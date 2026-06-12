@@ -29,6 +29,11 @@ namespace erhe::scene {
 namespace erhe::geometry {
     class Geometry;
 }
+namespace erhe::physics {
+    class Collision_filter;
+    class Physics_joint_settings;
+    class Physics_material;
+}
 namespace erhe::primitive {
     class Buffer_mesh;
     class Primitive_raytrace;
@@ -40,6 +45,7 @@ namespace editor {
 class Brush;
 class Brush_placement;
 class App_context;
+class Node_joint;
 class Node_physics;
 class Rendertarget_mesh;
 
@@ -72,6 +78,10 @@ private:
     void brush_properties             (const std::shared_ptr<Brush>& brush);
     void brush_placement_properties   (Brush_placement& brush_placement);
     void node_physics_properties      (Node_physics& node_physics);
+    void node_joint_properties        (Node_joint& node_joint);
+    void physics_material_properties  (const std::shared_ptr<erhe::physics::Physics_material>& physics_material);
+    void collision_filter_properties  (const std::shared_ptr<erhe::physics::Collision_filter>& collision_filter);
+    void physics_joint_settings_properties(const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings);
     void item_flags                   (const std::shared_ptr<erhe::Item_base>& item);
     void item_properties              (const std::shared_ptr<erhe::Item_base>& item);
 

@@ -93,6 +93,13 @@ public:
     // distinct filter items ever assigned.)
     [[nodiscard]] auto get_or_compile(const std::shared_ptr<Collision_filter>& filter) -> JPH::CollisionGroup::GroupID;
 
+    // Like get_or_compile(), but refreshes an already-compiled entry from the
+    // filter item's current contents (in place, keeping the GroupID, so every
+    // body referencing the entry picks up the change). Used by the explicit
+    // IRigid_body::set_collision_filter() path, making "re-assign after
+    // editing a live Collision_filter" actually re-snapshot the filter.
+    [[nodiscard]] auto recompile(const std::shared_ptr<Collision_filter>& filter) -> JPH::CollisionGroup::GroupID;
+
     void set_pair_collision_enabled(JPH::CollisionGroup::SubGroupID a, JPH::CollisionGroup::SubGroupID b, bool enabled);
 
 private:

@@ -9,4 +9,7 @@ enum("Collision_shape_type_serial",
     value("e_cylinder",       5),
     value("e_compound",       6),
     value("e_tapered_capsule", 7),
+    value("e_tapered_cylinder", 8),
+    value("e_convex_hull",    9, short_desc="Convex hull rebuilt from source node mesh geometry at load"),
+    value("e_mesh",           10, short_desc="Triangle mesh rebuilt from source node mesh geometry at load"),
 )

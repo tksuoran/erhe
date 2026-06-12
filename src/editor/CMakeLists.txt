@@ -446,17 +446,26 @@ erhe_codegen_generate(
     OUTPUT_DIR      "${_codegen_out}"
     DEFINITIONS
         "${_codegen_defs}/camera_data.py"
+        "${_codegen_defs}/collision_filter_data.py"
         "${_codegen_defs}/collision_shape_data.py"
         "${_codegen_defs}/collision_shape_type_serial.py"
+        "${_codegen_defs}/combine_mode_serial.py"
         "${_codegen_defs}/compound_child_data.py"
+        "${_codegen_defs}/drive_mode_serial.py"
+        "${_codegen_defs}/drive_type_serial.py"
         "${_codegen_defs}/gltf_source_reference.py"
+        "${_codegen_defs}/joint_drive_data.py"
+        "${_codegen_defs}/joint_limit_data.py"
         "${_codegen_defs}/layout_data.py"
         "${_codegen_defs}/light_data.py"
         "${_codegen_defs}/mesh_reference.py"
         "${_codegen_defs}/mesh_source_type.py"
         "${_codegen_defs}/motion_mode_serial.py"
         "${_codegen_defs}/node_data.py"
+        "${_codegen_defs}/node_joint_data.py"
         "${_codegen_defs}/node_physics_data.py"
+        "${_codegen_defs}/physics_joint_data.py"
+        "${_codegen_defs}/physics_material_data.py"
         "${_codegen_defs}/projection_data.py"
         "${_codegen_defs}/scene_file.py"
         "${_codegen_defs}/transform_data.py"
@@ -466,17 +475,32 @@ set(_codegen_sources
     ${_codegen_out}/camera_data.hpp
     ${_codegen_out}/camera_data_serialization.hpp
     ${_codegen_out}/camera_data.cpp
+    ${_codegen_out}/collision_filter_data.hpp
+    ${_codegen_out}/collision_filter_data_serialization.hpp
+    ${_codegen_out}/collision_filter_data.cpp
     ${_codegen_out}/collision_shape_data.hpp
     ${_codegen_out}/collision_shape_data_serialization.hpp
     ${_codegen_out}/collision_shape_data.cpp
     ${_codegen_out}/collision_shape_type_serial.hpp
     ${_codegen_out}/collision_shape_type_serial.cpp
+    ${_codegen_out}/combine_mode_serial.hpp
+    ${_codegen_out}/combine_mode_serial.cpp
     ${_codegen_out}/compound_child_data.hpp
     ${_codegen_out}/compound_child_data_serialization.hpp
     ${_codegen_out}/compound_child_data.cpp
+    ${_codegen_out}/drive_mode_serial.hpp
+    ${_codegen_out}/drive_mode_serial.cpp
+    ${_codegen_out}/drive_type_serial.hpp
+    ${_codegen_out}/drive_type_serial.cpp
     ${_codegen_out}/gltf_source_reference.hpp
     ${_codegen_out}/gltf_source_reference_serialization.hpp
     ${_codegen_out}/gltf_source_reference.cpp
+    ${_codegen_out}/joint_drive_data.hpp
+    ${_codegen_out}/joint_drive_data_serialization.hpp
+    ${_codegen_out}/joint_drive_data.cpp
+    ${_codegen_out}/joint_limit_data.hpp
+    ${_codegen_out}/joint_limit_data_serialization.hpp
+    ${_codegen_out}/joint_limit_data.cpp
     ${_codegen_out}/axis_direction_serial.hpp
     ${_codegen_out}/axis_direction_serial.cpp
     ${_codegen_out}/layout_alignment_serial.hpp
@@ -504,9 +528,18 @@ set(_codegen_sources
     ${_codegen_out}/node_data_serial.hpp
     ${_codegen_out}/node_data_serial_serialization.hpp
     ${_codegen_out}/node_data_serial.cpp
+    ${_codegen_out}/node_joint_data.hpp
+    ${_codegen_out}/node_joint_data_serialization.hpp
+    ${_codegen_out}/node_joint_data.cpp
     ${_codegen_out}/node_physics_data.hpp
     ${_codegen_out}/node_physics_data_serialization.hpp
     ${_codegen_out}/node_physics_data.cpp
+    ${_codegen_out}/physics_joint_data.hpp
+    ${_codegen_out}/physics_joint_data_serialization.hpp
+    ${_codegen_out}/physics_joint_data.cpp
+    ${_codegen_out}/physics_material_data.hpp
+    ${_codegen_out}/physics_material_data_serialization.hpp
+    ${_codegen_out}/physics_material_data.cpp
     ${_codegen_out}/projection_data.hpp
     ${_codegen_out}/projection_data_serialization.hpp
     ${_codegen_out}/projection_data.cpp

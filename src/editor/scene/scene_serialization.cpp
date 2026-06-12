@@ -10,10 +10,15 @@
 
 #include "scene/generated/scene_file_serialization.hpp"
 
+#include "scene/node_joint.hpp"
+
 #include "erhe_file/file.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_gltf/gltf.hpp"
+#include "erhe_physics/collision_filter.hpp"
 #include "erhe_physics/icollision_shape.hpp"
+#include "erhe_physics/physics_joint_settings.hpp"
+#include "erhe_physics/physics_material.hpp"
 #include "erhe_gltf/image_transfer.hpp"
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_primitive/material.hpp"
@@ -35,6 +40,8 @@
 #include <geogram/mesh/mesh.h>
 #include <geogram/mesh/mesh_io.h>
 
+#include <cmath>
+#include <limits>
 #include <unordered_map>
 
 using erhe::geometry::make_convex_hull;
@@ -216,16 +223,78 @@ auto from_motion_mode_serial(Motion_mode_serial mode) -> erhe::physics::Motion_m
 auto to_collision_shape_type_serial(erhe::physics::Collision_shape_type type) -> Collision_shape_type_serial
 {
     switch (type) {
-        case erhe::physics::Collision_shape_type::e_empty:           return Collision_shape_type_serial::e_empty;
-        case erhe::physics::Collision_shape_type::e_box:             return Collision_shape_type_serial::e_box;
-        case erhe::physics::Collision_shape_type::e_sphere:          return Collision_shape_type_serial::e_sphere;
-        case erhe::physics::Collision_shape_type::e_capsule:         return Collision_shape_type_serial::e_capsule;
-        case erhe::physics::Collision_shape_type::e_tapered_capsule: return Collision_shape_type_serial::e_tapered_capsule;
-        case erhe::physics::Collision_shape_type::e_cylinder:        return Collision_shape_type_serial::e_cylinder;
-        case erhe::physics::Collision_shape_type::e_compound:        return Collision_shape_type_serial::e_compound;
-        case erhe::physics::Collision_shape_type::e_convex_hull:     return Collision_shape_type_serial::e_not_specified; // derived from mesh
-        case erhe::physics::Collision_shape_type::e_uniform_scaling: return Collision_shape_type_serial::e_not_specified; // not directly serializable
-        default:                                                     return Collision_shape_type_serial::e_not_specified;
+        case erhe::physics::Collision_shape_type::e_empty:            return Collision_shape_type_serial::e_empty;
+        case erhe::physics::Collision_shape_type::e_box:              return Collision_shape_type_serial::e_box;
+        case erhe::physics::Collision_shape_type::e_sphere:           return Collision_shape_type_serial::e_sphere;
+        case erhe::physics::Collision_shape_type::e_capsule:          return Collision_shape_type_serial::e_capsule;
+        case erhe::physics::Collision_shape_type::e_tapered_capsule:  return Collision_shape_type_serial::e_tapered_capsule;
+        case erhe::physics::Collision_shape_type::e_tapered_cylinder: return Collision_shape_type_serial::e_tapered_cylinder;
+        case erhe::physics::Collision_shape_type::e_cylinder:         return Collision_shape_type_serial::e_cylinder;
+        case erhe::physics::Collision_shape_type::e_compound:         return Collision_shape_type_serial::e_compound;
+        case erhe::physics::Collision_shape_type::e_convex_hull:      return Collision_shape_type_serial::e_convex_hull; // rebuilt from source node mesh at load
+        case erhe::physics::Collision_shape_type::e_mesh:             return Collision_shape_type_serial::e_mesh;        // rebuilt from source node mesh at load
+        // Wrapper shapes (uniform scaling / scaled / offset center of mass) are
+        // unwrapped by serialize_collision_shape() and never reach this point.
+        case erhe::physics::Collision_shape_type::e_uniform_scaling:  return Collision_shape_type_serial::e_not_specified;
+        default:                                                      return Collision_shape_type_serial::e_not_specified;
+    }
+}
+
+auto to_combine_mode_serial(erhe::physics::Combine_mode mode) -> Combine_mode_serial
+{
+    switch (mode) {
+        case erhe::physics::Combine_mode::e_average:  return Combine_mode_serial::e_average;
+        case erhe::physics::Combine_mode::e_minimum:  return Combine_mode_serial::e_minimum;
+        case erhe::physics::Combine_mode::e_maximum:  return Combine_mode_serial::e_maximum;
+        case erhe::physics::Combine_mode::e_multiply: return Combine_mode_serial::e_multiply;
+        default:                                      return Combine_mode_serial::e_average;
+    }
+}
+
+auto from_combine_mode_serial(Combine_mode_serial mode) -> erhe::physics::Combine_mode
+{
+    switch (mode) {
+        case Combine_mode_serial::e_average:  return erhe::physics::Combine_mode::e_average;
+        case Combine_mode_serial::e_minimum:  return erhe::physics::Combine_mode::e_minimum;
+        case Combine_mode_serial::e_maximum:  return erhe::physics::Combine_mode::e_maximum;
+        case Combine_mode_serial::e_multiply: return erhe::physics::Combine_mode::e_multiply;
+        default:                              return erhe::physics::Combine_mode::e_average;
+    }
+}
+
+auto to_drive_type_serial(erhe::physics::Drive_type type) -> Drive_type_serial
+{
+    switch (type) {
+        case erhe::physics::Drive_type::e_linear:  return Drive_type_serial::e_linear;
+        case erhe::physics::Drive_type::e_angular: return Drive_type_serial::e_angular;
+        default:                                   return Drive_type_serial::e_linear;
+    }
+}
+
+auto from_drive_type_serial(Drive_type_serial type) -> erhe::physics::Drive_type
+{
+    switch (type) {
+        case Drive_type_serial::e_linear:  return erhe::physics::Drive_type::e_linear;
+        case Drive_type_serial::e_angular: return erhe::physics::Drive_type::e_angular;
+        default:                           return erhe::physics::Drive_type::e_linear;
+    }
+}
+
+auto to_drive_mode_serial(erhe::physics::Drive_mode mode) -> Drive_mode_serial
+{
+    switch (mode) {
+        case erhe::physics::Drive_mode::e_force:        return Drive_mode_serial::e_force;
+        case erhe::physics::Drive_mode::e_acceleration: return Drive_mode_serial::e_acceleration;
+        default:                                        return Drive_mode_serial::e_force;
+    }
+}
+
+auto from_drive_mode_serial(Drive_mode_serial mode) -> erhe::physics::Drive_mode
+{
+    switch (mode) {
+        case Drive_mode_serial::e_force:        return erhe::physics::Drive_mode::e_force;
+        case Drive_mode_serial::e_acceleration: return erhe::physics::Drive_mode::e_acceleration;
+        default:                                return erhe::physics::Drive_mode::e_force;
     }
 }
 
@@ -269,6 +338,7 @@ void serialize_primitive_shape_params(
             }
             break;
         case Collision_shape_type_serial::e_tapered_capsule:
+        case Collision_shape_type_serial::e_tapered_cylinder:
             out_radius     = shape.get_bottom_radius();
             out_top_radius = shape.get_top_radius();
             out_length     = shape.get_length();
@@ -287,15 +357,36 @@ void serialize_primitive_shape_params(
     }
 }
 
-auto serialize_collision_shape(const erhe::physics::ICollision_shape& shape) -> Collision_shape_data
+auto serialize_collision_shape(const erhe::physics::ICollision_shape& shape_in) -> Collision_shape_data
 {
     Collision_shape_data data;
-    data.type = to_collision_shape_type_serial(shape.get_shape_type());
 
-    serialize_primitive_shape_params(shape, data.type, data.half_extents, data.radius, data.axis, data.length, data.top_radius);
+    // Unwrap wrapper shapes into flat fields (the schema stores no shape tree):
+    // - scaled / uniform scaling: scale goes to Collision_shape_data::scale and
+    //   is re-applied at load (uniform when all components are equal).
+    // - offset center of mass: the offset is intentionally NOT serialized here;
+    //   it is stored once as Node_physics_data::center_of_mass (captured via
+    //   Node_physics::get_center_of_mass_offset()) and re-wrapped at load.
+    const erhe::physics::ICollision_shape*           shape = &shape_in;
+    std::shared_ptr<erhe::physics::ICollision_shape> inner = shape->get_inner_shape();
+    while (inner) {
+        const std::optional<glm::vec3> wrapper_scale = shape->get_scale();
+        if (wrapper_scale.has_value()) {
+            data.scale = data.scale.has_value() ? (data.scale.value() * wrapper_scale.value()) : wrapper_scale.value();
+        }
+        shape = inner.get();
+        inner = shape->get_inner_shape();
+    }
+
+    data.type = to_collision_shape_type_serial(shape->get_shape_type());
+
+    serialize_primitive_shape_params(*shape, data.type, data.half_extents, data.radius, data.axis, data.length, data.top_radius);
+
+    // Mesh / convex hull geometry is rebuilt from the owning node's mesh at
+    // load; source_node_id stays absent (absent = owning node).
 
     if (data.type == Collision_shape_type_serial::e_compound) {
-        for (const auto& child : shape.get_children()) {
+        for (const auto& child : shape->get_children()) {
             if (!child.shape) {
                 continue;
             }
@@ -361,6 +452,16 @@ auto deserialize_primitive_shape(
                 );
             }
             break;
+        case Collision_shape_type_serial::e_tapered_cylinder:
+            if (radius.has_value() && top_radius.has_value() && length.has_value()) {
+                return erhe::physics::ICollision_shape::create_tapered_cylinder_shape_shared(
+                    axis.has_value() ? from_axis_int(*axis) : erhe::physics::Axis::Y,
+                    *radius,
+                    *top_radius,
+                    *length
+                );
+            }
+            break;
         case Collision_shape_type_serial::e_cylinder:
             if (half_extents.has_value()) {
                 return erhe::physics::ICollision_shape::create_cylinder_shape_shared(
@@ -408,6 +509,86 @@ auto deserialize_collision_shape(const Collision_shape_data& data) -> std::share
     }
 
     return deserialize_primitive_shape(data.type, data.half_extents, data.radius, data.axis, data.length, data.top_radius);
+}
+
+// Builds a collision shape from the mesh geometry attached to a node: a convex
+// hull (usable with dynamic bodies) or a triangle mesh (static / kinematic
+// bodies only). Uses the first mesh primitive with non-empty Geometry; returns
+// nullptr when the node has no usable geometry (or hull construction fails).
+auto build_shape_from_node_mesh(const erhe::scene::Node* node, const bool convex_hull) -> std::shared_ptr<erhe::physics::ICollision_shape>
+{
+    if (node == nullptr) {
+        return {};
+    }
+    const auto mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node);
+    if (!mesh) {
+        return {};
+    }
+    for (const auto& prim : mesh->get_primitives()) {
+        if (!prim.primitive || !prim.primitive->render_shape) {
+            continue;
+        }
+        const auto& geom = prim.primitive->render_shape->get_geometry_const();
+        if (!geom || (geom->get_mesh().vertices.nb() == 0)) {
+            continue;
+        }
+        const GEO::Mesh& geo_mesh = geom->get_mesh();
+
+        if (convex_hull) {
+            GEO::Mesh convex_hull_mesh{};
+            if (!make_convex_hull(geo_mesh, convex_hull_mesh)) {
+                return {};
+            }
+            const GEO::index_t vertex_count = convex_hull_mesh.vertices.nb();
+            std::vector<float> coordinates(3 * vertex_count);
+            for (GEO::index_t v = 0; v < vertex_count; ++v) {
+                const float* ptr = convex_hull_mesh.vertices.single_precision_point_ptr(v);
+                coordinates[(3 * v) + 0] = ptr[0];
+                coordinates[(3 * v) + 1] = ptr[1];
+                coordinates[(3 * v) + 2] = ptr[2];
+            }
+            return erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
+                coordinates.data(),
+                static_cast<int>(vertex_count),
+                static_cast<int>(3 * sizeof(float))
+            );
+        }
+
+        // Triangle mesh: all vertices plus fan-triangulated facets.
+        const GEO::index_t vertex_count = geo_mesh.vertices.nb();
+        std::vector<float> coordinates(3 * vertex_count);
+        for (GEO::index_t v = 0; v < vertex_count; ++v) {
+            const float* ptr = geo_mesh.vertices.single_precision_point_ptr(v);
+            coordinates[(3 * v) + 0] = ptr[0];
+            coordinates[(3 * v) + 1] = ptr[1];
+            coordinates[(3 * v) + 2] = ptr[2];
+        }
+        std::vector<uint32_t> indices;
+        for (GEO::index_t facet = 0, facet_count = geo_mesh.facets.nb(); facet < facet_count; ++facet) {
+            const GEO::index_t corners_begin = geo_mesh.facets.corners_begin(facet);
+            const GEO::index_t corners_end   = geo_mesh.facets.corners_end(facet);
+            if ((corners_end - corners_begin) < 3) {
+                continue;
+            }
+            const GEO::index_t first_vertex = geo_mesh.facet_corners.vertex(corners_begin);
+            for (GEO::index_t corner = corners_begin + 1; (corner + 1) < corners_end; ++corner) {
+                indices.push_back(first_vertex);
+                indices.push_back(geo_mesh.facet_corners.vertex(corner));
+                indices.push_back(geo_mesh.facet_corners.vertex(corner + 1));
+            }
+        }
+        if (indices.empty()) {
+            return {};
+        }
+        return erhe::physics::ICollision_shape::create_mesh_shape_shared(
+            coordinates.data(),
+            static_cast<int>(vertex_count),
+            static_cast<int>(3 * sizeof(float)),
+            indices.data(),
+            static_cast<int>(indices.size() / 3)
+        );
+    }
+    return {};
 }
 
 // A mesh is geometry-normative if any of its primitives has a Geometry object.
@@ -522,6 +703,98 @@ auto save_scene(
         }
     }
 
+    // Shared physics asset collection: referenced Physics_material /
+    // Collision_filter / Physics_joint_settings items get file-local 1-based
+    // ids in encounter order and are written to the top-level arrays.
+    // Library items not referenced by any body / joint are not serialized.
+    std::unordered_map<const erhe::physics::Physics_material*,       uint64_t> material_id_map;
+    std::unordered_map<const erhe::physics::Collision_filter*,       uint64_t> filter_id_map;
+    std::unordered_map<const erhe::physics::Physics_joint_settings*, uint64_t> joint_id_map;
+
+    auto get_material_id = [&scene_file, &material_id_map](const std::shared_ptr<erhe::physics::Physics_material>& material) -> uint64_t {
+        const auto it = material_id_map.find(material.get());
+        if (it != material_id_map.end()) {
+            return it->second;
+        }
+        const uint64_t id = static_cast<uint64_t>(scene_file.physics_materials.size() + 1);
+        material_id_map.emplace(material.get(), id);
+        scene_file.physics_materials.push_back(
+            Physics_material_data{
+                .id                  = id,
+                .name                = material->get_name(),
+                .static_friction     = material->static_friction,
+                .dynamic_friction    = material->dynamic_friction,
+                .restitution         = material->restitution,
+                .friction_combine    = to_combine_mode_serial(material->friction_combine),
+                .restitution_combine = to_combine_mode_serial(material->restitution_combine),
+            }
+        );
+        return id;
+    };
+    auto get_filter_id = [&scene_file, &filter_id_map](const std::shared_ptr<erhe::physics::Collision_filter>& filter) -> uint64_t {
+        const auto it = filter_id_map.find(filter.get());
+        if (it != filter_id_map.end()) {
+            return it->second;
+        }
+        const uint64_t id = static_cast<uint64_t>(scene_file.collision_filters.size() + 1);
+        filter_id_map.emplace(filter.get(), id);
+        scene_file.collision_filters.push_back(
+            Collision_filter_data{
+                .id                       = id,
+                .name                     = filter->get_name(),
+                .collision_systems        = filter->collision_systems,
+                .collide_with_systems     = filter->collide_with_systems,
+                .not_collide_with_systems = filter->not_collide_with_systems,
+            }
+        );
+        return id;
+    };
+    auto get_joint_id = [&scene_file, &joint_id_map](const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings) -> uint64_t {
+        const auto it = joint_id_map.find(settings.get());
+        if (it != joint_id_map.end()) {
+            return it->second;
+        }
+        const uint64_t id = static_cast<uint64_t>(scene_file.physics_joints.size() + 1);
+        joint_id_map.emplace(settings.get(), id);
+        Physics_joint_data joint_data{
+            .id   = id,
+            .name = settings->get_name(),
+        };
+        for (const erhe::physics::Joint_limit& limit : settings->limits) {
+            Joint_limit_data limit_data{
+                .min       = limit.min,
+                .max       = limit.max,
+                .stiffness = limit.stiffness,
+                .damping   = limit.damping,
+            };
+            for (int axis = 0; axis < 3; ++axis) {
+                if (limit.linear_axes[static_cast<std::size_t>(axis)]) {
+                    limit_data.linear_axes.push_back(axis);
+                }
+                if (limit.angular_axes[static_cast<std::size_t>(axis)]) {
+                    limit_data.angular_axes.push_back(axis);
+                }
+            }
+            joint_data.limits.push_back(std::move(limit_data));
+        }
+        for (const erhe::physics::Joint_drive& drive : settings->drives) {
+            joint_data.drives.push_back(
+                Joint_drive_data{
+                    .type            = to_drive_type_serial(drive.type),
+                    .mode            = to_drive_mode_serial(drive.mode),
+                    .axis            = drive.axis,
+                    .max_force       = std::isfinite(drive.max_force) ? std::optional<float>{drive.max_force} : std::nullopt,
+                    .position_target = drive.position_target,
+                    .velocity_target = drive.velocity_target,
+                    .stiffness       = drive.stiffness,
+                    .damping         = drive.damping,
+                }
+            );
+        }
+        scene_file.physics_joints.push_back(std::move(joint_data));
+        return id;
+    };
+
     // Serialize node physics
     for (const auto& node : flat_nodes) {
         auto node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
@@ -541,8 +814,52 @@ auto save_scene(
             .mass              = rigid_body ? std::optional<float>{rigid_body->get_mass()} : std::nullopt,
             .enable_collisions = true,
             .collision_shape   = collision_shape ? serialize_collision_shape(*collision_shape) : Collision_shape_data{},
+            .is_trigger        = node_physics->is_trigger(),
         };
+        const glm::vec3 linear_velocity = node_physics->get_initial_linear_velocity();
+        if (linear_velocity != glm::vec3{0.0f}) {
+            physics_data.linear_velocity = linear_velocity;
+        }
+        const glm::vec3 angular_velocity = node_physics->get_initial_angular_velocity();
+        if (angular_velocity != glm::vec3{0.0f}) {
+            physics_data.angular_velocity = angular_velocity;
+        }
+        const float gravity_factor = node_physics->get_gravity_factor();
+        if (gravity_factor != 1.0f) {
+            physics_data.gravity_factor = gravity_factor;
+        }
+        const glm::vec3 center_of_mass = node_physics->get_center_of_mass_offset();
+        if (center_of_mass != glm::vec3{0.0f}) {
+            physics_data.center_of_mass = center_of_mass;
+        }
+        const std::shared_ptr<erhe::physics::Physics_material>& physics_material = node_physics->get_physics_material();
+        if (physics_material) {
+            physics_data.material_id = get_material_id(physics_material);
+        }
+        const std::shared_ptr<erhe::physics::Collision_filter>& collision_filter = node_physics->get_collision_filter();
+        if (collision_filter) {
+            physics_data.filter_id = get_filter_id(collision_filter);
+        }
         scene_file.node_physics.push_back(std::move(physics_data));
+    }
+
+    // Serialize node joints (a node may carry multiple Node_joint attachments)
+    for (const auto& node : flat_nodes) {
+        for (const auto& attachment : node->get_attachments()) {
+            const auto node_joint = std::dynamic_pointer_cast<Node_joint>(attachment);
+            if (!node_joint) {
+                continue;
+            }
+            const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings = node_joint->get_settings();
+            scene_file.node_joints.push_back(
+                Node_joint_data{
+                    .node_id           = node_id_map[node.get()],
+                    .connected_node_id = get_node_id(node_joint->get_connected_node().get(), node_id_map),
+                    .joint_id          = settings ? get_joint_id(settings) : uint64_t{0},
+                    .enable_collision  = node_joint->get_enable_collision(),
+                }
+            );
+        }
     }
 
     // Serialize layouts and layout items
@@ -838,8 +1155,86 @@ auto load_scene(
         }
     }
 
+    // Shared physics assets (scene file v3+): construct items and register
+    // them into the content library. Loaded items are always added as new
+    // items (the loading scene gets its own Content_library instance).
+    std::unordered_map<uint64_t, std::shared_ptr<erhe::physics::Physics_material>> material_map;
+    for (const Physics_material_data& material_data : scene_file.physics_materials) {
+        auto material = std::make_shared<erhe::physics::Physics_material>(material_data.name);
+        material->static_friction     = material_data.static_friction;
+        material->dynamic_friction    = material_data.dynamic_friction;
+        material->restitution         = material_data.restitution;
+        material->friction_combine    = from_combine_mode_serial(material_data.friction_combine);
+        material->restitution_combine = from_combine_mode_serial(material_data.restitution_combine);
+        if (material_data.id != 0) {
+            material_map[material_data.id] = material;
+        }
+        content_library->physics_materials->add(material);
+    }
+
+    std::unordered_map<uint64_t, std::shared_ptr<erhe::physics::Collision_filter>> filter_map;
+    for (const Collision_filter_data& filter_data : scene_file.collision_filters) {
+        auto filter = std::make_shared<erhe::physics::Collision_filter>(filter_data.name);
+        filter->collision_systems        = filter_data.collision_systems;
+        filter->collide_with_systems     = filter_data.collide_with_systems;
+        filter->not_collide_with_systems = filter_data.not_collide_with_systems;
+        if (filter_data.id != 0) {
+            filter_map[filter_data.id] = filter;
+        }
+        content_library->collision_filters->add(filter);
+    }
+
+    std::unordered_map<uint64_t, std::shared_ptr<erhe::physics::Physics_joint_settings>> joint_settings_map;
+    for (const Physics_joint_data& joint_data : scene_file.physics_joints) {
+        auto settings = std::make_shared<erhe::physics::Physics_joint_settings>(joint_data.name);
+        for (const Joint_limit_data& limit_data : joint_data.limits) {
+            erhe::physics::Joint_limit limit{};
+            for (const int axis : limit_data.linear_axes) {
+                if ((axis >= 0) && (axis < 3)) {
+                    limit.linear_axes[static_cast<std::size_t>(axis)] = true;
+                }
+            }
+            for (const int axis : limit_data.angular_axes) {
+                if ((axis >= 0) && (axis < 3)) {
+                    limit.angular_axes[static_cast<std::size_t>(axis)] = true;
+                }
+            }
+            limit.min       = limit_data.min;
+            limit.max       = limit_data.max;
+            limit.stiffness = limit_data.stiffness;
+            limit.damping   = limit_data.damping;
+            settings->limits.push_back(limit);
+        }
+        for (const Joint_drive_data& drive_data : joint_data.drives) {
+            erhe::physics::Joint_drive drive{};
+            drive.type            = from_drive_type_serial(drive_data.type);
+            drive.mode            = from_drive_mode_serial(drive_data.mode);
+            drive.axis            = drive_data.axis;
+            drive.max_force       = drive_data.max_force.value_or(std::numeric_limits<float>::infinity());
+            drive.position_target = drive_data.position_target;
+            drive.velocity_target = drive_data.velocity_target;
+            drive.stiffness       = drive_data.stiffness;
+            drive.damping         = drive_data.damping;
+            settings->drives.push_back(drive);
+        }
+        if (joint_data.id != 0) {
+            joint_settings_map[joint_data.id] = settings;
+        }
+        content_library->physics_joints->add(settings);
+    }
+
+    if (!scene_file.physics_materials.empty() || !scene_file.collision_filters.empty() || !scene_file.physics_joints.empty() || !scene_file.node_joints.empty()) {
+        log_parsers->info(
+            "load_scene: {} physics materials, {} collision filters, {} physics joints, {} node joints",
+            scene_file.physics_materials.size(),
+            scene_file.collision_filters.size(),
+            scene_file.physics_joints.size(),
+            scene_file.node_joints.size()
+        );
+    }
+
     // Load meshes and physics
-    if (context == nullptr || (scene_file.mesh_references.empty() && scene_file.node_physics.empty())) {
+    if (context == nullptr || (scene_file.mesh_references.empty() && scene_file.node_physics.empty() && scene_file.node_joints.empty())) {
         return scene_root;
     }
 
@@ -1079,46 +1474,57 @@ auto load_scene(
             continue;
         }
         const auto& node = node_it->second;
+        const Collision_shape_data& shape_data = physics_data.collision_shape;
 
-        // Try to recreate collision shape from serialized data
-        std::shared_ptr<erhe::physics::ICollision_shape> collision_shape = deserialize_collision_shape(physics_data.collision_shape);
-
-        // Fall back: derive collision shape from mesh geometry attached to this node
-        if (!collision_shape) {
-            auto mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
-            if (mesh) {
-                for (const auto& prim : mesh->get_primitives()) {
-                    if (prim.primitive && prim.primitive->render_shape) {
-                        const auto& geom = prim.primitive->render_shape->get_geometry_const();
-                        if (geom && geom->get_mesh().vertices.nb() > 0) {
-                            GEO::Mesh convex_hull{};
-                            if (make_convex_hull(geom->get_mesh(), convex_hull)) {
-                                const auto vertex_count = convex_hull.vertices.nb();
-                                std::vector<float> coordinates(3 * vertex_count);
-                                for (GEO::index_t v = 0; v < vertex_count; ++v) {
-                                    const auto* ptr = convex_hull.vertices.single_precision_point_ptr(v);
-                                    coordinates[3 * v + 0] = ptr[0];
-                                    coordinates[3 * v + 1] = ptr[1];
-                                    coordinates[3 * v + 2] = ptr[2];
-                                }
-                                collision_shape = erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
-                                    coordinates.data(),
-                                    static_cast<int>(vertex_count),
-                                    static_cast<int>(3 * sizeof(float))
-                                );
-                            }
-                            break; // Use first primitive with geometry
-                        }
-                    }
+        // Recreate the collision shape from serialized data; mesh and convex
+        // hull shapes are rebuilt from the source node's mesh geometry
+        // (absent source_node_id = the owning node).
+        std::shared_ptr<erhe::physics::ICollision_shape> collision_shape{};
+        if ((shape_data.type == Collision_shape_type_serial::e_convex_hull) || (shape_data.type == Collision_shape_type_serial::e_mesh)) {
+            const erhe::scene::Node* source_node = node.get();
+            if (shape_data.source_node_id.has_value()) {
+                auto source_it = node_map.find(shape_data.source_node_id.value());
+                if (source_it != node_map.end()) {
+                    source_node = source_it->second.get();
+                } else {
+                    log_parsers->warn("load_scene: collision shape source node {} not found, using owning node", shape_data.source_node_id.value());
                 }
             }
+            const bool convex_hull = (shape_data.type == Collision_shape_type_serial::e_convex_hull);
+            collision_shape = build_shape_from_node_mesh(source_node, convex_hull);
+            if (!collision_shape) {
+                log_parsers->warn("load_scene: could not rebuild {} shape for node '{}'", convex_hull ? "convex hull" : "mesh", node->get_name());
+            }
+        } else {
+            collision_shape = deserialize_collision_shape(shape_data);
+        }
+
+        // Legacy fall back (e_not_specified): derive convex hull from the
+        // mesh geometry attached to this node
+        if (!collision_shape) {
+            collision_shape = build_shape_from_node_mesh(node.get(), true);
         }
 
         if (!collision_shape) {
             collision_shape = erhe::physics::ICollision_shape::create_empty_shape_shared();
         }
 
-        const erhe::physics::IRigid_body_create_info create_info{
+        // Re-apply wrapper shapes serialized as flat fields: scale first
+        // (closest to the base shape), then the center of mass offset (the
+        // order Node_physics::set_center_of_mass_offset() maintains).
+        if (shape_data.scale.has_value()) {
+            const glm::vec3 scale = shape_data.scale.value();
+            if ((scale.x == scale.y) && (scale.y == scale.z)) {
+                collision_shape = erhe::physics::ICollision_shape::create_uniform_scaling_shape_shared(collision_shape, scale.x);
+            } else {
+                collision_shape = erhe::physics::ICollision_shape::create_scaled_shape_shared(collision_shape, scale);
+            }
+        }
+        if (physics_data.center_of_mass.has_value() && (physics_data.center_of_mass.value() != glm::vec3{0.0f})) {
+            collision_shape = erhe::physics::ICollision_shape::create_offset_center_of_mass_shape_shared(collision_shape, physics_data.center_of_mass.value());
+        }
+
+        erhe::physics::IRigid_body_create_info create_info{
             .friction          = physics_data.friction,
             .restitution       = physics_data.restitution,
             .linear_damping    = physics_data.linear_damping,
@@ -1127,9 +1533,63 @@ auto load_scene(
             .mass              = physics_data.mass,
             .enable_collisions = physics_data.enable_collisions,
             .motion_mode       = from_motion_mode_serial(physics_data.motion_mode),
+            .linear_velocity   = physics_data.linear_velocity.value_or(glm::vec3{0.0f}),
+            .angular_velocity  = physics_data.angular_velocity.value_or(glm::vec3{0.0f}),
+            .gravity_factor    = physics_data.gravity_factor.value_or(1.0f),
+            .is_sensor         = physics_data.is_trigger,
         };
+        if (physics_data.material_id.has_value()) {
+            auto material_it = material_map.find(physics_data.material_id.value());
+            if (material_it != material_map.end()) {
+                create_info.physics_material = material_it->second;
+            } else {
+                log_parsers->warn("load_scene: physics material {} not found", physics_data.material_id.value());
+            }
+        }
+        if (physics_data.filter_id.has_value()) {
+            auto filter_it = filter_map.find(physics_data.filter_id.value());
+            if (filter_it != filter_map.end()) {
+                create_info.collision_filter = filter_it->second;
+            } else {
+                log_parsers->warn("load_scene: collision filter {} not found", physics_data.filter_id.value());
+            }
+        }
         auto node_physics = std::make_shared<Node_physics>(create_info);
         node->attach(node_physics);
+    }
+
+    // Create node joints after all node physics: constraint creation needs
+    // the rigid bodies (Scene_root retries pending joints as bodies register,
+    // so strict ordering is not required, but attaching joints last avoids
+    // pointless pending retries).
+    for (const Node_joint_data& joint_data : scene_file.node_joints) {
+        if (joint_data.node_id == 0) {
+            continue;
+        }
+        auto node_it = node_map.find(joint_data.node_id);
+        if (node_it == node_map.end()) {
+            continue;
+        }
+        std::shared_ptr<erhe::scene::Node> connected_node{};
+        if (joint_data.connected_node_id != 0) {
+            auto connected_it = node_map.find(joint_data.connected_node_id);
+            if (connected_it != node_map.end()) {
+                connected_node = connected_it->second;
+            } else {
+                log_parsers->warn("load_scene: node joint connected node {} not found", joint_data.connected_node_id);
+            }
+        }
+        std::shared_ptr<erhe::physics::Physics_joint_settings> settings{};
+        if (joint_data.joint_id != 0) {
+            auto settings_it = joint_settings_map.find(joint_data.joint_id);
+            if (settings_it != joint_settings_map.end()) {
+                settings = settings_it->second;
+            } else {
+                log_parsers->warn("load_scene: physics joint {} not found", joint_data.joint_id);
+            }
+        }
+        auto node_joint = std::make_shared<Node_joint>(connected_node, settings, joint_data.enable_collision);
+        node_it->second->attach(node_joint);
     }
 
     return scene_root;

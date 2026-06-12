@@ -233,6 +233,21 @@ auto Jolt_group_filter::get_or_compile(const std::shared_ptr<Collision_filter>& 
     return group_id;
 }
 
+auto Jolt_group_filter::recompile(const std::shared_ptr<Collision_filter>& filter) -> JPH::CollisionGroup::GroupID
+{
+    const auto existing = m_filter_to_compiled.find(filter.get());
+    if (existing == m_filter_to_compiled.end()) {
+        return get_or_compile(filter);
+    }
+    Compiled_collision_filter& compiled = m_compiled_filters[existing->second];
+    compiled.membership    = make_bitset(filter->collision_systems);
+    compiled.is_allow_list = !filter->collide_with_systems.empty();
+    compiled.mask          = compiled.is_allow_list
+        ? make_bitset(filter->collide_with_systems)
+        : make_bitset(filter->not_collide_with_systems);
+    return existing->second;
+}
+
 void Jolt_group_filter::set_pair_collision_enabled(
     const JPH::CollisionGroup::SubGroupID a,
     const JPH::CollisionGroup::SubGroupID b,
@@ -771,7 +786,10 @@ void Jolt_world::update_collision_group(JPH::Body& body, const std::shared_ptr<C
 {
     JPH::CollisionGroup& group = body.GetCollisionGroup();
     if (filter) {
-        group.SetGroupID(m_group_filter->get_or_compile(filter));
+        // recompile() instead of get_or_compile(): the explicit setter path is
+        // also the "re-assign after editing a live Collision_filter" path, so
+        // refresh the compiled snapshot from the item's current contents.
+        group.SetGroupID(m_group_filter->recompile(filter));
         group.SetGroupFilter(m_group_filter.GetPtr());
     } else {
         // Keep the group filter pointer: it may still be needed for pair

@@ -14,9 +14,11 @@
 #include "operations/node_attach_operation.hpp"
 #include "operations/operation_stack.hpp"
 
+#include "app_scenes.hpp"
 #include "preview/material_preview.hpp"
 #include "rendertarget_mesh.hpp"
 #include "scene/frame_controller.hpp"
+#include "scene/node_joint.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
@@ -29,8 +31,11 @@
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
+#include "erhe_physics/collision_filter.hpp"
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_physics/irigid_body.hpp"
+#include "erhe_physics/physics_joint_settings.hpp"
+#include "erhe_physics/physics_material.hpp"
 #include "erhe_primitive/buffer_mesh.hpp"
 #include "erhe_primitive/enums.hpp"
 #include "erhe_primitive/primitive.hpp"
@@ -55,6 +60,9 @@
 
 #include <imgui/imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
+
+#include <cmath>
+#include <limits>
 
 #define ICON_MDI_AXIS_ARROW                               "\xf3\xb0\xb5\x89" // U+F0D49
 #define ICON_MDI_AXIS_ARROW_LOCK                          "\xf3\xb0\xb5\x8a" // U+F0D4A
@@ -792,13 +800,471 @@ void Properties::node_physics_properties(Node_physics& node_physics)
         });
     }
 
-    add_entry("Motion Mode", [rigid_body](){
-        const auto motion_mode = rigid_body->get_motion_mode();
-        int i_motion_mode = static_cast<int>(motion_mode);
+    add_entry("Motion Mode", [&node_physics](){
+        // Display / set the user-facing motion mode through Node_physics so
+        // that the intended mode and the rigid body stay consistent (static
+        // trigger bodies are internally kinematic non-physical).
+        int i_motion_mode = static_cast<int>(node_physics.get_motion_mode());
         if (ImGui::Combo("##", &i_motion_mode, erhe::physics::c_motion_mode_strings, IM_ARRAYSIZE(erhe::physics::c_motion_mode_strings))) {
-            rigid_body->set_motion_mode(static_cast<erhe::physics::Motion_mode>(i_motion_mode));
+            if (i_motion_mode != static_cast<int>(erhe::physics::Motion_mode::e_invalid)) {
+                node_physics.set_motion_mode(static_cast<erhe::physics::Motion_mode>(i_motion_mode));
+            }
         }
     });
+
+    add_entry("Is Trigger", [&node_physics](){
+        bool is_trigger = node_physics.is_trigger();
+        if (ImGui::Checkbox("##", &is_trigger)) {
+            node_physics.set_trigger(is_trigger);
+        }
+    });
+
+    add_entry("Gravity Factor", [&node_physics](){
+        float gravity_factor = node_physics.get_gravity_factor();
+        if (ImGui::SliderFloat("##", &gravity_factor, 0.0f, 2.0f)) {
+            node_physics.set_gravity_factor(gravity_factor);
+        }
+    });
+
+    add_entry(
+        "Initial Linear Velocity",
+        [&node_physics](){
+            glm::vec3 velocity = node_physics.get_initial_linear_velocity();
+            if (ImGui::DragFloat3("##", &velocity.x, 0.01f)) {
+                node_physics.set_initial_linear_velocity(velocity);
+            }
+        },
+        "Applied when the rigid body is (re)created"
+    );
+
+    add_entry(
+        "Initial Angular Velocity",
+        [&node_physics](){
+            glm::vec3 velocity = node_physics.get_initial_angular_velocity();
+            if (ImGui::DragFloat3("##", &velocity.x, 0.01f)) {
+                node_physics.set_initial_angular_velocity(velocity);
+            }
+        },
+        "Applied when the rigid body is (re)created"
+    );
+
+    add_entry(
+        "Center of Mass",
+        [&node_physics](){
+            glm::vec3 offset = node_physics.get_center_of_mass_offset();
+            ImGui::DragFloat3("##", &offset.x, 0.01f);
+            if (ImGui::IsItemDeactivatedAfterEdit()) {
+                node_physics.set_center_of_mass_offset(offset);
+            }
+        },
+        "Center of mass offset; applied when the edit is completed (recreates the rigid body)"
+    );
+
+    erhe::scene::Node* node = node_physics.get_node();
+    Scene_root* scene_root = (node != nullptr) ? static_cast<Scene_root*>(node->get_item_host()) : nullptr;
+    const std::shared_ptr<Content_library> content_library = (scene_root != nullptr) ? scene_root->get_content_library() : std::shared_ptr<Content_library>{};
+    if (content_library) {
+        add_entry("Physics Material", [this, &node_physics, content_library]() {
+            std::shared_ptr<erhe::physics::Physics_material> material = node_physics.get_physics_material();
+            if (content_library->physics_materials->combo(m_context, "##", material, true)) {
+                node_physics.set_physics_material(material);
+            }
+        });
+        add_entry("Collision Filter", [this, &node_physics, content_library]() {
+            std::shared_ptr<erhe::physics::Collision_filter> filter = node_physics.get_collision_filter();
+            if (content_library->collision_filters->combo(m_context, "##", filter, true)) {
+                node_physics.set_collision_filter(filter);
+            }
+        });
+    }
+}
+
+void Properties::node_joint_properties(Node_joint& node_joint)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    add_entry(
+        "Connected Node",
+        [&node_joint]() {
+            const std::shared_ptr<erhe::scene::Node> connected_node = node_joint.get_connected_node();
+            ImGui::Button(connected_node ? connected_node->get_name().c_str() : "(world)", ImVec2{-FLT_MIN, 0.0f});
+            if (ImGui::BeginDragDropTarget()) {
+                const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(erhe::scene::Node::static_type_name.data());
+                if (payload != nullptr) {
+                    erhe::Item_base* item_base = *(static_cast<erhe::Item_base**>(payload->Data));
+                    erhe::scene::Node* dropped_node = dynamic_cast<erhe::scene::Node*>(item_base);
+                    if ((dropped_node != nullptr) && (dropped_node != node_joint.get_node())) {
+                        node_joint.set_connected_node(std::static_pointer_cast<erhe::scene::Node>(dropped_node->shared_from_this()));
+                    }
+                }
+                ImGui::EndDragDropTarget();
+            }
+        },
+        "Drop a node here to connect the joint to it; no connected node constrains to the world"
+    );
+
+    add_entry(
+        "Connect",
+        [this, &node_joint]() {
+            if (ImGui::Button("Connect to Selected Node", ImVec2{-FLT_MIN, 0.0f})) {
+                const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = m_context.selection->get_selected_items();
+                for (const std::shared_ptr<erhe::Item_base>& selected_item : selected_items) {
+                    const std::shared_ptr<erhe::scene::Node> selected_node = std::dynamic_pointer_cast<erhe::scene::Node>(selected_item);
+                    if (selected_node && (selected_node.get() != node_joint.get_node())) {
+                        node_joint.set_connected_node(selected_node);
+                        break;
+                    }
+                }
+            }
+        },
+        "Connects the joint to the first selected node other than the joint's own node"
+    );
+
+    erhe::scene::Node* node = node_joint.get_node();
+    Scene_root* scene_root = (node != nullptr) ? static_cast<Scene_root*>(node->get_item_host()) : nullptr;
+    const std::shared_ptr<Content_library> content_library = (scene_root != nullptr) ? scene_root->get_content_library() : std::shared_ptr<Content_library>{};
+    if (content_library) {
+        add_entry("Joint Settings", [this, &node_joint, content_library]() {
+            std::shared_ptr<erhe::physics::Physics_joint_settings> settings = node_joint.get_settings();
+            if (content_library->physics_joints->combo(m_context, "##", settings, true)) {
+                node_joint.set_settings(settings);
+            }
+        });
+    }
+
+    add_entry("Enable Collision", [&node_joint]() {
+        bool enable_collision = node_joint.get_enable_collision();
+        if (ImGui::Checkbox("##", &enable_collision)) {
+            node_joint.set_enable_collision(enable_collision);
+        }
+    });
+
+    add_entry("Constraint", [&node_joint]() {
+        ImGui::TextUnformatted((node_joint.get_constraint() != nullptr) ? "Created" : "Pending");
+    });
+
+    add_entry(
+        "Rebuild",
+        [&node_joint]() {
+            if (ImGui::Button("Rebuild Joint", ImVec2{-FLT_MIN, 0.0f})) {
+                node_joint.rebuild();
+            }
+        },
+        "Recreates the constraint, re-capturing the joint frames; use after editing the shared joint settings or moving the nodes"
+    );
+}
+
+namespace {
+
+constexpr const char* c_combine_mode_names[] = { "Average", "Minimum", "Maximum", "Multiply" };
+constexpr const char* c_drive_type_names  [] = { "Linear", "Angular" };
+constexpr const char* c_drive_mode_names  [] = { "Force", "Acceleration" };
+
+// Re-assigns the edited material to every scene body using it so the physics
+// backend re-snapshots the values (the per-body snapshot does not track the
+// shared item).
+void reapply_physics_material(App_context& context, const std::shared_ptr<erhe::physics::Physics_material>& physics_material)
+{
+    if (context.app_scenes == nullptr) {
+        return;
+    }
+    for (const std::shared_ptr<Scene_root>& scene_root : context.app_scenes->get_scene_roots()) {
+        for (const std::shared_ptr<erhe::scene::Node>& node : scene_root->get_scene().get_flat_nodes()) {
+            const std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
+            if (node_physics && (node_physics->get_physics_material() == physics_material)) {
+                node_physics->set_physics_material(physics_material);
+            }
+        }
+    }
+}
+
+// Re-assigns the edited filter to every scene body using it so the physics
+// backend recompiles the filter snapshot.
+void reapply_collision_filter(App_context& context, const std::shared_ptr<erhe::physics::Collision_filter>& collision_filter)
+{
+    if (context.app_scenes == nullptr) {
+        return;
+    }
+    for (const std::shared_ptr<Scene_root>& scene_root : context.app_scenes->get_scene_roots()) {
+        for (const std::shared_ptr<erhe::scene::Node>& node : scene_root->get_scene().get_flat_nodes()) {
+            const std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
+            if (node_physics && (node_physics->get_collision_filter() == collision_filter)) {
+                node_physics->set_collision_filter(collision_filter);
+            }
+        }
+    }
+}
+
+// Checkbox toggling presence + drag editing the value of an optional float.
+void optional_float_editor(std::optional<float>& value, const float default_value)
+{
+    bool has_value = value.has_value();
+    if (ImGui::Checkbox("##has", &has_value)) {
+        if (has_value) {
+            value = default_value;
+        } else {
+            value.reset();
+        }
+    }
+    if (value.has_value()) {
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        float editable_value = value.value();
+        if (ImGui::DragFloat("##value", &editable_value, 0.01f)) {
+            value = editable_value;
+        }
+    }
+}
+
+} // anonymous namespace
+
+void Properties::physics_material_properties(const std::shared_ptr<erhe::physics::Physics_material>& physics_material)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    add_entry("Static Friction", [this, physics_material]() {
+        if (ImGui::SliderFloat("##", &physics_material->static_friction, 0.0f, 1.0f)) {
+            reapply_physics_material(m_context, physics_material);
+        }
+    });
+    add_entry("Dynamic Friction", [this, physics_material]() {
+        if (ImGui::SliderFloat("##", &physics_material->dynamic_friction, 0.0f, 1.0f)) {
+            reapply_physics_material(m_context, physics_material);
+        }
+    });
+    add_entry("Restitution", [this, physics_material]() {
+        if (ImGui::SliderFloat("##", &physics_material->restitution, 0.0f, 1.0f)) {
+            reapply_physics_material(m_context, physics_material);
+        }
+    });
+    add_entry("Friction Combine", [this, physics_material]() {
+        int current = static_cast<int>(physics_material->friction_combine);
+        if (ImGui::Combo("##", &current, c_combine_mode_names, IM_ARRAYSIZE(c_combine_mode_names))) {
+            physics_material->friction_combine = static_cast<erhe::physics::Combine_mode>(current);
+            reapply_physics_material(m_context, physics_material);
+        }
+    });
+    add_entry("Restitution Combine", [this, physics_material]() {
+        int current = static_cast<int>(physics_material->restitution_combine);
+        if (ImGui::Combo("##", &current, c_combine_mode_names, IM_ARRAYSIZE(c_combine_mode_names))) {
+            physics_material->restitution_combine = static_cast<erhe::physics::Combine_mode>(current);
+            reapply_physics_material(m_context, physics_material);
+        }
+    });
+}
+
+void Properties::collision_filter_properties(const std::shared_ptr<erhe::physics::Collision_filter>& collision_filter)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    class List_description
+    {
+    public:
+        const char*               group_label;
+        const char*               tooltip;
+        std::vector<std::string>* strings;
+    };
+    const List_description lists[] = {
+        { "Collision Systems",        "Systems this filter's body belongs to",                          &collision_filter->collision_systems        },
+        { "Collide With",             "Non-empty = collide only with these systems (allowlist)",       &collision_filter->collide_with_systems     },
+        { "Not Collide With",         "Used when Collide With is empty: never collide with these",     &collision_filter->not_collide_with_systems },
+    };
+    for (const List_description& list : lists) {
+        push_group(list.group_label, ImGuiTreeNodeFlags_DefaultOpen, m_indent);
+        std::vector<std::string>* strings = list.strings;
+        for (std::size_t i = 0, end = strings->size(); i < end; ++i) {
+            add_entry(
+                fmt::format("System {}", i),
+                [this, collision_filter, strings, i]() {
+                    if (i >= strings->size()) {
+                        return;
+                    }
+                    if (ImGui::Button("-")) {
+                        strings->erase(strings->begin() + static_cast<std::ptrdiff_t>(i));
+                        reapply_collision_filter(m_context, collision_filter);
+                        return;
+                    }
+                    ImGui::SameLine();
+                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    ImGui::InputText("##", &(*strings)[i]);
+                    if (ImGui::IsItemDeactivatedAfterEdit()) {
+                        reapply_collision_filter(m_context, collision_filter);
+                    }
+                },
+                list.tooltip
+            );
+        }
+        add_entry("Add", [strings]() {
+            if (ImGui::Button("Add System", ImVec2{-FLT_MIN, 0.0f})) {
+                strings->emplace_back();
+            }
+        });
+        pop_group();
+    }
+}
+
+void Properties::physics_joint_settings_properties(const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    // Changes take effect on a joint when its constraint is recreated; press
+    // "Rebuild Joint" on the Node_joint(s) using these settings.
+    push_group("Limits", ImGuiTreeNodeFlags_DefaultOpen, m_indent);
+    for (std::size_t i = 0, end = settings->limits.size(); i < end; ++i) {
+        push_group(fmt::format("Limit {}", i), ImGuiTreeNodeFlags_DefaultOpen, m_indent);
+        add_entry(
+            "Linear Axes",
+            [settings, i]() {
+                if (i >= settings->limits.size()) {
+                    return;
+                }
+                erhe::physics::Joint_limit& limit = settings->limits[i];
+                ImGui::Checkbox("X##l", &limit.linear_axes[0]); ImGui::SameLine();
+                ImGui::Checkbox("Y##l", &limit.linear_axes[1]); ImGui::SameLine();
+                ImGui::Checkbox("Z##l", &limit.linear_axes[2]);
+            },
+            "Translation axes this limit applies to"
+        );
+        add_entry(
+            "Angular Axes",
+            [settings, i]() {
+                if (i >= settings->limits.size()) {
+                    return;
+                }
+                erhe::physics::Joint_limit& limit = settings->limits[i];
+                ImGui::Checkbox("X##a", &limit.angular_axes[0]); ImGui::SameLine();
+                ImGui::Checkbox("Y##a", &limit.angular_axes[1]); ImGui::SameLine();
+                ImGui::Checkbox("Z##a", &limit.angular_axes[2]);
+            },
+            "Rotation axes this limit applies to"
+        );
+        add_entry("Min", [settings, i]() {
+            if (i >= settings->limits.size()) {
+                return;
+            }
+            optional_float_editor(settings->limits[i].min, 0.0f);
+        }, "Absent = unbounded below");
+        add_entry("Max", [settings, i]() {
+            if (i >= settings->limits.size()) {
+                return;
+            }
+            optional_float_editor(settings->limits[i].max, 0.0f);
+        }, "Absent = unbounded above");
+        add_entry("Stiffness", [settings, i]() {
+            if (i >= settings->limits.size()) {
+                return;
+            }
+            optional_float_editor(settings->limits[i].stiffness, 0.0f);
+        }, "Soft limit spring stiffness; absent = hard limit");
+        add_entry("Damping", [settings, i]() {
+            if (i >= settings->limits.size()) {
+                return;
+            }
+            ImGui::DragFloat("##", &settings->limits[i].damping, 0.01f, 0.0f, FLT_MAX);
+        });
+        add_entry("Remove", [settings, i]() {
+            if (i >= settings->limits.size()) {
+                return;
+            }
+            if (ImGui::Button("Remove Limit", ImVec2{-FLT_MIN, 0.0f})) {
+                settings->limits.erase(settings->limits.begin() + static_cast<std::ptrdiff_t>(i));
+            }
+        });
+        pop_group();
+    }
+    add_entry("Add", [settings]() {
+        if (ImGui::Button("Add Limit", ImVec2{-FLT_MIN, 0.0f})) {
+            settings->limits.emplace_back();
+        }
+    });
+    pop_group();
+
+    push_group("Drives", ImGuiTreeNodeFlags_DefaultOpen, m_indent);
+    for (std::size_t i = 0, end = settings->drives.size(); i < end; ++i) {
+        push_group(fmt::format("Drive {}", i), ImGuiTreeNodeFlags_DefaultOpen, m_indent);
+        add_entry("Type", [settings, i]() {
+            if (i >= settings->drives.size()) {
+                return;
+            }
+            int current = static_cast<int>(settings->drives[i].type);
+            if (ImGui::Combo("##", &current, c_drive_type_names, IM_ARRAYSIZE(c_drive_type_names))) {
+                settings->drives[i].type = static_cast<erhe::physics::Drive_type>(current);
+            }
+        });
+        add_entry("Mode", [settings, i]() {
+            if (i >= settings->drives.size()) {
+                return;
+            }
+            int current = static_cast<int>(settings->drives[i].mode);
+            if (ImGui::Combo("##", &current, c_drive_mode_names, IM_ARRAYSIZE(c_drive_mode_names))) {
+                settings->drives[i].mode = static_cast<erhe::physics::Drive_mode>(current);
+            }
+        }, "Acceleration mode is approximated as force mode");
+        add_entry("Axis", [settings, i]() {
+            if (i >= settings->drives.size()) {
+                return;
+            }
+            ImGui::SliderInt("##", &settings->drives[i].axis, 0, 2);
+        });
+        add_entry(
+            "Max Force",
+            [settings, i]() {
+                if (i >= settings->drives.size()) {
+                    return;
+                }
+                erhe::physics::Joint_drive& drive = settings->drives[i];
+                bool limited = std::isfinite(drive.max_force);
+                if (ImGui::Checkbox("##has", &limited)) {
+                    drive.max_force = limited ? 0.0f : std::numeric_limits<float>::infinity();
+                }
+                if (std::isfinite(drive.max_force)) {
+                    ImGui::SameLine();
+                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    ImGui::DragFloat("##value", &drive.max_force, 0.1f, 0.0f, FLT_MAX);
+                }
+            },
+            "Unchecked = unlimited force"
+        );
+        add_entry("Position Target", [settings, i]() {
+            if (i >= settings->drives.size()) {
+                return;
+            }
+            ImGui::DragFloat("##", &settings->drives[i].position_target, 0.01f);
+        });
+        add_entry("Velocity Target", [settings, i]() {
+            if (i >= settings->drives.size()) {
+                return;
+            }
+            ImGui::DragFloat("##", &settings->drives[i].velocity_target, 0.01f);
+        });
+        add_entry("Stiffness", [settings, i]() {
+            if (i >= settings->drives.size()) {
+                return;
+            }
+            ImGui::DragFloat("##", &settings->drives[i].stiffness, 0.01f, 0.0f, FLT_MAX);
+        }, "> 0 selects a position motor, 0 a velocity motor");
+        add_entry("Damping", [settings, i]() {
+            if (i >= settings->drives.size()) {
+                return;
+            }
+            ImGui::DragFloat("##", &settings->drives[i].damping, 0.01f, 0.0f, FLT_MAX);
+        });
+        add_entry("Remove", [settings, i]() {
+            if (i >= settings->drives.size()) {
+                return;
+            }
+            if (ImGui::Button("Remove Drive", ImVec2{-FLT_MIN, 0.0f})) {
+                settings->drives.erase(settings->drives.begin() + static_cast<std::ptrdiff_t>(i));
+            }
+        });
+        pop_group();
+    }
+    add_entry("Add", [settings]() {
+        if (ImGui::Button("Add Drive", ImVec2{-FLT_MIN, 0.0f})) {
+            settings->drives.emplace_back();
+        }
+    });
+    pop_group();
 }
 
 void Properties::item_flags(const std::shared_ptr<erhe::Item_base>& item)
@@ -848,6 +1314,7 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
     const auto& item            = (content_library_node && content_library_node->item) ? content_library_node->item : item_in;
 
     const auto& node_physics    = std::dynamic_pointer_cast<Node_physics           >(item);
+    const auto& node_joint      = std::dynamic_pointer_cast<Node_joint             >(item);
     const auto& rendertarget    = std::dynamic_pointer_cast<Rendertarget_mesh      >(item);
     const auto& camera          = std::dynamic_pointer_cast<erhe::scene::Camera    >(item);
     const auto& layout          = std::dynamic_pointer_cast<erhe::scene::Layout    >(item);
@@ -858,6 +1325,9 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
     const auto& brush           = std::dynamic_pointer_cast<Brush                  >(item);
     const auto& brush_placement = std::dynamic_pointer_cast<Brush_placement        >(item);
     const auto& texture         = std::dynamic_pointer_cast<erhe::graphics::Texture>(item);
+    const auto& physics_material  = std::dynamic_pointer_cast<erhe::physics::Physics_material      >(item);
+    const auto& collision_filter  = std::dynamic_pointer_cast<erhe::physics::Collision_filter      >(item);
+    const auto& physics_joint     = std::dynamic_pointer_cast<erhe::physics::Physics_joint_settings>(item);
 
     if (!item) {
         return;
@@ -977,6 +1447,22 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
 
     if (node_physics) {
         node_physics_properties(*node_physics);
+    }
+
+    if (node_joint) {
+        node_joint_properties(*node_joint);
+    }
+
+    if (physics_material) {
+        physics_material_properties(physics_material);
+    }
+
+    if (collision_filter) {
+        collision_filter_properties(collision_filter);
+    }
+
+    if (physics_joint) {
+        physics_joint_settings_properties(physics_joint);
     }
 
     if (camera) {
