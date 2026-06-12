@@ -458,65 +458,13 @@ void Primitive_renderer::add_cone(
 
     const glm::mat4 m                       = world_from_node.get_matrix();
     const glm::mat4 node_from_world         = world_from_node.get_inverse_matrix();
-    const glm::vec3 top_center              = bottom_center + glm::vec3{0.0f, height, 0.0f};
-    const glm::vec3 camera_position_in_node = glm::vec4{node_from_world * glm::vec4{camera_position_in_world, 1.0f}};
+    const glm::vec3 top_center              = bottom_center + height * axis_y;
+    const glm::vec3 camera_position_in_node = glm::vec3{node_from_world * glm::vec4{camera_position_in_world, 1.0f}};
 
-    set_thickness(major_thickness);
-
-    class Cone_edge
-    {
-    public:
-        Cone_edge(const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& n, const glm::vec3& t, const glm::vec3& b, const float phi, const float n_dot_v)
-        : p0     {p0}
-        , p1     {p1}
-        , n      {n}
-        , t      {t}
-        , b      {b}
-        , phi    {phi}
-        , n_dot_v{n_dot_v}
-        {
-        }
-
-        glm::vec3  p0;
-        glm::vec3  p1;
-        glm::vec3  n;
-        glm::vec3  t;
-        glm::vec3  b;
-        float      phi;
-        float      n_dot_v;
-    };
-
-    std::vector<Cone_edge> cone_edges;
-    for (int i = 0; i < side_count; ++i) {
-        const float phi = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(side_count);
-        const glm::vec3 sin_phi_z = std::cos(phi) * axis_x;
-        const glm::vec3 cos_phi_x = std::sin(phi) * axis_z;
-
-        const glm::vec3 p0       {bottom_center + bottom_radius * cos_phi_x + bottom_radius * sin_phi_z};
-        const glm::vec3 p1       {top_center    + top_radius    * cos_phi_x + top_radius    * sin_phi_z};
-        const glm::vec3 mid_point{0.5f * (p0 + p1)};
-
-        const glm::vec3 B = glm::normalize(p1 - p0); // generatrix
-        const glm::vec3 T{
-            static_cast<float>(std::cos(phi + glm::half_pi<float>())),
-            0.0f,
-            static_cast<float>(std::sin(phi + glm::half_pi<float>()))
-        };
-        const glm::vec3 N       = erhe::math::safe_normalize_cross<float>(B, T);
-        const glm::vec3 v       = glm::normalize(camera_position_in_node - mid_point);
-        const float     n_dot_v = dot(N, v);
-
-        cone_edges.emplace_back(p0, p1, N, T, B, phi, n_dot_v);
-    }
-
-    std::vector<Cone_edge> sign_flip_edges;
-
-    const glm::vec3 bottom_v       = glm::normalize(camera_position_in_node -bottom_center);
-    const float     bottom_n_dot_v = glm::dot(bottom_normal, bottom_v);
-    const bool      bottom_visible = bottom_n_dot_v >= 0.0f;
+    const glm::vec3 bottom_v       = glm::normalize(camera_position_in_node - bottom_center);
+    const bool      bottom_visible = glm::dot(bottom_normal, bottom_v) >= 0.0f;
     const glm::vec3 top_v          = glm::normalize(camera_position_in_node - top_center);
-    const float     top_n_dot_v    = glm::dot(top_normal, top_v);
-    const bool      top_visible    = top_n_dot_v >= 0.0f;
+    const bool      top_visible    = glm::dot(top_normal, top_v) >= 0.0f;
 
     set_thickness(minor_thickness);
     add_lines(
@@ -535,37 +483,76 @@ void Primitive_renderer::add_cone(
         }
     );
 
-    for (size_t i = 0; i < cone_edges.size(); ++i) {
-        const std::size_t next_i      = (i + 1) % cone_edges.size();
-        const auto&       edge        = cone_edges[i];
-        const auto&       next_edge   = cone_edges[next_i];
-        const float       avg_n_dot_v = 0.5f * edge.n_dot_v + 0.5f * next_edge.n_dot_v;
-        if (sign(edge.n_dot_v) != sign(next_edge.n_dot_v)) {
-            if (std::abs(edge.n_dot_v) < std::abs(next_edge.n_dot_v)) {
-                sign_flip_edges.push_back(edge);
-            } else {
-                sign_flip_edges.push_back(next_edge);
-            }
-        }
-        if (bottom_radius > 0.0f) {
-            add_lines(
-                m,
-                bottom_visible || (avg_n_dot_v > 0.0) ? major_color : minor_color,
-                { { edge.p0, next_edge.p0 } }
-            );
-        }
+    // The outward normal along the lateral generatrix at azimuth phi,
+    // n(phi) = (height cos(phi), bottom_radius - top_radius, height sin(phi)) / slant,
+    // is constant along the whole generatrix, and so is n(phi) . (camera - q)
+    // for q on the generatrix. Whether the lateral surface faces the camera
+    // is therefore an exact function of phi alone:
+    //   facing(phi) = tangent_a cos(phi) + tangent_b sin(phi) - tangent_c > 0
+    // and the two silhouette generatrices sit at the exact zero crossings
+    // phi_mid -/+ phi_delta (the tangent planes through the camera).
+    const glm::vec3 w            = camera_position_in_node - bottom_center;
+    const float     tangent_a    = height * w.x;
+    const float     tangent_b    = height * w.z;
+    const float     tangent_c    = (bottom_radius * height) - ((bottom_radius - top_radius) * w.y);
+    const float     tangent_norm = std::sqrt((tangent_a * tangent_a) + (tangent_b * tangent_b));
+    const float     phi_mid      = std::atan2(tangent_b, tangent_a);
 
-        if (top_radius > 0.0f) {
-            add_lines(
-                m,
-                top_visible || (avg_n_dot_v > 0.0) ? major_color : minor_color,
-                { { edge.p1, next_edge.p1 } }
-            );
-        }
+    bool  facing_all  = false;
+    bool  facing_none = false;
+    float phi_delta   = 0.0f; // facing arc is (phi_mid - phi_delta, phi_mid + phi_delta)
+    if (tangent_norm > std::abs(tangent_c)) {
+        phi_delta = std::acos(glm::clamp(tangent_c / tangent_norm, -1.0f, 1.0f));
+    } else {
+        facing_all  = (tangent_c < 0.0f);
+        facing_none = !facing_all;
     }
 
-    for (auto& edge : sign_flip_edges) {
-        add_lines(m, major_color, { { edge.p0, edge.p1 } } );
+    // Rim circles: visible parts (cap visible or lateral surface facing the
+    // camera) in major style, hidden parts in minor style, split at the exact
+    // silhouette azimuths so the arcs join the silhouette generatrices.
+    const auto add_rim = [&](const glm::vec3& rim_center, const float rim_radius, const bool cap_visible) {
+        if (rim_radius <= 0.0f) {
+            return;
+        }
+        const auto add_rim_arc = [&](const float t_first, const float t_span, const glm::vec4& color, const float thickness) {
+            if (t_span <= 0.0f) {
+                return;
+            }
+            set_thickness(thickness);
+            const int step_count = std::max(1, static_cast<int>(std::ceil(static_cast<float>(side_count) * t_span / glm::two_pi<float>())));
+            for (int i = 0; i < step_count; ++i) {
+                const float t0 = t_first + (t_span * static_cast<float>(i    ) / static_cast<float>(step_count));
+                const float t1 = t_first + (t_span * static_cast<float>(i + 1) / static_cast<float>(step_count));
+                add_lines(
+                    m,
+                    color,
+                    {{
+                        rim_center + rim_radius * ((std::cos(t0) * axis_x) + (std::sin(t0) * axis_z)),
+                        rim_center + rim_radius * ((std::cos(t1) * axis_x) + (std::sin(t1) * axis_z))
+                    }}
+                );
+            }
+        };
+        if (cap_visible || facing_all) {
+            add_rim_arc(0.0f, glm::two_pi<float>(), major_color, major_thickness);
+        } else if (facing_none) {
+            add_rim_arc(0.0f, glm::two_pi<float>(), minor_color, minor_thickness);
+        } else {
+            add_rim_arc(phi_mid - phi_delta, 2.0f * phi_delta, major_color, major_thickness);
+            add_rim_arc(phi_mid + phi_delta, glm::two_pi<float>() - (2.0f * phi_delta), minor_color, minor_thickness);
+        }
+    };
+    add_rim(bottom_center, bottom_radius, bottom_visible);
+    add_rim(top_center,    top_radius,    top_visible);
+
+    // Silhouette generatrices at the exact tangency azimuths
+    if (!facing_all && !facing_none) {
+        set_thickness(major_thickness);
+        for (const float phi : { phi_mid - phi_delta, phi_mid + phi_delta }) {
+            const glm::vec3 radial = (std::cos(phi) * axis_x) + (std::sin(phi) * axis_z);
+            add_lines(m, major_color, { { bottom_center + bottom_radius * radial, top_center + top_radius * radial } });
+        }
     }
 }
 
