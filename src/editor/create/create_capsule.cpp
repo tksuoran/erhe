@@ -82,12 +82,17 @@ auto Create_capsule::create(Brush_data& brush_create_info) const -> std::shared_
         erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
     geometry->process(flags);
 
-    // erhe::physics exposes only the uniform-radius capsule shape; tapered
-    // capsules fall back to the default brush collision shape.
     if (m_bottom_radius == m_top_radius) {
         brush_create_info.collision_shape = erhe::physics::ICollision_shape::create_capsule_shape_shared(
             erhe::physics::Axis::Y,
             m_bottom_radius,
+            m_length
+        );
+    } else {
+        brush_create_info.collision_shape = erhe::physics::ICollision_shape::create_tapered_capsule_shape_shared(
+            erhe::physics::Axis::Y,
+            m_bottom_radius,
+            m_top_radius,
             m_length
         );
     }

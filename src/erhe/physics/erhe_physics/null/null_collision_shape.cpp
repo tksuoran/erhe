@@ -58,6 +58,26 @@ auto ICollision_shape::create_capsule_shape_shared(
 //    return std::make_shared<Null_cone_shape>(axis, base_radius, height);
 //}
 
+auto ICollision_shape::create_tapered_capsule_shape(
+    const Axis  axis,
+    const float bottom_radius,
+    const float top_radius,
+    const float length
+) -> ICollision_shape*
+{
+    return new Null_tapered_capsule_shape(axis, bottom_radius, top_radius, length);
+}
+
+auto ICollision_shape::create_tapered_capsule_shape_shared(
+    const Axis  axis,
+    const float bottom_radius,
+    const float top_radius,
+    const float length
+) -> std::shared_ptr<ICollision_shape>
+{
+    return std::make_shared<Null_tapered_capsule_shape>(axis, bottom_radius, top_radius, length);
+}
+
 auto ICollision_shape::create_cylinder_shape(
     const Axis      axis,
     const glm::vec3 half_extents

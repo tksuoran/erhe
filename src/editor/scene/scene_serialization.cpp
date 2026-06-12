@@ -220,6 +220,7 @@ auto to_collision_shape_type_serial(erhe::physics::Collision_shape_type type) ->
         case erhe::physics::Collision_shape_type::e_box:             return Collision_shape_type_serial::e_box;
         case erhe::physics::Collision_shape_type::e_sphere:          return Collision_shape_type_serial::e_sphere;
         case erhe::physics::Collision_shape_type::e_capsule:         return Collision_shape_type_serial::e_capsule;
+        case erhe::physics::Collision_shape_type::e_tapered_capsule: return Collision_shape_type_serial::e_tapered_capsule;
         case erhe::physics::Collision_shape_type::e_cylinder:        return Collision_shape_type_serial::e_cylinder;
         case erhe::physics::Collision_shape_type::e_compound:        return Collision_shape_type_serial::e_compound;
         case erhe::physics::Collision_shape_type::e_convex_hull:     return Collision_shape_type_serial::e_not_specified; // derived from mesh
@@ -249,7 +250,8 @@ void serialize_primitive_shape_params(
     std::optional<glm::vec3>&              out_half_extents,
     std::optional<float>&                  out_radius,
     std::optional<int>&                    out_axis,
-    std::optional<float>&                  out_length
+    std::optional<float>&                  out_length,
+    std::optional<float>&                  out_top_radius
 )
 {
     switch (serial_type) {
@@ -262,6 +264,14 @@ void serialize_primitive_shape_params(
         case Collision_shape_type_serial::e_capsule:
             out_radius = shape.get_radius();
             out_length = shape.get_length();
+            if (auto a = shape.get_axis()) {
+                out_axis = to_axis_int(*a);
+            }
+            break;
+        case Collision_shape_type_serial::e_tapered_capsule:
+            out_radius     = shape.get_bottom_radius();
+            out_top_radius = shape.get_top_radius();
+            out_length     = shape.get_length();
             if (auto a = shape.get_axis()) {
                 out_axis = to_axis_int(*a);
             }
@@ -282,7 +292,7 @@ auto serialize_collision_shape(const erhe::physics::ICollision_shape& shape) -> 
     Collision_shape_data data;
     data.type = to_collision_shape_type_serial(shape.get_shape_type());
 
-    serialize_primitive_shape_params(shape, data.type, data.half_extents, data.radius, data.axis, data.length);
+    serialize_primitive_shape_params(shape, data.type, data.half_extents, data.radius, data.axis, data.length, data.top_radius);
 
     if (data.type == Collision_shape_type_serial::e_compound) {
         for (const auto& child : shape.get_children()) {
@@ -297,7 +307,8 @@ auto serialize_collision_shape(const erhe::physics::ICollision_shape& shape) -> 
                 child_data.half_extents,
                 child_data.radius,
                 child_data.axis,
-                child_data.length
+                child_data.length,
+                child_data.top_radius
             );
             const glm::quat rotation{child.transform.basis};
             child_data.position = child.transform.origin;
@@ -314,7 +325,8 @@ auto deserialize_primitive_shape(
     const std::optional<glm::vec3>&     half_extents,
     const std::optional<float>&         radius,
     const std::optional<int>&           axis,
-    const std::optional<float>&         length
+    const std::optional<float>&         length,
+    const std::optional<float>&         top_radius
 ) -> std::shared_ptr<erhe::physics::ICollision_shape>
 {
     switch (type) {
@@ -335,6 +347,16 @@ auto deserialize_primitive_shape(
                 return erhe::physics::ICollision_shape::create_capsule_shape_shared(
                     axis.has_value() ? from_axis_int(*axis) : erhe::physics::Axis::Y,
                     *radius,
+                    *length
+                );
+            }
+            break;
+        case Collision_shape_type_serial::e_tapered_capsule:
+            if (radius.has_value() && top_radius.has_value() && length.has_value()) {
+                return erhe::physics::ICollision_shape::create_tapered_capsule_shape_shared(
+                    axis.has_value() ? from_axis_int(*axis) : erhe::physics::Axis::Y,
+                    *radius,
+                    *top_radius,
                     *length
                 );
             }
@@ -367,7 +389,8 @@ auto deserialize_collision_shape(const Collision_shape_data& data) -> std::share
                 child_data.half_extents,
                 child_data.radius,
                 child_data.axis,
-                child_data.length
+                child_data.length,
+                child_data.top_radius
             );
             if (!child_shape) {
                 continue;
@@ -384,7 +407,7 @@ auto deserialize_collision_shape(const Collision_shape_data& data) -> std::share
         return erhe::physics::ICollision_shape::create_empty_shape_shared();
     }
 
-    return deserialize_primitive_shape(data.type, data.half_extents, data.radius, data.axis, data.length);
+    return deserialize_primitive_shape(data.type, data.half_extents, data.radius, data.axis, data.length, data.top_radius);
 }
 
 // A mesh is geometry-normative if any of its primitives has a Geometry object.

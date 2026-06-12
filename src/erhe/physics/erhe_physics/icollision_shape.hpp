@@ -22,6 +22,7 @@ enum class Collision_shape_type : int {
     e_box,
     e_sphere,
     e_capsule,
+    e_tapered_capsule,
     e_cylinder,
     e_convex_hull,
     e_compound,
@@ -81,6 +82,11 @@ public:
     [[nodiscard]] static auto create_sphere_shape                (float radius) -> ICollision_shape*;
     [[nodiscard]] static auto create_sphere_shape_shared         (float radius) -> std::shared_ptr<ICollision_shape>;
 
+    // length is the axial distance between the two cap sphere centers
+    // (same convention as erhe::geometry::shapes::make_capsule())
+    [[nodiscard]] static auto create_tapered_capsule_shape       (Axis axis, float bottom_radius, float top_radius, float length) -> ICollision_shape*;
+    [[nodiscard]] static auto create_tapered_capsule_shape_shared(Axis axis, float bottom_radius, float top_radius, float length) -> std::shared_ptr<ICollision_shape>;
+
     [[nodiscard]] static auto create_uniform_scaling_shape       (ICollision_shape* shape, float scale) -> ICollision_shape*;
     [[nodiscard]] static auto create_uniform_scaling_shape_shared(ICollision_shape* shape, float scale) -> std::shared_ptr<ICollision_shape>;
 
@@ -94,6 +100,8 @@ public:
     [[nodiscard]] virtual auto get_shape_type  () const -> Collision_shape_type                        = 0;
     [[nodiscard]] virtual auto get_half_extents() const -> std::optional<glm::vec3>                    { return std::nullopt; }
     [[nodiscard]] virtual auto get_radius      () const -> std::optional<float>                        { return std::nullopt; }
+    [[nodiscard]] virtual auto get_bottom_radius() const -> std::optional<float>                       { return std::nullopt; }
+    [[nodiscard]] virtual auto get_top_radius  () const -> std::optional<float>                        { return std::nullopt; }
     [[nodiscard]] virtual auto get_axis        () const -> std::optional<Axis>                         { return std::nullopt; }
     [[nodiscard]] virtual auto get_length      () const -> std::optional<float>                        { return std::nullopt; }
     [[nodiscard]] virtual auto get_children    () const -> const std::vector<Compound_child>&          { static const std::vector<Compound_child> empty; return empty; }

@@ -8,4 +8,5 @@ enum("Collision_shape_type_serial",
     value("e_capsule",        4),
     value("e_cylinder",       5),
     value("e_compound",       6),
+    value("e_tapered_capsule", 7),
 )
