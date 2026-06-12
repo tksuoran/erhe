@@ -123,7 +123,9 @@ public:
     void update_pointer_2d_position  (glm::vec2 position_in_viewport);
     void update_hover                (bool ray_only = false);
     void request_cursor_relative_hold(bool relative_hold_enable);
-    void viewport_toolbar            ();
+    
+    void viewport_toolbar            () override;
+    
     void set_shader_debug            (erhe::scene_renderer::Shader_debug shader_debug);
     auto get_shader_debug            () const -> erhe::scene_renderer::Shader_debug;
 
@@ -169,9 +171,6 @@ private:
     bool                               m_is_scene_view_hovered          {false};
     bool                               m_show_navigation_gizmo          {true};
     bool                               m_relative_hold_enable           {false};
-    bool                               m_show_visual_style_popup        {false};
-    bool                               m_show_scene_and_camera_popup    {false};
-    bool                               m_show_debug_visualizations_popup{false};
     std::unique_ptr<ImViewGuizmo::Context> m_navigation_gizmo;
     Property_editor m_property_editor;
 

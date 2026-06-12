@@ -79,4 +79,6 @@ auto make_angle_button(
     const char* imgui_label
 ) -> Value_edit_state;
 
+auto begin_popup_with_title_and_open(ImGuiID id, const char* name, bool* open, ImGuiWindowFlags extra_window_flags) -> bool;
+
 } // namespace erhe::imgui

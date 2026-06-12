@@ -11,6 +11,7 @@
 #include <glm/glm.hpp>
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -144,6 +145,19 @@ public:
     void update_hover_with_raytrace();
     void update_grid_hover         ();
 
+    auto icon_button(ImFont* icon_font, float font_size, const char* icon, const char* fallback_text, const char* tooltip, bool& toggle) -> bool;
+    void popup_button(
+        ImFont*                      icon_font,
+        float                        font_size,
+        const char*                  icon,
+        const char*                  title,
+        ImGuiID                      popup_id,
+        bool&                        is_open,
+        const std::function<void()>& content_fn
+    );
+
+    virtual void viewport_toolbar          ();
+
     // Called by App_rendering::render_viewport_renderables() so that the
     // per-view Debug_visualizations renders alongside the globally
     // registered Renderables. The Render_context names the view being
@@ -181,6 +195,10 @@ protected:
     bool                               m_hover_update_pending{true};
     std::weak_ptr<Scene_root>          m_scene_root;
     std::weak_ptr<erhe::scene::Camera> m_shadow_fit_override_camera;
+
+    bool                               m_show_visual_style_popup        {false};
+    bool                               m_show_scene_and_camera_popup    {false};
+    bool                               m_show_debug_visualizations_popup{false};
 
 private:
     std::array<Hover_entry, Hover_entry::slot_count> m_hover_entries;

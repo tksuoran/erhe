@@ -217,6 +217,21 @@ auto make_angle_button(
         .edit_ended    = ImGui::IsItemDeactivatedAfterEdit(),
         .active        = ImGui::IsItemActive()
     };
-};
+}
+
+auto begin_popup_with_title_and_open(ImGuiID id, const char* name, bool* open, ImGuiWindowFlags extra_window_flags) -> bool
+{
+    ImGuiContext& g = *GImGui;
+    if (!ImGui::IsPopupOpen(id, ImGuiPopupFlags_None)) {
+        g.NextWindowData.ClearFlags();
+        return false;
+    }
+
+    bool is_open = ImGui::Begin(name, open, extra_window_flags | ImGuiWindowFlags_Popup | ImGuiWindowFlags_NoDocking);
+    if (!is_open) {
+        ImGui::EndPopup();
+    }
+    return is_open;
+}
 
 } // namespace erhe::imgui

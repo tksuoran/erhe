@@ -3,30 +3,31 @@
 #include "scene/scene_view.hpp"
 
 #include "app_context.hpp"
+#include "app_message_bus.hpp"
 #include "app_settings.hpp"
-#include "editor_log.hpp"
-#include "editor_settings_store.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/editor_settings_config_serialization.hpp"
-
-#include "erhe_graphics/device.hpp"
-
-#include "app_message_bus.hpp"
-#include "scene/scene_root.hpp"
+#include "editor_log.hpp"
+#include "editor_settings_store.hpp"
 #include "grid/grid.hpp"
 #include "grid/grid_tool.hpp"
-#include "tools/tools.hpp"
 #include "rendergraph/shadow_render_node.hpp"
+#include "scene/scene_root.hpp"
+#include "tools/tools.hpp"
+#include "windows/scene_view_config_window.hpp"
+#include "windows/viewport_config_window.hpp"
 
-#include "erhe_geometry/geometry.hpp"
-#include "erhe_raytrace/iinstance.hpp"
-#include "erhe_raytrace/iscene.hpp"
-#include "erhe_raytrace/ray.hpp"
-#include "erhe_scene/mesh.hpp"
-#include "erhe_scene/mesh_raytrace.hpp"
 #include "erhe_scene/scene.hpp"
-#include "erhe_math/math_util.hpp"
+#include "erhe_scene/mesh_raytrace.hpp"
+#include "erhe_scene/mesh.hpp"
+#include "erhe_raytrace/ray.hpp"
+#include "erhe_raytrace/iscene.hpp"
+#include "erhe_raytrace/iinstance.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_math/math_util.hpp"
+#include "erhe_graphics/device.hpp"
+#include "erhe_geometry/geometry.hpp"
+#include "erhe_defer/defer.hpp"
 
 #include <glm/gtx/matrix_operation.hpp>
 
@@ -34,6 +35,14 @@
 
 using erhe::geometry::mesh_facet_normalf;
 using erhe::geometry::to_glm_vec3;
+
+// #include "IconsMaterialDesignIcons.h"
+#define ICON_MDI_AXIS_ARROW                               "\xf3\xb0\xb5\x89" // U+F0D49
+#define ICON_MDI_CAMERA                                   "\xf3\xb0\x84\x80" // U+F0100
+#define ICON_MDI_DOTS_TRIANGLE                            "\xf3\xb1\x97\xbe" // U+F15FE
+#define ICON_MDI_EYE                                      "\xf3\xb0\x88\x88" // U+F0208
+#define ICON_MDI_PALETTE                                  "\xf3\xb0\x8f\x98" // U+F03D8
+#define ICON_MDI_EYE_SETTINGS_OUTLINE                     "\xf3\xb0\xa1\xae" // U+F086E
 
 namespace editor {
 
@@ -565,6 +574,106 @@ void Scene_view::update_transforms()
 
     erhe::scene::Scene& scene = scene_root->get_scene();
     scene.update_node_transforms();
+}
+
+auto Scene_view::icon_button(ImFont* icon_font, float font_size, const char* icon, const char* fallback_text, const char* tooltip, bool& toggle) -> bool
+{
+    bool pressed;
+    erhe::imgui::Item_mode mode = toggle ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal;
+    erhe::imgui::begin_button_style(mode);
+    if (icon_font != nullptr) {
+        ImGui::PushFont(icon_font, font_size);
+        pressed = ImGui::Button(icon);
+        ImGui::PopFont();
+    } else {
+        pressed = ImGui::Button(fallback_text);
+    }
+    erhe::imgui::end_button_style(mode);
+    if ((tooltip != nullptr) && ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s", tooltip);
+    }
+    if (pressed) {
+        toggle = !toggle;
+    }
+    return pressed;
+}
+
+void Scene_view::popup_button(
+    ImFont*                      icon_font,
+    float                        font_size,
+    const char*                  icon,
+    const char*                  title,
+    ImGuiID                      popup_id,
+    bool&                        is_open,
+    const std::function<void()>& content_fn
+)
+{
+    ImGui::PushFont(icon_font, font_size);
+    const bool pressed = ImGui::Button(icon);
+    ImGui::PopFont();
+    ImGui::SetItemTooltip("%s", title);
+    if (pressed) {
+        ImGui::OpenPopup(popup_id, ImGuiPopupFlags_None);
+    }
+    if (erhe::imgui::begin_popup_with_title_and_open(popup_id, title, &is_open, ImGuiWindowFlags_AlwaysAutoResize)) {
+        content_fn();
+        ImGui::EndPopup();
+    }
+}
+
+void Scene_view::viewport_toolbar()
+{
+    ImGui::PushID("Viewport_scene_view::viewport_toolbar()");
+    ERHE_DEFER( ImGui::PopID(); );
+
+    ImFont* icon_font = m_context.imgui_renderer->material_design_font();
+    const float font_size =
+        m_context.imgui_renderer->get_imgui_settings().scale_factor *
+        m_context.imgui_renderer->get_imgui_settings().material_design_font_size;
+
+#if 0
+    icon_button(
+        icon_font,
+        font_size,
+        ICON_MDI_AXIS_ARROW "##navigation_gizmo",
+        "N##navigation_gizmo",
+        "Show/Hide Navigation Gizmo",
+        m_show_navigation_gizmo
+    );
+#endif
+
+    popup_button(
+        icon_font,
+        font_size,
+        ICON_MDI_EYE "##ViewportVisualStyle",                      // icon
+        "Visual Style",                                            // title
+        ImGui::GetID("ViewportVisualStylePopup"),                  // popup_id
+        m_show_visual_style_popup,                                 // is_open
+        [this]() { Viewport_config_window::imgui(get_config()); }  // content_fn
+    );
+    popup_button(
+        icon_font,
+        font_size,
+        ICON_MDI_DOTS_TRIANGLE "##ViewportSceneAndCamera",              // icon
+        "Scene and Camera",                                             // title
+        ImGui::GetID("ViewportSceneAndCameraPopup"),                    // popup_id
+        m_show_scene_and_camera_popup,                                  // is_open
+        [this]() { Scene_view_config_window::imgui(m_context, *this); } // content_fn
+    );
+    popup_button(
+        icon_font,
+        font_size,
+        ICON_MDI_EYE_SETTINGS_OUTLINE "##ViewportDebugVisualizations", // icon
+        "Debug Visualization",                                         // title
+        ImGui::GetID("ViewportDebugVisualizations"),                   // popup_id
+        m_show_debug_visualizations_popup,                             // is_open
+        [this]() { m_debug_visualizations.imgui(*this, m_context); }   // content_fn
+    );
+
+    m_context.selection_tool->viewport_toolbar();
+    m_context.transform_tool->viewport_toolbar();
+    //// m_context.grid_tool->viewport_toolbar(hovered);
+    //// TODO m_physics_window.viewport_toolbar(hovered);
 }
 
 }

@@ -273,6 +273,9 @@ void Headset_view::imgui()
         m_scene_root = scene_root;
     }
 
+
+    viewport_toolbar();
+
     // Shader selection
     //ImGui::Combo(
     //    "Shader Debug",

@@ -750,21 +750,6 @@ auto Viewport_scene_view::get_navigation_gizmo() -> ImViewGuizmo::Context&
     return *m_navigation_gizmo;
 }
 
-auto BeginPopupWithTitleAndOpen(ImGuiID id, const char* name, bool* open, ImGuiWindowFlags extra_window_flags) -> bool
-{
-    ImGuiContext& g = *GImGui;
-    if (!ImGui::IsPopupOpen(id, ImGuiPopupFlags_None)) {
-        g.NextWindowData.ClearFlags();
-        return false;
-    }
-
-    bool is_open = ImGui::Begin(name, open, extra_window_flags | ImGuiWindowFlags_Popup | ImGuiWindowFlags_NoDocking);
-    if (!is_open) {
-        ImGui::EndPopup();
-    }
-    return is_open;
-}
-
 void Viewport_scene_view::viewport_toolbar()
 {
     ImGui::PushID("Viewport_scene_view::viewport_toolbar()");
@@ -775,55 +760,18 @@ void Viewport_scene_view::viewport_toolbar()
         m_context.imgui_renderer->get_imgui_settings().scale_factor *
         m_context.imgui_renderer->get_imgui_settings().material_design_font_size;
 
-    auto icon_button = [&](const char* icon, const char* fallback_text, const char* tooltip, bool& toggle) -> bool {
-        bool pressed;
-        erhe::imgui::Item_mode mode = toggle ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal;
-        erhe::imgui::begin_button_style(mode);
-        if (icon_font) {
-            ImGui::PushFont(icon_font, font_size);
-            pressed = ImGui::Button(icon);
-            ImGui::PopFont();
-        } else {
-            pressed = ImGui::Button(fallback_text);
-        }
-        erhe::imgui::end_button_style(mode);
-        if (tooltip != nullptr && ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("%s", tooltip);
-        }
-        if (pressed) {
-            toggle = !toggle;
-        }
-        return pressed;
-    };
-
     icon_button(
+        icon_font,
+        font_size,
         ICON_MDI_AXIS_ARROW "##navigation_gizmo",
         "N##navigation_gizmo",
         "Show/Hide Navigation Gizmo",
         m_show_navigation_gizmo
     );
 
-    auto popup_button = [&](
-        const char* icon,
-        const char* title,
-        ImGuiID     popup_id,
-        bool&       is_open,
-        auto        content_fn
-    ) {
-        ImGui::PushFont(icon_font, font_size);
-        const bool pressed = ImGui::Button(icon);
-        ImGui::PopFont();
-        ImGui::SetItemTooltip("%s", title);
-        if (pressed) {
-            ImGui::OpenPopup(popup_id, ImGuiPopupFlags_None);
-        }
-        if (BeginPopupWithTitleAndOpen(popup_id, title, &is_open, ImGuiWindowFlags_AlwaysAutoResize)) {
-            content_fn();
-            ImGui::EndPopup();
-        }
-    };
-
     popup_button(
+        icon_font,
+        font_size,
         ICON_MDI_EYE "##ViewportVisualStyle",                      // icon
         "Visual Style",                                            // title
         ImGui::GetID("ViewportVisualStylePopup"),                  // popup_id
@@ -831,6 +779,8 @@ void Viewport_scene_view::viewport_toolbar()
         [this]() { Viewport_config_window::imgui(get_config()); }  // content_fn
     );
     popup_button(
+        icon_font,
+        font_size,
         ICON_MDI_DOTS_TRIANGLE "##ViewportSceneAndCamera",              // icon
         "Scene and Camera",                                             // title
         ImGui::GetID("ViewportSceneAndCameraPopup"),                    // popup_id
@@ -838,11 +788,13 @@ void Viewport_scene_view::viewport_toolbar()
         [this]() { Scene_view_config_window::imgui(m_context, *this); } // content_fn
     );
     popup_button(
-        ICON_MDI_EYE_SETTINGS_OUTLINE "##ViewportDebugVisualizations",      // icon
-        "Debug Visualization",                                              // title
-        ImGui::GetID("ViewportDebugVisualizations"),                        // popup_id
-        m_show_debug_visualizations_popup,                                  // is_open
-        [this]() { m_debug_visualizations.imgui(*this, m_context); } // content_fn
+        icon_font,
+        font_size,
+        ICON_MDI_EYE_SETTINGS_OUTLINE "##ViewportDebugVisualizations", // icon
+        "Debug Visualization",                                         // title
+        ImGui::GetID("ViewportDebugVisualizations"),                   // popup_id
+        m_show_debug_visualizations_popup,                             // is_open
+        [this]() { m_debug_visualizations.imgui(*this, m_context); }   // content_fn
     );
 
     m_context.selection_tool->viewport_toolbar();
