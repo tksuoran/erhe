@@ -35,6 +35,10 @@ public:
     void set_on_body_deactivated(std::function<void(IRigid_body*)> callback) override;
     void for_each_active_body   (std::function<void(IRigid_body*)> callback) override;
 
+    void set_on_trigger_enter   (std::function<void(const Trigger_event&)> callback) override;
+    void set_on_trigger_exit    (std::function<void(const Trigger_event&)> callback) override;
+    void set_collision_enabled  (IRigid_body* rigid_body_a, IRigid_body* rigid_body_b, bool enabled) override;
+
 private:
     glm::vec3                 m_gravity        {0.0f};
 
@@ -42,6 +46,9 @@ private:
     std::vector<IConstraint*> m_constraints;
 
     std::vector<std::shared_ptr<ICollision_shape>> m_collision_shapes;
+
+    std::function<void(const Trigger_event&)> m_on_trigger_enter_callback;
+    std::function<void(const Trigger_event&)> m_on_trigger_exit_callback;
 };
 
 } // namespace erhe::physics

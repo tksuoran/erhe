@@ -40,10 +40,14 @@ Jolt_rigid_body::Jolt_rigid_body(
     Jolt_world&                    world,
     const IRigid_body_create_info& create_info
 )
-    : m_world          {world}
-    , m_collision_shape{std::static_pointer_cast<Jolt_collision_shape>(create_info.collision_shape)}
-    , m_motion_mode    {create_info.motion_mode}
+    : m_world           {world}
+    , m_collision_shape {std::static_pointer_cast<Jolt_collision_shape>(create_info.collision_shape)}
+    , m_motion_mode     {create_info.motion_mode}
+    , m_physics_material{create_info.physics_material}
+    , m_collision_filter{create_info.collision_filter}
 {
+    update_material_snapshot();
+
     if (!m_collision_shape) {
         return;
     }
@@ -118,6 +122,11 @@ Jolt_rigid_body::Jolt_rigid_body(
 
     static_assert(sizeof(uintptr_t) <= sizeof(JPH::uint64));
     creation_settings.mUserData = static_cast<JPH::uint64>(reinterpret_cast<uintptr_t>(this));
+
+    // Every body gets a CollisionGroup with a unique SubGroupID serial
+    // (enables pair exclusion for any body); the world group filter and a
+    // compiled GroupID are assigned only when a Collision_filter is present.
+    creation_settings.mCollisionGroup = world.make_collision_group(create_info.collision_filter);
 
     m_body = get_body_interface().CreateBody(creation_settings);
     if (m_body == nullptr) {
@@ -545,6 +554,50 @@ void Jolt_rigid_body::set_owner(void* owner)
 auto Jolt_rigid_body::get_owner() const -> void*
 {
     return m_owner;
+}
+
+auto Jolt_rigid_body::get_physics_material() const -> std::shared_ptr<Physics_material>
+{
+    return m_physics_material;
+}
+
+void Jolt_rigid_body::set_physics_material(const std::shared_ptr<Physics_material>& material)
+{
+    m_physics_material = material;
+    update_material_snapshot();
+}
+
+auto Jolt_rigid_body::get_collision_filter() const -> std::shared_ptr<Collision_filter>
+{
+    return m_collision_filter;
+}
+
+void Jolt_rigid_body::set_collision_filter(const std::shared_ptr<Collision_filter>& filter)
+{
+    m_collision_filter = filter;
+    if (m_body == nullptr) {
+        return;
+    }
+    m_world.update_collision_group(*m_body, filter);
+}
+
+auto Jolt_rigid_body::get_material_snapshot() const -> const Physics_material_snapshot&
+{
+    return m_material_snapshot;
+}
+
+void Jolt_rigid_body::update_material_snapshot()
+{
+    if (m_physics_material) {
+        m_material_snapshot.static_friction     = m_physics_material->static_friction;
+        m_material_snapshot.dynamic_friction    = m_physics_material->dynamic_friction;
+        m_material_snapshot.restitution         = m_physics_material->restitution;
+        m_material_snapshot.friction_combine    = m_physics_material->friction_combine;
+        m_material_snapshot.restitution_combine = m_physics_material->restitution_combine;
+        m_material_snapshot.has_material        = true;
+    } else {
+        m_material_snapshot = Physics_material_snapshot{};
+    }
 }
 
 } // namespace erhe::physics

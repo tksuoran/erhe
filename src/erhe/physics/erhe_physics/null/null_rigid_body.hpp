@@ -36,6 +36,8 @@ public:
     auto get_world_transform         () const -> glm::mat4                         override;
     auto is_active                   () const -> bool                              override;
     auto get_allow_sleeping          () const -> bool                              override;
+    auto get_physics_material        () const -> std::shared_ptr<Physics_material> override;
+    auto get_collision_filter        () const -> std::shared_ptr<Collision_filter> override;
 
     void begin_move                  ()                                             override; // Disables deactivation
     void end_move                    ()                                             override; // Sets active, clears disable deactivation
@@ -51,10 +53,14 @@ public:
     void set_allow_sleeping          (bool value)                                   override;
     void set_owner                   (void* owner)                                  override;
     auto get_owner                   () const -> void*                              override;
+    void set_physics_material        (const std::shared_ptr<Physics_material>& material) override;
+    void set_collision_filter        (const std::shared_ptr<Collision_filter>& filter)   override;
 
 private:
     Null_world&                       m_world;
     std::shared_ptr<ICollision_shape> m_collision_shape;
+    std::shared_ptr<Physics_material> m_physics_material;
+    std::shared_ptr<Collision_filter> m_collision_filter;
     Transform                         m_transform;
     glm::vec3                         m_linear_velocity;
     glm::vec3                         m_angular_velocity;

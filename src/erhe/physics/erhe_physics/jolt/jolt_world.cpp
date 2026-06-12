@@ -1,5 +1,6 @@
 #include "erhe_physics/jolt/jolt_world.hpp"
 #include "erhe_log/log_glm.hpp"
+#include "erhe_physics/collision_filter.hpp"
 #include "erhe_physics/jolt/jolt_constraint.hpp"
 #include "erhe_physics/jolt/jolt_rigid_body.hpp"
 #include "erhe_physics/jolt/glm_conversions.hpp"
@@ -12,6 +13,7 @@
 #include <Jolt/Core/Factory.h>
 #include <Jolt/Physics/Body/Body.h>
 
+#include <algorithm>
 #include <cstdarg>
 
 namespace erhe::physics {
@@ -129,6 +131,122 @@ auto Jolt_collision_filter::ShouldCollide(JPH::ObjectLayer inLayer1, JPH::Object
     }
 }
 
+namespace {
+
+// Packs an ordered SubGroupID pair into a single 64-bit pair-exclusion key.
+[[nodiscard]] auto pack_subgroup_pair(const JPH::CollisionGroup::SubGroupID a, const JPH::CollisionGroup::SubGroupID b) -> uint64_t
+{
+    const uint64_t lo = static_cast<uint64_t>(std::min(a, b));
+    const uint64_t hi = static_cast<uint64_t>(std::max(a, b));
+    return (hi << 32) | lo;
+}
+
+// Packs a (body1, body2) BodyID pair into a sensor-contact map key. Jolt
+// orders body 1 ID < body 2 ID in both OnContactAdded and OnContactRemoved,
+// but the ids are min/max-ordered here anyway for robustness.
+[[nodiscard]] auto pack_body_pair(const JPH::BodyID body_id_1, const JPH::BodyID body_id_2) -> uint64_t
+{
+    const uint32_t raw1 = body_id_1.GetIndexAndSequenceNumber();
+    const uint32_t raw2 = body_id_2.GetIndexAndSequenceNumber();
+    const uint64_t lo   = static_cast<uint64_t>(std::min(raw1, raw2));
+    const uint64_t hi   = static_cast<uint64_t>(std::max(raw1, raw2));
+    return (hi << 32) | lo;
+}
+
+} // anonymous namespace
+
+auto Jolt_group_filter::CanCollide(const JPH::CollisionGroup& group1, const JPH::CollisionGroup& group2) const -> bool
+{
+    // Read-only during PhysicsSystem::Update(); mutations happen only outside
+    // update_fixed_step() - see class comment.
+
+    // 1. Pair exclusion (IWorld::set_collision_enabled(), joint enableCollision = false)
+    if (!m_excluded_pairs.empty()) {
+        const uint64_t key = pack_subgroup_pair(group1.GetSubGroupID(), group2.GetSubGroupID());
+        if (m_excluded_pairs.find(key) != m_excluded_pairs.end()) {
+            return false;
+        }
+    }
+
+    // 2. Bidirectional KHR_physics_rigid_bodies collision-system test
+    return
+        does_collide(group1.GetGroupID(), group2.GetGroupID()) &&
+        does_collide(group2.GetGroupID(), group1.GetGroupID());
+}
+
+auto Jolt_group_filter::does_collide(const JPH::CollisionGroup::GroupID a, const JPH::CollisionGroup::GroupID b) const -> bool
+{
+    if (a == JPH::CollisionGroup::cInvalidGroup) {
+        return true; // no filter - collides with everything
+    }
+    const Compiled_collision_filter& filter = m_compiled_filters[a];
+    const uint64_t other_membership = (b == JPH::CollisionGroup::cInvalidGroup)
+        ? uint64_t{0}
+        : m_compiled_filters[b].membership;
+    return filter.is_allow_list
+        ? ((filter.mask & other_membership) != 0)
+        : ((filter.mask & other_membership) == 0);
+}
+
+auto Jolt_group_filter::intern_system(const std::string& name) -> int
+{
+    for (std::size_t i = 0, end = m_system_names.size(); i < end; ++i) {
+        if (m_system_names[i] == name) {
+            return static_cast<int>(i);
+        }
+    }
+    if (m_system_names.size() >= 64) {
+        log_physics->error("collision system limit (64) exceeded; system '{}' ignored", name);
+        return -1;
+    }
+    m_system_names.push_back(name);
+    return static_cast<int>(m_system_names.size() - 1);
+}
+
+auto Jolt_group_filter::make_bitset(const std::vector<std::string>& names) -> uint64_t
+{
+    uint64_t bits = 0;
+    for (const std::string& name : names) {
+        const int index = intern_system(name);
+        if (index >= 0) {
+            bits = bits | (uint64_t{1} << static_cast<unsigned int>(index));
+        }
+    }
+    return bits;
+}
+
+auto Jolt_group_filter::get_or_compile(const std::shared_ptr<Collision_filter>& filter) -> JPH::CollisionGroup::GroupID
+{
+    const auto existing = m_filter_to_compiled.find(filter.get());
+    if (existing != m_filter_to_compiled.end()) {
+        return existing->second;
+    }
+    Compiled_collision_filter compiled{};
+    compiled.membership    = make_bitset(filter->collision_systems);
+    compiled.is_allow_list = !filter->collide_with_systems.empty();
+    compiled.mask          = compiled.is_allow_list
+        ? make_bitset(filter->collide_with_systems)
+        : make_bitset(filter->not_collide_with_systems);
+    const JPH::CollisionGroup::GroupID group_id = static_cast<JPH::CollisionGroup::GroupID>(m_compiled_filters.size());
+    m_compiled_filters.push_back(compiled);
+    m_filter_to_compiled.emplace(filter.get(), group_id);
+    return group_id;
+}
+
+void Jolt_group_filter::set_pair_collision_enabled(
+    const JPH::CollisionGroup::SubGroupID a,
+    const JPH::CollisionGroup::SubGroupID b,
+    const bool                            enabled
+)
+{
+    const uint64_t key = pack_subgroup_pair(a, b);
+    if (enabled) {
+        m_excluded_pairs.erase(key);
+    } else {
+        m_excluded_pairs.insert(key);
+    }
+}
+
 IWorld::~IWorld() noexcept
 {
 }
@@ -166,6 +284,7 @@ void initialize_physics_system()
 Jolt_world::Jolt_world()
     : m_temp_allocator{10 * 1024 * 1024}
     , m_job_system    {JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, 10}
+    , m_group_filter  {new Jolt_group_filter()}
 {
     //m_debug_renderer              = std::make_unique<Jolt_debug_renderer             >();
     m_broad_phase_layer_interface = std::make_unique<Broad_phase_layer_interface_impl>();
@@ -208,6 +327,32 @@ void Jolt_world::update_fixed_step(const double dt)
         &m_temp_allocator,
         &m_job_system
     );
+
+    dispatch_trigger_events();
+}
+
+void Jolt_world::dispatch_trigger_events()
+{
+    // Move pending events (queued by contact callbacks on Jolt worker
+    // threads) to the dispatch buffer and invoke the callbacks on this
+    // (caller) thread. Both vectors keep their high-water capacity: swap
+    // exchanges buffers and clear() does not deallocate.
+    {
+        const std::lock_guard<std::mutex> lock{m_trigger_mutex};
+        std::swap(m_pending_trigger_events, m_dispatch_trigger_events);
+    }
+    for (const Pending_trigger_event& pending : m_dispatch_trigger_events) {
+        if (pending.is_enter) {
+            if (m_on_trigger_enter_callback) {
+                m_on_trigger_enter_callback(pending.event);
+            }
+        } else {
+            if (m_on_trigger_exit_callback) {
+                m_on_trigger_exit_callback(pending.event);
+            }
+        }
+    }
+    m_dispatch_trigger_events.clear();
 }
 
 auto Jolt_world::describe() const -> std::vector<std::string>
@@ -291,6 +436,37 @@ void Jolt_world::remove_rigid_body(IRigid_body* rigid_body)
         body_interface.RemoveBody(jolt_body->GetID());
         m_rigid_bodies.erase(i, m_rigid_bodies.end());
     }
+
+    // Synthesize trigger exit events for sensor pairs involving the removed
+    // body. Jolt reports OnContactRemoved for these pairs only in the NEXT
+    // update, when the removed body (and its Jolt_rigid_body wrapper) may
+    // already be destroyed and its BodyID reused; the map entries are erased
+    // here so that those late callbacks find nothing.
+    {
+        const std::lock_guard<std::mutex> lock{m_trigger_mutex};
+        for (auto entry = m_sensor_contacts.begin(); entry != m_sensor_contacts.end();) {
+            const Sensor_pair& pair = entry->second;
+            if ((pair.sensor == jolt_rigid_body) || (pair.other == jolt_rigid_body)) {
+                m_dispatch_trigger_events.push_back(
+                    Pending_trigger_event{
+                        .event    = Trigger_event{.sensor = pair.sensor, .other = pair.other},
+                        .is_enter = false
+                    }
+                );
+                entry = m_sensor_contacts.erase(entry);
+            } else {
+                ++entry;
+            }
+        }
+    }
+    // Dispatch outside the lock; remove_rigid_body is never called during
+    // update_fixed_step, so the dispatch buffer is free here.
+    for (const Pending_trigger_event& pending : m_dispatch_trigger_events) {
+        if (m_on_trigger_exit_callback) {
+            m_on_trigger_exit_callback(pending.event);
+        }
+    }
+    m_dispatch_trigger_events.clear();
 }
 
 void Jolt_world::add_constraint(IConstraint* constraint)
@@ -423,6 +599,51 @@ void Jolt_world::OnBodyDeactivated(const JPH::BodyID& inBodyID, JPH::uint64 inBo
     );
 }
 
+namespace {
+
+// Computes per-contact combined friction / restitution from the bodies'
+// Physics_material_snapshots per KHR_physics_rigid_bodies (combine mode
+// precedence: average > minimum > maximum > multiply). Only overrides
+// ioSettings when at least one body has a material; a material-less body
+// contributes its legacy scalar friction / restitution values (as both
+// static and dynamic friction) with e_average combine mode. Friction uses
+// dynamic friction only for now (documented approximation; static friction
+// selection by tangential velocity is a follow-up).
+//
+// Runs on Jolt worker threads with all bodies locked: allocation-free,
+// lock-free, reads POD snapshots only.
+void combine_contact_material(const JPH::Body& body1, const JPH::Body& body2, JPH::ContactSettings& settings)
+{
+    const Jolt_rigid_body* rigid_body1 = reinterpret_cast<const Jolt_rigid_body*>(body1.GetUserData());
+    const Jolt_rigid_body* rigid_body2 = reinterpret_cast<const Jolt_rigid_body*>(body2.GetUserData());
+    if ((rigid_body1 == nullptr) || (rigid_body2 == nullptr)) {
+        return;
+    }
+    const Physics_material_snapshot& snapshot1 = rigid_body1->get_material_snapshot();
+    const Physics_material_snapshot& snapshot2 = rigid_body2->get_material_snapshot();
+    if (!snapshot1.has_material && !snapshot2.has_material) {
+        return; // legacy scalar path: keep Jolt's default combine result
+    }
+
+    const float friction1    = snapshot1.has_material ? snapshot1.dynamic_friction : body1.GetFriction();
+    const float friction2    = snapshot2.has_material ? snapshot2.dynamic_friction : body2.GetFriction();
+    const float restitution1 = snapshot1.has_material ? snapshot1.restitution      : body1.GetRestitution();
+    const float restitution2 = snapshot2.has_material ? snapshot2.restitution      : body2.GetRestitution();
+
+    const Combine_mode friction_combine1    = snapshot1.has_material ? snapshot1.friction_combine    : Combine_mode::e_average;
+    const Combine_mode friction_combine2    = snapshot2.has_material ? snapshot2.friction_combine    : Combine_mode::e_average;
+    const Combine_mode restitution_combine1 = snapshot1.has_material ? snapshot1.restitution_combine : Combine_mode::e_average;
+    const Combine_mode restitution_combine2 = snapshot2.has_material ? snapshot2.restitution_combine : Combine_mode::e_average;
+
+    const Combine_mode friction_mode    = combine(friction_combine1,    friction_combine2);
+    const Combine_mode restitution_mode = combine(restitution_combine1, restitution_combine2);
+
+    settings.mCombinedFriction    = combine_values(friction_mode,    friction1,    friction2);
+    settings.mCombinedRestitution = combine_values(restitution_mode, restitution1, restitution2);
+}
+
+} // anonymous namespace
+
 void Jolt_world::OnContactAdded(
     const JPH::Body&            inBody1,
     const JPH::Body&            inBody2,
@@ -430,18 +651,33 @@ void Jolt_world::OnContactAdded(
     JPH::ContactSettings&       ioSettings
 )
 {
-    //log_physics->trace("contact added");
-    static_cast<void>(inBody1);
-    static_cast<void>(inBody2);
     static_cast<void>(inManifold);
-    static_cast<void>(ioSettings);
-    //auto* jolt_body1 = reinterpret_cast<Jolt_rigid_body*>(inBody1.GetUserData());
-    //auto* jolt_body2 = reinterpret_cast<Jolt_rigid_body*>(inBody1.GetUserData());
-    //log_physics.info(
-    //    "contact added {} - {}",
-    //    (jolt_body1 != nullptr) ? jolt_body1->get_debug_label() : "()",
-    //    (jolt_body2 != nullptr) ? jolt_body2->get_debug_label() : "()"
-    //);
+
+    combine_contact_material(inBody1, inBody2, ioSettings);
+
+    const bool is_sensor1 = inBody1.IsSensor();
+    const bool is_sensor2 = inBody2.IsSensor();
+    if (is_sensor1 || is_sensor2) {
+        // Cache the wrapper pointers now: bodies cannot be accessed during
+        // OnContactRemoved. Trigger enter fires on the first sub-shape
+        // contact of a body pair; further manifolds only bump the count.
+        Jolt_rigid_body* rigid_body1 = reinterpret_cast<Jolt_rigid_body*>(inBody1.GetUserData());
+        Jolt_rigid_body* rigid_body2 = reinterpret_cast<Jolt_rigid_body*>(inBody2.GetUserData());
+        const uint64_t key = pack_body_pair(inBody1.GetID(), inBody2.GetID());
+        const std::lock_guard<std::mutex> lock{m_trigger_mutex};
+        Sensor_pair& pair = m_sensor_contacts[key];
+        if (pair.contact_count == 0) {
+            pair.sensor = is_sensor1 ? rigid_body1 : rigid_body2;
+            pair.other  = is_sensor1 ? rigid_body2 : rigid_body1;
+            m_pending_trigger_events.push_back(
+                Pending_trigger_event{
+                    .event    = Trigger_event{.sensor = pair.sensor, .other = pair.other},
+                    .is_enter = true
+                }
+            );
+        }
+        ++pair.contact_count;
+    }
 }
 
 void Jolt_world::OnContactPersisted(
@@ -451,36 +687,98 @@ void Jolt_world::OnContactPersisted(
     JPH::ContactSettings&       ioSettings
 )
 {
-    //log_physics->trace("contact persisted");
-    static_cast<void>(inBody1);
-    static_cast<void>(inBody2);
     static_cast<void>(inManifold);
-    static_cast<void>(ioSettings);
-    //auto* jolt_body1 = reinterpret_cast<Jolt_rigid_body*>(inBody1.GetUserData());
-    //auto* jolt_body2 = reinterpret_cast<Jolt_rigid_body*>(inBody1.GetUserData());
-    //log_physics.info(
-    //    "contact persisted {} - {}",
-    //    (jolt_body1 != nullptr) ? jolt_body1->get_debug_label() : "()",
-    //    (jolt_body2 != nullptr) ? jolt_body2->get_debug_label() : "()"
-    //);
+
+    combine_contact_material(inBody1, inBody2, ioSettings);
 }
 
 void Jolt_world::OnContactRemoved(const JPH::SubShapeIDPair& inSubShapePair)
 {
-    static_cast<void>(inSubShapePair);
-    //log_physics->trace("contact removed");
-    //auto& body_interface = m_physics_system.GetBodyInterface();
-    //auto* jolt_body1 = reinterpret_cast<Jolt_rigid_body*>(body_interface.GetUserData(inSubShapePair.GetBody1ID()));
-    //auto* jolt_body2 = reinterpret_cast<Jolt_rigid_body*>(body_interface.GetUserData(inSubShapePair.GetBody2ID()));
-    //log_physics.info(
-    //    "contact removed {} - {}",
-    //    (jolt_body1 != nullptr) ? jolt_body1->get_debug_label() : "()",
-    //    (jolt_body2 != nullptr) ? jolt_body2->get_debug_label() : "()"
-    //);
+    // Bodies must NOT be accessed here (they may already be destroyed);
+    // everything needed was cached in OnContactAdded.
+    const uint64_t key = pack_body_pair(inSubShapePair.GetBody1ID(), inSubShapePair.GetBody2ID());
+    const std::lock_guard<std::mutex> lock{m_trigger_mutex};
+    const auto entry = m_sensor_contacts.find(key);
+    if (entry == m_sensor_contacts.end()) {
+        return; // not a sensor pair (or purged by remove_rigid_body)
+    }
+    Sensor_pair& pair = entry->second;
+    --pair.contact_count;
+    if (pair.contact_count <= 0) {
+        m_pending_trigger_events.push_back(
+            Pending_trigger_event{
+                .event    = Trigger_event{.sensor = pair.sensor, .other = pair.other},
+                .is_enter = false
+            }
+        );
+        m_sensor_contacts.erase(entry);
+    }
 }
 
 void Jolt_world::sanity_check()
 {
+}
+
+void Jolt_world::set_on_trigger_enter(std::function<void(const Trigger_event&)> callback)
+{
+    m_on_trigger_enter_callback = callback;
+}
+
+void Jolt_world::set_on_trigger_exit(std::function<void(const Trigger_event&)> callback)
+{
+    m_on_trigger_exit_callback = callback;
+}
+
+void Jolt_world::set_collision_enabled(IRigid_body* rigid_body_a, IRigid_body* rigid_body_b, const bool enabled)
+{
+    auto* jolt_rigid_body_a = reinterpret_cast<Jolt_rigid_body*>(rigid_body_a);
+    auto* jolt_rigid_body_b = reinterpret_cast<Jolt_rigid_body*>(rigid_body_b);
+    ERHE_VERIFY(jolt_rigid_body_a != nullptr);
+    ERHE_VERIFY(jolt_rigid_body_b != nullptr);
+
+    JPH::Body* jolt_body_a = jolt_rigid_body_a->get_jolt_body();
+    JPH::Body* jolt_body_b = jolt_rigid_body_b->get_jolt_body();
+    if ((jolt_body_a == &JPH::Body::sFixedToWorld) || (jolt_body_b == &JPH::Body::sFixedToWorld)) {
+        return; // the fixed-to-world placeholder never goes through group filters
+    }
+
+    JPH::CollisionGroup& group_a = jolt_body_a->GetCollisionGroup();
+    JPH::CollisionGroup& group_b = jolt_body_b->GetCollisionGroup();
+    if (!enabled) {
+        // Pair exclusion requires the group filter to be consulted for this
+        // pair; assign it lazily to bodies that did not have a Collision_filter.
+        if (group_a.GetGroupFilter() == nullptr) {
+            group_a.SetGroupFilter(m_group_filter.GetPtr());
+        }
+        if (group_b.GetGroupFilter() == nullptr) {
+            group_b.SetGroupFilter(m_group_filter.GetPtr());
+        }
+    }
+    m_group_filter->set_pair_collision_enabled(group_a.GetSubGroupID(), group_b.GetSubGroupID(), enabled);
+}
+
+auto Jolt_world::make_collision_group(const std::shared_ptr<Collision_filter>& filter) -> JPH::CollisionGroup
+{
+    const JPH::CollisionGroup::SubGroupID serial = m_next_body_serial++;
+    if (filter) {
+        const JPH::CollisionGroup::GroupID group_id = m_group_filter->get_or_compile(filter);
+        return JPH::CollisionGroup{m_group_filter.GetPtr(), group_id, serial};
+    }
+    return JPH::CollisionGroup{nullptr, JPH::CollisionGroup::cInvalidGroup, serial};
+}
+
+void Jolt_world::update_collision_group(JPH::Body& body, const std::shared_ptr<Collision_filter>& filter)
+{
+    JPH::CollisionGroup& group = body.GetCollisionGroup();
+    if (filter) {
+        group.SetGroupID(m_group_filter->get_or_compile(filter));
+        group.SetGroupFilter(m_group_filter.GetPtr());
+    } else {
+        // Keep the group filter pointer: it may still be needed for pair
+        // exclusion; with an invalid GroupID and no excluded pairs
+        // CanCollide() returns true.
+        group.SetGroupID(JPH::CollisionGroup::cInvalidGroup);
+    }
 }
 
 auto Jolt_world::create_rigid_body(const IRigid_body_create_info& create_info) -> IRigid_body*

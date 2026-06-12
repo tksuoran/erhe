@@ -57,14 +57,20 @@ if (${ERHE_PHYSICS_LIBRARY} STREQUAL "none")
 endif ()
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+    erhe_physics/collision_filter.cpp
+    erhe_physics/collision_filter.hpp
     erhe_physics/icollision_shape.hpp
     erhe_physics/iconstraint.hpp
     erhe_physics/iconvex_hull_collision_shape.hpp
     erhe_physics/idebug_draw.hpp
     erhe_physics/irigid_body.hpp
     erhe_physics/iworld.hpp
+    erhe_physics/physics_joint_settings.cpp
+    erhe_physics/physics_joint_settings.hpp
     erhe_physics/physics_log.cpp
     erhe_physics/physics_log.hpp
+    erhe_physics/physics_material.cpp
+    erhe_physics/physics_material.hpp
     erhe_physics/transform.hpp
 )
 
@@ -75,6 +81,7 @@ target_link_libraries(
     PUBLIC
         ${impl_link_libraries}
         erhe::geometry
+        erhe::item
         erhe::log
         erhe::primitive
         erhe::profile

@@ -14,6 +14,8 @@ Null_rigid_body::Null_rigid_body(
 )
     : m_world           {world}
     , m_collision_shape {create_info.collision_shape}
+    , m_physics_material{create_info.physics_material}
+    , m_collision_filter{create_info.collision_filter}
     , m_linear_velocity {create_info.linear_velocity}
     , m_angular_velocity{create_info.angular_velocity}
     , m_mass            {create_info.mass}
@@ -42,6 +44,26 @@ auto Null_rigid_body::get_motion_mode() const -> Motion_mode
 auto Null_rigid_body::get_collision_shape() const -> std::shared_ptr<ICollision_shape>
 {
     return m_collision_shape;
+}
+
+auto Null_rigid_body::get_physics_material() const -> std::shared_ptr<Physics_material>
+{
+    return m_physics_material;
+}
+
+void Null_rigid_body::set_physics_material(const std::shared_ptr<Physics_material>& material)
+{
+    m_physics_material = material;
+}
+
+auto Null_rigid_body::get_collision_filter() const -> std::shared_ptr<Collision_filter>
+{
+    return m_collision_filter;
+}
+
+void Null_rigid_body::set_collision_filter(const std::shared_ptr<Collision_filter>& filter)
+{
+    m_collision_filter = filter;
 }
 
 auto Null_rigid_body::get_friction() const -> float

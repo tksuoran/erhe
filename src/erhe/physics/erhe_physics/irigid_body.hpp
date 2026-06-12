@@ -36,8 +36,10 @@ static constexpr const char* c_motion_mode_strings[] = {
     return c_motion_mode_strings[static_cast<int>(motion_mode)];
 }
 
+class Collision_filter;
 class ICollision_shape;
 class IWorld;
+class Physics_material;
 
 class IRigid_body_create_info
 {
@@ -59,6 +61,8 @@ public:
     glm::vec3                         angular_velocity {0.0f, 0.0f, 0.0f}; // world space, applied at creation
     float                             gravity_factor   {1.0f};
     bool                              is_sensor        {false};
+    std::shared_ptr<Physics_material> physics_material {}; // shared material; overrides scalar friction / restitution in contact resolution
+    std::shared_ptr<Collision_filter> collision_filter {}; // shared collision-system filter
 };
 
 class IRigid_body
@@ -83,6 +87,8 @@ public:
     [[nodiscard]] virtual auto get_world_transform         () const -> glm::mat4                         = 0;
     [[nodiscard]] virtual auto is_active                   () const -> bool                              = 0;
     [[nodiscard]] virtual auto get_allow_sleeping          () const -> bool                              = 0;
+    [[nodiscard]] virtual auto get_physics_material        () const -> std::shared_ptr<Physics_material> = 0;
+    [[nodiscard]] virtual auto get_collision_filter        () const -> std::shared_ptr<Collision_filter> = 0;
     virtual void begin_move          ()                                             = 0;
     virtual void end_move            ()                                             = 0;
     virtual void set_angular_velocity(const glm::vec3& velocity)                    = 0;
@@ -97,6 +103,12 @@ public:
     virtual void set_allow_sleeping  (bool value)                                   = 0;
     virtual void set_owner           (void* owner)                                  = 0;
     [[nodiscard]] virtual auto get_owner() const -> void*                           = 0;
+
+    // Material / filter assignment. Must be called outside
+    // IWorld::update_fixed_step(): the backend snapshot is read without locks
+    // by contact callbacks running on physics worker threads during update.
+    virtual void set_physics_material(const std::shared_ptr<Physics_material>& material) = 0;
+    virtual void set_collision_filter(const std::shared_ptr<Collision_filter>& filter)   = 0;
 };
 
 } // namespace erhe::physics

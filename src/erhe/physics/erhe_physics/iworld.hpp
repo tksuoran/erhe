@@ -20,6 +20,15 @@ class IConstraint;
 class IRigid_body;
 class IRigid_body_create_info;
 
+// Sensor (trigger volume) overlap event: another body started or stopped
+// overlapping a body created with IRigid_body_create_info::is_sensor = true.
+class Trigger_event
+{
+public:
+    IRigid_body* sensor{nullptr};
+    IRigid_body* other {nullptr};
+};
+
 class IWorld
 {
 public:
@@ -47,6 +56,17 @@ public:
     virtual void set_on_body_activated  (std::function<void(IRigid_body*)> callback)     = 0;
     virtual void set_on_body_deactivated(std::function<void(IRigid_body*)> callback)     = 0;
     virtual void for_each_active_body   (std::function<void(IRigid_body*)> callback)     = 0;
+
+    // Trigger (sensor) overlap callbacks. Events are collected during
+    // update_fixed_step() and dispatched on the calling thread at the end of
+    // that same update_fixed_step() call.
+    virtual void set_on_trigger_enter   (std::function<void(const Trigger_event&)> callback) = 0;
+    virtual void set_on_trigger_exit    (std::function<void(const Trigger_event&)> callback) = 0;
+
+    // Enables / disables collision between one specific pair of bodies
+    // (used for joint enableCollision = false pair exclusion). Must be
+    // called outside update_fixed_step().
+    virtual void set_collision_enabled  (IRigid_body* rigid_body_a, IRigid_body* rigid_body_b, bool enabled) = 0;
 };
 
 } // namespace erhe::physics

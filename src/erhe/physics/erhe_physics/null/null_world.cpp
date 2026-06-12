@@ -129,5 +129,22 @@ void Null_world::for_each_active_body(std::function<void(IRigid_body*)>)
 {
 }
 
+void Null_world::set_on_trigger_enter(std::function<void(const Trigger_event&)> callback)
+{
+    m_on_trigger_enter_callback = callback;
+}
+
+void Null_world::set_on_trigger_exit(std::function<void(const Trigger_event&)> callback)
+{
+    m_on_trigger_exit_callback = callback;
+}
+
+void Null_world::set_collision_enabled(IRigid_body* rigid_body_a, IRigid_body* rigid_body_b, bool enabled)
+{
+    static_cast<void>(rigid_body_a);
+    static_cast<void>(rigid_body_b);
+    static_cast<void>(enabled);
+}
+
 
 } // namespace erhe::physics

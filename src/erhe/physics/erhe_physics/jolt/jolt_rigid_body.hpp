@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_physics/irigid_body.hpp"
+#include "erhe_physics/physics_material.hpp"
 
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/Body/Body.h>
@@ -14,6 +15,21 @@ namespace erhe::physics {
 
 class Jolt_collision_shape;
 class Jolt_world;
+
+// POD copy of the assigned Physics_material, read without locks by the
+// world's contact listener (Jolt worker threads) during update_fixed_step().
+// Updated only at body creation and from set_physics_material(), which must
+// be called outside update_fixed_step().
+class Physics_material_snapshot
+{
+public:
+    float        static_friction    {0.6f};
+    float        dynamic_friction   {0.6f};
+    float        restitution        {0.0f};
+    Combine_mode friction_combine   {Combine_mode::e_average};
+    Combine_mode restitution_combine{Combine_mode::e_average};
+    bool         has_material       {false};
+};
 
 class Jolt_rigid_body : public IRigid_body
 {
@@ -42,6 +58,8 @@ public:
     auto get_world_transform         () const -> glm::mat4                         override;
     auto is_active                   () const -> bool                              override;
     auto get_allow_sleeping          () const -> bool                              override;
+    auto get_physics_material        () const -> std::shared_ptr<Physics_material> override;
+    auto get_collision_filter        () const -> std::shared_ptr<Collision_filter> override;
 
     void begin_move                  ()                                            override; // Disables deactivation
     void end_move                    ()                                            override; // Sets active, clears disable deactivation
@@ -57,12 +75,19 @@ public:
     void set_allow_sleeping          (bool value)                                  override;
     void set_owner                   (void* owner)                                 override;
     auto get_owner                   () const -> void*                             override;
+    void set_physics_material        (const std::shared_ptr<Physics_material>& material) override;
+    void set_collision_filter        (const std::shared_ptr<Collision_filter>& filter)   override;
 
     // Public API
     auto get_jolt_body() const -> JPH::Body*;
 
+    // Read by the world's contact listener on Jolt worker threads; see
+    // Physics_material_snapshot.
+    [[nodiscard]] auto get_material_snapshot() const -> const Physics_material_snapshot&;
+
 private:
     [[nodiscard]] auto get_body_interface() const -> JPH::BodyInterface&;
+    void update_material_snapshot();
 
     JPH::Body*                            m_body            {nullptr};
     void*                                 m_owner           {nullptr};
@@ -71,6 +96,9 @@ private:
     std::shared_ptr<Jolt_collision_shape> m_collision_shape;
     Motion_mode                           m_motion_mode     {Motion_mode::e_kinematic_non_physical};
     std::string                           m_debug_label;
+    std::shared_ptr<Physics_material>     m_physics_material;
+    std::shared_ptr<Collision_filter>     m_collision_filter;
+    Physics_material_snapshot             m_material_snapshot;
 };
 
 } // namespace erhe::physics

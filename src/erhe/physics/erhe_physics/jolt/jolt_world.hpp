@@ -3,20 +3,27 @@
 #include "erhe_physics/iworld.hpp"
 
 #include <Jolt/Jolt.h>
+#include <Jolt/Core/Reference.h>
 #include <Jolt/Core/TempAllocator.h>
 #include <Jolt/Core/JobSystemThreadPool.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h>
+#include <Jolt/Physics/Collision/CollisionGroup.h>
 #include <Jolt/Physics/Collision/ContactListener.h>
+#include <Jolt/Physics/Collision/GroupFilter.h>
 #include <Jolt/Physics/Body/BodyActivationListener.h>
 
 #include <memory>
+#include <mutex>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace erhe::physics {
 
 enum class Motion_mode : unsigned int;
 
+class Collision_filter;
 class ICollision_shape;
 class Jolt_rigid_body;
 class Jolt_constraint;
@@ -46,6 +53,57 @@ class Jolt_collision_filter
 
     // Implements JPH::ObjectLayerPairFilter
     [[nodiscard]] auto ShouldCollide(JPH::ObjectLayer inLayer1, JPH::ObjectLayer inLayer2) const -> bool override;
+};
+
+// Collision_filter compiled into bitsets over interned collision-system
+// strings (at most 64 systems per world; see Jolt_group_filter).
+class Compiled_collision_filter
+{
+public:
+    uint64_t membership   {0};     // systems this filter's body belongs to
+    uint64_t mask         {0};     // collide_with (allow list) or not_collide_with (deny list) systems
+    bool     is_allow_list{false};
+};
+
+// Single world-owned JPH::GroupFilter implementing both KHR_physics_rigid_bodies
+// collision-system filters and per-pair collision exclusion. Consulted by the
+// Jolt narrow phase for body pairs where at least one body's CollisionGroup
+// carries this filter. Per-body CollisionGroup usage:
+// - GroupID:    index into m_compiled_filters, or JPH::CollisionGroup::cInvalidGroup
+//               when the body has no Collision_filter (collides with everything).
+// - SubGroupID: world-assigned monotonically increasing body serial, used as
+//               key for pair exclusion.
+//
+// THREAD SAFETY: CanCollide() is called concurrently from Jolt worker threads
+// during PhysicsSystem::Update() and performs read-only lookups. All mutating
+// methods (get_or_compile(), set_pair_collision_enabled()) must only be
+// called outside IWorld::update_fixed_step() (body creation, filter
+// assignment, constraint add/remove - all cold paths).
+class Jolt_group_filter final : public JPH::GroupFilter
+{
+public:
+    // Implements JPH::GroupFilter
+    auto CanCollide(const JPH::CollisionGroup& group1, const JPH::CollisionGroup& group2) const -> bool override;
+
+    // Returns the compiled-filter GroupID for the given filter item, compiling
+    // it on first use. Identical Collision_filter items (by pointer) share one
+    // compiled entry. Compiled entries snapshot the item's current contents;
+    // editing a live Collision_filter requires re-assigning it to bodies.
+    // (Entries are never removed; the table is bounded by the number of
+    // distinct filter items ever assigned.)
+    [[nodiscard]] auto get_or_compile(const std::shared_ptr<Collision_filter>& filter) -> JPH::CollisionGroup::GroupID;
+
+    void set_pair_collision_enabled(JPH::CollisionGroup::SubGroupID a, JPH::CollisionGroup::SubGroupID b, bool enabled);
+
+private:
+    [[nodiscard]] auto intern_system(const std::string& name) -> int; // bit index, or -1 when over the 64-system cap
+    [[nodiscard]] auto make_bitset  (const std::vector<std::string>& names) -> uint64_t;
+    [[nodiscard]] auto does_collide (JPH::CollisionGroup::GroupID a, JPH::CollisionGroup::GroupID b) const -> bool;
+
+    std::vector<std::string>                                                  m_system_names;      // interned system strings; bit index = vector index; cap 64
+    std::vector<Compiled_collision_filter>                                    m_compiled_filters;
+    std::unordered_map<const Collision_filter*, JPH::CollisionGroup::GroupID> m_filter_to_compiled;
+    std::unordered_set<uint64_t>                                              m_excluded_pairs;    // packed ordered SubGroupID pairs
 };
 
 class Jolt_world
@@ -78,6 +136,10 @@ public:
     void set_on_body_deactivated(std::function<void(IRigid_body*)> callback) override;
     void for_each_active_body   (std::function<void(IRigid_body*)> callback) override;
 
+    void set_on_trigger_enter   (std::function<void(const Trigger_event&)> callback) override;
+    void set_on_trigger_exit    (std::function<void(const Trigger_event&)> callback) override;
+    void set_collision_enabled  (IRigid_body* rigid_body_a, IRigid_body* rigid_body_b, bool enabled) override;
+
     // Implements BodyActivationListener
     void OnBodyActivated  (const JPH::BodyID& inBodyID, JPH::uint64 inBodyUserData) override;
     void OnBodyDeactivated(const JPH::BodyID& inBodyID, JPH::uint64 inBodyUserData) override;
@@ -95,7 +157,38 @@ public:
     // Public API
     [[nodiscard]] auto get_physics_system() -> JPH::PhysicsSystem&;
 
+    // Builds the CollisionGroup for a body being created: assigns a unique
+    // SubGroupID serial, and (when filter is non-null) the world group filter
+    // plus a compiled GroupID. Must be called outside update_fixed_step().
+    [[nodiscard]] auto make_collision_group(const std::shared_ptr<Collision_filter>& filter) -> JPH::CollisionGroup;
+
+    // Re-assigns the compiled filter of a live body, keeping its SubGroupID
+    // serial. Must be called outside update_fixed_step().
+    void update_collision_group(JPH::Body& body, const std::shared_ptr<Collision_filter>& filter);
+
 private:
+    void dispatch_trigger_events();
+
+    // Sensor overlap bookkeeping: one entry per (sensor, other) body pair
+    // currently in contact, counting sub-shape contacts so that enter / exit
+    // events fire once per body pair even when Jolt reports multiple
+    // manifolds. Body wrapper pointers are cached at OnContactAdded time
+    // because bodies must not be accessed during OnContactRemoved.
+    class Sensor_pair
+    {
+    public:
+        Jolt_rigid_body* sensor       {nullptr};
+        Jolt_rigid_body* other        {nullptr};
+        int              contact_count{0};
+    };
+
+    class Pending_trigger_event
+    {
+    public:
+        Trigger_event event;
+        bool          is_enter{false};
+    };
+
     static constexpr unsigned int cMaxBodies             = 1024 * 32;
     static constexpr unsigned int cNumBodyMutexes        = 0;
     static constexpr unsigned int cMaxBodyPairs          = 1024 * 8;
@@ -118,6 +211,22 @@ private:
 
     std::vector<std::shared_ptr<ICollision_shape>> m_collision_shapes;
 
+    // Collision-system filters / pair exclusion. The group filter object is
+    // shared with body CollisionGroups via Jolt ref counting; it mutates only
+    // outside update_fixed_step() (see Jolt_group_filter).
+    JPH::Ref<Jolt_group_filter>                    m_group_filter;
+    JPH::CollisionGroup::SubGroupID                m_next_body_serial{0};
+
+    // Trigger (sensor) events. Contact callbacks run concurrently on Jolt
+    // worker threads during update_fixed_step(), so the pending containers
+    // are mutex guarded. Containers are cleared (capacity kept), never
+    // reassigned; the map allocates only when a new sensor pair appears.
+    std::function<void(const Trigger_event&)>      m_on_trigger_enter_callback;
+    std::function<void(const Trigger_event&)>      m_on_trigger_exit_callback;
+    std::mutex                                     m_trigger_mutex;
+    std::unordered_map<uint64_t, Sensor_pair>      m_sensor_contacts;        // key: packed (body1, body2) BodyID pair
+    std::vector<Pending_trigger_event>             m_pending_trigger_events; // filled by contact callbacks
+    std::vector<Pending_trigger_event>             m_dispatch_trigger_events;// drained on the update_fixed_step caller thread
 };
 
 } // namespace erhe::physics
