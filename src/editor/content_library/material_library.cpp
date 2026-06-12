@@ -1,5 +1,6 @@
 #include "content_library/content_library.hpp"
 
+#include "erhe_physics/physics_material.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
 
@@ -84,6 +85,25 @@ void add_default_materials(Content_library& library)
         );
     }
 #endif
+}
+
+void add_default_physics_materials(Content_library& library)
+{
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{library.mutex};
+
+    auto& physics_materials = *library.physics_materials.get();
+
+    // Spec-default KHR_physics_rigid_bodies material: static / dynamic
+    // friction 0.6, restitution 0.0, average combine modes. These match the
+    // Physics_material member defaults; set explicitly so the values stay
+    // correct even if the class defaults change.
+    std::shared_ptr<erhe::physics::Physics_material> default_material =
+        physics_materials.make<erhe::physics::Physics_material>("Default");
+    default_material->static_friction     = 0.6f;
+    default_material->dynamic_friction    = 0.6f;
+    default_material->restitution         = 0.0f;
+    default_material->friction_combine    = erhe::physics::Combine_mode::e_average;
+    default_material->restitution_combine = erhe::physics::Combine_mode::e_average;
 }
 
 }

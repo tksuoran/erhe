@@ -2,6 +2,7 @@
 #include "scene/scene_root.hpp"
 #include "editor_log.hpp"
 
+#include "erhe_physics/icollision_shape.hpp"
 #include "erhe_physics/iworld.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_utility/bit_helpers.hpp"
@@ -75,10 +76,49 @@ void Node_physics::handle_item_host_update(erhe::Item_host* const old_item_host,
         auto& physics_world = new_scene_root->get_physics_world();
 
         log_physics->trace("making rigid body for {}", get_node()->get_name());
-        m_rigid_body = physics_world.create_rigid_body_shared(m_create_info);
-        m_rigid_body->set_owner(this);
+        create_rigid_body(physics_world);
         new_scene_root->register_node_physics(shared_this);
     }
+}
+
+auto Node_physics::get_effective_motion_mode() const -> Motion_mode
+{
+    // Jolt sensors must be non-static to detect overlaps with static bodies.
+    return (m_create_info.is_sensor && (m_motion_mode == Motion_mode::e_static))
+        ? Motion_mode::e_kinematic_non_physical
+        : m_motion_mode;
+}
+
+void Node_physics::create_rigid_body(erhe::physics::IWorld& physics_world)
+{
+    m_create_info.motion_mode = get_effective_motion_mode();
+    const erhe::scene::Node* node = get_node();
+    if (node != nullptr) {
+        const erhe::scene::Trs_transform& world_from_node_transform = node->world_from_node_transform();
+        m_create_info.position    = world_from_node_transform.get_translation();
+        m_create_info.orientation = world_from_node_transform.get_rotation();
+    }
+    m_rigid_body = physics_world.create_rigid_body_shared(m_create_info);
+    m_rigid_body->set_owner(this);
+}
+
+void Node_physics::recreate_rigid_body()
+{
+    if (m_physics_world == nullptr) {
+        // Not attached to a scene; the updated create info is picked up when
+        // the rigid body is created at attach time.
+        return;
+    }
+    Scene_root* scene_root = static_cast<Scene_root*>(get_item_host());
+    ERHE_VERIFY(scene_root != nullptr);
+    const auto shared_this = std::static_pointer_cast<Node_physics>(shared_from_this());
+    // unregister_node_physics() tears down joint constraints referencing the
+    // old body and removes it from the world; register_node_physics() adds
+    // the new body and retries pending joint constraints.
+    scene_root->unregister_node_physics(shared_this);
+    m_rigid_body.reset();
+    create_rigid_body(scene_root->get_physics_world());
+    scene_root->register_node_physics(shared_this);
 }
 
 void Node_physics::before_physics_simulation()
@@ -145,9 +185,112 @@ auto Node_physics::get_motion_mode() const -> Motion_mode
 void Node_physics::set_motion_mode(Motion_mode mode)
 {
     m_motion_mode = mode;
+    m_create_info.motion_mode = get_effective_motion_mode();
     if (m_rigid_body) {
-        m_rigid_body->set_motion_mode(mode);
+        m_rigid_body->set_motion_mode(m_create_info.motion_mode);
     }
+}
+
+auto Node_physics::get_physics_material() const -> const std::shared_ptr<erhe::physics::Physics_material>&
+{
+    return m_create_info.physics_material;
+}
+
+void Node_physics::set_physics_material(const std::shared_ptr<erhe::physics::Physics_material>& physics_material)
+{
+    m_create_info.physics_material = physics_material;
+    if (m_rigid_body) {
+        m_rigid_body->set_physics_material(physics_material);
+    }
+}
+
+auto Node_physics::get_collision_filter() const -> const std::shared_ptr<erhe::physics::Collision_filter>&
+{
+    return m_create_info.collision_filter;
+}
+
+void Node_physics::set_collision_filter(const std::shared_ptr<erhe::physics::Collision_filter>& collision_filter)
+{
+    m_create_info.collision_filter = collision_filter;
+    if (m_rigid_body) {
+        m_rigid_body->set_collision_filter(collision_filter);
+    }
+}
+
+auto Node_physics::is_trigger() const -> bool
+{
+    return m_create_info.is_sensor;
+}
+
+void Node_physics::set_trigger(const bool trigger)
+{
+    if (m_create_info.is_sensor == trigger) {
+        return;
+    }
+    m_create_info.is_sensor = trigger;
+    recreate_rigid_body();
+}
+
+auto Node_physics::get_gravity_factor() const -> float
+{
+    return m_create_info.gravity_factor;
+}
+
+void Node_physics::set_gravity_factor(const float gravity_factor)
+{
+    m_create_info.gravity_factor = gravity_factor;
+    if (m_rigid_body && (m_rigid_body->get_motion_mode() != Motion_mode::e_static)) {
+        m_rigid_body->set_gravity_factor(gravity_factor);
+    }
+}
+
+auto Node_physics::get_initial_linear_velocity() const -> glm::vec3
+{
+    return m_create_info.linear_velocity;
+}
+
+void Node_physics::set_initial_linear_velocity(const glm::vec3& velocity)
+{
+    m_create_info.linear_velocity = velocity;
+}
+
+auto Node_physics::get_initial_angular_velocity() const -> glm::vec3
+{
+    return m_create_info.angular_velocity;
+}
+
+void Node_physics::set_initial_angular_velocity(const glm::vec3& velocity)
+{
+    m_create_info.angular_velocity = velocity;
+}
+
+auto Node_physics::get_center_of_mass_offset() const -> glm::vec3
+{
+    const std::shared_ptr<erhe::physics::ICollision_shape>& shape = m_create_info.collision_shape;
+    if (!shape) {
+        return glm::vec3{0.0f};
+    }
+    return shape->get_offset().value_or(glm::vec3{0.0f});
+}
+
+void Node_physics::set_center_of_mass_offset(const glm::vec3& offset)
+{
+    if (offset == get_center_of_mass_offset()) {
+        return;
+    }
+    std::shared_ptr<erhe::physics::ICollision_shape> shape = m_create_info.collision_shape;
+    if (!shape) {
+        log_physics->warn("set_center_of_mass_offset() ignored: no collision shape");
+        return;
+    }
+    if (shape->get_offset().has_value()) {
+        shape = shape->get_inner_shape(); // unwrap existing offset-center-of-mass wrapper
+    }
+    if (offset != glm::vec3{0.0f}) {
+        shape = erhe::physics::ICollision_shape::create_offset_center_of_mass_shape_shared(shape, offset);
+    }
+    m_create_info.collision_shape = shape;
+    recreate_rigid_body();
 }
 
 void Node_physics::begin_interaction()
@@ -166,7 +309,7 @@ void Node_physics::end_interaction()
     if (!m_rigid_body) {
         return;
     }
-    m_rigid_body->set_motion_mode(m_motion_mode);
+    m_rigid_body->set_motion_mode(get_effective_motion_mode());
     m_rigid_body->end_move();
 }
 

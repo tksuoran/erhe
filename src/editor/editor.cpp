@@ -1479,6 +1479,7 @@ public:
                 ERHE_GET_GL_CONTEXT
                 auto content_library = std::make_shared<Content_library>();
                 add_default_materials(*content_library.get());
+                add_default_physics_materials(*content_library.get());
 
                 const bool enable_physics = m_editor_settings.physics.static_enable;
                 m_default_scene = std::make_shared<Scene_root>(

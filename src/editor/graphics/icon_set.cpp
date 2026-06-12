@@ -97,13 +97,16 @@ Icon_set::Icon_set(
         .code  = ICON_MDI_BRUSH,
         .color = glm::vec4{0.4f, 0.1f, 1.0f, 1.0f}
     };
+    type_icons[erhe::Item_type::index_physics_material      ] = { .code = icons.material, .color = glm::vec4{0.2f, 0.5f, 1.0f, 1.0f}};
+    type_icons[erhe::Item_type::index_collision_filter      ] = { .code = icons.physics,  .color = glm::vec4{0.5f, 0.8f, 0.5f, 1.0f}};
+    type_icons[erhe::Item_type::index_physics_joint_settings] = { .code = icons.physics,  .color = glm::vec4{1.0f, 0.8f, 0.2f, 1.0f}};
 
 }
 
 void Icon_set::add_icons(const uint64_t item_type, const float size)
 {
     using namespace erhe::utility;
-    for (uint64_t bit_position = 0; bit_position < erhe::Item_flags::count; ++ bit_position) {
+    for (uint64_t bit_position = 0; bit_position < erhe::Item_type::count; ++ bit_position) {
         const uint64_t bit_mask = (uint64_t{1} << bit_position);
         if (test_bit_set(item_type, bit_mask)) {
             const auto& icon_opt = type_icons.at(bit_position);

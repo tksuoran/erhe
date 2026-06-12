@@ -6,7 +6,11 @@
 #include <vector>
 
 namespace erhe          { class Item_host; }
-namespace erhe::physics { class IWorld; }
+namespace erhe::physics {
+    class Collision_filter;
+    class IWorld;
+    class Physics_material;
+}
 
 namespace editor {
 
@@ -56,9 +60,59 @@ public:
     void begin_interaction();
     void end_interaction();
 
+    // Shared physics material; updates both create info and the live rigid
+    // body. Re-assign after editing a live Physics_material item so the
+    // backend re-snapshots the values.
+    [[nodiscard]] auto get_physics_material() const -> const std::shared_ptr<erhe::physics::Physics_material>&;
+    void               set_physics_material(const std::shared_ptr<erhe::physics::Physics_material>& physics_material);
+
+    // Shared collision filter; updates both create info and the live rigid
+    // body. Re-assign after editing a live Collision_filter item so the
+    // backend re-snapshots the compiled filter.
+    [[nodiscard]] auto get_collision_filter() const -> const std::shared_ptr<erhe::physics::Collision_filter>&;
+    void               set_collision_filter(const std::shared_ptr<erhe::physics::Collision_filter>& collision_filter);
+
+    // Trigger (sensor) flag. Changing it recreates the rigid body. A static
+    // trigger body is created kinematic non-physical (Jolt sensors must be
+    // non-static to detect static bodies); get_motion_mode() continues to
+    // return the user-facing motion mode.
+    [[nodiscard]] auto is_trigger () const -> bool;
+    void               set_trigger(bool trigger);
+
+    [[nodiscard]] auto get_gravity_factor() const -> float;
+    void               set_gravity_factor(float gravity_factor);
+
+    // Initial velocities apply when the rigid body is (re)created - at scene
+    // attach or after set_trigger() / set_center_of_mass_offset(); they do
+    // not change a live body (use the rigid body API for that).
+    [[nodiscard]] auto get_initial_linear_velocity () const -> glm::vec3;
+    void               set_initial_linear_velocity (const glm::vec3& velocity);
+    [[nodiscard]] auto get_initial_angular_velocity() const -> glm::vec3;
+    void               set_initial_angular_velocity(const glm::vec3& velocity);
+
+    // Center of mass offset, implemented by (re)wrapping the collision shape
+    // in an offset-center-of-mass wrapper. Changing it recreates the rigid body.
+    [[nodiscard]] auto get_center_of_mass_offset() const -> glm::vec3;
+    void               set_center_of_mass_offset(const glm::vec3& offset);
+
     std::vector<glm::vec3> markers;
 
 private:
+    // The motion mode the rigid body is actually created with: same as
+    // m_motion_mode, except that static trigger bodies are created kinematic
+    // non-physical (Jolt sensors must be non-static to detect static bodies).
+    [[nodiscard]] auto get_effective_motion_mode() const -> erhe::physics::Motion_mode;
+
+    // Creates m_rigid_body from m_create_info, applying the effective motion
+    // mode and the current node world transform. Does not add the body to the
+    // world; Scene_root::register_node_physics() does that.
+    void create_rigid_body(erhe::physics::IWorld& physics_world);
+
+    // Recreates the rigid body from (updated) create info while attached to a
+    // scene, going through Scene_root unregister/register so that dependent
+    // bookkeeping (joint constraints) stays consistent. No-op when detached.
+    void recreate_rigid_body();
+
     erhe::physics::IWorld*                      m_physics_world{nullptr};
     erhe::physics::IRigid_body_create_info      m_create_info;
     std::shared_ptr<erhe::physics::IRigid_body> m_rigid_body;

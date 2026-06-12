@@ -8,6 +8,7 @@
 
 #include "app_context.hpp"
 #include "content_library/content_library.hpp"
+#include "scene/node_joint.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/node_raytrace.hpp"
@@ -580,12 +581,27 @@ void Scene_root::register_node_physics(const std::shared_ptr<Node_physics>& node
     if (rigid_body != nullptr) {
         m_physics_world->add_rigid_body(node_physics->get_rigid_body());
     }
+
+    // The newly registered rigid body may be the missing body of a pending
+    // Node_joint (scene load / paste order); retry constraint creation.
+    for (const auto& node_joint : m_node_joints) {
+        static_cast<void>(node_joint->try_create_constraint());
+    }
 }
 
 void Scene_root::unregister_node_physics(const std::shared_ptr<Node_physics>& node_physics)
 {
     if (!m_physics_world) {
         return;
+    }
+
+    // Tear down joint constraints referencing this rigid body before it
+    // leaves the world; the affected joints return to the pending state.
+    erhe::physics::IRigid_body* rigid_body_for_joints = node_physics->get_rigid_body();
+    if (rigid_body_for_joints != nullptr) {
+        for (const auto& node_joint : m_node_joints) {
+            node_joint->handle_rigid_body_removed(rigid_body_for_joints);
+        }
     }
 
     const auto i = std::remove(
@@ -606,6 +622,47 @@ void Scene_root::unregister_node_physics(const std::shared_ptr<Node_physics>& no
         m_physics_world->remove_rigid_body(node_physics->get_rigid_body());
     }
     node_physics->set_physics_world(nullptr);
+}
+
+void Scene_root::register_node_joint(const std::shared_ptr<Node_joint>& node_joint)
+{
+    if (!m_physics_world) {
+        return;
+    }
+
+#ifndef NDEBUG
+    const auto i = std::find(m_node_joints.begin(), m_node_joints.end(), node_joint);
+    if (i != m_node_joints.end()) {
+        auto* node = node_joint->get_node();
+        log_physics->error("Node_joint for '{}' already in Scene_root", (node != nullptr) ? node->get_name().c_str() : "");
+    } else
+#endif
+    {
+        m_node_joints.push_back(node_joint);
+    }
+
+    node_joint->set_physics_world(m_physics_world.get());
+    // The needed rigid bodies may not be registered yet (scene load / paste
+    // order); when this returns false the joint stays pending and is retried
+    // from register_node_physics().
+    static_cast<void>(node_joint->try_create_constraint());
+}
+
+void Scene_root::unregister_node_joint(const std::shared_ptr<Node_joint>& node_joint)
+{
+    if (!m_physics_world) {
+        return;
+    }
+
+    const auto i = std::remove(m_node_joints.begin(), m_node_joints.end(), node_joint);
+    if (i == m_node_joints.end()) {
+        auto* node = node_joint->get_node();
+        log_physics->error("Node_joint for '{}' not in Scene_root", (node != nullptr) ? node->get_name().c_str() : "");
+    } else {
+        m_node_joints.erase(i, m_node_joints.end());
+    }
+
+    node_joint->set_physics_world(nullptr);
 }
 
 void Scene_root::before_physics_simulation_steps()

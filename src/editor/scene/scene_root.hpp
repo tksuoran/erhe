@@ -57,6 +57,7 @@ class App_message_bus;
 class App_scenes;
 class App_settings;
 class Item_tree_window;
+class Node_joint;
 class Node_physics;
 class Raytrace_primitive;
 class Rendertarget_mesh;
@@ -150,6 +151,14 @@ public:
     void register_node_physics  (const std::shared_ptr<Node_physics>& node_physics);
     void unregister_node_physics(const std::shared_ptr<Node_physics>& node_physics);
 
+    // Node_joint bookkeeping. All attached joints stay registered; a joint
+    // without a live constraint is pending. register_node_physics() retries
+    // pending joints after adding the new rigid body to the world, and
+    // unregister_node_physics() tears down constraints referencing the
+    // departing body (returning those joints to the pending state).
+    void register_node_joint    (const std::shared_ptr<Node_joint>& node_joint);
+    void unregister_node_joint  (const std::shared_ptr<Node_joint>& node_joint);
+
     void before_physics_simulation_steps     ();
     void update_physics_simulation_fixed_step(double dt);
     void after_physics_simulation_steps      ();
@@ -198,6 +207,7 @@ private:
     // Must live longer than m_scene for example
     bool                                            m_node_physics_sorted{false};
     std::vector<std::shared_ptr<Node_physics>>      m_node_physics;
+    std::vector<std::shared_ptr<Node_joint>>        m_node_joints;
     std::vector<std::shared_ptr<Rendertarget_mesh>> m_rendertarget_meshes;
 
     std::vector<std::shared_ptr<erhe::Item_base>>   m_physics_disabled_nodes;
