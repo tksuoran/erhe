@@ -2785,9 +2785,13 @@ private:
         const std::size_t index_count   = mesh_info.index_count_fill_triangles;
         const std::size_t vertex_count  = mesh_info.vertex_count_corners;
 
-        erhe::primitive::Buffer_mesh buffer_mesh;
         erhe::buffer::Cpu_buffer vertex_buffer{"", vertex_count * vertex_stride};
         erhe::buffer::Cpu_buffer index_buffer {"", index_count * index_stride};
+
+        // Declared after the buffers: buffer_mesh holds Buffer_allocation RAII
+        // handles that free into the buffers' allocators on destruction, so it
+        // must be destroyed before vertex_buffer / index_buffer.
+        erhe::primitive::Buffer_mesh buffer_mesh;
 
         erhe::primitive::Cpu_vertex_buffer_sink vertex_buffer_sink{{&vertex_buffer}};
         erhe::primitive::Cpu_index_buffer_sink index_buffer_sink{index_buffer};
