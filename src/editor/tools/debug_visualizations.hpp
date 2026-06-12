@@ -11,6 +11,8 @@
 #include "erhe_message_bus/message_bus.hpp"
 #include "erhe_math/math_util.hpp"
 
+#include <cstddef>
+#include <limits>
 #include <memory>
 
 namespace erhe::graphics { class Command_buffer; }
@@ -134,6 +136,14 @@ private:
     // shadow_frustum_fit_visualization() so the dump is emitted a single time
     // rather than every frame.
     bool m_shadow_fit_dump_requested{false};
+
+    // Diagnostics: shadow_frustum_fit_visualization() logs a one line gating
+    // summary whenever the boolean state changes (shadow node present, fit
+    // valid, view-frustum corners valid), so a run shows why nothing is drawn
+    // (no shadow node, no valid fit debug data, ...) without per-frame log spam.
+    bool        m_dbg_last_node_found      {false};
+    bool        m_dbg_last_fit_valid       {false};
+    bool        m_dbg_last_corners_valid   {false};
 
     Property_editor m_property_editor;
 };

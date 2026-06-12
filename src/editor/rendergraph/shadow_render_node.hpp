@@ -80,6 +80,15 @@ private:
     erhe::math::Viewport                                      m_viewport{0, 0, 0, 0};
     erhe::scene_renderer::Light_projections                   m_light_projections;
     erhe::scene::Shadow_frustum_fit_settings                  m_fit_settings; // refreshed from editor settings each frame
+
+    // Diagnostics: log the fit view camera / projection / viewport only when
+    // they change, so a run reveals which camera the shadow fit is fitted to
+    // (the headset drives m_root_camera as perspective_xr from the combined
+    // stereo eye frustum) and its fov, without per-frame log spam.
+    const void* m_dbg_last_camera{nullptr};
+    int         m_dbg_last_viewport_width {-1};
+    int         m_dbg_last_viewport_height{-1};
+    int         m_dbg_last_projection_type{-1};
 };
 
 }

@@ -19,12 +19,16 @@
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_scene_renderer/shadow_renderer.hpp"
+#include "erhe_scene/camera.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_scene/projection.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
 
 #include <fmt/format.h>
+#include <glm/gtc/constants.hpp>
+#include <glm/trigonometric.hpp>
 
 namespace editor {
 
@@ -323,12 +327,54 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
     }
 
     // The tight frustum fit needs the main camera viewport for the view
-    // frustum aspect ratio; only Viewport_scene_view has one (XR cameras use
-    // fov sides and ignore the aspect ratio).
+    // frustum aspect ratio; only Viewport_scene_view has one. The headset has
+    // no viewport, but its root camera is driven as perspective_xr (from the
+    // combined stereo eye frustum, see Headset_view::update_root_camera_projection),
+    // and perspective_xr derives the frustum from explicit fov sides and ignores
+    // the aspect ratio - so the empty viewport here is harmless for that path.
     const Viewport_scene_view* viewport_scene_view = m_scene_view.as_viewport_scene_view();
     const erhe::math::Viewport view_camera_viewport = (viewport_scene_view != nullptr)
         ? viewport_scene_view->get_projection_viewport()
         : erhe::math::Viewport{};
+
+    // Diagnostics: the tight shadow fit derives its view frustum from this
+    // camera + viewport. For the headset there is no
+    // Viewport_scene_view (viewport is empty), and the root camera is driven as
+    // perspective_xr from the combined stereo eye frustum
+    // (Headset_view::update_root_camera_projection); log on change so a Quest
+    // run shows the fov sides the fit is actually fitted to. For perspective_xr
+    // the meaningful fields are the fov sides, not fov_x/fov_y.
+    {
+        const erhe::scene::Projection* const projection = camera->projection();
+        const erhe::scene::Projection::Type  type       = (projection != nullptr) ? projection->projection_type : erhe::scene::Projection::Type::other;
+        if (
+            (camera.get()                != m_dbg_last_camera) ||
+            (view_camera_viewport.width  != m_dbg_last_viewport_width) ||
+            (view_camera_viewport.height != m_dbg_last_viewport_height) ||
+            (static_cast<int>(type)      != m_dbg_last_projection_type)
+        ) {
+            m_dbg_last_camera          = camera.get();
+            m_dbg_last_viewport_width  = view_camera_viewport.width;
+            m_dbg_last_viewport_height = view_camera_viewport.height;
+            m_dbg_last_projection_type = static_cast<int>(type);
+            log_render->info(
+                "Shadow fit: view={} camera='{}' projection={} fov[L{:.1f} R{:.1f} U{:.1f} D{:.1f}]deg fov_y={:.1f}deg viewport={}x{} aspect={:.3f} shadow_range={:.2f} tight_fit={}",
+                (viewport_scene_view != nullptr) ? "viewport" : "headset/other",
+                camera->get_name(),
+                (projection != nullptr) ? erhe::scene::Projection::c_type_strings[static_cast<unsigned int>(type)] : "none",
+                (projection != nullptr) ? glm::degrees(projection->fov_left ) : 0.0f,
+                (projection != nullptr) ? glm::degrees(projection->fov_right) : 0.0f,
+                (projection != nullptr) ? glm::degrees(projection->fov_up   ) : 0.0f,
+                (projection != nullptr) ? glm::degrees(projection->fov_down ) : 0.0f,
+                (projection != nullptr) ? glm::degrees(projection->fov_y) : 0.0f,
+                view_camera_viewport.width,
+                view_camera_viewport.height,
+                view_camera_viewport.aspect_ratio(),
+                camera->get_shadow_range(),
+                m_fit_settings.any_tightening_enabled()
+            );
+        }
+    }
 
     // Hardware (rasterizer) depth bias and face culling for the shadow caster
     // pass, from the active graphics preset (depth bias 0 = off, cull mode

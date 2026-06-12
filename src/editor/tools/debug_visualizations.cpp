@@ -425,6 +425,12 @@ void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context
     // m_settings.shadow_debug (which gates the shadow texel visualization).
     const auto shadow_render_node = context.app_context.app_rendering->get_shadow_node_for_view(context.scene_view);
     if (!shadow_render_node) {
+        // Diagnostics: on the headset this means no Shadow_render_node
+        // is registered for the headset Scene_view, so the fit viz cannot run.
+        if (m_dbg_last_node_found) {
+            m_dbg_last_node_found = false;
+            log_debug_visualization->info("Shadow fit viz: no shadow render node for this view - skipping");
+        }
         return;
     }
 
@@ -463,6 +469,41 @@ void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context
             resolved_light = transforms[i].light;
         }
     }
+
+    // Diagnostics: a one line gating summary, logged only when the boolean
+    // state changes. Reveals whether the fit produced valid debug data at all
+    // and the sizes the per element toggles draw from (a valid fit but empty
+    // shadow_volume_planes / caster_boxes means fit_to_casters did not run).
+    {
+        const bool        fit_valid        = (fit_debug_ptr != nullptr) && fit_debug_ptr->valid;
+        const bool        corners_valid    = (fit_debug_ptr != nullptr) && fit_debug_ptr->view_frustum_corners_valid;
+        const std::size_t volume_plane_n   = (fit_debug_ptr != nullptr) ? fit_debug_ptr->shadow_volume_planes.size() : 0;
+        const std::size_t caster_box_n     = (fit_debug_ptr != nullptr) ? fit_debug_ptr->caster_boxes.size()         : 0;
+        // Throttle on the boolean state only (node present, fit valid, corners
+        // valid). The plane / caster counts oscillate every frame as the head
+        // moves, so keying on them would log every frame; they are still
+        // reported in the message for the transition that does fire.
+        if (
+            (m_dbg_last_node_found    != true)        ||
+            (m_dbg_last_fit_valid     != fit_valid)   ||
+            (m_dbg_last_corners_valid != corners_valid)
+        ) {
+            m_dbg_last_node_found      = true;
+            m_dbg_last_fit_valid       = fit_valid;
+            m_dbg_last_corners_valid   = corners_valid;
+            log_debug_visualization->info(
+                "Shadow fit viz: transforms={} fit_debug_data={} resolved_fit_valid={} corners_valid={} volume_planes={} caster_boxes={} light='{}'",
+                transforms.size(),
+                fit_debug_data.size(),
+                fit_valid,
+                corners_valid,
+                volume_plane_n,
+                caster_box_n,
+                (resolved_light != nullptr) ? resolved_light->get_name() : std::string{"<none>"}
+            );
+        }
+    }
+
     if (fit_debug_ptr == nullptr) {
         return;
     }
