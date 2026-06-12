@@ -14,6 +14,8 @@ Provides the Create tool and shape generator classes for interactively creating 
 
 - **`Create_cone`** -- Cone generator with configurable base/top radii, height, and subdivision.
 
+- **`Create_capsule`** -- Capsule generator with configurable bottom/top radii (tapered capsules supported), mid-section length, and subdivision.
+
 - **`Create_torus`** -- Torus generator with configurable major/minor radii and subdivision.
 
 - **`Create_box`** -- Box generator with configurable dimensions and subdivision.

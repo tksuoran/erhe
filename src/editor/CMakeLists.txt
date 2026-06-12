@@ -125,6 +125,8 @@ erhe_target_sources_grouped(
     create/create.hpp
     create/create_box.cpp
     create/create_box.hpp
+    create/create_capsule.cpp
+    create/create_capsule.hpp
     create/create_cone.cpp
     create/create_cone.hpp
     create/create_preview_settings.hpp

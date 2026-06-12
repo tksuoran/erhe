@@ -134,6 +134,7 @@ void Create::window_imgui()
     ImGui::Checkbox("Preview Shape",       &m_preview_shape);
     brush_create_button("UV Sphere", &m_create_uv_sphere);
     brush_create_button("Cone",      &m_create_cone);
+    brush_create_button("Capsule",   &m_create_capsule);
     brush_create_button("Torus",     &m_create_torus);
     brush_create_button("Box",       &m_create_box);
 

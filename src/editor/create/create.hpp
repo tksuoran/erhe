@@ -1,6 +1,7 @@
 #pragma once
 
 #include "create/create_box.hpp"
+#include "create/create_capsule.hpp"
 #include "create/create_cone.hpp"
 #include "create/create_torus.hpp"
 #include "create/create_uv_sphere.hpp"
@@ -49,6 +50,7 @@ private:
     bool                          m_preview_shape{true};
     Create_uv_sphere              m_create_uv_sphere;
     Create_cone                   m_create_cone;
+    Create_capsule                m_create_capsule;
     Create_torus                  m_create_torus;
     Create_box                    m_create_box;
     Create_shape*                 m_create_shape{nullptr};
