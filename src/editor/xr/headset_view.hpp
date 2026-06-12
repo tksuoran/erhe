@@ -15,6 +15,8 @@
 #include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_xr/headset.hpp"
 
+#include <span>
+
 namespace erhe::graphics {
     class Command_buffer;
     class Device;
@@ -163,6 +165,18 @@ private:
     void update_camera_node();
     void update_pointer_context_from_controller();
 
+    // Combined stereo culling frustum for the shadow fit. OpenXR has no API
+    // for a single frustum bounding both eyes, so the headset builds one from
+    // the per-eye views: update_camera_node() locates the current frame's views
+    // early (Headset::locate_views, valid after begin_frame() and before the
+    // rendergraph runs), cache_combined_eye_frustum() reduces them to the union
+    // of the eye fov sides, and update_root_camera_projection() applies that to
+    // m_root_camera as a perspective_xr projection. This is the same frame the
+    // shadow node fits, with no latency. If a locate fails, the last good
+    // frustum is kept (m_combined_eye_fov_valid stays set).
+    void cache_combined_eye_frustum(std::span<const erhe::xr::Render_view> views);
+    void update_root_camera_projection();
+
     // VR skinned-mesh picking. The raytrace BVH used by
     // update_hover_with_raytrace() is rest-pose only, so it cannot pick the
     // GPU-skinned (posed) surface the user sees. update_id_render() drives
@@ -194,6 +208,18 @@ private:
     std::shared_ptr<erhe::scene::Node>                   m_root_node; // scene root node
     std::shared_ptr<erhe::scene::Node>                   m_headset_node; // transform set by headset
     std::shared_ptr<erhe::scene::Camera>                 m_root_camera;
+    // Combined eye frustum cache (see cache_combined_eye_frustum). Filled from
+    // the located per-eye Render_views during render, applied to m_root_camera
+    // at the next frame's update_camera_node(). Until the first eye views are
+    // located, m_combined_eye_fov_valid is false and m_root_camera keeps the
+    // setup_root_camera() default.
+    erhe::scene::Projection::Fov_sides                   m_combined_eye_fov_sides{-0.6f, 0.6f, 0.6f, -0.6f};
+    float                                                m_combined_eye_z_near{0.03f};
+    float                                                m_combined_eye_z_far {200.0f};
+    bool                                                 m_combined_eye_fov_valid{false};
+    // Reused scratch for the early per-frame view locate (cleared + refilled by
+    // Headset::locate_views; persists only to keep its capacity across frames).
+    std::vector<erhe::xr::Render_view>                   m_located_eye_views;
     // Single-view camera positioned at the controller aim pose each frame,
     // used solely to drive the Id_renderer for skinned-mesh picking (see
     // update_id_render). Not flagged visible / show_in_ui -- it is never

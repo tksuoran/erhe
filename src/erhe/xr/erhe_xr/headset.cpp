@@ -236,6 +236,17 @@ auto Headset::end_frame(const bool rendered) -> bool
     return m_xr_session->end_frame(rendered);
 }
 
+auto Headset::locate_views(std::vector<Render_view>& out_views) -> bool
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if (!m_xr_session) {
+        out_views.clear();
+        return false;
+    }
+    return m_xr_session->locate_views(out_views);
+}
+
 auto Headset::create_quad_layer(uint32_t width, uint32_t height, const std::string& debug_label) -> std::unique_ptr<Quad_layer>
 {
     if (!m_xr_session) {

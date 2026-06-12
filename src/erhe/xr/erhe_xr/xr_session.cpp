@@ -1504,6 +1504,69 @@ auto Xr_session::wait_frame() -> XrFrameState*
     }
 }
 
+auto Xr_session::locate_views(std::vector<Render_view>& out_views) -> bool
+{
+    ERHE_PROFILE_FUNCTION();
+
+    out_views.clear();
+    if (m_xr_session == XR_NULL_HANDLE) {
+        return false;
+    }
+
+    // Standalone locate, independent of the render-frame locate (which
+    // re-locates into m_xr_views during render_frame / render_frame_multiview).
+    // Intentionally not factored together with those, so the render path stays
+    // untouched. xrLocateViews is a pure query keyed on the predicted display
+    // time and may be called more than once per frame.
+    XrViewState view_state{
+        .type           = XR_TYPE_VIEW_STATE,
+        .next           = nullptr,
+        .viewStateFlags = 0
+    };
+    const uint32_t view_capacity_input{static_cast<uint32_t>(m_xr_views.size())};
+    uint32_t       view_count_output  {0};
+
+    const XrViewLocateInfo view_locate_info{
+        .type                  = XR_TYPE_VIEW_LOCATE_INFO,
+        .next                  = nullptr,
+        .viewConfigurationType = m_instance.get_xr_view_configuration_type(),
+        .displayTime           = m_xr_frame_state.predictedDisplayTime,
+        .space                 = m_xr_reference_space_stage
+    };
+
+    if (!check(
+        xrLocateViews(
+            m_xr_session,
+            &view_locate_info,
+            &view_state,
+            view_capacity_input,
+            &view_count_output,
+            m_xr_views.data()
+        )
+    )) {
+        return false;
+    }
+
+    out_views.reserve(view_count_output);
+    for (uint32_t i = 0; i < view_count_output; ++i) {
+        // Value-initialize so the unused texture / format / near-far fields are
+        // zeroed; the shadow fit consumes only the fov sides (and falls back to
+        // a default near/far range when they are zero).
+        Render_view view{};
+        view.slot      = i;
+        view.view_pose = erhe::xr::Pose{
+            .orientation = to_glm(m_xr_views[i].pose.orientation),
+            .position    = to_glm(m_xr_views[i].pose.position)
+        };
+        view.fov_left  = m_xr_views[i].fov.angleLeft;
+        view.fov_right = m_xr_views[i].fov.angleRight;
+        view.fov_up    = m_xr_views[i].fov.angleUp;
+        view.fov_down  = m_xr_views[i].fov.angleDown;
+        out_views.push_back(view);
+    }
+    return !out_views.empty();
+}
+
 auto Xr_session::render_frame(erhe::graphics::Command_buffer& command_buffer, std::function<bool(Render_view&, erhe::graphics::Command_buffer&)> render_view_callback) -> bool
 {
     ERHE_PROFILE_FUNCTION();

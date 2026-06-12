@@ -83,6 +83,17 @@ public:
     // when is_multiview_enabled() returns true; returns false otherwise.
     [[nodiscard]] auto render_frame_multiview      (erhe::graphics::Command_buffer& command_buffer, std::function<bool(const Render_views_frame&, erhe::graphics::Command_buffer&)> render_views_callback) -> bool;
     [[nodiscard]] auto end_frame                   (const bool rendered) -> bool;
+
+    // Locate the per-view poses + fovs for the current predicted display time
+    // (set by begin_frame_'s xrWaitFrame) without acquiring swapchains or
+    // rendering. xrLocateViews is a pure query and may be called multiple times
+    // per frame, so this is safe to call before the render-frame locate; it is
+    // used by the headset shadow fit to build a combined culling frustum before
+    // the rendergraph runs. out_views is cleared then filled (capacity kept)
+    // with pose + fov only (texture / format fields left zero). Returns false
+    // when the session is not ready or the locate fails, leaving out_views
+    // empty so the caller keeps its previous frustum.
+    [[nodiscard]] auto locate_views(std::vector<Render_view>& out_views) -> bool;
     [[nodiscard]] auto is_multiview_enabled        () const -> bool;
 
     // Quad composition layers. create_quad_layer() creates a dedicated color

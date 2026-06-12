@@ -60,6 +60,9 @@
 
 #include <imgui/imgui.h>
 
+#include <algorithm>
+#include <limits>
+
 namespace editor {
 
 using erhe::graphics::Color_blend_state;
@@ -1355,6 +1358,76 @@ void Headset_view::update_camera_node()
     const glm::mat4 world_from_view = m_translation * m_orientation;
     m_headset_node->set_world_from_node(world_from_view);
     m_headset_node->update_transform(0); // TODO
+
+    // Drive the root camera's projection from a frustum that bounds both stereo
+    // eyes, so the shadow fit (Shadow_render_node, run during the rendergraph
+    // later this frame) fits the actual rendered view rather than the
+    // placeholder 35-degree projection from setup_root_camera(). The eye views
+    // are located here (before the rendergraph) via Headset::locate_views; on
+    // failure the previous frustum is kept.
+    if ((m_headset != nullptr) && m_headset->locate_views(m_located_eye_views)) {
+        cache_combined_eye_frustum(m_located_eye_views);
+    }
+    update_root_camera_projection();
+}
+
+void Headset_view::cache_combined_eye_frustum(std::span<const erhe::xr::Render_view> views)
+{
+    if (views.empty()) {
+        return; // nothing located this frame; keep the previous frustum
+    }
+
+    // Union of the per-eye angular extents. fov_left / fov_down are negative
+    // angles, fov_right / fov_up positive, so the widest extent on each side
+    // (min left/down, max right/up) bounds both eye frusta. Taken about the
+    // head node origin; the small IPD positional offset is ignored, which only
+    // makes the culling frustum slightly conservative (over-covers - safe).
+    float fov_left  =  std::numeric_limits<float>::max();
+    float fov_right = -std::numeric_limits<float>::max();
+    float fov_up    = -std::numeric_limits<float>::max();
+    float fov_down  =  std::numeric_limits<float>::max();
+    float z_near    =  std::numeric_limits<float>::max();
+    float z_far     = -std::numeric_limits<float>::max();
+    for (const erhe::xr::Render_view& view : views) {
+        fov_left  = std::min(fov_left,  view.fov_left  );
+        fov_right = std::max(fov_right, view.fov_right );
+        fov_up    = std::max(fov_up,    view.fov_up    );
+        fov_down  = std::min(fov_down,  view.fov_down  );
+        z_near    = std::min(z_near,    view.near_depth);
+        z_far     = std::max(z_far,     view.far_depth );
+    }
+
+    // locate_views leaves near/far at 0 (only the fovs are meaningful there);
+    // fall back to the per-eye render range so the projection stays well formed.
+    if (!(z_far > z_near)) {
+        z_near = 0.03f;
+        z_far  = 200.0f;
+    }
+
+    m_combined_eye_fov_sides = erhe::scene::Projection::Fov_sides{fov_left, fov_right, fov_up, fov_down};
+    m_combined_eye_z_near    = z_near;
+    m_combined_eye_z_far     = z_far;
+    m_combined_eye_fov_valid = true;
+}
+
+void Headset_view::update_root_camera_projection()
+{
+    if (!m_combined_eye_fov_valid || !m_root_camera) {
+        return; // before the first successful locate: keep setup_root_camera()'s default
+    }
+    erhe::scene::Projection* const projection = m_root_camera->projection();
+    if (projection == nullptr) {
+        return;
+    }
+    *projection = erhe::scene::Projection{
+        .projection_type = erhe::scene::Projection::Type::perspective_xr,
+        .z_near          = m_combined_eye_z_near,
+        .z_far           = m_combined_eye_z_far,
+        .fov_left        = m_combined_eye_fov_sides.left,
+        .fov_right       = m_combined_eye_fov_sides.right,
+        .fov_up          = m_combined_eye_fov_sides.up,
+        .fov_down        = m_combined_eye_fov_sides.down
+    };
 }
 
 auto Headset_view::get_camera_offset() const -> glm::vec3

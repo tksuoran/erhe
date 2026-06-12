@@ -7,6 +7,7 @@
 
 #include <functional>
 #include <memory>
+#include <vector>
 
 struct XrCompositionLayerProjectionView;
 
@@ -52,6 +53,10 @@ public:
     // caller is expected to check that and otherwise fall back to render().
     auto render_multiview(erhe::graphics::Command_buffer& command_buffer, std::function<bool(const Render_views_frame&, erhe::graphics::Command_buffer&)> render_views_callback) -> bool;
     auto end_frame     (bool rendered) -> bool;
+    // Locate the current frame's per-view poses + fovs without rendering (see
+    // Xr_session::locate_views). Safe after begin_frame_(); used by the headset
+    // shadow fit to build a combined culling frustum before the rendergraph.
+    auto locate_views  (std::vector<Render_view>& out_views) -> bool;
     // Create a quad composition layer backed by its own color swapchain.
     // Returns nullptr when no session exists or the swapchain cannot be
     // created (the caller is expected to fall back to scene-mesh rendering).
