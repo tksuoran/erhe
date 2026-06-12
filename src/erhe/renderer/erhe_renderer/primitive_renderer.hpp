@@ -159,19 +159,24 @@ public:
         int                           side_count
     );
 
+    // Torus with the major circle in the local XY plane (tube axis along Z).
+    // Draws the wireframe circles and the exact silhouette contour (up to
+    // two horizon points per tube cross section, traced around the major
+    // circle). Visible lines use major style; back-facing or self-occluded
+    // lines use minor style. Occlusion is ray tested against the torus;
+    // epsilon is the self-hit tolerance for those rays.
     void add_torus(
         const erhe::scene::Transform& world_from_node,
         const glm::vec4&              major_color,
         const glm::vec4&              minor_color,
         float                         major_thickness,
+        float                         minor_thickness,
         float                         major_radius,
         float                         minor_radius,
         const glm::vec3&              camera_position_in_world,
         int                           major_step_count,
         int                           minor_step_count,
-        float                         epsilon,
-        int                           debug_major,
-        int                           debug_minor
+        float                         epsilon
     );
 #pragma endregion Draw API
 

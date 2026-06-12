@@ -33,6 +33,7 @@ void Create_torus::render_preview(const Create_preview_settings& preview_setting
         preview_settings.major_color,
         preview_settings.minor_color,
         preview_settings.major_thickness,
+        preview_settings.minor_thickness,
         m_major_radius,
         m_minor_radius,
         m_use_debug_camera
@@ -40,9 +41,7 @@ void Create_torus::render_preview(const Create_preview_settings& preview_setting
             : camera_node->position_in_world(),
         preview_settings.ideal_shape ? std::max(20, m_major_steps) : m_major_steps,
         preview_settings.ideal_shape ? std::max(10, m_minor_steps) : m_minor_steps,
-        m_epsilon,
-        m_debug_major,
-        m_debug_minor
+        m_epsilon
     );
 }
 
@@ -59,8 +58,6 @@ void Create_torus::imgui()
 
     ImGui::Checkbox    ("Use Debug Camera", &m_use_debug_camera);
     ImGui::SliderFloat3("Debug Camera",     &m_debug_camera.x, -4.0f, 4.0f);
-    ImGui::SliderInt   ("Debug Major",      &m_debug_major,     0, 100);
-    ImGui::SliderInt   ("Debug Minor",      &m_debug_minor,     0, 100);
     ImGui::SliderFloat ("Epsilon",          &m_epsilon,         0.0f, 1.0f);
 }
 

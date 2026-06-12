@@ -1006,101 +1006,174 @@ void Primitive_renderer::add_torus(
     const glm::vec4&              major_color,
     const glm::vec4&              minor_color,
     const float                   major_thickness,
+    const float                   minor_thickness,
     const float                   major_radius,
     const float                   minor_radius,
     const glm::vec3&              camera_position_in_world,
     const int                     major_step_count,
     const int                     minor_step_count,
-    const float                   epsilon,
-    const int                     debug_major,
-    const int                     debug_minor
+    const float                   epsilon
 )
 {
-    static_cast<void>(major_color);
-    static_cast<void>(minor_color);
-    static_cast<void>(debug_major);
-    static_cast<void>(debug_minor);
-    constexpr glm::vec3 axis_x{1.0f, 0.0f, 0.0f};
-    constexpr glm::vec3 axis_y{0.0f, 1.0f, 0.0f};
     constexpr glm::vec3 axis_z{0.0f, 0.0f, 1.0f};
-    const     glm::mat4 m                       = world_from_node.get_matrix();
-    const     glm::mat4 node_from_world         = world_from_node.get_inverse_matrix();
-    const     glm::vec3 camera_position_in_node = glm::vec4{node_from_world * glm::vec4{camera_position_in_world, 1.0f}};
-    const     glm::vec2 tor                     = glm::vec2{major_radius, minor_radius};
-    constexpr int  k = 8;
-    set_thickness(major_thickness);
+    constexpr int       k = 8;
+
+    const glm::mat4  m                       = world_from_node.get_matrix();
+    const glm::mat4  node_from_world         = world_from_node.get_inverse_matrix();
+    const glm::vec3  camera_position_in_node = glm::vec3{node_from_world * glm::vec4{camera_position_in_world, 1.0f}};
+    const glm::dvec3 camera                  = glm::dvec3{camera_position_in_node};
+    const glm::dvec2 tor                     = glm::dvec2{major_radius, minor_radius};
+
+    // Occlusion test against the torus itself: the torus is not convex, so
+    // facing the camera is necessary but not sufficient for visibility (the
+    // near tube can hide the far side of the hole). The ray origin is offset
+    // from the surface point toward the camera, and hits within epsilon of
+    // the point are treated as self-hits.
+    const auto is_unoccluded = [&](const glm::vec3& p) -> bool {
+        const glm::dvec3 ray_dir = glm::normalize(camera - glm::dvec3{p});
+        const glm::dvec3 ray_org = glm::dvec3{p} + 1.5 * static_cast<double>(epsilon) * ray_dir;
+        const double     t       = ray_torus_intersection(ray_org, ray_dir, tor);
+        if ((t == -1.0) || (t > 1e10)) {
+            return true;
+        }
+        const glm::dvec3 hit = ray_org + t * ray_dir;
+        const double     d   = glm::distance(hit, glm::dvec3{p});
+        return (d < static_cast<double>(epsilon)) || (d > glm::distance(glm::dvec3{p}, camera));
+    };
+
+    // Structural wireframe: tube cross-section circles and rings around the
+    // axis; visible parts major style, hidden parts minor style. Back-facing
+    // points are rejected without running the quartic ray test.
+    const auto add_wire_segment = [&](const Torus_point& a, const Torus_point& b, const Torus_point& mid) {
+        const bool facing  = glm::dot(mid.n, camera_position_in_node - mid.p) > 0.0f;
+        const bool visible = facing && is_unoccluded(mid.p);
+        set_thickness(visible ? major_thickness : minor_thickness);
+        add_lines(m, visible ? major_color : minor_color, { { a.p, b.p } });
+    };
+
     for (int i = 0; i < major_step_count; ++i) {
         const float rel_major = static_cast<float>(i) / static_cast<float>(major_step_count);
         for (int j = 0; j < minor_step_count * k; ++j) {
-            const float       rel_minor      = static_cast<float>(j    ) / static_cast<float>(minor_step_count * k);
-            const float       rel_minor_next = static_cast<float>(j + 1) / static_cast<float>(minor_step_count * k);
-            const Torus_point a       = torus_point(major_radius, minor_radius, rel_major, rel_minor);
-            const Torus_point b       = torus_point(major_radius, minor_radius, rel_major, rel_minor_next);
-            const Torus_point c       = torus_point(major_radius, minor_radius, rel_major, 0.5f * (rel_minor + rel_minor_next));
-            const glm::dvec3  ray_dir = glm::normalize(glm::dvec3{camera_position_in_node} - glm::dvec3{c.p});
-            const glm::dvec3  ray_org = glm::dvec3{c.p} + 1.5 * epsilon * ray_dir;
-            const double      t       = ray_torus_intersection(glm::dvec3{ray_org}, glm::dvec3{ray_dir}, glm::dvec2{tor});
-            const glm::dvec3  P0      = ray_org + t * ray_dir;
-            const float       d       = static_cast<float>(glm::distance(P0, glm::dvec3{c.p}));
-            const bool        visible = (t == -1.0f) || (t > 1e10) || (d < epsilon) || (d > glm::distance(c.p, camera_position_in_node));
-
-            add_lines(
-                m,
-                visible ? major_color : minor_color,
-                { { a.p, b.p } }
+            const float rel_minor      = static_cast<float>(j    ) / static_cast<float>(minor_step_count * k);
+            const float rel_minor_next = static_cast<float>(j + 1) / static_cast<float>(minor_step_count * k);
+            add_wire_segment(
+                torus_point(major_radius, minor_radius, rel_major, rel_minor),
+                torus_point(major_radius, minor_radius, rel_major, rel_minor_next),
+                torus_point(major_radius, minor_radius, rel_major, 0.5f * (rel_minor + rel_minor_next))
             );
-#if 0
-            if ((i == debug_major) && (j == debug_minor))
-            {
-                add_lines( // blue: normal
-                    m,
-                    vec4{0.0f, 0.0f, 1.0f, 0.5f},
-                    { { c.p, c.p + 0.1f * c.n } }
-                );
-                add_lines( // cyan: point to camera
-                    m,
-                    vec4{0.0f, 1.0f, 1.0f, 0.5f},
-                    { { camera_position_in_node, c.p } }
-                );
-                add_lines( // green: center to point
-                    m,
-                    vec4{0.0f, 1.0f, 0.0f, 1.0f},
-                    { { vec3{0.0f, 0.0f, 0.0f}, c.p } }
-                );
-                if ((t > 0.0f) && (t < 1e10)) // && (d > epsilon))
-                {
-                    add_lines( // red: point to intersection
-                        m,
-                        vec4{1.0f, 0.0f, 0.0f, 1.0f},
-                        { { ray_org, P0 } }
-                    );
-                }
-            }
-#endif
         }
     }
-
     for (int j = 0; j < minor_step_count; ++j) {
         const float rel_minor = static_cast<float>(j) / static_cast<float>(minor_step_count);
         for (int i = 0; i < major_step_count * k; ++i) {
-            const float       rel_major      = static_cast<float>(i    ) / static_cast<float>(major_step_count * k);
-            const float       rel_major_next = static_cast<float>(i + 1) / static_cast<float>(major_step_count * k);
-            const Torus_point a = torus_point(major_radius, minor_radius, rel_major,      rel_minor);
-            const Torus_point b = torus_point(major_radius, minor_radius, rel_major_next, rel_minor);
-            const Torus_point c = torus_point(major_radius, minor_radius, 0.5f * (rel_major + rel_major_next), rel_minor);
-            const glm::dvec3  ray_dir = glm::normalize(glm::dvec3{camera_position_in_node} - glm::dvec3{c.p});
-            const glm::dvec3  ray_org = glm::dvec3{c.p} + 1.5 * epsilon * ray_dir;
-            const double      t       = ray_torus_intersection(glm::dvec3{ray_org}, glm::dvec3{ray_dir}, glm::dvec2{tor});
-            const glm::dvec3  P0      = ray_org + t * ray_dir;
-            const float       d       = static_cast<float>(glm::distance(P0, glm::dvec3{c.p}));
-            const bool        visible = (t == -1.0f) || (t > 1e10) || (d < epsilon) || (d > glm::distance(c.p, camera_position_in_node));
-
-            add_lines(
-                m,
-                visible ? major_color : minor_color,
-                { { a.p, b.p } }
+            const float rel_major      = static_cast<float>(i    ) / static_cast<float>(major_step_count * k);
+            const float rel_major_next = static_cast<float>(i + 1) / static_cast<float>(major_step_count * k);
+            add_wire_segment(
+                torus_point(major_radius, minor_radius, rel_major,      rel_minor),
+                torus_point(major_radius, minor_radius, rel_major_next, rel_minor),
+                torus_point(major_radius, minor_radius, 0.5f * (rel_major + rel_major_next), rel_minor)
             );
         }
+    }
+
+    // True silhouette contour. torus_point() puts the major circle in the XY
+    // plane with the tube axis along Z, so on the cross-section circle at
+    // major angle theta the surface normal is
+    //   n(phi) = cos(phi) radial(theta) + sin(phi) Z
+    // and the horizon condition n . (camera - q) = 0 reduces to
+    //   (radial . w) cos(phi) + (Z . w) sin(phi) = minor_radius
+    // with w = camera - ring_center(theta) - the same threshold form used by
+    // add_sphere() / add_cone() / add_capsule() - giving up to two exact
+    // silhouette points per cross section. The two solution branches are
+    // traced into polylines around the major circle; where the branch pair
+    // appears or disappears (grazing cross sections) the branch ends are
+    // joined, exact up to one theta step. Self-occluded silhouette parts are
+    // drawn in minor style via the same ray test.
+    const int   silhouette_step_count = major_step_count * k;
+    const float chord_threshold       = 2.0f * glm::two_pi<float>() * (major_radius + minor_radius) / static_cast<float>(silhouette_step_count);
+
+    class Silhouette_sample
+    {
+    public:
+        bool      exists{false};
+        glm::vec3 q0    {0.0f};
+        glm::vec3 q1    {0.0f};
+        bool      vis0  {false};
+        bool      vis1  {false};
+    };
+
+    const auto solve_at = [&](const float theta) -> Silhouette_sample {
+        const glm::vec3 radial{std::cos(theta), std::sin(theta), 0.0f};
+        const glm::vec3 ring_center = major_radius * radial;
+        const glm::vec3 w           = camera_position_in_node - ring_center;
+        const float     a           = glm::dot(radial, w);
+        const float     b           = w.z;
+        const float     reach       = std::sqrt((a * a) + (b * b));
+        Silhouette_sample sample;
+        sample.exists = reach > minor_radius;
+        if (sample.exists) {
+            const float phi_mid = std::atan2(b, a);
+            const float phi_cut = std::acos(glm::clamp(minor_radius / reach, -1.0f, 1.0f));
+            const auto point_at = [&](const float phi) {
+                return ring_center + minor_radius * ((std::cos(phi) * radial) + (std::sin(phi) * axis_z));
+            };
+            sample.q0   = point_at(phi_mid - phi_cut);
+            sample.q1   = point_at(phi_mid + phi_cut);
+            sample.vis0 = is_unoccluded(sample.q0);
+            sample.vis1 = is_unoccluded(sample.q1);
+        }
+        return sample;
+    };
+
+    const auto add_silhouette_segment = [&](const glm::vec3& p0, const glm::vec3& p1, const bool visible) {
+        set_thickness(visible ? major_thickness : minor_thickness);
+        add_lines(m, visible ? major_color : minor_color, { { p0, p1 } });
+    };
+
+    const auto emit_between = [&](const Silhouette_sample& s0, const Silhouette_sample& s1) {
+        if (s0.exists && s1.exists) {
+            add_silhouette_segment(s0.q0, s1.q0, s0.vis0 && s1.vis0);
+            add_silhouette_segment(s0.q1, s1.q1, s0.vis1 && s1.vis1);
+        } else if (s0.exists && !s1.exists) {
+            add_silhouette_segment(s0.q0, s0.q1, s0.vis0 && s0.vis1); // branches fold together
+        } else if (!s0.exists && s1.exists) {
+            add_silhouette_segment(s1.q0, s1.q1, s1.vis0 && s1.vis1);
+        }
+    };
+
+    Silhouette_sample prev = solve_at(0.0f);
+    for (int i = 1; i <= silhouette_step_count; ++i) {
+        const float theta0 = glm::two_pi<float>() * static_cast<float>(i - 1) / static_cast<float>(silhouette_step_count);
+        const float theta1 = glm::two_pi<float>() * static_cast<float>(i    ) / static_cast<float>(silhouette_step_count);
+        const Silhouette_sample cur = solve_at(theta1);
+
+        // Near the folds (grazing cross sections, reach -> minor_radius) the
+        // curve moves fast in phi for small steps in theta (phi_cut behaves
+        // like a square root), so a uniform theta sampling leaves long chords
+        // exactly where the contour turns around. Refine those intervals.
+        const bool refine =
+            (prev.exists != cur.exists) ||
+            (
+                prev.exists && cur.exists &&
+                (
+                    (glm::distance(prev.q0, cur.q0) > chord_threshold) ||
+                    (glm::distance(prev.q1, cur.q1) > chord_threshold)
+                )
+            );
+        if (refine) {
+            constexpr int substep_count = 32;
+            Silhouette_sample a = prev;
+            for (int s = 1; s <= substep_count; ++s) {
+                const Silhouette_sample b = (s == substep_count)
+                    ? cur
+                    : solve_at(theta0 + ((theta1 - theta0) * static_cast<float>(s) / static_cast<float>(substep_count)));
+                emit_between(a, b);
+                a = b;
+            }
+        } else {
+            emit_between(prev, cur);
+        }
+        prev = cur;
     }
 }
 #pragma endregion add

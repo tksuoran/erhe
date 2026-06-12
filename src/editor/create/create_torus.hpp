@@ -23,8 +23,6 @@ private:
 
     bool      m_use_debug_camera{false};
     glm::vec3 m_debug_camera    {0.0f, 0.0f, 0.0f};
-    int       m_debug_major     {0};
-    int       m_debug_minor     {0};
     float     m_epsilon         {0.004f};
 };
 
