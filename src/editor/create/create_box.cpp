@@ -35,8 +35,8 @@ void Create_box::render_preview(const Create_preview_settings& preview_settings)
     line_renderer.add_cube(
         preview_settings.transform.get_matrix(),
         preview_settings.major_color,
-        -0.5f * m_size,
-         0.5f * m_size
+        -0.5f * m_parameters.size,
+         0.5f * m_parameters.size
     );
 }
 
@@ -46,15 +46,20 @@ void Create_box::imgui()
 
     ImGui::Text("Box Parameters");
 
-    ImGui::SliderFloat3("Size",  &m_size.x,  0.0f, 10.0f);
-    ImGui::SliderInt3  ("Steps", &m_steps.x, 1,    10   );
-    ImGui::SliderFloat ("Power", &m_power,   0.0f, 10.0f);
+    ImGui::SliderFloat3("Size",  &m_parameters.size.x,  0.0f, 10.0f);
+    ImGui::SliderInt3  ("Steps", &m_parameters.steps.x, 1,    10   );
+    ImGui::SliderFloat ("Power", &m_parameters.power,   0.0f, 10.0f);
 }
 
 auto Create_box::create(Brush_data& brush_create_info) const -> std::shared_ptr<Brush>
 {
+    return create_brush(brush_create_info, m_parameters);
+}
+
+auto Create_box::create_brush(Brush_data& brush_create_info, const Box_parameters& parameters) -> std::shared_ptr<Brush>
+{
     auto geometry = std::make_shared<erhe::geometry::Geometry>("box");
-    erhe::geometry::shapes::make_box(geometry->get_mesh(), to_geo_vec3f(m_size), to_geo_vec3i(m_steps), m_power);
+    erhe::geometry::shapes::make_box(geometry->get_mesh(), to_geo_vec3f(parameters.size), to_geo_vec3i(parameters.steps), parameters.power);
     brush_create_info.geometry = geometry;
     transform(*geometry.get(), *geometry.get(), to_geo_mat4f(erhe::math::mat4_swap_xy));
     const uint64_t flags =

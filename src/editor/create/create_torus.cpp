@@ -34,13 +34,13 @@ void Create_torus::render_preview(const Create_preview_settings& preview_setting
         preview_settings.minor_color,
         preview_settings.major_thickness,
         preview_settings.minor_thickness,
-        m_major_radius,
-        m_minor_radius,
+        m_parameters.major_radius,
+        m_parameters.minor_radius,
         m_use_debug_camera
             ? m_debug_camera
             : camera_node->position_in_world(),
-        preview_settings.ideal_shape ? std::max(20, m_major_steps) : m_major_steps,
-        preview_settings.ideal_shape ? std::max(10, m_minor_steps) : m_minor_steps,
+        preview_settings.ideal_shape ? std::max(20, m_parameters.major_steps) : m_parameters.major_steps,
+        preview_settings.ideal_shape ? std::max(10, m_parameters.minor_steps) : m_parameters.minor_steps,
         m_epsilon
     );
 }
@@ -49,10 +49,10 @@ void Create_torus::imgui()
 {
     ImGui::Text("Torus Parameters");
 
-    ImGui::SliderFloat("Major Radius", &m_major_radius, 0.0f, 3.0f);
-    ImGui::SliderFloat("Minor Radius", &m_minor_radius, 0.0f, m_major_radius);
-    ImGui::SliderInt  ("Major Steps",  &m_major_steps,  3, 40);
-    ImGui::SliderInt  ("Minor Steps",  &m_minor_steps,  3, 40);
+    ImGui::SliderFloat("Major Radius", &m_parameters.major_radius, 0.0f, 3.0f);
+    ImGui::SliderFloat("Minor Radius", &m_parameters.minor_radius, 0.0f, m_parameters.major_radius);
+    ImGui::SliderInt  ("Major Steps",  &m_parameters.major_steps,  3, 40);
+    ImGui::SliderInt  ("Minor Steps",  &m_parameters.minor_steps,  3, 40);
 
     ImGui::Separator();
 
@@ -63,14 +63,19 @@ void Create_torus::imgui()
 
 auto Create_torus::create(Brush_data& brush_create_info) const -> std::shared_ptr<Brush>
 {
+    return create_brush(brush_create_info, m_parameters);
+}
+
+auto Create_torus::create_brush(Brush_data& brush_create_info, const Torus_parameters& parameters) -> std::shared_ptr<Brush>
+{
     std::shared_ptr<erhe::geometry::Geometry> geometry = std::make_shared<erhe::geometry::Geometry>("torus");
     brush_create_info.geometry = geometry;
     erhe::geometry::shapes::make_torus(
         geometry->get_mesh(),
-        m_major_radius,
-        m_minor_radius,
-        m_major_steps,
-        m_minor_steps
+        parameters.major_radius,
+        parameters.minor_radius,
+        parameters.major_steps,
+        parameters.minor_steps
     );
 
     transform(*geometry.get(), *geometry.get(), to_geo_mat4f(erhe::math::mat4_swap_yz));

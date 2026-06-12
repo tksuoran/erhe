@@ -9,6 +9,14 @@ namespace editor {
 class Brush;
 class Brush_data;
 
+class Box_parameters
+{
+public:
+    glm::vec3  size {1.0f, 1.0f, 1.0f};
+    glm::ivec3 steps{3, 3, 3};
+    float      power{1.0f};
+};
+
 class Create_box : public Create_shape
 {
 public:
@@ -18,10 +26,10 @@ public:
     void imgui         ()                                                              override;
     auto create        (Brush_data& brush_create_info) const -> std::shared_ptr<Brush> override;
 
+    [[nodiscard]] static auto create_brush(Brush_data& brush_create_info, const Box_parameters& parameters) -> std::shared_ptr<Brush>;
+
 private:
-    glm::vec3  m_size {1.0f, 1.0f, 1.0f};
-    glm::ivec3 m_steps{3, 3, 3};
-    float      m_power{1.0f};
+    Box_parameters m_parameters;
 };
 
 }

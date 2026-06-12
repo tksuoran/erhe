@@ -4,6 +4,16 @@
 
 namespace editor {
 
+class Capsule_parameters
+{
+public:
+    int   slice_count           {32};
+    int   hemisphere_stack_count{8};
+    float length                {1.0f};
+    float bottom_radius         {1.0f};
+    float top_radius            {0.5f};
+};
+
 class Create_capsule : public Create_shape
 {
 public:
@@ -13,12 +23,10 @@ public:
     void imgui         ()                                                              override;
     auto create        (Brush_data& brush_create_info) const -> std::shared_ptr<Brush> override;
 
+    [[nodiscard]] static auto create_brush(Brush_data& brush_create_info, const Capsule_parameters& parameters) -> std::shared_ptr<Brush>;
+
 private:
-    int   m_slice_count           {32};
-    int   m_hemisphere_stack_count{8};
-    float m_length                {1.0f};
-    float m_bottom_radius         {1.0f};
-    float m_top_radius            {0.5f};
+    Capsule_parameters m_parameters;
 };
 
 }

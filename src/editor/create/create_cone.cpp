@@ -35,11 +35,11 @@ void Create_cone::render_preview(const Create_preview_settings& preview_settings
         preview_settings.major_thickness,
         preview_settings.minor_thickness,
         glm::vec3{0.0f, 0.0f, 0.0f},
-        m_height,
-        m_bottom_radius,
-        m_top_radius,
+        m_parameters.height,
+        m_parameters.bottom_radius,
+        m_parameters.top_radius,
         camera_node->position_in_world(),
-        preview_settings.ideal_shape ? std::max(80, m_slice_count) : m_slice_count
+        preview_settings.ideal_shape ? std::max(80, m_parameters.slice_count) : m_parameters.slice_count
     );
 }
 
@@ -47,16 +47,21 @@ void Create_cone::imgui()
 {
     ImGui::Text("Cone Parameters");
 
-    ImGui::SliderFloat("Height",        &m_height ,       0.0f, 3.0f);
-    ImGui::SliderFloat("Bottom Radius", &m_bottom_radius, 0.0f, 3.0f);
-    ImGui::SliderFloat("Top Radius",    &m_top_radius,    0.0f, 3.0f);
-    ImGui::SliderInt  ("Slices",        &m_slice_count,   1, 40);
-    ImGui::SliderInt  ("Stacks",        &m_stack_count,   1, 6);
-    ImGui::Checkbox   ("Use Top",       &m_use_top);
-    ImGui::Checkbox   ("Use Bottom",    &m_use_bottom);
+    ImGui::SliderFloat("Height",        &m_parameters.height ,       0.0f, 3.0f);
+    ImGui::SliderFloat("Bottom Radius", &m_parameters.bottom_radius, 0.0f, 3.0f);
+    ImGui::SliderFloat("Top Radius",    &m_parameters.top_radius,    0.0f, 3.0f);
+    ImGui::SliderInt  ("Slices",        &m_parameters.slice_count,   1, 40);
+    ImGui::SliderInt  ("Stacks",        &m_parameters.stack_count,   1, 6);
+    ImGui::Checkbox   ("Use Top",       &m_parameters.use_top);
+    ImGui::Checkbox   ("Use Bottom",    &m_parameters.use_bottom);
 }
 
 auto Create_cone::create(Brush_data& brush_create_info) const -> std::shared_ptr<Brush>
+{
+    return create_brush(brush_create_info, m_parameters);
+}
+
+auto Create_cone::create_brush(Brush_data& brush_create_info, const Cone_parameters& parameters) -> std::shared_ptr<Brush>
 {
     std::shared_ptr<erhe::geometry::Geometry> geometry = std::make_shared<erhe::geometry::Geometry>("cone");;
     brush_create_info.geometry = geometry;
@@ -64,13 +69,13 @@ auto Create_cone::create(Brush_data& brush_create_info) const -> std::shared_ptr
     erhe::geometry::shapes::make_conical_frustum(
         geo_mesh,
         0.0,
-        m_height,
-        m_bottom_radius,
-        m_top_radius,
-        m_use_bottom,
-        m_use_top,
-        std::max(3, m_slice_count), // slice count
-        std::max(1, m_stack_count)  // stack count
+        parameters.height,
+        parameters.bottom_radius,
+        parameters.top_radius,
+        parameters.use_bottom,
+        parameters.use_top,
+        std::max(3, parameters.slice_count), // slice count
+        std::max(1, parameters.stack_count)  // stack count
     );
 
     transform(*geometry.get(), *geometry.get(), to_geo_mat4f(erhe::math::mat4_swap_xy));

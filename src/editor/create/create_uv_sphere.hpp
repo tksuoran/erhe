@@ -4,6 +4,14 @@
 
 namespace editor {
 
+class Uv_sphere_parameters
+{
+public:
+    int   slice_count{8};
+    int   stack_count{8};
+    float radius     {1.0f};
+};
+
 class Create_uv_sphere : public Create_shape
 {
 public:
@@ -13,10 +21,10 @@ public:
     void imgui         ()                                                              override;
     auto create        (Brush_data& brush_create_info) const -> std::shared_ptr<Brush> override;
 
+    [[nodiscard]] static auto create_brush(Brush_data& brush_create_info, const Uv_sphere_parameters& parameters) -> std::shared_ptr<Brush>;
+
 private:
-    int   m_slice_count{8};
-    int   m_stack_count{8};
-    float m_radius     {1.0f};
+    Uv_sphere_parameters m_parameters;
 };
 
 }

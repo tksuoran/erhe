@@ -6,6 +6,11 @@
 #include "brushes/brush.hpp"
 #include "brushes/brush_placement.hpp"
 #include "content_library/content_library.hpp"
+#include "create/create_box.hpp"
+#include "create/create_capsule.hpp"
+#include "create/create_cone.hpp"
+#include "create/create_torus.hpp"
+#include "create/create_uv_sphere.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/item_parent_change_operation.hpp"
 #include "operations/material_change_operation.hpp"
@@ -776,6 +781,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "select_items")       result = action_select_items   (req->arguments);
         else if (req->tool_name == "transform_selection") result = action_transform_selection(req->arguments);
         else if (req->tool_name == "place_brush")        result = action_place_brush    (req->arguments);
+        else if (req->tool_name == "create_shape")       result = action_create_shape   (req->arguments);
         else if (req->tool_name == "toggle_physics")     result = action_toggle_physics (req->arguments);
         else if (req->tool_name == "reparent_node")      result = action_reparent_node  (req->arguments);
         else if (req->tool_name == "lock_items")         result = action_lock_items     (req->arguments);
@@ -859,6 +865,38 @@ void Mcp_server::refresh_tool_list()
         {"required", json::array({"scene_name", "brush_id", "position"})}
     }});
 
+    m_tool_infos.push_back({"create_shape",        "Create a parametric shape using the same generators as the Create window, then place an instance in the scene and/or add the brush to the content library. Shape parameters: box (size [x,y,z], steps [x,y,z], power), uv_sphere (radius, slice_count, stack_count), cone (height, bottom_radius, top_radius, use_top, use_bottom, slice_count, stack_count), capsule (length, bottom_radius, top_radius, slice_count, stack_count; tapered when the radii differ, which requires length > |bottom_radius - top_radius|), torus (major_radius, minor_radius, major_steps, minor_steps).", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name",     {{"type", "string"},  {"description", "Name of the scene"}}},
+            {"shape",          {{"type", "string"},  {"description", "Shape type: box, uv_sphere, cone, capsule or torus"}}},
+            {"name",           {{"type", "string"},  {"description", "Brush / instance name (default: shape type)"}}},
+            {"instance",       {{"type", "boolean"}, {"description", "Place an instance node in the scene (default true)"}}},
+            {"add_brush",      {{"type", "boolean"}, {"description", "Add the brush to the content library for later place_brush use (default false)"}}},
+            {"position",       {{"type", "array"},   {"items", {{"type", "number"}}},  {"minItems", 3}, {"maxItems", 3}, {"description", "World position [x, y, z] for the instance (default [0, 0, 0])"}}},
+            {"parent_node_id", {{"type", "integer"}, {"description", "Parent node ID for the instance (default: scene root); the world position is preserved"}}},
+            {"material_name",  {{"type", "string"},  {"description", "Material name (default: first available)"}}},
+            {"scale",          {{"type", "number"},  {"description", "Uniform scale factor for the instance (default 1.0)"}}},
+            {"motion_mode",    {{"type", "string"},  {"description", "Physics motion mode for the instance: static, kinematic, dynamic (default dynamic)"}}},
+            {"size",           {{"type", "array"},   {"items", {{"type", "number"}}},  {"minItems", 3}, {"maxItems", 3}, {"description", "box: size [x, y, z]"}}},
+            {"steps",          {{"type", "array"},   {"items", {{"type", "integer"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "box: subdivision steps [x, y, z]"}}},
+            {"power",          {{"type", "number"},  {"description", "box: power"}}},
+            {"radius",         {{"type", "number"},  {"description", "uv_sphere: radius"}}},
+            {"height",         {{"type", "number"},  {"description", "cone: height"}}},
+            {"length",         {{"type", "number"},  {"description", "capsule: cylinder section length"}}},
+            {"bottom_radius",  {{"type", "number"},  {"description", "cone / capsule: bottom radius"}}},
+            {"top_radius",     {{"type", "number"},  {"description", "cone / capsule: top radius"}}},
+            {"use_top",        {{"type", "boolean"}, {"description", "cone: generate top cap (default true)"}}},
+            {"use_bottom",     {{"type", "boolean"}, {"description", "cone: generate bottom cap (default true)"}}},
+            {"slice_count",    {{"type", "integer"}, {"description", "uv_sphere / cone / capsule: slice count"}}},
+            {"stack_count",    {{"type", "integer"}, {"description", "uv_sphere / cone: stack count; capsule: hemisphere stack count"}}},
+            {"major_radius",   {{"type", "number"},  {"description", "torus: major radius"}}},
+            {"minor_radius",   {{"type", "number"},  {"description", "torus: minor radius"}}},
+            {"major_steps",    {{"type", "integer"}, {"description", "torus: major steps"}}},
+            {"minor_steps",    {{"type", "integer"}, {"description", "torus: minor steps"}}}
+        }},
+        {"required", json::array({"scene_name", "shape"})}
+    }});
     m_tool_infos.push_back({"toggle_physics",     "Toggle dynamic physics simulation on/off",              schema_no_args()});
     m_tool_infos.push_back({"reparent_node",     "Set a node's parent (by node IDs)",                    {
         {"type", "object"},
@@ -2056,6 +2094,237 @@ auto Mcp_server::action_place_brush(const json& args) -> std::string
         {"position",  {position.x, position.y, position.z}},
         {"scale",     scale}
     };
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_create_shape(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    const std::string shape = args.value("shape", "");
+    if ((shape != "box") && (shape != "uv_sphere") && (shape != "cone") && (shape != "capsule") && (shape != "torus")) {
+        json r = make_text_content("Invalid shape '" + shape + "' (expected box, uv_sphere, cone, capsule or torus)");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    const bool make_instance = args.value("instance", true);
+    const bool add_brush     = args.value("add_brush", false);
+    if (!make_instance && !add_brush) {
+        json r = make_text_content("Nothing to do - enable instance and/or add_brush");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    auto read_vec3 = [&args](const char* key, glm::vec3& out_value) {
+        const json value = args.value(key, json());
+        if (value.is_array() && (value.size() == 3)) {
+            out_value = glm::vec3{value[0].get<float>(), value[1].get<float>(), value[2].get<float>()};
+        }
+    };
+    auto read_ivec3 = [&args](const char* key, glm::ivec3& out_value) {
+        const json value = args.value(key, json());
+        if (value.is_array() && (value.size() == 3)) {
+            out_value = glm::ivec3{value[0].get<int>(), value[1].get<int>(), value[2].get<int>()};
+        }
+    };
+
+    Brush_data brush_create_info{
+        .context      = m_context,
+        .app_settings = *m_context.app_settings,
+        .name         = args.value("name", shape),
+        .build_info   = erhe::primitive::Build_info{
+            .primitive_types = {
+                .fill_triangles  = true,
+                .edge_lines      = true,
+                .corner_points   = true,
+                .centroid_points = true
+            },
+            .buffer_info     = m_context.mesh_memory->make_primitive_buffer_info()
+        },
+        .normal_style = erhe::primitive::Normal_style::point_normals,
+        .density      = 1.0f
+    };
+
+    std::shared_ptr<Brush> brush;
+    json parameters_echo = json::object();
+    if (shape == "box") {
+        Box_parameters parameters;
+        read_vec3 ("size",  parameters.size);
+        read_ivec3("steps", parameters.steps);
+        parameters.power = args.value("power", parameters.power);
+        brush = Create_box::create_brush(brush_create_info, parameters);
+        parameters_echo = {
+            {"size",  {parameters.size.x,  parameters.size.y,  parameters.size.z}},
+            {"steps", {parameters.steps.x, parameters.steps.y, parameters.steps.z}},
+            {"power", parameters.power}
+        };
+    } else if (shape == "uv_sphere") {
+        Uv_sphere_parameters parameters;
+        parameters.radius      = args.value("radius",      parameters.radius);
+        parameters.slice_count = args.value("slice_count", parameters.slice_count);
+        parameters.stack_count = args.value("stack_count", parameters.stack_count);
+        brush = Create_uv_sphere::create_brush(brush_create_info, parameters);
+        parameters_echo = {
+            {"radius",      parameters.radius},
+            {"slice_count", parameters.slice_count},
+            {"stack_count", parameters.stack_count}
+        };
+    } else if (shape == "cone") {
+        Cone_parameters parameters;
+        parameters.height        = args.value("height",        parameters.height);
+        parameters.bottom_radius = args.value("bottom_radius", parameters.bottom_radius);
+        parameters.top_radius    = args.value("top_radius",    parameters.top_radius);
+        parameters.use_top       = args.value("use_top",       parameters.use_top);
+        parameters.use_bottom    = args.value("use_bottom",    parameters.use_bottom);
+        parameters.slice_count   = args.value("slice_count",   parameters.slice_count);
+        parameters.stack_count   = args.value("stack_count",   parameters.stack_count);
+        brush = Create_cone::create_brush(brush_create_info, parameters);
+        parameters_echo = {
+            {"height",        parameters.height},
+            {"bottom_radius", parameters.bottom_radius},
+            {"top_radius",    parameters.top_radius},
+            {"use_top",       parameters.use_top},
+            {"use_bottom",    parameters.use_bottom},
+            {"slice_count",   parameters.slice_count},
+            {"stack_count",   parameters.stack_count}
+        };
+    } else if (shape == "capsule") {
+        Capsule_parameters parameters;
+        parameters.length                 = args.value("length",        parameters.length);
+        parameters.bottom_radius          = args.value("bottom_radius", parameters.bottom_radius);
+        parameters.top_radius             = args.value("top_radius",    parameters.top_radius);
+        parameters.slice_count            = args.value("slice_count",   parameters.slice_count);
+        parameters.hemisphere_stack_count = args.value("stack_count",   parameters.hemisphere_stack_count);
+        // make_capsule() requires |bottom_radius - top_radius| < length when the
+        // radii differ: the tangent cone between the cap spheres exists only
+        // while neither sphere contains the other.
+        if (
+            (parameters.bottom_radius != parameters.top_radius) &&
+            (parameters.length <= std::abs(parameters.bottom_radius - parameters.top_radius))
+        ) {
+            json r = make_text_content("Tapered capsule requires length > |bottom_radius - top_radius|");
+            r["isError"] = true;
+            return r.dump();
+        }
+        brush = Create_capsule::create_brush(brush_create_info, parameters);
+        parameters_echo = {
+            {"length",        parameters.length},
+            {"bottom_radius", parameters.bottom_radius},
+            {"top_radius",    parameters.top_radius},
+            {"slice_count",   parameters.slice_count},
+            {"stack_count",   parameters.hemisphere_stack_count},
+            {"tapered",       parameters.bottom_radius != parameters.top_radius}
+        };
+    } else { // torus
+        Torus_parameters parameters;
+        parameters.major_radius = args.value("major_radius", parameters.major_radius);
+        parameters.minor_radius = args.value("minor_radius", parameters.minor_radius);
+        parameters.major_steps  = args.value("major_steps",  parameters.major_steps);
+        parameters.minor_steps  = args.value("minor_steps",  parameters.minor_steps);
+        brush = Create_torus::create_brush(brush_create_info, parameters);
+        parameters_echo = {
+            {"major_radius", parameters.major_radius},
+            {"minor_radius", parameters.minor_radius},
+            {"major_steps",  parameters.major_steps},
+            {"minor_steps",  parameters.minor_steps}
+        };
+    }
+
+    if (!brush) {
+        json r = make_text_content("Failed to create shape: " + shape);
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    json result = {
+        {"shape",      shape},
+        {"name",       brush->get_name()},
+        {"parameters", parameters_echo}
+    };
+
+    auto library = sr->get_content_library();
+    if (add_brush) {
+        if (!library || !library->brushes) {
+            json r = make_text_content("No brush library in scene");
+            r["isError"] = true;
+            return r.dump();
+        }
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{library->mutex};
+        library->brushes->add(brush);
+        result["brush_id"] = brush->get_id();
+    }
+
+    if (make_instance) {
+        std::shared_ptr<erhe::primitive::Material> material;
+        const std::string material_name = args.value("material_name", "");
+        if (!material_name.empty() && library && library->materials) {
+            const auto& mat_list = library->materials->get_all<erhe::primitive::Material>();
+            for (const auto& mat : mat_list) {
+                if (mat->get_name() == material_name) {
+                    material = mat;
+                    break;
+                }
+            }
+        }
+        if (!material && library && library->materials) {
+            const auto& mat_list = library->materials->get_all<erhe::primitive::Material>();
+            if (!mat_list.empty()) {
+                material = mat_list.front();
+            }
+        }
+        if (!material) {
+            json r = make_text_content("No materials available");
+            r["isError"] = true;
+            return r.dump();
+        }
+
+        glm::vec3 position{0.0f};
+        read_vec3("position", position);
+
+        std::shared_ptr<erhe::scene::Node> parent;
+        if (args.contains("parent_node_id")) {
+            const std::size_t parent_node_id = args.value("parent_node_id", std::size_t{0});
+            for (const auto& node : sr->get_scene().get_flat_nodes()) {
+                if (node->get_id() == parent_node_id) {
+                    parent = node;
+                    break;
+                }
+            }
+            if (!parent) {
+                json r = make_text_content("Parent node not found with id: " + std::to_string(parent_node_id));
+                r["isError"] = true;
+                return r.dump();
+            }
+        }
+
+        const double scale = args.value("scale", 1.0);
+        const erhe::physics::Motion_mode motion_mode = parse_motion_mode(
+            args.value("motion_mode", "dynamic"),
+            erhe::physics::Motion_mode::e_dynamic
+        );
+
+        const glm::mat4 world_from_node = erhe::math::create_translation<float>(position);
+        auto instance_node = place_brush_in_scene(m_context, *brush, *sr, world_from_node, material, scale, motion_mode, parent);
+        if (!instance_node) {
+            json r = make_text_content("Failed to create shape instance");
+            r["isError"] = true;
+            return r.dump();
+        }
+        result["node_name"]   = instance_node->get_name();
+        result["node_id"]     = instance_node->get_id();
+        result["material"]    = material->get_name();
+        result["position"]    = {position.x, position.y, position.z};
+        result["motion_mode"] = motion_mode_to_string(motion_mode);
+        result["parent"]      = parent ? parent->get_name() : "(scene root)";
+    }
+
     return make_json_content(result).dump();
 }
 

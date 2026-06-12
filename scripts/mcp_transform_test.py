@@ -22,76 +22,10 @@ The editor must already be running. Exit code 0 = all checks passed.
 """
 
 import argparse
-import json
 import math
-import os
 import sys
-import time
-import urllib.error
-import urllib.request
 
-
-class McpClient:
-    def __init__(self, port: int) -> None:
-        self.url = f"http://127.0.0.1:{port}/mcp"
-        self.next_id = 0
-        self.headers = {"Content-Type": "application/json"}
-        token_path = os.path.join(os.path.expanduser("~"), ".claude", "erhe_mcp_token")
-        if os.path.isfile(token_path):
-            with open(token_path, "r", encoding="utf-8") as f:
-                token = f.read().strip()
-            if token:
-                self.headers["Authorization"] = f"Bearer {token}"
-
-    def rpc(self, method: str, params: dict) -> dict:
-        self.next_id += 1
-        request = {
-            "jsonrpc": "2.0",
-            "id": str(self.next_id),
-            "method": method,
-            "params": params,
-        }
-        data = json.dumps(request).encode("utf-8")
-        req = urllib.request.Request(self.url, data=data, headers=self.headers)
-        with urllib.request.urlopen(req, timeout=10) as response:
-            reply = json.loads(response.read().decode("utf-8"))
-        if "error" in reply:
-            raise RuntimeError(f"JSON-RPC error from {method}: {reply['error']}")
-        return reply["result"]
-
-    def call(self, tool: str, arguments: dict | None = None) -> dict:
-        """Call a tool and return its JSON payload (parsed from the text content)."""
-        result = self.rpc("tools/call", {"name": tool, "arguments": arguments or {}})
-        text = result["content"][0]["text"]
-        if result.get("isError", False):
-            raise RuntimeError(f"Tool {tool} failed: {text}")
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            return {"text": text}
-
-
-FAILURES: list[str] = []
-
-
-def check_close(label: str, actual, expected, tolerance: float = 1.0e-4) -> None:
-    ok = all(math.isclose(a, e, abs_tol=tolerance) for a, e in zip(actual, expected)) and (len(actual) == len(expected))
-    status = "PASS" if ok else "FAIL"
-    print(f"  [{status}] {label}: actual={actual} expected={expected}")
-    if not ok:
-        FAILURES.append(label)
-
-
-def wait_for_server(client: McpClient, timeout_s: float) -> None:
-    deadline = time.monotonic() + timeout_s
-    while True:
-        try:
-            client.rpc("initialize", {})
-            return
-        except (urllib.error.URLError, ConnectionError, OSError):
-            if time.monotonic() >= deadline:
-                raise RuntimeError(f"MCP server did not respond within {timeout_s} s")
-            time.sleep(1.0)
+from erhe_mcp import McpClient, check_close, pick_scene, report, wait_for_server
 
 
 def main() -> int:
@@ -105,18 +39,11 @@ def main() -> int:
     print(f"Waiting for MCP server on port {args.port} ...")
     wait_for_server(client, args.wait)
 
-    tools = self_check_tool_list(client)
-    if "transform_selection" not in tools:
+    if "transform_selection" not in client.tool_names():
         print("FAIL: transform_selection tool is not registered")
         return 1
 
-    scene_name = args.scene
-    if not scene_name:
-        scenes = client.call("list_scenes")["scenes"]
-        if not scenes:
-            print("FAIL: no scenes available")
-            return 1
-        scene_name = scenes[0]["name"]
+    scene_name = pick_scene(client, args.scene)
     print(f"Using scene: {scene_name}")
 
     brushes = client.call("get_scene_brushes", {"scene_name": scene_name}).get("brushes", [])
@@ -184,18 +111,7 @@ def main() -> int:
     node = result["nodes"][0]
     check_close("child local scale", node["local_transform"]["scale"], scale)
 
-    if FAILURES:
-        print(f"\n{len(FAILURES)} check(s) FAILED:")
-        for failure in FAILURES:
-            print(f"  - {failure}")
-        return 1
-    print("\nAll checks passed.")
-    return 0
-
-
-def self_check_tool_list(client: McpClient) -> set[str]:
-    result = client.rpc("tools/list", {})
-    return {tool["name"] for tool in result.get("tools", [])}
+    return report()
 
 
 if __name__ == "__main__":

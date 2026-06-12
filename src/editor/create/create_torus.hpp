@@ -6,6 +6,15 @@
 
 namespace editor {
 
+class Torus_parameters
+{
+public:
+    float major_radius{1.0f};
+    float minor_radius{0.5f};
+    int   major_steps {32};
+    int   minor_steps {28};
+};
+
 class Create_torus : public Create_shape
 {
 public:
@@ -15,11 +24,10 @@ public:
     void imgui         ()                                                              override;
     auto create        (Brush_data& brush_create_info) const -> std::shared_ptr<Brush> override;
 
+    [[nodiscard]] static auto create_brush(Brush_data& brush_create_info, const Torus_parameters& parameters) -> std::shared_ptr<Brush>;
+
 private:
-    float m_major_radius{1.0f};
-    float m_minor_radius{0.5f};
-    int   m_major_steps {32};
-    int   m_minor_steps {28};
+    Torus_parameters m_parameters;
 
     bool      m_use_debug_camera{false};
     glm::vec3 m_debug_camera    {0.0f, 0.0f, 0.0f};

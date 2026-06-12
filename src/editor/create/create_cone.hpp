@@ -4,6 +4,18 @@
 
 namespace editor {
 
+class Cone_parameters
+{
+public:
+    int   slice_count  {32};
+    int   stack_count  {1};
+    float height       {1.33f};
+    float bottom_radius{1.0f};
+    float top_radius   {0.5f};
+    bool  use_top      {true};
+    bool  use_bottom   {true};
+};
+
 class Create_cone : public Create_shape
 {
 public:
@@ -13,14 +25,10 @@ public:
     void imgui         ()                                                              override;
     auto create        (Brush_data& brush_create_info) const -> std::shared_ptr<Brush> override;
 
+    [[nodiscard]] static auto create_brush(Brush_data& brush_create_info, const Cone_parameters& parameters) -> std::shared_ptr<Brush>;
+
 private:
-    int   m_slice_count  {32};
-    int   m_stack_count  {1};
-    float m_height       {1.33f};
-    float m_bottom_radius{1.0f};
-    float m_top_radius   {0.5f};
-    bool  m_use_top      {true};
-    bool  m_use_bottom   {true};
+    Cone_parameters m_parameters;
 };
 
 
