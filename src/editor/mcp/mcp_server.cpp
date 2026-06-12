@@ -25,6 +25,7 @@
 #include "scene/scene_serialization.hpp"
 #include "scene/shadow_fit_debug.hpp"
 #include "tools/selection_tool.hpp"
+#include "transform/transform_tool.hpp"
 
 #include "erhe_scene_renderer/mesh_memory.hpp"
 
@@ -773,6 +774,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "get_async_status")   result = query_async_status    (req->arguments);
         else if (req->tool_name == "get_shadow_fit_debug")result = query_shadow_fit_debug(req->arguments);
         else if (req->tool_name == "select_items")       result = action_select_items   (req->arguments);
+        else if (req->tool_name == "transform_selection") result = action_transform_selection(req->arguments);
         else if (req->tool_name == "place_brush")        result = action_place_brush    (req->arguments);
         else if (req->tool_name == "toggle_physics")     result = action_toggle_physics (req->arguments);
         else if (req->tool_name == "reparent_node")      result = action_reparent_node  (req->arguments);
@@ -832,6 +834,17 @@ void Mcp_server::refresh_tool_list()
             {"ids",        {{"type", "array"}, {"items", {{"type", "integer"}}}, {"description", "Array of item IDs to select"}}}
         }},
         {"required", json::array({"scene_name", "ids"})}
+    }});
+    m_tool_infos.push_back({"transform_selection", "Apply a Transform tool edit (translation / rotation / scale / skew) to the currently selected node(s), through the same code path as the Transform window numeric entry. space=local applies values in parent space (requires exactly one selected node); space=global applies in world (anchor) space. end_edit=true (default) records an undo operation and refreshes the edit baselines; end_edit=false keeps the edit session open like an active drag, so repeated calls re-apply against the same initial state.", {
+        {"type", "object"},
+        {"properties", {
+            {"space",         {{"type", "string"},  {"description", "Edit space: 'local' or 'global' (default 'global')"}}},
+            {"translation",   {{"type", "array"},   {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Translation [x, y, z]"}}},
+            {"rotation_xyzw", {{"type", "array"},   {"items", {{"type", "number"}}}, {"minItems", 4}, {"maxItems", 4}, {"description", "Rotation quaternion [x, y, z, w]"}}},
+            {"scale",         {{"type", "array"},   {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Scale [x, y, z]"}}},
+            {"skew",          {{"type", "array"},   {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Skew [x, y, z]"}}},
+            {"end_edit",      {{"type", "boolean"}, {"description", "Record an undo operation and refresh edit baselines (default true)"}}}
+        }}
     }});
     m_tool_infos.push_back({"place_brush",         "Place a brush instance in a scene at a given position", {
         {"type", "object"},
@@ -1288,6 +1301,12 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
     const glm::vec3 t = trs.get_translation();
     const glm::quat r = trs.get_rotation();
     const glm::vec3 s = trs.get_scale();
+    const glm::vec3 k = trs.get_skew();
+    const auto& world_trs = found_node->world_from_node_transform();
+    const glm::vec3 wt = world_trs.get_translation();
+    const glm::quat wr = world_trs.get_rotation();
+    const glm::vec3 ws = world_trs.get_scale();
+    const glm::vec3 wk = world_trs.get_skew();
     const glm::vec4 wp = found_node->position_in_world();
 
     json attachments = json::array();
@@ -1393,7 +1412,14 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
         {"local_transform", {
             {"translation",   {t.x, t.y, t.z}},
             {"rotation_xyzw", {r.x, r.y, r.z, r.w}},
-            {"scale",         {s.x, s.y, s.z}}
+            {"scale",         {s.x, s.y, s.z}},
+            {"skew",          {k.x, k.y, k.z}}
+        }},
+        {"world_transform", {
+            {"translation",   {wt.x, wt.y, wt.z}},
+            {"rotation_xyzw", {wr.x, wr.y, wr.z, wr.w}},
+            {"scale",         {ws.x, ws.y, ws.z}},
+            {"skew",          {wk.x, wk.y, wk.z}}
         }},
         {"attachments",    attachments},
         {"children",       children},
@@ -1799,6 +1825,133 @@ auto Mcp_server::action_select_items(const json& args) -> std::string
     return make_json_content({
         {"selected_count", static_cast<int>(items_to_select.size())},
         {"items",          selected}
+    }).dump();
+}
+
+auto Mcp_server::action_transform_selection(const json& args) -> std::string
+{
+    Transform_tool* transform_tool = m_context.transform_tool;
+    if (transform_tool == nullptr) {
+        json r = make_text_content("Transform tool not available");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    Transform_tool_shared& shared = transform_tool->shared;
+    if (shared.entries.empty()) {
+        json r = make_text_content("No nodes selected - use select_items to select node(s) first");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    const std::string space = args.value("space", "global");
+    if ((space != "local") && (space != "global")) {
+        json r = make_text_content("Invalid space '" + space + "' (expected 'local' or 'global')");
+        r["isError"] = true;
+        return r.dump();
+    }
+    const bool local = (space == "local");
+    if (local && (shared.entries.size() != 1)) {
+        json r = make_text_content("Local space edit requires exactly one selected node");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    std::string parse_error;
+    auto read_floats = [&args, &parse_error](const char* key, float* out_values, std::size_t count) -> bool {
+        if (!args.contains(key)) {
+            return false;
+        }
+        const json& value = args.at(key);
+        const bool shape_ok = value.is_array() && (value.size() == count);
+        if (shape_ok) {
+            for (std::size_t i = 0; i < count; ++i) {
+                if (!value[i].is_number()) {
+                    parse_error = std::string{key} + " must be an array of " + std::to_string(count) + " numbers";
+                    return false;
+                }
+                out_values[i] = value[i].get<float>();
+            }
+            return true;
+        }
+        parse_error = std::string{key} + " must be an array of " + std::to_string(count) + " numbers";
+        return false;
+    };
+
+    std::optional<glm::vec3> translation;
+    std::optional<glm::quat> rotation;
+    std::optional<glm::vec3> scale;
+    std::optional<glm::vec3> skew;
+    float v[4];
+    if (read_floats("translation",   v, 3)) { translation = glm::vec3{v[0], v[1], v[2]};       }
+    if (read_floats("rotation_xyzw", v, 4)) { rotation    = glm::quat{v[3], v[0], v[1], v[2]}; }
+    if (read_floats("scale",         v, 3)) { scale       = glm::vec3{v[0], v[1], v[2]};       }
+    if (read_floats("skew",          v, 3)) { skew        = glm::vec3{v[0], v[1], v[2]};       }
+    if (!parse_error.empty()) {
+        json r = make_text_content(parse_error);
+        r["isError"] = true;
+        return r.dump();
+    }
+    if (!translation.has_value() && !rotation.has_value() && !scale.has_value() && !skew.has_value()) {
+        json r = make_text_content("Nothing to apply - provide translation, rotation_xyzw, scale and/or skew");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    json applied = json::object();
+    if (translation.has_value()) {
+        transform_tool->apply_translation_edit(translation.value(), local);
+        applied["translation"] = {translation->x, translation->y, translation->z};
+    }
+    if (rotation.has_value()) {
+        transform_tool->apply_rotation_edit(rotation.value(), local);
+        applied["rotation_xyzw"] = {rotation->x, rotation->y, rotation->z, rotation->w};
+    }
+    if (scale.has_value()) {
+        transform_tool->apply_scale_edit(scale.value(), local);
+        applied["scale"] = {scale->x, scale->y, scale->z};
+    }
+    if (skew.has_value()) {
+        transform_tool->apply_skew_edit(skew.value(), local);
+        applied["skew"] = {skew->x, skew->y, skew->z};
+    }
+
+    const bool end_edit = args.value("end_edit", true);
+    if (end_edit) {
+        transform_tool->record_transform_operation();
+    }
+
+    auto trs_to_json = [](const erhe::scene::Trs_transform& trs) -> json {
+        const glm::vec3 t = trs.get_translation();
+        const glm::quat r = trs.get_rotation();
+        const glm::vec3 s = trs.get_scale();
+        const glm::vec3 k = trs.get_skew();
+        return json{
+            {"translation",   {t.x, t.y, t.z}},
+            {"rotation_xyzw", {r.x, r.y, r.z, r.w}},
+            {"scale",         {s.x, s.y, s.z}},
+            {"skew",          {k.x, k.y, k.z}}
+        };
+    };
+
+    json nodes = json::array();
+    for (const Transform_entry& entry : shared.entries) {
+        if (!entry.node) {
+            continue;
+        }
+        nodes.push_back({
+            {"name",            entry.node->get_name()},
+            {"id",              entry.node->get_id()},
+            {"local_transform", trs_to_json(entry.node->parent_from_node_transform())},
+            {"world_transform", trs_to_json(entry.node->world_from_node_transform())}
+        });
+    }
+
+    return make_json_content({
+        {"space",    space},
+        {"applied",  applied},
+        {"end_edit", end_edit},
+        {"nodes",    nodes}
     }).dump();
 }
 

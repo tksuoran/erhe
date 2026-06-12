@@ -206,6 +206,15 @@ public:
     // Interface for Properties window
     void transform_properties();
 
+    // Numeric edit application, shared by the Transform window (Edit_state)
+    // and the MCP server. When local is true and exactly one node is selected,
+    // the value is applied in parent space; otherwise it is applied in world
+    // (anchor) space. No-op when the selection contains no nodes.
+    void apply_translation_edit(glm::vec3 translation, bool local);
+    void apply_rotation_edit   (glm::quat rotation,    bool local);
+    void apply_scale_edit      (glm::vec3 scale,       bool local);
+    void apply_skew_edit       (glm::vec3 skew,        bool local);
+
     // Interface for Subtool usage
     void adjust            (const glm::mat4& updated_world_from_anchor);
     void adjust_translation(glm::vec3 translation);

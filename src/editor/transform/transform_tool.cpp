@@ -510,6 +510,111 @@ void Transform_tool::adjust_scale(const vec3 center_of_scale, const vec3 scale)
     update_transforms();
 }
 
+void Transform_tool::apply_translation_edit(const glm::vec3 translation, const bool local)
+{
+    if (shared.entries.empty()) {
+        return;
+    }
+    if (!local || (shared.entries.size() > 1)) {
+        adjust_translation(translation - shared.world_from_anchor_initial_state.get_translation());
+        return;
+    }
+    // In local mode the edited value is in parent space; apply it directly
+    // to parent_from_node instead of treating it as a world space value.
+    touch();
+    Transform_entry& entry = shared.entries.front();
+    if (!entry.node) {
+        return;
+    }
+    Trs_transform parent_from_node = entry.parent_from_node_before;
+    parent_from_node.set_translation(translation);
+    entry.node->set_parent_from_node(parent_from_node);
+    shared.world_from_anchor.set(entry.node->world_from_node());
+    update_transforms();
+}
+
+void Transform_tool::apply_rotation_edit(const glm::quat rotation, const bool local)
+{
+    if (shared.entries.empty()) {
+        return;
+    }
+    touch();
+    if (!local || (shared.entries.size() > 1)) {
+        for (auto& entry : shared.entries) {
+            auto& node = entry.node;
+            if (!node) {
+                return;
+            }
+            Trs_transform world_from_node = entry.world_from_node_before;
+            world_from_node.set_rotation(rotation);
+            node->set_world_from_node(world_from_node);
+        }
+        shared.world_from_anchor.set_rotation(rotation);
+    } else {
+        for (auto& entry : shared.entries) {
+            auto& node = entry.node;
+            if (!node) {
+                return;
+            }
+            Trs_transform parent_from_node = entry.parent_from_node_before;
+            parent_from_node.set_rotation(rotation);
+            node->set_parent_from_node(parent_from_node);
+            shared.world_from_anchor.set(node->world_from_node());
+        }
+    }
+    update_transforms();
+}
+
+void Transform_tool::apply_scale_edit(const glm::vec3 scale, const bool local)
+{
+    if (shared.entries.empty()) {
+        return;
+    }
+    if (!local || (shared.entries.size() > 1)) {
+        Trs_transform updated_world_from_anchor = shared.world_from_anchor_initial_state;
+        updated_world_from_anchor.set_scale(scale);
+        adjust(updated_world_from_anchor.get_matrix());
+        return;
+    }
+    // In local mode the edited value is in parent space; apply it directly
+    // to parent_from_node instead of treating it as a world space value.
+    touch();
+    Transform_entry& entry = shared.entries.front();
+    if (!entry.node) {
+        return;
+    }
+    Trs_transform parent_from_node = entry.parent_from_node_before;
+    parent_from_node.set_scale(scale);
+    entry.node->set_parent_from_node(parent_from_node);
+    shared.world_from_anchor.set(entry.node->world_from_node());
+    update_transforms();
+}
+
+void Transform_tool::apply_skew_edit(const glm::vec3 skew, const bool local)
+{
+    if (shared.entries.empty()) {
+        return;
+    }
+    if (!local || (shared.entries.size() > 1)) {
+        Trs_transform updated_world_from_anchor = shared.world_from_anchor_initial_state;
+        updated_world_from_anchor.set_skew(skew);
+        adjust(updated_world_from_anchor.get_matrix());
+        return;
+    }
+    // In local mode the edited value is in parent space; apply it directly
+    // to parent_from_node instead of treating it as a world space value.
+    touch();
+    Transform_entry& entry = shared.entries.front();
+    if (!entry.node) {
+        return;
+    }
+    Trs_transform parent_from_node = entry.parent_from_node_before;
+    parent_from_node.set_skew(skew);
+    entry.node->set_parent_from_node(parent_from_node);
+    shared.world_from_anchor.set(entry.node->world_from_node());
+    update_transforms();
+}
+
 void Transform_tool::update_hover()
 {
     auto* scene_view = get_hover_scene_view();
@@ -956,18 +1061,7 @@ Edit_state::Edit_state(
     p.show_entries();
 
     if (m_translate_state.value_changed) {
-        if (m_use_world_mode) {
-            transform_tool.adjust_translation(m_translation - shared.world_from_anchor_initial_state.get_translation());
-        } else {
-            // In local mode m_translation is in parent space; apply it directly
-            // to parent_from_node instead of treating it as a world space value.
-            transform_tool.touch();
-            Trs_transform parent_from_node = shared.entries.front().parent_from_node_before;
-            parent_from_node.set_translation(m_translation);
-            m_first_node->set_parent_from_node(parent_from_node);
-            shared.world_from_anchor.set(m_first_node->world_from_node());
-            transform_tool.update_transforms();
-        }
+        transform_tool.apply_translation_edit(m_translation, !m_use_world_mode);
     }
 
     if (m_rotate_quaternion_state.value_changed) {
@@ -987,66 +1081,15 @@ Edit_state::Edit_state(
     rotation_inspector.set_active(rotate_state.active);
 
     if (rotate_state.value_changed) {
-        if (m_use_world_mode || m_multiselect) {
-            transform_tool.touch();
-            for (auto& entry : shared.entries) {
-                auto& node = entry.node;
-                if (!node) {
-                    return;
-                }
-                Trs_transform world_from_node = entry.world_from_node_before;
-                world_from_node.set_rotation(rotation_inspector.get_quaternion());
-                node->set_world_from_node(world_from_node);
-            }
-            shared.world_from_anchor.set_rotation(rotation_inspector.get_quaternion());
-        } else {
-            transform_tool.touch();
-            for (auto& entry : shared.entries) {
-                auto& node = entry.node;
-                if (!node) {
-                    return;
-                }
-                Trs_transform parent_from_node = entry.parent_from_node_before;
-                parent_from_node.set_rotation(rotation_inspector.get_quaternion());
-                node->set_parent_from_node(parent_from_node);
-                shared.world_from_anchor.set(node->world_from_node());
-            }
-        }
-        transform_tool.update_transforms();
+        transform_tool.apply_rotation_edit(rotation_inspector.get_quaternion(), !m_use_world_mode);
     }
 
     if (m_scale_state.value_changed) {
-        if (m_use_world_mode) {
-            Trs_transform n = shared.world_from_anchor_initial_state;
-            n.set_scale(m_scale);
-            transform_tool.adjust(n.get_matrix());
-        } else {
-            // In local mode m_scale is in parent space; apply it directly
-            // to parent_from_node instead of treating it as a world space value.
-            transform_tool.touch();
-            Trs_transform parent_from_node = shared.entries.front().parent_from_node_before;
-            parent_from_node.set_scale(m_scale);
-            m_first_node->set_parent_from_node(parent_from_node);
-            shared.world_from_anchor.set(m_first_node->world_from_node());
-            transform_tool.update_transforms();
-        }
+        transform_tool.apply_scale_edit(m_scale, !m_use_world_mode);
     }
 
     if (m_skew_state.value_changed) {
-        if (m_use_world_mode) {
-            Trs_transform n = shared.world_from_anchor_initial_state;
-            n.set_skew(m_skew);
-            transform_tool.adjust(n.get_matrix());
-        } else {
-            // In local mode m_skew is in parent space; apply it directly
-            // to parent_from_node instead of treating it as a world space value.
-            transform_tool.touch();
-            Trs_transform parent_from_node = shared.entries.front().parent_from_node_before;
-            parent_from_node.set_skew(m_skew);
-            m_first_node->set_parent_from_node(parent_from_node);
-            shared.world_from_anchor.set(m_first_node->world_from_node());
-            transform_tool.update_transforms();
-        }
+        transform_tool.apply_skew_edit(m_skew, !m_use_world_mode);
     }
 
     Value_edit_state edit_state;

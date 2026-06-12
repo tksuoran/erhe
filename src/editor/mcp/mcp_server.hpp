@@ -104,6 +104,7 @@ private:
     auto query_async_status     (const nlohmann::json& args) -> std::string;
     auto query_shadow_fit_debug (const nlohmann::json& args) -> std::string;
     auto action_select_items    (const nlohmann::json& args) -> std::string;
+    auto action_transform_selection(const nlohmann::json& args) -> std::string;
     auto action_place_brush     (const nlohmann::json& args) -> std::string;
     auto action_toggle_physics  (const nlohmann::json& args) -> std::string;
     auto action_reparent_node   (const nlohmann::json& args) -> std::string;
