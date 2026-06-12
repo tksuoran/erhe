@@ -12,16 +12,22 @@ transforms, so each joint gets two coincident empty anchor nodes
 segment - and the joint is created anchor-to-anchor. Joint settings lock the
 linear axes (ball joint) and limit the angular axes.
 
+Parts do not touch: at every jointed end the capsule is inset from the pivot
+by its cap radius plus half the --clearance, so adjacent parts are separated
+by the full clearance along the bone while the constraint pivot stays at the
+anatomical point. After building, an analytic capsule-capsule check verifies
+that no two parts intersect.
+
 Dynamic physics is toggled off while building so parts stay posed; pass
 --simulate to enable it at the end and watch the spider collapse.
 
 Usage:
   py -3 scripts/mcp_ragdoll_spider.py [--port 8080] [--scene NAME] [--wait 30]
       [--name spider] [--position X Y Z] [--height 0.85] [--scale 1.0]
-      [--material NAME] [--simulate] [--settle 3.0]
+      [--clearance 0.025] [--material NAME] [--simulate] [--settle 3.0]
 
-The editor must already be running. Exit code 0 = spider built (and all
-sampled joints report a created constraint).
+The editor must already be running. Exit code 0 = spider built, all sampled
+joints report a created constraint, and no parts intersect.
 """
 
 import argparse
@@ -29,14 +35,16 @@ import math
 import sys
 import time
 
-from erhe_mcp import McpClient, check_close, check_true, pick_scene, report, wait_for_server
+from erhe_mcp import McpClient, check_true, pick_scene, report, wait_for_server
 
 
 def v_add(a, b):       return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
+def v_sub(a, b):       return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
 def v_scale(a, s):     return [a[0] * s, a[1] * s, a[2] * s]
-def v_length(a):       return math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2])
+def v_dot(a, b):       return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+def v_length(a):       return math.sqrt(v_dot(a, a))
 def v_normalize(a):    return v_scale(a, 1.0 / v_length(a))
-def v_distance(a, b):  return v_length([b[0] - a[0], b[1] - a[1], b[2] - a[2]])
+def v_distance(a, b):  return v_length(v_sub(b, a))
 
 
 def quat_align_y(direction):
@@ -52,28 +60,82 @@ def quat_align_y(direction):
     return [axis[0] * s, axis[1] * s, axis[2] * s, math.cos(0.5 * angle)]
 
 
+def segment_closest_parameters(p1, q1, p2, q2):
+    """Closest points between segments p1-q1 and p2-q2 (Ericson, RTCD 5.1.9).
+    Returns (s, t, distance) with s, t in [0, 1]."""
+    d1 = v_sub(q1, p1)
+    d2 = v_sub(q2, p2)
+    r  = v_sub(p1, p2)
+    a  = v_dot(d1, d1)
+    e  = v_dot(d2, d2)
+    f  = v_dot(d2, r)
+    epsilon = 1.0e-12
+    if (a <= epsilon) and (e <= epsilon):
+        s, t = 0.0, 0.0
+    elif a <= epsilon:
+        s = 0.0
+        t = min(max(f / e, 0.0), 1.0)
+    else:
+        c = v_dot(d1, r)
+        if e <= epsilon:
+            t = 0.0
+            s = min(max(-c / a, 0.0), 1.0)
+        else:
+            b = v_dot(d1, d2)
+            denominator = a * e - b * b
+            s = min(max((b * f - c * e) / denominator, 0.0), 1.0) if denominator > epsilon else 0.0
+            t = (b * s + f) / e
+            if t < 0.0:
+                t = 0.0
+                s = min(max(-c / a, 0.0), 1.0)
+            elif t > 1.0:
+                t = 1.0
+                s = min(max((b - c) / a, 0.0), 1.0)
+    point_1 = v_add(p1, v_scale(d1, s))
+    point_2 = v_add(p2, v_scale(d2, t))
+    return s, t, v_distance(point_1, point_2)
+
+
+def capsule_gap(capsule_a, capsule_b):
+    """Surface gap between two (possibly tapered) capsules, each given as
+    (name, cap0_center, cap1_center, r0, r1). Negative = intersection. The
+    radius at the closest axis point is linearly interpolated, which matches
+    the tapered capsule's tangent-cone surface closely for small tapers."""
+    _, a0, a1, ar0, ar1 = capsule_a
+    _, b0, b1, br0, br1 = capsule_b
+    s, t, distance = segment_closest_parameters(a0, a1, b0, b1)
+    radius_a = ar0 + (ar1 - ar0) * s
+    radius_b = br0 + (br1 - br0) * t
+    return distance - radius_a - radius_b
+
+
 class Spider_builder:
     # Leg profile: 6 segments. Pitch is the angle of each segment relative to
-    # the horizontal (positive = up); lengths are cylinder section lengths
-    # (= distance between consecutive joint pivots, the capsule cap sphere
-    # centers); radii[k] / radii[k + 1] are segment k's bottom / top radius,
-    # so the taper is continuous along the leg.
+    # the horizontal (positive = up); lengths are the distances between
+    # consecutive joint pivots; radii[k] / radii[k + 1] are segment k's
+    # bottom / top radius, so the taper is continuous along the leg.
     LEG_PITCH_DEG = [30.0, 8.0, -20.0, -45.0, -65.0, -80.0]
     LEG_LENGTHS   = [0.34, 0.30, 0.28, 0.26, 0.24, 0.22]
     LEG_RADII     = [0.075, 0.060, 0.048, 0.038, 0.030, 0.024, 0.018]
     # Azimuth of each right-side leg in the horizontal plane: 0 = straight out
     # (+X), positive = toward the front (-Z). Left side mirrors X.
     LEG_AZIMUTH_DEG = [42.0, 16.0, -12.0, -38.0]
+    # Hip pivots sit this far out from the cephalothorax axis - outside the
+    # body capsule surface (radius ~0.26 there) so the leg capsules clear it.
+    HIP_RADIAL = 0.32
+    HIP_LIFT   = 0.06
 
-    def __init__(self, client, scene_name, prefix, material, base, height, scale):
+    def __init__(self, client, scene_name, prefix, material, base, height, scale, clearance):
         self.client     = client
         self.scene_name = scene_name
         self.prefix     = prefix
         self.material   = material
         self.scale      = scale
+        self.clearance  = clearance * scale
         self.center     = [base[0], base[1] + height * scale, base[2]]
         self.part_count  = 0
         self.joint_count = 0
+        self.capsules    = []  # (name, cap0_center, cap1_center, r0, r1) as placed, for the clearance check
 
     def call(self, tool, arguments):
         arguments = dict(arguments)
@@ -84,19 +146,35 @@ class Spider_builder:
         """Spider-local offset (already scaled) to world position."""
         return v_add(self.center, v_scale(offset, self.scale))
 
-    def create_capsule_part(self, name, p0, p1, r0, r1):
-        """Create one capsule segment whose cap sphere centers sit at world
-        points p0 / p1 with radii r0 / r1, rotated from +Y onto p0 -> p1."""
-        direction = v_normalize([p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]])
-        length    = v_distance(p0, p1)
+    def create_capsule_part(self, name, p0, p1, r0, r1, joint_at_p0=True, joint_at_p1=True):
+        """Create one capsule segment between world pivot points p0 / p1 with
+        cap radii r0 / r1 (unscaled), rotated from +Y onto p0 -> p1. At a
+        jointed end the cap sphere is inset from the pivot by the cap radius
+        plus half the clearance, so two parts meeting at a pivot are separated
+        by the full clearance; a free end keeps its cap sphere center at the
+        pivot point."""
+        direction = v_normalize(v_sub(p1, p0))
+        span      = v_distance(p0, p1)
+        r0_world  = r0 * self.scale
+        r1_world  = r1 * self.scale
+        inset0    = (0.5 * self.clearance + r0_world) if joint_at_p0 else 0.0
+        inset1    = (0.5 * self.clearance + r1_world) if joint_at_p1 else 0.0
+        length    = span - inset0 - inset1
+        if length <= abs(r0_world - r1_world):
+            raise RuntimeError(
+                f"{name}: cylinder section {length:.3f} too short for taper "
+                f"|{r0_world:.3f} - {r1_world:.3f}| after clearance insets"
+            )
+        cap0   = v_add(p0, v_scale(direction, inset0))
+        center = v_add(cap0, v_scale(direction, 0.5 * length))
         node = self.call("create_shape", {
             "shape":         "capsule",
             "name":          name,
-            "position":      v_add(p0, v_scale(direction, 0.5 * length)),
+            "position":      center,
             "motion_mode":   "dynamic",
             "length":        length,
-            "bottom_radius": r0 * self.scale,
-            "top_radius":    r1 * self.scale,
+            "bottom_radius": r0_world,
+            "top_radius":    r1_world,
             "slice_count":   16,
             "stack_count":   4,
             **({"material_name": self.material} if self.material else {}),
@@ -104,6 +182,7 @@ class Spider_builder:
         self.call("select_items", {"ids": [node["node_id"]]})
         self.call("transform_selection", {"space": "global", "rotation_xyzw": quat_align_y(direction)})
         self.part_count += 1
+        self.capsules.append((name, cap0, v_add(cap0, v_scale(direction, length)), r0_world, r1_world))
         return node
 
     def create_ball_joint(self, name, part_a, part_b, pivot, settings_name):
@@ -132,8 +211,12 @@ class Spider_builder:
 
     def build_body(self):
         body_pivot = self.local([0.0, 0.0, 0.05])
-        front = self.create_capsule_part(f"{self.prefix}_body_front", self.local([0.0, 0.0, -0.40]), body_pivot, 0.22, 0.30)
-        rear  = self.create_capsule_part(f"{self.prefix}_body_rear",  body_pivot, self.local([0.0, 0.0, 0.60]),  0.34, 0.20)
+        front = self.create_capsule_part(
+            f"{self.prefix}_body_front", self.local([0.0, 0.0, -0.40]), body_pivot, 0.22, 0.30, joint_at_p0=False
+        )
+        rear = self.create_capsule_part(
+            f"{self.prefix}_body_rear", body_pivot, self.local([0.0, 0.0, 0.60]), 0.34, 0.20, joint_at_p1=False
+        )
         self.create_ball_joint(f"{self.prefix}_joint_body", front, rear, body_pivot, f"{self.prefix}_body_joint")
         return front
 
@@ -143,7 +226,10 @@ class Spider_builder:
         out     = [side * math.cos(azimuth), 0.0, -math.sin(azimuth)]  # horizontal leg direction
 
         front_center = self.local([0.0, 0.0, -0.175])  # cephalothorax center
-        hip = v_add(v_add(front_center, v_scale(out, 0.24 * self.scale)), [0.0, 0.06 * self.scale, 0.0])
+        hip = v_add(
+            v_add(front_center, v_scale(out, self.HIP_RADIAL * self.scale)),
+            [0.0, self.HIP_LIFT * self.scale, 0.0]
+        )
 
         side_tag = "r" if side > 0 else "l"
         leg_name = f"{self.prefix}_leg_{side_tag}{leg_index + 1}"
@@ -160,13 +246,27 @@ class Spider_builder:
             ])
             next_pivot = v_add(previous_pivot, v_scale(direction, self.LEG_LENGTHS[k] * self.scale))
             part = self.create_capsule_part(
-                f"{leg_name}_seg{k + 1}", previous_pivot, next_pivot, self.LEG_RADII[k], self.LEG_RADII[k + 1]
+                f"{leg_name}_seg{k + 1}", previous_pivot, next_pivot, self.LEG_RADII[k], self.LEG_RADII[k + 1],
+                joint_at_p1=(k < 5)  # the foot tip is a free end
             )
             joint_kind = "hip" if k == 0 else f"knee{k}"
             self.create_ball_joint(f"{leg_name}_{joint_kind}", previous_part, part, previous_pivot, settings)
             previous_part  = part
             previous_pivot = next_pivot
         return previous_part  # foot segment
+
+    def check_clearances(self):
+        """Analytic intersection check across all part pairs as placed.
+        Returns (worst_gap, worst_pair_label)."""
+        worst_gap  = math.inf
+        worst_pair = ""
+        for i in range(len(self.capsules)):
+            for j in range(i + 1, len(self.capsules)):
+                gap = capsule_gap(self.capsules[i], self.capsules[j])
+                if gap < worst_gap:
+                    worst_gap  = gap
+                    worst_pair = f"{self.capsules[i][0]} vs {self.capsules[j][0]}"
+        return worst_gap, worst_pair
 
 
 def set_dynamic_physics(client, enabled):
@@ -181,16 +281,17 @@ def set_dynamic_physics(client, enabled):
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--port",     type=int,   default=8080)
-    parser.add_argument("--scene",    type=str,   default="")
-    parser.add_argument("--wait",     type=float, default=30.0)
-    parser.add_argument("--name",     type=str,   default="spider", help="Node name prefix")
-    parser.add_argument("--position", type=float, nargs=3, default=[0.0, 0.0, 0.0], metavar=("X", "Y", "Z"), help="Base position; the body floats --height above it")
-    parser.add_argument("--height",   type=float, default=0.85, help="Body height above the base position")
-    parser.add_argument("--scale",    type=float, default=1.0,  help="Uniform size multiplier")
-    parser.add_argument("--material", type=str,   default="",   help="Material name (default: first available)")
-    parser.add_argument("--simulate", action="store_true",      help="Enable dynamic physics when done (ragdoll drop)")
-    parser.add_argument("--settle",   type=float, default=3.0,  help="Seconds to wait after enabling physics before sampling")
+    parser.add_argument("--port",      type=int,   default=8080)
+    parser.add_argument("--scene",     type=str,   default="")
+    parser.add_argument("--wait",      type=float, default=30.0)
+    parser.add_argument("--name",      type=str,   default="spider", help="Node name prefix")
+    parser.add_argument("--position",  type=float, nargs=3, default=[0.0, 0.0, 0.0], metavar=("X", "Y", "Z"), help="Base position; the body floats --height above it")
+    parser.add_argument("--height",    type=float, default=0.85,  help="Body height above the base position")
+    parser.add_argument("--scale",     type=float, default=1.0,   help="Uniform size multiplier")
+    parser.add_argument("--clearance", type=float, default=0.025, help="Surface gap between connected parts at each joint")
+    parser.add_argument("--material",  type=str,   default="",    help="Material name (default: first available)")
+    parser.add_argument("--simulate",  action="store_true",       help="Enable dynamic physics when done (ragdoll drop)")
+    parser.add_argument("--settle",    type=float, default=3.0,   help="Seconds to wait after enabling physics before sampling")
     args = parser.parse_args()
 
     client = McpClient(args.port)
@@ -218,22 +319,28 @@ def main() -> int:
     original_physics = set_dynamic_physics(client, False)
     print(f"Dynamic physics disabled for construction (was {'on' if original_physics else 'off'})")
 
-    builder = Spider_builder(client, scene_name, prefix, args.material, args.position, args.height, args.scale)
+    builder = Spider_builder(client, scene_name, prefix, args.material, args.position, args.height, args.scale, args.clearance)
     builder.create_joint_settings()
 
     print("Building body (2 parts) ...")
     body_front = builder.build_body()
 
-    feet = []
     for side, side_tag in ((1, "right"), (-1, "left")):
         for leg_index in range(4):
             print(f"Building {side_tag} leg {leg_index + 1} (6 parts) ...")
-            feet.append(builder.build_leg(body_front, side, leg_index))
+            builder.build_leg(body_front, side, leg_index)
     client.call("select_items", {"scene_name": scene_name, "ids": []})  # release selection (kinematic hold)
 
     print(f"Created {builder.part_count} capsule parts and {builder.joint_count} physics joints.")
     check_true("part count",  builder.part_count == 50, f"{builder.part_count}")
     check_true("joint count", builder.joint_count == 49, f"{builder.joint_count}")
+
+    worst_gap, worst_pair = builder.check_clearances()
+    check_true(
+        "no part intersections",
+        worst_gap > 0.0,
+        f"smallest surface gap {worst_gap * 1000.0:.1f} mm ({worst_pair})"
+    )
 
     # Sample a few joints: constraint must be created (not pending).
     for sample in (f"{prefix}_joint_body_b", f"{prefix}_leg_r1_hip_b", f"{prefix}_leg_l4_knee5_b"):
@@ -243,8 +350,8 @@ def main() -> int:
                    str(joints[0].get("constraint")) if joints else "no joint attachment")
 
     if args.simulate:
-        foot_name = client.call("get_node_details", {"scene_name": scene_name, "node_name": f"{prefix}_leg_r1_seg6"})
-        before = foot_name["world_transform"]["translation"]
+        foot = client.call("get_node_details", {"scene_name": scene_name, "node_name": f"{prefix}_leg_r1_seg6"})
+        before = foot["world_transform"]["translation"]
         set_dynamic_physics(client, True)
         print(f"Dynamic physics enabled; settling {args.settle} s ...")
         time.sleep(args.settle)
