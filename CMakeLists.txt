@@ -289,21 +289,20 @@ if (ERHE_SPIRV)
     CPMAddPackage(
         NAME              glslang
         VERSION           16.3.0
-        GIT_TAG           16.3.0
-        GIT_SHALLOW       TRUE
-        GITHUB_REPOSITORY KhronosGroup/glslang
-        # Local patch for an upstream bug in glslang 16.3.0 (still
-        # present): Builder::createConstVariable passes the
-        # OpConstantComposite id through as the Variable operand of
-        # DebugGlobalVariable, which spirv-val 1.4.328+ rejects under
-        # VUID-VkShaderModuleCreateInfo-pCode-08737. Affects every
-        # compute shader (synthesised gl_WorkGroupSize) plus any
-        # file-scope const composite array. See
-        # doc/glslang_bug_report_debugglobalvariable.md and the
-        # patch file's header for the full write-up. Drop this once
-        # KhronosGroup/glslang ships a release containing the fix.
-        PATCHES
-            "${CMAKE_CURRENT_LIST_DIR}/cmake/patches/glslang-debugglobalvariable-noop-for-composites.patch"
+        # erhe fork of glslang 16.3.0 (branch erhe-debugglobalvariable-composite-fix)
+        # carrying a one-line fix for an upstream bug still present on glslang
+        # main: Builder::createConstVariable passes the OpConstantComposite id
+        # through as the Variable operand of DebugGlobalVariable, which
+        # spirv-val 1.4.328+ rejects under
+        # VUID-VkShaderModuleCreateInfo-pCode-08737. Affects every compute
+        # shader (synthesised gl_WorkGroupSize) plus any file-scope const
+        # composite array. See doc/glslang_bug_report_debugglobalvariable.md
+        # and KhronosGroup/glslang #4186. The fork (rather than a CPM PATCHES
+        # patch) keeps the build free of any host `patch` invocation - see the
+        # "Do not use CPM's PATCHES keyword" note in CLAUDE.md. Move back to
+        # KhronosGroup/glslang and bump the tag once upstream ships the fix.
+        GIT_TAG           5222ff792e97714f3498b039da7060be28275738
+        GITHUB_REPOSITORY tksuoran/glslang
         OPTIONS
                       "GLSLANG_TESTS OFF"
              "GLSLANG_ENABLE_INSTALL OFF"
@@ -786,24 +785,24 @@ else ()
 endif ()
 
 if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
-    # Patch the core_validation API layer's codegen so that aliased
-    # XrStructureType values (e.g. XR_TYPE_GRAPHICS_BINDING_VULKAN2_KHR
-    # = XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR) accept any one of the
-    # alias-introducing extensions, not just the canonical one. Without
-    # this, enabling only XR_KHR_vulkan_enable2 and passing
-    # XrGraphicsBindingVulkan2KHR triggers a spurious
-    # VUID-xrStructureTypeToString-value-parameter that any "warnings
-    # are fatal" debug callback escalates to an abort. See the patch
-    # file's header for the full write-up. Drop this once the upstream
-    # fix lands in OpenXR-SDK-Source.
+    # erhe fork of OpenXR-SDK-Source release-1.1.59 (branch
+    # erhe-validation-aliased-extensions) patches the core_validation API
+    # layer's codegen so that aliased XrStructureType values (e.g.
+    # XR_TYPE_GRAPHICS_BINDING_VULKAN2_KHR = XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR)
+    # accept any one of the alias-introducing extensions, not just the
+    # canonical one. Without this, enabling only XR_KHR_vulkan_enable2 and
+    # passing XrGraphicsBindingVulkan2KHR triggers a spurious
+    # VUID-xrStructureTypeToString-value-parameter that any "warnings are
+    # fatal" debug callback escalates to an abort. Not present upstream. The
+    # fork (rather than a CPM PATCHES patch) keeps the build free of any host
+    # `patch` invocation - see the "Do not use CPM's PATCHES keyword" note in
+    # CLAUDE.md. Move back to KhronosGroup/OpenXR-SDK-Source and bump the tag
+    # once upstream carries the fix.
     CPMAddPackage(
         NAME              OpenXR-SDK
         VERSION           1.1.59
-        GIT_TAG           release-1.1.59
-        GIT_SHALLOW       TRUE
-        GITHUB_REPOSITORY KhronosGroup/OpenXR-SDK-Source
-        PATCHES
-            "${CMAKE_CURRENT_LIST_DIR}/cmake/patches/openxr-sdk-validation-accept-aliased-extensions.patch"
+        GIT_TAG           9e4c7dc2a56e82e2de9a12cb11c13f799783e9f9
+        GITHUB_REPOSITORY tksuoran/OpenXR-SDK-Source
         OPTIONS
             "BUILD_API_LAYERS ON"
                  "BUILD_TESTS OFF"
