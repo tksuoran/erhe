@@ -257,6 +257,8 @@ erhe_target_sources_grouped(
     parsers/geogram.hpp
     parsers/gltf.cpp
     parsers/gltf.hpp
+    parsers/gltf_physics_export.cpp
+    parsers/gltf_physics_export.hpp
     parsers/gltf_physics_import.cpp
     parsers/gltf_physics_import.hpp
     parsers/json_polyhedron.cpp

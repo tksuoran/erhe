@@ -17,6 +17,7 @@
 #include <vector>
 
 namespace erhe::scene {
+    class Mesh;
     class Node;
 }
 
@@ -130,7 +131,8 @@ class Physics_node_geometry
 {
 public:
     std::optional<std::size_t>         shape_index; // into Gltf_physics_data::shapes
-    std::shared_ptr<erhe::scene::Node> node;        // mesh-providing node
+    std::shared_ptr<erhe::scene::Mesh> mesh;        // mesh-keyed geometry (current spec)
+    std::shared_ptr<erhe::scene::Node> node;        // mesh-providing node (older spec revision)
     bool                               convex_hull{false};
 };
 
@@ -168,6 +170,29 @@ public:
     std::optional<Physics_node_joint>    joint;
 };
 
+// Export-only: a collider (or compound-trigger member) whose geometry sits on
+// a synthesized glTF child node of `parent` rather than on an existing erhe
+// node. Compound shape children and non-Y-aligned implicit shapes export this
+// way: the exporter creates a new glTF node parented to `parent`'s glTF node
+// with the given local TRS and attaches the collider (is_trigger false) or
+// trigger geometry (is_trigger true) to it. A parent whose
+// Physics_node_description::trigger has neither geometry nor compound_nodes
+// becomes a compound (node-list) trigger over its synthesized trigger
+// children.
+class Physics_synthesized_collider
+{
+public:
+    std::shared_ptr<erhe::scene::Node> parent;
+    std::string                        name;
+    glm::quat                          rotation   {1.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec3                          translation{0.0f};
+    glm::vec3                          scale      {1.0f};
+    Physics_node_geometry              geometry;
+    std::optional<std::size_t>         material_index; // into materials
+    std::optional<std::size_t>         filter_index;   // into collision_filters
+    bool                               is_trigger {false};
+};
+
 class Gltf_physics_data
 {
 public:
@@ -176,6 +201,7 @@ public:
     std::vector<Physics_collision_filter_description> collision_filters;
     std::vector<Physics_joint_description>            joints;
     std::vector<Physics_node_description>             node_physics;
+    std::vector<Physics_synthesized_collider>         synthesized_colliders; // export only
 };
 
 } // namespace erhe::gltf

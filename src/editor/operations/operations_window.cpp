@@ -15,6 +15,7 @@
 #include "operations/mesh_operation.hpp"
 #include "operations/node_transform_operation.hpp"
 #include "operations/operation_stack.hpp"
+#include "parsers/gltf_physics_export.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_builder.hpp"
@@ -913,8 +914,8 @@ void Operations::export_callback(const char* const* filelist, int filter)
 
     if (path.has_value()) {
         const bool binary = true;
-        std::string gltf = erhe::gltf::export_gltf(*root_node.get(), binary);
-        log_operations->info("{}", gltf);
+        const erhe::gltf::Gltf_physics_data physics_data = build_gltf_physics_data(scene);
+        std::string gltf = erhe::gltf::export_gltf(*root_node.get(), binary, &physics_data);
         erhe::file::write_file(path.value(), gltf);
     }
 }

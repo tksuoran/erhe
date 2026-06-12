@@ -12,20 +12,18 @@
 
 namespace editor {
 
-auto build_shape_from_node_mesh(const erhe::scene::Node* node, const bool convex_hull) -> std::shared_ptr<erhe::physics::ICollision_shape>
+auto build_shape_from_mesh(const erhe::scene::Mesh* mesh, const bool convex_hull) -> std::shared_ptr<erhe::physics::ICollision_shape>
 {
-    if (node == nullptr) {
-        return {};
-    }
-    const auto mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node);
-    if (!mesh) {
+    if (mesh == nullptr) {
         return {};
     }
     for (const auto& prim : mesh->get_primitives()) {
         if (!prim.primitive || !prim.primitive->render_shape) {
             continue;
         }
-        const auto& geom = prim.primitive->render_shape->get_geometry_const();
+        // Non-const get_geometry(): creates the Geometry from the primitive's
+        // Triangle_soup on demand (glTF-imported meshes carry only the soup).
+        const auto& geom = prim.primitive->render_shape->get_geometry();
         if (!geom || (geom->get_mesh().vertices.nb() == 0)) {
             continue;
         }
@@ -86,6 +84,15 @@ auto build_shape_from_node_mesh(const erhe::scene::Node* node, const bool convex
         );
     }
     return {};
+}
+
+auto build_shape_from_node_mesh(const erhe::scene::Node* node, const bool convex_hull) -> std::shared_ptr<erhe::physics::ICollision_shape>
+{
+    if (node == nullptr) {
+        return {};
+    }
+    const auto mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node);
+    return build_shape_from_mesh(mesh.get(), convex_hull);
 }
 
 }

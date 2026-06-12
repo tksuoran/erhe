@@ -87,6 +87,12 @@ struct Gltf_parse_arguments
 
 [[nodiscard]] auto scan_gltf(std::filesystem::path path) -> Gltf_scan;
 
-[[nodiscard]] auto export_gltf(const erhe::scene::Node& root_node, bool binary) -> std::string;
+// physics_data (optional): KHR_implicit_shapes + KHR_physics_rigid_bodies
+// content built by the editor (see editor parsers/gltf_physics_export.hpp).
+[[nodiscard]] auto export_gltf(
+    const erhe::scene::Node& root_node,
+    bool                     binary,
+    const Gltf_physics_data* physics_data = nullptr
+) -> std::string;
 
 }

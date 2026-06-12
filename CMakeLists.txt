@@ -553,6 +553,12 @@ if (${ERHE_GLTF_LIBRARY} STREQUAL "fastgltf")
         GIT_TAG           a31be255ff041fa1d6697e5040fef3c9b6405795
         #GIT_TAG           v0.9.0
         GITHUB_REPOSITORY spnda/fastgltf
+        # KHR_physics_rigid_bodies spec compliance fixes on top of the pin:
+        # mesh-keyed collider geometry (current spec; no upstream commit has
+        # it), spec inertia key names, and exporter JSON fixes (extension
+        # name, booleans, malformed motion arrays, collisionFilters trailing
+        # commas). Drop the patch when upstream catches up with the spec.
+        PATCHES           ${CMAKE_SOURCE_DIR}/cmake/patches/fastgltf_khr_physics.patch
         OPTIONS
                   "FASTGLTF_ENABLE_DEPRECATED_EXT ON"
                        "FASTGLTF_COMPILE_AS_CPP20 ON"

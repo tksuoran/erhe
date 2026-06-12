@@ -11,6 +11,7 @@
 #include "operations/operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "parsers/gltf.hpp"
+#include "parsers/gltf_physics_export.hpp"
 #include "erhe_math/math_util.hpp"
 #include "editor_log.hpp"
 #include "rendergraph/shadow_render_node.hpp"
@@ -2187,7 +2188,8 @@ auto Mcp_server::action_export_gltf(const json& args) -> std::string
         r["isError"] = true;
         return r.dump();
     }
-    const std::string gltf = erhe::gltf::export_gltf(*root_node, binary);
+    const erhe::gltf::Gltf_physics_data physics_data = build_gltf_physics_data(sr->get_scene());
+    const std::string gltf = erhe::gltf::export_gltf(*root_node, binary, &physics_data);
     if (!erhe::file::write_file(std::filesystem::path{path_str}, gltf)) {
         json r = make_text_content("Failed to write file: " + path_str);
         r["isError"] = true;

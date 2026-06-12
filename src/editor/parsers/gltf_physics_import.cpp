@@ -16,6 +16,7 @@
 #include "erhe_physics/irigid_body.hpp"
 #include "erhe_physics/physics_joint_settings.hpp"
 #include "erhe_physics/physics_material.hpp"
+#include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/trs_transform.hpp"
 
@@ -183,7 +184,7 @@ public:
                 return {};
             }
             shape = make_implicit_shape(physics.shapes[shape_index]);
-        } else if (geometry.node) {
+        } else if (geometry.mesh || geometry.node) {
             // Jolt restriction: triangle mesh shapes are usable with static /
             // kinematic bodies only; dynamic bodies fall back to a convex hull.
             bool convex_hull = geometry.convex_hull;
@@ -194,20 +195,24 @@ public:
                 );
                 convex_hull = true;
             }
-            shape = build_shape_from_node_mesh(geometry.node.get(), convex_hull);
+            // Current spec keys collider geometry by mesh; the older spec
+            // revision keyed it by a mesh-providing node.
+            shape = geometry.mesh
+                ? build_shape_from_mesh(geometry.mesh.get(), convex_hull)
+                : build_shape_from_node_mesh(geometry.node.get(), convex_hull);
             if (!shape) {
                 log_parsers->warn(
-                    "gltf physics: node '{}' {} collider could not be built from node '{}' mesh geometry",
+                    "gltf physics: node '{}' {} collider could not be built from {} '{}' geometry",
                     collider_node.get_name(),
                     convex_hull ? "convex hull" : "mesh",
-                    geometry.node->get_name()
+                    geometry.mesh ? "mesh" : "node",
+                    geometry.mesh ? geometry.mesh->get_name() : geometry.node->get_name()
                 );
                 return {};
             }
         } else {
             log_parsers->warn(
-                "gltf physics: node '{}' collider geometry has neither shape nor node"
-                " (mesh-keyed geometry is not supported by the bundled fastgltf revision) - skipping",
+                "gltf physics: node '{}' collider geometry has neither shape nor mesh nor node - skipping",
                 collider_node.get_name()
             );
             return {};

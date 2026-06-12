@@ -6,3 +6,8 @@ android-project/app/hwasan/** text eol=lf
 # SDL_SYNC_COMMIT is machine-read (CMake file(STRINGS) and
 # scripts/update_sdl.py); keep it byte-stable LF.
 android-project/SDL_SYNC_COMMIT text eol=lf
+
+# CPM-applied dependency patches: GNU patch applies an LF patch cleanly to
+# both LF (Linux/macOS) and CRLF (Windows autocrlf) checkouts of the
+# dependency, so keep the patch files byte-stable LF everywhere.
+cmake/patches/*.patch text eol=lf
