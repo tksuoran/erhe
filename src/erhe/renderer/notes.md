@@ -5,7 +5,7 @@ GPU rendering utilities for debug visualization and text overlay in 3D viewports
 
 ## Key Types
 - `Debug_renderer` -- Central coordinator for debug line/shape rendering. Manages a stack of views, dispatches compute shaders to expand lines into triangles, and renders the results.
-- `Primitive_renderer` -- Immediate-mode draw API obtained from `Debug_renderer::get()`. Provides `add_lines()`, `add_cube()`, `add_sphere()`, `add_cone()`, `add_torus()`, `add_bone()` etc.
+- `Primitive_renderer` -- Immediate-mode draw API obtained from `Debug_renderer::get()`. Provides `add_lines()`, `add_cube()`, `add_sphere()`, `add_cone()`, `add_capsule()`, `add_torus()`, `add_bone()` etc.
 - `Debug_renderer_bucket` -- Groups draw calls by pipeline config (primitive type, stencil, visibility). Internally manages GPU ring buffers.
 - `Debug_renderer_config` -- Selects primitive type, stencil reference, and visible/hidden draw flags for a bucket.
 - `Text_renderer` -- Renders 2D text at 3D positions using a font atlas texture. Uses `erhe::ui::Font` for glyph layout.

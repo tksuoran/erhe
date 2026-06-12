@@ -26,53 +26,20 @@ void Create_capsule::render_preview(const Create_preview_settings& preview_setti
         return;
     }
 
-    // The tangent cone touches the cap spheres at latitude angle alpha with
-    // sin(alpha) = (bottom_radius - top_radius) / length. Drawing the cone
-    // between the two tangency circles plus a sphere per cap traces the
-    // exact silhouette of the tapered capsule.
-    const float sin_alpha   = (m_bottom_radius == m_top_radius) ? 0.0f : ((m_bottom_radius - m_top_radius) / m_length);
-    const float cos_alpha   = std::sqrt(1.0f - (sin_alpha * sin_alpha));
     const float half_length = 0.5f * m_length;
-    const float bottom_y    = -half_length + (m_bottom_radius * sin_alpha);
-    const float top_y       =  half_length + (m_top_radius    * sin_alpha);
-
-    const int slice_count = preview_settings.ideal_shape ? std::max(80, m_slice_count) : m_slice_count;
-
     erhe::renderer::Primitive_renderer line_renderer = get_line_renderer(preview_settings);
-    line_renderer.add_cone(
-        preview_settings.transform,
-        preview_settings.major_color,
-        preview_settings.minor_color,
-        preview_settings.major_thickness,
-        preview_settings.minor_thickness,
-        glm::vec3{0.0f, bottom_y, 0.0f},
-        top_y - bottom_y,
-        m_bottom_radius * cos_alpha,
-        m_top_radius * cos_alpha,
-        camera_node->position_in_world(),
-        slice_count
-    );
-    line_renderer.add_sphere(
+    line_renderer.add_capsule(
         preview_settings.transform,
         preview_settings.major_color,
         preview_settings.minor_color,
         preview_settings.major_thickness,
         preview_settings.minor_thickness,
         glm::vec3{0.0f, -half_length, 0.0f},
+        m_length,
         m_bottom_radius,
-        &camera_node->world_from_node_transform(),
-        slice_count
-    );
-    line_renderer.add_sphere(
-        preview_settings.transform,
-        preview_settings.major_color,
-        preview_settings.minor_color,
-        preview_settings.major_thickness,
-        preview_settings.minor_thickness,
-        glm::vec3{0.0f, half_length, 0.0f},
         m_top_radius,
-        &camera_node->world_from_node_transform(),
-        slice_count
+        camera_node->position_in_world(),
+        preview_settings.ideal_shape ? std::max(80, m_slice_count) : m_slice_count
     );
 }
 

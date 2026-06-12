@@ -569,6 +569,191 @@ void Primitive_renderer::add_cone(
     }
 }
 
+void Primitive_renderer::add_capsule(
+    const erhe::scene::Transform& world_from_node,
+    const glm::vec4&              major_color,
+    const glm::vec4&              minor_color,
+    const float                   major_thickness,
+    const float                   minor_thickness,
+    const glm::vec3&              bottom_center,
+    const float                   length,
+    const float                   bottom_radius,
+    const float                   top_radius,
+    const glm::vec3&              camera_position_in_world,
+    const int                     side_count
+)
+{
+    constexpr glm::vec3 axis_x{1.0f, 0.0f, 0.0f};
+    constexpr glm::vec3 axis_y{0.0f, 1.0f, 0.0f};
+    constexpr glm::vec3 axis_z{0.0f, 0.0f, 1.0f};
+
+    const glm::mat4 m                       = world_from_node.get_matrix();
+    const glm::mat4 node_from_world         = world_from_node.get_inverse_matrix();
+    const glm::vec3 top_center              = bottom_center + length * axis_y;
+    const glm::vec3 camera_position_in_node = glm::vec3{node_from_world * glm::vec4{camera_position_in_world, 1.0f}};
+
+    // The tangent cone joining the cap spheres touches them at latitude angle
+    // alpha with sin(alpha) = (bottom_radius - top_radius) / length; the caps
+    // span latitudes [-pi/2, alpha] (bottom) and [alpha, pi/2] (top).
+    const float radius_delta = bottom_radius - top_radius;
+    const float sin_alpha    = (radius_delta == 0.0f) ? 0.0f : glm::clamp(radius_delta / length, -1.0f, 1.0f);
+    const float cos_alpha    = std::sqrt(1.0f - (sin_alpha * sin_alpha));
+    const float alpha        = std::asin(sin_alpha);
+
+    const glm::vec3 bottom_ring_center = bottom_center + (bottom_radius * sin_alpha) * axis_y;
+    const glm::vec3 top_ring_center    = top_center    + (top_radius    * sin_alpha) * axis_y;
+    const float     bottom_ring_radius = bottom_radius * cos_alpha;
+    const float     top_ring_radius    = top_radius    * cos_alpha;
+
+    // Structural lines: junction (tangency) rings, cap profile arcs with the
+    // connecting cone generatrices in the XY / ZY planes, and the axis
+    set_thickness(minor_thickness);
+    for (int i = 0; i < side_count; ++i) {
+        const float phi0 = glm::two_pi<float>() * static_cast<float>(i    ) / static_cast<float>(side_count);
+        const float phi1 = glm::two_pi<float>() * static_cast<float>(i + 1) / static_cast<float>(side_count);
+        const glm::vec3 d0 = (std::cos(phi0) * axis_x) + (std::sin(phi0) * axis_z);
+        const glm::vec3 d1 = (std::cos(phi1) * axis_x) + (std::sin(phi1) * axis_z);
+        add_lines(
+            m,
+            minor_color,
+            {
+                { bottom_ring_center + bottom_ring_radius * d0, bottom_ring_center + bottom_ring_radius * d1 },
+                { top_ring_center    + top_ring_radius    * d0, top_ring_center    + top_ring_radius    * d1 }
+            }
+        );
+    }
+
+    const int arc_step_count = std::max(2, side_count / 4);
+    for (const glm::vec3& radial : { axis_x, -axis_x, axis_z, -axis_z }) {
+        for (int i = 0; i < arc_step_count; ++i) {
+            const float rel0 = static_cast<float>(i    ) / static_cast<float>(arc_step_count);
+            const float rel1 = static_cast<float>(i + 1) / static_cast<float>(arc_step_count);
+            const float bottom_theta0 = -glm::half_pi<float>() + ((alpha + glm::half_pi<float>()) * rel0);
+            const float bottom_theta1 = -glm::half_pi<float>() + ((alpha + glm::half_pi<float>()) * rel1);
+            const float top_theta0    = alpha + ((glm::half_pi<float>() - alpha) * rel0);
+            const float top_theta1    = alpha + ((glm::half_pi<float>() - alpha) * rel1);
+            add_lines(
+                m,
+                minor_color,
+                {
+                    {
+                        bottom_center + bottom_radius * ((std::cos(bottom_theta0) * radial) + (std::sin(bottom_theta0) * axis_y)),
+                        bottom_center + bottom_radius * ((std::cos(bottom_theta1) * radial) + (std::sin(bottom_theta1) * axis_y))
+                    },
+                    {
+                        top_center + top_radius * ((std::cos(top_theta0) * radial) + (std::sin(top_theta0) * axis_y)),
+                        top_center + top_radius * ((std::cos(top_theta1) * radial) + (std::sin(top_theta1) * axis_y))
+                    }
+                }
+            );
+        }
+        add_lines(
+            m,
+            minor_color,
+            { { bottom_ring_center + bottom_ring_radius * radial, top_ring_center + top_ring_radius * radial } }
+        );
+    }
+    add_lines(m, minor_color, { { bottom_center - bottom_radius * axis_y, top_center + top_radius * axis_y } });
+
+    // Silhouette: the capsule is convex and tangent continuous, so the view
+    // silhouette is a single closed curve. A plane through the camera tangent
+    // to the cone is tangent to both cap spheres as well (the cone normal n
+    // satisfies n . (top_center - bottom_center) = length * sin(alpha) =
+    // bottom_radius - top_radius), so the two cone silhouette generatrices
+    // join the cap silhouette arcs exactly.
+    set_thickness(major_thickness);
+
+    // Cone silhouette generatrices: azimuths phi where the tangent plane with
+    // normal n(phi) = (cos_alpha cos(phi), sin_alpha, cos_alpha sin(phi))
+    // passes through the camera: n(phi) . (camera - bottom_center) = bottom_radius
+    const glm::vec3 to_camera_from_bottom = camera_position_in_node - bottom_center;
+    const float     tangent_a             = to_camera_from_bottom.x * cos_alpha;
+    const float     tangent_b             = to_camera_from_bottom.z * cos_alpha;
+    const float     tangent_c             = bottom_radius - (to_camera_from_bottom.y * sin_alpha);
+    const float     tangent_norm          = std::sqrt((tangent_a * tangent_a) + (tangent_b * tangent_b));
+    if (tangent_norm > std::abs(tangent_c)) {
+        const float phi_mid   = std::atan2(tangent_b, tangent_a);
+        const float phi_delta = std::acos(glm::clamp(tangent_c / tangent_norm, -1.0f, 1.0f));
+        for (const float phi : { phi_mid - phi_delta, phi_mid + phi_delta }) {
+            const glm::vec3 n =
+                ((cos_alpha * std::cos(phi)) * axis_x) +
+                (sin_alpha                   * axis_y) +
+                ((cos_alpha * std::sin(phi)) * axis_z);
+            add_lines(m, major_color, { { bottom_center + bottom_radius * n, top_center + top_radius * n } });
+        }
+    }
+
+    // Cap silhouette arcs: the part of each sphere's view silhouette circle
+    // whose latitude lies in the cap's range. The arc endpoints sit exactly
+    // at the cap edge latitude alpha, i.e. on the cone generatrices above.
+    const auto add_cap_silhouette_arc = [&](const glm::vec3& sphere_center, const float sphere_radius, const bool is_top) {
+        const glm::vec3 to_camera = camera_position_in_node - sphere_center;
+        const float     d2        = glm::dot(to_camera, to_camera);
+        const float     r2        = sphere_radius * sphere_radius;
+        if (d2 <= r2) {
+            return; // camera inside the cap sphere - no silhouette
+        }
+        const float     d             = std::sqrt(d2);
+        const float     h             = sphere_radius * std::sqrt(d2 - r2) / d; // silhouette circle radius
+        const float     p             = std::sqrt(r2 - (h * h));                // sphere center to silhouette circle center
+        const glm::vec3 dir           = to_camera / d;
+        const glm::vec3 circle_center = sphere_center + p * dir;
+
+        const glm::vec3 hint = (std::abs(dir.y) < 0.99f) ? axis_y : axis_x;
+        const glm::vec3 e0   = erhe::math::safe_normalize_cross<float>(dir, hint);
+        const glm::vec3 e1   = erhe::math::safe_normalize_cross<float>(e0, dir);
+
+        // Cap test for circle point q(t) = circle_center + h (cos(t) e0 + sin(t) e1):
+        // (q - sphere_center) . Y <= sphere_radius * sin(alpha) on the bottom cap
+        // (>= on the top cap), i.e. wave_r * cos(t - t_mid) <=> cap_c
+        const float wave_a = h * e0.y;
+        const float wave_b = h * e1.y;
+        const float wave_r = std::sqrt((wave_a * wave_a) + (wave_b * wave_b));
+        const float cap_c  = (sphere_radius * sin_alpha) - (p * dir.y);
+
+        float t_first;
+        float t_span;
+        if (wave_r < 1e-6f * sphere_radius) {
+            // Silhouette circle is horizontal: fully on or fully off the cap
+            const bool on_cap = is_top ? (cap_c <= 0.0f) : (cap_c >= 0.0f);
+            if (!on_cap) {
+                return;
+            }
+            t_first = 0.0f;
+            t_span  = glm::two_pi<float>();
+        } else {
+            const float t_mid = std::atan2(wave_b, wave_a);
+            const float t_cut = std::acos(glm::clamp(cap_c / wave_r, -1.0f, 1.0f));
+            if (is_top) {
+                t_first = t_mid - t_cut;
+                t_span  = 2.0f * t_cut;
+            } else {
+                t_first = t_mid + t_cut;
+                t_span  = glm::two_pi<float>() - (2.0f * t_cut);
+            }
+            if (t_span <= 0.0f) {
+                return;
+            }
+        }
+
+        const int step_count = std::max(1, static_cast<int>(std::ceil(static_cast<float>(side_count) * t_span / glm::two_pi<float>())));
+        for (int i = 0; i < step_count; ++i) {
+            const float t0 = t_first + (t_span * static_cast<float>(i    ) / static_cast<float>(step_count));
+            const float t1 = t_first + (t_span * static_cast<float>(i + 1) / static_cast<float>(step_count));
+            add_lines(
+                m,
+                major_color,
+                {{
+                    circle_center + h * ((std::cos(t0) * e0) + (std::sin(t0) * e1)),
+                    circle_center + h * ((std::cos(t1) * e0) + (std::sin(t1) * e1))
+                }}
+            );
+        }
+    };
+    add_cap_silhouette_arc(bottom_center, bottom_radius, false);
+    add_cap_silhouette_arc(top_center,    top_radius,    true);
+}
+
 namespace {
 
 struct Torus_point

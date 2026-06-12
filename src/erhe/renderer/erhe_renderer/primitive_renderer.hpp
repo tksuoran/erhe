@@ -132,6 +132,26 @@ public:
         int                           side_count
     );
 
+    // Tapered capsule on the local Y axis: cap spheres of bottom_radius at
+    // bottom_center and top_radius at bottom_center + length * Y, joined by
+    // their common tangent cone (the convex hull of the two spheres; equal
+    // radii give the classic capsule). Draws the single closed view
+    // silhouette in major style and structural lines (junction rings, cap
+    // profile arcs, side generatrices, axis) in minor style.
+    void add_capsule(
+        const erhe::scene::Transform& world_from_node,
+        const glm::vec4&              major_color,
+        const glm::vec4&              minor_color,
+        float                         major_thickness,
+        float                         minor_thickness,
+        const glm::vec3&              bottom_center,
+        float                         length,
+        float                         bottom_radius,
+        float                         top_radius,
+        const glm::vec3&              camera_position_in_world,
+        int                           side_count
+    );
+
     void add_torus(
         const erhe::scene::Transform& world_from_node,
         const glm::vec4&              major_color,
