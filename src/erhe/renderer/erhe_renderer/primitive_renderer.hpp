@@ -106,12 +106,19 @@ public:
         const glm::vec3& end
     );
 
+    // Sphere with great circles in the world XY, YZ and XZ planes and, when
+    // a camera transform is given, the exact view silhouette circle. The
+    // silhouette and the visible great circle arcs use major style, hidden
+    // arcs minor style; the visible/hidden split is exact, so visible arc
+    // endpoints lie on the silhouette circle. Without a camera (or with the
+    // camera inside the sphere) the great circles are drawn fully in minor
+    // style and the silhouette is omitted.
     void add_sphere(
         const erhe::scene::Transform& transform,
-        const glm::vec4&              edge_color,
-        const glm::vec4&              great_circle_color,
-        float                         edge_thickness,
-        float                         great_circle_thickness,
+        const glm::vec4&              major_color,
+        const glm::vec4&              minor_color,
+        float                         major_thickness,
+        float                         minor_thickness,
         const glm::vec3&              local_center,
         float                         local_radius,
         const erhe::scene::Transform* camera_world_from_node = nullptr,

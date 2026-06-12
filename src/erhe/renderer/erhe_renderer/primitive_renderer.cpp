@@ -299,17 +299,17 @@ void Primitive_renderer::add_bone(
 
 void Primitive_renderer::add_sphere(
     const erhe::scene::Transform&       world_from_local,
-    const glm::vec4&                    edge_color,
-    const glm::vec4&                    great_circle_color,
-    const float                         edge_thickness,
-    const float                         great_circle_thickness,
+    const glm::vec4&                    major_color,
+    const glm::vec4&                    minor_color,
+    const float                         major_thickness,
+    const float                         minor_thickness,
     const glm::vec3&                    local_center,
     const float                         local_radius,
     const erhe::scene::Transform* const camera_world_from_node,
     const int                           step_count
 )
 {
-    erhe::math::Sphere sphere = erhe::math::transform(
+    const erhe::math::Sphere sphere = erhe::math::transform(
         world_from_local.get_matrix(),
         erhe::math::Sphere{
             .center = local_center,
@@ -318,62 +318,66 @@ void Primitive_renderer::add_sphere(
     );
     const float     radius = sphere.radius;
     const glm::vec3 center = sphere.center;
-    const glm::vec3 axis_x{radius, 0.0f, 0.0f};
-    const glm::vec3 axis_y{0.0f, radius, 0.0f};
-    const glm::vec3 axis_z{0.0f, 0.0f, radius};
 
-    set_thickness(great_circle_thickness);
-    for (int i = 0; i < step_count; ++i) {
-        const float t0 = glm::two_pi<float>() * static_cast<float>(i    ) / static_cast<float>(step_count);
-        const float t1 = glm::two_pi<float>() * static_cast<float>(i + 1) / static_cast<float>(step_count);
-        add_lines(
-            great_circle_color,
-            {
-                {
-                    center + std::cos(t0) * axis_x + std::sin(t0) * axis_y,
-                    center + std::cos(t1) * axis_x + std::sin(t1) * axis_y
-                },
-                {
-                    center + std::cos(t0) * axis_y + std::sin(t0) * axis_z,
-                    center + std::cos(t1) * axis_y + std::sin(t1) * axis_z
-                },
-                {
-                    center + std::cos(t0) * axis_x + std::sin(t0) * axis_z,
-                    center + std::cos(t1) * axis_x + std::sin(t1) * axis_z
-                }
-            }
-        );
-        //add_lines(
-        //    0xffff0000,
-        //    {
-        //        {
-        //            center + std::cos(t0) * axis_x + std::sin(t0) * axis_y,
-        //            center + std::cos(t1) * axis_x + std::sin(t1) * axis_y
-        //        }
-        //    }
-        //);
-        //add_lines(
-        //    0xff0000ff,
-        //    {
-        //        {
-        //            center + std::cos(t0) * axis_y + std::sin(t0) * axis_z,
-        //            center + std::cos(t1) * axis_y + std::sin(t1) * axis_z
-        //        }
-        //    }
-        //);
-        //add_lines(
-        //    0xff00ff00,
-        //    {
-        //        {
-        //            center + std::cos(t0) * axis_x + std::sin(t0) * axis_z,
-        //            center + std::cos(t1) * axis_x + std::sin(t1) * axis_z
-        //        }
-        //    }
-        //);
+    constexpr glm::vec3 axis_x{1.0f, 0.0f, 0.0f};
+    constexpr glm::vec3 axis_y{0.0f, 1.0f, 0.0f};
+    constexpr glm::vec3 axis_z{0.0f, 0.0f, 1.0f};
+
+    glm::vec3 camera_position{0.0f};
+    bool      camera_outside = false;
+    if (camera_world_from_node != nullptr) {
+        camera_position = glm::vec3{camera_world_from_node->get_matrix() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
+        camera_outside  = glm::length2(camera_position - center) > (radius * radius);
     }
+    const glm::vec3 w = camera_position - center;
 
-    if (camera_world_from_node == nullptr) {
-        return;
+    // Great circles in the world XY, YZ and XZ planes. With a camera outside
+    // the sphere, each circle is split at the exact horizon: the point
+    // q(t) = center + radius (cos(t) u + sin(t) v) is visible iff
+    // (q - center) . (camera - q) > 0, which reduces to
+    // (u . w) cos(t) + (v . w) sin(t) > radius. The boundary points satisfy
+    // the horizon condition, i.e. the visible arc endpoints lie exactly on
+    // the silhouette circle drawn below.
+    const auto add_great_circle = [&](const glm::vec3& u, const glm::vec3& v) {
+        const auto add_arc = [&](const float t_first, const float t_span, const glm::vec4& color, const float thickness) {
+            if (t_span <= 0.0f) {
+                return;
+            }
+            set_thickness(thickness);
+            const int segment_count = std::max(1, static_cast<int>(std::ceil(static_cast<float>(step_count) * t_span / glm::two_pi<float>())));
+            for (int i = 0; i < segment_count; ++i) {
+                const float t0 = t_first + (t_span * static_cast<float>(i    ) / static_cast<float>(segment_count));
+                const float t1 = t_first + (t_span * static_cast<float>(i + 1) / static_cast<float>(segment_count));
+                add_lines(
+                    color,
+                    {{
+                        center + radius * ((std::cos(t0) * u) + (std::sin(t0) * v)),
+                        center + radius * ((std::cos(t1) * u) + (std::sin(t1) * v))
+                    }}
+                );
+            }
+        };
+
+        const float a      = glm::dot(u, w);
+        const float b      = glm::dot(v, w);
+        const float radial = std::sqrt((a * a) + (b * b));
+        if (!camera_outside || (radial <= radius)) {
+            // No camera, camera inside the sphere, or the whole circle is at
+            // or behind the horizon
+            add_arc(0.0f, glm::two_pi<float>(), minor_color, minor_thickness);
+            return;
+        }
+        const float t_mid = std::atan2(b, a);
+        const float t_cut = std::acos(glm::clamp(radius / radial, -1.0f, 1.0f));
+        add_arc(t_mid - t_cut, 2.0f * t_cut, major_color, major_thickness);
+        add_arc(t_mid + t_cut, glm::two_pi<float>() - (2.0f * t_cut), minor_color, minor_thickness);
+    };
+    add_great_circle(axis_x, axis_y);
+    add_great_circle(axis_y, axis_z);
+    add_great_circle(axis_x, axis_z);
+
+    if (!camera_outside) {
+        return; // no silhouette without a camera or from inside the sphere
     }
 
     //                             C = sphere center        .
@@ -387,20 +391,15 @@ void Primitive_renderer::add_sphere(
     //   C      P d             V  p*p + h*h = r*r          .
     //                             p = sqrt(r*r - h*h)      .
 
-    const glm::vec3 camera_position                 = glm::vec3{camera_world_from_node->get_matrix() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
-    const glm::vec3 from_camera_to_sphere           = center - camera_position;
-    const glm::vec3 from_sphere_to_camera           = camera_position - center;
-    const glm::vec3 from_camera_to_sphere_direction = glm::normalize(from_camera_to_sphere);
-    const glm::vec3 from_sphere_to_camera_direction = glm::normalize(from_sphere_to_camera);
-
     const float r2 = radius * radius;
-    const float d2 = glm::length2(from_camera_to_sphere);
+    const float d2 = glm::length2(w);
     const float d  = std::sqrt(d2);
-    const float b2 = d2 - r2;
-    const float b  = std::sqrt(b2);
+    const float b  = std::sqrt(d2 - r2);
     const float h  = radius * b / d;
-    const float h2 = h * h;
-    const float p  = std::sqrt(r2 - h2);
+    const float p  = std::sqrt(r2 - (h * h));
+
+    const glm::vec3 from_sphere_to_camera_direction = w / d;
+    const glm::vec3 from_camera_to_sphere_direction = -from_sphere_to_camera_direction;
 
     const glm::vec3 P              = center + p * from_sphere_to_camera_direction;
     const glm::vec3 up0_direction  = glm::vec3{camera_world_from_node->get_matrix() * glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}};
@@ -409,13 +408,12 @@ void Primitive_renderer::add_sphere(
     const glm::vec3 axis_a         = h * side_direction;
     const glm::vec3 axis_b         = h * up_direction;
 
-    set_thickness(edge_thickness);
+    set_thickness(major_thickness);
     for (int i = 0; i < step_count; ++i) {
         const float t0 = glm::two_pi<float>() * static_cast<float>(i    ) / static_cast<float>(step_count);
         const float t1 = glm::two_pi<float>() * static_cast<float>(i + 1) / static_cast<float>(step_count);
         add_lines(
-            //0xffffffff,
-            edge_color,
+            major_color,
             {
                 {
                     P + std::cos(t0) * axis_a + std::sin(t0) * axis_b,
