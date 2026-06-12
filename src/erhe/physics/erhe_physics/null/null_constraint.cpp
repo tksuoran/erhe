@@ -25,4 +25,25 @@ auto IConstraint::create_point_to_point_constraint_unique(
     return std::make_unique<Null_point_to_point_constraint>(settings);
 }
 
+auto IConstraint::create_six_dof_constraint(
+    const Six_dof_constraint_settings& settings
+) -> IConstraint*
+{
+    return new Null_six_dof_constraint(settings);
+}
+
+auto IConstraint::create_six_dof_constraint_shared(
+    const Six_dof_constraint_settings& settings
+) -> std::shared_ptr<IConstraint>
+{
+    return std::make_shared<Null_six_dof_constraint>(settings);
+}
+
+auto IConstraint::create_six_dof_constraint_unique(
+    const Six_dof_constraint_settings& settings
+) -> std::unique_ptr<IConstraint>
+{
+    return std::make_unique<Null_six_dof_constraint>(settings);
+}
+
 } // namespace erhe::physics

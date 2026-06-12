@@ -5,8 +5,10 @@
 #include "erhe_physics/jolt/glm_conversions.hpp"
 
 #include <Jolt/Jolt.h>
+#include <Jolt/Core/Reference.h>
 #include <Jolt/Physics/Constraints/Constraint.h>
 #include <Jolt/Physics/Constraints/DistanceConstraint.h>
+#include <Jolt/Physics/Constraints/SixDOFConstraint.h>
 
 namespace erhe::physics {
 
@@ -29,6 +31,18 @@ public:
 private:
     JPH::DistanceConstraintSettings m_settings;
     JPH::Constraint*                m_constraint;
+};
+
+class Jolt_six_dof_constraint : public Jolt_constraint
+{
+public:
+    explicit Jolt_six_dof_constraint(const Six_dof_constraint_settings& settings);
+    ~Jolt_six_dof_constraint() noexcept override;
+
+    [[nodiscard]] auto get_jolt_constraint() const -> JPH::Constraint* override;
+
+private:
+    JPH::Ref<JPH::SixDOFConstraint> m_constraint;
 };
 
 } // namespace erhe::physics
