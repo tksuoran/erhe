@@ -26,23 +26,18 @@ backward compat (Phase 4); real sample assets from
 https://github.com/eoineoineoin/glTF_Physics import and simulate (JointTypes: 11 live
 constraints; Materials_Friction; Filtering) (Phase 5).
 
-## Blocker for Phase 6: pre-existing export hang
+## Former blocker for Phase 6: export hang (FIXED, verified)
 
-`File > Save Scene` of the default scene hangs deterministically in
-`export_gltf()` -> `build_buffer_mesh` -> `build_polygon_fill` (infinite loop on a geometry
-with facets=4 / vertices=4). Pre-existing, unrelated to this work; matches the hang class in
-[`doc/intermittent_main_loop_hang.md`](intermittent_main_loop_hang.md) (previously believed
-ARM-only / intermittent, now reproducible on Windows). Must be root-caused (no band-aid
-iteration caps) before Phase 6 can be verified, since scene save writes a companion .glb
-through the same path.
+`File > Save Scene` of the default scene used to hang (assert inside
+`Free_list_allocator::free` at scope exit of `Gltf_exporter::process_geometry`, surfacing as
+a hang). Fixed by 699cee0b (Buffer_mesh declaration-order use-after-free). Verified
+2026-06-12 by driving the editor over its MCP server: `save_scene` of the default scene
+writes the scene .json + companion .glb + geogram meshes instantly, `export_gltf` produces a
+valid .glb, and `import_gltf` loads it back (16 -> 33 nodes). The MCP tools `save_scene` /
+`export_gltf` / `import_gltf` (path arguments, no file dialog) were added for this and remain
+available for Phase 6 round-trip verification.
 
-## Detailed design reference
-
-The full phase-by-phase design (API signatures, mapping tables, risks) lives outside the repo
-in the planning workspace:
-`~/.claude_personal/plans/review-https-github-com-eoineoineoin-glt-breezy-harbor.md` and the
-companion `...-agent-a614cae9d3c06f065.md` design doc. Key Phase 6 design points, restated so
-this repo doc is self-contained:
+## Design
 
 - Editor-side `build_gltf_physics_data(scene) -> erhe::gltf::Gltf_physics_data` (new
   `src/editor/parsers/gltf_physics_export.{hpp,cpp}`): walk Node_physics / Node_joint

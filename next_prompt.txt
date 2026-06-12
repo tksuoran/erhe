@@ -2,24 +2,13 @@ Continue the KHR_physics_rigid_bodies / KHR_implicit_shapes support work.
 
 Read doc/khr_physics_rigid_bodies_support.md first - it has the full status, the remaining
 work, and the Phase 6 design. Phases 1-5 (Jolt wrapper extensions, editor UI, scene
-serialization, glTF import) are committed on main (6c7c479d, fecd9665, 45e406d2, cd5bc619,
-13a1fdcb, 6fa07a4a). A branch khr-physics-rigid-bodies points at the same work.
+serialization, glTF import) are committed on physics branch.
 
 Remaining, in order:
-1. Fix the pre-existing deterministic hang: File > Save Scene of the default scene spins
-   forever in export_gltf() -> build_buffer_mesh -> build_polygon_fill on a facets=4/verts=4
-   geometry. See doc/intermittent_main_loop_hang.md for prior analysis of this hang class.
-   Root-cause fix only (CLAUDE.md no-band-aid policy). This blocks Phase 6 verification and
-   normal scene saving.
+1. Verify pre-existing deterministic hang: File > Save Scene of the default scene is now
+   fixed and Phase 6 verification is unblocked.
 2. Phase 6 - glTF physics export (design restated in doc/khr_physics_rigid_bodies_support.md).
 3. Phase 7 - polish: trigger-event surfacing in the editor, warning cleanup,
    src/erhe/physics/notes.md + src/erhe/gltf/notes.md updates.
 
-Execution preference from the user: run each phase serially in an independent agent
-(general-purpose subagent that reads the docs, implements, builds via
-cmake --build build_vs2026_opengl --target editor --config Debug, verifies, commits);
-the main session only orchestrates, to keep context lean.
-
-Full design docs (outside repo):
-~/.claude_personal/plans/review-https-github-com-eoineoineoin-glt-breezy-harbor.md
-~/.claude_personal/plans/review-https-github-com-eoineoineoin-glt-breezy-harbor-agent-a614cae9d3c06f065.md
+Work in single main context, no subagents.

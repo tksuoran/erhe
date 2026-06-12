@@ -10,19 +10,26 @@
 #include "operations/material_change_operation.hpp"
 #include "operations/operation.hpp"
 #include "operations/operation_stack.hpp"
+#include "parsers/gltf.hpp"
 #include "erhe_math/math_util.hpp"
 #include "editor_log.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/scene_serialization.hpp"
 #include "scene/shadow_fit_debug.hpp"
 #include "tools/selection_tool.hpp"
+
+#include "erhe_scene_renderer/mesh_memory.hpp"
 
 #include "erhe_scene_renderer/light_buffer.hpp"
 
 #include "erhe_commands/command.hpp"
 #include "erhe_commands/commands.hpp"
 #include "erhe_dataformat/dataformat.hpp"
+#include "erhe_file/file.hpp"
+#include "erhe_gltf/gltf.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_primitive/build_info.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
@@ -533,6 +540,9 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "add_tags")           result = action_add_tags       (req->arguments);
         else if (req->tool_name == "remove_tags")        result = action_remove_tags    (req->arguments);
         else if (req->tool_name == "edit_material")      result = action_edit_material  (req->arguments);
+        else if (req->tool_name == "save_scene")         result = action_save_scene     (req->arguments);
+        else if (req->tool_name == "export_gltf")        result = action_export_gltf    (req->arguments);
+        else if (req->tool_name == "import_gltf")        result = action_import_gltf    (req->arguments);
         else                                              result = execute_command       (req->tool_name);
 
         req->result_promise.set_value(std::move(result));
@@ -666,6 +676,32 @@ void Mcp_server::refresh_tool_list()
             }}
         }},
         {"required", json::array({"scene_name", "material_name"})}
+    }});
+
+    m_tool_infos.push_back({"save_scene",         "Save a scene to an editor scene .json file (plus companion .glb), without a file dialog", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name", {{"type", "string"}, {"description", "Name of the scene"}}},
+            {"path",       {{"type", "string"}, {"description", "Destination .json file path"}}}
+        }},
+        {"required", json::array({"scene_name", "path"})}
+    }});
+    m_tool_infos.push_back({"export_gltf",        "Export a scene to a glTF file, without a file dialog", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name", {{"type", "string"},  {"description", "Name of the scene"}}},
+            {"path",       {{"type", "string"},  {"description", "Destination file path"}}},
+            {"binary",     {{"type", "boolean"}, {"description", "Write binary .glb instead of text .gltf (default true)"}}}
+        }},
+        {"required", json::array({"scene_name", "path"})}
+    }});
+    m_tool_infos.push_back({"import_gltf",        "Import a glTF file into an existing scene", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name", {{"type", "string"}, {"description", "Name of the destination scene"}}},
+            {"path",       {{"type", "string"}, {"description", "Source .gltf/.glb file path"}}}
+        }},
+        {"required", json::array({"scene_name", "path"})}
     }});
 
     // Editor commands
@@ -2098,6 +2134,122 @@ auto Mcp_server::action_edit_material(const json& args) -> std::string
         {"id",      material->get_id()},
         {"applied", applied},
         {"changed", true}
+    }).dump();
+}
+
+auto Mcp_server::action_save_scene(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    const std::string path_str   = args.value("path", "");
+    if (path_str.empty()) {
+        json r = make_text_content("Missing required argument: path");
+        r["isError"] = true;
+        return r.dump();
+    }
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+    const std::filesystem::path path{path_str};
+    const bool ok = editor::save_scene(*sr, path);
+    if (!ok) {
+        json r = make_text_content("save_scene failed: " + path_str);
+        r["isError"] = true;
+        return r.dump();
+    }
+    return make_json_content({
+        {"saved", true},
+        {"path",  path_str}
+    }).dump();
+}
+
+auto Mcp_server::action_export_gltf(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    const std::string path_str   = args.value("path", "");
+    const bool        binary     = args.value("binary", true);
+    if (path_str.empty()) {
+        json r = make_text_content("Missing required argument: path");
+        r["isError"] = true;
+        return r.dump();
+    }
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+    std::shared_ptr<erhe::scene::Node> root_node = sr->get_scene().get_root_node();
+    if (!root_node) {
+        json r = make_text_content("Scene has no root node: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+    const std::string gltf = erhe::gltf::export_gltf(*root_node, binary);
+    if (!erhe::file::write_file(std::filesystem::path{path_str}, gltf)) {
+        json r = make_text_content("Failed to write file: " + path_str);
+        r["isError"] = true;
+        return r.dump();
+    }
+    return make_json_content({
+        {"exported", true},
+        {"path",     path_str},
+        {"bytes",    gltf.size()}
+    }).dump();
+}
+
+auto Mcp_server::action_import_gltf(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    const std::string path_str   = args.value("path", "");
+    if (path_str.empty()) {
+        json r = make_text_content("Missing required argument: path");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    std::shared_ptr<Scene_root> scene_root;
+    if (m_context.app_scenes != nullptr) {
+        for (const std::shared_ptr<Scene_root>& candidate : m_context.app_scenes->get_scene_roots()) {
+            if (candidate->get_name() == scene_name) {
+                scene_root = candidate;
+                break;
+            }
+        }
+    }
+    if (!scene_root) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    const std::filesystem::path path{path_str};
+    std::error_code error_code;
+    if (!std::filesystem::exists(path, error_code)) {
+        json r = make_text_content("File not found: " + path_str);
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    editor::import_gltf(
+        m_context,
+        erhe::primitive::Build_info{
+            .primitive_types = {
+                .fill_triangles  = true,
+                .edge_lines      = true,
+                .corner_points   = true,
+                .centroid_points = true
+            },
+            .buffer_info = m_context.mesh_memory->make_primitive_buffer_info()
+        },
+        scene_root,
+        path
+    );
+    return make_json_content({
+        {"imported", true},
+        {"path",     path_str}
     }).dump();
 }
 
