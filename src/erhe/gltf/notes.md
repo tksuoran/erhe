@@ -3,10 +3,13 @@
 ## Purpose
 glTF file import and export using the fastgltf library. Loads .gltf/.glb files into
 erhe scene objects (nodes, meshes, cameras, lights, materials, textures, animations, skins)
-and exports erhe scene graphs back to glTF format.
+and exports erhe scene graphs back to glTF format. Carries KHR_implicit_shapes +
+KHR_physics_rigid_bodies content in and out as plain data (`gltf_physics.hpp`); the editor
+performs all mapping to/from erhe::physics (see `doc/khr_physics_rigid_bodies_support.md`).
 
 ## Key Types
-- `Gltf_data` -- Container for all imported scene data: vectors of shared_ptr to animations, cameras, lights, meshes, skins, nodes, materials, textures, samplers.
+- `Gltf_data` -- Container for all imported scene data: vectors of shared_ptr to animations, cameras, lights, meshes, skins, nodes, materials, textures, samplers; plus `Gltf_physics_data physics`.
+- `Gltf_physics_data` (`gltf_physics.hpp`) -- Plain-data 1:1 carrier for the physics extensions: implicit shapes, physics materials, collision filters, joints, per-node body descriptions (motion / collider / trigger / joint), and export-only `synthesized_colliders` (colliders the exporter places on synthesized glTF child nodes: compound shape children, non-Y shape axes, non-node wrapper scales). Collider geometry is mesh-keyed (current spec); node-keyed geometry is still read/written for older files.
 - `Gltf_scan` -- Lightweight scan result listing names of all assets in a glTF file without fully loading them.
 - `Gltf_parse_arguments` -- Parameters for `parse_gltf()`: graphics device, executor, image transfer, root node, mesh layer, file path.
 - `Image_transfer` -- Manages GPU texture upload via a ring buffer for streaming image data.
@@ -14,7 +17,7 @@ and exports erhe scene graphs back to glTF format.
 ## Public API
 - `parse_gltf(arguments)` -- Load a glTF file and return populated `Gltf_data`.
 - `scan_gltf(path)` -- Quick scan returning asset names without full parse.
-- `export_gltf(root_node, binary)` -- Export a scene subtree to glTF/GLB string.
+- `export_gltf(root_node, binary, physics_data = nullptr)` -- Export a scene subtree to glTF/GLB string; the optional `Gltf_physics_data` (built by the editor's `build_gltf_physics_data()`) adds the physics extension content and extensionsUsed entries.
 - `Image_transfer(device)` -- Create image upload manager.
 - `Image_transfer::upload_to_texture(image_info, range, texture, gen_mipmap)` -- Upload image to GPU texture.
 
@@ -26,3 +29,11 @@ and exports erhe scene graphs back to glTF format.
 - Backend is selected at CMake time: `ERHE_GLTF_LIBRARY_FASTGLTF` or `ERHE_GLTF_LIBRARY_NONE`.
 - `gltf.hpp` is a dispatch header that includes the appropriate backend.
 - Uses `Image_transfer` with a ring buffer for asynchronous texture uploads.
+- fastgltf is pinned in the top-level CMakeLists with
+  `cmake/patches/fastgltf_khr_physics.patch` applied by CPM at configure time: mesh-keyed
+  physics collider geometry (current spec), spec inertia key names, missing member
+  initializers, and physics extension JSON writer fixes. Drop the patch when upstream
+  catches up. The CPM cache key hashes the patch path, not its content: delete the
+  `.cpm_cache/fastgltf/<hash>` directory after editing the patch file.
+- The text (.gltf) export variant writes no buffer URI and cannot be re-imported; use .glb
+  for round-trips and .gltf for JSON inspection.

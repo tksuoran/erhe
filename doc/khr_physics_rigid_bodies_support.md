@@ -20,7 +20,7 @@ content-library assets; triangle-mesh colliders via Jolt MeshShape (static/kinem
 | 5 | `6fa07a4a` | glTF import: extension bits enabled, `erhe_gltf/gltf_physics.hpp` plain-data carrier, `parse_physics()`, editor mapping `parsers/gltf_physics_import.*` (body roots, compound folding, implicit-shape table, hull/mesh colliders, triggers, joints) | done |
 | 5.5 | - | fastgltf spec-compliance patch (`cmake/patches/fastgltf_khr_physics.patch` via CPM `PATCHES`): mesh-keyed collider geometry (current spec) for parse + write, spec inertia key names, missing member initializers (convexHull, combine modes, drive maxForce/targets), exporter JSON fixes (extension name, booleans, malformed motion arrays, missing rigid-body close brace, collisionFilters trailing commas, omit infinite maxForce). Editor side: mesh-keyed import via `build_shape_from_mesh()` (builds Geometry from Triangle_soup on demand) | done |
 | 6 | - | glTF export: `parsers/gltf_physics_export.*` `build_gltf_physics_data()` (shape introspection, wrapper unwrap, shared item dedup, synthesized child colliders) + `Gltf_exporter` physics pass + extensionsUsed | done |
-| 7 | - | Polish: trigger-event surfacing in editor UI, warning cleanup, notes.md updates, optional cone creation tool parity | NOT started |
+| 7 | - | Polish: trigger events surfaced in the Physics window (bounded per-scene log on Scene_root fed by the IWorld trigger callbacks; count also in MCP list_scenes), joint warnings identify settings + node (were empty Node_joint names), notes.md updates. Cone creation tool parity remains optional/not done | done |
 
 Verification done: hinge constraint harness (Phase 3); scene save/load round-trip incl. v2
 backward compat (Phase 4); real sample assets from

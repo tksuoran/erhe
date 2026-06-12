@@ -57,6 +57,32 @@ void Physics_window::imgui()
         }
     }
 
+    // Trigger (sensor) overlap events of the hovered / single scene,
+    // collected by Scene_root from the physics world callbacks.
+    {
+        const auto viewport_scene_view = m_context.scene_views->last_scene_view();
+        const std::shared_ptr<Scene_root> scene_root = viewport_scene_view
+            ? viewport_scene_view->get_scene_root()
+            : m_context.app_scenes->get_single_scene_root();
+        if (scene_root && ImGui::CollapsingHeader("Trigger Events")) {
+            if (ImGui::Button("Clear")) {
+                scene_root->clear_trigger_event_log();
+            }
+            ImGui::SameLine();
+            ImGui::Text("%llu events", static_cast<unsigned long long>(scene_root->get_trigger_event_count()));
+            ImGui::BeginChild("##trigger_events", ImVec2{0.0f, 200.0f}, ImGuiChildFlags_Borders);
+            const std::deque<std::string>& trigger_event_log = scene_root->get_trigger_event_log();
+            for (const std::string& line : trigger_event_log) {
+                ImGui::TextUnformatted(line.c_str());
+            }
+            // Follow the newest entry while new events arrive.
+            if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY()) {
+                ImGui::SetScrollHereY(1.0f);
+            }
+            ImGui::EndChild();
+        }
+    }
+
     if (!m_context.developer_mode) {
         return;
     }

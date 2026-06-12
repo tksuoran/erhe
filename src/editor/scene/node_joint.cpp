@@ -273,8 +273,8 @@ auto Node_joint::try_create_constraint() -> bool
                 if (!warned_multi_axis_limit) {
                     warned_multi_axis_limit = true;
                     log_physics->warn(
-                        "Node_joint '{}': limit entry lists {} axes; radial limits are approximated per-axis",
-                        get_name(), listed_axis_count
+                        "Joint settings '{}' on node '{}': limit entry lists {} axes; radial limits are approximated per-axis",
+                        m_settings->get_name(), node->get_name(), listed_axis_count
                     );
                 }
             }
@@ -289,7 +289,10 @@ auto Node_joint::try_create_constraint() -> bool
         }
         for (const erhe::physics::Joint_drive& drive : m_settings->drives) {
             if ((drive.axis < 0) || (drive.axis > 2)) {
-                log_physics->warn("Node_joint '{}': drive axis {} out of range, drive ignored", get_name(), drive.axis);
+                log_physics->warn(
+                    "Joint settings '{}' on node '{}': drive axis {} out of range, drive ignored",
+                    m_settings->get_name(), node->get_name(), drive.axis
+                );
                 continue;
             }
             const std::size_t axis_index =
@@ -300,8 +303,8 @@ auto Node_joint::try_create_constraint() -> bool
                 if (!warned_acceleration_mode) {
                     warned_acceleration_mode = true;
                     log_physics->warn(
-                        "Node_joint '{}': acceleration mode drives are not supported; treating as force mode",
-                        get_name()
+                        "Joint settings '{}' on node '{}': acceleration mode drives are not supported; treating as force mode",
+                        m_settings->get_name(), node->get_name()
                     );
                 }
             }

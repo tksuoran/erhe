@@ -6,8 +6,10 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/scene_host.hpp"
 
+#include <deque>
 #include <memory>
 #include <mutex>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -27,6 +29,7 @@ namespace erhe::imgui {
 }
 namespace erhe::physics {
     class IWorld;
+    class Trigger_event;
 }
 namespace erhe::primitive {
     class Material;
@@ -166,6 +169,14 @@ public:
     [[nodiscard]] auto layers            () -> Scene_layers&;
     [[nodiscard]] auto layers            () const -> const Scene_layers&;
     [[nodiscard]] auto get_physics_world () -> erhe::physics::IWorld&;
+
+    // Bounded log of recent sensor (trigger) overlap events, appended by the
+    // physics world trigger callbacks at the end of update_fixed_step() and
+    // shown in the Physics window. Lines are preformatted at event time;
+    // the counter keeps counting after old lines fall out of the log.
+    [[nodiscard]] auto get_trigger_event_log  () const -> const std::deque<std::string>&;
+    [[nodiscard]] auto get_trigger_event_count() const -> uint64_t;
+    void clear_trigger_event_log();
     [[nodiscard]] auto get_raytrace_scene() -> erhe::raytrace::IScene&;
     [[nodiscard]] auto get_scene         () -> erhe::scene::Scene&;
     [[nodiscard]] auto get_scene         () const -> const erhe::scene::Scene&;
@@ -184,6 +195,8 @@ public:
     void sanity_check();
 
 private:
+    void add_trigger_event(bool enter, const erhe::physics::Trigger_event& event);
+
     [[nodiscard]] auto get_node_rt_mask(erhe::scene::Node* node) -> uint32_t;
     // Returns the raytrace IInstance mask for a mesh. Skinned meshes get
     // the Raytrace_node_mask::skinned bit in lieu of the role bits the
@@ -214,6 +227,10 @@ private:
 
     std::unique_ptr<erhe::physics::IWorld>          m_physics_world;
     std::unique_ptr<erhe::raytrace::IScene>         m_raytrace_scene;
+
+    static constexpr std::size_t s_max_trigger_event_log_entries = 100;
+    std::deque<std::string>                         m_trigger_event_log;
+    uint64_t                                        m_trigger_event_counter{0};
 
     std::unique_ptr<erhe::scene::Scene>             m_scene;
     Scene_layers                                    m_layers;

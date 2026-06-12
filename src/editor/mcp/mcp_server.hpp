@@ -115,6 +115,7 @@ private:
     auto action_save_scene      (const nlohmann::json& args) -> std::string;
     auto action_export_gltf     (const nlohmann::json& args) -> std::string;
     auto action_import_gltf     (const nlohmann::json& args) -> std::string;
+    auto action_wake_physics_bodies(const nlohmann::json& args) -> std::string;
     auto execute_command        (const std::string& tool_name) -> std::string;
 
     erhe::commands::Commands& m_commands;

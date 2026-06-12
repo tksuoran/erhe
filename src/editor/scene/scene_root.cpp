@@ -158,6 +158,16 @@ Scene_root::Scene_root(
                 node->disable_flag_bits(erhe::Item_flags::no_transform_update);
             }
         );
+        m_physics_world->set_on_trigger_enter(
+            [this](const erhe::physics::Trigger_event& event) {
+                add_trigger_event(true, event);
+            }
+        );
+        m_physics_world->set_on_trigger_exit(
+            [this](const erhe::physics::Trigger_event& event) {
+                add_trigger_event(false, event);
+            }
+        );
     }
 
     m_raytrace_scene = erhe::raytrace::IScene::create_unique("rt_root_scene");
@@ -730,6 +740,42 @@ auto Scene_root::get_physics_world() -> erhe::physics::IWorld&
 {
     ERHE_VERIFY(m_physics_world);
     return *m_physics_world.get();
+}
+
+void Scene_root::add_trigger_event(const bool enter, const erhe::physics::Trigger_event& event)
+{
+    auto label = [](erhe::physics::IRigid_body* rigid_body) -> const char* {
+        return (rigid_body != nullptr) ? rigid_body->get_debug_label() : "<null>";
+    };
+    ++m_trigger_event_counter;
+    if (m_trigger_event_log.size() >= s_max_trigger_event_log_entries) {
+        m_trigger_event_log.pop_front();
+    }
+    m_trigger_event_log.push_back(
+        fmt::format(
+            "{} {} '{}' {} '{}'",
+            m_trigger_event_counter,
+            enter ? "enter" : "exit",
+            label(event.sensor),
+            enter ? "<-" : "->",
+            label(event.other)
+        )
+    );
+}
+
+auto Scene_root::get_trigger_event_log() const -> const std::deque<std::string>&
+{
+    return m_trigger_event_log;
+}
+
+auto Scene_root::get_trigger_event_count() const -> uint64_t
+{
+    return m_trigger_event_counter;
+}
+
+void Scene_root::clear_trigger_event_log()
+{
+    m_trigger_event_log.clear();
 }
 
 auto Scene_root::get_raytrace_scene() -> erhe::raytrace::IScene&

@@ -15,6 +15,7 @@
 #include "erhe_math/math_util.hpp"
 #include "editor_log.hpp"
 #include "rendergraph/shadow_render_node.hpp"
+#include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_serialization.hpp"
 #include "scene/shadow_fit_debug.hpp"
@@ -544,6 +545,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "save_scene")         result = action_save_scene     (req->arguments);
         else if (req->tool_name == "export_gltf")        result = action_export_gltf    (req->arguments);
         else if (req->tool_name == "import_gltf")        result = action_import_gltf    (req->arguments);
+        else if (req->tool_name == "wake_physics_bodies") result = action_wake_physics_bodies(req->arguments);
         else                                              result = execute_command       (req->tool_name);
 
         req->result_promise.set_value(std::move(result));
@@ -704,6 +706,7 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"scene_name", "path"})}
     }});
+    m_tool_infos.push_back({"wake_physics_bodies", "Activate all dynamic rigid bodies in a scene (bodies enter the world deactivated)", schema_scene_name()});
 
     // Editor commands
     const auto& registered_commands = m_commands.get_commands();
@@ -775,11 +778,12 @@ auto Mcp_server::query_list_scenes(const json& args) -> std::string
         }
 
         scenes.push_back({
-            {"name",           sr->get_name()},
-            {"node_count",     static_cast<int>(scene.get_flat_nodes().size())},
-            {"camera_count",   static_cast<int>(scene.get_cameras().size())},
-            {"light_count",    light_count},
-            {"material_count", material_count}
+            {"name",                sr->get_name()},
+            {"node_count",          static_cast<int>(scene.get_flat_nodes().size())},
+            {"camera_count",        static_cast<int>(scene.get_cameras().size())},
+            {"light_count",         light_count},
+            {"material_count",      material_count},
+            {"trigger_event_count", sr->get_trigger_event_count()}
         });
     }
 
@@ -2252,6 +2256,40 @@ auto Mcp_server::action_import_gltf(const json& args) -> std::string
     return make_json_content({
         {"imported", true},
         {"path",     path_str}
+    }).dump();
+}
+
+auto Mcp_server::action_wake_physics_bodies(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    // Bodies enter the world deactivated (quiet scene loading); wake the
+    // dynamic ones the same way Node_joint does after constraint creation.
+    std::size_t woken = 0;
+    for (const std::shared_ptr<erhe::scene::Node>& node : sr->get_scene().get_flat_nodes()) {
+        const std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
+        if (!node_physics) {
+            continue;
+        }
+        erhe::physics::IRigid_body* rigid_body = node_physics->get_rigid_body();
+        if (rigid_body == nullptr) {
+            continue;
+        }
+        if (rigid_body->get_motion_mode() != erhe::physics::Motion_mode::e_dynamic) {
+            continue;
+        }
+        rigid_body->begin_move();
+        rigid_body->end_move();
+        ++woken;
+    }
+    return make_json_content({
+        {"woken", woken}
     }).dump();
 }
 
