@@ -997,7 +997,7 @@ void App_rendering::render_viewport_renderables(const Render_context& context)
     ERHE_PROFILE_FUNCTION();
 
     ERHE_VERIFY(context.command_buffer != nullptr);
-    erhe::graphics::Scoped_debug_group debug_group{*context.command_buffer, "App_rendering::render_viewport_renderables"};
+    erhe::graphics::Scoped_debug_group debug_group{*context.command_buffer, "Viewport Renderables"};
 
     for (auto* renderable : m_renderables) {
         renderable->render(context);
@@ -1014,7 +1014,7 @@ void App_rendering::render_composer(const Render_context& context)
     // log_frame->trace("App_rendering::render_composer()");
 
     ERHE_VERIFY(context.command_buffer != nullptr);
-    erhe::graphics::Scoped_debug_group pass_scope{*context.command_buffer, "App_rendering::render_composer()"};
+    erhe::graphics::Scoped_debug_group pass_scope{*context.command_buffer, "Composer"};
     erhe::graphics::Scoped_gpu_zone   gpu_zone  {*context.command_buffer, "Main"};
 
     update_sky_parameters();

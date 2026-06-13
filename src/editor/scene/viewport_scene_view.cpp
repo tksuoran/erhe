@@ -96,7 +96,7 @@ Viewport_scene_view::Viewport_scene_view(
     , Texture_rendergraph_node{
         erhe::rendergraph::Texture_rendergraph_node_create_info{
             .rendergraph          = rendergraph,
-            .debug_label          = erhe::utility::Debug_label{fmt::format("Texture_rendergraph_node for Viewport_scene_view {}", name)},
+            .debug_label          = erhe::utility::Debug_label{"Viewport window"},
             .output_key           = erhe::rendergraph::Rendergraph_node_key::viewport_texture,
             .color_format         = erhe::dataformat::Format::format_16_vec4_float,
             .depth_stencil_format = erhe::dataformat::Format::format_d32_sfloat_s8_uint,

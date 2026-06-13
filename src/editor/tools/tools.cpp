@@ -336,7 +336,7 @@ void Tools::render_viewport_tools(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
     ERHE_VERIFY(context.command_buffer != nullptr);
-    erhe::graphics::Scoped_debug_group debug_group{*context.command_buffer, "Tools::render_viewport_tools"};
+    erhe::graphics::Scoped_debug_group debug_group{*context.command_buffer, "Tools"};
 
     for (const auto& tool : m_background_tools) {
         tool->tool_render(context);
