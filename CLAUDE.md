@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**erhe** is a C++ graphics library and editor for OpenGL, vulkan and metal. It features a render graph system, full 3D scene graph, physics (Jolt), geometry manipulation (Catmull-Clark, Conway operators via Geogram), and an ImGui-based editor application.
+**erhe** is a C++ graphics library and editor for Vulkan, OpenGL and Metal (Vulkan is the default backend). It features a render graph system, full 3D scene graph, physics (Jolt), geometry manipulation (Catmull-Clark, Conway operators via Geogram), and an ImGui-based editor application.
 
 ## Session handoff: `next_prompt.txt`
 
@@ -24,18 +24,19 @@ Focus refactors on the `editor` executable and the `erhe::*` libraries. If a cha
 
 ### Windows (Visual Studio 2026)
 
-From an x64 Native Tools Command Prompt:
+Vulkan is the default backend. From an x64 Native Tools Command Prompt:
 
 ```bat
-scripts\configure_vs2026_opengl.bat
+scripts\configure_vs2026_vulkan.bat
 ```
 
-This generates a Visual Studio solution in `build_vs2026_opengl/`. Open it and build the `editor` target.
+This generates a Visual Studio solution in `build_vs2026_vulkan/`. Open it and build the `editor` target.
 
 Alternative configurations:
-- `configure_vs2026_opengl_asan.bat` - with AddressSanitizer
-- `configure_vs2026_opengl_no_tracy.bat` - without Tracy profiler
-- `configure_vs2026_vulkan.bat` - Vulkan backend
+- `configure_vs2026_vulkan_asan.bat` - Vulkan with AddressSanitizer
+- `configure_vs2026_opengl.bat` - OpenGL backend
+- `configure_vs2026_opengl_asan.bat` - OpenGL with AddressSanitizer
+- `configure_vs2026_opengl_no_tracy.bat` - OpenGL without Tracy profiler
 
 **Always use the `scripts\` build scripts on Windows.** Do not invoke `cmake --preset` directly -- the wrappers encode the project's intended configure flow (CPM caching, MSVC env init, etc.).
 
@@ -59,22 +60,26 @@ cmake --build build_xcode_metal  --target editor --config Debug
 
 ### Linux
 
+Vulkan is the default backend:
+
 ```bash
-scripts/configure_ninja_linux.sh
-cmake --build build_ninja_linux --target editor
+scripts/configure_ninja_linux_vulkan.sh
+cmake --build build_ninja_linux_vulkan --target editor
 ```
+
+For the OpenGL backend, use `scripts/configure_ninja_linux_opengl.sh` and build `build_ninja_linux`.
 
 Required packages: `libwayland-dev libxkbcommon-dev xorg-dev` (Ubuntu) or equivalent.
 
 ### CMake presets exist but should not be used
 
-`CMakePresets.json` defines presets like `OpenGL_Debug` and `Vulkan_Debug`. Do not invoke `cmake --preset ...` directly. The `scripts/` wrappers (`configure_vs2026_*.bat` on Windows, `configure_xcode_*.sh` on macOS, `configure_ninja_linux.sh` on Linux) wrap the configure step with the project's expected environment and should be used instead. Plans, scripts, and docs should not reference `cmake --preset`.
+`CMakePresets.json` defines presets like `OpenGL_Debug` and `Vulkan_Debug`. Do not invoke `cmake --preset ...` directly. The `scripts/` wrappers (`configure_vs2026_*.bat` on Windows, `configure_xcode_*.sh` on macOS, `configure_ninja_linux_*.sh` on Linux) wrap the configure step with the project's expected environment and should be used instead. Plans, scripts, and docs should not reference `cmake --preset`.
 
 ### Key CMake Options
 
 | Option | Default | Notes |
 |--------|---------|-------|
-| `ERHE_GRAPHICS_API` | - | `opengl`, `vulkan`, or `none` (headless) |
+| `ERHE_GRAPHICS_API` | `vulkan` | `vulkan`, `opengl`, `metal` (macOS), or `none` (headless) |
 | `ERHE_NAVIGATION_LIBRARY` | `recastnavigation` | `recastnavigation` or `none` |
 | `ERHE_PHYSICS_LIBRARY` | `jolt` | `jolt` or `none` |
 | `ERHE_RAYTRACE_LIBRARY` | `bvh` | `bvh`, `tinybvh`, `embree`, or `none` (none uses GPU ID-buffer picking) |

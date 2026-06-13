@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Linux Ninja configure for the Vulkan backend.
-# OpenGL variant: configure_ninja_linux.sh
+# OpenGL variant: configure_ninja_linux_opengl.sh
 # ERHE_SPIRV is forced ON for Vulkan by CMakeLists.txt, so it is not passed here.
 
 mkdir -p build_ninja_linux_vulkan

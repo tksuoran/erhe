@@ -20,16 +20,16 @@ git clone https://github.com/tksuoran/erhe
 cd erhe
 
 # Windows (from an x64 Native Tools Command Prompt)
-scripts\configure_vs2026_opengl.bat
+scripts\configure_vs2026_vulkan.bat
 
 # Linux
-scripts/configure_ninja_linux.sh && cmake --build build_ninja_linux --target editor
+scripts/configure_ninja_linux_vulkan.sh && cmake --build build_ninja_linux_vulkan --target editor
 
 # macOS
 scripts/configure_xcode_metal.sh && cmake --build build_xcode_metal --target editor --config Debug
 ```
 
-See [doc/building.md](doc/building.md) for all backends, CMake options, and IDE setup.
+Vulkan is the default backend; the OpenGL build uses the `*_opengl` scripts instead (e.g. `scripts\configure_vs2026_opengl.bat`). See [doc/building.md](doc/building.md) for all backends, CMake options, and IDE setup.
 
 ## Platforms
 

@@ -47,7 +47,7 @@ jobs:
             os: ubuntu-latest
             api: opengl
             shell: bash
-            configure: bash scripts/configure_ninja_linux.sh
+            configure: bash scripts/configure_ninja_linux_opengl.sh
             build_dir: build_ninja_linux
             config: Release
 

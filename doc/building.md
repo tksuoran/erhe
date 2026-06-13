@@ -39,20 +39,23 @@ From an x64 Native Tools Command Prompt:
 ```bat
 git clone https://github.com/tksuoran/erhe
 cd erhe
-scripts\configure_vs2026_opengl.bat
-devenv build_vs2026_opengl\erhe.slnx
+scripts\configure_vs2026_vulkan.bat
+devenv build_vs2026_vulkan\erhe.slnx
 ```
 
 In Visual Studio press F5 to build and run editor.
+
+Vulkan is the default backend. For the OpenGL build, use
+`scripts\configure_vs2026_opengl.bat` and `build_vs2026_opengl\erhe.slnx`.
 
 ### Visual Studio Code (Windows and Linux)
 
 1.  `git clone https://github.com/tksuoran/erhe`
 2.  Open the `erhe` folder in Visual Studio Code
 3.  Run one of the wrapper scripts from `scripts/` from a terminal in
-    the project root (e.g. `scripts\configure_vs2026_opengl.bat` on
-    Windows, `scripts/configure_xcode_opengl.sh` on macOS,
-    `scripts/configure_ninja_linux.sh` on Linux). The wrappers
+    the project root (e.g. `scripts\configure_vs2026_vulkan.bat` on
+    Windows, `scripts/configure_xcode_metal.sh` on macOS,
+    `scripts/configure_ninja_linux_vulkan.sh` on Linux). The wrappers
     encode the project's intended configure flow; do not invoke
     `cmake --preset` directly.
 4.  Open the generated build directory and use the *CMake: Build*
@@ -76,8 +79,8 @@ build erhe on Windows.
 ```bash
 git clone https://github.com/tksuoran/erhe
 cd erhe
-scripts/configure_ninja_linux.sh
-cmake --build build_ninja_linux --target editor
+scripts/configure_ninja_linux_vulkan.sh
+cmake --build build_ninja_linux_vulkan --target editor
 ```
 
 ### macOS (command line)
@@ -125,7 +128,7 @@ attempt and the launch must be retried.
 
 | Option | Description | Recognized values |
 | :--- | :--- | :--- |
-| `ERHE_GRAPHICS_API` | Graphics backend | `opengl`, `vulkan`, `metal` (macOS only) `none` (headless) |
+| `ERHE_GRAPHICS_API` | Graphics backend (default `vulkan`) | `opengl`, `vulkan`, `metal` (macOS only), `none` (headless) |
 | `ERHE_WINDOW_LIBRARY` | Window library | `sdl`, `none` (headless) |
 | `ERHE_PHYSICS_LIBRARY` | Physics library | `jolt`, `none` |
 | `ERHE_RAYTRACE_LIBRARY` | Raytrace library | `bvh`, `tinybvh`, `embree`, `none` |
@@ -166,6 +169,8 @@ These options allow faster build times by disabling unused features and selectin
 
 From an x64 Native Tools Command Prompt:
 
--   `scripts\configure_vs2026_opengl.bat` -- Standard build on Windows using Visual Studio 2026
--   `scripts\configure_vs2026_opengl_asan.bat` -- with AddressSanitizer
--   `scripts\configure_vs2026_opengl_no_tracy.bat` -- without Tracy profiler
+-   `scripts\configure_vs2026_vulkan.bat` -- Standard build on Windows using Visual Studio 2026 (Vulkan, the default backend)
+-   `scripts\configure_vs2026_vulkan_asan.bat` -- Vulkan with AddressSanitizer
+-   `scripts\configure_vs2026_opengl.bat` -- OpenGL backend
+-   `scripts\configure_vs2026_opengl_asan.bat` -- OpenGL with AddressSanitizer
+-   `scripts\configure_vs2026_opengl_no_tracy.bat` -- OpenGL without Tracy profiler
