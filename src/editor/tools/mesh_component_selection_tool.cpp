@@ -307,7 +307,10 @@ void Mesh_component_selection_tool::tool_render(const Render_context& context)
         return;
     }
 
-    erhe::renderer::Primitive_renderer triangle_renderer = context.get({erhe::graphics::Primitive_type::triangle, 0, true, false});
+    // stencil_reference must be non-zero: the debug pipeline's stencil test is
+    // function=greater against the (zero-cleared) stencil buffer, so reference 0
+    // would reject every fragment. 2 matches the other debug tools (Paint/Hover).
+    erhe::renderer::Primitive_renderer triangle_renderer = context.get({erhe::graphics::Primitive_type::triangle, 2, true, false});
     erhe::renderer::Primitive_renderer line_renderer     = context.get({erhe::graphics::Primitive_type::line,     2, true, true });
 
     // Camera basis for billboarded vertex handles.
