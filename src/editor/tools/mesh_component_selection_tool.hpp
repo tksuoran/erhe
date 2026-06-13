@@ -89,6 +89,13 @@ private:
 
     [[nodiscard]] auto pick(Scene_view& scene_view) const -> Pick_result;
 
+    // Smooth local-space normal at a vertex (area-weighted average of incident
+    // facet normals) and the world-space normal of an edge (mean of its two
+    // endpoint normals, transformed by normal_matrix). Used to bias selected /
+    // hovered edge lines off the surface.
+    [[nodiscard]] auto vertex_normal_local(const erhe::geometry::Geometry& geometry, GEO::index_t vertex) const -> glm::vec3;
+    [[nodiscard]] auto edge_world_normal   (const erhe::geometry::Geometry& geometry, const glm::mat3& normal_matrix, GEO::index_t v0, GEO::index_t v1) const -> glm::vec3;
+
     void window_imgui();
 
     // Append a facet's fan triangulation (mesh-local positions + indices) to
@@ -118,6 +125,7 @@ private:
     std::vector<glm::vec3>            m_scratch_positions;
     std::vector<uint32_t>             m_scratch_indices;
     std::vector<erhe::renderer::Line> m_scratch_lines;
+    std::vector<glm::vec3>            m_scratch_normals;
 };
 
 } // namespace editor

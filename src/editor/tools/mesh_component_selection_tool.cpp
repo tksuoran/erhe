@@ -28,6 +28,7 @@
 
 using erhe::geometry::get_pointf;
 using erhe::geometry::to_glm_vec3;
+using erhe::geometry::mesh_facet_normalf;
 
 namespace editor {
 
@@ -176,6 +177,32 @@ auto Mesh_component_selection_tool::pick(Scene_view& scene_view) const -> Pick_r
     result.edge_v1 = best_v1;
 
     return result;
+}
+
+auto Mesh_component_selection_tool::vertex_normal_local(const erhe::geometry::Geometry& geometry, const GEO::index_t vertex) const -> glm::vec3
+{
+    const GEO::Mesh& geo_mesh = geometry.get_mesh();
+    glm::vec3        sum{0.0f};
+    for (const GEO::index_t corner : geometry.get_vertex_corners(vertex)) {
+        const GEO::index_t facet = geometry.get_corner_facet(corner);
+        if (facet != GEO::NO_INDEX) {
+            sum += to_glm_vec3(mesh_facet_normalf(geo_mesh, facet)); // area-weighted
+        }
+    }
+    return sum;
+}
+
+auto Mesh_component_selection_tool::edge_world_normal(
+    const erhe::geometry::Geometry& geometry,
+    const glm::mat3&                normal_matrix,
+    const GEO::index_t              v0,
+    const GEO::index_t              v1
+) const -> glm::vec3
+{
+    const glm::vec3 local = vertex_normal_local(geometry, v0) + vertex_normal_local(geometry, v1);
+    const glm::vec3 world = normal_matrix * local;
+    const float     len   = glm::length(world);
+    return (len > 1e-6f) ? (world / len) : glm::vec3{0.0f};
 }
 
 auto Mesh_component_selection_tool::try_ready() const -> bool
@@ -342,6 +369,7 @@ void Mesh_component_selection_tool::tool_render(const Render_context& context)
                     m_mesh_component_selection.set_active_geometry(geometry);
 
                     const glm::mat4  world_from_node = node->world_from_node();
+                    const glm::mat3  normal_matrix   = glm::transpose(glm::inverse(glm::mat3(world_from_node)));
                     const GEO::Mesh& geo_mesh        = geometry->get_mesh();
 
                     // Faces.
@@ -354,16 +382,23 @@ void Mesh_component_selection_tool::tool_render(const Render_context& context)
                         triangle_renderer.add_triangles(world_from_node, m_face_color, m_scratch_positions, m_scratch_indices);
                     }
 
-                    // Edges.
+                    // Edges. Each carries a world-space surface normal so the
+                    // line shader pushes it off the surface (NdotV^2 bias).
                     m_scratch_lines.clear();
+                    m_scratch_normals.clear();
                     for (const Mesh_edge_key& edge : m_mesh_component_selection.get_edges()) {
                         const glm::vec3 p0 = to_glm_vec3(get_pointf(geo_mesh.vertices, edge.first));
                         const glm::vec3 p1 = to_glm_vec3(get_pointf(geo_mesh.vertices, edge.second));
                         m_scratch_lines.push_back(erhe::renderer::Line{p0, p1});
+                        m_scratch_normals.push_back(edge_world_normal(*geometry, normal_matrix, edge.first, edge.second));
                     }
                     if (!m_scratch_lines.empty()) {
                         line_renderer.set_thickness(m_edge_thickness);
-                        line_renderer.add_lines(world_from_node, m_edge_color, std::span<erhe::renderer::Line>{m_scratch_lines});
+                        line_renderer.add_lines(
+                            world_from_node, m_edge_color,
+                            std::span<const erhe::renderer::Line>{m_scratch_lines},
+                            std::span<const glm::vec3>{m_scratch_normals}
+                        );
                     }
 
                     // Vertices (camera-facing quads, world space).
@@ -403,8 +438,17 @@ void Mesh_component_selection_tool::tool_render(const Render_context& context)
                 case Mesh_component_mode::edge: {
                     const glm::vec3 p0 = to_glm_vec3(get_pointf(geo_mesh.vertices, hover.edge_v0));
                     const glm::vec3 p1 = to_glm_vec3(get_pointf(geo_mesh.vertices, hover.edge_v1));
+                    const glm::mat3 normal_matrix = glm::transpose(glm::inverse(glm::mat3(world_from_node)));
+                    m_scratch_lines.clear();
+                    m_scratch_normals.clear();
+                    m_scratch_lines.push_back(erhe::renderer::Line{p0, p1});
+                    m_scratch_normals.push_back(edge_world_normal(*hover.geometry, normal_matrix, hover.edge_v0, hover.edge_v1));
                     line_renderer.set_thickness(m_edge_thickness + 1.0f);
-                    line_renderer.add_lines(world_from_node, m_hover_color, {erhe::renderer::Line{p0, p1}});
+                    line_renderer.add_lines(
+                        world_from_node, m_hover_color,
+                        std::span<const erhe::renderer::Line>{m_scratch_lines},
+                        std::span<const glm::vec3>{m_scratch_normals}
+                    );
                     break;
                 }
                 case Mesh_component_mode::vertex: {

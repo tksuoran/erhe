@@ -126,12 +126,23 @@ was line-only; filled faces required adding triangle primitives:
   reject it on equal depth; a reverse-depth-aware polygon offset nudges it
   toward the viewer so it wins the test. The bias is set per pass via
   `Render_command_encoder::set_depth_bias()`.
+- Lines on a surface (selected edges) have the same problem, but a screen-space
+  wide line cannot use polygon offset cleanly. Instead the debug line vertex
+  carries an optional per-vertex surface normal, and the line shaders
+  (`line_simple.vert`, `debug_line.vert`, `compute_before_line.comp`) push the
+  line toward the viewer by `0.0005 * NdotV^2 * clip_depth_direction`, mirroring
+  `Content_wide_line_renderer` / `content_edge_lines.vert`. The NdotV^2 scaling
+  keeps the bias strong where the surface faces the camera (worst z-fighting)
+  and ~zero at silhouettes (where a uniform bias would make the line visibly
+  float). The normal is zero for ordinary debug lines, so they are unaffected.
 
 The tool draws, for the active mesh:
 
 - selected facets as filled translucent triangles (fan-triangulated, mesh-local
   positions with `transform = world_from_node`);
-- selected edges as lines;
+- selected edges as lines, each tagged with a world-space surface normal (the
+  mean of its two endpoints' area-weighted incident-facet normals) so the line
+  sits on top of the surface instead of intersecting it;
 - selected vertices as small camera-facing quads (two triangles, built in world
   space, sized as a fraction of the camera distance for a roughly constant on-
   screen size);
