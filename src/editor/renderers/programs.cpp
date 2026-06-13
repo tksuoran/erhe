@@ -41,7 +41,6 @@ Programs::Programs(erhe::graphics::Device& graphics_device, erhe::scene_renderer
     , sky                    {graphics_device, "sky-not_loaded"}
     , grid                   {graphics_device, "grid-not_loaded"}
     , shadow_debug           {graphics_device, "shadow_debug-not_loaded"}
-    //, points                 {graphics_device, "points-not_loaded"}
     , depth_to_color         {graphics_device, "depth_to_color-not_loaded"}
     //, id                     {graphics_device, "id-not_loaded"}
     , tool                   {graphics_device, "tool-not_loaded"}
@@ -97,7 +96,6 @@ void Programs::load_programs(
     //add_shader(error     , CI{ .name = "error"     } );
     //add_shader(brush     , CI{ .name = "brush"     } );
     //add_shader(textured  , CI{ .name = "textured"  } );
-    //add_shader(points    , CI{ .name = "points"    } );
 
     // Compile shaders
 
