@@ -127,9 +127,12 @@ public:
     std::size_t                                      view_camera_stride                       {0};
 
     // Offsets in view_block, after the cameras[] array.
-    std::size_t                                      view_count_offset     {0};
-    std::size_t                                      stride_per_view_offset{0};
-    std::size_t                                      vp_y_sign_offset      {0};
+    std::size_t                                      view_count_offset          {0};
+    std::size_t                                      stride_per_view_offset     {0};
+    std::size_t                                      vp_y_sign_offset           {0};
+    // +1.0 forward depth, -1.0 reverse depth; used by the line shaders to push
+    // a surface-aligned line toward the viewer (normal-derived NdotV^2 bias).
+    std::size_t                                      clip_depth_direction_offset{0};
 };
 
 class Primitive_renderer;

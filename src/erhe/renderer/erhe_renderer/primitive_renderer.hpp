@@ -83,6 +83,14 @@ public:
         add_lines(lines);
     }
 
+    // Lines with an explicit per-line WORLD-space surface normal (the same
+    // normal for both endpoints). `transform` is applied to the line
+    // positions only; the normal is written unchanged, so callers pass an
+    // already-world-space normal. The line shaders use it to push a
+    // surface-aligned line toward the viewer (NdotV^2 bias); a zero normal
+    // means no bias. normals[i] pairs with lines[i].
+    void add_lines(const glm::mat4& transform, const glm::vec4& color, std::span<const Line> lines, std::span<const glm::vec3> normals);
+
     // Filled triangles. These use the same per-vertex layout as lines
     // (position + color; the line-width slot is unused) and are rendered by
     // the triangle-primitive bucket (Debug_renderer_shader_key tier=simple,
@@ -200,13 +208,17 @@ private:
     inline void put(
         const glm::vec3& point_world,
         float            thickness,
-        const glm::vec4& color
+        const glm::vec4& color,
+        const glm::vec3& normal_world = glm::vec3{0.0f}
     )
     {
         if (m_last_allocate_gpu_float_data == nullptr) {
             return;
         }
-        ERHE_VERIFY(m_last_allocate_word_offset + 8 <= m_last_allocate_word_count);
+        // 12 floats per vertex: position.xyz + thickness, color.rgba,
+        // normal.xyz + pad. The normal is zero for ordinary lines / triangles
+        // (the shaders then apply no surface bias).
+        ERHE_VERIFY(m_last_allocate_word_offset + 12 <= m_last_allocate_word_count);
         m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = point_world.x;
         m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = point_world.y;
         m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = point_world.z;
@@ -215,6 +227,10 @@ private:
         m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = color.g;
         m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = color.b;
         m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = color.a;
+        m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = normal_world.x;
+        m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = normal_world.y;
+        m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = normal_world.z;
+        m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = 0.0f;
         ERHE_VERIFY(m_last_allocate_word_offset <= m_last_allocate_word_count);
     }
 

@@ -179,6 +179,24 @@ void Primitive_renderer::add_lines(const std::initializer_list<Line> lines)
     }
 }
 
+void Primitive_renderer::add_lines(
+    const glm::mat4&                 transform,
+    const glm::vec4&                 color,
+    const std::span<const Line>      lines,
+    const std::span<const glm::vec3> normals
+)
+{
+    set_line_color(color);
+    make_lines(lines.size());
+    for (std::size_t i = 0, end = lines.size(); i < end; ++i) {
+        const glm::vec3 normal = (i < normals.size()) ? normals[i] : glm::vec3{0.0f};
+        const glm::vec4 p0{transform * glm::vec4{lines[i].p0, 1.0f}};
+        const glm::vec4 p1{transform * glm::vec4{lines[i].p1, 1.0f}};
+        put(glm::vec3{p0} / p0.w, m_half_line_thickness, m_line_color, normal);
+        put(glm::vec3{p1} / p1.w, m_half_line_thickness, m_line_color, normal);
+    }
+}
+
 void Primitive_renderer::add_triangle(
     const glm::mat4& transform,
     const glm::vec4& color,

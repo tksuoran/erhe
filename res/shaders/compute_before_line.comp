@@ -109,6 +109,22 @@ vec2 ndc_from_screen_direction(vec2 screen, vec2 vp_size) {
     return screen / (0.5 * vp_size);
 }
 
+// NDC-space depth bias for a surface-aligned line endpoint. Mirrors the
+// clip-space bias in line_simple.vert / debug_line.vert (0.0005 * NdotV^2 *
+// clip_depth_direction), divided by clip w so the effect matches after the
+// perspective divide that the rasterizer would otherwise apply. Zero normal
+// (ordinary lines) yields no bias.
+float surface_bias_ndc(uint view_index, vec3 normal_world, vec3 world_position, float clip_w) {
+    float normal_length = length(normal_world);
+    if (normal_length < 1e-4) {
+        return 0.0;
+    }
+    vec3  normal = normal_world / normal_length;
+    vec3  v      = normalize(view.cameras[view_index].view_position_in_world.xyz - world_position);
+    float NdotV  = clamp(dot(normal, v), 0.0, 1.0);
+    return 0.0005 * NdotV * NdotV * view.clip_depth_direction / clip_w;
+}
+
 void do_wide_line(uint view_index, uint in_line_index, uint out_triangle_index)
 {
     uint in_i0           = 2 * in_line_index;
@@ -157,6 +173,15 @@ void do_wide_line(uint view_index, uint in_line_index, uint out_triangle_index)
     // Compute line axis and side vector in screen space
     vec3 v0_in_ndc       = v0_clipped.xyz / v0_clipped.w; //  clip to NDC
     vec3 v1_in_ndc       = v1_clipped.xyz / v1_clipped.w;
+
+    // Surface-aligned line bias: push the endpoints toward the viewer in NDC
+    // depth using the per-endpoint surface normal. a, d take the v0 bias;
+    // b, c take the v1 bias (offsets below touch only .xy, so applying here
+    // propagates to all four quad corners).
+    vec3 normal0 = line_vertex_buffer.vertices[in_i0].normal_0.xyz;
+    vec3 normal1 = line_vertex_buffer.vertices[in_i1].normal_0.xyz;
+    v0_in_ndc.z -= surface_bias_ndc(view_index, normal0, position0.xyz, v0_clipped.w);
+    v1_in_ndc.z -= surface_bias_ndc(view_index, normal1, position1.xyz, v1_clipped.w);
     vec2 line_in_ndc     = v1_in_ndc.xy - v0_in_ndc.xy;
     vec2 v0_in_screen    = screen_from_ndc(v0_in_ndc.xy, vp_size);
     vec2 v1_in_screen    = screen_from_ndc(v1_in_ndc.xy, vp_size);

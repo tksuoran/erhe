@@ -51,6 +51,10 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(
             {
                 {erhe::dataformat::Format::format_32_vec4_float, erhe::dataformat::Vertex_attribute_usage::position},
                 {erhe::dataformat::Format::format_32_vec4_float, erhe::dataformat::Vertex_attribute_usage::color},
+                // Optional per-vertex surface normal (xyz; w unused). Zero for
+                // ordinary debug lines / triangles; set for surface-aligned
+                // lines so the shaders can push them toward the viewer.
+                {erhe::dataformat::Format::format_32_vec4_float, erhe::dataformat::Vertex_attribute_usage::normal},
             }
         }
     }
@@ -81,6 +85,8 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(
     line_vertex_struct = std::make_unique<erhe::graphics::Shader_resource>(graphics_device, "line_vertex");
     line_vertex_struct->add_vec4("position_0");
     line_vertex_struct->add_vec4("color_0");
+    // Optional per-vertex surface normal (xyz; w unused). Zero = no bias.
+    line_vertex_struct->add_vec4("normal_0");
 
     // View UBO layout:
     //   ViewCamera cameras[view_count];   // per-eye camera
@@ -108,11 +114,12 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(
         erhe::graphics::Shader_resource::Type::uniform_block
     );
     view_block->add_struct("cameras", view_camera_struct.get(), static_cast<std::size_t>(view_count));
-    view_count_offset      = view_block->add_uint ("view_count"     )->get_offset_in_parent();
-    stride_per_view_offset = view_block->add_uint ("stride_per_view")->get_offset_in_parent();
-    vp_y_sign_offset       = view_block->add_float("vp_y_sign"      )->get_offset_in_parent();
-    // Trailing pad to round the block to a 16-byte boundary (std140).
-    view_block->add_float("_padding0");
+    view_count_offset           = view_block->add_uint ("view_count"          )->get_offset_in_parent();
+    stride_per_view_offset      = view_block->add_uint ("stride_per_view"     )->get_offset_in_parent();
+    vp_y_sign_offset            = view_block->add_float("vp_y_sign"           )->get_offset_in_parent();
+    // +1.0 forward depth, -1.0 reverse depth. Also rounds the block to a
+    // 16-byte boundary (std140), replacing the former trailing pad float.
+    clip_depth_direction_offset = view_block->add_float("clip_depth_direction")->get_offset_in_parent();
 
     const auto shader_path = std::filesystem::path{"res"} / std::filesystem::path{"shaders"};
 

@@ -228,7 +228,12 @@ auto Debug_renderer_bucket::update_view_buffer(
     const bool  top_left  = (m_graphics_device.get_info().coordinate_conventions.framebuffer_origin == erhe::math::Framebuffer_origin::top_left);
     const float vp_y_sign = top_left ? -1.0f : 1.0f;
     write(view_gpu_data, program_interface.vp_y_sign_offset, as_span(vp_y_sign));
-    // padding0 already zero-filled by the memset above.
+
+    // +1.0 forward depth, -1.0 reverse depth. Lets the line shaders push a
+    // surface-aligned line toward the viewer regardless of depth convention.
+    const bool  reverse_depth        = (m_graphics_device.get_info().coordinate_conventions.native_depth_range == erhe::math::Depth_range::zero_to_one);
+    const float clip_depth_direction = reverse_depth ? -1.0f : 1.0f;
+    write(view_gpu_data, program_interface.clip_depth_direction_offset, as_span(clip_depth_direction));
 
     view_buffer_range.bytes_written(view_block_size);
     view_buffer_range.close();
