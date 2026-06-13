@@ -13,6 +13,21 @@ layout(location = 0) flat out int v_draw_id;
 layout(location = 1) flat out int v_primitive_id;
 #endif
 
+#if defined(ERHE_VARIANT_POINTS)
+// The points variant (corner points / polygon centroids) draws each vertex
+// as a GL point. Redeclaring gl_PerVertex is required to write gl_PointSize;
+// each variant compiles separately and multiview does not redeclare the
+// block, so there is no conflict. Location 0 carries the flat point color --
+// free here because v_position is gated out under ERHE_VARIANT_POSITION_PASS
+// and the ID-render variant (the only other user of location 0) is mutually
+// exclusive with points.
+out gl_PerVertex {
+    vec4  gl_Position;
+    float gl_PointSize;
+};
+layout(location = 0) out vec4 v_point_color;
+#endif
+
 #if !defined(ERHE_VARIANT_POSITION_PASS)
 layout(location = 0) out vec4      v_position;
 #endif
@@ -106,6 +121,27 @@ void main()
     // ID pass always draws triangle lists, so the vertex shader writes
     // a per-vertex triangle index instead.
     v_primitive_id = gl_VertexID / 3;
+#endif
+
+#if defined(ERHE_VARIANT_POINTS)
+    // Point size and color are per-draw-primitive values from the primitive
+    // buffer. gl_PointSize uses 1/distance attenuation (floored at 2 px). The
+    // small depth bias pulls the point toward the camera so it passes the
+    // surface depth test (Compare_operation::less) instead of z-fighting the
+    // mesh corner / facet centroid it sits on.
+    vec3  view_position_in_world = camera.cameras[c_view_index].world_from_node[3].xyz;
+    float point_distance         = distance(view_position_in_world, position.xyz);
+    float clip_depth_direction   = camera.cameras[c_view_index].clip_depth_direction;
+#   ifdef ERHE_ATTRIBUTE_a_normal
+    vec3  point_normal           = normalize(vec3(world_from_node_normal * vec4(a_normal, 0.0)));
+    vec3  point_view_vector      = normalize(view_position_in_world - position.xyz);
+    float point_NdotV            = dot(point_normal, point_view_vector);
+    gl_Position.z               -= clip_depth_direction * 0.0005 * abs(point_NdotV);
+#   else
+    gl_Position.z               -= clip_depth_direction * 0.0005;
+#   endif
+    gl_PointSize  = max(primitive.primitives[ERHE_DRAW_ID].size / point_distance, 2.0);
+    v_point_color = primitive.primitives[ERHE_DRAW_ID].color;
 #endif
 
 #if !defined(ERHE_VARIANT_POSITION_PASS)

@@ -26,6 +26,11 @@ vec3 vec3_from_uint(uint i)
 }
 #endif
 
+#if defined(ERHE_VARIANT_POINTS)
+// Flat point color written by standard.vert under the points variant.
+layout(location = 0) in vec4 v_point_color;
+#endif
+
 #if !defined(ERHE_VARIANT_POSITION_PASS)
 layout(location = 0) in vec4      v_position;
 #endif
@@ -111,6 +116,14 @@ const uvec2 v_valency_edge_count = uvec2(0u);
 
 void main()
 {
+#if defined(ERHE_VARIANT_POINTS)
+    // Points (corner points / polygon centroids) are flat-shaded with the
+    // per-draw-primitive color; no lighting. The lit machinery and its
+    // includes are skipped via ERHE_VARIANT_POSITION_PASS.
+    out_color = v_point_color;
+    return;
+#endif
+
 #if defined(ERHE_VARIANT_ID_RENDER)
     // Pack draw_id + per-triangle index into RGB. The draw_id contribution
     // comes from a per-primitive color offset assigned by

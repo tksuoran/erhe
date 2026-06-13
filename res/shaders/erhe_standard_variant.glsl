@@ -18,13 +18,14 @@
 // compiling them without going through Shader_variant_cache -- fix the
 // call site, do not reintroduce fallback macros.
 
-// ERHE_VARIANT_POSITION_PASS is a derived gate. Both ERHE_VARIANT_DEPTH_ONLY
-// and ERHE_VARIANT_ID_RENDER skip the lit / debug varyings -- the vertex
-// shader only needs gl_Position and (for ID render) two tiny flat outputs;
-// the fragment shader either has no body (depth-only) or emits a packed
-// ID color directly. Use this gate at every "skip lit machinery" #if so
-// both variants stay in lock-step.
-#if defined(ERHE_VARIANT_DEPTH_ONLY) || defined(ERHE_VARIANT_ID_RENDER) || defined(ERHE_VARIANT_SHADOW_DISTANCE)
+// ERHE_VARIANT_POSITION_PASS is a derived gate. ERHE_VARIANT_DEPTH_ONLY,
+// ERHE_VARIANT_ID_RENDER and ERHE_VARIANT_POINTS all skip the lit / debug
+// varyings -- the vertex shader only needs gl_Position plus, per variant, a
+// couple of tiny outputs (ID render: two flat ints; points: gl_PointSize +
+// a flat color); the fragment shader either has no body (depth-only) or
+// emits a packed ID color / flat point color directly. Use this gate at
+// every "skip lit machinery" #if so the variants stay in lock-step.
+#if defined(ERHE_VARIANT_DEPTH_ONLY) || defined(ERHE_VARIANT_ID_RENDER) || defined(ERHE_VARIANT_SHADOW_DISTANCE) || defined(ERHE_VARIANT_POINTS)
 #  define ERHE_VARIANT_POSITION_PASS 1
 #endif
 
