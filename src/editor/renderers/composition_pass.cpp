@@ -212,6 +212,8 @@ void Composition_pass::render(const Render_context& context)
                         .lights            = layers.light()->lights,
                         .skins             = scene->get_skins(),
                         .materials         = materials,
+                        .shader_key_boolean_mask_force_enable  = data.shader_key_force_enable_mask,
+                        .shader_key_boolean_mask_force_disable = data.shader_key_force_disable_mask,
                         .reverse_depth     = context.scene_view.get_reverse_depth(),
                         .depth_range       = context.scene_view.get_depth_range(),
                         .conventions       = context.scene_view.get_conventions(),
