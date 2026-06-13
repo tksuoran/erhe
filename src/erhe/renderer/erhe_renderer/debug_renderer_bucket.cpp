@@ -31,19 +31,65 @@ bool operator==(const Debug_renderer_config& lhs, const Debug_renderer_config& r
         (lhs.thin_lines        == rhs.thin_lines       );
 }
 
+auto Debug_renderer_shader_key::derive(
+    const bool                   device_use_compute,
+    const bool                   device_use_geometry_shader,
+    const Debug_renderer_config& config
+) -> Debug_renderer_shader_key
+{
+    Debug_renderer_shader_key key;
+    key.primitive_type = config.primitive_type;
+    if (config.primitive_type != erhe::graphics::Primitive_type::line) {
+        // Triangles and points render directly; there is no wide-line
+        // expansion to do, so the compute / geometry tiers do not apply.
+        key.tier = Tier::simple;
+    } else if (device_use_compute && !config.thin_lines) {
+        key.tier = Tier::compute;
+    } else if (device_use_geometry_shader && !config.thin_lines) {
+        key.tier = Tier::geometry;
+    } else {
+        key.tier = Tier::simple;
+    }
+    return key;
+}
+
 auto Debug_renderer_bucket::Debug_renderer_bucket::make_pipeline(const bool visible) -> erhe::graphics::Base_render_pipeline
 {
     const bool reverse_depth = (m_graphics_device.get_info().coordinate_conventions.native_depth_range == erhe::math::Depth_range::zero_to_one);
     using namespace erhe::graphics;
 
-    // Three tiers: compute (triangles) > geometry shader (GL_LINES + geom expand) > simple (GL_LINES).
-    // thin_lines forces the simple path regardless of capability. The shader
-    // stages and vertex input vary across tiers but live outside the base
-    // pipeline state -- they are passed to get_pipeline_for() at draw time
+    // Three tiers: compute (triangles) > geometry shader (GL_LINES + geom expand) > simple.
+    // The compute tier expands lines into triangles, so it draws GL_TRIANGLES;
+    // the geometry tier and the simple-line variant draw GL_LINES; the simple
+    // tier for non-line primitives draws that primitive's topology directly.
+    // The shader stages and vertex input vary across tiers but live outside the
+    // base pipeline state -- they are passed to get_pipeline_for() at draw time
     // (see render_compute_draws / render_line_draws below).
-    const Input_assembly_state input_assembly = (m_use_compute && !m_config.thin_lines)
-        ? Input_assembly_state::triangle
-        : Input_assembly_state::line;
+    Input_assembly_state input_assembly = Input_assembly_state::line;
+    switch (m_shader_key.tier) {
+        case Debug_renderer_shader_key::Tier::compute:  input_assembly = Input_assembly_state::triangle; break;
+        case Debug_renderer_shader_key::Tier::geometry: input_assembly = Input_assembly_state::line;     break;
+        case Debug_renderer_shader_key::Tier::simple:
+        default: {
+            switch (m_shader_key.primitive_type) {
+                case erhe::graphics::Primitive_type::triangle: input_assembly = Input_assembly_state::triangle; break;
+                case erhe::graphics::Primitive_type::point:    input_assembly = Input_assembly_state::point;    break;
+                case erhe::graphics::Primitive_type::line:
+                default:                                       input_assembly = Input_assembly_state::line;     break;
+            }
+            break;
+        }
+    }
+
+    // Filled-triangle overlays are coplanar with the surface they highlight,
+    // so the visible pass (depth compare less / reversed greater) would reject
+    // them on equal depth. Enabling depth bias (polygon offset) nudges them
+    // toward the viewer; the magnitudes are dynamic state set per pass in
+    // render() (sign matched to the reverse-depth convention there).
+    const Rasterization_state rasterization =
+        (m_shader_key.primitive_type == erhe::graphics::Primitive_type::triangle)
+            ? Rasterization_state::cull_mode_none.with_depth_bias()
+            : Rasterization_state::cull_mode_none;
 
     const Compare_operation depth_compare_op0 = visible ? Compare_operation::less : Compare_operation::greater_or_equal;
     const Compare_operation depth_compare_op  = reverse_depth ? reverse(depth_compare_op0) : depth_compare_op0;
@@ -52,7 +98,7 @@ auto Debug_renderer_bucket::Debug_renderer_bucket::make_pipeline(const bool visi
         Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Line Renderer"},
             .input_assembly = input_assembly,
-            .rasterization  = Rasterization_state::cull_mode_none,
+            .rasterization  = rasterization,
             .depth_stencil  = {
                 .depth_test_enable   = true,
                 .depth_write_enable  = false,
@@ -90,8 +136,13 @@ Debug_renderer_bucket::Debug_renderer_bucket(
 )
     : m_graphics_device   {graphics_device}
     , m_debug_renderer    {debug_renderer}
-    , m_use_compute       {debug_renderer.use_compute()}
-    , m_use_geometry_shader{debug_renderer.use_geometry_shader()}
+    , m_shader_key{
+        Debug_renderer_shader_key::derive(
+            debug_renderer.use_compute(),
+            debug_renderer.use_geometry_shader(),
+            config
+        )
+    }
     , m_view_buffer{
         graphics_device,
         erhe::graphics::Buffer_target::uniform,
@@ -103,7 +154,7 @@ Debug_renderer_bucket::Debug_renderer_bucket(
     , m_pipeline_hidden   {make_pipeline(false)}
 {
     const auto& program_interface = debug_renderer.get_program_interface();
-    if (m_use_compute) {
+    if (uses_compute()) {
         m_vertex_ssbo_buffer.emplace(
             graphics_device,
             erhe::graphics::Buffer_target::storage,
@@ -189,12 +240,12 @@ auto Debug_renderer_bucket::make_draw(const std::size_t vertex_byte_count, const
     constexpr std::size_t min_range_size = 8192; // TODO
     ERHE_VERIFY(!m_view_spans.empty());
 
-    auto& buffer_client = m_use_compute ? m_vertex_ssbo_buffer.value() : m_line_vertex_buffer.value();
+    auto& buffer_client = uses_compute() ? m_vertex_ssbo_buffer.value() : m_line_vertex_buffer.value();
 
     // When the buffer_client is an SSBO (compute path), also clamp to the
     // block's reported size so MoltenVK's Metal argument validation holds.
     // See note in joint_buffer.cpp.
-    const std::size_t ssbo_min_byte_count = m_use_compute
+    const std::size_t ssbo_min_byte_count = uses_compute()
         ? m_debug_renderer.get_program_interface().line_vertex_buffer_block->get_size_bytes()
         : std::size_t{0};
     const std::size_t acquire_byte_count = std::max({vertex_byte_count, min_range_size, ssbo_min_byte_count});
@@ -290,13 +341,13 @@ void Debug_renderer_bucket::start_view(std::span<const View> views)
 
 void Debug_renderer_bucket::dispatch_compute(erhe::graphics::Compute_command_encoder& encoder)
 {
-    if (!m_use_compute) {
+    if (!uses_compute()) {
         return;
     }
 
-    if (m_config.primitive_type != erhe::graphics::Primitive_type::line) {
-        ERHE_FATAL("TODO");
-    }
+    // The compute tier is only ever derived for the line primitive (the
+    // wide-line expansion); triangle / point buckets never reach here.
+    ERHE_VERIFY(m_config.primitive_type == erhe::graphics::Primitive_type::line);
 
     const std::size_t triangle_vertex_stride = m_debug_renderer.get_program_interface().triangle_vertex_format.streams.front().stride;
 
@@ -348,7 +399,7 @@ void Debug_renderer_bucket::dispatch_compute(erhe::graphics::Compute_command_enc
 void Debug_renderer_bucket::release_buffers()
 {
     for (Debug_draw_entry& draw : m_draws) {
-        if (m_use_compute) {
+        if (uses_compute()) {
             draw.draw_buffer_range.release();
         } else {
             draw.input_buffer_range.release();
@@ -370,7 +421,20 @@ void Debug_renderer_bucket::render(
     bool                                    multiview
 )
 {
-    if (m_use_compute) {
+    // Nothing was submitted to this bucket this frame (m_draws is cleared at
+    // end_frame, while the bucket object persists for the Debug_renderer
+    // lifetime). Return before any work -- and, crucially, before the direct
+    // path's ERHE_VERIFY(!multiview): the shared Debug_renderer renders both
+    // the single-view desktop viewport and the multiview headset, and a
+    // triangle / thin-line (tier == simple) bucket left over from a desktop
+    // frame would otherwise trip that assert during the headset's
+    // multiview render. A genuine multiview direct-path submission still
+    // asserts loudly below.
+    if (m_draws.empty()) {
+        return;
+    }
+
+    if (uses_compute()) {
         // Compute path. Both single-view and multiview read pre-transformed
         // triangle vertices from the triangle SSBO (binding 1, read-only
         // declaration) and per-eye viewport from the view UBO (binding 3).
@@ -444,8 +508,11 @@ void Debug_renderer_bucket::render(
             render_compute_draws(true, m_pipeline_visible);
         }
     } else {
-        // Non-compute path: close input ranges (upload CPU data to GPU), then render GL_LINES.
-        // The non-compute fallback is single-view only -- its update_view_buffer
+        // Direct path: close input ranges (upload CPU data to GPU), then render
+        // GL_LINES / GL_TRIANGLES / GL_POINTS directly from the vertex buffer.
+        // This serves the simple-line and geometry-line tiers and every
+        // triangle / point bucket (which never use compute).
+        // The direct path is single-view only -- its update_view_buffer
         // call below passes stride_per_view = 0 and the geometry-shader
         // pipeline reads cameras[c_view_index] with c_view_index = 0u. If
         // a caller ever opts into multiview here, both eyes would render
@@ -464,11 +531,14 @@ void Debug_renderer_bucket::render(
             // graphics_shader_stages is built only on the compute path
             // (see Debug_renderer_program_interface ctor). On GL 4.1 / Metal,
             // where use_compute is false, that pointer is null and binding
-            // it would issue glUseProgram(0). Pick the matching non-compute
-            // shader instead -- geometry-expanded wide lines when available,
-            // else the simple GL_LINES shader.
+            // it would issue glUseProgram(0). Pick the matching direct-path
+            // shader instead -- geometry-expanded wide lines when the bucket's
+            // tier is geometry, else the simple shader. The simple shader
+            // (line_simple.{vert,frag}) only transforms position and passes
+            // color through, so it serves line, triangle and point topologies
+            // alike from the shared line_vertex_format.
             erhe::graphics::Shader_stages* line_shader_stages =
-                (m_use_geometry_shader && !m_config.thin_lines)
+                uses_geometry()
                     ? pi.geometry_shader_stages.get()
                     : pi.line_shader_stages.get();
             erhe::graphics::Render_pipeline* p = pipeline.get_pipeline_for(
@@ -483,6 +553,15 @@ void Debug_renderer_bucket::render(
             }
             render_encoder.set_bind_group_layout(pi.bind_group_layout.get());
             render_encoder.set_render_pipeline(*p);
+            // Triangle pipelines enable depth bias (polygon offset) so the
+            // coplanar fill wins the depth test against the surface it
+            // overlays. Reverse depth (near = 1) needs a positive offset to
+            // move toward the viewer; standard depth (near = 0) a negative one.
+            if (m_shader_key.primitive_type == erhe::graphics::Primitive_type::triangle) {
+                const bool  reverse_depth = (m_graphics_device.get_info().coordinate_conventions.native_depth_range == erhe::math::Depth_range::zero_to_one);
+                const float bias_sign     = reverse_depth ? 1.0f : -1.0f;
+                render_encoder.set_depth_bias(bias_sign * 4.0f, bias_sign * 1.0f, 0.0f);
+            }
             for (Debug_draw_view_span& view_span : m_view_spans) {
                 // Non-compute path is single-view only (the multiview
                 // pipeline reads from the triangle SSBO produced by
@@ -502,7 +581,7 @@ void Debug_renderer_bucket::render(
                     render_encoder.draw_primitives(
                         pipeline.data.input_assembly.primitive_topology,
                         0,
-                        2 * draw.primitive_count
+                        vertex_count_from_primitive_count(draw.primitive_count, m_shader_key.primitive_type)
                     );
                 }
                 view_buffer_range.release();

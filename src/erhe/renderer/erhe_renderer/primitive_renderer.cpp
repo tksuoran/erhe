@@ -68,11 +68,11 @@ void Primitive_renderer::reserve_lines(std::size_t line_count)
     }
 }
 
-void Primitive_renderer::make_lines(std::size_t line_count)
+void Primitive_renderer::make_primitives(std::size_t primitive_count, std::size_t vertices_per_primitive)
 {
-    std::size_t byte_count     = line_count * 2 * m_line_vertex_stride;
+    std::size_t byte_count     = primitive_count * vertices_per_primitive * m_line_vertex_stride;
     m_last_allocate_word_count = byte_count / sizeof(float);
-    m_last_allocate_gpu_data   = m_bucket->make_draw(byte_count, line_count);
+    m_last_allocate_gpu_data   = m_bucket->make_draw(byte_count, primitive_count);
 
     if (m_last_allocate_gpu_data.size_bytes() < byte_count) {
         m_last_allocate_gpu_float_data = nullptr;
@@ -82,6 +82,11 @@ void Primitive_renderer::make_lines(std::size_t line_count)
         m_last_allocate_gpu_float_data = reinterpret_cast<float*>(start);
         m_last_allocate_word_offset    = 0;
     }
+}
+
+void Primitive_renderer::make_lines(std::size_t line_count)
+{
+    make_primitives(line_count, 2);
 }
 
 void Primitive_renderer::set_line_color(const float r, const float g, const float b, const float a)
@@ -171,6 +176,43 @@ void Primitive_renderer::add_lines(const std::initializer_list<Line> lines)
     for (const Line& line : lines) {
         put(line.p0, m_half_line_thickness, m_line_color);
         put(line.p1, m_half_line_thickness, m_line_color);
+    }
+}
+
+void Primitive_renderer::add_triangle(
+    const glm::mat4& transform,
+    const glm::vec4& color,
+    const glm::vec3& p0,
+    const glm::vec3& p1,
+    const glm::vec3& p2
+)
+{
+    make_primitives(1, 3);
+    const glm::vec4 q0{transform * glm::vec4{p0, 1.0f}};
+    const glm::vec4 q1{transform * glm::vec4{p1, 1.0f}};
+    const glm::vec4 q2{transform * glm::vec4{p2, 1.0f}};
+    put(glm::vec3{q0} / q0.w, 0.0f, color);
+    put(glm::vec3{q1} / q1.w, 0.0f, color);
+    put(glm::vec3{q2} / q2.w, 0.0f, color);
+}
+
+void Primitive_renderer::add_triangles(
+    const glm::mat4&                 transform,
+    const glm::vec4&                 color,
+    const std::span<const glm::vec3> positions,
+    const std::span<const uint32_t>  indices
+)
+{
+    const std::size_t triangle_count = indices.size() / 3;
+    if (triangle_count == 0) {
+        return;
+    }
+    make_primitives(triangle_count, 3);
+    const std::size_t index_count = triangle_count * 3;
+    for (std::size_t i = 0; i < index_count; ++i) {
+        const glm::vec3& p = positions[indices[i]];
+        const glm::vec4   q{transform * glm::vec4{p, 1.0f}};
+        put(glm::vec3{q} / q.w, 0.0f, color);
     }
 }
 

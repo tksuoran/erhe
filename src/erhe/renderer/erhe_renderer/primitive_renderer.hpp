@@ -83,6 +83,15 @@ public:
         add_lines(lines);
     }
 
+    // Filled triangles. These use the same per-vertex layout as lines
+    // (position + color; the line-width slot is unused) and are rendered by
+    // the triangle-primitive bucket (Debug_renderer_shader_key tier=simple,
+    // primitive_type=triangle). A color alpha < 1 gives a translucent fill
+    // through the premultiplied-over visible blend state. positions is an
+    // index buffer of triangle list indices into positions.
+    void add_triangle (const glm::mat4& transform, const glm::vec4& color, const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& p2);
+    void add_triangles(const glm::mat4& transform, const glm::vec4& color, std::span<const glm::vec3> positions, std::span<const uint32_t> indices);
+
     void add_plane(const glm::vec4& color, const glm::vec4& plane);
 
     // Draws the orientation indicator add_plane() uses - a center marker, a
@@ -181,8 +190,12 @@ public:
 #pragma endregion Draw API
 
 private:
-    void reserve_lines(std::size_t line_count);
-    void make_lines(std::size_t line_count);
+    void reserve_lines  (std::size_t line_count);
+    void make_lines     (std::size_t line_count);
+    // Allocate space for primitive_count primitives of vertices_per_primitive
+    // vertices each (2 = line, 3 = triangle, 1 = point) and reset the put()
+    // write cursor to the start of the allocation.
+    void make_primitives(std::size_t primitive_count, std::size_t vertices_per_primitive);
 
     inline void put(
         const glm::vec3& point_world,
