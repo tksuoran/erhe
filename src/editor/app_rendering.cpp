@@ -174,6 +174,65 @@ App_rendering::App_rendering(
         }, selected
     );
 
+    // Corner points and polygon centroids. Both take the normal
+    // Forward_renderer path (not Content_wide_line_renderer) and force the
+    // VARIANT_POINTS standard-shader variant, which sizes each point from the
+    // per-draw-primitive size and flat-shades it with the primitive color.
+    // Each pass is a no-op until the viewport render style enables the
+    // corresponding corner_points / polygon_centroids flag (checked by
+    // is_primitive_mode_enabled in Composition_pass::render). Not exposed as
+    // members: unlike the edge-line passes, nothing outside the Composer
+    // references them.
+    const uint32_t points_variant_mask = make_shader_bool_mask(Shader_bool::VARIANT_POINTS);
+
+    auto corner_points_not_selected = make_composition_pass(
+        "Content corner points not selected",
+        Composition_pass_data{
+            .mesh_layers                  {Mesh_layer_id::content},
+            .blending_mode_policy         {Blending_mode_policy::override_with_base_render_pipeline},
+            .primitive_mode               {Primitive_mode::corner_points},
+            .filter                       {filter_not_selected},
+            .shader_key_force_enable_mask {points_variant_mask},
+            .get_render_style             {render_style_not_selected}
+        }, not_selected
+    );
+
+    auto corner_points_selected = make_composition_pass(
+        "Content corner points selected",
+        Composition_pass_data{
+            .mesh_layers                  {Mesh_layer_id::content},
+            .blending_mode_policy         {Blending_mode_policy::override_with_base_render_pipeline},
+            .primitive_mode               {Primitive_mode::corner_points},
+            .filter                       {filter_selected},
+            .shader_key_force_enable_mask {points_variant_mask},
+            .get_render_style             {render_style_selected}
+        }, selected
+    );
+
+    auto polygon_centroids_not_selected = make_composition_pass(
+        "Content polygon centroids not selected",
+        Composition_pass_data{
+            .mesh_layers                  {Mesh_layer_id::content},
+            .blending_mode_policy         {Blending_mode_policy::override_with_base_render_pipeline},
+            .primitive_mode               {Primitive_mode::polygon_centroids},
+            .filter                       {filter_not_selected},
+            .shader_key_force_enable_mask {points_variant_mask},
+            .get_render_style             {render_style_not_selected}
+        }, not_selected
+    );
+
+    auto polygon_centroids_selected = make_composition_pass(
+        "Content polygon centroids selected",
+        Composition_pass_data{
+            .mesh_layers                  {Mesh_layer_id::content},
+            .blending_mode_policy         {Blending_mode_policy::override_with_base_render_pipeline},
+            .primitive_mode               {Primitive_mode::polygon_centroids},
+            .filter                       {filter_selected},
+            .shader_key_force_enable_mask {points_variant_mask},
+            .get_render_style             {render_style_selected}
+        }, selected
+    );
+
     selection_outline = make_composition_pass(
         "Content outline opaque selected",
         Composition_pass_data{
@@ -658,7 +717,6 @@ Pipeline_renderpasses::Pipeline_renderpasses(
         graphics_device,
         erhe::graphics::Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Corner Points"},
-            //.shader_stages  = programs.points.shader_stages(),
             .input_assembly = Input_assembly_state::point,
             .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
             .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
@@ -669,7 +727,6 @@ Pipeline_renderpasses::Pipeline_renderpasses(
         graphics_device,
         erhe::graphics::Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Polygon Centroids"},
-            //.shader_stages  = programs.points.shader_stages(),
             .input_assembly = Input_assembly_state::point,
             .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
             .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
