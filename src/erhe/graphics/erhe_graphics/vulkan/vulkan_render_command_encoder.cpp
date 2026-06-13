@@ -163,11 +163,18 @@ void Render_command_encoder_impl::set_render_pipeline_state(
     hash_combine(hash, reinterpret_cast<std::size_t>(vertex_module));
     hash_combine(hash, reinterpret_cast<std::size_t>(fragment_module));
     hash_combine(hash, static_cast<std::size_t>(data.input_assembly.primitive_topology));
+    // primitive_restart and depth_bias_enable both change the
+    // VkGraphicsPipelineCreateInfo (primitiveRestartEnable; depthBiasEnable and
+    // the dynamic-state count 2<->3), so two pipeline states differing only in
+    // them would otherwise collide in the hash-keyed m_pipeline_map and the
+    // second bind would receive the first's VkPipeline.
+    hash_combine(hash, static_cast<std::size_t>(data.input_assembly.primitive_restart));
     hash_combine(hash, static_cast<std::size_t>(data.rasterization.cull_face_mode));
     hash_combine(hash, static_cast<std::size_t>(data.rasterization.front_face_direction));
     hash_combine(hash, static_cast<std::size_t>(data.rasterization.polygon_mode));
     hash_combine(hash, static_cast<std::size_t>(data.rasterization.face_cull_enable));
     hash_combine(hash, static_cast<std::size_t>(data.rasterization.depth_clamp_enable));
+    hash_combine(hash, static_cast<std::size_t>(data.rasterization.depth_bias_enable));
     hash_combine(hash, static_cast<std::size_t>(data.depth_stencil.depth_test_enable));
     hash_combine(hash, static_cast<std::size_t>(data.depth_stencil.depth_write_enable));
     hash_combine(hash, static_cast<std::size_t>(data.depth_stencil.depth_compare_op));
