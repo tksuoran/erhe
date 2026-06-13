@@ -51,7 +51,7 @@ void Viewport_config_window::render_style_ui(Render_style_data& render_style, bo
                 edited = true;
             }
 
-            ImGui::ColorEdit4("Constant Color", &render_style.line_color.x, ImGuiColorEditFlags_Float);
+            ImGui::ColorEdit4("Constant Color", &render_style.line_color.x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR);
             if (ImGui::IsItemDeactivatedAfterEdit()) {
                 edited = true;
             }
@@ -76,7 +76,7 @@ void Viewport_config_window::render_style_ui(Render_style_data& render_style, bo
         }
 
         if (render_style.polygon_centroids) {
-            ImGui::ColorEdit4("Constant Color", &render_style.centroid_color.x, ImGuiColorEditFlags_Float);
+            ImGui::ColorEdit4("Constant Color", &render_style.centroid_color.x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR);
             if (ImGui::IsItemDeactivatedAfterEdit()) {
                 edited = true;
             }
@@ -101,7 +101,7 @@ void Viewport_config_window::render_style_ui(Render_style_data& render_style, bo
             edited = true;
         }
 
-        ImGui::ColorEdit4("Constant Color", &render_style.corner_color.x, ImGuiColorEditFlags_Float);
+        ImGui::ColorEdit4("Constant Color", &render_style.corner_color.x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR);
         if (ImGui::IsItemDeactivatedAfterEdit()) {
             edited = true;
         }
