@@ -129,12 +129,20 @@ was line-only; filled faces required adding triangle primitives:
 - Lines on a surface (selected edges) have the same problem, but a screen-space
   wide line cannot use polygon offset cleanly. Instead the debug line vertex
   carries an optional per-vertex surface normal, and the line shaders
-  (`line_simple.vert`, `debug_line.vert`, `compute_before_line.comp`) push the
-  line toward the viewer by `0.0005 * NdotV^2 * clip_depth_direction`, mirroring
-  `Content_wide_line_renderer` / `content_edge_lines.vert`. The NdotV^2 scaling
-  keeps the bias strong where the surface faces the camera (worst z-fighting)
-  and ~zero at silhouettes (where a uniform bias would make the line visibly
-  float). The normal is zero for ordinary debug lines, so they are unaffected.
+  (`line_simple.vert`, `debug_line.vert`, `compute_before_line.comp`, via the
+  shared `erhe_line_surface_bias.glsl`) push the line toward the viewer by a
+  bias derived from depth precision and surface slope rather than a tuned
+  constant: `bias = margin * ulp(depth) * tilt`. `ulp(depth)` is the fp32 depth
+  buffer's resolvable step at the fragment (so the bias scales with depth
+  precision and the reverse-Z distribution automatically); `tilt =
+  clamp(tan(theta), 1, 8)` from the surface normal is the slope-scaled term
+  (analogous to slope-scaled shadow-map bias); and `margin` is the only knob, a
+  unitless headroom in resolvable units (default 32, live-tunable as "Edge Depth
+  Bias (ULPs)"). `clip_depth_direction` and `window_to_ndc_scale` (from the
+  device depth-range convention) handle reverse-Z sign and the
+  window/NDC mapping. The normal is zero for ordinary debug lines, so they are
+  unaffected. (Assumes the viewport's float depth buffer; a fixed-point target
+  would substitute a constant `2^-bits` step for `ulp(depth)`.)
 
 The tool draws, for the active mesh:
 

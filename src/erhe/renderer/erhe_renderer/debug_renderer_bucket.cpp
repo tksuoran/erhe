@@ -235,8 +235,14 @@ auto Debug_renderer_bucket::update_view_buffer(
     const float clip_depth_direction = reverse_depth ? -1.0f : 1.0f;
     write(view_gpu_data, program_interface.clip_depth_direction_offset, as_span(clip_depth_direction));
 
-    const float line_surface_bias = m_debug_renderer.get_line_surface_bias();
-    write(view_gpu_data, program_interface.line_surface_bias_offset, as_span(line_surface_bias));
+    // Surface-line bias headroom (ULPs) and the depth-range mapping factor.
+    // zero_to_one: window depth == ndc z (scale 1). minus_one_to_one: window =
+    // 0.5*ndc + 0.5 (scale 2). The line shaders measure the depth ULP in
+    // window space and convert with this factor.
+    const float line_bias_margin    = m_debug_renderer.get_line_bias_margin();
+    const float window_to_ndc_scale = reverse_depth ? 1.0f : 2.0f;
+    write(view_gpu_data, program_interface.line_bias_margin_offset,    as_span(line_bias_margin));
+    write(view_gpu_data, program_interface.window_to_ndc_scale_offset, as_span(window_to_ndc_scale));
 
     view_buffer_range.bytes_written(view_block_size);
     view_buffer_range.close();

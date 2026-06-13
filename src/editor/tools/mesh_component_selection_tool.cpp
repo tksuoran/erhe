@@ -493,13 +493,14 @@ void Mesh_component_selection_tool::window_imgui()
     ImGui::DragFloat ("Edge Thickness", &m_edge_thickness,      0.1f,   0.5f, 20.0f);
     ImGui::DragFloat ("Vertex Size",    &m_vertex_handle_size,  0.001f, 0.001f, 0.1f);
 
-    // Live-tunable surface-line depth bias (the NdotV^2 factor in the line
-    // shaders). Global to the debug renderer, but only surface-aligned lines
-    // (selected edges) use it.
+    // Live-tunable surface-line depth-bias headroom, in depth-buffer
+    // resolvable units (ULPs). The shaders derive the actual bias from this
+    // and the depth precision + surface slope. Global to the debug renderer,
+    // but only surface-aligned lines (selected edges) use it.
     if (m_context.debug_renderer != nullptr) {
-        float surface_bias = m_context.debug_renderer->get_line_surface_bias();
-        if (ImGui::DragFloat("Edge Surface Bias", &surface_bias, 0.0001f, 0.0f, 0.05f, "%.5f")) {
-            m_context.debug_renderer->set_line_surface_bias(surface_bias);
+        float bias_margin = m_context.debug_renderer->get_line_bias_margin();
+        if (ImGui::DragFloat("Edge Depth Bias (ULPs)", &bias_margin, 1.0f, 0.0f, 1024.0f, "%.0f")) {
+            m_context.debug_renderer->set_line_bias_margin(bias_margin);
         }
     }
 }

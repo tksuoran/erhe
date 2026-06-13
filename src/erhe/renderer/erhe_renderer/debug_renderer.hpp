@@ -131,10 +131,14 @@ public:
     std::size_t                                      stride_per_view_offset     {0};
     std::size_t                                      vp_y_sign_offset           {0};
     // +1.0 forward depth, -1.0 reverse depth; used by the line shaders to push
-    // a surface-aligned line toward the viewer (normal-derived NdotV^2 bias).
+    // a surface-aligned line toward the viewer (normal-derived bias).
     std::size_t                                      clip_depth_direction_offset{0};
-    // Tunable magnitude of that surface-line bias (default 0.0005).
-    std::size_t                                      line_surface_bias_offset   {0};
+    // Surface-line bias headroom in depth resolvable units (ULPs).
+    std::size_t                                      line_bias_margin_offset    {0};
+    // d(window)/d(ndc) factor for the depth-range convention: 1.0 for
+    // zero_to_one, 2.0 for minus_one_to_one. Lets the line shaders map an
+    // NDC-space bias to/from the window-depth space the ULP is measured in.
+    std::size_t                                      window_to_ndc_scale_offset {0};
 };
 
 class Primitive_renderer;
@@ -153,11 +157,15 @@ public:
     );
     ~Debug_renderer() noexcept;
 
-    // Depth-bias magnitude for surface-aligned lines: the factor in the line
-    // shaders' 0.0005 * NdotV^2 * clip_depth_direction bias. Written to the
-    // view UBO each frame so it can be tuned live from the UI.
-    void               set_line_surface_bias(float bias) { m_line_surface_bias = bias; }
-    [[nodiscard]] auto get_line_surface_bias() const -> float { return m_line_surface_bias; }
+    // Surface-line depth bias headroom in depth-buffer resolvable units
+    // (ULPs). The line shaders push a surface-aligned line toward the viewer
+    // by margin * ulp(depth) * tilt, where ulp(depth) is the float depth
+    // buffer's resolvable step at the fragment (so the bias is derived from
+    // the depth precision and reverse-Z distribution, not a magic length) and
+    // tilt is a clamped surface-slope factor. This margin is the only knob,
+    // unitless; written to the view UBO each frame and tunable live.
+    void               set_line_bias_margin(float margin) { m_line_bias_margin = margin; }
+    [[nodiscard]] auto get_line_bias_margin() const -> float { return m_line_bias_margin; }
 
     // Public API
     auto get        (const Debug_renderer_config& config) -> Primitive_renderer;
@@ -234,7 +242,7 @@ private:
     std::optional<erhe::graphics::Compute_pipeline> m_lines_to_triangles_compute_pipeline;
     std::stack<View>                                m_view_stack{};
     View                                            m_view      {};
-    float                                           m_line_surface_bias{0.0005f};
+    float                                           m_line_bias_margin{32.0f};
 
     // Multiview state, parallel to m_view_stack / m_view. Non-empty
     // when a multiview begin_frame() supplied a per-eye View span;
