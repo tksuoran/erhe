@@ -73,6 +73,8 @@ class Input_state;
 class Jolt_debug_renderer;
 class Material_paint_tool;
 class Material_preview;
+class Mesh_component_selection;
+class Mesh_component_selection_tool;
 class Move_tool;
 class Navigation_gizmo_tool;
 class Operation_stack;
@@ -168,6 +170,8 @@ public:
     Material_preview*                  material_preview     {nullptr};
     Brush_preview*                     brush_preview        {nullptr};
     erhe::scene_renderer::Mesh_memory* mesh_memory          {nullptr};
+    Mesh_component_selection*          mesh_component_selection     {nullptr};
+    Mesh_component_selection_tool*     mesh_component_selection_tool{nullptr};
     Move_tool*                         move_tool            {nullptr};
     Navigation_gizmo_tool*             navigation_gizmo_tool{nullptr};
     Operation_stack*                   operation_stack      {nullptr};

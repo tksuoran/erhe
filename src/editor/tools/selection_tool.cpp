@@ -11,6 +11,7 @@
 #include "operations/operation_stack.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/clipboard.hpp"
+#include "tools/mesh_component_selection.hpp"
 #include "tools/tools.hpp"
 
 #include "erhe_commands/commands.hpp"
@@ -593,6 +594,17 @@ void Selection::end_selection_change()
 
 auto Selection::on_viewport_select_try_ready() -> bool
 {
+    // Defer to the mesh component selection tool while a component mode
+    // (Vertex / Edge / Face) is active: in those modes a viewport click
+    // selects mesh sub-components instead of whole objects. Object mode
+    // leaves object selection untouched.
+    if (
+        (m_context.mesh_component_selection != nullptr) &&
+        (m_context.mesh_component_selection->get_mode() != Mesh_component_mode::object)
+    ) {
+        return false;
+    }
+
     if (!m_hover_scene_view) {
         log_selection->trace("Selection has no hover scene view");
         return false;

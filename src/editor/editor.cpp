@@ -82,6 +82,8 @@
 #include "scene/scene_root.hpp"
 #include "scene/viewport_scene_views.hpp"
 #include "tools/clipboard.hpp"
+#include "tools/mesh_component_selection.hpp"
+#include "tools/mesh_component_selection_tool.hpp"
 #include "tools/navigation_gizmo_tool.hpp"
 #include "tools/tools.hpp"
 #include "transform/move_tool.hpp"
@@ -947,6 +949,7 @@ public:
             m_app_windows          = std::make_unique<App_windows   >(m_app_context, commands);
             m_viewport_scene_views = std::make_unique<Scene_views   >(m_editor_settings.viewport, commands, m_app_context, app_message_bus);
             m_selection            = std::make_unique<Selection     >(commands, m_app_context, app_message_bus);
+            m_mesh_component_selection = std::make_unique<Mesh_component_selection>();
             m_scene_commands       = std::make_unique<Scene_commands>(commands, m_app_context);
             m_debug_draw           = std::make_unique<Debug_draw    >(m_app_context);
             // Drive view_count from the OpenXR session's multiview
@@ -1755,6 +1758,15 @@ public:
                     *m_icon_set.get(),
                     *m_tools.get()
                 );
+                m_mesh_component_selection_tool = std::make_unique<Mesh_component_selection_tool>(
+                    *m_commands.get(),
+                    *m_imgui_renderer.get(),
+                    *m_imgui_windows.get(),
+                    m_app_context,
+                    *m_app_message_bus.get(),
+                    *m_mesh_component_selection.get(),
+                    *m_tools.get()
+                );
             }
             ERHE_TASK_FOOTER(
                 .name("Group 2")
@@ -2215,6 +2227,8 @@ public:
         m_app_context.material_preview         = m_material_preview      .get();
         m_app_context.brush_preview            = m_brush_preview         .get();
         m_app_context.mesh_memory              = m_mesh_memory           .get();
+        m_app_context.mesh_component_selection      = m_mesh_component_selection     .get();
+        m_app_context.mesh_component_selection_tool = m_mesh_component_selection_tool.get();
         m_app_context.content_wide_line_renderer = m_content_wide_line_renderer.get();
         m_app_context.move_tool                = m_move_tool             .get();
         m_app_context.operation_stack          = m_operation_stack       .get();
@@ -2590,6 +2604,7 @@ public:
     std::unique_ptr<Scene_views                     >        m_viewport_scene_views;
     std::unique_ptr<App_rendering                   >        m_app_rendering;
     std::unique_ptr<Selection                       >        m_selection;
+    std::unique_ptr<Mesh_component_selection        >        m_mesh_component_selection;
     std::unique_ptr<Operation_stack                 >        m_operation_stack;
     std::unique_ptr<Scene_commands                  >        m_scene_commands;
     std::unique_ptr<Clipboard_window                >        m_clipboard_window;
@@ -2646,6 +2661,7 @@ public:
     std::unique_ptr<Create             >                     m_create;
     std::unique_ptr<Grid_tool          >                     m_grid_tool;
     std::unique_ptr<Material_paint_tool>                     m_material_paint_tool;
+    std::unique_ptr<Mesh_component_selection_tool>           m_mesh_component_selection_tool;
     std::unique_ptr<Paint_tool         >                     m_paint_tool;
     std::unique_ptr<Physics_tool       >                     m_physics_tool;
     std::unique_ptr<Selection_tool     >                     m_selection_tool;
