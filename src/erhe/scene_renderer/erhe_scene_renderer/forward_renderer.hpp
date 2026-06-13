@@ -151,6 +151,11 @@ public:
         // passes (e.g. macOS GL 4.1 edge_lines, where the geometry-shader
         // wide_lines program replaces the standard mesh shader).
         const erhe::graphics::Shader_stages*                   shader_stages_override{nullptr};
+        // When non-null, overrides the per-bucket color-blend state (otherwise
+        // color_blend_disabled / color_blend_premultiplied chosen by blend mode).
+        // Used by depth/stencil-only passes that must not write color, e.g. the
+        // selection stencil-mask pass (color_writes_disabled).
+        const erhe::graphics::Color_blend_state*               color_blend_override{nullptr};
     };
 
     class Primitive_render_parameters

@@ -150,6 +150,33 @@ App_rendering::App_rendering(
         selected
     );
 
+    // When selection Polygon Fill is disabled, content_fill_selected_or_hovered
+    // no-ops and never writes selection stencil bit 7, so selection_outline has
+    // no mask and floods the whole object. This pass writes that stencil mask
+    // (depth + bit 7, no color) for the selected/hovered meshes whenever the
+    // selection fill is OFF, reusing polygon_fill_standard_selected (identical
+    // stencil to the fill). VARIANT_DEPTH_ONLY skips the lit fragment work and
+    // the color_writes_disabled override keeps the color buffer untouched.
+    // Exactly one of this pass and content_fill_selected_or_hovered is active
+    // per frame (mutually exclusive on render_style_selected.polygon_fill).
+    auto selection_stencil_mask = make_composition_pass(
+        "Selection stencil mask (fill disabled)",
+        Composition_pass_data{
+            .mesh_layers                  {Mesh_layer_id::content},
+            .blending_mode_policy         {Blending_mode_policy::override_with_base_render_pipeline},
+            .primitive_mode               {Primitive_mode::polygon_fill},
+            .filter                       {filter_selected_or_hovered},
+            .color_blend_override         {&Color_blend_state::color_writes_disabled},
+            .shader_key_force_enable_mask {make_shader_bool_mask(Shader_bool::VARIANT_DEPTH_ONLY)},
+            .is_enabled                   {
+                [](const Render_context& context) -> bool {
+                    return !context.viewport_config.render_style_selected.polygon_fill;
+                }
+            }
+        },
+        selected
+    );
+
     edge_lines_not_selected = make_composition_pass(
         "Content edge lines not selected",
         Composition_pass_data{

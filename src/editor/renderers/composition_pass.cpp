@@ -56,6 +56,12 @@ void Composition_pass::render(const Render_context& context)
         return;
     }
 
+    // Render-time activation predicate (e.g. the selection stencil-mask pass is
+    // active only when selection polygon fill is disabled).
+    if (data.is_enabled && !data.is_enabled(context)) {
+        return;
+    }
+
     // NOTE This overrides settings in App_rendering::App_rendering()
     // TODO This is a bit hacky, route this better.
     if (context.app_context.app_rendering->selection_outline) {
@@ -238,6 +244,7 @@ void Composition_pass::render(const Render_context& context)
                     .debug_joint_indices    = context.app_context.app_rendering->debug_joint_indices,
                     .debug_joint_colors     = context.app_context.app_rendering->debug_joint_colors,
                     .shader_stages_override = data.shader_stages,
+                    .color_blend_override   = data.color_blend_override,
                 }
             );
         }

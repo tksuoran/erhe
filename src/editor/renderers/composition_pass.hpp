@@ -15,7 +15,7 @@
 #include <functional>
 #include <optional>
 
-namespace erhe::graphics { class Base_render_pipeline; }
+namespace erhe::graphics { class Base_render_pipeline; class Color_blend_state; }
 namespace erhe::scene    { using Layer_id = uint64_t; }
 
 struct Render_style_data;
@@ -36,6 +36,10 @@ public:
     erhe::scene_renderer::Blending_mode_policy                             blending_mode_policy{erhe::scene_renderer::Blending_mode_policy::not_set};
     erhe::primitive::Primitive_mode                                        primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
     erhe::Item_filter                                                      filter{};
+    // When set, overrides the per-bucket color-blend state in Forward_renderer
+    // (otherwise chosen by blend mode). Used by the selection stencil-mask pass
+    // to write depth/stencil only (color_writes_disabled).
+    const erhe::graphics::Color_blend_state*                               color_blend_override{nullptr};
     std::shared_ptr<Scene_root>                                            override_scene_root{};
     uint32_t                                                               shader_key_force_enable_mask{0};
     uint32_t                                                               shader_key_force_disable_mask{0};
@@ -50,6 +54,12 @@ public:
     std::function<void()>                                                  begin;
     std::function<void()>                                                  end; 
     std::function<const Render_style_data&(const Render_context& context)> get_render_style;
+    // Optional render-time activation predicate, evaluated against the current
+    // viewport's Render_context (e.g. to gate on a render-style flag). The pass
+    // is skipped when this is set and returns false. Distinct from
+    // get_render_style / is_primitive_mode_enabled, which gate on the pass's own
+    // primitive_mode.
+    std::function<bool(const Render_context& context)>                     is_enabled;
 };
 
 class Composition_pass : public erhe::Item<erhe::Item_base, erhe::Item_base, Composition_pass>

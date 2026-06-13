@@ -249,11 +249,17 @@ void Forward_renderer::render(const Render_parameters& parameters)
             // Mirrored (negative determinant) buckets get the front-face-
             // flipped pipeline variant so face culling keeps the same
             // visible faces as for non-mirrored meshes.
+            // A pass may override the color-blend state (e.g. the selection
+            // stencil-mask pass uses color_writes_disabled to write depth/stencil
+            // only); otherwise pick by the bucket's blend mode.
+            const erhe::graphics::Color_blend_state* color_blend = (parameters.color_blend_override != nullptr)
+                ? parameters.color_blend_override
+                : (bucket.shader_key.blending_mode == erhe::primitive::Material_blending_mode::opaque)
+                    ? &erhe::graphics::Color_blend_state::color_blend_disabled
+                    : &erhe::graphics::Color_blend_state::color_blend_premultiplied; // color_blend_alpha,
             erhe::graphics::Render_pipeline* render_pipeline = render_pipeline_state->get_pipeline_for(
                 base.render_pass->get_descriptor(),
-                (bucket.shader_key.blending_mode == erhe::primitive::Material_blending_mode::opaque)
-                    ? &erhe::graphics::Color_blend_state::color_blend_disabled
-                    : &erhe::graphics::Color_blend_state::color_blend_premultiplied, // color_blend_alpha,
+                color_blend,
                 shader_stages,
                 vertex_input.vertex_input.get(),
                 &vertex_input.vertex_format,
