@@ -117,9 +117,15 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(
     view_count_offset           = view_block->add_uint ("view_count"          )->get_offset_in_parent();
     stride_per_view_offset      = view_block->add_uint ("stride_per_view"     )->get_offset_in_parent();
     vp_y_sign_offset            = view_block->add_float("vp_y_sign"           )->get_offset_in_parent();
-    // +1.0 forward depth, -1.0 reverse depth. Also rounds the block to a
-    // 16-byte boundary (std140), replacing the former trailing pad float.
+    // +1.0 forward depth, -1.0 reverse depth. Fills the first trailing vec4
+    // slot (with view_count / stride_per_view / vp_y_sign) to 16 bytes.
     clip_depth_direction_offset = view_block->add_float("clip_depth_direction")->get_offset_in_parent();
+    // Surface-line bias magnitude. Starts a second trailing vec4; pad the
+    // remaining three floats so the block stays std140 16-byte aligned.
+    line_surface_bias_offset    = view_block->add_float("line_surface_bias"   )->get_offset_in_parent();
+    view_block->add_float("_padding1");
+    view_block->add_float("_padding2");
+    view_block->add_float("_padding3");
 
     const auto shader_path = std::filesystem::path{"res"} / std::filesystem::path{"shaders"};
 

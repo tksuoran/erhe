@@ -235,6 +235,9 @@ auto Debug_renderer_bucket::update_view_buffer(
     const float clip_depth_direction = reverse_depth ? -1.0f : 1.0f;
     write(view_gpu_data, program_interface.clip_depth_direction_offset, as_span(clip_depth_direction));
 
+    const float line_surface_bias = m_debug_renderer.get_line_surface_bias();
+    write(view_gpu_data, program_interface.line_surface_bias_offset, as_span(line_surface_bias));
+
     view_buffer_range.bytes_written(view_block_size);
     view_buffer_range.close();
     return view_buffer_range;

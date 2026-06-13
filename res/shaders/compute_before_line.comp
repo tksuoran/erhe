@@ -122,7 +122,7 @@ float surface_bias_ndc(uint view_index, vec3 normal_world, vec3 world_position, 
     vec3  normal = normal_world / normal_length;
     vec3  v      = normalize(view.cameras[view_index].view_position_in_world.xyz - world_position);
     float NdotV  = clamp(dot(normal, v), 0.0, 1.0);
-    return 0.0005 * NdotV * NdotV * view.clip_depth_direction / clip_w;
+    return view.line_surface_bias * NdotV * NdotV * view.clip_depth_direction / clip_w;
 }
 
 void do_wide_line(uint view_index, uint in_line_index, uint out_triangle_index)

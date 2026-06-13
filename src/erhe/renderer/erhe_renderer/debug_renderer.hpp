@@ -133,6 +133,8 @@ public:
     // +1.0 forward depth, -1.0 reverse depth; used by the line shaders to push
     // a surface-aligned line toward the viewer (normal-derived NdotV^2 bias).
     std::size_t                                      clip_depth_direction_offset{0};
+    // Tunable magnitude of that surface-line bias (default 0.0005).
+    std::size_t                                      line_surface_bias_offset   {0};
 };
 
 class Primitive_renderer;
@@ -150,6 +152,12 @@ public:
         int                     view_count = 1
     );
     ~Debug_renderer() noexcept;
+
+    // Depth-bias magnitude for surface-aligned lines: the factor in the line
+    // shaders' 0.0005 * NdotV^2 * clip_depth_direction bias. Written to the
+    // view UBO each frame so it can be tuned live from the UI.
+    void               set_line_surface_bias(float bias) { m_line_surface_bias = bias; }
+    [[nodiscard]] auto get_line_surface_bias() const -> float { return m_line_surface_bias; }
 
     // Public API
     auto get        (const Debug_renderer_config& config) -> Primitive_renderer;
@@ -226,6 +234,7 @@ private:
     std::optional<erhe::graphics::Compute_pipeline> m_lines_to_triangles_compute_pipeline;
     std::stack<View>                                m_view_stack{};
     View                                            m_view      {};
+    float                                           m_line_surface_bias{0.0005f};
 
     // Multiview state, parallel to m_view_stack / m_view. Non-empty
     // when a multiview begin_frame() supplied a per-eye View span;

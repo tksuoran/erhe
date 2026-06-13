@@ -17,7 +17,7 @@ void main()
         vec3  normal = a_normal.xyz / normal_length;
         vec3  v      = normalize(view.cameras[c_view_index].view_position_in_world.xyz - world_position);
         float NdotV  = clamp(dot(normal, v), 0.0, 1.0);
-        gl_Position.z -= 0.0005 * NdotV * NdotV * view.clip_depth_direction;
+        gl_Position.z -= view.line_surface_bias * NdotV * NdotV * view.clip_depth_direction;
     }
 
     v_color = a_color_0;
