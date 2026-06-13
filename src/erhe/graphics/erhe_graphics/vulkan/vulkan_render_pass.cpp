@@ -307,6 +307,46 @@ auto compute_post_render_pass_barrier(
     return true;
 }
 
+// Establish a full-render-target viewport and scissor at render pass begin.
+//
+// Viewport and scissor are command-buffer-persistent dynamic state in Vulkan
+// (VK_DYNAMIC_STATE_VIEWPORT / VK_DYNAMIC_STATE_SCISSOR): values recorded by a
+// previous render pass on the same command buffer remain in effect across the
+// pass boundary until set again. Without this, a narrow scissor set by an
+// earlier pass (e.g. Id_renderer restricts rasterization to the pick rect
+// around the pointer) leaks into the next pass and clips any renderer that
+// does not set its own scissor (e.g. Forward_renderer early-returns on empty
+// content before reaching its set_scissor_rect, leaving the text/debug
+// renderers clipped to the pick rect).
+//
+// The OpenGL backend resets both at render pass begin (gl_render_pass.cpp) and
+// Metal's render command encoder defaults them to the full attachment; this
+// mirrors that invariant so a render pass always starts with full-target
+// dynamic state on every backend. The negative viewport height matches the
+// Y-flip convention used by Render_command_encoder_impl::set_viewport_rect()
+// (VK_KHR_maintenance1). Renderers that set their own viewport/scissor still
+// override these defaults.
+void record_default_viewport_scissor(const VkCommandBuffer command_buffer, const uint32_t width, const uint32_t height)
+{
+    if ((command_buffer == VK_NULL_HANDLE) || (width == 0) || (height == 0)) {
+        return;
+    }
+    const VkViewport viewport{
+        .x        = 0.0f,
+        .y        = static_cast<float>(height),
+        .width    = static_cast<float>(width),
+        .height   = -static_cast<float>(height),
+        .minDepth = 0.0f,
+        .maxDepth = 1.0f
+    };
+    vkCmdSetViewport(command_buffer, 0, 1, &viewport);
+    const VkRect2D scissor{
+        .offset = {0, 0},
+        .extent = {width, height}
+    };
+    vkCmdSetScissor(command_buffer, 0, 1, &scissor);
+}
+
 } // anonymous namespace
 
 auto Render_pass_impl::get_command_buffer() const -> VkCommandBuffer
@@ -1326,6 +1366,10 @@ void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_
         } else {
             m_emulated_swapchain->mark_render_pass_recorded();
         }
+        // Reset dynamic viewport/scissor to the full swapchain extent so
+        // dynamic state from a prior pass on this command buffer does not leak
+        // in (see record_default_viewport_scissor).
+        record_default_viewport_scissor(m_command_buffer, swapchain_extent.width, swapchain_extent.height);
     } else {
         // Non-swapchain render pass. Record into the explicit
         // Command_buffer the caller handed to start_render_pass. The
@@ -1432,6 +1476,15 @@ void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_
             .contents = VK_SUBPASS_CONTENTS_INLINE
         };
         vkCmdBeginRenderPass2(m_command_buffer, &render_pass_begin_info, &subpass_begin_info);
+
+        // Reset dynamic viewport/scissor to the full render target so dynamic
+        // state from a prior pass on this command buffer does not leak in (see
+        // record_default_viewport_scissor).
+        record_default_viewport_scissor(
+            m_command_buffer,
+            static_cast<uint32_t>(m_render_target_width),
+            static_cast<uint32_t>(m_render_target_height)
+        );
 
         {
             int color_count = 0;
