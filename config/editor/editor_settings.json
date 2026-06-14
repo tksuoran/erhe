@@ -1,5 +1,5 @@
 {
-    "_version": 5,
+    "_version": 6,
     "camera_controls": {
         "invert_x": false,
         "invert_y": false,
@@ -825,7 +825,7 @@
     },
     "physics": {
         "static_enable": true,
-        "dynamic_enable": true,
+        "dynamic_enable": false,
         "debug_draw": false
     },
     "scene": {
@@ -905,5 +905,6 @@
         "thread_count": 8
     },
     "post_processing": true,
+    "geometry_edit_mode": "fork",
     "quit_after_frames": 0
 }
