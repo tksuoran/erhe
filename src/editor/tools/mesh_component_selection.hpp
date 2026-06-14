@@ -1,5 +1,9 @@
 #pragma once
 
+#include "app_message.hpp"
+
+#include "erhe_message_bus/message_bus.hpp"
+
 #include <geogram/basic/numeric.h>
 
 #include <cstddef>
@@ -12,6 +16,8 @@ namespace erhe::geometry { class Geometry; }
 namespace erhe::scene    { class Mesh; }
 
 namespace editor {
+
+class App_message_bus;
 
 // Selection granularity for the Mesh_component_selection_tool.
 //   object - whole mesh / node selection (the existing Selection handles it)
@@ -40,6 +46,25 @@ using Mesh_edge_key = std::pair<GEO::index_t, GEO::index_t>;
 class Mesh_component_selection
 {
 public:
+    explicit Mesh_component_selection(App_message_bus& app_message_bus);
+
+    // Snapshot of the component selection sufficient to restore it across an
+    // undo/redo of a geometry operation. Excludes m_mode (user-owned UI state,
+    // not part of the undo history).
+    class State
+    {
+    public:
+        std::weak_ptr<erhe::scene::Mesh>        active_mesh           {};
+        std::weak_ptr<erhe::geometry::Geometry> active_geometry       {};
+        std::size_t                             active_primitive_index{std::numeric_limits<std::size_t>::max()};
+        std::set<GEO::index_t>                  vertices              {};
+        std::set<GEO::index_t>                  facets                {};
+        std::set<Mesh_edge_key>                 edges                 {};
+    };
+
+    [[nodiscard]] auto capture_state() const -> State;
+    void               restore_state(const State& state);
+
     [[nodiscard]] auto get_mode() const -> Mesh_component_mode;
     void               set_mode(Mesh_component_mode mode);
 
@@ -85,6 +110,9 @@ public:
     [[nodiscard]] auto get_edges    () const -> const std::set<Mesh_edge_key>&;
 
 private:
+    void on_mesh_geometry_changed(Mesh_geometry_changed_message& message);
+
+    erhe::message_bus::Subscription<Mesh_geometry_changed_message> m_mesh_geometry_changed_subscription;
     Mesh_component_mode                     m_mode                  {Mesh_component_mode::object};
     std::weak_ptr<erhe::scene::Mesh>        m_active_mesh           {};
     std::weak_ptr<erhe::geometry::Geometry> m_active_geometry       {};

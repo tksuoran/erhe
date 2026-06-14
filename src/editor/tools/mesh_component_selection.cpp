@@ -1,8 +1,72 @@
 #include "tools/mesh_component_selection.hpp"
 
+#include "app_message_bus.hpp"
+
+#include "erhe_primitive/primitive.hpp"
 #include "erhe_scene/mesh.hpp"
 
 namespace editor {
+
+Mesh_component_selection::Mesh_component_selection(App_message_bus& app_message_bus)
+{
+    // Push contract: any operation that swaps a mesh's primitives announces it
+    // via Mesh_geometry_changed_message. Reconcile the stored geometry pointer
+    // when our active mesh is the one that changed.
+    m_mesh_geometry_changed_subscription = app_message_bus.mesh_geometry_changed.subscribe(
+        [this](Mesh_geometry_changed_message& message) {
+            on_mesh_geometry_changed(message);
+        }
+    );
+}
+
+void Mesh_component_selection::on_mesh_geometry_changed(Mesh_geometry_changed_message& message)
+{
+    const std::shared_ptr<erhe::scene::Mesh> active_mesh = m_active_mesh.lock();
+    if (!active_mesh || (message.mesh != active_mesh)) {
+        return;
+    }
+
+    // Re-derive the active primitive's current geometry (same accessor the tool
+    // and pick use), defaulting to null when the primitive vanished.
+    std::shared_ptr<erhe::geometry::Geometry>       geometry  {};
+    const std::vector<erhe::scene::Mesh_primitive>& primitives = active_mesh->get_primitives();
+    if (m_active_primitive_index < primitives.size()) {
+        const std::shared_ptr<erhe::primitive::Primitive>& primitive = primitives[m_active_primitive_index].primitive;
+        if (primitive) {
+            const std::shared_ptr<erhe::primitive::Primitive_shape> shape = primitive->get_shape_for_raytrace();
+            if (shape) {
+                geometry = shape->get_geometry();
+            }
+        }
+    }
+
+    // Clears the stored indices when the Geometry pointer changed (topology swap,
+    // or the primitive vanished); a no-op when the same Geometry object was
+    // reused (e.g. a geometry-preserving vertex move).
+    set_active_geometry(geometry);
+}
+
+auto Mesh_component_selection::capture_state() const -> State
+{
+    State state;
+    state.active_mesh            = m_active_mesh;
+    state.active_geometry        = m_active_geometry;
+    state.active_primitive_index = m_active_primitive_index;
+    state.vertices               = m_vertices;
+    state.facets                 = m_facets;
+    state.edges                  = m_edges;
+    return state;
+}
+
+void Mesh_component_selection::restore_state(const State& state)
+{
+    m_active_mesh            = state.active_mesh;
+    m_active_geometry        = state.active_geometry;
+    m_active_primitive_index = state.active_primitive_index;
+    m_vertices               = state.vertices;
+    m_facets                 = state.facets;
+    m_edges                  = state.edges;
+}
 
 auto c_str(const Mesh_component_mode mode) -> const char*
 {
