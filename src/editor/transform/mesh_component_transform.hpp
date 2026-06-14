@@ -1,5 +1,7 @@
 #pragma once
 
+#include "erhe_scene/mesh.hpp"
+
 #include <geogram/basic/numeric.h>
 #include <glm/glm.hpp>
 
@@ -8,7 +10,6 @@
 #include <vector>
 
 namespace erhe::geometry { class Geometry; }
-namespace erhe::scene    { class Mesh; }
 
 namespace editor {
 
@@ -48,16 +49,28 @@ private:
     public:
         std::weak_ptr<erhe::scene::Mesh>          mesh;
         std::size_t                               primitive_index{0};
-        std::shared_ptr<erhe::geometry::Geometry> geometry;
+        std::shared_ptr<erhe::geometry::Geometry> geometry;       // the fork after fork-on-edit
         glm::mat4                                 world_from_node{1.0f};
         glm::mat4                                 node_from_world{1.0f};
         std::vector<GEO::index_t>                 vertices;     // unique affected
         std::vector<glm::vec3>                    before_local; // captured at begin(), parallel to vertices
+
+        // Fork-on-edit (set the first time this group is forked during the drag).
+        bool                          forked{false};
+        erhe::scene::Mesh_primitive   fork_before;  // shared primitive (for the Fork op's undo)
+        erhe::scene::Mesh_primitive   fork_after;   // forked primitive (for the Fork op's redo)
     };
 
     // Resolve the live component-selection entries into editable groups (one per
     // single-geometry, in-scene mesh). Returns false when no editable target exists.
     auto gather(App_context& context) -> bool;
+
+    // True if any mesh OTHER than `mesh` references `geometry` in the scene.
+    [[nodiscard]] auto is_geometry_shared(App_context& context, const std::shared_ptr<erhe::scene::Mesh>& mesh, const erhe::geometry::Geometry* geometry) const -> bool;
+
+    // Deep-copy this group's geometry onto a new primitive for its mesh only, swap
+    // it in, redirect the group + its component-selection entry to the fork.
+    void fork_group(App_context& context, Group& group);
 
     void enqueue_gpu_position(App_context& context, const Group& group, GEO::index_t vertex, const glm::vec3& local_position);
 

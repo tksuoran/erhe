@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Editor_settings_config",
-    version=5,
+    version=6,
     short_desc="Editor settings",
     long_desc="Runtime-editable settings saved to editor_settings.json.",
     developer=False,
@@ -38,6 +38,16 @@ struct("Editor_settings_config",
             default="true",
             short_desc="Post Processing",
             long_desc="Enable Post Processing",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "geometry_edit_mode",
+            EnumRef("Geometry_edit_mode"),
+            added_in=6,
+            default="Geometry_edit_mode::shared",
+            short_desc="Geometry Edit Mode",
+            long_desc="When editing components of a mesh whose geometry is shared by other meshes (e.g. a duplicate), whether to edit the shared geometry (all instances change) or fork a copy on edit (only this instance changes).",
             visible=True,
             developer=False
         ),

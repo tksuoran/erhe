@@ -245,6 +245,8 @@ erhe_target_sources_grouped(
     operations/mesh_operation.hpp
     operations/move_mesh_vertices_operation.cpp
     operations/move_mesh_vertices_operation.hpp
+    operations/fork_geometry_operation.cpp
+    operations/fork_geometry_operation.hpp
     operations/node_attach_operation.cpp
     operations/node_attach_operation.hpp
     operations/node_transform_operation.cpp
@@ -589,6 +591,7 @@ erhe_codegen_generate(
     DEFINITIONS
         "${_config_defs}/camera_controls_config.py"
         "${_config_defs}/developer_config.py"
+        "${_config_defs}/geometry_edit_mode.py"
         "${_config_defs}/editor_settings_config.py"
         "${_config_defs}/grid_config.py"
         "${_config_defs}/hotbar_config.py"
@@ -712,6 +715,8 @@ set(_config_sources
     ${_config_out}/fly_camera_config.hpp
     ${_config_out}/fly_camera_config_serialization.hpp
     ${_config_out}/fly_camera_config.cpp
+    ${_config_out}/geometry_edit_mode.hpp
+    ${_config_out}/geometry_edit_mode.cpp
     ${_config_out}/editor_settings_config.hpp
     ${_config_out}/editor_settings_config_serialization.hpp
     ${_config_out}/editor_settings_config.cpp

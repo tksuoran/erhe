@@ -2,27 +2,53 @@
 #include "transform/transform_tool.hpp"
 
 #include "app_context.hpp"
+#include "config/generated/editor_settings_config.hpp"
 #include "operations/compound_operation.hpp"
+#include "operations/fork_geometry_operation.hpp"
 #include "operations/move_mesh_vertices_operation.hpp"
 #include "operations/operation.hpp"
 #include "operations/operation_stack.hpp"
+#include "scene/scene_root.hpp"
 #include "tools/mesh_component_selection.hpp"
 
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_item/item_host.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_scene/scene.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <geogram/mesh/mesh.h>
 
 #include <algorithm>
+#include <cmath>
 
 using erhe::geometry::get_pointf;
 using erhe::geometry::set_pointf;
 
 namespace editor {
+
+namespace {
+
+// Has the gizmo actually moved? Used to defer fork-on-edit to the first real drag
+// (a click on a handle without dragging passes an identity delta and must not fork).
+auto is_nontrivial_delta(const glm::mat4& m) -> bool
+{
+    const glm::mat4 id{1.0f};
+    for (int c = 0; c < 4; ++c) {
+        for (int r = 0; r < 4; ++r) {
+            if (std::abs(m[c][r] - id[c][r]) > 1e-6f) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+} // anonymous namespace
 
 auto Mesh_component_transform::gather(App_context& context) -> bool
 {
@@ -201,6 +227,9 @@ void Mesh_component_transform::apply(App_context& context, Transform_tool_shared
         return;
     }
     const glm::mat4 world_delta = updated_world_from_anchor * shared.world_from_anchor_initial_state.get_inverse_matrix();
+    const bool      moved       = is_nontrivial_delta(world_delta);
+    const bool      fork_mode   = (context.editor_settings != nullptr) &&
+                                  (context.editor_settings->geometry_edit_mode == Geometry_edit_mode::fork);
 
     for (Group& group : m_groups) {
         const std::shared_ptr<erhe::scene::Mesh> mesh = group.mesh.lock();
@@ -210,12 +239,30 @@ void Mesh_component_transform::apply(App_context& context, Transform_tool_shared
         if (group.before_local.size() != group.vertices.size()) {
             continue;
         }
+
+        // Fork-on-first-move: the first time the user actually moves, if fork mode is
+        // on and this group's geometry is shared by another mesh, deep-copy the
+        // geometry onto a new primitive for THIS mesh only - BEFORE touching any
+        // positions - so the other instances never move. A click without dragging
+        // keeps `moved` false and never forks.
+        if (fork_mode && moved && !group.forked && is_geometry_shared(context, mesh, group.geometry.get())) {
+            fork_group(context, group);
+        }
+
         GEO::Mesh& geo_mesh = group.geometry->get_mesh();
         for (std::size_t i = 0, end = group.vertices.size(); i < end; ++i) {
-            const GEO::index_t vertex       = group.vertices[i];
-            const glm::vec3    world_before = glm::vec3{group.world_from_node * glm::vec4{group.before_local[i], 1.0f}};
-            const glm::vec3    world_after  = glm::vec3{world_delta           * glm::vec4{world_before,         1.0f}};
-            const glm::vec3    local_after  = glm::vec3{group.node_from_world  * glm::vec4{world_after,          1.0f}};
+            const GEO::index_t vertex = group.vertices[i];
+            // When the gizmo has not moved, write the exact captured start position.
+            // Going through the world round-trip with an identity delta would perturb
+            // the position by a float ULP, which (before a fork) would leave a tiny
+            // un-revertable change on the shared geometry, and would not exactly
+            // restore a drag dragged back to the start.
+            glm::vec3 local_after = group.before_local[i];
+            if (moved) {
+                const glm::vec3 world_before = glm::vec3{group.world_from_node * glm::vec4{group.before_local[i], 1.0f}};
+                const glm::vec3 world_after  = glm::vec3{world_delta           * glm::vec4{world_before,          1.0f}};
+                local_after                  = glm::vec3{group.node_from_world  * glm::vec4{world_after,           1.0f}};
+            }
             set_pointf(geo_mesh.vertices, vertex, GEO::vec3f{local_after.x, local_after.y, local_after.z});
             enqueue_gpu_position(context, group, vertex, local_after);
         }
@@ -257,6 +304,22 @@ void Mesh_component_transform::commit(App_context& context)
             continue;
         }
 
+        // Record the fork (if this group forked) so it is undoable - even if the
+        // subsequent move turns out to be a no-op (dragged out and back). Queued
+        // before the Move op so undo reverts the move first, then un-forks.
+        if (group.forked) {
+            operations.push_back(
+                std::make_shared<Fork_geometry_operation>(
+                    Fork_geometry_operation::Parameters{
+                        .mesh            = mesh,
+                        .primitive_index = group.primitive_index,
+                        .before          = group.fork_before,
+                        .after           = group.fork_after
+                    }
+                )
+            );
+        }
+
         GEO::Mesh&             geo_mesh = group.geometry->get_mesh();
         std::vector<glm::vec3> after_local;
         after_local.reserve(group.vertices.size());
@@ -265,26 +328,24 @@ void Mesh_component_transform::commit(App_context& context)
             after_local.push_back(glm::vec3{p.x, p.y, p.z});
         }
 
-        // Skip a group that did not actually move (e.g. a click on a handle without
-        // dragging, or a mesh outside the drag direction).
-        if (after_local == group.before_local) {
-            continue;
+        // Queue the move only if the group actually moved (a forked-but-unmoved group
+        // still records its Fork op above).
+        if (after_local != group.before_local) {
+            operations.push_back(
+                std::make_shared<Move_mesh_vertices_operation>(
+                    Move_mesh_vertices_operation::Parameters{
+                        .mesh             = mesh,
+                        .primitive_index  = group.primitive_index,
+                        .geometry         = group.geometry,
+                        .vertices         = group.vertices,
+                        .before_positions = group.before_local,
+                        .after_positions  = after_local,
+                        .build_info       = build_info,
+                        .normal_style     = primitive.render_shape->get_normal_style()
+                    }
+                )
+            );
         }
-
-        operations.push_back(
-            std::make_shared<Move_mesh_vertices_operation>(
-                Move_mesh_vertices_operation::Parameters{
-                    .mesh             = mesh,
-                    .primitive_index  = group.primitive_index,
-                    .geometry         = group.geometry,
-                    .vertices         = group.vertices,
-                    .before_positions = group.before_local,
-                    .after_positions  = after_local,
-                    .build_info       = build_info,
-                    .normal_style     = primitive.render_shape->get_normal_style()
-                }
-            )
-        );
     }
 
     if (operations.empty()) {
@@ -370,6 +431,111 @@ void Mesh_component_transform::enqueue_gpu_position(App_context& context, const 
         }
         mesh_memory.enqueue_vertex_data(vertex_buffer_update_range, std::move(buffer));
     }
+}
+
+auto Mesh_component_transform::is_geometry_shared(App_context&, const std::shared_ptr<erhe::scene::Mesh>& mesh, const erhe::geometry::Geometry* geometry) const -> bool
+{
+    if (!mesh || (geometry == nullptr)) {
+        return false;
+    }
+    erhe::scene::Node* node = mesh->get_node();
+    if (node == nullptr) {
+        return false;
+    }
+    erhe::Item_host* item_host = node->get_item_host();
+    if (item_host == nullptr) {
+        return false;
+    }
+    Scene_root*               scene_root = static_cast<Scene_root*>(item_host);
+    const erhe::scene::Scene& scene      = scene_root->get_scene();
+    for (const std::shared_ptr<erhe::scene::Mesh_layer>& layer : scene.get_mesh_layers()) {
+        for (const std::shared_ptr<erhe::scene::Mesh>& other : layer->meshes) {
+            if (!other || (other == mesh)) {
+                continue;
+            }
+            for (const erhe::scene::Mesh_primitive& mesh_primitive : other->get_primitives()) {
+                const std::shared_ptr<erhe::primitive::Primitive>& primitive = mesh_primitive.primitive;
+                if (primitive && primitive->render_shape && (primitive->render_shape->get_geometry().get() == geometry)) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+void Mesh_component_transform::fork_group(App_context& context, Group& group)
+{
+    const std::shared_ptr<erhe::scene::Mesh> mesh = group.mesh.lock();
+    if (!mesh) {
+        return;
+    }
+    erhe::scene::Node* node = mesh->get_node();
+    if (node == nullptr) {
+        return;
+    }
+    const std::vector<erhe::scene::Mesh_primitive>& current_primitives = mesh->get_primitives();
+    if ((group.primitive_index >= current_primitives.size()) || !current_primitives[group.primitive_index].primitive) {
+        return;
+    }
+    const erhe::scene::Mesh_primitive& shared_mesh_primitive = current_primitives[group.primitive_index];
+    if (!shared_mesh_primitive.primitive->render_shape) {
+        return;
+    }
+    const erhe::primitive::Normal_style             normal_style = shared_mesh_primitive.primitive->render_shape->get_normal_style();
+    const std::shared_ptr<erhe::geometry::Geometry> old_geometry = group.geometry;
+
+    // Deep-copy the geometry (identity transform) so the fork is independent of the
+    // shared original.
+    std::shared_ptr<erhe::geometry::Geometry> fork_geometry = std::make_shared<erhe::geometry::Geometry>(old_geometry->get_name() + " (fork)");
+    fork_geometry->copy_with_transform(*old_geometry, GEO::create_scaling_matrix(1.0f));
+
+    const erhe::primitive::Build_info build_info{
+        .primitive_types = {
+            .fill_triangles  = true,
+            .edge_lines      = true,
+            .corner_points   = true,
+            .centroid_points = true
+        },
+        .buffer_info = context.mesh_memory->make_primitive_buffer_info()
+    };
+    std::shared_ptr<erhe::primitive::Primitive> fork_primitive = std::make_shared<erhe::primitive::Primitive>(fork_geometry);
+    const bool renderable_ok = fork_primitive->make_renderable_mesh(build_info, normal_style);
+    const bool raytrace_ok   = fork_primitive->make_raytrace();
+    ERHE_VERIFY(renderable_ok && raytrace_ok);
+
+    // Record before/after Mesh_primitive for the commit's Fork_geometry_operation.
+    group.fork_before          = shared_mesh_primitive; // shared primitive + material
+    group.fork_after.primitive = fork_primitive;
+    group.fork_after.material  = shared_mesh_primitive.material;
+
+    // Swap the mesh's primitive to the fork via the node re-parent dance (no physics
+    // change - the fork is a position-identical copy).
+    std::vector<erhe::scene::Mesh_primitive> new_primitives = current_primitives;
+    new_primitives[group.primitive_index] = group.fork_after;
+    std::shared_ptr<erhe::Hierarchy>   parent      = node->get_parent().lock();
+    std::shared_ptr<erhe::scene::Node> node_shared = std::dynamic_pointer_cast<erhe::scene::Node>(node->shared_from_this());
+    node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
+    mesh->set_primitives(new_primitives);
+    node->set_parent(parent);
+
+    // Preserve the component selection across fork/un-fork: add an entry keyed on the
+    // fork geometry copying the indices from the shared-geometry entry. Both entries
+    // are retained; is_live() shows whichever matches the mesh's current geometry, so
+    // the selection survives the fork and its undo.
+    Mesh_component_selection* selection = context.mesh_component_selection;
+    if (selection != nullptr) {
+        Mesh_component_entry&       fork_entry = selection->find_or_create_entry(mesh, group.primitive_index, fork_geometry);
+        const Mesh_component_entry* orig       = selection->find_entry(mesh, group.primitive_index, old_geometry);
+        if (orig != nullptr) {
+            fork_entry.vertices = orig->vertices;
+            fork_entry.facets   = orig->facets;
+            fork_entry.edges    = orig->edges;
+        }
+    }
+
+    group.geometry = fork_geometry;
+    group.forked   = true;
 }
 
 }

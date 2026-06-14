@@ -4,6 +4,7 @@
 
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
+#include "config/generated/editor_settings_config.hpp"
 #include "config/generated/viewport_config.hpp"
 #include "input_state.hpp"
 #include "renderers/render_context.hpp"
@@ -635,6 +636,21 @@ void Mesh_component_selection_tool::viewport_toolbar()
     }
     if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Mesh Component Selection Mode");
+    }
+
+    // Geometry edit mode (Shared / Fork): when the edited geometry is shared by
+    // other meshes (e.g. a duplicate), Shared edits it in place so all instances
+    // change; Fork deep-copies the geometry for this instance on the first move.
+    if (m_context.editor_settings != nullptr) {
+        int               edit_index    = static_cast<int>(m_context.editor_settings->geometry_edit_mode);
+        const char* const edit_items[]  = {"Shared", "Fork"};
+        ImGui::SetNextItemWidth(6.0f * ImGui::GetFontSize());
+        if (ImGui::Combo("##geometry_edit_mode", &edit_index, edit_items, IM_ARRAYSIZE(edit_items))) {
+            m_context.editor_settings->geometry_edit_mode = static_cast<Geometry_edit_mode>(edit_index);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Shared: edit shared geometry (all instances change). Fork: copy geometry on edit (only this instance changes).");
+        }
     }
 
     if (ImGui::Button("Clear")) {
