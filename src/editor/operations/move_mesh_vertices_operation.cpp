@@ -5,6 +5,7 @@
 #include "app_settings.hpp"
 #include "editor_log.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/scene_root.hpp"
 
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_item/item_host.hpp"
@@ -14,6 +15,7 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_scene/scene.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <geogram/mesh/mesh.h>
@@ -112,72 +114,114 @@ void Move_mesh_vertices_operation::apply(App_context& context, const std::vector
     }
     refresh_geometry_normals(*m_parameters.geometry);
 
-    // Rebuild only the edited primitive's GPU + raytrace data, keeping the same
-    // Geometry object so the component selection (keyed on the Geometry pointer)
-    // remains valid. Other primitives and materials are preserved.
-    std::vector<erhe::scene::Mesh_primitive> new_primitives = current_primitives;
+    // Build one new Primitive for the (unchanged) Geometry object and share it
+    // across EVERY mesh that references this Geometry - not just the edited one.
+    // The Geometry pointer is reused (component-selection entries keyed on it stay
+    // valid); the Primitive (GPU + raytrace) is rebuilt so all instances reflect
+    // the move and, crucially, revert together on undo. (A duplicated node shares
+    // the Primitive/Geometry by shared_ptr, so rebuilding only the edited mesh left
+    // the others stale on undo.)
     std::shared_ptr<erhe::primitive::Primitive> new_primitive = std::make_shared<erhe::primitive::Primitive>(m_parameters.geometry);
     const bool renderable_ok = new_primitive->make_renderable_mesh(m_parameters.build_info, m_parameters.normal_style);
     const bool raytrace_ok   = new_primitive->make_raytrace();
     ERHE_VERIFY(renderable_ok && raytrace_ok);
-    new_primitives[m_parameters.primitive_index].primitive = new_primitive;
 
-    // Re-attach raytrace (and rebuild static physics) via the same node re-parent
-    // dance Mesh_operation uses.
-    std::shared_ptr<erhe::Hierarchy>   parent      = node->get_parent().lock();
-    std::shared_ptr<erhe::scene::Node> node_shared = std::dynamic_pointer_cast<erhe::scene::Node>(node->shared_from_this());
+    // Collect every mesh that references this Geometry first, then rebuild them.
+    // (Collect-then-rebuild: the re-parent dance below unregisters/registers nodes,
+    // mutating the scene's mesh-layer vectors, so we must not be iterating them.)
+    auto* const                                     scene_root = static_cast<Scene_root*>(item_host);
+    erhe::scene::Scene&                             scene      = scene_root->get_scene();
+    std::vector<std::shared_ptr<erhe::scene::Mesh>> referers;
+    for (const std::shared_ptr<erhe::scene::Mesh_layer>& layer : scene.get_mesh_layers()) {
+        for (const std::shared_ptr<erhe::scene::Mesh>& mesh : layer->meshes) {
+            if (!mesh) {
+                continue;
+            }
+            const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
+            for (const erhe::scene::Mesh_primitive& mesh_primitive : primitives) {
+                const std::shared_ptr<erhe::primitive::Primitive>& primitive = mesh_primitive.primitive;
+                if (primitive && primitive->render_shape &&
+                    (primitive->render_shape->get_geometry().get() == m_parameters.geometry.get())) {
+                    referers.push_back(mesh);
+                    break;
+                }
+            }
+        }
+    }
 
-    std::shared_ptr<Node_physics> old_node_physics = erhe::scene::get_attachment<Node_physics>(node);
-    const erhe::physics::Motion_mode motion_mode = old_node_physics
-        ? old_node_physics->get_motion_mode()
-        : erhe::physics::Motion_mode::e_invalid;
+    // Shared convex-hull collision shape (same Geometry -> same local-space hull),
+    // built lazily on the first referencing mesh that actually has static physics.
+    const bool                                       static_enable = context.editor_settings->physics.static_enable;
+    std::shared_ptr<erhe::physics::ICollision_shape> shared_collision_shape;
 
-    std::shared_ptr<Node_physics> new_node_physics;
-    if (context.editor_settings->physics.static_enable && old_node_physics) {
-        GEO::Mesh convex_hull{};
-        const bool convex_hull_ok = make_convex_hull(geo_mesh, convex_hull);
-        ERHE_VERIFY(convex_hull_ok);
-
-        std::vector<float> coordinates;
-        coordinates.resize(convex_hull.vertices.nb() * 3);
-        for (GEO::index_t vertex : convex_hull.vertices) {
-            const GEO::vec3f p = get_pointf(convex_hull.vertices, vertex);
-            coordinates[3 * vertex + 0] = p.x;
-            coordinates[3 * vertex + 1] = p.y;
-            coordinates[3 * vertex + 2] = p.z;
+    for (const std::shared_ptr<erhe::scene::Mesh>& mesh : referers) {
+        erhe::scene::Node* mesh_node = mesh->get_node();
+        if (mesh_node == nullptr) {
+            continue;
         }
 
-        std::shared_ptr<erhe::physics::ICollision_shape> collision_shape =
-            erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
-                coordinates.data(),
-                static_cast<int>(convex_hull.vertices.nb()),
-                static_cast<int>(3 * sizeof(float))
-            );
+        // Swap in the shared rebuilt primitive at every index that references the
+        // Geometry, preserving each mesh's own material.
+        std::vector<erhe::scene::Mesh_primitive> new_primitives = mesh->get_primitives();
+        for (erhe::scene::Mesh_primitive& mesh_primitive : new_primitives) {
+            if (mesh_primitive.primitive && mesh_primitive.primitive->render_shape &&
+                (mesh_primitive.primitive->render_shape->get_geometry().get() == m_parameters.geometry.get())) {
+                mesh_primitive.primitive = new_primitive;
+            }
+        }
 
-        const erhe::physics::IRigid_body_create_info rigid_body_create_info{
-            .collision_shape = collision_shape,
-            .debug_label     = m_parameters.geometry->get_name(),
-            .motion_mode     = motion_mode
-        };
-        new_node_physics = std::make_shared<Node_physics>(rigid_body_create_info);
-    }
+        // Re-attach raytrace (and rebuild static physics) via the node re-parent
+        // dance Mesh_operation uses.
+        std::shared_ptr<erhe::Hierarchy>   parent      = mesh_node->get_parent().lock();
+        std::shared_ptr<erhe::scene::Node> node_shared = std::dynamic_pointer_cast<erhe::scene::Node>(mesh_node->shared_from_this());
 
-    node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
-    if (old_node_physics) {
-        node->detach(old_node_physics.get());
-    }
-    m_parameters.mesh->set_primitives(new_primitives);
-    if (new_node_physics) {
-        node->attach(new_node_physics);
-    }
-    node->set_parent(parent);
+        std::shared_ptr<Node_physics> old_node_physics = erhe::scene::get_attachment<Node_physics>(mesh_node);
+        std::shared_ptr<Node_physics> new_node_physics;
+        if (static_enable && old_node_physics) {
+            if (!shared_collision_shape) {
+                GEO::Mesh convex_hull{};
+                const bool convex_hull_ok = make_convex_hull(geo_mesh, convex_hull);
+                ERHE_VERIFY(convex_hull_ok);
 
-    // Honor the geometry-changed contract uniformly. This rebuild reuses the
-    // same Geometry object, so the Mesh_component_selection subscriber sees an
-    // unchanged pointer and keeps the selection (which is the intent here).
-    context.app_message_bus->mesh_geometry_changed.send_message(
-        Mesh_geometry_changed_message{.mesh = m_parameters.mesh}
-    );
+                std::vector<float> coordinates;
+                coordinates.resize(convex_hull.vertices.nb() * 3);
+                for (GEO::index_t vertex : convex_hull.vertices) {
+                    const GEO::vec3f p = get_pointf(convex_hull.vertices, vertex);
+                    coordinates[3 * vertex + 0] = p.x;
+                    coordinates[3 * vertex + 1] = p.y;
+                    coordinates[3 * vertex + 2] = p.z;
+                }
+                shared_collision_shape = erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
+                    coordinates.data(),
+                    static_cast<int>(convex_hull.vertices.nb()),
+                    static_cast<int>(3 * sizeof(float))
+                );
+            }
+
+            const erhe::physics::IRigid_body_create_info rigid_body_create_info{
+                .collision_shape = shared_collision_shape,
+                .debug_label     = m_parameters.geometry->get_name(),
+                .motion_mode     = old_node_physics->get_motion_mode()
+            };
+            new_node_physics = std::make_shared<Node_physics>(rigid_body_create_info);
+        }
+
+        mesh_node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
+        if (old_node_physics) {
+            mesh_node->detach(old_node_physics.get());
+        }
+        mesh->set_primitives(new_primitives);
+        if (new_node_physics) {
+            mesh_node->attach(new_node_physics);
+        }
+        mesh_node->set_parent(parent);
+
+        // Honor the geometry-changed contract uniformly (the Geometry pointer is
+        // unchanged, so the component-selection store keeps its entries).
+        context.app_message_bus->mesh_geometry_changed.send_message(
+            Mesh_geometry_changed_message{.mesh = mesh}
+        );
+    }
 }
 
 }
