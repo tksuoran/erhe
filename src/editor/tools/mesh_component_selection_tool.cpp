@@ -233,6 +233,13 @@ auto Mesh_component_selection_tool::pick(Scene_view& scene_view) const -> Pick_r
         return result;
     }
 
+    // Edit-locked meshes (e.g. the room floor) are not valid component-selection
+    // targets. pick() is the single choke point for try_ready(), on_select() and
+    // the hover highlight, so rejecting here suppresses selection and hover both.
+    if (mesh->is_lock_edit()) {
+        return result;
+    }
+
     const erhe::scene::Node* node = mesh->get_node();
     if (node == nullptr) {
         return result;
