@@ -85,13 +85,13 @@ public:
     [[nodiscard]] auto get_edges    () const -> const std::set<Mesh_edge_key>&;
 
 private:
-    Mesh_component_mode                  m_mode                  {Mesh_component_mode::object};
-    std::weak_ptr<erhe::scene::Mesh>     m_active_mesh           {};
-    std::weak_ptr<erhe::geometry::Geometry> m_active_geometry    {};
-    std::size_t                          m_active_primitive_index{std::numeric_limits<std::size_t>::max()};
-    std::set<GEO::index_t>           m_vertices              {};
-    std::set<GEO::index_t>           m_facets                {};
-    std::set<Mesh_edge_key>          m_edges                 {};
+    Mesh_component_mode                     m_mode                  {Mesh_component_mode::object};
+    std::weak_ptr<erhe::scene::Mesh>        m_active_mesh           {};
+    std::weak_ptr<erhe::geometry::Geometry> m_active_geometry       {};
+    std::size_t                             m_active_primitive_index{std::numeric_limits<std::size_t>::max()};
+    std::set<GEO::index_t>                  m_vertices              {};
+    std::set<GEO::index_t>                  m_facets                {};
+    std::set<Mesh_edge_key>                 m_edges                 {};
 };
 
 } // namespace editor
