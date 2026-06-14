@@ -5,6 +5,7 @@
 #include <vector>
 
 namespace erhe        { class Item_base; }
+namespace erhe::scene { class Mesh; }
 namespace erhe::scene { class Node; }
 
 struct Graphics_preset_entry;
@@ -59,6 +60,16 @@ struct Node_touched_message
 {
     Node_touch_source  source{Node_touch_source::operation_stack};
     erhe::scene::Node* node  {nullptr};
+};
+
+// Announced whenever an editor operation replaces a mesh's primitives via
+// Mesh::set_primitives() (a geometry swap). Subscribers that cache anything
+// keyed on a mesh's Geometry (currently Mesh_component_selection) reconcile on
+// receipt. Sent by the operations that perform the swap (erhe::scene has no
+// message bus), mirroring how Node_touched_message is sent by operations.
+struct Mesh_geometry_changed_message
+{
+    std::shared_ptr<erhe::scene::Mesh> mesh{};
 };
 
 struct Open_scene_message

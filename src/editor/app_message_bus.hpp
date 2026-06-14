@@ -23,6 +23,7 @@ public:
     erhe::message_bus::Message_bus<Selection_message,             sync>  selection;
     erhe::message_bus::Message_bus<Graphics_settings_message,     queue> graphics_settings;
     erhe::message_bus::Message_bus<Node_touched_message,          sync>  node_touched;
+    erhe::message_bus::Message_bus<Mesh_geometry_changed_message, sync>  mesh_geometry_changed;
     erhe::message_bus::Message_bus<Open_scene_message,            sync>  open_scene;
     erhe::message_bus::Message_bus<Load_scene_file_message,       queue> load_scene_file;
     erhe::message_bus::Message_bus<Tool_select_message,           sync>  tool_select;
