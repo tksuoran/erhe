@@ -1,6 +1,7 @@
 #pragma once
 
 #include "operations/operation.hpp"
+#include "tools/mesh_component_selection.hpp"
 
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_scene/mesh.hpp"
@@ -108,8 +109,15 @@ public:
 protected:
     auto describe_entries() const -> std::string;
 
-    Mesh_operation_parameters m_parameters;
-    std::vector<Entry>        m_entries;
+    Mesh_operation_parameters       m_parameters;
+    std::vector<Entry>              m_entries;
+
+    // Set when the active mesh component selection targets one of m_entries, so
+    // its geometry is swapped by this operation. The before-state is captured at
+    // construction (while the original geometry is still live) and restored on
+    // undo; execute/redo let the Mesh_geometry_changed_message subscriber clear.
+    bool                            m_affects_component_selection{false};
+    Mesh_component_selection::State m_component_selection_before{};
 };
 
 }

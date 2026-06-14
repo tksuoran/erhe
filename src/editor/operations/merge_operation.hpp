@@ -1,6 +1,7 @@
 #pragma once
 
 #include "operations/operation.hpp"
+#include "tools/mesh_component_selection.hpp"
 
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_scene/mesh.hpp"
@@ -54,6 +55,12 @@ private:
     std::vector<std::shared_ptr<erhe::Item_base>>              m_selection_after;
     std::vector<std::shared_ptr<erhe::scene::Node>>            m_hold_nodes;
     std::vector<std::shared_ptr<erhe::scene::Node_attachment>> m_hold_node_attachments;
+
+    // Set when the active mesh component selection targets the merge survivor
+    // (first mesh), whose geometry is swapped to the combined geometry. Captured
+    // at construction, restored on undo.
+    bool                            m_affects_component_selection{false};
+    Mesh_component_selection::State m_component_selection_before{};
 };
 
 }

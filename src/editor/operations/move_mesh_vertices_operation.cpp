@@ -1,6 +1,7 @@
 #include "operations/move_mesh_vertices_operation.hpp"
 
 #include "app_context.hpp"
+#include "app_message_bus.hpp"
 #include "app_settings.hpp"
 #include "editor_log.hpp"
 #include "scene/node_physics.hpp"
@@ -170,6 +171,13 @@ void Move_mesh_vertices_operation::apply(App_context& context, const std::vector
         node->attach(new_node_physics);
     }
     node->set_parent(parent);
+
+    // Honor the geometry-changed contract uniformly. This rebuild reuses the
+    // same Geometry object, so the Mesh_component_selection subscriber sees an
+    // unchanged pointer and keeps the selection (which is the intent here).
+    context.app_message_bus->mesh_geometry_changed.send_message(
+        Mesh_geometry_changed_message{.mesh = m_parameters.mesh}
+    );
 }
 
 }
