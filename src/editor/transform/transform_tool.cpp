@@ -14,6 +14,7 @@
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
+#include "tools/mesh_component_selection.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 #include "transform/handle_enums.hpp"
@@ -210,16 +211,27 @@ void Transform_tool::on_hover_mesh(Hover_mesh_message&)
 
 void Transform_tool::on_selection(Selection_message&)
 {
+    // In component mode the gizmo tracks the mesh component selection, not the node
+    // selection; the anchor is recomputed each idle frame in update_for_view().
+    if (shared.component_mode) {
+        return;
+    }
     update_target_nodes(nullptr);
 }
 
 void Transform_tool::on_animation_update(Animation_update_message&)
 {
+    if (shared.component_mode) {
+        return;
+    }
     update_target_nodes(nullptr);
 }
 
 void Transform_tool::on_node_touched(Node_touched_message& message)
 {
+    if (shared.component_mode) {
+        return;
+    }
     update_target_nodes(message.node);
 }
 
@@ -437,6 +449,12 @@ void Transform_tool::adjust(const mat4& updated_world_from_anchor)
 void Transform_tool::adjust_translation(const glm::vec3 translation)
 {
     using namespace erhe::utility;
+    if (shared.component_mode) {
+        apply_component_transform(
+            erhe::scene::translate(shared.world_from_anchor_initial_state, translation).get_matrix()
+        );
+        return;
+    }
     touch();
     for (auto& entry : shared.entries) {
         auto& node = entry.node;
@@ -457,6 +475,14 @@ void Transform_tool::adjust_translation(const glm::vec3 translation)
 void Transform_tool::adjust_rotation(const vec3 center_of_rotation, const quat rotation)
 {
     using namespace erhe::utility;
+    if (shared.component_mode) {
+        const mat4 translate   = erhe::math::create_translation<float>(vec3{-center_of_rotation});
+        const mat4 untranslate = erhe::math::create_translation<float>(vec3{ center_of_rotation});
+        apply_component_transform(
+            untranslate * mat4_cast(rotation) * translate * shared.world_from_anchor_initial_state.get_matrix()
+        );
+        return;
+    }
     if (shared.settings.local && shared.entries.size() == 1) {
         touch();
         for (auto& entry : shared.entries) {
@@ -485,6 +511,14 @@ void Transform_tool::adjust_rotation(const vec3 center_of_rotation, const quat r
 void Transform_tool::adjust_scale(const vec3 center_of_scale, const vec3 scale)
 {
     using namespace erhe::utility;
+    if (shared.component_mode) {
+        const mat4 translate   = erhe::math::create_translation<float>(vec3{-center_of_scale});
+        const mat4 untranslate = erhe::math::create_translation<float>(vec3{ center_of_scale});
+        apply_component_transform(
+            untranslate * glm::scale(mat4{1.0f}, scale) * translate * shared.world_from_anchor_initial_state.get_matrix()
+        );
+        return;
+    }
     if (shared.settings.local && shared.entries.size() == 1) {
         touch();
         for (auto& entry : shared.entries) {
@@ -512,6 +546,15 @@ void Transform_tool::adjust_scale(const vec3 center_of_scale, const vec3 scale)
 
 void Transform_tool::apply_translation_edit(const glm::vec3 translation, const bool local)
 {
+    if (shared.component_mode) {
+        if (!is_component_edit_active()) {
+            begin_component_edit();
+        }
+        Trs_transform updated_world_from_anchor = shared.world_from_anchor_initial_state;
+        updated_world_from_anchor.set_translation(translation);
+        apply_component_transform(updated_world_from_anchor.get_matrix());
+        return;
+    }
     if (shared.entries.empty()) {
         return;
     }
@@ -535,6 +578,15 @@ void Transform_tool::apply_translation_edit(const glm::vec3 translation, const b
 
 void Transform_tool::apply_rotation_edit(const glm::quat rotation, const bool local)
 {
+    if (shared.component_mode) {
+        if (!is_component_edit_active()) {
+            begin_component_edit();
+        }
+        Trs_transform updated_world_from_anchor = shared.world_from_anchor_initial_state;
+        updated_world_from_anchor.set_rotation(rotation);
+        apply_component_transform(updated_world_from_anchor.get_matrix());
+        return;
+    }
     if (shared.entries.empty()) {
         return;
     }
@@ -567,6 +619,15 @@ void Transform_tool::apply_rotation_edit(const glm::quat rotation, const bool lo
 
 void Transform_tool::apply_scale_edit(const glm::vec3 scale, const bool local)
 {
+    if (shared.component_mode) {
+        if (!is_component_edit_active()) {
+            begin_component_edit();
+        }
+        Trs_transform updated_world_from_anchor = shared.world_from_anchor_initial_state;
+        updated_world_from_anchor.set_scale(scale);
+        apply_component_transform(updated_world_from_anchor.get_matrix());
+        return;
+    }
     if (shared.entries.empty()) {
         return;
     }
@@ -592,6 +653,15 @@ void Transform_tool::apply_scale_edit(const glm::vec3 scale, const bool local)
 
 void Transform_tool::apply_skew_edit(const glm::vec3 skew, const bool local)
 {
+    if (shared.component_mode) {
+        if (!is_component_edit_active()) {
+            begin_component_edit();
+        }
+        Trs_transform updated_world_from_anchor = shared.world_from_anchor_initial_state;
+        updated_world_from_anchor.set_skew(skew);
+        apply_component_transform(updated_world_from_anchor.get_matrix());
+        return;
+    }
     if (shared.entries.empty()) {
         return;
     }
@@ -793,13 +863,21 @@ auto Transform_tool::on_drag_ready() -> bool
         initial_drag_position_in_world
     );
 
-    if (shared.entries.empty()) {
+    if (shared.entries.empty() && !shared.component_mode) {
         log_trs_tool->trace("drag not possible - no selection");
         return false;
     }
 
     const unsigned int axis_mask = get_axis_mask(m_active_handle);
-    return m_active_tool->begin(axis_mask, scene_view);
+    // Begin the component edit only once the subtool drag has actually started: a
+    // subtool begin() can fail (e.g. the rotate ring hit edge-on), in which case
+    // end_drag() never runs and a prematurely-begun component edit would be left
+    // stuck active, freezing the gizmo anchor.
+    const bool started = m_active_tool->begin(axis_mask, scene_view);
+    if (started && shared.component_mode) {
+        begin_component_edit();
+    }
+    return started;
 }
 
 void Transform_tool::end_drag()
@@ -808,6 +886,13 @@ void Transform_tool::end_drag()
 
     if (m_active_tool != nullptr) {
         m_active_tool->end();
+    }
+
+    // In component mode the node record path (record_transform_operation, called via
+    // Subtool::end above) is a no-op because shared.entries is empty; queue the mesh
+    // vertex operation instead.
+    if (shared.component_mode && is_component_edit_active()) {
+        commit_component_edit();
     }
 
     m_active_handle = Handle::e_handle_none;
@@ -926,6 +1011,23 @@ void Transform_tool::tool_render(const Render_context& context)
 
 void Transform_tool::update_for_view(Scene_view* scene_view)
 {
+    // Keep the gizmo anchor tracking the live mesh component selection while idle.
+    // Skipped during an active gizmo drag or numeric component edit so the captured
+    // initial anchor is not stomped mid-edit.
+    if (!is_transform_tool_active() && !m_component_transform.is_active()) {
+        Mesh_component_selection* mesh_component_selection = m_context.mesh_component_selection;
+        const bool want_component =
+            (mesh_component_selection != nullptr) &&
+            (mesh_component_selection->get_mode() != Mesh_component_mode::object);
+        if (want_component) {
+            m_component_transform.update_anchor(m_context, shared);
+        } else if (shared.component_mode) {
+            // Left component mode (back to object mode): restore the node gizmo.
+            shared.component_mode = false;
+            update_target_nodes(nullptr);
+        }
+    }
+
     update_visibility();
     Handle_visualizations* visualizations = shared.get_visualizations();
     if (visualizations != nullptr) {
@@ -950,6 +1052,30 @@ void Transform_tool::update_transforms()
         visualizations->set_anchor(shared.world_from_anchor);
         visualizations->update_transforms();
     };
+}
+
+void Transform_tool::apply_component_transform(const glm::mat4& updated_world_from_anchor)
+{
+    // Note: the component path does not use shared.touched (which gates the node
+    // record path); commit is driven by Mesh_component_transform::is_active().
+    m_component_transform.apply(m_context, shared, updated_world_from_anchor);
+    shared.world_from_anchor.set(updated_world_from_anchor);
+    update_transforms();
+}
+
+void Transform_tool::begin_component_edit()
+{
+    m_component_transform.begin(m_context);
+}
+
+void Transform_tool::commit_component_edit()
+{
+    m_component_transform.commit(m_context);
+}
+
+auto Transform_tool::is_component_edit_active() const -> bool
+{
+    return m_component_transform.is_active();
 }
 
 void Transform_tool::touch()
@@ -998,20 +1124,32 @@ Edit_state::Edit_state(
 )
 {
     static_cast<void>(property_editor);
-    m_multiselect       = shared.entries.size() > 1;
-    m_first_node        = shared.entries.front().node;
-    m_world_from_parent = m_first_node->world_from_parent();
-    m_use_world_mode    = !shared.settings.local || m_multiselect;
+    const bool component_mode = shared.component_mode;
+    if (component_mode) {
+        // Mesh component editing: there is no node; all edits are world-space deltas
+        // around the selection-centroid anchor.
+        m_multiselect        = false;
+        m_first_node         = nullptr;
+        m_world_from_parent  = glm::mat4{1.0f};
+        m_use_world_mode     = true;
+        m_transform          = &shared.world_from_anchor;
+        m_rotation_transform = &shared.world_from_anchor;
+    } else {
+        m_multiselect       = shared.entries.size() > 1;
+        m_first_node        = shared.entries.front().node;
+        m_world_from_parent = m_first_node->world_from_parent();
+        m_use_world_mode    = !shared.settings.local || m_multiselect;
 
-    m_transform =
-        m_use_world_mode
-            ? &shared.world_from_anchor
-            : &shared.entries.front().node->parent_from_node_transform();
+        m_transform =
+            m_use_world_mode
+                ? &shared.world_from_anchor
+                : &shared.entries.front().node->parent_from_node_transform();
 
-    m_rotation_transform =
-        (m_use_world_mode || m_multiselect)
-            ? &shared.world_from_anchor
-            : &shared.entries.front().node->parent_from_node_transform();
+        m_rotation_transform =
+            (m_use_world_mode || m_multiselect)
+                ? &shared.world_from_anchor
+                : &shared.entries.front().node->parent_from_node_transform();
+    }
 
     m_scale       = m_transform->get_scale      ();
     m_rotation    = m_rotation_transform->get_rotation();
@@ -1024,13 +1162,16 @@ Edit_state::Edit_state(
         ImGui::Text("Negative determinant (%.9f)", determinant);
     }
 
-    const std::shared_ptr<erhe::scene::Node> first_parent = m_first_node->get_parent_node();
-    const bool euler_matches_gizmo = !m_multiselect &&
-        (
-            !m_use_world_mode ||
-            !first_parent ||
-            first_parent == m_first_node->get_scene()->get_root_node()
-        );
+    bool euler_matches_gizmo = true;
+    if (!component_mode) {
+        const std::shared_ptr<erhe::scene::Node> first_parent = m_first_node->get_parent_node();
+        euler_matches_gizmo = !m_multiselect &&
+            (
+                !m_use_world_mode ||
+                !first_parent ||
+                first_parent == m_first_node->get_scene()->get_root_node()
+            );
+    }
 
     using namespace erhe::imgui;
 
@@ -1098,14 +1239,18 @@ Edit_state::Edit_state(
     edit_state.combine(m_scale_state);
     edit_state.combine(m_skew_state);
 
-    if (edit_state.edit_ended && shared.touched) {
-        transform_tool.record_transform_operation();
+    if (edit_state.edit_ended) {
+        if (component_mode) {
+            transform_tool.commit_component_edit();
+        } else if (shared.touched) {
+            transform_tool.record_transform_operation();
+        }
     }
 }
 
 void Transform_tool::transform_properties()
 {
-    if (shared.entries.empty()) {
+    if (shared.entries.empty() && !shared.component_mode) {
         return;
     }
 

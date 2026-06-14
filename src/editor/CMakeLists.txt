@@ -243,6 +243,8 @@ erhe_target_sources_grouped(
     operations/merge_operation.hpp
     operations/mesh_operation.cpp
     operations/mesh_operation.hpp
+    operations/move_mesh_vertices_operation.cpp
+    operations/move_mesh_vertices_operation.hpp
     operations/node_attach_operation.cpp
     operations/node_attach_operation.hpp
     operations/node_transform_operation.cpp
@@ -379,6 +381,8 @@ erhe_target_sources_grouped(
     transform/handle_enums.hpp
     transform/handle_visualizations.cpp
     transform/handle_visualizations.hpp
+    transform/mesh_component_transform.cpp
+    transform/mesh_component_transform.hpp
     transform/move_tool.cpp
     transform/move_tool.hpp
     transform/rotate_tool.cpp

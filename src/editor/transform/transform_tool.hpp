@@ -2,6 +2,7 @@
 
 #include "transform/handle_enums.hpp"
 #include "transform/handle_visualizations.hpp"
+#include "transform/mesh_component_transform.hpp"
 #include "transform/rotation_inspector.hpp"
 #include "tools/tool.hpp"
 
@@ -111,6 +112,10 @@ public:
     erhe::scene::Trs_transform             world_from_anchor_initial_state;
     erhe::scene::Trs_transform             world_from_anchor;
     bool                                   touched             {false};
+    // True when a mesh component selection (vertex/edge/face) is driving the gizmo
+    // instead of node selection. When set, shared.entries is empty and the gizmo
+    // edits geometry vertices via Mesh_component_transform.
+    bool                                   component_mode      {false};
     std::atomic<bool>                      visualizations_ready{false};
     std::unique_ptr<Handle_visualizations> visualizations      {};
 };
@@ -223,6 +228,14 @@ public:
     void update_visibility ();
     void update_transforms ();
 
+    // Mesh component editing (vertex/edge/face). Begins a component edit gesture (drag
+    // or numeric edit), commits the queued operation, and reports whether a gesture is
+    // in progress. Exposed for Edit_state (numeric fields).
+    void begin_component_edit  ();
+    void commit_component_edit ();
+    [[nodiscard]] auto is_component_mode      () const -> bool { return shared.component_mode; }
+    [[nodiscard]] auto is_component_edit_active() const -> bool;
+
     Transform_tool_shared shared;
 
 private:
@@ -237,6 +250,10 @@ private:
     void update_hover       ();
     auto update_box_face_hover(Scene_view* scene_view) -> bool;
     void render_rays    (erhe::scene::Node& node);
+
+    // Apply a gizmo-produced world-from-anchor transform to the selected mesh
+    // components (used by adjust_* and the numeric edits when component_mode).
+    void apply_component_transform(const glm::mat4& updated_world_from_anchor);
 
     Tool_window                         m_window;
     erhe::message_bus::Subscription<Hover_scene_view_message>  m_hover_scene_view_subscription;
@@ -262,6 +279,8 @@ private:
     Property_editor                     m_property_editor;
 
     Edit_state m_edit_state;
+
+    Mesh_component_transform m_component_transform;
 
 };
 

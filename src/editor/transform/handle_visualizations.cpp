@@ -321,9 +321,9 @@ void Handle_visualizations::update_mesh_visibility(bool precondition, const std:
     const bool translate     = m_context.move_tool ->is_active() && ((m_context.move_tool ->get_axis_mask() & axis_mask) == axis_mask);
     const bool scale         = m_context.scale_tool->is_active() && ((m_context.scale_tool->get_axis_mask() & axis_mask) == axis_mask);
 
-    const bool visible = 
+    const bool visible =
         precondition &&
-        !transform_tool.shared.entries.empty() && 
+        (!transform_tool.shared.entries.empty() || transform_tool.shared.component_mode) &&
         show &&
         (
             !transform_tool.shared.settings.hide_inactive ||
