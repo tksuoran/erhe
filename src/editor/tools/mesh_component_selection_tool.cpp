@@ -4,6 +4,7 @@
 
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
+#include "config/generated/viewport_config.hpp"
 #include "input_state.hpp"
 #include "renderers/render_context.hpp"
 #include "scene/scene_view.hpp"
@@ -31,6 +32,126 @@ using erhe::geometry::to_glm_vec3;
 using erhe::geometry::mesh_facet_normalf;
 
 namespace editor {
+
+namespace {
+
+// Per-edge surface frame for the two-face "tent" used by surface-aligned edge
+// lines: the edge's two adjacent face normals (world space) plus the
+// interior-tangent sign of face A. sign_a is chosen so that
+//   sign_a * cross(normal_a, edge_direction_world)
+// points toward face A's interior; the compute line shader projects that
+// tangent to decide which face governs each screen side of the wide-line
+// ribbon. A boundary edge (single facet) sets normal_b = normal_a so the tent
+// degenerates to hugging one plane. All-zero normals mean "ordinary line, no
+// bias". See Primitive_renderer::add_surface_lines / compute_before_line.comp.
+class Edge_surface_frame
+{
+public:
+    glm::vec3 normal_a{0.0f};
+    glm::vec3 normal_b{0.0f};
+    float     sign_a  {0.0f};
+};
+
+[[nodiscard]] auto compute_edge_surface_frame(
+    const erhe::geometry::Geometry& geometry,
+    const glm::mat4&                world_from_node,
+    const glm::mat3&                normal_matrix,
+    const GEO::index_t              v0,
+    const GEO::index_t              v1
+) -> Edge_surface_frame
+{
+    Edge_surface_frame frame{};
+    const GEO::Mesh& geo_mesh = geometry.get_mesh();
+
+    // Find the (up to two) facets that have v0..v1 as one of their edges.
+    GEO::index_t facet_a = GEO::NO_INDEX;
+    GEO::index_t facet_b = GEO::NO_INDEX;
+    for (const GEO::index_t corner : geometry.get_vertex_corners(v0)) {
+        const GEO::index_t facet = geometry.get_corner_facet(corner);
+        if (facet == GEO::NO_INDEX) {
+            continue;
+        }
+        const GEO::index_t corner_begin = geo_mesh.facets.corners_begin(facet);
+        const GEO::index_t corner_end   = geo_mesh.facets.corners_end(facet);
+        const GEO::index_t corner_count = corner_end - corner_begin;
+        if (corner_count < 3) {
+            continue;
+        }
+        bool has_edge = false;
+        for (GEO::index_t c = corner_begin; c < corner_end; ++c) {
+            if (geo_mesh.facet_corners.vertex(c) != v0) {
+                continue;
+            }
+            const GEO::index_t local      = c - corner_begin;
+            const GEO::index_t c_next      = corner_begin + ((local + 1) % corner_count);
+            const GEO::index_t c_prev      = corner_begin + ((local + corner_count - 1) % corner_count);
+            const GEO::index_t vertex_next = geo_mesh.facet_corners.vertex(c_next);
+            const GEO::index_t vertex_prev = geo_mesh.facet_corners.vertex(c_prev);
+            if ((vertex_next == v1) || (vertex_prev == v1)) {
+                has_edge = true;
+            }
+            break;
+        }
+        if (!has_edge) {
+            continue;
+        }
+        if (facet_a == GEO::NO_INDEX) {
+            facet_a = facet;
+        } else if (facet != facet_a) {
+            facet_b = facet;
+            break;
+        }
+    }
+
+    if (facet_a == GEO::NO_INDEX) {
+        return frame; // no adjacent facet -> zero normals -> unbiased flat line
+    }
+
+    const glm::vec3 p0_local   = to_glm_vec3(get_pointf(geo_mesh.vertices, v0));
+    const glm::vec3 p1_local   = to_glm_vec3(get_pointf(geo_mesh.vertices, v1));
+    const glm::vec3 world_p0   = glm::vec3{world_from_node * glm::vec4{p0_local, 1.0f}};
+    const glm::vec3 world_p1   = glm::vec3{world_from_node * glm::vec4{p1_local, 1.0f}};
+    const glm::vec3 edge_world = world_p1 - world_p0;
+
+    const glm::vec3 normal_a_local = to_glm_vec3(mesh_facet_normalf(geo_mesh, facet_a));
+    const glm::vec3 normal_a_world = normal_matrix * normal_a_local;
+    const float     normal_a_len   = glm::length(normal_a_world);
+    frame.normal_a = (normal_a_len > 1e-6f) ? (normal_a_world / normal_a_len) : glm::vec3{0.0f};
+
+    // Interior-tangent sign for face A: sign so that sign * cross(n_a, edge)
+    // points from the edge midpoint toward face A's centroid.
+    glm::vec3    centroid_a_local{0.0f};
+    GEO::index_t centroid_count = 0;
+    {
+        const GEO::index_t corner_begin = geo_mesh.facets.corners_begin(facet_a);
+        const GEO::index_t corner_end   = geo_mesh.facets.corners_end(facet_a);
+        for (GEO::index_t c = corner_begin; c < corner_end; ++c) {
+            centroid_a_local += to_glm_vec3(get_pointf(geo_mesh.vertices, geo_mesh.facet_corners.vertex(c)));
+            ++centroid_count;
+        }
+    }
+    if (centroid_count > 0) {
+        centroid_a_local /= static_cast<float>(centroid_count);
+    }
+    const glm::vec3 centroid_a_world = glm::vec3{world_from_node * glm::vec4{centroid_a_local, 1.0f}};
+    const glm::vec3 edge_mid_world   = 0.5f * (world_p0 + world_p1);
+    const glm::vec3 to_interior_a    = centroid_a_world - edge_mid_world;
+    const glm::vec3 tangent_a        = glm::cross(frame.normal_a, edge_world);
+    frame.sign_a = (glm::dot(tangent_a, to_interior_a) >= 0.0f) ? 1.0f : -1.0f;
+
+    // Face B, or fall back to A for a boundary edge (single-plane hug).
+    if (facet_b != GEO::NO_INDEX) {
+        const glm::vec3 normal_b_local = to_glm_vec3(mesh_facet_normalf(geo_mesh, facet_b));
+        const glm::vec3 normal_b_world = normal_matrix * normal_b_local;
+        const float     normal_b_len   = glm::length(normal_b_world);
+        frame.normal_b = (normal_b_len > 1e-6f) ? (normal_b_world / normal_b_len) : frame.normal_a;
+    } else {
+        frame.normal_b = frame.normal_a;
+    }
+    return frame;
+}
+
+} // anonymous namespace
 
 #pragma region Commands
 Component_select_command::Component_select_command(erhe::commands::Commands& commands, App_context& context)
@@ -338,7 +459,22 @@ void Mesh_component_selection_tool::tool_render(const Render_context& context)
     // function=greater against the (zero-cleared) stencil buffer, so reference 0
     // would reject every fragment. 2 matches the other debug tools (Paint/Hover).
     erhe::renderer::Primitive_renderer triangle_renderer = context.get({erhe::graphics::Primitive_type::triangle, 2, true, false});
-    erhe::renderer::Primitive_renderer line_renderer     = context.get({erhe::graphics::Primitive_type::line,     2, true, true });
+    // TEMP: draw_hidden set to false to isolate rendering issues in the
+    // surface-aligned edge "tent" (the hidden/xray pass otherwise overlays the
+    // visible pass). Restore to true once the tent is verified.
+    erhe::renderer::Primitive_renderer line_renderer     = context.get({erhe::graphics::Primitive_type::line,     2, true, false});
+
+    // Per-viewport visual style (serialized in Viewport_config, edited in
+    // Viewport_config_window).
+    const Mesh_component_style& style = context.viewport_config.mesh_component_style;
+
+    // Surface-line depth bias is a single global on the debug renderer (it is
+    // written to the view UBO when the line bucket flushes, after all tools have
+    // queued). Push the per-viewport config value here so the selected-edge
+    // "tent" lines bias correctly for this view.
+    if (m_context.debug_renderer != nullptr) {
+        m_context.debug_renderer->set_line_bias_margin(style.edge_depth_bias);
+    }
 
     // Camera basis for billboarded vertex handles.
     glm::vec3       camera_position{0.0f};
@@ -379,25 +515,34 @@ void Mesh_component_selection_tool::tool_render(const Render_context& context)
                         append_facet_triangles(*geometry, facet);
                     }
                     if (!m_scratch_indices.empty()) {
-                        triangle_renderer.add_triangles(world_from_node, m_face_color, m_scratch_positions, m_scratch_indices);
+                        triangle_renderer.add_triangles(world_from_node, style.face_color, m_scratch_positions, m_scratch_indices);
                     }
 
-                    // Edges. Each carries a world-space surface normal so the
-                    // line shader pushes it off the surface (NdotV^2 bias).
+                    // Edges. Each carries its two adjacent face normals (plus an
+                    // interior-tangent sign) so the compute line shader makes
+                    // each side of the wide-line ribbon coplanar with its face
+                    // (the two-face "tent"), eliminating z-fight with both faces.
                     m_scratch_lines.clear();
-                    m_scratch_normals.clear();
+                    m_scratch_face_normals_a.clear();
+                    m_scratch_face_normals_b.clear();
+                    m_scratch_signs_a.clear();
                     for (const Mesh_edge_key& edge : m_mesh_component_selection.get_edges()) {
                         const glm::vec3 p0 = to_glm_vec3(get_pointf(geo_mesh.vertices, edge.first));
                         const glm::vec3 p1 = to_glm_vec3(get_pointf(geo_mesh.vertices, edge.second));
                         m_scratch_lines.push_back(erhe::renderer::Line{p0, p1});
-                        m_scratch_normals.push_back(edge_world_normal(*geometry, normal_matrix, edge.first, edge.second));
+                        const Edge_surface_frame frame = compute_edge_surface_frame(*geometry, world_from_node, normal_matrix, edge.first, edge.second);
+                        m_scratch_face_normals_a.push_back(frame.normal_a);
+                        m_scratch_face_normals_b.push_back(frame.normal_b);
+                        m_scratch_signs_a.push_back(frame.sign_a);
                     }
                     if (!m_scratch_lines.empty()) {
-                        line_renderer.set_thickness(m_edge_thickness);
-                        line_renderer.add_lines(
-                            world_from_node, m_edge_color,
+                        line_renderer.set_thickness(style.edge_thickness);
+                        line_renderer.add_surface_lines(
+                            world_from_node, style.edge_color,
                             std::span<const erhe::renderer::Line>{m_scratch_lines},
-                            std::span<const glm::vec3>{m_scratch_normals}
+                            std::span<const glm::vec3>{m_scratch_face_normals_a},
+                            std::span<const glm::vec3>{m_scratch_face_normals_b},
+                            std::span<const float>{m_scratch_signs_a}
                         );
                     }
 
@@ -407,19 +552,25 @@ void Mesh_component_selection_tool::tool_render(const Render_context& context)
                     for (const GEO::index_t vertex : m_mesh_component_selection.get_vertices()) {
                         const glm::vec3 v_local = to_glm_vec3(get_pointf(geo_mesh.vertices, vertex));
                         const glm::vec3 v_world = glm::vec3{world_from_node * glm::vec4{v_local, 1.0f}};
-                        const float     half    = m_vertex_handle_size * glm::distance(camera_position, v_world);
+                        const float     half    = style.vertex_size * glm::distance(camera_position, v_world);
                         append_vertex_quad(v_world, camera_right, camera_up, half);
                     }
                     if (!m_scratch_indices.empty()) {
-                        triangle_renderer.add_triangles(glm::mat4{1.0f}, m_vertex_color, m_scratch_positions, m_scratch_indices);
+                        triangle_renderer.add_triangles(glm::mat4{1.0f}, style.vertex_color, m_scratch_positions, m_scratch_indices);
                     }
                 }
             }
         }
     }
 
-    // Hover highlight for the component under the pointer in this view.
-    const Pick_result hover = pick(context.scene_view);
+    // Hover highlight for the component under the pointer -- only in the view the
+    // pointer is actually over. get_hover_scene_view() is fed by the
+    // App_message_bus hover_scene_view message (subscribed in the constructor)
+    // and becomes null when the pointer leaves every viewport, so the highlight
+    // does not linger on a stale hover in the previously hovered view.
+    const Pick_result hover = (get_hover_scene_view() == &context.scene_view)
+        ? pick(context.scene_view)
+        : Pick_result{};
     if (hover.valid) {
         const erhe::scene::Node* hover_node = hover.mesh->get_node();
         if (hover_node != nullptr) {
@@ -431,7 +582,7 @@ void Mesh_component_selection_tool::tool_render(const Render_context& context)
                     m_scratch_indices.clear();
                     append_facet_triangles(*hover.geometry, hover.facet);
                     if (!m_scratch_indices.empty()) {
-                        triangle_renderer.add_triangles(world_from_node, m_hover_color, m_scratch_positions, m_scratch_indices);
+                        triangle_renderer.add_triangles(world_from_node, style.hover_color, m_scratch_positions, m_scratch_indices);
                     }
                     break;
                 }
@@ -443,9 +594,9 @@ void Mesh_component_selection_tool::tool_render(const Render_context& context)
                     m_scratch_normals.clear();
                     m_scratch_lines.push_back(erhe::renderer::Line{p0, p1});
                     m_scratch_normals.push_back(edge_world_normal(*hover.geometry, normal_matrix, hover.edge_v0, hover.edge_v1));
-                    line_renderer.set_thickness(m_edge_thickness + 1.0f);
+                    line_renderer.set_thickness(style.edge_thickness - 1.0f); // 1px thicker (negative = screen-space, so more negative = thicker)
                     line_renderer.add_lines(
-                        world_from_node, m_hover_color,
+                        world_from_node, style.hover_color,
                         std::span<const erhe::renderer::Line>{m_scratch_lines},
                         std::span<const glm::vec3>{m_scratch_normals}
                     );
@@ -454,11 +605,11 @@ void Mesh_component_selection_tool::tool_render(const Render_context& context)
                 case Mesh_component_mode::vertex: {
                     const glm::vec3 v_local = to_glm_vec3(get_pointf(geo_mesh.vertices, hover.vertex));
                     const glm::vec3 v_world = glm::vec3{world_from_node * glm::vec4{v_local, 1.0f}};
-                    const float     half    = (m_vertex_handle_size * 1.3f) * glm::distance(camera_position, v_world);
+                    const float     half    = (style.vertex_size * 1.3f) * glm::distance(camera_position, v_world);
                     m_scratch_positions.clear();
                     m_scratch_indices.clear();
                     append_vertex_quad(v_world, camera_right, camera_up, half);
-                    triangle_renderer.add_triangles(glm::mat4{1.0f}, m_hover_color, m_scratch_positions, m_scratch_indices);
+                    triangle_renderer.add_triangles(glm::mat4{1.0f}, style.hover_color, m_scratch_positions, m_scratch_indices);
                     break;
                 }
                 case Mesh_component_mode::object:
@@ -487,22 +638,10 @@ void Mesh_component_selection_tool::window_imgui()
         selection.clear();
     }
 
-    ImGui::ColorEdit4("Vertex Color", &m_vertex_color.x, ImGuiColorEditFlags_NoInputs);
-    ImGui::ColorEdit4("Edge Color",   &m_edge_color.x,   ImGuiColorEditFlags_NoInputs);
-    ImGui::ColorEdit4("Face Color",   &m_face_color.x,   ImGuiColorEditFlags_NoInputs);
-    ImGui::DragFloat ("Edge Thickness", &m_edge_thickness,      0.1f,   0.5f, 20.0f);
-    ImGui::DragFloat ("Vertex Size",    &m_vertex_handle_size,  0.001f, 0.001f, 0.1f);
-
-    // Live-tunable surface-line depth-bias headroom, in depth-buffer
-    // resolvable units (ULPs). The shaders derive the actual bias from this
-    // and the depth precision + surface slope. Global to the debug renderer,
-    // but only surface-aligned lines (selected edges) use it.
-    if (m_context.debug_renderer != nullptr) {
-        float bias_margin = m_context.debug_renderer->get_line_bias_margin();
-        if (ImGui::DragFloat("Edge Depth Bias (ULPs)", &bias_margin, 1.0f, 0.0f, 1024.0f, "%.0f")) {
-            m_context.debug_renderer->set_line_bias_margin(bias_margin);
-        }
-    }
+    // Visual style (colors, edge thickness, vertex size, edge depth bias) is
+    // edited in the Viewport Configuration window; it is stored per-viewport in
+    // Viewport_config::mesh_component_style so codegen serialization / autosave
+    // cover it.
 }
 
 } // namespace editor

@@ -211,16 +211,16 @@ auto Debug_renderer_bucket::update_view_buffer(
     }
 
     const uint32_t view_count_uint      = static_cast<uint32_t>(views.size());
-    // stride_per_view is in vertices: each line emits 6 vertices. The
-    // SSBO holds view_count contiguous slabs of this size; the
-    // multiview vertex shader indexes
+    // stride_per_view is in vertices: each line emits 12 vertices (a
+    // 4-triangle surface tent). The SSBO holds view_count contiguous slabs
+    // of this size; the multiview vertex shader indexes
     //     gl_VertexID + gl_ViewIndex * stride_per_view
     // and the compute shader's loop over view.view_count writes one
-    // slab per iteration at out_triangle_index = v * (stride/3) + 2*i.
+    // slab per iteration at out_triangle_index = v * (stride/3) + 4*i.
     // Single-view: stride_per_view is unused (view_count = 1, only the
     // v=0 iteration runs); zero is fine and the caller passes 0.
     const uint32_t stride_per_view_uint = (views.size() >= 2)
-        ? static_cast<uint32_t>(6u * primitive_count_for_stride)
+        ? static_cast<uint32_t>(12u * primitive_count_for_stride)
         : 0u;
     write(view_gpu_data, program_interface.view_count_offset,      as_span(view_count_uint     ));
     write(view_gpu_data, program_interface.stride_per_view_offset, as_span(stride_per_view_uint));
@@ -386,8 +386,9 @@ void Debug_renderer_bucket::dispatch_compute(erhe::graphics::Compute_command_enc
             m_vertex_ssbo_buffer->bind(encoder, draw.input_buffer_range);
 
             // Triangle SSBO must hold view_count contiguous slabs of
-            // 6 * primitive_count vertices each. Single-view: 1 slab.
-            const std::size_t per_view_triangle_byte_count = 6 * draw.primitive_count * triangle_vertex_stride;
+            // 12 * primitive_count vertices each (4-triangle tent per line).
+            // Single-view: 1 slab.
+            const std::size_t per_view_triangle_byte_count = 12 * draw.primitive_count * triangle_vertex_stride;
             const std::size_t triangle_byte_count          = view_count * per_view_triangle_byte_count;
             // See note in joint_buffer.cpp.
             const std::size_t triangle_acquire_byte_count = std::max(
@@ -510,7 +511,7 @@ void Debug_renderer_bucket::render(
                 render_encoder.draw_primitives(
                     pipeline.data.input_assembly.primitive_topology,
                     0,
-                    static_cast<uint32_t>(6 * draw.primitive_count)
+                    static_cast<uint32_t>(12 * draw.primitive_count)
                 );
             }
         };

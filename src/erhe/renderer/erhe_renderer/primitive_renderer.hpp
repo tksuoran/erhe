@@ -91,6 +91,25 @@ public:
     // means no bias. normals[i] pairs with lines[i].
     void add_lines(const glm::mat4& transform, const glm::vec4& color, std::span<const Line> lines, std::span<const glm::vec3> normals);
 
+    // Surface-aligned edge lines with per-endpoint face normals. Unlike the
+    // single-normal overload above, the two endpoints of line i carry the
+    // edge's two adjacent face normals: endpoint 0 gets face_normals_a[i],
+    // endpoint 1 gets face_normals_b[i]. interior_signs_a[i] is +/-1 chosen so
+    // that interior_signs_a[i] * cross(face_normals_a[i], edge_direction) is
+    // face A's world-space interior tangent; the compute line shader uses it to
+    // decide which face governs each screen side of the wide-line ribbon, then
+    // makes each side coplanar with its face (the "tent"). All vectors are
+    // already world-space (transform applies to positions only). Zero normals
+    // fall back to an unbiased flat line.
+    void add_surface_lines(
+        const glm::mat4&           transform,
+        const glm::vec4&           color,
+        std::span<const Line>      lines,
+        std::span<const glm::vec3> face_normals_a,
+        std::span<const glm::vec3> face_normals_b,
+        std::span<const float>     interior_signs_a
+    );
+
     // Filled triangles. These use the same per-vertex layout as lines
     // (position + color; the line-width slot is unused) and are rendered by
     // the triangle-primitive bucket (Debug_renderer_shader_key tier=simple,
@@ -209,15 +228,20 @@ private:
         const glm::vec3& point_world,
         float            thickness,
         const glm::vec4& color,
-        const glm::vec3& normal_world = glm::vec3{0.0f}
+        const glm::vec3& normal_world = glm::vec3{0.0f},
+        float            normal_w     = 0.0f
     )
     {
         if (m_last_allocate_gpu_float_data == nullptr) {
             return;
         }
         // 12 floats per vertex: position.xyz + thickness, color.rgba,
-        // normal.xyz + pad. The normal is zero for ordinary lines / triangles
-        // (the shaders then apply no surface bias).
+        // normal.xyz + normal.w. The normal is zero for ordinary lines /
+        // triangles (the shaders then apply no surface bias). For surface-
+        // aligned edge lines the two endpoints carry the edge's two adjacent
+        // face normals, and normal.w on the first endpoint carries the
+        // interior-tangent sign used by compute_before_line.comp's tent
+        // (see Primitive_renderer::add_surface_lines).
         ERHE_VERIFY(m_last_allocate_word_offset + 12 <= m_last_allocate_word_count);
         m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = point_world.x;
         m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = point_world.y;
@@ -230,7 +254,7 @@ private:
         m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = normal_world.x;
         m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = normal_world.y;
         m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = normal_world.z;
-        m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = 0.0f;
+        m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = normal_w;
         ERHE_VERIFY(m_last_allocate_word_offset <= m_last_allocate_word_count);
     }
 

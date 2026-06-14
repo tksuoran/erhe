@@ -109,15 +109,10 @@ private:
     erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
     Component_select_command                                  m_select_command;
 
-    // Style.
-    glm::vec4 m_vertex_color {0.95f, 0.65f, 0.10f, 1.00f};
-    glm::vec4 m_edge_color   {1.00f, 0.55f, 0.05f, 1.00f};
-    glm::vec4 m_face_color   {1.00f, 0.55f, 0.05f, 0.35f};
-    glm::vec4 m_hover_color  {1.00f, 1.00f, 1.00f, 0.80f};
-    float     m_edge_thickness {4.0f};
-    // Vertex handle size as a fraction of the distance to the camera, so the
-    // handles keep a roughly constant on-screen size.
-    float     m_vertex_handle_size{0.012f};
+    // Visual style (colors, edge thickness, vertex size, edge depth bias) lives
+    // in the per-viewport Viewport_config::mesh_component_style so it is covered
+    // by codegen serialization / autosave; tool_render reads it from the active
+    // Render_context and edits happen in Viewport_config_window.
 
     // Per-frame scratch (cleared each frame, capacity retained). tool_render
     // is hot-path, so it must not allocate transient containers (see CLAUDE.md
@@ -125,7 +120,10 @@ private:
     std::vector<glm::vec3>            m_scratch_positions;
     std::vector<uint32_t>             m_scratch_indices;
     std::vector<erhe::renderer::Line> m_scratch_lines;
-    std::vector<glm::vec3>            m_scratch_normals;
+    std::vector<glm::vec3>            m_scratch_normals;        // hover edge (single averaged normal)
+    std::vector<glm::vec3>            m_scratch_face_normals_a; // selected edges: face A normal (endpoint 0)
+    std::vector<glm::vec3>            m_scratch_face_normals_b; // selected edges: face B normal (endpoint 1)
+    std::vector<float>                m_scratch_signs_a;        // selected edges: face A interior-tangent sign
 };
 
 } // namespace editor

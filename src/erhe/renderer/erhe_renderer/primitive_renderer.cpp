@@ -197,6 +197,31 @@ void Primitive_renderer::add_lines(
     }
 }
 
+void Primitive_renderer::add_surface_lines(
+    const glm::mat4&                 transform,
+    const glm::vec4&                 color,
+    const std::span<const Line>      lines,
+    const std::span<const glm::vec3> face_normals_a,
+    const std::span<const glm::vec3> face_normals_b,
+    const std::span<const float>     interior_signs_a
+)
+{
+    set_line_color(color);
+    make_lines(lines.size());
+    for (std::size_t i = 0, end = lines.size(); i < end; ++i) {
+        const glm::vec3 normal_a = (i < face_normals_a.size())   ? face_normals_a[i]   : glm::vec3{0.0f};
+        const glm::vec3 normal_b = (i < face_normals_b.size())   ? face_normals_b[i]   : glm::vec3{0.0f};
+        const float     sign_a   = (i < interior_signs_a.size()) ? interior_signs_a[i] : 0.0f;
+        const glm::vec4 p0{transform * glm::vec4{lines[i].p0, 1.0f}};
+        const glm::vec4 p1{transform * glm::vec4{lines[i].p1, 1.0f}};
+        // Endpoint 0 carries face A's normal plus the interior-tangent sign;
+        // endpoint 1 carries face B's normal. compute_before_line.comp reads
+        // both endpoints' normals to build the two-face "tent".
+        put(glm::vec3{p0} / p0.w, m_half_line_thickness, m_line_color, normal_a, sign_a);
+        put(glm::vec3{p1} / p1.w, m_half_line_thickness, m_line_color, normal_b, 0.0f);
+    }
+}
+
 void Primitive_renderer::add_triangle(
     const glm::mat4& transform,
     const glm::vec4& color,

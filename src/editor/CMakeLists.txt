@@ -613,6 +613,7 @@ erhe_codegen_generate(
         "${_config_defs}/graphics_presets_config.py"
         "${_config_defs}/fly_camera_config.py"
         "${_config_defs}/render_style_data.py"
+        "${_config_defs}/mesh_component_style.py"
         "${_config_defs}/debug_visualizations_config.py"
         "${_config_defs}/debug_visualizations_settings.py"
         "${_config_defs}/scene_view_settings.py"
@@ -713,6 +714,9 @@ set(_config_sources
     ${_config_out}/render_style_data.hpp
     ${_config_out}/render_style_data_serialization.hpp
     ${_config_out}/render_style_data.cpp
+    ${_config_out}/mesh_component_style.hpp
+    ${_config_out}/mesh_component_style_serialization.hpp
+    ${_config_out}/mesh_component_style.cpp
     ${_config_out}/debug_visualizations_config.hpp
     ${_config_out}/debug_visualizations_config_serialization.hpp
     ${_config_out}/debug_visualizations_config.cpp

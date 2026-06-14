@@ -242,7 +242,7 @@ private:
     std::optional<erhe::graphics::Compute_pipeline> m_lines_to_triangles_compute_pipeline;
     std::stack<View>                                m_view_stack{};
     View                                            m_view      {};
-    float                                           m_line_bias_margin{32.0f};
+    float                                           m_line_bias_margin{1024.0f};
 
     // Multiview state, parallel to m_view_stack / m_view. Non-empty
     // when a multiview begin_frame() supplied a per-eye View span;
