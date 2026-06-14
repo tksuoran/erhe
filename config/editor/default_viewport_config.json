@@ -2,8 +2,8 @@
     "render_style_not_selected": {
         "polygon_fill": true,
         "edge_lines": true,
-        "polygon_centroids": true,
-        "corner_points": true,
+        "polygon_centroids": false,
+        "corner_points": false,
         "point_size": 10,
         "line_width": -2,
         "line_color": [0,0,0,0.5],
@@ -16,8 +16,8 @@
     "render_style_selected": {
         "polygon_fill": true,
         "edge_lines": true,
-        "polygon_centroids": true,
-        "corner_points": true,
+        "polygon_centroids": false,
+        "corner_points": false,
         "point_size": 4,
         "line_width": -1,
         "line_color": [0,0,0,0.5],
