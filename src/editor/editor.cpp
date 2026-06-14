@@ -1761,8 +1761,6 @@ public:
                 );
                 m_mesh_component_selection_tool = std::make_unique<Mesh_component_selection_tool>(
                     *m_commands.get(),
-                    *m_imgui_renderer.get(),
-                    *m_imgui_windows.get(),
                     m_app_context,
                     *m_app_message_bus.get(),
                     *m_mesh_component_selection.get(),

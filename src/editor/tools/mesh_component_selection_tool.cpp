@@ -187,8 +187,6 @@ auto Component_select_command::try_call() -> bool
 
 Mesh_component_selection_tool::Mesh_component_selection_tool(
     erhe::commands::Commands&    commands,
-    erhe::imgui::Imgui_renderer& imgui_renderer,
-    erhe::imgui::Imgui_windows&  imgui_windows,
     App_context&                 context,
     App_message_bus&             app_message_bus,
     Mesh_component_selection&    mesh_component_selection,
@@ -196,7 +194,6 @@ Mesh_component_selection_tool::Mesh_component_selection_tool(
 )
     : Tool                      {context, tools, Tool_flags::background}
     , m_mesh_component_selection{mesh_component_selection}
-    , m_window                  {imgui_renderer, imgui_windows, "Mesh Components", "mesh_components", [this]() { window_imgui(); }}
     , m_select_command          {commands, context}
 {
     set_base_priority(c_priority);
@@ -621,22 +618,32 @@ void Mesh_component_selection_tool::tool_render(const Render_context& context)
     }
 }
 
-void Mesh_component_selection_tool::window_imgui()
+void Mesh_component_selection_tool::viewport_toolbar()
 {
+    ImGui::PushID("Mesh_component_selection_tool::viewport_toolbar");
+
     Mesh_component_selection& selection = m_mesh_component_selection;
 
-    int                mode_index = static_cast<int>(selection.get_mode());
-    const char* const  items[]    = {"Object", "Vertex", "Edge", "Face"};
-    if (ImGui::Combo("Mode", &mode_index, items, IM_ARRAYSIZE(items))) {
+    // Mode combo (Object / Vertex / Edge / Face). In a menu bar successive
+    // widgets flow horizontally, so the Clear button lands to the right.
+    int               mode_index = static_cast<int>(selection.get_mode());
+    const char* const items[]    = {"Object", "Vertex", "Edge", "Face"};
+    ImGui::SetNextItemWidth(6.0f * ImGui::GetFontSize());
+    if (ImGui::Combo("##mesh_component_mode", &mode_index, items, IM_ARRAYSIZE(items))) {
         selection.set_mode(static_cast<Mesh_component_mode>(mode_index));
     }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Mesh Component Selection Mode");
+    }
 
-    ImGui::Text("Vertices: %d", static_cast<int>(selection.get_vertices().size()));
-    ImGui::Text("Edges: %d",    static_cast<int>(selection.get_edges().size()));
-    ImGui::Text("Faces: %d",    static_cast<int>(selection.get_facets().size()));
     if (ImGui::Button("Clear")) {
         selection.clear();
     }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Clear mesh component selection");
+    }
+
+    ImGui::PopID();
 
     // Visual style (colors, edge thickness, vertex size, edge depth bias) is
     // edited in the Viewport Configuration window; it is stored per-viewport in

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "tools/tool.hpp"
-#include "tools/tool_window.hpp"
 
 #include "app_message.hpp"
 #include "erhe_commands/command.hpp"
@@ -18,7 +17,6 @@
 
 namespace erhe::commands { class Commands; }
 namespace erhe::geometry { class Geometry; }
-namespace erhe::imgui    { class Imgui_renderer; class Imgui_windows; }
 namespace erhe::scene    { class Mesh; }
 
 namespace editor {
@@ -56,8 +54,6 @@ public:
 
     Mesh_component_selection_tool(
         erhe::commands::Commands&    commands,
-        erhe::imgui::Imgui_renderer& imgui_renderer,
-        erhe::imgui::Imgui_windows&  imgui_windows,
         App_context&                 context,
         App_message_bus&             app_message_bus,
         Mesh_component_selection&    mesh_component_selection,
@@ -66,6 +62,10 @@ public:
 
     // Implements Tool
     void tool_render(const Render_context& context) override;
+
+    // Contributes the mode combo + clear button to the viewport toolbar
+    // (called from Viewport_scene_view::viewport_toolbar).
+    void viewport_toolbar();
 
     // Called by Component_select_command.
     [[nodiscard]] auto try_ready() const -> bool;
@@ -96,8 +96,6 @@ private:
     [[nodiscard]] auto vertex_normal_local(const erhe::geometry::Geometry& geometry, GEO::index_t vertex) const -> glm::vec3;
     [[nodiscard]] auto edge_world_normal   (const erhe::geometry::Geometry& geometry, const glm::mat3& normal_matrix, GEO::index_t v0, GEO::index_t v1) const -> glm::vec3;
 
-    void window_imgui();
-
     // Append a facet's fan triangulation (mesh-local positions + indices) to
     // the scratch buffers. Caller renders them with transform = world_from_node.
     void append_facet_triangles(const erhe::geometry::Geometry& geometry, GEO::index_t facet);
@@ -105,7 +103,6 @@ private:
     void append_vertex_quad(const glm::vec3& position_in_world, const glm::vec3& camera_right, const glm::vec3& camera_up, float half_size);
 
     Mesh_component_selection&                                 m_mesh_component_selection;
-    Tool_window                                               m_window;
     erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
     Component_select_command                                  m_select_command;
 

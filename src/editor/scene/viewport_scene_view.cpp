@@ -18,6 +18,7 @@
 #include "scene/scene_root.hpp"
 #include "scene/viewport_scene_views.hpp"
 #include "time.hpp"
+#include "tools/mesh_component_selection_tool.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 #include "transform/transform_tool.hpp"
@@ -799,6 +800,9 @@ void Viewport_scene_view::viewport_toolbar()
 
     m_context.selection_tool->viewport_toolbar();
     m_context.transform_tool->viewport_toolbar();
+    if (m_context.mesh_component_selection_tool != nullptr) {
+        m_context.mesh_component_selection_tool->viewport_toolbar();
+    }
     //// m_context.grid_tool->viewport_toolbar(hovered);
     //// TODO m_physics_window.viewport_toolbar(hovered);
 }
