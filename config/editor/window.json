@@ -1,4 +1,5 @@
 {
+    "_version": 2,
     "show": true,
     "fullscreen": false,
     "use_transparency": false,
@@ -11,5 +12,8 @@
     "use_sleep": false,
     "sleep_margin": 0,
     "swap_interval": 0,
-    "enable_joystick": true
+    "enable_joystick": true,
+    "power_save": true,
+    "unfocused_fps": 30,
+    "hidden_fps": 10
 }

@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Window_config",
-    version=1,
+    version=2,
     short_desc="",
     long_desc="",
     developer=False,
@@ -133,6 +133,36 @@ struct("Window_config",
             default="true",
             short_desc="",
             long_desc="",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "power_save",
+            Bool,
+            added_in=2,
+            default="true",
+            short_desc="Power Save",
+            long_desc="Render at a reduced frequency when the window is unfocused or not visible, and pause the simulation while not visible",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "unfocused_fps",
+            Int,
+            added_in=2,
+            default="30",
+            short_desc="Unfocused FPS",
+            long_desc="Frame rate cap while the window is visible but does not have input focus (power_save only)",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "hidden_fps",
+            Int,
+            added_in=2,
+            default="10",
+            short_desc="Hidden FPS",
+            long_desc="Frame rate cap while the window is not visible (minimized, occluded or hidden); rendering and simulation are skipped (power_save only)",
             visible=True,
             developer=False
         ),

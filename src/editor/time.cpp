@@ -13,7 +13,7 @@ auto Time::get_frame_time_average_ms() const -> float
     return m_frame_time_average_ms;
 }
 
-void Time::prepare_update()
+void Time::prepare_update(bool advance_simulation)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -45,6 +45,16 @@ void Time::prepare_update()
     // Cap frame duration to 25ms. This causes time dilation
     if (simulation_frame_duration_ns > 25'000'000) {
         simulation_frame_duration_ns = 25'000'000;
+    }
+
+    // When the simulation is paused (e.g. the window is not visible), do not
+    // advance simulation time at all. The accumulator stays frozen, the fixed
+    // step loop below produces zero steps, and no wall-clock time piles up to
+    // be replayed as a catch-up burst when the simulation resumes. The frame
+    // number and host-time baseline still advance (below), so the first active
+    // frame after resume measures a normal small dt.
+    if (!advance_simulation) {
+        simulation_frame_duration_ns = 0;
     }
 
     //m_current_time = new_time;

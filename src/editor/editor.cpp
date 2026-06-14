@@ -302,14 +302,21 @@ public:
         m_app_context.current_command_buffer = &command_buffer;
 
         erhe::graphics::Frame_state frame_state{};
-        bool should_render = true;
+        // Power saving: when the window is not visible (minimized/occluded/
+        // hidden) skip all GPU rendering this frame -- do not acquire or present
+        // the swapchain and do not execute the rendergraph. The device frame is
+        // still opened (wait_frame, above) and closed (end_frame, below)
+        // cleanly. Pacing is handled by the poll_events wait in run(), so no
+        // sleep is added here. The simulation is also paused via prepare_update
+        // below.
+        bool should_render = (m_frame_activity != Frame_activity::hidden);
 
         // Under OpenXR the headset owns display, so the desktop swapchain
         // is not engaged. The cb is opened with cb.begin() but no swapchain
         // is bound to it.
         // Non-XR path drives the swapchain through cb.wait_for_swapchain
         // and cb.begin_swapchain.
-        if (!m_app_context.OpenXR) {
+        if (should_render && !m_app_context.OpenXR) {
             const bool wait_swap_ok = command_buffer.wait_for_swapchain(frame_state);
             should_render = wait_swap_ok;
             if (!wait_swap_ok) {
@@ -334,7 +341,7 @@ public:
 
         std::vector<erhe::window::Input_event>& input_events = m_window->get_input_events();
 
-        m_time->prepare_update();
+        m_time->prepare_update(m_frame_activity != Frame_activity::hidden);
         m_time->update_transform_animations(*m_app_message_bus.get());
         m_fly_camera_tool->on_frame_begin();
 
@@ -686,6 +693,10 @@ public:
 
         m_app_context.use_sleep    = window_config.use_sleep;
         m_app_context.sleep_margin = window_config.sleep_margin;
+
+        m_app_context.power_save    = window_config.power_save;
+        m_app_context.unfocused_fps = window_config.unfocused_fps;
+        m_app_context.hidden_fps    = window_config.hidden_fps;
 
         if (m_app_context.OpenXR) {
             m_app_context.sleep_margin = 0.0f;
@@ -2447,13 +2458,30 @@ public:
         ERHE_PROFILE_FUNCTION();
 
         m_run_started = true;
-        float wait_time = m_app_context.use_sleep ? m_app_context.sleep_margin : 0.0f;
         // TODO: https://registry.khronos.org/OpenGL/extensions/NV/GLX_NV_delay_before_swap.txt
         // Also:
         //  - Measure time since first swapbuffers
         //  - Count number of swapbuffers
         //  - Wait to avoid presenting frames faster than display refreshrate
         while (!m_close_requested) {
+            // Classify window activity for power saving and derive the
+            // poll_events wait timeout. While unfocused or not visible we block
+            // on events with a timeout instead of busy-spinning, which caps the
+            // frame rate and yields the CPU. OpenXR drives its own pacing (the
+            // desktop window is only a mirror), so never throttle under OpenXR.
+            float wait_time = 0.0f;
+            m_frame_activity = Frame_activity::active;
+            if (m_app_context.power_save && !m_app_context.OpenXR) {
+                if (!m_window->is_visible()) {
+                    m_frame_activity = Frame_activity::hidden;
+                    const int fps = (m_app_context.hidden_fps > 0) ? m_app_context.hidden_fps : 1;
+                    wait_time = 1.0f / static_cast<float>(fps);
+                } else if (!m_window->is_focused()) {
+                    m_frame_activity = Frame_activity::unfocused;
+                    const int fps = (m_app_context.unfocused_fps > 0) ? m_app_context.unfocused_fps : 1;
+                    wait_time = 1.0f / static_cast<float>(fps);
+                }
+            }
             m_window->poll_events(wait_time);
 #if defined(ERHE_OS_ANDROID)
             // Skip render while the activity is in the background. SDL's
@@ -2520,6 +2548,16 @@ public:
     bool                                    m_run_started{false};
     std::atomic<bool>                       m_in_tick    {false};
     bool m_run_stopped    {false};
+
+    // Window-activity classification for power saving (see run()). Computed
+    // once per loop iteration and read by tick() to pause the simulation and
+    // skip rendering while the window is not visible.
+    enum class Frame_activity {
+        active,    // focused and visible    -> full rate
+        unfocused, // visible but not focused -> reduced rate
+        hidden     // not visible             -> reduced rate, no render, sim paused
+    };
+    Frame_activity m_frame_activity{Frame_activity::active};
 
     // Main-loop stall watchdog. The render thread executes tick() under
     // m_mutex with m_in_tick == true; if a single tick spins (CPU-bound loop)

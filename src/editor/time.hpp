@@ -49,7 +49,11 @@ public:
     [[nodiscard]] auto get_frame_number                      () const -> uint64_t;
     [[nodiscard]] auto get_frame_time_average_ms             () const -> float;
 
-    void prepare_update     ();
+    // advance_simulation == false pauses the fixed-step simulation (physics,
+    // fly-camera and headset fixed updates) without losing wall-clock time:
+    // no fixed steps are produced this frame and the accumulator is frozen, so
+    // resuming does not replay a catch-up burst.
+    void prepare_update     (bool advance_simulation = true);
     void for_each_fixed_step(std::function<void(const Time_context&)> callback);
 
     void update_transform_animations(App_message_bus& app_message_bus);

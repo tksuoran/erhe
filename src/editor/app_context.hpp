@@ -107,6 +107,12 @@ public:
     bool  use_sleep     {false};
     float sleep_margin  {0.0f}; // TODO
 
+    // Power saving: render at a reduced frequency when the window is idle.
+    // Cached from Window_config so the per-frame loop reads plain fields.
+    bool  power_save    {true}; // master enable
+    int   unfocused_fps {30};   // frame cap while visible but unfocused
+    int   hidden_fps    {10};   // frame cap while not visible (also pauses sim + skips render)
+
     Developer_config*       developer_config    {nullptr};
     Graphics_config*        graphics_config     {nullptr};
     Mesh_memory_config*     mesh_memory_config  {nullptr};
