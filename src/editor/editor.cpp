@@ -705,7 +705,8 @@ public:
 #else
             .title             = erhe::window::format_window_title("erhe editor by Timo Suoranta"),
 #endif
-            .initialize_frame_capture = m_graphics_config.renderdoc_capture_support
+            .initialize_frame_capture = m_graphics_config.renderdoc_capture_support,
+            .renderdoc_library_path   = m_graphics_config.renderdoc_library_path
         };
 
         configuration.show                     = window_config.show;

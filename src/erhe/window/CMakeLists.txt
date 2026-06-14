@@ -54,6 +54,7 @@ target_link_libraries(
     PRIVATE
         erhe::log
         erhe::profile
+        erhe::utility
         erhe::verify
         fmt::fmt
         glm::glm-header-only

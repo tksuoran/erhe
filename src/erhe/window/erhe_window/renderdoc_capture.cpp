@@ -2,7 +2,11 @@
 #include "erhe_window/window.hpp"
 #include "erhe_window/window_log.hpp"
 #include "erhe_window/renderdoc_app.h"
+#include "erhe_utility/env.hpp"
 #include "erhe_verify/verify.hpp"
+
+#include <filesystem>
+#include <string>
 
 #if defined(ERHE_OS_WINDOWS)
 #   ifndef _CRT_SECURE_NO_WARNINGS
@@ -32,12 +36,46 @@ namespace {
 RENDERDOC_API_1_7_0* renderdoc_api{nullptr};
 bool is_initialized{false};
 
+void set_env_or_warn(const char* key, const char* value)
+{
+    if (!erhe::utility::set_env(key, value)) {
+        log_renderdoc->warn("RenderDoc: failed to set environment variable {}={}", key, value);
+    }
 }
 
-void initialize_frame_capture()
+// Apply the environment variables needed to make the Vulkan loader pick up the
+// override RenderDoc library's implicit capture layer (an experimental fork at
+// a custom location) instead of the system-installed RenderDoc layer. Must run
+// before vkCreateInstance. The layer search path is derived from the override
+// library's own directory so it stays in sync with renderdoc_library_path.
+void apply_renderdoc_override_env(std::string_view library_path_override)
 {
+    const std::filesystem::path library_path{library_path_override};
+    const std::string layer_directory = library_path.parent_path().string();
+    set_env_or_warn("DISABLE_VULKAN_RENDERDOC_CAPTURE_1_44", "1");
+    set_env_or_warn("DISABLE_VULKAN_RENDERDOC_CAPTURE_1_41", "1");
+    set_env_or_warn("VK_ADD_IMPLICIT_LAYER_PATH", layer_directory.c_str());
+    set_env_or_warn("ENABLE_VULKAN_RENDERDOC_CAPTURE", "1");
+    log_renderdoc->info(
+        "RenderDoc: override library '{}' active, VK_ADD_IMPLICIT_LAYER_PATH='{}'",
+        library_path_override, layer_directory
+    );
+}
+
+}
+
+void initialize_frame_capture(std::string_view library_path_override)
+{
+    const bool have_override = !library_path_override.empty();
+    if (have_override) {
+        apply_renderdoc_override_env(library_path_override);
+    }
+
 #if defined(ERHE_OS_WINDOWS)
-    HMODULE renderdoc_module = LoadLibraryExA("C:\\Program Files\\RenderDoc\\renderdoc.dll", NULL, 0);
+    const std::string library_path = have_override
+        ? std::string{library_path_override}
+        : std::string{"C:\\Program Files\\RenderDoc\\renderdoc.dll"};
+    HMODULE renderdoc_module = LoadLibraryExA(library_path.c_str(), NULL, 0);
     if (renderdoc_module) {
         auto RENDERDOC_GetAPI = reinterpret_cast<pRENDERDOC_GetAPI>(
             GetProcAddress(renderdoc_module, "RENDERDOC_GetAPI")
@@ -50,10 +88,15 @@ void initialize_frame_capture()
         int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_7_0, (void **)&renderdoc_api);
         log_renderdoc->trace("Loaded RenderDoc .dll, RENDERDOC_GetAPI() return value = {}", ret);
         ERHE_VERIFY(ret == 1);
+    } else {
+        log_renderdoc->warn("RenderDoc: failed to load library '{}'", library_path);
     }
 #elif defined(ERHE_OS_LINUX)
     // For android replace librenderdoc.so with libVkLayer_GLES_RenderDoc.so
-    void* renderdoc_so = dlopen("librenderdoc.so", RTLD_NOW);
+    const std::string library_path = have_override
+        ? std::string{library_path_override}
+        : std::string{"librenderdoc.so"};
+    void* renderdoc_so = dlopen(library_path.c_str(), RTLD_NOW);
     if (renderdoc_so != nullptr) {
         pRENDERDOC_GetAPI RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)dlsym(renderdoc_so, "RENDERDOC_GetAPI");
         int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_7_0, (void **)&renderdoc_api);
@@ -61,7 +104,10 @@ void initialize_frame_capture()
         ERHE_VERIFY(ret == 1);
     }
 #elif defined(ERHE_OS_MACOS)
-    void* renderdoc_so = dlopen("/Applications/qrenderdoc.app/Contents/lib/librenderdoc.dylib", RTLD_NOW);
+    const std::string library_path = have_override
+        ? std::string{library_path_override}
+        : std::string{"/Applications/qrenderdoc.app/Contents/lib/librenderdoc.dylib"};
+    void* renderdoc_so = dlopen(library_path.c_str(), RTLD_NOW);
     if (renderdoc_so != nullptr) {
         pRENDERDOC_GetAPI RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)dlsym(renderdoc_so, "RENDERDOC_GetAPI");
         int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_7_0, (void **)&renderdoc_api);

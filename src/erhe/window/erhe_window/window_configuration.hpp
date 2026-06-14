@@ -36,6 +36,7 @@ public:
     std::string     title                   {};
     int             initial_clear           {3};
     bool            initialize_frame_capture{false};
+    std::string     renderdoc_library_path  {};
 };
 
 } // namespace erhe::window
