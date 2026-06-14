@@ -1,7 +1,6 @@
 {
     "initial_clear": true,
     "renderdoc_capture_support": true,
-    "renderdoc_library_path": "D:\\renderdoc\\x64\\Development\\renderdoc.dll",
     "shader_monitor_enabled": false,
     "force_disable_vsync": false,
     "force_disable_reverse_depth": false,
