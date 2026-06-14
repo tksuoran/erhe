@@ -103,19 +103,9 @@ auto Mesh_component_transform::gather(App_context& context) -> bool
     std::sort(m_vertices.begin(), m_vertices.end());
     m_vertices.erase(std::unique(m_vertices.begin(), m_vertices.end()), m_vertices.end());
 
-    // Drop any stale out-of-range indices defensively.
-    const GEO::index_t vertex_count = geo_mesh.vertices.nb();
-    m_vertices.erase(
-        std::remove_if(
-            m_vertices.begin(),
-            m_vertices.end(),
-            [vertex_count](const GEO::index_t vertex) { return vertex >= vertex_count; }
-        ),
-        m_vertices.end()
-    );
-    if (m_vertices.empty()) {
-        return false;
-    }
+    // No stale-index filtering needed: geometry swaps clear the selection
+    // synchronously via Mesh_geometry_changed_message before gather() can run,
+    // so the indices always address the current geometry.
 
     m_mesh            = mesh;
     m_primitive_index = primitive_index;

@@ -496,11 +496,10 @@ void Mesh_component_selection_tool::tool_render(const Render_context& context)
             if (shape) {
                 const std::shared_ptr<erhe::geometry::Geometry>& geometry = shape->get_geometry();
                 if (geometry) {
-                    // Drop the selection if the mesh's geometry has been
-                    // replaced (a geometry edit / undo) since it was picked;
-                    // the stored indices would otherwise address the new mesh.
-                    m_mesh_component_selection.set_active_geometry(geometry);
-
+                    // Geometry reconciliation is push-driven: operations that
+                    // swap a mesh's geometry send Mesh_geometry_changed_message,
+                    // and Mesh_component_selection clears stale indices on
+                    // receipt. No render-time poll is needed here.
                     const glm::mat4  world_from_node = node->world_from_node();
                     const glm::mat3  normal_matrix   = glm::transpose(glm::inverse(glm::mat3(world_from_node)));
                     const GEO::Mesh& geo_mesh        = geometry->get_mesh();
