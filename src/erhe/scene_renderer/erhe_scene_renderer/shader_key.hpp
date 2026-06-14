@@ -57,7 +57,8 @@ enum class Shader_debug : uint16_t
     emissive           = 27,
     shadowmap_texels   = 28,
     misc               = 29,
-    shadow_visibility  = 30
+    shadow_visibility  = 30,
+    vdotn_dim          = 31
 };
 
 // User-visible display strings matching the Shader_debug enum, in
@@ -93,7 +94,8 @@ inline constexpr const char* c_shader_debug_strings[] = {
     "Emissive",
     "Shadowmap Texels",
     "Debug Miscellaneous",
-    "Shadow Visibility"
+    "Shadow Visibility",
+    "V.N (dim)"
 };
 
 #define ERHE_SHADER_BOOL(X) \

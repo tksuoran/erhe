@@ -673,6 +673,10 @@ void main()
             out_color.rgb = vec3(0.0);
 #    endif
         }
+#  elif ERHE_SHADER_DEBUG == 31 // vdotn_dim
+        // Dimmed (0.5x) version of vdotn, easier on the eyes when
+        // editing vertices / edges / faces in mesh-component mode.
+        out_color.rgb = vec3(0.5 * max(dot(V, N), 0.0));
 #  endif
         out_color.a = 1.0;
     }
