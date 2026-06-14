@@ -453,7 +453,8 @@ void bucket_primitives(
     const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
     const erhe::Item_filter&                                   filter,
     const erhe::primitive::Primitive_mode                      primitive_mode,
-    const Blending_mode_policy                                 blending_mode_policy
+    const Blending_mode_policy                                 blending_mode_policy,
+    const erhe::Item_filter&                                   shader_debug_filter
 )
 {
     for (const std::shared_ptr<erhe::scene::Mesh>& mesh : meshes) {
@@ -493,6 +494,15 @@ void bucket_primitives(
                 &vertex_input_entry.vertex_format,
                 static_cast<bool>(mesh->skin)
             );
+            // The shader-debug override visualization is a content-inspection aid; do not recolor
+            // tool / brush / controller / rendertarget meshes. Drop the SHADER_DEBUG axis for any mesh
+            // the caller's shader_debug_filter rejects, so it falls back to its normal shader variant.
+            if (
+                (environment_shader_key.get(Shader_int::SHADER_DEBUG) != 0u) &&
+                !shader_debug_filter(mesh->get_flag_bits())
+            ) {
+                shader_key.set(Shader_int::SHADER_DEBUG, 0u);
+            }
             shader_key.bool_mask |=  boolean_mask_force_enable;
             shader_key.bool_mask &= ~boolean_mask_force_disable;
             switch (blending_mode_policy) {

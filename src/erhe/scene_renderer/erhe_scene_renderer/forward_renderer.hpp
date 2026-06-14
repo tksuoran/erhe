@@ -128,6 +128,10 @@ public:
         Primitive_interface_settings                           primitive_settings{};
         const erhe::Item_filter                                filter{};
         Shader_debug                                           shader_debug{Shader_debug::none};
+        // The SHADER_DEBUG override visualization applies only to meshes that
+        // pass this filter; meshes it rejects render with SHADER_DEBUG = none.
+        // Default (match-all) preserves the prior "applies to everything" behavior.
+        const erhe::Item_filter                                shader_debug_filter{};
         // Shadow map filtering method, plumbed to the shader as the
         // ERHE_SHADOW_FILTER compile-time variant axis. The value is the PCF
         // kernel width in texels (0 = hard, 2 = 2x2, 4 = 4x4, 6 = 6x6).

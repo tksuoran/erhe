@@ -234,7 +234,8 @@ void bucket_primitives(
     const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
     const erhe::Item_filter&                                   filter,
     erhe::primitive::Primitive_mode                            primitive_mode,
-    Blending_mode_policy                                       blending_mode_policy
+    Blending_mode_policy                                       blending_mode_policy,
+    const erhe::Item_filter&                                   shader_debug_filter = {}
 );
 
 }

@@ -216,7 +216,8 @@ void Forward_renderer::render(const Render_parameters& parameters)
                 meshes,
                 filter,
                 parameters.primitive_mode,
-                parameters.blending_mode_policy
+                parameters.blending_mode_policy,
+                parameters.shader_debug_filter
             );
         }
 
