@@ -193,18 +193,6 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         ss << entry.mesh->get_name();
     }
     set_description(ss.str());
-
-    // If the active mesh component selection targets the merge survivor (first
-    // mesh, whose geometry is swapped to the combined geometry), snapshot it now
-    // so undo() can restore it.
-    Mesh_component_selection* const component_selection = m_parameters.context.mesh_component_selection;
-    if (component_selection != nullptr) {
-        const std::shared_ptr<erhe::scene::Mesh> active_mesh = component_selection->get_active_mesh();
-        if (active_mesh && (active_mesh == m_sources.front().mesh)) {
-            m_affects_component_selection = true;
-            m_component_selection_before  = component_selection->capture_state();
-        }
-    }
 }
 
 void Merge_operation::execute(App_context& context)
@@ -265,8 +253,8 @@ void Merge_operation::execute(App_context& context)
             node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
         }
     }
-    // Announce the survivor's geometry swap; the Mesh_component_selection
-    // subscriber reconciles and clears the (now stale) component selection.
+    // Announce the survivor's geometry swap (eager housekeeping for the
+    // component-selection store; any entry for the old geometry goes dormant).
     context.app_message_bus->mesh_geometry_changed.send_message(
         Mesh_geometry_changed_message{.mesh = m_sources.front().mesh}
     );
@@ -330,16 +318,13 @@ void Merge_operation::undo(App_context& context)
             node->set_parent(entry.before_parent);
         }
     }
-    // Announce the geometry restore (subscriber reconciles to the now-live
-    // original geometry), then restore the component snapshot last so the
-    // original geometry is paired with the original component indices.
+    // Announce the geometry restore. The component-selection store re-binds the
+    // original survivor geometry, so any dormant entry for it becomes live again
+    // automatically via is_live().
     context.app_message_bus->mesh_geometry_changed.send_message(
         Mesh_geometry_changed_message{.mesh = m_sources.front().mesh}
     );
     context.selection->set_selection(m_selection_before);
-    if (m_affects_component_selection) {
-        context.mesh_component_selection->restore_state(m_component_selection_before);
-    }
 
 #if !defined(NDEBUG)
     scene.sanity_check();

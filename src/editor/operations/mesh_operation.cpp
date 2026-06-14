@@ -105,9 +105,9 @@ void Mesh_operation::execute(App_context& context)
 
     log_operations->trace("Op Execute End {}", describe());
 
-    // Announce the geometry swap. The Mesh_component_selection subscriber
-    // reconciles synchronously and clears the (now stale) selection if it
-    // targeted one of these meshes.
+    // Announce the geometry swap (eager housekeeping for the component-selection
+    // store). Any entry for the old geometry simply goes dormant via is_live();
+    // the subscriber only prunes entries that can no longer become live.
     for (const auto& entry : m_entries) {
         context.app_message_bus->mesh_geometry_changed.send_message(
             Mesh_geometry_changed_message{.mesh = entry.scene_mesh}
@@ -159,16 +159,13 @@ void Mesh_operation::undo(App_context& context)
 
     log_operations->trace("Op Undo End {}", describe());
 
-    // Announce the geometry restore (subscriber reconciles to the now-live
-    // original geometry), then restore the snapshot last so the original
-    // geometry is paired with the original component indices.
+    // Announce the geometry restore. The component-selection store re-binds the
+    // original geometry (held alive by before.primitives), so any dormant entry
+    // for it becomes live again automatically via is_live() - no restore needed.
     for (const auto& entry : m_entries) {
         context.app_message_bus->mesh_geometry_changed.send_message(
             Mesh_geometry_changed_message{.mesh = entry.scene_mesh}
         );
-    }
-    if (m_affects_component_selection) {
-        context.mesh_component_selection->restore_state(m_component_selection_before);
     }
 }
 
@@ -371,24 +368,6 @@ void Mesh_operation::make_entries(
 #if !defined(NDEBUG)
     scene.sanity_check();
 #endif
-
-    // If the active mesh component selection targets a mesh whose geometry this
-    // operation swaps, snapshot it now - while the original geometry is still
-    // live - so undo() can restore it. execute()/redo() rely on the
-    // Mesh_geometry_changed_message subscriber to clear instead.
-    Mesh_component_selection* const component_selection = m_parameters.context.mesh_component_selection;
-    if ((component_selection != nullptr) && !m_entries.empty()) {
-        const std::shared_ptr<erhe::scene::Mesh> active_mesh = component_selection->get_active_mesh();
-        if (active_mesh) {
-            for (const Entry& entry : m_entries) {
-                if (entry.scene_mesh == active_mesh) {
-                    m_affects_component_selection = true;
-                    m_component_selection_before  = component_selection->capture_state();
-                    break;
-                }
-            }
-        }
-    }
 }
 
 void Mesh_operation::add_entry(Entry&& entry)

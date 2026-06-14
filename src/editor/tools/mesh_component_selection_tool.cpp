@@ -350,40 +350,40 @@ auto Mesh_component_selection_tool::on_select() -> bool
     }
 
     Mesh_component_selection& selection = m_mesh_component_selection;
-    // Switching to a different mesh (or to a rebuilt geometry) clears the
-    // previous component selection.
-    selection.set_active_mesh(pick_result.mesh, pick_result.primitive_index);
-    selection.set_active_geometry(pick_result.geometry);
 
-    // Plain click replaces (clear then add); Ctrl/Shift extend (toggle).
+    // Plain click replaces the whole selection (single mesh); Ctrl/Shift extend
+    // toggles within the picked mesh's entry and may accumulate across meshes.
     const bool extend = (m_context.input_state != nullptr) &&
                         (m_context.input_state->control || m_context.input_state->shift);
+    if (!extend) {
+        selection.clear_all();
+    }
+    Mesh_component_entry& entry = selection.find_or_create_entry(
+        pick_result.mesh, pick_result.primitive_index, pick_result.geometry
+    );
 
     switch (selection.get_mode()) {
         case Mesh_component_mode::vertex: {
             if (extend) {
-                selection.toggle_vertex(pick_result.vertex);
+                entry.toggle_vertex(pick_result.vertex);
             } else {
-                selection.clear();
-                selection.add_vertex(pick_result.vertex);
+                entry.add_vertex(pick_result.vertex);
             }
             break;
         }
         case Mesh_component_mode::edge: {
             if (extend) {
-                selection.toggle_edge(pick_result.edge_v0, pick_result.edge_v1);
+                entry.toggle_edge(pick_result.edge_v0, pick_result.edge_v1);
             } else {
-                selection.clear();
-                selection.add_edge(pick_result.edge_v0, pick_result.edge_v1);
+                entry.add_edge(pick_result.edge_v0, pick_result.edge_v1);
             }
             break;
         }
         case Mesh_component_mode::face: {
             if (extend) {
-                selection.toggle_facet(pick_result.facet);
+                entry.toggle_facet(pick_result.facet);
             } else {
-                selection.clear();
-                selection.add_facet(pick_result.facet);
+                entry.add_facet(pick_result.facet);
             }
             break;
         }
@@ -485,77 +485,72 @@ void Mesh_component_selection_tool::tool_render(const Render_context& context)
         camera_up       = glm::normalize(glm::vec3{world_from_camera[1]});
     }
 
-    // Persisted selection of the active mesh.
-    const std::shared_ptr<erhe::scene::Mesh> active_mesh     = m_mesh_component_selection.get_active_mesh();
-    const std::size_t                        primitive_index = m_mesh_component_selection.get_active_primitive_index();
-    if (active_mesh && (primitive_index < active_mesh->get_primitives().size())) {
-        const erhe::scene::Node*                           node      = active_mesh->get_node();
-        const std::shared_ptr<erhe::primitive::Primitive>& primitive = active_mesh->get_primitives()[primitive_index].primitive;
-        if ((node != nullptr) && primitive) {
-            const std::shared_ptr<erhe::primitive::Primitive_shape> shape = primitive->get_shape_for_raytrace();
-            if (shape) {
-                const std::shared_ptr<erhe::geometry::Geometry>& geometry = shape->get_geometry();
-                if (geometry) {
-                    // Geometry reconciliation is push-driven: operations that
-                    // swap a mesh's geometry send Mesh_geometry_changed_message,
-                    // and Mesh_component_selection clears stale indices on
-                    // receipt. No render-time poll is needed here.
-                    const glm::mat4  world_from_node = node->world_from_node();
-                    const glm::mat3  normal_matrix   = glm::transpose(glm::inverse(glm::mat3(world_from_node)));
-                    const GEO::Mesh& geo_mesh        = geometry->get_mesh();
+    // Render every live entry (multi-mesh). is_live() guarantees the mesh is in
+    // the scene and the primitive still carries the exact Geometry the indices
+    // address, so a geometry swap (dormant entry) or a scene removal (mesh out of
+    // scene) draws nothing - no stale ghost, no poll needed.
+    m_mesh_component_selection.prune();
+    for (const Mesh_component_entry& entry : m_mesh_component_selection.get_entries()) {
+        if (!m_mesh_component_selection.is_live(entry)) {
+            continue;
+        }
+        const std::shared_ptr<erhe::scene::Mesh>        mesh     = entry.mesh.lock();
+        const std::shared_ptr<erhe::geometry::Geometry> geometry = entry.geometry.lock();
+        const erhe::scene::Node*                        node     = mesh->get_node();
 
-                    // Faces.
-                    m_scratch_positions.clear();
-                    m_scratch_indices.clear();
-                    for (const GEO::index_t facet : m_mesh_component_selection.get_facets()) {
-                        append_facet_triangles(*geometry, facet);
-                    }
-                    if (!m_scratch_indices.empty()) {
-                        triangle_renderer.add_triangles(world_from_node, style.face_color, m_scratch_positions, m_scratch_indices);
-                    }
+        const glm::mat4  world_from_node = node->world_from_node();
+        const glm::mat3  normal_matrix   = glm::transpose(glm::inverse(glm::mat3(world_from_node)));
+        const GEO::Mesh& geo_mesh        = geometry->get_mesh();
 
-                    // Edges. Each carries its two adjacent face normals (plus an
-                    // interior-tangent sign) so the compute line shader makes
-                    // each side of the wide-line ribbon coplanar with its face
-                    // (the two-face "tent"), eliminating z-fight with both faces.
-                    m_scratch_lines.clear();
-                    m_scratch_face_normals_a.clear();
-                    m_scratch_face_normals_b.clear();
-                    m_scratch_signs_a.clear();
-                    for (const Mesh_edge_key& edge : m_mesh_component_selection.get_edges()) {
-                        const glm::vec3 p0 = to_glm_vec3(get_pointf(geo_mesh.vertices, edge.first));
-                        const glm::vec3 p1 = to_glm_vec3(get_pointf(geo_mesh.vertices, edge.second));
-                        m_scratch_lines.push_back(erhe::renderer::Line{p0, p1});
-                        const Edge_surface_frame frame = compute_edge_surface_frame(*geometry, world_from_node, normal_matrix, edge.first, edge.second);
-                        m_scratch_face_normals_a.push_back(frame.normal_a);
-                        m_scratch_face_normals_b.push_back(frame.normal_b);
-                        m_scratch_signs_a.push_back(frame.sign_a);
-                    }
-                    if (!m_scratch_lines.empty()) {
-                        line_renderer.set_thickness(style.edge_thickness);
-                        line_renderer.add_surface_lines(
-                            world_from_node, style.edge_color,
-                            std::span<const erhe::renderer::Line>{m_scratch_lines},
-                            std::span<const glm::vec3>{m_scratch_face_normals_a},
-                            std::span<const glm::vec3>{m_scratch_face_normals_b},
-                            std::span<const float>{m_scratch_signs_a}
-                        );
-                    }
+        // Faces.
+        m_scratch_positions.clear();
+        m_scratch_indices.clear();
+        for (const GEO::index_t facet : entry.facets) {
+            append_facet_triangles(*geometry, facet);
+        }
+        if (!m_scratch_indices.empty()) {
+            triangle_renderer.add_triangles(world_from_node, style.face_color, m_scratch_positions, m_scratch_indices);
+        }
 
-                    // Vertices (camera-facing quads, world space).
-                    m_scratch_positions.clear();
-                    m_scratch_indices.clear();
-                    for (const GEO::index_t vertex : m_mesh_component_selection.get_vertices()) {
-                        const glm::vec3 v_local = to_glm_vec3(get_pointf(geo_mesh.vertices, vertex));
-                        const glm::vec3 v_world = glm::vec3{world_from_node * glm::vec4{v_local, 1.0f}};
-                        const float     half    = style.vertex_size * glm::distance(camera_position, v_world);
-                        append_vertex_quad(v_world, camera_right, camera_up, half);
-                    }
-                    if (!m_scratch_indices.empty()) {
-                        triangle_renderer.add_triangles(glm::mat4{1.0f}, style.vertex_color, m_scratch_positions, m_scratch_indices);
-                    }
-                }
-            }
+        // Edges. Each carries its two adjacent face normals (plus an interior-
+        // tangent sign) so the compute line shader makes each side of the
+        // wide-line ribbon coplanar with its face (the two-face "tent"),
+        // eliminating z-fight with both faces.
+        m_scratch_lines.clear();
+        m_scratch_face_normals_a.clear();
+        m_scratch_face_normals_b.clear();
+        m_scratch_signs_a.clear();
+        for (const Mesh_edge_key& edge : entry.edges) {
+            const glm::vec3 p0 = to_glm_vec3(get_pointf(geo_mesh.vertices, edge.first));
+            const glm::vec3 p1 = to_glm_vec3(get_pointf(geo_mesh.vertices, edge.second));
+            m_scratch_lines.push_back(erhe::renderer::Line{p0, p1});
+            const Edge_surface_frame frame = compute_edge_surface_frame(*geometry, world_from_node, normal_matrix, edge.first, edge.second);
+            m_scratch_face_normals_a.push_back(frame.normal_a);
+            m_scratch_face_normals_b.push_back(frame.normal_b);
+            m_scratch_signs_a.push_back(frame.sign_a);
+        }
+        if (!m_scratch_lines.empty()) {
+            line_renderer.set_thickness(style.edge_thickness);
+            line_renderer.add_surface_lines(
+                world_from_node, style.edge_color,
+                std::span<const erhe::renderer::Line>{m_scratch_lines},
+                std::span<const glm::vec3>{m_scratch_face_normals_a},
+                std::span<const glm::vec3>{m_scratch_face_normals_b},
+                std::span<const float>{m_scratch_signs_a}
+            );
+        }
+
+        // Vertices (camera-facing quads, world space).
+        m_scratch_positions.clear();
+        m_scratch_indices.clear();
+        for (const GEO::index_t vertex : entry.vertices) {
+            const glm::vec3 v_local = to_glm_vec3(get_pointf(geo_mesh.vertices, vertex));
+            const glm::vec3 v_world = glm::vec3{world_from_node * glm::vec4{v_local, 1.0f}};
+            const float     half    = style.vertex_size * glm::distance(camera_position, v_world);
+            append_vertex_quad(v_world, camera_right, camera_up, half);
+        }
+        if (!m_scratch_indices.empty()) {
+            triangle_renderer.add_triangles(glm::mat4{1.0f}, style.vertex_color, m_scratch_positions, m_scratch_indices);
         }
     }
 
@@ -636,7 +631,7 @@ void Mesh_component_selection_tool::viewport_toolbar()
     }
 
     if (ImGui::Button("Clear")) {
-        selection.clear();
+        selection.clear_all();
     }
     if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Clear mesh component selection");

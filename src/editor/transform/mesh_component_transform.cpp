@@ -2,7 +2,9 @@
 #include "transform/transform_tool.hpp"
 
 #include "app_context.hpp"
+#include "operations/compound_operation.hpp"
 #include "operations/move_mesh_vertices_operation.hpp"
+#include "operations/operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "tools/mesh_component_selection.hpp"
 
@@ -24,93 +26,95 @@ namespace editor {
 
 auto Mesh_component_transform::gather(App_context& context) -> bool
 {
+    m_groups.clear();
+
     Mesh_component_selection* selection = context.mesh_component_selection;
     if (selection == nullptr) {
         return false;
     }
-    if (selection->get_mode() == Mesh_component_mode::object) {
-        return false;
-    }
-    std::shared_ptr<erhe::scene::Mesh> mesh = selection->get_active_mesh();
-    if (!mesh) {
-        return false;
-    }
-    const std::size_t primitive_index = selection->get_active_primitive_index();
-    const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
-    if (primitive_index >= primitives.size()) {
-        return false;
-    }
-    const std::shared_ptr<erhe::primitive::Primitive>& primitive = primitives[primitive_index].primitive;
-    if (!primitive) {
-        return false;
-    }
-    // Component editing is only valid when the raytrace/selection geometry is the same
-    // object as the render geometry, i.e. there is no separate collision Primitive_shape.
-    // For two-geometry primitives the selection indices address the collision geometry,
-    // not the render geometry, so editing would corrupt the mesh.
-    if (primitive->collision_shape) {
-        return false;
-    }
-    const std::shared_ptr<erhe::primitive::Primitive_render_shape>& render_shape = primitive->render_shape;
-    if (!render_shape) {
-        return false;
-    }
-    const std::shared_ptr<erhe::geometry::Geometry>& geometry = render_shape->get_geometry();
-    if (!geometry) {
-        return false;
-    }
-    if (mesh->get_node() == nullptr) {
+    const Mesh_component_mode mode = selection->get_mode();
+    if (mode == Mesh_component_mode::object) {
         return false;
     }
 
-    const GEO::Mesh& geo_mesh = geometry->get_mesh();
+    selection->prune();
+    for (const Mesh_component_entry& entry : selection->get_entries()) {
+        if (!selection->is_live(entry)) {
+            continue;
+        }
+        const std::shared_ptr<erhe::scene::Mesh> mesh = entry.mesh.lock();
+        const std::size_t                        primitive_index = entry.primitive_index;
+        const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
+        const std::shared_ptr<erhe::primitive::Primitive>& primitive = primitives[primitive_index].primitive;
 
-    m_vertices.clear();
-    switch (selection->get_mode()) {
-        case Mesh_component_mode::vertex: {
-            for (const GEO::index_t vertex : selection->get_vertices()) {
-                m_vertices.push_back(vertex);
-            }
-            break;
+        // Component editing is only valid when the raytrace/selection geometry is the
+        // same object as the render geometry, i.e. there is no separate collision
+        // Primitive_shape; otherwise the selection indices address the collision
+        // geometry, not the render geometry, and editing would corrupt the mesh.
+        if (primitive->collision_shape) {
+            continue;
         }
-        case Mesh_component_mode::edge: {
-            for (const Mesh_edge_key& edge : selection->get_edges()) {
-                m_vertices.push_back(edge.first);
-                m_vertices.push_back(edge.second);
-            }
-            break;
+        const std::shared_ptr<erhe::primitive::Primitive_render_shape>& render_shape = primitive->render_shape;
+        if (!render_shape) {
+            continue;
         }
-        case Mesh_component_mode::face: {
-            for (const GEO::index_t facet : selection->get_facets()) {
-                const GEO::index_t corner_begin = geo_mesh.facets.corners_begin(facet);
-                const GEO::index_t corner_end   = geo_mesh.facets.corners_end(facet);
-                for (GEO::index_t corner = corner_begin; corner < corner_end; ++corner) {
-                    m_vertices.push_back(geo_mesh.facet_corners.vertex(corner));
+        const std::shared_ptr<erhe::geometry::Geometry>& geometry = render_shape->get_geometry();
+        if (!geometry) {
+            continue;
+        }
+        if (mesh->get_node() == nullptr) {
+            continue;
+        }
+
+        const GEO::Mesh& geo_mesh = geometry->get_mesh();
+
+        std::vector<GEO::index_t> vertices;
+        switch (mode) {
+            case Mesh_component_mode::vertex: {
+                for (const GEO::index_t vertex : entry.vertices) {
+                    vertices.push_back(vertex);
                 }
+                break;
             }
-            break;
+            case Mesh_component_mode::edge: {
+                for (const Mesh_edge_key& edge : entry.edges) {
+                    vertices.push_back(edge.first);
+                    vertices.push_back(edge.second);
+                }
+                break;
+            }
+            case Mesh_component_mode::face: {
+                for (const GEO::index_t facet : entry.facets) {
+                    const GEO::index_t corner_begin = geo_mesh.facets.corners_begin(facet);
+                    const GEO::index_t corner_end   = geo_mesh.facets.corners_end(facet);
+                    for (GEO::index_t corner = corner_begin; corner < corner_end; ++corner) {
+                        vertices.push_back(geo_mesh.facet_corners.vertex(corner));
+                    }
+                }
+                break;
+            }
+            case Mesh_component_mode::object:
+            default: {
+                break;
+            }
         }
-        case Mesh_component_mode::object:
-        default: {
-            return false;
+        if (vertices.empty()) {
+            continue;
         }
+        std::sort(vertices.begin(), vertices.end());
+        vertices.erase(std::unique(vertices.begin(), vertices.end()), vertices.end());
+        if (vertices.empty()) {
+            continue;
+        }
+
+        Group& group = m_groups.emplace_back();
+        group.mesh            = mesh;
+        group.primitive_index = primitive_index;
+        group.geometry        = geometry;
+        group.vertices        = std::move(vertices);
     }
 
-    if (m_vertices.empty()) {
-        return false;
-    }
-
-    std::sort(m_vertices.begin(), m_vertices.end());
-    m_vertices.erase(std::unique(m_vertices.begin(), m_vertices.end()), m_vertices.end());
-
-    // No stale-index filtering needed: geometry swaps clear the selection
-    // synchronously via Mesh_geometry_changed_message before gather() can run,
-    // so the indices always address the current geometry.
-
-    m_mesh            = mesh;
-    m_primitive_index = primitive_index;
-    m_geometry        = geometry;
-    return true;
+    return !m_groups.empty();
 }
 
 auto Mesh_component_transform::update_anchor(App_context& context, Transform_tool_shared& shared) -> bool
@@ -121,19 +125,43 @@ auto Mesh_component_transform::update_anchor(App_context& context, Transform_too
         return false;
     }
 
-    std::shared_ptr<erhe::scene::Mesh> mesh = m_mesh.lock();
-    erhe::scene::Node*                 node = mesh->get_node();
-    const glm::mat4                    world_from_node = node->world_from_node();
-    const GEO::Mesh&                   geo_mesh = m_geometry->get_mesh();
-
-    glm::vec3 centroid_local{0.0f};
-    for (const GEO::index_t vertex : m_vertices) {
-        const GEO::vec3f p = get_pointf(geo_mesh.vertices, vertex);
-        centroid_local += glm::vec3{p.x, p.y, p.z};
+    // Combined centroid (world space) over all selected vertices across all groups.
+    glm::vec3   centroid_world{0.0f};
+    std::size_t count = 0;
+    for (const Group& group : m_groups) {
+        const std::shared_ptr<erhe::scene::Mesh> mesh = group.mesh.lock();
+        if (!mesh) {
+            continue;
+        }
+        const erhe::scene::Node* node = mesh->get_node();
+        if (node == nullptr) {
+            continue;
+        }
+        const glm::mat4  world_from_node = node->world_from_node();
+        const GEO::Mesh& geo_mesh        = group.geometry->get_mesh();
+        for (const GEO::index_t vertex : group.vertices) {
+            const GEO::vec3f p     = get_pointf(geo_mesh.vertices, vertex);
+            const glm::vec3  world = glm::vec3{world_from_node * glm::vec4{p.x, p.y, p.z, 1.0f}};
+            centroid_world += world;
+            ++count;
+        }
     }
-    centroid_local /= static_cast<float>(m_vertices.size());
-    const glm::vec3 centroid_world = glm::vec3{world_from_node * glm::vec4{centroid_local, 1.0f}};
-    const glm::quat rotation       = node->world_from_node_transform().get_rotation();
+    if (count == 0) {
+        shared.component_mode = false;
+        shared.entries.clear();
+        return false;
+    }
+    centroid_world /= static_cast<float>(count);
+
+    // Orient the anchor with the first group's mesh (multi-mesh has no single basis).
+    glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
+    const std::shared_ptr<erhe::scene::Mesh> first_mesh = m_groups.front().mesh.lock();
+    if (first_mesh) {
+        const erhe::scene::Node* node = first_mesh->get_node();
+        if (node != nullptr) {
+            rotation = node->world_from_node_transform().get_rotation();
+        }
+    }
 
     shared.world_from_anchor_initial_state.set_trs(centroid_world, rotation, glm::vec3{1.0f});
     shared.world_from_anchor = shared.world_from_anchor_initial_state;
@@ -148,40 +176,49 @@ void Mesh_component_transform::begin(App_context& context)
         m_active = false;
         return;
     }
-    std::shared_ptr<erhe::scene::Mesh> mesh = m_mesh.lock();
-    erhe::scene::Node*                 node = mesh->get_node();
-    m_world_from_node = node->world_from_node();
-    m_node_from_world = node->node_from_world();
-
-    const GEO::Mesh& geo_mesh = m_geometry->get_mesh();
-    m_before_local.clear();
-    for (const GEO::index_t vertex : m_vertices) {
-        const GEO::vec3f p = get_pointf(geo_mesh.vertices, vertex);
-        m_before_local.push_back(glm::vec3{p.x, p.y, p.z});
+    for (Group& group : m_groups) {
+        const std::shared_ptr<erhe::scene::Mesh> mesh = group.mesh.lock();
+        erhe::scene::Node* const                 node = mesh ? mesh->get_node() : nullptr;
+        group.before_local.clear();
+        if (node == nullptr) {
+            continue;
+        }
+        group.world_from_node = node->world_from_node();
+        group.node_from_world = node->node_from_world();
+        const GEO::Mesh& geo_mesh = group.geometry->get_mesh();
+        group.before_local.reserve(group.vertices.size());
+        for (const GEO::index_t vertex : group.vertices) {
+            const GEO::vec3f p = get_pointf(geo_mesh.vertices, vertex);
+            group.before_local.push_back(glm::vec3{p.x, p.y, p.z});
+        }
     }
     m_active = true;
 }
 
 void Mesh_component_transform::apply(App_context& context, Transform_tool_shared& shared, const glm::mat4& updated_world_from_anchor)
 {
-    if (!m_active || !m_geometry) {
+    if (!m_active) {
         return;
     }
-    std::shared_ptr<erhe::scene::Mesh> mesh = m_mesh.lock();
-    if (!mesh) {
-        return;
-    }
-
     const glm::mat4 world_delta = updated_world_from_anchor * shared.world_from_anchor_initial_state.get_inverse_matrix();
-    GEO::Mesh&      geo_mesh    = m_geometry->get_mesh();
 
-    for (std::size_t i = 0, end = m_vertices.size(); i < end; ++i) {
-        const GEO::index_t vertex       = m_vertices[i];
-        const glm::vec3    world_before = glm::vec3{m_world_from_node * glm::vec4{m_before_local[i], 1.0f}};
-        const glm::vec3    world_after  = glm::vec3{world_delta       * glm::vec4{world_before,      1.0f}};
-        const glm::vec3    local_after  = glm::vec3{m_node_from_world  * glm::vec4{world_after,       1.0f}};
-        set_pointf(geo_mesh.vertices, vertex, GEO::vec3f{local_after.x, local_after.y, local_after.z});
-        enqueue_gpu_position(context, vertex, local_after);
+    for (Group& group : m_groups) {
+        const std::shared_ptr<erhe::scene::Mesh> mesh = group.mesh.lock();
+        if (!mesh || !group.geometry) {
+            continue;
+        }
+        if (group.before_local.size() != group.vertices.size()) {
+            continue;
+        }
+        GEO::Mesh& geo_mesh = group.geometry->get_mesh();
+        for (std::size_t i = 0, end = group.vertices.size(); i < end; ++i) {
+            const GEO::index_t vertex       = group.vertices[i];
+            const glm::vec3    world_before = glm::vec3{group.world_from_node * glm::vec4{group.before_local[i], 1.0f}};
+            const glm::vec3    world_after  = glm::vec3{world_delta           * glm::vec4{world_before,         1.0f}};
+            const glm::vec3    local_after  = glm::vec3{group.node_from_world  * glm::vec4{world_after,          1.0f}};
+            set_pointf(geo_mesh.vertices, vertex, GEO::vec3f{local_after.x, local_after.y, local_after.z});
+            enqueue_gpu_position(context, group, vertex, local_after);
+        }
     }
 }
 
@@ -192,33 +229,7 @@ void Mesh_component_transform::commit(App_context& context)
     }
     m_active = false;
 
-    std::shared_ptr<erhe::scene::Mesh> mesh = m_mesh.lock();
-    if (!mesh || !m_geometry || m_vertices.empty()) {
-        return;
-    }
-    const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
-    if (m_primitive_index >= primitives.size() || !primitives[m_primitive_index].primitive) {
-        return;
-    }
-    const erhe::primitive::Primitive& primitive = *primitives[m_primitive_index].primitive.get();
-    if (!primitive.render_shape) {
-        return;
-    }
-
-    GEO::Mesh& geo_mesh = m_geometry->get_mesh();
-    std::vector<glm::vec3> after_local;
-    after_local.reserve(m_vertices.size());
-    for (const GEO::index_t vertex : m_vertices) {
-        const GEO::vec3f p = get_pointf(geo_mesh.vertices, vertex);
-        after_local.push_back(glm::vec3{p.x, p.y, p.z});
-    }
-
-    // Do not record a no-op edit (e.g. a click on a handle without dragging).
-    if ((after_local.size() == m_before_local.size()) && (after_local == m_before_local)) {
-        return;
-    }
-
-    erhe::primitive::Build_info build_info{
+    const erhe::primitive::Build_info build_info{
         .primitive_types = {
             .fill_triangles  = true,
             .edge_lines      = true,
@@ -228,35 +239,81 @@ void Mesh_component_transform::commit(App_context& context)
         .buffer_info = context.mesh_memory->make_primitive_buffer_info()
     };
 
-    context.operation_stack->queue(
-        std::make_shared<Move_mesh_vertices_operation>(
-            Move_mesh_vertices_operation::Parameters{
-                .mesh             = mesh,
-                .primitive_index  = m_primitive_index,
-                .geometry         = m_geometry,
-                .vertices         = m_vertices,
-                .before_positions = m_before_local,
-                .after_positions  = after_local,
-                .build_info       = build_info,
-                .normal_style     = primitive.render_shape->get_normal_style()
-            }
-        )
-    );
+    std::vector<std::shared_ptr<Operation>> operations;
+    for (Group& group : m_groups) {
+        const std::shared_ptr<erhe::scene::Mesh> mesh = group.mesh.lock();
+        if (!mesh || !group.geometry || group.vertices.empty()) {
+            continue;
+        }
+        if (group.before_local.size() != group.vertices.size()) {
+            continue;
+        }
+        const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
+        if ((group.primitive_index >= primitives.size()) || !primitives[group.primitive_index].primitive) {
+            continue;
+        }
+        const erhe::primitive::Primitive& primitive = *primitives[group.primitive_index].primitive.get();
+        if (!primitive.render_shape) {
+            continue;
+        }
+
+        GEO::Mesh&             geo_mesh = group.geometry->get_mesh();
+        std::vector<glm::vec3> after_local;
+        after_local.reserve(group.vertices.size());
+        for (const GEO::index_t vertex : group.vertices) {
+            const GEO::vec3f p = get_pointf(geo_mesh.vertices, vertex);
+            after_local.push_back(glm::vec3{p.x, p.y, p.z});
+        }
+
+        // Skip a group that did not actually move (e.g. a click on a handle without
+        // dragging, or a mesh outside the drag direction).
+        if (after_local == group.before_local) {
+            continue;
+        }
+
+        operations.push_back(
+            std::make_shared<Move_mesh_vertices_operation>(
+                Move_mesh_vertices_operation::Parameters{
+                    .mesh             = mesh,
+                    .primitive_index  = group.primitive_index,
+                    .geometry         = group.geometry,
+                    .vertices         = group.vertices,
+                    .before_positions = group.before_local,
+                    .after_positions  = after_local,
+                    .build_info       = build_info,
+                    .normal_style     = primitive.render_shape->get_normal_style()
+                }
+            )
+        );
+    }
+
+    if (operations.empty()) {
+        return;
+    }
+    if (operations.size() == 1) {
+        context.operation_stack->queue(operations.front());
+    } else {
+        context.operation_stack->queue(
+            std::make_shared<Compound_operation>(
+                Compound_operation::Parameters{.operations = std::move(operations)}
+            )
+        );
+    }
 }
 
-void Mesh_component_transform::enqueue_gpu_position(App_context& context, const GEO::index_t vertex, const glm::vec3& local_position)
+void Mesh_component_transform::enqueue_gpu_position(App_context& context, const Group& group, const GEO::index_t vertex, const glm::vec3& local_position)
 {
-    std::shared_ptr<erhe::scene::Mesh> mesh = m_mesh.lock();
+    const std::shared_ptr<erhe::scene::Mesh> mesh = group.mesh.lock();
     if (!mesh) {
         return;
     }
     erhe::scene_renderer::Mesh_memory& mesh_memory = *context.mesh_memory;
 
     const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
-    if (m_primitive_index >= primitives.size() || !primitives[m_primitive_index].primitive) {
+    if ((group.primitive_index >= primitives.size()) || !primitives[group.primitive_index].primitive) {
         return;
     }
-    const erhe::primitive::Primitive& primitive = *primitives[m_primitive_index].primitive.get();
+    const erhe::primitive::Primitive& primitive = *primitives[group.primitive_index].primitive.get();
     if (!primitive.render_shape) {
         return;
     }
@@ -279,7 +336,7 @@ void Mesh_component_transform::enqueue_gpu_position(App_context& context, const 
 
     // Update every GPU vertex that maps to this geometry vertex (one per corner when
     // corner normals split the vertex), matching Paint_tool Point mode.
-    for (const GEO::index_t corner : m_geometry->get_vertex_corners(vertex)) {
+    for (const GEO::index_t corner : group.geometry->get_vertex_corners(vertex)) {
         if (corner >= element_mappings.mesh_corner_to_vertex_buffer_index.size()) {
             continue;
         }
