@@ -130,10 +130,23 @@ public:
     [[nodiscard]] auto is_paused              () const -> bool;
     [[nodiscard]] auto consume_swapchain_dirty() -> bool;
 
+    // Window activity state, queried from SDL_GetWindowFlags() each call so it
+    // is always authoritative and self-healing (no event bookkeeping). Used by
+    // the main loop to render at a reduced frequency when the window is idle.
+    [[nodiscard]] auto is_focused  () const -> bool; // has keyboard input focus
+    [[nodiscard]] auto is_minimized() const -> bool;
+    [[nodiscard]] auto is_occluded () const -> bool; // fully covered by other windows
+    [[nodiscard]] auto is_hidden   () const -> bool;
+    [[nodiscard]] auto is_visible  () const -> bool; // !minimized && !occluded && !hidden
+
 private:
 #if defined(ERHE_GRAPHICS_API_OPENGL)
     void get_extensions();
 #endif
+
+    // Dispatch a single SDL_Event (passed as void* to keep SDL out of this
+    // public header). Shared by the timed-wait and poll paths in poll_events().
+    void handle_sdl_event(void* sdl_event);
 
     struct Joystick_info
     {

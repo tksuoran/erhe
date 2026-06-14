@@ -307,6 +307,52 @@ auto Context_window::consume_swapchain_dirty() -> bool
     return m_swapchain_dirty.exchange(false, std::memory_order_acq_rel);
 }
 
+auto Context_window::is_focused() const -> bool
+{
+    auto* const window = reinterpret_cast<SDL_Window*>(m_sdl_window);
+    if (window == nullptr) {
+        return false;
+    }
+    return (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) != 0;
+}
+
+auto Context_window::is_minimized() const -> bool
+{
+    auto* const window = reinterpret_cast<SDL_Window*>(m_sdl_window);
+    if (window == nullptr) {
+        return false;
+    }
+    return (SDL_GetWindowFlags(window) & SDL_WINDOW_MINIMIZED) != 0;
+}
+
+auto Context_window::is_occluded() const -> bool
+{
+    auto* const window = reinterpret_cast<SDL_Window*>(m_sdl_window);
+    if (window == nullptr) {
+        return false;
+    }
+    return (SDL_GetWindowFlags(window) & SDL_WINDOW_OCCLUDED) != 0;
+}
+
+auto Context_window::is_hidden() const -> bool
+{
+    auto* const window = reinterpret_cast<SDL_Window*>(m_sdl_window);
+    if (window == nullptr) {
+        return false;
+    }
+    return (SDL_GetWindowFlags(window) & SDL_WINDOW_HIDDEN) != 0;
+}
+
+auto Context_window::is_visible() const -> bool
+{
+    auto* const window = reinterpret_cast<SDL_Window*>(m_sdl_window);
+    if (window == nullptr) {
+        return false;
+    }
+    const SDL_WindowFlags flags = SDL_GetWindowFlags(window);
+    return (flags & (SDL_WINDOW_MINIMIZED | SDL_WINDOW_OCCLUDED | SDL_WINDOW_HIDDEN)) == 0;
+}
+
 void Context_window::register_redraw_callback(std::function<void()> callback)
 {
     m_redraw_callback = callback;
@@ -622,15 +668,54 @@ void Context_window::poll_events(float wait_time)
         // WarpMouseInWindow takes window coordinates (logical points), convert from pixel coords
         SDL_WarpMouseInWindow(window, m_mouse_relative_hold_xpos / m_pixel_density, m_mouse_relative_hold_ypos / m_pixel_density);
     }
-    static_cast<void>(wait_time);
 
-    //if (wait_time > 0.0f) {
-    // ERHE_PROFILE_SCOPE("wait");
-    // TODO SDL_WaitEventTimeoutNS()
-    //double  wait_time_ns_ = static_cast<double>(wait_time) * 1'000'000'000;
-    //int64_t wait_time_ns  = static_cast<int64_t>(wait_time_ns_);
+    // When the caller requests a wait (window unfocused / not visible), block
+    // until an event arrives or the timeout elapses, instead of busy-polling.
+    // This yields the CPU and is what makes reduced-frequency rendering save
+    // power; we still drain any further queued events below.
+    if (wait_time > 0.0f) {
+        ERHE_PROFILE_SCOPE("wait");
+        int32_t wait_time_ms = static_cast<int32_t>(wait_time * 1000.0f);
+        if (wait_time_ms < 1) {
+            wait_time_ms = 1; // never request a 0 ms timeout (that would busy-poll)
+        }
+        SDL_Event first_event{};
+        if (SDL_WaitEventTimeout(&first_event, wait_time_ms)) {
+            handle_sdl_event(&first_event);
+        }
+    }
+
     SDL_Event poll_event{};
     while (SDL_PollEvent(&poll_event)) {
+        handle_sdl_event(&poll_event);
+    }
+
+
+    // SDL only emits MOUSE_ENTER / MOUSE_LEAVE on boundary crossings, so the initial ENTER can
+    // be missed (e.g. the window appears under an already-stationary cursor, or the event lands
+    // before the imgui host starts processing input). Reconcile against the authoritative
+    // SDL_WINDOW_MOUSE_FOCUS flag each poll so has_cursor() is correct from the first frame and
+    // self-heals from any missed enter/leave event. handle_cursor_enter_event() de-duplicates,
+    // so this is a no-op when the state already matches.
+    handle_cursor_enter_event(
+        static_cast<int64_t>(SDL_GetTicksNS()),
+        (SDL_GetWindowFlags(window) & SDL_WINDOW_MOUSE_FOCUS) != 0
+    );
+
+    if (m_input_event_synthesizer_callback) {
+        m_input_event_synthesizer_callback(*this);
+    }
+
+    // Swap input event buffers
+    int old_read_buffer = 1 - m_input_event_queue_write;
+    m_input_events[old_read_buffer].clear();
+    m_input_event_queue_write = old_read_buffer;
+}
+
+void Context_window::handle_sdl_event(void* sdl_event)
+{
+    SDL_Event& poll_event = *static_cast<SDL_Event*>(sdl_event);
+    {
         const int64_t timestamp = static_cast<int64_t>(poll_event.common.timestamp);
         switch (poll_event.type) {
             case SDL_EVENT_MOUSE_MOTION: {
@@ -737,41 +822,6 @@ void Context_window::poll_events(float wait_time)
             }
         }
     }
-
-
-    //    glfwWaitEventsTimeout(wait_time);
-    //} else {
-    //    ERHE_PROFILE_SCOPE("poll");
-    //    glfwPollEvents();
-    //}
-
-    // SDL only emits MOUSE_ENTER / MOUSE_LEAVE on boundary crossings, so the initial ENTER can
-    // be missed (e.g. the window appears under an already-stationary cursor, or the event lands
-    // before the imgui host starts processing input). Reconcile against the authoritative
-    // SDL_WINDOW_MOUSE_FOCUS flag each poll so has_cursor() is correct from the first frame and
-    // self-heals from any missed enter/leave event. handle_cursor_enter_event() de-duplicates,
-    // so this is a no-op when the state already matches.
-    handle_cursor_enter_event(
-        static_cast<int64_t>(SDL_GetTicksNS()),
-        (SDL_GetWindowFlags(window) & SDL_WINDOW_MOUSE_FOCUS) != 0
-    );
-
-    if (m_input_event_synthesizer_callback) {
-        m_input_event_synthesizer_callback(*this);
-    }
-
-    // Swap input event buffers
-    int old_read_buffer = 1 - m_input_event_queue_write;
-    // for (const Input_event& input_event : m_input_events[old_read_buffer]) {
-    //     if (input_event.handled) {
-    //         continue;
-    //     }
-    //     if (input_event.type == Input_event_type::window_focus_event) {
-    //         log_window_event->trace("Not handled: {}", input_event.describe());
-    //     }
-    // }
-    m_input_events[old_read_buffer].clear();
-    m_input_event_queue_write = old_read_buffer;
 }
 
 void Context_window::inject_input_event(const Input_event& event)

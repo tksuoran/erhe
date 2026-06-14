@@ -56,6 +56,13 @@ public:
     [[nodiscard]] auto get_cursor_relative_hold() const -> bool;
     [[nodiscard]] auto get_input_events        () -> std::vector<Input_event>&;
 
+    // Window activity queries (see sdl_window.hpp). Headless: always active.
+    [[nodiscard]] auto is_focused  () const -> bool;
+    [[nodiscard]] auto is_minimized() const -> bool;
+    [[nodiscard]] auto is_occluded () const -> bool;
+    [[nodiscard]] auto is_hidden   () const -> bool;
+    [[nodiscard]] auto is_visible  () const -> bool;
+
     void register_redraw_callback(std::function<void()> callback);
 
     auto open                             (const Window_configuration& configuration) -> bool;

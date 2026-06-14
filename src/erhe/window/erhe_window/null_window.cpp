@@ -37,6 +37,12 @@ auto Context_window::get_input_events() -> std::vector<Input_event>&
     return m_input_events[read_index];
 }
 
+auto Context_window::is_focused  () const -> bool { return true;  }
+auto Context_window::is_minimized() const -> bool { return false; }
+auto Context_window::is_occluded () const -> bool { return false; }
+auto Context_window::is_hidden   () const -> bool { return false; }
+auto Context_window::is_visible  () const -> bool { return true;  }
+
 void Context_window::register_redraw_callback(std::function<void()> callback)
 {
     m_redraw_callback = std::move(callback);

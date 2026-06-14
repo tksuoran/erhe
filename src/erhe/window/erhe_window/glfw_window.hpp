@@ -63,6 +63,13 @@ public:
     [[nodiscard]] auto get_glfw_window         () const -> GLFWwindow*;
     [[nodiscard]] auto get_input_events        () -> std::vector<Input_event>&;
 
+    // Window activity queries (see sdl_window.hpp). Deprecated backend: stubs.
+    [[nodiscard]] auto is_focused  () const -> bool;
+    [[nodiscard]] auto is_minimized() const -> bool;
+    [[nodiscard]] auto is_occluded () const -> bool;
+    [[nodiscard]] auto is_hidden   () const -> bool;
+    [[nodiscard]] auto is_visible  () const -> bool;
+
     auto open                             (const Window_configuration& configuration) -> bool;
     void make_current                     () const;
     void clear_current                    () const;

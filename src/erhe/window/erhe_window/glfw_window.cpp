@@ -1043,6 +1043,12 @@ auto Context_window::get_input_events() -> std::vector<Input_event>&
     return m_input_events[1 - m_input_event_queue_write];
 }
 
+auto Context_window::is_focused  () const -> bool { return true;  }
+auto Context_window::is_minimized() const -> bool { return false; }
+auto Context_window::is_occluded () const -> bool { return false; }
+auto Context_window::is_hidden   () const -> bool { return false; }
+auto Context_window::is_visible  () const -> bool { return true;  }
+
 void Context_window::get_extensions()
 {
     ERHE_PROFILE_FUNCTION();
