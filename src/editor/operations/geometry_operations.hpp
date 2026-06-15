@@ -3,6 +3,8 @@
 #include "operations/mesh_operation.hpp"
 #include "operations/compound_operation.hpp"
 
+#include "erhe_geometry/operation/make_atlas.hpp"
+
 namespace editor {
 
 class Catmull_clark_subdivision_operation : public Mesh_operation
@@ -142,6 +144,17 @@ class Smooth_operation : public Mesh_operation
 {
 public:
     Smooth_operation(Mesh_operation_parameters&& context, unsigned int iterations, float strength, bool regenerate_attributes);
+};
+
+class Make_atlas_operation : public Mesh_operation
+{
+public:
+    Make_atlas_operation(
+        Mesh_operation_parameters&&                    context,
+        std::size_t                                    usage_index,
+        float                                          hard_angles_threshold,
+        erhe::geometry::operation::Atlas_parameterizer parameterizer,
+        erhe::geometry::operation::Atlas_packer        packer);
 };
 
 class Binary_mesh_operation : public Compound_operation

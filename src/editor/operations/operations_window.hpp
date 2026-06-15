@@ -102,6 +102,9 @@ public:
     void decimate();
     void smooth();
 
+    // Texturing
+    void make_atlas();
+
     // CSG
     void difference();
     void intersection();
@@ -178,6 +181,9 @@ private:
     erhe::commands::Lambda_command m_decimate_command;
     erhe::commands::Lambda_command m_smooth_command;
 
+    // Texturing
+    erhe::commands::Lambda_command m_make_atlas_command;
+
     erhe::commands::Lambda_command m_difference_command;
     erhe::commands::Lambda_command m_intersection_command;
     erhe::commands::Lambda_command m_union_command;
@@ -214,6 +220,15 @@ private:
     // vertex normals and facet texture coordinates; when off they are left as-is
     // (Smooth keeps the original UVs/attributes; Remesh/Decimate produce none).
     bool  m_remesh_regenerate_attributes{true};
+
+    // Make Atlas (Geogram mesh_make_atlas) parameters. m_atlas_texcoord_slot is the
+    // target corner texcoord channel (0 or 1) that the generated UVs overwrite;
+    // m_atlas_parameterizer / m_atlas_packer index the Atlas_parameterizer /
+    // Atlas_packer enums (defaults ABF + XAtlas, matching Geogram's defaults).
+    int   m_atlas_texcoord_slot  {0};
+    float m_atlas_hard_angles_deg{45.0f};
+    int   m_atlas_parameterizer  {3};
+    int   m_atlas_packer         {2};
 
     erhe::commands::Lambda_command m_generate_tangents_command;
     erhe::commands::Lambda_command m_make_geometry_command;

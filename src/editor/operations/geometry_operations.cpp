@@ -20,6 +20,7 @@
 #include "erhe_geometry/operation/csg/intersection.hpp"
 #include "erhe_geometry/operation/csg/union.hpp"
 #include "erhe_geometry/operation/generate_tangents.hpp"
+#include "erhe_geometry/operation/make_atlas.hpp"
 #include "erhe_geometry/operation/normalize.hpp"
 #include "erhe_geometry/operation/remesh.hpp"
 #include "erhe_geometry/operation/repair.hpp"
@@ -254,6 +255,24 @@ Smooth_operation::Smooth_operation(Mesh_operation_parameters&& context, unsigned
         }
     );
     set_description(fmt::format("Smooth {}", describe_entries()));
+}
+
+Make_atlas_operation::Make_atlas_operation(
+    Mesh_operation_parameters&&                          context,
+    std::size_t                                          usage_index,
+    float                                                hard_angles_threshold,
+    erhe::geometry::operation::Atlas_parameterizer       parameterizer,
+    erhe::geometry::operation::Atlas_packer              packer
+)
+    : Mesh_operation{std::move(context)}
+{
+    set_description("Make atlas");
+    make_entries(
+        [usage_index, hard_angles_threshold, parameterizer, packer](const erhe::geometry::Geometry& source, erhe::geometry::Geometry& destination) {
+            erhe::geometry::operation::make_atlas(source, destination, usage_index, static_cast<double>(hard_angles_threshold), parameterizer, packer);
+        }
+    );
+    set_description(fmt::format("Make atlas {}", describe_entries()));
 }
 
 ///

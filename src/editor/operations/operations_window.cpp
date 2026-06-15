@@ -268,6 +268,7 @@ Operations::Operations(
     , m_anisotropic_remesh_command{commands, "Geometry.Remesh.Anisotropic",    [this]() -> bool { anisotropic_remesh(); return true; } }
     , m_decimate_command          {commands, "Geometry.Remesh.Decimate",       [this]() -> bool { decimate          (); return true; } }
     , m_smooth_command            {commands, "Geometry.Remesh.Smooth",         [this]() -> bool { smooth            (); return true; } }
+    , m_make_atlas_command        {commands, "Geometry.MakeAtlas",             [this]() -> bool { make_atlas        (); return true; } }
 
     , m_difference_command    {commands, "Geometry.Difference",                [this]() -> bool { difference    (); return true; } }
     , m_intersection_command  {commands, "Geometry.Intersection",              [this]() -> bool { intersection  (); return true; } }
@@ -314,6 +315,7 @@ Operations::Operations(
     commands.register_command(&m_anisotropic_remesh_command);
     commands.register_command(&m_decimate_command          );
     commands.register_command(&m_smooth_command            );
+    commands.register_command(&m_make_atlas_command        );
 
     commands.register_command(&m_difference_command  );
     commands.register_command(&m_intersection_command);
@@ -358,6 +360,7 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_anisotropic_remesh_command, "Geometry.Remesh.Anisotropic");
     commands.bind_command_to_menu(&m_decimate_command,           "Geometry.Remesh.Decimate");
     commands.bind_command_to_menu(&m_smooth_command,             "Geometry.Remesh.Smooth");
+    commands.bind_command_to_menu(&m_make_atlas_command,         "Geometry.Generate Texture Coordinates");
 
     commands.bind_command_to_menu(&m_difference_command,     "Geometry.CSG.Difference");
     commands.bind_command_to_menu(&m_intersection_command,   "Geometry.CSG.Intersection");
@@ -768,6 +771,32 @@ void Operations::imgui()
         smooth();
     }
     ImGui::PopID();
+    ImGui::PushID("Atlas");
+    {
+        const char* const texcoord_slot_items[] = { "Texcoord 0", "Texcoord 1" };
+        const char* const parameterizer_items[] = { "Projection", "LSCM", "Spectral LSCM", "ABF" };
+        const char* const packer_items[]        = { "None", "Tetris", "XAtlas" };
+        ImGui::PushID("slot");
+        ImGui::Combo("##", &m_atlas_texcoord_slot, texcoord_slot_items, IM_ARRAYSIZE(texcoord_slot_items));
+        if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Make Atlas: target texture coordinate channel (overwritten)"); }
+        ImGui::PopID();
+        ImGui::PushID("hard_angles");
+        ImGui::SliderFloat("##", &m_atlas_hard_angles_deg, 0.0f, 180.0f, "%.0f deg");
+        if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Make Atlas: dihedral angle above which an edge becomes a chart boundary"); }
+        ImGui::PopID();
+        ImGui::PushID("param");
+        ImGui::Combo("##", &m_atlas_parameterizer, parameterizer_items, IM_ARRAYSIZE(parameterizer_items));
+        if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Make Atlas: per-chart parameterizer (ABF = best quality)"); }
+        ImGui::PopID();
+        ImGui::PushID("pack");
+        ImGui::Combo("##", &m_atlas_packer, packer_items, IM_ARRAYSIZE(packer_items));
+        if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Make Atlas: chart packing in texture space (XAtlas = best)"); }
+        ImGui::PopID();
+    }
+    if (make_button("Generate Texture Coordinates", has_selection_mode, button_size)) {
+        make_atlas();
+    }
+    ImGui::PopID();
     if (make_button("Gen Tangents", has_selection_mode, button_size)) {
         generate_tangents();
     }
@@ -1121,6 +1150,21 @@ void Operations::smooth()
         [this, iterations, strength, regenerate_attributes](Mesh_operation_parameters&& params) {
             m_context.operation_stack->queue(
                 std::make_shared<Smooth_operation>(std::move(params), iterations, strength, regenerate_attributes)
+            );
+        }
+    );
+}
+
+void Operations::make_atlas()
+{
+    const std::size_t usage_index           = static_cast<std::size_t>(m_atlas_texcoord_slot);
+    const float       hard_angles_threshold = m_atlas_hard_angles_deg;
+    const auto        parameterizer         = static_cast<erhe::geometry::operation::Atlas_parameterizer>(m_atlas_parameterizer);
+    const auto        packer                = static_cast<erhe::geometry::operation::Atlas_packer>(m_atlas_packer);
+    async_for_selected_nodes_with_mesh(
+        [this, usage_index, hard_angles_threshold, parameterizer, packer](Mesh_operation_parameters&& params) {
+            m_context.operation_stack->queue(
+                std::make_shared<Make_atlas_operation>(std::move(params), usage_index, hard_angles_threshold, parameterizer, packer)
             );
         }
     );
