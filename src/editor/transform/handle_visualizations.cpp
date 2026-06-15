@@ -694,8 +694,10 @@ void Handle_visualizations::update_transforms() //const uint64_t serial)
         log_trs_tool->error("!isfinite()");
     }
     const glm::mat4 scale             = erhe::math::create_scale<float>(scalar_scale);
+    // The gizmo follows only the anchor's position and orientation, never its
+    // scale or skew (a scaled/skewed selection must not distort the handles).
     const glm::mat4 world_from_anchor = settings.use_anchor_orientation()
-        ? m_world_from_anchor.get_matrix()
+        ? erhe::math::create_translation<float>(m_world_from_anchor.get_translation()) * glm::mat4_cast(m_world_from_anchor.get_rotation())
         : erhe::math::create_translation<float>(m_world_from_anchor.get_translation());
     const glm::vec3 origin = glm::vec3{world_from_anchor * glm::vec4{0.0f, 0.0, 0.0f, 1.0}};
 
