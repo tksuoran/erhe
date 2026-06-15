@@ -87,7 +87,7 @@ void Catmull_clark_subdivision::build()
             const GEO::index_t new_dst_vertex_b = m_vertex_src_to_dst[src_vertex_b];
 
             const float n_a = static_cast<float>(source.get_vertex_corners(src_vertex_a).size());
-            const float n_b = static_cast<float>(source.get_vertex_corners(src_vertex_a).size());
+            const float n_b = static_cast<float>(source.get_vertex_corners(src_vertex_b).size());
             ERHE_VERIFY(n_a != 0.0f);
             ERHE_VERIFY(n_b != 0.0f);
             const float weight_a = 1.0f / n_a;
