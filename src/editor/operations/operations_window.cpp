@@ -25,12 +25,16 @@
 #include <algorithm>
 #include "scene/scene_serialization.hpp"
 #include "scene/viewport_scene_views.hpp"
+#include "brushes/reference_frame.hpp"
+#include "tools/mesh_component_selection.hpp"
 #include "tools/selection_tool.hpp"
 #include "windows/item_tree_window.hpp"
 
 #include "erhe_rendergraph/rendergraph_node.hpp"
 
 #include "erhe_commands/commands.hpp"
+#include "erhe_geometry/geometry.hpp"
+#include "erhe_window/window_event_handler.hpp"
 #include "config/generated/scene_config.hpp"
 #include "erhe_defer/defer.hpp"
 #include "erhe_file/file.hpp"
@@ -48,6 +52,14 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 
+#include <geogram/mesh/mesh.h>
+
+#include <cmath>
+
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
+
 #include <imgui/imgui.h>
 
 #if defined(ERHE_WINDOW_LIBRARY_SDL)
@@ -57,6 +69,159 @@
 #include <taskflow/taskflow.hpp>  // Taskflow is header-only
 
 namespace editor {
+
+namespace {
+
+using erhe::geometry::get_pointf;
+using erhe::geometry::mesh_facet_centerf;
+using erhe::geometry::to_geo_mat4f;
+using erhe::geometry::to_glm_mat4;
+
+// One selected mesh component (vertex / edge / face) resolved to world space,
+// plus the owning node and enough source identity to build a face frame.
+class Selected_component
+{
+public:
+    std::shared_ptr<erhe::scene::Node>        node;
+    std::shared_ptr<erhe::geometry::Geometry> geometry;                  // face only (to build the TNB frame)
+    glm::vec3                                 world_position {0.0f};      // vertex pos / edge midpoint / facet centroid
+    glm::vec3                                 world_direction{0.0f};      // edge only: unit tangent (zero if degenerate)
+    float                                     world_size{0.0f};          // edge only: edge length in world (for Align with Scale)
+    GEO::index_t                              facet{GEO::NO_INDEX};       // face only
+};
+
+// A facet's world-space frame for Align: an orthonormal (unit-axis) TNB basis
+// plus the centroid translation, and a characteristic facet size used to derive
+// a uniform scale factor in Align with Scale.
+class Face_frame
+{
+public:
+    glm::mat4 basis{1.0f};
+    float     scale{0.0f};
+};
+
+// Shortest-arc rotation taking unit vector `from` onto unit vector `to`. Callers
+// pass `to` chosen as the nearer of +-target, so the two are never antiparallel
+// and the cross product is well defined; returns identity when already aligned.
+[[nodiscard]] auto shortest_arc(const glm::vec3& from, const glm::vec3& to) -> glm::quat
+{
+    const float d = glm::dot(from, to);
+    if (d >= 1.0f - 1e-6f) {
+        return glm::quat{1.0f, 0.0f, 0.0f, 0.0f};
+    }
+    const glm::vec3 axis = glm::cross(from, to);
+    const float     s    = std::sqrt((1.0f + d) * 2.0f);
+    const float     inv  = 1.0f / s;
+    return glm::normalize(glm::quat{s * 0.5f, axis.x * inv, axis.y * inv, axis.z * inv});
+}
+
+// Append every selected component of `mode` (across all live entries, in entry
+// then sorted-component order) resolved to world space. Allocating: call only on
+// invocation, never per frame.
+void gather_components(Mesh_component_selection& selection, const Mesh_component_mode mode, std::vector<Selected_component>& out)
+{
+    out.clear();
+    for (const Mesh_component_entry& entry : selection.get_entries()) {
+        if (!selection.is_live(entry)) {
+            continue;
+        }
+        const std::shared_ptr<erhe::scene::Mesh>        mesh     = entry.mesh.lock();
+        const std::shared_ptr<erhe::geometry::Geometry> geometry = entry.geometry.lock();
+        if (!mesh || !geometry) {
+            continue;
+        }
+        erhe::scene::Node* const node = mesh->get_node();
+        if (node == nullptr) {
+            continue;
+        }
+        const std::shared_ptr<erhe::scene::Node> node_shared = std::dynamic_pointer_cast<erhe::scene::Node>(node->shared_from_this());
+        if (!node_shared) {
+            continue;
+        }
+        const glm::mat4  world_from_node = node->world_from_node();
+        const GEO::Mesh& geo_mesh        = geometry->get_mesh();
+        const auto to_world = [&](const GEO::vec3f& p) -> glm::vec3 {
+            return glm::vec3{world_from_node * glm::vec4{p.x, p.y, p.z, 1.0f}};
+        };
+
+        switch (mode) {
+            case Mesh_component_mode::vertex: {
+                for (const GEO::index_t vertex : entry.vertices) {
+                    Selected_component& component = out.emplace_back();
+                    component.node           = node_shared;
+                    component.world_position = to_world(get_pointf(geo_mesh.vertices, vertex));
+                }
+                break;
+            }
+            case Mesh_component_mode::edge: {
+                for (const Mesh_edge_key& edge : entry.edges) {
+                    const glm::vec3 world_p0 = to_world(get_pointf(geo_mesh.vertices, edge.first));
+                    const glm::vec3 world_p1 = to_world(get_pointf(geo_mesh.vertices, edge.second));
+                    const glm::vec3 delta    = world_p1 - world_p0;
+                    const float     len      = glm::length(delta);
+
+                    Selected_component& component = out.emplace_back();
+                    component.node            = node_shared;
+                    component.world_position  = 0.5f * (world_p0 + world_p1);
+                    component.world_direction = (len > 1e-8f) ? (delta / len) : glm::vec3{0.0f};
+                    component.world_size      = len;
+                }
+                break;
+            }
+            case Mesh_component_mode::face: {
+                for (const GEO::index_t facet : entry.facets) {
+                    Selected_component& component = out.emplace_back();
+                    component.node           = node_shared;
+                    component.geometry       = geometry;
+                    component.facet          = facet;
+                    component.world_position = to_world(mesh_facet_centerf(geo_mesh, facet));
+                }
+                break;
+            }
+            case Mesh_component_mode::object:
+            default: {
+                break;
+            }
+        }
+    }
+}
+
+// World-space TNB basis (axes in columns, centroid in translation) for a facet,
+// with the given normal orientation. Reuses the brush-placement Reference_frame:
+// build it in geometry-local space, then push it through world_from_node.
+[[nodiscard]] auto facet_world_frame(const Selected_component& component, const Frame_orientation orientation) -> Face_frame
+{
+    Reference_frame frame{component.geometry->get_mesh(), component.facet, 0, 0, orientation};
+    frame.transform_by(to_geo_mat4f(component.node->world_from_node()));
+    return Face_frame{
+        .basis = to_glm_mat4(frame.transform(0.0f)),
+        .scale = frame.scale()
+    };
+}
+
+// Queue an undoable node transform that left-multiplies `world_delta` onto the
+// moved node's current world matrix (rigid delta -> the node's own scale/shear is
+// preserved), converting back to a parent-relative transform.
+[[nodiscard]] auto queue_align(App_context& context, const std::shared_ptr<erhe::scene::Node>& moved_node, const glm::mat4& world_delta) -> bool
+{
+    erhe::scene::Node* const node                   = moved_node.get();
+    const glm::mat4          new_world_from_node    = world_delta * node->world_from_node();
+    const glm::mat4          parent_from_node_after = node->parent_from_world() * new_world_from_node;
+
+    context.operation_stack->queue(
+        std::make_shared<Node_transform_operation>(
+            Node_transform_operation::Parameters{
+                .node                    = moved_node,
+                .parent_from_node_before = node->parent_from_node_transform(),
+                .parent_from_node_after  = erhe::scene::Transform{parent_from_node_after},
+                .time_duration           = 0.0f
+            }
+        )
+    );
+    return true;
+}
+
+} // anonymous namespace
 
 template<typename T>
 void Operations::async_mesh_operation()
@@ -89,6 +254,8 @@ Operations::Operations(
     : Imgui_window              {imgui_renderer, imgui_windows, "Operations", "operations"}
     , m_context                 {app_context}
     , m_merge_command           {commands, "Geometry.Merge",                     [this]() -> bool { merge           (); return true; } }
+    , m_align_command           {commands, "Geometry.Align",                     [this]() -> bool { return align_selection(false); } }
+    , m_align_with_scale_command{commands, "Geometry.AlignWithScale",            [this]() -> bool { return align_selection(true ); } }
     , m_triangulate_command     {commands, "Geometry.Triangulate",               [this]() -> bool { triangulate     (); return true; } }
     , m_normalize_command       {commands, "Geometry.Normalize",                 [this]() -> bool { normalize       (); return true; } }
     , m_bake_transform_command  {commands, "Geometry.BakeTransform",             [this]() -> bool { bake_transform  (); return true; } }
@@ -128,6 +295,8 @@ Operations::Operations(
     , m_create_joint_settings {commands, "Create.JointSettings",               [this]() -> bool { create_joint_settings(); return true; } }
 {
     commands.register_command(&m_merge_command         );
+    commands.register_command(&m_align_command         );
+    commands.register_command(&m_align_with_scale_command);
     commands.register_command(&m_triangulate_command   );
     commands.register_command(&m_normalize_command     );
     commands.register_command(&m_bake_transform_command);
@@ -165,6 +334,8 @@ Operations::Operations(
     commands.register_command(&m_create_joint_settings);
 
     commands.bind_command_to_menu(&m_merge_command,            "Geometry.Merge");
+    commands.bind_command_to_menu(&m_align_command,            "Geometry.Align");
+    commands.bind_command_to_menu(&m_align_with_scale_command, "Geometry.Align with Scale");
     commands.bind_command_to_menu(&m_triangulate_command,      "Geometry.Triangulate");
     commands.bind_command_to_menu(&m_normalize_command,        "Geometry.Normalize");
     commands.bind_command_to_menu(&m_bake_transform_command,   "Geometry.Bake-Transform");
@@ -202,6 +373,10 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_create_physics_material, "Create.Physics Material");
     commands.bind_command_to_menu(&m_create_collision_filter, "Create.Collision Filter");
     commands.bind_command_to_menu(&m_create_joint_settings,   "Create.Joint Settings");
+
+    // Default keys for Align / Align with Scale (F7/F8 are otherwise unbound).
+    commands.bind_command_to_key(&m_align_command,            erhe::window::Key_f8);
+    commands.bind_command_to_key(&m_align_with_scale_command, erhe::window::Key_f7);
 
     m_make_mesh_config.instance_count = scene_config.instance_count;
     m_make_mesh_config.instance_gap   = scene_config.instance_gap;
@@ -458,6 +633,14 @@ void Operations::imgui()
         merge();
     }
 
+    const auto align_mode = can_align() ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
+    if (make_button("Align", align_mode, button_size)) {
+        align_selection(false);
+    }
+    if (make_button("Align with Scale", align_mode, button_size)) {
+        align_selection(true);
+    }
+
     if (make_button("Catmull-Clark", has_selection_mode, button_size)) {
         catmull_clark();
     }
@@ -583,6 +766,144 @@ void Operations::merge()
             );
     ///     }
     /// );
+}
+
+auto Operations::can_align() const -> bool
+{
+    const Mesh_component_selection* selection = m_context.mesh_component_selection;
+    if (selection == nullptr) {
+        return false;
+    }
+    const Mesh_component_mode mode = selection->get_mode();
+    if (mode == Mesh_component_mode::object) {
+        return false;
+    }
+
+    // Allocation-free structural check: count selected components of the active
+    // mode across live entries and track up to two distinct owning nodes. Each
+    // entry's components belong to the same node, so two components on one node
+    // (one entry with two, or two primitives of one node) leaves node_b null and
+    // is rejected.
+    std::size_t              count  = 0;
+    const erhe::scene::Node* node_a = nullptr;
+    const erhe::scene::Node* node_b = nullptr;
+    for (const Mesh_component_entry& entry : selection->get_entries()) {
+        if (!selection->is_live(entry)) {
+            continue;
+        }
+        std::size_t n = 0;
+        switch (mode) {
+            case Mesh_component_mode::vertex: n = entry.vertices.size(); break;
+            case Mesh_component_mode::edge:   n = entry.edges.size();    break;
+            case Mesh_component_mode::face:   n = entry.facets.size();   break;
+            default:                          n = 0;                     break;
+        }
+        if (n == 0) {
+            continue;
+        }
+        const std::shared_ptr<erhe::scene::Mesh> mesh = entry.mesh.lock();
+        if (!mesh) {
+            continue;
+        }
+        const erhe::scene::Node* const node = mesh->get_node();
+        if (node == nullptr) {
+            continue;
+        }
+        count += n;
+        if (count > 2) {
+            return false;
+        }
+        if (node_a == nullptr) {
+            node_a = node;
+        } else if ((node != node_a) && (node_b == nullptr)) {
+            node_b = node;
+        }
+    }
+    return (count == 2) && (node_a != nullptr) && (node_b != nullptr);
+}
+
+auto Operations::align_selection(const bool apply_scale) -> bool
+{
+    Mesh_component_selection* selection = m_context.mesh_component_selection;
+    if (selection == nullptr) {
+        return false;
+    }
+    const Mesh_component_mode mode = selection->get_mode();
+    if (mode == Mesh_component_mode::object) {
+        return false;
+    }
+
+    std::vector<Selected_component> components;
+    gather_components(*selection, mode, components);
+    if (components.size() != 2) {
+        log_operations->info("Align: requires exactly two selected {} components (have {})", c_str(mode), components.size());
+        return false;
+    }
+
+    const Selected_component& anchor = components[0]; // first-selected component stays put
+    const Selected_component& moved  = components[1]; // its node is transformed to align onto the anchor
+    if (!anchor.node || !moved.node) {
+        return false;
+    }
+    if (anchor.node == moved.node) {
+        log_operations->info("Align: both components are on the same node; nothing to align");
+        return false;
+    }
+
+    switch (mode) {
+        case Mesh_component_mode::vertex: {
+            // Translate-only: colocate the two vertex positions (a vertex has no
+            // inherent size or direction, so apply_scale has no effect here).
+            const glm::mat4 world_delta = glm::translate(glm::mat4{1.0f}, anchor.world_position - moved.world_position);
+            return queue_align(m_context, moved.node, world_delta);
+        }
+
+        case Mesh_component_mode::edge: {
+            if ((glm::length(anchor.world_direction) < 0.5f) || (glm::length(moved.world_direction) < 0.5f)) {
+                return false; // degenerate (zero-length) edge
+            }
+            // Choose same vs opposite edge direction by least rotation (nearer of
+            // +-dir_a). Roll about the edge axis is left free (shortest-arc).
+            const glm::vec3 dir_a    = anchor.world_direction;
+            const glm::vec3 dir_b    = moved.world_direction;
+            const glm::vec3 target   = (glm::dot(dir_b, dir_a) >= 0.0f) ? dir_a : -dir_a;
+            const glm::quat rotation = shortest_arc(dir_b, target);
+
+            // Optional uniform scale so the moved edge matches the anchor edge length.
+            const float     scale     = (apply_scale && (moved.world_size > 1e-6f)) ? (anchor.world_size / moved.world_size) : 1.0f;
+            const glm::mat4 scale_mat = glm::scale(glm::mat4{1.0f}, glm::vec3{scale});
+
+            // Scale and rotate about the moved edge's midpoint, then translate that
+            // midpoint onto the anchor midpoint.
+            const glm::mat4 to_pivot    = glm::translate(glm::mat4{1.0f}, -moved.world_position);
+            const glm::mat4 rotate      = glm::mat4_cast(rotation);
+            const glm::mat4 from_anchor = glm::translate(glm::mat4{1.0f}, anchor.world_position);
+            const glm::mat4 world_delta = from_anchor * rotate * scale_mat * to_pivot;
+            return queue_align(m_context, moved.node, world_delta);
+        }
+
+        case Mesh_component_mode::face: {
+            // Full-frame, faces meeting each other: align the moved face's frame
+            // (normal flipped via Frame_orientation::in) onto the anchor face's
+            // frame (Frame_orientation::out), so centroids coincide, tangents align
+            // and the two outward normals end up antiparallel (glued face-to-face).
+            const Face_frame anchor_frame = facet_world_frame(anchor, Frame_orientation::out);
+            const Face_frame moved_frame  = facet_world_frame(moved,  Frame_orientation::in);
+
+            // Optional uniform scale so the moved face matches the anchor face size.
+            // The frame bases are orthonormal, so scaling about the (frame-local)
+            // centroid resizes the moved object without otherwise disturbing the fit.
+            const float     scale     = (apply_scale && (moved_frame.scale > 1e-6f)) ? (anchor_frame.scale / moved_frame.scale) : 1.0f;
+            const glm::mat4 scale_mat = glm::scale(glm::mat4{1.0f}, glm::vec3{scale});
+            const glm::mat4 world_delta = anchor_frame.basis * scale_mat * glm::inverse(moved_frame.basis);
+            return queue_align(m_context, moved.node, world_delta);
+        }
+
+        case Mesh_component_mode::object:
+        default: {
+            return false;
+        }
+    }
 }
 
 void Operations::triangulate()

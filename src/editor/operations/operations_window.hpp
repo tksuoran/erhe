@@ -87,6 +87,7 @@ public:
     void imgui() override;
 
     void merge();
+    auto align_selection(bool apply_scale) -> bool;
     void triangulate();
     void normalize();
     void bake_transform();
@@ -135,6 +136,13 @@ private:
     void async_for_selected_nodes_with_mesh(std::function<void(Mesh_operation_parameters&&)> op);
 
     [[nodiscard]] auto count_selected_meshes() const -> size_t;
+
+    // True when exactly two components of the active mesh-component mode
+    // (vertex / edge / face) are selected on two distinct nodes, i.e. when
+    // align_selection() has a well-defined pair to act on. Used to gate the
+    // toolbar button; deliberately allocation-free (runs per frame).
+    [[nodiscard]] auto can_align() const -> bool;
+
     [[nodiscard]] auto mesh_context() -> Mesh_operation_parameters;
 
     // Scene root of the last hovered scene view; before any viewport has been
@@ -148,6 +156,8 @@ private:
     App_context& m_context;
 
     erhe::commands::Lambda_command m_merge_command;
+    erhe::commands::Lambda_command m_align_command;
+    erhe::commands::Lambda_command m_align_with_scale_command;
     erhe::commands::Lambda_command m_triangulate_command;
     erhe::commands::Lambda_command m_normalize_command;
     erhe::commands::Lambda_command m_bake_transform_command;
