@@ -120,6 +120,30 @@ public:
     explicit Weld_operation(Mesh_operation_parameters&& context);
 };
 
+class Remesh_operation : public Mesh_operation
+{
+public:
+    Remesh_operation(Mesh_operation_parameters&& context, unsigned int target_point_count, bool regenerate_attributes);
+};
+
+class Anisotropic_remesh_operation : public Mesh_operation
+{
+public:
+    Anisotropic_remesh_operation(Mesh_operation_parameters&& context, unsigned int target_point_count, float anisotropy, bool regenerate_attributes);
+};
+
+class Decimate_operation : public Mesh_operation
+{
+public:
+    Decimate_operation(Mesh_operation_parameters&& context, unsigned int nb_bins, bool regenerate_attributes);
+};
+
+class Smooth_operation : public Mesh_operation
+{
+public:
+    Smooth_operation(Mesh_operation_parameters&& context, unsigned int iterations, float strength, bool regenerate_attributes);
+};
+
 class Binary_mesh_operation : public Compound_operation
 {
 public:

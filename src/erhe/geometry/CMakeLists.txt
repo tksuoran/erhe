@@ -54,6 +54,8 @@ erhe_target_sources_grouped(
     erhe_geometry/operation/geometry_operation.hpp
     erhe_geometry/operation/normalize.cpp
     erhe_geometry/operation/normalize.hpp
+    erhe_geometry/operation/remesh.cpp
+    erhe_geometry/operation/remesh.hpp
     erhe_geometry/operation/repair.cpp
     erhe_geometry/operation/repair.hpp
     erhe_geometry/operation/reverse.cpp

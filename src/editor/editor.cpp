@@ -2779,6 +2779,10 @@ void run_editor()
         ERHE_PROFILE_SCOPE("initialize geogram");
         GEO::initialize(GEO::GEOGRAM_INSTALL_NONE);
         GEO::CmdLine::import_arg_group("algo");
+        // Required by GEO::remesh_smooth() (Remesh / Anisotropic Remesh operations),
+        // which reads remesh:multi_nerve and remesh:RVC_centroids; querying an
+        // undeclared arg aborts via geo_assert_arg_type.
+        GEO::CmdLine::import_arg_group("remesh");
         GEO::CmdLine::set_arg("sys:multithread", "true");
         GEO::geo_register_attribute_type<GEO::vec2f>("vec2f");
         GEO::geo_register_attribute_type<GEO::vec3f>("vec3f");

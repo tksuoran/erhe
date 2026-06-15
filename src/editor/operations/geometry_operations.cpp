@@ -21,6 +21,7 @@
 #include "erhe_geometry/operation/csg/union.hpp"
 #include "erhe_geometry/operation/generate_tangents.hpp"
 #include "erhe_geometry/operation/normalize.hpp"
+#include "erhe_geometry/operation/remesh.hpp"
 #include "erhe_geometry/operation/repair.hpp"
 #include "erhe_geometry/operation/reverse.hpp"
 #include "erhe_geometry/operation/subdivision/catmull_clark_subdivision.hpp"
@@ -205,6 +206,54 @@ Weld_operation::Weld_operation(Mesh_operation_parameters&& context)
     set_description("Weld");
     make_entries(erhe::geometry::operation::weld);
     set_description(fmt::format("Weld {}", describe_entries()));
+}
+
+Remesh_operation::Remesh_operation(Mesh_operation_parameters&& context, unsigned int target_point_count, bool regenerate_attributes)
+    : Mesh_operation{std::move(context)}
+{
+    set_description("Remesh");
+    make_entries(
+        [target_point_count, regenerate_attributes](const erhe::geometry::Geometry& source, erhe::geometry::Geometry& destination) {
+            erhe::geometry::operation::remesh(source, destination, target_point_count, 0.0, regenerate_attributes);
+        }
+    );
+    set_description(fmt::format("Remesh {}", describe_entries()));
+}
+
+Anisotropic_remesh_operation::Anisotropic_remesh_operation(Mesh_operation_parameters&& context, unsigned int target_point_count, float anisotropy, bool regenerate_attributes)
+    : Mesh_operation{std::move(context)}
+{
+    set_description("Anisotropic remesh");
+    make_entries(
+        [target_point_count, anisotropy, regenerate_attributes](const erhe::geometry::Geometry& source, erhe::geometry::Geometry& destination) {
+            erhe::geometry::operation::remesh(source, destination, target_point_count, static_cast<double>(anisotropy), regenerate_attributes);
+        }
+    );
+    set_description(fmt::format("Anisotropic remesh {}", describe_entries()));
+}
+
+Decimate_operation::Decimate_operation(Mesh_operation_parameters&& context, unsigned int nb_bins, bool regenerate_attributes)
+    : Mesh_operation{std::move(context)}
+{
+    set_description("Decimate");
+    make_entries(
+        [nb_bins, regenerate_attributes](const erhe::geometry::Geometry& source, erhe::geometry::Geometry& destination) {
+            erhe::geometry::operation::decimate(source, destination, nb_bins, regenerate_attributes);
+        }
+    );
+    set_description(fmt::format("Decimate {}", describe_entries()));
+}
+
+Smooth_operation::Smooth_operation(Mesh_operation_parameters&& context, unsigned int iterations, float strength, bool regenerate_attributes)
+    : Mesh_operation{std::move(context)}
+{
+    set_description("Smooth");
+    make_entries(
+        [iterations, strength, regenerate_attributes](const erhe::geometry::Geometry& source, erhe::geometry::Geometry& destination) {
+            erhe::geometry::operation::smooth(source, destination, iterations, strength, regenerate_attributes);
+        }
+    );
+    set_description(fmt::format("Smooth {}", describe_entries()));
 }
 
 ///

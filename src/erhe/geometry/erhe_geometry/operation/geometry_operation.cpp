@@ -414,7 +414,7 @@ void Geometry_operation::copy_mesh_attributes()
     copy_attribute<GEO::vec2f>(s.corner_aniso_control,   d.corner_aniso_control   );
 }
 
-void Geometry_operation::post_processing()
+void Geometry_operation::post_processing(const uint64_t process_flags)
 {
     interpolate_mesh_attributes();
 
@@ -422,13 +422,7 @@ void Geometry_operation::post_processing()
     // crash Geogram's connect() (e.g., facets with duplicate vertices).
     destination.sanitize();
 
-    const uint64_t flags =
-        erhe::geometry::Geometry::process_flag_connect |
-        erhe::geometry::Geometry::process_flag_build_edges |
-        erhe::geometry::Geometry::process_flag_compute_facet_centroids |
-        erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
-        erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
-    destination.process(flags);
+    destination.process(process_flags);
 }
 
 } // namespace erhe::geometry::operation

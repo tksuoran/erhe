@@ -264,6 +264,11 @@ Operations::Operations(
     , m_repair_command        {commands, "Geometry.Repair",                    [this]() -> bool { repair        (); return true; } }
     , m_weld_command          {commands, "Geometry.Weld",                      [this]() -> bool { weld          (); return true; } }
 
+    , m_remesh_command            {commands, "Geometry.Remesh.Isotropic",      [this]() -> bool { remesh            (); return true; } }
+    , m_anisotropic_remesh_command{commands, "Geometry.Remesh.Anisotropic",    [this]() -> bool { anisotropic_remesh(); return true; } }
+    , m_decimate_command          {commands, "Geometry.Remesh.Decimate",       [this]() -> bool { decimate          (); return true; } }
+    , m_smooth_command            {commands, "Geometry.Remesh.Smooth",         [this]() -> bool { smooth            (); return true; } }
+
     , m_difference_command    {commands, "Geometry.Difference",                [this]() -> bool { difference    (); return true; } }
     , m_intersection_command  {commands, "Geometry.Intersection",              [this]() -> bool { intersection  (); return true; } }
     , m_union_command         {commands, "Geometry.Union",                     [this]() -> bool { union_        (); return true; } }
@@ -305,6 +310,11 @@ Operations::Operations(
     commands.register_command(&m_repair_command        );
     commands.register_command(&m_weld_command          );
 
+    commands.register_command(&m_remesh_command            );
+    commands.register_command(&m_anisotropic_remesh_command);
+    commands.register_command(&m_decimate_command          );
+    commands.register_command(&m_smooth_command            );
+
     commands.register_command(&m_difference_command  );
     commands.register_command(&m_intersection_command);
     commands.register_command(&m_union_command       );
@@ -343,6 +353,11 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_reverse_command,          "Geometry.Reverse");
     commands.bind_command_to_menu(&m_repair_command,           "Geometry.Repair");
     commands.bind_command_to_menu(&m_weld_command,             "Geometry.Weld");
+
+    commands.bind_command_to_menu(&m_remesh_command,             "Geometry.Remesh.Isotropic");
+    commands.bind_command_to_menu(&m_anisotropic_remesh_command, "Geometry.Remesh.Anisotropic");
+    commands.bind_command_to_menu(&m_decimate_command,           "Geometry.Remesh.Decimate");
+    commands.bind_command_to_menu(&m_smooth_command,             "Geometry.Remesh.Smooth");
 
     commands.bind_command_to_menu(&m_difference_command,     "Geometry.CSG.Difference");
     commands.bind_command_to_menu(&m_intersection_command,   "Geometry.CSG.Intersection");
@@ -713,6 +728,46 @@ void Operations::imgui()
     if (make_button("Weld", has_selection_mode, button_size)) {
         weld();
     }
+    ImGui::PushID("Remesh");
+    ImGui::Checkbox("Regenerate Normals/UVs", &m_remesh_regenerate_attributes);
+    if (ImGui::IsItemHovered()) { ImGui::SetTooltip("When on, process() recomputes smooth normals and texture coordinates.\nWhen off, Smooth keeps the original UVs/attributes; Isotropic/Anisotropic Remesh and Decimate produce none (new topology)."); }
+    ImGui::PushID("target");
+    ImGui::SliderInt("##", &m_remesh_target_vertex_count, 50, 100000, "%d", ImGuiSliderFlags_Logarithmic);
+    if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Remesh: target vertex count"); }
+    ImGui::PopID();
+    if (make_button("Isotropic Remesh", has_selection_mode, button_size)) {
+        remesh();
+    }
+    ImGui::PushID("anisotropy");
+    ImGui::SliderFloat("##", &m_anisotropy, 0.0f, 0.5f, "%.3f");
+    if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Anisotropic Remesh: anisotropy strength (uses the target vertex count above)"); }
+    ImGui::PopID();
+    if (make_button("Anisotropic Remesh", has_selection_mode, button_size)) {
+        anisotropic_remesh();
+    }
+    ImGui::PopID();
+    ImGui::PushID("Decimate");
+    ImGui::PushID("bins");
+    ImGui::SliderInt("##", &m_decimate_bins, 4, 512, "%d");
+    if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Decimate: clustering grid resolution (higher = more detail kept)"); }
+    ImGui::PopID();
+    if (make_button("Decimate", has_selection_mode, button_size)) {
+        decimate();
+    }
+    ImGui::PopID();
+    ImGui::PushID("Smooth");
+    ImGui::PushID("iterations");
+    ImGui::SliderInt("##", &m_smooth_iterations, 1, 50, "%d");
+    if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Smooth: number of Taubin lambda/mu cycles"); }
+    ImGui::PopID();
+    ImGui::PushID("strength");
+    ImGui::SliderFloat("##", &m_smooth_strength, 0.0f, 1.0f, "%.2f");
+    if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Smooth: per-step Laplacian strength (lambda)"); }
+    ImGui::PopID();
+    if (make_button("Smooth", has_selection_mode, button_size)) {
+        smooth();
+    }
+    ImGui::PopID();
     if (make_button("Gen Tangents", has_selection_mode, button_size)) {
         generate_tangents();
     }
@@ -1015,6 +1070,60 @@ void Operations::repair()
 void Operations::weld()
 {
     async_mesh_operation<Weld_operation>();
+}
+
+void Operations::remesh()
+{
+    const unsigned int target_point_count    = static_cast<unsigned int>(m_remesh_target_vertex_count);
+    const bool         regenerate_attributes = m_remesh_regenerate_attributes;
+    async_for_selected_nodes_with_mesh(
+        [this, target_point_count, regenerate_attributes](Mesh_operation_parameters&& params) {
+            m_context.operation_stack->queue(
+                std::make_shared<Remesh_operation>(std::move(params), target_point_count, regenerate_attributes)
+            );
+        }
+    );
+}
+
+void Operations::anisotropic_remesh()
+{
+    const unsigned int target_point_count    = static_cast<unsigned int>(m_remesh_target_vertex_count);
+    const float        anisotropy            = m_anisotropy;
+    const bool         regenerate_attributes = m_remesh_regenerate_attributes;
+    async_for_selected_nodes_with_mesh(
+        [this, target_point_count, anisotropy, regenerate_attributes](Mesh_operation_parameters&& params) {
+            m_context.operation_stack->queue(
+                std::make_shared<Anisotropic_remesh_operation>(std::move(params), target_point_count, anisotropy, regenerate_attributes)
+            );
+        }
+    );
+}
+
+void Operations::decimate()
+{
+    const unsigned int nb_bins               = static_cast<unsigned int>(m_decimate_bins);
+    const bool         regenerate_attributes = m_remesh_regenerate_attributes;
+    async_for_selected_nodes_with_mesh(
+        [this, nb_bins, regenerate_attributes](Mesh_operation_parameters&& params) {
+            m_context.operation_stack->queue(
+                std::make_shared<Decimate_operation>(std::move(params), nb_bins, regenerate_attributes)
+            );
+        }
+    );
+}
+
+void Operations::smooth()
+{
+    const unsigned int iterations            = static_cast<unsigned int>(m_smooth_iterations);
+    const float        strength              = m_smooth_strength;
+    const bool         regenerate_attributes = m_remesh_regenerate_attributes;
+    async_for_selected_nodes_with_mesh(
+        [this, iterations, strength, regenerate_attributes](Mesh_operation_parameters&& params) {
+            m_context.operation_stack->queue(
+                std::make_shared<Smooth_operation>(std::move(params), iterations, strength, regenerate_attributes)
+            );
+        }
+    );
 }
 
 void Operations::generate_tangents()

@@ -57,7 +57,24 @@ public:
     }
 
 protected:
-    void post_processing();
+    // Default finalization: rebuild connectivity / edges / centroids and
+    // regenerate smooth vertex normals and facet texture coordinates.
+    static constexpr uint64_t default_post_process_flags =
+        erhe::geometry::Geometry::process_flag_connect |
+        erhe::geometry::Geometry::process_flag_build_edges |
+        erhe::geometry::Geometry::process_flag_compute_facet_centroids |
+        erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
+        erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
+
+    // Structural finalization only; callers that preserve source attributes
+    // (topology-preserving operations) pass this to keep process() from
+    // overwriting normals / texture coordinates.
+    static constexpr uint64_t structural_post_process_flags =
+        erhe::geometry::Geometry::process_flag_connect |
+        erhe::geometry::Geometry::process_flag_build_edges |
+        erhe::geometry::Geometry::process_flag_compute_facet_centroids;
+
+    void post_processing(uint64_t process_flags = default_post_process_flags);
 
     const erhe::geometry::Geometry&  source;
     const erhe::geometry::Geometry*  rhs{nullptr};

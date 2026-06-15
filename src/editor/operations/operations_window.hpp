@@ -96,6 +96,12 @@ public:
     void repair();
     void weld();
 
+    // Remesh
+    void remesh();
+    void anisotropic_remesh();
+    void decimate();
+    void smooth();
+
     // CSG
     void difference();
     void intersection();
@@ -166,6 +172,12 @@ private:
     erhe::commands::Lambda_command m_repair_command;
     erhe::commands::Lambda_command m_weld_command;
 
+    // Remesh
+    erhe::commands::Lambda_command m_remesh_command;
+    erhe::commands::Lambda_command m_anisotropic_remesh_command;
+    erhe::commands::Lambda_command m_decimate_command;
+    erhe::commands::Lambda_command m_smooth_command;
+
     erhe::commands::Lambda_command m_difference_command;
     erhe::commands::Lambda_command m_intersection_command;
     erhe::commands::Lambda_command m_union_command;
@@ -189,6 +201,19 @@ private:
     float m_truncate_ratio{1.0f / 3.0f};
     float m_gyro_ratio{1.0f / 3.0f};
     float m_kis_height{0.0f};
+
+    // Remesh parameters. m_remesh_target_vertex_count is shared by isotropic
+    // and anisotropic remesh (maps to Geogram's nb_points); m_decimate_bins is
+    // the vertex-clustering grid resolution (higher = more detail kept).
+    int   m_remesh_target_vertex_count{2000};
+    int   m_decimate_bins{50};
+    float m_anisotropy{0.04f};
+    int   m_smooth_iterations{5};
+    float m_smooth_strength{0.5f};
+    // Shared by all four remesh operations: when on, process() regenerates smooth
+    // vertex normals and facet texture coordinates; when off they are left as-is
+    // (Smooth keeps the original UVs/attributes; Remesh/Decimate produce none).
+    bool  m_remesh_regenerate_attributes{true};
 
     erhe::commands::Lambda_command m_generate_tangents_command;
     erhe::commands::Lambda_command m_make_geometry_command;
