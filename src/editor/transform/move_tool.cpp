@@ -2,6 +2,7 @@
 #include "windows/property_editor.hpp"
 
 #include "app_context.hpp"
+#include "input_state.hpp"
 #include "graphics/icon_set.hpp"
 #include "scene/scene_view.hpp"
 #include "tools/tools.hpp"
@@ -113,7 +114,10 @@ auto Move_tool::snap(const glm::vec3 in_translation) const -> glm::vec3
 {
     const auto& shared = get_shared();
 
-    if (!shared.settings.translate_snap_enable) {
+    // Snap when the toggle is enabled or while Control is held. The live key state
+    // is read each update, so toggling Control mid-drag takes effect immediately.
+    const bool snap_enabled = shared.settings.translate_snap_enable || m_context.input_state->control;
+    if (!snap_enabled) {
         return in_translation;
     }
 

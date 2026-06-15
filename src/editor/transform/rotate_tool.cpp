@@ -3,6 +3,7 @@
 
 #include "app_context.hpp"
 #include "editor_log.hpp"
+#include "input_state.hpp"
 #include "graphics/icon_set.hpp"
 #include "renderers/render_context.hpp"
 #include "scene/scene_view.hpp"
@@ -96,7 +97,10 @@ auto Rotate_tool::begin(unsigned int axis_mask, Scene_view* scene_view) -> bool
 auto Rotate_tool::snap(const float angle_radians) const -> float
 {
     auto& shared = get_shared();
-    if (!shared.settings.rotate_snap_enable) {
+    // Snap when the toggle is enabled or while Control is held. The live key state
+    // is read each update, so toggling Control mid-drag takes effect immediately.
+    const bool snap_enabled = shared.settings.rotate_snap_enable || m_context.input_state->control;
+    if (!snap_enabled) {
         return angle_radians;
     }
 
@@ -194,7 +198,8 @@ void Rotate_tool::render(const Render_context& context)
     erhe::renderer::Primitive_renderer line_renderer = context.get({erhe::graphics::Primitive_type::line, 2, true, true});
 
     {
-        const int sector_count = shared.settings.rotate_snap_enable
+        const bool snap_enabled = shared.settings.rotate_snap_enable || m_context.input_state->control;
+        const int sector_count = snap_enabled
             ? static_cast<int>(glm::two_pi<float>() / glm::radians(shared.settings.rotate_snap))
             : 80;
         std::vector<vec3> positions;

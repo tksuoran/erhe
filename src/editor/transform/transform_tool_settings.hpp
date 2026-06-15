@@ -47,7 +47,7 @@ public:
     float                    edge_normal_blend    {0.5f};
     bool                     translate_snap_enable{false};
     float                    translate_snap       {0.1f};
-    bool                     rotate_snap_enable   {true};
+    bool                     rotate_snap_enable   {false};
     float                    rotate_snap          {15.0f};
     Scale_gizmo_mode         scale_gizmo_mode     {Scale_gizmo_mode::basic};
 
