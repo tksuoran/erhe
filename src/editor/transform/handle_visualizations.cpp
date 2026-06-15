@@ -694,7 +694,7 @@ void Handle_visualizations::update_transforms() //const uint64_t serial)
         log_trs_tool->error("!isfinite()");
     }
     const glm::mat4 scale             = erhe::math::create_scale<float>(scalar_scale);
-    const glm::mat4 world_from_anchor = settings.local
+    const glm::mat4 world_from_anchor = settings.use_anchor_orientation()
         ? m_world_from_anchor.get_matrix()
         : erhe::math::create_translation<float>(m_world_from_anchor.get_translation());
     const glm::vec3 origin = glm::vec3{world_from_anchor * glm::vec4{0.0f, 0.0, 0.0f, 1.0}};
@@ -715,7 +715,7 @@ void Handle_visualizations::compute_selection_box()
     // path both work in world units).
     const Transform_tool_shared&   shared    = m_context.transform_tool->shared;
     const Transform_tool_settings& settings  = shared.settings;
-    const glm::mat4                box_frame = settings.local
+    const glm::mat4                box_frame = settings.use_anchor_orientation()
         ? erhe::math::create_translation<float>(shared.world_from_anchor.get_translation()) * glm::mat4_cast(shared.world_from_anchor.get_rotation())
         : erhe::math::create_translation<float>(shared.world_from_anchor.get_translation());
     const glm::mat4 box_inv = glm::inverse(box_frame);
@@ -765,7 +765,7 @@ void Handle_visualizations::update_box_handles()
     const float     perspective_scale = m_scene_view->get_perspective_scale();
     const float     scalar_scale      = distance_scale * perspective_scale;
     const glm::mat4 cone_scale         = erhe::math::create_scale<float>(scalar_scale);
-    const glm::mat4 orient             = settings.local
+    const glm::mat4 orient             = settings.use_anchor_orientation()
         ? glm::mat4_cast(shared.world_from_anchor.get_rotation())
         : glm::mat4{1.0f};
 
@@ -812,24 +812,22 @@ void Handle_visualizations::viewport_toolbar()
     const auto& icon_set = m_context.icon_set;
 
     auto& settings = m_context.transform_tool->shared.settings;
-    const auto local_pressed = erhe::imgui::make_button("L", settings.local ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal);
-    if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("Transform in Local space");
-    }
-    if (local_pressed) {
-        settings.local = true;
-    }
+    const auto reference_mode_button = [&](const char* label, const Transform_reference_mode mode, const char* tooltip) {
+        const bool pressed = erhe::imgui::make_button(label, (settings.reference_mode == mode) ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s", tooltip);
+        }
+        if (pressed && (settings.reference_mode != mode)) {
+            settings.reference_mode = mode;
+            m_context.transform_tool->on_reference_settings_changed();
+        }
+        ImGui::SameLine();
+    };
+    reference_mode_button("W", Transform_reference_mode::global,    "Transform in World space");
+    reference_mode_button("L", Transform_reference_mode::local,     "Transform in Local space");
+    reference_mode_button("R", Transform_reference_mode::reference, "Transform in Reference node space");
+    reference_mode_button("S", Transform_reference_mode::selection, "Transform in mesh component Selection space");
 
-    ImGui::SameLine();
-    const auto global_pressed = erhe::imgui::make_button("W", (!settings.local) ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal);
-    if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("Transform in World space");
-    }
-    if (global_pressed) {
-        settings.local = false;
-    }
-
-    ImGui::SameLine();
     {
         const auto mode = settings.show_translate ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal;
 

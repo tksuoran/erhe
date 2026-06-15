@@ -75,6 +75,17 @@ private:
     App_context& m_context;
 };
 
+// Bakes the current gizmo anchor ("temp node") frame into a real, undoable scene Node.
+class Create_frame_node_command : public erhe::commands::Command
+{
+public:
+    Create_frame_node_command(erhe::commands::Commands& commands, App_context& context);
+    auto try_call() -> bool override;
+
+private:
+    App_context& m_context;
+};
+
 class Transform_entry
 {
 public:
@@ -105,8 +116,19 @@ public:
         m_initial_drag_position_from_anchor_initial_state = in_initial_drag_position_in_world - world_from_anchor_initial_state.get_translation();
     }
 
+    // Finalize the reference frame after a producer (node selection or mesh
+    // component selection) has set world_from_anchor_initial_state. In Reference
+    // mode the explicit reference node replaces the frame entirely; otherwise the
+    // producer-supplied frame stands. Always leaves a valid frame and mirrors it
+    // into world_from_anchor. Consumers read world_from_anchor without caring
+    // which origin produced it; Global (world axes) is applied at the gizmo/basis
+    // via Transform_tool_settings::use_anchor_orientation().
+    void apply_reference_frame();
+
     Transform_tool_settings                settings;
     std::vector<Transform_entry>           entries;
+    // Arbitrary node whose orientation drives the gizmo in Reference mode.
+    std::weak_ptr<erhe::scene::Node>       reference_node;
     glm::vec3                              m_initial_drag_position_from_anchor_initial_state{0.0f};
     float                                  initial_drag_position_distance_to_camera{0.0f};
     erhe::scene::Trs_transform             world_from_anchor_initial_state;
@@ -118,18 +140,6 @@ public:
     bool                                   component_mode      {false};
     std::atomic<bool>                      visualizations_ready{false};
     std::unique_ptr<Handle_visualizations> visualizations      {};
-};
-
-enum class Reference_mode : unsigned int {
-    local = 0,
-    parent,
-    world,
-};
-
-static constexpr std::array<std::string_view, 3> c_reference_mode_strings = {
-    "Local",
-    "Parent",
-    "World"
 };
 
 class Edit_state
@@ -205,8 +215,17 @@ public:
     void touch();
     void record_transform_operation();
 
+    // Create a real, undoable scene Node at the current gizmo anchor frame.
+    void create_node_from_anchor();
+
     // Exposed for Node_transform_operation
     void update_target_nodes(erhe::scene::Node* node_filter);
+
+    // Re-derive the gizmo anchor after a reference-frame setting (mode or
+    // reference node) is changed from the UI. The mesh-component path already
+    // re-derives the anchor every idle frame, so only the node-selection path
+    // needs this explicit refresh.
+    void on_reference_settings_changed();
 
     // Interface for Properties window
     void transform_properties();
@@ -265,6 +284,7 @@ private:
     Transform_tool_drag_command         m_drag_command;
     erhe::commands::Redirect_command    m_drag_redirect_update_command;
     erhe::commands::Drag_enable_command m_drag_enable_command;
+    Create_frame_node_command           m_create_frame_node_command;
     Handle                              m_hover_handle {Handle::e_handle_none};
     Handle                              m_active_handle{Handle::e_handle_none};
     Handle                              m_box_face_hover_handle  {Handle::e_handle_none};

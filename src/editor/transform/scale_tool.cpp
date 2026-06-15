@@ -150,7 +150,7 @@ auto Scale_tool::update(Scene_view* scene_view) -> bool
 
         case 2: {
             const vec3 P             = shared.get_initial_drag_position_in_world();
-            const vec3 N             = get_plane_normal(!shared.settings.local);
+            const vec3 N             = get_plane_normal(!shared.settings.use_anchor_orientation());
             const auto closest_point = scene_view->get_closest_point_on_plane(N, P);
             if (closest_point.has_value()) {
                 update(closest_point.value());

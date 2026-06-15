@@ -7,11 +7,13 @@
 #include "app_message_bus.hpp"
 #include "editor_log.hpp"
 #include "operations/compound_operation.hpp"
+#include "operations/item_insert_remove_operation.hpp"
 #include "operations/node_transform_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp" // need to be able to pass to visualization
 #include "renderers/render_context.hpp"
 #include "scene/node_raytrace.hpp"
+#include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
 #include "tools/mesh_component_selection.hpp"
@@ -104,6 +106,18 @@ void Transform_tool_drag_command::on_inactive()
     }
 }
 
+Create_frame_node_command::Create_frame_node_command(erhe::commands::Commands& commands, App_context& app_context)
+    : Command  {commands, "Transform_tool.create_frame_node"}
+    , m_context{app_context}
+{
+}
+
+auto Create_frame_node_command::try_call() -> bool
+{
+    m_context.transform_tool->create_node_from_anchor();
+    return true;
+}
+
 #pragma endregion Commands
 
 Transform_tool::Transform_tool(
@@ -126,6 +140,7 @@ Transform_tool::Transform_tool(
     , m_drag_command                {commands, app_context}
     , m_drag_redirect_update_command{commands, m_drag_command}
     , m_drag_enable_command         {commands, m_drag_redirect_update_command}
+    , m_create_frame_node_command   {commands, app_context}
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -147,6 +162,10 @@ Transform_tool::Transform_tool(
 
     commands.register_command(&m_drag_command);
     commands.bind_command_to_mouse_drag(&m_drag_command, erhe::window::Mouse_button_left, true);
+
+    commands.register_command(&m_create_frame_node_command);
+    commands.bind_command_to_key(&m_create_frame_node_command, erhe::window::Key_n);
+    m_create_frame_node_command.set_host(this);
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     erhe::xr::Headset*    headset  = headset_view.get_headset();
@@ -261,24 +280,71 @@ void Transform_tool::window_imgui()
     auto& settings = shared.settings;
     const ImVec2 button_size{ImGui::GetContentRegionAvail().x / 2, 0.0f};
 
-    if (
-        erhe::imgui::make_button(
-            "Local",
-            (settings.local) ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal,
-            button_size
-        )
-    ) {
-        settings.local = true;
-    }
+    const ImVec2 mode_button_size{ImGui::GetContentRegionAvail().x / 4.0f, 0.0f};
+    const auto reference_mode_button = [&](const char* label, const Transform_reference_mode mode) {
+        if (
+            erhe::imgui::make_button(
+                label,
+                (settings.reference_mode == mode) ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal,
+                mode_button_size
+            )
+        ) {
+            if (settings.reference_mode != mode) {
+                settings.reference_mode = mode;
+                on_reference_settings_changed();
+            }
+        }
+    };
+    reference_mode_button("Global",    Transform_reference_mode::global);
     ImGui::SameLine();
-    if (
-        erhe::imgui::make_button(
-            "Global",
-            (!settings.local) ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal,
-            button_size
-        )
-    ) {
-        settings.local = false;
+    reference_mode_button("Local",     Transform_reference_mode::local);
+    ImGui::SameLine();
+    reference_mode_button("Reference", Transform_reference_mode::reference);
+    ImGui::SameLine();
+    reference_mode_button("Selection", Transform_reference_mode::selection);
+
+    if (settings.reference_mode == Transform_reference_mode::reference) {
+        const std::shared_ptr<erhe::scene::Node> current = shared.reference_node.lock();
+        const char* const preview = current ? current->get_name().c_str() : "(none)";
+        if (ImGui::BeginCombo("Reference node", preview)) {
+            Scene_root* scene_root = m_context.scene_commands->get_scene_root(static_cast<erhe::scene::Node*>(nullptr));
+            if (scene_root != nullptr) {
+                for (const std::shared_ptr<erhe::scene::Node>& node : scene_root->get_scene().get_flat_nodes()) {
+                    if (!node) {
+                        continue;
+                    }
+                    const bool selected = (node == current);
+                    if (ImGui::Selectable(node->get_name().c_str(), selected)) {
+                        shared.reference_node = node;
+                        on_reference_settings_changed();
+                    }
+                }
+            }
+            ImGui::EndCombo();
+        }
+        // Drag a node from the scene tree onto the combo to set the reference.
+        if (ImGui::BeginDragDropTarget()) {
+            const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Node", ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
+            if ((payload != nullptr) && (payload->Data != nullptr) && (payload->DataSize == sizeof(erhe::Item_base*))) {
+                erhe::Item_base* const item_raw = *static_cast<erhe::Item_base**>(payload->Data);
+                const std::shared_ptr<erhe::scene::Node> dropped = (item_raw != nullptr)
+                    ? std::dynamic_pointer_cast<erhe::scene::Node>(item_raw->shared_from_this())
+                    : std::shared_ptr<erhe::scene::Node>{};
+                if (dropped) {
+                    shared.reference_node = dropped;
+                    on_reference_settings_changed();
+                }
+            }
+            ImGui::EndDragDropTarget();
+        }
+    }
+
+    if (settings.reference_mode == Transform_reference_mode::selection) {
+        ImGui::SliderFloat("Edge normal blend", &settings.edge_normal_blend, 0.0f, 1.0f);
+    }
+
+    if (erhe::imgui::make_button("Create node from frame", erhe::imgui::Item_mode::normal, button_size)) {
+        create_node_from_anchor();
     }
 
     ImGui::TextUnformatted("Scale gizmo");
@@ -349,6 +415,29 @@ void Transform_tool::window_imgui()
     ImGui::Separator();
 }
 
+void Transform_tool_shared::apply_reference_frame()
+{
+    if (settings.reference_mode == Transform_reference_mode::reference) {
+        const std::shared_ptr<erhe::scene::Node> node = reference_node.lock();
+        if (node) {
+            world_from_anchor_initial_state = node->world_from_node_transform();
+        }
+    }
+    world_from_anchor = world_from_anchor_initial_state;
+}
+
+void Transform_tool::on_reference_settings_changed()
+{
+    // The mesh-component path re-derives the anchor every idle frame (see
+    // update_for_view -> Mesh_component_transform::update_anchor), so only the
+    // node-selection path needs an explicit refresh when the mode or reference
+    // node changes.
+    if (shared.component_mode) {
+        return;
+    }
+    update_target_nodes(nullptr);
+}
+
 void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
 {
     const auto& selection = m_context.selection->get_selected_items();
@@ -403,7 +492,11 @@ void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
         );
     }
 
-    shared.world_from_anchor = shared.world_from_anchor_initial_state;
+    // Finalize the reference frame: in Reference mode the chosen reference node
+    // replaces the frame entirely; otherwise the selection-derived frame stands.
+    // The same finalizer runs for node and mesh-component selections, so
+    // consumers read world_from_anchor without caring which origin produced it.
+    shared.apply_reference_frame();
 
     Handle_visualizations* visualizations = shared.get_visualizations();
     if (visualizations != nullptr) {
@@ -483,7 +576,7 @@ void Transform_tool::adjust_rotation(const vec3 center_of_rotation, const quat r
         );
         return;
     }
-    if (shared.settings.local && shared.entries.size() == 1) {
+    if (shared.settings.is_local() && shared.entries.size() == 1) {
         touch();
         for (auto& entry : shared.entries) {
             auto& node = entry.node;
@@ -519,7 +612,7 @@ void Transform_tool::adjust_scale(const vec3 center_of_scale, const vec3 scale)
         );
         return;
     }
-    if (shared.settings.local && shared.entries.size() == 1) {
+    if (shared.settings.is_local() && shared.entries.size() == 1) {
         touch();
         for (auto& entry : shared.entries) {
             auto& node = entry.node;
@@ -1112,6 +1205,37 @@ void Transform_tool::record_transform_operation()
     );
 }
 
+void Transform_tool::create_node_from_anchor()
+{
+    // Resolve the scene root for the new node (handles selection / viewport /
+    // single-scene fallbacks). The new node is parented to the scene root, so its
+    // parent space equals world space and the gizmo anchor frame can be baked in
+    // directly.
+    Scene_root* scene_root = m_context.scene_commands->get_scene_root(static_cast<erhe::scene::Node*>(nullptr));
+    if (scene_root == nullptr) {
+        return;
+    }
+    const std::shared_ptr<erhe::scene::Node> root_node = scene_root->get_hosted_scene()->get_root_node();
+    if (!root_node) {
+        return;
+    }
+
+    auto new_node = std::make_shared<erhe::scene::Node>("frame node");
+    new_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+    new_node->set_parent_from_node(shared.world_from_anchor);
+
+    m_context.operation_stack->queue(
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context = m_context,
+                .item    = new_node,
+                .parent  = root_node,
+                .mode    = Item_insert_remove_operation::Mode::insert
+            }
+        )
+    );
+}
+
 Edit_state::Edit_state()
 {
 }
@@ -1138,7 +1262,7 @@ Edit_state::Edit_state(
         m_multiselect       = shared.entries.size() > 1;
         m_first_node        = shared.entries.front().node;
         m_world_from_parent = m_first_node->world_from_parent();
-        m_use_world_mode    = !shared.settings.local || m_multiselect;
+        m_use_world_mode    = !shared.settings.is_local() || m_multiselect;
 
         m_transform =
             m_use_world_mode

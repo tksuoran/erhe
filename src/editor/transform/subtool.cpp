@@ -66,7 +66,7 @@ auto Subtool::get_shared() const -> Transform_tool_shared&
 auto Subtool::get_basis() const -> const glm::mat4&
 {
     const auto& shared = get_shared();
-    return shared.settings.local 
+    return shared.settings.use_anchor_orientation()
         ? shared.world_from_anchor_initial_state.get_matrix()
         : mat4_identity;
 }

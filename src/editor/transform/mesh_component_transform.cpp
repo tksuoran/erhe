@@ -14,6 +14,7 @@
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_item/item_host.hpp"
+#include "erhe_math/math_util.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
@@ -22,6 +23,7 @@
 #include "erhe_verify/verify.hpp"
 
 #include <geogram/mesh/mesh.h>
+#include <glm/gtc/quaternion.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -42,6 +44,171 @@ auto is_nontrivial_delta(const glm::mat4& m) -> bool
         for (int r = 0; r < 4; ++r) {
             if (std::abs(m[c][r] - id[c][r]) > 1e-6f) {
                 return true;
+            }
+        }
+    }
+    return false;
+}
+
+// Build a right-handed orthonormal rotation with the surface normal as local +Y
+// and the tangent as local +X (the node "sits flat" on the surface, up along the
+// normal). The normal is authoritative; the tangent is orthogonalized against it,
+// falling back to the smallest world axis when degenerate.
+auto make_frame_rotation_normal_up(glm::vec3 normal_ws, glm::vec3 tangent_ws) -> glm::quat
+{
+    const glm::vec3 y = glm::normalize(normal_ws);
+    glm::vec3       x = tangent_ws - glm::dot(tangent_ws, y) * y;
+    if (glm::length(x) < 1e-6f) {
+        const glm::vec3 fallback = erhe::math::min_axis<float>(y);
+        x = fallback - glm::dot(fallback, y) * y;
+    }
+    x = glm::normalize(x);
+    const glm::vec3 z = glm::cross(x, y);
+    return glm::quat_cast(glm::mat3{x, y, z});
+}
+
+// Edge variant: the edge direction is authoritative as local +X, the (blended)
+// normal is orthogonalized into local +Y.
+auto make_frame_rotation_edge(glm::vec3 edge_dir_ws, glm::vec3 normal_ws) -> glm::quat
+{
+    const glm::vec3 x = glm::normalize(edge_dir_ws);
+    glm::vec3       y = normal_ws - glm::dot(normal_ws, x) * x;
+    if (glm::length(y) < 1e-6f) {
+        const glm::vec3 fallback = erhe::math::min_axis<float>(x);
+        y = fallback - glm::dot(fallback, x) * x;
+    }
+    y = glm::normalize(y);
+    const glm::vec3 z = glm::cross(x, y);
+    return glm::quat_cast(glm::mat3{x, y, z});
+}
+
+// Derive a world-space orientation for the temp frame from the first live mesh
+// component (face / edge / vertex) of the selection, honoring the user's
+// normal->+Y, tangent->+X convention. Returns false when no usable component
+// exists (the caller then keeps its fallback orientation).
+auto compute_selection_frame_rotation(Mesh_component_selection& selection, const float edge_blend, glm::quat& out_rotation) -> bool
+{
+    const Mesh_component_mode mode = selection.get_mode();
+    if (mode == Mesh_component_mode::object) {
+        return false;
+    }
+
+    for (const Mesh_component_entry& entry : selection.get_entries()) {
+        if (!selection.is_live(entry)) {
+            continue;
+        }
+        const std::shared_ptr<erhe::scene::Mesh>        mesh     = entry.mesh.lock();
+        const std::shared_ptr<erhe::geometry::Geometry> geometry = entry.geometry.lock();
+        if (!mesh || !geometry) {
+            continue;
+        }
+        const erhe::scene::Node* node = mesh->get_node();
+        if (node == nullptr) {
+            continue;
+        }
+        const glm::mat4                        world_from_node = node->world_from_node();
+        const glm::mat3                        dir_matrix      = glm::mat3{world_from_node};
+        const glm::mat3                        normal_matrix   = glm::transpose(glm::inverse(dir_matrix));
+        const GEO::Mesh&                       geo_mesh        = geometry->get_mesh();
+        const erhe::geometry::Mesh_attributes& attributes      = geometry->get_attributes();
+
+        // Local-space facet normal: prefer the stored (normalized) attribute, else
+        // compute and normalize the area-weighted normal.
+        const auto facet_normal_local = [&](const GEO::index_t facet) -> glm::vec3 {
+            if (attributes.facet_normal.has(facet)) {
+                const GEO::vec3f n = attributes.facet_normal.get(facet);
+                return glm::vec3{n.x, n.y, n.z};
+            }
+            const GEO::vec3f n = erhe::geometry::mesh_facet_normalf(geo_mesh, facet);
+            return glm::normalize(glm::vec3{n.x, n.y, n.z});
+        };
+
+        switch (mode) {
+            case Mesh_component_mode::face: {
+                if (entry.facets.empty()) {
+                    continue;
+                }
+                const GEO::index_t facet        = *entry.facets.begin();
+                const glm::vec3    normal_local = facet_normal_local(facet);
+                glm::vec3          tangent_local{0.0f};
+                if (attributes.facet_tangent.has(facet)) {
+                    const GEO::vec4f t = attributes.facet_tangent.get(facet);
+                    tangent_local = glm::vec3{t.x, t.y, t.z};
+                } else {
+                    // Fall back to the facet's first edge direction.
+                    const GEO::index_t corner_begin = geo_mesh.facets.corners_begin(facet);
+                    const GEO::index_t corner_end   = geo_mesh.facets.corners_end(facet);
+                    if (corner_begin + 1 < corner_end) {
+                        const GEO::index_t v0 = geo_mesh.facet_corners.vertex(corner_begin);
+                        const GEO::index_t v1 = geo_mesh.facet_corners.vertex(corner_begin + 1);
+                        const GEO::vec3f   p0 = get_pointf(geo_mesh.vertices, v0);
+                        const GEO::vec3f   p1 = get_pointf(geo_mesh.vertices, v1);
+                        tangent_local = glm::vec3{p1.x - p0.x, p1.y - p0.y, p1.z - p0.z};
+                    }
+                }
+                out_rotation = make_frame_rotation_normal_up(normal_matrix * normal_local, dir_matrix * tangent_local);
+                return true;
+            }
+            case Mesh_component_mode::edge: {
+                if (entry.edges.empty()) {
+                    continue;
+                }
+                const Mesh_edge_key edge_key = *entry.edges.begin();
+                const GEO::index_t  v0       = edge_key.first;
+                const GEO::index_t  v1       = edge_key.second;
+                const GEO::vec3f    p0       = get_pointf(geo_mesh.vertices, v0);
+                const GEO::vec3f    p1       = get_pointf(geo_mesh.vertices, v1);
+                const glm::vec3     edge_dir_local{p1.x - p0.x, p1.y - p0.y, p1.z - p0.z};
+
+                // Blend (nlerp) the normals of the two facets sharing the edge.
+                glm::vec3          normal_local{0.0f, 1.0f, 0.0f};
+                const GEO::index_t edge = geometry->get_edge(v0, v1);
+                if (edge != GEO::NO_EDGE) {
+                    const std::vector<GEO::index_t>& facets = geometry->get_edge_facets(edge);
+                    if (!facets.empty()) {
+                        const glm::vec3 n0 = facet_normal_local(facets[0]);
+                        const glm::vec3 n1 = (facets.size() >= 2) ? facet_normal_local(facets[1]) : n0;
+                        normal_local = glm::normalize(glm::mix(n0, n1, edge_blend));
+                    }
+                }
+                out_rotation = make_frame_rotation_edge(dir_matrix * edge_dir_local, normal_matrix * normal_local);
+                return true;
+            }
+            case Mesh_component_mode::vertex: {
+                if (entry.vertices.empty()) {
+                    continue;
+                }
+                const GEO::index_t vertex = *entry.vertices.begin();
+                glm::vec3          normal_local{0.0f};
+                if (attributes.vertex_normal.has(vertex)) {
+                    const GEO::vec3f n = attributes.vertex_normal.get(vertex);
+                    normal_local = glm::vec3{n.x, n.y, n.z};
+                } else if (attributes.vertex_normal_smooth.has(vertex)) {
+                    const GEO::vec3f n = attributes.vertex_normal_smooth.get(vertex);
+                    normal_local = glm::vec3{n.x, n.y, n.z};
+                } else {
+                    // Average the normals of the facets around the vertex.
+                    for (const GEO::index_t corner : geometry->get_vertex_corners(vertex)) {
+                        normal_local += facet_normal_local(geometry->get_corner_facet(corner));
+                    }
+                }
+                if (glm::length(normal_local) < 1e-6f) {
+                    normal_local = glm::vec3{0.0f, 1.0f, 0.0f};
+                }
+
+                glm::vec3 tangent_local{0.0f};
+                if (attributes.vertex_tangent.has(vertex)) {
+                    const GEO::vec4f t = attributes.vertex_tangent.get(vertex);
+                    tangent_local = glm::vec3{t.x, t.y, t.z};
+                } else {
+                    tangent_local = erhe::math::min_axis<float>(glm::normalize(normal_local));
+                }
+                out_rotation = make_frame_rotation_normal_up(normal_matrix * normal_local, dir_matrix * tangent_local);
+                return true;
+            }
+            case Mesh_component_mode::object:
+            default: {
+                break;
             }
         }
     }
@@ -179,20 +346,33 @@ auto Mesh_component_transform::update_anchor(App_context& context, Transform_too
     }
     centroid_world /= static_cast<float>(count);
 
-    // Orient the anchor with the first group's mesh (multi-mesh has no single basis).
+    // Orientation. In Selection mode the temp frame is derived from the selected
+    // component geometry (face normal/tangent, edge direction/blended normal, or
+    // vertex normal/tangent). In the other modes the frame keeps the first group's
+    // mesh orientation; Reference and Global are resolved uniformly afterwards by
+    // Transform_tool_shared::apply_reference_frame() / the gizmo basis.
     glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
-    const std::shared_ptr<erhe::scene::Mesh> first_mesh = m_groups.front().mesh.lock();
-    if (first_mesh) {
-        const erhe::scene::Node* node = first_mesh->get_node();
-        if (node != nullptr) {
-            rotation = node->world_from_node_transform().get_rotation();
+    bool      have_rotation = false;
+    if (shared.settings.reference_mode == Transform_reference_mode::selection) {
+        Mesh_component_selection* selection = context.mesh_component_selection;
+        if (selection != nullptr) {
+            have_rotation = compute_selection_frame_rotation(*selection, shared.settings.edge_normal_blend, rotation);
+        }
+    }
+    if (!have_rotation) {
+        const std::shared_ptr<erhe::scene::Mesh> first_mesh = m_groups.front().mesh.lock();
+        if (first_mesh) {
+            const erhe::scene::Node* node = first_mesh->get_node();
+            if (node != nullptr) {
+                rotation = node->world_from_node_transform().get_rotation();
+            }
         }
     }
 
     shared.world_from_anchor_initial_state.set_trs(centroid_world, rotation, glm::vec3{1.0f});
-    shared.world_from_anchor = shared.world_from_anchor_initial_state;
     shared.entries.clear();
     shared.component_mode = true;
+    shared.apply_reference_frame();
     return true;
 }
 

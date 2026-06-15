@@ -74,7 +74,7 @@ auto Rotate_tool::begin(unsigned int axis_mask, Scene_view* scene_view) -> bool
 
     //if (is_rotate_active()) {
     auto& shared = get_shared();
-    const bool world        = !shared.settings.local;
+    const bool world        = !shared.settings.use_anchor_orientation();
     const vec3 n            = get_plane_normal(world);
     const vec3 side         = get_plane_side  (world);
     const vec3 center       = shared.world_from_anchor_initial_state.get_translation();
