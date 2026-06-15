@@ -25,7 +25,7 @@
         "centroid_color": [0,0,1,1],
         "edge_lines_color_source": "constant_color",
         "polygon_centroids_color_source": "constant_color",
-        "corner_points_color_source": "mesh_wireframe_color"
+        "corner_points_color_source": "constant_color"
     },
     "selection_highlight_low": [2,1,0,0.8],
     "selection_highlight_high": [2,1,0,0.8],

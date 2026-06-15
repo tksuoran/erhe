@@ -258,6 +258,7 @@ void Frame_log_window::imgui()
     std::deque<erhe::log::Entry>& frame_entries = m_frame_entries;
     ImGui::PushFont(m_imgui_renderer.mono_font(), font_size); // TODO mono font size
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2{0.0f, 0.0f});
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{0.0f, 0.0f});
     const ImVec2 outer_size{-FLT_MIN, 0.0f};
     const float  inner_width{4000.0f};  // TODO Need a better way, to make long lines horizontally scrollable
     const ImGuiTableFlags flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable | ImGuiTableFlags_Hideable | ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY;
@@ -272,7 +273,7 @@ void Frame_log_window::imgui()
         }
         ImGui::EndTable();
     }
-    ImGui::PopStyleVar();
+    ImGui::PopStyleVar(2);
 
     ImGui::PopFont();
 }
