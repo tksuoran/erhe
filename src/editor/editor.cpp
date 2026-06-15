@@ -115,6 +115,7 @@
 #include "erhe_file/file.hpp"
 #include "erhe_file/file_log.hpp"
 #include "erhe_geometry/geometry_log.hpp"
+#include "erhe_geometry/geometry_progress.hpp"
 #if defined(ERHE_GRAPHICS_API_OPENGL)
 # include "erhe_gl/gl_helpers.hpp"
 # include "erhe_gl/gl_log.hpp"
@@ -1923,6 +1924,19 @@ public:
                             ImGui::Text("%.2f ms", frame_ms);
                         }
                         ImGui::SameLine();
+
+                        // Geogram operation progress (Remesh / atlas / ...).
+                        // m_geogram_progress is reused so this allocates no heap
+                        // in steady-state frames; returns false when idle.
+                        if (erhe::geometry::get_geogram_progress(m_geogram_progress)) {
+                            ImGui::Text("%s %u%%", m_geogram_progress.task_name.c_str(), m_geogram_progress.percent);
+                            ImGui::SameLine();
+                            ImGui::ProgressBar(
+                                static_cast<float>(m_geogram_progress.percent) / 100.0f,
+                                ImVec2{160.0f, 0.0f}
+                            );
+                            ImGui::SameLine();
+                        }
                     }
                     struct Input_record
                     {
@@ -2591,6 +2605,10 @@ public:
 
     App_context                         m_app_context;
 
+    // Reused by the status-bar callback so reading Geogram progress allocates no
+    // heap memory in steady-state frames (its std::string keeps capacity).
+    erhe::geometry::Geogram_progress_state m_geogram_progress;
+
     std::shared_ptr<Scene_root>             m_default_scene;
     std::shared_ptr<Content_library_window> m_default_content_library_window;
     std::shared_ptr<Item_tree_window>       m_default_scene_browser;
@@ -2797,6 +2815,10 @@ void run_editor()
         // Requires the Geogram Logger singleton (created by GEO::initialize()
         // above) and log_geogram (created by erhe::geometry::initialize_logging()).
         erhe::geometry::register_geogram_logger();
+        // Route Geogram progress (ProgressTask begin/progress/end) into a snapshot
+        // the status bar reads. GEO::initialize() above ran Progress::initialize(),
+        // which installed the default progress client we replace here.
+        erhe::geometry::register_geogram_progress();
     }
 
     {
@@ -2816,6 +2838,7 @@ void run_editor()
     // still alive, so no late Geogram message can reach an already-destroyed
     // logger during static destruction.
     erhe::geometry::unregister_geogram_logger();
+    erhe::geometry::unregister_geogram_progress();
 }
 
 }
