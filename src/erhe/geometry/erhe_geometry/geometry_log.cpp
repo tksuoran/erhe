@@ -1,5 +1,6 @@
 #include "erhe_geometry/geometry_log.hpp"
 #include "erhe_log/log.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <geogram/basic/logger.h>
 
@@ -44,8 +45,6 @@ public:
     }
 };
 
-std::unique_ptr<Geogram_logger_client> s_geogram_logger_client;
-
 void initialize_logging()
 {
     using namespace erhe::log;
@@ -65,7 +64,38 @@ void initialize_logging()
     log_attribute_maps    = make_logger("erhe.geometry.attribute_maps"   );
     log_merge             = make_logger("erhe.geometry.merge"            );
     log_weld              = make_logger("erhe.geometry.weld"             );
-    s_geogram_logger_client = std::make_unique<Geogram_logger_client>();
+}
+
+void register_geogram_logger()
+{
+    // GEO::initialize() must have created the Logger singleton and
+    // initialize_logging() must have created log_geogram before this runs.
+    GEO::Logger* logger = GEO::Logger::instance();
+    ERHE_VERIFY(logger != nullptr);
+    ERHE_VERIFY(log_geogram);
+
+    // Replace Geogram's default ConsoleLogger (which writes to stdout) with a
+    // client that forwards into log_geogram. GEO::LoggerClient derives from
+    // GEO::Counted, and the Logger stores its clients as intrusive-refcounted
+    // SmartPointers, so register_client() takes ownership of this raw 'new':
+    // we must not delete it ourselves. unregister_geogram_logger() drops the
+    // last reference and destroys it.
+    logger->unregister_all_clients();
+    logger->register_client(new Geogram_logger_client());
+    logger->set_pretty(false); // single-line messages, no ASCII title boxes
+    logger->set_quiet (false); // ensure messages are dispatched to clients
+}
+
+void unregister_geogram_logger()
+{
+    // Detach (and destroy, via the last SmartPointer reference) the forwarding
+    // client while log_geogram is still alive, so a late Geogram message can
+    // never be forwarded into an already-destroyed logger during static
+    // destruction. Safe to call when no client is registered.
+    GEO::Logger* logger = GEO::Logger::instance();
+    if (logger != nullptr) {
+        logger->unregister_all_clients();
+    }
 }
 
 } // namespace erhe::geometry

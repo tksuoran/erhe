@@ -2793,9 +2793,10 @@ void run_editor()
         GEO::geo_register_attribute_type<GEO::vec2u>("vec2u");
         GEO::geo_register_attribute_type<GEO::vec3u>("vec3u");
         GEO::geo_register_attribute_type<GEO::vec4u>("vec4u");
-        // TODO
-        // GEO::Logger::unregister_all_clients();
-        // GEO::Logger::register_client(s_geogram_logger_client.get());
+        // Route Geogram's GEO::Logger output into erhe::geometry::log_geogram.
+        // Requires the Geogram Logger singleton (created by GEO::initialize()
+        // above) and log_geogram (created by erhe::geometry::initialize_logging()).
+        erhe::geometry::register_geogram_logger();
     }
 
     {
@@ -2810,6 +2811,11 @@ void run_editor()
         Editor editor{};
         editor.run();
     }
+
+    // Detach the Geogram -> log_geogram forwarding client while log_geogram is
+    // still alive, so no late Geogram message can reach an already-destroyed
+    // logger during static destruction.
+    erhe::geometry::unregister_geogram_logger();
 }
 
 }
