@@ -38,6 +38,9 @@ erhe_target_sources_grouped(
     erhe_graphics/image_loader.hpp
     erhe_graphics/image_loader_wuffs.cpp
     erhe_graphics/image_loader_wuffs.hpp
+    erhe_graphics/image_writer.hpp
+    erhe_graphics/image_writer_null.hpp
+    erhe_graphics/image_writer_fpng.hpp
     erhe_graphics/native_format.cpp
     erhe_graphics/native_format.hpp
     erhe_graphics/renderdoc_app.h
@@ -417,6 +420,25 @@ target_link_libraries(${_target}
         erhe::utility
         erhe::verify
 )
+
+# Image writer backend selection. The fpng (fast PNG) backend is used whenever
+# ERHE_USE_FPNG is set; this is independent of ERHE_WINDOW_LIBRARY so a headless
+# build can still save images. fpng is a single source file fetched download-only
+# at the top level (fpng_SOURCE_DIR); it is compiled straight into this target.
+# The null backend is compiled otherwise.
+if (ERHE_USE_FPNG)
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        erhe_graphics/image_writer_fpng.cpp
+    )
+    target_sources(${_target} PRIVATE "${fpng_SOURCE_DIR}/src/fpng.cpp")
+    target_include_directories(${_target} PRIVATE "${fpng_SOURCE_DIR}/src")
+else ()
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        erhe_graphics/image_writer_null.cpp
+    )
+endif ()
 
 if (${ERHE_BUILD_TESTS} STREQUAL "ON")
     add_subdirectory(test)

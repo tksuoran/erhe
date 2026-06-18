@@ -5,6 +5,7 @@
 #include "volk.h"
 #include "vk_mem_alloc.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -64,6 +65,18 @@ public:
     [[nodiscard]] auto get_depth_image_view() const -> VkImageView;
     [[nodiscard]] auto get_vk_depth_format () const -> VkFormat;
 
+    // Reads the most recently composited color image back to host memory as
+    // tightly packed 8-bit RGBA (alpha forced to 255). Returns false if no
+    // frame has been composited yet. Used by the headless screenshot path; the
+    // emulated swapchain leaves its color images in TRANSFER_SRC_OPTIMAL, so
+    // the copy is a drop-in. Synchronous (drains the GPU); intended for
+    // infrequent diagnostic capture, not the hot path.
+    [[nodiscard]] auto read_back_last_frame(
+        uint32_t&               out_width,
+        uint32_t&               out_height,
+        std::vector<std::byte>& out_rgba8
+    ) -> bool;
+
 private:
     void create_images     ();
     void create_depth_image(uint32_t width, uint32_t height);
@@ -75,6 +88,12 @@ private:
     VkFormat                   m_color_format    {VK_FORMAT_UNDEFINED};
     VkFormat                   m_depth_format    {VK_FORMAT_UNDEFINED};
     uint32_t                   m_image_index     {0};
+    // Index of the image whose swapchain render pass was most recently
+    // recorded (set in mark_render_pass_recorded). This is the fully
+    // composited frame the readback path reads. m_have_composited gates the
+    // readback until at least one frame has been rendered.
+    uint32_t                   m_last_composited_index{0};
+    bool                       m_have_composited      {false};
     std::vector<VkImage>       m_images;
     std::vector<VmaAllocation> m_allocations;
     std::vector<VkImageView>   m_views;

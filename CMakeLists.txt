@@ -64,6 +64,7 @@ set_option(ERHE_TERMINAL_LIBRARY           "Terminal use with erhe. Either cpp-t
 set_option(ERHE_USE_PRECOMPILED_HEADERS    "Use precompiled headers in erhe"                                            "OFF"      "ON;OFF")
 set_option(ERHE_USE_ASAN                   "Enable AddressSanitizer"                                                    "OFF"      "ON;OFF")
 set_option(ERHE_USE_MIMALLOC               "Enable mimalloc"                                                            "OFF"      "ON;OFF")
+set_option(ERHE_USE_FPNG                   "Build the fpng image writer (fast PNG save), independent of window lib"      "ON"       "ON;OFF")
 set_option(ERHE_SPIRV                      "Enable SPIR-V"                                                              "OFF"      "ON;OFF")
 set_option(ERHE_BUILD_TESTS                "Build erhe unit tests"                                                      "OFF"      "ON;OFF")
 
@@ -482,6 +483,23 @@ elseif (${ERHE_WINDOW_LIBRARY} STREQUAL "glfw")
 else ()
     message(STATUS "Erhe configured to disable window system integration.")
     add_definitions(-DERHE_WINDOW_LIBRARY_NONE)
+endif ()
+
+# fpng (https://github.com/richgel999/fpng) is a very fast PNG reader/writer
+# used by the erhe::graphics image writer. It is a single source file with no
+# external dependencies and is independent of ERHE_WINDOW_LIBRARY, so headless
+# builds can save PNGs too. Fetched download-only; fpng.cpp is compiled into
+# erhe::graphics directly (see src/erhe/graphics/CMakeLists.txt).
+if (ERHE_USE_FPNG)
+    CPMAddPackage(
+        NAME              fpng
+        GIT_TAG           925796543b9d26b8edfcdcecd94c1dac280f29fc
+        GIT_SHALLOW       TRUE
+        GITHUB_REPOSITORY richgel999/fpng
+        DOWNLOAD_ONLY     YES
+    )
+    add_definitions(-DERHE_USE_FPNG)
+    message(STATUS "Erhe configured to build the fpng image writer (fast PNG save).")
 endif ()
 
 if (${ERHE_NAVIGATION_LIBRARY} STREQUAL "recastnavigation")

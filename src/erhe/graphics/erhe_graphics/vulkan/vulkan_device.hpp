@@ -235,6 +235,9 @@ public:
 
     [[nodiscard]] auto get_device                       () -> Device&;
     [[nodiscard]] auto get_surface                      () -> Surface*;
+    // Reads the most recently composited headless (emulated swapchain) frame to
+    // host memory as tightly packed 8-bit RGBA. Returns false when not headless.
+    [[nodiscard]] auto capture_last_frame               (int& out_width, int& out_height, erhe::dataformat::Format& out_format, std::vector<std::byte>& out_pixels) -> bool;
     [[nodiscard]] auto get_native_handles               () const -> Native_device_handles;
     [[nodiscard]] auto get_vulkan_instance              () -> VkInstance;
     [[nodiscard]] auto get_vulkan_physical_device       () -> VkPhysicalDevice;

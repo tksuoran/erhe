@@ -307,8 +307,12 @@ auto Emulated_swapchain_impl::get_swapchain_extent() const -> VkExtent2D
 
 void Emulated_swapchain_impl::mark_render_pass_recorded()
 {
-    // No-op: the emulated swapchain has no acquire/present state machine to
-    // advance (present is a no-op).
+    // The emulated swapchain has no acquire/present state machine to advance
+    // (present is a no-op). Record which image just had its swapchain render
+    // pass recorded; that image holds the fully composited frame (viewports +
+    // ImGui) in TRANSFER_SRC_OPTIMAL, and is what read_back_last_frame() reads.
+    m_last_composited_index = m_image_index;
+    m_have_composited       = true;
 }
 
 auto Emulated_swapchain_impl::get_surface_impl() -> Surface_impl&
@@ -347,6 +351,192 @@ auto Emulated_swapchain_impl::get_depth_image_view() const -> VkImageView
 auto Emulated_swapchain_impl::get_vk_depth_format() const -> VkFormat
 {
     return m_depth_format;
+}
+
+auto Emulated_swapchain_impl::read_back_last_frame(
+    uint32_t&               out_width,
+    uint32_t&               out_height,
+    std::vector<std::byte>& out_rgba8
+) -> bool
+{
+    if (!m_have_composited || m_images.empty()) {
+        return false;
+    }
+
+    const VkDevice vulkan_device = m_device_impl.get_vulkan_device();
+    const VkQueue  queue         = m_device_impl.get_graphics_queue();
+    const uint32_t queue_family  = m_device_impl.get_graphics_queue_family_index();
+    VmaAllocator&  allocator     = m_device_impl.get_allocator();
+    const uint32_t index         = m_last_composited_index;
+    const VkImage  image         = m_images[index];
+    const uint32_t width         = m_extent.width;
+    const uint32_t height        = m_extent.height;
+    if ((image == VK_NULL_HANDLE) || (width == 0) || (height == 0)) {
+        return false;
+    }
+
+    // Drain the GPU so the last composited frame is complete and its color
+    // image is settled in TRANSFER_SRC_OPTIMAL before the copy. This is a
+    // diagnostic / infrequent path, so a full device wait is acceptable.
+    vkDeviceWaitIdle(vulkan_device);
+
+    const VkDeviceSize pixel_count = static_cast<VkDeviceSize>(width) * static_cast<VkDeviceSize>(height);
+    const VkDeviceSize buffer_size = pixel_count * 4u; // source is 4 bytes/pixel (RGBA8 / BGRA8)
+
+    // Host-visible, persistently mapped staging buffer.
+    VkBuffer          staging_buffer     = VK_NULL_HANDLE;
+    VmaAllocation     staging_allocation = VK_NULL_HANDLE;
+    VmaAllocationInfo staging_info{};
+    const VkBufferCreateInfo buffer_create_info{
+        .sType                 = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .pNext                 = nullptr,
+        .flags                 = 0,
+        .size                  = buffer_size,
+        .usage                 = VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        .sharingMode           = VK_SHARING_MODE_EXCLUSIVE,
+        .queueFamilyIndexCount = 0,
+        .pQueueFamilyIndices   = nullptr
+    };
+    const VmaAllocationCreateInfo alloc_create_info{
+        .flags          = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+        .usage          = VMA_MEMORY_USAGE_AUTO,
+        .requiredFlags  = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+        .preferredFlags = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        .memoryTypeBits = 0,
+        .pool           = VK_NULL_HANDLE,
+        .pUserData      = nullptr,
+        .priority       = 0.0f
+    };
+    if (vmaCreateBuffer(allocator, &buffer_create_info, &alloc_create_info, &staging_buffer, &staging_allocation, &staging_info) != VK_SUCCESS) {
+        log_swapchain->error("read_back_last_frame: staging buffer allocation failed");
+        return false;
+    }
+
+    // One-shot command pool + primary command buffer on the graphics queue.
+    VkCommandPool   command_pool   = VK_NULL_HANDLE;
+    VkCommandBuffer command_buffer = VK_NULL_HANDLE;
+    VkFence         fence          = VK_NULL_HANDLE;
+    const VkCommandPoolCreateInfo pool_create_info{
+        .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .pNext            = nullptr,
+        .flags            = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
+        .queueFamilyIndex = queue_family
+    };
+    bool ok = (vkCreateCommandPool(vulkan_device, &pool_create_info, nullptr, &command_pool) == VK_SUCCESS);
+
+    if (ok) {
+        const VkCommandBufferAllocateInfo cb_alloc_info{
+            .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+            .pNext              = nullptr,
+            .commandPool        = command_pool,
+            .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+            .commandBufferCount = 1
+        };
+        ok = (vkAllocateCommandBuffers(vulkan_device, &cb_alloc_info, &command_buffer) == VK_SUCCESS);
+    }
+
+    if (ok) {
+        const VkCommandBufferBeginInfo begin_info{
+            .sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+            .pNext            = nullptr,
+            .flags            = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+            .pInheritanceInfo = nullptr
+        };
+        vkBeginCommandBuffer(command_buffer, &begin_info);
+
+        // The swapchain render pass left the image in TRANSFER_SRC_OPTIMAL.
+        // Barrier with old == new layout to make the color writes available to
+        // the transfer read.
+        const VkImageMemoryBarrier barrier{
+            .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .pNext               = nullptr,
+            .srcAccessMask       = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            .dstAccessMask       = VK_ACCESS_TRANSFER_READ_BIT,
+            .oldLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            .newLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image               = image,
+            .subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
+        };
+        vkCmdPipelineBarrier(
+            command_buffer,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            0, 0, nullptr, 0, nullptr, 1, &barrier
+        );
+
+        const VkBufferImageCopy region{
+            .bufferOffset      = 0,
+            .bufferRowLength   = 0,
+            .bufferImageHeight = 0,
+            .imageSubresource  = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+            .imageOffset       = {0, 0, 0},
+            .imageExtent       = {width, height, 1}
+        };
+        vkCmdCopyImageToBuffer(command_buffer, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, staging_buffer, 1, &region);
+        vkEndCommandBuffer(command_buffer);
+
+        const VkFenceCreateInfo fence_create_info{
+            .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+            .pNext = nullptr,
+            .flags = 0
+        };
+        ok = (vkCreateFence(vulkan_device, &fence_create_info, nullptr, &fence) == VK_SUCCESS);
+    }
+
+    if (ok) {
+        const VkSubmitInfo submit_info{
+            .sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+            .pNext                = nullptr,
+            .waitSemaphoreCount   = 0,
+            .pWaitSemaphores      = nullptr,
+            .pWaitDstStageMask    = nullptr,
+            .commandBufferCount   = 1,
+            .pCommandBuffers      = &command_buffer,
+            .signalSemaphoreCount = 0,
+            .pSignalSemaphores    = nullptr
+        };
+        ok = (vkQueueSubmit(queue, 1, &submit_info, fence) == VK_SUCCESS);
+        if (ok) {
+            vkWaitForFences(vulkan_device, 1, &fence, VK_TRUE, UINT64_MAX);
+        }
+    }
+
+    if (ok && (staging_info.pMappedData != nullptr)) {
+        // Make the GPU writes visible to the host (no-op for coherent memory).
+        vmaInvalidateAllocation(allocator, staging_allocation, 0, VK_WHOLE_SIZE);
+
+        // Convert to tightly packed RGBA8: swap B/R for a BGRA source and force
+        // an opaque alpha (the composited frame's alpha is not meaningful).
+        const bool             is_bgra = (m_color_format == VK_FORMAT_B8G8R8A8_SRGB) || (m_color_format == VK_FORMAT_B8G8R8A8_UNORM);
+        const std::byte* const src     = static_cast<const std::byte*>(staging_info.pMappedData);
+        out_rgba8.resize(static_cast<std::size_t>(buffer_size));
+        for (VkDeviceSize i = 0; i < pixel_count; ++i) {
+            const std::size_t o  = static_cast<std::size_t>(i) * 4u;
+            const std::byte   c0 = src[o + 0];
+            const std::byte   c1 = src[o + 1];
+            const std::byte   c2 = src[o + 2];
+            out_rgba8[o + 0] = is_bgra ? c2 : c0; // R
+            out_rgba8[o + 1] = c1;                // G
+            out_rgba8[o + 2] = is_bgra ? c0 : c2; // B
+            out_rgba8[o + 3] = std::byte{0xff};   // A
+        }
+        out_width  = width;
+        out_height = height;
+    } else {
+        ok = false;
+    }
+
+    if (fence != VK_NULL_HANDLE) {
+        vkDestroyFence(vulkan_device, fence, nullptr);
+    }
+    if (command_pool != VK_NULL_HANDLE) {
+        vkDestroyCommandPool(vulkan_device, command_pool, nullptr);
+    }
+    vmaDestroyBuffer(allocator, staging_buffer, staging_allocation);
+
+    return ok;
 }
 
 } // namespace erhe::graphics

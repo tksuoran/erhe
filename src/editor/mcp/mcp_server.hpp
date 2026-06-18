@@ -130,6 +130,7 @@ private:
     auto action_edit_collision_filter  (const nlohmann::json& args) -> std::string;
     auto action_create_physics_joint_settings(const nlohmann::json& args) -> std::string;
     auto action_edit_physics_joint_settings  (const nlohmann::json& args) -> std::string;
+    auto action_capture_screenshot           (const nlohmann::json& args) -> std::string;
     auto execute_command        (const std::string& tool_name) -> std::string;
 
     erhe::commands::Commands& m_commands;

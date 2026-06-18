@@ -3,6 +3,7 @@
 #include "erhe_graphics/vulkan/vulkan_buffer.hpp"
 #include "erhe_graphics/vulkan/vulkan_command_buffer.hpp"
 #include "erhe_graphics/vulkan/vulkan_device_sync_pool.hpp"
+#include "erhe_graphics/vulkan/vulkan_emulated_swapchain.hpp"
 #include "erhe_graphics/vulkan/vulkan_gpu_timer.hpp"
 #include "erhe_graphics/vulkan/vulkan_helpers.hpp"
 #include "erhe_graphics/vulkan/vulkan_render_pass.hpp"
@@ -944,6 +945,33 @@ auto Device_impl::get_device() -> Device&
 auto Device_impl::get_surface() -> Surface*
 {
     return m_surface.get();
+}
+
+auto Device_impl::capture_last_frame(
+    int&                      out_width,
+    int&                      out_height,
+    erhe::dataformat::Format& out_format,
+    std::vector<std::byte>&   out_pixels
+) -> bool
+{
+    if (m_surface == nullptr) {
+        return false;
+    }
+    // Only the headless emulated swapchain is supported; the real WSI swapchain
+    // (non-headless) capture is not implemented yet.
+    Emulated_swapchain_impl* const emulated = m_surface->get_impl().get_emulated_swapchain();
+    if (emulated == nullptr) {
+        return false;
+    }
+    uint32_t width  = 0;
+    uint32_t height = 0;
+    if (!emulated->read_back_last_frame(width, height, out_pixels)) {
+        return false;
+    }
+    out_width  = static_cast<int>(width);
+    out_height = static_cast<int>(height);
+    out_format = erhe::dataformat::Format::format_8_vec4_srgb;
+    return true;
 }
 
 auto Device_impl::get_native_handles() const -> Native_device_handles

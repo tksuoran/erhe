@@ -19,6 +19,8 @@
 #include "parsers/gltf.hpp"
 #include "parsers/gltf_physics_export.hpp"
 #include "erhe_math/math_util.hpp"
+#include "erhe_graphics/device.hpp"
+#include "erhe_graphics/image_writer.hpp"
 #include "editor_log.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "scene/collision_shape_from_mesh.hpp"
@@ -793,6 +795,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "save_scene")         result = action_save_scene     (req->arguments);
         else if (req->tool_name == "export_gltf")        result = action_export_gltf    (req->arguments);
         else if (req->tool_name == "import_gltf")        result = action_import_gltf    (req->arguments);
+        else if (req->tool_name == "capture_screenshot") result = action_capture_screenshot(req->arguments);
         else if (req->tool_name == "wake_physics_bodies") result = action_wake_physics_bodies(req->arguments);
         else if (req->tool_name == "get_physics_items")  result = query_physics_items   (req->arguments);
         else if (req->tool_name == "create_physics_body") result = action_create_physics_body(req->arguments);
@@ -1018,6 +1021,12 @@ void Mcp_server::refresh_tool_list()
             {"path",       {{"type", "string"}, {"description", "Source .gltf/.glb file path"}}}
         }},
         {"required", json::array({"scene_name", "path"})}
+    }});
+    m_tool_infos.push_back({"capture_screenshot",  "Capture the current rendered frame to a PNG file and return its path. Currently supported only in the headless Vulkan configuration (emulated swapchain).", {
+        {"type", "object"},
+        {"properties", {
+            {"path", {{"type", "string"}, {"description", "Output PNG path (default logs/mcp_screenshot.png)"}}}
+        }}
     }});
     m_tool_infos.push_back({"wake_physics_bodies", "Activate all dynamic rigid bodies in a scene (bodies enter the world deactivated)", schema_scene_name()});
 
@@ -3195,6 +3204,44 @@ auto Mcp_server::action_import_gltf(const json& args) -> std::string
     return make_json_content({
         {"imported", true},
         {"path",     path_str}
+    }).dump();
+}
+
+auto Mcp_server::action_capture_screenshot(const json& args) -> std::string
+{
+    if (m_context.graphics_device == nullptr) {
+        json r = make_text_content("Graphics device not available");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    const std::string path_str = args.value("path", std::string{"logs/mcp_screenshot.png"});
+
+    int                      width  = 0;
+    int                      height = 0;
+    erhe::dataformat::Format format = erhe::dataformat::Format::format_8_vec4_srgb;
+    std::vector<std::byte>   pixels;
+    if (!m_context.graphics_device->capture_last_frame(width, height, format, pixels)) {
+        json r = make_text_content(
+            "Frame capture not available. Screenshots are currently only supported in the headless "
+            "Vulkan configuration (emulated swapchain), and require at least one rendered frame."
+        );
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    std::unique_ptr<erhe::graphics::Image_writer> writer = erhe::graphics::Image_writer::create();
+    const int row_stride = width * 4;
+    if (!writer->write_png(std::filesystem::path{path_str}, width, height, row_stride, format, pixels)) {
+        json r = make_text_content("Failed to write PNG '" + path_str + "' (image writer backend may be disabled)");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    return make_json_content({
+        {"path",   path_str},
+        {"width",  width},
+        {"height", height}
     }).dump();
 }
 

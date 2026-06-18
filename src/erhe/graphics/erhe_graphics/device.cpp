@@ -58,6 +58,25 @@ auto Device::get_surface() -> Surface*
 {
     return m_impl->get_surface();
 }
+auto Device::capture_last_frame(
+    int&                      out_width,
+    int&                      out_height,
+    erhe::dataformat::Format& out_format,
+    std::vector<std::byte>&   out_pixels
+) -> bool
+{
+#if defined(ERHE_GRAPHICS_API_VULKAN)
+    return m_impl->capture_last_frame(out_width, out_height, out_format, out_pixels);
+#else
+    // Frame capture is currently only implemented for the headless Vulkan
+    // emulated swapchain.
+    static_cast<void>(out_width);
+    static_cast<void>(out_height);
+    static_cast<void>(out_format);
+    static_cast<void>(out_pixels);
+    return false;
+#endif
+}
 auto Device::get_handle(const Texture& texture, const Sampler& sampler) const -> uint64_t
 {
     return m_impl->get_handle(texture, sampler);

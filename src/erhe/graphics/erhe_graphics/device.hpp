@@ -12,6 +12,7 @@
 #include "erhe_utility/debug_label.hpp"
 
 #include <array>
+#include <cstddef>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -398,6 +399,19 @@ public:
 
     void add_completion_handler    (std::function<void()> callback);
     void on_thread_enter           ();
+
+    // Reads the most recently composited frame back to host memory as tightly
+    // packed 8-bit RGBA (out_format = format_8_vec4_srgb). Returns false if the
+    // backend / configuration does not support it. Currently only the headless
+    // Vulkan emulated swapchain is supported; the real WSI swapchain and other
+    // backends return false. Synchronous and intended for infrequent
+    // diagnostic capture (e.g. MCP screenshots), not the hot path.
+    [[nodiscard]] auto capture_last_frame(
+        int&                      out_width,
+        int&                      out_height,
+        erhe::dataformat::Format& out_format,
+        std::vector<std::byte>&   out_pixels
+    ) -> bool;
 
     [[nodiscard]] auto get_surface                        () -> Surface*;
     [[nodiscard]] auto get_handle                         (const Texture& texture, const Sampler& sampler) const -> uint64_t;
