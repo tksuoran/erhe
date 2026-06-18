@@ -151,6 +151,11 @@ public:
 private:
     void update_hover_with_id_render();
 
+    // Implements Scene_view per-view "Scene and Camera" persistence: adds the
+    // camera, shader_debug and renderer_choice that live on this derived view.
+    void write_scene_and_camera_settings(Scene_and_camera_settings& out) const override;
+    auto resolve_pending_scene_and_camera() -> bool override;
+
     static int s_serial;
 
     std::optional<glm::vec2>           m_position_in_viewport {};

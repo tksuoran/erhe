@@ -1,6 +1,7 @@
 #pragma once
 
 #include "renderers/viewport_config.hpp"
+#include "config/generated/scene_and_camera_settings.hpp"
 #include "scene/node_raytrace_mask.hpp"
 #include "tools/debug_visualizations.hpp"
 
@@ -158,6 +159,12 @@ public:
 
     virtual void viewport_toolbar          ();
 
+    // Per-frame: resolves any pending persisted "Scene and Camera" selection
+    // (scene / camera / shadow-camera looked up by name) once the named scene
+    // has been loaded. No-op once resolved or when nothing is pending. Driven
+    // from update_transforms(), which runs every frame for every view type.
+    void tick_scene_and_camera_restore();
+
     // Called by App_rendering::render_viewport_renderables() so that the
     // per-view Debug_visualizations renders alongside the globally
     // registered Renderables. The Render_context names the view being
@@ -184,6 +191,23 @@ protected:
     // result is closest to the camera along the picking ray.
     void merge_hover(std::size_t slot, const Hover_entry& candidate);
 
+    // Per-view "Scene and Camera" persistence. The base handles the scene and
+    // the shadow-camera override (both owned by Scene_view); Viewport_scene_view
+    // overrides to also persist camera, shader_debug and renderer_choice.
+    // write_ and resolve_ run per frame (object fully constructed), so virtual
+    // dispatch reaches the most-derived override. The read side is consumed
+    // directly from m_pending_scene_and_camera in each class's constructor to
+    // avoid calling a virtual from a base constructor.
+    virtual void write_scene_and_camera_settings(Scene_and_camera_settings& out) const;
+    // Resolves the staged names to live objects. Returns false while the named
+    // scene is not yet loaded, so the caller retries on a later frame.
+    virtual auto resolve_pending_scene_and_camera() -> bool;
+
+    [[nodiscard]] static auto find_camera_in_scene(
+        const Scene_root&  scene_root,
+        const std::string& name
+    ) -> std::shared_ptr<erhe::scene::Camera>;
+
     App_context&                       m_context;
     Editor_settings_store*             m_editor_settings_store{nullptr};
     std::string                        m_settings_key;
@@ -195,6 +219,14 @@ protected:
     bool                               m_hover_update_pending{true};
     std::weak_ptr<Scene_root>          m_scene_root;
     std::weak_ptr<erhe::scene::Camera> m_shadow_fit_override_camera;
+
+    // Persisted "Scene and Camera" selection, staged at construction and
+    // applied (by name) on a later frame once the scene is available; see
+    // tick_scene_and_camera_restore(). While restore is pending the collect
+    // callback writes these staged names back verbatim so the baseline collect
+    // cannot clobber the saved selection before it is resolved.
+    Scene_and_camera_settings          m_pending_scene_and_camera       {};
+    bool                               m_scene_and_camera_restore_pending{false};
 
     bool                               m_show_visual_style_popup        {false};
     bool                               m_show_scene_and_camera_popup    {false};

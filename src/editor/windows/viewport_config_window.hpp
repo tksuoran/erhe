@@ -19,10 +19,13 @@ public:
         "All"
     };
 
+    // Edits the per-scene-view Visual Style in place. Persistence is handled
+    // by the owning Scene_view's collect callback (autosaved to
+    // editor_settings.json); this window does not save directly.
     static void imgui(Viewport_config& edit_data);
 
     // Public API
-    static void render_style_ui(Render_style_data& render_style, bool& edited);
+    static void render_style_ui(Render_style_data& render_style);
 
 };
 

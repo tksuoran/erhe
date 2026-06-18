@@ -118,6 +118,21 @@ Viewport_scene_view::Viewport_scene_view(
 
     // We need rendertarget texture(s) rendered before
     register_input("rendertarget texture", erhe::rendergraph::Rendergraph_node_key::rendertarget_texture);
+
+    // Apply the persisted shader_debug / renderer_choice immediately: unlike
+    // scene / camera they have no scene dependency, so they do not need the
+    // deferred name resolution done in resolve_pending_scene_and_camera().
+    // m_pending_scene_and_camera was staged by the Scene_view constructor.
+    if (m_scene_and_camera_restore_pending) {
+        const int shader_debug_value = m_pending_scene_and_camera.shader_debug;
+        if ((shader_debug_value >= 0) && (shader_debug_value < IM_ARRAYSIZE(erhe::scene_renderer::c_shader_debug_strings))) {
+            m_shader_debug = static_cast<erhe::scene_renderer::Shader_debug>(shader_debug_value);
+        }
+        const int renderer_value = m_pending_scene_and_camera.renderer_choice;
+        if ((renderer_value >= 0) && (renderer_value < IM_ARRAYSIZE(c_renderer_choice_strings))) {
+            m_renderer_choice = static_cast<Renderer_choice>(renderer_value);
+        }
+    }
 }
 
 Viewport_scene_view::~Viewport_scene_view() noexcept
@@ -825,6 +840,37 @@ void Viewport_scene_view::set_renderer_choice(Renderer_choice choice)
 auto Viewport_scene_view::get_renderer_choice() const -> Renderer_choice
 {
     return m_renderer_choice;
+}
+
+void Viewport_scene_view::write_scene_and_camera_settings(Scene_and_camera_settings& out) const
+{
+    Scene_view::write_scene_and_camera_settings(out);
+    if (m_scene_and_camera_restore_pending) {
+        // See Scene_view::write_scene_and_camera_settings: preserve verbatim
+        // until the selection has been resolved.
+        out.camera_name = m_pending_scene_and_camera.camera_name;
+    } else {
+        std::shared_ptr<erhe::scene::Camera> camera = m_camera.lock();
+        out.camera_name = camera ? camera->get_name() : std::string{};
+    }
+    out.shader_debug    = static_cast<int>(m_shader_debug);
+    out.renderer_choice = static_cast<int>(m_renderer_choice);
+}
+
+auto Viewport_scene_view::resolve_pending_scene_and_camera() -> bool
+{
+    if (!Scene_view::resolve_pending_scene_and_camera()) {
+        return false; // scene not loaded yet; base asked to retry
+    }
+    const std::string& camera_name = m_pending_scene_and_camera.camera_name;
+    std::shared_ptr<Scene_root> scene_root = get_scene_root();
+    if (!camera_name.empty() && scene_root) {
+        std::shared_ptr<erhe::scene::Camera> camera = find_camera_in_scene(*scene_root, camera_name);
+        if (camera) {
+            set_camera(camera);
+        }
+    }
+    return true;
 }
 
 auto Viewport_scene_view::get_closest_point_on_line(const glm::vec3 P0, const glm::vec3 P1) -> std::optional<glm::vec3>

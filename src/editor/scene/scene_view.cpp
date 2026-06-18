@@ -4,6 +4,7 @@
 
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
+#include "app_scenes.hpp"
 #include "app_settings.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/editor_settings_config_serialization.hpp"
@@ -18,6 +19,7 @@
 #include "windows/viewport_config_window.hpp"
 
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh_raytrace.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_raytrace/ray.hpp"
@@ -91,9 +93,21 @@ Scene_view::Scene_view(
     );
     if (i != settings.scene_views.end()) {
         m_debug_visualizations.read_config(i->debug_visualizations);
+        // Per-view Visual Style overrides the make_viewport_config() default.
+        // (On the first run after upgrading a pre-v2 entry that has no saved
+        // viewport_config, this adopts the codegen defaults once; the choice
+        // then persists per view.)
+        m_viewport_config = i->viewport_config;
+        // Stage the persisted scene/camera selection; it is applied by name on
+        // a later frame (see tick_scene_and_camera_restore) once the scene is
+        // loaded, because resolving it needs App_scenes which a constructor
+        // must not touch.
+        m_pending_scene_and_camera         = i->scene_and_camera;
+        m_scene_and_camera_restore_pending = true;
     } else {
         // No saved entry for this view yet: the global slot acts as the
-        // defaults for new views.
+        // defaults for new views. Keep the make_viewport_config() Visual Style
+        // default and the constructor-provided scene/camera (nothing pending).
         m_debug_visualizations.read_config(settings.debug_visualizations);
     }
 
@@ -113,6 +127,11 @@ Scene_view::Scene_view(
                 j = std::prev(settings_out.scene_views.end());
             }
             m_debug_visualizations.write_config(j->debug_visualizations);
+            j->viewport_config = m_viewport_config;
+            // Virtual: dispatches to Viewport_scene_view to add camera /
+            // shader_debug / renderer_choice. Safe here because the callback
+            // runs per frame, long after construction.
+            write_scene_and_camera_settings(j->scene_and_camera);
         }
     );
 }
@@ -567,6 +586,11 @@ auto Scene_view::get_closest_point_on_plane(const glm::vec3 N, const glm::vec3 P
 
 void Scene_view::update_transforms()
 {
+    // Apply any persisted scene/camera selection now that scenes are loaded.
+    // Runs before the early-out below so a view that needs its scene restored
+    // is not skipped while it still has no scene_root.
+    tick_scene_and_camera_restore();
+
     std::shared_ptr<Scene_root> scene_root = get_scene_root();
     if (!scene_root) {
         return;
@@ -574,6 +598,73 @@ void Scene_view::update_transforms()
 
     erhe::scene::Scene& scene = scene_root->get_scene();
     scene.update_node_transforms();
+}
+
+void Scene_view::tick_scene_and_camera_restore()
+{
+    if (!m_scene_and_camera_restore_pending) {
+        return;
+    }
+    if (resolve_pending_scene_and_camera()) {
+        m_scene_and_camera_restore_pending = false;
+    }
+}
+
+auto Scene_view::find_camera_in_scene(
+    const Scene_root&  scene_root,
+    const std::string& name
+) -> std::shared_ptr<erhe::scene::Camera>
+{
+    if (name.empty()) {
+        return {};
+    }
+    const std::vector<std::shared_ptr<erhe::scene::Camera>>& cameras = scene_root.get_scene().get_cameras();
+    for (const std::shared_ptr<erhe::scene::Camera>& camera : cameras) {
+        if (camera->get_name() == name) {
+            return camera;
+        }
+    }
+    return {};
+}
+
+void Scene_view::write_scene_and_camera_settings(Scene_and_camera_settings& out) const
+{
+    if (m_scene_and_camera_restore_pending) {
+        // Not yet restored: preserve the persisted selection verbatim so the
+        // baseline collect cannot clobber it before resolution completes.
+        out.scene_name                      = m_pending_scene_and_camera.scene_name;
+        out.shadow_fit_override_camera_name = m_pending_scene_and_camera.shadow_fit_override_camera_name;
+        return;
+    }
+    std::shared_ptr<Scene_root> scene_root = get_scene_root();
+    out.scene_name = scene_root ? scene_root->get_name() : std::string{};
+    std::shared_ptr<erhe::scene::Camera> shadow_camera = m_shadow_fit_override_camera.lock();
+    out.shadow_fit_override_camera_name = shadow_camera ? shadow_camera->get_name() : std::string{};
+}
+
+auto Scene_view::resolve_pending_scene_and_camera() -> bool
+{
+    const std::string& scene_name = m_pending_scene_and_camera.scene_name;
+    std::shared_ptr<Scene_root> scene_root = get_scene_root();
+    if (!scene_name.empty()) {
+        std::shared_ptr<Scene_root> found;
+        for (const std::shared_ptr<Scene_root>& root : m_context.app_scenes->get_scene_roots()) {
+            if (root->get_name() == scene_name) {
+                found = root;
+                break;
+            }
+        }
+        if (!found) {
+            return false; // named scene not loaded yet; retry on a later frame
+        }
+        set_scene_root(found);
+        scene_root = found;
+    }
+    const std::string& shadow_name = m_pending_scene_and_camera.shadow_fit_override_camera_name;
+    if (!shadow_name.empty() && scene_root) {
+        set_shadow_fit_override_camera(find_camera_in_scene(*scene_root, shadow_name));
+    }
+    return true;
 }
 
 auto Scene_view::icon_button(ImFont* icon_font, float font_size, const char* icon, const char* fallback_text, const char* tooltip, bool& toggle) -> bool

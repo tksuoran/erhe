@@ -1,9 +1,7 @@
 #include "windows/viewport_config_window.hpp"
 #include "app_context.hpp"
-#include "config/generated/viewport_config_serialization.hpp"
 #include "scene/viewport_scene_views.hpp"
 #include "scene/viewport_scene_view.hpp"
-#include "erhe_codegen/config_io.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
@@ -13,10 +11,12 @@
 
 namespace editor {
 
-void Viewport_config_window::render_style_ui(Render_style_data& render_style, bool& edited)
+void Viewport_config_window::render_style_ui(Render_style_data& render_style)
 {
     ERHE_PROFILE_FUNCTION();
 
+    // Widgets edit render_style in place; the owning Scene_view's collect
+    // callback persists the change (autosaved). No per-widget edit tracking.
     const ImGuiTreeNodeFlags flags{
         ImGuiTreeNodeFlags_OpenOnArrow       |
         ImGuiTreeNodeFlags_OpenOnDoubleClick |
@@ -25,10 +25,6 @@ void Viewport_config_window::render_style_ui(Render_style_data& render_style, bo
 
     if (ImGui::TreeNodeEx("Polygon Fill", flags)) {
         ImGui::Checkbox("Visible", &render_style.polygon_fill);
-        if (ImGui::IsItemDeactivatedAfterEdit()) {
-            edited = true;
-        }
-
         //if (render_style.polygon_fill) {
         //    ImGui::Text       ("Polygon Offset");
         //    ImGui::Checkbox   ("Enable", &render_style.polygon_offset_enable);
@@ -42,88 +38,47 @@ void Viewport_config_window::render_style_ui(Render_style_data& render_style, bo
     using Primitive_interface_settings = erhe::scene_renderer::Primitive_interface_settings;
     if (ImGui::TreeNodeEx("Edge Lines", flags)) {
         ImGui::Checkbox("Visible", &render_style.edge_lines);
-        if (ImGui::IsItemDeactivatedAfterEdit()) {
-            edited = true;
-        }
         if (render_style.edge_lines) {
             ImGui::SliderFloat("Width", &render_style.line_width, 0.0f, 20.0f);
-            if (ImGui::IsItemDeactivatedAfterEdit()) {
-                edited = true;
-            }
-
             ImGui::ColorEdit4("Constant Color", &render_style.line_color.x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR);
-            if (ImGui::IsItemDeactivatedAfterEdit()) {
-                edited = true;
-            }
-
             erhe::imgui::make_combo(
                 "Color Source",
                 render_style.edge_lines_color_source,
                 Primitive_interface_settings::c_primitive_color_source_strings_data.data(),
                 static_cast<int>(Primitive_interface_settings::c_primitive_color_source_strings_data.size())
             );
-            if (ImGui::IsItemDeactivatedAfterEdit()) {
-                edited = true;
-            }
         }
         ImGui::TreePop();
     }
 
     if (ImGui::TreeNodeEx("Polygon Centroids", flags)) {
         ImGui::Checkbox("Visible", &render_style.polygon_centroids);
-        if (ImGui::IsItemDeactivatedAfterEdit()) {
-            edited = true;
-        }
-
         if (render_style.polygon_centroids) {
             ImGui::ColorEdit4("Constant Color", &render_style.centroid_color.x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR);
-            if (ImGui::IsItemDeactivatedAfterEdit()) {
-                edited = true;
-            }
-
             erhe::imgui::make_combo(
                 "Color Source",
                 render_style.polygon_centroids_color_source,
                 Primitive_interface_settings::c_primitive_color_source_strings_data.data(),
                 static_cast<int>(Primitive_interface_settings::c_primitive_color_source_strings_data.size())
             );
-            if (ImGui::IsItemDeactivatedAfterEdit()) {
-                edited = true;
-            }
-
         }
         ImGui::TreePop();
     }
 
     if (ImGui::TreeNodeEx("Corner Points", flags)) {
         ImGui::Checkbox("Visible", &render_style.corner_points);
-        if (ImGui::IsItemDeactivatedAfterEdit()) {
-            edited = true;
-        }
-
         ImGui::ColorEdit4("Constant Color", &render_style.corner_color.x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR);
-        if (ImGui::IsItemDeactivatedAfterEdit()) {
-            edited = true;
-        }
-
         erhe::imgui::make_combo(
             "Color Source",
             render_style.corner_points_color_source,
             Primitive_interface_settings::c_primitive_color_source_strings_data.data(),
             static_cast<int>(Primitive_interface_settings::c_primitive_color_source_strings_data.size())
         );
-        if (ImGui::IsItemDeactivatedAfterEdit()) {
-            edited = true;
-        }
-
         ImGui::TreePop();
     }
 
     if (render_style.polygon_centroids || render_style.corner_points) {
         ImGui::SliderFloat("Point Size", &render_style.point_size, 0.0f, 20.0f);
-        if (ImGui::IsItemDeactivatedAfterEdit()) {
-            edited = true;
-        }
     }
 }
 
@@ -140,61 +95,49 @@ void Viewport_config_window::imgui(Viewport_config& edit_data)
         ImGuiTreeNodeFlags_DefaultOpen
     };
 
-    const std::string before = serialize(edit_data);
-
-    bool edited = false;
-    auto collect = [&](const bool value) {
-        static_cast<void>(value);
-        edited = edited || ImGui::IsItemDeactivatedAfterEdit();
-    };
-    collect(ImGui::SliderFloat("Gizmo Scale", &edit_data.gizmo_scale, 1.0f, 20.0f, "%.2f"));
-    collect(ImGui::ColorEdit4("Clear Color", &edit_data.clear_color.x, ImGuiColorEditFlags_Float));
+    // edit_data aliases the owning Scene_view's m_viewport_config. Widgets
+    // mutate it in place; the view's collect callback writes it to
+    // editor_settings.json, which Editor_settings_store autosaves on change.
+    ImGui::SliderFloat("Gizmo Scale", &edit_data.gizmo_scale, 1.0f, 20.0f, "%.2f");
+    ImGui::ColorEdit4("Clear Color", &edit_data.clear_color.x, ImGuiColorEditFlags_Float);
 
     if (ImGui::TreeNodeEx("Default Style", flags)) {
-        render_style_ui(edit_data.render_style_not_selected, edited);
+        render_style_ui(edit_data.render_style_not_selected);
         ImGui::TreePop();
     }
 
     if (ImGui::TreeNodeEx("Selection", flags)) {
-        render_style_ui(edit_data.render_style_selected, edited);
+        render_style_ui(edit_data.render_style_selected);
         ImGui::TreePop();
     }
 
     if (ImGui::TreeNodeEx("Selection Outline", flags)) {
-        collect(ImGui::ColorEdit4 ("Color Low",  &edit_data.selection_highlight_low.x,  ImGuiColorEditFlags_Float));
-        collect(ImGui::ColorEdit4 ("Color High", &edit_data.selection_highlight_high.x, ImGuiColorEditFlags_Float));
-        collect(ImGui::SliderFloat("Width Low",  &edit_data.selection_highlight_width_low,  -20.0f, 0.0f, "%.2f"));
-        collect(ImGui::SliderFloat("Width High", &edit_data.selection_highlight_width_high, -20.0f, 0.0f, "%.2f"));
-        collect(ImGui::SliderFloat("Frequency",  &edit_data.selection_highlight_frequency,    0.0f, 1.0f, "%.2f"));
+        ImGui::ColorEdit4 ("Color Low",  &edit_data.selection_highlight_low.x,  ImGuiColorEditFlags_Float);
+        ImGui::ColorEdit4 ("Color High", &edit_data.selection_highlight_high.x, ImGuiColorEditFlags_Float);
+        ImGui::SliderFloat("Width Low",  &edit_data.selection_highlight_width_low,  -20.0f, 0.0f, "%.2f");
+        ImGui::SliderFloat("Width High", &edit_data.selection_highlight_width_high, -20.0f, 0.0f, "%.2f");
+        ImGui::SliderFloat("Frequency",  &edit_data.selection_highlight_frequency,    0.0f, 1.0f, "%.2f");
         ImGui::TreePop();
     }
 
     if (ImGui::TreeNodeEx("Debug Visualizations", flags)) {
-        collect(erhe::imgui::make_combo("Light",  edit_data.debug_visualizations.light,  c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings)));
-        collect(erhe::imgui::make_combo("Camera", edit_data.debug_visualizations.camera, c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings)));
+        erhe::imgui::make_combo("Light",  edit_data.debug_visualizations.light,  c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
+        erhe::imgui::make_combo("Camera", edit_data.debug_visualizations.camera, c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
         ImGui::TreePop();
     }
 
     if (ImGui::TreeNodeEx("Mesh Components", flags)) {
         Mesh_component_style& mesh_component_style = edit_data.mesh_component_style;
-        collect(ImGui::ColorEdit4("Vertex Color", &mesh_component_style.vertex_color.x, ImGuiColorEditFlags_Float));
-        collect(ImGui::ColorEdit4("Edge Color",   &mesh_component_style.edge_color.x,   ImGuiColorEditFlags_Float));
-        collect(ImGui::ColorEdit4("Face Color",   &mesh_component_style.face_color.x,   ImGuiColorEditFlags_Float));
-        collect(ImGui::ColorEdit4("Hover Color",  &mesh_component_style.hover_color.x,  ImGuiColorEditFlags_Float));
+        ImGui::ColorEdit4("Vertex Color", &mesh_component_style.vertex_color.x, ImGuiColorEditFlags_Float);
+        ImGui::ColorEdit4("Edge Color",   &mesh_component_style.edge_color.x,   ImGuiColorEditFlags_Float);
+        ImGui::ColorEdit4("Face Color",   &mesh_component_style.face_color.x,   ImGuiColorEditFlags_Float);
+        ImGui::ColorEdit4("Hover Color",  &mesh_component_style.hover_color.x,  ImGuiColorEditFlags_Float);
         // edge_thickness: negative = constant screen-space pixel width.
-        collect(ImGui::DragFloat("Edge Thickness", &mesh_component_style.edge_thickness, 0.1f,   -20.0f, -0.5f));
-        collect(ImGui::DragFloat("Vertex Size",    &mesh_component_style.vertex_size,    0.001f,  0.001f, 0.1f));
+        ImGui::DragFloat("Edge Thickness", &mesh_component_style.edge_thickness, 0.1f,   -20.0f, -0.5f);
+        ImGui::DragFloat("Vertex Size",    &mesh_component_style.vertex_size,    0.001f,  0.001f, 0.1f);
         // edge_depth_bias: surface-line bias headroom in depth ULPs.
-        collect(ImGui::DragFloat("Edge Depth Bias (ULPs)", &mesh_component_style.edge_depth_bias, 1.0f, 0.0f, 4096.0f, "%.0f"));
+        ImGui::DragFloat("Edge Depth Bias (ULPs)", &mesh_component_style.edge_depth_bias, 1.0f, 0.0f, 4096.0f, "%.0f");
         ImGui::TreePop();
-    }
-
-    if (edited) {
-        const std::string after = serialize(edit_data);
-        if (before != after) {
-            // TODO Path needs to be scene view specific - add path to edit_data
-            erhe::codegen::save_config(edit_data, "config/editor/default_viewport_config.json");
-        }
     }
 }
 

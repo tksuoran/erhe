@@ -623,6 +623,7 @@ erhe_codegen_generate(
         "${_config_defs}/mesh_component_style.py"
         "${_config_defs}/debug_visualizations_config.py"
         "${_config_defs}/debug_visualizations_settings.py"
+        "${_config_defs}/scene_and_camera_settings.py"
         "${_config_defs}/scene_view_settings.py"
         "${_config_defs}/default_viewport_config.py"
         "${_config_defs}/make_mesh_args.py"
@@ -732,6 +733,9 @@ set(_config_sources
     ${_config_out}/debug_visualizations_settings.hpp
     ${_config_out}/debug_visualizations_settings_serialization.hpp
     ${_config_out}/debug_visualizations_settings.cpp
+    ${_config_out}/scene_and_camera_settings.hpp
+    ${_config_out}/scene_and_camera_settings_serialization.hpp
+    ${_config_out}/scene_and_camera_settings.cpp
     ${_config_out}/scene_view_settings.hpp
     ${_config_out}/scene_view_settings_serialization.hpp
     ${_config_out}/scene_view_settings.cpp
