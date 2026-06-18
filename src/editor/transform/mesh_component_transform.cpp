@@ -385,9 +385,14 @@ void Mesh_component_transform::begin(App_context& context)
         return;
     }
     // Capture the transform mode once for the whole gesture. Extrude defers its
-    // topology change to the first real move (apply()), like fork-on-edit.
-    m_extrude = (context.editor_settings != nullptr) &&
-                (context.editor_settings->transform_mode == Mesh_transform_mode::extrude);
+    // topology change to the first real move (apply()), like fork-on-edit. Both Extrude
+    // and Extrude (Normal) build the same topology (m_extrude); they differ only in how
+    // the duplicated vertices then move (m_extrude_normal: along each subset's normal).
+    const Mesh_transform_mode transform_mode = (context.editor_settings != nullptr)
+        ? context.editor_settings->transform_mode
+        : Mesh_transform_mode::move;
+    m_extrude        = (transform_mode == Mesh_transform_mode::extrude) || (transform_mode == Mesh_transform_mode::extrude_normal);
+    m_extrude_normal = (transform_mode == Mesh_transform_mode::extrude_normal);
     for (Group& group : m_groups) {
         const std::shared_ptr<erhe::scene::Mesh> mesh = group.mesh.lock();
         erhe::scene::Node* const                 node = mesh ? mesh->get_node() : nullptr;
@@ -417,6 +422,63 @@ void Mesh_component_transform::apply(App_context& context, Transform_tool_shared
     const bool      fork_mode   = (context.editor_settings != nullptr) &&
                                   (context.editor_settings->geometry_edit_mode == Geometry_edit_mode::fork);
 
+    // Pre-pass on the first real move: trigger the deferred topology change (extrude) or
+    // geometry isolation (fork) for every group BEFORE moving any vertices.
+    //
+    // Extrude-on-first-move: the first time the user actually moves, build an extruded
+    // copy of the geometry (duplicate the selection boundary, bridge with new faces) and
+    // redirect this group to move the duplicated vertices. Extrude inherently isolates
+    // this instance (a new geometry copy), so it supersedes the fork path. A click
+    // without dragging keeps `moved` false and never extrudes.
+    //
+    // Otherwise fork-on-first-move: if fork mode is on and this group's geometry is
+    // shared by another mesh, deep-copy the geometry onto a new primitive for THIS mesh
+    // only - BEFORE touching any positions - so the other instances never move.
+    //
+    // Doing the whole fleet up front (rather than lazily inside the move loop) lets the
+    // extrude-normal amount below see every group's per-subset move directions.
+    if (moved) {
+        for (Group& group : m_groups) {
+            const std::shared_ptr<erhe::scene::Mesh> mesh = group.mesh.lock();
+            if (!mesh || !group.geometry) {
+                continue;
+            }
+            if (group.before_local.size() != group.vertices.size()) {
+                continue;
+            }
+            if (m_extrude) {
+                if (!group.extruded) {
+                    extrude_group(context, group);
+                }
+            } else if (fork_mode && !group.forked && is_geometry_shared(context, mesh, group.geometry.get())) {
+                fork_group(context, group);
+            }
+        }
+    }
+
+    // Extrude (Normal): the gizmo no longer transforms the vertices directly. Instead
+    // each disjoint selection subset slides along its own (world-space) average normal by
+    // a single scalar amount derived from the drag - the gizmo translation projected onto
+    // the overall average normal (falling back to the anchor frame's up axis when the
+    // per-subset normals cancel). A dedicated gizmo mode will refine this mapping later.
+    float amount = 0.0f;
+    if (m_extrude_normal && moved) {
+        glm::vec3 reference{0.0f};
+        for (const Group& group : m_groups) {
+            for (const glm::vec3& direction : group.move_directions) {
+                reference += direction;
+            }
+        }
+        if (glm::length(reference) < 1e-6f) {
+            reference = glm::vec3{shared.world_from_anchor_initial_state.get_matrix() * glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}};
+        }
+        if (glm::length(reference) > 1e-6f) {
+            reference = glm::normalize(reference);
+            const glm::vec3 translation{world_delta[3]};
+            amount = glm::dot(translation, reference);
+        }
+    }
+
     for (Group& group : m_groups) {
         const std::shared_ptr<erhe::scene::Mesh> mesh = group.mesh.lock();
         if (!mesh || !group.geometry) {
@@ -425,23 +487,10 @@ void Mesh_component_transform::apply(App_context& context, Transform_tool_shared
         if (group.before_local.size() != group.vertices.size()) {
             continue;
         }
-
-        // Extrude-on-first-move: the first time the user actually moves, build an
-        // extruded copy of the geometry (duplicate the selection boundary, bridge with
-        // new faces) and redirect this group to move the duplicated vertices. Extrude
-        // inherently isolates this instance (a new geometry copy), so it supersedes the
-        // fork path. A click without dragging keeps `moved` false and never extrudes.
-        //
-        // Otherwise fork-on-first-move: if fork mode is on and this group's geometry is
-        // shared by another mesh, deep-copy the geometry onto a new primitive for THIS
-        // mesh only - BEFORE touching any positions - so the other instances never move.
-        if (m_extrude) {
-            if (moved && !group.extruded) {
-                extrude_group(context, group);
-            }
-        } else if (fork_mode && moved && !group.forked && is_geometry_shared(context, mesh, group.geometry.get())) {
-            fork_group(context, group);
-        }
+        // Extrude-normal slides along stored per-subset world normals; everything else
+        // applies the raw gizmo delta. (move_directions is only populated/parallel after
+        // a successful extrude_group; a failed extrude falls back to the delta path.)
+        const bool use_normal = m_extrude_normal && (group.move_directions.size() == group.vertices.size());
 
         GEO::Mesh& geo_mesh = group.geometry->get_mesh();
         for (std::size_t i = 0, end = group.vertices.size(); i < end; ++i) {
@@ -454,8 +503,13 @@ void Mesh_component_transform::apply(App_context& context, Transform_tool_shared
             glm::vec3 local_after = group.before_local[i];
             if (moved) {
                 const glm::vec3 world_before = glm::vec3{group.world_from_node * glm::vec4{group.before_local[i], 1.0f}};
-                const glm::vec3 world_after  = glm::vec3{world_delta           * glm::vec4{world_before,          1.0f}};
-                local_after                  = glm::vec3{group.node_from_world  * glm::vec4{world_after,           1.0f}};
+                glm::vec3       world_after;
+                if (use_normal) {
+                    world_after = world_before + (amount * group.move_directions[i]);
+                } else {
+                    world_after = glm::vec3{world_delta * glm::vec4{world_before, 1.0f}};
+                }
+                local_after = glm::vec3{group.node_from_world * glm::vec4{world_after, 1.0f}};
             }
             set_pointf(geo_mesh.vertices, vertex, GEO::vec3f{local_after.x, local_after.y, local_after.z});
             enqueue_gpu_position(context, group, vertex, local_after);
@@ -525,7 +579,7 @@ void Mesh_component_transform::commit(App_context& context)
                         .primitive_index = group.primitive_index,
                         .before          = group.extrude_before,
                         .after           = group.extrude_after,
-                        .description     = "Extrude"
+                        .description     = m_extrude_normal ? "Extrude (Normal)" : "Extrude"
                     }
                 )
             );
@@ -1031,8 +1085,9 @@ void Mesh_component_transform::extrude_group(App_context& context, Group& group)
     const Mesh_component_mode mode = selection->get_mode();
 
     // Build the extruded copy (topology change). Original vertex/facet indices are
-    // preserved; new duplicates/faces are appended.
-    Extrude_result extrude = extrude_mesh_components(*group.geometry, mode, entry->vertices, entry->edges, entry->facets);
+    // preserved; new duplicates/faces are appended. In Extrude (Normal) mode the builder
+    // also returns a per-moved-vertex subset normal (geometry-local) in move_directions.
+    Extrude_result extrude = extrude_mesh_components(*group.geometry, mode, entry->vertices, entry->edges, entry->facets, m_extrude_normal);
     if (!extrude.is_valid()) {
         return;
     }
@@ -1087,6 +1142,24 @@ void Mesh_component_transform::extrude_group(App_context& context, Group& group)
         const GEO::vec3f p = get_pointf(geo_mesh.vertices, vertex);
         group.before_local.push_back(glm::vec3{p.x, p.y, p.z});
     }
+
+    // Extrude (Normal): transform the per-subset normals from geometry-local to world
+    // space (direction transform = inverse-transpose of the node basis) so apply() can
+    // slide each subset along its own normal regardless of node rotation/scale. Parallel
+    // to group.vertices. Left empty for plain extrude, which uses the gizmo delta.
+    group.move_directions.clear();
+    if (m_extrude_normal && (extrude.move_directions.size() == group.vertices.size())) {
+        const glm::mat3 node_basis    = glm::mat3{group.world_from_node};
+        const glm::mat3 normal_matrix = glm::transpose(glm::inverse(node_basis));
+        group.move_directions.reserve(group.vertices.size());
+        for (const GEO::vec3f& local_direction : extrude.move_directions) {
+            glm::vec3   world_direction = normal_matrix * glm::vec3{local_direction.x, local_direction.y, local_direction.z};
+            const float length          = glm::length(world_direction);
+            world_direction = (length > 1e-6f) ? (world_direction / length) : glm::vec3{0.0f, 1.0f, 0.0f};
+            group.move_directions.push_back(world_direction);
+        }
+    }
+
     group.extruded = true;
 }
 

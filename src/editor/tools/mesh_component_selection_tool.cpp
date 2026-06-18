@@ -652,16 +652,19 @@ void Mesh_component_selection_tool::viewport_toolbar()
             ImGui::SetTooltip("Shared: edit shared geometry (all instances change). Fork: copy geometry on edit (only this instance changes).");
         }
 
-        // Transform mode (Move / Extrude): how the gizmo transforms the selected
-        // components. Move translates/rotates/scales them in place; Extrude duplicates
-        // the selection boundary, bridges it with new faces, then moves the duplicates.
+        // Transform mode (Move / Extrude / Extrude (Normal)): how the gizmo transforms the
+        // selected components. Move translates/rotates/scales them in place; Extrude
+        // duplicates the selection boundary, bridges it with new faces, then moves the
+        // duplicates along the gizmo delta; Extrude (Normal) does the same topology change
+        // but slides each disjoint subset along its own average normal. The item order
+        // matches the Mesh_transform_mode enum values (move, extrude, extrude_normal).
         int               transform_index   = static_cast<int>(m_context.editor_settings->transform_mode);
-        const char* const transform_items[] = {"Move", "Extrude"};
+        const char* const transform_items[] = {"Move", "Extrude", "Extrude (Normal)"};
         if (erhe::imgui::combo_fit_width("##mesh_transform_mode", &transform_index, transform_items, IM_ARRAYSIZE(transform_items))) {
             m_context.editor_settings->transform_mode = static_cast<Mesh_transform_mode>(transform_index);
         }
         if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("Move: drag moves the selected components. Extrude: drag extrudes them (new faces) then moves.");
+            ImGui::SetTooltip("Move: drag moves the selected components. Extrude: drag extrudes them (new faces) then moves. Extrude (Normal): extrudes, then each disjoint subset slides along its own average normal by the drag amount.");
         }
     }
 
