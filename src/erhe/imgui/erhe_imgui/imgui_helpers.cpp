@@ -234,4 +234,24 @@ auto begin_popup_with_title_and_open(ImGuiID id, const char* name, bool* open, I
     return is_open;
 }
 
+auto combo_fit_width(const char* label, int* current_item, const char* const items[], int items_count) -> bool
+{
+    const char* const preview = ((*current_item >= 0) && (*current_item < items_count)) ? items[*current_item] : "";
+    bool changed = false;
+    if (ImGui::BeginCombo(label, preview, ImGuiComboFlags_WidthFitPreview | ImGuiComboFlags_HeightLargest)) {
+        for (int i = 0; i < items_count; ++i) {
+            const bool selected = (i == *current_item);
+            if (ImGui::Selectable(items[i], selected) && (*current_item != i)) {
+                *current_item = i;
+                changed = true;
+            }
+            if (selected) {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::EndCombo();
+    }
+    return changed;
+}
+
 } // namespace erhe::imgui

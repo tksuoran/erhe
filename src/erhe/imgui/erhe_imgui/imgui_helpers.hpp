@@ -21,6 +21,12 @@ auto make_small_button        (const char* label, Item_mode mode) -> bool;
 void make_check_box           (const char* label, bool* value, Item_mode mode = Item_mode::normal);
 void make_text_with_background(const char* text, float rounding, ImVec4 background_color);
 
+// Combo whose width fits the current preview item, via the native
+// ImGuiComboFlags_WidthFitPreview. Use for compact toolbar combos so they do not
+// waste precious horizontal space. Mirrors ImGui::Combo's items[] form; returns
+// true when the selection changed.
+auto combo_fit_width(const char* label, int* current_item, const char* const items[], int items_count) -> bool;
+
 template <typename T>
 auto make_combo(
     const char*       label,

@@ -107,24 +107,6 @@ void Scene_view_config_window::imgui(App_context& context, Scene_view& scene_vie
 
         ImGui::TableNextRow();
         ImGui::TableNextColumn();
-        ImGui::TextUnformatted("Shader Debug");
-        ImGui::TableNextColumn();
-
-        erhe::scene_renderer::Shader_debug shader_debug = viewport_scene_view->get_shader_debug();
-        int shader_debug_int = static_cast<int>(shader_debug);
-        if (ImGui::Combo(
-                "##ShaderDebug",
-                &shader_debug_int,
-                erhe::scene_renderer::c_shader_debug_strings,
-                IM_ARRAYSIZE(erhe::scene_renderer::c_shader_debug_strings),
-                IM_ARRAYSIZE(erhe::scene_renderer::c_shader_debug_strings)
-            ))
-        {
-            viewport_scene_view->set_shader_debug(static_cast<erhe::scene_renderer::Shader_debug>(shader_debug_int));
-        }
-
-        ImGui::TableNextRow();
-        ImGui::TableNextColumn();
         ImGui::TextUnformatted("Renderer");
         ImGui::TableNextColumn();
 

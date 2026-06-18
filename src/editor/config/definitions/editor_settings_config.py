@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Editor_settings_config",
-    version=6,
+    version=7,
     short_desc="Editor settings",
     long_desc="Runtime-editable settings saved to editor_settings.json.",
     developer=False,
@@ -48,6 +48,16 @@ struct("Editor_settings_config",
             default="Geometry_edit_mode::shared",
             short_desc="Geometry Edit Mode",
             long_desc="When editing components of a mesh whose geometry is shared by other meshes (e.g. a duplicate), whether to edit the shared geometry (all instances change) or fork a copy on edit (only this instance changes).",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "transform_mode",
+            EnumRef("Mesh_transform_mode"),
+            added_in=7,
+            default="Mesh_transform_mode::move",
+            short_desc="Mesh Transform Mode",
+            long_desc="When transforming a mesh component selection with the gizmo, whether to move the selected components or extrude them (duplicate the selection boundary and bridge it with new faces) before moving.",
             visible=True,
             developer=False
         ),

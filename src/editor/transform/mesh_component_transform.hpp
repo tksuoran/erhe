@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 namespace erhe::geometry { class Geometry; }
@@ -59,6 +60,14 @@ private:
         bool                          forked{false};
         erhe::scene::Mesh_primitive   fork_before;  // shared primitive (for the Fork op's undo)
         erhe::scene::Mesh_primitive   fork_after;   // forked primitive (for the Fork op's redo)
+
+        // Extrude-on-first-move (set the first time this group is extruded during the
+        // drag). The extrude builds a new Geometry (topology change), so `geometry` and
+        // `vertices` are redirected to it and the commit swaps the whole primitive
+        // (not an in-place vertex move).
+        bool                          extruded{false};
+        erhe::scene::Mesh_primitive   extrude_before; // original primitive (for undo)
+        erhe::scene::Mesh_primitive   extrude_after;  // extruded primitive (for redo)
     };
 
     // Resolve the live component-selection entries into editable groups (one per
@@ -72,10 +81,33 @@ private:
     // it in, redirect the group + its component-selection entry to the fork.
     void fork_group(App_context& context, Group& group);
 
+    // Build an extruded copy of this group's geometry (duplicate the selection
+    // boundary, bridge with new faces), swap it onto a new primitive for this mesh,
+    // and redirect the group + its component-selection entry + its moved-vertex set to
+    // the extruded copy. Modeled on fork_group(); deferred to the first real move.
+    void extrude_group(App_context& context, Group& group);
+
     void enqueue_gpu_position(App_context& context, const Group& group, GEO::index_t vertex, const glm::vec3& local_position);
+
+    // Patch the edge-line vertex buffer endpoints for the edges incident to this moved
+    // vertex, so the content wide-line renderer (which reads that separate buffer, not
+    // the main vertex buffer) follows the drag live instead of snapping only on commit.
+    void enqueue_gpu_edge_line_positions(App_context& context, const Group& group, GEO::index_t vertex, const glm::vec3& local_position);
+
+    // Recompute and re-upload the content + smooth normal attributes for the faces
+    // incident to this group's moved vertices, so involved faces (and the new faces
+    // created by extrude) are shaded with valid normals during the active drag, matching
+    // what the commit rebuild produces (so there is no shading pop on release).
+    void update_group_normals(App_context& context, Group& group);
 
     std::vector<Group> m_groups;        // persistent scratch, cleared per gather()
     bool               m_active{false};
+    bool               m_extrude{false}; // captured at begin(): transform mode is Extrude
+
+    // Per-frame scratch for update_group_normals(), kept across frames so the live
+    // normal update performs no steady-state heap allocation (cleared, capacity kept).
+    std::vector<GEO::index_t>                 m_normal_scratch_facets;
+    std::unordered_map<GEO::index_t, glm::vec3> m_normal_smooth_cache;
 };
 
 }

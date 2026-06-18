@@ -385,6 +385,8 @@ erhe_target_sources_grouped(
     transform/handle_enums.hpp
     transform/handle_visualizations.cpp
     transform/handle_visualizations.hpp
+    transform/mesh_component_extrude.cpp
+    transform/mesh_component_extrude.hpp
     transform/mesh_component_transform.cpp
     transform/mesh_component_transform.hpp
     transform/move_tool.cpp
@@ -594,6 +596,7 @@ erhe_codegen_generate(
         "${_config_defs}/camera_controls_config.py"
         "${_config_defs}/developer_config.py"
         "${_config_defs}/geometry_edit_mode.py"
+        "${_config_defs}/mesh_transform_mode.py"
         "${_config_defs}/editor_settings_config.py"
         "${_config_defs}/grid_config.py"
         "${_config_defs}/hotbar_config.py"
@@ -720,6 +723,8 @@ set(_config_sources
     ${_config_out}/fly_camera_config.cpp
     ${_config_out}/geometry_edit_mode.hpp
     ${_config_out}/geometry_edit_mode.cpp
+    ${_config_out}/mesh_transform_mode.hpp
+    ${_config_out}/mesh_transform_mode.cpp
     ${_config_out}/editor_settings_config.hpp
     ${_config_out}/editor_settings_config_serialization.hpp
     ${_config_out}/editor_settings_config.cpp

@@ -306,7 +306,7 @@ void Transform_tool::window_imgui()
     if (settings.reference_mode == Transform_reference_mode::reference) {
         const std::shared_ptr<erhe::scene::Node> current = shared.reference_node.lock();
         const char* const preview = current ? current->get_name().c_str() : "(none)";
-        if (ImGui::BeginCombo("Reference node", preview)) {
+        if (ImGui::BeginCombo("Reference node", preview, ImGuiComboFlags_WidthFitPreview)) {
             Scene_root* scene_root = m_context.scene_commands->get_scene_root(static_cast<erhe::scene::Node*>(nullptr));
             if (scene_root != nullptr) {
                 for (const std::shared_ptr<erhe::scene::Node>& node : scene_root->get_scene().get_flat_nodes()) {

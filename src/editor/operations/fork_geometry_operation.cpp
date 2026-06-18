@@ -15,7 +15,7 @@ namespace editor {
 Fork_geometry_operation::Fork_geometry_operation(Parameters&& parameters)
     : m_parameters{std::move(parameters)}
 {
-    set_description("Fork geometry");
+    set_description(m_parameters.description.empty() ? "Fork geometry" : m_parameters.description);
 }
 
 void Fork_geometry_operation::execute(App_context& context)

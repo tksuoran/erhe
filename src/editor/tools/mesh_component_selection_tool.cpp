@@ -24,6 +24,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtx/norm.hpp>
 
+#include "erhe_imgui/imgui_helpers.hpp"
+
 #include <imgui/imgui.h>
 
 #include <limits>
@@ -630,8 +632,7 @@ void Mesh_component_selection_tool::viewport_toolbar()
     // widgets flow horizontally, so the Clear button lands to the right.
     int               mode_index = static_cast<int>(selection.get_mode());
     const char* const items[]    = {"Object", "Vertex", "Edge", "Face"};
-    ImGui::SetNextItemWidth(6.0f * ImGui::GetFontSize());
-    if (ImGui::Combo("##mesh_component_mode", &mode_index, items, IM_ARRAYSIZE(items))) {
+    if (erhe::imgui::combo_fit_width("##mesh_component_mode", &mode_index, items, IM_ARRAYSIZE(items))) {
         selection.set_mode(static_cast<Mesh_component_mode>(mode_index));
     }
     if (ImGui::IsItemHovered()) {
@@ -644,12 +645,23 @@ void Mesh_component_selection_tool::viewport_toolbar()
     if (m_context.editor_settings != nullptr) {
         int               edit_index    = static_cast<int>(m_context.editor_settings->geometry_edit_mode);
         const char* const edit_items[]  = {"Shared", "Fork"};
-        ImGui::SetNextItemWidth(6.0f * ImGui::GetFontSize());
-        if (ImGui::Combo("##geometry_edit_mode", &edit_index, edit_items, IM_ARRAYSIZE(edit_items))) {
+        if (erhe::imgui::combo_fit_width("##geometry_edit_mode", &edit_index, edit_items, IM_ARRAYSIZE(edit_items))) {
             m_context.editor_settings->geometry_edit_mode = static_cast<Geometry_edit_mode>(edit_index);
         }
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("Shared: edit shared geometry (all instances change). Fork: copy geometry on edit (only this instance changes).");
+        }
+
+        // Transform mode (Move / Extrude): how the gizmo transforms the selected
+        // components. Move translates/rotates/scales them in place; Extrude duplicates
+        // the selection boundary, bridges it with new faces, then moves the duplicates.
+        int               transform_index   = static_cast<int>(m_context.editor_settings->transform_mode);
+        const char* const transform_items[] = {"Move", "Extrude"};
+        if (erhe::imgui::combo_fit_width("##mesh_transform_mode", &transform_index, transform_items, IM_ARRAYSIZE(transform_items))) {
+            m_context.editor_settings->transform_mode = static_cast<Mesh_transform_mode>(transform_index);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Move: drag moves the selected components. Extrude: drag extrudes them (new faces) then moves.");
         }
     }
 

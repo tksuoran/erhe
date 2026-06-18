@@ -1,8 +1,10 @@
 #include "transform/mesh_component_transform.hpp"
+#include "transform/mesh_component_extrude.hpp"
 #include "transform/transform_tool.hpp"
 
 #include "app_context.hpp"
 #include "config/generated/editor_settings_config.hpp"
+#include "config/generated/mesh_transform_mode.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/fork_geometry_operation.hpp"
 #include "operations/move_mesh_vertices_operation.hpp"
@@ -382,6 +384,10 @@ void Mesh_component_transform::begin(App_context& context)
         m_active = false;
         return;
     }
+    // Capture the transform mode once for the whole gesture. Extrude defers its
+    // topology change to the first real move (apply()), like fork-on-edit.
+    m_extrude = (context.editor_settings != nullptr) &&
+                (context.editor_settings->transform_mode == Mesh_transform_mode::extrude);
     for (Group& group : m_groups) {
         const std::shared_ptr<erhe::scene::Mesh> mesh = group.mesh.lock();
         erhe::scene::Node* const                 node = mesh ? mesh->get_node() : nullptr;
@@ -420,12 +426,20 @@ void Mesh_component_transform::apply(App_context& context, Transform_tool_shared
             continue;
         }
 
-        // Fork-on-first-move: the first time the user actually moves, if fork mode is
-        // on and this group's geometry is shared by another mesh, deep-copy the
-        // geometry onto a new primitive for THIS mesh only - BEFORE touching any
-        // positions - so the other instances never move. A click without dragging
-        // keeps `moved` false and never forks.
-        if (fork_mode && moved && !group.forked && is_geometry_shared(context, mesh, group.geometry.get())) {
+        // Extrude-on-first-move: the first time the user actually moves, build an
+        // extruded copy of the geometry (duplicate the selection boundary, bridge with
+        // new faces) and redirect this group to move the duplicated vertices. Extrude
+        // inherently isolates this instance (a new geometry copy), so it supersedes the
+        // fork path. A click without dragging keeps `moved` false and never extrudes.
+        //
+        // Otherwise fork-on-first-move: if fork mode is on and this group's geometry is
+        // shared by another mesh, deep-copy the geometry onto a new primitive for THIS
+        // mesh only - BEFORE touching any positions - so the other instances never move.
+        if (m_extrude) {
+            if (moved && !group.extruded) {
+                extrude_group(context, group);
+            }
+        } else if (fork_mode && moved && !group.forked && is_geometry_shared(context, mesh, group.geometry.get())) {
             fork_group(context, group);
         }
 
@@ -445,6 +459,14 @@ void Mesh_component_transform::apply(App_context& context, Transform_tool_shared
             }
             set_pointf(geo_mesh.vertices, vertex, GEO::vec3f{local_after.x, local_after.y, local_after.z});
             enqueue_gpu_position(context, group, vertex, local_after);
+            enqueue_gpu_edge_line_positions(context, group, vertex, local_after);
+        }
+
+        // Refresh the involved faces' normals from the new positions so shading is valid
+        // live (and so extrude's brand-new faces get valid normals at all). Only when the
+        // gizmo actually moved - an identity delta leaves positions and normals unchanged.
+        if (moved) {
+            update_group_normals(context, group);
         }
     }
 }
@@ -481,6 +503,32 @@ void Mesh_component_transform::commit(App_context& context)
         }
         const erhe::primitive::Primitive& primitive = *primitives[group.primitive_index].primitive.get();
         if (!primitive.render_shape) {
+            continue;
+        }
+
+        // Extruded group: the topology changed, so an in-place vertex move can't be
+        // undone back to the original. Finalize normals from the now-final positions,
+        // rebuild a clean primitive, and queue a primitive swap (before = original
+        // geometry, after = extruded geometry) - undo removes the extrusion entirely.
+        if (group.extruded) {
+            finalize_extrude_normals(*group.geometry);
+            std::shared_ptr<erhe::primitive::Primitive> after_primitive = std::make_shared<erhe::primitive::Primitive>(group.geometry);
+            const bool renderable_ok = after_primitive->make_renderable_mesh(build_info, primitive.render_shape->get_normal_style());
+            const bool raytrace_ok   = after_primitive->make_raytrace();
+            ERHE_VERIFY(renderable_ok && raytrace_ok);
+            group.extrude_after.primitive = after_primitive;
+
+            operations.push_back(
+                std::make_shared<Fork_geometry_operation>(
+                    Fork_geometry_operation::Parameters{
+                        .mesh            = mesh,
+                        .primitive_index = group.primitive_index,
+                        .before          = group.extrude_before,
+                        .after           = group.extrude_after,
+                        .description     = "Extrude"
+                    }
+                )
+            );
             continue;
         }
 
@@ -613,6 +661,240 @@ void Mesh_component_transform::enqueue_gpu_position(App_context& context, const 
     }
 }
 
+void Mesh_component_transform::enqueue_gpu_edge_line_positions(App_context& context, const Group& group, const GEO::index_t vertex, const glm::vec3& local_position)
+{
+    const std::shared_ptr<erhe::scene::Mesh> mesh = group.mesh.lock();
+    if (!mesh) {
+        return;
+    }
+    const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
+    if ((group.primitive_index >= primitives.size()) || !primitives[group.primitive_index].primitive) {
+        return;
+    }
+    const erhe::primitive::Primitive& primitive = *primitives[group.primitive_index].primitive.get();
+    if (!primitive.render_shape) {
+        return;
+    }
+    const erhe::primitive::Buffer_mesh&  buffer_mesh = primitive.render_shape->get_renderable_mesh();
+    const erhe::primitive::Buffer_range& edge_range  = buffer_mesh.edge_line_vertex_buffer_range;
+    if (edge_range.count == 0) {
+        return; // primitive built without edge lines
+    }
+
+    // The content wide-line renderer reads edge_line_vertex_buffer_range (a separate
+    // buffer), not the main vertex buffer enqueue_gpu_position() patches. Each geometry
+    // edge contributes two consecutive 8-float entries (vec4 position + vec4 normal),
+    // in mesh.edges index order, so edge e local-endpoint w is at entry (2*e + w). Patch
+    // the position (first 3 floats) of every entry referencing this moved vertex so the
+    // wide lines follow the drag live. Normals stay as built until commit rebuilds.
+    const GEO::Mesh&                   geo_mesh    = group.geometry->get_mesh();
+    const std::size_t                  entry_size  = 8 * sizeof(float);
+    erhe::scene_renderer::Mesh_memory& mesh_memory = *context.mesh_memory;
+
+    for (const GEO::index_t edge : group.geometry->get_vertex_edges(vertex)) {
+        for (GEO::index_t which = 0; which < 2; ++which) {
+            if (geo_mesh.edges.vertex(edge, which) != vertex) {
+                continue;
+            }
+            const std::size_t entry_index = (static_cast<std::size_t>(edge) * 2) + which;
+            const erhe::primitive::Buffer_range update_range{
+                .count        = 1,
+                .element_size = 3 * sizeof(float),
+                .byte_offset  = edge_range.byte_offset + (entry_index * entry_size),
+                .pool_id      = edge_range.pool_id,
+                .buffer_id    = edge_range.buffer_id
+            };
+            std::vector<std::uint8_t> buffer(3 * sizeof(float));
+            auto* const ptr = reinterpret_cast<float*>(buffer.data());
+            ptr[0] = local_position.x;
+            ptr[1] = local_position.y;
+            ptr[2] = local_position.z;
+            mesh_memory.enqueue_vertex_data(update_range, std::move(buffer));
+        }
+    }
+}
+
+void Mesh_component_transform::update_group_normals(App_context& context, Group& group)
+{
+    const std::shared_ptr<erhe::scene::Mesh> mesh = group.mesh.lock();
+    if (!mesh || !group.geometry) {
+        return;
+    }
+    const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
+    if ((group.primitive_index >= primitives.size()) || !primitives[group.primitive_index].primitive) {
+        return;
+    }
+    const erhe::primitive::Primitive& primitive = *primitives[group.primitive_index].primitive.get();
+    if (!primitive.render_shape) {
+        return;
+    }
+    const erhe::primitive::Buffer_mesh&             buffer_mesh      = primitive.render_shape->get_renderable_mesh();
+    const erhe::primitive::Element_mappings&        element_mappings = primitive.render_shape->get_element_mappings();
+    const erhe::primitive::Normal_style             normal_style     = primitive.render_shape->get_normal_style();
+    erhe::scene_renderer::Mesh_memory&              mesh_memory      = *context.mesh_memory;
+    const erhe::scene_renderer::Vertex_input_entry& vertex_input     = mesh_memory.get_vertex_input(buffer_mesh.vertex_input_key);
+    const erhe::dataformat::Vertex_format&          vertex_format    = vertex_input.vertex_format;
+
+    // Resolve the two per-corner normal attribute streams: content normal (location 0,
+    // shading) and smooth normal (location 1, wide-line depth bias).
+    class Stream_target
+    {
+    public:
+        bool                     valid     {false};
+        std::size_t              base_offset{0};
+        std::size_t              pool_id    {0};
+        std::size_t              buffer_id  {0};
+        std::size_t              stride     {0};
+        std::size_t              offset     {0};
+        erhe::dataformat::Format format     {};
+    };
+    const auto resolve = [&](const std::size_t attribute_index) -> Stream_target {
+        Stream_target target;
+        const erhe::dataformat::Attribute_stream stream = vertex_format.find_attribute(erhe::dataformat::Vertex_attribute_usage::normal, attribute_index);
+        if ((stream.attribute == nullptr) || (stream.stream == nullptr)) {
+            return target;
+        }
+        const std::size_t stream_index = static_cast<std::size_t>(stream.stream - vertex_format.streams.data());
+        if (stream_index >= buffer_mesh.vertex_buffer_ranges.size()) {
+            return target;
+        }
+        const erhe::primitive::Buffer_range& range = buffer_mesh.vertex_buffer_ranges[stream_index];
+        target.valid       = true;
+        target.base_offset = range.byte_offset;
+        target.pool_id     = range.pool_id;
+        target.buffer_id   = range.buffer_id;
+        target.stride      = stream.stream->stride;
+        target.offset      = stream.attribute->offset;
+        target.format      = stream.attribute->format;
+        return target;
+    };
+    const Stream_target normal_target = resolve(erhe::dataformat::normal_attribute);
+    const Stream_target smooth_target = resolve(erhe::dataformat::normal_attribute_smooth);
+    if (!normal_target.valid && !smooth_target.valid) {
+        return;
+    }
+
+    erhe::geometry::Geometry&              geometry   = *group.geometry;
+    const erhe::geometry::Mesh_attributes& attributes = geometry.get_attributes();
+    const GEO::Mesh&                       geo_mesh   = geometry.get_mesh();
+
+    // Affected facets = facets incident to the moved vertices (each face whose shape
+    // changed). Dedup with sort+unique on the persistent scratch vector.
+    m_normal_scratch_facets.clear();
+    for (const GEO::index_t vertex : group.vertices) {
+        for (const GEO::index_t corner : geometry.get_vertex_corners(vertex)) {
+            m_normal_scratch_facets.push_back(geometry.get_corner_facet(corner));
+        }
+    }
+    std::sort(m_normal_scratch_facets.begin(), m_normal_scratch_facets.end());
+    m_normal_scratch_facets.erase(std::unique(m_normal_scratch_facets.begin(), m_normal_scratch_facets.end()), m_normal_scratch_facets.end());
+
+    const auto facet_normal = [&](const GEO::index_t facet) -> glm::vec3 {
+        const GEO::vec3f n = erhe::geometry::mesh_facet_normalf(geo_mesh, facet);
+        const glm::vec3  v{n.x, n.y, n.z};
+        const float      len = glm::length(v);
+        return (len > 1e-8f) ? (v / len) : glm::vec3{0.0f, 0.0f, 0.0f};
+    };
+    // Smooth vertex normal: normalize each incident facet normal, then sum and
+    // normalize (matching compute_mesh_vertex_normal_smooth). Cached per vertex so a
+    // vertex shared by several affected facets is computed once.
+    m_normal_smooth_cache.clear();
+    const auto smooth_normal = [&](const GEO::index_t vertex) -> glm::vec3 {
+        const auto it = m_normal_smooth_cache.find(vertex);
+        if (it != m_normal_smooth_cache.end()) {
+            return it->second;
+        }
+        glm::vec3 sum{0.0f};
+        for (const GEO::index_t corner : geometry.get_vertex_corners(vertex)) {
+            sum += facet_normal(geometry.get_corner_facet(corner));
+        }
+        const float     len    = glm::length(sum);
+        const glm::vec3 result = (len > 1e-8f) ? (sum / len) : glm::vec3{0.0f, 1.0f, 0.0f};
+        m_normal_smooth_cache.emplace(vertex, result);
+        return result;
+    };
+
+    const auto write_stream = [&](const Stream_target& target, const GEO::index_t corner, const glm::vec3& value) {
+        if (!target.valid) {
+            return;
+        }
+        if (corner >= element_mappings.mesh_corner_to_vertex_buffer_index.size()) {
+            return;
+        }
+        const uint32_t    vertex_id   = element_mappings.mesh_corner_to_vertex_buffer_index[corner];
+        const std::size_t byte_offset = target.base_offset + (static_cast<std::size_t>(vertex_id) * target.stride) + target.offset;
+
+        std::vector<std::uint8_t> buffer;
+        if (target.format == erhe::dataformat::Format::format_32_vec3_float) {
+            buffer.resize(sizeof(float) * 3);
+            auto* const ptr = reinterpret_cast<float*>(buffer.data());
+            ptr[0] = value.x;
+            ptr[1] = value.y;
+            ptr[2] = value.z;
+        } else if (target.format == erhe::dataformat::Format::format_32_vec4_float) {
+            buffer.resize(sizeof(float) * 4);
+            auto* const ptr = reinterpret_cast<float*>(buffer.data());
+            ptr[0] = value.x;
+            ptr[1] = value.y;
+            ptr[2] = value.z;
+            ptr[3] = 0.0f; // direction, w = 0
+        } else {
+            return;
+        }
+        const erhe::primitive::Buffer_range update_range{
+            .count        = 1,
+            .element_size = erhe::dataformat::get_format_size_bytes(target.format),
+            .byte_offset  = byte_offset,
+            .pool_id      = target.pool_id,
+            .buffer_id    = target.buffer_id
+        };
+        mesh_memory.enqueue_vertex_data(update_range, std::move(buffer));
+    };
+
+    // Write per-corner normals for every affected facet. The content normal must match
+    // exactly what the commit's make_renderable_mesh would select per corner, so there is
+    // no shading pop on release. The commit recomputes facet normals, recomputes smooth
+    // vertex normals, and collapses any PRESENT corner_normal / vertex_normal to the
+    // smooth normal; make_renderable_mesh then picks per the mesh's normal style:
+    //   polygon_normals -> flat facet normal.
+    //   corner_normals  -> corner_normal (collapsed to smooth) if present, else facet.
+    //   point_normals   -> vertex_normal (collapsed to smooth) if present, else facet.
+    //   none            -> +Y.
+    // So: use the smooth normal only where the geometry actually carries the matching
+    // per-corner / per-vertex normal attribute; otherwise use the flat facet normal
+    // (matching the fallback). New extrude faces carry no such attribute, so they render
+    // flat - consistent with how the commit builds them.
+    for (const GEO::index_t facet : m_normal_scratch_facets) {
+        const glm::vec3 facet_n = facet_normal(facet);
+        for (const GEO::index_t corner : geo_mesh.facets.corners(facet)) {
+            const GEO::index_t vertex   = geo_mesh.facet_corners.vertex(corner);
+            const glm::vec3    smooth_n = smooth_normal(vertex);
+            glm::vec3          content_n;
+            switch (normal_style) {
+                case erhe::primitive::Normal_style::corner_normals: {
+                    content_n = attributes.corner_normal.has(corner) ? smooth_n : facet_n;
+                    break;
+                }
+                case erhe::primitive::Normal_style::point_normals: {
+                    content_n = attributes.vertex_normal.has(vertex) ? smooth_n : facet_n;
+                    break;
+                }
+                case erhe::primitive::Normal_style::polygon_normals: {
+                    content_n = facet_n;
+                    break;
+                }
+                case erhe::primitive::Normal_style::none:
+                default: {
+                    content_n = glm::vec3{0.0f, 1.0f, 0.0f};
+                    break;
+                }
+            }
+            write_stream(normal_target, corner, content_n);
+            write_stream(smooth_target, corner, smooth_n);
+        }
+    }
+}
+
 auto Mesh_component_transform::is_geometry_shared(App_context&, const std::shared_ptr<erhe::scene::Mesh>& mesh, const erhe::geometry::Geometry* geometry) const -> bool
 {
     if (!mesh || (geometry == nullptr)) {
@@ -716,6 +998,96 @@ void Mesh_component_transform::fork_group(App_context& context, Group& group)
 
     group.geometry = fork_geometry;
     group.forked   = true;
+}
+
+void Mesh_component_transform::extrude_group(App_context& context, Group& group)
+{
+    const std::shared_ptr<erhe::scene::Mesh> mesh = group.mesh.lock();
+    if (!mesh) {
+        return;
+    }
+    erhe::scene::Node* node = mesh->get_node();
+    if (node == nullptr) {
+        return;
+    }
+    const std::vector<erhe::scene::Mesh_primitive>& current_primitives = mesh->get_primitives();
+    if ((group.primitive_index >= current_primitives.size()) || !current_primitives[group.primitive_index].primitive) {
+        return;
+    }
+    const erhe::scene::Mesh_primitive& original_mesh_primitive = current_primitives[group.primitive_index];
+    if (!original_mesh_primitive.primitive->render_shape) {
+        return;
+    }
+
+    // Resolve the live selection entry (sets + mode) on the original geometry.
+    Mesh_component_selection* selection = context.mesh_component_selection;
+    if (selection == nullptr) {
+        return;
+    }
+    const Mesh_component_entry* entry = selection->find_entry(mesh, group.primitive_index, group.geometry);
+    if (entry == nullptr) {
+        return;
+    }
+    const Mesh_component_mode mode = selection->get_mode();
+
+    // Build the extruded copy (topology change). Original vertex/facet indices are
+    // preserved; new duplicates/faces are appended.
+    Extrude_result extrude = extrude_mesh_components(*group.geometry, mode, entry->vertices, entry->edges, entry->facets);
+    if (!extrude.is_valid()) {
+        return;
+    }
+
+    const erhe::primitive::Normal_style normal_style = original_mesh_primitive.primitive->render_shape->get_normal_style();
+    const erhe::primitive::Build_info   build_info{
+        .primitive_types = {
+            .fill_triangles  = true,
+            .edge_lines      = true,
+            .corner_points   = true,
+            .centroid_points = true
+        },
+        .buffer_info = context.mesh_memory->make_primitive_buffer_info()
+    };
+    std::shared_ptr<erhe::primitive::Primitive> extrude_primitive = std::make_shared<erhe::primitive::Primitive>(extrude.geometry);
+    const bool renderable_ok = extrude_primitive->make_renderable_mesh(build_info, normal_style);
+    const bool raytrace_ok   = extrude_primitive->make_raytrace();
+    ERHE_VERIFY(renderable_ok && raytrace_ok);
+
+    // Record before/after Mesh_primitive for the commit's swap operation.
+    group.extrude_before          = original_mesh_primitive;
+    group.extrude_after.primitive = extrude_primitive;
+    group.extrude_after.material  = original_mesh_primitive.material;
+
+    // Swap the mesh's primitive to the extruded copy via the node re-parent dance
+    // (hold node_shared so set_parent(nullptr) cannot drop the node mid-swap).
+    std::vector<erhe::scene::Mesh_primitive> new_primitives = current_primitives;
+    new_primitives[group.primitive_index] = group.extrude_after;
+    std::shared_ptr<erhe::Hierarchy>   parent      = node->get_parent().lock();
+    std::shared_ptr<erhe::scene::Node> node_shared = std::dynamic_pointer_cast<erhe::scene::Node>(node->shared_from_this());
+    node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
+    mesh->set_primitives(new_primitives);
+    node->set_parent(parent);
+
+    // Redirect the component selection onto the extruded geometry, carrying the
+    // post-extrude selection sets (the moved duplicates / re-pointed facets). The
+    // original-geometry entry goes dormant; is_live() follows the mesh's current
+    // geometry, so the selection survives the extrude and its undo.
+    Mesh_component_entry& extrude_entry = selection->find_or_create_entry(mesh, group.primitive_index, extrude.geometry);
+    extrude_entry.vertices = extrude.selection_vertices;
+    extrude_entry.edges    = extrude.selection_edges;
+    extrude_entry.facets   = extrude.selection_facets;
+
+    // Redirect the group to move the extruded (duplicate + interior) vertices. They
+    // start coincident with their originals; capture that as the move's start state.
+    group.geometry = extrude.geometry;
+    group.vertices = std::move(extrude.moved_vertices);
+    const GEO::Mesh& geo_mesh = group.geometry->get_mesh();
+    group.before_local.clear();
+    group.before_local.reserve(group.vertices.size());
+    for (const GEO::index_t vertex : group.vertices) {
+        const GEO::vec3f p = get_pointf(geo_mesh.vertices, vertex);
+        group.before_local.push_back(glm::vec3{p.x, p.y, p.z});
+    }
+    group.extruded = true;
 }
 
 }

@@ -123,12 +123,16 @@ void install_crash_handler()
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
 
     // Route the debug CRT's assert / error / warn reports (_CrtDbgReport, used by
-    // assert() and _ASSERTE) to stderr instead of the modal dialog. No effect in
-    // the release CRT.
+    // assert() and _ASSERTE) to stderr instead of the modal dialog. The _CrtSetReport*
+    // calls exist only in the debug CRT (they are no-ops in the release CRT, which
+    // would leave report_type unused and trip warning-as-error C4189), so guard the
+    // whole block on _DEBUG.
+#ifdef _DEBUG
     for (const int report_type : {_CRT_ASSERT, _CRT_ERROR, _CRT_WARN}) {
         _CrtSetReportMode(report_type, _CRTDBG_MODE_FILE);
         _CrtSetReportFile(report_type, _CRTDBG_FILE_STDERR);
     }
+#endif
 
     // Do not let abort() pop the CRT message box or hand off to WER before our
     // SIGABRT handler runs.

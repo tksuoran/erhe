@@ -813,6 +813,24 @@ void Viewport_scene_view::viewport_toolbar()
         [this]() { m_debug_visualizations.imgui(*this, m_context); }   // content_fn
     );
 
+    // Shader debug visualization selector. Lives directly on the toolbar
+    // (rather than behind the "Scene and Camera" popup) so the per-viewport
+    // debug mode is one click away. The combo preview shows the active mode;
+    // the tooltip names the control.
+    {
+        int shader_debug_int = static_cast<int>(get_shader_debug());
+        if (erhe::imgui::combo_fit_width(
+                "##ViewportShaderDebug",
+                &shader_debug_int,
+                erhe::scene_renderer::c_shader_debug_strings,
+                IM_ARRAYSIZE(erhe::scene_renderer::c_shader_debug_strings)
+            ))
+        {
+            set_shader_debug(static_cast<erhe::scene_renderer::Shader_debug>(shader_debug_int));
+        }
+        ImGui::SetItemTooltip("Shader Debug");
+    }
+
     m_context.selection_tool->viewport_toolbar();
     m_context.transform_tool->viewport_toolbar();
     if (m_context.mesh_component_selection_tool != nullptr) {
