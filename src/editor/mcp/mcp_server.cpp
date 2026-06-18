@@ -889,6 +889,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "smooth")                       result = action_smooth(req->arguments);
         else if (req->tool_name == "generate_texture_coordinates") result = action_generate_texture_coordinates(req->arguments);
         else if (req->tool_name == "set_transform_reference_mode") result = action_set_transform_reference_mode(req->arguments);
+        else if (req->tool_name == "set_transform_mode")           result = action_set_transform_mode          (req->arguments);
         else                                              result = execute_command       (req->tool_name);
 
         req->result_promise.set_value(std::move(result));
@@ -1366,6 +1367,13 @@ void Mcp_server::refresh_tool_list()
             {"reference_node_id",   {{"type", "integer"}, {"description", "Reference-mode node ID"}}},
             {"reference_node_name", {{"type", "string"},  {"description", "Reference-mode node name"}}},
             {"edge_normal_blend",   {{"type", "number"},  {"description", "Selection mode: [0,1] blend between the two faces sharing a selected edge"}}}
+        }},
+        {"required", json::array({"mode"})}
+    }});
+    m_tool_infos.push_back({"set_transform_mode", "Set what the transform tool does to a mesh-component (vertex/edge/face) selection when the gizmo is dragged: move (translate/rotate/scale in place), extrude (duplicate the selection boundary, bridge it with new faces, then move along the gizmo delta), or extrude_normal (same topology, but each disjoint selection subset slides along its own average normal by an amount derived from the drag). Persisted in editor settings; applies to subsequent component edits.", {
+        {"type", "object"},
+        {"properties", {
+            {"mode", {{"type", "string"}, {"enum", json::array({"move", "extrude", "extrude_normal"})}, {"description", "Mesh transform mode"}}}
         }},
         {"required", json::array({"mode"})}
     }});
@@ -1931,6 +1939,9 @@ auto Mcp_server::query_selection(const json& args) -> std::string
     if (m_context.mesh_component_selection != nullptr) {
         result["mesh_component_mode"] = mesh_component_mode_lc(m_context.mesh_component_selection->get_mode());
     }
+    if (m_context.editor_settings != nullptr) {
+        result["transform_mode"] = std::string{::to_string(m_context.editor_settings->transform_mode)};
+    }
     return make_json_content(result).dump();
 }
 
@@ -2071,8 +2082,11 @@ auto Mcp_server::action_transform_selection(const json& args) -> std::string
     }
 
     Transform_tool_shared& shared = transform_tool->shared;
-    if (shared.entries.empty()) {
-        json r = make_text_content("No nodes selected - use select_items to select node(s) first");
+    // A node selection populates shared.entries; an active mesh-component selection
+    // instead sets shared.component_mode (entries stays empty). Either is a valid target,
+    // matching the gizmo's own "nothing to transform" condition used elsewhere.
+    if (shared.entries.empty() && !shared.component_mode) {
+        json r = make_text_content("Nothing to transform - select node(s) with select_items, or a mesh-component selection with select_mesh_components");
         r["isError"] = true;
         return r.dump();
     }
@@ -2151,7 +2165,15 @@ auto Mcp_server::action_transform_selection(const json& args) -> std::string
 
     const bool end_edit = args.value("end_edit", true);
     if (end_edit) {
+        // Mirror the gizmo drag-release: the node record path is a no-op in component
+        // mode (shared.entries is empty there), so a mesh-component edit (move / extrude /
+        // extrude_normal) must be finalized via commit_component_edit() to queue its
+        // undoable operation. Without this, an MCP component edit would deform the live
+        // geometry but never commit (and never finalize extrude normals).
         transform_tool->record_transform_operation();
+        if (shared.component_mode && transform_tool->is_component_edit_active()) {
+            transform_tool->commit_component_edit();
+        }
     }
 
     auto trs_to_json = [](const erhe::scene::Trs_transform& trs) -> json {
@@ -4396,6 +4418,20 @@ auto Mcp_server::action_set_transform_reference_mode(const json& args) -> std::s
 
     m_context.transform_tool->on_reference_settings_changed();
     return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_set_transform_mode(const json& args) -> std::string
+{
+    if (m_context.editor_settings == nullptr) {
+        return make_error_content("Editor settings not available");
+    }
+    const std::string   mode_str = args.value("mode", "");
+    Mesh_transform_mode mode     = Mesh_transform_mode::move;
+    if (!::from_string(mode_str, mode)) {
+        return make_error_content("Invalid mode: " + mode_str + " (move, extrude, extrude_normal)");
+    }
+    m_context.editor_settings->transform_mode = mode;
+    return make_json_content(json{{"mode", std::string{::to_string(mode)}}}).dump();
 }
 
 } // namespace editor

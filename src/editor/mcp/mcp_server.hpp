@@ -142,6 +142,7 @@ private:
     auto action_smooth                        (const nlohmann::json& args) -> std::string;
     auto action_generate_texture_coordinates  (const nlohmann::json& args) -> std::string;
     auto action_set_transform_reference_mode  (const nlohmann::json& args) -> std::string;
+    auto action_set_transform_mode            (const nlohmann::json& args) -> std::string;
     auto execute_command        (const std::string& tool_name) -> std::string;
 
     erhe::commands::Commands& m_commands;
