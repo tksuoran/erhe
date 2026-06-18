@@ -170,7 +170,7 @@ endif()
 
 CPMAddPackage(
     NAME              geogram
-    GIT_TAG           5a96c38e8408053146853156962f7c6384d9104b # Exact commit for pull_requests (which gets force pushed)
+    GIT_TAG           70e5eb87628078998087c59a15549bf1f3860150 # Exact commit for pull_requests (which gets force pushed); includes thread-local ProgressTask fix
     GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY tksuoran/geogram
     # Currently erhe still requires some pull-requests and we must use fork above instead
