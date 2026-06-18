@@ -131,6 +131,17 @@ private:
     auto action_create_physics_joint_settings(const nlohmann::json& args) -> std::string;
     auto action_edit_physics_joint_settings  (const nlohmann::json& args) -> std::string;
     auto action_capture_screenshot           (const nlohmann::json& args) -> std::string;
+    auto action_set_mesh_component_mode       (const nlohmann::json& args) -> std::string;
+    auto action_select_mesh_components        (const nlohmann::json& args) -> std::string;
+    auto query_mesh_component_selection       (const nlohmann::json& args) -> std::string;
+    auto action_clear_mesh_component_selection(const nlohmann::json& args) -> std::string;
+    auto action_align_components              (const nlohmann::json& args) -> std::string;
+    auto action_add_joint                     (const nlohmann::json& args) -> std::string;
+    auto action_remesh                        (const nlohmann::json& args) -> std::string;
+    auto action_decimate                      (const nlohmann::json& args) -> std::string;
+    auto action_smooth                        (const nlohmann::json& args) -> std::string;
+    auto action_generate_texture_coordinates  (const nlohmann::json& args) -> std::string;
+    auto action_set_transform_reference_mode  (const nlohmann::json& args) -> std::string;
     auto execute_command        (const std::string& tool_name) -> std::string;
 
     erhe::commands::Commands& m_commands;

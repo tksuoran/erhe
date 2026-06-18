@@ -78,6 +78,7 @@ class Mesh_component_selection_tool;
 class Move_tool;
 class Navigation_gizmo_tool;
 class Operation_stack;
+class Operations;
 class Paint_tool;
 class Physics_tool;
 class Post_processing;
@@ -181,6 +182,7 @@ public:
     Move_tool*                         move_tool            {nullptr};
     Navigation_gizmo_tool*             navigation_gizmo_tool{nullptr};
     Operation_stack*                   operation_stack      {nullptr};
+    Operations*                        operations           {nullptr};
     Paint_tool*                        paint_tool           {nullptr};
     Physics_tool*                      physics_tool         {nullptr};
     Post_processing*                   post_processing      {nullptr};

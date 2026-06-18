@@ -2256,6 +2256,7 @@ public:
         m_app_context.content_wide_line_renderer = m_content_wide_line_renderer.get();
         m_app_context.move_tool                = m_move_tool             .get();
         m_app_context.operation_stack          = m_operation_stack       .get();
+        m_app_context.operations               = m_operations            .get();
         m_app_context.paint_tool               = m_paint_tool            .get();
         m_app_context.physics_tool             = m_physics_tool          .get();
         m_app_context.post_processing          = m_post_processing       .get();

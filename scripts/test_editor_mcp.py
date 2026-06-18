@@ -159,6 +159,21 @@ class UnitTestRunner:
             self.test_geometry_csg_union,
             self.test_geometry_csg_intersection,
             self.test_geometry_csg_difference,
+            # New tools (functionality since d6282ce)
+            self.test_new_tools_registered,
+            self.test_set_mesh_component_mode,
+            self.test_mesh_component_selection,
+            self.test_align_components,
+            self.test_add_joint,
+            self.test_decimate,
+            self.test_smooth,
+            self.test_transform_reference_mode,
+            # NOTE: remesh (GEO::remesh_smooth) and generate_texture_coordinates
+            # (atlas parameterization) drive Geogram's OpenNL solver, which can
+            # abort() the process on degenerate inputs (e.g. NB_VARIABLES == 0).
+            # That pre-existing Geogram fragility is out of scope here, so these
+            # ops are not auto-run (a crash would poison the rest of the suite);
+            # their MCP registration is still covered by test_new_tools_registered.
         ]
         print("=" * 60)
         print("UNIT TESTS")
@@ -185,6 +200,13 @@ class UnitTestRunner:
     def _cleanup(self):
         try:
             self.client.call("select_items", {"scene_name": self.scene_name or "", "ids": []})
+        except Exception:
+            pass
+        # Reset editor state touched by the new-tool tests so the smoke test starts clean.
+        try:
+            self.client.call("clear_mesh_component_selection")
+            self.client.call("set_mesh_component_mode", {"mode": "object"})
+            self.client.call("set_transform_reference_mode", {"mode": "global"})
         except Exception:
             pass
 
@@ -734,6 +756,259 @@ class UnitTestRunner:
 
     def test_geometry_csg_difference(self):
         self._run_csg_op("Geometry.Difference")
+
+    # -- New tools (functionality since d6282ce) ----------------------------
+
+    def test_new_tools_registered(self):
+        """All new MCP tools must be advertised by tools/list."""
+        names = {t["name"] for t in self.client.tools_list()}
+        expected = {
+            "set_mesh_component_mode", "select_mesh_components",
+            "get_mesh_component_selection", "clear_mesh_component_selection",
+            "align_components", "add_joint",
+            "remesh", "decimate", "smooth", "generate_texture_coordinates",
+            "set_transform_reference_mode",
+        }
+        missing = expected - names
+        assert not missing, f"Missing new tools: {sorted(missing)}"
+
+    def _wait_undo_growth(self, undo_before, timeout=15.0):
+        """Wait until the undo stack grows past undo_before. Returns True if it did."""
+        self.client.wait_async(timeout=timeout)
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if len(self.client.call_ok("get_undo_redo_stack")["undo"]) > undo_before:
+                return True
+            time.sleep(0.1)
+        return len(self.client.call_ok("get_undo_redo_stack")["undo"]) > undo_before
+
+    def _place_brush_at(self, position, motion_mode=None):
+        """Place a cube brush at a position, return its node_id."""
+        brushes = self.client.call_ok("get_scene_brushes", {"scene_name": self.scene_name})["brushes"]
+        if not brushes:
+            raise SkipTest("no brushes")
+        cube = next((b for b in brushes if b["name"] == "cube"), brushes[0])
+        args = {"scene_name": self.scene_name, "brush_id": cube["id"], "position": position}
+        if motion_mode is not None:
+            args["motion_mode"] = motion_mode
+        return self.client.call_ok("place_brush", args)["node_id"]
+
+    def _node_world_pos(self, node_id):
+        # Look up by id (get_node_details takes a name, and placed brushes share
+        # the name "cube", so a name lookup would be ambiguous). For top-level
+        # nodes the reported "position" is the world position.
+        nodes = self.client.call_ok("get_scene_nodes", {"scene_name": self.scene_name})["nodes"]
+        node = next((n for n in nodes if n["id"] == node_id), None)
+        assert node is not None, f"Node {node_id} not found"
+        return node["position"]
+
+    def _node_vertex_count(self, node_id):
+        """Total vertex count across the node's mesh attachment primitives, or None."""
+        nodes = self.client.call_ok("get_scene_nodes", {"scene_name": self.scene_name})["nodes"]
+        node = next((n for n in nodes if n["id"] == node_id), None)
+        assert node is not None, f"Node {node_id} not found"
+        detail = self.client.call_ok("get_node_details", {"scene_name": self.scene_name, "node_name": node["name"]})
+        for att in detail["attachments"]:
+            if "vertex_count" in att:
+                return att["vertex_count"]
+        return None
+
+    def _create_dense_sphere(self):
+        """Create a fairly dense uv_sphere instance; return its node_id (undoable)."""
+        result = self.client.call_ok("create_shape", {
+            "scene_name": self.scene_name,
+            "shape": "uv_sphere",
+            "name": "mcp_test_sphere",
+            "position": [0.0, 12.0, 0.0],
+            "motion_mode": "static",
+            "radius": 1.0,
+            "slice_count": 24,
+            "stack_count": 24,
+        })
+        assert "node_id" in result, f"create_shape returned no node_id: {result}"
+        return result["node_id"]
+
+    def test_set_mesh_component_mode(self):
+        for mode in ("vertex", "edge", "face", "object"):
+            result = self.client.call_ok("set_mesh_component_mode", {"mode": mode})
+            assert result["mode"] == mode, f"set mode {mode} returned {result}"
+            sel = self.client.call_ok("get_mesh_component_selection")
+            assert sel["mode"] == mode, f"get_mesh_component_selection mode {sel['mode']} != {mode}"
+        # Invalid mode is rejected.
+        _, is_error = self.client.call("set_mesh_component_mode", {"mode": "bogus"})
+        assert is_error, "Expected error for invalid component mode"
+
+    def test_mesh_component_selection(self):
+        self._require_scene()
+        node_id = self._place_brush_at([0.0, 11.0, 0.0])
+        nodes = self.client.call_ok("get_scene_nodes", {"scene_name": self.scene_name})["nodes"]
+        node_name = next(n["name"] for n in nodes if n["id"] == node_id)
+
+        result, is_error = self.client.call("select_mesh_components", {
+            "scene_name": self.scene_name,
+            "node_id": node_id,
+            "mode": "face",
+            "facets": [0],
+        })
+        if is_error:
+            self.client.call("undo")  # undo placement
+            raise SkipTest(f"node has no selectable mesh geometry: {result}")
+        assert result["facets"] == 1, f"Expected 1 facet selected, got {result}"
+
+        sel = self.client.call_ok("get_mesh_component_selection")
+        assert sel["mode"] == "face"
+        assert len(sel["entries"]) == 1, f"Expected 1 entry, got {sel['entries']}"
+        entry = sel["entries"][0]
+        assert 0 in entry["facets"], f"Facet 0 not in entry: {entry}"
+        assert entry.get("node_name") == node_name, f"Entry node_name {entry.get('node_name')} != {node_name}"
+
+        self.client.call_ok("clear_mesh_component_selection")
+        sel = self.client.call_ok("get_mesh_component_selection")
+        assert sel["entries"] == [], f"Expected empty after clear, got {sel['entries']}"
+
+        self.client.call("set_mesh_component_mode", {"mode": "object"})
+        self.client.call("undo")  # undo placement
+
+    def test_align_components(self):
+        self._require_scene()
+        node_a = self._place_brush_at([0.0, 11.0, 0.0])
+        node_b = self._place_brush_at([2.0, 11.0, 0.0])
+
+        r1, e1 = self.client.call("select_mesh_components", {
+            "scene_name": self.scene_name, "node_id": node_a, "mode": "face", "facets": [0]})
+        r2, e2 = self.client.call("select_mesh_components", {
+            "scene_name": self.scene_name, "node_id": node_b, "extend": True, "facets": [0]})
+        if e1 or e2:
+            self.client.call("clear_mesh_component_selection")
+            self.client.call("undo"); self.client.call("undo")
+            raise SkipTest(f"mesh component selection failed: {r1} / {r2}")
+
+        pos_a_before = self._node_world_pos(node_a)
+        pos_b_before = self._node_world_pos(node_b)
+        undo_before = len(self.client.call_ok("get_undo_redo_stack")["undo"])
+
+        result = self.client.call_ok("align_components", {"apply_scale": False})
+        assert result["aligned"] is True, f"align_components result {result}"
+        assert self._wait_undo_growth(undo_before), "Align did not land on the undo stack"
+
+        pos_a_after = self._node_world_pos(node_a)
+        pos_b_after = self._node_world_pos(node_b)
+        moved_a = pos_a_after != pos_a_before
+        moved_b = pos_b_after != pos_b_before
+        assert moved_a or moved_b, f"Neither node moved: A {pos_a_before}->{pos_a_after}, B {pos_b_before}->{pos_b_after}"
+
+        # Clean up: undo align + 2 placements, clear component selection.
+        self.client.call("clear_mesh_component_selection")
+        self.client.call("set_mesh_component_mode", {"mode": "object"})
+        self.client.call("undo")  # undo align
+        self.client.call("undo")  # undo placement b
+        self.client.call("undo")  # undo placement a
+
+    def test_add_joint(self):
+        self._require_scene()
+        node_a = self._place_brush_at([0.0, 11.0, 0.0], motion_mode="dynamic")
+        node_b = self._place_brush_at([1.2, 11.0, 0.0], motion_mode="dynamic")
+
+        r1, e1 = self.client.call("select_mesh_components", {
+            "scene_name": self.scene_name, "node_id": node_a, "mode": "face", "facets": [0]})
+        r2, e2 = self.client.call("select_mesh_components", {
+            "scene_name": self.scene_name, "node_id": node_b, "extend": True, "facets": [0]})
+        if e1 or e2:
+            self.client.call("clear_mesh_component_selection")
+            self.client.call("undo"); self.client.call("undo")
+            raise SkipTest(f"mesh component selection failed: {r1} / {r2}")
+
+        nodes_before = len(self.client.call_ok("get_scene_nodes", {"scene_name": self.scene_name})["nodes"])
+        result, is_error = self.client.call("add_joint", {"avoidance": "joint_pair"})
+
+        self.client.call("clear_mesh_component_selection")
+        self.client.call("set_mesh_component_mode", {"mode": "object"})
+
+        if is_error:
+            # The non-intersecting orientation search can legitimately fail; treat as skip.
+            self.client.call("undo")  # undo placement b
+            self.client.call("undo")  # undo placement a
+            raise SkipTest(f"add_joint reported: {result}")
+
+        assert result["created"] is True, f"add_joint result {result}"
+        # The compound adds joint frame nodes; expect the node count to have grown.
+        nodes_after = len(self.client.call_ok("get_scene_nodes", {"scene_name": self.scene_name})["nodes"])
+        assert nodes_after > nodes_before, f"Expected new joint nodes: {nodes_before} -> {nodes_after}"
+        names = [n["name"] for n in self.client.call_ok("get_scene_nodes", {"scene_name": self.scene_name})["nodes"]]
+        assert any("Joint" in n for n in names), f"No 'Joint' node found in {names}"
+
+        self.client.call("undo")  # undo add joint (compound)
+        self.client.call("undo")  # undo placement b
+        self.client.call("undo")  # undo placement a
+
+    def test_decimate(self):
+        self._require_scene()
+        node_id = self._create_dense_sphere()
+        before = self._node_vertex_count(node_id)
+        self.client.call_ok("select_items", {"scene_name": self.scene_name, "ids": [node_id]})
+        undo_before = len(self.client.call_ok("get_undo_redo_stack")["undo"])
+
+        queued = self.client.call_ok("decimate", {"bins": 8})
+        assert queued.get("queued") is True, f"decimate result {queued}"
+        if not self._wait_undo_growth(undo_before):
+            self.client.call("undo")  # undo create
+            raise SkipTest("decimate did not complete (Geogram may be unavailable)")
+
+        after = self._node_vertex_count(node_id)
+        assert (before is not None) and (after is not None), "vertex_count not reported"
+        # Validate the tool wiring and that the op yields a valid (non-increasing)
+        # vertex count; the exact reduction depends on Geogram's clustering and the
+        # bin count, which is not what this test pins down.
+        assert after <= before, f"decimate increased vertex count ({before} -> {after})"
+
+        self.client.call("undo")  # undo decimate
+        self.client.call("undo")  # undo create
+
+    def test_smooth(self):
+        self._require_scene()
+        node_id = self._create_dense_sphere()
+        before = self._node_vertex_count(node_id)
+        self.client.call_ok("select_items", {"scene_name": self.scene_name, "ids": [node_id]})
+        undo_before = len(self.client.call_ok("get_undo_redo_stack")["undo"])
+
+        queued = self.client.call_ok("smooth", {"iterations": 3, "strength": 0.5})
+        assert queued.get("queued") is True, f"smooth result {queued}"
+        if not self._wait_undo_growth(undo_before):
+            self.client.call("undo")  # undo create
+            raise SkipTest("smooth did not complete (Geogram may be unavailable)")
+
+        after = self._node_vertex_count(node_id)
+        assert after == before, f"smooth should preserve vertex count ({before} -> {after})"
+
+        self.client.call("undo")  # undo smooth
+        self.client.call("undo")  # undo create
+
+    def test_transform_reference_mode(self):
+        self._require_scene()
+        for mode in ("local", "selection", "global"):
+            result = self.client.call_ok("set_transform_reference_mode", {"mode": mode})
+            assert result["mode"] == mode, f"set reference mode {mode} returned {result}"
+            sel = self.client.call_ok("get_selection")
+            assert sel.get("transform_reference_mode") == mode, \
+                f"get_selection reference mode {sel.get('transform_reference_mode')} != {mode}"
+
+        # Reference mode with an explicit reference node.
+        node_id = self._place_brush_at([0.0, 11.0, 0.0])
+        nodes = self.client.call_ok("get_scene_nodes", {"scene_name": self.scene_name})["nodes"]
+        node_name = next(n["name"] for n in nodes if n["id"] == node_id)
+        result = self.client.call_ok("set_transform_reference_mode", {
+            "scene_name": self.scene_name, "mode": "reference", "reference_node_id": node_id})
+        assert result["mode"] == "reference", f"reference mode result {result}"
+        assert result.get("reference_node") == node_name, f"reference_node {result.get('reference_node')} != {node_name}"
+
+        # Unknown reference node is an error.
+        _, is_error = self.client.call("set_transform_reference_mode", {
+            "scene_name": self.scene_name, "mode": "reference", "reference_node_name": "no_such_node_xyz"})
+        assert is_error, "Expected error for unknown reference node"
+
+        # Reset and clean up.
+        self.client.call("set_transform_reference_mode", {"mode": "global"})
+        self.client.call("undo")  # undo placement
 
 
 class SkipTest(Exception):

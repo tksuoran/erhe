@@ -1151,6 +1151,11 @@ auto Operations::align_selection(const bool apply_scale) -> bool
 
 auto Operations::add_joint() -> bool
 {
+    return add_joint(m_add_joint_avoidance);
+}
+
+auto Operations::add_joint(const Add_joint_avoidance avoidance) -> bool
+{
     Mesh_component_selection* selection = m_context.mesh_component_selection;
     if (selection == nullptr) {
         return false;
@@ -1207,7 +1212,7 @@ auto Operations::add_joint() -> bool
         node_rigid_world(*alignment.moved_node),
         alignment,
         penetration_tolerance,
-        (m_add_joint_avoidance == Add_joint_avoidance::whole_world)
+        (avoidance == Add_joint_avoidance::whole_world)
     );
     if (!non_intersecting_delta.has_value()) {
         log_operations->warn("Add Joint: no non-intersecting orientation found; joint not created");
@@ -1436,8 +1441,11 @@ void Operations::weld()
 
 void Operations::remesh()
 {
-    const unsigned int target_point_count    = static_cast<unsigned int>(m_remesh_target_vertex_count);
-    const bool         regenerate_attributes = m_remesh_regenerate_attributes;
+    remesh(static_cast<unsigned int>(m_remesh_target_vertex_count), m_remesh_regenerate_attributes);
+}
+
+void Operations::remesh(const unsigned int target_point_count, const bool regenerate_attributes)
+{
     async_for_selected_nodes_with_mesh(
         [this, target_point_count, regenerate_attributes](Mesh_operation_parameters&& params) {
             m_context.operation_stack->queue(
@@ -1449,9 +1457,11 @@ void Operations::remesh()
 
 void Operations::anisotropic_remesh()
 {
-    const unsigned int target_point_count    = static_cast<unsigned int>(m_remesh_target_vertex_count);
-    const float        anisotropy            = m_anisotropy;
-    const bool         regenerate_attributes = m_remesh_regenerate_attributes;
+    anisotropic_remesh(static_cast<unsigned int>(m_remesh_target_vertex_count), m_anisotropy, m_remesh_regenerate_attributes);
+}
+
+void Operations::anisotropic_remesh(const unsigned int target_point_count, const float anisotropy, const bool regenerate_attributes)
+{
     async_for_selected_nodes_with_mesh(
         [this, target_point_count, anisotropy, regenerate_attributes](Mesh_operation_parameters&& params) {
             m_context.operation_stack->queue(
@@ -1463,8 +1473,11 @@ void Operations::anisotropic_remesh()
 
 void Operations::decimate()
 {
-    const unsigned int nb_bins               = static_cast<unsigned int>(m_decimate_bins);
-    const bool         regenerate_attributes = m_remesh_regenerate_attributes;
+    decimate(static_cast<unsigned int>(m_decimate_bins), m_remesh_regenerate_attributes);
+}
+
+void Operations::decimate(const unsigned int nb_bins, const bool regenerate_attributes)
+{
     async_for_selected_nodes_with_mesh(
         [this, nb_bins, regenerate_attributes](Mesh_operation_parameters&& params) {
             m_context.operation_stack->queue(
@@ -1476,9 +1489,11 @@ void Operations::decimate()
 
 void Operations::smooth()
 {
-    const unsigned int iterations            = static_cast<unsigned int>(m_smooth_iterations);
-    const float        strength              = m_smooth_strength;
-    const bool         regenerate_attributes = m_remesh_regenerate_attributes;
+    smooth(static_cast<unsigned int>(m_smooth_iterations), m_smooth_strength, m_remesh_regenerate_attributes);
+}
+
+void Operations::smooth(const unsigned int iterations, const float strength, const bool regenerate_attributes)
+{
     async_for_selected_nodes_with_mesh(
         [this, iterations, strength, regenerate_attributes](Mesh_operation_parameters&& params) {
             m_context.operation_stack->queue(
@@ -1490,14 +1505,17 @@ void Operations::smooth()
 
 void Operations::make_atlas()
 {
-    const std::size_t usage_index           = static_cast<std::size_t>(m_atlas_texcoord_slot);
-    const float       hard_angles_threshold = m_atlas_hard_angles_deg;
-    const auto        parameterizer         = static_cast<erhe::geometry::operation::Atlas_parameterizer>(m_atlas_parameterizer);
-    const auto        packer                = static_cast<erhe::geometry::operation::Atlas_packer>(m_atlas_packer);
+    make_atlas(static_cast<std::size_t>(m_atlas_texcoord_slot), m_atlas_hard_angles_deg, m_atlas_parameterizer, m_atlas_packer);
+}
+
+void Operations::make_atlas(const std::size_t usage_index, const float hard_angles_threshold, const int parameterizer, const int packer)
+{
+    const auto atlas_parameterizer = static_cast<erhe::geometry::operation::Atlas_parameterizer>(parameterizer);
+    const auto atlas_packer        = static_cast<erhe::geometry::operation::Atlas_packer>(packer);
     async_for_selected_nodes_with_mesh(
-        [this, usage_index, hard_angles_threshold, parameterizer, packer](Mesh_operation_parameters&& params) {
+        [this, usage_index, hard_angles_threshold, atlas_parameterizer, atlas_packer](Mesh_operation_parameters&& params) {
             m_context.operation_stack->queue(
-                std::make_shared<Make_atlas_operation>(std::move(params), usage_index, hard_angles_threshold, parameterizer, packer)
+                std::make_shared<Make_atlas_operation>(std::move(params), usage_index, hard_angles_threshold, atlas_parameterizer, atlas_packer)
             );
         }
     );

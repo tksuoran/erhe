@@ -100,6 +100,7 @@ public:
     // for edge, hinge about the common normal for face). Aborts with a warning if
     // either node lacks a rigid body.
     auto add_joint() -> bool;
+    auto add_joint(Add_joint_avoidance avoidance) -> bool;
     void triangulate();
     void normalize();
     void bake_transform();
@@ -110,12 +111,17 @@ public:
 
     // Remesh
     void remesh();
+    void remesh(unsigned int target_point_count, bool regenerate_attributes);
     void anisotropic_remesh();
+    void anisotropic_remesh(unsigned int target_point_count, float anisotropy, bool regenerate_attributes);
     void decimate();
+    void decimate(unsigned int nb_bins, bool regenerate_attributes);
     void smooth();
+    void smooth(unsigned int iterations, float strength, bool regenerate_attributes);
 
     // Texturing
     void make_atlas();
+    void make_atlas(std::size_t usage_index, float hard_angles_threshold, int parameterizer, int packer);
 
     // CSG
     void difference();

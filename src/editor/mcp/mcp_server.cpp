@@ -16,6 +16,7 @@
 #include "operations/material_change_operation.hpp"
 #include "operations/operation.hpp"
 #include "operations/operation_stack.hpp"
+#include "operations/operations_window.hpp"
 #include "parsers/gltf.hpp"
 #include "parsers/gltf_physics_export.hpp"
 #include "erhe_math/math_util.hpp"
@@ -31,8 +32,13 @@
 #include "scene/scene_root.hpp"
 #include "scene/scene_serialization.hpp"
 #include "scene/shadow_fit_debug.hpp"
+#include "tools/mesh_component_selection.hpp"
 #include "tools/selection_tool.hpp"
 #include "transform/transform_tool.hpp"
+#include "transform/transform_tool_settings.hpp"
+
+#include "erhe_geometry/geometry.hpp"
+#include "erhe_primitive/primitive.hpp"
 
 #include "erhe_scene_renderer/mesh_memory.hpp"
 
@@ -190,6 +196,70 @@ auto parse_motion_mode(const std::string& motion_mode, const erhe::physics::Moti
     if (motion_mode == "kinematic_non_physical") { return erhe::physics::Motion_mode::e_kinematic_non_physical; }
     if (motion_mode == "dynamic")                { return erhe::physics::Motion_mode::e_dynamic; }
     return fallback;
+}
+
+// Mesh component mode <-> lowercase string (matches the MCP tool argument names,
+// distinct from the UI-facing c_str() which is capitalized).
+auto parse_mesh_component_mode(const std::string& mode, const Mesh_component_mode fallback) -> Mesh_component_mode
+{
+    if (mode == "object") { return Mesh_component_mode::object; }
+    if (mode == "vertex") { return Mesh_component_mode::vertex; }
+    if (mode == "edge")   { return Mesh_component_mode::edge;   }
+    if (mode == "face")   { return Mesh_component_mode::face;   }
+    return fallback;
+}
+
+auto mesh_component_mode_lc(const Mesh_component_mode mode) -> const char*
+{
+    switch (mode) {
+        case Mesh_component_mode::vertex: return "vertex";
+        case Mesh_component_mode::edge:   return "edge";
+        case Mesh_component_mode::face:   return "face";
+        case Mesh_component_mode::object:
+        default:                          return "object";
+    }
+}
+
+auto is_valid_mesh_component_mode(const std::string& mode) -> bool
+{
+    return (mode == "object") || (mode == "vertex") || (mode == "edge") || (mode == "face");
+}
+
+auto transform_reference_mode_lc(const Transform_reference_mode mode) -> const char*
+{
+    switch (mode) {
+        case Transform_reference_mode::local:     return "local";
+        case Transform_reference_mode::reference: return "reference";
+        case Transform_reference_mode::selection: return "selection";
+        case Transform_reference_mode::global:
+        default:                                  return "global";
+    }
+}
+
+// Resolve a node's renderable Geometry for a given primitive, mirroring the path
+// the node-details query and the component-selection tool use:
+// node -> Mesh attachment -> primitive[primitive_index] -> render_shape geometry.
+auto resolve_mesh_geometry(
+    const std::shared_ptr<erhe::scene::Node>&  node,
+    const std::size_t                          primitive_index,
+    std::shared_ptr<erhe::scene::Mesh>&        out_mesh,
+    std::shared_ptr<erhe::geometry::Geometry>& out_geometry
+) -> bool
+{
+    out_mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+    if (!out_mesh) {
+        return false;
+    }
+    const std::vector<erhe::scene::Mesh_primitive>& primitives = out_mesh->get_primitives();
+    if (primitive_index >= primitives.size()) {
+        return false;
+    }
+    const erhe::scene::Mesh_primitive& prim = primitives[primitive_index];
+    if (!prim.primitive || !prim.primitive->render_shape) {
+        return false;
+    }
+    out_geometry = prim.primitive->render_shape->get_geometry();
+    return static_cast<bool>(out_geometry);
 }
 
 auto motion_mode_to_string(const erhe::physics::Motion_mode motion_mode) -> const char*
@@ -808,6 +878,17 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "edit_collision_filter")   result = action_edit_collision_filter(req->arguments);
         else if (req->tool_name == "create_physics_joint_settings") result = action_create_physics_joint_settings(req->arguments);
         else if (req->tool_name == "edit_physics_joint_settings")   result = action_edit_physics_joint_settings(req->arguments);
+        else if (req->tool_name == "set_mesh_component_mode")        result = action_set_mesh_component_mode(req->arguments);
+        else if (req->tool_name == "select_mesh_components")         result = action_select_mesh_components(req->arguments);
+        else if (req->tool_name == "get_mesh_component_selection")   result = query_mesh_component_selection(req->arguments);
+        else if (req->tool_name == "clear_mesh_component_selection") result = action_clear_mesh_component_selection(req->arguments);
+        else if (req->tool_name == "align_components")              result = action_align_components(req->arguments);
+        else if (req->tool_name == "add_joint")                    result = action_add_joint(req->arguments);
+        else if (req->tool_name == "remesh")                       result = action_remesh(req->arguments);
+        else if (req->tool_name == "decimate")                     result = action_decimate(req->arguments);
+        else if (req->tool_name == "smooth")                       result = action_smooth(req->arguments);
+        else if (req->tool_name == "generate_texture_coordinates") result = action_generate_texture_coordinates(req->arguments);
+        else if (req->tool_name == "set_transform_reference_mode") result = action_set_transform_reference_mode(req->arguments);
         else                                              result = execute_command       (req->tool_name);
 
         req->result_promise.set_value(std::move(result));
@@ -1201,6 +1282,92 @@ void Mcp_server::refresh_tool_list()
         {"type", "object"},
         {"properties", edit_joint_settings_properties},
         {"required", json::array({"scene_name", "name"})}
+    }});
+
+    // Mesh component (vertex / edge / face) selection, used by Align and Add Joint.
+    const json component_mode_property = {
+        {"mode", {{"type", "string"}, {"enum", json::array({"object", "vertex", "edge", "face"})}, {"description", "Component granularity: object, vertex, edge or face"}}}
+    };
+    m_tool_infos.push_back({"set_mesh_component_mode", "Set the mesh-component selection granularity (object / vertex / edge / face). vertex/edge/face are required before select_mesh_components and Align / Add Joint.", {
+        {"type", "object"},
+        {"properties", component_mode_property},
+        {"required", json::array({"mode"})}
+    }});
+    m_tool_infos.push_back({"select_mesh_components", "Select sub-components (vertices / edges / faces) of a node's mesh, addressed by Geogram indices into its render geometry. extend=false (default) replaces the whole component selection first; extend=true accumulates (use it to add a second node's component for Align / Add Joint). Indices are validated against the geometry. Edges are [v0, v1] vertex-index pairs.", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name",      {{"type", "string"},  {"description", "Name of the scene"}}},
+            {"node_id",         {{"type", "integer"}, {"description", "Node ID (preferred over node_name when both given)"}}},
+            {"node_name",       {{"type", "string"},  {"description", "Node name (used when node_id is absent)"}}},
+            {"primitive_index", {{"type", "integer"}, {"description", "Mesh primitive index (default 0)"}}},
+            {"mode",            {{"type", "string"},  {"enum", json::array({"object", "vertex", "edge", "face"})}, {"description", "Set the component mode before selecting (default: keep current)"}}},
+            {"extend",          {{"type", "boolean"}, {"description", "Accumulate instead of replacing the whole selection (default false)"}}},
+            {"vertices",        {{"type", "array"},   {"items", {{"type", "integer"}}}, {"description", "Vertex indices to select"}}},
+            {"edges",           {{"type", "array"},   {"items", {{"type", "array"}, {"items", {{"type", "integer"}}}, {"minItems", 2}, {"maxItems", 2}}}, {"description", "Edges as [v0, v1] vertex-index pairs"}}},
+            {"facets",          {{"type", "array"},   {"items", {{"type", "integer"}}}, {"description", "Facet (polygon) indices to select"}}}
+        }},
+        {"required", json::array({"scene_name"})}
+    }});
+    m_tool_infos.push_back({"get_mesh_component_selection", "Get the current mesh-component selection: mode plus each entry's node, primitive index, selected vertices / edges / facets, and whether it is live.", schema_no_args()});
+    m_tool_infos.push_back({"clear_mesh_component_selection", "Clear the entire mesh-component selection", schema_no_args()});
+    m_tool_infos.push_back({"align_components", "Align the two selected mesh components (of the active vertex/edge/face mode) on two distinct nodes: colocate vertices, align edges, or glue faces. apply_scale also matches scale (edge/face only). Requires exactly two components selected on two distinct nodes. Undoable.", {
+        {"type", "object"},
+        {"properties", {
+            {"apply_scale", {{"type", "boolean"}, {"description", "Also apply uniform scale to match the components (edge/face modes; default false)"}}}
+        }}
+    }});
+    m_tool_infos.push_back({"add_joint", "Align the two selected mesh components, then create a physics joint between the two nodes' rigid bodies (ball for vertex, hinge for edge/face). Both nodes must already have a rigid body. Searches the joint's free rotational DOF for a non-intersecting placement; fails if none is found. Undoable.", {
+        {"type", "object"},
+        {"properties", {
+            {"avoidance", {{"type", "string"}, {"enum", json::array({"joint_pair", "whole_world"})}, {"description", "What the initial-orientation search avoids intersecting: just the joined pair (default) or every body in the physics world"}}}
+        }}
+    }});
+
+    // Geogram mesh operations - act on the object selection (set via select_items).
+    m_tool_infos.push_back({"remesh", "Geogram isotropic / anisotropic remesh of the selected mesh node(s) to a target vertex count (queued, runs over subsequent frames - poll get_async_status). anisotropy=0 (default) is isotropic; anisotropy>0 (e.g. 0.04) is anisotropic. Acts on the current object selection.", {
+        {"type", "object"},
+        {"properties", {
+            {"target_vertex_count",   {{"type", "integer"}, {"description", "Target vertex count (Geogram nb_points, default 2000)"}}},
+            {"anisotropy",            {{"type", "number"},  {"description", "0 = isotropic (default); >0 = anisotropic strength (e.g. 0.04)"}}},
+            {"regenerate_attributes", {{"type", "boolean"}, {"description", "Regenerate smooth normals and texture coordinates (default true)"}}}
+        }}
+    }});
+    m_tool_infos.push_back({"decimate", "Geogram vertex-clustering decimation of the selected mesh node(s) (queued). bins is the clustering grid resolution (higher = more detail kept). Acts on the current object selection.", {
+        {"type", "object"},
+        {"properties", {
+            {"bins",                  {{"type", "integer"}, {"description", "Vertex-clustering grid resolution (default 50)"}}},
+            {"regenerate_attributes", {{"type", "boolean"}, {"description", "Regenerate smooth normals and texture coordinates (default true)"}}}
+        }}
+    }});
+    m_tool_infos.push_back({"smooth", "Geogram Laplacian smoothing of the selected mesh node(s) (queued). Vertex count is preserved. Acts on the current object selection.", {
+        {"type", "object"},
+        {"properties", {
+            {"iterations",            {{"type", "integer"}, {"description", "Smoothing iterations (default 5)"}}},
+            {"strength",              {{"type", "number"},  {"description", "Smoothing strength [0,1] (default 0.5)"}}},
+            {"regenerate_attributes", {{"type", "boolean"}, {"description", "Regenerate smooth normals and texture coordinates (default true)"}}}
+        }}
+    }});
+    m_tool_infos.push_back({"generate_texture_coordinates", "Generate texture coordinates for the selected mesh node(s) via Geogram mesh_make_atlas (queued). Writes UVs into the given corner texcoord channel. Acts on the current object selection.", {
+        {"type", "object"},
+        {"properties", {
+            {"texcoord_slot",   {{"type", "integer"}, {"description", "Target corner texcoord channel 0 or 1 (default 0)"}}},
+            {"hard_angles_deg", {{"type", "number"},  {"description", "Hard-angle threshold in degrees for chart seams (default 45)"}}},
+            {"parameterizer",   {{"type", "integer"}, {"description", "Atlas_parameterizer enum index (default 3 = ABF)"}}},
+            {"packer",          {{"type", "integer"}, {"description", "Atlas_packer enum index (default 2 = XAtlas)"}}}
+        }}
+    }});
+
+    // Transform reference frame for the transform gizmo / numeric edits.
+    m_tool_infos.push_back({"set_transform_reference_mode", "Set the orientation reference frame of the transform tool: global (world axes), local (selection's own orientation), reference (a chosen reference node's orientation), or selection (a frame derived from the active mesh-component selection). For reference mode, give reference_node_id or reference_node_name (searched across scenes, or within scene_name when given).", {
+        {"type", "object"},
+        {"properties", {
+            {"mode",                {{"type", "string"}, {"enum", json::array({"global", "local", "reference", "selection"})}, {"description", "Reference mode"}}},
+            {"scene_name",          {{"type", "string"},  {"description", "Scene to resolve reference_node in (optional; otherwise all scenes are searched)"}}},
+            {"reference_node_id",   {{"type", "integer"}, {"description", "Reference-mode node ID"}}},
+            {"reference_node_name", {{"type", "string"},  {"description", "Reference-mode node name"}}},
+            {"edge_normal_blend",   {{"type", "number"},  {"description", "Selection mode: [0,1] blend between the two faces sharing a selected edge"}}}
+        }},
+        {"required", json::array({"mode"})}
     }});
 
     // Editor commands
@@ -1757,7 +1924,14 @@ auto Mcp_server::query_selection(const json& args) -> std::string
         });
     }
 
-    return make_json_content({{"items", items}}).dump();
+    json result = {{"items", items}};
+    if (m_context.transform_tool != nullptr) {
+        result["transform_reference_mode"] = transform_reference_mode_lc(m_context.transform_tool->shared.settings.reference_mode);
+    }
+    if (m_context.mesh_component_selection != nullptr) {
+        result["mesh_component_mode"] = mesh_component_mode_lc(m_context.mesh_component_selection->get_mode());
+    }
+    return make_json_content(result).dump();
 }
 
 auto Mcp_server::query_undo_redo_stack(const json& args) -> std::string
@@ -3922,6 +4096,305 @@ auto Mcp_server::action_edit_physics_joint_settings(const json& args) -> std::st
 
     json result = joint_settings_to_json(*item);
     result["applied"] = applied;
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_set_mesh_component_mode(const json& args) -> std::string
+{
+    if (m_context.mesh_component_selection == nullptr) {
+        return make_error_content("Mesh component selection not available");
+    }
+    const std::string mode_str = args.value("mode", "");
+    if (!is_valid_mesh_component_mode(mode_str)) {
+        return make_error_content("mode is required (object, vertex, edge, face)");
+    }
+    m_context.mesh_component_selection->set_mode(parse_mesh_component_mode(mode_str, Mesh_component_mode::object));
+    return make_json_content({{"mode", mode_str}}).dump();
+}
+
+auto Mcp_server::action_select_mesh_components(const json& args) -> std::string
+{
+    Mesh_component_selection* selection = m_context.mesh_component_selection;
+    if (selection == nullptr) {
+        return make_error_content("Mesh component selection not available");
+    }
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (!node) {
+        return make_error_content("Node not found (give node_id or node_name)");
+    }
+    const std::size_t primitive_index = args.value("primitive_index", std::size_t{0});
+    std::shared_ptr<erhe::scene::Mesh>        mesh;
+    std::shared_ptr<erhe::geometry::Geometry> geometry;
+    if (!resolve_mesh_geometry(node, primitive_index, mesh, geometry)) {
+        return make_error_content("Node has no mesh geometry at primitive_index " + std::to_string(primitive_index) + ": " + node->get_name());
+    }
+
+    if (args.contains("mode")) {
+        const std::string mode_str = args.value("mode", "");
+        if (!is_valid_mesh_component_mode(mode_str)) {
+            return make_error_content("Invalid mode: " + mode_str + " (object, vertex, edge, face)");
+        }
+        selection->set_mode(parse_mesh_component_mode(mode_str, Mesh_component_mode::object));
+    }
+
+    const bool extend = args.value("extend", false);
+    if (!extend) {
+        selection->clear_all();
+    }
+
+    const GEO::Mesh&   geo_mesh     = geometry->get_mesh();
+    const GEO::index_t vertex_count = geo_mesh.vertices.nb();
+    const GEO::index_t facet_count  = geo_mesh.facets.nb();
+
+    Mesh_component_entry& entry = selection->find_or_create_entry(mesh, primitive_index, geometry);
+
+    if (args.contains("vertices") && args["vertices"].is_array()) {
+        for (const auto& v : args["vertices"]) {
+            const GEO::index_t vertex = v.get<GEO::index_t>();
+            if (vertex >= vertex_count) {
+                return make_error_content("Vertex index out of range: " + std::to_string(vertex) + " >= " + std::to_string(vertex_count));
+            }
+            entry.add_vertex(vertex);
+        }
+    }
+    if (args.contains("edges") && args["edges"].is_array()) {
+        for (const auto& e : args["edges"]) {
+            if (!e.is_array() || (e.size() != 2)) {
+                return make_error_content("Each edge must be a [v0, v1] vertex-index pair");
+            }
+            const GEO::index_t v0 = e[0].get<GEO::index_t>();
+            const GEO::index_t v1 = e[1].get<GEO::index_t>();
+            if ((v0 >= vertex_count) || (v1 >= vertex_count)) {
+                return make_error_content("Edge vertex index out of range (vertex_count " + std::to_string(vertex_count) + ")");
+            }
+            entry.add_edge(v0, v1);
+        }
+    }
+    if (args.contains("facets") && args["facets"].is_array()) {
+        for (const auto& f : args["facets"]) {
+            const GEO::index_t facet = f.get<GEO::index_t>();
+            if (facet >= facet_count) {
+                return make_error_content("Facet index out of range: " + std::to_string(facet) + " >= " + std::to_string(facet_count));
+            }
+            entry.add_facet(facet);
+        }
+    }
+
+    return make_json_content({
+        {"node",            node->get_name()},
+        {"node_id",         node->get_id()},
+        {"primitive_index", primitive_index},
+        {"mode",            mesh_component_mode_lc(selection->get_mode())},
+        {"vertices",        entry.vertices.size()},
+        {"edges",           entry.edges.size()},
+        {"facets",          entry.facets.size()}
+    }).dump();
+}
+
+auto Mcp_server::query_mesh_component_selection(const json& args) -> std::string
+{
+    static_cast<void>(args);
+    Mesh_component_selection* selection = m_context.mesh_component_selection;
+    if (selection == nullptr) {
+        return make_json_content({{"mode", "object"}, {"entries", json::array()}}).dump();
+    }
+    json entries = json::array();
+    for (const Mesh_component_entry& entry : selection->get_entries()) {
+        json vertices = json::array();
+        for (const GEO::index_t v : entry.vertices) {
+            vertices.push_back(v);
+        }
+        json facets = json::array();
+        for (const GEO::index_t f : entry.facets) {
+            facets.push_back(f);
+        }
+        json edges = json::array();
+        for (const Mesh_edge_key& e : entry.edges) {
+            edges.push_back(json::array({e.first, e.second}));
+        }
+        json entry_json = {
+            {"primitive_index", entry.primitive_index},
+            {"live",            selection->is_live(entry)},
+            {"vertices",        vertices},
+            {"edges",           edges},
+            {"facets",          facets}
+        };
+        const std::shared_ptr<erhe::scene::Mesh> mesh = entry.mesh.lock();
+        if (mesh) {
+            entry_json["mesh_name"] = mesh->get_name();
+            const erhe::scene::Node* node = mesh->get_node();
+            if (node != nullptr) {
+                entry_json["node_name"] = node->get_name();
+                entry_json["node_id"]   = node->get_id();
+            }
+        }
+        entries.push_back(entry_json);
+    }
+    return make_json_content({
+        {"mode",    mesh_component_mode_lc(selection->get_mode())},
+        {"entries", entries}
+    }).dump();
+}
+
+auto Mcp_server::action_clear_mesh_component_selection(const json& args) -> std::string
+{
+    static_cast<void>(args);
+    if (m_context.mesh_component_selection == nullptr) {
+        return make_error_content("Mesh component selection not available");
+    }
+    m_context.mesh_component_selection->clear_all();
+    return make_json_content({{"cleared", true}}).dump();
+}
+
+auto Mcp_server::action_align_components(const json& args) -> std::string
+{
+    if (m_context.operations == nullptr) {
+        return make_error_content("Operations not available");
+    }
+    const bool apply_scale = args.value("apply_scale", false);
+    const bool aligned = m_context.operations->align_selection(apply_scale);
+    if (!aligned) {
+        return make_error_content("Align failed: requires exactly two components of the active mode (vertex/edge/face) selected on two distinct nodes");
+    }
+    return make_json_content({{"aligned", true}, {"apply_scale", apply_scale}}).dump();
+}
+
+auto Mcp_server::action_add_joint(const json& args) -> std::string
+{
+    if (m_context.operations == nullptr) {
+        return make_error_content("Operations not available");
+    }
+    const std::string avoidance_str = args.value("avoidance", "joint_pair");
+    Add_joint_avoidance avoidance = Add_joint_avoidance::joint_pair;
+    if (avoidance_str == "whole_world") {
+        avoidance = Add_joint_avoidance::whole_world;
+    } else if (avoidance_str != "joint_pair") {
+        return make_error_content("Invalid avoidance: " + avoidance_str + " (joint_pair, whole_world)");
+    }
+    const bool created = m_context.operations->add_joint(avoidance);
+    if (!created) {
+        return make_error_content("Add Joint failed: needs two aligned components on distinct rigid bodies and a non-intersecting orientation (see editor log for the specific reason)");
+    }
+    return make_json_content({{"created", true}, {"avoidance", avoidance_str}}).dump();
+}
+
+auto Mcp_server::action_remesh(const json& args) -> std::string
+{
+    if (m_context.operations == nullptr) {
+        return make_error_content("Operations not available");
+    }
+    const unsigned int target     = static_cast<unsigned int>(args.value("target_vertex_count", 2000));
+    const float        anisotropy = args.value("anisotropy", 0.0f);
+    const bool         regen      = args.value("regenerate_attributes", true);
+    if (anisotropy > 0.0f) {
+        m_context.operations->anisotropic_remesh(target, anisotropy, regen);
+    } else {
+        m_context.operations->remesh(target, regen);
+    }
+    return make_json_content({
+        {"queued",                true},
+        {"target_vertex_count",   target},
+        {"anisotropy",            anisotropy},
+        {"regenerate_attributes", regen}
+    }).dump();
+}
+
+auto Mcp_server::action_decimate(const json& args) -> std::string
+{
+    if (m_context.operations == nullptr) {
+        return make_error_content("Operations not available");
+    }
+    const unsigned int bins  = static_cast<unsigned int>(args.value("bins", 50));
+    const bool         regen = args.value("regenerate_attributes", true);
+    m_context.operations->decimate(bins, regen);
+    return make_json_content({{"queued", true}, {"bins", bins}, {"regenerate_attributes", regen}}).dump();
+}
+
+auto Mcp_server::action_smooth(const json& args) -> std::string
+{
+    if (m_context.operations == nullptr) {
+        return make_error_content("Operations not available");
+    }
+    const unsigned int iterations = static_cast<unsigned int>(args.value("iterations", 5));
+    const float        strength   = args.value("strength", 0.5f);
+    const bool         regen      = args.value("regenerate_attributes", true);
+    m_context.operations->smooth(iterations, strength, regen);
+    return make_json_content({{"queued", true}, {"iterations", iterations}, {"strength", strength}, {"regenerate_attributes", regen}}).dump();
+}
+
+auto Mcp_server::action_generate_texture_coordinates(const json& args) -> std::string
+{
+    if (m_context.operations == nullptr) {
+        return make_error_content("Operations not available");
+    }
+    const std::size_t texcoord_slot   = args.value("texcoord_slot", std::size_t{0});
+    const float       hard_angles_deg = args.value("hard_angles_deg", 45.0f);
+    const int         parameterizer   = args.value("parameterizer", 3);
+    const int         packer          = args.value("packer", 2);
+    m_context.operations->make_atlas(texcoord_slot, hard_angles_deg, parameterizer, packer);
+    return make_json_content({
+        {"queued",          true},
+        {"texcoord_slot",   texcoord_slot},
+        {"hard_angles_deg", hard_angles_deg},
+        {"parameterizer",   parameterizer},
+        {"packer",          packer}
+    }).dump();
+}
+
+auto Mcp_server::action_set_transform_reference_mode(const json& args) -> std::string
+{
+    if (m_context.transform_tool == nullptr) {
+        return make_error_content("Transform tool not available");
+    }
+    const std::string mode_str = args.value("mode", "");
+    Transform_reference_mode mode = Transform_reference_mode::global;
+    if      (mode_str == "global")    { mode = Transform_reference_mode::global;    }
+    else if (mode_str == "local")     { mode = Transform_reference_mode::local;     }
+    else if (mode_str == "reference") { mode = Transform_reference_mode::reference; }
+    else if (mode_str == "selection") { mode = Transform_reference_mode::selection; }
+    else {
+        return make_error_content("Invalid mode: " + mode_str + " (global, local, reference, selection)");
+    }
+
+    Transform_tool_shared& shared = m_context.transform_tool->shared;
+    shared.settings.reference_mode = mode;
+
+    json result = {{"mode", mode_str}};
+
+    if (mode == Transform_reference_mode::reference) {
+        const std::string scene_name = args.value("scene_name", "");
+        std::shared_ptr<erhe::scene::Node> ref_node;
+        if (!scene_name.empty()) {
+            Scene_root* sr = find_scene(scene_name);
+            if (sr != nullptr) {
+                ref_node = find_node_in_scene(*sr, args, "reference_node_id", "reference_node_name");
+            }
+        } else if (m_context.app_scenes != nullptr) {
+            for (const auto& sr : m_context.app_scenes->get_scene_roots()) {
+                ref_node = find_node_in_scene(*sr, args, "reference_node_id", "reference_node_name");
+                if (ref_node) {
+                    break;
+                }
+            }
+        }
+        if (ref_node) {
+            shared.reference_node = ref_node;
+            result["reference_node"] = ref_node->get_name();
+        } else if (args.contains("reference_node_id") || args.contains("reference_node_name")) {
+            return make_error_content("Reference node not found (give reference_node_id or reference_node_name)");
+        }
+    }
+
+    if (args.contains("edge_normal_blend")) {
+        shared.settings.edge_normal_blend = args.value("edge_normal_blend", 0.5f);
+    }
+
+    m_context.transform_tool->on_reference_settings_changed();
     return make_json_content(result).dump();
 }
 
