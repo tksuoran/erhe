@@ -173,7 +173,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         erhe::geometry::Geometry::process_flag_build_edges |
         erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
         erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
-    combined_geometry->process(flags);
+    combined_geometry->process({.flags = flags});
 
     std::shared_ptr<erhe::primitive::Primitive> new_primitive = std::make_shared<erhe::primitive::Primitive>(combined_geometry);
     const bool renderable_ok = new_primitive->make_renderable_mesh(m_parameters.build_info, normal_style);

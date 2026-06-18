@@ -318,12 +318,12 @@ auto Primitive_shape::make_geometry() -> bool
         //}
         //mesh.vertices.set_single_precision();
         //m_geometry->update_connectivity();
-        m_geometry->process(
+        m_geometry->process({.flags =
             erhe::geometry::Geometry::process_flag_connect                       |
             erhe::geometry::Geometry::process_flag_build_edges                   |
-            erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals | 
+            erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
             erhe::geometry::Geometry::process_flag_compute_facet_centroids
-        );
+        });
         // compute_mesh_tangents();
         return true;
     }

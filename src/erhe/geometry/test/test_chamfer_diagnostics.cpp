@@ -26,7 +26,7 @@ auto make_platonic(const char* name, void (*make_fn)(GEO::Mesh&, float), float r
     std::unique_ptr<erhe::geometry::Geometry> geometry =
         std::make_unique<erhe::geometry::Geometry>(name);
     make_fn(geometry->get_mesh(), radius);
-    geometry->process(process_flags);
+    geometry->process({.flags = process_flags});
     return geometry;
 }
 
@@ -403,7 +403,7 @@ TEST(ChamferSelfIntersection, CoplanarQuad_SingleChamfer)
     mesh.facets.create_triangle(v0, v2, v3);
     mesh.vertices.set_single_precision();
 
-    geometry->process(process_flags);
+    geometry->process({.flags = process_flags});
 
     std::unique_ptr<erhe::geometry::Geometry> chamfered = apply_chamfer(*geometry);
 
@@ -433,7 +433,7 @@ TEST(ChamferSelfIntersection, CoplanarSubdividedQuad_SingleChamfer)
     mesh.facets.create_triangle(v3, v0, vc);
     mesh.vertices.set_single_precision();
 
-    geometry->process(process_flags);
+    geometry->process({.flags = process_flags});
 
     std::unique_ptr<erhe::geometry::Geometry> chamfered = apply_chamfer(*geometry);
     const GEO::Mesh& result = chamfered->get_mesh();

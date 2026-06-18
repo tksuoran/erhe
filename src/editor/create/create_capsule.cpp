@@ -85,7 +85,7 @@ auto Create_capsule::create_brush(Brush_data& brush_create_info, const Capsule_p
         erhe::geometry::Geometry::process_flag_connect |
         erhe::geometry::Geometry::process_flag_build_edges |
         erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
-    geometry->process(flags);
+    geometry->process({.flags = flags});
 
     if (parameters.bottom_radius == parameters.top_radius) {
         brush_create_info.collision_shape = erhe::physics::ICollision_shape::create_capsule_shape_shared(

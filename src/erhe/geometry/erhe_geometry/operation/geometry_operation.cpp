@@ -422,7 +422,7 @@ void Geometry_operation::post_processing(const uint64_t process_flags)
     // crash Geogram's connect() (e.g., facets with duplicate vertices).
     destination.sanitize();
 
-    destination.process(process_flags);
+    destination.process({.flags = process_flags});
 }
 
 } // namespace erhe::geometry::operation

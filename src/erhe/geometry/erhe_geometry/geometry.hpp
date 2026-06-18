@@ -719,6 +719,25 @@ auto get_pointf(const GEO::MeshVertices& mesh_vertices, GEO::index_t vertex) -> 
 auto mesh_facet_normalf(const GEO::Mesh& M, GEO::index_t f) -> GEO::vec3f;
 auto mesh_facet_centerf(const GEO::Mesh& M, GEO::index_t f) -> GEO::vec3f;
 
+// Parameters for Geometry::process(). Bundled into a struct (rather than a
+// growing positional argument list) so new processing options can be added
+// without touching every call site. Aggregate - use designated initializers:
+//   geometry.process({.flags = Geometry::process_flag_connect | ...});
+class Geometry_process_parameters
+{
+public:
+    uint64_t flags{0};
+
+    // Used by process_flag_generate_atlas_texture_coordinates: dihedral angle
+    // threshold, in degrees. Mesh edges whose dihedral angle exceeds this become
+    // UV chart boundaries. A small value (~1 degree) puts every face in its own
+    // chart (per-face atlas); Geogram's default is 45.
+    float atlas_hard_angle_threshold{45.0f};
+
+    // Corner texcoord slot the atlas writes into (0 or 1).
+    std::size_t atlas_texcoord_usage_index{0};
+};
+
 class Geometry
 {
 public:
@@ -752,8 +771,9 @@ public:
     static constexpr uint64_t process_flag_merge_coplanar_neighbors           = (1u << 6u);
     static constexpr uint64_t process_flag_generate_tangents                  = (1u << 7u);
     static constexpr uint64_t process_flag_generate_tangents_ortho            = (1u << 8u);
+    static constexpr uint64_t process_flag_generate_atlas_texture_coordinates = (1u << 9u);
 
-    void process(uint64_t flags);
+    void process(const Geometry_process_parameters& parameters);
     void generate_mesh_facet_texture_coordinates(std::size_t usage_index = 1);
     void build_edges();
     void update_connectivity();

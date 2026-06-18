@@ -28,7 +28,7 @@ auto make_platonic(const char* name, void (*make_fn)(GEO::Mesh&, float), float r
     std::unique_ptr<erhe::geometry::Geometry> geometry =
         std::make_unique<erhe::geometry::Geometry>(name);
     make_fn(geometry->get_mesh(), radius);
-    geometry->process(process_flags);
+    geometry->process({.flags = process_flags});
     return geometry;
 }
 

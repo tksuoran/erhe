@@ -27,7 +27,7 @@ void Generate_tangents::build()
         erhe::geometry::Geometry::process_flag_connect |
         erhe::geometry::Geometry::process_flag_build_edges |
         erhe::geometry::Geometry::process_flag_generate_tangents;
-    destination.process(flags);
+    destination.process({.flags = flags});
 }
 
 void generate_tangents(const Geometry& source, Geometry& destination)

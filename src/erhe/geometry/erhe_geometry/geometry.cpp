@@ -1,5 +1,6 @@
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/geometry_log.hpp"
+#include "erhe_geometry/operation/make_atlas.hpp"
 #include "erhe_log/log.hpp"
 
 // TEMPORARY diagnostic for the intermittent main-loop hang -- see
@@ -1334,8 +1335,9 @@ void Geometry::build_edges()
     }
 }
 
-void Geometry::process(const uint64_t flags)
+void Geometry::process(const Geometry_process_parameters& parameters)
 {
+    const uint64_t flags = parameters.flags;
     //GEO::mesh_reorder(m_mesh);
 
     // Breadcrumbs localize which mesh-processing step a spinning thread is
@@ -1369,6 +1371,21 @@ void Geometry::process(const uint64_t flags)
     }
     if (flags & process_flag_generate_facet_texture_coordinates) {
         generate_mesh_facet_texture_coordinates();
+    }
+    if (flags & process_flag_generate_atlas_texture_coordinates) {
+        erhe::log::set_breadcrumb("geometry: generate_atlas_texture_coordinates");
+        // mesh_make_atlas() mutates attribute stores, so m_attributes must be
+        // unbound across the call; the core rebinds before writing UVs back.
+        // Projection keeps each flat face undistorted; xatlas packs the charts.
+        m_attributes.unbind();
+        erhe::geometry::operation::generate_mesh_atlas_texture_coordinates(
+            m_mesh,
+            m_attributes,
+            parameters.atlas_texcoord_usage_index,
+            static_cast<double>(parameters.atlas_hard_angle_threshold),
+            erhe::geometry::operation::Atlas_parameterizer::projection,
+            erhe::geometry::operation::Atlas_packer::xatlas
+        );
     }
     if (flags & process_flag_generate_tangents_ortho) {
         compute_mesh_tangents(m_mesh, true, false);

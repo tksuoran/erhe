@@ -1280,7 +1280,7 @@ auto load_scene(
                     erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
 
                 geo_mesh.vertices.set_single_precision();
-                geometry->process(process_flags);
+                geometry->process({.flags = process_flags});
 
                 auto primitive = std::make_shared<erhe::primitive::Primitive>(
                     geometry,

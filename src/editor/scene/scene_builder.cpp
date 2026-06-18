@@ -300,7 +300,7 @@ void Scene_builder::make_platonic_solid_brushes(
     {
         auto new_geometry = std::make_shared<erhe::geometry::Geometry>(name);
         builder(new_geometry->get_mesh());
-        new_geometry->process(flags);
+        new_geometry->process({.flags = flags});
 
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_brush_mutex};
         m_platonic_solids.push_back(make_brush(folder, app_settings, mesh_memory, new_geometry));
@@ -314,7 +314,7 @@ void Scene_builder::make_platonic_solid_brushes(
 
     auto cube = std::make_shared<erhe::geometry::Geometry>("cube");
     erhe::geometry::shapes::make_cube(cube->get_mesh(), scale);
-    cube->process(flags);
+    cube->process({.flags = flags});
     m_platonic_solids.push_back(make_brush(
         folder,
         Brush_data{
@@ -348,7 +348,7 @@ void Scene_builder::make_sphere_brushes(
         erhe::geometry::Geometry::process_flag_connect |
         erhe::geometry::Geometry::process_flag_build_edges |
         erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
-    sphere->process(flags);
+    sphere->process({.flags = flags});
 
     m_sphere_brush = make_brush(
         brushes,
@@ -436,7 +436,7 @@ void Scene_builder::make_torus_brushes(
         erhe::geometry::Geometry::process_flag_connect |
         erhe::geometry::Geometry::process_flag_build_edges | 
         erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
-    torus_geometry->process(flags);
+    torus_geometry->process({.flags = flags});
     m_torus_brush = make_brush(
         brushes,
         Brush_data{
@@ -480,7 +480,7 @@ void Scene_builder::make_cylinder_brushes(
             erhe::geometry::Geometry::process_flag_connect |
             erhe::geometry::Geometry::process_flag_build_edges |
             erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
-        cylinder_geometry->process(flags);
+        cylinder_geometry->process({.flags = flags});
         m_cylinder_brush[index++] = make_brush(
             brushes,
             Brush_data{
@@ -523,7 +523,7 @@ void Scene_builder::make_cone_brushes(
         erhe::geometry::Geometry::process_flag_connect |
         erhe::geometry::Geometry::process_flag_build_edges |
         erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
-    cone_geometry->process(flags);
+    cone_geometry->process({.flags = flags});
 
     m_cone_brush = make_brush(
         brushes,
@@ -568,7 +568,7 @@ void Scene_builder::make_capsule_brushes(
         erhe::geometry::Geometry::process_flag_connect |
         erhe::geometry::Geometry::process_flag_build_edges |
         erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
-    capsule_geometry->process(flags);
+    capsule_geometry->process({.flags = flags});
 
     m_capsule_brush = make_brush(
         brushes,
@@ -604,7 +604,8 @@ void Scene_builder::make_json_brushes(
         erhe::geometry::Geometry::process_flag_build_edges |
         erhe::geometry::Geometry::process_flag_compute_facet_centroids |
         erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
-        erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
+        erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates |
+        erhe::geometry::Geometry::process_flag_generate_atlas_texture_coordinates;
 
     m_johnson_solids_folder = brushes.make_folder("Johnson Solids");
     auto& folder = *m_johnson_solids_folder.get();
@@ -616,7 +617,15 @@ void Scene_builder::make_json_brushes(
             if (!ok || (geometry->get_mesh().facets.nb() == 0)) {
                 return;
             }
-            geometry->process(process_flags);
+            geometry->process({
+                .flags = process_flags,
+                // ~1 degree forces every face into its own UV chart (per-face
+                // atlas). Johnson faces are regular polygons, so projection makes
+                // each chart an undistorted regular n-gon; xatlas packs them into
+                // slot 0. (Slot 1 keeps the radial brushed-metal UVs.)
+                .atlas_hard_angle_threshold = 1.0f,
+                .atlas_texcoord_usage_index = 0
+            });
 
             auto brush = make_brush(
                 folder,
@@ -753,7 +762,7 @@ void Scene_builder::add_room(const Add_room_args& args)
         erhe::geometry::Geometry::process_flag_build_edges |
         erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
         erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
-    floor_geometry->process(flags);
+    floor_geometry->process({.flags = flags});
 
     ERHE_VERIFY(m_context.app_settings != nullptr);
     ERHE_VERIFY(m_context.mesh_memory  != nullptr);

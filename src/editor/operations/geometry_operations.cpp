@@ -418,7 +418,7 @@ auto Binary_mesh_operation::make_operations(
         erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
         erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
 
-    out_geometry->process(flags);
+    out_geometry->process({.flags = flags});
 
     // If the CSG result is empty (no facets), produce an empty compound operation
     if (out_geometry->get_mesh().facets.nb() == 0) {

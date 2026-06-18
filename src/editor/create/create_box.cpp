@@ -67,7 +67,7 @@ auto Create_box::create_brush(Brush_data& brush_create_info, const Box_parameter
         erhe::geometry::Geometry::process_flag_build_edges |
         erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
         erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
-    geometry->process(flags);
+    geometry->process({.flags = flags});
 
     //// brush_create_info.geometry->compute_tangents();
     //// brush_create_info.geometry->compute_polygon_centroids();

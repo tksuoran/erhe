@@ -468,10 +468,10 @@ auto extrude_mesh_components(
     // and edges / centroids for rendering. No normals here: positions are still
     // coincident, so the new faces are degenerate - normals come later via
     // finalize_extrude_normals() once the gizmo has moved.
-    result.geometry->process(
+    result.geometry->process({.flags =
         Geometry::process_flag_build_edges |
         Geometry::process_flag_compute_facet_centroids
-    );
+    });
 
     return result;
 }

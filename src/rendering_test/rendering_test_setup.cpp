@@ -92,11 +92,11 @@ void Rendering_test::create_test_scene(erhe::graphics::Command_buffer& init_comm
 
         auto geometry = std::make_shared<erhe::geometry::Geometry>("Orientation Cube");
         erhe::geometry::shapes::make_box(geometry->get_mesh(), 1.0f, 1.0f, 1.0f);
-        geometry->process(
+        geometry->process({.flags =
             erhe::geometry::Geometry::process_flag_connect |
             erhe::geometry::Geometry::process_flag_build_edges |
             erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals
-        );
+        });
 
         erhe::primitive::Build_info build_info{
             .primitive_types = { .fill_triangles = true, .edge_lines = true },
@@ -156,11 +156,11 @@ void Rendering_test::create_test_scene(erhe::graphics::Command_buffer& init_comm
     {
         auto geometry = std::make_shared<erhe::geometry::Geometry>("Stencil Cube");
         erhe::geometry::shapes::make_box(geometry->get_mesh(), 1.6f, 1.6f, 1.6f);
-        geometry->process(
+        geometry->process({.flags =
             erhe::geometry::Geometry::process_flag_connect |
             erhe::geometry::Geometry::process_flag_build_edges |
             erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals
-        );
+        });
 
         auto primitive = std::make_shared<erhe::primitive::Primitive>(
             geometry, stencil_build_info, erhe::primitive::Normal_style::corner_normals
@@ -178,11 +178,11 @@ void Rendering_test::create_test_scene(erhe::graphics::Command_buffer& init_comm
     {
         auto geometry = std::make_shared<erhe::geometry::Geometry>("Stencil Sphere");
         erhe::geometry::shapes::make_sphere(geometry->get_mesh(), 1.2f, 32, 16);
-        geometry->process(
+        geometry->process({.flags =
             erhe::geometry::Geometry::process_flag_connect |
             erhe::geometry::Geometry::process_flag_build_edges |
             erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals
-        );
+        });
 
         auto primitive = std::make_shared<erhe::primitive::Primitive>(
             geometry, stencil_build_info, erhe::primitive::Normal_style::point_normals

@@ -2,7 +2,9 @@
 
 #include <cstddef>
 
-namespace erhe::geometry { class Geometry; }
+namespace GEO            { class Mesh;            }
+namespace erhe::geometry { class Geometry;        }
+namespace erhe::geometry { class Mesh_attributes; }
 
 namespace erhe::geometry::operation {
 
@@ -33,6 +35,21 @@ enum class Atlas_packer {
 void make_atlas(
     const Geometry&     source,
     Geometry&           destination,
+    std::size_t         usage_index,
+    double              hard_angles_threshold,
+    Atlas_parameterizer parameterizer,
+    Atlas_packer        packer);
+
+// In-place core of the atlas operation: run Geogram's mesh_make_atlas() on the
+// given mesh and move the resulting per-corner UVs into the corner texcoord
+// channel selected by usage_index. Topology and all other attributes are
+// preserved. Precondition: attributes must be UNBOUND on entry (mesh_make_atlas
+// mutates the corner/facet/vertex attribute stores, which would invalidate live
+// handles); on return attributes are bound again. Used both by make_atlas()
+// (source->destination) and by Geometry::process() (in place).
+void generate_mesh_atlas_texture_coordinates(
+    GEO::Mesh&          mesh,
+    Mesh_attributes&    attributes,
     std::size_t         usage_index,
     double              hard_angles_threshold,
     Atlas_parameterizer parameterizer,

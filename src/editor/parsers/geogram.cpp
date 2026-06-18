@@ -69,7 +69,7 @@ void import_geogram(
         erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
 
     geo_mesh.vertices.set_single_precision();
-    geometry->process(flags);
+    geometry->process({.flags = flags});
 
     constexpr uint64_t mesh_flags =
         erhe::Item_flags::visible     |

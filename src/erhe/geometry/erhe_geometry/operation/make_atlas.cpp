@@ -6,6 +6,8 @@
 #include <geogram/parameterization/mesh_atlas_maker.h>
 #include <geogram/basic/attributes.h>
 
+#include <mutex>
+
 namespace erhe::geometry::operation {
 
 namespace {
@@ -81,21 +83,51 @@ void Make_atlas::build()
 {
     destination.get_attributes().unbind();
     destination_mesh.copy(source_mesh, true);
-    // mesh_make_atlas() reads vertices.point() in double precision and grows
-    // charts across facet adjacency, so ensure both are in place before the call.
-    destination_mesh.vertices.set_double_precision();
-    destination_mesh.facets.connect();
-
-    GEO::mesh_make_atlas(
+    generate_mesh_atlas_texture_coordinates(
         destination_mesh,
+        destination.get_attributes(),
+        m_usage_index,
         m_hard_angles_threshold,
-        to_geo(m_parameterizer),
-        to_geo(m_packer),
-        false // verbose
+        m_parameterizer,
+        m_packer
     );
+    post_processing(structural_post_process_flags);
+}
 
-    destination_mesh.vertices.set_single_precision();
-    destination.get_attributes().bind();
+void generate_mesh_atlas_texture_coordinates(
+    GEO::Mesh&                mesh,
+    Mesh_attributes&          attributes,
+    const std::size_t         usage_index,
+    const double              hard_angles_threshold,
+    const Atlas_parameterizer parameterizer,
+    const Atlas_packer        packer)
+{
+    // Precondition: attributes is UNBOUND (see header). mesh_make_atlas() reads
+    // vertices.point() in double precision and grows charts across facet
+    // adjacency, so ensure both are in place before the call.
+    mesh.vertices.set_double_precision();
+    mesh.facets.connect();
+
+    {
+        // Geogram's progress system uses a process-global, non-thread-safe task
+        // stack (basic/progress.cpp: "geo_assert(progress_tasks_.top() == task)").
+        // The editor builds brushes on many worker threads, so concurrent
+        // mesh_make_atlas() calls corrupt that stack. A single mesh_make_atlas()
+        // call is safe (the MCP path uses one at a time), so serialize the Geogram
+        // call here; the surrounding per-mesh work stays parallel.
+        static std::mutex           s_mesh_make_atlas_mutex;
+        std::lock_guard<std::mutex> lock{s_mesh_make_atlas_mutex};
+        GEO::mesh_make_atlas(
+            mesh,
+            hard_angles_threshold,
+            to_geo(parameterizer),
+            to_geo(packer),
+            false // verbose
+        );
+    }
+
+    mesh.vertices.set_single_precision();
+    attributes.bind();
 
     // Move Geogram's per-corner "tex_coord" (double[2]) into the selected erhe
     // corner texcoord channel, overwriting it. The scoped Attribute is unbound at
@@ -103,10 +135,10 @@ void Make_atlas::build()
     // the store has no live observers).
     {
         GEO::Attribute<double> tex_coord;
-        tex_coord.bind_if_is_defined(destination_mesh.facet_corners.attributes(), "tex_coord");
+        tex_coord.bind_if_is_defined(mesh.facet_corners.attributes(), "tex_coord");
         if (tex_coord.is_bound()) {
-            Attribute_present<GEO::vec2f>& corner_texcoord = destination.get_attributes().corner_texcoord(m_usage_index);
-            for (GEO::index_t corner : destination_mesh.facet_corners) {
+            Attribute_present<GEO::vec2f>& corner_texcoord = attributes.corner_texcoord(usage_index);
+            for (GEO::index_t corner : mesh.facet_corners) {
                 corner_texcoord.set(
                     corner,
                     GEO::vec2f{
@@ -121,11 +153,9 @@ void Make_atlas::build()
     // Drop the scratch attributes mesh_make_atlas() leaves behind so they are not
     // carried forward by later operations or serialization. (erhe's own "id" is a
     // facet attribute; Geogram's "id" here is a vertex attribute - different store.)
-    delete_attribute_if_present(destination_mesh.facet_corners.attributes(), "tex_coord");
-    delete_attribute_if_present(destination_mesh.facets.attributes(),        "chart");
-    delete_attribute_if_present(destination_mesh.vertices.attributes(),      "id");
-
-    post_processing(structural_post_process_flags);
+    delete_attribute_if_present(mesh.facet_corners.attributes(), "tex_coord");
+    delete_attribute_if_present(mesh.facets.attributes(),        "chart");
+    delete_attribute_if_present(mesh.vertices.attributes(),      "id");
 }
 
 void make_atlas(

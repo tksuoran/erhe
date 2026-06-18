@@ -33,7 +33,7 @@ void Reverse::build()
         erhe::geometry::Geometry::process_flag_compute_facet_centroids |
         erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
         erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
-    destination.process(flags);
+    destination.process({.flags = flags});
 }
 
 void reverse(const Geometry& source, Geometry& destination)

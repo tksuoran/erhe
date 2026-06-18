@@ -202,11 +202,11 @@ void import_gltf(
                 if (primitive.render_shape) {
                     const std::shared_ptr<erhe::geometry::Geometry>& geometry = primitive.render_shape->get_geometry();
                     if (geometry) {
-                        geometry->process(
+                        geometry->process({.flags =
                             erhe::geometry::Geometry::process_flag_connect                       |
                             erhe::geometry::Geometry::process_flag_build_edges                   |
                             erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals
-                        );
+                        });
                     }
                 }
                 ERHE_VERIFY(primitive.make_renderable_mesh(mesh_build_info, erhe::primitive::Normal_style::corner_normals));

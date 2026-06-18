@@ -84,7 +84,7 @@ auto Create_cone::create_brush(Brush_data& brush_create_info, const Cone_paramet
         erhe::geometry::Geometry::process_flag_connect |
         erhe::geometry::Geometry::process_flag_build_edges |
         erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
-    geometry->process(flags);
+    geometry->process({.flags = flags});
 
     /// brush_create_info.mesh->compute_tangents();
 

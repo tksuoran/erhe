@@ -251,7 +251,7 @@ void Mesh_operation::make_entries(
                     erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
                     erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
 
-                after_geometry->process(flags);
+                after_geometry->process({.flags = flags});
 
                 std::shared_ptr<erhe::primitive::Primitive> after_primitive = std::make_shared<erhe::primitive::Primitive>(after_geometry);
                 const bool renderable_ok = after_primitive->make_renderable_mesh(m_parameters.build_info, render_shape->get_normal_style());

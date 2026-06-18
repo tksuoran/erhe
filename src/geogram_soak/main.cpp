@@ -469,7 +469,7 @@ int main(int argc, char** argv)
                 const Shape_job& job = jobs[slot % jobs.size()];
                 std::shared_ptr<Geometry> geometry = std::make_shared<Geometry>(job.name);
                 job.generate(geometry->get_mesh());
-                geometry->process(job.flags);
+                geometry->process({.flags = job.flags});
                 geometries[slot] = geometry;
             });
         }
