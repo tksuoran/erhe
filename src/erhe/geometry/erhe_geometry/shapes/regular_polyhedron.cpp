@@ -1,11 +1,148 @@
 #include "erhe_geometry/shapes/regular_polyhedron.hpp"
+#include "erhe_geometry/geometry.hpp"
 
 #include <geogram/mesh/mesh.h>
 
+#include <algorithm> // for std::min
 #include <array>
 #include <cmath>  // for sqrt
 
 namespace erhe::geometry::shapes {
+
+namespace {
+
+// Net-based texture coordinates for regular polyhedra, written to slot 0
+// (corner_texcoord_0). Texcoords are per-corner so the polyhedron's shared
+// vertices need no duplication: each face carries its own UVs. These nets give
+// every face a unique, non-overlapping region of the texture.
+
+// Multi-row zig-zag triangle-strip net, normalized to [0,1]^2. Triangles within
+// a row share edges (a true unfolding per row); rows > 1 trade single-net
+// continuity for squarer, less-stretched cells (e.g. the 20-face icosahedron).
+void assign_triangle_strip_texcoords(
+    GEO::Mesh&         mesh,
+    Mesh_attributes&   attributes,
+    const GEO::index_t facet_count,
+    const int          rows
+)
+{
+    const float h       = 0.8660254037844386f; // sqrt(3)/2, equilateral row height
+    const int   count   = static_cast<int>(facet_count);
+    const int   per_row = (count + rows - 1) / rows; // ceil
+    const float total_w = (0.5f * static_cast<float>(per_row)) + 0.5f;
+    const float total_h = static_cast<float>(rows) * h;
+
+    for (GEO::index_t f = 0; f < facet_count; ++f) {
+        const int   index = static_cast<int>(f);
+        const int   row   = index / per_row; // 0 = top row
+        const int   col   = index % per_row; // position within row
+        const int   k     = col / 2;
+        const float y0    = static_cast<float>((rows - 1) - row) * h;
+
+        GEO::vec2f p0;
+        GEO::vec2f p1;
+        GEO::vec2f p2;
+        if ((col % 2) == 0) { // up-pointing triangle
+            p0 = GEO::vec2f{ static_cast<float>(k),         y0     };
+            p1 = GEO::vec2f{ static_cast<float>(k) + 1.0f,  y0     };
+            p2 = GEO::vec2f{ static_cast<float>(k) + 0.5f,  y0 + h };
+        } else {              // down-pointing triangle
+            p0 = GEO::vec2f{ static_cast<float>(k) + 1.0f,  y0     };
+            p1 = GEO::vec2f{ static_cast<float>(k) + 0.5f,  y0 + h };
+            p2 = GEO::vec2f{ static_cast<float>(k) + 1.5f,  y0 + h };
+        }
+        attributes.corner_texcoord_0.set(mesh.facets.corner(f, 0), GEO::vec2f{ p0.x / total_w, p0.y / total_h });
+        attributes.corner_texcoord_0.set(mesh.facets.corner(f, 1), GEO::vec2f{ p1.x / total_w, p1.y / total_h });
+        attributes.corner_texcoord_0.set(mesh.facets.corner(f, 2), GEO::vec2f{ p2.x / total_w, p2.y / total_h });
+    }
+}
+
+// Octahedral square map: the 4 faces around the +Y apex tile the central
+// diamond, the 4 around the -Y apex fold out into the corners, exactly filling
+// [0,1]^2. Facet and vertex order must match make_octahedron().
+void assign_octahedron_net_texcoords(GEO::Mesh& mesh, Mesh_attributes& attributes)
+{
+    const GEO::vec2f C { 0.5f, 0.5f }; // center  (both apexes project here / to corners)
+    const GEO::vec2f N { 0.5f, 1.0f }; // mid-edges of the central diamond
+    const GEO::vec2f E { 1.0f, 0.5f };
+    const GEO::vec2f S { 0.5f, 0.0f };
+    const GEO::vec2f W { 0.0f, 0.5f };
+    const GEO::vec2f BL{ 0.0f, 0.0f }; // square corners (the folded-out -Y faces)
+    const GEO::vec2f BR{ 1.0f, 0.0f };
+    const GEO::vec2f TR{ 1.0f, 1.0f };
+    const GEO::vec2f TL{ 0.0f, 1.0f };
+    const GEO::vec2f uv[8][3] = {
+        { S,  W, C }, // facet 0 {3,2,0} +Y apex
+        { E,  S, C }, // facet 1 {4,3,0} +Y apex
+        { N,  E, C }, // facet 2 {5,4,0} +Y apex
+        { W,  N, C }, // facet 3 {2,5,0} +Y apex
+        { BL, W, S }, // facet 4 {1,2,3} -Y apex
+        { BR, S, E }, // facet 5 {1,3,4} -Y apex
+        { TR, E, N }, // facet 6 {1,4,5} -Y apex
+        { TL, N, W }  // facet 7 {1,5,2} -Y apex
+    };
+    for (GEO::index_t f = 0; f < 8; ++f) {
+        for (GEO::index_t i = 0; i < 3; ++i) {
+            attributes.corner_texcoord_0.set(mesh.facets.corner(f, i), uv[f][i]);
+        }
+    }
+}
+
+// Generic per-face net for mixed or non-triangulated solids: each facet is
+// packed into its own grid cell. Quads fill the cell; other n-gons are inscribed
+// as a regular polygon. Guarantees unique, non-overlapping UVs per face.
+void assign_polygon_grid_texcoords(
+    GEO::Mesh&         mesh,
+    Mesh_attributes&   attributes,
+    const GEO::index_t first_facet,
+    const GEO::index_t facet_count,
+    const int          cols,
+    const int          rows
+)
+{
+    const float two_pi  = 6.283185307179586f;
+    const float half_pi = 1.5707963267948966f;
+    const float cell_w  = 1.0f / static_cast<float>(cols);
+    const float cell_h  = 1.0f / static_cast<float>(rows);
+    const float margin  = 0.04f; // fraction of a cell, reduces bilinear bleed between faces
+
+    for (GEO::index_t i = 0; i < facet_count; ++i) {
+        const GEO::index_t facet = first_facet + i;
+        const int          index = static_cast<int>(i);
+        const int          col   = index % cols;
+        const int          row   = index / cols;
+        const float        u0    = (static_cast<float>(col) + margin)        * cell_w;
+        const float        u1    = (static_cast<float>(col) + 1.0f - margin) * cell_w;
+        const float        v0    = (static_cast<float>(row) + margin)        * cell_h;
+        const float        v1    = (static_cast<float>(row) + 1.0f - margin) * cell_h;
+        const GEO::index_t n     = mesh.facets.nb_vertices(facet);
+
+        if (n == 4) {
+            const GEO::vec2f uv[4] = {
+                GEO::vec2f{ u0, v0 },
+                GEO::vec2f{ u1, v0 },
+                GEO::vec2f{ u1, v1 },
+                GEO::vec2f{ u0, v1 }
+            };
+            for (GEO::index_t j = 0; j < 4; ++j) {
+                attributes.corner_texcoord_0.set(mesh.facets.corner(facet, j), uv[j]);
+            }
+        } else {
+            const float cu = 0.5f * (u0 + u1);
+            const float cv = 0.5f * (v0 + v1);
+            const float r  = 0.5f * std::min(u1 - u0, v1 - v0);
+            for (GEO::index_t j = 0; j < n; ++j) {
+                const float a = half_pi + ((two_pi * static_cast<float>(j)) / static_cast<float>(n));
+                attributes.corner_texcoord_0.set(
+                    mesh.facets.corner(facet, j),
+                    GEO::vec2f{ cu + (r * std::cos(a)), cv + (r * std::sin(a)) }
+                );
+            }
+        }
+    }
+}
+
+} // anonymous namespace
 
 void make_cuboctahedron(GEO::Mesh& mesh, const float r)
 {
@@ -46,6 +183,9 @@ void make_cuboctahedron(GEO::Mesh& mesh, const float r)
     mesh.facets.create_triangle( 3, 5,  2);
     mesh.facets.create_triangle( 5, 6,  8);
     mesh.facets.create_triangle(11, 8,  9);
+
+    Mesh_attributes attributes{mesh};
+    assign_polygon_grid_texcoords(mesh, attributes, 0, 14, 4, 4);
     mesh.vertices.set_single_precision();
 }
 
@@ -109,6 +249,9 @@ void make_dodecahedron(GEO::Mesh& mesh, const float r)
             }
         }
     }
+
+    Mesh_attributes attributes{mesh};
+    assign_polygon_grid_texcoords(mesh, attributes, 0, 12, 4, 3);
     mesh.vertices.set_single_precision();
 }
 
@@ -171,6 +314,9 @@ void make_icosahedron(GEO::Mesh& mesh, const float r)
         }
     }
     mesh.facets.connect();
+
+    Mesh_attributes attributes{mesh};
+    assign_triangle_strip_texcoords(mesh, attributes, 20, 4);
     mesh.vertices.set_single_precision();
 }
 
@@ -212,6 +358,9 @@ void make_octahedron(GEO::Mesh& mesh, const float r)
         }
     }
     mesh.facets.connect();
+
+    Mesh_attributes attributes{mesh};
+    assign_octahedron_net_texcoords(mesh, attributes);
     mesh.vertices.set_single_precision();
 }
 
@@ -251,6 +400,9 @@ void make_tetrahedron(GEO::Mesh& mesh, float r)
         }
     }
     mesh.facets.connect();
+
+    Mesh_attributes attributes{mesh};
+    assign_triangle_strip_texcoords(mesh, attributes, 4, 1);
     mesh.vertices.set_single_precision();
 }
 
@@ -296,6 +448,9 @@ void make_cube(GEO::Mesh& mesh, const float r)
         }
     }
     mesh.facets.connect();
+
+    Mesh_attributes attributes{mesh};
+    assign_polygon_grid_texcoords(mesh, attributes, 0, 6, 3, 2);
     mesh.vertices.set_single_precision();
 }
 
