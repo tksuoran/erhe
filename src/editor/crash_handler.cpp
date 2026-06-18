@@ -142,6 +142,11 @@ void install_crash_handler()
     SetUnhandledExceptionFilter(unhandled_exception_filter);
 }
 
+auto is_debugger_present() -> bool
+{
+    return IsDebuggerPresent() != FALSE;
+}
+
 } // namespace editor
 
 #else // !_WIN32
@@ -150,6 +155,11 @@ namespace editor {
 
 void install_crash_handler()
 {
+}
+
+auto is_debugger_present() -> bool
+{
+    return false;
 }
 
 } // namespace editor

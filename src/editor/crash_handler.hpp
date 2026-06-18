@@ -24,4 +24,11 @@ namespace editor {
 // Call once, as early as possible in main(), before any subsystem starts.
 void install_crash_handler();
 
+// True when a debugger is currently attached (Windows: IsDebuggerPresent; always
+// false on other platforms). Used to make Geogram asserts break into the debugger
+// at the failure site (GEO::ASSERT_BREAKPOINT) instead of throwing - a throw from
+// Geogram's own parallel worker threads (e.g. parallel_delaunay_3d) escapes every
+// editor-side catch and just terminates the process.
+[[nodiscard]] auto is_debugger_present() -> bool;
+
 } // namespace editor

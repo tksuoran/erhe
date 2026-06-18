@@ -18,6 +18,7 @@
 #include "config/generated/make_mesh_args_serialization.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/editor_settings_config_serialization.hpp"
+#include "crash_handler.hpp"
 #include "erhe_scene_renderer/generated/mesh_memory_config.hpp"
 #include "erhe_scene_renderer/generated/mesh_memory_config_serialization.hpp"
 #include "config/generated/renderer_config.hpp"
@@ -183,6 +184,7 @@
 #   include <tracy/TracyC.h>
 #endif
 
+#include <geogram/basic/assert.h>
 #include <geogram/basic/attributes.h>
 #include <geogram/basic/common.h>
 #include <geogram/basic/command_line.h>
@@ -2797,6 +2799,17 @@ void run_editor()
     {
         ERHE_PROFILE_SCOPE("initialize geogram");
         GEO::initialize(GEO::GEOGRAM_INSTALL_NONE);
+        // Under a debugger, make Geogram asserts break into it at the failure site
+        // (ASSERT_BREAKPOINT -> __debugbreak) instead of the default ASSERT_THROW.
+        // geo_assert in parallel code (e.g. parallel_delaunay_3d, reached via chamfer's
+        // convex hull) fires on Geogram's own worker threads, where the throw escapes
+        // every editor-side catch (including the async mesh-operation worker boundary)
+        // and just calls std::terminate - so the process exits with no chance to break
+        // and inspect. Outside a debugger keep the default ASSERT_THROW, so that worker
+        // boundary can still catch and skip a degenerate operation in unattended runs.
+        if (is_debugger_present()) {
+            GEO::set_assert_mode(GEO::ASSERT_BREAKPOINT);
+        }
         GEO::CmdLine::import_arg_group("algo");
         // Required by GEO::remesh_smooth() (Remesh / Anisotropic Remesh operations),
         // which reads remesh:multi_nerve and remesh:RVC_centroids; querying an
