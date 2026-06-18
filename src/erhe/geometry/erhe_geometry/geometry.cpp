@@ -18,8 +18,42 @@
 // worker likewise perturbs the race, so this is OFF by default. REMOVE once
 // the root cause is fixed.
 #define ERHE_DEBUG_VALIDATE_GEOMETRY 0
+
+// TEMPORARY diagnostic: capture the exact point set handed to
+// GEO::Delaunay::set_vertices() inside make_convex_hull() as a standalone,
+// compilable C++ reproducer, so a Geogram crash (the geo_assert in
+// GEO::Delaunay3dThread::vertex_ptr reached from locate_inexact() during
+// GEO::ParallelDelaunay3d::set_vertices) can be filed as an upstream bug report
+// against Geogram alone. Each call writes one geogram_repro_NNNN.cpp into the
+// working directory. Set to 0 to compile the capture out. REMOVE once the
+// Geogram issue is reported / resolved.
+//
+// Off by default now that the reproducer has been captured and the upstream
+// Geogram bug filed, and because the default convex-hull path no longer uses
+// Geogram Delaunay (see ERHE_CONVEX_HULL_USE_QUICKHULL); only set to 1 again
+// when re-capturing input for the Geogram path (ERHE_CONVEX_HULL_USE_QUICKHULL 0).
+//
+// https://github.com/BrunoLevy/geogram/issues/367
+#define ERHE_CAPTURE_DELAUNAY_REPRO 0
+
+// Convex-hull backend selector for make_convex_hull():
+//   0 = Geogram parallel 3D Delaunay ("PDEL")  -- default
+//   1 = erhe's own QuickHull (erhe::math::calculate_bounding_convex_hull)
+// PDEL is the default again now that the Geogram lock-free locate_inexact()
+// race is fixed. That race mishandled a concurrently freed tetrahedron (the
+// VERTEX_OF_DELETED_TET assert / out-of-range read in parallel_delaunay_3d.cpp
+// in debug builds, plus a freed-hint livelock once the read was guarded), and
+// triggered on degenerate-but-valid convex-hull inputs such as
+// chamfer(ortho^4(dodecahedron)). The fix ships in the geogram fork pin (see
+// the geogram CPMAddPackage GIT_TAG in the top-level CMakeLists.txt). The
+// QuickHull path is kept behind this define as an alternative / fallback.
+//
+// https://github.com/BrunoLevy/geogram/issues/367
+#define ERHE_CONVEX_HULL_USE_QUICKHULL 0
+
 #include "erhe_log/log_geogram.hpp"
 #include "erhe_verify/verify.hpp"
+#include "erhe_math/math_util.hpp"
 
 #include <geogram/basic/command_line.h>
 #include <geogram/basic/geometry.h>
@@ -28,11 +62,17 @@
 #include <geogram/mesh/mesh.h>
 
 #include <fmt/format.h>
+#include <glm/glm.hpp>
 
 #include <geogram/mesh/mesh_reorder.h>
 
+#include <array>
 #include <cmath>
+#include <cstdio>
+#include <mutex>
+#include <span>
 #include <unordered_map>
+#include <vector>
 
 namespace erhe::geometry {
 
@@ -663,10 +703,161 @@ auto Geometry::get_mass_properties() -> Mass_properties
 }
 #endif
 
+#if ERHE_CAPTURE_DELAUNAY_REPRO
+namespace {
+
+// Write a self-contained reproducer for the exact input passed to
+// GEO::Delaunay::set_vertices() below. Point coordinates are emitted as C99/C++
+// hex float literals (exact bit-for-bit; the inexact point-location walk that
+// asserts is floating-point sensitive) with the %.17g decimal value in a
+// trailing comment for readability. The generated program initializes Geogram
+// and issues the identical create("PDEL") / set_keeps_infinite / set_vertices
+// sequence the editor uses, so it crashes standalone.
+//
+// make_convex_hull() runs on taskflow worker threads, so the file index is
+// guarded by a mutex (no atomics, per project policy) and each input lands in
+// its own file -- the input that crashes is whichever file was being written
+// when the process aborted.
+void write_geogram_delaunay_repro(GEO::index_t dim, GEO::index_t nb_pts, const GEO::vector<double>& points)
+{
+    static std::mutex  repro_mutex;
+    static unsigned int repro_index = 0;
+    unsigned int index = 0;
+    {
+        std::lock_guard<std::mutex> lock{repro_mutex};
+        index = repro_index++;
+    }
+
+    char filename[64];
+    std::snprintf(filename, sizeof(filename), "geogram_repro_%04u.cpp", index);
+    std::FILE* file = std::fopen(filename, "wb");
+    if (file == nullptr) {
+        log_geogram->warn("make_convex_hull: could not open {} for Delaunay repro capture", filename);
+        return;
+    }
+
+    std::fprintf(
+        file,
+        "// Auto-generated standalone reproducer for a GEO::Delaunay crash,\n"
+        "// captured from erhe::geometry::make_convex_hull() immediately before\n"
+        "// GEO::Delaunay::set_vertices(). The crash observed in the editor is a\n"
+        "// geo_assert failure in GEO::Delaunay3dThread::vertex_ptr(), reached from\n"
+        "// locate_inexact() during GEO::ParallelDelaunay3d::set_vertices().\n"
+        "//\n"
+        "// Build against the same geogram the editor links, e.g.:\n"
+        "//   c++ -std=c++17 %s -I<geogram>/src -L<geogram-build>/lib -lgeogram -o repro\n"
+        "// then run ./repro\n"
+        "//\n"
+        "// NOTE: geogram must be built with -ffp-contract=off to match the editor\n"
+        "// (FMA contraction breaks its exact predicates); see the geogram section of\n"
+        "// erhe's top-level CMakeLists.txt.\n"
+        "\n"
+        "#include <geogram/basic/assert.h>\n"
+        "#include <geogram/basic/common.h>\n"
+        "#include <geogram/basic/command_line.h>\n"
+        "#include <geogram/basic/command_line_args.h>\n"
+        "#include <geogram/delaunay/delaunay.h>\n"
+        "\n"
+        "static const GEO::index_t dim    = %u;\n"
+        "static const GEO::index_t nb_pts = %u;\n"
+        "\n"
+        "// nb_pts * dim doubles, row-major (one point per line). Hex float literals\n"
+        "// are exact; the trailing comment shows the %%.17g decimal value.\n"
+        "static const double points[%u] = {\n",
+        filename,
+        static_cast<unsigned int>(dim),
+        static_cast<unsigned int>(nb_pts),
+        static_cast<unsigned int>(nb_pts * dim)
+    );
+
+    for (GEO::index_t v = 0; v < nb_pts; ++v) {
+        std::fprintf(file, "    ");
+        for (GEO::index_t c = 0; c < dim; ++c) {
+            std::fprintf(file, "%a, ", points[(v * dim) + c]);
+        }
+        std::fprintf(file, "//");
+        for (GEO::index_t c = 0; c < dim; ++c) {
+            std::fprintf(file, " %.17g", points[(v * dim) + c]);
+        }
+        std::fprintf(file, "\n");
+    }
+
+    std::fprintf(
+        file,
+        "};\n"
+        "\n"
+        "int main()\n"
+        "{\n"
+        "    GEO::initialize(GEO::GEOGRAM_INSTALL_NONE);\n"
+        "    // Abort (not throw) on geo_assert: the failing assert fires on geogram's\n"
+        "    // own worker threads, where the default ASSERT_THROW is swallowed by the\n"
+        "    // thread pool and the process would otherwise exit 0.\n"
+        "    GEO::set_assert_mode(GEO::ASSERT_ABORT);\n"
+        "    GEO::CmdLine::import_arg_group(\"algo\");\n"
+        "    GEO::CmdLine::set_arg(\"sys:multithread\", \"true\");\n"
+        "\n"
+        "    GEO::Delaunay_var delaunay = GEO::Delaunay::create(GEO::coord_index_t(dim), \"PDEL\");\n"
+        "    delaunay->set_keeps_infinite(true);\n"
+        "    delaunay->set_vertices(nb_pts, points);\n"
+        "    return 0;\n"
+        "}\n"
+    );
+
+    std::fclose(file);
+    log_geogram->info(
+        "make_convex_hull: wrote Geogram Delaunay repro {} (nb_pts={}, dim={})",
+        filename, nb_pts, dim
+    );
+}
+
+} // namespace
+#endif // ERHE_CAPTURE_DELAUNAY_REPRO
+
 auto make_convex_hull(const GEO::Mesh& source, GEO::Mesh& destination) -> bool
 {
     try {
         const GEO::index_t nb_pts = source.vertices.nb();
+#if ERHE_CONVEX_HULL_USE_QUICKHULL
+        // erhe QuickHull path (default; see ERHE_CONVEX_HULL_USE_QUICKHULL).
+        // make_convex_hull() always emits a 3D triangle mesh, so the source
+        // points are read as vec3 and the hull is built in single precision.
+        std::vector<glm::vec3> in_points;
+        in_points.reserve(nb_pts);
+        for (GEO::index_t v : source.vertices) {
+            const float* p = source.vertices.single_precision_point_ptr(v);
+            in_points.push_back(glm::vec3{p[0], p[1], p[2]});
+        }
+
+        erhe::math::Convex_hull hull;
+        erhe::math::calculate_bounding_convex_hull(std::span<const glm::vec3>{in_points}, hull);
+        if (hull.triangle_indices.empty()) {
+            return false;
+        }
+
+        // QuickHull returns only the hull vertices (a subset of the input) and
+        // triangles indexing into them, wound counter-clockwise viewed from
+        // outside (cross(p1 - p0, p2 - p0) points outward). Hand them to Geogram
+        // as a triangle mesh.
+        GEO::vector<double> hull_points;
+        hull_points.reserve(hull.points.size() * 3);
+        for (const glm::vec3& p : hull.points) {
+            hull_points.push_back(static_cast<double>(p.x));
+            hull_points.push_back(static_cast<double>(p.y));
+            hull_points.push_back(static_cast<double>(p.z));
+        }
+        GEO::vector<GEO::index_t> triangles_indices;
+        triangles_indices.reserve(hull.triangle_indices.size() * 3);
+        for (const std::array<size_t, 3>& tri : hull.triangle_indices) {
+            triangles_indices.push_back(static_cast<GEO::index_t>(tri[0]));
+            triangles_indices.push_back(static_cast<GEO::index_t>(tri[1]));
+            triangles_indices.push_back(static_cast<GEO::index_t>(tri[2]));
+        }
+        destination.vertices.set_dimension(3);
+        destination.facets.assign_triangle_mesh(3, hull_points, triangles_indices, true);
+        destination.vertices.remove_isolated();
+        destination.vertices.set_single_precision();
+        return true;
+#else
         const GEO::index_t dim = source.vertices.dimension();
         GEO::vector<double> points;
         points.reserve(nb_pts * dim);
@@ -685,6 +876,9 @@ auto make_convex_hull(const GEO::Mesh& source, GEO::Mesh& destination) -> bool
         // coplanar base ring (ARM-only, intermittent).
         GEO::Delaunay_var delaunay = GEO::Delaunay::create(GEO::coord_index_t(dim), "PDEL");
         delaunay->set_keeps_infinite(true);
+#if ERHE_CAPTURE_DELAUNAY_REPRO
+        write_geogram_delaunay_repro(dim, nb_pts, points);
+#endif
         delaunay->set_vertices(nb_pts, points.data());
         destination.vertices.set_dimension(dim);
         GEO::vector<GEO::index_t> triangles_indices;
@@ -700,6 +894,7 @@ auto make_convex_hull(const GEO::Mesh& source, GEO::Mesh& destination) -> bool
         destination.vertices.remove_isolated();
         destination.vertices.set_single_precision();
         return true;
+#endif // ERHE_CONVEX_HULL_USE_QUICKHULL
     } catch (...) {
         return false;
     }
