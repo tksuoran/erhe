@@ -1,3 +1,4 @@
+#include "crash_handler.hpp"
 #include "editor.hpp"
 
 #if defined(ERHE_WINDOW_LIBRARY_SDL)
@@ -12,6 +13,11 @@
 
 auto main(int, char**) -> int
 {
+    // Install before anything else so a fatal abort() (e.g. OpenNL's nl_assert
+    // during a Geogram remesh) writes a minidump and exits instead of hanging on
+    // a modal Abort / Retry / Ignore dialog.
+    editor::install_crash_handler();
+
 #if defined(ERHE_OS_ANDROID)
     // Android starts the process at cwd "/", which is read-only and outside
     // the app sandbox. Move to internal storage so relative writes

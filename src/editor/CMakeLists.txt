@@ -89,6 +89,8 @@ erhe_target_sources_grouped(
     animation/timeline_window.hpp
     app_context.cpp
     app_context.hpp
+    crash_handler.cpp
+    crash_handler.hpp
     app_message.hpp
     app_message_bus.cpp
     app_message_bus.hpp
@@ -899,6 +901,11 @@ if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
     target_link_libraries(${_target} PRIVATE openxr_loader)
 endif ()
 target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} ${_codegen_out})
+
+# dbghelp provides MiniDumpWriteDump for the crash handler (crash_handler.cpp).
+if (WIN32)
+    target_link_libraries(${_target} PRIVATE dbghelp)
+endif ()
 
 set_target_properties(
     ${_target} PROPERTIES

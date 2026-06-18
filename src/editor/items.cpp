@@ -1,4 +1,5 @@
 #include "items.hpp"
+#include "editor_log.hpp"
 #include "operations/mesh_operation.hpp"
 #include "scene/scene_root.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
@@ -8,6 +9,7 @@
 
 #include <taskflow/taskflow.hpp>
 
+#include <exception>
 #include <unordered_map>
 
 namespace editor {
@@ -88,21 +90,34 @@ void async_for_nodes_with_mesh(
         [&context, op, items]()
         {
             ++context.running_async_ops;
-            Mesh_operation_parameters parameters{
-                .context = context,
-                .build_info{
-                    .primitive_types = {
-                        .fill_triangles  = true,
-                        .edge_lines      = true,
-                        .corner_points   = true,
-                        .centroid_points = true
-                    },
-                    .buffer_info     = context.mesh_memory->make_primitive_buffer_info()
-                }
-            };
+            // Geometry operations call into Geogram, whose assertion mechanism
+            // throws by default (GEO::ASSERT_THROW). An exception escaping this
+            // worker task would call std::terminate (process abort + a modal
+            // "abort() has been called" dialog that hangs headless runs) and
+            // leak the async counters. Catch at the task boundary: log the
+            // failure (Geogram puts the assertion text in what()) and let the
+            // counters settle so the operation simply does not happen.
+            try {
+                Mesh_operation_parameters parameters{
+                    .context = context,
+                    .build_info{
+                        .primitive_types = {
+                            .fill_triangles  = true,
+                            .edge_lines      = true,
+                            .corner_points   = true,
+                            .centroid_points = true
+                        },
+                        .buffer_info     = context.mesh_memory->make_primitive_buffer_info()
+                    }
+                };
 
-            parameters.items = items;
-            op(std::move(parameters));
+                parameters.items = items;
+                op(std::move(parameters));
+            } catch (const std::exception& e) {
+                log_operations->error("Async mesh operation failed: {}", e.what());
+            } catch (...) {
+                log_operations->error("Async mesh operation failed: unknown exception");
+            }
             --context.running_async_ops;
             --context.pending_async_ops;
         },
