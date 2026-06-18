@@ -12,6 +12,13 @@
 #include <Jolt/RegisterTypes.h>
 #include <Jolt/Core/Factory.h>
 #include <Jolt/Physics/Body/Body.h>
+#include <Jolt/Physics/StateRecorderImpl.h>
+#include <Jolt/Physics/Collision/CollideShape.h>
+#include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
+#include <Jolt/Physics/Collision/CollisionDispatch.h>
+#include <Jolt/Physics/Collision/NarrowPhaseQuery.h>
+#include <Jolt/Physics/Collision/Shape/SubShapeID.h>
+#include <Jolt/Physics/Body/BodyFilter.h>
 
 #include <algorithm>
 #include <cstdarg>
@@ -264,6 +271,121 @@ void Jolt_group_filter::set_pair_collision_enabled(
 
 IWorld::~IWorld() noexcept
 {
+}
+
+IWorld::State::~State() noexcept
+{
+}
+
+namespace {
+
+// Jolt-backed IWorld::State: holds the serialized PhysicsSystem state.
+class Jolt_world_state final : public IWorld::State
+{
+public:
+    JPH::StateRecorderImpl recorder;
+};
+
+// Center-of-mass world transform for a body whose node-space (origin) transform
+// is `node_transform` - the form CollideShape / sCollideShapeVsShape expect. The
+// shape's center-of-mass offset is applied the same way SetPositionAndRotation
+// does internally, so the result matches the body's own GetCenterOfMassTransform()
+// when placed at node_transform.
+[[nodiscard]] auto com_transform_of(const JPH::Body& body, const Transform& node_transform) -> JPH::Mat44
+{
+    glm::mat4 node_world{node_transform.basis};
+    node_world[3] = glm::vec4{node_transform.origin, 1.0f};
+    const glm::vec3 com_offset = from_jolt(body.GetShape()->GetCenterOfMass());
+    glm::mat4 com_world = node_world;
+    com_world[3] = node_world * glm::vec4{com_offset, 1.0f};
+    return to_jolt(com_world);
+}
+
+// Greatest penetration depth across `collector`, or 0 when there is no hit.
+[[nodiscard]] auto deepest_penetration(const JPH::ClosestHitCollisionCollector<JPH::CollideShapeCollector>& collector) -> float
+{
+    return collector.HadHit() ? collector.mHit.mPenetrationDepth : 0.0f;
+}
+
+} // anonymous namespace
+
+auto Jolt_world::save_state() -> std::unique_ptr<IWorld::State>
+{
+    auto state = std::make_unique<Jolt_world_state>();
+    m_physics_system.SaveState(state->recorder);
+    return state;
+}
+
+void Jolt_world::restore_state(IWorld::State& state)
+{
+    Jolt_world_state& jolt_state = static_cast<Jolt_world_state&>(state);
+    jolt_state.recorder.Rewind();
+    m_physics_system.RestoreState(jolt_state.recorder);
+}
+
+auto Jolt_world::would_bodies_intersect(
+    const IRigid_body& body_a, const Transform& transform_a,
+    const IRigid_body& body_b, const Transform& transform_b,
+    const float        penetration_tolerance
+) const -> bool
+{
+    const JPH::Body* const jolt_a = static_cast<const Jolt_rigid_body&>(body_a).get_jolt_body();
+    const JPH::Body* const jolt_b = static_cast<const Jolt_rigid_body&>(body_b).get_jolt_body();
+    if ((jolt_a == nullptr) || (jolt_b == nullptr)) {
+        return false;
+    }
+
+    JPH::CollideShapeSettings settings{};
+    settings.mMaxSeparationDistance = 0.0f; // report only actual overlaps (depth >= 0)
+
+    // ClosestHit for CollideShape returns the contact with the greatest
+    // penetration depth (GetEarlyOutFraction() == -penetration).
+    JPH::ClosestHitCollisionCollector<JPH::CollideShapeCollector> collector;
+    JPH::CollisionDispatch::sCollideShapeVsShape(
+        jolt_a->GetShape(),
+        jolt_b->GetShape(),
+        JPH::Vec3::sReplicate(1.0f),
+        JPH::Vec3::sReplicate(1.0f),
+        com_transform_of(*jolt_a, transform_a),
+        com_transform_of(*jolt_b, transform_b),
+        JPH::SubShapeIDCreator{},
+        JPH::SubShapeIDCreator{},
+        settings,
+        collector
+    );
+    return deepest_penetration(collector) > penetration_tolerance;
+}
+
+auto Jolt_world::would_body_intersect_world(
+    const IRigid_body& body, const Transform& transform, const float penetration_tolerance
+) const -> bool
+{
+    const JPH::Body* const jolt_body = static_cast<const Jolt_rigid_body&>(body).get_jolt_body();
+    if (jolt_body == nullptr) {
+        return false;
+    }
+
+    const JPH::Mat44 com_transform = com_transform_of(*jolt_body, transform);
+
+    JPH::CollideShapeSettings settings{};
+    settings.mMaxSeparationDistance = 0.0f;
+
+    // Tests the shape (at the trial transform) against every other body in the
+    // broad phase at its current position; the body itself is excluded so it does
+    // not self-collide with its (un-moved) world entry.
+    JPH::ClosestHitCollisionCollector<JPH::CollideShapeCollector> collector;
+    m_physics_system.GetNarrowPhaseQuery().CollideShape(
+        jolt_body->GetShape(),
+        JPH::Vec3::sReplicate(1.0f),
+        com_transform,
+        settings,
+        com_transform.GetTranslation(), // base offset for query precision
+        collector,
+        {},
+        {},
+        JPH::IgnoreSingleBodyFilter{jolt_body->GetID()}
+    );
+    return deepest_penetration(collector) > penetration_tolerance;
 }
 
 auto IWorld::create() -> IWorld*

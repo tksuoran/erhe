@@ -8,15 +8,18 @@
 #include "content_library/content_library.hpp"
 #include "content_library/content_library_window.hpp"
 #include "items.hpp"
+#include "operations/compound_operation.hpp"
 #include "operations/geometry_operations.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/item_parent_change_operation.hpp"
 #include "operations/merge_operation.hpp"
 #include "operations/mesh_operation.hpp"
+#include "operations/node_attach_operation.hpp"
 #include "operations/node_transform_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "parsers/gltf_physics_export.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
+#include "scene/node_joint.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_commands.hpp"
@@ -44,6 +47,8 @@
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_physics/collision_filter.hpp"
+#include "erhe_physics/irigid_body.hpp"
+#include "erhe_physics/iworld.hpp"
 #include "erhe_physics/physics_joint_settings.hpp"
 #include "erhe_physics/physics_material.hpp"
 #include "erhe_primitive/material.hpp"
@@ -57,6 +62,7 @@
 #include <cmath>
 
 #include <glm/glm.hpp>
+#include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
@@ -199,26 +205,232 @@ void gather_components(Mesh_component_selection& selection, const Mesh_component
     };
 }
 
-// Queue an undoable node transform that left-multiplies `world_delta` onto the
+// Build an undoable node transform that left-multiplies `world_delta` onto the
 // moved node's current world matrix (rigid delta -> the node's own scale/shear is
 // preserved), converting back to a parent-relative transform.
-[[nodiscard]] auto queue_align(App_context& context, const std::shared_ptr<erhe::scene::Node>& moved_node, const glm::mat4& world_delta) -> bool
+[[nodiscard]] auto make_align_operation(const std::shared_ptr<erhe::scene::Node>& moved_node, const glm::mat4& world_delta) -> std::shared_ptr<Node_transform_operation>
 {
     erhe::scene::Node* const node                   = moved_node.get();
     const glm::mat4          new_world_from_node    = world_delta * node->world_from_node();
     const glm::mat4          parent_from_node_after = node->parent_from_world() * new_world_from_node;
 
-    context.operation_stack->queue(
-        std::make_shared<Node_transform_operation>(
-            Node_transform_operation::Parameters{
-                .node                    = moved_node,
-                .parent_from_node_before = node->parent_from_node_transform(),
-                .parent_from_node_after  = erhe::scene::Transform{parent_from_node_after},
-                .time_duration           = 0.0f
-            }
-        )
+    return std::make_shared<Node_transform_operation>(
+        Node_transform_operation::Parameters{
+            .node                    = moved_node,
+            .parent_from_node_before = node->parent_from_node_transform(),
+            .parent_from_node_after  = erhe::scene::Transform{parent_from_node_after},
+            .time_duration           = 0.0f
+        }
     );
+}
+
+[[nodiscard]] auto queue_align(App_context& context, const std::shared_ptr<erhe::scene::Node>& moved_node, const glm::mat4& world_delta) -> bool
+{
+    context.operation_stack->queue(make_align_operation(moved_node, world_delta));
     return true;
+}
+
+// Result of resolving the current two-component selection into the rigid delta
+// that aligns the moved node onto the anchor, plus the contact-feature geometry
+// the Add Joint operation needs (the world feature point, and the world hinge
+// axis: the alignment edge direction for edges, the surface normal for faces).
+class Alignment
+{
+public:
+    bool                               valid           {false};
+    Mesh_component_mode                mode            {Mesh_component_mode::object};
+    std::shared_ptr<erhe::scene::Node> anchor_node;                       // stays put
+    std::shared_ptr<erhe::scene::Node> moved_node;                        // transformed by world_delta
+    glm::mat4                          world_delta     {1.0f};
+    glm::vec3                          world_position  {0.0f};            // contact feature point (anchor)
+    glm::vec3                          world_hinge_axis{0.0f};            // edge dir / face normal; zero for vertex
+};
+
+// Shared by Align and Add Joint: gather the two selected components, validate,
+// and compute the rigid delta (and feature geometry). apply_scale enables the
+// optional uniform match-size used by "Align with Scale" (never by Add Joint, so
+// joined bodies are not resized).
+[[nodiscard]] auto compute_alignment(Mesh_component_selection& selection, const bool apply_scale) -> Alignment
+{
+    Alignment result{};
+    const Mesh_component_mode mode = selection.get_mode();
+    if (mode == Mesh_component_mode::object) {
+        return result;
+    }
+
+    std::vector<Selected_component> components;
+    gather_components(selection, mode, components);
+    if (components.size() != 2) {
+        log_operations->info("Align: requires exactly two selected {} components (have {})", c_str(mode), components.size());
+        return result;
+    }
+
+    const Selected_component& anchor = components[0]; // first-selected component stays put
+    const Selected_component& moved  = components[1]; // its node is transformed to align onto the anchor
+    if (!anchor.node || !moved.node) {
+        return result;
+    }
+    if (anchor.node == moved.node) {
+        log_operations->info("Align: both components are on the same node; nothing to align");
+        return result;
+    }
+
+    result.mode           = mode;
+    result.anchor_node    = anchor.node;
+    result.moved_node     = moved.node;
+    result.world_position = anchor.world_position;
+
+    switch (mode) {
+        case Mesh_component_mode::vertex: {
+            // Translate-only: colocate the two vertex positions (a vertex has no
+            // inherent size or direction, so apply_scale has no effect here).
+            result.world_delta = glm::translate(glm::mat4{1.0f}, anchor.world_position - moved.world_position);
+            result.valid       = true;
+            return result;
+        }
+
+        case Mesh_component_mode::edge: {
+            if ((glm::length(anchor.world_direction) < 0.5f) || (glm::length(moved.world_direction) < 0.5f)) {
+                return result; // degenerate (zero-length) edge
+            }
+            // Choose same vs opposite edge direction by least rotation (nearer of
+            // +-dir_a). Roll about the edge axis is left free (shortest-arc).
+            const glm::vec3 dir_a    = anchor.world_direction;
+            const glm::vec3 dir_b    = moved.world_direction;
+            const glm::vec3 target   = (glm::dot(dir_b, dir_a) >= 0.0f) ? dir_a : -dir_a;
+            const glm::quat rotation = shortest_arc(dir_b, target);
+
+            const float     scale     = (apply_scale && (moved.world_size > 1e-6f)) ? (anchor.world_size / moved.world_size) : 1.0f;
+            const glm::mat4 scale_mat = glm::scale(glm::mat4{1.0f}, glm::vec3{scale});
+
+            const glm::mat4 to_pivot    = glm::translate(glm::mat4{1.0f}, -moved.world_position);
+            const glm::mat4 rotate      = glm::mat4_cast(rotation);
+            const glm::mat4 from_anchor = glm::translate(glm::mat4{1.0f}, anchor.world_position);
+            result.world_delta      = from_anchor * rotate * scale_mat * to_pivot;
+            result.world_hinge_axis = dir_a; // hinge about the (now collinear) alignment edge
+            result.valid            = true;
+            return result;
+        }
+
+        case Mesh_component_mode::face: {
+            // Align the moved face's frame (normal flipped via Frame_orientation::in)
+            // onto the anchor face's frame (Frame_orientation::out), gluing the faces.
+            const Face_frame anchor_frame = facet_world_frame(anchor, Frame_orientation::out);
+            const Face_frame moved_frame  = facet_world_frame(moved,  Frame_orientation::in);
+
+            const float     scale     = (apply_scale && (moved_frame.scale > 1e-6f)) ? (anchor_frame.scale / moved_frame.scale) : 1.0f;
+            const glm::mat4 scale_mat = glm::scale(glm::mat4{1.0f}, glm::vec3{scale});
+            result.world_delta      = anchor_frame.basis * scale_mat * glm::inverse(moved_frame.basis);
+            // Reference_frame::transform() columns are [T | N | B | O]; column 1 is
+            // the surface normal -> hinge about the common normal axis.
+            result.world_hinge_axis = glm::normalize(glm::vec3{anchor_frame.basis[1]});
+            result.valid            = true;
+            return result;
+        }
+
+        case Mesh_component_mode::object:
+        default: {
+            return result;
+        }
+    }
+}
+
+// Nearest self-or-ancestor live rigid body (the body a node "belongs" to).
+// Mirrors Node_joint's find_nearest_node_physics.
+[[nodiscard]] auto nearest_rigid_body(erhe::scene::Node* node) -> erhe::physics::IRigid_body*
+{
+    while (node != nullptr) {
+        const std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(node);
+        if (node_physics) {
+            erhe::physics::IRigid_body* const rigid_body = node_physics->get_rigid_body();
+            if (rigid_body != nullptr) {
+                return rigid_body;
+            }
+        }
+        node = node->get_parent_node().get();
+    }
+    return nullptr;
+}
+
+// Rigid (rotation + translation, scale dropped) world transform of a node, the
+// same convention Node_physics uses to drive its rigid body.
+[[nodiscard]] auto node_rigid_world(const erhe::scene::Node& node) -> glm::mat4
+{
+    const erhe::scene::Trs_transform& world_from_node = node.world_from_node_transform();
+    return glm::translate(glm::mat4{1.0f}, world_from_node.get_translation()) * glm::mat4_cast(world_from_node.get_rotation());
+}
+
+[[nodiscard]] auto to_physics_transform(const glm::mat4& rigid) -> erhe::physics::Transform
+{
+    return erhe::physics::Transform{glm::mat3{rigid}, glm::vec3{rigid[3]}};
+}
+
+// Searches the joint's free rotational DOF for an orientation of the moved body
+// that does not interpenetrate. The free DOF are exactly the joint's free axes:
+// roll about the hinge axis (edge / face), or any rotation (vertex ball joint).
+// Candidates are tried in increasing-perturbation order, so the result is the
+// least change from the base alignment that removes the overlap. The bodies are
+// never moved: each candidate is tested by querying the moved body's shape at the
+// trial transform (would_bodies_intersect / would_body_intersect_world), so the
+// physics world is left untouched. avoid_whole_world selects whether the search
+// avoids only the anchor body or every other body in the world. Returns the
+// chosen world delta, or nullopt when every tried orientation still
+// interpenetrates.
+//
+// anchor_world / moved_world are the node-derived rigid world transforms (so the
+// test matches the rendered poses even when the simulation has not synced the
+// bodies); every composed delta is rigid, so the trial transform stays a clean
+// rotation + translation.
+[[nodiscard]] auto find_non_intersecting_delta(
+    const erhe::physics::IWorld&      world,
+    const erhe::physics::IRigid_body& moved_body,
+    const erhe::physics::IRigid_body& anchor_body,
+    const glm::mat4&                  anchor_world,
+    const glm::mat4&                  moved_world,
+    const Alignment&                  alignment,
+    const float                       penetration_tolerance,
+    const bool                        avoid_whole_world
+) -> std::optional<glm::mat4>
+{
+    const glm::mat4 to_pivot   = glm::translate(glm::mat4{1.0f}, -alignment.world_position);
+    const glm::mat4 from_pivot = glm::translate(glm::mat4{1.0f},  alignment.world_position);
+
+    std::vector<glm::quat> candidates;
+    candidates.push_back(glm::quat{1.0f, 0.0f, 0.0f, 0.0f}); // identity = base alignment
+    if (alignment.mode == Mesh_component_mode::vertex) {
+        // Ball joint: all rotations free. Best-effort sweep about the principal axes.
+        const glm::vec3 axes[3] = { glm::vec3{1.0f, 0.0f, 0.0f}, glm::vec3{0.0f, 1.0f, 0.0f}, glm::vec3{0.0f, 0.0f, 1.0f} };
+        for (int step = 1; step <= 11; ++step) {
+            const float angle = glm::two_pi<float>() * static_cast<float>(step) / 12.0f;
+            for (const glm::vec3& axis : axes) {
+                candidates.push_back(glm::angleAxis(angle, axis));
+            }
+        }
+    } else {
+        // Hinge: roll about the hinge axis, sweeping +- away from the base so the
+        // nearest non-intersecting roll is found first.
+        const glm::vec3 axis  = glm::normalize(alignment.world_hinge_axis);
+        const int       steps = 180; // 1 degree resolution over a half turn
+        for (int i = 1; i <= steps; ++i) {
+            const float angle = glm::pi<float>() * static_cast<float>(i) / static_cast<float>(steps);
+            candidates.push_back(glm::angleAxis( angle, axis));
+            candidates.push_back(glm::angleAxis(-angle, axis));
+        }
+    }
+
+    const erhe::physics::Transform anchor_transform = to_physics_transform(anchor_world);
+    for (const glm::quat& q : candidates) {
+        const glm::mat4                extra           = from_pivot * glm::mat4_cast(q) * to_pivot;
+        const glm::mat4                delta           = extra * alignment.world_delta;
+        const erhe::physics::Transform moved_transform = to_physics_transform(delta * moved_world);
+        const bool intersects = avoid_whole_world
+            ? world.would_body_intersect_world(moved_body, moved_transform, penetration_tolerance)
+            : world.would_bodies_intersect(moved_body, moved_transform, anchor_body, anchor_transform, penetration_tolerance);
+        if (!intersects) {
+            return delta;
+        }
+    }
+    return std::nullopt;
 }
 
 } // anonymous namespace
@@ -256,6 +468,7 @@ Operations::Operations(
     , m_merge_command           {commands, "Geometry.Merge",                     [this]() -> bool { merge           (); return true; } }
     , m_align_command           {commands, "Geometry.Align",                     [this]() -> bool { return align_selection(false); } }
     , m_align_with_scale_command{commands, "Geometry.AlignWithScale",            [this]() -> bool { return align_selection(true ); } }
+    , m_add_joint_command       {commands, "Geometry.AddJoint",                  [this]() -> bool { return add_joint(); } }
     , m_triangulate_command     {commands, "Geometry.Triangulate",               [this]() -> bool { triangulate     (); return true; } }
     , m_normalize_command       {commands, "Geometry.Normalize",                 [this]() -> bool { normalize       (); return true; } }
     , m_bake_transform_command  {commands, "Geometry.BakeTransform",             [this]() -> bool { bake_transform  (); return true; } }
@@ -303,6 +516,7 @@ Operations::Operations(
     commands.register_command(&m_merge_command         );
     commands.register_command(&m_align_command         );
     commands.register_command(&m_align_with_scale_command);
+    commands.register_command(&m_add_joint_command      );
     commands.register_command(&m_triangulate_command   );
     commands.register_command(&m_normalize_command     );
     commands.register_command(&m_bake_transform_command);
@@ -348,6 +562,7 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_merge_command,            "Geometry.Merge");
     commands.bind_command_to_menu(&m_align_command,            "Geometry.Align");
     commands.bind_command_to_menu(&m_align_with_scale_command, "Geometry.Align with Scale");
+    commands.bind_command_to_menu(&m_add_joint_command,        "Geometry.Add Joint");
     commands.bind_command_to_menu(&m_triangulate_command,      "Geometry.Triangulate");
     commands.bind_command_to_menu(&m_normalize_command,        "Geometry.Normalize");
     commands.bind_command_to_menu(&m_bake_transform_command,   "Geometry.Bake-Transform");
@@ -658,6 +873,21 @@ void Operations::imgui()
     if (make_button("Align with Scale", align_mode, button_size)) {
         align_selection(true);
     }
+    if (make_button("Add Joint", align_mode, button_size)) {
+        add_joint();
+    }
+    {
+        // Controls what the Add Joint initial-orientation search avoids intersecting.
+        const char* const avoidance_items[] = { "Avoid joint pair", "Avoid whole world" };
+        int avoidance = static_cast<int>(m_add_joint_avoidance);
+        ImGui::SetNextItemWidth(button_size.x);
+        if (ImGui::Combo("##add_joint_avoidance", &avoidance, avoidance_items, IM_ARRAYSIZE(avoidance_items))) {
+            m_add_joint_avoidance = static_cast<Add_joint_avoidance>(avoidance);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Add Joint: obstacles avoided when searching the initial non-intersecting orientation");
+        }
+    }
 
     if (make_button("Catmull-Clark", has_selection_mode, button_size)) {
         catmull_clark();
@@ -912,82 +1142,185 @@ auto Operations::align_selection(const bool apply_scale) -> bool
     if (selection == nullptr) {
         return false;
     }
-    const Mesh_component_mode mode = selection->get_mode();
-    if (mode == Mesh_component_mode::object) {
+    const Alignment alignment = compute_alignment(*selection, apply_scale);
+    if (!alignment.valid) {
+        return false;
+    }
+    return queue_align(m_context, alignment.moved_node, alignment.world_delta);
+}
+
+auto Operations::add_joint() -> bool
+{
+    Mesh_component_selection* selection = m_context.mesh_component_selection;
+    if (selection == nullptr) {
+        return false;
+    }
+    // Add Joint uses the rigid fit (no scaling) so the joined bodies are not resized.
+    Alignment alignment = compute_alignment(*selection, false);
+    if (!alignment.valid) {
         return false;
     }
 
-    std::vector<Selected_component> components;
-    gather_components(*selection, mode, components);
-    if (components.size() != 2) {
-        log_operations->info("Align: requires exactly two selected {} components (have {})", c_str(mode), components.size());
+    // Precondition (abort with warning): both nodes must already have a rigid body
+    // (on themselves or an ancestor); otherwise the joint would be inert.
+    erhe::physics::IRigid_body* const anchor_body = nearest_rigid_body(alignment.anchor_node.get());
+    erhe::physics::IRigid_body* const moved_body  = nearest_rigid_body(alignment.moved_node.get());
+    if ((anchor_body == nullptr) || (moved_body == nullptr)) {
+        log_operations->warn("Add Joint: both aligned nodes must have a rigid body; aborting");
+        return false;
+    }
+    if (anchor_body == moved_body) {
+        log_operations->warn("Add Joint: both components belong to the same rigid body; aborting");
         return false;
     }
 
-    const Selected_component& anchor = components[0]; // first-selected component stays put
-    const Selected_component& moved  = components[1]; // its node is transformed to align onto the anchor
-    if (!anchor.node || !moved.node) {
+    std::shared_ptr<Scene_root> scene_root = get_target_scene_root();
+    if (!scene_root) {
         return false;
     }
-    if (anchor.node == moved.node) {
-        log_operations->info("Align: both components are on the same node; nothing to align");
-        return false;
-    }
+    const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
 
-    switch (mode) {
-        case Mesh_component_mode::vertex: {
-            // Translate-only: colocate the two vertex positions (a vertex has no
-            // inherent size or direction, so apply_scale has no effect here).
-            const glm::mat4 world_delta = glm::translate(glm::mat4{1.0f}, anchor.world_position - moved.world_position);
-            return queue_align(m_context, moved.node, world_delta);
+    // The alignment fixes the contact feature but leaves the joint's free
+    // rotational DOF (the roll about the hinge axis) unconstrained, so the default
+    // fit can leave the bodies interpenetrating. Search that DOF (physics
+    // snapshot / trial / rollback) for an orientation where the two bodies do not
+    // intersect, and reject the joint when none exists. Tolerance scales with the
+    // smaller object so a feature-contact touch is not mistaken for penetration.
+    const auto mesh_world_diagonal = [](const std::shared_ptr<erhe::scene::Node>& node) -> float {
+        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+        if (!mesh) {
+            return 0.0f;
         }
+        const erhe::math::Aabb aabb = mesh->get_aabb_world();
+        return aabb.is_valid() ? glm::length(aabb.diagonal()) : 0.0f;
+    };
+    float characteristic_size = std::min(mesh_world_diagonal(alignment.anchor_node), mesh_world_diagonal(alignment.moved_node));
+    if (characteristic_size <= 0.0f) {
+        characteristic_size = 1.0f;
+    }
+    const float penetration_tolerance = 0.01f * characteristic_size;
+    const std::optional<glm::mat4> non_intersecting_delta = find_non_intersecting_delta(
+        scene_root->get_physics_world(),
+        *moved_body,
+        *anchor_body,
+        node_rigid_world(*alignment.anchor_node),
+        node_rigid_world(*alignment.moved_node),
+        alignment,
+        penetration_tolerance,
+        (m_add_joint_avoidance == Add_joint_avoidance::whole_world)
+    );
+    if (!non_intersecting_delta.has_value()) {
+        log_operations->warn("Add Joint: no non-intersecting orientation found; joint not created");
+        return false;
+    }
+    alignment.world_delta = non_intersecting_delta.value();
 
-        case Mesh_component_mode::edge: {
-            if ((glm::length(anchor.world_direction) < 0.5f) || (glm::length(moved.world_direction) < 0.5f)) {
-                return false; // degenerate (zero-length) edge
+    // World joint frame at the contact feature. Frame axis X is the hinge axis
+    // (edge direction / face normal). Vertex joints are rotationally symmetric, so
+    // the orientation is arbitrary (identity).
+    glm::mat3 basis{1.0f};
+    if (alignment.mode != Mesh_component_mode::vertex) {
+        const glm::vec3 hinge_axis = glm::normalize(alignment.world_hinge_axis);
+        glm::vec3       tangent;
+        glm::vec3       bitangent;
+        erhe::math::get_plane_basis(hinge_axis, tangent, bitangent);
+        basis = glm::mat3{hinge_axis, tangent, bitangent};
+    }
+    glm::mat4 world_frame{basis};
+    world_frame[3] = glm::vec4{alignment.world_position, 1.0f};
+
+    // Joint settings: lock the contact (all 3 translations) for every mode; for
+    // hinges also lock the two off-axis rotations, leaving rotation about frame X
+    // (the hinge axis) free; vertex joints leave all rotations free (ball joint).
+    // One single-axis limit entry per locked axis avoids Node_joint's multi-axis
+    // limit warning. min == max == 0 makes the axis fixed.
+    const bool is_hinge = (alignment.mode != Mesh_component_mode::vertex);
+    auto settings = std::make_shared<erhe::physics::Physics_joint_settings>(is_hinge ? "Hinge joint" : "Ball joint");
+    const auto lock_axis = [&settings](const bool linear, const std::size_t axis) {
+        erhe::physics::Joint_limit limit{};
+        if (linear) {
+            limit.linear_axes[axis] = true;
+        } else {
+            limit.angular_axes[axis] = true;
+        }
+        limit.min = 0.0f;
+        limit.max = 0.0f;
+        settings->limits.push_back(limit);
+    };
+    lock_axis(true, 0);
+    lock_axis(true, 1);
+    lock_axis(true, 2);
+    if (is_hinge) {
+        lock_axis(false, 1); // lock rotation about frame Y
+        lock_axis(false, 2); // lock rotation about frame Z
+    }
+
+    // The joint frame is represented by two nodes (so the transform lives on nodes,
+    // not on the attachment): the joint node carries the Node_joint, the connected
+    // node is referenced by it. Both sit at the world joint frame; Node::set_parent
+    // preserves world transform on reparent, so we set each node's transform to the
+    // world frame and let insertion recompute the body-local part. The joint node
+    // is a child of the anchor body, the connected node a child of the moved body,
+    // so find_nearest_node_physics resolves bodies A / B and the frames move with
+    // their bodies.
+    auto joint_node = std::make_shared<erhe::scene::Node>("Joint");
+    joint_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+    joint_node->set_parent_from_node(world_frame);
+
+    auto connected_node = std::make_shared<erhe::scene::Node>("Joint target");
+    connected_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+    connected_node->set_parent_from_node(world_frame);
+
+    // Keep collision enabled between the two connected bodies so they cannot pass
+    // through each other while the joint moves. This is safe because the alignment
+    // search above guarantees the parts start in a non-penetrating pose, so
+    // enabling collision does not cause a push-apart on creation.
+    auto node_joint = std::make_shared<Node_joint>(connected_node, settings, true /* enable_collision */);
+    node_joint->set_name(is_hinge ? "Hinge joint" : "Ball joint");
+    node_joint->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+
+    auto settings_library_node = std::make_shared<Content_library_node>(settings);
+
+    // Single compound so one Undo reverts the joint, both frame nodes, the settings
+    // asset, and the alignment. Order matters: the moved node is transformed before
+    // the connected node (its child) is inserted, so set_parent captures the
+    // connected node at the world joint frame rather than dragging it with the body.
+    Compound_operation::Parameters compound{};
+    compound.operations.push_back(make_align_operation(alignment.moved_node, alignment.world_delta));
+    compound.operations.push_back(
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context = m_context,
+                .item    = settings_library_node,
+                .parent  = content_library->physics_joints,
+                .mode    = Item_insert_remove_operation::Mode::insert
             }
-            // Choose same vs opposite edge direction by least rotation (nearer of
-            // +-dir_a). Roll about the edge axis is left free (shortest-arc).
-            const glm::vec3 dir_a    = anchor.world_direction;
-            const glm::vec3 dir_b    = moved.world_direction;
-            const glm::vec3 target   = (glm::dot(dir_b, dir_a) >= 0.0f) ? dir_a : -dir_a;
-            const glm::quat rotation = shortest_arc(dir_b, target);
+        )
+    );
+    compound.operations.push_back(
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context = m_context,
+                .item    = joint_node,
+                .parent  = alignment.anchor_node,
+                .mode    = Item_insert_remove_operation::Mode::insert
+            }
+        )
+    );
+    compound.operations.push_back(
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context = m_context,
+                .item    = connected_node,
+                .parent  = alignment.moved_node,
+                .mode    = Item_insert_remove_operation::Mode::insert
+            }
+        )
+    );
+    compound.operations.push_back(std::make_shared<Node_attach_operation>(node_joint, joint_node));
 
-            // Optional uniform scale so the moved edge matches the anchor edge length.
-            const float     scale     = (apply_scale && (moved.world_size > 1e-6f)) ? (anchor.world_size / moved.world_size) : 1.0f;
-            const glm::mat4 scale_mat = glm::scale(glm::mat4{1.0f}, glm::vec3{scale});
-
-            // Scale and rotate about the moved edge's midpoint, then translate that
-            // midpoint onto the anchor midpoint.
-            const glm::mat4 to_pivot    = glm::translate(glm::mat4{1.0f}, -moved.world_position);
-            const glm::mat4 rotate      = glm::mat4_cast(rotation);
-            const glm::mat4 from_anchor = glm::translate(glm::mat4{1.0f}, anchor.world_position);
-            const glm::mat4 world_delta = from_anchor * rotate * scale_mat * to_pivot;
-            return queue_align(m_context, moved.node, world_delta);
-        }
-
-        case Mesh_component_mode::face: {
-            // Full-frame, faces meeting each other: align the moved face's frame
-            // (normal flipped via Frame_orientation::in) onto the anchor face's
-            // frame (Frame_orientation::out), so centroids coincide, tangents align
-            // and the two outward normals end up antiparallel (glued face-to-face).
-            const Face_frame anchor_frame = facet_world_frame(anchor, Frame_orientation::out);
-            const Face_frame moved_frame  = facet_world_frame(moved,  Frame_orientation::in);
-
-            // Optional uniform scale so the moved face matches the anchor face size.
-            // The frame bases are orthonormal, so scaling about the (frame-local)
-            // centroid resizes the moved object without otherwise disturbing the fit.
-            const float     scale     = (apply_scale && (moved_frame.scale > 1e-6f)) ? (anchor_frame.scale / moved_frame.scale) : 1.0f;
-            const glm::mat4 scale_mat = glm::scale(glm::mat4{1.0f}, glm::vec3{scale});
-            const glm::mat4 world_delta = anchor_frame.basis * scale_mat * glm::inverse(moved_frame.basis);
-            return queue_align(m_context, moved.node, world_delta);
-        }
-
-        case Mesh_component_mode::object:
-        default: {
-            return false;
-        }
-    }
+    m_context.operation_stack->queue(std::make_shared<Compound_operation>(std::move(compound)));
+    return true;
 }
 
 void Operations::triangulate()

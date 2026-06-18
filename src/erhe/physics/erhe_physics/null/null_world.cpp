@@ -41,8 +41,44 @@ IWorld::~IWorld() noexcept
 {
 }
 
+IWorld::State::~State() noexcept
+{
+}
+
 Null_world::~Null_world() noexcept
 {
+}
+
+auto Null_world::save_state() -> std::unique_ptr<IWorld::State>
+{
+    return std::make_unique<IWorld::State>();
+}
+
+void Null_world::restore_state(IWorld::State& state)
+{
+    static_cast<void>(state);
+}
+
+auto Null_world::would_bodies_intersect(
+    const IRigid_body& body_a, const Transform& transform_a,
+    const IRigid_body& body_b, const Transform& transform_b,
+    const float        penetration_tolerance
+) const -> bool
+{
+    static_cast<void>(body_a);
+    static_cast<void>(transform_a);
+    static_cast<void>(body_b);
+    static_cast<void>(transform_b);
+    static_cast<void>(penetration_tolerance);
+    return false;
+}
+
+auto Null_world::would_body_intersect_world(const IRigid_body& body, const Transform& transform, const float penetration_tolerance) const -> bool
+{
+    static_cast<void>(body);
+    static_cast<void>(transform);
+    static_cast<void>(penetration_tolerance);
+    return false;
 }
 
 void Null_world::update_fixed_step(const double dt)

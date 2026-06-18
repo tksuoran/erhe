@@ -39,6 +39,11 @@ public:
     void set_on_trigger_exit    (std::function<void(const Trigger_event&)> callback) override;
     void set_collision_enabled  (IRigid_body* rigid_body_a, IRigid_body* rigid_body_b, bool enabled) override;
 
+    auto save_state      () -> std::unique_ptr<State> override;
+    void restore_state   (State& state)               override;
+    auto would_bodies_intersect    (const IRigid_body& body_a, const Transform& transform_a, const IRigid_body& body_b, const Transform& transform_b, float penetration_tolerance) const -> bool override;
+    auto would_body_intersect_world(const IRigid_body& body, const Transform& transform, float penetration_tolerance) const -> bool override;
+
 private:
     glm::vec3                 m_gravity        {0.0f};
 

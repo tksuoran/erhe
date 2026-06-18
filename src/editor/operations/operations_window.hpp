@@ -71,6 +71,13 @@ class Content_library_window;
 class Scene_root;
 class Scene_view;
 
+// Obstacles the Add Joint initial-orientation search treats as blocking when
+// looking for a non-intersecting placement.
+enum class Add_joint_avoidance : unsigned int {
+    joint_pair  = 0, // only the other body being joined
+    whole_world = 1  // every other body in the physics world
+};
+
 class Operations : public erhe::imgui::Imgui_window
 {
 public:
@@ -88,6 +95,11 @@ public:
 
     void merge();
     auto align_selection(bool apply_scale) -> bool;
+    // Compound: align the two selected components, then create a physics joint
+    // between the two nodes' rigid bodies (ball for vertex, hinge about the edge
+    // for edge, hinge about the common normal for face). Aborts with a warning if
+    // either node lacks a rigid body.
+    auto add_joint() -> bool;
     void triangulate();
     void normalize();
     void bake_transform();
@@ -167,6 +179,7 @@ private:
     erhe::commands::Lambda_command m_merge_command;
     erhe::commands::Lambda_command m_align_command;
     erhe::commands::Lambda_command m_align_with_scale_command;
+    erhe::commands::Lambda_command m_add_joint_command;
     erhe::commands::Lambda_command m_triangulate_command;
     erhe::commands::Lambda_command m_normalize_command;
     erhe::commands::Lambda_command m_bake_transform_command;
@@ -207,6 +220,9 @@ private:
     float m_truncate_ratio{1.0f / 3.0f};
     float m_gyro_ratio{1.0f / 3.0f};
     float m_kis_height{0.0f};
+
+    // What the Add Joint initial-orientation search avoids intersecting.
+    Add_joint_avoidance m_add_joint_avoidance{Add_joint_avoidance::joint_pair};
 
     // Remesh parameters. m_remesh_target_vertex_count is shared by isotropic
     // and anisotropic remesh (maps to Geogram's nb_points); m_decimate_bins is
