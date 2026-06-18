@@ -108,15 +108,37 @@ void abort_handler(int)
 
 void install_crash_handler()
 {
-    // Under a debugger (e.g. F5 from Visual Studio) install nothing: leave the
-    // default behaviour so asserts, abort() and access violations break into the
-    // debugger and the live faulting state can be inspected. This handler exists
-    // only for unattended / headless runs, where the alternative is a modal
-    // dialog that hangs the run. (The handlers also re-check IsDebuggerPresent()
-    // to cover a debugger that attaches after startup.)
+    // Under a debugger (e.g. F5 from Visual Studio) we want faults to break into
+    // the debugger at the failure site so the live state can be inspected -- and,
+    // crucially, with NO intervening modal dialog (an MCP-driven debugger session
+    // cannot click "Retry" / "Break"). Access violations and other structured
+    // exceptions already break as first-chance exceptions with no dialog, so no
+    // unhandled-exception filter is needed. abort() and the debug-CRT assert path
+    // do NOT: by default they pop a modal "abort() has been called" / "Debug
+    // Assertion Failed" dialog first, which hangs an unattended debugger session.
+    // Reconfigure just those to break directly instead:
+    //   - _set_abort_behavior() stops abort() from showing the CRT message box or
+    //     handing off to Windows Error Reporting.
+    //   - the SIGABRT handler runs first and __debugbreak()s at the abort site
+    //     (see abort_handler's IsDebuggerPresent branch), so the break lands on
+    //     the faulting worker thread with its stack intact.
+    //   - _CRTDBG_MODE_DEBUG makes _CrtDbgReport (assert / _ASSERTE) break rather
+    //     than open a dialog window.
+    // (Geogram's own geo_assert is routed to a breakpoint separately, via
+    // GEO::set_assert_mode(ASSERT_BREAKPOINT) during editor init.)
     if (IsDebuggerPresent()) {
+        _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+        std::signal(SIGABRT, abort_handler);
+#ifdef _DEBUG
+        for (const int report_type : {_CRT_ASSERT, _CRT_ERROR, _CRT_WARN}) {
+            _CrtSetReportMode(report_type, _CRTDBG_MODE_DEBUG);
+        }
+#endif
         return;
     }
+
+    // Unattended / headless runs below: there is no debugger to catch faults, so
+    // the alternative to these handlers is a modal dialog that hangs the run.
 
     // Suppress the Windows Error Reporting GUI and critical-error dialogs so a
     // crash fails fast instead of blocking on a popup.
