@@ -55,6 +55,7 @@ static constexpr std::size_t custom_attribute_id                 = 0;
 static constexpr std::size_t custom_attribute_aniso_control      = 1; // anisotropy tangent_space
 static constexpr std::size_t custom_attribute_valency_edge_count = 2; // uvec2 vertex valency and polygon edge count
 static constexpr std::size_t custom_attribute_metallic_roughness = 3; // TODO metallic roughess_x roughness_y
+static constexpr std::size_t custom_attribute_wireframe          = 4; // uint: corner index (bits 0..1) + real-edge mask (bits 2..4), expanded solid-wireframe fill
 
 enum class Vertex_step : unsigned int
 {

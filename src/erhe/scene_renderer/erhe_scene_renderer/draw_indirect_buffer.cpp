@@ -83,7 +83,11 @@ auto Draw_indirect_buffer::update(
 
             const uint32_t base_index  = buffer_mesh.base_index();
             const uint32_t first_index = static_cast<uint32_t>(index_range.first_index + base_index);
-            const uint32_t base_vertex = buffer_mesh.base_vertex();
+            // Solid wireframe draws the expanded vertex stream(s); its sequential
+            // indices are relative to that range, so use the expanded base_vertex.
+            const uint32_t base_vertex = (primitive_mode == erhe::primitive::Primitive_mode::solid_wireframe)
+                ? buffer_mesh.expanded_base_vertex()
+                : buffer_mesh.base_vertex();
 
             const erhe::graphics::Draw_indexed_primitives_indirect_command draw_command{
                 index_count,
@@ -149,7 +153,9 @@ auto Draw_indirect_buffer::update(
 
         const uint32_t base_index  = buffer_mesh->base_index();
         const uint32_t first_index = static_cast<uint32_t>(index_range.first_index + base_index);
-        const uint32_t base_vertex = buffer_mesh->base_vertex();
+        const uint32_t base_vertex = (primitive_mode == erhe::primitive::Primitive_mode::solid_wireframe)
+            ? buffer_mesh->expanded_base_vertex()
+            : buffer_mesh->base_vertex();
 
         const erhe::graphics::Draw_indexed_primitives_indirect_command draw_command{
             index_count,

@@ -30,6 +30,9 @@ class Vertex_buffer_writer
 {
 public:
     Vertex_buffer_writer(Build_context& build_context, Vertex_buffer_sink& buffer_sink, std::size_t stream, std::size_t stride);
+    // Variant targeting an explicit Buffer_range (e.g. the expanded
+    // solid-wireframe vertex range) instead of buffer_mesh.vertex_buffer_ranges[stream].
+    Vertex_buffer_writer(Build_context& build_context, Vertex_buffer_sink& buffer_sink, std::size_t stream, std::size_t stride, const Buffer_range& target_range);
     Vertex_buffer_writer(const Vertex_buffer_writer&) = delete;
     Vertex_buffer_writer& operator=(const Vertex_buffer_writer&) = delete;
     Vertex_buffer_writer(Vertex_buffer_writer&&) = delete;
@@ -78,10 +81,11 @@ public:
     Index_buffer_writer(Build_context& build_context, Index_buffer_sink& buffer_sink);
     virtual ~Index_buffer_writer() noexcept;
 
-    void write_corner  (uint32_t v0);
-    void write_triangle(uint32_t v0, uint32_t v1, uint32_t v2);
-    void write_edge    (uint32_t v0, uint32_t v1);
-    void write_centroid(uint32_t v0);
+    void write_corner           (uint32_t v0);
+    void write_triangle         (uint32_t v0, uint32_t v1, uint32_t v2);
+    void write_expanded_triangle(uint32_t v0, uint32_t v1, uint32_t v2);
+    void write_edge             (uint32_t v0, uint32_t v1);
+    void write_centroid         (uint32_t v0);
 
     [[nodiscard]] auto start_offset() -> std::size_t;
 
@@ -94,13 +98,15 @@ public:
     std::span<std::uint8_t>        index_data_span;
     std::span<std::uint8_t>        corner_point_index_data_span;
     std::span<std::uint8_t>        triangle_fill_index_data_span;
+    std::span<std::uint8_t>        expanded_triangle_fill_index_data_span;
     std::span<std::uint8_t>        edge_line_index_data_span;
     std::span<std::uint8_t>        polygon_centroid_index_data_span;
 
-    std::size_t corner_point_indices_written    {0};
-    std::size_t triangle_indices_written        {0};
-    std::size_t edge_line_indices_written       {0};
-    std::size_t polygon_centroid_indices_written{0};
+    std::size_t corner_point_indices_written     {0};
+    std::size_t triangle_indices_written         {0};
+    std::size_t expanded_triangle_indices_written{0};
+    std::size_t edge_line_indices_written        {0};
+    std::size_t polygon_centroid_indices_written {0};
 };
 
 } // namespace erhe::primitive

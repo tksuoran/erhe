@@ -83,6 +83,78 @@ Mesh_memory::Mesh_memory(
             }
         }
     }
+    , vertex_format_not_skinned_wireframe{
+        erhe::dataformat::Vertex_format{
+            {
+                0,
+                {
+                    { Format::format_32_vec3_float, Vertex_attribute_usage::position, 0}
+                }
+            },
+            {
+                1,
+                {
+                    { Format::format_32_vec3_float, Vertex_attribute_usage::normal,    erhe::dataformat::normal_attribute},
+                    { Format::format_32_vec4_float, Vertex_attribute_usage::tangent,   0},
+                    { Format::format_32_vec2_float, Vertex_attribute_usage::tex_coord, 0},
+                    { Format::format_32_vec2_float, Vertex_attribute_usage::tex_coord, 1},
+                    { Format::format_32_vec4_float, Vertex_attribute_usage::color,     0},
+                }
+            },
+            {
+                2,
+                {
+                    { Format::format_32_vec3_float, Vertex_attribute_usage::normal, erhe::dataformat::normal_attribute_smooth},
+                    { Format::format_8_vec2_unorm,  Vertex_attribute_usage::custom, erhe::dataformat::custom_attribute_aniso_control},
+                    { Format::format_16_vec2_uint,  Vertex_attribute_usage::custom, erhe::dataformat::custom_attribute_valency_edge_count},
+                    { Format::format_8_vec4_unorm,  Vertex_attribute_usage::custom, erhe::dataformat::custom_attribute_id}
+                }
+            },
+            {
+                3,
+                {
+                    { Format::format_32_scalar_uint, Vertex_attribute_usage::custom, erhe::dataformat::custom_attribute_wireframe}
+                }
+            }
+        }
+    }
+    , vertex_format_skinned_wireframe{
+        erhe::dataformat::Vertex_format{
+            {
+                0,
+                {
+                    { Format::format_32_vec3_float, Vertex_attribute_usage::position,      0},
+                    { Format::format_8_vec4_uint,   Vertex_attribute_usage::joint_indices, 0},
+                    { Format::format_8_vec4_unorm,  Vertex_attribute_usage::joint_weights, 0}
+                }
+            },
+            {
+                1,
+                {
+                    { Format::format_32_vec3_float, Vertex_attribute_usage::normal,    erhe::dataformat::normal_attribute},
+                    { Format::format_32_vec4_float, Vertex_attribute_usage::tangent,   0},
+                    { Format::format_32_vec2_float, Vertex_attribute_usage::tex_coord, 0},
+                    { Format::format_32_vec2_float, Vertex_attribute_usage::tex_coord, 1},
+                    { Format::format_32_vec4_float, Vertex_attribute_usage::color,     0},
+                }
+            },
+            {
+                2,
+                {
+                    { Format::format_32_vec3_float, Vertex_attribute_usage::normal, erhe::dataformat::normal_attribute_smooth},
+                    { Format::format_8_vec2_unorm,  Vertex_attribute_usage::custom, erhe::dataformat::custom_attribute_aniso_control},
+                    { Format::format_16_vec2_uint,  Vertex_attribute_usage::custom, erhe::dataformat::custom_attribute_valency_edge_count},
+                    { Format::format_8_vec4_unorm,  Vertex_attribute_usage::custom, erhe::dataformat::custom_attribute_id}
+                }
+            },
+            {
+                3,
+                {
+                    { Format::format_32_scalar_uint, Vertex_attribute_usage::custom, erhe::dataformat::custom_attribute_wireframe}
+                }
+            }
+        }
+    }
     , vertex_format_edge_line{
         erhe::dataformat::Vertex_format{
             {
@@ -112,6 +184,8 @@ Mesh_memory::Mesh_memory(
     get_vertex_input_from_vertex_format(vertex_format_empty);
     get_vertex_input_from_vertex_format(vertex_format_skinned);
     get_vertex_input_from_vertex_format(vertex_format_not_skinned);
+    get_vertex_input_from_vertex_format(vertex_format_not_skinned_wireframe);
+    get_vertex_input_from_vertex_format(vertex_format_skinned_wireframe);
     get_vertex_input_from_vertex_format(vertex_format_edge_line);
     get_vertex_input_from_vertex_format(vertex_format_edge_line_joints);
 }
@@ -354,26 +428,30 @@ auto Mesh_memory::get_index_format(const Pool_buffer_identity& buffer_identity) 
 auto Mesh_memory::make_primitive_buffer_info() -> erhe::primitive::Buffer_info
 {
     return erhe::primitive::Buffer_info{
-        .index_type              = erhe::dataformat::Format::format_32_scalar_uint,
-        .vertex_format           = vertex_format_not_skinned,
-        .vertex_buffer_sink      = *this,
-        .index_buffer_sink       = *this,
-        .vertex_input_key        = get_vertex_input_from_vertex_format(vertex_format_not_skinned).key,
-        .edge_line_vertex_stream = &vertex_format_edge_line       .streams.front(),
-        .edge_line_joint_stream  = &vertex_format_edge_line_joints.streams.front()
+        .index_type                = erhe::dataformat::Format::format_32_scalar_uint,
+        .vertex_format             = vertex_format_not_skinned,
+        .vertex_buffer_sink        = *this,
+        .index_buffer_sink         = *this,
+        .vertex_input_key          = get_vertex_input_from_vertex_format(vertex_format_not_skinned).key,
+        .edge_line_vertex_stream   = &vertex_format_edge_line       .streams.front(),
+        .edge_line_joint_stream    = &vertex_format_edge_line_joints.streams.front(),
+        .expanded_vertex_format    = &vertex_format_not_skinned_wireframe,
+        .expanded_vertex_input_key = get_vertex_input_from_vertex_format(vertex_format_not_skinned_wireframe).key
     };
 }
 
 auto Mesh_memory::make_skinned_primitive_buffer_info() -> erhe::primitive::Buffer_info
 {
     return erhe::primitive::Buffer_info{
-        .index_type              = erhe::dataformat::Format::format_32_scalar_uint,
-        .vertex_format           = vertex_format_skinned,
-        .vertex_buffer_sink      = *this,
-        .index_buffer_sink       = *this,
-        .vertex_input_key        = get_vertex_input_from_vertex_format(vertex_format_skinned).key,
-        .edge_line_vertex_stream = &vertex_format_edge_line       .streams.front(),
-        .edge_line_joint_stream  = &vertex_format_edge_line_joints.streams.front()
+        .index_type                = erhe::dataformat::Format::format_32_scalar_uint,
+        .vertex_format             = vertex_format_skinned,
+        .vertex_buffer_sink        = *this,
+        .index_buffer_sink         = *this,
+        .vertex_input_key          = get_vertex_input_from_vertex_format(vertex_format_skinned).key,
+        .edge_line_vertex_stream   = &vertex_format_edge_line       .streams.front(),
+        .edge_line_joint_stream    = &vertex_format_edge_line_joints.streams.front(),
+        .expanded_vertex_format    = &vertex_format_skinned_wireframe,
+        .expanded_vertex_input_key = get_vertex_input_from_vertex_format(vertex_format_skinned_wireframe).key
     };
 }
 
@@ -385,24 +463,54 @@ void Mesh_memory::flush(erhe::graphics::Command_buffer& command_buffer)
 
 ///////////////////////////////////////////////////////////////////////////////
 
+// Solid wireframe is drawn from the Buffer_mesh's expanded vertex stream(s),
+// which use a distinct vertex input key (the format carries the extra wireframe
+// attribute). All other modes use the normal vertex stream(s). The index buffer
+// is shared between the two (the expanded indices live in the same index buffer).
+namespace {
+
+[[nodiscard]] auto bucket_vertex_input_key(
+    const erhe::primitive::Buffer_mesh&   buffer_mesh,
+    const erhe::primitive::Primitive_mode primitive_mode
+) -> std::size_t
+{
+    return (primitive_mode == erhe::primitive::Primitive_mode::solid_wireframe)
+        ? buffer_mesh.expanded_vertex_input_key
+        : buffer_mesh.vertex_input_key;
+}
+
+[[nodiscard]] auto bucket_vertex_ranges(
+    const erhe::primitive::Buffer_mesh&   buffer_mesh,
+    const erhe::primitive::Primitive_mode primitive_mode
+) -> const std::vector<erhe::primitive::Buffer_range>&
+{
+    return (primitive_mode == erhe::primitive::Primitive_mode::solid_wireframe)
+        ? buffer_mesh.expanded_vertex_buffer_ranges
+        : buffer_mesh.vertex_buffer_ranges;
+}
+
+} // anonymous namespace
+
 Render_bucket::Render_bucket() = default;
 
 Render_bucket::Render_bucket(
-    erhe::scene::Mesh&                  mesh,
-    const std::size_t                   mesh_primitive_index,
-    const erhe::primitive::Buffer_mesh& buffer_mesh,
-    const Shader_key&                   shader_key,
-    const uint64_t                      shader_key_hash,
-    const bool                          negative_determinant
+    erhe::scene::Mesh&                    mesh,
+    const std::size_t                     mesh_primitive_index,
+    const erhe::primitive::Buffer_mesh&   buffer_mesh,
+    const Shader_key&                     shader_key,
+    const uint64_t                        shader_key_hash,
+    const bool                            negative_determinant,
+    const erhe::primitive::Primitive_mode primitive_mode
 )
     : shader_key          {shader_key}
     , shader_key_hash     {shader_key_hash}
     , negative_determinant{negative_determinant}
+    , primitive_mode      {primitive_mode}
 {
-    buffer_set.vertex_input_key = buffer_mesh.vertex_input_key;
+    buffer_set.vertex_input_key = bucket_vertex_input_key(buffer_mesh, primitive_mode);
     buffer_set.index_buffer     = Pool_buffer_identity{buffer_mesh.index_buffer_range.pool_id, buffer_mesh.index_buffer_range.buffer_id};
 
-    for (const erhe::primitive::Buffer_range& vr : buffer_mesh.vertex_buffer_ranges) {
+    for (const erhe::primitive::Buffer_range& vr : bucket_vertex_ranges(buffer_mesh, primitive_mode)) {
         buffer_set.vertex_buffers.emplace_back(vr.pool_id, vr.buffer_id);
     }
 
@@ -423,20 +531,21 @@ auto Render_bucket::accept(
     if (primitive_negative_determinant != negative_determinant) {
         return false;
     }
-    if (buffer_mesh.vertex_input_key != buffer_set.vertex_input_key) {
+    const std::vector<erhe::primitive::Buffer_range>& vertex_ranges = bucket_vertex_ranges(buffer_mesh, primitive_mode);
+    if (bucket_vertex_input_key(buffer_mesh, primitive_mode) != buffer_set.vertex_input_key) {
         return false;
     }
-    if (Pool_buffer_identity{buffer_mesh.index_buffer_range.pool_id, buffer_mesh.index_buffer_range.buffer_id} != buffer_set.index_buffer) {  
+    if (Pool_buffer_identity{buffer_mesh.index_buffer_range.pool_id, buffer_mesh.index_buffer_range.buffer_id} != buffer_set.index_buffer) {
         return false;
-    } 
-    if (buffer_mesh.vertex_buffer_ranges.size() != buffer_set.vertex_buffers.size()) {
+    }
+    if (vertex_ranges.size() != buffer_set.vertex_buffers.size()) {
         return false;
     }
     if (primitive_shader_key_hash != shader_key_hash) {
         return false;
     }
     for (size_t i = 0; i < buffer_set.vertex_buffers.size(); ++i) {
-        if (Pool_buffer_identity{buffer_mesh.vertex_buffer_ranges[i].pool_id, buffer_mesh.vertex_buffer_ranges[i].buffer_id} != buffer_set.vertex_buffers[i]) {
+        if (Pool_buffer_identity{vertex_ranges[i].pool_id, vertex_ranges[i].buffer_id} != buffer_set.vertex_buffers[i]) {
             return false;
         }
     }
@@ -561,7 +670,7 @@ void bucket_primitives(
                 continue;
             }
 
-            buckets.emplace_back(*mesh.get(), i, *buffer_mesh, shader_key, shader_key_hash, mesh_negative_determinant);
+            buckets.emplace_back(*mesh.get(), i, *buffer_mesh, shader_key, shader_key_hash, mesh_negative_determinant, primitive_mode);
         }
     }
 }

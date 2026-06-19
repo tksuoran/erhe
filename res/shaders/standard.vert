@@ -86,6 +86,17 @@ layout(location = 11) flat out uvec2 v_valency_edge_count;
 #  endif
 #endif
 
+// Solid-wireframe varyings: a per-vertex barycentric basis (reconstructed from
+// the packed corner index in a_custom_4) plus the per-triangle real-edge mask
+// and the wireframe color / width. Only emitted for the expanded fill mesh
+// (which carries a_custom_4) under the solid-wireframe variant.
+#if defined(ERHE_SOLID_WIREFRAME) && defined(ERHE_ATTRIBUTE_a_custom_4) && !defined(ERHE_VARIANT_POSITION_PASS)
+layout(location = 13)      out vec3  v_bary;
+layout(location = 14) flat out uint  v_edge_mask;
+layout(location = 15) flat out vec4  v_wire_color;
+layout(location = 16) flat out float v_wire_width;
+#endif
+
 void main()
 {
     mat4 world_from_node;
@@ -221,6 +232,20 @@ void main()
 #       if defined(ERHE_ATTRIBUTE_a_custom_2)
     v_valency_edge_count  = a_valency_edge_count;
 #       endif
+#   endif
+
+#   if defined(ERHE_SOLID_WIREFRAME) && defined(ERHE_ATTRIBUTE_a_custom_4)
+    // a_custom_4: bits 0..1 = triangle corner index (barycentric basis),
+    // bits 2..4 = real-edge mask (bit b gates barycentric component b).
+    uint wireframe_corner = a_custom_4 & 3u;
+    v_bary       = vec3(
+        (wireframe_corner == 0u) ? 1.0 : 0.0,
+        (wireframe_corner == 1u) ? 1.0 : 0.0,
+        (wireframe_corner == 2u) ? 1.0 : 0.0
+    );
+    v_edge_mask  = (a_custom_4 >> 2u) & 7u;
+    v_wire_color = primitive.primitives[ERHE_DRAW_ID].color;
+    v_wire_width = primitive.primitives[ERHE_DRAW_ID].size;
 #   endif
 #endif
 

@@ -119,6 +119,16 @@ public:
     erhe::dataformat::Vertex_format vertex_format_skinned;
     erhe::dataformat::Vertex_format vertex_format_not_skinned;
 
+    // Expanded solid-wireframe fill formats: identical streams to
+    // vertex_format_not_skinned / vertex_format_skinned, plus a dedicated
+    // stream (binding 3) carrying the packed wireframe attribute
+    // (custom_attribute_wireframe: corner index + real-edge mask). Used to
+    // allocate Buffer_mesh::expanded_vertex_buffer_ranges; the extra stream
+    // keeps streams 0..2 byte-identical to the base format so the shared
+    // build's per-attribute offsets stay valid for the expanded build.
+    erhe::dataformat::Vertex_format vertex_format_not_skinned_wireframe;
+    erhe::dataformat::Vertex_format vertex_format_skinned_wireframe;
+
     // Single-stream vertex format used to allocate
     // Buffer_mesh::edge_line_vertex_buffer_range. The stream layout
     // matches the compute shader's input SSBO struct
@@ -198,7 +208,8 @@ public:
         const erhe::primitive::Buffer_mesh& buffer_mesh,
         const Shader_key&                   shader_key,
         const uint64_t                      shader_key_hash,
-        const bool                          negative_determinant
+        const bool                          negative_determinant,
+        const erhe::primitive::Primitive_mode primitive_mode
     );
 
     [[nodiscard]] auto accept(
@@ -214,6 +225,10 @@ public:
     Shader_key                        shader_key{};
     uint64_t                          shader_key_hash;
     bool                              negative_determinant{false};
+    // The primitive mode this bucket draws. solid_wireframe selects the
+    // expanded vertex input key + expanded vertex buffer ranges of each
+    // Buffer_mesh (the index buffer is shared with the normal ranges).
+    erhe::primitive::Primitive_mode   primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
 };
 
 enum class Blending_mode_policy : uint32_t

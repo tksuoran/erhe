@@ -31,6 +31,17 @@ public:
     // attributes (skinned mesh). Leave nullptr to disable skinned edge
     // lines entirely.
     const erhe::dataformat::Vertex_stream* edge_line_joint_stream{nullptr};
+
+    // Optional vertex format for the expanded solid-wireframe fill mesh
+    // (same attributes as vertex_format plus custom_attribute_wireframe).
+    // Primitive_builder allocates Buffer_mesh::expanded_vertex_buffer_ranges
+    // from this format only when Primitive_types::fill_triangles_expanded is
+    // set AND this is non-null. expanded_vertex_input_key is stored on the
+    // Buffer_mesh so the renderer can bind the matching vertex input state
+    // for the solid-wireframe draw. Leave nullptr to disable the expanded
+    // build entirely (e.g. CPU-buffer test sinks).
+    const erhe::dataformat::Vertex_format* expanded_vertex_format{nullptr};
+    std::size_t                            expanded_vertex_input_key{0};
 };
 
 } // namesapce erhe::primitive

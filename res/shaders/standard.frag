@@ -106,6 +106,15 @@ const uvec2 v_valency_edge_count = uvec2(0u);
 #  endif
 #endif
 
+// Solid-wireframe varyings (expanded fill mesh): per-vertex barycentric basis,
+// per-triangle real-edge mask, and wireframe color / width. See standard.vert.
+#if defined(ERHE_SOLID_WIREFRAME) && defined(ERHE_ATTRIBUTE_a_custom_4) && !defined(ERHE_VARIANT_POSITION_PASS)
+layout(location = 13)      in vec3  v_bary;
+layout(location = 14) flat in uint  v_edge_mask;
+layout(location = 15) flat in vec4  v_wire_color;
+layout(location = 16) flat in float v_wire_width;
+#endif
+
 // "Lit-path locals are required" gate: true when the BxDF runs lighting
 // OR when a debug visualization needs N / V / T / B / sampled
 // material properties. The debug overrides read those even in the
@@ -690,6 +699,24 @@ void main()
         out_color.rgb = vec3(0.3 * max(dot(V, N), 0.0));
 #  endif
         out_color.a = 1.0;
+    }
+#endif
+
+#if defined(ERHE_SOLID_WIREFRAME) && defined(ERHE_ATTRIBUTE_a_custom_4)
+    {
+        // Solid wireframe overlaid on the (lit or debug) fill color. Because
+        // this fragment IS the fill fragment, the wireframe shares the fill's
+        // exact depth and cannot z-fight. Screen-space anti-aliased distance to
+        // each triangle edge comes from the barycentric coords; fan diagonals
+        // (cleared mask bits) are pushed to distance 1 so no line is drawn.
+        vec3  bary_d     = fwidth(v_bary);
+        vec3  edge_a     = smoothstep(vec3(0.0), bary_d * max(v_wire_width, 1e-3), v_bary);
+        if ((v_edge_mask & 0x1u) == 0u) { edge_a.x = 1.0; }
+        if ((v_edge_mask & 0x2u) == 0u) { edge_a.y = 1.0; }
+        if ((v_edge_mask & 0x4u) == 0u) { edge_a.z = 1.0; }
+        float wire       = 1.0 - min(min(edge_a.x, edge_a.y), edge_a.z);
+        float wire_alpha = wire * v_wire_color.a;
+        out_color.rgb    = mix(out_color.rgb, srgb_to_linear(v_wire_color.rgb), wire_alpha);
     }
 #endif
 #endif

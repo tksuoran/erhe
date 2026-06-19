@@ -13,6 +13,11 @@ auto Buffer_mesh::base_vertex(std::size_t stream) const -> uint32_t
     return static_cast<uint32_t>(vertex_buffer_ranges[stream].byte_offset / vertex_buffer_ranges[stream].element_size);
 }
 
+auto Buffer_mesh::expanded_base_vertex(std::size_t stream) const -> uint32_t
+{
+    return static_cast<uint32_t>(expanded_vertex_buffer_ranges[stream].byte_offset / expanded_vertex_buffer_ranges[stream].element_size);
+}
+
 // Value that should be added in index range first index
 auto Buffer_mesh::base_index() const -> uint32_t
 {
@@ -28,6 +33,7 @@ auto Buffer_mesh::index_range(const Primitive_mode primitive_mode) const -> Inde
         case Primitive_mode::edge_lines       : return edge_line_indices;
         case Primitive_mode::corner_points    : return corner_point_indices;
         case Primitive_mode::polygon_centroids: return polygon_centroid_indices;
+        case Primitive_mode::solid_wireframe  : return expanded_triangle_fill_indices;
         case Primitive_mode::count            : return {};
         default:                                return {};
     }
@@ -42,6 +48,7 @@ auto primitive_type(const Primitive_mode primitive_mode) -> Primitive_type
         case Primitive_mode::edge_lines       : return Primitive_type::lines;
         case Primitive_mode::corner_points    : return Primitive_type::points;
         case Primitive_mode::polygon_centroids: return Primitive_type::points;
+        case Primitive_mode::solid_wireframe  : return Primitive_type::triangles;
         case Primitive_mode::count            : return Primitive_type::none;
         default:                                return Primitive_type::none;
     }

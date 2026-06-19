@@ -23,6 +23,7 @@ auto c_str(const Primitive_mode primitive_mode) -> const char*
         case Primitive_mode::corner_points:     return "corner_points";
         case Primitive_mode::corner_normals:    return "corner_normals";
         case Primitive_mode::polygon_centroids: return "polygon_centroids";
+        case Primitive_mode::solid_wireframe:   return "solid_wireframe";
         case Primitive_mode::count:             return "count";
         default: {
             ERHE_FATAL("Bad mesh mode");

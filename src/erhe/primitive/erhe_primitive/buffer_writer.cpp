@@ -514,6 +514,24 @@ Vertex_buffer_writer::Vertex_buffer_writer(
     ERHE_VERIFY(buffer_range.element_size == stride);
 }
 
+Vertex_buffer_writer::Vertex_buffer_writer(
+    Build_context&      build_context,
+    Vertex_buffer_sink& buffer_sink,
+    const std::size_t   stream,
+    const std::size_t   stride,
+    const Buffer_range& target_range
+)
+    : build_context{build_context}
+    , buffer_sink  {buffer_sink}
+    , stream       {stream}
+    , stride       {stride}
+    , buffer_range {target_range}
+{
+    vertex_data.resize(buffer_range.count * buffer_range.element_size);
+    vertex_data_span = vertex_data;
+    ERHE_VERIFY(buffer_range.element_size == stride);
+}
+
 Vertex_buffer_writer::~Vertex_buffer_writer() noexcept
 {
     buffer_sink.vertex_writer_ready(*this);
@@ -521,7 +539,7 @@ Vertex_buffer_writer::~Vertex_buffer_writer() noexcept
 
 auto Vertex_buffer_writer::start_offset() -> std::size_t
 {
-    return build_context.root.buffer_mesh.vertex_buffer_ranges[stream].byte_offset;
+    return buffer_range.byte_offset;
 }
 
 Index_buffer_writer::Index_buffer_writer(Build_context& build_context, Index_buffer_sink& buffer_sink)
@@ -549,6 +567,12 @@ Index_buffer_writer::Index_buffer_writer(Build_context& build_context, Index_buf
         triangle_fill_index_data_span = index_data_span.subspan(
             buffer_mesh.triangle_fill_indices.first_index * index_type_size,
             mesh_info.index_count_fill_triangles * index_type_size
+        );
+    }
+    if (primitive_types.fill_triangles_expanded && (buffer_mesh.expanded_triangle_fill_indices.index_count > 0)) {
+        expanded_triangle_fill_index_data_span = index_data_span.subspan(
+            buffer_mesh.expanded_triangle_fill_indices.first_index * index_type_size,
+            buffer_mesh.expanded_triangle_fill_indices.index_count * index_type_size
         );
     }
     if (primitive_types.edge_lines) {
@@ -740,6 +764,14 @@ void Index_buffer_writer::write_triangle(const uint32_t v0, const uint32_t v1, c
     write_low(triangle_fill_index_data_span.subspan((triangle_indices_written + 1) * index_type_size, index_type_size), index_type, v1);
     write_low(triangle_fill_index_data_span.subspan((triangle_indices_written + 2) * index_type_size, index_type_size), index_type, v2);
     triangle_indices_written += 3;
+}
+
+void Index_buffer_writer::write_expanded_triangle(const uint32_t v0, const uint32_t v1, const uint32_t v2)
+{
+    write_low(expanded_triangle_fill_index_data_span.subspan((expanded_triangle_indices_written + 0) * index_type_size, index_type_size), index_type, v0);
+    write_low(expanded_triangle_fill_index_data_span.subspan((expanded_triangle_indices_written + 1) * index_type_size, index_type_size), index_type, v1);
+    write_low(expanded_triangle_fill_index_data_span.subspan((expanded_triangle_indices_written + 2) * index_type_size, index_type_size), index_type, v2);
+    expanded_triangle_indices_written += 3;
 }
 
 void Index_buffer_writer::write_edge(const uint32_t v0, const uint32_t v1)

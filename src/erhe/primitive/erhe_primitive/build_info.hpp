@@ -12,10 +12,16 @@ namespace erhe::primitive {
 class Primitive_types
 {
 public:
-    bool fill_triangles {false};
-    bool edge_lines     {false};
-    bool corner_points  {false};
-    bool centroid_points{false};
+    bool fill_triangles         {false};
+    // Expanded (un-shared, 3 sequential vertices per triangle) copy of the fill
+    // triangles, carrying a per-vertex packed wireframe attribute (corner index +
+    // real-edge mask). Drawn by the solid-wireframe shader variant so the
+    // wireframe shares the fill's exact depth (no z-fight). Independent of
+    // fill_triangles: a build may produce either, or both.
+    bool fill_triangles_expanded{false};
+    bool edge_lines             {false};
+    bool corner_points          {false};
+    bool centroid_points        {false};
 };
 
 class Build_info

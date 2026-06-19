@@ -50,6 +50,7 @@ public:
     void allocate_vertex_buffers        ();
     void allocate_edge_line_vertex_buffer();
     void allocate_edge_line_joint_buffer ();
+    void allocate_expanded_fill_buffers  ();
     void allocate_index_buffer          ();
     void allocate_index_range           (Primitive_type primitive_type, std::size_t index_count, Index_range& out_range);
 
@@ -80,9 +81,10 @@ public:
 
     auto is_ready() const -> bool;
 
-    void build_polygon_fill   ();
-    void build_edge_lines     ();
-    void build_centroid_points();
+    void build_polygon_fill         ();
+    void build_expanded_polygon_fill();
+    void build_edge_lines           ();
+    void build_centroid_points      ();
 
     Build_context_root root;
 

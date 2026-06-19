@@ -18,7 +18,8 @@ enum class Primitive_mode : unsigned int {
     corner_points     = 3,
     corner_normals    = 4,
     polygon_centroids = 5,
-    count             = 6
+    solid_wireframe   = 6, // expanded fill triangles, drawn with the solid-wireframe shader variant
+    count             = 7
 };
 
 enum class Primitive_type : unsigned int {
@@ -64,7 +65,8 @@ static constexpr const char* c_mode_strings[] = {
     "Edge Lines",
     "Corner Points",
     "Corner Normals",
-    "Polygon Centroids"
+    "Polygon Centroids",
+    "Solid Wireframe"
 };
 
 static constexpr const char* c_normal_style_strings[] = {

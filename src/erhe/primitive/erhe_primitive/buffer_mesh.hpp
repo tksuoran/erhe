@@ -23,6 +23,8 @@ public:
     Buffer_mesh& operator=(const Buffer_mesh&) = delete;
 
     [[nodiscard]] auto base_vertex(std::size_t stream = 0) const -> uint32_t;
+    // base_vertex for the expanded solid-wireframe vertex stream(s).
+    [[nodiscard]] auto expanded_base_vertex(std::size_t stream = 0) const -> uint32_t;
     [[nodiscard]] auto base_index () const -> uint32_t;
     [[nodiscard]] auto index_range(Primitive_mode primitive_mode) const -> Index_range;
 
@@ -33,9 +35,21 @@ public:
     Index_range               edge_line_indices       {};
     Index_range               corner_point_indices    {};
     Index_range               polygon_centroid_indices{};
+    // Sequential index range (values 0..3N-1) into expanded_vertex_buffer_ranges
+    // for the solid-wireframe fill draw. Empty when the expanded fill was not built.
+    Index_range               expanded_triangle_fill_indices{};
 
     std::vector<Buffer_range> vertex_buffer_ranges{};
     Buffer_range              index_buffer_range  {};
+
+    // Expanded solid-wireframe fill vertex stream(s): un-shared, 3 sequential
+    // vertices per fill triangle, in the expanded vertex format (fill attributes
+    // plus custom_attribute_wireframe). Empty when the expanded fill was not
+    // built. expanded_vertex_input_key indexes Mesh_memory's vertex-input table
+    // for these streams (distinct from vertex_input_key because the format has
+    // the extra wireframe attribute).
+    std::vector<Buffer_range> expanded_vertex_buffer_ranges{};
+    std::size_t               expanded_vertex_input_key{0};
 
     // Edge line vertex pairs (consecutive pairs of vec4 positions in object-local space)
     Buffer_range              edge_line_vertex_buffer_range{};
@@ -54,6 +68,7 @@ public:
     erhe::buffer::Buffer_allocation              index_allocation  {};
     erhe::buffer::Buffer_allocation              edge_line_vertex_allocation{};
     erhe::buffer::Buffer_allocation              edge_line_joint_allocation {};
+    std::vector<erhe::buffer::Buffer_allocation> expanded_vertex_allocations{};
 };
 
 } // namespace erhe::primitive

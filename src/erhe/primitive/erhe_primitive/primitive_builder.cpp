@@ -16,6 +16,7 @@
 
 #include <cstdint>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 using erhe::geometry::get_mesh_info;
@@ -46,6 +47,7 @@ Build_context_root::Build_context_root(
     allocate_vertex_buffers        ();
     allocate_edge_line_vertex_buffer();
     allocate_edge_line_joint_buffer ();
+    allocate_expanded_fill_buffers  ();
     allocate_index_buffer          ();
 }
 
@@ -66,6 +68,14 @@ void Build_context_root::get_mesh_info()
         allocate_index_range(Primitive_type::triangles, mesh_info.index_count_fill_triangles, buffer_mesh.triangle_fill_indices);
         const std::size_t primitive_count = mesh_info.index_count_fill_triangles;
         element_mappings.triangle_to_mesh_facet.resize(primitive_count);
+    }
+
+    // Expanded solid-wireframe fill: one sequential index per expanded vertex
+    // (3 per fill triangle), values 0..3N-1 into the dedicated expanded vertex
+    // buffer. Only when the caller supplied an expanded vertex format.
+    if (primitive_types.fill_triangles_expanded && (build_info.buffer_info.expanded_vertex_format != nullptr)) {
+        total_index_count += mesh_info.index_count_fill_triangles;
+        allocate_index_range(Primitive_type::triangles, mesh_info.index_count_fill_triangles, buffer_mesh.expanded_triangle_fill_indices);
     }
 
     if (primitive_types.edge_lines) {
@@ -206,6 +216,38 @@ void Build_context_root::allocate_edge_line_joint_buffer()
     buffer_mesh.edge_line_joint_allocation   = std::move(sink_allocation.allocation);
 }
 
+void Build_context_root::allocate_expanded_fill_buffers()
+{
+    // Allocate the dedicated expanded solid-wireframe fill vertex stream(s).
+    // The expanded mesh has one un-shared vertex per fill-triangle corner
+    // (3 * triangle_count) in the expanded vertex format (fill attributes plus
+    // custom_attribute_wireframe). Only when fill_triangles_expanded was
+    // requested and the caller supplied an expanded vertex format.
+    if (build_failed) {
+        return;
+    }
+    if (!build_info.primitive_types.fill_triangles_expanded) {
+        return;
+    }
+    if (build_info.buffer_info.expanded_vertex_format == nullptr) {
+        return;
+    }
+    const std::size_t expanded_vertex_count = mesh_info.index_count_fill_triangles; // 3 per triangle
+    if (expanded_vertex_count == 0) {
+        return;
+    }
+    for (const erhe::dataformat::Vertex_stream& stream : build_info.buffer_info.expanded_vertex_format->streams) {
+        Buffer_sink_allocation sink_allocation = build_info.buffer_info.vertex_buffer_sink.allocate_vertex_buffer_range(stream, expanded_vertex_count);
+        if (sink_allocation.range.count == 0) {
+            build_failed = true;
+            return;
+        }
+        buffer_mesh.expanded_vertex_buffer_ranges.emplace_back(sink_allocation.range);
+        buffer_mesh.expanded_vertex_allocations.emplace_back(std::move(sink_allocation.allocation));
+    }
+    buffer_mesh.expanded_vertex_input_key = build_info.buffer_info.expanded_vertex_input_key;
+}
+
 void Build_context_root::allocate_index_buffer()
 {
     ERHE_VERIFY(total_index_count > 0);
@@ -305,6 +347,11 @@ auto Primitive_builder::build() -> bool
             )
         );
         build_context.build_polygon_fill();
+    }
+
+    if (primitive_types.fill_triangles_expanded) {
+        erhe::log::set_breadcrumb("primitive: build_expanded_polygon_fill");
+        build_context.build_expanded_polygon_fill();
     }
 
     if (primitive_types.edge_lines) {
@@ -800,6 +847,178 @@ void Build_context::build_polygon_fill()
     if (used_fallback_texcoord) {
         log_primitive_builder->warn("Warning: Used fallback texcoord");
     }
+}
+
+void Build_context::build_expanded_polygon_fill()
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if (!is_ready()) {
+        return;
+    }
+    if (!root.build_info.primitive_types.fill_triangles_expanded) {
+        return;
+    }
+    // Nothing allocated (no expanded vertex format supplied) -> skip.
+    if (root.buffer_mesh.expanded_vertex_buffer_ranges.empty()) {
+        return;
+    }
+    const erhe::dataformat::Vertex_format* expanded_format = root.build_info.buffer_info.expanded_vertex_format;
+    if (expanded_format == nullptr) {
+        return;
+    }
+
+    using namespace erhe::dataformat;
+
+    // The packed wireframe attribute lives only in the expanded format.
+    const Vertex_attribute_info wireframe_info{*expanded_format, Vertex_attribute_usage::custom, custom_attribute_wireframe};
+
+    // Writers over the expanded vertex ranges (one per expanded-format stream).
+    std::vector<std::unique_ptr<Vertex_buffer_writer>> expanded_writers;
+    for (std::size_t stream_index = 0, stream_end = expanded_format->streams.size(); stream_index < stream_end; ++stream_index) {
+        const Vertex_stream& stream = expanded_format->streams[stream_index];
+        expanded_writers.push_back(
+            std::make_unique<Vertex_buffer_writer>(
+                *this,
+                root.build_info.buffer_info.vertex_buffer_sink,
+                stream_index,
+                stream.stride,
+                root.buffer_mesh.expanded_vertex_buffer_ranges[stream_index]
+            )
+        );
+    }
+
+    const auto expanded_writer_for = [&](Vertex_attribute_usage usage, std::size_t index) -> Vertex_buffer_writer* {
+        const Attribute_stream as = expanded_format->find_attribute(usage, index);
+        if (as.attribute == nullptr) {
+            return nullptr;
+        }
+        const std::size_t stream_index = static_cast<std::size_t>(as.stream - expanded_format->streams.data());
+        return expanded_writers.at(stream_index).get();
+    };
+
+    Vertex_buffer_writer* wireframe_writer = expanded_writer_for(Vertex_attribute_usage::custom, custom_attribute_wireframe);
+
+    // Redirect the build_vertex_* helpers' writers to the expanded streams for
+    // the duration of this pass; the per-attribute offsets in
+    // root.vertex_attributes are valid because the expanded format mirrors the
+    // shared fill streams (the wireframe attribute is in a separate stream).
+    const Vertex_writers saved_attribute_writers = attribute_writers;
+    attribute_writers.position           = expanded_writer_for(Vertex_attribute_usage::position,      0);
+    attribute_writers.normal             = expanded_writer_for(Vertex_attribute_usage::normal,        normal_attribute);
+    attribute_writers.normal_smooth      = expanded_writer_for(Vertex_attribute_usage::normal,        normal_attribute_smooth);
+    attribute_writers.tangent            = expanded_writer_for(Vertex_attribute_usage::tangent,       0);
+    attribute_writers.bitangent          = expanded_writer_for(Vertex_attribute_usage::bitangent,     0);
+    attribute_writers.color_0            = expanded_writer_for(Vertex_attribute_usage::color,         0);
+    attribute_writers.texcoord_0         = expanded_writer_for(Vertex_attribute_usage::tex_coord,     0);
+    attribute_writers.joint_indices_0    = expanded_writer_for(Vertex_attribute_usage::joint_indices, 0);
+    attribute_writers.joint_weights_0    = expanded_writer_for(Vertex_attribute_usage::joint_weights, 0);
+    attribute_writers.id                 = expanded_writer_for(Vertex_attribute_usage::custom,        custom_attribute_id);
+    attribute_writers.aniso_control      = expanded_writer_for(Vertex_attribute_usage::custom,        custom_attribute_aniso_control);
+    attribute_writers.valency_edge_count = expanded_writer_for(Vertex_attribute_usage::custom,        custom_attribute_valency_edge_count);
+
+    const bool do_polygon_id           = (attribute_writers.id              != nullptr) && root.vertex_attributes.id_vec4.is_valid();
+    const bool do_vertex_position      = (attribute_writers.position        != nullptr);
+    const bool do_vertex_normal        = (attribute_writers.normal          != nullptr) && root.vertex_attributes.normal.is_valid();
+    const bool do_vertex_normal_smooth = (attribute_writers.normal_smooth   != nullptr) && root.vertex_attributes.normal_smooth.is_valid();
+    const bool do_vertex_normal_either = do_vertex_normal || do_vertex_normal_smooth;
+    const bool do_vertex_tangent       = (attribute_writers.tangent         != nullptr) && root.vertex_attributes.tangent.is_valid();
+    const bool do_vertex_bitangent     = (attribute_writers.bitangent       != nullptr) && root.vertex_attributes.bitangent.is_valid();
+    const bool do_vertex_texcoord_0    = (attribute_writers.texcoord_0      != nullptr) && root.vertex_attributes.texcoord[0].is_valid();
+    const bool do_vertex_texcoord_1    = (attribute_writers.texcoord_0      != nullptr) && root.vertex_attributes.texcoord[1].is_valid();
+    const bool do_vertex_color_0       = (attribute_writers.color_0         != nullptr) && root.vertex_attributes.color[0].is_valid();
+    const bool do_vertex_color_1       = (attribute_writers.color_0         != nullptr) && root.vertex_attributes.color[1].is_valid();
+    const bool do_aniso_control        = (attribute_writers.aniso_control   != nullptr) && root.vertex_attributes.aniso_control.is_valid();
+    const bool do_joint_indices_0      = (attribute_writers.joint_indices_0 != nullptr) && root.vertex_attributes.joint_indices[0].is_valid();
+    const bool do_joint_weights_0      = (attribute_writers.joint_weights_0 != nullptr) && root.vertex_attributes.joint_weights[0].is_valid();
+    const bool do_tangent_frame        = do_vertex_normal_either || do_vertex_tangent || do_vertex_bitangent;
+
+    // Per-facet boundary-edge set: an expanded-triangle edge is a real polygon
+    // edge (drawn) only if it is a consecutive-corner pair of its facet; fan
+    // diagonals are not, and are masked off in the shader.
+    std::unordered_set<uint64_t> facet_boundary_edges;
+    const auto edge_key = [](GEO::index_t a, GEO::index_t b) -> uint64_t {
+        const GEO::index_t lo = (a < b) ? a : b;
+        const GEO::index_t hi = (a < b) ? b : a;
+        return (static_cast<uint64_t>(lo) << 32) | static_cast<uint64_t>(hi);
+    };
+
+    uint32_t expanded_vertex_index = 0;
+    for (GEO::index_t facet : root.mesh.facets) {
+        mesh_facet = facet;
+        const GEO::index_t facet_corner_count = root.mesh.facets.nb_corners(facet);
+        if (facet_corner_count < 3) {
+            continue;
+        }
+
+        facet_boundary_edges.clear();
+        for (GEO::index_t local = 0; local < facet_corner_count; ++local) {
+            const GEO::index_t corner      = root.mesh.facets.corner(facet, local);
+            const GEO::index_t next_corner = root.mesh.facets.corner(facet, (local + 1) % facet_corner_count);
+            facet_boundary_edges.insert(
+                edge_key(root.mesh.facet_corners.vertex(corner), root.mesh.facet_corners.vertex(next_corner))
+            );
+        }
+        const auto is_boundary = [&](GEO::index_t a, GEO::index_t b) -> bool {
+            return facet_boundary_edges.find(edge_key(a, b)) != facet_boundary_edges.end();
+        };
+
+        const GEO::index_t corner0 = root.mesh.facets.corner(facet, 0);
+        const GEO::index_t vertex0 = root.mesh.facet_corners.vertex(corner0);
+        // Fan triangulation matching build_triangle_fill_index:
+        // triangles (corner0, corner_{k-1}, corner_k) for k = 2 .. n-1.
+        for (GEO::index_t k = 2; k < facet_corner_count; ++k) {
+            const GEO::index_t corner1 = root.mesh.facets.corner(facet, k - 1);
+            const GEO::index_t corner2 = root.mesh.facets.corner(facet, k);
+            const GEO::index_t vertex1 = root.mesh.facet_corners.vertex(corner1);
+            const GEO::index_t vertex2 = root.mesh.facet_corners.vertex(corner2);
+
+            // Bit b gates barycentric component b (b ~ 0 on the edge OPPOSITE
+            // triangle vertex b): bit0 edge (v1,v2), bit1 edge (v2,v0), bit2 edge (v0,v1).
+            const uint32_t edge_mask =
+                (is_boundary(vertex1, vertex2) ? 0x1u : 0u) |
+                (is_boundary(vertex2, vertex0) ? 0x2u : 0u) |
+                (is_boundary(vertex0, vertex1) ? 0x4u : 0u);
+
+            const GEO::index_t tri_corners [3] = { corner0, corner1, corner2 };
+            const GEO::index_t tri_vertices[3] = { vertex0, vertex1, vertex2 };
+
+            const uint32_t base = expanded_vertex_index;
+            index_writer.write_expanded_triangle(base + 0u, base + 1u, base + 2u);
+
+            for (uint32_t j = 0; j < 3u; ++j) {
+                mesh_corner = tri_corners[j];
+                mesh_vertex = tri_vertices[j];
+
+                if (do_polygon_id)           build_polygon_id          ();
+                if (do_tangent_frame)        build_tangent_frame       ();
+                if (do_vertex_position)      build_vertex_position     ();
+                if (do_vertex_normal_either) build_vertex_normal       (do_vertex_normal, do_vertex_normal_smooth);
+                if (do_vertex_tangent)       build_vertex_tangent      ();
+                if (do_vertex_bitangent)     build_vertex_bitangent    ();
+                if (do_vertex_texcoord_0)    build_vertex_texcoord     (0);
+                if (do_vertex_texcoord_1)    build_vertex_texcoord     (1);
+                if (do_vertex_color_0)       build_vertex_color        (0);
+                if (do_vertex_color_1)       build_vertex_color        (1);
+                if (do_aniso_control)        build_vertex_aniso_control();
+                if (do_joint_indices_0)      build_vertex_joint_indices(0);
+                if (do_joint_weights_0)      build_vertex_joint_weights(0);
+
+                if (wireframe_writer != nullptr) {
+                    const uint32_t packed = j | (edge_mask << 2);
+                    wireframe_writer->write(wireframe_info, packed);
+                }
+
+                for (std::unique_ptr<Vertex_buffer_writer>& w : expanded_writers) {
+                    w->next_vertex();
+                }
+                ++expanded_vertex_index;
+            }
+        }
+    }
+
+    // Restore the shared-fill attribute writers; expanded_writers flush on scope exit.
+    attribute_writers = saved_attribute_writers;
 }
 
 void Build_context::build_edge_lines()
