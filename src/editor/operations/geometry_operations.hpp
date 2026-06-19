@@ -98,6 +98,12 @@ public:
     explicit Generate_tangents_operation(Mesh_operation_parameters&& context);
 };
 
+class Generate_frame_field_tangents_operation : public Mesh_operation
+{
+public:
+    Generate_frame_field_tangents_operation(Mesh_operation_parameters&& context, float sharp_angle_threshold);
+};
+
 class Make_raytrace_operation : public Mesh_operation
 {
 public:

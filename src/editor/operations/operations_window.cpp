@@ -633,6 +633,7 @@ Operations::Operations(
     , m_chamfer3_command          {commands, "Geometry.Conway.Chamfer3",           [this]() -> bool { chamfer3      (); return true; } }
 
     , m_generate_tangents_command {commands, "Geometry.GenerateTangents",          [this]() -> bool { generate_tangents(); return true; } }
+    , m_generate_frame_field_tangents_command{commands, "Geometry.GenerateFrameFieldTangents", [this]() -> bool { generate_frame_field_tangents(); return true; } }
     , m_make_geometry_command     {commands, "Mesh.MakeGeometry",                  [this]() -> bool { make_geometry    (); return true; } }
     , m_make_raytrace_command     {commands, "Mesh.MakeRaytrace",                  [this]() -> bool { make_raytrace    (); return true; } }
 
@@ -680,6 +681,7 @@ Operations::Operations(
     commands.register_command(&m_truncate_command);
     commands.register_command(&m_gyro_command    );
     commands.register_command(&m_generate_tangents_command );
+    commands.register_command(&m_generate_frame_field_tangents_command );
     commands.register_command(&m_make_geometry_command );
     commands.register_command(&m_make_raytrace_command );
 
@@ -729,6 +731,7 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_chamfer3_command, "Geometry.Conway Operations.Chamfer3");
 
     commands.bind_command_to_menu(&m_generate_tangents_command, "Geometry.Generate Tangents");
+    commands.bind_command_to_menu(&m_generate_frame_field_tangents_command, "Geometry.Generate Frame Field Tangents");
     commands.bind_command_to_menu(&m_make_geometry_command,     "Mesh.Make Geometry");
     commands.bind_command_to_menu(&m_make_raytrace_command,     "Mesh.Make Raytrace");
 
@@ -1168,6 +1171,15 @@ void Operations::imgui()
     if (make_button("Gen Tangents", has_selection_mode, button_size)) {
         generate_tangents();
     }
+    ImGui::PushID("FrameFieldTangents");
+    ImGui::PushID("sharp_angle");
+    ImGui::SliderFloat("##", &m_frame_field_sharp_angle_deg, 0.0f, 180.0f, "%.0f deg");
+    if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Gen Frame Field Tangents: dihedral angle above which an edge is treated as a sharp feature the cross field aligns to"); }
+    ImGui::PopID();
+    if (make_button("Gen Frame Field Tangents", has_selection_mode, button_size)) {
+        generate_frame_field_tangents();
+    }
+    ImGui::PopID();
     if (make_button("Make Geometry", has_selection_mode, button_size)) {
         make_geometry();
     }
@@ -1790,6 +1802,18 @@ void Operations::make_atlas(const std::size_t usage_index, const float hard_angl
 void Operations::generate_tangents()
 {
     async_mesh_operation<Generate_tangents_operation>();
+}
+
+void Operations::generate_frame_field_tangents()
+{
+    const float sharp_angle = m_frame_field_sharp_angle_deg;
+    async_for_selected_nodes_with_mesh(
+        [this, sharp_angle](Mesh_operation_parameters&& params) {
+            m_context.operation_stack->queue(
+                std::make_shared<Generate_frame_field_tangents_operation>(std::move(params), sharp_angle)
+            );
+        }
+    );
 }
 
 void Operations::make_geometry()

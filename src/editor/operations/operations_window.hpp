@@ -153,6 +153,7 @@ public:
     void chamfer3();
 
     void generate_tangents();
+    void generate_frame_field_tangents();
     void make_geometry();
     void make_raytrace();
 
@@ -267,7 +268,12 @@ private:
     int   m_atlas_parameterizer  {3};
     int   m_atlas_packer         {2};
 
+    // Generate Frame Field Tangents: dihedral angle (degrees) above which an edge is
+    // treated as a sharp feature the Geogram cross field aligns to.
+    float m_frame_field_sharp_angle_deg{45.0f};
+
     erhe::commands::Lambda_command m_generate_tangents_command;
+    erhe::commands::Lambda_command m_generate_frame_field_tangents_command;
     erhe::commands::Lambda_command m_make_geometry_command;
     erhe::commands::Lambda_command m_make_raytrace_command;
 

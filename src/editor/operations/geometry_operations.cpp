@@ -19,6 +19,7 @@
 #include "erhe_geometry/operation/csg/difference.hpp"
 #include "erhe_geometry/operation/csg/intersection.hpp"
 #include "erhe_geometry/operation/csg/union.hpp"
+#include "erhe_geometry/operation/generate_frame_field_tangents.hpp"
 #include "erhe_geometry/operation/generate_tangents.hpp"
 #include "erhe_geometry/operation/make_atlas.hpp"
 #include "erhe_geometry/operation/normalize.hpp"
@@ -171,6 +172,18 @@ Generate_tangents_operation::Generate_tangents_operation(Mesh_operation_paramete
     set_description("Generate tangents");
     make_entries(erhe::geometry::operation::generate_tangents);
     set_description(fmt::format("Generate tangents {}", describe_entries()));
+}
+
+Generate_frame_field_tangents_operation::Generate_frame_field_tangents_operation(Mesh_operation_parameters&& context, float sharp_angle_threshold)
+    : Mesh_operation{std::move(context)}
+{
+    set_description("Generate frame field tangents");
+    make_entries(
+        [sharp_angle_threshold](const erhe::geometry::Geometry& source, erhe::geometry::Geometry& destination) {
+            erhe::geometry::operation::generate_frame_field_tangents(source, destination, static_cast<double>(sharp_angle_threshold));
+        }
+    );
+    set_description(fmt::format("Generate frame field tangents {}", describe_entries()));
 }
 
 Bake_transform_operation::Bake_transform_operation(Mesh_operation_parameters&& context)
