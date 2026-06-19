@@ -101,6 +101,15 @@ public:
     // either node lacks a rigid body.
     auto add_joint() -> bool;
     auto add_joint(Add_joint_avoidance avoidance) -> bool;
+    // Flips the selected rigid-body party of a hinge joint 180 degrees about an axis
+    // perpendicular to the hinge (through the joint pivot), as if the hinge edge's
+    // endpoints were swapped. Only the selected body moves; the other party is left
+    // untouched. The same collision-avoidance roll search as Add Joint is applied and
+    // the operation is rejected (not created) when no non-intersecting orientation is
+    // found. The selected body's joint frame is re-pinned and the constraint rebuilt
+    // so the hinge stays valid in the flipped pose.
+    auto flip_joint() -> bool;
+    auto flip_joint(Add_joint_avoidance avoidance) -> bool;
     void triangulate();
     void normalize();
     void bake_transform();
@@ -170,6 +179,11 @@ private:
     // toolbar button; deliberately allocation-free (runs per frame).
     [[nodiscard]] auto can_align() const -> bool;
 
+    // Cheap per-frame gate for the Flip Joint button: a single node is selected and
+    // it has a nearest rigid body. The authoritative hinge-joint lookup (and the
+    // reject-on-no-orientation) happens in flip_joint() on invocation.
+    [[nodiscard]] auto can_flip_joint() const -> bool;
+
     [[nodiscard]] auto mesh_context() -> Mesh_operation_parameters;
 
     // Scene root of the last hovered scene view; before any viewport has been
@@ -186,6 +200,7 @@ private:
     erhe::commands::Lambda_command m_align_command;
     erhe::commands::Lambda_command m_align_with_scale_command;
     erhe::commands::Lambda_command m_add_joint_command;
+    erhe::commands::Lambda_command m_flip_joint_command;
     erhe::commands::Lambda_command m_triangulate_command;
     erhe::commands::Lambda_command m_normalize_command;
     erhe::commands::Lambda_command m_bake_transform_command;

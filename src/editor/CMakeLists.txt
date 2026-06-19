@@ -247,6 +247,8 @@ erhe_target_sources_grouped(
     operations/mesh_operation.hpp
     operations/move_mesh_vertices_operation.cpp
     operations/move_mesh_vertices_operation.hpp
+    operations/flip_joint_operation.cpp
+    operations/flip_joint_operation.hpp
     operations/fork_geometry_operation.cpp
     operations/fork_geometry_operation.hpp
     operations/node_attach_operation.cpp

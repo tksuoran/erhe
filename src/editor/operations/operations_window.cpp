@@ -9,6 +9,7 @@
 #include "content_library/content_library_window.hpp"
 #include "items.hpp"
 #include "operations/compound_operation.hpp"
+#include "operations/flip_joint_operation.hpp"
 #include "operations/geometry_operations.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/item_parent_change_operation.hpp"
@@ -352,6 +353,22 @@ public:
     return nullptr;
 }
 
+// Nearest self-or-ancestor Node_physics (the physics node a node "belongs" to).
+// Matches Node_joint's body resolution and exposes the owning node (which
+// nearest_rigid_body, returning the bare body, does not). Returns the first
+// Node_physics found regardless of whether its rigid body is live.
+[[nodiscard]] auto nearest_node_physics(erhe::scene::Node* node) -> std::shared_ptr<Node_physics>
+{
+    while (node != nullptr) {
+        std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(node);
+        if (node_physics) {
+            return node_physics;
+        }
+        node = node->get_parent_node().get();
+    }
+    return {};
+}
+
 // Rigid (rotation + translation, scale dropped) world transform of a node, the
 // same convention Node_physics uses to drive its rigid body.
 [[nodiscard]] auto node_rigid_world(const erhe::scene::Node& node) -> glm::mat4
@@ -363,6 +380,121 @@ public:
 [[nodiscard]] auto to_physics_transform(const glm::mat4& rigid) -> erhe::physics::Transform
 {
     return erhe::physics::Transform{glm::mat3{rigid}, glm::vec3{rigid[3]}};
+}
+
+// True when the joint settings describe a hinge: the X angular axis is free while
+// the Y and Z angular axes are locked (a limit entry flags them with min == max).
+// Matches how Add Joint builds a hinge (two off-axis angular locks) versus a ball
+// joint (no angular locks); a ranged (min != max) limit does not count as locked,
+// so a limited hinge still reads as a hinge.
+[[nodiscard]] auto is_hinge_settings(const erhe::physics::Physics_joint_settings* settings) -> bool
+{
+    if (settings == nullptr) {
+        return false;
+    }
+    bool angular_locked[3] = { false, false, false };
+    for (const erhe::physics::Joint_limit& limit : settings->limits) {
+        const bool fixed = limit.min.has_value() && limit.max.has_value() && (limit.min.value() == limit.max.value());
+        if (!fixed) {
+            continue;
+        }
+        for (std::size_t i = 0; i < 3; ++i) {
+            if (limit.angular_axes[i]) {
+                angular_locked[i] = true;
+            }
+        }
+    }
+    return (!angular_locked[0]) && angular_locked[1] && angular_locked[2];
+}
+
+// One hinge joint the selected node is a rigid-body party of, resolved for Flip
+// Joint: which body to flip (moved_node), that body's joint frame node to re-pin
+// (frame_node), the other party body left untouched (other_node), the live joint,
+// and the unmoved side's rigid world hinge frame F (column 0 = hinge axis,
+// translation = pivot) that the flip pivots about and the frame node is re-pinned to.
+class Flip_joint_target
+{
+public:
+    bool                               valid{false};
+    std::shared_ptr<Node_joint>        node_joint;
+    std::shared_ptr<erhe::scene::Node> moved_node;
+    std::shared_ptr<erhe::scene::Node> frame_node;
+    std::shared_ptr<erhe::scene::Node> other_node;
+    glm::mat4                          hinge_frame{1.0f};
+};
+
+// Scan the scene for the first hinge joint that the selected node is a rigid-body
+// party of (both parties must be live rigid bodies). Mirrors the joint walk in
+// rebuild_joints_using_settings (physics_edits.cpp). The selected node resolves to
+// its nearest rigid-body node, so selecting the body, a child mesh, or the joint
+// frame node all pick the same party.
+[[nodiscard]] auto find_flip_joint_target(Scene_root& scene_root, const std::shared_ptr<erhe::scene::Node>& selected_node) -> Flip_joint_target
+{
+    Flip_joint_target result{};
+    if (!selected_node) {
+        return result;
+    }
+    const std::shared_ptr<Node_physics> selected_physics = nearest_node_physics(selected_node.get());
+    if (!selected_physics || (selected_physics->get_rigid_body() == nullptr)) {
+        return result;
+    }
+    erhe::scene::Node* const selected_body_node = selected_physics->get_node();
+    if (selected_body_node == nullptr) {
+        return result;
+    }
+
+    const auto as_shared = [](erhe::scene::Node* node) -> std::shared_ptr<erhe::scene::Node> {
+        return std::dynamic_pointer_cast<erhe::scene::Node>(node->shared_from_this());
+    };
+
+    for (const std::shared_ptr<erhe::scene::Node>& node : scene_root.get_scene().get_flat_nodes()) {
+        for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : node->get_attachments()) {
+            const std::shared_ptr<Node_joint> node_joint = std::dynamic_pointer_cast<Node_joint>(attachment);
+            if (!node_joint) {
+                continue;
+            }
+            if (!is_hinge_settings(node_joint->get_settings().get())) {
+                continue;
+            }
+            erhe::scene::Node* const                 joint_node     = node_joint->get_node();
+            const std::shared_ptr<erhe::scene::Node> connected_node = node_joint->get_connected_node();
+            if ((joint_node == nullptr) || !connected_node) {
+                continue; // Flip needs two body parties (body-to-world joints are skipped)
+            }
+            const std::shared_ptr<Node_physics> physics_a = nearest_node_physics(joint_node);
+            const std::shared_ptr<Node_physics> physics_b = nearest_node_physics(connected_node.get());
+            if (!physics_a || !physics_b || (physics_a->get_rigid_body() == nullptr) || (physics_b->get_rigid_body() == nullptr)) {
+                continue;
+            }
+            erhe::scene::Node* const body_a_node = physics_a->get_node();
+            erhe::scene::Node* const body_b_node = physics_b->get_node();
+            if ((body_a_node == nullptr) || (body_b_node == nullptr) || (body_a_node == body_b_node)) {
+                continue;
+            }
+
+            if (selected_body_node == body_a_node) {
+                // Flip side A; the unmoved hinge frame is side B's connected node.
+                result.valid       = true;
+                result.node_joint  = node_joint;
+                result.moved_node  = as_shared(body_a_node);
+                result.frame_node  = as_shared(joint_node);
+                result.other_node  = as_shared(body_b_node);
+                result.hinge_frame = node_rigid_world(*connected_node);
+                return result;
+            }
+            if (selected_body_node == body_b_node) {
+                // Flip side B; the unmoved hinge frame is side A's joint node.
+                result.valid       = true;
+                result.node_joint  = node_joint;
+                result.moved_node  = as_shared(body_b_node);
+                result.frame_node  = connected_node;
+                result.other_node  = as_shared(body_a_node);
+                result.hinge_frame = node_rigid_world(*joint_node);
+                return result;
+            }
+        }
+    }
+    return result;
 }
 
 // Searches the joint's free rotational DOF for an orientation of the moved body
@@ -463,60 +595,61 @@ Operations::Operations(
     App_context&                 app_context,
     App_message_bus&             app_message_bus
 )
-    : Imgui_window              {imgui_renderer, imgui_windows, "Operations", "operations"}
-    , m_context                 {app_context}
-    , m_merge_command           {commands, "Geometry.Merge",                     [this]() -> bool { merge           (); return true; } }
-    , m_align_command           {commands, "Geometry.Align",                     [this]() -> bool { return align_selection(false); } }
-    , m_align_with_scale_command{commands, "Geometry.AlignWithScale",            [this]() -> bool { return align_selection(true ); } }
-    , m_add_joint_command       {commands, "Geometry.AddJoint",                  [this]() -> bool { return add_joint(); } }
-    , m_triangulate_command     {commands, "Geometry.Triangulate",               [this]() -> bool { triangulate     (); return true; } }
-    , m_normalize_command       {commands, "Geometry.Normalize",                 [this]() -> bool { normalize       (); return true; } }
-    , m_bake_transform_command  {commands, "Geometry.BakeTransform",             [this]() -> bool { bake_transform  (); return true; } }
-    , m_center_transform_command{commands, "Geometry.CenterTransform",           [this]() -> bool { center_transform(); return true; } }
-    , m_reverse_command       {commands, "Geometry.Reverse",                   [this]() -> bool { reverse       (); return true; } }
-    , m_repair_command        {commands, "Geometry.Repair",                    [this]() -> bool { repair        (); return true; } }
-    , m_weld_command          {commands, "Geometry.Weld",                      [this]() -> bool { weld          (); return true; } }
-
+    : Imgui_window                {imgui_renderer, imgui_windows, "Operations", "operations"}
+    , m_context                   {app_context}
+    , m_merge_command             {commands, "Geometry.Merge",                 [this]() -> bool { merge           (); return true; } }
+    , m_align_command             {commands, "Geometry.Align",                 [this]() -> bool { return align_selection(false); } }
+    , m_align_with_scale_command  {commands, "Geometry.AlignWithScale",        [this]() -> bool { return align_selection(true ); } }
+    , m_add_joint_command         {commands, "Geometry.AddJoint",              [this]() -> bool { return add_joint  (); } }
+    , m_flip_joint_command        {commands, "Geometry.FlipJoint",             [this]() -> bool { return flip_joint (); } }
+    , m_triangulate_command       {commands, "Geometry.Triangulate",           [this]() -> bool { triangulate       (); return true; } }
+    , m_normalize_command         {commands, "Geometry.Normalize",             [this]() -> bool { normalize         (); return true; } }
+    , m_bake_transform_command    {commands, "Geometry.BakeTransform",         [this]() -> bool { bake_transform    (); return true; } }
+    , m_center_transform_command  {commands, "Geometry.CenterTransform",       [this]() -> bool { center_transform  (); return true; } }
+    , m_reverse_command           {commands, "Geometry.Reverse",               [this]() -> bool { reverse           (); return true; } }
+    , m_repair_command            {commands, "Geometry.Repair",                [this]() -> bool { repair            (); return true; } }
+    , m_weld_command              {commands, "Geometry.Weld",                  [this]() -> bool { weld              (); return true; } }
     , m_remesh_command            {commands, "Geometry.Remesh.Isotropic",      [this]() -> bool { remesh            (); return true; } }
     , m_anisotropic_remesh_command{commands, "Geometry.Remesh.Anisotropic",    [this]() -> bool { anisotropic_remesh(); return true; } }
     , m_decimate_command          {commands, "Geometry.Remesh.Decimate",       [this]() -> bool { decimate          (); return true; } }
     , m_smooth_command            {commands, "Geometry.Remesh.Smooth",         [this]() -> bool { smooth            (); return true; } }
     , m_make_atlas_command        {commands, "Geometry.MakeAtlas",             [this]() -> bool { make_atlas        (); return true; } }
 
-    , m_difference_command    {commands, "Geometry.Difference",                [this]() -> bool { difference    (); return true; } }
-    , m_intersection_command  {commands, "Geometry.Intersection",              [this]() -> bool { intersection  (); return true; } }
-    , m_union_command         {commands, "Geometry.Union",                     [this]() -> bool { union_        (); return true; } }
+    , m_difference_command        {commands, "Geometry.Difference",                [this]() -> bool { difference    (); return true; } }
+    , m_intersection_command      {commands, "Geometry.Intersection",              [this]() -> bool { intersection  (); return true; } }
+    , m_union_command             {commands, "Geometry.Union",                     [this]() -> bool { union_        (); return true; } }
 
-    , m_catmull_clark_command {commands, "Geometry.Subdivision.Catmull-Clark", [this]() -> bool { catmull_clark (); return true; } }
-    , m_sqrt3_command         {commands, "Geometry.Subdivision.Sqrt3",         [this]() -> bool { sqrt3         (); return true; } }
+    , m_catmull_clark_command     {commands, "Geometry.Subdivision.Catmull-Clark", [this]() -> bool { catmull_clark (); return true; } }
+    , m_sqrt3_command             {commands, "Geometry.Subdivision.Sqrt3",         [this]() -> bool { sqrt3         (); return true; } }
 
-    , m_dual_command          {commands, "Geometry.Conway.Dual",               [this]() -> bool { dual          (); return true; } }
-    , m_join_command          {commands, "Geometry.Conway.Join",               [this]() -> bool { join          (); return true; } }
-    , m_kis_command           {commands, "Geometry.Conway.Kis",                [this]() -> bool { kis           (); return true; } }
-    , m_meta_command          {commands, "Geometry.Conway.Meta",               [this]() -> bool { meta          (); return true; } }
-    , m_ortho_command         {commands, "Geometry.Conway.Ortho",              [this]() -> bool { ortho         (); return true; } }
-    , m_ambo_command          {commands, "Geometry.Conway.Ambo",               [this]() -> bool { ambo          (); return true; } }
-    , m_truncate_command      {commands, "Geometry.Conway.Truncate",           [this]() -> bool { truncate      (); return true; } }
-    , m_gyro_command          {commands, "Geometry.Conway.Gyro",               [this]() -> bool { gyro          (); return true; } }
-    , m_chamfer3_command      {commands, "Geometry.Conway.Chamfer3",           [this]() -> bool { chamfer3      (); return true; } }
+    , m_dual_command              {commands, "Geometry.Conway.Dual",               [this]() -> bool { dual          (); return true; } }
+    , m_join_command              {commands, "Geometry.Conway.Join",               [this]() -> bool { join          (); return true; } }
+    , m_kis_command               {commands, "Geometry.Conway.Kis",                [this]() -> bool { kis           (); return true; } }
+    , m_meta_command              {commands, "Geometry.Conway.Meta",               [this]() -> bool { meta          (); return true; } }
+    , m_ortho_command             {commands, "Geometry.Conway.Ortho",              [this]() -> bool { ortho         (); return true; } }
+    , m_ambo_command              {commands, "Geometry.Conway.Ambo",               [this]() -> bool { ambo          (); return true; } }
+    , m_truncate_command          {commands, "Geometry.Conway.Truncate",           [this]() -> bool { truncate      (); return true; } }
+    , m_gyro_command              {commands, "Geometry.Conway.Gyro",               [this]() -> bool { gyro          (); return true; } }
+    , m_chamfer3_command          {commands, "Geometry.Conway.Chamfer3",           [this]() -> bool { chamfer3      (); return true; } }
 
-    , m_generate_tangents_command{commands, "Geometry.GenerateTangents",      [this]() -> bool { generate_tangents(); return true; } }
-    , m_make_geometry_command    {commands, "Mesh.MakeGeometry",              [this]() -> bool { make_geometry(); return true; } }
-    , m_make_raytrace_command    {commands, "Mesh.MakeRaytrace",              [this]() -> bool { make_raytrace(); return true; } }
+    , m_generate_tangents_command {commands, "Geometry.GenerateTangents",          [this]() -> bool { generate_tangents(); return true; } }
+    , m_make_geometry_command     {commands, "Mesh.MakeGeometry",                  [this]() -> bool { make_geometry    (); return true; } }
+    , m_make_raytrace_command     {commands, "Mesh.MakeRaytrace",                  [this]() -> bool { make_raytrace    (); return true; } }
 
-    , m_export_gltf_command   {commands, "File.Export.glTF",                   [this]() -> bool { export_gltf   (); return true; } }
-    , m_save_scene_command    {commands, "File.SaveScene",                     [this]() -> bool { save_scene     (); return true; } }
-    , m_load_scene_command    {commands, "File.LoadScene",                     [this]() -> bool { load_scene     (); return true; } }
-    , m_create_material       {commands, "Create.Material",                    [this]() -> bool { create_material(); return true; } }
-    , m_create_brush          {commands, "Create.Brush",                       [this]() -> bool { create_brush   (); return true; } }
-    , m_create_physics_material{commands, "Create.PhysicsMaterial",            [this]() -> bool { create_physics_material(); return true; } }
-    , m_create_collision_filter{commands, "Create.CollisionFilter",            [this]() -> bool { create_collision_filter(); return true; } }
-    , m_create_joint_settings {commands, "Create.JointSettings",               [this]() -> bool { create_joint_settings(); return true; } }
+    , m_export_gltf_command       {commands, "File.Export.glTF",                   [this]() -> bool { export_gltf            (); return true; } }
+    , m_save_scene_command        {commands, "File.SaveScene",                     [this]() -> bool { save_scene             (); return true; } }
+    , m_load_scene_command        {commands, "File.LoadScene",                     [this]() -> bool { load_scene             (); return true; } }
+    , m_create_material           {commands, "Create.Material",                    [this]() -> bool { create_material        (); return true; } }
+    , m_create_brush              {commands, "Create.Brush",                       [this]() -> bool { create_brush           (); return true; } }
+    , m_create_physics_material   {commands, "Create.PhysicsMaterial",             [this]() -> bool { create_physics_material(); return true; } }
+    , m_create_collision_filter   {commands, "Create.CollisionFilter",             [this]() -> bool { create_collision_filter(); return true; } }
+    , m_create_joint_settings     {commands, "Create.JointSettings",               [this]() -> bool { create_joint_settings  (); return true; } }
 {
     commands.register_command(&m_merge_command         );
     commands.register_command(&m_align_command         );
     commands.register_command(&m_align_with_scale_command);
     commands.register_command(&m_add_joint_command      );
+    commands.register_command(&m_flip_joint_command     );
     commands.register_command(&m_triangulate_command   );
     commands.register_command(&m_normalize_command     );
     commands.register_command(&m_bake_transform_command);
@@ -563,6 +696,7 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_align_command,            "Geometry.Align");
     commands.bind_command_to_menu(&m_align_with_scale_command, "Geometry.Align with Scale");
     commands.bind_command_to_menu(&m_add_joint_command,        "Geometry.Add Joint");
+    commands.bind_command_to_menu(&m_flip_joint_command,       "Geometry.Flip Joint");
     commands.bind_command_to_menu(&m_triangulate_command,      "Geometry.Triangulate");
     commands.bind_command_to_menu(&m_normalize_command,        "Geometry.Normalize");
     commands.bind_command_to_menu(&m_bake_transform_command,   "Geometry.Bake-Transform");
@@ -598,11 +732,11 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_make_geometry_command,     "Mesh.Make Geometry");
     commands.bind_command_to_menu(&m_make_raytrace_command,     "Mesh.Make Raytrace");
 
-    commands.bind_command_to_menu(&m_export_gltf_command, "File.Export glTF");
-    commands.bind_command_to_menu(&m_save_scene_command,  "File.Save Scene");
-    commands.bind_command_to_menu(&m_load_scene_command,  "File.Load Scene");
-    commands.bind_command_to_menu(&m_create_material,     "Create.Material");
-    commands.bind_command_to_menu(&m_create_brush,        "Create.Brush from Selection");
+    commands.bind_command_to_menu(&m_export_gltf_command,     "File.Export glTF");
+    commands.bind_command_to_menu(&m_save_scene_command,      "File.Save Scene");
+    commands.bind_command_to_menu(&m_load_scene_command,      "File.Load Scene");
+    commands.bind_command_to_menu(&m_create_material,         "Create.Material");
+    commands.bind_command_to_menu(&m_create_brush,            "Create.Brush from Selection");
     commands.bind_command_to_menu(&m_create_physics_material, "Create.Physics Material");
     commands.bind_command_to_menu(&m_create_collision_filter, "Create.Collision Filter");
     commands.bind_command_to_menu(&m_create_joint_settings,   "Create.Joint Settings");
@@ -885,8 +1019,12 @@ void Operations::imgui()
             m_add_joint_avoidance = static_cast<Add_joint_avoidance>(avoidance);
         }
         if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("Add Joint: obstacles avoided when searching the initial non-intersecting orientation");
+            ImGui::SetTooltip("Add Joint / Flip Joint: obstacles avoided when searching the non-intersecting orientation");
         }
+    }
+    const auto flip_joint_mode = can_flip_joint() ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
+    if (make_button("Flip Joint", flip_joint_mode, button_size)) {
+        flip_joint();
     }
 
     if (make_button("Catmull-Clark", has_selection_mode, button_size)) {
@@ -1325,6 +1463,134 @@ auto Operations::add_joint(const Add_joint_avoidance avoidance) -> bool
     compound.operations.push_back(std::make_shared<Node_attach_operation>(node_joint, joint_node));
 
     m_context.operation_stack->queue(std::make_shared<Compound_operation>(std::move(compound)));
+    return true;
+}
+
+auto Operations::can_flip_joint() const -> bool
+{
+    const std::shared_ptr<erhe::scene::Node> node = m_context.selection->get_last_selected<erhe::scene::Node>();
+    if (!node) {
+        return false;
+    }
+    return nearest_rigid_body(node.get()) != nullptr;
+}
+
+auto Operations::flip_joint() -> bool
+{
+    return flip_joint(m_add_joint_avoidance);
+}
+
+auto Operations::flip_joint(const Add_joint_avoidance avoidance) -> bool
+{
+    const std::shared_ptr<erhe::scene::Node> selected_node = m_context.selection->get_last_selected<erhe::scene::Node>();
+    if (!selected_node) {
+        log_operations->warn("Flip Joint: no node selected");
+        return false;
+    }
+    std::shared_ptr<Scene_root> scene_root = get_target_scene_root();
+    if (!scene_root) {
+        return false;
+    }
+
+    const Flip_joint_target target = find_flip_joint_target(*scene_root, selected_node);
+    if (!target.valid) {
+        log_operations->warn("Flip Joint: selected node is not a rigid-body party of a hinge joint; aborting");
+        return false;
+    }
+
+    erhe::physics::IRigid_body* const moved_body  = nearest_rigid_body(target.moved_node.get());
+    erhe::physics::IRigid_body* const anchor_body = nearest_rigid_body(target.other_node.get());
+    if ((moved_body == nullptr) || (anchor_body == nullptr)) {
+        log_operations->warn("Flip Joint: both joint parties must have a rigid body; aborting");
+        return false;
+    }
+
+    // Unmoved side's rigid world hinge frame: column 0 is the hinge axis, the
+    // translation is the contact pivot. The flip is a 180-degree rotation about an
+    // axis perpendicular to the hinge, through the pivot, which reverses the hinge
+    // edge direction (swaps its endpoints) while leaving the pivot fixed. The choice
+    // of perpendicular axis is immaterial: the roll search below sweeps about the
+    // hinge axis, and a 180-degree roll maps one perpendicular flip onto the other.
+    const glm::mat4 hinge_frame = target.hinge_frame;
+    const glm::vec3 pivot       = glm::vec3{hinge_frame[3]};
+    const glm::vec3 hinge_axis  = glm::normalize(glm::vec3{hinge_frame[0]});
+    const glm::vec3 perp_axis   = glm::normalize(glm::vec3{hinge_frame[1]});
+
+    const glm::mat4 to_pivot   = glm::translate(glm::mat4{1.0f}, -pivot);
+    const glm::mat4 from_pivot = glm::translate(glm::mat4{1.0f},  pivot);
+    const glm::mat4 flip       = from_pivot * glm::rotate(glm::mat4{1.0f}, glm::pi<float>(), perp_axis) * to_pivot;
+
+    // Describe the hinge to the shared collision-avoidance search so it sweeps the
+    // free roll DOF about the hinge axis (mode != vertex selects the hinge sweep).
+    Alignment alignment{};
+    alignment.valid            = true;
+    alignment.mode             = Mesh_component_mode::edge;
+    alignment.anchor_node      = target.other_node;
+    alignment.moved_node       = target.moved_node;
+    alignment.world_delta      = flip;
+    alignment.world_position   = pivot;
+    alignment.world_hinge_axis = hinge_axis;
+
+    // Penetration tolerance scales with the smaller body (same rule as Add Joint).
+    const auto mesh_world_diagonal = [](const std::shared_ptr<erhe::scene::Node>& node) -> float {
+        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+        if (!mesh) {
+            return 0.0f;
+        }
+        const erhe::math::Aabb aabb = mesh->get_aabb_world();
+        return aabb.is_valid() ? glm::length(aabb.diagonal()) : 0.0f;
+    };
+    float characteristic_size = std::min(mesh_world_diagonal(target.moved_node), mesh_world_diagonal(target.other_node));
+    if (characteristic_size <= 0.0f) {
+        characteristic_size = 1.0f;
+    }
+    const float penetration_tolerance = 0.01f * characteristic_size;
+
+    const std::optional<glm::mat4> non_intersecting_delta = find_non_intersecting_delta(
+        scene_root->get_physics_world(),
+        *moved_body,
+        *anchor_body,
+        node_rigid_world(*target.other_node),
+        node_rigid_world(*target.moved_node),
+        alignment,
+        penetration_tolerance,
+        (avoidance == Add_joint_avoidance::whole_world)
+    );
+    if (!non_intersecting_delta.has_value()) {
+        log_operations->warn("Flip Joint: no non-intersecting orientation found; node not flipped");
+        return false;
+    }
+    const glm::mat4 world_delta = non_intersecting_delta.value(); // rigid: flip composed with the chosen roll
+
+    // Body transform: left-multiply the rigid world delta onto the moved body's world.
+    erhe::scene::Node* const moved                   = target.moved_node.get();
+    const glm::mat4          world_from_moved_after   = world_delta * moved->world_from_node();
+    const glm::mat4          parent_from_moved_after  = moved->parent_from_world() * world_from_moved_after;
+
+    // Re-pin the moved body's joint frame node back onto the unmoved hinge frame so
+    // the rebuilt constraint's two frames coincide again (valid hinge, no snap-back).
+    // The frame node is a descendant of the moved body, so its parent's world is
+    // displaced by the same world_delta; choosing the local transform that maps that
+    // displaced parent back to the hinge frame leaves the frame node world-stationary.
+    erhe::scene::Node* const frame_node               = target.frame_node.get();
+    erhe::scene::Node* const frame_parent             = frame_node->get_parent_node().get();
+    if (frame_parent == nullptr) {
+        log_operations->warn("Flip Joint: joint frame node has no parent body; aborting");
+        return false;
+    }
+    const glm::mat4          world_from_parent_after   = world_delta * frame_parent->world_from_node();
+    const glm::mat4          parent_from_frame_after   = glm::inverse(world_from_parent_after) * hinge_frame;
+
+    Flip_joint_operation::Parameters parameters{
+        .moved_node   = target.moved_node,
+        .moved_before = moved->parent_from_node_transform(),
+        .moved_after  = erhe::scene::Transform{parent_from_moved_after},
+        .frame_node   = target.frame_node,
+        .frame_before = frame_node->parent_from_node_transform(),
+        .frame_after  = erhe::scene::Transform{parent_from_frame_after},
+        .node_joint   = target.node_joint
+    };
+    m_context.operation_stack->queue(std::make_shared<Flip_joint_operation>(std::move(parameters)));
     return true;
 }
 
