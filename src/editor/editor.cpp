@@ -2816,6 +2816,20 @@ void run_editor()
         // undeclared arg aborts via geo_assert_arg_type.
         GEO::CmdLine::import_arg_group("remesh");
         GEO::CmdLine::set_arg("sys:multithread", "true");
+        // GEO::remesh_smooth() defaults remesh:multi_nerve=true; we keep it on.
+        // multi_nerve was previously disabled because remeshing e.g. a
+        // uv_sphere(48,24) to 2000 points produced an empty output mesh and an
+        // abort in mesh_adjust_surface (OpenNL nl_assert(NL_NB_VARIABLES > 0)).
+        // Root cause: the editor was handing remesh_smooth() an input surface
+        // with no facet adjacency (every edge a boundary), because
+        // Mesh::facets::triangulate() rebuilds the facets and drops adjacency.
+        // The multinerve RDT path computes per-seed restricted-Voronoi connected
+        // components, so a disconnected surface explodes into a fragmented
+        // triangle soup that mesh_postprocess_RDT() then strips to nothing. The
+        // fix is in erhe::geometry::operation::remesh (input.facets.connect()
+        // after triangulate); with a connected input, multi_nerve works
+        // correctly. It was never a Geogram bug.
+        GEO::CmdLine::set_arg("remesh:multi_nerve", "true");
         GEO::geo_register_attribute_type<GEO::vec2f>("vec2f");
         GEO::geo_register_attribute_type<GEO::vec3f>("vec3f");
         GEO::geo_register_attribute_type<GEO::vec4f>("vec4f");
