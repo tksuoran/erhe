@@ -80,14 +80,16 @@ auto Create_cone::create_brush(Brush_data& brush_create_info, const Cone_paramet
 
     transform(*geometry.get(), *geometry.get(), to_geo_mat4f(erhe::math::mat4_swap_xy));
 
-    const uint64_t flags =
-        erhe::geometry::Geometry::process_flag_connect |
-        erhe::geometry::Geometry::process_flag_build_edges |
-        erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
-    geometry->process({.flags = flags});
+    geometry->process(
+        {
+            .flags =
+                erhe::geometry::Geometry::process_flag_connect |
+                erhe::geometry::Geometry::process_flag_build_edges |
+                erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates
+        }
+    );
 
-    /// brush_create_info.mesh->compute_tangents();
-
+    brush_create_info.normal_style = erhe::primitive::Normal_style::corner_normals;
     std::shared_ptr<Brush> brush = std::make_shared<Brush>(brush_create_info);
     return brush;
 }

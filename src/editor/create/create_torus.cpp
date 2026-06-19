@@ -80,12 +80,15 @@ auto Create_torus::create_brush(Brush_data& brush_create_info, const Torus_param
 
     transform(*geometry.get(), *geometry.get(), to_geo_mat4f(erhe::math::mat4_swap_yz));
 
-    //brush_create_info.geometry->build_edges();
-    //brush_create_info.geometry->compute_polygon_normals();
-    //brush_create_info.geometry->compute_tangents();
-    //brush_create_info.geometry->compute_polygon_centroids();
-    //brush_create_info.geometry->compute_point_normals(erhe::geometry::c_point_normals_smooth);
+    geometry->process(
+        {
+            .flags =
+                erhe::geometry::Geometry::process_flag_connect |
+                erhe::geometry::Geometry::process_flag_build_edges
+        }
+    );
 
+    brush_create_info.normal_style = erhe::primitive::Normal_style::point_normals;
     std::shared_ptr<Brush> brush = std::make_shared<Brush>(brush_create_info);
     return brush;
 }

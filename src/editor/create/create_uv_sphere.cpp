@@ -65,13 +65,17 @@ auto Create_uv_sphere::create_brush(Brush_data& brush_create_info, const Uv_sphe
     );
     brush_create_info.geometry = geometry;
 
-    // geometry->build_edges();
-    // geometry->compute_polygon_normals();
-    // geometry->compute_tangents();
-    // geometry->compute_polygon_centroids();
-    // geometry->compute_point_normals(erhe::geometry::c_point_normals_smooth);
+    geometry->process(
+        {
+            .flags =
+                erhe::geometry::Geometry::process_flag_connect |
+                erhe::geometry::Geometry::process_flag_build_edges
+        }
+    );
+
     brush_create_info.collision_shape = erhe::physics::ICollision_shape::create_sphere_shape_shared(parameters.radius);
 
+    brush_create_info.normal_style = erhe::primitive::Normal_style::point_normals;
     std::shared_ptr<Brush> brush = std::make_shared<Brush>(brush_create_info);
     return brush;
 }

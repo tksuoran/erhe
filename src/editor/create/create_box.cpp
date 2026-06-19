@@ -62,17 +62,16 @@ auto Create_box::create_brush(Brush_data& brush_create_info, const Box_parameter
     erhe::geometry::shapes::make_box(geometry->get_mesh(), to_geo_vec3f(parameters.size), to_geo_vec3i(parameters.steps), parameters.power);
     brush_create_info.geometry = geometry;
     transform(*geometry.get(), *geometry.get(), to_geo_mat4f(erhe::math::mat4_swap_xy));
-    const uint64_t flags =
-        erhe::geometry::Geometry::process_flag_connect |
-        erhe::geometry::Geometry::process_flag_build_edges |
-        erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
-        erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
-    geometry->process({.flags = flags});
+    geometry->process(
+        {
+            .flags =
+                erhe::geometry::Geometry::process_flag_connect |
+                erhe::geometry::Geometry::process_flag_build_edges |
+                erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates
+        }
+    );
 
-    //// brush_create_info.geometry->compute_tangents();
-    //// brush_create_info.geometry->compute_polygon_centroids();
-    //// brush_create_info.collision_shape = TODO
-
+    brush_create_info.normal_style = erhe::primitive::Normal_style::corner_normals;
     std::shared_ptr<Brush> brush = std::make_shared<Brush>(brush_create_info);
     return brush;
 }

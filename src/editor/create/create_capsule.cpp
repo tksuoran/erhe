@@ -81,11 +81,13 @@ auto Create_capsule::create_brush(Brush_data& brush_create_info, const Capsule_p
         std::max(1, parameters.hemisphere_stack_count)  // hemisphere stack count
     );
 
-    const uint64_t flags =
-        erhe::geometry::Geometry::process_flag_connect |
-        erhe::geometry::Geometry::process_flag_build_edges |
-        erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
-    geometry->process({.flags = flags});
+    geometry->process(
+        {
+            .flags =
+                erhe::geometry::Geometry::process_flag_connect |
+                erhe::geometry::Geometry::process_flag_build_edges
+        }
+    );
 
     if (parameters.bottom_radius == parameters.top_radius) {
         brush_create_info.collision_shape = erhe::physics::ICollision_shape::create_capsule_shape_shared(
@@ -102,6 +104,7 @@ auto Create_capsule::create_brush(Brush_data& brush_create_info, const Capsule_p
         );
     }
 
+    brush_create_info.normal_style = erhe::primitive::Normal_style::point_normals;
     std::shared_ptr<Brush> brush = std::make_shared<Brush>(brush_create_info);
     return brush;
 }
