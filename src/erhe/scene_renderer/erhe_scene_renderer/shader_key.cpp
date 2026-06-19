@@ -198,14 +198,42 @@ auto Shader_key::derive(
         }
     }
 
-    // Debug visualizations of the texcoord sets need the varyings even
-    // when no material texture (or material at all) requests them.
-    const uint32_t shader_debug = key.get(Shader_int::SHADER_DEBUG);
-    if (has_texcoord_0 && (shader_debug == static_cast<uint32_t>(Shader_debug::texcoord_0))) {
-        key.set(Shader_bool::USE_VERTEX_VARYING_TEXCOORD0, true);
-    }
-    if (has_texcoord_1 && (shader_debug == static_cast<uint32_t>(Shader_debug::texcoord_1))) {
-        key.set(Shader_bool::USE_VERTEX_VARYING_TEXCOORD1, true);
+    // When any debug visualization is active, expose every varying the
+    // mesh can supply, regardless of what the bound material consumes.
+    // Debug modes visualize raw mesh attributes (normal, tangent,
+    // bitangent, texcoords, vertex color, aniso control), so the
+    // varyings must reach the fragment shader even when the material
+    // would not otherwise request them -- otherwise e.g. the "tangent"
+    // mode shows the neutral fallback color on any mesh whose material
+    // lacks a normal map / anisotropy. Each set is still gated on the
+    // vertex_format carrying the underlying attribute, preserving the
+    // ERHE_USE_VERTEX_VARYING_X => ERHE_ATTRIBUTE_a_X invariant. The
+    // BITANGENT => TANGENT && NORMAL link-time invariant (bitangent is
+    // computed from normal x tangent in standard.vert) is preserved by
+    // requiring has_normal_0 for the tangent frame and setting NORMAL
+    // alongside it.
+    const bool shader_debug_active =
+        key.get(Shader_int::SHADER_DEBUG) != static_cast<uint32_t>(Shader_debug::none);
+    if (shader_debug_active) {
+        if (has_normal_0) {
+            key.set(Shader_bool::USE_VERTEX_VARYING_NORMAL, true);
+        }
+        if (has_tangent && has_normal_0) {
+            key.set(Shader_bool::USE_VERTEX_VARYING_NORMAL,    true);
+            key.set(Shader_bool::USE_VERTEX_VARYING_TANGENT,   true);
+            key.set(Shader_bool::USE_VERTEX_VARYING_BITANGENT, true);
+        }
+        if (has_texcoord_0) {
+            key.set(Shader_bool::USE_VERTEX_VARYING_TEXCOORD0, true);
+        }
+        if (has_texcoord_1) {
+            key.set(Shader_bool::USE_VERTEX_VARYING_TEXCOORD1, true);
+        }
+        if (has_aniso_control) {
+            key.set(Shader_bool::USE_VERTEX_VARYING_ANISO_CONTROL, true);
+        }
+        // USE_VERTEX_VARYING_COLOR is already set unconditionally above
+        // when has_color_0, so vertex-color debug modes are covered.
     }
 
     return key;

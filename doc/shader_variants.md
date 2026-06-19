@@ -76,6 +76,34 @@ mesh lacks tangents, the normal-mapping path drops out.
 `derive()` guarantees `ERHE_USE_VERTEX_VARYING_X => ERHE_ATTRIBUTE_a_X`
 so the attribute-presence gating in shader source remains correct.
 
+#### Debug override: expose all mesh varyings
+
+The material-driven conditions above are bypassed when a debug
+visualization is active (`ERHE_SHADER_DEBUG != 0`). The debug modes
+visualize raw mesh attributes, so a material that does not consume the
+tangent frame (or texcoords, or aniso control) would otherwise force
+those varyings off and the debug mode would only ever show its neutral
+fallback color. When `SHADER_DEBUG != none`, `derive()` instead turns
+on every `ERHE_USE_VERTEX_VARYING_*` axis whose underlying attribute is
+present in the `Vertex_format`:
+
+- `NORMAL` when the format has `normal` (ignoring the `unlit` gate),
+- `TANGENT` + `BITANGENT` + `NORMAL` when it has `tangent` AND `normal`,
+- `TEXCOORD0` / `TEXCOORD1` when it has the corresponding `tex_coord` set,
+- `ANISO_CONTROL` when it has the aniso-control custom attribute,
+- `COLOR` is already always on when `color,0` is present.
+
+This keeps both invariants intact (`USE_VERTEX_VARYING_X =>
+ATTRIBUTE_a_X`, and `BITANGENT => TANGENT && NORMAL`) and has the side
+benefit that, under a given debug mode, the varying set depends only on
+the vertex format and not on the material. The lit color these varyings
+feed is irrelevant under debug because the `#if ERHE_SHADER_DEBUG == N`
+block at the end of `standard.frag` fully replaces `out_color`. Debug
+varyings gated purely on attribute presence in shader source
+(`v_tangent_scale`, `v_valency_edge_count` -- both `#ifdef
+ERHE_ATTRIBUTE_a_*`) are unaffected by this and already reach the
+fragment shader whenever the mesh carries the attribute.
+
 ### Scene sub-key (integer counts)
 
 | Macro | Source |
