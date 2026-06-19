@@ -249,7 +249,15 @@ App_rendering::App_rendering(
             .blending_mode_policy          {Blending_mode_policy::override_with_base_render_pipeline},
             .primitive_mode                {Primitive_mode::edge_lines},
             .filter                        {filter_not_selected},
-            .get_render_style              {render_style_not_selected}
+            .get_render_style              {render_style_not_selected},
+            .is_enabled                    {
+                // Solid wireframe replaces the wide-line edge path: when it is
+                // enabled, suppress the Content_wide_line_renderer edge lines so
+                // the two do not both draw.
+                [](const Render_context& context) -> bool {
+                    return !context.viewport_config.render_style_not_selected.solid_wireframe;
+                }
+            }
         }, not_selected
     );
 
@@ -261,7 +269,12 @@ App_rendering::App_rendering(
             .blending_mode_policy          {Blending_mode_policy::override_with_base_render_pipeline},
             .primitive_mode                {Primitive_mode::edge_lines},
             .filter                        {filter_selected},
-            .get_render_style              {render_style_selected}
+            .get_render_style              {render_style_selected},
+            .is_enabled                    {
+                [](const Render_context& context) -> bool {
+                    return !context.viewport_config.render_style_selected.solid_wireframe;
+                }
+            }
         }, selected
     );
 
