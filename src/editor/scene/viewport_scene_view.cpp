@@ -804,7 +804,7 @@ void Viewport_scene_view::viewport_toolbar()
         "Visual Style",                                            // title
         ImGui::GetID("ViewportVisualStylePopup"),                  // popup_id
         m_show_visual_style_popup,                                 // is_open
-        [this]() { Viewport_config_window::imgui(get_config()); }  // content_fn
+        [this]() { Viewport_config_window::imgui(m_context, get_config()); }  // content_fn
     );
     popup_button(
         icon_font,
