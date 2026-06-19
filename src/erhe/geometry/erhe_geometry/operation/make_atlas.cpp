@@ -6,6 +6,8 @@
 #include <geogram/parameterization/mesh_atlas_maker.h>
 #include <geogram/basic/attributes.h>
 
+#include <mutex>
+
 namespace erhe::geometry::operation {
 
 namespace {
@@ -106,13 +108,28 @@ void generate_mesh_atlas_texture_coordinates(
     mesh.vertices.set_double_precision();
     mesh.facets.connect();
 
-    GEO::mesh_make_atlas(
-        mesh,
-        hard_angles_threshold,
-        to_geo(parameterizer),
-        to_geo(packer),
-        false // verbose
-    );
+    {
+        // Geogram's progress system uses a process-global, non-thread-safe task
+        // stack (basic/progress.cpp: "geo_assert(progress_tasks_.top() == task)"),
+        // and the atlas packer/parameterizer carries further process-global state.
+        // The editor builds brushes on many worker threads, so concurrent
+        // mesh_make_atlas() calls corrupt that global state (assertion in
+        // progress.cpp end_task(), and intermittent heap corruption inside the
+        // packer). A single mesh_make_atlas() call is safe (the MCP / remesh paths
+        // use one at a time), so serialize the Geogram call here; the surrounding
+        // per-mesh work stays parallel. This serialization is REQUIRED with the
+        // geogram pin at 5a96c38e (which does not have the thread-local
+        // ProgressTask change) and is the robust fix regardless of that change.
+        static std::mutex           s_mesh_make_atlas_mutex;
+        std::lock_guard<std::mutex> lock{s_mesh_make_atlas_mutex};
+        GEO::mesh_make_atlas(
+            mesh,
+            hard_angles_threshold,
+            to_geo(parameterizer),
+            to_geo(packer),
+            false // verbose
+        );
+    }
 
     mesh.vertices.set_single_precision();
     attributes.bind();
