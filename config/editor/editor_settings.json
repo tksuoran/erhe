@@ -406,7 +406,7 @@
                     "corner_points": false,
                     "point_size": 4,
                     "line_width": -1,
-                    "line_color": [0,0.850575,1,0.5],
+                    "line_color": [0,0,0,1],
                     "corner_color": [0,0,1,1],
                     "centroid_color": [0,0,1,1],
                     "edge_lines_color_source": "constant_color",
@@ -420,7 +420,7 @@
                     "corner_points": false,
                     "point_size": 4,
                     "line_width": -1,
-                    "line_color": [0,0.850575,1,0.5],
+                    "line_color": [0.024045456,0.049808443,0,1],
                     "corner_color": [0,0,1,1],
                     "centroid_color": [0,0,1,1],
                     "edge_lines_color_source": "constant_color",
@@ -439,11 +439,11 @@
                     "camera": "selected"
                 },
                 "mesh_component_style": {
-                    "vertex_color": [0.95,0.65,0,1],
-                    "edge_color": [1,0.6396551,0.050000012,1],
-                    "face_color": [1,0.55,0.05,0.35],
-                    "hover_color": [1,1,1,0.8],
-                    "edge_thickness": -3,
+                    "vertex_color": [0,0.80459785,1,0.745],
+                    "edge_color": [0,0.5517242,1,0.745],
+                    "face_color": [0,0.29885054,1,0.745],
+                    "hover_color": [1,0.69220936,0.07662833,0.8],
+                    "edge_thickness": -4,
                     "vertex_size": 0.012,
                     "edge_depth_bias": 1024
                 },
@@ -454,7 +454,7 @@
                 "scene_name": "Default Scene",
                 "camera_name": "Camera A",
                 "shadow_fit_override_camera_name": "",
-                "shader_debug": 31,
+                "shader_debug": 0,
                 "renderer_choice": 0
             }
         },
