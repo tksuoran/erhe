@@ -219,17 +219,32 @@ auto make_angle_button(
     };
 }
 
+// Mirrors ImGui::BeginPopupModal()'s handling of the title-bar close button.
+// Passing 'open' to Begin() draws the close button, but clicking it only sets
+// *open = false - the popup's open/closed state lives in ImGui's OpenPopupStack,
+// so we must also call ClosePopupToLevel() to actually dismiss it. The caller is
+// expected to set *open = true when it calls OpenPopup() (same contract as
+// BeginPopupModal()): *open is true while the popup is open and is reset to false
+// once it has been closed (by the close button, an outside click, or the caller).
 auto begin_popup_with_title_and_open(ImGuiID id, const char* name, bool* open, ImGuiWindowFlags extra_window_flags) -> bool
 {
     ImGuiContext& g = *GImGui;
     if (!ImGui::IsPopupOpen(id, ImGuiPopupFlags_None)) {
         g.NextWindowData.ClearFlags();
+        if ((open != nullptr) && *open) {
+            *open = false;
+        }
         return false;
     }
 
-    bool is_open = ImGui::Begin(name, open, extra_window_flags | ImGuiWindowFlags_Popup | ImGuiWindowFlags_NoDocking);
-    if (!is_open) {
+    const bool is_open = ImGui::Begin(name, open, extra_window_flags | ImGuiWindowFlags_Popup | ImGuiWindowFlags_NoDocking);
+    if (!is_open || ((open != nullptr) && !*open)) {
+        // NB: is_open can be false when the popup is completely clipped (e.g. zero size display).
         ImGui::EndPopup();
+        if (is_open) {
+            ImGui::ClosePopupToLevel(g.BeginPopupStack.Size, true);
+        }
+        return false;
     }
     return is_open;
 }

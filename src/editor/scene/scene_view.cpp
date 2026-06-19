@@ -704,6 +704,7 @@ void Scene_view::popup_button(
     ImGui::PopFont();
     ImGui::SetItemTooltip("%s", title);
     if (pressed) {
+        is_open = true;
         ImGui::OpenPopup(popup_id, ImGuiPopupFlags_None);
     }
     if (erhe::imgui::begin_popup_with_title_and_open(popup_id, title, &is_open, ImGuiWindowFlags_AlwaysAutoResize)) {
