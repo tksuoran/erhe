@@ -28,6 +28,17 @@ if (WIN32)
     set(ERHE_ADDITIONAL_GL_INCLUDES "${PROJECT_SOURCE_DIR}/src/khronos/khronos")
 endif ()
 
+# x86 SIMD intrinsics baseline. fpng's accelerated CRC32 uses _mm_clmulepi64_si128
+# (PCLMULQDQ) plus SSE4.1 intrinsics; on Clang these always_inline intrinsics fail to
+# compile ("always_inline ... target specific option mismatch") unless the matching
+# -m flags are enabled. Set globally for x86 here, in the compiler-specific toolchain
+# file, so it stays orthogonal to the physics backend (it must NOT live in
+# JoltPhysicsCompatibility.cmake, which is skipped for non-Jolt builds). Not applied
+# on aarch64, where the flags are invalid and fpng compiles no SSE path.
+if (("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "x86_64") OR ("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "AMD64"))
+    add_compile_options(-msse4.1 -mpclmul)
+endif ()
+
 function (erhe_target_settings_toolchain target)
     if (WIN32)
         target_compile_definitions(${target} PUBLIC $<$<COMPILE_LANGUAGE:CXX>:NOMINMAX>)

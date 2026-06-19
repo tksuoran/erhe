@@ -26,6 +26,17 @@ add_compile_options("$<$<CONFIG:DEBUG>:-O0;-g3>")
 
 set(ERHE_ADDITIONAL_GL_INCLUDES "${PROJECT_SOURCE_DIR}/src/khronos/khronos")
 
+# x86 SIMD intrinsics baseline (Intel Macs). fpng's accelerated CRC32 uses
+# _mm_clmulepi64_si128 (PCLMULQDQ) plus SSE4.1 intrinsics; on Clang these
+# always_inline intrinsics fail to compile ("always_inline ... target specific option
+# mismatch") unless the matching -m flags are enabled. Set globally for x86 here, in
+# the compiler-specific toolchain file, so it stays orthogonal to the physics backend.
+# Not applied on Apple Silicon (arm64), where the flags are invalid and fpng compiles
+# no SSE path.
+if (("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "x86_64") OR ("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "AMD64"))
+    add_compile_options(-msse4.1 -mpclmul)
+endif ()
+
 function (erhe_target_settings_toolchain target)
     set_target_properties(${target} PROPERTIES XCODE_ATTRIBUTE_DEBUG_INFORMATION_FORMAT "dwarf-with-dsym")
 endfunction()
