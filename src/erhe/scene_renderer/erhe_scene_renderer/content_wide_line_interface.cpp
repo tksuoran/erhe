@@ -88,11 +88,15 @@ Content_wide_line_interface::Content_wide_line_interface(
     //   vec4   line_color;                  // per-dispatch (.w = line_width)
     //   uint   edge_count;                  // per-dispatch
     //   uint   view_count;                  // mirrors view_count
-    //   uint   stride_per_view;             // padded_edge_count * 6 vertices
+    //   uint   stride_per_view;             // padded_edge_count * 12 vertices
     //   float  vp_y_sign;
     //   float  clip_depth_direction;
     //   uint   base_joint_index;            // per-dispatch, skinned variant only
-    //   float  _padding;                    // pad to 16-byte boundary
+    //   float  line_bias_margin;            // tent surface-line bias (ULPs)
+    //   float  window_to_ndc_scale;         // tent depth-range convention factor
+    //   uint   use_tent;                    // 0 = simple quad, 1 = two-face tent
+    //   float  line_bias_clamp;             // max toward-camera extrapolation (ULPs)
+    //   float  _padding0..1;                // pad to 16-byte boundary
     //
     // Per-eye data is grouped into cameras[] so the multiview compute
     // shader can write one triangle set per view in a single dispatch
@@ -111,7 +115,13 @@ Content_wide_line_interface::Content_wide_line_interface(
     // skinned variants ignore it. Keeping the field in the shared view
     // block avoids two view layouts.
     offsets.base_joint_index     = view_block.add_uint ("base_joint_index"    )->get_offset_in_parent();
+    // Tent wide-line method fields; see Content_wide_line_view_offsets.
+    offsets.line_bias_margin     = view_block.add_float("line_bias_margin"    )->get_offset_in_parent();
+    offsets.window_to_ndc_scale  = view_block.add_float("window_to_ndc_scale" )->get_offset_in_parent();
+    offsets.use_tent             = view_block.add_uint ("use_tent"            )->get_offset_in_parent();
+    offsets.line_bias_clamp      = view_block.add_float("line_bias_clamp"     )->get_offset_in_parent();
     offsets.padding0             = view_block.add_float("_padding0"           )->get_offset_in_parent();
+    offsets.padding1             = view_block.add_float("_padding1"           )->get_offset_in_parent();
 
     // Skinned geometry-shader bind group layout: view UBO + global joint
     // block. The vertex shader reads a_joint_indices_0 + a_joint_weights_0

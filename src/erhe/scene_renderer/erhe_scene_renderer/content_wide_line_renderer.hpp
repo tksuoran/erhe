@@ -64,6 +64,20 @@ public:
     // nullptr on construction failure, so a live pointer means enabled.
     [[nodiscard]] auto is_enabled() const -> bool { return true; }
 
+    // Tent wide-line method controls (compute backend only). use_tent selects
+    // between the simple single-plane quad (false) and the two-face surface
+    // tent (true) at runtime; both are kept because each wins in different
+    // cases. line_bias_margin is the tent's surface-line depth-bias headroom in
+    // depth-buffer resolvable units (ULPs).
+    void               set_use_tent        (bool value)   { m_use_tent = value; }
+    [[nodiscard]] auto get_use_tent        () const -> bool  { return m_use_tent; }
+    void               set_line_bias_margin(float margin)  { m_line_bias_margin = margin; }
+    [[nodiscard]] auto get_line_bias_margin() const -> float { return m_line_bias_margin; }
+    // Max toward-camera face-plane extrapolation per tent corner (ULPs); bounds
+    // show-through where thin geometry overlaps in screen space.
+    void               set_line_bias_clamp (float ulps)   { m_line_bias_clamp = ulps; }
+    [[nodiscard]] auto get_line_bias_clamp () const -> float { return m_line_bias_clamp; }
+
     // True for the compute backend (compute() runs a real dispatch and
     // callers must emit a compute->vertex memory barrier afterwards),
     // false for the geometry-shader backend (compute() is a no-op, there
@@ -175,6 +189,15 @@ private:
     std::vector<Per_view_camera>       m_per_view_cameras;
     Dispatch_per_frame_params          m_frame_params{};
     bool                               m_view_params_set{false};
+
+    // Tent wide-line method state (compute backend). Defaults: tent off (the
+    // simple single-plane quad is the no-regression default; the tent is opt-in
+    // via the Visual Style toggle), a 1024-ULP bias headroom matching
+    // Debug_renderer's default, and a 2048-ULP toward-camera extrapolation clamp
+    // (anti show-through on overlapping thin geometry) used when the tent is on.
+    bool                               m_use_tent{false};
+    float                              m_line_bias_margin{1024.0f};
+    float                              m_line_bias_clamp{2048.0f};
 
     erhe::graphics::Ring_buffer_client* m_joint_buffer_client{nullptr};
     erhe::graphics::Ring_buffer_range   m_joint_buffer_range;

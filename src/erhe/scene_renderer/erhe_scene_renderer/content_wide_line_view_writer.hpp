@@ -66,6 +66,16 @@ public:
     uint32_t                         view_count_runtime;
     float                            vp_y_sign;
     float                            clip_depth_direction;
+    // Tent wide-line method (see compute_before_content_line.comp):
+    // line_bias_margin = surface-line bias headroom in depth ULPs;
+    // window_to_ndc_scale = 1.0 for zero_to_one depth, 2.0 for minus_one_to_one;
+    // use_tent = 0 simple quad, 1 two-face tent;
+    // line_bias_clamp = max toward-camera face-plane extrapolation per corner
+    // (ULPs), bounding show-through on overlapping thin geometry.
+    float                            line_bias_margin;
+    float                            window_to_ndc_scale;
+    uint32_t                         use_tent;
+    float                            line_bias_clamp;
 };
 
 inline void write_view_block(
@@ -102,7 +112,12 @@ inline void write_view_block(
     write(view_data, offsets.vp_y_sign,            as_span(frame_params.vp_y_sign         ));
     write(view_data, offsets.clip_depth_direction, as_span(frame_params.clip_depth_direction));
     write(view_data, offsets.base_joint_index,     as_span(base_joint_index               ));
+    write(view_data, offsets.line_bias_margin,     as_span(frame_params.line_bias_margin   ));
+    write(view_data, offsets.window_to_ndc_scale,  as_span(frame_params.window_to_ndc_scale));
+    write(view_data, offsets.use_tent,             as_span(frame_params.use_tent           ));
+    write(view_data, offsets.line_bias_clamp,      as_span(frame_params.line_bias_clamp    ));
     write(view_data, offsets.padding0,             as_span(padding_zero                   ));
+    write(view_data, offsets.padding1,             as_span(padding_zero                   ));
 }
 
 } // namespace erhe::scene_renderer

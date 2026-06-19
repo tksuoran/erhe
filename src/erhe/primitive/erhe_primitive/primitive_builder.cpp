@@ -14,6 +14,10 @@
 #include <fmt/format.h>
 #include "erhe_verify/verify.hpp"
 
+#include <cstdint>
+#include <unordered_map>
+#include <utility>
+
 using erhe::geometry::get_mesh_info;
 using erhe::geometry::get_pointf;
 using erhe::geometry::mesh_facet_centerf;
@@ -809,10 +813,10 @@ void Build_context::build_edge_lines()
     }
 
     // Edge-line vertex data feeds Content_wide_line_renderer's compute
-    // expansion. Two vec4s per edge endpoint (position + smooth normal)
-    // matching the compute shader's edge_line_vertex SSBO struct. The
-    // buffer range itself is allocated up front by
-    // Build_context_root::allocate_edge_line_vertex_buffer().
+    // expansion. Two vec4s per edge endpoint (position + per-edge face normal;
+    // normal.w on endpoint 0 carries the interior-tangent sign) matching the
+    // compute shader's edge_line_vertex SSBO struct. The buffer range itself is
+    // allocated up front by Build_context_root::allocate_edge_line_vertex_buffer().
     const bool has_edge_line_vertex_buffer = (root.buffer_mesh.edge_line_vertex_buffer_range.count > 0);
     std::vector<uint8_t> edge_line_vertex_data;
     const std::size_t    vertex_element_size = 8 * sizeof(float); // vec4 position + vec4 normal
@@ -834,6 +838,36 @@ void Build_context::build_edge_lines()
     }
     std::size_t edge_joint_write_offset = 0;
 
+    // Per-edge surface frame for the tent wide-line method: each edge needs the
+    // (up to two) facets adjacent to it so the compute shader can make each half
+    // of the wide-line ribbon coplanar with its own face. Build an edge -> facets
+    // adjacency from the raw GEO::Mesh by walking every facet's consecutive
+    // corner pairs (same construction as erhe::geometry::Geometry's
+    // m_edge_to_facets). Cold path: runs once per mesh at build time.
+    std::unordered_map<uint64_t, std::pair<GEO::index_t, GEO::index_t>> edge_to_facets;
+    if (has_edge_line_vertex_buffer) {
+        for (GEO::index_t facet : root.mesh.facets) {
+            const GEO::index_t facet_corner_count = root.mesh.facets.nb_corners(facet);
+            for (GEO::index_t local = 0; local < facet_corner_count; ++local) {
+                const GEO::index_t corner      = root.mesh.facets.corner(facet, local);
+                const GEO::index_t next_corner = root.mesh.facets.corner(facet, (local + 1) % facet_corner_count);
+                const GEO::index_t va          = root.mesh.facet_corners.vertex(corner);
+                const GEO::index_t vb          = root.mesh.facet_corners.vertex(next_corner);
+                const GEO::index_t lo          = (va < vb) ? va : vb;
+                const GEO::index_t hi          = (va < vb) ? vb : va;
+                const uint64_t     key         = (static_cast<uint64_t>(lo) << 32) | static_cast<uint64_t>(hi);
+                std::pair<GEO::index_t, GEO::index_t>& facets = edge_to_facets.try_emplace(
+                    key, std::pair<GEO::index_t, GEO::index_t>{GEO::NO_INDEX, GEO::NO_INDEX}
+                ).first->second;
+                if (facets.first == GEO::NO_INDEX) {
+                    facets.first = facet;
+                } else if ((facets.second == GEO::NO_INDEX) && (facet != facets.first)) {
+                    facets.second = facet;
+                }
+            }
+        }
+    }
+
     for (GEO::index_t mesh_edge : root.mesh.edges) {
         const GEO::index_t mesh_vertex_a  = root.mesh.edges.vertex(mesh_edge, 0);
         const GEO::index_t mesh_vertex_b  = root.mesh.edges.vertex(mesh_edge, 1);
@@ -845,19 +879,55 @@ void Build_context::build_edge_lines()
             const GEO::vec3f pos_a = get_pointf(root.mesh.vertices, mesh_vertex_a);
             const GEO::vec3f pos_b = get_pointf(root.mesh.vertices, mesh_vertex_b);
 
-            // Smooth (averaged across adjacent facets) normal preferred; fall
-            // back to the per-vertex normal, then to a fixed up-axis. Matches
-            // the wireframe-bias smooth normal carried by the main mesh.
+            // Per-edge surface frame for the tent wide-line method. Endpoint 0
+            // carries face A's geometric normal plus the interior-tangent sign
+            // (in normal.w); endpoint 1 carries face B's normal. Both normals are
+            // object-local; compute_before_content_line.comp lifts them to world
+            // and builds the two coplanar half-quads. Boundary edge (one facet)
+            // -> normal_b = normal_a (single-plane hug). Facet-less edge -> fall
+            // back to the smooth/vertex normal so the (toggle-off) simple-quad
+            // path still has a usable normal. Mirrors compute_edge_surface_frame()
+            // in mesh_component_selection_tool.cpp.
             const GEO::vec3f fallback_normal{0.0f, 1.0f, 0.0f};
             const std::optional<GEO::vec3f> vertex_normal_a = mesh_attributes.vertex_normal.try_get(mesh_vertex_a);
             const std::optional<GEO::vec3f> vertex_normal_b = mesh_attributes.vertex_normal.try_get(mesh_vertex_b);
             const std::optional<GEO::vec3f> smooth_normal_a = mesh_attributes.vertex_normal_smooth.try_get(mesh_vertex_a);
             const std::optional<GEO::vec3f> smooth_normal_b = mesh_attributes.vertex_normal_smooth.try_get(mesh_vertex_b);
-            const GEO::vec3f normal_a = smooth_normal_a.has_value() ? smooth_normal_a.value() : vertex_normal_a.has_value() ? vertex_normal_a.value() : fallback_normal;
-            const GEO::vec3f normal_b = smooth_normal_b.has_value() ? smooth_normal_b.value() : vertex_normal_b.has_value() ? vertex_normal_b.value() : fallback_normal;
+            const GEO::vec3f fb_normal_a = smooth_normal_a.has_value() ? smooth_normal_a.value() : vertex_normal_a.has_value() ? vertex_normal_a.value() : fallback_normal;
+            const GEO::vec3f fb_normal_b = smooth_normal_b.has_value() ? smooth_normal_b.value() : vertex_normal_b.has_value() ? vertex_normal_b.value() : fallback_normal;
 
-            const float data_a[8] = { pos_a.x, pos_a.y, pos_a.z, 0.0f, normal_a.x, normal_a.y, normal_a.z, 0.0f };
-            const float data_b[8] = { pos_b.x, pos_b.y, pos_b.z, 0.0f, normal_b.x, normal_b.y, normal_b.z, 0.0f };
+            const GEO::index_t edge_lo   = (mesh_vertex_a < mesh_vertex_b) ? mesh_vertex_a : mesh_vertex_b;
+            const GEO::index_t edge_hi   = (mesh_vertex_a < mesh_vertex_b) ? mesh_vertex_b : mesh_vertex_a;
+            const uint64_t     edge_key  = (static_cast<uint64_t>(edge_lo) << 32) | static_cast<uint64_t>(edge_hi);
+            GEO::index_t       facet_a   = GEO::NO_INDEX;
+            GEO::index_t       facet_b   = GEO::NO_INDEX;
+            const auto         facets_it = edge_to_facets.find(edge_key);
+            if (facets_it != edge_to_facets.end()) {
+                facet_a = facets_it->second.first;
+                facet_b = facets_it->second.second;
+            }
+
+            GEO::vec3f normal_a = fb_normal_a;
+            GEO::vec3f normal_b = fb_normal_b;
+            float      sign_a   = 0.0f;
+            if (facet_a != GEO::NO_INDEX) {
+                normal_a = GEO::normalize(mesh_facet_normalf(root.mesh, facet_a));
+                // Interior-tangent sign for face A: sign so that
+                // sign_a * cross(normal_a, edge_dir) points from the edge
+                // midpoint toward face A's centroid.
+                const GEO::vec3f edge_dir      = pos_b - pos_a;
+                const GEO::vec3f tangent_a     = GEO::cross(normal_a, edge_dir);
+                const GEO::vec3f center_a      = mesh_facet_centerf(root.mesh, facet_a);
+                const GEO::vec3f edge_mid      = 0.5f * (pos_a + pos_b);
+                const GEO::vec3f to_interior_a = center_a - edge_mid;
+                sign_a = (GEO::dot(tangent_a, to_interior_a) >= 0.0f) ? 1.0f : -1.0f;
+                normal_b = (facet_b != GEO::NO_INDEX)
+                    ? GEO::normalize(mesh_facet_normalf(root.mesh, facet_b))
+                    : normal_a;
+            }
+
+            const float data_a[8] = { pos_a.x, pos_a.y, pos_a.z, 0.0f, normal_a.x, normal_a.y, normal_a.z, sign_a };
+            const float data_b[8] = { pos_b.x, pos_b.y, pos_b.z, 0.0f, normal_b.x, normal_b.y, normal_b.z, 0.0f   };
             memcpy(edge_line_vertex_data.data() + edge_vertex_write_offset, data_a, vertex_element_size);
             edge_vertex_write_offset += vertex_element_size;
             memcpy(edge_line_vertex_data.data() + edge_vertex_write_offset, data_b, vertex_element_size);

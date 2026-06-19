@@ -12,10 +12,10 @@ layout(location = 2) out vec4  v_start_end;
 // Non-multiview builds use c_view_index = 0 and the (unique) slab written
 // for the single-view dispatch.
 //
-// triangle_vertex_buffer matches the layout written by
-// compute_before_content_line.comp; `view` mirrors the per-renderer view
-// UBO whose stride_per_view field the C++ side fills with
-// padded_edge_count * 6 (vertices).
+// triangle_vertex_buffer matches the layout written by the wide-line compute
+// shader; `view` mirrors the per-renderer view UBO whose stride_per_view field
+// the C++ side fills with padded_edge_count * 12 (vertices) -- each edge
+// expands to a 4-triangle tent.
 void main()
 {
     uint idx = uint(gl_VertexID) + c_view_index * view.stride_per_view;

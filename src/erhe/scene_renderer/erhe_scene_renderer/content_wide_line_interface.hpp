@@ -35,7 +35,19 @@ public:
     std::size_t vp_y_sign             {0};
     std::size_t clip_depth_direction  {0};
     std::size_t base_joint_index      {0};
+    // Tent wide-line method fields (see compute_before_content_line.comp).
+    // line_bias_margin: surface-line depth-bias headroom in depth-buffer
+    //   resolvable units (ULPs); window_to_ndc_scale: d(window)/d(ndc) for the
+    //   depth-range convention (1.0 zero_to_one, 2.0 minus_one_to_one);
+    //   use_tent: 0 = simple quad, 1 = two-face tent; line_bias_clamp: max
+    //   toward-camera face-plane extrapolation per corner (ULPs), anti
+    //   show-through.
+    std::size_t line_bias_margin      {0};
+    std::size_t window_to_ndc_scale   {0};
+    std::size_t use_tent              {0};
+    std::size_t line_bias_clamp       {0};
     std::size_t padding0              {0};
+    std::size_t padding1              {0};
 };
 
 // Shader-interface description for the content wide-line renderer. Owns

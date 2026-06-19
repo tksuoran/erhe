@@ -99,10 +99,10 @@ private:
         uint32_t                base_joint_index        {0};
 
         // Filled by compute(). triangle_buffer_range covers all views:
-        // size = view_count * padded_edge_count * 6 * stride. The
+        // size = view_count * padded_edge_count * 12 * stride. The
         // multiview vertex shader indexes within it as
         //     base_offset + (gl_VertexID + gl_ViewIndex * stride_per_view)
-        // and stride_per_view (= padded_edge_count * 6 vertices) is
+        // and stride_per_view (= padded_edge_count * 12 vertices) is
         // mirrored into the view UBO. view_buffer_range is held across
         // the compute encoder + the render encoder so the multiview
         // vertex shader can read stride_per_view at draw time; release
@@ -303,10 +303,11 @@ void Content_wide_line_compute_renderer::compute(erhe::graphics::Compute_command
         }
 
         // padded_edge_count = workgroup_count * 32 (= ceil(edge_count/32) * 32).
-        // stride_per_view (in vertices) = padded_edge_count * 6.
+        // stride_per_view (in vertices) = padded_edge_count * 12 (each edge
+        // expands to a 4-triangle tent = 12 vertices).
         const uint32_t    workgroup_count   = static_cast<uint32_t>((dispatch.edge_count + 31) / 32);
         const std::size_t padded_edge_count = static_cast<std::size_t>(workgroup_count) * 32;
-        const uint32_t    stride_per_view_v = static_cast<uint32_t>(padded_edge_count * 6);
+        const uint32_t    stride_per_view_v = static_cast<uint32_t>(padded_edge_count * 12);
 
         erhe::graphics::Ring_buffer_range view_buffer_range = m_view_buffer.acquire(
             erhe::graphics::Ring_buffer_usage::CPU_write,
@@ -448,6 +449,17 @@ void Content_wide_line_compute_renderer::render(
         return;
     }
 
+    // Wide-line ribbons are screen-facing thin geometry whose triangle winding
+    // is not a meaningful front/back face: the tent's two half-quads fold at the
+    // edge crease and depth-displace onto different planes, so no single winding
+    // survives backface culling (RenderDoc shows every tent triangle culled when
+    // the caller's solid-mesh cull state is honoured). Disable culling for the
+    // wide-line draw (matching Debug_renderer's cull_mode_none); the simpler quad
+    // path is unaffected (a correctly-wound quad renders the same with culling
+    // off). Other rasterization settings (depth clamp, polygon mode) are kept.
+    erhe::graphics::Rasterization_state rasterization = pipeline_state.data.rasterization;
+    rasterization.face_cull_enable = false;
+
     erhe::graphics::Render_pipeline_state temp_state{
         erhe::graphics::Render_pipeline_data{
             .debug_label          = pipeline_state.data.debug_label,
@@ -463,7 +475,7 @@ void Content_wide_line_compute_renderer::render(
             .input_assembly       = erhe::graphics::Input_assembly_state::triangle,
             .multisample          = pipeline_state.data.multisample,
             .viewport_depth_range = pipeline_state.data.viewport_depth_range,
-            .rasterization        = pipeline_state.data.rasterization,
+            .rasterization        = rasterization,
             .depth_stencil        = pipeline_state.data.depth_stencil,
             .color_blend          = (color_blend_state != nullptr)
                 ? *color_blend_state
@@ -490,7 +502,7 @@ void Content_wide_line_compute_renderer::render(
         render_encoder.draw_primitives(
             erhe::graphics::Primitive_type::triangle,
             0,
-            static_cast<uint32_t>(6 * dispatch.edge_count)
+            static_cast<uint32_t>(12 * dispatch.edge_count)
         );
     }
 }
