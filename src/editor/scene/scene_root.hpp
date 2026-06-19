@@ -168,6 +168,7 @@ public:
 
     [[nodiscard]] auto layers            () -> Scene_layers&;
     [[nodiscard]] auto layers            () const -> const Scene_layers&;
+    [[nodiscard]] auto has_physics_world () const -> bool;
     [[nodiscard]] auto get_physics_world () -> erhe::physics::IWorld&;
 
     // Bounded log of recent sensor (trigger) overlap events, appended by the

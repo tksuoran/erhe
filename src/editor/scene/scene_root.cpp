@@ -767,6 +767,11 @@ auto Scene_root::layers() const -> const Scene_layers&
     return m_layers;
 }
 
+auto Scene_root::has_physics_world() const -> bool
+{
+    return static_cast<bool>(m_physics_world);
+}
+
 auto Scene_root::get_physics_world() -> erhe::physics::IWorld&
 {
     ERHE_VERIFY(m_physics_world);

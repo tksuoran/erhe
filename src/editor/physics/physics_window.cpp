@@ -93,6 +93,14 @@ void Physics_window::imgui()
             continue;
         }
 
+        // No physics world is created when physics is disabled (static_enable =
+        // false); the scene_root then has no world to describe.
+        if (!scene_root->has_physics_world()) {
+            ImGui::TextUnformatted("(physics disabled - no world)");
+            ImGui::TreePop();
+            continue;
+        }
+
         const auto& physics_world = scene_root->get_physics_world();
         const auto& debug_info = physics_world.describe();
         for (const auto& line : debug_info) {
@@ -134,6 +142,10 @@ void Physics_window::imgui()
         // No viewport hovered yet: when exactly one scene exists, use it.
         : m_context.app_scenes->get_single_scene_root();
     if (!scene_root) {
+        return;
+    }
+    // Physics disabled (static_enable = false) -> no world to edit.
+    if (!scene_root->has_physics_world()) {
         return;
     }
 
