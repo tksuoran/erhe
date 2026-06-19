@@ -8,6 +8,8 @@ claude.sh
 !.idea/runConfigurations/**
 .vs
 .vscode/compile_commands.json
+.clangd
+build_ninja_win_vulkan
 erhe_cmake_profiling.json
 **/__pycache__/
 *.pyc
