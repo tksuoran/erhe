@@ -13,6 +13,7 @@ auto is_primitive_mode_enabled(
         case Primitive_mode::corner_points    : return style.corner_points;
         case Primitive_mode::corner_normals   : return false;
         case Primitive_mode::polygon_centroids: return style.polygon_centroids;
+        case Primitive_mode::solid_wireframe  : return style.solid_wireframe;
         case Primitive_mode::count            : return false;
         default:                                return false;
     }
@@ -49,6 +50,17 @@ auto get_primitive_settings(
             };
 
         case Primitive_mode::corner_normals   : return Primitive_interface_settings{};
+
+        case Primitive_mode::solid_wireframe:
+            // Wireframe color / width are read by standard.frag (via the
+            // per-draw Primitive block color / size) for the expanded fill draw.
+            return Primitive_interface_settings{
+                .color_source    = erhe::scene_renderer::Primitive_color_source::constant_color,
+                .constant_color0 = style.solid_wireframe_color,
+                .constant_color1 = style.solid_wireframe_color,
+                .size_source     = Primitive_size_source::constant_size,
+                .constant_size   = style.solid_wireframe_width
+            };
 
         case Primitive_mode::polygon_centroids:
             return Primitive_interface_settings{

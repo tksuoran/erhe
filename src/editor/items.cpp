@@ -103,6 +103,7 @@ void async_for_nodes_with_mesh(
                     .build_info{
                         .primitive_types = {
                             .fill_triangles  = true,
+                            .fill_triangles_expanded = true,
                             .edge_lines      = true,
                             .corner_points   = true,
                             .centroid_points = true

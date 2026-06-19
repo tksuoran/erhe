@@ -66,6 +66,10 @@ public:
     // base pipeline per selection state suffices.
     erhe::graphics::Base_render_pipeline polygon_fill_standard;
     erhe::graphics::Base_render_pipeline polygon_fill_standard_selected;
+    // Solid-wireframe overlay: triangle fill, depth less-or-equal, no depth
+    // write, no stencil -- draws the expanded fill (with the wireframe variant)
+    // at equal depth over the normal polygon fill.
+    erhe::graphics::Base_render_pipeline solid_wireframe;
     erhe::graphics::Color_blend_state    line_hidden_blend_state;
     erhe::graphics::Base_render_pipeline line_hidden_blend;
     erhe::graphics::Base_render_pipeline brush_back;

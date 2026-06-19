@@ -827,6 +827,7 @@ auto Operations::mesh_context() -> Mesh_operation_parameters
         .build_info{
             .primitive_types = {
                 .fill_triangles  = true,
+                .fill_triangles_expanded = true,
                 .edge_lines      = true,
                 .corner_points   = true,
                 .centroid_points = true
@@ -1219,6 +1220,7 @@ void Operations::merge()
                         .build_info{
                             .primitive_types{
                                 .fill_triangles  = true,
+                                .fill_triangles_expanded = true,
                                 .edge_lines      = true,
                                 .corner_points   = true,
                                 .centroid_points = true
@@ -2273,6 +2275,7 @@ void Operations::create_brush()
         const erhe::primitive::Build_info brush_build_info{
             .primitive_types = {
                 .fill_triangles  = true,
+                .fill_triangles_expanded = true,
                 .edge_lines      = true,
                 .corner_points   = true,
                 .centroid_points = true

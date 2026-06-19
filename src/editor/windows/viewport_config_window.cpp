@@ -52,6 +52,18 @@ void Viewport_config_window::render_style_ui(Render_style_data& render_style)
         ImGui::TreePop();
     }
 
+    if (ImGui::TreeNodeEx("Solid Wireframe", flags)) {
+        // Real polygon edges drawn inside the fill fragment shader (expanded
+        // fill mesh) so they share the fill's depth and never z-fight. Replaces
+        // normal polygon fill when enabled.
+        ImGui::Checkbox("Visible", &render_style.solid_wireframe);
+        if (render_style.solid_wireframe) {
+            ImGui::SliderFloat("Width", &render_style.solid_wireframe_width, 0.0f, 8.0f);
+            ImGui::ColorEdit4("Color", &render_style.solid_wireframe_color.x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR);
+        }
+        ImGui::TreePop();
+    }
+
     if (ImGui::TreeNodeEx("Polygon Centroids", flags)) {
         ImGui::Checkbox("Visible", &render_style.polygon_centroids);
         if (render_style.polygon_centroids) {

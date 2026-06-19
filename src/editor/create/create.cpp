@@ -159,6 +159,7 @@ void Create::window_imgui()
                 .build_info   = erhe::primitive::Build_info{
                     .primitive_types = {
                         .fill_triangles  = true,
+                        .fill_triangles_expanded = true,
                         .edge_lines      = true,
                         .corner_points   = true,
                         .centroid_points = true
@@ -257,6 +258,7 @@ void Create::window_imgui()
                 .build_info   = erhe::primitive::Build_info{
                     .primitive_types = {
                         .fill_triangles  = true,
+                        .fill_triangles_expanded = true,
                         .edge_lines      = true,
                         .corner_points   = true,
                         .centroid_points = true

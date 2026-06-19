@@ -175,7 +175,41 @@ App_rendering::App_rendering(
             .blending_mode_policy{Blending_mode_policy::opaque_primitives_only},
             .primitive_mode      {Primitive_mode::polygon_fill},
             .filter              {filter_selected_or_hovered},
-            .get_render_style    {render_style_selected}
+            .get_render_style    {render_style_selected},
+        },
+        selected
+    );
+
+    // Solid wireframe: draws the expanded fill geometry with the SOLID_WIREFRAME
+    // standard-shader variant (real polygon edges blended over the lit fill,
+    // sharing the fill's exact depth -> no z-fight). Drawn as a depth
+    // less-or-equal overlay AFTER the normal polygon fill (same positions ->
+    // equal depth -> passes), so meshes that have no expanded geometry simply
+    // show the normal fill (no invisible content). Each pass no-ops unless its
+    // render style enables solid_wireframe (is_primitive_mode_enabled in
+    // Composition_pass::render) and the mesh has an expanded fill range.
+    auto content_solid_wireframe_not_selected = make_composition_pass(
+        "Content solid wireframe not selected",
+        Composition_pass_data{
+            .mesh_layers                  {Mesh_layer_id::content},
+            .blending_mode_policy         {Blending_mode_policy::opaque_primitives_only},
+            .primitive_mode               {Primitive_mode::solid_wireframe},
+            .filter                       {filter_not_selected},
+            .shader_key_force_enable_mask {make_shader_bool_mask(Shader_bool::SOLID_WIREFRAME)},
+            .get_render_style             {render_style_not_selected},
+        },
+        not_selected
+    );
+
+    auto content_solid_wireframe_selected_or_hovered = make_composition_pass(
+        "Content solid wireframe selected",
+        Composition_pass_data{
+            .mesh_layers                  {Mesh_layer_id::content},
+            .blending_mode_policy         {Blending_mode_policy::opaque_primitives_only},
+            .primitive_mode               {Primitive_mode::solid_wireframe},
+            .filter                       {filter_selected_or_hovered},
+            .shader_key_force_enable_mask {make_shader_bool_mask(Shader_bool::SOLID_WIREFRAME)},
+            .get_render_style             {render_style_selected},
         },
         selected
     );
@@ -520,6 +554,12 @@ auto App_rendering::get_render_pipeline_state(
                 ? &m_pipeline_passes.polygon_fill_standard_selected
                 : &m_pipeline_passes.polygon_fill_standard;
 
+        case Primitive_mode::solid_wireframe:
+            // Depth less-or-equal overlay over the normal fill (same pipeline
+            // for selected / not -- the selection stencil is written by the
+            // normal fill pass). No depth write, no stencil.
+            return &m_pipeline_passes.solid_wireframe;
+
         case Primitive_mode::edge_lines:
             return &m_pipeline_passes.edge_lines;
 
@@ -635,6 +675,21 @@ Pipeline_renderpasses::Pipeline_renderpasses(
                     .test_mask       = 0b00000000u,
                     .write_mask      = 0b10000000u
                 },
+            }
+        }
+    }
+
+    , solid_wireframe{
+        graphics_device,
+        erhe::graphics::Base_render_pipeline_create_info{
+            .debug_label    = erhe::utility::Debug_label{"Solid Wireframe"},
+            .input_assembly = Input_assembly_state::triangle,
+            .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
+            .depth_stencil  = {
+                .depth_test_enable   = true,
+                .depth_write_enable  = false,
+                .depth_compare_op    = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::less_or_equal, reverse_depth),
+                .stencil_test_enable = false
             }
         }
     }

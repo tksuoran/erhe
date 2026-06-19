@@ -1224,6 +1224,7 @@ auto load_scene(
     erhe::primitive::Build_info build_info{
         .primitive_types = {
             .fill_triangles  = true,
+            .fill_triangles_expanded = true,
             .edge_lines      = true,
             .corner_points   = true,
             .centroid_points = true,

@@ -2452,10 +2452,11 @@ auto Mcp_server::action_create_shape(const json& args) -> std::string
         .name         = args.value("name", shape),
         .build_info   = erhe::primitive::Build_info{
             .primitive_types = {
-                .fill_triangles  = true,
-                .edge_lines      = true,
-                .corner_points   = true,
-                .centroid_points = true
+                .fill_triangles          = true,
+                .fill_triangles_expanded = true,
+                .edge_lines              = true,
+                .corner_points           = true,
+                .centroid_points         = true
             },
             .buffer_info     = m_context.mesh_memory->make_primitive_buffer_info()
         },
@@ -3659,10 +3660,11 @@ auto Mcp_server::action_import_gltf(const json& args) -> std::string
         m_context,
         erhe::primitive::Build_info{
             .primitive_types = {
-                .fill_triangles  = true,
-                .edge_lines      = true,
-                .corner_points   = true,
-                .centroid_points = true
+                .fill_triangles          = true,
+                .fill_triangles_expanded = true,
+                .edge_lines              = true,
+                .corner_points           = true,
+                .centroid_points         = true
             },
             .buffer_info = m_context.mesh_memory->make_primitive_buffer_info()
         },

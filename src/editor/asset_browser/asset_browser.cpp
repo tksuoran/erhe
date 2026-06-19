@@ -97,6 +97,7 @@ void Scene_open_operation::execute(App_context& context)
             erhe::primitive::Build_info{
                 .primitive_types = {
                     .fill_triangles  = true,
+                    .fill_triangles_expanded = true,
                     .edge_lines      = true,
                     .corner_points   = true,
                     .centroid_points = true
@@ -326,6 +327,7 @@ auto Asset_browser::try_import(const std::shared_ptr<Asset_file_gltf>& gltf) -> 
             erhe::primitive::Build_info{
                 .primitive_types = {
                     .fill_triangles  = true,
+                    .fill_triangles_expanded = true,
                     .edge_lines      = true,
                     .corner_points   = true,
                     .centroid_points = true
@@ -348,6 +350,7 @@ auto Asset_browser::try_import(const std::shared_ptr<Asset_file_geogram>& geogra
             erhe::primitive::Build_info{
                 .primitive_types = {
                     .fill_triangles  = true,
+                    .fill_triangles_expanded = true,
                     .edge_lines      = true,
                     .corner_points   = true,
                     .centroid_points = true

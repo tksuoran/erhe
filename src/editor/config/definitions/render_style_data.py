@@ -1,13 +1,19 @@
 from erhe_codegen import *
 
 struct("Render_style_data",
-    version=1,
+    version=2,
     short_desc="Render Style",
     long_desc="Rendering style for meshes in viewport",
     developer=False,
     fields=[
         field("polygon_fill",      Bool, added_in=1, default="true",  short_desc="Polygon Fill"),
         field("edge_lines",        Bool, added_in=1, default="false", short_desc="Edge Lines"),
+        # Solid wireframe: real polygon edges drawn inside the fill fragment
+        # shader (expanded fill mesh), so the wireframe shares the fill's depth
+        # and never z-fights. Replaces the normal polygon fill when enabled.
+        field("solid_wireframe",       Bool,  added_in=2, default="false",                short_desc="Solid Wireframe"),
+        field("solid_wireframe_width", Float, added_in=2, default="1.5f",                 short_desc="Solid Wireframe Width"),
+        field("solid_wireframe_color", Vec4,  added_in=2, default="0.0f, 0.0f, 0.0f, 1.0f", short_desc="Solid Wireframe Color"),
         field("polygon_centroids", Bool, added_in=1, default="false", short_desc="Polygon Centroids"),
         field("corner_points",     Bool, added_in=1, default="false", short_desc="Corner Points"),
         field("point_size",        Float, added_in=1, default="4.0f", short_desc="Point Size"),

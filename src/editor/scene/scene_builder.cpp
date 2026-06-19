@@ -246,6 +246,7 @@ auto Scene_builder::build_info(erhe::scene_renderer::Mesh_memory& mesh_memory) -
     return erhe::primitive::Build_info{
         .primitive_types = {
             .fill_triangles  = true,
+            .fill_triangles_expanded = true,
             .edge_lines      = true,
             .corner_points   = true,
             .centroid_points = true
