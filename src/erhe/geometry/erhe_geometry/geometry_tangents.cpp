@@ -8,11 +8,14 @@
 namespace erhe::geometry {
 
 auto compute_mesh_tangents(
-    GEO::Mesh& mesh,
-    const bool orthonormalize, 
-    const bool make_facets_flat
+    GEO::Mesh&                         mesh,
+    const Compute_tangents_parameters& parameters
 ) -> bool
 {
+    const bool        orthonormalize       = parameters.orthonormalize;
+    const bool        make_facets_flat     = parameters.make_facets_flat;
+    const std::size_t texcoord_usage_index = parameters.texcoord_usage_index;
+
     // compute_polygon_normals
     // compute_polygon_centroids
     // compute_point_normals c_point_normals_smooth
@@ -21,19 +24,23 @@ auto compute_mesh_tangents(
     class Mesh_context
     {
     public:
-        explicit Mesh_context(GEO::Mesh& mesh, const bool orthonormalize)
-            : mesh          {mesh}
-            , attributes    {mesh}
-            , orthonormalize{orthonormalize}
+        explicit Mesh_context(GEO::Mesh& mesh, const bool orthonormalize, const std::size_t texcoord_usage_index)
+            : mesh           {mesh}
+            , attributes     {mesh}
+            , corner_texcoord{attributes.corner_texcoord(texcoord_usage_index)}
+            , vertex_texcoord{attributes.vertex_texcoord(texcoord_usage_index)}
+            , orthonormalize {orthonormalize}
         {
         }
 
-        GEO::Mesh&      mesh;
-        Mesh_attributes attributes;
-        bool            orthonormalize     {false};
-        int             face_count         {0};
-        bool            override_existing  {false};
-        int             tangent_error_count{0};
+        GEO::Mesh&                     mesh;
+        Mesh_attributes                attributes;
+        Attribute_present<GEO::vec2f>& corner_texcoord;
+        Attribute_present<GEO::vec2f>& vertex_texcoord;
+        bool                           orthonormalize     {false};
+        int                            face_count         {0};
+        bool                           override_existing  {false};
+        int                            tangent_error_count{0};
 
         // Polygons are triangulated.
         class Face
@@ -136,15 +143,15 @@ auto compute_mesh_tangents(
                 GEO::index_t corner_count = 0;
                 const GEO::index_t facet        = get_facet(iFace);
                 for (GEO::index_t corner : mesh.facets.corners(facet)) {
-                    const std::optional<GEO::vec2f> corner_texcoord_0 = attributes.corner_texcoord_0.try_get(corner);
-                    if (corner_texcoord_0.has_value()) {
-                        texcoord_sum += corner_texcoord_0.value();
+                    const std::optional<GEO::vec2f> corner_texcoord_value = corner_texcoord.try_get(corner);
+                    if (corner_texcoord_value.has_value()) {
+                        texcoord_sum += corner_texcoord_value.value();
                         ++corner_count;
                     } else {
                         const GEO::index_t vertex = mesh.facet_corners.vertex(corner);
-                        const std::optional<GEO::vec2f> vertex_texcoord_0 = attributes.vertex_texcoord_0.try_get(vertex);
-                        if (vertex_texcoord_0.has_value()) {
-                            texcoord_sum += vertex_texcoord_0.value();
+                        const std::optional<GEO::vec2f> vertex_texcoord_value = vertex_texcoord.try_get(vertex);
+                        if (vertex_texcoord_value.has_value()) {
+                            texcoord_sum += vertex_texcoord_value.value();
                             ++corner_count;
                         }
                     }
@@ -160,16 +167,16 @@ auto compute_mesh_tangents(
                 return get_facet_average_texcoord();
             }
 
-            const GEO::index_t              corner            = get_corner(iFace, iVert);
-            const std::optional<GEO::vec2f> corner_texcoord_0 = attributes.corner_texcoord_0.try_get(corner);
-            if (corner_texcoord_0.has_value()) {
-                return corner_texcoord_0.value();
+            const GEO::index_t              corner                = get_corner(iFace, iVert);
+            const std::optional<GEO::vec2f> corner_texcoord_value = corner_texcoord.try_get(corner);
+            if (corner_texcoord_value.has_value()) {
+                return corner_texcoord_value.value();
             }
 
-            const GEO::index_t              vertex            = get_vertex(iFace, iVert);
-            const std::optional<GEO::vec2f> vertex_texcoord_0 = attributes.vertex_texcoord_0.try_get(vertex);
-            if (vertex_texcoord_0.has_value()) {
-                return vertex_texcoord_0.value();
+            const GEO::index_t              vertex                = get_vertex(iFace, iVert);
+            const std::optional<GEO::vec2f> vertex_texcoord_value = vertex_texcoord.try_get(vertex);
+            if (vertex_texcoord_value.has_value()) {
+                return vertex_texcoord_value.value();
             }
 
             return get_facet_average_texcoord();
@@ -210,7 +217,7 @@ auto compute_mesh_tangents(
         }
     };
 
-    Mesh_context mesh_context{mesh, orthonormalize};
+    Mesh_context mesh_context{mesh, orthonormalize, texcoord_usage_index};
 
     // MikkTSpace can only handle triangles or quads.
     // We triangulate face with more corners than 4 by adding a virtual polygon centroid

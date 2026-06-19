@@ -1370,7 +1370,7 @@ void Geometry::process(const Geometry_process_parameters& parameters)
         compute_facet_centroids(m_mesh, m_attributes);
     }
     if (flags & process_flag_generate_facet_texture_coordinates) {
-        generate_mesh_facet_texture_coordinates();
+        generate_mesh_facet_texture_coordinates(parameters.facet_texcoord_usage_index);
     }
     if (flags & process_flag_generate_atlas_texture_coordinates) {
         erhe::log::set_breadcrumb("geometry: generate_atlas_texture_coordinates");
@@ -1388,10 +1388,10 @@ void Geometry::process(const Geometry_process_parameters& parameters)
         );
     }
     if (flags & process_flag_generate_tangents_ortho) {
-        compute_mesh_tangents(m_mesh, true, false);
+        compute_mesh_tangents(m_mesh, {.orthonormalize = true, .make_facets_flat = false, .texcoord_usage_index = parameters.tangent_texcoord_usage_index});
     } else
     if (flags & process_flag_generate_tangents) {
-        compute_mesh_tangents(m_mesh, false, false);
+        compute_mesh_tangents(m_mesh, {.orthonormalize = false, .make_facets_flat = false, .texcoord_usage_index = parameters.tangent_texcoord_usage_index});
     }
     if (flags & process_flag_debug_trace) {
         debug_trace();

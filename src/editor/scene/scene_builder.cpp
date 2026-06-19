@@ -605,7 +605,7 @@ void Scene_builder::make_json_brushes(
         erhe::geometry::Geometry::process_flag_compute_facet_centroids |
         erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
         erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates |
-        erhe::geometry::Geometry::process_flag_generate_atlas_texture_coordinates;
+        erhe::geometry::Geometry::process_flag_generate_tangents;
 
     m_johnson_solids_folder = brushes.make_folder("Johnson Solids");
     auto& folder = *m_johnson_solids_folder.get();
@@ -619,12 +619,8 @@ void Scene_builder::make_json_brushes(
             }
             geometry->process({
                 .flags = process_flags,
-                // ~1 degree forces every face into its own UV chart (per-face
-                // atlas). Johnson faces are regular polygons, so projection makes
-                // each chart an undistorted regular n-gon; xatlas packs them into
-                // slot 0. (Slot 1 keeps the radial brushed-metal UVs.)
-                .atlas_hard_angle_threshold = 1.0f,
-                .atlas_texcoord_usage_index = 0
+                .facet_texcoord_usage_index = 1,
+                .tangent_texcoord_usage_index = 1
             });
 
             auto brush = make_brush(

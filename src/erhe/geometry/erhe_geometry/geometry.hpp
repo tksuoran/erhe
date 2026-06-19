@@ -332,10 +332,24 @@ void transform_mesh(
     Mesh_attributes&       destination_attributes,
     const GEO::mat4f&      transform
 );
+// Parameters for compute_mesh_tangents(). Bundled into a struct (rather than a
+// positional list of booleans) so call sites read self-documentingly. Aggregate -
+// use designated initializers:
+//   compute_mesh_tangents(mesh, {.orthonormalize = true, .texcoord_usage_index = 0});
+class Compute_tangents_parameters
+{
+public:
+    bool orthonormalize{false};
+    bool make_facets_flat{false};
+
+    // Corner/vertex texcoord slot (0 or 1) the tangent generation reads UVs from.
+    std::size_t texcoord_usage_index{0};
+};
+
 void compute_facet_normals                   (GEO::Mesh& mesh, Mesh_attributes& attributes);
 void compute_facet_centroids                 (GEO::Mesh& mesh, Mesh_attributes& attributes);
 void compute_mesh_vertex_normal_smooth       (GEO::Mesh& mesh, Mesh_attributes& attributes);
-auto compute_mesh_tangents                   (GEO::Mesh& mesh, bool orthonormalize, bool make_facets_flat) -> bool;
+auto compute_mesh_tangents                   (GEO::Mesh& mesh, const Compute_tangents_parameters& parameters) -> bool;
 void generate_mesh_facet_texture_coordinates (GEO::Mesh& mesh, GEO::index_t facet, Mesh_attributes& attributes, std::size_t usage_index = 1);
 void generate_mesh_facet_texture_coordinates (GEO::Mesh& mesh, Mesh_attributes& attributes, std::size_t usage_index = 1);
 
@@ -734,8 +748,16 @@ public:
     // chart (per-face atlas); Geogram's default is 45.
     float atlas_hard_angle_threshold{45.0f};
 
-    // Corner texcoord slot the atlas writes into (0 or 1).
+    // Corner texcoord slot the atlas writes into.
     std::size_t atlas_texcoord_usage_index{0};
+
+    // Used by process_flag_generate_facet_texture_coordinates: corner texcoord slot
+    // the per-facet planar texture coordinates are written into.
+    std::size_t facet_texcoord_usage_index{1};
+
+    // Used by process_flag_generate_tangents / process_flag_generate_tangents_ortho:
+    // corner/vertex texcoord slot the tangent generation reads UVs from.
+    std::size_t tangent_texcoord_usage_index{0};
 };
 
 class Geometry
