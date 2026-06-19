@@ -122,6 +122,7 @@ private:
     auto action_import_gltf     (const nlohmann::json& args) -> std::string;
     auto action_wake_physics_bodies(const nlohmann::json& args) -> std::string;
     auto query_physics_items    (const nlohmann::json& args) -> std::string;
+    auto query_get_physics_state(const nlohmann::json& args) -> std::string;
     auto action_create_physics_body(const nlohmann::json& args) -> std::string;
     auto action_edit_physics_body  (const nlohmann::json& args) -> std::string;
     auto action_create_physics_joint(const nlohmann::json& args) -> std::string;
@@ -139,6 +140,7 @@ private:
     auto action_clear_mesh_component_selection(const nlohmann::json& args) -> std::string;
     auto action_align_components              (const nlohmann::json& args) -> std::string;
     auto action_add_joint                     (const nlohmann::json& args) -> std::string;
+    auto action_flip_joint                    (const nlohmann::json& args) -> std::string;
     auto action_remesh                        (const nlohmann::json& args) -> std::string;
     auto action_decimate                      (const nlohmann::json& args) -> std::string;
     auto action_smooth                        (const nlohmann::json& args) -> std::string;

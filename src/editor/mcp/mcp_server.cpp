@@ -911,6 +911,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "capture_screenshot") result = action_capture_screenshot(req->arguments);
         else if (req->tool_name == "wake_physics_bodies") result = action_wake_physics_bodies(req->arguments);
         else if (req->tool_name == "get_physics_items")  result = query_physics_items   (req->arguments);
+        else if (req->tool_name == "get_physics_state")  result = query_get_physics_state(req->arguments);
         else if (req->tool_name == "create_physics_body") result = action_create_physics_body(req->arguments);
         else if (req->tool_name == "edit_physics_body")  result = action_edit_physics_body(req->arguments);
         else if (req->tool_name == "create_physics_joint") result = action_create_physics_joint(req->arguments);
@@ -927,6 +928,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "clear_mesh_component_selection") result = action_clear_mesh_component_selection(req->arguments);
         else if (req->tool_name == "align_components")              result = action_align_components(req->arguments);
         else if (req->tool_name == "add_joint")                    result = action_add_joint(req->arguments);
+        else if (req->tool_name == "flip_joint")                   result = action_flip_joint(req->arguments);
         else if (req->tool_name == "remesh")                       result = action_remesh(req->arguments);
         else if (req->tool_name == "decimate")                     result = action_decimate(req->arguments);
         else if (req->tool_name == "smooth")                       result = action_smooth(req->arguments);
@@ -1398,6 +1400,21 @@ void Mcp_server::refresh_tool_list()
         {"properties", {
             {"avoidance", {{"type", "string"}, {"enum", json::array({"joint_pair", "whole_world"})}, {"description", "What the initial-orientation search avoids intersecting: just the joined pair (default) or every body in the physics world"}}}
         }}
+    }});
+    m_tool_infos.push_back({"flip_joint", "Flip the hinge joint that the selected node is a rigid-body party of: reorients that body by a 180-degree edge-endpoints-swapped flip plus a non-intersecting roll, re-pins its joint frame, and rebuilds the constraint. Select a rigid-body party of a hinge joint first. Undoable.", {
+        {"type", "object"},
+        {"properties", {
+            {"avoidance", {{"type", "string"}, {"enum", json::array({"joint_pair", "whole_world"})}, {"description", "What the roll search avoids intersecting: just the joined pair (default) or every body in the physics world"}}}
+        }}
+    }});
+    m_tool_infos.push_back({"get_physics_state", "Get the live physics motion state of a node's rigid body: motion mode, active flag, world position, and linear / angular velocity (with magnitudes). Poll across frames to observe how a body reacts after an operation.", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name", {{"type", "string"},  {"description", "Name of the scene"}}},
+            {"node_id",    {{"type", "integer"}, {"description", "Node ID (preferred over node_name when both given)"}}},
+            {"node_name",  {{"type", "string"},  {"description", "Node name (used when node_id is absent)"}}}
+        }},
+        {"required", json::array({"scene_name"})}
     }});
 
     // Geogram mesh operations - act on the object selection (set via select_items).
@@ -4558,6 +4575,59 @@ auto Mcp_server::action_add_joint(const json& args) -> std::string
         return make_error_content("Add Joint failed: needs two aligned components on distinct rigid bodies and a non-intersecting orientation (see editor log for the specific reason)");
     }
     return make_json_content({{"created", true}, {"avoidance", avoidance_str}}).dump();
+}
+
+auto Mcp_server::action_flip_joint(const json& args) -> std::string
+{
+    if (m_context.operations == nullptr) {
+        return make_error_content("Operations not available");
+    }
+    const std::string avoidance_str = args.value("avoidance", "joint_pair");
+    Add_joint_avoidance avoidance = Add_joint_avoidance::joint_pair;
+    if (avoidance_str == "whole_world") {
+        avoidance = Add_joint_avoidance::whole_world;
+    } else if (avoidance_str != "joint_pair") {
+        return make_error_content("Invalid avoidance: " + avoidance_str + " (joint_pair, whole_world)");
+    }
+    const bool flipped = m_context.operations->flip_joint(avoidance);
+    if (!flipped) {
+        return make_error_content("Flip Joint failed: select a rigid-body party of a hinge joint (see editor log for the specific reason)");
+    }
+    return make_json_content({{"flipped", true}, {"avoidance", avoidance_str}}).dump();
+}
+
+auto Mcp_server::query_get_physics_state(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (!node) {
+        return make_error_content("Node not found (give node_id or node_name)");
+    }
+    const std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
+    if (!node_physics) {
+        return make_error_content("Node has no rigid body: " + node->get_name());
+    }
+    const erhe::physics::IRigid_body* rigid_body = node_physics->get_rigid_body();
+    if (rigid_body == nullptr) {
+        return make_error_content("Rigid body is not live (node not attached to a scene): " + node->get_name());
+    }
+    const glm::vec3 lin = rigid_body->get_linear_velocity();
+    const glm::vec3 ang = rigid_body->get_angular_velocity();
+    const glm::vec3 pos = glm::vec3{rigid_body->get_world_transform()[3]};
+    return make_json_content({
+        {"node",             node->get_name()},
+        {"motion_mode",      motion_mode_to_string(rigid_body->get_motion_mode())},
+        {"is_active",        rigid_body->is_active()},
+        {"position",         {pos.x, pos.y, pos.z}},
+        {"linear_velocity",  {lin.x, lin.y, lin.z}},
+        {"angular_velocity", {ang.x, ang.y, ang.z}},
+        {"linear_speed",     glm::length(lin)},
+        {"angular_speed",    glm::length(ang)}
+    }).dump();
 }
 
 auto Mcp_server::action_remesh(const json& args) -> std::string
