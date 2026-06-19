@@ -9,7 +9,10 @@ claude.sh
 .vs
 .vscode/compile_commands.json
 .clangd
+.mcp.json
+.lsai/
 build_ninja_win_vulkan
+build_ninja_win_clang
 erhe_cmake_profiling.json
 **/__pycache__/
 *.pyc
