@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "lsai": {
+      "command": "C:/Users/ladis/.lsai/run.cmd",
+      "args": ["--stdio"]
+    }
+  }
+}
