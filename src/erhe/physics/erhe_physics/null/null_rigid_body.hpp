@@ -50,6 +50,7 @@ public:
     void set_motion_mode             (Motion_mode motion_mode)                      override;
     void set_restitution             (float restitution)                            override;
     void set_world_transform         (const Transform& transform)                   override;
+    void teleport                    (const Transform& transform)                   override;
     void set_allow_sleeping          (bool value)                                   override;
     void set_owner                   (void* owner)                                  override;
     auto get_owner                   () const -> void*                              override;

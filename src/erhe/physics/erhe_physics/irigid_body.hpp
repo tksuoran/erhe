@@ -100,6 +100,13 @@ public:
     virtual void set_motion_mode     (Motion_mode motion_mode)                      = 0;
     virtual void set_restitution     (float restitution)                            = 0;
     virtual void set_world_transform (const Transform& transform)                   = 0;
+    // Instantaneous, motion-mode-independent placement that induces no velocity.
+    // Unlike set_world_transform(), which for e_kinematic_physical bodies uses
+    // MoveKinematic() (converting the position delta into a velocity), teleport()
+    // always sets the pose directly without activation. Use it to snap a body to a
+    // new authored pose (e.g. after a joint create/flip or an editor move) so the
+    // simulation does not react to the jump with a corrective impulse.
+    virtual void teleport            (const Transform& transform)                   = 0;
     virtual void set_allow_sleeping  (bool value)                                   = 0;
     virtual void set_owner           (void* owner)                                  = 0;
     [[nodiscard]] virtual auto get_owner() const -> void*                           = 0;

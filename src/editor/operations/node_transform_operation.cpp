@@ -3,6 +3,7 @@
 #include "app_context.hpp"
 #include "editor_log.hpp"
 #include "app_message_bus.hpp"
+#include "scene/node_physics.hpp"
 #include "time.hpp"
 
 #include "erhe_log/log_glm.hpp"
@@ -108,6 +109,13 @@ void Node_transform_operation::execute(App_context& context)
                 .node   = m_parameters.node.get()
             }
         );
+        // Snap the node's rigid body to the new pose at rest so the simulation does
+        // not react to this discrete (non-interactive) move with a kinematic velocity
+        // injection or corrective impulse.
+        const std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(m_parameters.node.get());
+        if (node_physics) {
+            node_physics->teleport_to_node();
+        }
     } else {
         context.time->begin_transform_animation(
             m_parameters.node,
@@ -128,6 +136,11 @@ void Node_transform_operation::undo(App_context& context)
             .node   = m_parameters.node.get()
         }
     );
+    // Snap the node's rigid body to the restored pose at rest (see execute()).
+    const std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(m_parameters.node.get());
+    if (node_physics) {
+        node_physics->teleport_to_node();
+    }
 }
 
 }

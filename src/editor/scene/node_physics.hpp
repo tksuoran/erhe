@@ -65,6 +65,14 @@ public:
     void begin_interaction();
     void end_interaction();
 
+    // Snap the rigid body instantly to the node's current world pose with zero
+    // linear/angular velocity (and wake it if dynamic). Used by editor operations
+    // that reposition a body (joint create / flip, transform edits) so the
+    // simulation does not react with a corrective impulse or a kinematic velocity
+    // injection (the MoveKinematic path in set_world_transform). No-op for bodies
+    // that cannot produce such a reaction (no body / static / kinematic non-physical).
+    void teleport_to_node();
+
     // Shared physics material; updates both create info and the live rigid
     // body. Re-assign after editing a live Physics_material item so the
     // backend re-snapshots the values.

@@ -367,6 +367,25 @@ void Jolt_rigid_body::set_world_transform(const Transform& transform)
     }
 }
 
+void Jolt_rigid_body::teleport(const Transform& transform)
+{
+    if (m_body == nullptr) {
+        log_physics->error("Fixed world body cannot be modified");
+        return;
+    }
+
+    // Motion-mode-independent instantaneous placement. Always SetPositionAndRotation
+    // with DontActivate so no velocity is induced (in particular this bypasses the
+    // MoveKinematic path that set_world_transform() takes for e_kinematic_physical).
+    SPDLOG_LOGGER_TRACE(log_physics_frame, "{} teleport {}", m_debug_label, transform.origin);
+    get_body_interface().SetPositionAndRotation(
+        m_body->GetID(),
+        to_jolt(transform.origin),
+        to_jolt(glm::quat{transform.basis}),
+        JPH::EActivation::DontActivate
+    );
+}
+
 auto Jolt_rigid_body::get_linear_velocity() const -> glm::vec3
 {
     if (m_body == nullptr) {

@@ -322,4 +322,34 @@ void Node_physics::end_interaction()
     m_rigid_body->end_move();
 }
 
+void Node_physics::teleport_to_node()
+{
+    if (!m_rigid_body) {
+        return;
+    }
+    const Motion_mode mode = m_rigid_body->get_motion_mode();
+    // Only dynamic and kinematic-physical bodies can carry or produce kinetic energy
+    // that the simulation reacts to. Static and kinematic-non-physical bodies need no
+    // settling (the latter is already teleported via set_world_transform without
+    // inducing velocity).
+    if ((mode != Motion_mode::e_dynamic) && (mode != Motion_mode::e_kinematic_physical)) {
+        return;
+    }
+    const erhe::scene::Trs_transform& world_from_node = get_node()->world_from_node_transform();
+    m_rigid_body->teleport(
+        erhe::physics::Transform{
+            glm::mat3_cast(world_from_node.get_rotation()),
+            world_from_node.get_translation()
+        }
+    );
+    m_rigid_body->set_linear_velocity (glm::vec3{0.0f});
+    m_rigid_body->set_angular_velocity(glm::vec3{0.0f});
+    if (mode == Motion_mode::e_dynamic) {
+        // Wake the body so gravity and the (possibly new) constraint take effect from
+        // the placed pose instead of the body floating asleep.
+        m_rigid_body->begin_move();
+        m_rigid_body->end_move();
+    }
+}
+
 }

@@ -223,11 +223,12 @@ auto Node_joint::try_create_constraint() -> bool
 
     // Body B: nearest self-or-ancestor rigid body of the connected node;
     // no connected node (or none found) = constrain to the world.
-    IRigid_body*       body_b      {nullptr};
-    erhe::scene::Node* body_b_node {nullptr};
+    IRigid_body*                  body_b      {nullptr};
+    erhe::scene::Node*            body_b_node {nullptr};
+    std::shared_ptr<Node_physics> node_physics_b;
     const std::shared_ptr<erhe::scene::Node> connected_node = m_connected_node.lock();
     if (connected_node) {
-        const std::shared_ptr<Node_physics> node_physics_b = find_nearest_node_physics(connected_node.get());
+        node_physics_b = find_nearest_node_physics(connected_node.get());
         if (node_physics_b) {
             body_b = node_physics_b->get_rigid_body();
             if (body_b == nullptr) {
@@ -331,15 +332,15 @@ auto Node_joint::try_create_constraint() -> bool
     m_rigid_body_a = body_a;
     m_rigid_body_b = body_b;
 
-    // Bodies enter the world deactivated; wake the dynamic ones so the new
-    // constraint takes effect immediately.
-    if (body_a->get_motion_mode() == Motion_mode::e_dynamic) {
-        body_a->begin_move();
-        body_a->end_move();
-    }
-    if ((body_b != nullptr) && (body_b->get_motion_mode() == Motion_mode::e_dynamic)) {
-        body_b->begin_move();
-        body_b->end_move();
+    // Settle both bodies to their joint pose at rest so the freshly added constraint
+    // starts from coincident frames with zero relative velocity - no corrective
+    // impulse. teleport_to_node() also wakes dynamic bodies (so the constraint takes
+    // effect immediately, replacing the previous begin_move/end_move) and zeroes the
+    // kinematic MoveKinematic delta so a selected (kinematic-physical) body injects no
+    // velocity on the next frame.
+    node_physics_a->teleport_to_node();
+    if (node_physics_b) {
+        node_physics_b->teleport_to_node();
     }
 
     log_physics->trace("Node_joint '{}': constraint created", get_name());
