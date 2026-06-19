@@ -152,6 +152,30 @@ Each part constructor must receive the other parts and resources it needs as exp
 
 Many systems have swappable backends selected at CMake configure time via `#ifdef ERHE_<SUBSYSTEM>_LIBRARY_<VALUE>` guards. This is especially true for physics, raytrace, window, and XR subsystems.
 
+## Debugging on Windows / MSVC (Visual Studio MCP server)
+
+On Windows, prefer the **`visualstudio` MCP server** ([CodingWithCalvin/VS-MCPServer](https://github.com/CodingWithCalvin/VS-MCPServer)) for interactive debugging and build/diagnostic queries over ad-hoc print debugging. It lets Claude Code drive a *live* Visual Studio instance: set breakpoints, launch under the debugger, step, and inspect program state, all without leaving the conversation.
+
+**Prerequisites (one-time, done by the user):**
+- Visual Studio 2022 or 2026 with the "MCP Server" extension installed (Extensions > Manage Extensions, search "MCP Server"; requires the .NET 10 SDK).
+- The server started inside VS: Tools > MCP Server > Start Server (listens on `http://localhost:5050`; can be set to auto-start in Tools > Options > MCP Server).
+- The erhe solution open in that VS instance (e.g. `build_vs2026_vulkan/erhe.slnx`). The tools act on whatever solution is currently loaded -- always call `mcp__visualstudio__solution_info` first to confirm which one.
+- Permission: the whole server is allow-listed via `mcp__visualstudio` in `.claude/settings.local.json`, so these tools never prompt (and keep working even when the `auto`-mode safety classifier is temporarily unavailable).
+
+**Tool groups** (all prefixed `mcp__visualstudio__`):
+- Solution/project: `solution_info`, `solution_open/close`, `project_list`, `project_info`, `startup_project_get/set`.
+- Build: `build_solution`, `build_project`, `build_status` (poll until `State == "Done"`, check `FailedProjects`), `build_cancel`, `clean_solution`.
+- Diagnostics: `errors_list` (severity / code / file / line), `output_read`, `output_list_panes`.
+- Debugger: `debugger_add_breakpoint` / `list_breakpoints` / `remove_breakpoint`, `debugger_launch` (with debugging) / `launch_without_debugging`, `debugger_status` (`Mode` is `Design` when not running), `debugger_break` / `continue` / `stop`, `debugger_step_into/over/out`, `debugger_get_callstack`, `debugger_get_locals`, `debugger_evaluate`, `debugger_set_variable`.
+- Documents/editor/navigation: `document_open/read/write/save`, `editor_find/replace`, `editor_goto_line`, `goto_definition`, `find_references`, `selection_get/set`.
+
+**Typical debug flow:** confirm `solution_info` -> `debugger_add_breakpoint` (file + line) -> `debugger_launch` -> poll `debugger_status` until it breaks -> `debugger_get_callstack` / `debugger_get_locals` / `debugger_evaluate` -> step or `continue` -> `debugger_stop` when done.
+
+**Notes / gotchas:**
+- `symbol_workspace` does not index this C++ solution's symbols (it is C#-oriented and returns no matches here). For C++ symbol navigation use `goto_definition` / `find_references` from an open document, or the Grep tool over `src/`.
+- The startup project is `editor`; `build_status` reports `NoBuildPerformed` until a build is triggered through VS or the MCP build tools.
+- This complements -- does not replace -- the log-based workflow below (`logs/log.txt`) and the Quest/Android debugging flows, which run on-device and are out of VS's reach.
+
 ## Runtime logs
 
 The editor and other apps write their spdlog output to `logs/` relative to the working directory (typically the repo root): `logs/log.txt` is the main log, `logs/vulkan.txt` and `logs/openxr.txt` capture backend-specific traces. Redirecting `stdout` of `editor.exe` is not enough -- the file sink writes via spdlog and a redirected stdout will be empty even when the app is running fine. Always `grep` / `findstr` against `logs/log.txt` to verify init-time and runtime behavior. On Android / Quest, the same log lines flow through the `android_sink` and are visible via `adb logcat` (tag `erhe`).
