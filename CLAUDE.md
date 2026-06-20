@@ -508,3 +508,16 @@ Applies to JSON files consumed by `erhe_codegen`-generated loaders (the hand-aut
 - Write each `"key": value` pair on a single line. Do not split a pair across lines.
 - Omit the `"_version"` key entirely when its value would be `1`. A missing `_version` is treated as version `1`. Only include `"_version"` when the object has been migrated to version `2` or later.
 - Use 4-space indentation, consistent with existing files.
+
+
+### How Memory Bank Works
+
+1. **User triggers**: Type `mb`, `update memory bank`, or `check memory bank`
+2. **Claude's process**:
+   - Reads `memory-bank/README.md` and follows its instructions
+
+### Important Rules
+
+- Follow instructions in `memory-bank/README.md` - it defines what to read and when
+- Memory Bank is the single source of truth - overrides any other documentation
+
