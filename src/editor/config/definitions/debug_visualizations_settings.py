@@ -1,15 +1,19 @@
 from erhe_codegen import *
 
-# Persisted settings of the editor's Debug Visualizations window
-# (tools/debug_visualizations.cpp). Defaults match the C++ member
-# defaults. Not to be confused with Debug_visualizations_config, the
-# per-viewport light/camera visualization modes in Viewport_config_data.
+# Per-Scene_view persisted state of the editor's Debug Visualizations window
+# (tools/debug_visualizations.cpp): the enable toggles and per-view modes.
+# The appearance of these visualizations (colors, line widths, label geometry)
+# is editor-global and lives in Debug_visualizations_style instead. Defaults
+# match the C++ member defaults. Not to be confused with
+# Debug_visualizations_config, the per-viewport light/camera visualization
+# modes in Viewport_config_data.
 struct("Debug_visualizations_settings",
     version=8,
     short_desc="Debug Visualizations",
     long_desc="Settings for the Debug Visualizations window",
     developer=False,
     fields=[
+        # Per scene view:
         field("lights",                      EnumRef("Visualization_mode"), added_in=1, default="Visualization_mode::off", short_desc="Lights"),
         field("cameras",                     EnumRef("Visualization_mode"), added_in=1, default="Visualization_mode::off", short_desc="Cameras"),
         field("layouts",                     EnumRef("Visualization_mode"), added_in=1, default="Visualization_mode::off", short_desc="Layouts"),
@@ -38,39 +42,7 @@ struct("Debug_visualizations_settings",
         field("shadow_fit_box_frustum",            Bool,  added_in=2, default="false", short_desc="Fit Box: Frustum",     long_desc="Light space box after the view frustum / near constraints"),
         field("shadow_fit_box_cap",                Bool,  added_in=2, default="false", short_desc="Fit Box: Range Cap",   long_desc="Light space box after the shadow range cap"),
         field("shadow_fit_box_final",              Bool,  added_in=2, default="false", short_desc="Fit Box: Final",       long_desc="Final light space box after quantize and texel snap; matches the light projection"),
-        # Shadow frustum fit visualization colors and line widths. Negative
-        # line widths are in pixels and do not scale by distance.
-        field("shadow_fit_casters_color",          Vec4,  added_in=3, default="0.2f, 1.0f, 0.3f, 0.6f", short_desc="Fit Casters Color",        long_desc="Caster that affects the selected light's shadow (its bounds intersect F_shadow)"),
-        field("shadow_fit_casters_culled_color",   Vec4,  added_in=4, default="1.0f, 0.2f, 0.2f, 0.4f", short_desc="Fit Casters Culled Color", long_desc="Caster culled from the fit (its bounds do not intersect F_shadow), so it cannot affect the selected light's shadow"),
-        field("shadow_fit_casters_width",          Float, added_in=3, default="1.0f",                   short_desc="Fit Casters Width"),
-        field("shadow_fit_caster_hull_color",      Vec4,  added_in=3, default="1.0f, 1.0f, 1.0f, 0.8f", short_desc="Fit Caster Hull Color"),
-        field("shadow_fit_caster_hull_width",      Float, added_in=3, default="1.0f",                   short_desc="Fit Caster Hull Width"),
-        field("shadow_fit_view_frustum_color",     Vec4,  added_in=5, default="1.0f, 1.0f, 1.0f, 0.7f", short_desc="Fit View Frustum Color"),
-        field("shadow_fit_view_frustum_width",     Float, added_in=5, default="2.0f",                   short_desc="Fit View Frustum Width"),
-        field("shadow_fit_receivers_color",        Vec4,  added_in=3, default="0.4f, 0.8f, 1.0f, 1.0f", short_desc="Fit Receivers Color",        long_desc="Receiver that passes the view frustum filter"),
-        field("shadow_fit_receivers_culled_color", Vec4,  added_in=5, default="1.0f, 0.2f, 0.2f, 0.4f", short_desc="Fit Receivers Culled Color", long_desc="Receiver that fails the view frustum filter"),
-        field("shadow_fit_receivers_width",        Float, added_in=3, default="2.0f",                   short_desc="Fit Receivers Width"),
-        field("shadow_fit_receiver_hull_color",    Vec4,  added_in=6, default="0.2f, 1.0f, 0.6f, 0.8f", short_desc="Fit Receiver Hull Clipped Color"),
-        field("shadow_fit_receiver_hull_width",    Float, added_in=6, default="1.0f",                   short_desc="Fit Receiver Hull Clipped Width"),
-        field("shadow_fit_receiver_hull_unclipped_color", Vec4,  added_in=8, default="1.0f, 0.6f, 0.2f, 0.8f", short_desc="Fit Receiver Hull Unclipped Color"),
-        field("shadow_fit_receiver_hull_unclipped_width", Float, added_in=8, default="1.0f",                   short_desc="Fit Receiver Hull Unclipped Width"),
-        field("shadow_fit_volume_planes_color",    Vec4,  added_in=3, default="1.0f, 0.6f, 0.0f, 0.5f", short_desc="Fit Volume Planes Color"),
-        field("shadow_fit_volume_planes_width",    Float, added_in=3, default="8.0f",                   short_desc="Fit Volume Planes Width"),
-        field("shadow_fit_far_plane_hull_color",   Vec4,  added_in=7, default="1.0f, 0.0f, 0.4f, 1.0f", short_desc="Fit Far Plane Hull Color"),
-        field("shadow_fit_far_plane_hull_width",   Float, added_in=7, default="3.0f",                   short_desc="Fit Far Plane Hull Width"),
-        field("shadow_fit_points_color",           Vec4,  added_in=3, default="0.2f, 1.0f, 1.0f, 1.0f", short_desc="Fit Points Color"),
-        field("shadow_fit_points_width",           Float, added_in=3, default="1.0f",                   short_desc="Fit Points Width"),
-        field("shadow_fit_light_plane_hull_color", Vec4,  added_in=3, default="1.0f, 0.0f, 1.0f, 0.7f", short_desc="Fit Light Plane Hull Color"),
-        field("shadow_fit_light_plane_hull_width", Float, added_in=3, default="2.0f",                   short_desc="Fit Light Plane Hull Width"),
-        field("shadow_fit_obb_color",              Vec4,  added_in=3, default="1.0f, 0.3f, 0.6f, 1.0f", short_desc="Fit OBB Color"),
-        field("shadow_fit_obb_width",              Float, added_in=3, default="1.0f",                   short_desc="Fit OBB Width"),
-        field("shadow_fit_obb_edge_color",         Vec4,  added_in=3, default="0.4f, 1.0f, 0.1f, 1.0f", short_desc="Fit OBB Edge Color"),
-        field("shadow_fit_obb_edge_width",         Float, added_in=3, default="3.0f",                   short_desc="Fit OBB Edge Width"),
-        field("shadow_fit_box_fit_color",          Vec4,  added_in=3, default="1.0f, 0.2f, 0.2f, 1.0f", short_desc="Fit Box: Points Color"),
-        field("shadow_fit_box_frustum_color",      Vec4,  added_in=3, default="1.0f, 1.0f, 0.2f, 1.0f", short_desc="Fit Box: Frustum Color"),
-        field("shadow_fit_box_cap_color",          Vec4,  added_in=3, default="0.3f, 0.5f, 1.0f, 1.0f", short_desc="Fit Box: Range Cap Color"),
-        field("shadow_fit_box_final_color",        Vec4,  added_in=3, default="0.2f, 1.0f, 0.2f, 1.0f", short_desc="Fit Box: Final Color"),
-        field("shadow_fit_box_width",              Float, added_in=3, default="2.0f",                   short_desc="Fit Box Width"),
+
         field("selection",                         Bool,  added_in=1, default="true",   short_desc="Selection"),
         field("selection_bounding_points",         Bool,  added_in=1, default="false",  short_desc="Bounding Points"),
         field("selection_box",                     Bool,  added_in=1, default="false",  short_desc="Selection Box"),
@@ -80,41 +52,13 @@ struct("Debug_visualizations_settings",
         field("selection_convex_hull_projected",   Bool,  added_in=1, default="false",  short_desc="Selection Projected Hull"),
         field("debug_convex_hull",                 Bool,  added_in=1, default="false",  short_desc="Debug Convex Hull"),
         field("convex_hull_edge",                  Int,   added_in=1, default="0",      short_desc="Convex Hull Edge"),
-        field("selection_major_color",             Vec4,  added_in=1, default="2.0f, 1.6f, 0.1f, 1.0f", short_desc="Selection Major Color"),
-        field("selection_minor_color",             Vec4,  added_in=1, default="2.0f, 1.6f, 0.1f, 0.5f", short_desc="Selection Minor Color"),
-        field("group_selection_major_color",       Vec4,  added_in=1, default="2.0f, 1.2f, 0.1f, 1.0f", short_desc="Group Major Color"),
-        field("group_selection_minor_color",       Vec4,  added_in=1, default="2.0f, 1.2f, 0.1f, 0.5f", short_desc="Group Minor Color"),
-        field("selection_major_width",             Float, added_in=1, default="4.0f",   short_desc="Selection Major Width"),
-        field("selection_minor_width",             Float, added_in=1, default="2.0f",   short_desc="Selection Minor Width"),
-        field("sphere_step_count",                 Int,   added_in=1, default="80",     short_desc="Sphere Step Count"),
         field("gap",                               Float, added_in=1, default="0.003f", short_desc="Gap"),
         field("tool_hide",                         Bool,  added_in=1, default="false",  short_desc="Tool Hide"),
         field("frustum_box",                       Bool,  added_in=1, default="false",  short_desc="Frustum Box"),
         field("frustum_planes",                    Bool,  added_in=1, default="false",  short_desc="Frustum Planes"),
-        field("light_line_width",                  Float, added_in=1, default="8.0f",   short_desc="Light Line Width"),
         field("camera_cull_test",                  Bool,  added_in=1, default="false",  short_desc="Camera Cull Test"),
-        field("camera_line_width",                 Float, added_in=1, default="8.0f",   short_desc="Camera Line Width"),
-        field("camera_line_color",                 Vec4,  added_in=1, default="1.0f, 1.0f, 1.0f, 1.0f", short_desc="Camera Line Color"),
-        field("layout_line_width",                 Float, added_in=1, default="2.0f",   short_desc="Layout Line Width"),
-        field("layout_line_color",                 Vec4,  added_in=1, default="0.2f, 0.8f, 1.0f, 1.0f", short_desc="Layout Line Color"),
+
         field("max_labels",                        Int,   added_in=1, default="400",    short_desc="Max Labels"),
         field("vertex_positions",                  Bool,  added_in=1, default="false",  short_desc="Vertex Positions"),
-        field("vertex_label_text_color",           Vec4,  added_in=1, default="0.3f, 1.0f, 0.3f, 1.0f", short_desc="Vertex Label Text Color"),
-        field("vertex_label_line_color",           Vec4,  added_in=1, default="0.0f, 0.8f, 0.0f, 1.0f", short_desc="Vertex Label Line Color"),
-        field("vertex_label_line_width",           Float, added_in=1, default="1.0f",   short_desc="Vertex Label Line Width"),
-        field("vertex_label_line_length",          Float, added_in=1, default="0.1f",  short_desc="Vertex Label Line Length"),
-        field("edge_label_text_color",             Vec4,  added_in=1, default="1.0f, 0.3f, 0.3f, 1.0f", short_desc="Edge Label Text Color"),
-        field("edge_label_text_offset",            Float, added_in=1, default="0.1f",   short_desc="Edge Label Text Offset"),
-        field("edge_label_line_color",             Vec4,  added_in=1, default="0.8f, 0.0f, 0.0f, 1.0f", short_desc="Edge Label Line Color"),
-        field("edge_label_line_width",             Float, added_in=1, default="1.0f",   short_desc="Edge Label Line Width"),
-        field("edge_label_line_length",            Float, added_in=1, default="0.5f",   short_desc="Edge Label Line Length"),
-        field("facet_label_text_color",            Vec4,  added_in=1, default="1.0f, 1.0f, 5.0f, 1.0f", short_desc="Facet Label Text Color"),
-        field("facet_label_line_color",            Vec4,  added_in=1, default="1.0f, 0.5f, 0.0f, 1.0f", short_desc="Facet Label Line Color"),
-        field("facet_label_line_width",            Float, added_in=1, default="1.0f",   short_desc="Facet Label Line Width"),
-        field("facet_label_line_length",           Float, added_in=1, default="0.1f",   short_desc="Facet Label Line Length"),
-        field("corner_label_text_color",           Vec4,  added_in=1, default="0.5f, 1.0f, 1.0f, 1.0f", short_desc="Corner Label Text Color"),
-        field("corner_label_line_color",           Vec4,  added_in=1, default="0.0f, 0.5f, 0.5f, 1.0f", short_desc="Corner Label Line Color"),
-        field("corner_label_line_width",           Float, added_in=1, default="1.0f",   short_desc="Corner Label Line Width"),
-        field("corner_label_line_length",          Float, added_in=1, default="0.05f",  short_desc="Corner Label Line Length"),
     ],
 )

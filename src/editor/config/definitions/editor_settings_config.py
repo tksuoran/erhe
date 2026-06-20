@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Editor_settings_config",
-    version=7,
+    version=8,
     short_desc="Editor settings",
     long_desc="Runtime-editable settings saved to editor_settings.json.",
     developer=False,
@@ -11,6 +11,9 @@ struct("Editor_settings_config",
         # reads this slot at construction. Per-view state is persisted in
         # scene_views below.
         field("debug_visualizations", StructRef("Debug_visualizations_settings"), added_in=2),
+        # Editor-global appearance of the debug visualizations (colors, line
+        # widths, label geometry), shared by all scene views.
+        field("debug_visualizations_style", StructRef("Debug_visualizations_style"), added_in=8),
         field("scene_views",          Vector(StructRef("Scene_view_settings")), added_in=5),
         field("developer",            StructRef("Developer_config"),       added_in=1),
         field("grid",                 StructRef("Grid_config"),            added_in=1),
