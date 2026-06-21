@@ -2218,7 +2218,7 @@ void Debug_visualizations::imgui(Scene_view& scene_view, App_context& app_contex
         p.pop_group();
     }
 
-    p.push_group("Selection",  ImGuiTreeNodeFlags_None); //ImGuiTreeNodeFlags_DefaultOpen);
+    p.push_group("Selection",  ImGuiTreeNodeFlags_DefaultOpen); //ImGuiTreeNodeFlags_DefaultOpen);
     p.add_entry("Selection",       [this](){ ImGui::Checkbox   ("##", &m_settings.selection); });
     p.add_entry("Bounding points", [this](){ ImGui::Checkbox   ("##", &m_settings.selection_bounding_points); });
     if (m_settings.selection_bounding_points) {
@@ -2256,7 +2256,7 @@ void Debug_visualizations::imgui(Scene_view& scene_view, App_context& app_contex
 
     p.add_entry("Skins",          [this](){ make_combo("##", m_settings.skins); });
 
-    p.push_group("Annotiations", ImGuiTreeNodeFlags_None); //ImGuiTreeNodeFlags_DefaultOpen);
+    p.push_group("Annotiations", ImGuiTreeNodeFlags_DefaultOpen); //ImGuiTreeNodeFlags_DefaultOpen);
     p.add_entry("Max Labels", [this](){ ImGui::SliderInt("##", &m_settings.max_labels, 0, 2000); });
     
     p.add_entry("Show Vertices",    [this](){ make_combo("##", m_settings.vertex_labels); });
