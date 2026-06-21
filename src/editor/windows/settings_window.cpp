@@ -26,6 +26,7 @@
 #include "config/generated/render_style_appearance_serialization.hpp"
 #include "config/generated/selection_outline_style_serialization.hpp"
 #include "config/generated/mesh_component_style_serialization.hpp"
+#include "config/generated/content_edge_lines_config_serialization.hpp"
 #include "config/generated/debug_visualizations_settings_serialization.hpp"
 #include "config/generated/developer_config_serialization.hpp"
 #include "config/generated/grid_config_serialization.hpp"
@@ -656,6 +657,14 @@ void Settings_window::imgui()
         add_config_section(settings.selection_outline);
         // Editor-global mesh-component (vertex / edge / face) selection style.
         add_config_section(settings.mesh_component_style);
+        // Editor-global gizmo scale + viewport clear color (moved out of the
+        // per-view Visual Style popup).
+        push_group("Viewport", ImGuiTreeNodeFlags_Framed);
+        add_entry("Gizmo Scale", [&settings](){ ImGui::SliderFloat("##", &settings.gizmo_scale, 1.0f, 20.0f, "%.2f"); }, "Scale factor for the transform gizmo handles.");
+        add_entry("Clear Color", [&settings](){ ImGui::ColorEdit4("##", &settings.clear_color.x, ImGuiColorEditFlags_Float); }, "Viewport background clear color.");
+        pop_group();
+        // Editor-global content edge-line (wide-line) method + bias tuning.
+        add_config_section(settings.content_edge_lines);
         // Note: the per-view debug-visualization enable toggles / modes
         // (Debug_visualizations_settings) are intentionally NOT shown here -
         // they live only per scene view (edited in the scene-view Debug

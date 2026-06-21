@@ -831,6 +831,12 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
             erhe::scene_renderer::Content_wide_line_renderer* content_wide_line_renderer = m_app_context.content_wide_line_renderer;
             const bool drive_wide_lines = (content_wide_line_renderer != nullptr) && content_wide_line_renderer->is_enabled();
             if (drive_wide_lines) {
+                // Push the editor-global content edge-line config (method + bias)
+                // to the renderer each frame; edited in the Settings window.
+                const Content_edge_lines_config& cel = m_app_context.editor_settings->content_edge_lines;
+                content_wide_line_renderer->set_use_tent(cel.use_tent);
+                content_wide_line_renderer->set_line_bias_margin(cel.line_bias_margin);
+                content_wide_line_renderer->set_line_bias_clamp(cel.line_bias_clamp);
                 content_wide_line_renderer->begin_frame();
 
                 erhe::scene::Scene* hosted_scene = scene_root->get_hosted_scene();

@@ -1,6 +1,7 @@
 #include "transform/handle_visualizations.hpp"
 
 #include "app_context.hpp"
+#include "config/generated/editor_settings_config.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "graphics/icon_set.hpp"
@@ -686,7 +687,7 @@ void Handle_visualizations::update_transforms() //const uint64_t serial)
     }
 
     const auto& settings          = m_context.transform_tool->shared.settings;
-    const float distance_scale    = m_scene_view->get_config().gizmo_scale * m_view_distance / 100.0f;
+    const float distance_scale    = m_context.editor_settings->gizmo_scale * m_view_distance / 100.0f;
     const float perspective_scale = m_scene_view->get_perspective_scale();
     const float scalar_scale      = distance_scale * perspective_scale;
 
@@ -763,7 +764,7 @@ void Handle_visualizations::update_box_handles()
     const Transform_tool_shared&   shared   = m_context.transform_tool->shared;
     const Transform_tool_settings& settings = shared.settings;
 
-    const float     distance_scale    = m_scene_view->get_config().gizmo_scale * m_view_distance / 100.0f;
+    const float     distance_scale    = m_context.editor_settings->gizmo_scale * m_view_distance / 100.0f;
     const float     perspective_scale = m_scene_view->get_perspective_scale();
     const float     scalar_scale      = distance_scale * perspective_scale;
     const glm::mat4 cone_scale         = erhe::math::create_scale<float>(scalar_scale);

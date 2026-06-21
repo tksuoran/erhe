@@ -4,7 +4,6 @@
 #include "scene/viewport_scene_view.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
-#include "erhe_scene_renderer/content_wide_line_renderer.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
 #include "erhe_profile/profile.hpp"
 
@@ -28,32 +27,14 @@ void Viewport_config_window::render_style_ui(Render_style_data& render_style)
     ImGui::Checkbox("Corner Points",     &render_style.corner_points);
 }
 
-void Viewport_config_window::imgui(App_context& context, Viewport_config& edit_data)
+void Viewport_config_window::imgui(Viewport_config& edit_data)
 {
     ERHE_PROFILE_FUNCTION();
 
-    // Content wide-line method selector. The simple quad and the two-face
-    // surface tent each win in different cases (the tent hugs sharp creases but
-    // can poke through overlapping thin geometry; the simple quad is flatter but
-    // more predictable), so both are kept and chosen at runtime here. Global
-    // runtime state on the content wide-line renderer (not persisted config).
-    erhe::scene_renderer::Content_wide_line_renderer* wide_line_renderer = context.content_wide_line_renderer;
-    if (wide_line_renderer != nullptr) {
-        bool use_tent = wide_line_renderer->get_use_tent();
-        if (ImGui::Checkbox("Edge Lines: Surface Tent", &use_tent)) {
-            wide_line_renderer->set_use_tent(use_tent);
-        }
-        if (use_tent) {
-            float bias = wide_line_renderer->get_line_bias_margin();
-            if (ImGui::DragFloat("Edge Lines: Tent Bias (ULPs)", &bias, 1.0f, 0.0f, 4096.0f, "%.0f")) {
-                wide_line_renderer->set_line_bias_margin(bias);
-            }
-            float clamp = wide_line_renderer->get_line_bias_clamp();
-            if (ImGui::DragFloat("Edge Lines: Tent Bias Clamp (ULPs)", &clamp, 16.0f, 0.0f, 65536.0f, "%.0f")) {
-                wide_line_renderer->set_line_bias_clamp(clamp);
-            }
-        }
-    }
+    // This popup holds only per-Scene_view render-style visibility toggles.
+    // Editor-global visual style lives in the Settings window: render-style
+    // appearance, selection outline, mesh component style, gizmo scale, clear
+    // color, and the content edge-line (wide-line) method + bias.
 
     const ImGuiTreeNodeFlags flags{
         ImGuiTreeNodeFlags_Framed            |
@@ -66,9 +47,6 @@ void Viewport_config_window::imgui(App_context& context, Viewport_config& edit_d
     // edit_data aliases the owning Scene_view's m_viewport_config. Widgets
     // mutate it in place; the view's collect callback writes it to
     // editor_settings.json, which Editor_settings_store autosaves on change.
-    ImGui::SliderFloat("Gizmo Scale", &edit_data.gizmo_scale, 1.0f, 20.0f, "%.2f");
-    ImGui::ColorEdit4("Clear Color", &edit_data.clear_color.x, ImGuiColorEditFlags_Float);
-
     if (ImGui::TreeNodeEx("Default Style", flags)) {
         render_style_ui(edit_data.render_style_not_selected);
         ImGui::TreePop();

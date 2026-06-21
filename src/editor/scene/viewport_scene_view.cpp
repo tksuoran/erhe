@@ -213,6 +213,12 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
             (m_context.content_wide_line_renderer != nullptr) &&
             m_context.content_wide_line_renderer->is_enabled()
         ) {
+            // Push the editor-global content edge-line config (method + bias) to
+            // the renderer each frame; it is edited in the Settings window.
+            const Content_edge_lines_config& cel = m_context.editor_settings->content_edge_lines;
+            m_context.content_wide_line_renderer->set_use_tent(cel.use_tent);
+            m_context.content_wide_line_renderer->set_line_bias_margin(cel.line_bias_margin);
+            m_context.content_wide_line_renderer->set_line_bias_clamp(cel.line_bias_clamp);
             m_context.content_wide_line_renderer->begin_frame();
         }
 
@@ -807,7 +813,7 @@ void Viewport_scene_view::viewport_toolbar()
         "Visual Style",                                            // title
         ImGui::GetID("ViewportVisualStylePopup"),                  // popup_id
         m_show_visual_style_popup,                                 // is_open
-        [this]() { Viewport_config_window::imgui(m_context, get_config()); }  // content_fn
+        [this]() { Viewport_config_window::imgui(get_config()); }  // content_fn
     );
     popup_button(
         icon_font,

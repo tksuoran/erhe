@@ -2,6 +2,7 @@
 #include "windows/property_editor.hpp"
 
 #include "app_context.hpp"
+#include "config/generated/editor_settings_config.hpp"
 #include "editor_log.hpp"
 #include "input_state.hpp"
 #include "graphics/icon_set.hpp"
@@ -188,7 +189,7 @@ void Rotate_tool::render(const Render_context& context)
     const vec3  side2             = normalize(cross(n, side1));
     const vec3  position_in_world = p;//node.position_in_world();
     const float distance          = length(position_in_world - vec3{camera_node->position_in_world()});
-    const float scale             = context.scene_view.get_config().gizmo_scale * distance / 100.0f;
+    const float scale             = context.app_context.editor_settings->gizmo_scale * distance / 100.0f;
     const float r1                = scale * 6.0f;
 
     constexpr vec4 red   {1.0f, 0.0f, 0.0f, 1.0f};

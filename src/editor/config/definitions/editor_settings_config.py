@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Editor_settings_config",
-    version=10,
+    version=11,
     short_desc="Editor settings",
     long_desc="Runtime-editable settings saved to editor_settings.json.",
     developer=False,
@@ -27,6 +27,12 @@ struct("Editor_settings_config",
         # Editor-global mesh-component (vertex / edge / face) selection style,
         # shared by all scene views.
         field("mesh_component_style",             StructRef("Mesh_component_style"),    added_in=10),
+        # Editor-global gizmo handle scale and viewport clear color, shared by
+        # all scene views (moved out of the per-view Visual Style popup).
+        field("gizmo_scale",                      Float, added_in=11, default="4.5f", short_desc="Gizmo Scale", long_desc="Scale factor for the transform gizmo handles."),
+        field("clear_color",                      Vec4,  added_in=11, default="0.0f, 0.0f, 0.0f, 0.4f", short_desc="Clear Color", long_desc="Viewport background clear color."),
+        # Editor-global content edge-line (wide-line) method and bias tuning.
+        field("content_edge_lines",               StructRef("Content_edge_lines_config"), added_in=11),
         field("scene_views",          Vector(StructRef("Scene_view_settings")), added_in=5),
         field("developer",            StructRef("Developer_config"),       added_in=1),
         field("grid",                 StructRef("Grid_config"),            added_in=1),

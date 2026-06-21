@@ -34,10 +34,8 @@ auto make_viewport_config(const Viewport_config_data& viewport_config_data) -> V
     render_style_selected.corner_points     = viewport_config_data.corner_points;
     render_style_selected.polygon_centroids = viewport_config_data.polygon_centroids;
 
-    config.gizmo_scale               = viewport_config_data.gizmo_scale;
     config.selection_bounding_box    = viewport_config_data.selection_bounding_box;
     config.selection_bounding_sphere = viewport_config_data.selection_bounding_sphere;
-    config.clear_color               = viewport_config_data.clear_color;
     return config;
 }
 
