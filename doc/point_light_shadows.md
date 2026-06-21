@@ -1,14 +1,25 @@
 # Cube-map point-light shadows
 
-Status: implemented and building; **runtime / visual verification still pending**
-(could not run the editor from the implementing session's detached shell -- see
-"Runtime status" below). Committed on branch `ls/main`:
+Status: implemented, building, and **running**. Point-light shadows are
+**partially working**: a shadow appears and tracks the light, but it looks as if
+an **incorrect transformation is applied to the cube-map sample/store
+coordinates somewhere** -- the shadow is right in some regions and wrong
+(mirrored / rotated / offset) in others. The next session's job is to pin down
+exactly which coordinate transform is wrong, using the live GPU-capture workflow.
+
+**If you are the fresh-context debugging session, start here:**
+[Debugging the texture-coordinate bug](#debugging-the-texture-coordinate-bug-vs-mcp--renderdoc-fork-mcp)
+-- it tells you how to launch + capture and exactly what to inspect. The
+sections in between are the original design reference (still accurate); read them
+for background as needed.
+
+Committed on branch `ls/main`:
 
 - `22c1a50` docs: add `doc/forge-erhe.md` (SDL3 GPU -> erhe graphics API mapping)
 - `a230415` editor: add cube-map point-light shadows
 
-This document records the design, the per-file changes, how to finish verifying,
-and the known risks / tuning knobs, so testing can continue in a fresh context.
+This document records the design, the per-file changes, the debugging plan, and
+the known risks / tuning knobs, so testing can continue in a fresh context.
 
 ## Overview
 
@@ -139,41 +150,127 @@ in parallel; point lights are split out of the 2D path entirely.
   `.py`. Verified: `graphics_preset_entry.hpp` regenerated with the two fields;
   full editor build links clean.
 
-## Runtime status (IMPORTANT -- not yet verified)
+## Debugging the texture-coordinate bug (VS MCP + RenderDoc fork MCP)
 
-The implementing session could not run the editor: launched from a detached
-background shell it aborts in `choose_physical_device` (logged misleadingly as
-`vkCreateInstance() failed with 0 VK_SUCCESS` -- the `result` is the prior
-successful `vkCreateInstance`; the real failure is no GPU selected). This is a
-launch-context/environment issue **upstream of all shadow code** and reproduces
-with the Vulkan validation layer both on and off. (Separately, enabling
-`vulkan_validation_layers` breaks `vkCreateInstance` on this machine's crowded
-layer stack -- leave it `false` for normal runs.)
+The editor now runs fine on the desktop GPU. The earlier "could not run from a
+detached shell" problem is gone -- **launch the editor through the Visual Studio
+MCP server** (`debugger_launch`), which gives a real GPU session, and **capture +
+inspect frames through the RenderDoc fork MCP server**. The full mechanics of
+that setup (config, layer coexistence, connect_to_target, trigger_capture, the
+inspection tools, gotchas) are documented once in
+[`doc/renderdoc_fork.md`](renderdoc_fork.md) -- read that first; this section is
+only the point-shadow-specific recipe on top of it.
 
-So the build is proven; visual behavior is not.
+### 0. Make sure a shadow-casting point light is in the scene
 
-## How to finish verifying
+The cube path is dormant unless a `type = point`, `cast_shadow = true` light
+exists (the default scene historically had only directional + spot). Either add
+one through the editor UI (Add Lights), or temporarily force one in
+`Scene_builder::add_lights` (`src/editor/scene/scene_builder.cpp`) after the spot
+loop -- a `Light` with `type = point`, `cast_shadow = true`, `range ~= 30` above
+some geometry. Revert that hack before committing. The first point-shadow frame
+compiles the `VARIANT_SHADOW_CUBE` shader (one-time hitch). Put an **asymmetric**
+occluder near the light (e.g. an L-shape or a single off-center box) -- a
+symmetric scene hides exactly the mirror/rotation errors we are hunting.
 
-1. Run `build_vs2026_vulkan/src/editor/Debug/editor.exe` interactively (real
-   desktop GPU session).
-2. Add a **shadow-casting point light** above some geometry: Add Lights, or create
-   a Node + `erhe::scene::Light` with `type = point`, `cast_shadow = true`,
-   `range ~= 30`. (The default scene has only directional + spot lights, so the
-   cube path is dormant until a point light exists -- the first point-shadow frame
-   compiles the `VARIANT_SHADOW_CUBE` shader, a one-time hitch.)
-3. Confirm an omnidirectional shadow that tracks the light as it orbits; toggle
-   `cast_shadow` to confirm it appears/disappears; add a 2nd point light to
-   exercise `point_shadow_light_count`.
-4. Regression: directional + spot shadows must look identical; mixed
-   dir+spot+point scenes must light correctly (validates the index split).
-5. Changing `point_shadow_resolution` / `point_shadow_light_count` in the preset
-   should reallocate the cube array (reconfigure match-and-skip respects them).
-6. `grep -iE "error|fatal|No shader variant|No render pipeline" logs/log.txt`.
+### 1. Launch + capture
 
-A quick way to force a point light for testing (revert before commit): in
-`Scene_builder::add_lights` (`src/editor/scene/scene_builder.cpp`), after the spot
-loop, push a `Light` with `type = point`, `cast_shadow = true`. This was used
-during implementation and removed.
+Follow [`doc/renderdoc_fork.md`](renderdoc_fork.md): start the fork
+`qrenderdoc --mcp-server`, `debugger_launch` the editor via VS MCP, then
+`list_targets` -> `connect_to_target` -> `trigger_capture open=true`.
+
+### 2. What to inspect (point-shadow-specific resource / event labels)
+
+- **The cube array texture** is labelled **`Point shadow cube array`** (R32F
+  `texture_cube_map_array`, `6 * point_shadow_light_count` layers; layer
+  `6*cube + face`). `list_textures` finds it by that label. It stores **raw
+  radial distance** from the light; unrendered texels hold the `1e30` clear.
+- **The caster passes** are labelled **`Point shadow cube <c> face <f>`**
+  (`search_actions query="Point shadow cube"`), inside the
+  `Shadow_renderer::render()` group, Vulkan face order `+X,-X,+Y,-Y,+Z,-Z`. Each
+  is one render pass writing one cube face (`shadow_render_node.cpp:308-339`).
+- **The receiver** is `sample_point_light_visibility` in
+  `res/shaders/erhe_light.glsl:303`: it samples `s_shadow_cube` with
+  `vec4(world_position - light_position, cube_index)` and does a raw-distance
+  compare. The forward draw that calls it is the main viewport `standard.frag`
+  pass (`standard.frag:438-450`).
+- **The caster shader** writes `length(v_position.xyz - point_light_position)`
+  to the R32F face under `VARIANT_SHADOW_CUBE` (`standard.frag:161`).
+
+### 3. The leading hypothesis: per-face y-flip / cube-face orientation
+
+The single most likely "incorrect texture-coordinate transformation" is a
+**mismatch between how the caster orients each rendered cube face and how the
+`samplerCubeArray` hardware expects that face to be oriented**. erhe applies a
+central clip-space **y-flip** for Vulkan (correct for normal screen rendering),
+but the Vulkan/GL **cube-map face coordinate system is fixed by the spec** and is
+*not* screen-oriented. Rendering each face through the normal y-flipped pipeline
+can therefore store each face **vertically mirrored** (or rotated, depending on
+the face) relative to what the sampler reads back -- which looks exactly like
+"partially working": correct where the occluder is symmetric about the flip axis,
+wrong where it isn't, with errors strongest near face seams. The `cube_up` table
+and the no-`proj.m[5]`-negate decision are in `shadow_renderer.cpp:480-489` and
+flagged under [Known risks](#known-risks--tuning-knobs).
+
+**Confirm or refute it with the capture (decisive, ~5 tools):**
+
+1. `save_texture` each face layer of `Point shadow cube array` (slice
+   `6*cube+face`, format `exr`/`hdr` to keep the float distance) and look at the
+   stored distance image. With the asymmetric occluder, is the occluder silhouette
+   in each face **oriented as the light would see it**, or vertically mirrored /
+   rotated? `get_texture_stats` per slice first to find which faces were actually
+   rendered (min far below `1e30`) vs left at clear.
+2. Pick a fragment that is **wrongly** shadowed/lit. Compute its
+   `light_to_frag = world_pos - light_pos`; the dominant axis is the face the
+   sampler uses. `set_event` to that forward draw and `debug_pixel` it -- step
+   `sample_point_light_visibility` and read the sampled `stored` vs `current`.
+3. Cross-check: open the matching `Point shadow cube <c> face <f>` caster pass and
+   `read_texture_region` / `pick_pixel` at the texel the sampler *should* hit. If
+   the geometry is present in the face but at a **mirrored/rotated uv** vs where
+   the sampler reads, that is the transform bug, and it localises whether the flip
+   is on the store (caster) or the load (sampler direction) side.
+
+**Candidate fixes once confirmed** (do not apply blind -- let the capture say
+which): flip the per-face `cube_up` signs in `shadow_renderer.cpp:485-489`; or
+suppress the central y-flip specifically for the cube caster pipeline; or negate
+the sampled direction's y in `sample_point_light_visibility`. These are mutually
+exclusive -- exactly one coordinate space is wrong; the capture tells you which.
+
+### 4. Alternative suspects (if the faces look correctly oriented)
+
+- **Face order / look vectors.** `cube_look` (`shadow_renderer.cpp:480-484`) must
+  match the layer order the sampler selects. If shadows are wrong by a whole face
+  (not mirrored within a face), the `+X,-X,+Y,-Y,+Z,-Z` look/up/layer mapping is
+  off, not the in-face orientation.
+- **Cube layer index.** The receiver passes `cube_index = shadow_index_packed.y`
+  to the 4th `samplerCubeArray` coord; confirm it equals `6*point_shadow_index`
+  vs `point_shadow_index` (array layer base, *not* face). A wrong base samples
+  another light's cube. Check `light_buffer.cpp` (`point_shadow_index` ->
+  `shadow_index_packed.y`) against the sampler's `index * 6 + face` expectation.
+- **World-space vs view-space.** Caster stores `v_position - point_light_position`
+  (world). Receiver uses `world_position - light_position` (world). Both must be
+  world; verify `v_position` and the UBO `point_light_position` are in the same
+  space in the capture's constant buffers.
+- **Bias / range.** `bias = max(0.05, 0.02*current)` and `far = light->range`. A
+  global over/under-shadow that is *not* position-dependent is bias/range, not a
+  coordinate transform -- a different bug class.
+
+### 5. Verify the fix the same way
+
+Re-`build_project` via VS MCP, relaunch, recapture, and re-run step 3 -- the
+wrongly-shadowed fragment should now sample the correct face/texel, and the saved
+face images should be consistently oriented. Then run the regression pass below.
+
+### 6. Regression (after the shadow looks correct)
+
+1. Omnidirectional shadow tracks the light as it orbits; toggling `cast_shadow`
+   makes it appear/disappear; a 2nd point light exercises
+   `point_shadow_light_count`.
+2. Directional + spot shadows look identical to before; a mixed
+   dir+spot+point scene lights correctly (validates the index split).
+3. Changing `point_shadow_resolution` / `point_shadow_light_count` in the preset
+   reallocates the cube array (reconfigure match-and-skip respects them).
+4. `grep -iE "error|fatal|No shader variant|No render pipeline" logs/log.txt`.
 
 ## Known risks / tuning knobs
 
