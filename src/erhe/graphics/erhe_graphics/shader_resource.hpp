@@ -41,7 +41,8 @@ public:
         struct_member        = 3,
         samplers             = 4, // was: default_uniform_block
         uniform_block        = 5,
-        shader_storage_block = 6
+        shader_storage_block = 6,
+        image                = 7  // load/store storage image (compute)
     };
 
     // GLSL interface block memory layout. Picks the alignment / padding
@@ -136,6 +137,20 @@ public:
         std::optional<int>         dedicated_texture_unit = {}
     );
 
+    // Storage image (load/store image, e.g. compute shader output).
+    // Lives in the default uniform block like a sampler, but emits
+    // "layout(binding = N, <format>) uniform image2D name;". The format
+    // layout qualifier (e.g. "rgba16f") is required so both imageLoad and
+    // imageStore are valid without readonly/writeonly qualifiers.
+    Shader_resource(
+        Device&          device,
+        std::string_view image_name,
+        Shader_resource* parent,
+        int              binding_point,
+        Glsl_type        image_type,
+        std::string_view image_format
+    );
+
     // Constructor for creating  default uniform block
     explicit Shader_resource(Device& device);
     ~Shader_resource() noexcept;
@@ -207,6 +222,15 @@ public:
         bool                       is_texture_heap,
         std::optional<uint32_t>    dedicated_texture_unit = {},
         std::optional<std::size_t> array_size = {}
+    ) -> Shader_resource*;
+
+    // Add a load/store storage image to the default uniform block. Emits
+    // "layout(binding = binding_point, image_format) uniform <image_type> name;".
+    auto add_image(
+        std::string_view name,
+        Glsl_type        image_type,
+        std::string_view image_format,
+        int              binding_point
     ) -> Shader_resource*;
 
     auto add_float(
@@ -336,6 +360,11 @@ private:
 
     bool              m_readonly {false};
     bool              m_writeonly{false};
+
+    // Only used when m_type == Type::image. GLSL format layout qualifier
+    // (e.g. "rgba16f") emitted inside the layout(...) of the image
+    // declaration. Required so imageLoad/imageStore are valid.
+    std::string       m_image_format;
 
     // Only used for uniforms in program
 };

@@ -16,6 +16,12 @@ void Compute_command_encoder_impl::set_bind_group_layout(const Bind_group_layout
     static_cast<void>(bind_group_layout);
 }
 
+void Compute_command_encoder_impl::set_storage_image(uint32_t binding_point, const Texture& texture)
+{
+    static_cast<void>(binding_point);
+    static_cast<void>(texture);
+}
+
 void Compute_command_encoder_impl::set_compute_pipeline_state(const Compute_pipeline_state& pipeline)
 {
     static_cast<void>(pipeline);

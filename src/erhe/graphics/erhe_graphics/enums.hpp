@@ -72,6 +72,10 @@ enum class Glsl_type
     sampler_2d_multisample_array,
     int_sampler_2d_multisample_array,
     unsigned_int_sampler_2d_multisample_array,
+    // Load/store images (compute storage images). Only the float rgba 2D
+    // form is currently used (atmosphere LUT generation); add more entries
+    // here (image_2d_array, image_cube, ...) when other shapes are needed.
+    image_2d,
 };
 
 enum class Primitive_type : unsigned int

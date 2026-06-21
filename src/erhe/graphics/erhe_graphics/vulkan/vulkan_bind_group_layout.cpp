@@ -19,6 +19,7 @@ auto to_vulkan_descriptor_type(const Binding_type type) -> VkDescriptorType
         case Binding_type::uniform_buffer:         return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         case Binding_type::storage_buffer:         return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         case Binding_type::combined_image_sampler: return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        case Binding_type::storage_image:          return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
         default:                                   return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     }
 }
@@ -60,20 +61,29 @@ Bind_group_layout_impl::Bind_group_layout_impl(
     // lands on the caller's binding_point as long as earlier bindings
     // were in ascending order.
     for (const Bind_group_layout_binding& binding : create_info.bindings) {
-        if (binding.type != Binding_type::combined_image_sampler) {
-            continue;
+        if (binding.type == Binding_type::combined_image_sampler) {
+            const std::optional<uint32_t> dedicated_texture_unit = binding.is_texture_heap
+                ? std::optional<uint32_t>{}
+                : std::optional<uint32_t>{binding.binding_point};
+            m_default_uniform_block.add_sampler(
+                binding.name,
+                binding.glsl_type,
+                binding.sampler_aspect,
+                binding.is_texture_heap,
+                dedicated_texture_unit,
+                (binding.array_size > 0) ? std::optional<std::size_t>{binding.array_size} : std::optional<std::size_t>{}
+            );
+        } else if (binding.type == Binding_type::storage_image) {
+            // Storage images are emitted into the GLSL preamble as
+            // "layout(binding = N, <format>) uniform image2D name;" and use
+            // the raw binding_point (no sampler-binding offset).
+            m_default_uniform_block.add_image(
+                binding.name,
+                binding.glsl_type,
+                binding.image_format,
+                static_cast<int>(binding.binding_point)
+            );
         }
-        const std::optional<uint32_t> dedicated_texture_unit = binding.is_texture_heap
-            ? std::optional<uint32_t>{}
-            : std::optional<uint32_t>{binding.binding_point};
-        m_default_uniform_block.add_sampler(
-            binding.name,
-            binding.glsl_type,
-            binding.sampler_aspect,
-            binding.is_texture_heap,
-            dedicated_texture_unit,
-            (binding.array_size > 0) ? std::optional<std::size_t>{binding.array_size} : std::optional<std::size_t>{}
-        );
     }
     // Compute sampler binding offset: one past the highest buffer binding
     uint32_t max_buffer_binding = 0;

@@ -126,6 +126,11 @@ auto get_type_details(const Glsl_type type) -> Type_details
         case Glsl_type::int_sampler_2d_multisample_array:            return Type_details(type, Glsl_type::int_,         Texture_type::texture_2d, 2, sampler_flags_multisample | sampler_flags_array);
         case Glsl_type::unsigned_int_sampler_2d_multisample_array:   return Type_details(type, Glsl_type::unsigned_int, Texture_type::texture_2d, 2, sampler_flags_multisample | sampler_flags_array);
 
+        // Storage images are opaque (like samplers) for sizing purposes; they
+        // only ever live in the default uniform block, which is never sized as
+        // a UBO/SSBO, so this is a safety net rather than a hot path.
+        case Glsl_type::image_2d:                                    return Type_details(type, Glsl_type::float_,       Texture_type::texture_2d, 2, 0);
+
         default: {
             ERHE_FATAL("Bad GLSL type %u", static_cast<unsigned int>(type));
         }
@@ -174,6 +179,7 @@ auto Shader_resource::is_basic(const Type type) -> bool
         case Type::samplers             : return false;
         case Type::uniform_block        : return false;
         case Type::shader_storage_block : return false;
+        case Type::image                : return true; // so get_basic_type() works
         default: {
             ERHE_FATAL("bad Shader_resource::Type");
         }
@@ -191,6 +197,7 @@ auto Shader_resource::is_aggregate(const Shader_resource::Type type) -> bool
         case Type::samplers             : return true;
         case Type::uniform_block        : return true;
         case Type::shader_storage_block : return true;
+        case Type::image                : return false;
         default: {
             ERHE_FATAL("bad Shader_resource::Type");
         }
@@ -208,6 +215,7 @@ auto Shader_resource::should_emit_layout(const Type type) -> bool
         case Type::samplers             : return false;
         case Type::uniform_block        : return true;
         case Type::shader_storage_block : return true;
+        case Type::image                : return true; // layout(binding, format)
         default: {
             ERHE_FATAL("bad Shader_resource::Type");
         }
@@ -225,6 +233,7 @@ auto Shader_resource::should_emit_members(const Shader_resource::Type type) -> b
         case Type::samplers             : return true;
         case Type::uniform_block        : return true;
         case Type::shader_storage_block : return true;
+        case Type::image                : return false;
         default: {
             ERHE_FATAL("bad Shader_resource::Type");
         }
@@ -242,6 +251,7 @@ auto Shader_resource::is_block(const Shader_resource::Type type) -> bool
         case Type::samplers             : return false; //// This used to be true for OpenGL
         case Type::uniform_block        : return true;
         case Type::shader_storage_block : return true;
+        case Type::image                : return false;
         default: {
             ERHE_FATAL("bad Shader_resource::Type");
         }
@@ -259,6 +269,7 @@ auto Shader_resource::uses_binding_points(const Shader_resource::Type type) -> b
         case Type::samplers             : return false;
         case Type::uniform_block        : return true;
         case Type::shader_storage_block : return true;
+        case Type::image                : return false; // binding via m_binding_point like samplers
         default: {
             ERHE_FATAL("bad Shader_resource::Type");
         }
@@ -402,6 +413,26 @@ Shader_resource::Shader_resource(
     if (dedicated_texture_unit.has_value()) {
         ERHE_VERIFY(dedicated_texture_unit.value() < device.get_info().max_combined_texture_image_units);
     }
+}
+
+// Storage image (load/store image). Lives in the default uniform block
+// alongside samplers; emits "layout(binding = N, <format>) uniform image2D name;".
+Shader_resource::Shader_resource(
+    Device&                device,
+    const std::string_view image_name,
+    Shader_resource*       parent,
+    const int              binding_point,
+    const Glsl_type        image_type,
+    const std::string_view image_format
+)
+    : m_device       {device}
+    , m_type         {Type::image}
+    , m_name         {image_name}
+    , m_parent       {parent}
+    , m_basic_type   {image_type}
+    , m_binding_point{binding_point}
+    , m_image_format {image_format}
+{
 }
 
 // Constructor with no arguments creates default uniform block
@@ -811,8 +842,19 @@ auto Shader_resource::get_layout_string(const uint32_t sampler_binding_offset) c
             } else {
                 ss << "binding = " << m_binding_point;
             }
-            //first = false;
+            first = false;
         }
+    }
+    // Storage images need a format layout qualifier (e.g. rgba16f) so that
+    // imageLoad / imageStore are valid without readonly / writeonly. Images
+    // always carry a binding (emitted just above), so the leading comma is
+    // correct here.
+    if ((m_type == Type::image) && !m_image_format.empty()) {
+        if (!first) {
+            ss << ", ";
+        }
+        ss << m_image_format;
+        first = false;
     }
     ss << ") ";
     // GLSL memory qualifiers (readonly / writeonly) are valid on shader
@@ -977,6 +1019,27 @@ auto Shader_resource::add_sampler(
     if (end_unit > m_location) {
         m_location = end_unit;
     }
+    return new_member;
+}
+
+auto Shader_resource::add_image(
+    const std::string_view name,
+    const Glsl_type        image_type,
+    const std::string_view image_format,
+    const int              binding_point
+) -> Shader_resource*
+{
+    ERHE_VERIFY(m_type == Type::samplers);
+    auto* const new_member = m_members.emplace_back(
+        std::make_unique<Shader_resource>(
+            m_device,
+            name,
+            this,
+            binding_point,
+            image_type,
+            image_format
+        )
+    ).get();
     return new_member;
 }
 

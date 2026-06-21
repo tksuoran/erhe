@@ -110,6 +110,14 @@ void Compute_command_encoder_impl::set_bind_group_layout(const Bind_group_layout
     static_cast<void>(bind_group_layout);
 }
 
+void Compute_command_encoder_impl::set_storage_image(uint32_t binding_point, const Texture& texture)
+{
+    // Storage-image compute is not wired on the Metal backend yet; the
+    // atmosphere LUT generation that uses this is Vulkan-only for now.
+    static_cast<void>(binding_point);
+    static_cast<void>(texture);
+}
+
 void Compute_command_encoder_impl::set_compute_pipeline_state(const Compute_pipeline_state& pipeline)
 {
     const Compute_pipeline_data& data = pipeline.data;

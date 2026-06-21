@@ -15,6 +15,7 @@ class Compute_pipeline;
 class Compute_pipeline_state;
 class Compute_command_encoder_impl;
 class Device;
+class Texture;
 
 class Compute_command_encoder final : public Command_encoder
 {
@@ -29,6 +30,12 @@ public:
     void set_bind_group_layout     (const Bind_group_layout* bind_group_layout);
     void set_buffer                (Buffer_target buffer_target, const Buffer* buffer, std::uintptr_t offset, std::uintptr_t length, std::uintptr_t index) override;
     void set_buffer                (Buffer_target buffer_target, const Buffer* buffer) override;
+    // Bind a load/store storage image to the given binding point (must be a
+    // storage_image binding in the active Bind_group_layout). The texture must
+    // be in Image_layout::general; the caller is responsible for transitioning
+    // it (and for barriers between dispatches). Vulkan backend only; GL / Metal
+    // / Null are no-ops (the atmosphere LUT path that uses this is Vulkan-only).
+    void set_storage_image         (uint32_t binding_point, const Texture& texture);
     void set_compute_pipeline_state(const Compute_pipeline_state& pipeline);
     void set_compute_pipeline      (const Compute_pipeline& pipeline);
     void dispatch_compute          (std::uintptr_t x_size, std::uintptr_t y_size, std::uintptr_t z_size);

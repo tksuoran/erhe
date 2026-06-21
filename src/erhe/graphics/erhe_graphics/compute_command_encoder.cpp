@@ -36,6 +36,10 @@ void Compute_command_encoder::set_buffer(Buffer_target buffer_target, const Buff
 {
     m_impl->set_buffer(buffer_target, buffer);
 }
+void Compute_command_encoder::set_storage_image(uint32_t binding_point, const Texture& texture)
+{
+    m_impl->set_storage_image(binding_point, texture);
+}
 void Compute_command_encoder::set_compute_pipeline_state(const Compute_pipeline_state& pipeline)
 {
     m_impl->set_compute_pipeline_state(pipeline);

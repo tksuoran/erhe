@@ -148,6 +148,7 @@ auto glsl_type_c_str(const Glsl_type type) -> const char*
         case Glsl_type::sampler_2d_multisample_array:                return "sampler2DMSArray";
         case Glsl_type::int_sampler_2d_multisample_array:            return "isampler2DMSArray";
         case Glsl_type::unsigned_int_sampler_2d_multisample_array:   return "usampler2DMSArray";
+        case Glsl_type::image_2d:                                    return "image2D";
 
         default: {
             ERHE_FATAL("Bad Glsl_type");
@@ -212,6 +213,7 @@ auto get_dimension(const Glsl_type type) -> std::size_t
         case Glsl_type::sampler_2d_multisample_array:                return 2;
         case Glsl_type::int_sampler_2d_multisample_array:            return 2;
         case Glsl_type::unsigned_int_sampler_2d_multisample_array:   return 2;
+        case Glsl_type::image_2d:                                    return 2;
 
         default: {
             ERHE_FATAL("Bad Glsl_type");

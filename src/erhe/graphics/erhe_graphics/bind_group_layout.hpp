@@ -17,7 +17,11 @@ class Texture;
 enum class Binding_type : unsigned int {
     uniform_buffer,
     storage_buffer,
-    combined_image_sampler
+    combined_image_sampler,
+    // Load/store storage image (compute read/write). Uses the raw
+    // binding_point (no sampler-binding offset). glsl_type names the image
+    // type (e.g. image_2d) and image_format the GLSL format qualifier.
+    storage_image
 };
 
 class Bind_group_layout_binding
@@ -43,8 +47,15 @@ public:
     std::string_view name           {};
 
     // GLSL type of the sampler uniform declaration, e.g. sampler_2d,
-    // sampler_2d_array_shadow, unsigned_int_sampler_buffer.
+    // sampler_2d_array_shadow, unsigned_int_sampler_buffer. For
+    // storage_image bindings this is the image type (e.g. image_2d).
     Glsl_type        glsl_type      {Glsl_type::sampler_2d};
+
+    // --- Only meaningful when type == storage_image.
+    // GLSL format layout qualifier for the storage image declaration, e.g.
+    // "rgba16f". Required: emitted inside layout(binding = N, <image_format>)
+    // so imageLoad / imageStore are valid.
+    std::string_view image_format   {};
 
     // true if this sampler represents the bindless / argument-buffer /
     // sampler-array texture heap (material textures), false for

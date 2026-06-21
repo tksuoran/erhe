@@ -6,8 +6,10 @@
 #include "erhe_graphics/vulkan/vulkan_device.hpp"
 #include "erhe_graphics/vulkan/vulkan_render_pass.hpp"
 #include "erhe_graphics/vulkan/vulkan_shader_stages.hpp"
+#include "erhe_graphics/vulkan/vulkan_texture.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/command_buffer.hpp"
+#include "erhe_graphics/texture.hpp"
 #include "erhe_graphics/compute_pipeline_state.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/graphics_log.hpp"
@@ -88,6 +90,55 @@ void Compute_command_encoder_impl::set_buffer(Buffer_target buffer_target, const
     if (buffer != nullptr) {
         set_buffer(buffer_target, buffer, 0, VK_WHOLE_SIZE, 0);
     }
+}
+
+void Compute_command_encoder_impl::set_storage_image(const uint32_t binding_point, const Texture& texture)
+{
+    VkCommandBuffer command_buffer = get_active_vk_command_buffer();
+    if (command_buffer == VK_NULL_HANDLE) {
+        return;
+    }
+
+    Device_impl& device_impl = m_device.get_impl();
+    ERHE_VERIFY(device_impl.has_push_descriptor()); // todo: descriptor-set fallback
+    ERHE_VERIFY(m_pipeline_layout != VK_NULL_HANDLE);
+
+    // Storage images are bound at their raw binding point (no sampler-binding
+    // offset) and must already be in VK_IMAGE_LAYOUT_GENERAL (the caller
+    // transitions them around the dispatch). A single-layer 2D color view.
+    Texture_impl& texture_impl = const_cast<Texture_impl&>(texture.get_impl());
+    VkImageView   image_view   = texture_impl.get_vk_image_view(VK_IMAGE_ASPECT_COLOR_BIT, 0, 1);
+    if (image_view == VK_NULL_HANDLE) {
+        return;
+    }
+
+    const VkDescriptorImageInfo image_info{
+        .sampler     = VK_NULL_HANDLE,
+        .imageView   = image_view,
+        .imageLayout = VK_IMAGE_LAYOUT_GENERAL
+    };
+
+    const VkWriteDescriptorSet write{
+        .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .pNext            = nullptr,
+        .dstSet           = VK_NULL_HANDLE, // ignored for push descriptors
+        .dstBinding       = binding_point,
+        .dstArrayElement  = 0,
+        .descriptorCount  = 1,
+        .descriptorType   = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+        .pImageInfo       = &image_info,
+        .pBufferInfo      = nullptr,
+        .pTexelBufferView = nullptr
+    };
+
+    vkCmdPushDescriptorSetKHR(
+        command_buffer,
+        VK_PIPELINE_BIND_POINT_COMPUTE,
+        m_pipeline_layout,
+        0, // set index
+        1,
+        &write
+    );
 }
 
 void Compute_command_encoder_impl::set_bind_group_layout(const Bind_group_layout* bind_group_layout)

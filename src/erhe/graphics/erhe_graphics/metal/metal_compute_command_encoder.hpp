@@ -25,6 +25,7 @@ public:
 
     void set_buffer(Buffer_target buffer_target, const Buffer* buffer, std::uintptr_t offset, std::uintptr_t length, std::uintptr_t index);
     void set_buffer(Buffer_target buffer_target, const Buffer* buffer);
+    void set_storage_image         (uint32_t binding_point, const Texture& texture);
 
     void set_bind_group_layout     (const Bind_group_layout* bind_group_layout);
     void set_compute_pipeline_state(const Compute_pipeline_state& pipeline);
