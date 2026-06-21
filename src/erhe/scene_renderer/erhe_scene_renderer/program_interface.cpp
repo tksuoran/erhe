@@ -124,6 +124,21 @@ Program_interface::Program_interface(
                 .immutable_sampler = &light_interface.shadow_sampler_no_compare,
                 .stage_flags       = erhe::graphics::Shader_stage_flags::fragment
             },
+            {
+                // Color-aspect R32F cube-map array for omnidirectional
+                // point-light shadows: stores radial distance from the light,
+                // one cube (6 faces) per shadow-casting point light. The
+                // receiver samples it by the fragment->light direction and
+                // compares the raw distance (no comparison sampler).
+                .binding_point     = c_texture_heap_slot_shadow_cube,
+                .type              = erhe::graphics::Binding_type::combined_image_sampler,
+                .sampler_aspect    = erhe::graphics::Sampler_aspect::color,
+                .name              = "s_shadow_cube",
+                .glsl_type         = erhe::graphics::Glsl_type::sampler_cube_map_array,
+                .is_texture_heap   = false,
+                .immutable_sampler = &light_interface.shadow_sampler_no_compare,
+                .stage_flags       = erhe::graphics::Shader_stage_flags::fragment
+            },
         },
         .debug_label = "Scene renderer"
     };

@@ -292,4 +292,25 @@ float sample_light_visibility(vec4 position, uint light_index, float N_dot_L) {
 #endif
 }
 
+// Omnidirectional point-light shadow lookup. The caster stored the raw radial
+// distance from the light into an R32F cube-map array (one cube / 6 faces per
+// shadow-casting point light); here we sample it by the fragment->light
+// direction (the samplerCubeArray selects the face automatically) at the
+// light's cube layer and compare the stored nearest-occluder distance against
+// this fragment's distance. A small world-space slope+constant bias avoids
+// self-shadow acne without detaching the contact shadow. Returns 1.0 (lit) when
+// shadow maps are disabled. See doc/forge-erhe.md / forge-point-light-shadows.
+float sample_point_light_visibility(vec3 world_position, vec3 light_position, float cube_index)
+{
+#if defined(ERHE_SHADOW_MAPS)
+    vec3  light_to_frag = world_position - light_position;
+    float current       = length(light_to_frag);
+    float bias          = max(0.05, 0.02 * current);
+    float stored        = texture(s_shadow_cube, vec4(light_to_frag, cube_index)).r;
+    return (current - bias > stored) ? 0.0 : 1.0;
+#else
+    return 1.0;
+#endif
+}
+
 #endif // ERHE_LIGHT_GLSL

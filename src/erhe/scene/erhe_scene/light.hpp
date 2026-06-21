@@ -93,7 +93,12 @@ class Light_projection_transforms
 public:
     const Light*  light       {nullptr};
     std::size_t   index       {0}; // index in lights block shader resource (all lights)
-    std::size_t   shadow_index{0}; // shadow texture array layer / render pass index (equals index when partitioned)
+    std::size_t   shadow_index{0}; // 2D shadow texture array layer / render pass index (directional + spot); std::size_t max for point lights, which use the cube array instead
+    // Dense index (counting only shadow-casting point lights) into the R32F
+    // cube-map array used for omnidirectional point-light shadows. std::size_t
+    // max for non-point or non-shadow lights. The cube occupies array layers
+    // [6*point_shadow_index, 6*point_shadow_index + 6).
+    std::size_t   point_shadow_index{0};
     Projection    projection;      // resolved projection; the shadow pass must rasterize with this so it matches clip_from_world / texture_from_world
     Trs_transform world_from_light_camera;
     Transform     clip_from_light_camera;
@@ -149,6 +154,14 @@ private:
     [[nodiscard]] auto tight_directional_light_projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms;
 
     [[nodiscard]] auto spot_light_projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms;
+
+    // Point lights cast omnidirectional shadows into an R32F cube-map array
+    // sampled by direction, so the per-face view-projections are computed in
+    // Shadow_renderer at render time, not stored here. This only carries the
+    // light world pose (so light_buffer derives the correct light position) and
+    // a perspective projection with z_far = range; clip_from_world /
+    // texture_from_world are unused by the cube sampling path (left identity).
+    [[nodiscard]] auto point_light_projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms;
 
     // Assembles the Light_projection_transforms for a directional light from
     // the resolved projection and the (snapped) light camera pose. Shared by

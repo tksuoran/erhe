@@ -6,7 +6,9 @@
             "shadow_enable": true,
             "shadow_resolution": 1024,
             "shadow_light_count": 1,
-            "shadow_depth_bits": 16
+            "shadow_depth_bits": 16,
+            "point_shadow_resolution": 512,
+            "point_shadow_light_count": 1
         }
     ]
 }

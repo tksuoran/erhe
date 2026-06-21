@@ -31,7 +31,9 @@ public:
         Scene_view&                     scene_view,
         int                             resolution,
         int                             light_count,
-        int                             depth_bits
+        int                             depth_bits,
+        int                             point_resolution,
+        int                             point_light_count
     );
     ~Shadow_render_node() noexcept override;
 
@@ -43,7 +45,7 @@ public:
     auto inputs_allowed() const -> bool override;
 
     // Public API
-    void reconfigure(erhe::graphics::Device& graphics_device, erhe::graphics::Command_buffer& command_buffer, int resolution, int light_count, int depth_bits, bool distance_technique);
+    void reconfigure(erhe::graphics::Device& graphics_device, erhe::graphics::Command_buffer& command_buffer, int resolution, int light_count, int depth_bits, bool distance_technique, int point_resolution, int point_light_count);
 
     [[nodiscard]] auto get_scene_view       () -> Scene_view&;
     [[nodiscard]] auto get_scene_view       () const -> const Scene_view&;
@@ -75,6 +77,19 @@ private:
     int                                                       m_light_count{0};
     int                                                       m_depth_bits {0};
     std::vector<std::unique_ptr<erhe::graphics::Render_pass>> m_render_passes;
+
+    // Omnidirectional point-light shadows: an R32F texture_cube_map_array (one
+    // cube / 6 faces per shadow-casting point light) of radial distances, a
+    // shared 2D depth scratch reused as the rasterization depth for every face,
+    // and 6 * m_point_light_count render passes (face f of cube p ->
+    // m_point_render_passes[6*p + f]). Sized by the preset's
+    // point_shadow_resolution / point_shadow_light_count.
+    std::shared_ptr<erhe::graphics::Texture>                  m_point_cube_texture;
+    std::shared_ptr<erhe::graphics::Texture>                  m_point_cube_depth;
+    std::vector<std::unique_ptr<erhe::graphics::Render_pass>> m_point_render_passes;
+    int                                                       m_point_resolution {0};
+    int                                                       m_point_light_count{0};
+    erhe::math::Viewport                                      m_point_viewport{0, 0, 0, 0};
     std::vector<std::string>                                  m_gpu_timer_labels;
     std::vector<std::unique_ptr<erhe::graphics::Gpu_timer>>   m_gpu_timers;
     erhe::math::Viewport                                      m_viewport{0, 0, 0, 0};

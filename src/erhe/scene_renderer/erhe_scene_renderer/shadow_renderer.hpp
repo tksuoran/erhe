@@ -134,6 +134,16 @@ public:
         std::shared_ptr<erhe::graphics::Texture>                           distance_texture{};
         bool                                                               use_distance{false};
         float                                                              distance_bias_coeff{0.0f};
+
+        // Omnidirectional point-light shadows. point_cube_texture is the R32F
+        // texture_cube_map_array (one cube / 6 faces per shadow-casting point
+        // light); point_cube_render_passes holds 6 * point_shadow_light_count
+        // render passes, the cube face for dense point index p / face f being
+        // pass [6*p + f]. point_shadow_viewport is the per-face viewport (the
+        // point cube resolution). Empty / null disables the point cube pass.
+        std::shared_ptr<erhe::graphics::Texture>                           point_cube_texture{};
+        const std::vector<std::unique_ptr<erhe::graphics::Render_pass>>*   point_cube_render_passes{nullptr};
+        erhe::math::Viewport                                               point_shadow_viewport{};
     };
 
     auto render(const Render_parameters& parameters) -> bool;
@@ -160,6 +170,24 @@ public:
     );
 
 private:
+    // Shared shadow-caster bucket walk + draw used by both the 2D (directional /
+    // spot) per-light pass and the per-face point-light cube pass. The caller
+    // sets up the encoder (bind group, viewport / scissor, depth bias, material
+    // / joint / light / camera / control buffers, texture heap) and opens the
+    // render pass; this fills it with the shadow casters, selecting the variant
+    // via boolean_mask_force_enable (VARIANT_DEPTH_ONLY [+ VARIANT_SHADOW_DISTANCE],
+    // or VARIANT_SHADOW_CUBE) and the color attachment policy via color_blend.
+    void draw_shadow_casters(
+        erhe::graphics::Command_buffer&                                                          command_buffer,
+        erhe::graphics::Render_command_encoder&                                                  encoder,
+        erhe::graphics::Base_render_pipeline&                                                     base_pipeline,
+        const erhe::graphics::Render_pass&                                                       render_pass,
+        const erhe::graphics::Color_blend_state*                                                  color_blend,
+        const std::initializer_list<const std::span<const std::shared_ptr<erhe::scene::Mesh>>>&  mesh_spans,
+        const erhe::Item_filter&                                                                 shadow_filter,
+        uint32_t                                                                                 boolean_mask_force_enable
+    );
+
     erhe::graphics::Device&                       m_graphics_device;
     Mesh_memory&                                  m_mesh_memory;
     Shader_variant_cache&                         m_shader_variant_cache;

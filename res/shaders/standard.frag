@@ -31,7 +31,7 @@ vec3 vec3_from_uint(uint i)
 layout(location = 0) in vec4 v_point_color;
 #endif
 
-#if !defined(ERHE_VARIANT_POSITION_PASS)
+#if defined(ERHE_USE_VARYING_POSITION)
 layout(location = 0) in vec4      v_position;
 #endif
 
@@ -150,6 +150,15 @@ void main()
     // bias; see doc/shadows.md ("distance / fwidth alternative").
     float ls_depth = gl_FragCoord.z;
     out_color = vec4(ls_depth + light_control_block.shadow_distance_bias_coeff * fwidth(ls_depth));
+    return;
+#endif
+
+#if defined(ERHE_VARIANT_SHADOW_CUBE)
+    // Omnidirectional point-light shadow caster: store the raw radial distance
+    // from the light to this fragment into the R32F cube face. The light world
+    // position is supplied per pass in the light control block. Unrendered
+    // texels keep the large clear value, which the receiver reads as "lit".
+    out_color = vec4(length(v_position.xyz - light_control_block.point_light_position.xyz));
     return;
 #endif
 
@@ -423,8 +432,9 @@ void main()
         }
         light_offset += uint(ERHE_LIGHT_COUNT_SPOT_NOT_SHADOWMAPPED);
 
-        // Point - shadow-mapped prefix
-        // Point shadows are not yet sampled (TODO in old code), so this matches the suffix branch.
+        // Point - shadow-mapped prefix. Sample the omnidirectional shadow cube
+        // by the fragment->light direction; the cube-array layer for this light
+        // is shadow_index_packed.y (written by light_buffer.cpp).
         for (uint i = 0u; i < uint(ERHE_LIGHT_COUNT_POINT_SHADOWMAPPED); ++i) {
             uint  light_index    = light_offset + i;
             Light light          = light_block.lights[light_index];
@@ -433,7 +443,8 @@ void main()
             float N_dot_L        = dot(N, L);
             if (N_dot_L > 0.0) {
                 float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
-                vec3  intensity         = range_attenuation * light.radiance_and_range.rgb;
+                float light_visibility  = sample_point_light_visibility(v_position.xyz, light.position_and_inner_spot_cos.xyz, float(light.shadow_index_packed.y));
+                vec3  intensity         = range_attenuation * light.radiance_and_range.rgb * light_visibility;
                 color += intensity * BXDF_CALL(L);
             }
         }

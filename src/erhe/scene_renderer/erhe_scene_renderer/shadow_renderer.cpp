@@ -116,6 +116,126 @@ Shadow_renderer::Shadow_renderer(
 
 Shadow_renderer::~Shadow_renderer() noexcept = default;
 
+void Shadow_renderer::draw_shadow_casters(
+    erhe::graphics::Command_buffer&                                                         command_buffer,
+    erhe::graphics::Render_command_encoder&                                                 encoder,
+    erhe::graphics::Base_render_pipeline&                                                    base_pipeline,
+    const erhe::graphics::Render_pass&                                                       render_pass,
+    const erhe::graphics::Color_blend_state*                                                 color_blend,
+    const std::initializer_list<const std::span<const std::shared_ptr<erhe::scene::Mesh>>>& mesh_spans,
+    const erhe::Item_filter&                                                                 shadow_filter,
+    const uint32_t                                                                           boolean_mask_force_enable
+)
+{
+    using Ring_buffer_range          = erhe::graphics::Ring_buffer_range;
+    using Draw_indirect_buffer_range = erhe::scene_renderer::Draw_indirect_buffer_range;
+
+    const erhe::primitive::Primitive_mode primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
+
+    Shader_key                 environment_key{};
+    std::vector<Render_bucket> buckets;
+    const uint32_t             boolean_mask_force_disable = 0; // TODO
+
+    for (const auto& meshes : mesh_spans) {
+        bucket_primitives(
+            buckets,
+            boolean_mask_force_enable,
+            boolean_mask_force_disable,
+            m_mesh_memory,
+            environment_key,
+            meshes,
+            shadow_filter,
+            primitive_mode,
+            Blending_mode_policy::opaque_primitives_only // TODO Think about what would be correct
+        );
+    }
+
+    for (std::size_t bucket_index = 0, end = buckets.size(); bucket_index < end; ++bucket_index) {
+        const Render_bucket& bucket = buckets[bucket_index];
+        erhe::graphics::Scoped_debug_group bucket_scope{
+            command_buffer,
+            erhe::utility::Debug_label{
+                fmt::format(
+                    "shadow bucket {}/{} entries={} streams={}",
+                    bucket_index + 1,
+                    buckets.size(),
+                    bucket.entries.size(),
+                    bucket.buffer_set.vertex_buffers.size()
+                )
+            }
+        };
+
+        const Vertex_input_entry& vertex_input = m_mesh_memory.get_vertex_input(bucket.buffer_set.vertex_input_key);
+        const erhe::graphics::Reloadable_shader_stages* reloadable_shader_stages = m_shader_variant_cache.get(
+            bucket.shader_key,
+            &vertex_input.vertex_format
+        );
+        if (reloadable_shader_stages == nullptr) {
+            log_draw->warn(
+                "No shader variant for bucket {} ({} primitives, {} vertex streams): {}",
+                bucket_index,
+                bucket.entries.size(),
+                bucket.buffer_set.vertex_buffers.size(),
+                bucket.shader_key.describe()
+            );
+            continue;
+        }
+        // Mirrored (negative determinant) buckets get the front-face-flipped
+        // variant so front-face culling removes the side facing the light, same
+        // as for non-mirrored casters.
+        erhe::graphics::Render_pipeline* render_pipeline = base_pipeline.get_pipeline_for(
+            render_pass.get_descriptor(),
+            color_blend,
+            &reloadable_shader_stages->shader_stages,
+            vertex_input.vertex_input.get(),
+            &vertex_input.vertex_format,
+            bucket.negative_determinant
+        );
+        if (render_pipeline == nullptr) {
+            log_draw->warn("No render pipeline");
+            continue;
+        }
+        // Bind the pipeline before the index/vertex buffers: switching the
+        // pipeline switches the GL VAO, and on GL 4.1 (no DSA) the element
+        // array buffer binding is VAO-local.
+        encoder.set_render_pipeline(*render_pipeline);
+
+        erhe::graphics::Buffer* index_buffer = m_mesh_memory.get_index_buffer(bucket.buffer_set.index_buffer);
+        encoder.set_index_buffer(index_buffer);
+        for (std::size_t stream_index = 0; stream_index < bucket.buffer_set.vertex_buffers.size(); ++stream_index) {
+            erhe::graphics::Buffer* vertex_buffer = m_mesh_memory.get_vertex_buffer(bucket.buffer_set.vertex_buffers[stream_index]);
+            encoder.set_vertex_buffer(
+                vertex_buffer,
+                0,
+                static_cast<uint32_t>(stream_index)
+            );
+        }
+
+        Ring_buffer_range primitive_range = m_primitive_buffer.update(
+            bucket,
+            primitive_mode,
+            Primitive_interface_settings{}
+        );
+        ERHE_VERIFY(!bucket.entries.empty());
+        Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffer.update(bucket, primitive_mode);
+        ERHE_VERIFY(bucket.entries.size() == draw_indirect_buffer_range.draw_indirect_count);
+
+        m_primitive_buffer.bind(encoder, primitive_range);
+        m_draw_indirect_buffer.bind(encoder, draw_indirect_buffer_range.range);
+
+        encoder.multi_draw_indexed_primitives_indirect(
+            base_pipeline.data.input_assembly.primitive_topology,
+            m_mesh_memory.get_index_format(bucket.buffer_set.index_buffer),
+            draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer(),
+            draw_indirect_buffer_range.draw_indirect_count,
+            sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command)
+        );
+
+        primitive_range.release();
+        draw_indirect_buffer_range.range.release();
+    }
+}
+
 auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 {
     ERHE_PROFILE_FUNCTION();
@@ -200,6 +320,11 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     // technique, in which case the receiver uses the depth samplers instead.
     parameters.light_projections.shadow_distance_texture = parameters.distance_texture;
 
+    // Likewise expose the point-light shadow cube array (if any) so the forward
+    // pass binds it to s_shadow_cube. Null when no point shadows are configured;
+    // bind_shadow_samplers then binds the fallback cube.
+    parameters.light_projections.shadow_cube_texture = parameters.point_cube_texture;
+
     erhe::graphics::Scoped_debug_group debug_group{
         parameters.command_buffer,
         erhe::utility::Debug_label{"Shadow_renderer::render()"}
@@ -215,8 +340,6 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     Ring_buffer_range light_range    = m_light_buffer.update(lights, &parameters.light_projections, glm::vec3{0.0f});
 
     // log_shadow_renderer->trace("Rendering shadow map to '{}'", parameters.texture->get_debug_label().string_view());
-
-    const erhe::primitive::Primitive_mode primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
 
     // Depth clamping preserves casters outside the (tightly fitted) light
     // space near plane by clamping their depth instead of clipping them.
@@ -305,130 +428,170 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 
         m_texture_heap->bind(encoder);
 
-        const Light_layer_partition partition = compute_light_layer_partition(parameters.lights);
-
-        Shader_key environment_key{};
-        std::vector<Render_bucket> buckets;
+        // Directional / spot caster variant: depth-only, plus the distance
+        // fragment shader (and its R32F color attachment) when the distance
+        // technique is active.
         uint32_t boolean_mask_force_enable = erhe::scene_renderer::make_shader_bool_mask(
             erhe::scene_renderer::Shader_bool::VARIANT_DEPTH_ONLY
         );
         if (parameters.use_distance) {
-            // Distance technique: also run the caster fragment shader that writes
-            // the fwidth-biased light-space depth into the color attachment.
             boolean_mask_force_enable |= erhe::scene_renderer::make_shader_bool_mask(
                 erhe::scene_renderer::Shader_bool::VARIANT_SHADOW_DISTANCE
             );
         }
-        const uint32_t boolean_mask_force_disable = 0; // TODO
+        const erhe::graphics::Color_blend_state* color_blend = parameters.use_distance
+            ? &erhe::graphics::Color_blend_state::color_blend_disabled   // write biased distance to the color attachment
+            : &erhe::graphics::Color_blend_state::color_writes_disabled; // depth-only
 
-        for (const auto& meshes : mesh_spans) {
-            bucket_primitives(
-                buckets,
-                boolean_mask_force_enable,
-                boolean_mask_force_disable,
-                m_mesh_memory,
-                environment_key,
-                meshes,
-                shadow_filter,
-                primitive_mode,
-                Blending_mode_policy::opaque_primitives_only // TODO Think about what would be correct
-            );
-        }
-
-        for (std::size_t bucket_index = 0, end = buckets.size(); bucket_index < end; ++bucket_index) {
-            const Render_bucket& bucket = buckets[bucket_index];
-            erhe::graphics::Scoped_debug_group bucket_scope{
-                parameters.command_buffer,
-                erhe::utility::Debug_label{
-                    fmt::format(
-                        "shadow bucket {}/{} entries={} streams={}",
-                        bucket_index + 1,
-                        buckets.size(),
-                        bucket.entries.size(),
-                        bucket.buffer_set.vertex_buffers.size()
-                    )
-                }
-            };
-
-            const Vertex_input_entry& vertex_input = m_mesh_memory.get_vertex_input(bucket.buffer_set.vertex_input_key);
-            const erhe::graphics::Reloadable_shader_stages* reloadable_shader_stages = m_shader_variant_cache.get(
-                bucket.shader_key,
-                &vertex_input.vertex_format
-            );
-            if (reloadable_shader_stages == nullptr) {
-                log_draw->warn(
-                    "No shader variant for bucket {} ({} primitives, {} vertex streams): {}",
-                    bucket_index,
-                    bucket.entries.size(),
-                    bucket.buffer_set.vertex_buffers.size(),
-                    bucket.shader_key.describe()
-                );
-                continue;
-            }
-            // Mirrored (negative determinant) buckets get the front-face-
-            // flipped variant so front-face culling removes the side facing
-            // the light, same as for non-mirrored casters.
-            erhe::graphics::Render_pipeline* render_pipeline = base_pipeline.get_pipeline_for(
-                parameters.render_passes[shadow_index]->get_descriptor(),
-                parameters.use_distance
-                    ? &erhe::graphics::Color_blend_state::color_blend_disabled   // write biased distance to the color attachment
-                    : &erhe::graphics::Color_blend_state::color_writes_disabled, // depth-only
-                &reloadable_shader_stages->shader_stages,
-                vertex_input.vertex_input.get(),
-                &vertex_input.vertex_format,
-                bucket.negative_determinant
-            );
-            if (render_pipeline == nullptr) {
-                log_draw->warn("No render pipeline");
-                continue;
-            }
-            // Bind the pipeline before the index/vertex buffers: switching the
-            // pipeline switches the GL VAO, and on GL 4.1 (no DSA) the element
-            // array buffer binding is VAO-local. Binding the index buffer
-            // first would leave it attached to the previous VAO and the draw
-            // would fail with GL_INVALID_OPERATION (elem_buf=0).
-            encoder.set_render_pipeline(*render_pipeline);
-
-            erhe::graphics::Buffer* index_buffer = m_mesh_memory.get_index_buffer(bucket.buffer_set.index_buffer);
-            encoder.set_index_buffer(index_buffer);
-            for (std::size_t stream_index = 0; stream_index < bucket.buffer_set.vertex_buffers.size(); ++stream_index) {
-                erhe::graphics::Buffer* vertex_buffer = m_mesh_memory.get_vertex_buffer(bucket.buffer_set.vertex_buffers[stream_index]);
-                encoder.set_vertex_buffer(
-                    vertex_buffer,
-                    0,
-                    static_cast<uint32_t>(stream_index)
-                );
-            }
-
-            //const std::span<const std::shared_ptr<erhe::scene::Mesh>> bucket_meshes{bucket.meshes};
-            Ring_buffer_range primitive_range = m_primitive_buffer.update(
-                bucket,
-                primitive_mode,
-                Primitive_interface_settings{}
-            );
-            ERHE_VERIFY(!bucket.entries.empty());
-            Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffer.update(bucket, primitive_mode);
-            ERHE_VERIFY(bucket.entries.size() == draw_indirect_buffer_range.draw_indirect_count);
-
-            // log_draw->debug("MDI - shader key = {}", bucket.shader_key.describe());
-
-            m_primitive_buffer.bind(encoder, primitive_range);
-            m_draw_indirect_buffer.bind(encoder, draw_indirect_buffer_range.range);
-
-            encoder.multi_draw_indexed_primitives_indirect(
-                base_pipeline.data.input_assembly.primitive_topology,
-                m_mesh_memory.get_index_format(bucket.buffer_set.index_buffer),
-                draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer(),
-                draw_indirect_buffer_range.draw_indirect_count,
-                sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command)
-            );
-
-            primitive_range.release();
-            draw_indirect_buffer_range.range.release();
-        }
+        draw_shadow_casters(
+            parameters.command_buffer,
+            encoder,
+            base_pipeline,
+            *parameters.render_passes[shadow_index].get(),
+            color_blend,
+            mesh_spans,
+            shadow_filter,
+            boolean_mask_force_enable
+        );
 
         control_range.release();
         camera_range.release();
+    }
+
+    // Omnidirectional point-light shadow cube pass. Each shadow-casting point
+    // light renders the scene into the six faces of its R32F cube (radial
+    // distance from the light), one render pass per face. cull_none (per the
+    // forge SKILL.md: safe for non-watertight glTF) with color writes enabled.
+    if (
+        (parameters.point_cube_texture != nullptr) &&
+        (parameters.point_cube_render_passes != nullptr) &&
+        !parameters.point_cube_render_passes->empty() &&
+        (parameters.point_shadow_viewport.width > 0) &&
+        (parameters.point_shadow_viewport.height > 0)
+    ) {
+        const std::vector<std::unique_ptr<erhe::graphics::Render_pass>>& cube_passes = *parameters.point_cube_render_passes;
+        const std::size_t cube_count = cube_passes.size() / 6;
+
+        // Cube face look / up vectors in Vulkan cube-face order (+X, -X, +Y, -Y,
+        // +Z, -Z), matching the layer order written here and the direction-based
+        // samplerCubeArray lookup in the forward pass. Reverse-Z and the
+        // device clip-space y-flip are applied centrally through Projection /
+        // the caster pipeline, so no SDL3-GPU-style proj.m[5] negate is needed.
+        static const glm::vec3 cube_look[6] = {
+            { 1.0f,  0.0f,  0.0f}, {-1.0f,  0.0f,  0.0f},
+            { 0.0f,  1.0f,  0.0f}, { 0.0f, -1.0f,  0.0f},
+            { 0.0f,  0.0f,  1.0f}, { 0.0f,  0.0f, -1.0f}
+        };
+        static const glm::vec3 cube_up[6] = {
+            { 0.0f, -1.0f,  0.0f}, { 0.0f, -1.0f,  0.0f},
+            { 0.0f,  0.0f,  1.0f}, { 0.0f,  0.0f, -1.0f},
+            { 0.0f, -1.0f,  0.0f}, { 0.0f, -1.0f,  0.0f}
+        };
+        const uint32_t cube_force_enable = erhe::scene_renderer::make_shader_bool_mask(
+            erhe::scene_renderer::Shader_bool::VARIANT_SHADOW_CUBE
+        );
+        erhe::graphics::Base_render_pipeline& cube_base_pipeline =
+            m_pipelines[static_cast<std::size_t>(Shadow_cull_mode::cull_none)];
+
+        erhe::graphics::Scoped_debug_group cube_debug_group{
+            parameters.command_buffer,
+            erhe::utility::Debug_label{"Shadow_renderer point cubes"}
+        };
+
+        erhe::graphics::Render_pass* previous_cube_render_pass = nullptr;
+        for (const auto& light : lights) {
+            if (!light->cast_shadow || (light->type != erhe::scene::Light_type::point)) {
+                continue;
+            }
+            auto* lpt = parameters.light_projections.get_light_projection_transforms_for_light(light.get());
+            if (lpt == nullptr) {
+                continue;
+            }
+            const std::size_t point_shadow_index = lpt->point_shadow_index;
+            if (point_shadow_index >= cube_count) {
+                continue;
+            }
+            const std::size_t light_index = lpt->index;
+            const glm::vec3   light_pos   = glm::vec3{lpt->world_from_light_camera.get_matrix() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
+            const float       far_plane   = light->range;
+
+            for (int face = 0; face < 6; ++face) {
+                const std::size_t pass_index = (point_shadow_index * 6) + static_cast<std::size_t>(face);
+
+                erhe::graphics::Render_command_encoder encoder = m_graphics_device.make_render_command_encoder(parameters.command_buffer);
+                erhe::graphics::Scoped_render_pass scoped_render_pass{
+                    *cube_passes[pass_index].get(),
+                    parameters.command_buffer,
+                    previous_cube_render_pass,
+                    nullptr
+                };
+                previous_cube_render_pass = cube_passes[pass_index].get();
+
+                encoder.set_bind_group_layout(m_bind_group_layout);
+                encoder.set_viewport_rect(
+                    parameters.point_shadow_viewport.x,
+                    parameters.point_shadow_viewport.y,
+                    parameters.point_shadow_viewport.width,
+                    parameters.point_shadow_viewport.height
+                );
+                // Full-face scissor: unlike the 2D map there is no empty border,
+                // so adjacent cube faces meet without a clear-value seam.
+                encoder.set_scissor_rect(
+                    parameters.point_shadow_viewport.x,
+                    parameters.point_shadow_viewport.y,
+                    parameters.point_shadow_viewport.width,
+                    parameters.point_shadow_viewport.height
+                );
+                encoder.set_depth_bias(parameters.depth_bias_constant, parameters.depth_bias_slope, 0.0f);
+                m_material_buffer.bind(encoder, material_range);
+                m_joint_buffer.bind(encoder, joint_range);
+                m_light_buffer.bind_light_buffer(encoder, light_range);
+
+                const glm::mat4 world_from_face = erhe::math::create_look_at(
+                    light_pos,                 // eye
+                    light_pos + cube_look[face], // center
+                    cube_up[face]              // up
+                );
+                const erhe::scene::Trs_transform face_transform{world_from_face, glm::inverse(world_from_face)};
+                Ring_buffer_range camera_range = m_camera_buffer.update(
+                    lpt->projection,
+                    face_transform,
+                    parameters.point_shadow_viewport,
+                    1.0f,                      // exposure
+                    Grid_parameters{},
+                    Sky_parameters{},
+                    0,                         // frame number
+                    parameters.reverse_depth,
+                    parameters.depth_range
+                );
+                m_camera_buffer.bind(encoder, camera_range);
+
+                // The caster fragment shader reads the light world position (and
+                // far) from the light control block to store radial distance.
+                Ring_buffer_range control_range = m_light_buffer.update_control(
+                    light_index,
+                    0.0f,
+                    glm::vec4{light_pos, far_plane}
+                );
+                m_light_buffer.bind_control_buffer(encoder, control_range);
+
+                m_texture_heap->bind(encoder);
+
+                draw_shadow_casters(
+                    parameters.command_buffer,
+                    encoder,
+                    cube_base_pipeline,
+                    *cube_passes[pass_index].get(),
+                    &erhe::graphics::Color_blend_state::color_blend_disabled,
+                    mesh_spans,
+                    shadow_filter,
+                    cube_force_enable
+                );
+
+                control_range.release();
+                camera_range.release();
+            }
+        }
     }
 
     m_texture_heap->unbind(parameters.command_buffer);

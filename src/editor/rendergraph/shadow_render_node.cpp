@@ -43,7 +43,9 @@ Shadow_render_node::Shadow_render_node(
     Scene_view&                     scene_view,
     const int                       resolution,
     const int                       light_count,
-    const int                       depth_bits
+    const int                       depth_bits,
+    const int                       point_resolution,
+    const int                       point_light_count
 )
     // TODO fmt::format("Shadow render {}", viewport_scene_view->name())
     : erhe::rendergraph::Rendergraph_node{rendergraph, "shadow_maps"}
@@ -55,14 +57,14 @@ Shadow_render_node::Shadow_render_node(
     // Start on the depth technique; execute_rendergraph_node lazily switches to
     // distance on the first frame if the active preset selects it (the App_context
     // settings are not available to read here at construction time).
-    reconfigure(graphics_device, init_command_buffer, resolution, light_count, depth_bits, false);
+    reconfigure(graphics_device, init_command_buffer, resolution, light_count, depth_bits, false, point_resolution, point_light_count);
 }
 
 Shadow_render_node::~Shadow_render_node() noexcept
 {
 }
 
-void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, erhe::graphics::Command_buffer& command_buffer, const int resolution, const int light_count, const int requested_depth_bits, const bool distance_technique)
+void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, erhe::graphics::Command_buffer& command_buffer, const int resolution, const int light_count, const int requested_depth_bits, const bool distance_technique, const int point_resolution, const int point_light_count)
 {
     // Reverse-Z is the static device value; query it rather than caching.
     const bool reverse_depth = graphics_device.get_reverse_depth();
@@ -113,7 +115,9 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, er
         (m_texture->get_height()            == resolution) &&
         (m_texture->get_array_layer_count() == std::max(1, light_count)) &&
         (m_texture->get_pixelformat()       == depth_format) &&
-        (m_distance_technique               == distance_technique)
+        (m_distance_technique               == distance_technique) &&
+        (m_point_resolution                 == point_resolution) &&
+        (m_point_light_count                == point_light_count)
     ) {
         log_render->debug(
             "Reconfigure shadow resolution = {}, light count = {}, format = {} - match old settings, skip",
@@ -129,6 +133,8 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, er
     m_light_count        = light_count;
     m_depth_bits         = requested_depth_bits;
     m_distance_technique = distance_technique;
+    m_point_resolution   = point_resolution;
+    m_point_light_count  = point_light_count;
 
     //// TODO device.wait_for_idle()
 
@@ -245,6 +251,95 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, er
         .height = resolution
     };
 
+    // Point-light shadow cube array (R32F radial distance) + a shared 2D depth
+    // scratch reused as the rasterization depth for every face + 6 *
+    // point_light_count render passes. Allocated only when point shadows are
+    // enabled; otherwise the forward pass binds Light_buffer's fallback cube and
+    // no point-cube render passes are issued.
+    m_point_cube_texture.reset();
+    m_point_cube_depth.reset();
+    m_point_render_passes.clear();
+    m_point_viewport = {0, 0, 0, 0};
+    if ((point_light_count > 0) && (point_resolution > 0)) {
+        const int point_res = std::max(1, point_resolution);
+        {
+            ERHE_PROFILE_SCOPE("allocating point shadow cube array texture");
+            m_point_cube_texture = std::make_shared<Texture>(
+                graphics_device,
+                erhe::graphics::Texture_create_info {
+                    .device            = graphics_device,
+                    .usage_mask        =
+                        erhe::graphics::Image_usage_flag_bit_mask::color_attachment |
+                        erhe::graphics::Image_usage_flag_bit_mask::sampled |
+                        erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
+                    .type              = erhe::graphics::Texture_type::texture_cube_map_array,
+                    .pixelformat       = erhe::dataformat::Format::format_32_scalar_float,
+                    .width             = point_res,
+                    .height            = point_res,
+                    .depth             = 1,
+                    .array_layer_count = 6 * point_light_count, // 6 faces per cube
+                    .debug_label       = "Point shadow cube array"
+                }
+            );
+            // Transition all layer-faces UNDEFINED -> shader_read_only_optimal so
+            // every cube/face the receiver can sample is in a defined layout even
+            // before its render pass first writes it (mirrors m_distance_texture).
+            command_buffer.transition_texture_layout(*m_point_cube_texture.get(), erhe::graphics::Image_layout::shader_read_only_optimal);
+        }
+        {
+            ERHE_PROFILE_SCOPE("allocating point shadow cube depth scratch");
+            m_point_cube_depth = std::make_shared<Texture>(
+                graphics_device,
+                erhe::graphics::Texture_create_info {
+                    .device            = graphics_device,
+                    .usage_mask        = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment,
+                    .type              = erhe::graphics::Texture_type::texture_2d,
+                    .pixelformat       = depth_format,
+                    .width             = point_res,
+                    .height            = point_res,
+                    .depth             = 1,
+                    .array_layer_count = 1,
+                    .debug_label       = "Point shadow cube depth scratch"
+                }
+            );
+            command_buffer.transition_texture_layout(*m_point_cube_depth.get(), erhe::graphics::Image_layout::depth_stencil_attachment_optimal);
+        }
+        m_point_render_passes.reserve(static_cast<std::size_t>(6 * point_light_count));
+        for (int cube = 0; cube < point_light_count; ++cube) {
+            for (int face = 0; face < 6; ++face) {
+                erhe::graphics::Render_pass_descriptor rp;
+                // Color: one cube face (layer 6*cube + face). Clear to a large
+                // distance so unrendered texels read "occluder very far" -> lit.
+                rp.color_attachments[0].texture        = m_point_cube_texture.get();
+                rp.color_attachments[0].texture_level  = 0;
+                rp.color_attachments[0].texture_layer  = static_cast<unsigned int>((6 * cube) + face);
+                rp.color_attachments[0].load_action    = erhe::graphics::Load_action::Clear;
+                rp.color_attachments[0].store_action   = erhe::graphics::Store_action::Store;
+                rp.color_attachments[0].usage_before   = erhe::graphics::Image_usage_flag_bit_mask::sampled;
+                rp.color_attachments[0].layout_before  = erhe::graphics::Image_layout::shader_read_only_optimal;
+                rp.color_attachments[0].usage_after    = erhe::graphics::Image_usage_flag_bit_mask::sampled;
+                rp.color_attachments[0].layout_after   = erhe::graphics::Image_layout::shader_read_only_optimal;
+                rp.color_attachments[0].clear_value[0] = 1.0e30;
+                // Depth: shared scratch, cleared each face, never sampled.
+                rp.depth_attachment.texture            = m_point_cube_depth.get();
+                rp.depth_attachment.texture_level      = 0;
+                rp.depth_attachment.texture_layer      = 0;
+                rp.depth_attachment.load_action        = erhe::graphics::Load_action::Clear;
+                rp.depth_attachment.store_action       = erhe::graphics::Store_action::Dont_care;
+                rp.depth_attachment.usage_before       = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
+                rp.depth_attachment.layout_before      = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;
+                rp.depth_attachment.usage_after        = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
+                rp.depth_attachment.layout_after       = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;
+                rp.depth_attachment.clear_value[0]     = reverse_depth ? 0.0 : 1.0;
+                rp.render_target_width                 = point_res;
+                rp.render_target_height                = point_res;
+                rp.debug_label                         = erhe::utility::Debug_label{fmt::format("Point shadow cube {} face {}", cube, face)};
+                m_point_render_passes.emplace_back(std::make_unique<Render_pass>(graphics_device, rp));
+            }
+        }
+        m_point_viewport = {0, 0, point_res, point_res};
+    }
+
     // Invalidate m_light_projections which at this point has stale texture handles
     m_light_projections = erhe::scene_renderer::Light_projections{};
 }
@@ -289,7 +384,7 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
         const bool want_distance =
             (m_context.app_settings->graphics.current_graphics_preset.shadow_technique == Shadow_technique_mode::distance);
         if (want_distance != m_distance_technique) {
-            reconfigure(*m_context.graphics_device, command_buffer, m_resolution, m_light_count, m_depth_bits, want_distance);
+            reconfigure(*m_context.graphics_device, command_buffer, m_resolution, m_light_count, m_depth_bits, want_distance, m_point_resolution, m_point_light_count);
             if (!m_texture) {
                 return;
             }
@@ -422,7 +517,10 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
             .cull_mode             = cull_mode,
             .distance_texture      = use_distance ? m_distance_texture : std::shared_ptr<erhe::graphics::Texture>{},
             .use_distance          = use_distance,
-            .distance_bias_coeff   = distance_bias_coeff
+            .distance_bias_coeff   = distance_bias_coeff,
+            .point_cube_texture       = m_point_cube_texture,
+            .point_cube_render_passes = &m_point_render_passes,
+            .point_shadow_viewport    = m_point_viewport
         }
     );
 }

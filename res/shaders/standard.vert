@@ -28,7 +28,7 @@ out gl_PerVertex {
 layout(location = 0) out vec4 v_point_color;
 #endif
 
-#if !defined(ERHE_VARIANT_POSITION_PASS)
+#if defined(ERHE_USE_VARYING_POSITION)
 layout(location = 0) out vec4      v_position;
 #endif
 
@@ -113,6 +113,13 @@ void main()
 
     vec4 position        = world_from_node * vec4(a_position, 1.0);
     gl_Position          = clip_from_world * position;
+
+#if defined(ERHE_VARIANT_SHADOW_CUBE)
+    // Point-light shadow cube caster: the fragment shader needs the world
+    // position to compute radial distance to the light. This is a position pass,
+    // so the lit-varying block below is skipped; assign v_position here.
+    v_position = position;
+#endif
 
 #if defined(ERHE_VARIANT_ID_RENDER)
     v_draw_id      = ERHE_DRAW_ID;

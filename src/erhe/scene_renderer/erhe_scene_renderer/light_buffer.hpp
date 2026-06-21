@@ -74,6 +74,10 @@ static constexpr uint32_t c_texture_heap_slot_shadow_no_compare{1};
 // map. Separate from the two depth-aspect shadow samplers above because a
 // color texture cannot bind to a depth-aspect combined-image-sampler.
 static constexpr uint32_t c_texture_heap_slot_shadow_distance  {2};
+// Color-aspect samplerCubeArray binding for omnidirectional point-light
+// shadows: an R32F cube-map array storing radial distance from the light, one
+// cube (6 faces) per shadow-casting point light. Sampled by direction.
+static constexpr uint32_t c_texture_heap_slot_shadow_cube      {3};
 
 class Light_interface
 {
@@ -97,6 +101,9 @@ public:
     // Per-pass coefficient the distance caster multiplies fwidth() by, =
     // cdd*(1+pcfRadius) (Shadow_technique_mode::distance). 0 for the depth path.
     std::size_t                     shadow_distance_bias_coeff_offset;
+    // Per-pass point light world position (xyz) + far/range (w), used by the
+    // VARIANT_SHADOW_CUBE caster to store radial distance into the cube face.
+    std::size_t                     point_light_position_offset;
     erhe::graphics::Sampler         shadow_sampler_compare;
     erhe::graphics::Sampler         shadow_sampler_no_compare;
 };
@@ -132,6 +139,11 @@ public:
     // distances the caster wrote). Null for the depth technique; the receiver
     // then samples shadow_map_texture through the depth samplers instead.
     std::shared_ptr<erhe::graphics::Texture>              shadow_distance_texture;
+    // Omnidirectional point-light shadows: R32F cube-map array of radial
+    // distances (one cube / 6 faces per shadow-casting point light). Null when
+    // no point shadows are configured; the receiver then binds the fallback
+    // cube and the point shadow-mapped light count is zero.
+    std::shared_ptr<erhe::graphics::Texture>              shadow_cube_texture;
 
     // Frame-lifetime backing storage for parameters.fit_debug_out; parallel
     // to light_projection_transforms, and resized (then filled by the fit)
@@ -188,7 +200,11 @@ public:
         const Light_projections*                light_projections
     );
 
-    auto update_control(std::size_t light_index, float shadow_distance_bias_coeff = 0.0f) -> erhe::graphics::Ring_buffer_range;
+    auto update_control(
+        std::size_t      light_index,
+        float            shadow_distance_bias_coeff = 0.0f,
+        const glm::vec4& point_light_position       = glm::vec4{0.0f}
+    ) -> erhe::graphics::Ring_buffer_range;
 
     void bind_light_buffer  (erhe::graphics::Command_encoder& encoder, const erhe::graphics::Ring_buffer_range& range);
     void bind_control_buffer(erhe::graphics::Command_encoder& encoder, const erhe::graphics::Ring_buffer_range& range);
@@ -203,6 +219,10 @@ private:
     // map is active (depth technique), so the color-aspect binding always has
     // a valid texture. Mirrors m_fallback_shadow_texture for the depth path.
     std::shared_ptr<erhe::graphics::Texture> m_fallback_distance_texture;
+    // 1x1 R32F cube-map array (6 layers) bound to s_shadow_cube whenever no
+    // point shadows are configured, so the samplerCubeArray binding always has
+    // a valid texture. Cleared to a large distance (every sample reads "lit").
+    std::shared_ptr<erhe::graphics::Texture> m_fallback_point_cube_texture;
 };
 
 } // namespace erhe::scene_renderer

@@ -506,6 +506,17 @@ void Settings_window::imgui()
             Graphics_settings& graphics        = m_context.app_settings->graphics;
             ImGui::SliderInt("##", &graphics_preset.shadow_light_count, 1, std::min(graphics.max_depth_layers, 32));
         });
+        // Point lights use a separate R32F cube-map array for omnidirectional
+        // shadows; these size that array independently of the 2D shadow map.
+        add_entry("Point Shadow Resolution", [this](){
+            Graphics_preset_entry& graphics_preset = get_graphics_preset();
+            Graphics_settings&     graphics        = m_context.app_settings->graphics;
+            ImGui::SliderInt("##", &graphics_preset.point_shadow_resolution, 1, std::min(graphics.max_shadow_resolution, 4096));
+        });
+        add_entry("Point Shadow Count", [this](){
+            Graphics_preset_entry& graphics_preset = get_graphics_preset();
+            ImGui::SliderInt("##", &graphics_preset.point_shadow_light_count, 0, 8);
+        });
     }
 
     add_entry("", [this, button_size](){

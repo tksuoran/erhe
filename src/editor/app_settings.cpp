@@ -133,6 +133,15 @@ void Graphics_settings::apply_limits(Graphics_preset_entry& graphics_preset)
 
     graphics_preset.shadow_resolution  = std::min(graphics_preset.shadow_resolution,  8192);
     graphics_preset.shadow_light_count = std::min(graphics_preset.shadow_light_count, 32);
+
+    // Point shadow cube array (R32F) is allocated separately and is memory-heavy
+    // (a 512^2 cube is ~6 MB, x 6 faces x count). Clamp resolution to the array
+    // limit and keep the cube count small so the array stays bounded.
+    graphics_preset.point_shadow_resolution  = std::min(graphics_preset.point_shadow_resolution, max_shadow_resolution);
+    graphics_preset.point_shadow_resolution  = std::min(graphics_preset.point_shadow_resolution, 4096);
+    graphics_preset.point_shadow_light_count = std::min(graphics_preset.point_shadow_light_count, 8);
+    graphics_preset.point_shadow_resolution  = std::max(graphics_preset.point_shadow_resolution, 1);
+    graphics_preset.point_shadow_light_count = std::max(graphics_preset.point_shadow_light_count, 0);
 }
 
 void Graphics_settings::select_active_graphics_preset(App_message_bus& app_message_bus)

@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Graphics_preset_entry",
-    version=6,
+    version=7,
     short_desc="Graphics quality preset",
     long_desc="",
     developer=False,
@@ -19,5 +19,11 @@ struct("Graphics_preset_entry",
         field("shadow_depth_bias_slope",    Float,                       added_in=4, default="0.0f", short_desc="Shadow Depth Bias (slope)"),
         field("shadow_cull_mode",           EnumRef("Shadow_cull_mode"), added_in=5, default="Shadow_cull_mode::cull_front",      short_desc="Shadow Cull Mode"),
         field("shadow_technique",           EnumRef("Shadow_technique_mode"), added_in=6, default="Shadow_technique_mode::depth", short_desc="Shadow Technique"),
+        # Point lights cast omnidirectional shadows into an R32F cube-map array
+        # (one cube / 6 faces per shadow-casting point light). These bound that
+        # array independently of the 2D directional/spot shadow map because R32F
+        # cube arrays are memory-heavy (a 512^2 cube is ~6 MB).
+        field("point_shadow_resolution",    Int,                         added_in=7, default="512", short_desc="Point Shadow Resolution"),
+        field("point_shadow_light_count",   Int,                         added_in=7, default="2",   short_desc="Point Shadow Count"),
     ],
 )

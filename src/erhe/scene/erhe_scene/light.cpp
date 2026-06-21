@@ -10,6 +10,8 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <glm/gtc/constants.hpp>
+
 namespace erhe::scene {
 
 auto Light::get_texture_from_clip(const erhe::math::Depth_range depth_range, const erhe::math::Coordinate_conventions& conventions) -> glm::mat4
@@ -135,7 +137,10 @@ auto Light::projection_transforms(const Light_projection_parameters& parameters)
             return directional_light_projection_transforms(parameters);
         }
 
-        case Light_type::point: // fallthrough
+        case Light_type::point: {
+            return point_light_projection_transforms(parameters);
+        }
+
         case Light_type::spot: {
             return spot_light_projection_transforms(parameters);
         }
@@ -310,6 +315,34 @@ auto Light::spot_light_projection_transforms(const Light_projection_parameters& 
         .clip_from_light_camera  = clip_from_light_camera,
         .clip_from_world         = clip_from_world,
         .texture_from_world      = texture_from_world
+    };
+}
+
+auto Light::point_light_projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms
+{
+    ERHE_PROFILE_FUNCTION();
+    static_cast<void>(parameters);
+    const Node* const node = get_node();
+    ERHE_VERIFY(node != nullptr);
+
+    // The omnidirectional cube shadow is rasterized per face in Shadow_renderer
+    // from six 90-degree perspectives centred on the light position. Only the
+    // light pose (for the light position written by light_buffer.cpp) and the
+    // far plane (= range) matter here; the receiver samples the cube by
+    // direction, so clip_from_world / texture_from_world are unused and kept
+    // identity to avoid implying a single-projection shadow lookup.
+    const Projection light_projection{
+        .projection_type = Projection::Type::perspective,
+        .z_near          = 0.05f,
+        .z_far           = range,
+        .fov_x           = glm::half_pi<float>(),
+        .fov_y           = glm::half_pi<float>()
+    };
+
+    return Light_projection_transforms{
+        .light                   = this,
+        .projection              = light_projection,
+        .world_from_light_camera = node->world_from_node_transform()
     };
 }
 

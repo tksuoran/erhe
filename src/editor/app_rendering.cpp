@@ -385,12 +385,14 @@ auto App_rendering::create_shadow_node_for_scene_view(
     Scene_view&                     scene_view
 ) -> std::shared_ptr<Shadow_render_node>
 {
-    const auto& preset        = app_settings.graphics.current_graphics_preset;
-    const int   resolution    = preset.shadow_enable ? preset.shadow_resolution  : 1;
-    const int   light_count   = preset.shadow_enable ? preset.shadow_light_count : 1;
+    const auto& preset            = app_settings.graphics.current_graphics_preset;
+    const int   resolution        = preset.shadow_enable ? preset.shadow_resolution  : 1;
+    const int   light_count       = preset.shadow_enable ? preset.shadow_light_count : 1;
+    const int   point_resolution  = preset.shadow_enable ? preset.point_shadow_resolution  : 1;
+    const int   point_light_count = preset.shadow_enable ? preset.point_shadow_light_count : 0;
     log_startup->info(
-        "Creating shadow render node from preset '{}': shadow_enable={} -> light_count={} resolution={} depth_bits={}",
-        preset.name, preset.shadow_enable, light_count, resolution, preset.shadow_depth_bits
+        "Creating shadow render node from preset '{}': shadow_enable={} -> light_count={} resolution={} depth_bits={} point_light_count={} point_resolution={}",
+        preset.name, preset.shadow_enable, light_count, resolution, preset.shadow_depth_bits, point_light_count, point_resolution
     );
     ERHE_VERIFY(m_context.current_command_buffer != nullptr);
     auto shadow_render_node = std::make_shared<Shadow_render_node>(
@@ -401,7 +403,9 @@ auto App_rendering::create_shadow_node_for_scene_view(
         scene_view,
         resolution,
         light_count,
-        preset.shadow_depth_bits
+        preset.shadow_depth_bits,
+        point_resolution,
+        point_light_count
     );
     m_all_shadow_render_nodes.push_back(shadow_render_node);
     return shadow_render_node;
@@ -409,14 +413,16 @@ auto App_rendering::create_shadow_node_for_scene_view(
 
 void App_rendering::handle_graphics_settings_changed(Graphics_preset_entry* graphics_preset)
 {
-    const int resolution  = (graphics_preset != nullptr) && graphics_preset->shadow_enable ? graphics_preset->shadow_resolution  : 1;
-    const int light_count = (graphics_preset != nullptr) && graphics_preset->shadow_enable ? graphics_preset->shadow_light_count : 1;
+    const int resolution        = (graphics_preset != nullptr) && graphics_preset->shadow_enable ? graphics_preset->shadow_resolution  : 1;
+    const int light_count       = (graphics_preset != nullptr) && graphics_preset->shadow_enable ? graphics_preset->shadow_light_count : 1;
+    const int point_resolution  = (graphics_preset != nullptr) && graphics_preset->shadow_enable ? graphics_preset->point_shadow_resolution  : 1;
+    const int point_light_count = (graphics_preset != nullptr) && graphics_preset->shadow_enable ? graphics_preset->point_shadow_light_count : 0;
 
     if (graphics_preset != nullptr) {
         log_startup->info(
-            "Reconfiguring {} shadow render node(s) from preset '{}': shadow_enable={} -> light_count={} resolution={} depth_bits={}",
+            "Reconfiguring {} shadow render node(s) from preset '{}': shadow_enable={} -> light_count={} resolution={} depth_bits={} point_light_count={} point_resolution={}",
             m_all_shadow_render_nodes.size(),
-            graphics_preset->name, graphics_preset->shadow_enable, light_count, resolution, graphics_preset->shadow_depth_bits
+            graphics_preset->name, graphics_preset->shadow_enable, light_count, resolution, graphics_preset->shadow_depth_bits, point_light_count, point_resolution
         );
     }
 
@@ -428,7 +434,7 @@ void App_rendering::handle_graphics_settings_changed(Graphics_preset_entry* grap
     ERHE_VERIFY(m_context.current_command_buffer != nullptr);
     const bool distance_technique = (graphics_preset != nullptr) && (graphics_preset->shadow_technique == Shadow_technique_mode::distance);
     for (const auto& node : m_all_shadow_render_nodes) {
-        node->reconfigure(*m_context.graphics_device, *m_context.current_command_buffer, resolution, light_count, graphics_preset->shadow_depth_bits, distance_technique);
+        node->reconfigure(*m_context.graphics_device, *m_context.current_command_buffer, resolution, light_count, graphics_preset->shadow_depth_bits, distance_technique, point_resolution, point_light_count);
     }
 }
 

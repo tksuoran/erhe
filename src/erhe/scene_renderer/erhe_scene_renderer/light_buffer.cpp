@@ -59,6 +59,9 @@ Light_interface::Light_interface(erhe::graphics::Device& graphics_device, const 
     , shadow_distance_bias_coeff_offset{
         light_control_block.add_float("shadow_distance_bias_coeff")->get_offset_in_parent()
     }
+    , point_light_position_offset{
+        light_control_block.add_vec4("point_light_position")->get_offset_in_parent()
+    }
     , shadow_sampler_compare{
         graphics_device,
         erhe::graphics::Sampler_create_info{
@@ -152,6 +155,22 @@ Light_buffer::Light_buffer(
             }
         )
     }
+    , m_fallback_point_cube_texture{
+        std::make_shared<erhe::graphics::Texture>(
+            graphics_device,
+            erhe::graphics::Texture_create_info {
+                .device            = graphics_device,
+                .usage_mask        = erhe::graphics::Image_usage_flag_bit_mask::sampled | erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
+                .type              = erhe::graphics::Texture_type::texture_cube_map_array,
+                .pixelformat       = erhe::dataformat::Format::format_32_scalar_float,
+                .width             = 1,
+                .height            = 1,
+                .depth             = 1,
+                .array_layer_count = 6, // one cube (6 faces)
+                .debug_label       = "Light_buffer::m_fallback_point_cube_texture"
+            }
+        )
+    }
 {
     // Initialize fallback shadow texture contents (clear to far-plane depth) and
     // leave it in DEPTH_STENCIL_READ_ONLY_OPTIMAL. A bare UNDEFINED -> READ_ONLY
@@ -162,6 +181,10 @@ Light_buffer::Light_buffer(
     // stray sample resolves to "lit". The shader's max_u32 sentinel normally
     // short-circuits before sampling, so the exact value only matters defensively.
     init_command_buffer.clear_texture(*m_fallback_distance_texture.get(), {1.0, 0.0, 0.0, 0.0});
+    // Point-shadow cube fallback (R32F radial distance): clear to a large
+    // distance so any sample reads "occluder very far away" => lit. Bound
+    // whenever no point shadow cube array is active.
+    init_command_buffer.clear_texture(*m_fallback_point_cube_texture.get(), {1.0e30, 0.0, 0.0, 0.0});
 }
 
 void Light_projections::apply(
@@ -271,28 +294,47 @@ void Light_projections::apply(
     // separate dense space that counts only shadow-casting lights, so
     // it can index the Shadow_renderer's render_passes array (sized to
     // the total shadow-light cap) without including non-shadow lights.
+    //
+    // Point lights are the exception: they cast omnidirectional shadows into a
+    // separate R32F cube-map array, NOT the 2D shadow array, so their
+    // shadow_index is left at max() (which makes the 2D shadow loop skip them
+    // via the render_passes.size() gate) and they instead receive a dense
+    // point_shadow_index counting only shadow-casting point lights. Because
+    // point is the last shadow-bearing type bucket (after directional and
+    // spot), excluding point lights from the 2D dense space does not shift the
+    // directional / spot layer indices.
     std::size_t cursor_shadow   [4] = {0, 0, 0, 0};
     std::size_t cursor_nonshadow[4] = {0, 0, 0, 0};
+    std::size_t point_shadow_cursor = 0;
     for (std::size_t i = 0; i < lights.size(); ++i) {
         const std::shared_ptr<erhe::scene::Light>& light = lights[i];
-        const std::size_t t = type_index_of(light->type);
+        const std::size_t t        = type_index_of(light->type);
+        const bool        is_point = (light->type == erhe::scene::Light_type::point);
         std::size_t slot;
-        std::size_t shadow_slot;
+        std::size_t shadow_slot       = std::numeric_limits<std::size_t>::max();
+        std::size_t point_shadow_slot = std::numeric_limits<std::size_t>::max();
         if (light->cast_shadow) {
-            slot        = base_shadow[t]       + cursor_shadow[t];
-            shadow_slot = base_shadow_dense[t] + cursor_shadow[t];
+            slot = base_shadow[t] + cursor_shadow[t];
+            if (is_point) {
+                // Cube array gets its own dense index; shadow_slot stays max()
+                // so the 2D shadow pass / receiver 2D sampling skip this light.
+                point_shadow_slot = point_shadow_cursor;
+                ++point_shadow_cursor;
+            } else {
+                shadow_slot = base_shadow_dense[t] + cursor_shadow[t];
+            }
             ++cursor_shadow[t];
         } else {
-            slot        = base_nonshadow[t] + cursor_nonshadow[t];
+            slot = base_nonshadow[t] + cursor_nonshadow[t];
             // Non-shadow lights still get a deterministic shadow_index
             // (any value works since Shadow_renderer skips them via
             // !light->cast_shadow), but using max() makes any stray
             // out-of-bound use loudly fail the render_passes.size() gate.
-            shadow_slot = std::numeric_limits<std::size_t>::max();
             ++cursor_nonshadow[t];
         }
-        light_projection_transforms[i].index        = slot;
-        light_projection_transforms[i].shadow_index = shadow_slot;
+        light_projection_transforms[i].index              = slot;
+        light_projection_transforms[i].shadow_index       = shadow_slot;
+        light_projection_transforms[i].point_shadow_index = point_shadow_slot;
     }
 
     SPDLOG_LOGGER_TRACE(
@@ -462,7 +504,13 @@ auto Light_buffer::update(
         const uint32_t shadow_index_u32 = (light_projection_transforms->shadow_index <= std::numeric_limits<uint32_t>::max())
             ? static_cast<uint32_t>(light_projection_transforms->shadow_index)
             : std::numeric_limits<uint32_t>::max();
-        const uint32_t shadow_index_packed[4] = { shadow_index_u32, 0u, 0u, 0u };
+        // packed.y = dense cube-array index for omnidirectional point-light
+        // shadows (max() for non-point / non-shadow lights). The forward shader
+        // reads it as the samplerCubeArray layer base for this light.
+        const uint32_t point_shadow_index_u32 = (light_projection_transforms->point_shadow_index <= std::numeric_limits<uint32_t>::max())
+            ? static_cast<uint32_t>(light_projection_transforms->point_shadow_index)
+            : std::numeric_limits<uint32_t>::max();
+        const uint32_t shadow_index_packed[4] = { shadow_index_u32, point_shadow_index_u32, 0u, 0u };
         write(light_gpu_data, light_offset + offsets.light.shadow_index_packed, as_span(shadow_index_packed));
     }
     // Fill in unused part of the array
@@ -542,9 +590,21 @@ void Light_buffer::bind_shadow_samplers(
         shadow_distance_texture = m_fallback_distance_texture.get();
     }
     encoder.set_sampled_image(c_texture_heap_slot_shadow_distance, *shadow_distance_texture, *no_compare_sampler);
+
+    // Point-light shadow cube array (R32F radial distance), sampled by direction
+    // through s_shadow_cube. Falls back to the 1x1 cube array when no point
+    // shadows are configured so the samplerCubeArray binding always has a valid
+    // texture.
+    erhe::graphics::Texture* shadow_cube_texture = (light_projections != nullptr)
+        ? light_projections->shadow_cube_texture.get()
+        : nullptr;
+    if (shadow_cube_texture == nullptr) {
+        shadow_cube_texture = m_fallback_point_cube_texture.get();
+    }
+    encoder.set_sampled_image(c_texture_heap_slot_shadow_cube, *shadow_cube_texture, *no_compare_sampler);
 }
 
-auto Light_buffer::update_control(const std::size_t light_index, const float shadow_distance_bias_coeff) -> erhe::graphics::Ring_buffer_range
+auto Light_buffer::update_control(const std::size_t light_index, const float shadow_distance_bias_coeff, const glm::vec4& point_light_position) -> erhe::graphics::Ring_buffer_range
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -559,6 +619,7 @@ auto Light_buffer::update_control(const std::size_t light_index, const float sha
     const auto uint_light_index = static_cast<uint32_t>(light_index);
     write(gpu_data, m_light_interface.light_index_offset,                as_span(uint_light_index));
     write(gpu_data, m_light_interface.shadow_distance_bias_coeff_offset, as_span(shadow_distance_bias_coeff));
+    write(gpu_data, m_light_interface.point_light_position_offset,       as_span(point_light_position));
     write_offset += entry_size;
 
     buffer_range.bytes_written(write_offset);

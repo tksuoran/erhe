@@ -25,8 +25,17 @@
 // a flat color); the fragment shader either has no body (depth-only) or
 // emits a packed ID color / flat point color directly. Use this gate at
 // every "skip lit machinery" #if so the variants stay in lock-step.
-#if defined(ERHE_VARIANT_DEPTH_ONLY) || defined(ERHE_VARIANT_ID_RENDER) || defined(ERHE_VARIANT_SHADOW_DISTANCE) || defined(ERHE_VARIANT_POINTS)
+#if defined(ERHE_VARIANT_DEPTH_ONLY) || defined(ERHE_VARIANT_ID_RENDER) || defined(ERHE_VARIANT_SHADOW_DISTANCE) || defined(ERHE_VARIANT_SHADOW_CUBE) || defined(ERHE_VARIANT_POINTS)
 #  define ERHE_VARIANT_POSITION_PASS 1
+#endif
+
+// ERHE_VARIANT_SHADOW_CUBE is a position pass (no lit / debug varyings), but
+// unlike the other position-pass variants its fragment shader needs the world
+// position to compute the radial distance to the point light, so v_position is
+// kept (see standard.vert / standard.frag). Use this gate to re-enable the
+// v_position varying without pulling in the rest of the lit machinery.
+#if !defined(ERHE_VARIANT_POSITION_PASS) || defined(ERHE_VARIANT_SHADOW_CUBE)
+#  define ERHE_USE_VARYING_POSITION 1
 #endif
 
 // Bxdf_model enum values. Keep in sync with erhe::primitive::Bxdf_model.
