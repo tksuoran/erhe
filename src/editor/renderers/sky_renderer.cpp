@@ -4,6 +4,7 @@
 #include "app_settings.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/sky_config.hpp"
+#include "editor_log.hpp"
 #include "renderers/render_context.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
@@ -18,6 +19,7 @@
 #include "erhe_graphics/render_pipeline.hpp"
 #include "erhe_graphics/ring_buffer.hpp"
 #include "erhe_graphics/sampler.hpp"
+#include "erhe_graphics/scoped_debug_group.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/state/depth_stencil_state.hpp"
@@ -333,6 +335,9 @@ void Sky_renderer::ensure_luts(erhe::graphics::Device& graphics_device, erhe::gr
 #if defined(ERHE_GRAPHICS_API_VULKAN)
     using namespace erhe::graphics;
 
+    log_render->info("Sky_renderer::ensure_luts: generating atmosphere LUTs");
+    erhe::graphics::Scoped_debug_group lut_scope{command_buffer, "Sky LUT generation"};
+
     // Pass 1: transmittance LUT (writes the storage image).
     command_buffer.transition_texture_layout(*m_transmittance_lut, Image_layout::general);
     {
@@ -373,6 +378,17 @@ void Sky_renderer::ensure_luts(erhe::graphics::Device& graphics_device, erhe::gr
 
 void Sky_renderer::render_atmosphere(const Render_context& context)
 {
+    static bool s_logged = false;
+    if (!s_logged) {
+        s_logged = true;
+        log_render->info(
+            "Sky_renderer::render_atmosphere first call: supported={} luts_ready={} encoder={} render_pass={} views={}",
+            is_atmosphere_supported(), m_luts_ready,
+            (context.encoder != nullptr), (context.render_pass != nullptr),
+            context.views.size()
+        );
+    }
+
     if (!is_atmosphere_supported() || !m_luts_ready) {
         return;
     }
@@ -450,8 +466,11 @@ void Sky_renderer::render_atmosphere(const Render_context& context)
         &empty_vertex_input.vertex_format
     );
     if (pipeline == nullptr) {
+        log_render->warn("Sky_renderer::render_atmosphere: no render pipeline (atmosphere shader not ready)");
         return;
     }
+
+    erhe::graphics::Scoped_debug_group atmosphere_scope{*context.command_buffer, "Sky atmosphere"};
 
     erhe::graphics::Ring_buffer_range camera_range = m_camera_buffer->update_views(
         m_view_scratch,
