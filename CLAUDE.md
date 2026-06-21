@@ -419,3 +419,11 @@ Applies to JSON files consumed by `erhe_codegen`-generated loaders (the hand-aut
 - Follow instructions in `memory-bank/README.md` - it defines what to read and when
 - Memory Bank is the single source of truth - overrides any other documentation
 
+## Memory Bank — stato reale (AUTO-CARICATO)
+@memory-bank/README.md
+@memory-bank/productContext.md
+@memory-bank/systemPatterns.md
+@memory-bank/techContext.md
+@memory-bank/activeContext.md
+@memory-bank/progress.md
+MB was READEN!

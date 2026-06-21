@@ -1,39 +1,34 @@
 §MBEL:5.0
 
 [FOCUS]
-@task::SemanticCpp-MCP-Integration{lsai+xmp4}→erhe-Cpp-navigation!
-©Ladislav>requested::give-erhe-Cpp-semantic-MCP{VS-MCP-roslyn-cant-do-cpp}
+@task::Deliver-Cpp-Semantic-MCP+SkillKit→tksuoran{fork-PR+issue#10}!
+©Ladislav>goal::give-erhe-Cpp-agent-tooling{LSAI-nav+/x-*-skills+MemoryBank}→Timo-can-continue
 identity::vulcan{chat-agent-name}
+context::erhe-fork-was-LSAI-test-bench{big-real-Cpp-project-Ladislav-lacked}
 
 [RECENT]
->built::Ninja-clang-cl-build✓{compile_commands#1731-native-clang}
->installed::lsai+clangd✓{winget LLVM,PATH-persistent,v1.0.180}
->proved::clangd-needs-VS-env→26errors→0{INCLUDE-resolves-headers}✓
->forked::tksuoran/erhe→LadislavSopko/erhe{PUBLIC}✓
->wrote::doc/semantic_cpp_mcp_setup_xmp4_lsai.md✓
->fieldtest::lsai-outline+info+source✓{file-scoped-immediate}|search/usages/hierarchy✗{clangd-index-warmup}
->xmp4::simdjson+nlohmann/json-navigable✓{third-party-internals}
+>VALIDATED::LSAI@1.0.190✓{erhe-c-1 C++ Ready,parasite-auto-open,¬workspace_open}
+>built::Cpp-SkillKit✓{.claude/commands/:/x-audit+/x-debug+/x-tddab+/x-review-plan+/x-develop+mind-sets/}
+>wrote::README-cppskills.md✓{gift-kit-install-guide}+doc/lsai_usage_playbook.md✓{measured-query-rules@1.0.187}
+>ran::x-audit-on-erhe✓→tasks/audit-erhe-2026-06-21.md{7P/8Partial/1Missing,score3.6}
+  Findings::WarningsGate-MSVC-only{Clang/GNU-no-Werror}+MCP-server-security{127.0.0.1+bearer-timing-safe}+CI-builds-editor-only{¬ctest,ERHE_BUILD_TESTS=OFF}+code-diags{sign-conversion erhe::net::Socket,shadow-field,float-equal mcp_server}
+>hardened::x-audit-skill✓{+EvidenceDiscipline rules6-9:read-default-config¬grep-count|test-exists≠test-runs|run-lsai-diagnostics|¬carry-claims-unverified;+5b-CodeDiagnostics-section;+network-surface-hunt;+RAII-via-LSAI¬new/delete-count}
+>self-corrected::removed-2-unverified-claims{RAII-ratio+inflated-sanitizer-list}©copied-from-old-audit→deleted-AUDIT-report-2026-06-21.md{na-merda}
+>issue#10::tksuoran-replied-positive{"make-PR-I-can-merge"}+flagged{.NET10-prereq-uncheck,No-solution-loaded-wording}
 
-[LSAI_COLLAB]
-↔lsai-agent{room:lsai}+Ladislav{chat-hub:cc-chat.0ics.ai}
-RootInsight::lsai-analyzer-IGNORES-build{compile_commands#0-occurrences-in-codebase}→re-derives-88s-FS-scan©vulcan+Ladislav+lsai
-!FixDirection::parasite-build-output{compile_commands C/C++|sln+csproj C#|cargo Rust|go-list Go|gradle/maven Java}¬scan¬build-self
-C#::WorkspaceNeedsRestore::correct-parasite{model-only-post-restore}¬bug
-C/C++::scan::THE-bug{model-exists-in-DB,ignored}+WorkspaceUnusable{g++-only-flags→0symbols→DB-fixes}
+[NEXT]
+?commit+push→fork{LadislavSopko/erhe main}!{skill-kit+docs+MB+CLAUDE.md+.gitignore}
+?PR::LadislavSopko:main→tksuoran:main{Timo-invited}
+?comment::issue#10{thank-Timo+announce-skill-kit+MB+PR-link}
+?build::editor{¬needed-for-doc-changes,only-confirm-runnable}
 
-[BLOCKERS]
-!FixpointValidation::pending→validate-via-restart-logs{¬tool-hang}
-lsai-workspace_open-explicit::BLOCKS-88s{Ensure-sync-pre-cts}≠auto-open{background}
-async-open-MUST-pair-progress{Generating-x/N→Indexing-y/N→Ready}©Ladislav{else-blind}
+[GIT_LAYOUT]
+remotes::origin=tksuoran/erhe{¬push}|fork=LadislavSopko/erhe{push-here}
+ignored-OK::.mcp.json{secret-API-key}+.lsai{tool-state}
+revert::config/editor/desktop_window_imgui_host_imgui.ini{runtime-noise}
+delete::next_prompt.txt{handoff-exhausted,lsai-validation-done}
+local-only::tasks/audit-*.md{session-artifacts,¬part-of-kit}
 
-[ISSUES_LSAI]
-#29+#30::parasite-compile_commands{root-fix,TDD}!priority1
-#28+#31::non-blocking-open+phased-status{folds#23,TDD}priority2
-#22::redundant-CI/CD-deploy{¬blocking}
-#24+#25::installer-version-pin+stale-dll-Windows{closed@1.0.180}✓
-#27::installer-respawn-race{exit255,fail-safe,tracked}
-
-[DECISIONS_PENDING]
-?commit-clang-scripts{configure/build_ninja_win_clang.bat}+gitignore→fork
-?link-doc→issue#10{tksuoran}
-?lsai-#30/#31-timing{Ladislav-call,proposed-tomorrow-TDD}
+[DECISIONS_RESOLVED]
+©Ladislav>track-.claude/commands{.gitignore !.claude/commands/}✓
+©Ladislav>channel::issue#10-comment✓+fork-push✓
