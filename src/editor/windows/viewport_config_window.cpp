@@ -82,11 +82,8 @@ void Viewport_config_window::imgui(App_context& context, Viewport_config& edit_d
     // Selection Outline appearance is editor-global (Selection_outline_style),
     // edited in the Settings window - no longer per scene view here.
 
-    if (ImGui::TreeNodeEx("Debug Visualizations", flags)) {
-        erhe::imgui::make_combo("Light",  edit_data.debug_visualizations.light,  c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
-        erhe::imgui::make_combo("Camera", edit_data.debug_visualizations.camera, c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
-        ImGui::TreePop();
-    }
+    // Debug Visualizations have their own dedicated scene-view popup (the
+    // eye-settings toolbar button, Debug_visualizations::imgui) - not shown here.
 
     // Mesh Component Style (vertex / edge / face selection colors and sizes) is
     // editor-global (Editor_settings_config.mesh_component_style), edited in the
