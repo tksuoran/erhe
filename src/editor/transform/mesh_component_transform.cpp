@@ -37,6 +37,18 @@ namespace editor {
 
 namespace {
 
+// Map the captured transform mode to how the extrude builder fills move_directions:
+// the two normal modes slide along stored per-vertex normals, everything else uses the
+// raw gizmo delta.
+auto to_extrude_normal_mode(const Mesh_transform_mode mode) -> Extrude_normal_mode
+{
+    switch (mode) {
+        case Mesh_transform_mode::extrude_group_normal:  return Extrude_normal_mode::group;
+        case Mesh_transform_mode::extrude_vertex_normal: return Extrude_normal_mode::vertex;
+        default:                                         return Extrude_normal_mode::none;
+    }
+}
+
 // Has the gizmo actually moved? Used to defer fork-on-edit to the first real drag
 // (a click on a handle without dragging passes an identity delta and must not fork).
 auto is_nontrivial_delta(const glm::mat4& m) -> bool
@@ -384,15 +396,17 @@ void Mesh_component_transform::begin(App_context& context)
         m_active = false;
         return;
     }
-    // Capture the transform mode once for the whole gesture. Extrude defers its
-    // topology change to the first real move (apply()), like fork-on-edit. Both Extrude
-    // and Extrude (Normal) build the same topology (m_extrude); they differ only in how
-    // the duplicated vertices then move (m_extrude_normal: along each subset's normal).
-    const Mesh_transform_mode transform_mode = (context.editor_settings != nullptr)
+    // Capture the transform mode once for the whole gesture. Extrude defers its topology
+    // change to the first real move (apply()), like fork-on-edit. All three extrude modes
+    // build the same topology (m_extrude); they differ only in how the duplicated vertices
+    // then move: plain extrude follows the gizmo delta, the group/vertex normal modes slide
+    // each vertex along a stored normal (per-subset average, or its own vertex normal).
+    m_transform_mode = (context.editor_settings != nullptr)
         ? context.editor_settings->transform_mode
         : Mesh_transform_mode::move;
-    m_extrude        = (transform_mode == Mesh_transform_mode::extrude) || (transform_mode == Mesh_transform_mode::extrude_normal);
-    m_extrude_normal = (transform_mode == Mesh_transform_mode::extrude_normal);
+    m_extrude = (m_transform_mode == Mesh_transform_mode::extrude) ||
+                (m_transform_mode == Mesh_transform_mode::extrude_group_normal) ||
+                (m_transform_mode == Mesh_transform_mode::extrude_vertex_normal);
     for (Group& group : m_groups) {
         const std::shared_ptr<erhe::scene::Mesh> mesh = group.mesh.lock();
         erhe::scene::Node* const                 node = mesh ? mesh->get_node() : nullptr;
@@ -436,7 +450,8 @@ void Mesh_component_transform::apply(App_context& context, Transform_tool_shared
     // only - BEFORE touching any positions - so the other instances never move.
     //
     // Doing the whole fleet up front (rather than lazily inside the move loop) lets the
-    // extrude-normal amount below see every group's per-subset move directions.
+    // extrude-normal amount below see every group's per-vertex move directions.
+    const bool along_normal = (to_extrude_normal_mode(m_transform_mode) != Extrude_normal_mode::none);
     if (moved) {
         for (Group& group : m_groups) {
             const std::shared_ptr<erhe::scene::Mesh> mesh = group.mesh.lock();
@@ -456,13 +471,14 @@ void Mesh_component_transform::apply(App_context& context, Transform_tool_shared
         }
     }
 
-    // Extrude (Normal): the gizmo no longer transforms the vertices directly. Instead
-    // each disjoint selection subset slides along its own (world-space) average normal by
-    // a single scalar amount derived from the drag - the gizmo translation projected onto
-    // the overall average normal (falling back to the anchor frame's up axis when the
-    // per-subset normals cancel). A dedicated gizmo mode will refine this mapping later.
+    // Extrude (Group/Vertex Normal): the gizmo no longer transforms the vertices directly.
+    // Instead each vertex slides along its own (world-space) normal by a single scalar
+    // amount derived from the drag - the gizmo translation projected onto the overall
+    // average move direction (falling back to the anchor frame's up axis when the per-vertex
+    // normals cancel, e.g. a closed surface in Vertex Normal mode). A dedicated gizmo mode
+    // will refine this mapping later.
     float amount = 0.0f;
-    if (m_extrude_normal && moved) {
+    if (along_normal && moved) {
         glm::vec3 reference{0.0f};
         for (const Group& group : m_groups) {
             for (const glm::vec3& direction : group.move_directions) {
@@ -487,10 +503,10 @@ void Mesh_component_transform::apply(App_context& context, Transform_tool_shared
         if (group.before_local.size() != group.vertices.size()) {
             continue;
         }
-        // Extrude-normal slides along stored per-subset world normals; everything else
+        // The normal modes slide along stored per-vertex world normals; everything else
         // applies the raw gizmo delta. (move_directions is only populated/parallel after
         // a successful extrude_group; a failed extrude falls back to the delta path.)
-        const bool use_normal = m_extrude_normal && (group.move_directions.size() == group.vertices.size());
+        const bool use_normal = along_normal && (group.move_directions.size() == group.vertices.size());
 
         GEO::Mesh& geo_mesh = group.geometry->get_mesh();
         for (std::size_t i = 0, end = group.vertices.size(); i < end; ++i) {
@@ -572,6 +588,10 @@ void Mesh_component_transform::commit(App_context& context)
             ERHE_VERIFY(renderable_ok && raytrace_ok);
             group.extrude_after.primitive = after_primitive;
 
+            const char* description =
+                (m_transform_mode == Mesh_transform_mode::extrude_group_normal)  ? "Extrude (Group Normal)"  :
+                (m_transform_mode == Mesh_transform_mode::extrude_vertex_normal) ? "Extrude (Vertex Normal)" :
+                                                                                   "Extrude";
             operations.push_back(
                 std::make_shared<Fork_geometry_operation>(
                     Fork_geometry_operation::Parameters{
@@ -579,7 +599,7 @@ void Mesh_component_transform::commit(App_context& context)
                         .primitive_index = group.primitive_index,
                         .before          = group.extrude_before,
                         .after           = group.extrude_after,
-                        .description     = m_extrude_normal ? "Extrude (Normal)" : "Extrude"
+                        .description     = description
                     }
                 )
             );
@@ -1085,9 +1105,10 @@ void Mesh_component_transform::extrude_group(App_context& context, Group& group)
     const Mesh_component_mode mode = selection->get_mode();
 
     // Build the extruded copy (topology change). Original vertex/facet indices are
-    // preserved; new duplicates/faces are appended. In Extrude (Normal) mode the builder
-    // also returns a per-moved-vertex subset normal (geometry-local) in move_directions.
-    Extrude_result extrude = extrude_mesh_components(*group.geometry, mode, entry->vertices, entry->edges, entry->facets, m_extrude_normal);
+    // preserved; new duplicates/faces are appended. In a normal extrude mode the builder
+    // also returns a per-moved-vertex normal (geometry-local) in move_directions.
+    const Extrude_normal_mode normal_mode = to_extrude_normal_mode(m_transform_mode);
+    Extrude_result extrude = extrude_mesh_components(*group.geometry, mode, entry->vertices, entry->edges, entry->facets, normal_mode);
     if (!extrude.is_valid()) {
         return;
     }
@@ -1143,12 +1164,12 @@ void Mesh_component_transform::extrude_group(App_context& context, Group& group)
         group.before_local.push_back(glm::vec3{p.x, p.y, p.z});
     }
 
-    // Extrude (Normal): transform the per-subset normals from geometry-local to world
-    // space (direction transform = inverse-transpose of the node basis) so apply() can
-    // slide each subset along its own normal regardless of node rotation/scale. Parallel
-    // to group.vertices. Left empty for plain extrude, which uses the gizmo delta.
+    // Normal modes: transform the per-vertex normals from geometry-local to world space
+    // (direction transform = inverse-transpose of the node basis) so apply() can slide each
+    // vertex along its own normal regardless of node rotation/scale. Parallel to
+    // group.vertices. Left empty for plain extrude, which uses the gizmo delta.
     group.move_directions.clear();
-    if (m_extrude_normal && (extrude.move_directions.size() == group.vertices.size())) {
+    if ((normal_mode != Extrude_normal_mode::none) && (extrude.move_directions.size() == group.vertices.size())) {
         const glm::mat3 node_basis    = glm::mat3{group.world_from_node};
         const glm::mat3 normal_matrix = glm::transpose(glm::inverse(node_basis));
         group.move_directions.reserve(group.vertices.size());

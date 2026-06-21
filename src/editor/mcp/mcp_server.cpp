@@ -1370,10 +1370,10 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"mode"})}
     }});
-    m_tool_infos.push_back({"set_transform_mode", "Set what the transform tool does to a mesh-component (vertex/edge/face) selection when the gizmo is dragged: move (translate/rotate/scale in place), extrude (duplicate the selection boundary, bridge it with new faces, then move along the gizmo delta), or extrude_normal (same topology, but each disjoint selection subset slides along its own average normal by an amount derived from the drag). Persisted in editor settings; applies to subsequent component edits.", {
+    m_tool_infos.push_back({"set_transform_mode", "Set what the transform tool does to a mesh-component (vertex/edge/face) selection when the gizmo is dragged: move (translate/rotate/scale in place), extrude (duplicate the selection boundary, bridge it with new faces, then move along the gizmo delta), extrude_group_normal (same topology, but each disjoint selection subset slides along its own average normal by an amount derived from the drag), or extrude_vertex_normal (same topology, but each vertex slides along its own normal). Persisted in editor settings; applies to subsequent component edits.", {
         {"type", "object"},
         {"properties", {
-            {"mode", {{"type", "string"}, {"enum", json::array({"move", "extrude", "extrude_normal"})}, {"description", "Mesh transform mode"}}}
+            {"mode", {{"type", "string"}, {"enum", json::array({"move", "extrude", "extrude_group_normal", "extrude_vertex_normal"})}, {"description", "Mesh transform mode"}}}
         }},
         {"required", json::array({"mode"})}
     }});
@@ -2167,9 +2167,10 @@ auto Mcp_server::action_transform_selection(const json& args) -> std::string
     if (end_edit) {
         // Mirror the gizmo drag-release: the node record path is a no-op in component
         // mode (shared.entries is empty there), so a mesh-component edit (move / extrude /
-        // extrude_normal) must be finalized via commit_component_edit() to queue its
-        // undoable operation. Without this, an MCP component edit would deform the live
-        // geometry but never commit (and never finalize extrude normals).
+        // extrude_group_normal / extrude_vertex_normal) must be finalized via
+        // commit_component_edit() to queue its undoable operation. Without this, an MCP
+        // component edit would deform the live geometry but never commit (and never finalize
+        // extrude normals).
         transform_tool->record_transform_operation();
         if (shared.component_mode && transform_tool->is_component_edit_active()) {
             transform_tool->commit_component_edit();
@@ -4428,7 +4429,7 @@ auto Mcp_server::action_set_transform_mode(const json& args) -> std::string
     const std::string   mode_str = args.value("mode", "");
     Mesh_transform_mode mode     = Mesh_transform_mode::move;
     if (!::from_string(mode_str, mode)) {
-        return make_error_content("Invalid mode: " + mode_str + " (move, extrude, extrude_normal)");
+        return make_error_content("Invalid mode: " + mode_str + " (move, extrude, extrude_group_normal, extrude_vertex_normal)");
     }
     m_context.editor_settings->transform_mode = mode;
     return make_json_content(json{{"mode", std::string{::to_string(mode)}}}).dump();

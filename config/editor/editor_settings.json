@@ -1146,6 +1146,6 @@
     },
     "post_processing": true,
     "geometry_edit_mode": "fork",
-    "transform_mode": "extrude_normal",
+    "transform_mode": "extrude_group_normal",
     "quit_after_frames": 0
 }

@@ -12,6 +12,11 @@
 
 namespace erhe::geometry { class Geometry; }
 
+// Generated in config/generated/mesh_transform_mode.hpp (global scope, fixed underlying
+// type). Forward-declared here so this header can hold the captured mode by value without
+// pulling in the generated header.
+enum class Mesh_transform_mode : unsigned int;
+
 namespace editor {
 
 class App_context;
@@ -56,10 +61,11 @@ private:
         std::vector<GEO::index_t>                 vertices;     // unique affected
         std::vector<glm::vec3>                    before_local; // captured at begin(), parallel to vertices
 
-        // Extrude-along-normal only: per moved vertex, the unit average normal of its
-        // disjoint selection subset, in WORLD space (parallel to `vertices`). The drag
-        // slides each vertex along its own direction by a shared scalar amount instead of
-        // applying the gizmo delta. Empty for plain move / plain extrude.
+        // Extrude-along-normal only: per moved vertex, the unit direction it slides along,
+        // in WORLD space (parallel to `vertices`) - its disjoint subset's average normal
+        // (group-normal mode) or its own original vertex normal (vertex-normal mode). The
+        // drag slides each vertex along its own direction by a shared scalar amount instead
+        // of applying the gizmo delta. Empty for plain move / plain extrude.
         std::vector<glm::vec3>                    move_directions;
 
         // Fork-on-edit (set the first time this group is forked during the drag).
@@ -90,9 +96,9 @@ private:
     // Build an extruded copy of this group's geometry (duplicate the selection
     // boundary, bridge with new faces), swap it onto a new primitive for this mesh,
     // and redirect the group + its component-selection entry + its moved-vertex set to
-    // the extruded copy. Modeled on fork_group(); deferred to the first real move. When
-    // m_extrude_normal is set, also fills group.move_directions (world-space per-subset
-    // normals) so apply() can slide each subset along its own normal.
+    // the extruded copy. Modeled on fork_group(); deferred to the first real move. In a
+    // normal extrude mode (group / vertex), also fills group.move_directions (world-space
+    // per-vertex normals) so apply() can slide each vertex along its own normal.
     void extrude_group(App_context& context, Group& group);
 
     void enqueue_gpu_position(App_context& context, const Group& group, GEO::index_t vertex, const glm::vec3& local_position);
@@ -108,10 +114,10 @@ private:
     // what the commit rebuild produces (so there is no shading pop on release).
     void update_group_normals(App_context& context, Group& group);
 
-    std::vector<Group> m_groups;        // persistent scratch, cleared per gather()
-    bool               m_active{false};
-    bool               m_extrude{false};        // captured at begin(): mode is Extrude or Extrude (Normal)
-    bool               m_extrude_normal{false}; // captured at begin(): mode is Extrude (Normal) specifically
+    std::vector<Group>  m_groups;        // persistent scratch, cleared per gather()
+    bool                m_active{false};
+    bool                m_extrude{false};       // captured at begin(): mode is any Extrude (plain / group / vertex)
+    Mesh_transform_mode m_transform_mode{};     // captured at begin(): the exact transform mode (value-inits to move)
 
     // Per-frame scratch for update_group_normals(), kept across frames so the live
     // normal update performs no steady-state heap allocation (cleared, capacity kept).

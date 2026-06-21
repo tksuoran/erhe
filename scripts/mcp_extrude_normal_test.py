@@ -1,13 +1,14 @@
 """Drive the editor over MCP to verify the mesh-component transform modes.
 
-Exercises the shared component-transform path plus the new Extrude / Extrude
-(Normal) modes end to end:
+Exercises the shared component-transform path plus the Extrude / Extrude (Group
+Normal) / Extrude (Vertex Normal) modes end to end:
 
-  - set_transform_mode (new MCP tool) sets / reads back move | extrude | extrude_normal.
+  - set_transform_mode (MCP tool) sets / reads back
+    move | extrude | extrude_group_normal | extrude_vertex_normal.
   - A face component selection + transform_selection(end_edit=true) now commits the
-    component edit (move queues a vertex move; extrude / extrude_normal swap in an
-    extruded primitive and grow the geometry).
-  - Plain "move" must NOT change the topology (vertex/facet counts stay equal); both
+    component edit (move queues a vertex move; the extrude modes swap in an extruded
+    primitive and grow the geometry).
+  - Plain "move" must NOT change the topology (vertex/facet counts stay equal); all
     extrude modes MUST grow it; the undo stack must carry the matching operation.
 
 Usage: launch build_*/src/editor/<Config>/editor.exe (cwd = repo root), then
@@ -117,9 +118,10 @@ def main() -> int:
     # resolves get_node_details to a stale box from a previous run (names are the only
     # lookup key, and create_shape does not uniquify across runs).
     tag = uuid.uuid4().hex[:8]
-    run_case(client, scene, f"xn_{tag}_move",    "move",           expect_grows=False, expect_label="Move")
-    run_case(client, scene, f"xn_{tag}_extrude", "extrude",        expect_grows=True,  expect_label="Extrude")
-    run_case(client, scene, f"xn_{tag}_normal",  "extrude_normal", expect_grows=True,  expect_label="Extrude (Normal)")
+    run_case(client, scene, f"xn_{tag}_move",     "move",                  expect_grows=False, expect_label="Move")
+    run_case(client, scene, f"xn_{tag}_extrude",  "extrude",               expect_grows=True,  expect_label="Extrude")
+    run_case(client, scene, f"xn_{tag}_groupn",   "extrude_group_normal",  expect_grows=True,  expect_label="Extrude (Group Normal)")
+    run_case(client, scene, f"xn_{tag}_vertexn",  "extrude_vertex_normal", expect_grows=True,  expect_label="Extrude (Vertex Normal)")
 
     # Leave the editor in the default mode.
     client.call("set_transform_mode", {"mode": "move"})

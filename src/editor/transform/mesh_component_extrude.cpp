@@ -319,7 +319,7 @@ auto extrude_mesh_components(
     const std::set<GEO::index_t>&  selected_vertices,
     const std::set<Mesh_edge_key>& selected_edges,
     const std::set<GEO::index_t>&  selected_facets,
-    const bool                     along_normal
+    const Extrude_normal_mode      normal_mode
 ) -> Extrude_result
 {
     Extrude_result result;
@@ -328,8 +328,8 @@ auto extrude_mesh_components(
     GEO::Mesh& mesh = result.geometry->get_mesh();
 
     // The ORIGINAL source vertex each moved vertex derives from, parallel to
-    // result.moved_vertices. Used (when along_normal) to look up the moved vertex's
-    // subset normal, which is keyed by original vertex.
+    // result.moved_vertices. Used (in a normal mode) to look up the moved vertex's slide
+    // normal, which is keyed by original vertex (its subset's average, or its own).
     std::vector<GEO::index_t> moved_origin;
 
     // Original vertex -> its single duplicate (shared across all uses).
@@ -451,16 +451,34 @@ auto extrude_mesh_components(
         return result;
     }
 
-    // Extrude-along-normal: resolve each moved vertex's per-subset average normal from
-    // its original vertex. Computed on the source connectivity (the result geometry's new
-    // faces are degenerate here, so its normals are not yet meaningful).
-    if (along_normal) {
-        const std::unordered_map<GEO::index_t, GEO::vec3f> vertex_direction =
-            compute_subset_directions(source, mode, selected_vertices, selected_edges, selected_facets);
-        result.move_directions.reserve(moved_origin.size());
-        for (const GEO::index_t origin : moved_origin) {
-            const auto i = vertex_direction.find(origin);
-            result.move_directions.push_back((i != vertex_direction.end()) ? i->second : GEO::vec3f{0.0f, 1.0f, 0.0f});
+    // Extrude-along-normal: resolve each moved vertex's slide direction from its original
+    // vertex. Computed on the source connectivity (the result geometry's new faces are
+    // degenerate here, so its normals are not yet meaningful). The +Y fallback covers a
+    // vertex with no usable normal (or, in group mode, one that maps to no subset).
+    const GEO::vec3f up{0.0f, 1.0f, 0.0f};
+    switch (normal_mode) {
+        case Extrude_normal_mode::group: {
+            const std::unordered_map<GEO::index_t, GEO::vec3f> vertex_direction =
+                compute_subset_directions(source, mode, selected_vertices, selected_edges, selected_facets);
+            result.move_directions.reserve(moved_origin.size());
+            for (const GEO::index_t origin : moved_origin) {
+                const auto i = vertex_direction.find(origin);
+                result.move_directions.push_back((i != vertex_direction.end()) ? i->second : up);
+            }
+            break;
+        }
+        case Extrude_normal_mode::vertex: {
+            const erhe::geometry::Mesh_attributes& attributes = source.get_attributes();
+            result.move_directions.reserve(moved_origin.size());
+            for (const GEO::index_t origin : moved_origin) {
+                const GEO::vec3f normal = vertex_unit_normal_or_zero(source, attributes, origin);
+                result.move_directions.push_back((length2(normal) > 1e-20f) ? normal : up);
+            }
+            break;
+        }
+        case Extrude_normal_mode::none:
+        default: {
+            break;
         }
     }
 
