@@ -1,17 +1,12 @@
 # Cube-map point-light shadows
 
-Status: implemented, building, and **running**. Point-light shadows are
-**partially working**: a shadow appears and tracks the light, but it looks as if
-an **incorrect transformation is applied to the cube-map sample/store
-coordinates somewhere** -- the shadow is right in some regions and wrong
-(mirrored / rotated / offset) in others. The next session's job is to pin down
-exactly which coordinate transform is wrong, using the live GPU-capture workflow.
-
-**If you are the fresh-context debugging session, start here:**
-[Debugging the texture-coordinate bug](#debugging-the-texture-coordinate-bug-vs-mcp--renderdoc-fork-mcp)
--- it tells you how to launch + capture and exactly what to inspect. The
-sections in between are the original design reference (still accurate); read them
-for background as needed.
+Status: **FIXED** (2026-06-22). The texture-coordinate bug was a per-face
+**vertical (t-axis) flip**: the caster stored every cube face vertically
+mirrored relative to what `samplerCubeArray` reads back, so point shadows were
+displaced / mirrored. Root cause and fix are in
+[Resolution](#resolution-2026-06-22-confirmed-vertical-face-flip-fixed) below;
+the original design + debugging sections are kept for reference. The earlier
+"partially working / mirrored in some regions" symptom is resolved.
 
 Committed on branch `ls/main`:
 
@@ -19,7 +14,107 @@ Committed on branch `ls/main`:
 - `a230415` editor: add cube-map point-light shadows
 
 This document records the design, the per-file changes, the debugging plan, and
-the known risks / tuning knobs, so testing can continue in a fresh context.
+the known risks / tuning knobs.
+
+## Resolution 2026-06-22: confirmed vertical face flip, fixed
+
+**Root cause.** The point-light cube caster rendered each cube face through the
+same pipeline as everything else, including erhe's Vulkan framebuffer y-flip,
+which is done by a **negative-height viewport** in `set_viewport_rect`
+(`vulkan_render_command_encoder.cpp:456`, VK_KHR_maintenance1) -- applied
+uniformly to the screen pass AND the cube caster. But a cube face is not
+displayed; it is read back by `samplerCubeArray` by direction, and the cube-map
+face (s,t) convention is vertically inverted relative to the framebuffer row
+order. So every stored face came out mirrored in t: geometry that the sampler
+reads at (s,t) was stored at (s,1-t).
+
+**How it was confirmed (RenderDoc fork capture, decisive).** Captured a frame,
+`save_texture`'d the `-Y` layer of `Point shadow cube array` (slice 3) as DDS,
+reconstructed the float distances, and for each shadow-casting solid (positions
+from the in-editor MCP `get_node_details`) compared the stored distance at the
+sampler's expected (s,t) against the vertically-mirrored (s,1-t). Result: 4/6
+solids had their exact near-surface distance at (s,1-t) with **clear (1e30) at
+(s,t)**; 0 matched (s,t). (The 2 "ambiguous" solids sat near the vertical centre
+where (s,t)~=(s,1-t).) That is an unambiguous vertical face flip.
+
+**The fix.** `res/shaders/standard.vert`, under `ERHE_VARIANT_SHADOW_CUBE`,
+negates `gl_Position.y` so the cube caster gets the **opposite** clip-space Y
+from the screen pass, cancelling the viewport flip for the cube pass only. This
+is erhe's equivalent of the SDL3-GPU forge lesson's per-face `proj.m[5]` negate
+(the cube pipeline is `cull_none`, so the induced winding change is moot). It
+flips the stored t, moving geometry from (s,1-t) back to (s,t).
+
+**Verified.** With the fix, point shadows render as proper contact shadows
+directly under the occluders (before: detached / displaced into the foreground),
+a ~47k-pixel change versus the pre-fix frame (the earlier `conventions` attempt
+changed nothing). Deductively the fix is the exact inverse of the confirmed
+flip, and it is purely vertical (s untouched).
+
+### Note: the clip-space-y-flip candidate fix is INERT (why the earlier attempt failed)
+
+The doc's original "leading hypothesis" was correct (a per-face y-flip), but the
+candidate *implementation* -- "suppress the central clip-space y-flip for the
+cube caster" via `Coordinate_conventions` -- is a **no-op**:
+
+- **`clip_space_y_flip` is `disabled` on every backend.** Vulkan
+  (`vulkan_device_init.cpp:1386`), OpenGL (`gl_device.cpp:1053`) and Metal
+  (`metal_device.cpp:217`) all set
+  `coordinate_conventions.clip_space_y_flip = disabled`. The projection-level
+  y-negate in `Projection::get_projection_matrix` (`projection.cpp:122`) is
+  therefore never taken in practice. On Vulkan the y-flip is done entirely by a
+  **negative-height viewport** in `set_viewport_rect`
+  (`vulkan_render_command_encoder.cpp:456`, VK_KHR_maintenance1), applied
+  **uniformly** to the cube caster and the main screen pass.
+- Consequence: passing `parameters.conventions` (or any `Coordinate_conventions`)
+  to the cube `camera_buffer.update` changes nothing. This was tried and produced
+  a **pixel-identical** before/after headless capture (only the FPS readout
+  differed). So the candidate fix "suppress the central clip-space y-flip for the
+  cube caster" is a **no-op** -- do not pursue it via `conventions`. If an extra
+  cube-pass flip is genuinely needed (see below), it must be done at the viewport
+  level (give the cube caster a **positive** viewport height so it does NOT
+  inherit the screen's negative-viewport flip) or by negating the cube
+  projection's Y row directly -- NOT via the conventions/`clip_space_y_flip` path.
+
+### What was verified empirically (headless + in-editor MCP)
+
+A new headless workflow was used (now documented in `CLAUDE.md` ->
+"In-editor MCP server"): build `build_vs2026_vulkan_headless`
+(`scripts/configure_vs2026_vulkan_headless.bat`), run the editor (it auto-runs
+`config/editor/commands.json`, which now stands up a point-shadow test scene: one
+shadow-casting point light + a platonic-solid cluster + floor), then drive the
+editor's MCP server over HTTP (`POST http://127.0.0.1:8080/mcp`, JSON-RPC; note
+the `id` field must be a **string**). `capture_screenshot` only works in this
+headless build (emulated swapchain).
+
+- Point shadows render; `VARIANT_SHADOW_CUBE` compiles; no errors in `logs/log.txt`.
+- Moving the point light via MCP (`select_items` the light **node**, id 663 not
+  the light item 664; `transform_selection` sets an **absolute** world
+  translation) confirms lighting and shadows **track the light correctly** --
+  lit faces and floor shadows follow the light. No **gross** mirror was observed
+  at overhead, side, and elevated-side light positions.
+- This neither confirms nor refutes the doc's "wrong in *some* regions" claim:
+  a subtle per-face seam / orientation error is not legible from a shaded-floor
+  screenshot under a single point light (the floor also dims with inverse-square
+  falloff, so "shadow" vs "dim" is hard to separate; there is no MCP `edit_light`
+  to boost intensity).
+
+### How the faces were inspected (decisive, done)
+
+The shaded-floor view was inconclusive (the gross shadow looked plausible), so
+the cube faces were inspected directly via the **RenderDoc fork on the windowed
+build** (`doc/renderdoc_fork.md`): `list_targets` -> `connect_to_target` ->
+`trigger_capture`, then `save_texture` the `-Y` layer of `Point shadow cube
+array` as **DDS** (PNG/EXR clamp the float distances; the `1e30` clear saturates
+a default PNG). The DDS was reconstructed and the per-solid (s,t) vs (s,1-t) test
+(above) proved the vertical flip. See [Resolution](#resolution-2026-06-22-confirmed-vertical-face-flip-fixed).
+(The originally-scoped in-editor MCP "dump cube face" tool was not needed once
+RenderDoc worked; it remains a viable headless alternative -- reach the texture
+via `m_context.app_rendering->get_all_shadow_nodes()` + a `get_point_cube_texture()`
+getter, and `Blit_command_encoder::copy_from_texture(tex -> buffer)` for readback.)
+
+The original-design sections below remain accurate except the
+`conventions`/`clip_space_y_flip` framing of the y-flip (the fix lives in the
+caster vertex shader, `gl_Position.y` negate, not in `conventions`).
 
 ## Overview
 
