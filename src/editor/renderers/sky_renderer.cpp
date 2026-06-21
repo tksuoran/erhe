@@ -419,10 +419,16 @@ void Sky_renderer::render_atmosphere(const Render_context& context)
             if (node == nullptr) {
                 continue;
             }
-            const glm::vec3 light_direction = glm::vec3{node->world_from_node() * glm::vec4{0.0f, 0.0f, 1.0f, 0.0f}};
-            const float     length_sq       = glm::dot(light_direction, light_direction);
+            // erhe stores a directional light's direction as world_from_node * +Z,
+            // which is the direction from the surface toward the light (see
+            // standard.frag: L = normalize(light.direction_and_outer_spot_cos.xyz),
+            // used directly in dot(N, L)). That is already the toward-sun direction
+            // the atmosphere wants, so use it as-is - negating it would put the sun
+            // below the horizon and render a black night sky.
+            const glm::vec3 to_light  = glm::vec3{node->world_from_node() * glm::vec4{0.0f, 0.0f, 1.0f, 0.0f}};
+            const float     length_sq = glm::dot(to_light, to_light);
             if (length_sq > 1e-8f) {
-                toward_sun = -glm::normalize(light_direction); // sun is opposite the light travel direction
+                toward_sun = glm::normalize(to_light);
             }
             break;
         }

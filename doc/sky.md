@@ -10,10 +10,10 @@ verifying + fixing** in a fresh session with more tooling.
 
 ## Status (one line)
 
-Implemented and **building clean** (Vulkan + OpenGL + headless editors link);
-all sky shaders **compile at runtime**; atmosphere mode (`Sky_config::mode == 1`)
-**runs without crashing**, BUT **renders nothing visible** (only the clear
-color). Verification is WIP and a fix is still needed.
+Implemented, **building clean** (Vulkan + OpenGL + headless editors link), all
+sky shaders **compile at runtime**, and the "renders nothing visible" bug is
+**fixed and verified** on Vulkan: atmosphere mode (`Sky_config::mode == 1`) now
+renders a bright blue daytime sky. See [Resolution](#resolution-the-sun-was-below-the-horizon).
 
 ## What was built (branch `ls/main`)
 
@@ -45,7 +45,34 @@ Commits (newest last):
 - `354b1e6a` instrument for verification: RenderDoc debug groups + one-time logs
   (see "Diagnostics in place").
 
-## The open bug: atmosphere draws but nothing is visible
+## Resolution: the sun was below the horizon
+
+**Root cause (fixed):** `Sky_renderer::render_atmosphere` took the sun direction
+from the scene's directional light and **negated** it:
+
+```cpp
+const glm::vec3 light_direction = world_from_node * vec4(0,0,1,0);
+toward_sun = -glm::normalize(light_direction);   // BUG
+```
+
+erhe stores a directional light's direction as `world_from_node * +Z` and uses it
+**directly** as the toward-the-light vector when shading (`standard.frag`:
+`L = normalize(light.direction_and_outer_spot_cos.xyz); dot(N, L)`). So
+`light_direction` was already "toward the sun"; negating it pushed the sun ~66
+degrees below the horizon, and the physically-based atmosphere correctly
+integrated a near-black night sky. The fix is to drop the negation:
+`toward_sun = glm::normalize(light_direction)`.
+
+**How it was found + verified:** the RenderDoc fork MCP workflow in
+[`doc/renderdoc_fork.md`](renderdoc_fork.md) -- connect to the running editor,
+`trigger_capture`, and read the numbers back. That ruled out the original leading
+hypothesis (LUTs all zero -- they were fine: transmittance mean 0.73) and showed
+the sky fragment ran, passed depth/stencil, and output `[0,0,0,1]` because
+`sun_direction.y == -0.91`. After the fix, the same captured pixel outputs
+`[2.20, 3.34, 4.22, 1]` (Rayleigh blue) and the viewport's exactly-zero pixel
+count dropped from 88,424 to 872.
+
+## Historical: the original open-bug report
 
 Symptom: with Sky Mode = 1, the viewport shows only the clear color; in RenderDoc
 no sky draw was visible (the draw had no debug scope -- now added).
