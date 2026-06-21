@@ -145,6 +145,15 @@ App_rendering::App_rendering(
     const auto& render_style_not_selected = [](const Render_context& context) -> const Render_style_data& {
         return context.viewport_config.render_style_not_selected;
     };
+    // Editor-global render-style appearance (colors / widths / color sources),
+    // shared by all scene views. Selected to match the per-view render style
+    // each pass gates on (Default vs Selection). See get_primitive_settings.
+    const auto& appearance_not_selected = [](const Render_context& context) -> const Render_style_appearance& {
+        return context.app_context.editor_settings->render_style_appearance;
+    };
+    const auto& appearance_selected = [](const Render_context& context) -> const Render_style_appearance& {
+        return context.app_context.editor_settings->selected_render_style_appearance;
+    };
 
     using namespace erhe::primitive;
     using namespace erhe::scene_renderer;
@@ -160,6 +169,7 @@ App_rendering::App_rendering(
             .primitive_mode       {Primitive_mode::polygon_fill},
             .filter               {filter_not_selected},
             .get_render_style     {render_style_not_selected},
+            .get_appearance       {appearance_not_selected},
         },
         not_selected
     );
@@ -176,6 +186,7 @@ App_rendering::App_rendering(
             .primitive_mode      {Primitive_mode::polygon_fill},
             .filter              {filter_selected_or_hovered},
             .get_render_style    {render_style_selected},
+            .get_appearance      {appearance_selected},
         },
         selected
     );
@@ -197,6 +208,7 @@ App_rendering::App_rendering(
             .filter                       {filter_not_selected},
             .shader_key_force_enable_mask {make_shader_bool_mask(Shader_bool::SOLID_WIREFRAME)},
             .get_render_style             {render_style_not_selected},
+            .get_appearance               {appearance_not_selected},
         },
         not_selected
     );
@@ -210,6 +222,7 @@ App_rendering::App_rendering(
             .filter                       {filter_selected_or_hovered},
             .shader_key_force_enable_mask {make_shader_bool_mask(Shader_bool::SOLID_WIREFRAME)},
             .get_render_style             {render_style_selected},
+            .get_appearance               {appearance_selected},
         },
         selected
     );
@@ -250,6 +263,7 @@ App_rendering::App_rendering(
             .primitive_mode                {Primitive_mode::edge_lines},
             .filter                        {filter_not_selected},
             .get_render_style              {render_style_not_selected},
+            .get_appearance                {appearance_not_selected},
             .is_enabled                    {
                 // Solid wireframe replaces the wide-line edge path: when it is
                 // enabled, suppress the Content_wide_line_renderer edge lines so
@@ -270,6 +284,7 @@ App_rendering::App_rendering(
             .primitive_mode                {Primitive_mode::edge_lines},
             .filter                        {filter_selected},
             .get_render_style              {render_style_selected},
+            .get_appearance                {appearance_selected},
             .is_enabled                    {
                 [](const Render_context& context) -> bool {
                     return !context.viewport_config.render_style_selected.solid_wireframe;
@@ -297,7 +312,8 @@ App_rendering::App_rendering(
             .primitive_mode               {Primitive_mode::corner_points},
             .filter                       {filter_not_selected},
             .shader_key_force_enable_mask {points_variant_mask},
-            .get_render_style             {render_style_not_selected}
+            .get_render_style             {render_style_not_selected},
+            .get_appearance               {appearance_not_selected}
         }, not_selected
     );
 
@@ -309,7 +325,8 @@ App_rendering::App_rendering(
             .primitive_mode               {Primitive_mode::corner_points},
             .filter                       {filter_selected},
             .shader_key_force_enable_mask {points_variant_mask},
-            .get_render_style             {render_style_selected}
+            .get_render_style             {render_style_selected},
+            .get_appearance               {appearance_selected}
         }, selected
     );
 
@@ -321,7 +338,8 @@ App_rendering::App_rendering(
             .primitive_mode               {Primitive_mode::polygon_centroids},
             .filter                       {filter_not_selected},
             .shader_key_force_enable_mask {points_variant_mask},
-            .get_render_style             {render_style_not_selected}
+            .get_render_style             {render_style_not_selected},
+            .get_appearance               {appearance_not_selected}
         }, not_selected
     );
 
@@ -333,7 +351,8 @@ App_rendering::App_rendering(
             .primitive_mode               {Primitive_mode::polygon_centroids},
             .filter                       {filter_selected},
             .shader_key_force_enable_mask {points_variant_mask},
-            .get_render_style             {render_style_selected}
+            .get_render_style             {render_style_selected},
+            .get_appearance               {appearance_selected}
         }, selected
     );
 

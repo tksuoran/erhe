@@ -4,6 +4,7 @@
 
 #include "ImViewGuizmo.h"
 #include "config/generated/viewport_config_data.hpp"
+#include "config/generated/editor_settings_config.hpp"
 #include "app_context.hpp"
 #include "editor_log.hpp"
 #include "app_message_bus.hpp"
@@ -258,9 +259,8 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
                         erhe::scene_renderer::Primitive_interface_settings settings;
                         if (data.primitive_settings.has_value()) {
                             settings = data.primitive_settings.value();
-                        } else if (data.get_render_style) {
-                            const Render_style_data& style = data.get_render_style(context);
-                            settings = get_primitive_settings(style, data.primitive_mode);
+                        } else if (data.get_appearance) {
+                            settings = get_primitive_settings(data.get_appearance(context), data.primitive_mode);
                         }
                         const glm::vec4 color      = settings.constant_color0;
                         const float     line_width = settings.constant_size;
@@ -285,15 +285,18 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
                         }
                     };
 
-                    // Feed selection outline with animated color/width
+                    // Feed selection outline with animated color/width. The
+                    // outline appearance is editor-global (Selection_outline_style),
+                    // shared by all scene views; edited in the Settings window.
                     if (m_context.app_rendering->selection_outline) {
+                        const Selection_outline_style& sel_outline = m_context.editor_settings->selection_outline;
                         const int64_t   t0_ns         = m_context.time->get_host_system_time_ns();
                         const double    t0            = static_cast<double>(t0_ns) / 1'000'000'000.0;
-                        const float     period        = 1.0f / m_viewport_config.selection_highlight_frequency;
+                        const float     period        = 1.0f / sel_outline.selection_highlight_frequency;
                         const float     t1            = static_cast<float>(::fmod(t0, period));
                         const float     t2            = static_cast<float>(0.5f + (2.0f * std::abs(2.0f * (t1 / period - std::floor(t1 / period + 0.5f))) - 1.0f) * 0.5f);
-                        const glm::vec4 outline_color = glm::mix(m_viewport_config.selection_highlight_low, m_viewport_config.selection_highlight_high, t2);
-                        const float     outline_width = m_viewport_config.selection_highlight_width_low * (1.0f - t2) + m_viewport_config.selection_highlight_width_high * t2;
+                        const glm::vec4 outline_color = glm::mix(sel_outline.selection_highlight_low, sel_outline.selection_highlight_high, t2);
+                        const float     outline_width = sel_outline.selection_highlight_width_low * (1.0f - t2) + sel_outline.selection_highlight_width_high * t2;
 
                         // Temporarily override primitive_settings for the animated outline
                         m_context.app_rendering->selection_outline->data.primitive_settings = erhe::scene_renderer::Primitive_interface_settings{

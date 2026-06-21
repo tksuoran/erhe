@@ -19,6 +19,7 @@ namespace erhe::graphics { class Base_render_pipeline; class Color_blend_state; 
 namespace erhe::scene    { using Layer_id = uint64_t; }
 
 struct Render_style_data;
+struct Render_style_appearance;
 
 namespace editor {
 
@@ -54,6 +55,12 @@ public:
     std::function<void()>                                                  begin;
     std::function<void()>                                                  end; 
     std::function<const Render_style_data&(const Render_context& context)> get_render_style;
+    // Editor-global appearance (colors / widths / color sources) for this pass's
+    // primitive_mode, selected to match get_render_style (Default vs Selection
+    // appearance). Read via get_primitive_settings when primitive_settings is
+    // not explicitly set. The matching per-view Render_style_data still gates
+    // visibility through get_render_style / is_primitive_mode_enabled.
+    std::function<const Render_style_appearance&(const Render_context& context)> get_appearance;
     // Optional render-time activation predicate, evaluated against the current
     // viewport's Render_context (e.g. to gate on a render-style flag). The pass
     // is skipped when this is set and returns false. Distinct from

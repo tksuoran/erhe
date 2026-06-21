@@ -20,7 +20,7 @@ auto is_primitive_mode_enabled(
 }
 
 auto get_primitive_settings(
-    const Render_style_data&        style,
+    const Render_style_appearance&  appearance,
     erhe::primitive::Primitive_mode primitive_mode
 ) -> erhe::scene_renderer::Primitive_interface_settings
 {
@@ -33,20 +33,20 @@ auto get_primitive_settings(
 
         case Primitive_mode::edge_lines:
             return Primitive_interface_settings{
-                .color_source    = style.edge_lines_color_source,
-                .constant_color0 = style.line_color,
-                .constant_color1 = style.line_color,
+                .color_source    = appearance.edge_lines_color_source,
+                .constant_color0 = appearance.line_color,
+                .constant_color1 = appearance.line_color,
                 .size_source     = Primitive_size_source::constant_size,
-                .constant_size   = style.line_width
+                .constant_size   = appearance.line_width
             };
 
         case Primitive_mode::corner_points:
             return Primitive_interface_settings{
-                .color_source    = style.corner_points_color_source,
-                .constant_color0 = style.corner_color,
-                .constant_color1 = style.corner_color,
+                .color_source    = appearance.corner_points_color_source,
+                .constant_color0 = appearance.corner_color,
+                .constant_color1 = appearance.corner_color,
                 .size_source     = Primitive_size_source::constant_size,
-                .constant_size   = style.point_size
+                .constant_size   = appearance.point_size
             };
 
         case Primitive_mode::corner_normals   : return Primitive_interface_settings{};
@@ -56,19 +56,19 @@ auto get_primitive_settings(
             // per-draw Primitive block color / size) for the expanded fill draw.
             return Primitive_interface_settings{
                 .color_source    = erhe::scene_renderer::Primitive_color_source::constant_color,
-                .constant_color0 = style.solid_wireframe_color,
-                .constant_color1 = style.solid_wireframe_color,
+                .constant_color0 = appearance.solid_wireframe_color,
+                .constant_color1 = appearance.solid_wireframe_color,
                 .size_source     = Primitive_size_source::constant_size,
-                .constant_size   = style.solid_wireframe_width
+                .constant_size   = appearance.solid_wireframe_width
             };
 
         case Primitive_mode::polygon_centroids:
             return Primitive_interface_settings{
-                .color_source    = style.polygon_centroids_color_source,
-                .constant_color0 = style.centroid_color,
-                .constant_color1 = style.centroid_color,
+                .color_source    = appearance.polygon_centroids_color_source,
+                .constant_color0 = appearance.centroid_color,
+                .constant_color1 = appearance.centroid_color,
                 .size_source     = Primitive_size_source::constant_size,
-                .constant_size   = style.point_size
+                .constant_size   = appearance.point_size
             };
 
         case Primitive_mode::count            : return Primitive_interface_settings{};

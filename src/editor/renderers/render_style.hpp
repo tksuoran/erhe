@@ -1,6 +1,7 @@
 #pragma once
 
 #include "config/generated/render_style_data.hpp"
+#include "config/generated/render_style_appearance.hpp"
 #include "erhe_renderer/enums.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
 
@@ -9,8 +10,11 @@
 
 #include <string_view>
 
+// is_primitive_mode_enabled gates on the per-Scene_view visibility toggles
+// (Render_style_data); get_primitive_settings reads the editor-global
+// appearance (Render_style_appearance) for the same primitive mode.
 auto is_primitive_mode_enabled(const Render_style_data& style, erhe::primitive::Primitive_mode primitive_mode) -> bool;
-auto get_primitive_settings   (const Render_style_data& style, erhe::primitive::Primitive_mode primitive_mode) -> erhe::scene_renderer::Primitive_interface_settings;
+auto get_primitive_settings   (const Render_style_appearance& appearance, erhe::primitive::Primitive_mode primitive_mode) -> erhe::scene_renderer::Primitive_interface_settings;
 
 namespace editor {
 

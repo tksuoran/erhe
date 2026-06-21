@@ -1,9 +1,15 @@
 from erhe_codegen import *
 
+# Per-Scene_view render style: ONLY which primitives are drawn (visibility
+# toggles). The appearance of those primitives (colors, line/point widths,
+# point size, per-primitive color sources) is editor-global and lives in
+# Render_style_appearance (a Default-style set and a Selection-style set in
+# Editor_settings_config). Used twice in Viewport_config
+# (render_style_not_selected, render_style_selected).
 struct("Render_style_data",
     version=2,
     short_desc="Render Style",
-    long_desc="Rendering style for meshes in viewport",
+    long_desc="Which primitives are drawn for meshes in a viewport",
     developer=False,
     fields=[
         field("polygon_fill",      Bool, added_in=1, default="true",  short_desc="Polygon Fill"),
@@ -11,18 +17,8 @@ struct("Render_style_data",
         # Solid wireframe: real polygon edges drawn inside the fill fragment
         # shader (expanded fill mesh), so the wireframe shares the fill's depth
         # and never z-fights. Replaces the normal polygon fill when enabled.
-        field("solid_wireframe",       Bool,  added_in=2, default="false",                short_desc="Solid Wireframe"),
-        field("solid_wireframe_width", Float, added_in=2, default="1.5f",                 short_desc="Solid Wireframe Width"),
-        field("solid_wireframe_color", Vec4,  added_in=2, default="0.0f, 0.0f, 0.0f, 1.0f", short_desc="Solid Wireframe Color"),
+        field("solid_wireframe",   Bool, added_in=2, default="false", short_desc="Solid Wireframe"),
         field("polygon_centroids", Bool, added_in=1, default="false", short_desc="Polygon Centroids"),
         field("corner_points",     Bool, added_in=1, default="false", short_desc="Corner Points"),
-        field("point_size",        Float, added_in=1, default="4.0f", short_desc="Point Size"),
-        field("line_width",        Float, added_in=1, default="-1.0f", short_desc="Line Width"),
-        field("line_color",        Vec4, added_in=1, default="0.0f, 0.0f, 0.0f, 0.5f", short_desc="Line Color"),
-        field("corner_color",      Vec4, added_in=1, default="0.0f, 0.0f, 1.0f, 1.0f", short_desc="Corner Color"),
-        field("centroid_color",    Vec4, added_in=1, default="0.0f, 0.0f, 1.0f, 1.0f", short_desc="Centroid Color"),
-        field("edge_lines_color_source",        EnumRef("Primitive_color_source"), added_in=1, default="Primitive_color_source::constant_color",        short_desc="Edge Lines Color Source"),
-        field("polygon_centroids_color_source", EnumRef("Primitive_color_source"), added_in=1, default="Primitive_color_source::mesh_wireframe_color", short_desc="Polygon Centroids Color Source"),
-        field("corner_points_color_source",     EnumRef("Primitive_color_source"), added_in=1, default="Primitive_color_source::mesh_wireframe_color", short_desc="Corner Points Color Source"),
     ],
 )

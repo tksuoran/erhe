@@ -4,9 +4,9 @@ from erhe_codegen import *
 # ("Default Viewport", "Headset", ...). Editor_settings_config stores these
 # in a vector; each Scene_view constructed with an Editor_settings_store and
 # a non-empty settings key reads its entry by name at construction and
-# updates (or appends) it through a registered collect callback. Views
-# without a saved entry start from the global debug_visualizations slot in
-# Editor_settings_config, which acts as the defaults for new views.
+# updates (or appends) it through a registered collect callback. A view
+# without a saved entry starts from the struct defaults (there is no
+# editor-global defaults slot for these per-view settings).
 #
 # This is the single per-viewport settings struct: it hosts the per-view
 # Visual Style (viewport_config), the Scene and Camera selection

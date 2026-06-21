@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Editor_settings_config",
-    version=8,
+    version=9,
     short_desc="Editor settings",
     long_desc="Runtime-editable settings saved to editor_settings.json.",
     developer=False,
@@ -14,6 +14,16 @@ struct("Editor_settings_config",
         # editor-global slot for them. New views fall back to the
         # Debug_visualizations_settings struct defaults.
         field("debug_visualizations_style", StructRef("Debug_visualizations_style"), added_in=8),
+        # Editor-global render-style appearance (colors, line / point widths,
+        # point size, per-primitive color sources), shared by all scene views.
+        # Two sets: render_style_appearance for the Default style (non-selected
+        # meshes) and selected_render_style_appearance for the Selection style.
+        # The per-view render styles (Viewport_config.render_style_*) keep only
+        # the visibility toggles (Render_style_data).
+        field("render_style_appearance",          StructRef("Render_style_appearance"), added_in=9),
+        field("selected_render_style_appearance", StructRef("Render_style_appearance"), added_in=9),
+        # Editor-global selection outline appearance, shared by all scene views.
+        field("selection_outline",                StructRef("Selection_outline_style"), added_in=9),
         field("scene_views",          Vector(StructRef("Scene_view_settings")), added_in=5),
         field("developer",            StructRef("Developer_config"),       added_in=1),
         field("grid",                 StructRef("Grid_config"),            added_in=1),

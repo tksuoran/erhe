@@ -857,9 +857,8 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                         erhe::scene_renderer::Primitive_interface_settings settings;
                         if (data.primitive_settings.has_value()) {
                             settings = data.primitive_settings.value();
-                        } else if (data.get_render_style) {
-                            const Render_style_data& style = data.get_render_style(cpu_render_context);
-                            settings = get_primitive_settings(style, data.primitive_mode);
+                        } else if (data.get_appearance) {
+                            settings = get_primitive_settings(data.get_appearance(cpu_render_context), data.primitive_mode);
                         }
                         const glm::vec4 color      = settings.constant_color0;
                         const float     line_width = settings.constant_size;
@@ -883,13 +882,14 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                     // explicit primitive_settings, so we patch the
                     // colour/width into the pass before feeding.
                     if (m_app_context.app_rendering->selection_outline) {
+                        const Selection_outline_style& sel_outline = m_app_context.editor_settings->selection_outline;
                         const int64_t   t0_ns         = m_app_context.time->get_host_system_time_ns();
                         const double    t0            = static_cast<double>(t0_ns) / 1'000'000'000.0;
-                        const float     period        = 1.0f / m_viewport_config.selection_highlight_frequency;
+                        const float     period        = 1.0f / sel_outline.selection_highlight_frequency;
                         const float     t1            = static_cast<float>(::fmod(t0, period));
                         const float     t2            = static_cast<float>(0.5f + (2.0f * std::abs(2.0f * (t1 / period - std::floor(t1 / period + 0.5f))) - 1.0f) * 0.5f);
-                        const glm::vec4 outline_color = glm::mix(m_viewport_config.selection_highlight_low, m_viewport_config.selection_highlight_high, t2);
-                        const float     outline_width = m_viewport_config.selection_highlight_width_low * (1.0f - t2) + m_viewport_config.selection_highlight_width_high * t2;
+                        const glm::vec4 outline_color = glm::mix(sel_outline.selection_highlight_low, sel_outline.selection_highlight_high, t2);
+                        const float     outline_width = sel_outline.selection_highlight_width_low * (1.0f - t2) + sel_outline.selection_highlight_width_high * t2;
                         m_app_context.app_rendering->selection_outline->data.primitive_settings = erhe::scene_renderer::Primitive_interface_settings{
                             .color_source    = erhe::scene_renderer::Primitive_color_source::constant_color,
                             .constant_color0 = outline_color,

@@ -16,83 +16,16 @@ void Viewport_config_window::render_style_ui(Render_style_data& render_style)
 {
     ERHE_PROFILE_FUNCTION();
 
-    // Widgets edit render_style in place; the owning Scene_view's collect
-    // callback persists the change (autosaved). No per-widget edit tracking.
-    const ImGuiTreeNodeFlags flags{
-        ImGuiTreeNodeFlags_OpenOnArrow       |
-        ImGuiTreeNodeFlags_OpenOnDoubleClick |
-        ImGuiTreeNodeFlags_SpanFullWidth
-    };
-
-    if (ImGui::TreeNodeEx("Polygon Fill", flags)) {
-        ImGui::Checkbox("Visible", &render_style.polygon_fill);
-        //if (render_style.polygon_fill) {
-        //    ImGui::Text       ("Polygon Offset");
-        //    ImGui::Checkbox   ("Enable", &render_style.polygon_offset_enable);
-        //    ImGui::SliderFloat("Factor", &render_style.polygon_offset_factor, -2.0f, 2.0f);
-        //    ImGui::SliderFloat("Units",  &render_style.polygon_offset_units,  -2.0f, 2.0f);
-        //    ImGui::SliderFloat("clamp",  &render_style.polygon_offset_clamp,  -0.01f, 0.01f);
-        //}
-        ImGui::TreePop();
-    }
-
-    using Primitive_interface_settings = erhe::scene_renderer::Primitive_interface_settings;
-    if (ImGui::TreeNodeEx("Edge Lines", flags)) {
-        ImGui::Checkbox("Visible", &render_style.edge_lines);
-        if (render_style.edge_lines) {
-            ImGui::SliderFloat("Width", &render_style.line_width, 0.0f, 20.0f);
-            ImGui::ColorEdit4("Constant Color", &render_style.line_color.x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR);
-            erhe::imgui::make_combo(
-                "Color Source",
-                render_style.edge_lines_color_source,
-                Primitive_interface_settings::c_primitive_color_source_strings_data.data(),
-                static_cast<int>(Primitive_interface_settings::c_primitive_color_source_strings_data.size())
-            );
-        }
-        ImGui::TreePop();
-    }
-
-    if (ImGui::TreeNodeEx("Solid Wireframe", flags)) {
-        // Real polygon edges drawn inside the fill fragment shader (expanded
-        // fill mesh) so they share the fill's depth and never z-fight. Replaces
-        // normal polygon fill when enabled.
-        ImGui::Checkbox("Visible", &render_style.solid_wireframe);
-        if (render_style.solid_wireframe) {
-            ImGui::SliderFloat("Width", &render_style.solid_wireframe_width, 0.0f, 8.0f);
-            ImGui::ColorEdit4("Color", &render_style.solid_wireframe_color.x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR);
-        }
-        ImGui::TreePop();
-    }
-
-    if (ImGui::TreeNodeEx("Polygon Centroids", flags)) {
-        ImGui::Checkbox("Visible", &render_style.polygon_centroids);
-        if (render_style.polygon_centroids) {
-            ImGui::ColorEdit4("Constant Color", &render_style.centroid_color.x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR);
-            erhe::imgui::make_combo(
-                "Color Source",
-                render_style.polygon_centroids_color_source,
-                Primitive_interface_settings::c_primitive_color_source_strings_data.data(),
-                static_cast<int>(Primitive_interface_settings::c_primitive_color_source_strings_data.size())
-            );
-        }
-        ImGui::TreePop();
-    }
-
-    if (ImGui::TreeNodeEx("Corner Points", flags)) {
-        ImGui::Checkbox("Visible", &render_style.corner_points);
-        ImGui::ColorEdit4("Constant Color", &render_style.corner_color.x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR);
-        erhe::imgui::make_combo(
-            "Color Source",
-            render_style.corner_points_color_source,
-            Primitive_interface_settings::c_primitive_color_source_strings_data.data(),
-            static_cast<int>(Primitive_interface_settings::c_primitive_color_source_strings_data.size())
-        );
-        ImGui::TreePop();
-    }
-
-    if (render_style.polygon_centroids || render_style.corner_points) {
-        ImGui::SliderFloat("Point Size", &render_style.point_size, 0.0f, 20.0f);
-    }
+    // Per-Scene_view visibility toggles only: which primitives are drawn. The
+    // appearance of these primitives (colors, line / point widths, point size,
+    // color sources) is editor-global and edited in the Settings window
+    // (Render_style_appearance). Widgets edit render_style in place; the owning
+    // Scene_view's collect callback persists the change (autosaved).
+    ImGui::Checkbox("Polygon Fill",      &render_style.polygon_fill);
+    ImGui::Checkbox("Edge Lines",        &render_style.edge_lines);
+    ImGui::Checkbox("Solid Wireframe",   &render_style.solid_wireframe);
+    ImGui::Checkbox("Polygon Centroids", &render_style.polygon_centroids);
+    ImGui::Checkbox("Corner Points",     &render_style.corner_points);
 }
 
 void Viewport_config_window::imgui(App_context& context, Viewport_config& edit_data)
@@ -146,14 +79,8 @@ void Viewport_config_window::imgui(App_context& context, Viewport_config& edit_d
         ImGui::TreePop();
     }
 
-    if (ImGui::TreeNodeEx("Selection Outline", flags)) {
-        ImGui::ColorEdit4 ("Color Low",  &edit_data.selection_highlight_low.x,  ImGuiColorEditFlags_Float);
-        ImGui::ColorEdit4 ("Color High", &edit_data.selection_highlight_high.x, ImGuiColorEditFlags_Float);
-        ImGui::SliderFloat("Width Low",  &edit_data.selection_highlight_width_low,  -20.0f, 0.0f, "%.2f");
-        ImGui::SliderFloat("Width High", &edit_data.selection_highlight_width_high, -20.0f, 0.0f, "%.2f");
-        ImGui::SliderFloat("Frequency",  &edit_data.selection_highlight_frequency,    0.0f, 1.0f, "%.2f");
-        ImGui::TreePop();
-    }
+    // Selection Outline appearance is editor-global (Selection_outline_style),
+    // edited in the Settings window - no longer per scene view here.
 
     if (ImGui::TreeNodeEx("Debug Visualizations", flags)) {
         erhe::imgui::make_combo("Light",  edit_data.debug_visualizations.light,  c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));

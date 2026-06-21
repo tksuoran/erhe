@@ -3,6 +3,7 @@
 #include "app_context.hpp"
 #include "app_rendering.hpp"
 #include "app_settings.hpp"
+#include "config/generated/editor_settings_config.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "erhe_scene_renderer/content_wide_line_renderer.hpp"
@@ -65,23 +66,26 @@ void Composition_pass::render(const Render_context& context)
     // NOTE This overrides settings in App_rendering::App_rendering()
     // TODO This is a bit hacky, route this better.
     if (context.app_context.app_rendering->selection_outline) {
+        // Selection outline appearance is editor-global (Selection_outline_style),
+        // shared by all scene views; edited in the Settings window.
+        const Selection_outline_style& outline = context.app_context.editor_settings->selection_outline;
         const int64_t t0_ns  = context.app_context.time->get_host_system_time_ns();
         const double  t0     = static_cast<double>(t0_ns) / 1'000'000'000.0;
-        const float   period = 1.0f / context.viewport_config.selection_highlight_frequency;
+        const float   period = 1.0f / outline.selection_highlight_frequency;
         const float   t1     = static_cast<float>(::fmod(t0, period));
         const float   t2     = static_cast<float>(0.5f + triangle_wave(t1, period) * 0.5f);
         context.app_context.app_rendering->selection_outline->data.primitive_settings = erhe::scene_renderer::Primitive_interface_settings{
             .color_source    = erhe::scene_renderer::Primitive_color_source::constant_color,
             .constant_color0 = glm::mix(
-                context.viewport_config.selection_highlight_low,
-                context.viewport_config.selection_highlight_high,
+                outline.selection_highlight_low,
+                outline.selection_highlight_high,
                 t2
             ),
             .constant_color1 = glm::vec4{0.2f, 0.5, 1.0f, 1.0f},
             .size_source     = erhe::scene_renderer::Primitive_size_source::constant_size,
             .constant_size   = mix(
-                context.viewport_config.selection_highlight_width_low,
-                context.viewport_config.selection_highlight_width_high,
+                outline.selection_highlight_width_low,
+                outline.selection_highlight_width_high,
                 t2
             )
         };
@@ -232,8 +236,8 @@ void Composition_pass::render(const Render_context& context)
                     .primitive_settings     =
                         data.primitive_settings.has_value()
                             ? data.primitive_settings.value()
-                            : (render_style != nullptr)
-                                ? get_primitive_settings(*render_style, data.primitive_mode)
+                            : data.get_appearance
+                                ? get_primitive_settings(data.get_appearance(context), data.primitive_mode)
                                 : erhe::scene_renderer::Primitive_interface_settings{},
                     .filter                 = data.filter,
                     .shader_debug           = context.shader_debug,

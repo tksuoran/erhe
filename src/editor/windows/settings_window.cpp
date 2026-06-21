@@ -23,6 +23,8 @@
 #include "config/generated/editor_settings_config_serialization.hpp"
 #include "erhe_codegen/config_io.hpp"
 #include "config/generated/camera_controls_config_serialization.hpp"
+#include "config/generated/render_style_appearance_serialization.hpp"
+#include "config/generated/selection_outline_style_serialization.hpp"
 #include "config/generated/debug_visualizations_settings_serialization.hpp"
 #include "config/generated/developer_config_serialization.hpp"
 #include "config/generated/grid_config_serialization.hpp"
@@ -551,14 +553,18 @@ void Settings_window::imgui()
 
     const bool show_developer = (m_context.developer_config != nullptr) && m_context.developer_config->enable;
 
-    auto add_config_section = [this, show_developer](auto& section) {
+    // label_override gives a distinct group header when the same struct type is
+    // shown more than once (e.g. the Default vs Selection Render_style_appearance).
+    auto add_config_section = [this, show_developer](auto& section, const char* label_override = nullptr) {
         const auto& struct_info = get_struct_info(static_cast<const std::remove_reference_t<decltype(section)>*>(nullptr));
         if (struct_info.developer && !show_developer) {
             return;
         }
-        const char* label = (struct_info.short_desc != nullptr && struct_info.short_desc[0] != '\0')
-            ? struct_info.short_desc
-            : struct_info.name;
+        const char* label = (label_override != nullptr)
+            ? label_override
+            : (struct_info.short_desc != nullptr && struct_info.short_desc[0] != '\0')
+                ? struct_info.short_desc
+                : struct_info.name;
         push_group(label, ImGuiTreeNodeFlags_Framed);
         const auto fields = get_fields(static_cast<const std::remove_reference_t<decltype(section)>*>(nullptr));
         for (const auto& field : fields) {
@@ -637,6 +643,16 @@ void Settings_window::imgui()
         // Default Visual Style for new viewports - shown near the top since it
         // is one of the more commonly edited sections.
         add_config_section(settings.viewport);
+        // Editor-global render-style appearance (colors / widths / point size /
+        // color sources), shared by all scene views. The per-view render styles
+        // (Visual Style popup) keep only the visibility toggles. Two sets, one
+        // per render style; both are the same struct type, so a label override
+        // gives each a distinct group header.
+        add_config_section(settings.render_style_appearance,          "Default Style Appearance");
+        add_config_section(settings.selected_render_style_appearance, "Selection Style Appearance");
+        // Editor-global selection outline appearance (moved out of the per-view
+        // Visual Style popup).
+        add_config_section(settings.selection_outline);
         // Note: the per-view debug-visualization enable toggles / modes
         // (Debug_visualizations_settings) are intentionally NOT shown here -
         // they live only per scene view (edited in the scene-view Debug
