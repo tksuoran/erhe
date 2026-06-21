@@ -4,6 +4,7 @@
 #include "windows/property_editor.hpp"
 
 #include "config/generated/debug_visualizations_settings.hpp"
+#include "config/generated/debug_visualizations_style.hpp"
 
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_renderer/generated/visualization_mode.hpp"
@@ -56,6 +57,13 @@ public:
     void render(const Render_context& context) override;
 
     void imgui(Scene_view& scene_view, App_context& app_context);
+
+    // Renders the editor-global Debug_visualizations_style controls (colors, line
+    // widths, label geometry), grouped to match the former popup layout. Emits only
+    // push_group/add_entry/pop_group (no reset / show_entries) so it composes into a
+    // caller-owned Property_editor. Called from the Settings window; the per-view
+    // toggles stay in the scene-view Debug Visualization popup (imgui() above).
+    static void style_imgui(Property_editor& property_editor, Debug_visualizations_style& style);
 
     // Whole-struct copy in / out of m_settings. Persistence is owned by
     // Scene_view, whose collect callback (registered with

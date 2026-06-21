@@ -4,6 +4,7 @@
 #include "app_message_bus.hpp"
 #include "app_settings.hpp"
 #include "windows/inventory_window.hpp"
+#include "tools/debug_visualizations.hpp"
 #include "editor_settings_store.hpp"
 #include "config/generated/developer_config.hpp"
 #include "config/generated/editor_settings_config.hpp"
@@ -634,6 +635,12 @@ void Settings_window::imgui()
         }, "Enable Post Processing. Takes effect on next viewport creation.");
         add_config_section(settings.camera_controls);
         add_config_section(settings.debug_visualizations);
+        // Editor-global debug-visualization appearance (colors, line widths,
+        // label geometry), shared by all scene views. The per-view enable
+        // toggles stay in the scene-view Debug Visualization popup. Rendered
+        // with the hand-grouped layout (Shadow Fit / Selection / Annotations)
+        // rather than the flat reflection list.
+        Debug_visualizations::style_imgui(*this, settings.debug_visualizations_style);
         add_config_section(settings.developer);
         add_config_section(settings.grid);
         add_config_section(settings.headset);

@@ -2029,9 +2029,105 @@ void Debug_visualizations::make_combo(const char* label, Visualization_mode& vis
     );
 }
 
+void Debug_visualizations::style_imgui(Property_editor& p, Debug_visualizations_style& style)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    // Combined color (+ optional width) row, matching the former Debug
+    // Visualization popup layout. Negative line widths are in pixels and do not
+    // scale by distance. Captured by value into each deferred entry (the lambda
+    // is stateless), so it stays valid after this function returns - the caller
+    // (Settings window) flushes the entries via show_entries() later.
+    auto style_row = [](glm::vec4* color, float* width) {
+        ImGui::ColorEdit4("##c", &color->x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
+        if (width != nullptr) {
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(80.0f);
+            ImGui::DragFloat("##w", width, 0.1f, -100.0f, 100.0f, "%.1f");
+        }
+    };
+
+    // Top-level framed group, matching how the Settings window renders the
+    // other editor config sections (add_config_section).
+    p.push_group("Debug Visualizations Style", ImGuiTreeNodeFlags_Framed);
+
+    p.push_group("Shadow Fit", ImGuiTreeNodeFlags_None);
+    // Casters: affecting color, culled color, line width.
+    p.add_entry("Casters", [&style]() {
+        ImGui::ColorEdit4("##affecting", &style.shadow_fit_casters_color.x,        ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
+        ImGui::SameLine();
+        ImGui::ColorEdit4("##culled",    &style.shadow_fit_casters_culled_color.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(80.0f);
+        ImGui::DragFloat("##w", &style.shadow_fit_casters_width, 0.1f, -100.0f, 100.0f, "%.1f");
+    });
+    p.add_entry("Caster Hull",  [style_row, &style](){ style_row(&style.shadow_fit_caster_hull_color,  &style.shadow_fit_caster_hull_width); });
+    p.add_entry("View Frustum", [style_row, &style](){ style_row(&style.shadow_fit_view_frustum_color, &style.shadow_fit_view_frustum_width); });
+    // Receivers: passing color, culled color, line width.
+    p.add_entry("Receivers", [&style]() {
+        ImGui::ColorEdit4("##pass",   &style.shadow_fit_receivers_color.x,        ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
+        ImGui::SameLine();
+        ImGui::ColorEdit4("##culled", &style.shadow_fit_receivers_culled_color.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(80.0f);
+        ImGui::DragFloat("##w", &style.shadow_fit_receivers_width, 0.1f, -100.0f, 100.0f, "%.1f");
+    });
+    p.add_entry("Receiver Hull Unclipped", [style_row, &style](){ style_row(&style.shadow_fit_receiver_hull_unclipped_color, &style.shadow_fit_receiver_hull_unclipped_width); });
+    p.add_entry("Receiver Hull Clipped",   [style_row, &style](){ style_row(&style.shadow_fit_receiver_hull_color,           &style.shadow_fit_receiver_hull_width); });
+    p.add_entry("Volume Planes",    [style_row, &style](){ style_row(&style.shadow_fit_volume_planes_color,    &style.shadow_fit_volume_planes_width); });
+    p.add_entry("Far Plane Hull",   [style_row, &style](){ style_row(&style.shadow_fit_far_plane_hull_color,   &style.shadow_fit_far_plane_hull_width); });
+    p.add_entry("Fit Points",       [style_row, &style](){ style_row(&style.shadow_fit_points_color,           &style.shadow_fit_points_width); });
+    p.add_entry("Light Plane Hull", [style_row, &style](){ style_row(&style.shadow_fit_light_plane_hull_color, &style.shadow_fit_light_plane_hull_width); });
+    p.add_entry("OBB",              [style_row, &style](){ style_row(&style.shadow_fit_obb_color,              &style.shadow_fit_obb_width); });
+    p.add_entry("OBB Edge",         [style_row, &style](){ style_row(&style.shadow_fit_obb_edge_color,         &style.shadow_fit_obb_edge_width); });
+    p.add_entry("Box: Points",      [style_row, &style](){ style_row(&style.shadow_fit_box_fit_color,          nullptr); });
+    p.add_entry("Box: Frustum",     [style_row, &style](){ style_row(&style.shadow_fit_box_frustum_color,      nullptr); });
+    p.add_entry("Box: Range Cap",   [style_row, &style](){ style_row(&style.shadow_fit_box_cap_color,          nullptr); });
+    p.add_entry("Box: Final",       [style_row, &style](){ style_row(&style.shadow_fit_box_final_color,        nullptr); });
+    p.add_entry("Box Width",        [&style](){ ImGui::SetNextItemWidth(80.0f); ImGui::DragFloat("##", &style.shadow_fit_box_width, 0.1f, -100.0f, 100.0f, "%.1f"); });
+    p.pop_group();
+
+    p.push_group("Selection", ImGuiTreeNodeFlags_None);
+    p.add_entry("Selection Major Color", [&style](){ ImGui::ColorEdit4 ("##", &style.selection_major_color.x, ImGuiColorEditFlags_Float); });
+    p.add_entry("Selection Minor Color", [&style](){ ImGui::ColorEdit4 ("##", &style.selection_minor_color.x, ImGuiColorEditFlags_Float); });
+    p.add_entry("Group Major Color",     [&style](){ ImGui::ColorEdit4 ("##", &style.group_selection_major_color.x, ImGuiColorEditFlags_Float); });
+    p.add_entry("Group Minor Color",     [&style](){ ImGui::ColorEdit4 ("##", &style.group_selection_minor_color.x, ImGuiColorEditFlags_Float); });
+    p.add_entry("Selection Major Width", [&style](){ ImGui::SliderFloat("##", &style.selection_major_width, 0.1f, 100.0f); });
+    p.add_entry("Selection Minor Width", [&style](){ ImGui::SliderFloat("##", &style.selection_minor_width, 0.1f, 100.0f); });
+    p.pop_group();
+
+    p.add_entry("Sphere Step Count", [&style](){ ImGui::SliderInt  ("##", &style.sphere_step_count,    1,    200); });
+    p.add_entry("Light Line Width",  [&style](){ ImGui::SliderFloat("##", &style.light_line_width,     0.1f, 100.0f); });
+    p.add_entry("Camera Line Width", [&style](){ ImGui::SliderFloat("##", &style.camera_line_width,    0.1f, 100.0f); });
+    p.add_entry("Camera Line Color", [&style](){ ImGui::ColorEdit4 ("##", &style.camera_line_color.x,  ImGuiColorEditFlags_Float); });
+    p.add_entry("Layout Line Width", [&style](){ ImGui::SliderFloat("##", &style.layout_line_width,    0.1f, 100.0f); });
+    p.add_entry("Layout Line Color", [&style](){ ImGui::ColorEdit4 ("##", &style.layout_line_color.x,  ImGuiColorEditFlags_Float); });
+
+    p.push_group("Annotations", ImGuiTreeNodeFlags_None);
+    p.add_entry("Vertex Label Text Color",  [&style](){ ImGui::ColorEdit4 ("##", &style.vertex_label_text_color.x, ImGuiColorEditFlags_Float); });
+    p.add_entry("Vertex Label Line Color",  [&style](){ ImGui::ColorEdit4 ("##", &style.vertex_label_line_color.x, ImGuiColorEditFlags_Float); });
+    p.add_entry("Vertex Label Line Width",  [&style](){ ImGui::SliderFloat("##", &style.vertex_label_line_width,   0.0f, 4.0f); });
+    p.add_entry("Vertex Label Line Length", [&style](){ ImGui::SliderFloat("##", &style.vertex_label_line_length,  0.0f, 1.0f); });
+    p.add_entry("Edge Label Text Color",    [&style](){ ImGui::ColorEdit4 ("##", &style.edge_label_text_color.x,   ImGuiColorEditFlags_Float); });
+    p.add_entry("Edge Label Text Offset",   [&style](){ ImGui::SliderFloat("##", &style.edge_label_text_offset,    0.0f, 1.0f); });
+    p.add_entry("Edge Label Line Color",    [&style](){ ImGui::ColorEdit4 ("##", &style.edge_label_line_color.x,   ImGuiColorEditFlags_Float); });
+    p.add_entry("Edge Label Line Width",    [&style](){ ImGui::SliderFloat("##", &style.edge_label_line_width,     0.0f, 4.0f); });
+    p.add_entry("Edge Label Line Length",   [&style](){ ImGui::SliderFloat("##", &style.edge_label_line_length,    0.0f, 1.0f); });
+    p.add_entry("Facet Label Text Color",   [&style](){ ImGui::ColorEdit4 ("##", &style.facet_label_text_color.x,  ImGuiColorEditFlags_Float); });
+    p.add_entry("Facet Label Line Color",   [&style](){ ImGui::ColorEdit4 ("##", &style.facet_label_line_color.x,  ImGuiColorEditFlags_Float); });
+    p.add_entry("Facet Label Line Width",   [&style](){ ImGui::SliderFloat("##", &style.facet_label_line_width,    0.0f, 4.0f); });
+    p.add_entry("Facet Label Line Length",  [&style](){ ImGui::SliderFloat("##", &style.facet_label_line_length,   0.0f, 1.0f); });
+    p.add_entry("Corner Label Text Color",  [&style](){ ImGui::ColorEdit4 ("##", &style.corner_label_text_color.x, ImGuiColorEditFlags_Float); });
+    p.add_entry("Corner Label Line Color",  [&style](){ ImGui::ColorEdit4 ("##", &style.corner_label_line_color.x, ImGuiColorEditFlags_Float); });
+    p.add_entry("Corner Label Line Width",  [&style](){ ImGui::SliderFloat("##", &style.corner_label_line_width,   0.0f, 4.0f); });
+    p.add_entry("Corner Label Line Length", [&style](){ ImGui::SliderFloat("##", &style.corner_label_line_length,  0.0f, 1.0f); });
+    p.pop_group();
+
+    p.pop_group();
+}
+
 void Debug_visualizations::imgui(Scene_view& scene_view, App_context& app_context)
 {
-    Debug_visualizations_style& style = app_context.editor_settings->debug_visualizations_style;
     ERHE_PROFILE_FUNCTION();
 
     Property_editor& p = m_property_editor;
@@ -2059,20 +2155,9 @@ void Debug_visualizations::imgui(Scene_view& scene_view, App_context& app_contex
     if (m_settings.shadow_fit_debug) {
         // Shadow frustum fit visualizations; data is collected per light only
         // when the Shadow Frustum Fit setting "Collect Debug Data" is enabled.
-        // Each row: enable, color, line width (negative widths are in pixels
-        // and do not scale by distance).
-        auto shadow_fit_entry = [](bool* enable, glm::vec4* color, float* width) {
-            if (enable != nullptr) {
-                ImGui::Checkbox("##v", enable);
-                ImGui::SameLine();
-            }
-            ImGui::ColorEdit4("##c", &color->x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
-            if (width != nullptr) {
-                ImGui::SameLine();
-                ImGui::SetNextItemWidth(80.0f);
-                ImGui::DragFloat("##w", width, 0.1f, -100.0f, 100.0f, "%.1f");
-            }
-        };
+        // These are the per-view enable toggles; their appearance (colors, line
+        // widths) is editor-global and edited in the Settings window
+        // (Debug_visualizations_style, via Debug_visualizations::style_imgui).
         const std::shared_ptr<Scene_root> shadow_fit_scene_root = scene_view.get_scene_root();
         p.push_group("Shadow Fit", ImGuiTreeNodeFlags_None);
         // Master switch for the fit's debug-data collection
@@ -2116,43 +2201,20 @@ void Debug_visualizations::imgui(Scene_view& scene_view, App_context& app_contex
                 ImGui::EndCombo();
             }
         });
-        // Casters: enable, affecting color, culled color, line width.
-        p.add_entry("Casters", [this, &style]() {
-            ImGui::Checkbox("##v", &m_settings.shadow_fit_casters);
-            ImGui::SameLine();
-            ImGui::ColorEdit4("##affecting", &style.shadow_fit_casters_color.x,        ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
-            ImGui::SameLine();
-            ImGui::ColorEdit4("##culled",    &style.shadow_fit_casters_culled_color.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
-            ImGui::SameLine();
-            ImGui::SetNextItemWidth(80.0f);
-            ImGui::DragFloat("##w", &style.shadow_fit_casters_width, 0.1f, -100.0f, 100.0f, "%.1f");
-        });
-        p.add_entry("Caster Hull",      [this, shadow_fit_entry, &style](){ shadow_fit_entry(&m_settings.shadow_fit_caster_hull,      &style.shadow_fit_caster_hull_color,      &style.shadow_fit_caster_hull_width); });
-        p.add_entry("View Frustum",     [this, shadow_fit_entry, &style](){ shadow_fit_entry(&m_settings.shadow_fit_view_frustum,     &style.shadow_fit_view_frustum_color,     &style.shadow_fit_view_frustum_width); });
-        // Receivers: enable, passing color, culled color, line width.
-        p.add_entry("Receivers", [this, &style]() {
-            ImGui::Checkbox("##v", &m_settings.shadow_fit_receivers);
-            ImGui::SameLine();
-            ImGui::ColorEdit4("##pass",   &style.shadow_fit_receivers_color.x,        ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
-            ImGui::SameLine();
-            ImGui::ColorEdit4("##culled", &style.shadow_fit_receivers_culled_color.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
-            ImGui::SameLine();
-            ImGui::SetNextItemWidth(80.0f);
-            ImGui::DragFloat("##w", &style.shadow_fit_receivers_width, 0.1f, -100.0f, 100.0f, "%.1f");
-        });
-        p.add_entry("Receiver Hull Unclipped", [this, shadow_fit_entry, &style](){ shadow_fit_entry(&m_settings.shadow_fit_receiver_hull_unclipped, &style.shadow_fit_receiver_hull_unclipped_color, &style.shadow_fit_receiver_hull_unclipped_width); });
-        p.add_entry("Receiver Hull Clipped",   [this, shadow_fit_entry, &style](){ shadow_fit_entry(&m_settings.shadow_fit_receiver_hull,           &style.shadow_fit_receiver_hull_color,           &style.shadow_fit_receiver_hull_width); });
-        p.add_entry("Volume Planes",    [this, shadow_fit_entry, &style](){ shadow_fit_entry(&m_settings.shadow_fit_volume_planes,    &style.shadow_fit_volume_planes_color,    &style.shadow_fit_volume_planes_width); });
-        p.add_entry("Far Plane Hull",   [this, shadow_fit_entry, &style](){ shadow_fit_entry(&m_settings.shadow_fit_far_plane_hull,   &style.shadow_fit_far_plane_hull_color,   &style.shadow_fit_far_plane_hull_width); });
-        p.add_entry("Fit Points",       [this, shadow_fit_entry, &style](){ shadow_fit_entry(&m_settings.shadow_fit_points,           &style.shadow_fit_points_color,           &style.shadow_fit_points_width); });
-        p.add_entry("Light Plane Hull", [this, shadow_fit_entry, &style](){ shadow_fit_entry(&m_settings.shadow_fit_light_plane_hull, &style.shadow_fit_light_plane_hull_color, &style.shadow_fit_light_plane_hull_width); });
-        p.add_entry("OBB",              [this, shadow_fit_entry, &style](){ shadow_fit_entry(nullptr,                        &style.shadow_fit_obb_color,              &style.shadow_fit_obb_width); });
-        p.add_entry("OBB Edge",         [this, shadow_fit_entry, &style](){ shadow_fit_entry(nullptr,                        &style.shadow_fit_obb_edge_color,         &style.shadow_fit_obb_edge_width); });
-        p.add_entry("Box: Points",      [this, shadow_fit_entry, &style](){ shadow_fit_entry(&m_settings.shadow_fit_box_fit,          &style.shadow_fit_box_fit_color,          nullptr); });
-        p.add_entry("Box: Frustum",     [this, shadow_fit_entry, &style](){ shadow_fit_entry(&m_settings.shadow_fit_box_frustum,      &style.shadow_fit_box_frustum_color,      nullptr); });
-        p.add_entry("Box: Range Cap",   [this, shadow_fit_entry, &style](){ shadow_fit_entry(&m_settings.shadow_fit_box_cap,          &style.shadow_fit_box_cap_color,          nullptr); });
-        p.add_entry("Box: Final",       [this, shadow_fit_entry, &style](){ shadow_fit_entry(&m_settings.shadow_fit_box_final,        &style.shadow_fit_box_final_color,        nullptr); });
-        p.add_entry("Box Width",        [this, &style](){ ImGui::SetNextItemWidth(80.0f); ImGui::DragFloat("##", &style.shadow_fit_box_width, 0.1f, -100.0f, 100.0f, "%.1f"); });
+        p.add_entry("Casters",                 [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_casters); });
+        p.add_entry("Caster Hull",             [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_caster_hull); });
+        p.add_entry("View Frustum",            [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_view_frustum); });
+        p.add_entry("Receivers",               [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_receivers); });
+        p.add_entry("Receiver Hull Unclipped", [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_receiver_hull_unclipped); });
+        p.add_entry("Receiver Hull Clipped",   [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_receiver_hull); });
+        p.add_entry("Volume Planes",           [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_volume_planes); });
+        p.add_entry("Far Plane Hull",          [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_far_plane_hull); });
+        p.add_entry("Fit Points",              [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_points); });
+        p.add_entry("Light Plane Hull",        [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_light_plane_hull); });
+        p.add_entry("Box: Points",             [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_box_fit); });
+        p.add_entry("Box: Frustum",            [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_box_frustum); });
+        p.add_entry("Box: Range Cap",          [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_box_cap); });
+        p.add_entry("Box: Final",              [this](){ ImGui::Checkbox("##", &m_settings.shadow_fit_box_final); });
         p.pop_group();
     }
 
@@ -2176,16 +2238,8 @@ void Debug_visualizations::imgui(Scene_view& scene_view, App_context& app_contex
     p.add_entry("Selection Projected Hull", [this](){ ImGui::Checkbox   ("##", &m_settings.selection_convex_hull_projected); });
     p.add_entry("Debug Convex Hull",        [this](){ ImGui::Checkbox   ("##", &m_settings.debug_convex_hull); });
     p.add_entry("Convex Hull Edge",         [this](){ ImGui::InputInt("##", &m_settings.convex_hull_edge, 1, 10, ImGuiInputTextFlags_None); });
-
-    p.add_entry("Selection Major Color", [this, &style](){ ImGui::ColorEdit4 ("##", &style.selection_major_color.x, ImGuiColorEditFlags_Float); });
-    p.add_entry("Selection Minor Color", [this, &style](){ ImGui::ColorEdit4 ("##", &style.selection_minor_color.x, ImGuiColorEditFlags_Float); });
-    p.add_entry("Group Major Color",     [this, &style](){ ImGui::ColorEdit4 ("##", &style.group_selection_major_color.x, ImGuiColorEditFlags_Float); });
-    p.add_entry("Group Minor Color",     [this, &style](){ ImGui::ColorEdit4 ("##", &style.group_selection_minor_color.x, ImGuiColorEditFlags_Float); });
-    p.add_entry("Selection Major Width", [this, &style](){ ImGui::SliderFloat("##", &style.selection_major_width, 0.1f, 100.0f); });
-    p.add_entry("Selection Minor Width", [this, &style](){ ImGui::SliderFloat("##", &style.selection_minor_width, 0.1f, 100.0f); });
     p.pop_group();
 
-    p.add_entry("Sphere Step Count",     [this, &style](){ ImGui::SliderInt  ("##", &style.sphere_step_count, 1, 200); });
     p.add_entry("Gap",                   [this](){ ImGui::SliderFloat("##", &m_settings.gap, 0.0001f, 0.1f); });
     p.add_entry("Tool Hide",             [this](){ ImGui::Checkbox   ("##", &m_settings.tool_hide); });
     //ImGui::Checkbox   ("Raytrace",              &m_settings.raytrace);
@@ -2193,21 +2247,12 @@ void Debug_visualizations::imgui(Scene_view& scene_view, App_context& app_contex
     p.add_entry("Frustum Box",       [this](){ ImGui::Checkbox("##", &m_settings.frustum_box); });
     p.add_entry("Frustum Planes",    [this](){ ImGui::Checkbox("##", &m_settings.frustum_planes); });
     p.add_entry("Lights",            [this](){ make_combo("##", m_settings.lights); });
-    if (m_settings.lights != Visualization_mode::off) {
-        p.add_entry("Light Line Width", [this, &style](){ ImGui::SliderFloat("##", &style.light_line_width, 0.1f, 100.0f); });
-    }
     p.add_entry("Cameras",           [this](){ make_combo("##", m_settings.cameras); });
     if (m_settings.cameras != Visualization_mode::off) {
         p.add_entry("Camera Cull Test",  [this](){ ImGui::Checkbox   ("##", &m_settings.camera_cull_test); });
-        p.add_entry("Camera Line Width", [this, &style](){ ImGui::SliderFloat("##", &style.camera_line_width, 0.1f, 100.0f); });
-        p.add_entry("Camera Line Color", [this, &style](){ ImGui::ColorEdit4 ("##", &style.camera_line_color.x, ImGuiColorEditFlags_Float); });
     }
 
     p.add_entry("Layouts",           [this](){ make_combo("##", m_settings.layouts); });
-    if (m_settings.layouts != Visualization_mode::off) {
-        p.add_entry("Layout Line Width", [this, &style](){ ImGui::SliderFloat("##", &style.layout_line_width, 0.1f, 100.0f); });
-        p.add_entry("Layout Line Color", [this, &style](){ ImGui::ColorEdit4 ("##", &style.layout_line_color.x, ImGuiColorEditFlags_Float); });
-    }
 
     p.add_entry("Skins",          [this](){ make_combo("##", m_settings.skins); });
 
@@ -2219,26 +2264,6 @@ void Debug_visualizations::imgui(Scene_view& scene_view, App_context& app_contex
     p.add_entry("Show Facets",      [this](){ make_combo("##", m_settings.facet_labels ); });
     p.add_entry("Show Edges",       [this](){ make_combo("##", m_settings.edge_labels  ); });
     p.add_entry("Show Corners",     [this](){ make_combo("##", m_settings.corner_labels); });
-
-    p.push_group("Style", ImGuiTreeNodeFlags_None); //ImGuiTreeNodeFlags_DefaultOpen);
-    p.add_entry("Vertex Label Text Color",  [this, &style](){ ImGui::ColorEdit4 ("##", &style.vertex_label_text_color.x, ImGuiColorEditFlags_Float); });
-    p.add_entry("Vertex Label Line Color",  [this, &style](){ ImGui::ColorEdit4 ("##", &style.vertex_label_line_color.x, ImGuiColorEditFlags_Float); });
-    p.add_entry("Vertex Label Line Width",  [this, &style](){ ImGui::SliderFloat("##", &style.vertex_label_line_width,   0.0f, 4.0f); });
-    p.add_entry("Vertex Label Line Length", [this, &style](){ ImGui::SliderFloat("##", &style.vertex_label_line_length,  0.0f, 1.0f); });
-    p.add_entry("Edge Label Text Color",    [this, &style](){ ImGui::ColorEdit4 ("##", &style.edge_label_text_color.x,   ImGuiColorEditFlags_Float); });
-    p.add_entry("Edge Label Text Offset",   [this, &style](){ ImGui::SliderFloat("##", &style.edge_label_text_offset,    0.0f, 1.0f); });
-    p.add_entry("Edge Label Line Color",    [this, &style](){ ImGui::ColorEdit4 ("##", &style.edge_label_line_color.x,   ImGuiColorEditFlags_Float); });
-    p.add_entry("Edge Label Line Width",    [this, &style](){ ImGui::SliderFloat("##", &style.edge_label_line_width,     0.0f, 4.0f); });
-    p.add_entry("Edge Label Line Length",   [this, &style](){ ImGui::SliderFloat("##", &style.edge_label_line_length,    0.0f, 1.0f); });
-    p.add_entry("Facet Label Text Color",   [this, &style](){ ImGui::ColorEdit4 ("##", &style.facet_label_text_color.x,  ImGuiColorEditFlags_Float); });
-    p.add_entry("Facet Label Line Color",   [this, &style](){ ImGui::ColorEdit4 ("##", &style.facet_label_line_color.x,  ImGuiColorEditFlags_Float); });
-    p.add_entry("Facet Label Line Width",   [this, &style](){ ImGui::SliderFloat("##", &style.facet_label_line_width,    0.0f, 4.0f); });
-    p.add_entry("Facet Label Line Length",  [this, &style](){ ImGui::SliderFloat("##", &style.facet_label_line_length,   0.0f, 1.0f); });
-    p.add_entry("Corner Label Text Color",  [this, &style](){ ImGui::ColorEdit4 ("##", &style.corner_label_text_color.x, ImGuiColorEditFlags_Float); });
-    p.add_entry("Corner Label Line Color",  [this, &style](){ ImGui::ColorEdit4 ("##", &style.corner_label_line_color.x, ImGuiColorEditFlags_Float); });
-    p.add_entry("Corner Label Line Width",  [this, &style](){ ImGui::SliderFloat("##", &style.corner_label_line_width,   0.0f, 4.0f); });
-    p.add_entry("Corner Label Line Length", [this, &style](){ ImGui::SliderFloat("##", &style.corner_label_line_length,  0.0f, 1.0f); });
-    p.pop_group();
     p.pop_group();
     p.show_entries();
 }
