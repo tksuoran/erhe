@@ -170,6 +170,20 @@ Ask the agent (or call the tools directly):
   immediately. Deep cross-file `usages` / `callers` / `callees` fill in as
   clangd's background index completes on a large repo.
 
+> **First open is a one-time indexing wait.** The very first time LSAI opens
+> erhe, clangd builds a full background index of every translation unit in
+> `compile_commands.json` (erhe is ~1700 TU). Expect this to take **several
+> minutes -- up to ~10 minutes on a large repo -- and it scales with your
+> machine** (CPU cores, disk speed, header set). It is a one-time cost: clangd's
+> on-disk shard cache is reused on later opens, so subsequent startups reach
+> `Ready` in seconds. The first index has nothing to reuse, though, and any TU
+> whose content or compile flags changed is re-indexed afterwards -- not
+> everything can be served from cache. You are not blocked while it runs:
+> `outline` / `info` / `diagnostics` on an already-parsed file answer
+> immediately (annotated "results may be incomplete"), while project-wide
+> `search` / `hierarchy` become available once the workspace reaches `Ready`.
+> Watch progress with `lsai_workspace_list` (`Indexing(n/total)` -> `Ready`).
+
 That is the goal achieved: vs-mcp could not do this for C++, and LSAI does.
 xmp4 (step 3) covers the dependencies in parallel.
 
