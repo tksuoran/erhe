@@ -471,9 +471,9 @@ void Mesh_component_selection_tool::tool_render(const Render_context& context)
     // visible pass). Restore to true once the tent is verified.
     erhe::renderer::Primitive_renderer line_renderer     = context.get({erhe::graphics::Primitive_type::line,     2, true, false});
 
-    // Per-viewport visual style (serialized in Viewport_config, edited in
-    // Viewport_config_window).
-    const Mesh_component_style& style = context.viewport_config.mesh_component_style;
+    // Editor-global visual style (Editor_settings_config.mesh_component_style,
+    // edited in the Settings window), shared by all scene views.
+    const Mesh_component_style& style = context.app_context.editor_settings->mesh_component_style;
 
     // Surface-line depth bias is a single global on the debug renderer (it is
     // written to the view UBO when the line bucket flushes, after all tools have
@@ -679,9 +679,9 @@ void Mesh_component_selection_tool::viewport_toolbar()
     ImGui::PopID();
 
     // Visual style (colors, edge thickness, vertex size, edge depth bias) is
-    // edited in the Viewport Configuration window; it is stored per-viewport in
-    // Viewport_config::mesh_component_style so codegen serialization / autosave
-    // cover it.
+    // edited in the Settings window; it is stored editor-global in
+    // Editor_settings_config::mesh_component_style so codegen serialization /
+    // autosave cover it.
 }
 
 } // namespace editor

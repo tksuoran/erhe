@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Editor_settings_config",
-    version=9,
+    version=10,
     short_desc="Editor settings",
     long_desc="Runtime-editable settings saved to editor_settings.json.",
     developer=False,
@@ -24,6 +24,9 @@ struct("Editor_settings_config",
         field("selected_render_style_appearance", StructRef("Render_style_appearance"), added_in=9),
         # Editor-global selection outline appearance, shared by all scene views.
         field("selection_outline",                StructRef("Selection_outline_style"), added_in=9),
+        # Editor-global mesh-component (vertex / edge / face) selection style,
+        # shared by all scene views.
+        field("mesh_component_style",             StructRef("Mesh_component_style"),    added_in=10),
         field("scene_views",          Vector(StructRef("Scene_view_settings")), added_in=5),
         field("developer",            StructRef("Developer_config"),       added_in=1),
         field("grid",                 StructRef("Grid_config"),            added_in=1),

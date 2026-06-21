@@ -107,9 +107,9 @@ private:
     Component_select_command                                  m_select_command;
 
     // Visual style (colors, edge thickness, vertex size, edge depth bias) lives
-    // in the per-viewport Viewport_config::mesh_component_style so it is covered
-    // by codegen serialization / autosave; tool_render reads it from the active
-    // Render_context and edits happen in Viewport_config_window.
+    // editor-global in Editor_settings_config::mesh_component_style so it is
+    // covered by codegen serialization / autosave; tool_render reads it from
+    // app_context.editor_settings and edits happen in the Settings window.
 
     // Per-frame scratch (cleared each frame, capacity retained). tool_render
     // is hot-path, so it must not allocate transient containers (see CLAUDE.md

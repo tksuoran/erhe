@@ -88,19 +88,9 @@ void Viewport_config_window::imgui(App_context& context, Viewport_config& edit_d
         ImGui::TreePop();
     }
 
-    if (ImGui::TreeNodeEx("Mesh Components", flags)) {
-        Mesh_component_style& mesh_component_style = edit_data.mesh_component_style;
-        ImGui::ColorEdit4("Vertex Color", &mesh_component_style.vertex_color.x, ImGuiColorEditFlags_Float);
-        ImGui::ColorEdit4("Edge Color",   &mesh_component_style.edge_color.x,   ImGuiColorEditFlags_Float);
-        ImGui::ColorEdit4("Face Color",   &mesh_component_style.face_color.x,   ImGuiColorEditFlags_Float);
-        ImGui::ColorEdit4("Hover Color",  &mesh_component_style.hover_color.x,  ImGuiColorEditFlags_Float);
-        // edge_thickness: negative = constant screen-space pixel width.
-        ImGui::DragFloat("Edge Thickness", &mesh_component_style.edge_thickness, 0.1f,   -20.0f, -0.5f);
-        ImGui::DragFloat("Vertex Size",    &mesh_component_style.vertex_size,    0.001f,  0.001f, 0.1f);
-        // edge_depth_bias: surface-line bias headroom in depth ULPs.
-        ImGui::DragFloat("Edge Depth Bias (ULPs)", &mesh_component_style.edge_depth_bias, 1.0f, 0.0f, 4096.0f, "%.0f");
-        ImGui::TreePop();
-    }
+    // Mesh Component Style (vertex / edge / face selection colors and sizes) is
+    // editor-global (Editor_settings_config.mesh_component_style), edited in the
+    // Settings window - no longer per scene view here.
 }
 
 }

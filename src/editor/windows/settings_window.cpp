@@ -25,6 +25,7 @@
 #include "config/generated/camera_controls_config_serialization.hpp"
 #include "config/generated/render_style_appearance_serialization.hpp"
 #include "config/generated/selection_outline_style_serialization.hpp"
+#include "config/generated/mesh_component_style_serialization.hpp"
 #include "config/generated/debug_visualizations_settings_serialization.hpp"
 #include "config/generated/developer_config_serialization.hpp"
 #include "config/generated/grid_config_serialization.hpp"
@@ -653,6 +654,8 @@ void Settings_window::imgui()
         // Editor-global selection outline appearance (moved out of the per-view
         // Visual Style popup).
         add_config_section(settings.selection_outline);
+        // Editor-global mesh-component (vertex / edge / face) selection style.
+        add_config_section(settings.mesh_component_style);
         // Note: the per-view debug-visualization enable toggles / modes
         // (Debug_visualizations_settings) are intentionally NOT shown here -
         // they live only per scene view (edited in the scene-view Debug
