@@ -9,11 +9,14 @@
 #include "app_message_bus.hpp"
 #include "app_rendering.hpp"
 #include "app_scenes.hpp"
+#include "config/generated/editor_settings_config.hpp"
+#include "config/generated/sky_config.hpp"
 #include "renderers/composition_pass.hpp"
 #include "renderers/id_renderer.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/render_style.hpp"
 #include "renderers/render_context.hpp"
+#include "renderers/sky_renderer.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_scene_views.hpp"
@@ -385,6 +388,15 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
     // line compute->vertex barrier above.
     if (m_debug_visualizations.is_shadow_debug_enabled()) {
         command_buffer.memory_barrier(erhe::graphics::Memory_barrier_mask::texture_fetch_barrier_bit);
+    }
+
+    // Generate the atmosphere LUTs once (must be outside the render pass: it
+    // issues compute dispatches + image barriers) when the physically-based
+    // sky mode is active.
+    if ((m_context.sky_renderer != nullptr) &&
+        (m_context.editor_settings != nullptr) &&
+        (m_context.editor_settings->sky.mode == 1)) {
+        m_context.sky_renderer->ensure_luts(graphics_device, command_buffer);
     }
 
     m_render_target.update(m_projection_viewport.width, m_projection_viewport.height, nullptr);

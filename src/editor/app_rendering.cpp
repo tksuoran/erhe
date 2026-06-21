@@ -18,6 +18,7 @@
 #include "erhe_scene_renderer/shader_key.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/render_context.hpp"
+#include "renderers/sky_renderer.hpp"
 #include "renderers/viewport_config.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "scene/scene_root.hpp"
@@ -53,6 +54,35 @@
 namespace editor {
 
 using erhe::graphics::Color_blend_state;
+
+// Composition pass for the "Sky" slot. In gradient/checker mode it renders the
+// usual fullscreen sky shader via the base Composition_pass; in atmosphere mode
+// (sky.mode == 1, Vulkan only) it delegates to the dedicated Sky_renderer which
+// ray-marches the physically-based atmosphere with its own pipeline + LUTs.
+class Sky_composition_pass : public Composition_pass
+{
+public:
+    explicit Sky_composition_pass(std::string_view name) : Composition_pass{name} {}
+
+    void render(const Render_context& context) override
+    {
+        if (!data.enabled) {
+            return;
+        }
+        App_context&  app_context  = context.app_context;
+        Sky_renderer* sky_renderer = app_context.sky_renderer;
+        const bool atmosphere =
+            (app_context.editor_settings != nullptr) &&
+            (app_context.editor_settings->sky.mode == 1) &&
+            (sky_renderer != nullptr) &&
+            sky_renderer->is_atmosphere_supported();
+        if (atmosphere) {
+            sky_renderer->render_atmosphere(context);
+        } else {
+            Composition_pass::render(context);
+        }
+    }
+};
 
 
 #pragma region Commands
@@ -282,9 +312,11 @@ App_rendering::App_rendering(
     // This gets overridden in Composition_pass::render()
     // TODO Figure out a good way to route the settings
 
-    m_sky_composition_pass = make_composition_pass(
-        "Sky",
-        Composition_pass_data{
+    {
+        // Sky uses a Composition_pass subclass that switches between the
+        // gradient/checker shader and the physically-based atmosphere renderer.
+        auto sky_pass = std::make_shared<Sky_composition_pass>("Sky");
+        sky_pass->data = Composition_pass_data{
             .non_mesh_vertex_count{3}, // Fullscreen quad
             .primitive_mode{erhe::primitive::Primitive_mode::polygon_fill},
             .filter{
@@ -293,9 +325,14 @@ App_rendering::App_rendering(
                 .require_all_bits_clear       = 0
             },
             .shader_stages{&programs.sky.shader_stages}
-        },
-        { &m_pipeline_passes.sky }
-    );
+        };
+        sky_pass->data.base_render_pipelines = { &m_pipeline_passes.sky };
+        {
+            std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_composer.mutex};
+            m_composer.composition_passes.push_back(sky_pass);
+        }
+        m_sky_composition_pass = sky_pass;
+    }
 
     // Infinite plane with 4 triangles / 12 indices - https://stackoverflow.com/questions/12965161/rendering-infinitely-large-plane
     m_grid_composition_pass = make_composition_pass(

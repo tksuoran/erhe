@@ -91,6 +91,7 @@ class Selection;
 class Selection_tool;
 class Settings_window;
 class Sheet_window;
+class Sky_renderer;
 class Thumbnails;
 class Time;
 class Timeline_window;
@@ -194,6 +195,7 @@ public:
     Selection*                         selection            {nullptr};
     Selection_tool*                    selection_tool       {nullptr};
     Settings_window*                   settings_window      {nullptr};
+    Sky_renderer*                      sky_renderer         {nullptr};
     Sheet_window*                      sheet_window         {nullptr};
     Thumbnails*                        thumbnails           {nullptr};
     Time*                              time                 {nullptr};

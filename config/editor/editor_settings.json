@@ -1093,8 +1093,9 @@
         "collect_debug": false
     },
     "sky": {
-        "_version": 2,
+        "_version": 3,
         "enabled": true,
+        "mode": 0,
         "sky_horizon_color": [0.3,0.3,0.33,1],
         "sky_zenith_color": [0.2,0.2,0.22,1],
         "sky_power": 10,
@@ -1103,7 +1104,14 @@
         "ground_power": 8,
         "checker_frequency": [18,18],
         "checker_intensity_a": 0.92,
-        "checker_intensity_b": 1
+        "checker_intensity_b": 1,
+        "sun_intensity": 20,
+        "march_steps": 32,
+        "observer_altitude_km": 0.5,
+        "sun_angular_radius_deg": 0.5,
+        "sun_disc_intensity": 30,
+        "sun_elevation_deg": 45,
+        "sun_azimuth_deg": 0
     },
     "thumbnails": {
         "capacity": 200,

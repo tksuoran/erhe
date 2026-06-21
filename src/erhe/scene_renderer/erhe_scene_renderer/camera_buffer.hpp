@@ -59,6 +59,10 @@ public:
     std::size_t sky_zenith_color;     // vec4 rgb, w unused
     std::size_t ground_horizon_color; // vec4 rgb, w = horizon-to-nadir falloff power
     std::size_t ground_nadir_color;   // vec4 rgb, w unused
+    // Atmosphere (Hillaire) sky mode. Read by sky_atmosphere.frag; ignored by
+    // the gradient sky and other passes.
+    std::size_t sun_direction;        // vec4 xyz = world dir toward sun, w = sun illuminance
+    std::size_t atmosphere;           // vec4 x = march steps, y = observer altitude (km), z = cos(sun angular radius), w = sun disc brightness
     std::size_t frame_number;         // uvec2
     std::size_t padding;              // uvec2
 };
@@ -108,6 +112,13 @@ public:
     // rgb = color at the horizon, w = horizon-to-nadir falloff power.
     glm::vec4 ground_horizon_color{ 0.2f,  0.2f, 0.2f,   8.0f};
     glm::vec4 ground_nadir_color  { 0.1f,  0.1f, 0.1f,   0.0f};
+    // Atmosphere (Hillaire) sky mode parameters. xyz = world-space direction
+    // toward the sun, w = sun illuminance. Read by sky_atmosphere.frag only;
+    // the gradient sky ignores these. Defaults give a mid-morning sun.
+    glm::vec4 sun_direction       { 0.0f,  0.7071f, 0.7071f, 20.0f};
+    // x = ray-march step count, y = observer altitude above sea level (km),
+    // z = cos(sun angular radius), w = sun disc brightness multiplier.
+    glm::vec4 atmosphere          {32.0f,  0.5f,    0.99996f, 30.0f};
 };
 
 class Camera_interface

@@ -1,0 +1,49 @@
+#include "sky_atmosphere_common.glsl"
+
+// Transmittance LUT generation (Hillaire EGSR 2020). One texel per
+// (view-height, view-zenith) pair using the Bruneton non-linear mapping that
+// concentrates precision near the horizon. Each texel integrates extinction
+// from the view point to the atmosphere top and stores exp(-optical_depth).
+//
+// The output image (i_transmittance, rgba16f) is declared by the bind group
+// layout, so it is injected into the preamble -- do not declare it here.
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+const int SKY_TRANSMITTANCE_STEPS = 40;
+
+void main()
+{
+    ivec2 texel = ivec2(gl_GlobalInvocationID.xy);
+    int   width  = int(SKY_TRANSMITTANCE_LUT_WIDTH);
+    int   height = int(SKY_TRANSMITTANCE_LUT_HEIGHT);
+    if ((texel.x >= width) || (texel.y >= height)) {
+        return;
+    }
+
+    vec2  uv = (vec2(texel) + vec2(0.5)) / vec2(float(width), float(height));
+    float r;
+    float mu;
+    sky_uv_to_transmittance_params(uv, r, mu);
+
+    // View point at height r, ray direction with cosine-zenith mu. Place it in
+    // the x-y plane (the result is radially symmetric).
+    vec3 ray_origin = vec3(0.0, r, 0.0);
+    vec3 ray_dir    = vec3(sqrt(max(0.0, 1.0 - mu * mu)), mu, 0.0);
+
+    // Always integrate to the atmosphere top (never clip to the ground; see
+    // Hillaire common-mistake #13).
+    float t_max = sky_distance_to_atmosphere_top(ray_origin, ray_dir);
+
+    vec3  optical_depth = vec3(0.0);
+    float dt = t_max / float(SKY_TRANSMITTANCE_STEPS);
+    for (int i = 0; i < SKY_TRANSMITTANCE_STEPS; ++i) {
+        float t = (float(i) + 0.5) * dt;
+        vec3  p = ray_origin + ray_dir * t;
+        Sky_medium medium = sky_sample_medium(p);
+        optical_depth += medium.extinction * dt;
+    }
+
+    vec3 transmittance = exp(-optical_depth);
+    imageStore(i_transmittance, texel, vec4(transmittance, 1.0));
+}

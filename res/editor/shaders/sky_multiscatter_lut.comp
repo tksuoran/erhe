@@ -1,0 +1,120 @@
+#include "sky_atmosphere_common.glsl"
+
+// Multi-scattering LUT generation (Hillaire EGSR 2020, NewMultiScatCS). One
+// texel per (altitude, sun-zenith) pair. Integrates second-order scattering
+// over the sphere assuming uniform unit incoming radiance, then closes the
+// infinite multiple-scattering series with the 1 / (1 - F_ms) factor.
+//
+// Reads the transmittance LUT (i_transmittance, binding 0, readonly storage
+// image) via manual bilinear imageLoad, and writes i_multiscatter (binding 1).
+// Both images are declared by the bind group layout; do not declare them here.
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+const int SKY_MS_SQRT_SAMPLES = 8;  // 64 sphere directions
+const int SKY_MS_STEPS        = 20; // march steps per direction
+
+// Manual bilinear sample of the transmittance storage image.
+vec3 sample_transmittance(float r, float mu)
+{
+    vec2 uv = sky_transmittance_params_to_uv(r, mu);
+    vec2 coord = uv * vec2(SKY_TRANSMITTANCE_LUT_WIDTH, SKY_TRANSMITTANCE_LUT_HEIGHT) - vec2(0.5);
+    vec2 f = fract(coord);
+    ivec2 size_minus_one = ivec2(int(SKY_TRANSMITTANCE_LUT_WIDTH) - 1, int(SKY_TRANSMITTANCE_LUT_HEIGHT) - 1);
+    ivec2 i0 = clamp(ivec2(floor(coord)),       ivec2(0), size_minus_one);
+    ivec2 i1 = clamp(ivec2(floor(coord)) + 1,   ivec2(0), size_minus_one);
+    vec3 t00 = imageLoad(i_transmittance, ivec2(i0.x, i0.y)).rgb;
+    vec3 t10 = imageLoad(i_transmittance, ivec2(i1.x, i0.y)).rgb;
+    vec3 t01 = imageLoad(i_transmittance, ivec2(i0.x, i1.y)).rgb;
+    vec3 t11 = imageLoad(i_transmittance, ivec2(i1.x, i1.y)).rgb;
+    return mix(mix(t00, t10, f.x), mix(t01, t11, f.x), f.y);
+}
+
+void main()
+{
+    ivec2 texel = ivec2(gl_GlobalInvocationID.xy);
+    int   size  = int(SKY_MULTISCATTER_LUT_SIZE);
+    if ((texel.x >= size) || (texel.y >= size)) {
+        return;
+    }
+
+    vec2  uv = (vec2(texel) + vec2(0.5)) / vec2(float(size));
+    float r;
+    float mu_sun;
+    sky_uv_to_multiscatter_params(uv, r, mu_sun);
+
+    vec3 origin  = vec3(0.0, r, 0.0);
+    vec3 sun_dir = vec3(sqrt(max(0.0, 1.0 - mu_sun * mu_sun)), mu_sun, 0.0);
+
+    vec3 lum_total = vec3(0.0); // sum of per-direction 2nd-order in-scatter
+    vec3 fms_total = vec3(0.0); // sum of per-direction scattering transfer
+
+    for (int i = 0; i < SKY_MS_SQRT_SAMPLES; ++i) {
+        for (int j = 0; j < SKY_MS_SQRT_SAMPLES; ++j) {
+            // Uniform sphere direction.
+            float rand_a = (float(i) + 0.5) / float(SKY_MS_SQRT_SAMPLES);
+            float rand_b = (float(j) + 0.5) / float(SKY_MS_SQRT_SAMPLES);
+            float theta  = 2.0 * SKY_PI * rand_a;
+            float phi    = acos(1.0 - 2.0 * rand_b);
+            float sin_phi = sin(phi);
+            vec3 dir = vec3(cos(theta) * sin_phi, cos(phi), sin(theta) * sin_phi);
+
+            // March range: to the ground if the planet is hit, else the top.
+            Sky_ray_hit ground_hit = sky_ray_sphere(origin, dir, R_GROUND);
+            bool  hit_ground = ground_hit.hit && (ground_hit.t_near > 0.0);
+            float t_max = hit_ground
+                ? ground_hit.t_near
+                : sky_distance_to_atmosphere_top(origin, dir);
+
+            float cos_theta = dot(dir, sun_dir);
+            float rayleigh_phase = sky_rayleigh_phase(cos_theta);
+            float mie_phase      = sky_mie_phase_hg(cos_theta, MIE_G);
+
+            vec3 throughput = vec3(1.0);
+            vec3 l_dir   = vec3(0.0);
+            vec3 fms_dir = vec3(0.0);
+            float dt = t_max / float(SKY_MS_STEPS);
+            for (int s = 0; s < SKY_MS_STEPS; ++s) {
+                float t = (float(s) + 0.5) * dt;
+                vec3  p = origin + dir * t;
+                Sky_medium m = sky_sample_medium(p);
+                vec3 step_trans = exp(-m.extinction * dt);
+
+                float mu_s_p   = dot(normalize(p), sun_dir);
+                vec3  trans_sun = sample_transmittance(length(p), mu_s_p);
+                float shadow   = sky_hits_ground(p, sun_dir) ? 0.0 : 1.0;
+
+                vec3 in_scatter = (m.rayleigh_scatter * rayleigh_phase + m.mie_scatter * mie_phase) * trans_sun * shadow;
+                vec3 sigma_s    = m.rayleigh_scatter + m.mie_scatter;
+
+                // Analytic integral of throughput over the step.
+                vec3 s_int   = (in_scatter - in_scatter * step_trans) / m.extinction;
+                vec3 fms_int = (sigma_s    - sigma_s    * step_trans) / m.extinction;
+                l_dir   += throughput * s_int;
+                fms_dir += throughput * fms_int;
+                throughput *= step_trans;
+            }
+
+            // Ground bounce: lambertian reflection of the sun off the planet.
+            if (hit_ground) {
+                vec3  ground_pos    = origin + dir * t_max;
+                vec3  ground_normal = normalize(ground_pos);
+                float sun_cos       = max(0.0, dot(ground_normal, sun_dir));
+                vec3  trans_sun_g   = sample_transmittance(R_GROUND, dot(ground_normal, sun_dir));
+                l_dir += throughput * GROUND_ALBEDO * (sun_cos / SKY_PI) * trans_sun_g;
+            }
+
+            lum_total += l_dir;
+            fms_total += fms_dir;
+        }
+    }
+
+    // The uniform-phase (1/4pi) and uniform sphere pdf (4pi) fold into 1/N.
+    float inv_samples = 1.0 / float(SKY_MS_SQRT_SAMPLES * SKY_MS_SQRT_SAMPLES);
+    vec3  l_2nd_order = lum_total * inv_samples;
+    vec3  f_ms        = fms_total * inv_samples;
+
+    // Closed-form sum of the infinite multiple-scattering series.
+    vec3 psi_ms = l_2nd_order / max(vec3(1.0) - f_ms, vec3(1e-4));
+    imageStore(i_multiscatter, texel, vec4(psi_ms, 1.0));
+}

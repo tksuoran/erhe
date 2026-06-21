@@ -20,6 +20,7 @@
 #include "renderers/composition_pass.hpp"
 #include "renderers/render_context.hpp"
 #include "renderers/render_style.hpp"
+#include "renderers/sky_renderer.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "scene/scene_root.hpp"
 #include "time.hpp"
@@ -1024,6 +1025,14 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
 
             erhe::graphics::Render_pass multiview_render_pass{*m_app_context.graphics_device, render_pass_descriptor};
 
+            // Generate the atmosphere LUTs once before the render pass (compute
+            // dispatches + barriers cannot run inside a render pass).
+            if ((m_app_context.sky_renderer != nullptr) &&
+                (m_app_context.editor_settings != nullptr) &&
+                (m_app_context.editor_settings->sky.mode == 1)) {
+                m_app_context.sky_renderer->ensure_luts(*m_app_context.graphics_device, views_cb);
+            }
+
             {
                 erhe::graphics::Render_command_encoder encoder = m_app_context.graphics_device->make_render_command_encoder(views_cb);
                 erhe::graphics::Scoped_render_pass scoped_render_pass{multiview_render_pass, views_cb};
@@ -1182,6 +1191,13 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                     erhe::graphics::Memory_barrier_mask::vertex_attrib_array_barrier_bit |
                     erhe::graphics::Memory_barrier_mask::shader_storage_barrier_bit
                 );
+            }
+
+            // Generate the atmosphere LUTs once before the render pass.
+            if ((m_app_context.sky_renderer != nullptr) &&
+                (m_app_context.editor_settings != nullptr) &&
+                (m_app_context.editor_settings->sky.mode == 1)) {
+                m_app_context.sky_renderer->ensure_luts(graphics_device, view_cb);
             }
 
             {

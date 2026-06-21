@@ -301,6 +301,8 @@ erhe_target_sources_grouped(
     renderers/render_context.hpp
     renderers/render_style.cpp
     renderers/render_style.hpp
+    renderers/sky_renderer.cpp
+    renderers/sky_renderer.hpp
     renderers/viewport_config.cpp
     renderers/viewport_config.hpp
     rendergraph/post_processing.cpp
