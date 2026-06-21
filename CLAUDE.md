@@ -180,6 +180,25 @@ On Windows, prefer the **`visualstudio` MCP server** ([CodingWithCalvin/VS-MCPSe
 
 The editor and other apps write their spdlog output to `logs/` relative to the working directory (typically the repo root): `logs/log.txt` is the main log, `logs/vulkan.txt` and `logs/openxr.txt` capture backend-specific traces. Redirecting `stdout` of `editor.exe` is not enough -- the file sink writes via spdlog and a redirected stdout will be empty even when the app is running fine. Always `grep` / `findstr` against `logs/log.txt` to verify init-time and runtime behavior. On Android / Quest, the same log lines flow through the `android_sink` and are visible via `adb logcat` (tag `erhe`).
 
+## In-editor MCP server (live scene scripting + headless screenshots)
+
+The `editor` executable embeds its own MCP server (`src/editor/mcp/mcp_server.{hpp,cpp}`), auto-started at launch on `http://127.0.0.1:8080/mcp` (JSON-RPC 2.0 over `POST`; methods `initialize`, `tools/list`, `tools/call`). It runs on a background thread and dispatches each call to the main thread (`process_queued_requests()` once per frame), so it is safe to drive a *running* editor. Auth is **off** unless `~/.claude/erhe_mcp_token` exists (mode 0600); when present, every request needs `Authorization: Bearer <token>`. This server is usually NOT registered as native `mcp__*` tools in a Claude Code session (it only exists while the editor is running), so drive it over plain HTTP, e.g.:
+
+```powershell
+$body = '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_scene_lights","arguments":{}}}'
+Invoke-RestMethod http://127.0.0.1:8080/mcp -Method POST -Body $body -ContentType application/json
+```
+
+**Use this to set up / inspect / mutate a scene for any debugging need**, rather than only poking at the UI by hand. Tools fall into:
+- **Queries**: `list_scenes`, `get_scene_nodes`, `get_node_details`, `get_scene_cameras`, `get_scene_lights`, `get_scene_materials`, `get_material_details`, `get_scene_textures`, `get_scene_brushes`, `get_selection`, `get_undo_redo_stack`, `get_physics_items`, `get_shadow_fit_debug`, `get_async_status`.
+- **Actions**: `create_shape`, `create_node`, `place_brush`, `select_items`, `transform_selection`, `reparent_node`, `edit_material`, `lock_items`/`unlock_items`, `add_tags`/`remove_tags`, `toggle_physics` + the `*_physics_*` family, mesh-component editing (`set_mesh_component_mode`, `select_mesh_components`, `remesh`/`decimate`/`smooth`, ...), `save_scene`, `export_gltf`/`import_gltf`, and `capture_screenshot`.
+
+**Screenshots (`capture_screenshot`, default `logs/mcp_screenshot.png`) only work in the headless Vulkan build** -- `Device::capture_last_frame` reads back the *emulated* swapchain (`ERHE_GRAPHICS_API=vulkan` + `ERHE_WINDOW_LIBRARY=none`; build via `scripts/configure_vs2026_vulkan_headless.bat` -> `build_vs2026_vulkan_headless`). The normal windowed build returns "Frame capture not available" (real WSI swapchain readback is unimplemented). For the windowed build, capture frames with the RenderDoc fork instead ([`doc/renderdoc_fork.md`](doc/renderdoc_fork.md)) -- which is also strictly more diagnostic (save individual textures, pixel-debug shaders).
+
+**Scripted startup scene**: `config/editor/commands.json` is a startup script (`scene.add_cameras` / `add_lights` / `add_room` / `add_platonic_solids` / ... with arg blocks; see `editor.cpp` dispatch + `src/editor/config/definitions/*.py` for arg fields). Adjust it to stand up a reproducible test scene before the editor even finishes init -- this is the preferred knob for "I need scene X to debug Y".
+
+**Augment the API when a capability is missing.** If a debugging task needs an editor action the MCP server does not expose, add a new tool (a `query_*`/`action_*` handler + the `req->tool_name == "..."` dispatch entry + its `tools/list` schema in `refresh_tool_list`) rather than working around it from outside. Growing this surface makes the live editor scriptable for the next investigation; treat it as first-class debugging infrastructure.
+
 ## Memory growth diagnostics (Linux)
 
 Two zero-install tools. Both launch the editor in an isolated working directory (copy of `config/` with optional overrides applied, `res/` symlinked, shared spirv cache), so the user's `config/` is never touched and runs are reproducible:
