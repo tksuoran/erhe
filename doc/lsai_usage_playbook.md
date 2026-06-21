@@ -19,6 +19,16 @@ unscoped search or a macro lookup.
   at startup. **Do NOT call `lsai_workspace_open`** -- it is legacy and has
   blocked for ~88-164s historically. Confirm readiness with `lsai_server`
   (C++ plugin `Status: Ready`) instead.
+- **First open is a one-time indexing wait** (distinct from the `workspace_open`
+  blocking above). In parasite mode you never call open -- clangd builds a full
+  background index of every TU the first time it sees the repo. That can take
+  **minutes (up to ~10 on a large repo), and it scales with the machine** (cores,
+  disk, header set). It is a one-time cost: the shard cache is reused on later
+  starts, which reach `Ready` in seconds. During indexing, file-scoped ops
+  (`outline` / `info` / `diagnostics` on an already-parsed file) answer immediately;
+  project-wide `search` / `usages` / `hierarchy` need `Ready`. Watch progress with
+  `lsai_workspace_list` (`Indexing(n/total)` -> `Ready`). See `doc/hands-on.md` for
+  the full note.
 - `mjsf.json` contains **287 projects** built from the clangd compile-commands
   database. That index covers **everything in compile_commands.json**:
   - erhe's own code -- projects with ids like `c++:src/erhe/log/erhe_log`,
