@@ -232,6 +232,9 @@ Sky_renderer::Sky_renderer(
         graphics_device,
         Shader_stages_create_info{
             .name                = "sky_atmosphere",
+            // The camera UBO block references the "Camera" struct type, so the
+            // struct definition must be emitted before the block.
+            .struct_types        = { &m_program_interface.camera_interface.camera_struct },
             .interface_blocks    = { &m_program_interface.camera_interface.camera_block },
             .fragment_outputs    = &s_fragment_outputs,
             .no_vertex_input     = true,
