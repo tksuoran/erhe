@@ -634,6 +634,9 @@ void Settings_window::imgui()
             ImGui::Checkbox("##", &settings.post_processing);
         }, "Enable Post Processing. Takes effect on next viewport creation.");
         add_config_section(settings.camera_controls);
+        // Default Visual Style for new viewports - shown near the top since it
+        // is one of the more commonly edited sections.
+        add_config_section(settings.viewport);
         // Note: the per-view debug-visualization enable toggles / modes
         // (Debug_visualizations_settings) are intentionally NOT shown here -
         // they live only per scene view (edited in the scene-view Debug
@@ -658,7 +661,6 @@ void Settings_window::imgui()
         add_config_section(settings.sky);
         add_config_section(settings.thumbnails);
         add_config_section(settings.transform_tool);
-        add_config_section(settings.viewport);
 
         add_entry("", [this, button_size, &settings](){
             if (ImGui::Button("Save Settings", button_size)) {
