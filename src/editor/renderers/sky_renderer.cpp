@@ -438,17 +438,8 @@ void Sky_renderer::render_atmosphere(const Render_context& context)
         m_view_scratch.push_back(m_view_scratch.front());
     }
 
-    erhe::graphics::Ring_buffer_range camera_range = m_camera_buffer->update_views(
-        m_view_scratch,
-        exposure,
-        erhe::scene_renderer::Grid_parameters{},
-        sky_parameters,
-        0,
-        context.scene_view.get_reverse_depth(),
-        context.scene_view.get_depth_range(),
-        context.scene_view.get_conventions()
-    );
-
+    // Fetch the pipeline before acquiring the ring-buffer range, so an early
+    // return (pipeline not ready) does not leave an unreleased range.
     const erhe::scene_renderer::Vertex_input_entry& empty_vertex_input = m_context.mesh_memory->get_empty_vertex_input();
 
     Render_pipeline* pipeline = m_atmosphere_pipeline->get_pipeline_for(
@@ -462,6 +453,17 @@ void Sky_renderer::render_atmosphere(const Render_context& context)
         return;
     }
 
+    erhe::graphics::Ring_buffer_range camera_range = m_camera_buffer->update_views(
+        m_view_scratch,
+        exposure,
+        erhe::scene_renderer::Grid_parameters{},
+        sky_parameters,
+        0,
+        context.scene_view.get_reverse_depth(),
+        context.scene_view.get_depth_range(),
+        context.scene_view.get_conventions()
+    );
+
     Render_command_encoder& encoder = *context.encoder;
     encoder.set_render_pipeline(*pipeline);
     encoder.set_bind_group_layout(m_atmosphere_layout.get());
@@ -471,6 +473,10 @@ void Sky_renderer::render_atmosphere(const Render_context& context)
     encoder.set_viewport_rect(context.viewport.x, context.viewport.y, context.viewport.width, context.viewport.height);
     encoder.set_scissor_rect (context.viewport.x, context.viewport.y, context.viewport.width, context.viewport.height);
     encoder.draw_primitives(Primitive_type::triangle, 0, 3);
+
+    // update_views() already closed the range; release it so the ring buffer
+    // tracks its GPU lifetime (and the dtor's released/cancelled invariant holds).
+    camera_range.release();
 #else
     static_cast<void>(context);
 #endif
