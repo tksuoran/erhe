@@ -2,6 +2,7 @@
 # track project-scoped skills so the team gets them with the repo.
 .claude/*
 !.claude/skills/
+!.claude/commands/
 claude.sh
 .idea/*
 !.idea/runConfigurations
