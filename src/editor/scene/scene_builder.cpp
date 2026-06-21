@@ -1240,7 +1240,8 @@ auto Scene_builder::make_spot_light(
     const vec3             target,
     const vec3             color,
     const float            intensity,
-    const vec2             spot_cone_angle
+    const vec2             spot_cone_angle,
+    const bool             cast_shadow
 ) -> std::shared_ptr<erhe::scene::Node>
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
@@ -1253,12 +1254,41 @@ auto Scene_builder::make_spot_light(
     light->range            = 25.0f;
     light->inner_spot_angle = spot_cone_angle[0];
     light->outer_spot_angle = spot_cone_angle[1];
+    light->cast_shadow      = cast_shadow;
     light->layer_id         = m_scene_root->layers().light()->id;
     light->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
     node->attach          (light);
     node->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
 
     const mat4 m = erhe::math::create_look_at(position, target, vec3{0.0f, 0.0f, 1.0f});
+    node->set_parent_from_node(m);
+
+    return node;
+}
+
+auto Scene_builder::make_point_light(
+    const std::string_view name,
+    const vec3             position,
+    const vec3             color,
+    const float            intensity,
+    const bool             cast_shadow
+) -> std::shared_ptr<erhe::scene::Node>
+{
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
+
+    auto node  = std::make_shared<erhe::scene::Node>(name);
+    auto light = std::make_shared<erhe::scene::Light>(name);
+    light->type        = Light::Type::point;
+    light->color       = color;
+    light->intensity   = intensity;
+    light->range       = 25.0f;
+    light->cast_shadow = cast_shadow;
+    light->layer_id    = m_scene_root->layers().light()->id;
+    light->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui | Item_flags::show_debug_visualizations);
+    node->attach          (light);
+    node->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
+
+    const mat4 m = erhe::math::create_translation<float>(position);
     node->set_parent_from_node(m);
 
     return node;
@@ -1275,33 +1305,61 @@ void Scene_builder::add_lights(const Add_lights_args& args)
     const float directional_light_height            = args.directional_light_height;
     int         directional_light_shadow_count      = std::max(0, args.directional_light_shadow_count);
     const int   directional_light_no_shadow_count   = std::max(0, args.directional_light_no_shadow_count);
+    const float spot_light_intensity                = args.spot_light_intensity;
+    const float spot_light_radius                   = args.spot_light_radius;
+    const float spot_light_height                   = args.spot_light_height;
+    int         spot_light_shadow_count             = std::max(0, args.spot_light_shadow_count);
+    const int   spot_light_no_shadow_count          = std::max(0, args.spot_light_no_shadow_count);
+    const float point_light_intensity               = args.point_light_intensity;
+    const float point_light_radius                  = args.point_light_radius;
+    const float point_light_height                  = args.point_light_height;
+    int         point_light_shadow_count            = std::max(0, args.point_light_shadow_count);
+    const int   point_light_no_shadow_count         = std::max(0, args.point_light_no_shadow_count);
 
-    // Clamp shadow-light count to the active graphics preset's
-    // shadow_light_count. The shadow-map texture array has a fixed
-    // capacity, and exceeding it would silently drop lights or break
-    // shader bindings. add_lights() runs the clamp here so future
-    // callers via try_call() / key bindings / MCP / UI bypass the
-    // duplicate clamp that used to live in
-    // Add_lights_command::apply_args.
+    // Clamp shadow-light counts to the active graphics preset's capacities.
+    // The shadow-map arrays have fixed capacities, and exceeding them would
+    // silently drop lights or break shader bindings. add_lights() runs the
+    // clamp here so callers via try_call() / key bindings / MCP / UI bypass
+    // the duplicate clamp that used to live in Add_lights_command::apply_args.
+    //
+    // Directional and spot lights both render into the shared 2D shadow-map
+    // texture array (capacity shadow_light_count). Directional lights take
+    // priority; spot lights get whatever budget remains. Point lights render
+    // into a separate cube-map shadow array (capacity point_shadow_light_count).
     if (m_context.app_settings != nullptr) {
         const Graphics_preset_entry& preset = m_context.app_settings->graphics.current_graphics_preset;
-        if (preset.shadow_enable && (directional_light_shadow_count > preset.shadow_light_count)) {
-            log_startup->info(
-                "Clamping Scene_builder::add_lights directional_light_shadow_count from {} to {} (graphics preset '{}' shadow_light_count)",
-                directional_light_shadow_count, preset.shadow_light_count, preset.name
-            );
-            directional_light_shadow_count = preset.shadow_light_count;
+        if (preset.shadow_enable) {
+            if (directional_light_shadow_count > preset.shadow_light_count) {
+                log_startup->info(
+                    "Clamping Scene_builder::add_lights directional_light_shadow_count from {} to {} (graphics preset '{}' shadow_light_count)",
+                    directional_light_shadow_count, preset.shadow_light_count, preset.name
+                );
+                directional_light_shadow_count = preset.shadow_light_count;
+            }
+            const int remaining_2d_shadow = preset.shadow_light_count - directional_light_shadow_count;
+            if (spot_light_shadow_count > remaining_2d_shadow) {
+                log_startup->info(
+                    "Clamping Scene_builder::add_lights spot_light_shadow_count from {} to {} (graphics preset '{}' shadow_light_count {} shared with {} directional shadow light(s))",
+                    spot_light_shadow_count, remaining_2d_shadow, preset.name, preset.shadow_light_count, directional_light_shadow_count
+                );
+                spot_light_shadow_count = remaining_2d_shadow;
+            }
+            if (point_light_shadow_count > preset.point_shadow_light_count) {
+                log_startup->info(
+                    "Clamping Scene_builder::add_lights point_light_shadow_count from {} to {} (graphics preset '{}' point_shadow_light_count)",
+                    point_light_shadow_count, preset.point_shadow_light_count, preset.name
+                );
+                point_light_shadow_count = preset.point_shadow_light_count;
+            }
         }
     }
 
     const int   directional_light_count             = directional_light_shadow_count + directional_light_no_shadow_count;
-    const float spot_light_intensity                = args.spot_light_intensity;
-    const float spot_light_radius                   = args.spot_light_radius;
-    const float spot_light_height                   = args.spot_light_height;
-    const int   spot_light_count                    = args.spot_light_count;
+    const int   spot_light_count                    = spot_light_shadow_count + spot_light_no_shadow_count;
+    const int   point_light_count                   = point_light_shadow_count + point_light_no_shadow_count;
 
     std::vector<std::shared_ptr<erhe::scene::Node>> light_nodes;
-    light_nodes.reserve(static_cast<std::size_t>(directional_light_count + spot_light_count));
+    light_nodes.reserve(static_cast<std::size_t>(directional_light_count + spot_light_count + point_light_count));
 
     if (directional_light_count == 1) {
         const bool cast_shadow = (directional_light_shadow_count == 1);
@@ -1351,7 +1409,8 @@ void Scene_builder::add_lights(const Add_lights_args& args)
 
         const vec3        color           = vec3{r, g, b};
         const float       intensity       = spot_light_intensity;
-        const std::string name            = fmt::format("Spot {}", i);
+        const bool        cast_shadow     = (i < spot_light_shadow_count);
+        const std::string name            = fmt::format("Spot {}{}", i, cast_shadow ? "" : " (no shadow)");
         const float       x_pos           = R * std::sin(theta);
         const float       z_pos           = R * std::cos(theta);
         const vec3        position        = vec3{x_pos, spot_light_height, z_pos};
@@ -1360,7 +1419,28 @@ void Scene_builder::add_lights(const Add_lights_args& args)
             glm::pi<float>() / 5.0f,
             glm::pi<float>() / 4.0f
         };
-        light_nodes.push_back(make_spot_light(name, position, target, color, intensity, spot_cone_angle));
+        light_nodes.push_back(make_spot_light(name, position, target, color, intensity, spot_cone_angle, cast_shadow));
+    }
+
+    for (int i = 0; i < point_light_count; ++i) {
+        const float rel   = static_cast<float>(i) / static_cast<float>(point_light_count);
+        const float theta = rel * glm::two_pi<float>();
+        const float R     = point_light_radius;
+        const float h     = rel * 360.0f;
+        const float s     = (point_light_count > 1) ? 0.9f : 0.0f;
+        const float v     = 1.0f;
+        float r, g, b;
+
+        erhe::math::hsv_to_rgb(h, s, v, r, g, b);
+
+        const vec3        color       = vec3{r, g, b};
+        const float       intensity   = point_light_intensity;
+        const bool        cast_shadow = (i < point_light_shadow_count);
+        const std::string name        = fmt::format("Point {}{}", i, cast_shadow ? "" : " (no shadow)");
+        const float       x_pos       = R * std::sin(theta);
+        const float       z_pos       = R * std::cos(theta);
+        const vec3        position    = vec3{x_pos, point_light_height, z_pos};
+        light_nodes.push_back(make_point_light(name, position, color, intensity, cast_shadow));
     }
 
     if (light_nodes.empty() && (light_layer->ambient_light == target_ambient)) {

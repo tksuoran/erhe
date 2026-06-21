@@ -149,7 +149,16 @@ private:
         glm::vec3        direction,
         glm::vec3        color,
         float            intensity,
-        glm::vec2        spot_cone_angle
+        glm::vec2        spot_cone_angle,
+        bool             cast_shadow
+    ) -> std::shared_ptr<erhe::scene::Node>;
+
+    auto make_point_light(
+        std::string_view name,
+        glm::vec3        position,
+        glm::vec3        color,
+        float            intensity,
+        bool             cast_shadow
     ) -> std::shared_ptr<erhe::scene::Node>;
 
     auto make_brush(Content_library_node& folder, Brush_data&& brush_create_info) -> std::shared_ptr<Brush>;

@@ -41,7 +41,13 @@ Default file:
                 "spot_light_intensity": 500,
                 "spot_light_radius": 10,
                 "spot_light_height": 5,
-                "spot_light_count": 0
+                "spot_light_shadow_count": 0,
+                "spot_light_no_shadow_count": 0,
+                "point_light_intensity": 150,
+                "point_light_radius": 15,
+                "point_light_height": 8,
+                "point_light_shadow_count": 0,
+                "point_light_no_shadow_count": 0
             }
         },
         {
@@ -105,7 +111,7 @@ All names live in the `scene.*` namespace and are zero-argument
 |-------------------------------|-------------------------------------------------------------------------|----------|
 | `scene.add_cameras`           | Builds default camera(s) from its `Add_cameras_args` (camera_distance, camera_elevation, camera_exposure, shadow_range) and -- on desktop builds with `imgui_window_scene_view` enabled -- the default `Viewport_scene_view` + `Viewport_window` bound to "Camera A". | partial (camera node insertion is undoable; the viewport / rendergraph plumbing is not) |
 | `scene.add_room`              | Builds a floor brush from its `Add_room_args` and queues an undoable insert of one floor instance (locked from viewport edit). `args.floor: false` makes it a no-op. | yes      |
-| `scene.add_lights`            | Adds the directional/spot lights described by its `Add_lights_args` and sets the light layer's ambient color. | yes (single undo restores ambient + removes all lights) |
+| `scene.add_lights`            | Adds the directional/spot/point lights described by its `Add_lights_args` (each light type split into shadow-casting and non-shadow-casting counts) and sets the light layer's ambient color. | yes (single undo restores ambient + removes all lights) |
 | `scene.add_platonic_solids`   | Adds one instance per platonic-solid brush, packed in a 2D layout.      | yes      |
 | `scene.add_johnson_solids`    | Adds one instance per Johnson-solid brush.                              | yes      |
 | `scene.add_curved_shapes`     | Adds sphere / two cylinder variants / cone / torus instances.           | yes      |
