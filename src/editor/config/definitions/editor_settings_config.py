@@ -7,12 +7,12 @@ struct("Editor_settings_config",
     developer=False,
     fields=[
         field("camera_controls",      StructRef("Camera_controls_config"), added_in=1),
-        # Defaults for new scene views: a view with no entry in scene_views
-        # reads this slot at construction. Per-view state is persisted in
-        # scene_views below.
-        field("debug_visualizations", StructRef("Debug_visualizations_settings"), added_in=2),
         # Editor-global appearance of the debug visualizations (colors, line
-        # widths, label geometry), shared by all scene views.
+        # widths, label geometry), shared by all scene views. The per-view
+        # enable toggles / visualization modes (Debug_visualizations_settings)
+        # live ONLY per scene view, in Scene_view_settings below - there is no
+        # editor-global slot for them. New views fall back to the
+        # Debug_visualizations_settings struct defaults.
         field("debug_visualizations_style", StructRef("Debug_visualizations_style"), added_in=8),
         field("scene_views",          Vector(StructRef("Scene_view_settings")), added_in=5),
         field("developer",            StructRef("Developer_config"),       added_in=1),

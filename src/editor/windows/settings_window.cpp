@@ -634,7 +634,10 @@ void Settings_window::imgui()
             ImGui::Checkbox("##", &settings.post_processing);
         }, "Enable Post Processing. Takes effect on next viewport creation.");
         add_config_section(settings.camera_controls);
-        add_config_section(settings.debug_visualizations);
+        // Note: the per-view debug-visualization enable toggles / modes
+        // (Debug_visualizations_settings) are intentionally NOT shown here -
+        // they live only per scene view (edited in the scene-view Debug
+        // Visualization popup). Only the editor-global style is global.
         // Editor-global debug-visualization appearance (colors, line widths,
         // label geometry), shared by all scene views. The per-view enable
         // toggles stay in the scene-view Debug Visualization popup. Rendered

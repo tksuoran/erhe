@@ -104,12 +104,12 @@ Scene_view::Scene_view(
         // must not touch.
         m_pending_scene_and_camera         = i->scene_and_camera;
         m_scene_and_camera_restore_pending = true;
-    } else {
-        // No saved entry for this view yet: the global slot acts as the
-        // defaults for new views. Keep the make_viewport_config() Visual Style
-        // default and the constructor-provided scene/camera (nothing pending).
-        m_debug_visualizations.read_config(settings.debug_visualizations);
     }
+    // No saved entry for this view yet: m_debug_visualizations keeps the
+    // Debug_visualizations_settings struct defaults (there is no editor-global
+    // defaults slot for the per-view debug-visualization toggles), and we keep
+    // the make_viewport_config() Visual Style default plus the
+    // constructor-provided scene/camera (nothing pending).
 
     m_collect_callback_id = m_editor_settings_store->register_collect_callback(
         [this](Editor_settings_config& settings_out) {
