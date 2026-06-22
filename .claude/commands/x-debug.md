@@ -1,5 +1,5 @@
 ---
-description: Debug any C++ / native problem with Protocol D (RIDHV). Systematic, evidence-first debugging for build errors, crashes, sanitizer reports, GPU/Vulkan validation failures, and logic bugs. No guessing -- quote exact errors, isolate the failing layer, one change at a time.
+description: Solve any problem with Protocol D (RIDHV) -- deterministic root-cause analysis, not guess-and-check. A universal method, tuned here with C++ evidence sources (build/link errors, crashes, sanitizer/validation reports, GPU/Vulkan failures, logic bugs). A debugger is just one evidence source, not the point. No guessing -- quote exact errors, isolate the failing layer, one change at a time.
 ---
 
 <BASE_RULE>

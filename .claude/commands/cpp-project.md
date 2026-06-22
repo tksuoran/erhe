@@ -1,34 +1,30 @@
-# cpp-project.md -- optional per-project settings (C++)
+# cpp-project.md -- per-project settings (C++), filled for erhe
 
-> OPTIONAL. The x-* commands work without this file (they fall back to generic
-> CMake/CTest commands). Fill it in to make every command use YOUR project's real
-> build/test/navigation commands instead of the generic ones. One place, edited once.
->
-> This is a stripped-down stand-in for a full workflow's settings file: only the
-> fields the x-* commands actually read.
+> The x-* commands read these values and use them instead of the generic
+> CMake/CTest defaults. One place, edited once.
 
 ## Build & test
-@build:        cmake --build build            # how to build (e.g. scripts\build_android.bat quest)
-@configure:    cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-@test:         ctest --test-dir build --output-on-failure
-@test-fast:    ctest --test-dir build -L fast
-@test-target:  ctest --test-dir build -R       # prefix for filtering one target by name
+@build:        cmake --build build_ninja_win_vulkan --target editor   # incremental editor build (Ninja/MSVC)
+@configure:    scripts\configure_ninja_win_clang.bat                  # emits build_ninja_win_clang/compile_commands.json for clangd/LSAI
+@test:         ctest --test-dir build_ninja_win_vulkan --output-on-failure   # needs -DERHE_BUILD_TESTS=ON; GoogleTest, ~8 libs covered
+@test-fast:    ctest --test-dir build_ninja_win_vulkan                # no fast/slow CTest labels exist yet
+@test-target:  ctest --test-dir build_ninja_win_vulkan -R             # prefix for filtering one target by name
 
 ## Quality gates
-@lint:         clang-tidy -p build $(git ls-files '*.cpp')
-@format-check: clang-format --dry-run --Werror $(git ls-files '*.cpp' '*.hpp')
-@asan:         ctest --test-dir build-asan     # build configured with -fsanitize=address,undefined
+@lint:         clang-tidy -p build_ninja_win_clang $(git ls-files 'src/erhe/*.cpp' 'src/editor/*.cpp')   # no committed .clang-tidy config
+@format-check: clang-format --dry-run --Werror $(git ls-files 'src/erhe/*.cpp' 'src/erhe/*.hpp')          # no committed .clang-format config
+@asan:         scripts\configure_vs2026_vulkan_asan.bat               # then build + run editor; ERHE_USE_ASAN
 
 ## Code navigation
-@code-nav:          lsai                        # OWN code: LSAI (mcp__lsai__*) or clangd LSP; "grep" = last-resort fallback only
-@code-nav-external: xmp4                        # THIRD-PARTY libs: xmp4 (mcp__*xmp4*); "none" if unavailable -> use official docs
-@compile-db:        build                       # dir holding compile_commands.json (clangd --compile-commands-dir=<here>)
+@code-nav:          lsai                          # OWN code: LSAI (mcp__lsai__*); grep only for macros / non-C++
+@code-nav-external: xmp4                          # THIRD-PARTY libs: xmp4 (mcp__*xmp4*)
+@compile-db:        build_ninja_win_clang         # dir holding compile_commands.json (clang-cl)
 
 ## Runtime / logs
-@run:          # how to launch the app (project-specific, e.g. scripts\install_android.bat quest + adb am start)
-@logs:         # where the app writes its log file (spdlog sink path) / how to read device logs
-@platform:     # e.g. Windows + MSVC (x64 Native Tools), Linux, Android/Quest
+@run:          build_ninja_win_vulkan\src\editor\editor.exe   # launch from repo root (needs config/, res/, writes logs/)
+@logs:         logs/log.txt                                   # spdlog file sink (also logs/vulkan.txt, logs/openxr.txt)
+@platform:     Windows + MSVC (x64 Native Tools), Vulkan default. Live debugging via Visual Studio / VS-MCP, NOT gdb/lldb. clangd/LSAI must be launched from the x64 Native Tools prompt so it resolves the STL + Windows SDK headers.
 
 ## Conventions
-@methodology:  tddab                           # tddab | tdd | manual
-@tasks:        docs/tasks                       # where plans / task docs live (if any)
+@methodology:  tddab                             # tddab | tdd | manual
+@tasks:        tasks                             # where plan / task / audit docs live
