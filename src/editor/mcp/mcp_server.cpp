@@ -876,7 +876,15 @@ auto Mcp_server::process_queued_requests() -> int
             continue;
         }
 
+        // Per-request exception boundary. process_queued_requests() runs on the
+        // main thread, so a handler that throws would skip the set_value() below,
+        // break the waiting HTTP thread's promise (observed as
+        // future_error "broken promise"), and - fatally - escape up the main
+        // thread into the crash handler, taking down the whole editor. A single
+        // bad tool call must instead become a JSON-RPC tool error. The throw is
+        // logged loudly so the offending handler can still be tracked down.
         std::string result;
+        try {
 
         if      (req->tool_name == "list_scenes")         result = query_list_scenes     (req->arguments);
         else if (req->tool_name == "get_scene_nodes")     result = query_scene_nodes     (req->arguments);
@@ -936,6 +944,14 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "set_transform_reference_mode") result = action_set_transform_reference_mode(req->arguments);
         else if (req->tool_name == "set_transform_mode")           result = action_set_transform_mode          (req->arguments);
         else                                              result = execute_command       (req->tool_name);
+
+        } catch (const std::exception& e) {
+            log_mcp->error("MCP server: handler for '{}' threw: {}", req->tool_name, e.what());
+            result = make_error_content(std::string{"Handler '"} + req->tool_name + "' threw an exception: " + e.what());
+        } catch (...) {
+            log_mcp->error("MCP server: handler for '{}' threw a non-standard exception", req->tool_name);
+            result = make_error_content(std::string{"Handler '"} + req->tool_name + "' threw a non-standard exception");
+        }
 
         req->result_promise.set_value(std::move(result));
         ++count;
