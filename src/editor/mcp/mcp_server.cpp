@@ -167,6 +167,31 @@ auto find_node_in_scene(Scene_root& scene_root, const json& args, const char* id
     return {};
 }
 
+auto find_light_in_scene(Scene_root& scene_root, const json& args, const char* id_key, const char* name_key) -> std::shared_ptr<erhe::scene::Light>
+{
+    const std::size_t light_id   = args.value(id_key, std::size_t{0});
+    const std::string light_name = args.value(name_key, "");
+    if ((light_id == 0) && light_name.empty()) {
+        return {};
+    }
+    for (const auto& light_layer : scene_root.get_scene().get_light_layers()) {
+        for (const std::shared_ptr<erhe::scene::Light>& light : light_layer->lights) {
+            if ((light_id != 0) ? (light->get_id() == light_id) : (light->get_name() == light_name)) {
+                return light;
+            }
+        }
+    }
+    return {};
+}
+
+auto parse_light_type(const std::string& type, const erhe::scene::Light_type fallback) -> erhe::scene::Light_type
+{
+    if (type == "directional") { return erhe::scene::Light_type::directional; }
+    if (type == "point")       { return erhe::scene::Light_type::point; }
+    if (type == "spot")        { return erhe::scene::Light_type::spot; }
+    return fallback;
+}
+
 template <typename T>
 auto find_library_item(const std::shared_ptr<Content_library_node>& folder, const std::string& name) -> std::shared_ptr<T>
 {
@@ -694,7 +719,23 @@ void Mcp_server::setup_routes()
             return;
         }
 
-        const std::string id     = request.value("id", "null");
+        // JSON-RPC allows the id to be a string, a number, or null. json::value
+        // with a string default throws json::type_error on a numeric id, which
+        // httplib turns into an opaque HTTP 500. Normalize any id type to the
+        // string form used internally for the response echo.
+        std::string id = "null";
+        if (request.contains("id")) {
+            const json& id_json = request.at("id");
+            if (id_json.is_string()) {
+                id = id_json.get<std::string>();
+            } else if (id_json.is_number_integer()) {
+                id = std::to_string(id_json.get<int64_t>());
+            } else if (id_json.is_number_unsigned()) {
+                id = std::to_string(id_json.get<uint64_t>());
+            } else if (id_json.is_number_float()) {
+                id = std::to_string(id_json.get<double>());
+            }
+        }
         const std::string method = request.value("method", "");
 
         if (method == "initialize") {
@@ -855,6 +896,8 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "place_brush")        result = action_place_brush    (req->arguments);
         else if (req->tool_name == "create_shape")       result = action_create_shape   (req->arguments);
         else if (req->tool_name == "create_node")        result = action_create_node    (req->arguments);
+        else if (req->tool_name == "create_light")       result = action_create_light   (req->arguments);
+        else if (req->tool_name == "edit_light")         result = action_edit_light     (req->arguments);
         else if (req->tool_name == "toggle_physics")     result = action_toggle_physics (req->arguments);
         else if (req->tool_name == "reparent_node")      result = action_reparent_node  (req->arguments);
         else if (req->tool_name == "lock_items")         result = action_lock_items     (req->arguments);
@@ -991,6 +1034,39 @@ void Mcp_server::refresh_tool_list()
             {"parent_node_id",   {{"type", "integer"}, {"description", "Parent node ID (default: scene root)"}}},
             {"parent_node_name", {{"type", "string"},  {"description", "Parent node name (alternative to parent_node_id)"}}},
             {"position",         {{"type", "array"},   {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "World position [x, y, z] (default [0, 0, 0])"}}}
+        }},
+        {"required", json::array({"scene_name"})}
+    }});
+    m_tool_infos.push_back({"create_light",        "Create a light (directional, point or spot) attached to a new scene-root node (undoable, inserted on the next frame). Point/spot lights default to range 25; directional to range 0.", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name",       {{"type", "string"},  {"description", "Name of the scene"}}},
+            {"type",             {{"type", "string"},  {"enum", json::array({"directional", "point", "spot"})}, {"description", "Light type (default directional)"}}},
+            {"name",             {{"type", "string"},  {"description", "Name for the new light / node (default 'MCP light')"}}},
+            {"position",         {{"type", "array"},   {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "World position [x, y, z] (default [0, 0, 0])"}}},
+            {"color",            {{"type", "array"},   {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Linear RGB color [r, g, b] (default [1, 1, 1])"}}},
+            {"intensity",        {{"type", "number"},  {"description", "Light intensity (default 1.0)"}}},
+            {"range",            {{"type", "number"},  {"description", "Light range / far distance (default 25 for point/spot, 0 for directional)"}}},
+            {"cast_shadow",      {{"type", "boolean"}, {"description", "Whether the light casts shadows (default true)"}}},
+            {"inner_spot_angle", {{"type", "number"}, {"description", "Spot inner cone angle in radians (spot only)"}}},
+            {"outer_spot_angle", {{"type", "number"}, {"description", "Spot outer cone angle in radians (spot only)"}}}
+        }},
+        {"required", json::array({"scene_name"})}
+    }});
+    m_tool_infos.push_back({"edit_light",          "Edit an existing light in place (by light_id or light_name). Changing 'type' re-buckets the light for shadow rendering. 'position' moves the light's node. Only the provided fields change.", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name",       {{"type", "string"},  {"description", "Name of the scene"}}},
+            {"light_id",         {{"type", "integer"}, {"description", "ID of the light to edit (from get_scene_lights)"}}},
+            {"light_name",       {{"type", "string"},  {"description", "Name of the light to edit (alternative to light_id)"}}},
+            {"type",             {{"type", "string"},  {"enum", json::array({"directional", "point", "spot"})}, {"description", "New light type"}}},
+            {"position",         {{"type", "array"},   {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "New world position [x, y, z] for the light's node"}}},
+            {"color",            {{"type", "array"},   {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "New linear RGB color [r, g, b]"}}},
+            {"intensity",        {{"type", "number"},  {"description", "New light intensity"}}},
+            {"range",            {{"type", "number"},  {"description", "New light range / far distance"}}},
+            {"cast_shadow",      {{"type", "boolean"}, {"description", "Whether the light casts shadows"}}},
+            {"inner_spot_angle", {{"type", "number"}, {"description", "Spot inner cone angle in radians"}}},
+            {"outer_spot_angle", {{"type", "number"}, {"description", "Spot outer cone angle in radians"}}}
         }},
         {"required", json::array({"scene_name"})}
     }});
@@ -2595,6 +2671,184 @@ auto Mcp_server::action_create_node(const json& args) -> std::string
         {"parent",    parent->get_name()},
         {"position",  {position.x, position.y, position.z}},
         {"queued",    true} // the insert operation executes on the next editor frame
+    }).dump();
+}
+
+auto Mcp_server::action_create_light(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    const std::string type_str = args.value("type", "directional");
+    if ((type_str != "directional") && (type_str != "point") && (type_str != "spot")) {
+        json r = make_text_content("Invalid light type '" + type_str + "' (expected directional, point or spot)");
+        r["isError"] = true;
+        return r.dump();
+    }
+    const erhe::scene::Light_type type = parse_light_type(type_str, erhe::scene::Light_type::directional);
+
+    auto read_vec3 = [&args](const char* key, glm::vec3& out_value) {
+        const json value = args.value(key, json());
+        if (value.is_array() && (value.size() == 3)) {
+            out_value = glm::vec3{value[0].get<float>(), value[1].get<float>(), value[2].get<float>()};
+        }
+    };
+
+    glm::vec3 position{0.0f};
+    read_vec3("position", position);
+    glm::vec3 color{1.0f, 1.0f, 1.0f};
+    read_vec3("color", color);
+    const float       intensity   = args.value("intensity",   1.0f);
+    const bool        cast_shadow = args.value("cast_shadow", true);
+    // Directional lights have no meaningful range (parallel rays); point / spot
+    // default to the same 25.0 the editor's Scene_builder uses.
+    const float       range       = args.value("range", (type == erhe::scene::Light_type::directional) ? 0.0f : 25.0f);
+    const std::string name        = args.value("name", "MCP light");
+
+    std::shared_ptr<erhe::scene::Node>  node;
+    std::shared_ptr<erhe::scene::Light> light;
+    {
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{sr->item_host_mutex};
+        node  = std::make_shared<erhe::scene::Node>(name);
+        light = std::make_shared<erhe::scene::Light>(name);
+        light->type        = type;
+        light->color       = color;
+        light->intensity   = intensity;
+        light->range       = range;
+        light->cast_shadow = cast_shadow;
+        light->layer_id    = sr->layers().light()->id;
+        if (args.contains("inner_spot_angle")) { light->inner_spot_angle = args.value("inner_spot_angle", light->inner_spot_angle); }
+        if (args.contains("outer_spot_angle")) { light->outer_spot_angle = args.value("outer_spot_angle", light->outer_spot_angle); }
+        light->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::show_in_ui | erhe::Item_flags::show_debug_visualizations);
+        node->attach(light);
+        node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::show_in_ui);
+        // The node is attached to the scene via the queued insert operation below;
+        // set the world transform now (preserved by Node::set_parent).
+        node->set_world_from_node(erhe::math::create_translation<float>(position));
+    }
+
+    // Insert the light node into the scene root via an undoable operation that
+    // runs on the next editor frame (mirrors Scene_builder::add_lights).
+    const std::shared_ptr<erhe::scene::Node>& root_node = sr->get_scene().get_root_node();
+    m_context.operation_stack->queue(
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context = m_context,
+                .item    = node,
+                .parent  = root_node,
+                .mode    = Item_insert_remove_operation::Mode::insert
+            }
+        )
+    );
+
+    return make_json_content({
+        {"light_name",  light->get_name()},
+        {"light_id",    light->get_id()},
+        {"node_name",   node->get_name()},
+        {"node_id",     node->get_id()},
+        {"type",        type_str},
+        {"color",       {color.x, color.y, color.z}},
+        {"intensity",   intensity},
+        {"range",       range},
+        {"cast_shadow", cast_shadow},
+        {"position",    {position.x, position.y, position.z}},
+        {"queued",      true} // the insert operation executes on the next editor frame
+    }).dump();
+}
+
+auto Mcp_server::action_edit_light(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    // Accept light_id / light_name, and also bare id / name for convenience.
+    std::shared_ptr<erhe::scene::Light> light = find_light_in_scene(*sr, args, "light_id", "light_name");
+    if (!light) {
+        light = find_light_in_scene(*sr, args, "id", "name");
+    }
+    if (!light) {
+        json r = make_text_content("Light not found (specify light_id or light_name)");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    auto read_vec3 = [&args](const char* key, glm::vec3& out_value) -> bool {
+        const json value = args.value(key, json());
+        if (value.is_array() && (value.size() == 3)) {
+            out_value = glm::vec3{value[0].get<float>(), value[1].get<float>(), value[2].get<float>()};
+            return true;
+        }
+        return false;
+    };
+
+    json changed = json::object();
+    {
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{sr->item_host_mutex};
+
+        if (args.contains("type")) {
+            const std::string type_str = args.value("type", "");
+            if ((type_str != "directional") && (type_str != "point") && (type_str != "spot")) {
+                json r = make_text_content("Invalid light type '" + type_str + "' (expected directional, point or spot)");
+                r["isError"] = true;
+                return r.dump();
+            }
+            // Assigning Light::type re-buckets the light for rendering (forward
+            // variant + shadow technique). Other type-dependent fields (e.g.
+            // range) are left exactly as provided by the caller.
+            light->type = parse_light_type(type_str, light->type);
+            changed["type"] = type_str;
+        }
+        glm::vec3 color{};
+        if (read_vec3("color", color)) {
+            light->color = color;
+            changed["color"] = {color.x, color.y, color.z};
+        }
+        if (args.contains("intensity")) {
+            light->intensity = args.value("intensity", light->intensity);
+            changed["intensity"] = light->intensity;
+        }
+        if (args.contains("range")) {
+            light->range = args.value("range", light->range);
+            changed["range"] = light->range;
+        }
+        if (args.contains("cast_shadow")) {
+            light->cast_shadow = args.value("cast_shadow", light->cast_shadow);
+            changed["cast_shadow"] = light->cast_shadow;
+        }
+        if (args.contains("inner_spot_angle")) {
+            light->inner_spot_angle = args.value("inner_spot_angle", light->inner_spot_angle);
+            changed["inner_spot_angle"] = light->inner_spot_angle;
+        }
+        if (args.contains("outer_spot_angle")) {
+            light->outer_spot_angle = args.value("outer_spot_angle", light->outer_spot_angle);
+            changed["outer_spot_angle"] = light->outer_spot_angle;
+        }
+        glm::vec3 position{};
+        if (read_vec3("position", position)) {
+            erhe::scene::Node* node = light->get_node();
+            if (node != nullptr) {
+                node->set_world_from_node(erhe::math::create_translation<float>(position));
+                changed["position"] = {position.x, position.y, position.z};
+            } else {
+                changed["position_error"] = "light has no node";
+            }
+        }
+    }
+
+    return make_json_content({
+        {"light_id",   light->get_id()},
+        {"light_name", light->get_name()},
+        {"changed",    changed}
     }).dump();
 }
 
