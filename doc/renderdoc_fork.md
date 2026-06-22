@@ -79,30 +79,73 @@ You can leave the stock `qrenderdoc.exe` open at the same time -- it's 1.44 and
 cannot connect to the 1.45 editor layer, so it won't grab the target; only the
 fork's MCP `qrenderdoc` connects.
 
-### 3. Register the renderdoc MCP server with Claude Code
+### 3. Register the renderdoc MCP server with Claude Code (stdio proxy)
 
-```sh
-claude mcp add --transport http renderdoc http://127.0.0.1:7398/
+Claude Code connects every MCP server **at session start** and never lets the
+model reconnect one mid-session (only the user can, via `/mcp`). So pointing
+Claude Code straight at `http://127.0.0.1:7398/` only yields callable
+`mcp__renderdoc__*` tools if `qrenderdoc` happened to be running when Claude Code
+started -- the opposite of launching it on demand.
+
+To get on-demand launch **and** native tools, register the **stdio proxy**
+`scripts/renderdoc_mcp_proxy.py` instead of the raw http endpoint. A stdio
+server is always spawned by Claude Code at startup, so its tools are always
+registered; the proxy advertises a baked-in copy of the fork's tool schema and
+launches `qrenderdoc --mcp-server` lazily on the first tool call that needs the
+backend (or eagerly via its `renderdoc_launch` tool). It **leaves `qrenderdoc`
+running** when Claude Code exits -- only the proxy's `renderdoc_shutdown` tool
+tears down a `qrenderdoc` the proxy itself launched.
+
+In `.mcp.json` (project-local, uncommitted):
+
+```json
+"renderdoc": { "command": "py", "args": ["-3", "D:/alt/erhe/scripts/renderdoc_mcp_proxy.py"] }
 ```
 
-Important: Claude Code only registers an MCP server's **tools** if the server is
-reachable **at session start**. If you add it (or start `qrenderdoc`) mid-session,
-`claude mcp list` will show `renderdoc ... Connected` but the `mcp__renderdoc__*`
-tools won't be callable until the session reconnects to it. Two ways to work
-around that:
+If you previously ran `claude mcp add --transport http renderdoc ...`, remove it
+(`claude mcp remove renderdoc`) so the failed http entry does not shadow the
+proxy.
 
-- **Start the fork `qrenderdoc --mcp-server` before launching Claude Code** (or
-  run `/mcp` to reconnect) so the native `mcp__renderdoc__*` tools are present.
-- Or drive the server over plain HTTP (it's a stateless JSON-RPC-over-POST
-  endpoint). A tiny PowerShell helper is enough -- see
-  [HTTP fallback](#http-fallback-driving-the-server-without-native-tools) below.
-  This was used for the first half of the worked example and is fully equivalent.
+**One-time: capture the tool schema.** The proxy serves the fork's tools from
+`scripts/renderdoc_tools.json`. Generate it once (with the fork built; this
+launches `qrenderdoc` on demand if it is not already running):
+
+```sh
+py -3 scripts/capture_renderdoc_tools.py
+```
+
+Re-run it whenever the fork's tool set changes. Until the file exists, only the
+proxy's own management tools (`renderdoc_launch`, `renderdoc_status`,
+`renderdoc_shutdown`) are advertised; the fork's capture/inspection tools appear
+once it is generated.
+
+The proxy honors these environment overrides (defaults shown):
+`ERHE_RENDERDOC_QRENDERDOC=D:\renderdoc\x64\Development\qrenderdoc.exe`,
+`ERHE_RENDERDOC_MCP_HOST=127.0.0.1`, `ERHE_RENDERDOC_MCP_PORT=7398`,
+`ERHE_RENDERDOC_LAUNCH_TIMEOUT=60`.
+
+After editing `.mcp.json`, **restart Claude Code** (the proxy is spawned per
+session at startup).
+
+#### Driving the server without the proxy (HTTP fallback)
+
+The fork is a stateless JSON-RPC-over-POST endpoint, so you can always skip the
+proxy and drive it directly over HTTP -- see
+[HTTP fallback](#http-fallback-driving-the-server-without-native-tools) below.
+That path is also on-demand (start `qrenderdoc` from a shell, then POST); it just
+lacks the native `mcp__renderdoc__*` tool surface.
 
 ---
 
 ## The workflow (per debugging session)
 
 ### Step 1 -- start the fork qrenderdoc with the MCP server
+
+With the stdio proxy (section 3) this is automatic: the first `mcp__renderdoc__*`
+tool call launches `qrenderdoc --mcp-server` on demand, or call
+`mcp__renderdoc__renderdoc_launch` to pre-warm it (so the first capture call does
+not pay the cold-start delay) and `mcp__renderdoc__renderdoc_status` to confirm.
+You only need the manual command below for the HTTP-fallback path:
 
 ```powershell
 Start-Process "D:\renderdoc\x64\Development\qrenderdoc.exe" -ArgumentList "--mcp-server","--mcp-port","7398"
@@ -243,10 +286,13 @@ fix -> prove cycle was driven from the agent via these two MCP servers.
 
 ## Gotchas learned doing this
 
-- **MCP tools need the server up at session start.** Otherwise use `/mcp` to
-  reconnect, or the HTTP fallback below. `claude mcp list` showing `Connected` is
-  necessary but not sufficient for the `mcp__renderdoc__*` tools to be callable in
-  an already-running session.
+- **MCP tools need the server up at session start.** This is exactly what the
+  stdio proxy (section 3) removes: the proxy is the thing up at session start, so
+  its tools are always registered and it launches `qrenderdoc` on demand. The
+  caveat only bites the **raw http registration / HTTP fallback** -- there,
+  `claude mcp list` showing `Connected` is necessary but not sufficient for the
+  `mcp__renderdoc__*` tools to be callable in an already-running session; use
+  `/mcp` to reconnect or the HTTP fallback below.
 - **Connect, don't inject.** The editor already has the in-app RenderDoc, so use
   `list_targets` + `connect_to_target`. `attach_to_process` would inject a second
   copy and conflict.
