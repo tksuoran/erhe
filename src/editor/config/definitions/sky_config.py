@@ -21,9 +21,9 @@ struct("Sky_config",
                        "reality)."),
         ),
         # 0 = gradient/checker sky, 1 = physically-based atmosphere (Hillaire).
-        # Atmosphere mode requires the Vulkan backend; on other backends the
-        # gradient sky is used regardless of this value.
-        field("mode",                 Int,   added_in=3, default="0",     short_desc="Sky Mode", long_desc="0 = gradient / checker, 1 = physically-based atmosphere (Vulkan only)"),
+        # Atmosphere mode requires storage-image compute (Vulkan, or OpenGL
+        # 4.3+); without it the gradient sky is used regardless of this value.
+        field("mode",                 Int,   added_in=3, default="0",     short_desc="Sky Mode", long_desc="0 = gradient / checker, 1 = physically-based atmosphere (requires Vulkan, or OpenGL 4.3+)"),
         field("sky_horizon_color",    Vec4,  added_in=1, default="0.3f, 0.3f, 0.33f, 1.0f", short_desc="Sky Horizon Color"),
         field("sky_zenith_color",     Vec4,  added_in=1, default="0.2f, 0.2f, 0.22f, 1.0f", short_desc="Sky Zenith Color"),
         field("sky_power",            Float, added_in=1, default="10.0f", short_desc="Sky Power", long_desc="Falloff exponent from horizon to zenith"),

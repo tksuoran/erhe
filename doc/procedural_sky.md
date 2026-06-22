@@ -1,7 +1,9 @@
 # Procedural sky (Hillaire atmosphere)
 
 Status: implemented and building (Vulkan, OpenGL, headless all link clean); shaders
-pass an offline `glslc` syntax check. **Runtime / visual verification still pending**
+pass an offline `glslc` syntax check. The atmosphere is wired on **both Vulkan and
+OpenGL** (OpenGL requires GL 4.3+ for compute / storage-image load-store); only Metal
+remains unwired. **Runtime / visual verification still pending**
 (the editor cannot be launched from the implementing session's shell -- no GPU
 session; see "Runtime status"). On branch `ls/main`.
 
@@ -50,9 +52,10 @@ compute). That is the foundational, reusable part of this change.
   erhe lacked it, so it was built (new `Binding_type::storage_image`, GLSL `image2D`
   emission, `Compute_command_encoder::set_storage_image`, Vulkan `STORAGE_IMAGE`
   descriptors + `GENERAL` layout barriers).
-- **Vulkan-only feature.** `set_storage_image` is implemented only on the Vulkan backend
-  (the GL wrapper for `glBindImageTexture` is not generated; Metal not wired). On other
-  backends `Sky_renderer::is_atmosphere_supported()` returns false and the
+- **Vulkan + OpenGL.** `set_storage_image` is implemented on both the Vulkan backend
+  (STORAGE_IMAGE push descriptor) and the OpenGL backend (`gl::bind_image_texture`); Metal
+  is not yet wired. OpenGL additionally requires GL 4.3 (`use_compute_shader`) -- on GL <
+  4.3, or on Metal/null, `Sky_renderer::is_atmosphere_supported()` returns false and the
   `Sky_composition_pass` falls back to the gradient sky regardless of `mode`.
 - **Multiscatter reads transmittance via `imageLoad` + manual bilinear**, so the compute
   path only needs storage-image *write/read* (no compute *sampled*-image support). The
@@ -74,12 +77,14 @@ compute). That is the foundational, reusable part of this change.
   `layout(binding = N, <format>) uniform image2D name;` (format always emitted so
   `imageLoad`/`imageStore` are valid without readonly/writeonly). `get_type_details`
   treats `image_2d` as opaque (zero size) as a safety net.
-- `vulkan/vulkan_bind_group_layout.cpp`: `to_vulkan_descriptor_type` storage_image ->
-  `VK_DESCRIPTOR_TYPE_STORAGE_IMAGE`; mirrors storage_image bindings into the default
-  uniform block via `add_image` (raw binding, no sampler offset).
+- `vulkan/vulkan_bind_group_layout.cpp` and `gl/gl_bind_group_layout.cpp`: mirror
+  storage_image bindings into the default uniform block via `add_image` (raw binding, no
+  sampler offset). Vulkan also maps `to_vulkan_descriptor_type` storage_image ->
+  `VK_DESCRIPTOR_TYPE_STORAGE_IMAGE`.
 - `compute_command_encoder.{hpp,cpp}` + `vulkan/`, `gl/`, `metal/`, `null/`: new
   `set_storage_image(binding_point, texture)`. Vulkan pushes a STORAGE_IMAGE descriptor
-  with `VK_IMAGE_LAYOUT_GENERAL`; GL/Metal/Null are compile-only no-ops.
+  with `VK_IMAGE_LAYOUT_GENERAL`; GL binds image unit N via `gl::bind_image_texture`
+  (read_write, the texture's `Internal_format`); Metal/Null are compile-only no-ops.
 - Layout transitions use the existing public `Command_buffer::transition_texture_layout`
   (UNDEFINED->GENERAL before compute write, GENERAL->SHADER_READ_ONLY before fragment
   sample). The inter-pass write->read hazard (both LUTs stay GENERAL) is covered by
@@ -101,10 +106,14 @@ compute). That is the foundational, reusable part of this change.
   - `render_atmosphere()` -- resolves the sun direction (directional light or config
     fallback), fills `Sky_parameters`, writes the camera UBO via `update_views`, binds
     the pipeline + camera UBO + 2 LUTs, draws a fullscreen triangle into the viewport
-    render pass. All GPU work is Vulkan-gated (`#if defined(ERHE_GRAPHICS_API_VULKAN)`).
+    render pass. All GPU work is gated on backends with storage-image compute
+    (`#if defined(ERHE_GRAPHICS_API_VULKAN) || defined(ERHE_GRAPHICS_API_OPENGL)`); the
+    constructor additionally bails out when `Device_info::use_compute_shader` is false
+    (GL < 4.3), leaving the members null so the gradient sky is used.
 - `app_rendering.cpp`: the "Sky" composition pass is now a `Sky_composition_pass`
   subclass whose `render()` dispatches to `Sky_renderer::render_atmosphere` in atmosphere
-  mode (Vulkan + supported) and to the base gradient `Composition_pass::render` otherwise.
+  mode (when `is_atmosphere_supported()`) and to the base gradient `Composition_pass::render`
+  otherwise.
 - `app_context.hpp`: `Sky_renderer* sky_renderer` part pointer.
 - `editor.cpp`: constructs `m_sky_renderer` in the post-processing init task (init command
   buffer available, like `Post_processing`); assigns the App_context pointer.
@@ -166,12 +175,23 @@ machine (it breaks `vkCreateInstance` on the crowded layer stack).
 8. OpenXR / Quest (secondary): the atmosphere is wired into both headset render-pass
    paths; verify per-eye correctness (multiview) on device.
 
+### OpenGL
+
+Build and run `build_vs2026_opengl/src/editor/Debug/editor.exe` on a GL 4.3+ desktop GPU,
+then set **Sky Mode = 1**. The same visual / regression checks (1-7 above) apply.
+`capture_screenshot` works only in the headless **Vulkan** build, so confirm GL visually in
+the window (or with a RenderDoc capture: two compute dispatches binding the LUTs as images,
+then the fullscreen atmosphere draw). In `logs/log.txt`, confirm
+`Sky_renderer::ensure_luts: generating atmosphere LUTs` once and `render_atmosphere first
+call: supported=true ...`; if the startup compute-support line is false (GL < 4.3 or
+`force_no_compute_shader`), `supported=false` and the gradient sky is the expected fallback.
+
 ## Known risks / tuning knobs
 
-- **Vulkan-only.** On OpenGL / Metal the atmosphere is unsupported (no storage-image
-  compute); the gradient sky is used even with `mode == 1`. Wiring GL would need the
-  `glBindImageTexture` wrapper generated (and the GL bind group layout to mirror
-  storage_image bindings); Metal would need `setTexture` on the compute encoder.
+- **Metal not wired.** On Metal the atmosphere is unsupported (no storage-image compute);
+  the gradient sky is used even with `mode == 1`. Wiring Metal would need `setTexture` on
+  the compute encoder. OpenGL is now wired (`gl::bind_image_texture` + the GL bind group
+  layout mirroring storage_image bindings), gated on GL 4.3 (`use_compute_shader`).
 - **Multiview unverified.** The atmosphere shader is compiled with the session
   `view_count` and the camera UBO is written per view, but per-eye correctness on Quest
   is not yet visually verified (same caveat as the point-light port).

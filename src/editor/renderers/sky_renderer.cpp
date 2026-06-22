@@ -82,11 +82,19 @@ Sky_renderer::Sky_renderer(
     static_cast<void>(init_command_buffer);
     static_cast<void>(view_count);
 
-#if defined(ERHE_GRAPHICS_API_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN) || defined(ERHE_GRAPHICS_API_OPENGL)
     using namespace erhe::graphics;
     using erhe::utility::Debug_label;
 
     const std::filesystem::path editor_shaders = std::filesystem::path{"res"} / std::filesystem::path{"editor"} / std::filesystem::path{"shaders"};
+
+    // Storage-image compute requires GL 4.3 (use_compute_shader). On GL < 4.3 or
+    // when compute is force-disabled, leave all members null so
+    // is_atmosphere_supported() returns false and the gradient sky is used.
+    // (Vulkan always reports use_compute_shader == true.)
+    if (!graphics_device.get_info().use_compute_shader) {
+        return;
+    }
 
     // LUT textures: written by compute (storage) then sampled by the
     // atmosphere fragment shader (sampled). R16G16B16A16F.
@@ -332,7 +340,7 @@ void Sky_renderer::ensure_luts(erhe::graphics::Device& graphics_device, erhe::gr
         return;
     }
 
-#if defined(ERHE_GRAPHICS_API_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN) || defined(ERHE_GRAPHICS_API_OPENGL)
     using namespace erhe::graphics;
 
     log_render->info("Sky_renderer::ensure_luts: generating atmosphere LUTs");
@@ -393,7 +401,7 @@ void Sky_renderer::render_atmosphere(const Render_context& context)
         return;
     }
 
-#if defined(ERHE_GRAPHICS_API_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN) || defined(ERHE_GRAPHICS_API_OPENGL)
     using namespace erhe::graphics;
 
     if ((context.encoder == nullptr) || (context.render_pass == nullptr) || context.views.empty()) {
