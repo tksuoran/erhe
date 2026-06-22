@@ -29,6 +29,17 @@ and fixed with exactly this loop).
 
 ## One-time setup
 
+The script `scripts/setup_renderdoc_mcp.py` (in the erhe repo) automates everything
+below in one go:
+
+```sh
+py -3 scripts/setup_renderdoc_mcp.py        # clone+build+configure+register+schema
+py -3 scripts/setup_renderdoc_mcp.py --skip-build   # rewire an already-built fork
+py -3 scripts/setup_renderdoc_mcp.py --help         # options (paths, port, skips)
+```
+
+The manual steps are documented below for reference and for doing them piecemeal.
+
 ### 1. Point erhe at the fork's `renderdoc.dll`
 
 In `config/editor/erhe_graphics.json`:

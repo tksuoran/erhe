@@ -214,6 +214,8 @@ For **windowed Vulkan GPU debugging** -- inspecting a captured frame's pipeline 
 
 **On-demand launch via the stdio proxy.** Claude Code connects every MCP server at session start and the model cannot reconnect one mid-session, so a raw http registration pointing at `qrenderdoc` only works if it was already running at startup. Instead, register the **stdio proxy** `scripts/renderdoc_mcp_proxy.py` in `.mcp.json` (`"renderdoc": { "command": "py", "args": ["-3", "D:/alt/erhe/scripts/renderdoc_mcp_proxy.py"] }`). A stdio server is always spawned at startup, so its tools are always registered; the proxy serves the fork's tool schema from the committed `scripts/renderdoc_tools.json` and **launches `qrenderdoc --mcp-server` lazily on the first tool call** (or eagerly via its `renderdoc_launch` tool), proxying JSON-RPC over POST to `127.0.0.1:7398`. It **leaves `qrenderdoc` running** when Claude Code exits; the `renderdoc_shutdown` tool only tears down an instance the proxy itself launched (an externally started `qrenderdoc` is never touched). Other management tools: `renderdoc_status` (is the backend reachable, did the proxy launch it). This means Claude can launch RenderDoc itself on demand -- no manual pre-start or `/mcp` reconnect needed.
 
+**One-shot setup:** `py -3 scripts/setup_renderdoc_mcp.py` clones+builds the fork, configures erhe, registers the proxy in `.mcp.json`, and generates the schema (re-run with `--skip-build` to just rewire an existing build; `--help` for options). The pieces it wires up:
+
 `scripts/renderdoc_tools.json` is the proxy's baked-in tool schema, **regenerated with `py -3 scripts/capture_renderdoc_tools.py`** (which launches `qrenderdoc` on demand to dump its `tools/list`). Re-run and re-commit it whenever the fork's tool set changes. `.mcp.json` is machine-specific and stays untracked/local; the proxy honors `ERHE_RENDERDOC_QRENDERDOC` / `ERHE_RENDERDOC_MCP_HOST` / `ERHE_RENDERDOC_MCP_PORT` / `ERHE_RENDERDOC_LAUNCH_TIMEOUT` env overrides for the path/port. This complements the Visual Studio MCP server (build + debug-launch the editor) and the in-editor MCP server (set up the scene): the canonical windowed GPU-debug loop drives all three.
 
 ## Memory growth diagnostics (Linux)
@@ -336,6 +338,8 @@ When the layer is enabled there is noticeable per-frame overhead -- leave the co
 ## Python
 
 **IMPORTANT: On this Windows machine, always use the `py -3` launcher to run Python scripts. Never use `python` or `python3` - they resolve to the Microsoft Store stub and will fail.** This applies to all Python invocations: scripts, codegen, tools.
+
+**Write repository tooling/scripts in Python, not PowerShell.** New helper scripts (under `scripts/` or elsewhere) must be Python (`py -3`) - do not add `.ps1` PowerShell scripts. This keeps tooling portable and consistent. The only exception is the platform build-configure wrappers that must set up the native toolchain environment: `scripts/configure_*.bat` (Windows) and `scripts/configure_*.sh` (macOS/Linux); do not rewrite those.
 
 Example:
 
