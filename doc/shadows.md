@@ -1,10 +1,13 @@
 # Shadow Mapping
 
-This document covers shadow mapping in erhe: the directional light shadow
-frustum fitting (the stable baseline fit and the modular tight fit added in
-June 2026), the shadow pass mechanics that support it, the shadow sampling
-shader (including the receiver depth range fix), and the editor integration
-(settings, debug visualizations, fit target camera override).
+All three light types now cast shadows. Directional and spot lights use 2D
+depth shadow maps (a depth `texture_2d_array`); point lights use an
+omnidirectional cube-map shadow on a separate path. This document covers the
+directional light shadow frustum fitting (the stable baseline fit and the
+modular tight fit added in June 2026), the shadow pass mechanics that support
+it, the shadow sampling shader (including the receiver depth range fix), the
+point-light cube-map path, and the editor integration (settings, debug
+visualizations, fit target camera override).
 
 For the wider rendering architecture (rendergraph, composer, forward pass,
 winding variants) see [`editor_rendering.md`](editor_rendering.md); its
@@ -36,10 +39,16 @@ Per frame, for each scene view:
    `sample_light_visibility()` (`res/shaders/erhe_light.glsl`) using
    `texture_from_world` from the light UBO/SSBO.
 
-Spot lights use a single perspective shadow map built directly from the light
-node pose (`Light::spot_light_projection_transforms()`); point lights
-currently fall through to the same path. All of the frustum fitting below
-applies to directional lights only.
+Steps 1-4 above describe the **2D depth array** path used by directional and
+spot lights. Spot lights use a single perspective shadow map built directly
+from the light node pose (`Light::spot_light_projection_transforms()`).
+**Point lights take a parallel cube-map path** (`Light::point_light_projection_transforms()`
++ the `Shadow_renderer` point-cube pass): six perspective faces storing radial
+distance, sampled by direction, never touching the 2D array, the fit, or
+`texture_from_world`. See [Point-light cube-map shadows](#point-light-cube-map-shadows)
+below and [`point_light_shadows.md`](point_light_shadows.md). All of the frustum
+fitting below applies to directional lights only; spot and point use fixed
+light-pose projections.
 
 ## Directional light frustum fitting
 
@@ -401,7 +410,60 @@ erhe exposes this as the `distance` value of the `shadow_technique` graphics
 preset field (see "Editor integration"); `depth` (the RPDB path above) remains
 the default. The first implementation covers directional lights, where the
 stored radial distance specializes to the linear light-space depth the
-orthographic light projection already produces.
+orthographic light projection already produces. Point lights independently use a
+true-radial-distance cube map (see [Point-light cube-map shadows](#point-light-cube-map-shadows)
+below); that is its own subsystem, not this 2D `shadow_technique` knob.
+
+## Point-light cube-map shadows
+
+Point lights cast **omnidirectional** shadows through a separate cube-map path.
+Directional and spot lights use the 2D depth array above; point lights never
+touch the fit, the 2D array, or `texture_from_world`. Full design, the
+capture-driven debugging history, and the coordinate-flip fix are in
+[`point_light_shadows.md`](point_light_shadows.md); this is the summary.
+
+- **Storage.** One R32F `texture_cube_map_array` (labelled `Point shadow cube
+  array`), `6 * point_shadow_light_count` layers (layer `6*cube + face`, Vulkan
+  face order +X,-X,+Y,-Y,+Z,-Z). Each face stores the **raw radial distance**
+  from the light -- not projected/non-linear depth, and not normalized by far --
+  so neither caster nor receiver needs the far plane; unrendered texels hold a
+  large clear (`1e30`) that reads as "lit". `point_shadow_resolution` /
+  `point_shadow_light_count` are graphics-preset fields (defaults 512 / 2).
+- **Caster** (`Shadow_renderer` point-cube pass, `shadow_renderer.cpp`). For each
+  shadow-casting point light, six render passes -- one per face -- rasterize the
+  scene into that cube layer from a `create_look_at(light_pos, light_pos +
+  look[f], up[f])` camera with a 90-degree perspective
+  (`Light::point_light_projection_transforms()`, `z_far = light->range`). The
+  caster fragment (`standard.frag` under `VARIANT_SHADOW_CUBE`) writes
+  `length(world_pos - light_position)` to the R32F face (`cull_none`; the light
+  world position and far come from `light_control_block`). A shared 2D depth
+  scratch is reused for every face, for rasterization only (store `DONT_CARE`).
+- **Coordinate flip (convention-driven).** A cube face is sampled by direction
+  through the fixed cube-map (s,t) convention, which is vertically inverted
+  relative to the framebuffer row order, so the caster needs its clip-space Y
+  flipped opposite to the screen pass. This is expressed through the coordinate
+  conventions -- the cube pass gets `clip_space_y_flip` enabled iff
+  `framebuffer_origin == top_left`, mirroring `Light::get_texture_from_clip` for
+  the 2D map. Without it every stored face is mirrored in t and the shadows are
+  displaced. (See `point_light_shadows.md` for the RenderDoc proof and why the
+  earlier shader-side `gl_Position.y` negate was replaced.)
+- **Receiver.** `sample_point_light_visibility()` (`erhe_light.glsl`) samples
+  `s_shadow_cube` with the direction `world_pos - light_pos` at the light's cube
+  layer (`shadow_index_packed.y`) and compares the fragment's radial distance
+  against the stored nearest-occluder distance with a world-space slope+constant
+  bias (`max(0.05, 0.02 * current)`). The forward pass multiplies the point
+  light's contribution by this visibility (`standard.frag`). 1.0 = lit.
+- **Indexing.** Shadow-casting point lights get a dense `point_shadow_index`
+  (cube-array base) in `Light_projections::apply()`, written to
+  `shadow_index_packed.y`; their 2D `shadow_index` stays `max()` so the 2D shadow
+  loop and 2D receiver sampling skip them for free. Point is the last
+  shadow-bearing bucket, so it does not shift directional/spot 2D layer indices.
+  A fallback 1x1 cube (cleared to `1e30`) is bound when no real cube exists.
+- **No frustum fitting.** The six faces are fixed 90-degree perspectives centered
+  on the light; the only tuning is `range` (the cube far plane) and the receiver
+  bias. The directional tight-fit pipeline does not apply, and lights exceeding
+  `point_shadow_light_count` are dropped from the cube (same implicit cap as the
+  2D `shadow_light_count`).
 
 ## Editor integration
 
@@ -421,9 +483,14 @@ orthographic light projection already produces.
   cdd*(1+pcfRadius)`, carried on the per-pass `light_control_block`), and the
   receiver (`erhe_light.glsl`, `ERHE_SHADOW_TECHNIQUE == DISTANCE`) samples
   `s_shadow_distance` and compares with no bias. The bundled `High (distance)`
-  preset enables it. Directional lights only for now -- point / spot stay on the
-  depth path (extending them needs true radial distance; see the bias technique
-  section above).
+  preset enables it. This 2D `distance` knob covers directional lights only; spot
+  lights stay on the 2D depth path. Point lights are unaffected by it -- they
+  always use the omnidirectional radial-distance cube path (see [Point-light
+  cube-map shadows](#point-light-cube-map-shadows)).
+- **Point shadow resolution / count** - the graphics preset's
+  `point_shadow_resolution` and `point_shadow_light_count` (Settings window
+  sliders) size the cube array; changing either reallocates it in
+  `Shadow_render_node::reconfigure()`.
 - **Fit target camera override** - the Scene View Config window (also
   openable from the viewport toolbar popup) has "Override Shadow Fit Target
   Camera": when set, the fit (and its debug data) targets that camera
@@ -469,17 +536,19 @@ orthographic light projection already produces.
 
 | File | Contents |
 |---|---|
-| `src/erhe/scene/erhe_scene/light.cpp` | Stable fit, fit dispatch, transform assembly |
+| `src/erhe/scene/erhe_scene/light.cpp` | Stable fit, fit dispatch, transform assembly; point-light cube projection (`point_light_projection_transforms`); 2D texture-space matrices (`get_texture_from_clip`, framebuffer_origin-derived y-flip) |
 | `src/erhe/scene/erhe_scene/light.hpp` | `Shadow_frustum_fit_settings`, `Light_projection_parameters` |
 | `src/erhe/scene/erhe_scene/light_frustum_fit.cpp` | Tight modular fit pipeline |
 | `src/erhe/scene/erhe_scene/light_frustum_fit.hpp` | `Shadow_frustum_fit_debug_data`, `Shadow_fit_step` |
 | `src/erhe/math/erhe_math/math_util.cpp` | Convex hull clip, point-in-hull, rotating calipers, F_shadow open planes (`build_shadow_caster_volume_planes`) + silhouette side planes (`build_shadow_caster_silhouette`), AABB-vs-convex-volume cull (`aabb_in_convex_volume`), half-space intersection to polyhedron (`convex_polyhedron_from_planes`) |
-| `src/erhe/scene_renderer/erhe_scene_renderer/shadow_renderer.cpp` | Shadow pass, caster gathering, depth clamp pipeline, scissor border; distance-technique variant (color writes + `VARIANT_SHADOW_DISTANCE` + bias coeff) |
-| `src/erhe/scene_renderer/erhe_scene_renderer/light_buffer.cpp` | `Light_projections::apply()`, light UBO, shadow samplers; `s_shadow_distance` + distance fallback, `shadow_distance_bias_coeff` control field |
-| `src/erhe/scene_renderer/erhe_scene_renderer/program_interface.cpp` | Bind group layout: `s_shadow_compare` / `s_shadow_no_compare` (depth) + `s_shadow_distance` (color) sampler bindings |
-| `res/shaders/erhe_light.glsl` | Shadow sampling: RPDB depth path + distance (unbiased) path, reference depth clamp |
-| `res/shaders/standard.frag` | Caster: `VARIANT_SHADOW_DISTANCE` writes the fwidth-biased light-space depth to the distance map |
-| `src/editor/rendergraph/shadow_render_node.cpp` | Editor wiring: settings refresh, fit camera override, technique-aware distance-map allocation + color attachment |
+| `src/erhe/scene_renderer/erhe_scene_renderer/shadow_renderer.cpp` | Shadow pass, caster gathering, depth clamp pipeline, scissor border; distance-technique variant (color writes + `VARIANT_SHADOW_DISTANCE` + bias coeff); point-light cube pass (6 faces, `VARIANT_SHADOW_CUBE`, framebuffer_origin-gated `clip_space_y_flip`) |
+| `src/erhe/scene_renderer/erhe_scene_renderer/light_buffer.cpp` | `Light_projections::apply()`, light UBO, shadow samplers; `s_shadow_distance` + distance fallback, `shadow_distance_bias_coeff` control field; `point_shadow_index` assignment, `point_light_position`, `shadow_cube_texture` + 1x1 fallback cube |
+| `src/erhe/scene_renderer/erhe_scene_renderer/program_interface.cpp` | Bind group layout: `s_shadow_compare` / `s_shadow_no_compare` (depth) + `s_shadow_distance` (color) + `s_shadow_cube` (R32F cube array) sampler bindings |
+| `res/shaders/erhe_light.glsl` | Shadow sampling: RPDB depth path + distance (unbiased) path, reference depth clamp; `sample_point_light_visibility` (cube direction sample, radial compare) |
+| `res/shaders/standard.frag` | Caster: `VARIANT_SHADOW_DISTANCE` writes the fwidth-biased light-space depth to the distance map; `VARIANT_SHADOW_CUBE` writes radial distance to the cube face; point receiver multiplies `sample_point_light_visibility` |
+| `res/shaders/standard.vert` | `VARIANT_SHADOW_CUBE` passes `v_position` (world) to the cube caster fragment |
+| `src/editor/rendergraph/shadow_render_node.cpp` | Editor wiring: settings refresh, fit camera override, technique-aware distance-map allocation + color attachment; point cube array + per-face render passes (`reconfigure` on `point_shadow_resolution` / `point_shadow_light_count`) |
 | `src/editor/tools/debug_visualizations.cpp` | Shadow fit debug visualization |
 | `src/editor/config/definitions/shadow_frustum_fit_config.py` | Frustum fit settings codegen definition |
 | `src/editor/config/definitions/shadow_technique_mode.py` | Shadow technique enum codegen definition (depth / distance) |
+| `doc/point_light_shadows.md` | Point-light cube shadow design, capture-driven debugging history, coordinate-flip fix |

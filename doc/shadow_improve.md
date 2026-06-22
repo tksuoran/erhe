@@ -5,6 +5,16 @@ Plan for optimizing the tight shadow frustum fit pipeline
 derived from the 2026-06-10 pipeline review. See `doc/shadows.md` for how the
 pipeline works; this document only tracks performance work.
 
+**Scope.** All three light types now cast shadows, but this plan covers the
+**directional** tight fit only. Spot lights use a fixed perspective projection
+from the light pose, and point lights use an omnidirectional cube map
+(`point_light_projection_transforms` + the `Shadow_renderer` point-cube pass; see
+`doc/point_light_shadows.md`) -- neither runs the frustum fit, so the steps below
+do not apply to them. Point-shadow performance has a different shape (six full
+scene re-rasterizations per shadow-casting point light, no caster culling); its
+optimization candidates are listed under "Future candidates" and are not yet
+scheduled.
+
 Workflow: steps are executed one at a time, in order. After each step is
 implemented and builds, the user verifies (correctness in the editor and/or
 effect in the Tracy profile) before the step is committed. Update the Status
@@ -179,3 +189,27 @@ move camera, toggle visibility) re-fits on the next frame.
 - Per-light parallel fit (fork-join), SIMD/SoA caster filter.
 - True O(h) rotating calipers in `calculate_min_area_obb_2d` (currently
   O(h^2); h is small, so only if profiling says otherwise).
+
+### Point-light cube shadows (separate path, not part of the directional plan)
+
+The cube path re-rasterizes the whole shadow-caster set into all six faces of
+every shadow-casting point light with no culling, which is the dominant point
+shadow cost. Candidates, in rough priority order (none scheduled; gate on a
+Tracy capture with point shadows enabled):
+
+- **Per-face caster culling.** Each cube face is a 90-degree frustum; cull caster
+  AABBs against it (and against the light range sphere) so a face only draws the
+  casters that can fall in it. Reuses `aabb_in_frustum` / the p-vertex test from
+  step 2.
+- **Skip empty faces / lights.** A face (or a whole cube) with no surviving
+  casters can clear-only; a light whose range sphere contains no casters needs no
+  cube at all.
+- **Range/contribution cull.** Casters fully outside the light range, or whose
+  shadow cannot reach any receiver, never need rasterizing.
+- **Shared depth scratch serialization.** All six faces reuse one 2D depth
+  texture, so the passes serialize on a write-after-write barrier. Per-cube (or
+  per-face) depth would let the faces overlap, at a memory cost.
+- **Resolution / count budget.** `point_shadow_resolution` x
+  `point_shadow_light_count` R32F cube arrays are heavy (the High preset is
+  hundreds of MB); revisit defaults and consider per-light resolution by
+  screen-space size.
