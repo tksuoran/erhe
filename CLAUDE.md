@@ -171,6 +171,13 @@ On Windows, prefer the **`visualstudio` MCP server** ([CodingWithCalvin/VS-MCPSe
 
 **Typical debug flow:** confirm `solution_info` -> `debugger_add_breakpoint` (file + line) -> `debugger_launch` -> poll `debugger_status` until it breaks -> `debugger_get_callstack` / `debugger_get_locals` / `debugger_evaluate` -> step or `continue` -> `debugger_stop` when done.
 
+**ALWAYS use the Visual Studio MCP server to diagnose editor crashes.** When the editor aborts / throws (e.g. `editor.exe` exits with a non-zero code, `[crash] unhandled exception (code=0x...)`, a `logs/editor_crash_*.dmp` minidump, a `VERIFY` / `ERHE_FATAL`, or any C++ exception `0xe06d7363`), do NOT try to reason it out from `logs/log.txt` and a stripped console backtrace alone, and do NOT just stare at the minidump. Reproduce it **live under the VS debugger** so you get a real callstack plus `debugger_get_locals` / `debugger_evaluate` at the throw site:
+  1. `mcp__visualstudio__solution_info` to see which solution is loaded. The crash is almost always in shared `editor` / `erhe::*` code, so it reproduces on **any** build's `editor` target -- prefer the solution already open. To debug the **headless** build specifically (e.g. a crash only seen while driving the in-editor MCP / `capture_screenshot`), `solution_open` `build_vs2026_vulkan_headless/erhe.slnx`; for windowed use `build_vs2026_vulkan/erhe.slnx` (needs a live display) or `build_vs2026_opengl/erhe.slnx`.
+  2. If the loaded `editor` binary predates your change, `build_project` the `editor.vcxproj` and poll `build_status` until `State=="Done"` / `FailedProjects==0`.
+  3. `debugger_add_breakpoint` at the suspected throw site(s) if you have a hypothesis; otherwise just `debugger_launch` and let the debugger break on the unhandled exception (the editor's crash handler runs at second chance, so the user-stack throw frame is still visible).
+  4. Drive the repro (e.g. the in-editor MCP `tools/call` over HTTP, or the input that triggers it), poll `debugger_status` until `Mode != "Design"` stops at the break, then `debugger_get_callstack` + `debugger_get_locals` / `debugger_evaluate` to read the faulting state. `debugger_stop` when done.
+The minidump and `logs/log.txt` are a starting hypothesis, not the diagnosis -- the live callstack + locals are.
+
 **Notes / gotchas:**
 - `symbol_workspace` does not index this C++ solution's symbols (it is C#-oriented and returns no matches here). For C++ symbol navigation use `goto_definition` / `find_references` from an open document, or the Grep tool over `src/`.
 - The startup project is `editor`; `build_status` reports `NoBuildPerformed` until a build is triggered through VS or the MCP build tools.
