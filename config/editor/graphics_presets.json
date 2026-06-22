@@ -16,7 +16,7 @@
             "shadow_cull_mode": "cull_back",
             "shadow_technique": "depth",
             "point_shadow_resolution": 512,
-            "point_shadow_light_count": 2
+            "point_shadow_light_count": 8
         },
         {
             "_version": 7,

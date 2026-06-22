@@ -1095,7 +1095,7 @@
     "sky": {
         "_version": 3,
         "enabled": true,
-        "mode": 0,
+        "mode": 1,
         "sky_horizon_color": [0.3,0.3,0.33,1],
         "sky_zenith_color": [0.2,0.2,0.22,1],
         "sky_power": 10,
