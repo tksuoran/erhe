@@ -401,6 +401,15 @@ void Texture_impl::transition_layout(VkCommandBuffer command_buffer, VkImageLayo
     VkPipelineStageFlags2 src_stage  = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
     VkPipelineStageFlags2 dst_stage  = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT;
 
+    // A shader-read-only texture may be sampled by any shader stage, not just the
+    // fragment stage (e.g. the sky multi-scatter compute pass samples the
+    // transmittance LUT). Scoping read-only transitions to FRAGMENT_SHADER alone
+    // leaves compute (and vertex/geometry) consumers unsynchronized, which sync
+    // validation flags as a READ_AFTER_WRITE hazard. Matches the texture-fetch
+    // scope used by Command_buffer_impl::memory_barrier().
+    constexpr VkPipelineStageFlags2 any_shader_stage =
+        VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+
     switch (m_current_layout) {
         case VK_IMAGE_LAYOUT_UNDEFINED:
             src_access = 0;
@@ -416,7 +425,7 @@ void Texture_impl::transition_layout(VkCommandBuffer command_buffer, VkImageLayo
             break;
         case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
             src_access = VK_ACCESS_2_SHADER_READ_BIT;
-            src_stage  = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+            src_stage  = any_shader_stage;
             break;
         case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
             src_access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
@@ -447,7 +456,7 @@ void Texture_impl::transition_layout(VkCommandBuffer command_buffer, VkImageLayo
             break;
         case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
             dst_access = VK_ACCESS_2_SHADER_READ_BIT;
-            dst_stage  = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+            dst_stage  = any_shader_stage;
             break;
         case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
             dst_access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
@@ -459,7 +468,7 @@ void Texture_impl::transition_layout(VkCommandBuffer command_buffer, VkImageLayo
             break;
         case VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL:
             dst_access = VK_ACCESS_2_SHADER_READ_BIT;
-            dst_stage  = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+            dst_stage  = any_shader_stage;
             break;
         case VK_IMAGE_LAYOUT_GENERAL:
             dst_access = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT;
