@@ -290,19 +290,25 @@ if (ERHE_SPIRV)
     CPMAddPackage(
         NAME              glslang
         VERSION           16.3.0
-        # erhe fork of glslang 16.3.0 (branch erhe-debugglobalvariable-composite-fix)
-        # carrying a one-line fix for an upstream bug still present on glslang
-        # main: Builder::createConstVariable passes the OpConstantComposite id
-        # through as the Variable operand of DebugGlobalVariable, which
-        # spirv-val 1.4.328+ rejects under
-        # VUID-VkShaderModuleCreateInfo-pCode-08737. Affects every compute
-        # shader (synthesised gl_WorkGroupSize) plus any file-scope const
-        # composite array. See doc/glslang_bug_report_debugglobalvariable.md
-        # and KhronosGroup/glslang #4186. The fork (rather than a CPM PATCHES
-        # patch) keeps the build free of any host `patch` invocation - see the
-        # "Do not use CPM's PATCHES keyword" note in CLAUDE.md. Move back to
-        # KhronosGroup/glslang and bump the tag once upstream ships the fix.
-        GIT_TAG           5222ff792e97714f3498b039da7060be28275738
+        # erhe integration branch of glslang (branch `erhe` in tksuoran/glslang =
+        # upstream main + downstream fixes), carrying two fixes for upstream bugs in
+        # NonSemantic.Shader.DebugInfo emission that spirv-val rejects under
+        # VUID-VkShaderModuleCreateInfo-pCode-08737 (strict on Mesa KosmicKrisp /
+        # Vulkan-on-Metal; merely tolerated by desktop drivers):
+        #   1. Builder::createConstVariable passes the OpConstantComposite id as the
+        #      Variable operand of DebugGlobalVariable. Affects every compute shader
+        #      (synthesised gl_WorkGroupSize) plus any file-scope const composite
+        #      array. See doc/glslang_bug_report_debugglobalvariable.md.
+        #   2. makeMemberDebugType emits a DebugTypeMember Column that refers to the
+        #      original (pre-preprocessing) source and can exceed the embedded
+        #      DebugSource line length (KhronosGroup/glslang #3862, exposed by the
+        #      DebugSource line/column check added in SPIRV-Tools #5986 / Vulkan SDK
+        #      1.4.350); now emits column 0 like every other DebugInfo instruction.
+        # The fork (rather than a CPM PATCHES patch) keeps the build free of any host
+        # `patch` invocation - see the "Do not use CPM's PATCHES keyword" note in
+        # CLAUDE.md. Move back to KhronosGroup/glslang and bump the tag once upstream
+        # ships both fixes.
+        GIT_TAG           6ee8c2531efcf16e1531d7a1259dd7100c1db020
         GITHUB_REPOSITORY tksuoran/glslang
         OPTIONS
                       "GLSLANG_TESTS OFF"
