@@ -187,6 +187,20 @@ auto compile_spirv_to_mtl_function(
             rb.msl_buffer = glsl_binding;
             compiler.add_msl_resource_binding(rb);
         }
+        // Storage images (load/store image2D, used by the atmosphere LUT compute
+        // shaders) live in the discrete set 0 with a direct [[texture(N)]] slot.
+        // Pin msl_texture = GLSL binding so Compute_command_encoder::set_storage_image()
+        // can bind the same slot on the host side. The compute shaders declare no
+        // sampled images, so the texture index space is owned by the storage images.
+        for (const spirv_cross::Resource& resource : pre_resources.storage_images) {
+            uint32_t binding = compiler.get_decoration(resource.id, spv::DecorationBinding);
+            spirv_cross::MSLResourceBinding rb{};
+            rb.stage       = exec_model;
+            rb.desc_set    = 0;
+            rb.binding     = binding;
+            rb.msl_texture = binding;
+            compiler.add_msl_resource_binding(rb);
+        }
         for (const spirv_cross::Resource& resource : pre_resources.push_constant_buffers) {
             static_cast<void>(resource);
             spirv_cross::MSLResourceBinding rb{};

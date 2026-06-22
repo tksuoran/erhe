@@ -54,28 +54,42 @@ Bind_group_layout_impl::Bind_group_layout_impl(Device& device, const Bind_group_
     m_sampler_binding_offset = has_buffer_binding ? (max_buffer_binding + 1) : 0;
 
     // Mirror every combined_image_sampler binding into the default uniform
-    // block. The Metal shader-stages prototype reads these declarations to
-    // classify samplers via Shader_resource::get_is_texture_heap().
-    // Texture-heap samplers must auto-allocate their binding point from
-    // m_location (Shader_resource::add_sampler asserts against a
+    // block as a "uniform sampler* name;" declaration, and every storage_image
+    // binding as a "layout(binding = N, <format>) uniform image2D name;"
+    // declaration. The Metal shader-stages prototype reads the sampler
+    // declarations to classify samplers via Shader_resource::get_is_texture_heap()
+    // and the preamble emitter injects the image declarations into the compute
+    // GLSL source. Texture-heap samplers must auto-allocate their binding point
+    // from m_location (Shader_resource::add_sampler asserts against a
     // dedicated_texture_unit on them); the auto-allocation lands on the
     // caller's binding_point as long as earlier bindings were processed
     // in ascending order.
     for (const Bind_group_layout_binding& binding : create_info.bindings) {
-        if (binding.type != Binding_type::combined_image_sampler) {
-            continue;
+        if (binding.type == Binding_type::combined_image_sampler) {
+            const std::optional<uint32_t> dedicated_texture_unit = binding.is_texture_heap
+                ? std::optional<uint32_t>{}
+                : std::optional<uint32_t>{binding.binding_point};
+            m_default_uniform_block.add_sampler(
+                binding.name,
+                binding.glsl_type,
+                binding.sampler_aspect,
+                binding.is_texture_heap,
+                dedicated_texture_unit,
+                (binding.array_size > 0) ? std::optional<std::size_t>{binding.array_size} : std::optional<std::size_t>{}
+            );
+        } else if (binding.type == Binding_type::storage_image) {
+            // Storage images are emitted into the GLSL preamble as
+            // "layout(binding = N, <format>) uniform image2D name;" and use the
+            // raw binding_point as the [[texture(N)]] slot (no sampler-binding
+            // offset). compile_spirv_to_mtl_function pins msl_texture = binding
+            // and set_storage_image() binds the same slot to match.
+            m_default_uniform_block.add_image(
+                binding.name,
+                binding.glsl_type,
+                binding.image_format,
+                static_cast<int>(binding.binding_point)
+            );
         }
-        const std::optional<uint32_t> dedicated_texture_unit = binding.is_texture_heap
-            ? std::optional<uint32_t>{}
-            : std::optional<uint32_t>{binding.binding_point};
-        m_default_uniform_block.add_sampler(
-            binding.name,
-            binding.glsl_type,
-            binding.sampler_aspect,
-            binding.is_texture_heap,
-            dedicated_texture_unit,
-            (binding.array_size > 0) ? std::optional<std::size_t>{binding.array_size} : std::optional<std::size_t>{}
-        );
     }
 
     // Metal argument-buffer path: if no caller-supplied binding declared

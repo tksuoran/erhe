@@ -4,10 +4,12 @@
 #include "erhe_graphics/metal/metal_device.hpp"
 #include "erhe_graphics/metal/metal_buffer.hpp"
 #include "erhe_graphics/metal/metal_shader_stages.hpp"
+#include "erhe_graphics/metal/metal_texture.hpp"
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/compute_pipeline_state.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/shader_stages.hpp"
+#include "erhe_graphics/texture.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -112,10 +114,16 @@ void Compute_command_encoder_impl::set_bind_group_layout(const Bind_group_layout
 
 void Compute_command_encoder_impl::set_storage_image(uint32_t binding_point, const Texture& texture)
 {
-    // Storage-image compute is not wired on the Metal backend yet; the
-    // atmosphere LUT generation that uses this is Vulkan-only for now.
-    static_cast<void>(binding_point);
-    static_cast<void>(texture);
+    MTL::Texture* mtl_texture = texture.get_impl().get_mtl_texture();
+    if (mtl_texture == nullptr) {
+        return;
+    }
+    // Storage images bind at their raw binding point (no sampler-binding offset);
+    // this matches the [[texture(N)]] slot pinned in compile_spirv_to_mtl_function.
+    // Directly-bound textures are made resident and hazard-tracked automatically,
+    // so no useResource / explicit barrier is needed here (the cb's inter-encoder
+    // fence orders the transmittance pass before the multi-scatter pass).
+    m_encoder->setTexture(mtl_texture, static_cast<NS::UInteger>(binding_point));
 }
 
 void Compute_command_encoder_impl::set_compute_pipeline_state(const Compute_pipeline_state& pipeline)

@@ -1,11 +1,11 @@
 # Procedural sky (Hillaire atmosphere)
 
 Status: implemented and building (Vulkan, OpenGL, headless all link clean); shaders
-pass an offline `glslc` syntax check. The atmosphere is wired on **both Vulkan and
-OpenGL** (OpenGL requires GL 4.3+ for compute / storage-image load-store); only Metal
-remains unwired. **Runtime / visual verification still pending**
-(the editor cannot be launched from the implementing session's shell -- no GPU
-session; see "Runtime status"). On branch `ls/main`.
+pass an offline `glslc` syntax check. The atmosphere is wired on **Vulkan, OpenGL, and
+Metal** (OpenGL requires GL 4.3+ for compute / storage-image load-store; Metal requires
+Tier-2 read-write `RGBA16Float`, i.e. Apple Silicon -- see the Metal note below).
+Vulkan and OpenGL are runtime-verified; **Metal runtime / visual verification is
+pending** a build+run on the M-series Mac.
 
 Ported the forge-gpu `forge-procedural-sky` skill (Sebastien Hillaire, EGSR 2020:
 physically-based atmospheric scattering with LUT-accelerated transmittance +
@@ -52,11 +52,15 @@ compute). That is the foundational, reusable part of this change.
   erhe lacked it, so it was built (new `Binding_type::storage_image`, GLSL `image2D`
   emission, `Compute_command_encoder::set_storage_image`, Vulkan `STORAGE_IMAGE`
   descriptors + `GENERAL` layout barriers).
-- **Vulkan + OpenGL.** `set_storage_image` is implemented on both the Vulkan backend
-  (STORAGE_IMAGE push descriptor) and the OpenGL backend (`gl::bind_image_texture`); Metal
-  is not yet wired. OpenGL additionally requires GL 4.3 (`use_compute_shader`) -- on GL <
-  4.3, or on Metal/null, `Sky_renderer::is_atmosphere_supported()` returns false and the
-  `Sky_composition_pass` falls back to the gradient sky regardless of `mode`.
+- **Vulkan + OpenGL + Metal.** `set_storage_image` is implemented on the Vulkan backend
+  (STORAGE_IMAGE push descriptor), the OpenGL backend (`gl::bind_image_texture`), and the
+  Metal backend (`MTL::ComputeCommandEncoder::setTexture` at the raw binding point, with
+  the storage-image GLSL declaration mirrored into the default uniform block by
+  `metal_bind_group_layout.cpp` and the `[[texture(N)]]` slot pinned in
+  `compile_spirv_to_mtl_function`; the LUT textures also gain `MTL::TextureUsageShaderWrite`).
+  OpenGL additionally requires GL 4.3 (`use_compute_shader`) -- on GL < 4.3, or on null,
+  `Sky_renderer::is_atmosphere_supported()` returns false and the `Sky_composition_pass`
+  falls back to the gradient sky regardless of `mode`.
 - **Multiscatter reads transmittance via `imageLoad` + manual bilinear**, so the compute
   path only needs storage-image *write/read* (no compute *sampled*-image support). The
   fragment ray march samples both LUTs with a normal sampler (hardware bilinear).
@@ -188,10 +192,15 @@ call: supported=true ...`; if the startup compute-support line is false (GL < 4.
 
 ## Known risks / tuning knobs
 
-- **Metal not wired.** On Metal the atmosphere is unsupported (no storage-image compute);
-  the gradient sky is used even with `mode == 1`. Wiring Metal would need `setTexture` on
-  the compute encoder. OpenGL is now wired (`gl::bind_image_texture` + the GL bind group
-  layout mirroring storage_image bindings), gated on GL 4.3 (`use_compute_shader`).
+- **Metal RGBA16Float read-write.** Metal is now wired (storage-image compute via
+  `setTexture` + the bind-group-layout mirroring + `MTL::TextureUsageShaderWrite`). The LUT
+  `image2D`s are declared without `readonly`/`writeonly`, so SPIRV-Cross emits
+  `texture2d<float, access::read_write>`; Metal requires Tier-2 read-write texture support
+  for `RGBA16Float`, which Apple Silicon (the M-series dev machine) provides. To run on a
+  Tier-1 Metal GPU (some older Intel Macs), add `readonly`/`writeonly` to
+  `Bind_group_layout_binding`, extend `Shader_resource::get_source`'s qualifier emission to
+  cover `Type::image`, and mark each LUT binding by its actual access -- intentionally left
+  out of scope. OpenGL remains gated on GL 4.3 (`use_compute_shader`).
 - **Multiview unverified.** The atmosphere shader is compiled with the session
   `view_count` and the camera UBO is written per view, but per-eye correctness on Quest
   is not yet visually verified (same caveat as the point-light port).

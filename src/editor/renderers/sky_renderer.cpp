@@ -82,7 +82,7 @@ Sky_renderer::Sky_renderer(
     static_cast<void>(init_command_buffer);
     static_cast<void>(view_count);
 
-#if defined(ERHE_GRAPHICS_API_VULKAN) || defined(ERHE_GRAPHICS_API_OPENGL)
+#if defined(ERHE_GRAPHICS_API_VULKAN) || defined(ERHE_GRAPHICS_API_OPENGL) || defined(ERHE_GRAPHICS_API_METAL)
     using namespace erhe::graphics;
     using erhe::utility::Debug_label;
 
@@ -340,7 +340,7 @@ void Sky_renderer::ensure_luts(erhe::graphics::Device& graphics_device, erhe::gr
         return;
     }
 
-#if defined(ERHE_GRAPHICS_API_VULKAN) || defined(ERHE_GRAPHICS_API_OPENGL)
+#if defined(ERHE_GRAPHICS_API_VULKAN) || defined(ERHE_GRAPHICS_API_OPENGL) || defined(ERHE_GRAPHICS_API_METAL)
     using namespace erhe::graphics;
 
     log_render->info("Sky_renderer::ensure_luts: generating atmosphere LUTs");
@@ -401,7 +401,7 @@ void Sky_renderer::render_atmosphere(const Render_context& context)
         return;
     }
 
-#if defined(ERHE_GRAPHICS_API_VULKAN) || defined(ERHE_GRAPHICS_API_OPENGL)
+#if defined(ERHE_GRAPHICS_API_VULKAN) || defined(ERHE_GRAPHICS_API_OPENGL) || defined(ERHE_GRAPHICS_API_METAL)
     using namespace erhe::graphics;
 
     if ((context.encoder == nullptr) || (context.render_pass == nullptr) || context.views.empty()) {

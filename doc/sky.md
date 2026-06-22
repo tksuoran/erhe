@@ -14,6 +14,10 @@ Implemented, **building clean** (Vulkan + OpenGL + headless editors link), all
 sky shaders **compile at runtime**, and the "renders nothing visible" bug is
 **fixed and verified** on Vulkan: atmosphere mode (`Sky_config::mode == 1`) now
 renders a bright blue daytime sky. See [Resolution](#resolution-the-sun-was-below-the-horizon).
+The atmosphere is now **also wired on Metal** (storage-image compute via
+`MTL::ComputeCommandEncoder::setTexture` + `MTL::TextureUsageShaderWrite` + the
+storage_image bind-group-layout mirroring; assumes Tier-2 read-write `RGBA16Float`,
+i.e. Apple Silicon); Metal runtime verification is pending a build+run on the M-series Mac.
 
 ## What was built (branch `ls/main`)
 

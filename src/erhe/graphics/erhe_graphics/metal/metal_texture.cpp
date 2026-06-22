@@ -136,6 +136,11 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
     if (create_info.usage_mask & Image_usage_flag_bit_mask::depth_stencil_attachment) {
         usage |= MTL::TextureUsageRenderTarget;
     }
+    if (create_info.usage_mask & Image_usage_flag_bit_mask::storage) {
+        // Load/store images written by compute (e.g. the atmosphere LUTs) need
+        // ShaderWrite in addition to the default ShaderRead.
+        usage |= MTL::TextureUsageShaderWrite;
+    }
     desc->setUsage(usage);
 
     m_mtl_texture = mtl_device->newTexture(desc);
