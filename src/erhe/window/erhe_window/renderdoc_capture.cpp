@@ -67,6 +67,27 @@ void apply_renderdoc_override_env(std::string_view library_path_override)
 void initialize_frame_capture(std::string_view library_path_override)
 {
     const bool have_override = !library_path_override.empty();
+
+#if defined(ERHE_OS_MACOS)
+    // The system-installed RenderDoc (qRenderDoc) cannot wrap the macOS Vulkan
+    // driver (Mesa KosmicKrisp, Vulkan-on-Metal). Loading its librenderdoc.dylib
+    // makes RenderDoc insert its Vulkan capture layer, whose hooked vkCreateDevice
+    // crashes (SIGTRAP) building its VulkanShaderCache before KosmicKrisp's real
+    // device creation runs - so the editor never starts. Until the erhe RenderDoc
+    // fork supports macOS, only initialize RenderDoc when an explicit override
+    // library path (that fork) is supplied via renderdoc_library_path; never load
+    // the stock library here. Re-enabling on macOS is then a config change (point
+    // renderdoc_library_path at the fork), not a code change.
+    if (!have_override) {
+        log_renderdoc->info(
+            "RenderDoc: stock RenderDoc capture is disabled on macOS (incompatible "
+            "with the KosmicKrisp Vulkan driver). Set renderdoc_library_path to the "
+            "erhe RenderDoc fork to enable capture."
+        );
+        return;
+    }
+#endif
+
     if (have_override) {
         apply_renderdoc_override_env(library_path_override);
     }
