@@ -198,6 +198,16 @@ public:
     bool use_debug_output            {false}; // GL 4.3 or ARB_debug_output — debug callback
     bool use_debug_groups            {false}; // GL 4.3 — push/pop debug group (not in ARB_debug_output)
 
+    // The SOLID_WIREFRAME standard-shader variant draws real polygon edges in
+    // the lit fill fragment, which adds several flat varyings at high explicit
+    // locations (v_bary / v_edge_mask / v_wire_color / v_wire_width at
+    // locations 13..16). The macOS OpenGL 4.1 (GLSL 410) Apple GLSL compiler
+    // fails to allocate them and the program will not link ("Implementation
+    // limit of 128 varying components exceeded ... v_edge_mask"). Default true;
+    // the GL backend clears it on 4.1. When false the editor falls back to the
+    // wide-line edge renderer instead of solid wireframe.
+    bool use_solid_wireframe         {true};
+
     // limits
     int max_compute_workgroup_count[3] = { 1, 1, 1 };
     int max_compute_workgroup_size [3] = { 1, 1, 1 };

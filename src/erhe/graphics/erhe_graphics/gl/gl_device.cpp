@@ -387,6 +387,16 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     m_info.use_texture_view = (m_info.gl_version >= 430) || gl::is_extension_supported(gl::Extension::Extension_GL_ARB_texture_view);
     log_startup->info("Texture View supported: {}", m_info.use_texture_view);
 
+    // The SOLID_WIREFRAME standard-shader variant needs several flat varyings
+    // at high explicit locations (v_bary / v_edge_mask / v_wire_color /
+    // v_wire_width at locations 13..16). The macOS OpenGL 4.1 (GLSL 410) Apple
+    // GLSL compiler cannot allocate them and the link fails ("Implementation
+    // limit of 128 varying components exceeded ... v_edge_mask"). Enable only on
+    // GL newer than 4.1 (every non-Apple desktop driver); the editor falls back
+    // to the wide-line edge renderer where this is off.
+    m_info.use_solid_wireframe = (m_info.gl_version > 410);
+    log_startup->info("Solid wireframe variant supported: {}", m_info.use_solid_wireframe);
+
     m_info.use_direct_state_access =
         (m_info.gl_version >= 450) || gl::is_extension_supported(gl::Extension::Extension_GL_ARB_direct_state_access);
     log_startup->info("Direct State Access supported: {}", m_info.use_direct_state_access);

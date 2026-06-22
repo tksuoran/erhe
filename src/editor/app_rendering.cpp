@@ -161,6 +161,14 @@ App_rendering::App_rendering(
     static constexpr bool selected = true;
     static constexpr bool not_selected = false;
 
+    // The SOLID_WIREFRAME standard-shader variant cannot link on the macOS
+    // OpenGL 4.1 Apple GLSL compiler (too many flat varyings at high explicit
+    // locations); see Device_info::use_solid_wireframe. Where unsupported, the
+    // solid-wireframe passes are disabled (and their variant is never forced,
+    // so prewarm does not try to compile it) and the wide-line edge passes draw
+    // instead.
+    const bool solid_wireframe_supported = graphics_device.get_info().use_solid_wireframe;
+
     auto content_fill_not_selected = make_composition_pass(
         "Content fill opaque not selected",
         Composition_pass_data{
@@ -206,9 +214,14 @@ App_rendering::App_rendering(
             .blending_mode_policy         {Blending_mode_policy::opaque_primitives_only},
             .primitive_mode               {Primitive_mode::solid_wireframe},
             .filter                       {filter_not_selected},
-            .shader_key_force_enable_mask {make_shader_bool_mask(Shader_bool::SOLID_WIREFRAME)},
+            .shader_key_force_enable_mask {solid_wireframe_supported ? make_shader_bool_mask(Shader_bool::SOLID_WIREFRAME) : uint32_t{0}},
             .get_render_style             {render_style_not_selected},
             .get_appearance               {appearance_not_selected},
+            .is_enabled                   {
+                [solid_wireframe_supported](const Render_context&) -> bool {
+                    return solid_wireframe_supported;
+                }
+            },
         },
         not_selected
     );
@@ -220,9 +233,14 @@ App_rendering::App_rendering(
             .blending_mode_policy         {Blending_mode_policy::opaque_primitives_only},
             .primitive_mode               {Primitive_mode::solid_wireframe},
             .filter                       {filter_selected_or_hovered},
-            .shader_key_force_enable_mask {make_shader_bool_mask(Shader_bool::SOLID_WIREFRAME)},
+            .shader_key_force_enable_mask {solid_wireframe_supported ? make_shader_bool_mask(Shader_bool::SOLID_WIREFRAME) : uint32_t{0}},
             .get_render_style             {render_style_selected},
             .get_appearance               {appearance_selected},
+            .is_enabled                   {
+                [solid_wireframe_supported](const Render_context&) -> bool {
+                    return solid_wireframe_supported;
+                }
+            },
         },
         selected
     );
@@ -267,9 +285,11 @@ App_rendering::App_rendering(
             .is_enabled                    {
                 // Solid wireframe replaces the wide-line edge path: when it is
                 // enabled, suppress the Content_wide_line_renderer edge lines so
-                // the two do not both draw.
-                [](const Render_context& context) -> bool {
-                    return !context.viewport_config.render_style_not_selected.solid_wireframe;
+                // the two do not both draw. Where solid wireframe is unsupported
+                // (macOS GL 4.1) its toggle is inert, so the wide-line edges
+                // must not be suppressed by it.
+                [solid_wireframe_supported](const Render_context& context) -> bool {
+                    return !solid_wireframe_supported || !context.viewport_config.render_style_not_selected.solid_wireframe;
                 }
             }
         }, not_selected
@@ -286,8 +306,8 @@ App_rendering::App_rendering(
             .get_render_style              {render_style_selected},
             .get_appearance                {appearance_selected},
             .is_enabled                    {
-                [](const Render_context& context) -> bool {
-                    return !context.viewport_config.render_style_selected.solid_wireframe;
+                [solid_wireframe_supported](const Render_context& context) -> bool {
+                    return !solid_wireframe_supported || !context.viewport_config.render_style_selected.solid_wireframe;
                 }
             }
         }, selected
