@@ -1,0 +1,1272 @@
+{
+  "tools": [
+    {
+      "description": "List the capture(s) currently open in RenderDoc. RenderDoc holds at most one capture at a time, so this returns zero or one entry.",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "list_captures"
+    },
+    {
+      "description": "Get summary information about the currently loaded capture: filename, API, current event, and resource/texture/buffer counts.",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "get_capture_info"
+    },
+    {
+      "description": "Get frame metadata for the loaded capture: frame number, file sizes, and capture timestamp.",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "get_frame_info"
+    },
+    {
+      "description": "Get API properties of the loaded capture: graphics API, GPU vendor, and replay capabilities.",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "get_api_properties"
+    },
+    {
+      "description": "Browse the action/event tree (draws, dispatches, markers, etc.) of the loaded capture as a flattened, paginated, depth-annotated list.",
+      "inputSchema": {
+        "properties": {
+          "limit": {
+            "description": "Maximum number of actions to return (default 200, max 2000).",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Index of the first actions to return (default 0).",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "name": "get_action_tree"
+    },
+    {
+      "description": "Navigate RenderDoc to a specific event. This moves the live UI (Event Browser and all viewers) so subsequent state queries reflect this event.",
+      "inputSchema": {
+        "properties": {
+          "eventId": {
+            "description": "The event ID to navigate to.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "eventId"
+        ],
+        "type": "object"
+      },
+      "name": "set_event"
+    },
+    {
+      "description": "Get full detail for a single action/event: name, flags, parent/previous/next event ids, marker colour, draw parameters (indexed/instanced/indirect, index & vertex offsets, counts), dispatch dimensions, copy/resolve source & destination, colour/depth outputs, child event ids, and the list of API calls (structured-file chunks) recorded at this event.",
+      "inputSchema": {
+        "properties": {
+          "eventId": {
+            "description": "The event ID to describe (defaults to the current event).",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "name": "get_event_details"
+    },
+    {
+      "description": "Search the whole action/event tree server-side by name substring and/or action-type flag, returning matches as a flattened, paginated, depth-annotated list (same shape as get_action_tree). Provide 'query' and/or 'flags'.",
+      "inputSchema": {
+        "properties": {
+          "flags": {
+            "description": "Optional action-type filter: drawcall, dispatch, meshdispatch, dispatchray, clear, copy, resolve, genmips, present, marker, indexed, instanced, indirect, multiaction, passboundary.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Maximum number of matching actions to return (default 200, max 2000).",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Index of the first matching actions to return (default 0).",
+            "type": "integer"
+          },
+          "query": {
+            "description": "Case-insensitive substring matched against the action name.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "search_actions"
+    },
+    {
+      "description": "List the events where a resource (texture or buffer) is read or written across the frame: per event the event id, the kind of usage (e.g. vertex buffer, PS resource, colour target, copy source) and the action name. Paginated.",
+      "inputSchema": {
+        "properties": {
+          "limit": {
+            "description": "Maximum number of usages to return (default 200, max 2000).",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Index of the first usages to return (default 0).",
+            "type": "integer"
+          },
+          "resourceId": {
+            "description": "The resource id to query (from a list_* tool).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resourceId"
+        ],
+        "type": "object"
+      },
+      "name": "get_resource_usage"
+    },
+    {
+      "description": "Compare the pipeline-state summary (bound shaders per stage, primitive topology, render targets and depth target) between two events and report the fields that differ, with each field's value at eventA and eventB (null where unbound). Navigates the live UI internally to sample each event, then restores the original event.",
+      "inputSchema": {
+        "properties": {
+          "eventA": {
+            "description": "The first event ID to compare.",
+            "type": "integer"
+          },
+          "eventB": {
+            "description": "The second event ID to compare.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "eventA",
+          "eventB"
+        ],
+        "type": "object"
+      },
+      "name": "diff_pipeline_state"
+    },
+    {
+      "description": "Get a summary of the bound pipeline state at the current event: bound shaders per stage, primitive topology, render targets and depth target. For per-stage detail use the focused get_vertex_input / get_viewports_scissors / get_rasterizer_state / get_blend_state / get_depth_stencil_state / get_resource_bindings / get_constant_buffers tools.",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "get_pipeline_state"
+    },
+    {
+      "description": "Get the vertex-input stage state at the current event: primitive topology, rasterized stream, primitive-restart, vertex input attributes (name, slot, offset, format), bound vertex buffers and the index buffer (ids/offsets/strides/sizes - no contents).",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "get_vertex_input"
+    },
+    {
+      "description": "Get the bound viewports and scissor rectangles at the current event (x/y/width/height, depth range, enabled flag).",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "get_viewports_scissors"
+    },
+    {
+      "description": "Get the common rasterizer state at the current event: fill mode, cull mode and front-face winding.",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "get_rasterizer_state"
+    },
+    {
+      "description": "Get the output-merger blend state at the current event: the blend factor, whether independent blending is enabled, and per-target color/alpha blend equations, write mask and logic op.",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "get_blend_state"
+    },
+    {
+      "description": "Get the depth-stencil state at the current event: depth test/write/function and optional depth bounds, plus stencil enable and the front/back stencil face operations and masks.",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "get_depth_stencil_state"
+    },
+    {
+      "description": "Get the resource bindings for a shader stage at the current event: read-only resources, read/write (UAV) resources and samplers. Returns binding metadata only (slot, declared name, descriptor type, bound resource id/format/range, sub-resource range, sampler state) - not the resource contents.",
+      "inputSchema": {
+        "properties": {
+          "onlyUsed": {
+            "description": "If true, omit descriptors declared but not accessed by the shader (default false).",
+            "type": "boolean"
+          },
+          "stage": {
+            "description": "Shader stage: vertex, hull, domain, geometry, pixel, or compute.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stage"
+        ],
+        "type": "object"
+      },
+      "name": "get_resource_bindings"
+    },
+    {
+      "description": "Get the constant blocks / constant buffers bound to a shader stage at the current event: declared name and size, variable count, and the bound buffer id/offset/range. Metadata only - it does not read back the constant buffer values.",
+      "inputSchema": {
+        "properties": {
+          "onlyUsed": {
+            "description": "If true, omit constant blocks declared but not accessed by the shader (default false).",
+            "type": "boolean"
+          },
+          "stage": {
+            "description": "Shader stage: vertex, hull, domain, geometry, pixel, or compute.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stage"
+        ],
+        "type": "object"
+      },
+      "name": "get_constant_buffers"
+    },
+    {
+      "description": "Get the multisample / MSAA state at the current event (API-specific): sample count/mask, alpha-to-coverage, and per-API fields such as sample shading (Vulkan/GL), forced sample count (D3D) and sample coverage (GL).",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "get_multisample_state"
+    },
+    {
+      "description": "Get the explicit resource/barrier states at the current event: Vulkan image layouts or D3D12 resource states, per resource (and per sub-resource range where they differ). Only Vulkan and D3D12 track these; other APIs report supported=false.",
+      "inputSchema": {
+        "properties": {
+          "limit": {
+            "description": "Maximum number of resources to return (default 200, max 2000).",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Index of the first resources to return (default 0).",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "name": "get_resource_states"
+    },
+    {
+      "description": "Get push-constant metadata at the current event: on Vulkan the bound push-constant byte size and the declared block layout (name/size/variable count per stage); on D3D12 the root-constant parameters (space/register/size/visibility). Metadata only - no values. D3D11/OpenGL report supported=false (they use uniforms).",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "get_push_constants"
+    },
+    {
+      "description": "Get the D3D12 root signature and bound descriptor heaps at the current event: root signature id, bound descriptor heaps, root parameters (root constants / root descriptors / descriptor tables with their ranges) and static samplers. D3D12 captures only.",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "get_root_signature"
+    },
+    {
+      "description": "Read raw bytes from a buffer resource and return them as a hex string. This reads actual GPU data (vertex/index/storage/constant buffer backing). Length-capped; reports the total buffer size and whether the result was truncated.",
+      "inputSchema": {
+        "properties": {
+          "length": {
+            "description": "Number of bytes to read (default 256, max 65536).",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Byte offset to start reading from (default 0).",
+            "type": "integer"
+          },
+          "resourceId": {
+            "description": "The buffer resource id (e.g. from list_buffers / get_vertex_input).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resourceId"
+        ],
+        "type": "object"
+      },
+      "name": "get_buffer_data"
+    },
+    {
+      "description": "Read the value of a single pixel in a texture at the current event (top-left origin). Returns the RGBA value interpreted per the texture's component type.",
+      "inputSchema": {
+        "properties": {
+          "mip": {
+            "description": "Mip level (default 0).",
+            "type": "integer"
+          },
+          "resourceId": {
+            "description": "The texture resource id (from list_textures / get_pipeline_state).",
+            "type": "string"
+          },
+          "sample": {
+            "description": "Sample index for an MSAA texture (default 0).",
+            "type": "integer"
+          },
+          "slice": {
+            "description": "Array slice / 3D depth slice / cubemap face (default 0).",
+            "type": "integer"
+          },
+          "x": {
+            "description": "Pixel x coordinate (top-left origin).",
+            "type": "integer"
+          },
+          "y": {
+            "description": "Pixel y coordinate (top-left origin).",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "resourceId",
+          "x",
+          "y"
+        ],
+        "type": "object"
+      },
+      "name": "pick_pixel"
+    },
+    {
+      "description": "Compute the minimum and maximum RGBA values across a texture subresource at the current event (useful for inspecting value ranges of render targets / data textures).",
+      "inputSchema": {
+        "properties": {
+          "mip": {
+            "description": "Mip level (default 0).",
+            "type": "integer"
+          },
+          "resourceId": {
+            "description": "The texture resource id (from list_textures).",
+            "type": "string"
+          },
+          "sample": {
+            "description": "Sample index for an MSAA texture (default 0).",
+            "type": "integer"
+          },
+          "slice": {
+            "description": "Array/3D/cubemap slice (default 0).",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "resourceId"
+        ],
+        "type": "object"
+      },
+      "name": "get_texture_minmax"
+    },
+    {
+      "description": "Read the live, decoded values of a constant block bound at a shader stage and event: the named, typed variable tree (scalars/vectors/matrices/structs/arrays). Works for buffer-backed constant buffers as well as push constants / root constants / uniforms.",
+      "inputSchema": {
+        "properties": {
+          "arrayIndex": {
+            "description": "For an arrayed constant block binding, the array element (default 0).",
+            "type": "integer"
+          },
+          "slot": {
+            "description": "The constant block index (from get_shader / get_constant_buffers), default 0.",
+            "type": "integer"
+          },
+          "stage": {
+            "description": "Shader stage: vertex, hull, domain, geometry, pixel, or compute.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stage"
+        ],
+        "type": "object"
+      },
+      "name": "get_constant_buffer_contents"
+    },
+    {
+      "description": "Read decoded RGBA pixel values over a rectangular texture region at the current event, returned as rows of pixels. width*height must be <= 1024 (each pixel is a separate readback). Use pick_pixel for a single pixel.",
+      "inputSchema": {
+        "properties": {
+          "height": {
+            "description": "Region height in pixels (default 8).",
+            "type": "integer"
+          },
+          "mip": {
+            "description": "Mip level (default 0).",
+            "type": "integer"
+          },
+          "resourceId": {
+            "description": "The texture resource id (from list_textures).",
+            "type": "string"
+          },
+          "sample": {
+            "description": "Sample index for an MSAA texture (default 0).",
+            "type": "integer"
+          },
+          "slice": {
+            "description": "Array/3D/cubemap slice (default 0).",
+            "type": "integer"
+          },
+          "width": {
+            "description": "Region width in pixels (default 8).",
+            "type": "integer"
+          },
+          "x": {
+            "description": "Region origin x (top-left origin, default 0).",
+            "type": "integer"
+          },
+          "y": {
+            "description": "Region origin y (top-left origin, default 0).",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "resourceId"
+        ],
+        "type": "object"
+      },
+      "name": "read_texture_region"
+    },
+    {
+      "description": "Compute a value histogram for a texture subresource at the current event: a list of bucket counts over the value range (auto-derived from min/max unless minValue/maxValue are given), for the selected channels.",
+      "inputSchema": {
+        "properties": {
+          "channels": {
+            "description": "Optional array of up to 4 booleans selecting R,G,B,A (default [true,true,true,false]).",
+            "type": "array"
+          },
+          "maxValue": {
+            "description": "Upper end of the histogram range (default: auto from the texture min/max).",
+            "type": "number"
+          },
+          "minValue": {
+            "description": "Lower end of the histogram range (default: auto from the texture min/max).",
+            "type": "number"
+          },
+          "mip": {
+            "description": "Mip level (default 0).",
+            "type": "integer"
+          },
+          "resourceId": {
+            "description": "The texture resource id (from list_textures).",
+            "type": "string"
+          },
+          "sample": {
+            "description": "Sample index for an MSAA texture (default 0).",
+            "type": "integer"
+          },
+          "slice": {
+            "description": "Array/3D/cubemap slice (default 0).",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "resourceId"
+        ],
+        "type": "object"
+      },
+      "name": "get_texture_histogram"
+    },
+    {
+      "description": "Get the history of modifications to a single pixel up to the current event: per fragment the event id, primitive, pass/fail reasons (depth/stencil/scissor/discard/etc.) and the pre/shader-out/post colour, depth and stencil. Requires the replay to support pixel history (see get_api_properties.pixelHistory).",
+      "inputSchema": {
+        "properties": {
+          "mip": {
+            "description": "Mip level (default 0).",
+            "type": "integer"
+          },
+          "resourceId": {
+            "description": "The texture resource id (from list_textures / get_pipeline_state).",
+            "type": "string"
+          },
+          "sample": {
+            "description": "Sample index for an MSAA texture (default 0).",
+            "type": "integer"
+          },
+          "slice": {
+            "description": "Array/3D/cubemap slice (default 0).",
+            "type": "integer"
+          },
+          "x": {
+            "description": "Pixel x coordinate (top-left origin).",
+            "type": "integer"
+          },
+          "y": {
+            "description": "Pixel y coordinate (top-left origin).",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "resourceId",
+          "x",
+          "y"
+        ],
+        "type": "object"
+      },
+      "name": "get_pixel_history"
+    },
+    {
+      "description": "Read a buffer and decode it as an array of typed elements (e.g. float3 vertex positions, uint indices). Returns numeric values, not raw hex. Element count is capped; reports total buffer size and whether the result was truncated.",
+      "inputSchema": {
+        "properties": {
+          "count": {
+            "description": "Number of elements to decode (default: as many as fit, capped at 4096).",
+            "type": "integer"
+          },
+          "format": {
+            "description": "Element format: float, float2..float4, half, int, uint, short, ushort, byte, ubyte (with an optional 1-4 component suffix).",
+            "type": "string"
+          },
+          "offset": {
+            "description": "Byte offset to start decoding from (default 0).",
+            "type": "integer"
+          },
+          "resourceId": {
+            "description": "The buffer resource id (from list_buffers / get_vertex_input).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resourceId",
+          "format"
+        ],
+        "type": "object"
+      },
+      "name": "decode_buffer"
+    },
+    {
+      "description": "Read the post-transform (post-vertex/geometry-shader) mesh output at the current draw: the decoded position stream the shader produced (clip-space SV_Position, in draw order, resolving the output index buffer), plus topology, output vertex count, stride and position format. This is the data behind the Mesh Viewer's VS Out / GS Out. Vertex count is capped; reports whether the result was truncated. For ALL per-vertex varyings (TEXCOORD, NORMAL, COLOR, ...) use get_postvs_outputs instead.",
+      "inputSchema": {
+        "properties": {
+          "count": {
+            "description": "Number of output vertices to return (default 64, max 1024).",
+            "type": "integer"
+          },
+          "instance": {
+            "description": "Instance to fetch for instanced draws (default 0).",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "First output vertex/index to return (default 0).",
+            "type": "integer"
+          },
+          "stage": {
+            "description": "Which post-transform output: 'vsout' (vertex shader output, default) or 'gsout' (geometry/tessellation output).",
+            "type": "string"
+          },
+          "view": {
+            "description": "Multiview view index (default 0).",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "name": "get_postvs_data"
+    },
+    {
+      "description": "Read the FULL per-vertex post-transform output at the current draw - every varying the shader produced (SV_Position plus TEXCOORD/NORMAL/COLOR/etc.), not just position. The interleaved output layout is derived from the shader's output signature (this is the Mesh Viewer's VS Out / GS Out grid). Returns an 'outputs' layout descriptor and, per output vertex (in draw order, resolving the output index buffer), a 'values' object mapping each output name to its decoded numeric components. Vertex count is capped; reports whether the result was truncated. Use get_postvs_data for just the position stream.",
+      "inputSchema": {
+        "properties": {
+          "count": {
+            "description": "Number of output vertices to return (default 32, max 1024).",
+            "type": "integer"
+          },
+          "instance": {
+            "description": "Instance to fetch for instanced draws (default 0).",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "First output vertex/index to return (default 0).",
+            "type": "integer"
+          },
+          "stage": {
+            "description": "Which post-transform output: 'vsout' (vertex shader output, default) or 'gsout' (geometry/tessellation output).",
+            "type": "string"
+          },
+          "view": {
+            "description": "Multiview view index (default 0).",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "name": "get_postvs_outputs"
+    },
+    {
+      "description": "Read the raw bytes of a whole texture subresource (one mip/slice/sample) as hex, in a single bulk readback, plus metadata: mip dimensions, format, and (for regular formats) bytes-per-pixel and row pitch so the bytes can be decoded. Length-capped with offset/length paging and a truncated flag. Unlike read_texture_region (which is capped at 1024 pixels via per-pixel picks) this returns the full subresource efficiently.",
+      "inputSchema": {
+        "properties": {
+          "length": {
+            "description": "Number of bytes to return (default 4096, max 131072).",
+            "type": "integer"
+          },
+          "mip": {
+            "description": "Mip level (default 0).",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Byte offset within the subresource to start reading (default 0).",
+            "type": "integer"
+          },
+          "resourceId": {
+            "description": "The texture resource id (from list_textures).",
+            "type": "string"
+          },
+          "sample": {
+            "description": "Sample index for an MSAA texture (default 0).",
+            "type": "integer"
+          },
+          "slice": {
+            "description": "Array/3D/cubemap slice (default 0).",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "resourceId"
+        ],
+        "type": "object"
+      },
+      "name": "get_texture_data"
+    },
+    {
+      "description": "Compute per-channel summary statistics over a texture subresource (one mip/slice/sample): min, max, mean, stddev plus counts of NaN, Inf, exactly-0 and exactly-1 values - a fast sanity check for whether a texture/render target is broken (all black/white, full of NaNs, uninitialised, etc.). Decodes regular (uncompressed) formats; rejects block-compressed/packed formats (use get_texture_minmax / get_texture_histogram for those). Texel count is capped; larger subresources are stride-sampled across the whole image (reports sampleStride and pixelsSampled).",
+      "inputSchema": {
+        "properties": {
+          "maxPixels": {
+            "description": "Cap on texels to process (default 1000000, max 16000000). If the subresource is larger it is stride-sampled across the whole image.",
+            "type": "integer"
+          },
+          "mip": {
+            "description": "Mip level (default 0).",
+            "type": "integer"
+          },
+          "resourceId": {
+            "description": "The texture resource id (from list_textures).",
+            "type": "string"
+          },
+          "sample": {
+            "description": "Sample index for an MSAA texture (default 0).",
+            "type": "integer"
+          },
+          "slice": {
+            "description": "Array/3D/cubemap slice (default 0).",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "resourceId"
+        ],
+        "type": "object"
+      },
+      "name": "get_texture_stats"
+    },
+    {
+      "description": "Save a texture subresource (one mip/slice/sample) to an image FILE on disk and return its path - the way to produce a VIEWABLE image of a render target / texture (unlike get_texture_data which returns raw bytes). Encodes via RenderDoc's SaveTexture with the Texture Viewer's default mapping. WRITES A FILE: by default into the temp directory %TEMP%/renderdoc_mcp; an existing file is never overwritten unless overwrite:true. The MCP server returns the path only - it does not display the image; the calling agent should surface the file to the user itself (e.g. SendUserFile). Returns path, byte size, format and dimensions.",
+      "inputSchema": {
+        "properties": {
+          "filename": {
+            "description": "Optional output file name (basename only, no path separators). Written into the temp directory %TEMP%/renderdoc_mcp. If omitted, a name is auto-generated from the resource, event and mip/slice.",
+            "type": "string"
+          },
+          "format": {
+            "description": "Image file format: png (default), jpg, bmp, tga, hdr, exr or dds. PNG/JPG/BMP/TGA are 8-bit LDR; HDR/EXR/DDS preserve float/HDR data. The file extension is forced to match.",
+            "type": "string"
+          },
+          "jpegQuality": {
+            "description": "JPG quality 1-100 (default 90); only used for format=jpg.",
+            "type": "integer"
+          },
+          "mip": {
+            "description": "Mip level to save (default 0).",
+            "type": "integer"
+          },
+          "overwrite": {
+            "description": "Allow replacing an existing file at the target path (default false: existing files are never overwritten).",
+            "type": "boolean"
+          },
+          "path": {
+            "description": "Optional explicit ABSOLUTE output path (escape hatch). Allowed only if its parent directory already exists. Overrides 'filename'.",
+            "type": "string"
+          },
+          "resourceId": {
+            "description": "The texture resource id (from list_textures).",
+            "type": "string"
+          },
+          "sample": {
+            "description": "MSAA sample index to save. Omit to resolve-average all samples (the default).",
+            "type": "integer"
+          },
+          "slice": {
+            "description": "Array/3D/cubemap slice to save (default 0; -1 writes all slices in formats that support it).",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "resourceId"
+        ],
+        "type": "object"
+      },
+      "name": "save_texture"
+    },
+    {
+      "description": "Export the full pipeline state at the CURRENT event to a JSON file (for diff/archival/attaching to a bug): the summary, vertex input, viewports/scissors, rasterizer, blend, depth-stencil, multisample, push/root constants and root signature, plus per-stage resource bindings and constant-buffer metadata. WRITES A FILE under the same path policy as save_texture (temp dir by default, no blind overwrite); returns the path. Use set_event first to choose the event.",
+      "inputSchema": {
+        "properties": {
+          "filename": {
+            "description": "Optional output file name (basename only, no path separators) written into %TEMP%/renderdoc_mcp. Auto-named if omitted. Extension forced to .json.",
+            "type": "string"
+          },
+          "overwrite": {
+            "description": "Allow replacing an existing file (default false).",
+            "type": "boolean"
+          },
+          "path": {
+            "description": "Optional explicit ABSOLUTE output path (parent dir must exist). Overrides 'filename'.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "export_pipeline_state"
+    },
+    {
+      "description": "Export the frame's action/event tree to a JSON file as a NESTED tree (each node: eventId, actionId, name, flags, index/instance counts, and children). Unlike get_action_tree (flattened + paginated) this writes the whole hierarchy in one file for archival/diffing. WRITES A FILE under the same path policy as save_texture; returns the path. Bounded by maxDepth and a node cap (reports truncation).",
+      "inputSchema": {
+        "properties": {
+          "filename": {
+            "description": "Optional output file name (basename only) written into %TEMP%/renderdoc_mcp. Auto-named if omitted. Extension forced to .json.",
+            "type": "string"
+          },
+          "maxDepth": {
+            "description": "Maximum nesting depth to serialise (default -1 = unlimited). Deeper children are omitted with a childrenOmitted flag.",
+            "type": "integer"
+          },
+          "overwrite": {
+            "description": "Allow replacing an existing file (default false).",
+            "type": "boolean"
+          },
+          "path": {
+            "description": "Optional explicit ABSOLUTE output path (parent dir must exist). Overrides 'filename'.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "export_event_tree"
+    },
+    {
+      "description": "Generate a Markdown frame report and write it to a file - a human-readable summary an agent can attach to a bug. Composes capture info (file, API, frame, resource counts), the slowest draws by GPU duration (one FetchCounters pass, annotated with action names), and the validation/debug messages. WRITES A FILE under the same path policy as save_texture; returns the path. Note: sampling counters re-runs the frame, so GPU durations vary slightly run to run.",
+      "inputSchema": {
+        "properties": {
+          "filename": {
+            "description": "Optional output file name (basename only) written into %TEMP%/renderdoc_mcp. Auto-named if omitted. Extension forced to .md.",
+            "type": "string"
+          },
+          "maxMessages": {
+            "description": "How many validation/debug messages to include (default 50, max 1000).",
+            "type": "integer"
+          },
+          "overwrite": {
+            "description": "Allow replacing an existing file (default false).",
+            "type": "boolean"
+          },
+          "path": {
+            "description": "Optional explicit ABSOLUTE output path (parent dir must exist). Overrides 'filename'.",
+            "type": "string"
+          },
+          "topDraws": {
+            "description": "How many slowest draws (by GPU duration) to include (default 15, max 200).",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "name": "export_frame_report"
+    },
+    {
+      "description": "List the GPU performance counters available for this capture/replay (e.g. GPU duration, primitives, shader invocations, samples). Returns each counter's id, name, category, description, unit and result type. Use the ids/names with sample_counters. Returns an empty list with a note if the replay backend exposes no counters.",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "list_counters"
+    },
+    {
+      "description": "Sample GPU performance counters across the frame's events (one FetchCounters pass on the replay thread) and return per-event values. By default returns GPU duration per event sorted most-expensive-first - the direct way to find the slowest draws/dispatches. Pass 'counters' to sample others (e.g. primitives, invocations). Rows are {eventId, values:{counterName:value}}; result count is capped (reports totalEvents and truncated). Bound the work with minEventId/maxEventId.",
+      "inputSchema": {
+        "properties": {
+          "counters": {
+            "description": "Counters to sample: an array of counter ids (integers) and/or names (strings, case-insensitive) from list_counters. Defaults to GPU duration per event.",
+            "type": "array"
+          },
+          "limit": {
+            "description": "Max rows to return (default 100, max 2000).",
+            "type": "integer"
+          },
+          "maxEventId": {
+            "description": "Only include events with id <= this (optional).",
+            "type": "integer"
+          },
+          "minEventId": {
+            "description": "Only include events with id >= this (optional).",
+            "type": "integer"
+          },
+          "sort": {
+            "description": "'value' (default: descending by the first counter, i.e. most expensive first) or 'eventId' (ascending).",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "sample_counters"
+    },
+    {
+      "description": "Search a buffer for a byte pattern - either a hex 'pattern' or a typed 'value' + 'valueFormat' (useful for finding a magic number, a specific index/id, or a known float). Returns the matching byte offsets (capped) plus total match count. The scanned region is bounded.",
+      "inputSchema": {
+        "properties": {
+          "length": {
+            "description": "Number of bytes to search (default: to end of buffer; capped at 16 MiB).",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Byte offset to start searching from (default 0).",
+            "type": "integer"
+          },
+          "pattern": {
+            "description": "Byte pattern to find, as a hex string (e.g. \"deadbeef\" or \"00 00 80 3f\").",
+            "type": "string"
+          },
+          "resourceId": {
+            "description": "The buffer resource id (from list_buffers).",
+            "type": "string"
+          },
+          "value": {
+            "description": "Alternatively, a numeric value to find (encoded to bytes via 'valueFormat').",
+            "type": "number"
+          },
+          "valueFormat": {
+            "description": "Format for 'value': float, int, uint, short, ushort, byte or ubyte.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resourceId"
+        ],
+        "type": "object"
+      },
+      "name": "search_buffer"
+    },
+    {
+      "description": "Decode a buffer as an array of structs given a field layout (name/format/optional byteOffset per field, plus a stride) - for StructuredBuffers / SSBOs / interleaved vertex data. Each element is returned as a named object. Use decode_buffer for a flat array of one element format. Element count capped; reports truncation.",
+      "inputSchema": {
+        "properties": {
+          "count": {
+            "description": "Number of structs to decode (default: as many as fit, capped at 1024).",
+            "type": "integer"
+          },
+          "fields": {
+            "description": "Struct layout: an array of {name, format, byteOffset?} objects. format is float, float2..4, int, uint, short, ushort, byte, ubyte. byteOffset defaults to tightly-packed order.",
+            "type": "array"
+          },
+          "offset": {
+            "description": "Byte offset to start decoding from (default 0).",
+            "type": "integer"
+          },
+          "resourceId": {
+            "description": "The buffer resource id (from list_buffers).",
+            "type": "string"
+          },
+          "stride": {
+            "description": "Bytes between consecutive structs (default: the end of the last field).",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "resourceId",
+          "fields"
+        ],
+        "type": "object"
+      },
+      "name": "decode_structured_buffer"
+    },
+    {
+      "description": "List resources in the loaded capture (id, name, type).",
+      "inputSchema": {
+        "properties": {
+          "limit": {
+            "description": "Maximum number of resources to return (default 200, max 2000).",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Index of the first resources to return (default 0).",
+            "type": "integer"
+          },
+          "type": {
+            "description": "Optional resource type filter (e.g. Texture, Buffer, Shader), case-insensitive.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "list_resources"
+    },
+    {
+      "description": "List textures in the loaded capture with dimensions, format and mip/array/sample counts.",
+      "inputSchema": {
+        "properties": {
+          "limit": {
+            "description": "Maximum number of textures to return (default 200, max 2000).",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Index of the first textures to return (default 0).",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "name": "list_textures"
+    },
+    {
+      "description": "List buffers in the loaded capture with byte length and usage flags.",
+      "inputSchema": {
+        "properties": {
+          "limit": {
+            "description": "Maximum number of buffers to return (default 200, max 2000).",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Index of the first buffers to return (default 0).",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "name": "list_buffers"
+    },
+    {
+      "description": "Get full details for a single resource by id, including texture or buffer specifics and derived/parent resources.",
+      "inputSchema": {
+        "properties": {
+          "id": {
+            "description": "The resource id string from a list_* tool (e.g. \"ResourceId::1234\").",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "name": "get_resource"
+    },
+    {
+      "description": "Get shader reflection for the shader bound at a stage at the current event: entry point, encoding, constant blocks and resource bindings.",
+      "inputSchema": {
+        "properties": {
+          "stage": {
+            "description": "Shader stage: vertex, hull, domain, geometry, pixel, or compute.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stage"
+        ],
+        "type": "object"
+      },
+      "name": "get_shader"
+    },
+    {
+      "description": "Disassemble the shader bound at a stage at the current event. Output is capped in length.",
+      "inputSchema": {
+        "properties": {
+          "stage": {
+            "description": "Shader stage: vertex, hull, domain, geometry, pixel, or compute.",
+            "type": "string"
+          },
+          "target": {
+            "description": "Optional disassembly target (see availableTargets); defaults to the first.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stage"
+        ],
+        "type": "object"
+      },
+      "name": "disassemble_shader"
+    },
+    {
+      "description": "Get the high-level source for the shader bound at a stage at the current event (when the capture embeds debug info): the source file(s) and contents, entry point, source encoding/compiler, compile flags, whether the shader is debuggable (and why not), and any shader messages (printf/validation) emitted by this stage. Source is length-capped. Use disassemble_shader for the low-level disassembly.",
+      "inputSchema": {
+        "properties": {
+          "stage": {
+            "description": "Shader stage: vertex, hull, domain, geometry, pixel, or compute.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stage"
+        ],
+        "type": "object"
+      },
+      "name": "get_shader_source"
+    },
+    {
+      "description": "Debug the vertex shader for one vertex at the current draw, running the trace to completion. Returns the input variables, a bounded per-step trace (instruction index and changed registers) and the final variable state (which includes the shader outputs). Requires the capture/replay to support shader debugging.",
+      "inputSchema": {
+        "properties": {
+          "index": {
+            "description": "The actual index used to look up vertex inputs (from the index buffer, with draw offsets applied). Defaults to 'vertex'; pass explicitly for indexed draws.",
+            "type": "integer"
+          },
+          "instance": {
+            "description": "Instance index (default 0).",
+            "type": "integer"
+          },
+          "vertex": {
+            "description": "0-based vertex index within the draw.",
+            "type": "integer"
+          },
+          "view": {
+            "description": "Multiview viewport index (default 0).",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "vertex"
+        ],
+        "type": "object"
+      },
+      "name": "debug_vertex"
+    },
+    {
+      "description": "Debug the pixel/fragment shader for one pixel at the current draw, running the trace to completion. Returns the input variables, a bounded per-step trace and the final variable state (which includes the output colour). The pixel must be covered by the draw. Requires the capture/replay to support shader debugging.",
+      "inputSchema": {
+        "properties": {
+          "primitive": {
+            "description": "Disambiguate which primitive's fragment to debug if several cover the pixel (default: any).",
+            "type": "integer"
+          },
+          "sample": {
+            "description": "MSAA sample index (default 0).",
+            "type": "integer"
+          },
+          "view": {
+            "description": "Layered/multiview view index (default 0).",
+            "type": "integer"
+          },
+          "x": {
+            "description": "Pixel x coordinate (top-left origin).",
+            "type": "integer"
+          },
+          "y": {
+            "description": "Pixel y coordinate (top-left origin).",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "type": "object"
+      },
+      "name": "debug_pixel"
+    },
+    {
+      "description": "Debug the compute shader for one thread at the current dispatch, running the trace to completion. Returns the input variables (thread/group ids), a bounded per-step trace and the final variable state. Requires the capture/replay to support shader debugging.",
+      "inputSchema": {
+        "properties": {
+          "group": {
+            "description": "3-element [x,y,z] workgroup index.",
+            "type": "array"
+          },
+          "thread": {
+            "description": "3-element [x,y,z] thread index within the workgroup.",
+            "type": "array"
+          }
+        },
+        "required": [
+          "group",
+          "thread"
+        ],
+        "type": "object"
+      },
+      "name": "debug_thread"
+    },
+    {
+      "description": "List validation/debug messages recorded in the loaded capture.",
+      "inputSchema": {
+        "properties": {
+          "limit": {
+            "description": "Maximum number of messages to return (default 200, max 2000).",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Index of the first messages to return (default 0).",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "name": "get_debug_messages"
+    },
+    {
+      "description": "List running processes on the local machine (pid, name, window title, command line) that RenderDoc could attach to.",
+      "inputSchema": {
+        "properties": {
+          "filter": {
+            "description": "Optional case-insensitive substring to match against the process name.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Maximum number of processes to return (default 200, max 2000).",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Index of the first processes to return (default 0).",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "name": "list_processes"
+    },
+    {
+      "description": "Inject RenderDoc into a running process by PID and open a control connection to it so captures can be triggered. Requires \"Allow process injection\" to be enabled in RenderDoc settings. Only one process can be attached at a time.",
+      "inputSchema": {
+        "properties": {
+          "pid": {
+            "description": "The process ID to inject RenderDoc into (from list_processes).",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pid"
+        ],
+        "type": "object"
+      },
+      "name": "attach_to_process"
+    },
+    {
+      "description": "Report whether RenderDoc is currently attached to a process, including the target name, PID, API in use, and how many captures it has produced.",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "get_attach_status"
+    },
+    {
+      "description": "Close the control connection to the attached process. The target application keeps running.",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "detach_process"
+    },
+    {
+      "description": "Trigger a frame capture on the attached process and wait for the resulting capture file. The process must be presenting frames. Returns the capture file path(s).",
+      "inputSchema": {
+        "properties": {
+          "numFrames": {
+            "description": "How many frames to capture (default 1).",
+            "type": "integer"
+          },
+          "open": {
+            "description": "If true, open the resulting capture in RenderDoc's replay view (replaces any capture currently open).",
+            "type": "boolean"
+          },
+          "timeoutMs": {
+            "description": "How long to wait for the capture to be produced, in ms (default 10000, max 60000).",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "name": "trigger_capture"
+    },
+    {
+      "description": "List RenderDoc instances already running in local processes (apps that loaded the RenderDoc layer or in-application API). Each entry has an ident (for connect_to_target), pid, target name and API. Unlike list_processes, these are connectable without injecting.",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "list_targets"
+    },
+    {
+      "description": "Connect to a RenderDoc instance already running in a process (from list_targets), without injecting. Use this for apps that are already RenderDoc-enabled. Afterwards use trigger_capture / get_attach_status / detach_process as with attach_to_process.",
+      "inputSchema": {
+        "properties": {
+          "ident": {
+            "description": "The target ident from list_targets.",
+            "type": "integer"
+          },
+          "pid": {
+            "description": "Alternatively, the process ID; its ident is resolved automatically from list_targets.",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "name": "connect_to_target"
+    },
+    {
+      "description": "Compile 'source' and replace the shader bound at 'stage' in the live replay, then re-replay the current event so subsequent reads (post-VS, debug, pixel/depth) reflect the edit - no recapture. Replay-only: the .rdc file is not modified, and the change is reversible with revert_shader. On a compile failure nothing is replaced and the errors are returned. Gated behind the MCP_Server_AllowShaderEdit setting.",
+      "inputSchema": {
+        "properties": {
+          "encoding": {
+            "description": "Source encoding: glsl|hlsl|spirv|spirv-asm|slang. Defaults to the shader's original source encoding (see availableEncodings in the result).",
+            "type": "string"
+          },
+          "entryPoint": {
+            "description": "Entry point name. Defaults to the original.",
+            "type": "string"
+          },
+          "source": {
+            "description": "The full replacement shader source. Must be self-contained - resolve #includes yourself; the replay compiler has no filesystem.",
+            "type": "string"
+          },
+          "stage": {
+            "description": "Pipeline stage of the bound shader to replace (vertex|hull|domain|geometry|pixel|compute).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stage",
+          "source"
+        ],
+        "type": "object"
+      },
+      "name": "replace_shader"
+    },
+    {
+      "description": "Undo shader replacements from replace_shader, restoring the captured shader(s) and re-replaying the current event. Reverts all unless 'resourceId' is given.",
+      "inputSchema": {
+        "properties": {
+          "resourceId": {
+            "description": "Revert only this shader (its original resource id, as returned by replace_shader or list_shader_replacements). Omit to revert all active replacements.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "revert_shader"
+    },
+    {
+      "description": "List the shader replacements currently active in the replay (each with the original resource id/name and the built replacement id).",
+      "inputSchema": {
+        "properties": {},
+        "type": "object"
+      },
+      "name": "list_shader_replacements"
+    }
+  ]
+}
