@@ -15,6 +15,7 @@ class Compute_pipeline;
 class Compute_pipeline_state;
 class Compute_command_encoder_impl;
 class Device;
+class Sampler;
 class Texture;
 
 class Compute_command_encoder final : public Command_encoder
@@ -36,6 +37,12 @@ public:
     // it (and for barriers between dispatches). Vulkan backend only; GL / Metal
     // / Null are no-ops (the atmosphere LUT path that uses this is Vulkan-only).
     void set_storage_image         (uint32_t binding_point, const Texture& texture);
+    // Bind a sampled texture + sampler to the given binding point (must be a
+    // combined_image_sampler binding in the active Bind_group_layout). The
+    // texture must be in Image_layout::shader_read_only_optimal. Vulkan backend
+    // only; GL / Metal / Null are no-ops (only the KosmicKrisp storage-image
+    // read workaround uses this - those backends read the image directly).
+    void set_sampled_image         (uint32_t binding_point, const Texture& texture, const Sampler& sampler);
     void set_compute_pipeline_state(const Compute_pipeline_state& pipeline);
     void set_compute_pipeline      (const Compute_pipeline& pipeline);
     void dispatch_compute          (std::uintptr_t x_size, std::uintptr_t y_size, std::uintptr_t z_size);

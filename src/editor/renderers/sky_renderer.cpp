@@ -152,18 +152,33 @@ Sky_renderer::Sky_renderer(
             .uses_texture_heap = false
         }
     );
+    // binding 0 = the transmittance LUT consumed by the multi-scatter pass.
+    // Normally a storage image read via imageLoad; on drivers that reject
+    // OpImageRead from a storage image in compute (KosmicKrisp) we instead
+    // bind it as a sampled texture and read it via texelFetch. Both the bind
+    // group type here and the shader path (WORKAROUND_NO_COMPUTE_STORAGE_IMAGE_READ)
+    // are keyed off the same device flag so they stay in agreement.
+    m_sample_transmittance_lut = graphics_device.get_info().workaround_no_compute_storage_image_read;
+    Bind_group_layout_binding transmittance_binding{};
+    transmittance_binding.binding_point = 0;
+    transmittance_binding.stage_flags   = Shader_stage_flags::compute;
+    if (m_sample_transmittance_lut) {
+        transmittance_binding.type            = Binding_type::combined_image_sampler;
+        transmittance_binding.sampler_aspect  = Sampler_aspect::color;
+        transmittance_binding.name            = "s_transmittance";
+        transmittance_binding.glsl_type       = Glsl_type::sampler_2d;
+        transmittance_binding.is_texture_heap = false;
+    } else {
+        transmittance_binding.type         = Binding_type::storage_image;
+        transmittance_binding.name         = "i_transmittance";
+        transmittance_binding.glsl_type    = Glsl_type::image_2d;
+        transmittance_binding.image_format = "rgba16f";
+    }
     m_multiscatter_layout = std::make_unique<Bind_group_layout>(
         graphics_device,
         Bind_group_layout_create_info{
             .bindings = {
-                {
-                    .binding_point = 0,
-                    .type          = Binding_type::storage_image,
-                    .name          = "i_transmittance",
-                    .glsl_type     = Glsl_type::image_2d,
-                    .image_format  = "rgba16f",
-                    .stage_flags   = Shader_stage_flags::compute
-                },
+                transmittance_binding,
                 {
                     .binding_point = 1,
                     .type          = Binding_type::storage_image,
@@ -356,18 +371,27 @@ void Sky_renderer::ensure_luts(erhe::graphics::Device& graphics_device, erhe::gr
         encoder.dispatch_compute(c_transmittance_width / 8, c_transmittance_height / 8, 1);
     }
 
-    // Make the transmittance writes visible to the multi-scatter pass (both
-    // stay in GENERAL, so transition_texture_layout would be a no-op).
+    // Make the transmittance writes visible to the multi-scatter pass.
     command_buffer.memory_barrier(Memory_barrier_mask::shader_image_access_barrier_bit);
 
-    // Pass 2: multi-scatter LUT (reads transmittance via imageLoad, writes
-    // multi-scatter).
+    // Pass 2: multi-scatter LUT. Reads the transmittance LUT (as a sampled
+    // texture on the workaround path, else as a storage image via imageLoad) and
+    // writes the multi-scatter storage image. When sampling, the transmittance
+    // LUT must be in shader-read layout for the dispatch; otherwise both LUTs
+    // stay in GENERAL.
+    if (m_sample_transmittance_lut) {
+        command_buffer.transition_texture_layout(*m_transmittance_lut, Image_layout::shader_read_only_optimal);
+    }
     command_buffer.transition_texture_layout(*m_multiscatter_lut, Image_layout::general);
     {
         Compute_command_encoder encoder = graphics_device.make_compute_command_encoder(command_buffer);
         encoder.set_bind_group_layout(m_multiscatter_layout.get());
         encoder.set_compute_pipeline(*m_multiscatter_pipeline);
-        encoder.set_storage_image(0, *m_transmittance_lut);
+        if (m_sample_transmittance_lut) {
+            encoder.set_sampled_image(0, *m_transmittance_lut, *m_lut_sampler);
+        } else {
+            encoder.set_storage_image(0, *m_transmittance_lut);
+        }
         encoder.set_storage_image(1, *m_multiscatter_lut);
         encoder.dispatch_compute(c_multiscatter_size / 8, c_multiscatter_size / 8, 1);
     }

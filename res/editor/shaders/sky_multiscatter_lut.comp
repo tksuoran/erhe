@@ -5,9 +5,12 @@
 // over the sphere assuming uniform unit incoming radiance, then closes the
 // infinite multiple-scattering series with the 1 / (1 - F_ms) factor.
 //
-// Reads the transmittance LUT (i_transmittance, binding 0, readonly storage
-// image) via manual bilinear imageLoad, and writes i_multiscatter (binding 1).
-// Both images are declared by the bind group layout; do not declare them here.
+// Reads the transmittance LUT at binding 0 (manual bilinear) and writes
+// i_multiscatter (binding 1). Both are declared by the bind group layout; do
+// not declare them here. The transmittance LUT is normally a storage image read
+// via imageLoad (i_transmittance); on devices that reject OpImageRead in compute
+// it is a sampler2D read via texelFetch (s_transmittance). See
+// WORKAROUND_NO_COMPUTE_STORAGE_IMAGE_READ and doc/shader_workarounds.md.
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
@@ -23,10 +26,22 @@ vec3 sample_transmittance(float r, float mu)
     ivec2 size_minus_one = ivec2(int(SKY_TRANSMITTANCE_LUT_WIDTH) - 1, int(SKY_TRANSMITTANCE_LUT_HEIGHT) - 1);
     ivec2 i0 = clamp(ivec2(floor(coord)),       ivec2(0), size_minus_one);
     ivec2 i1 = clamp(ivec2(floor(coord)) + 1,   ivec2(0), size_minus_one);
+#if defined(WORKAROUND_NO_COMPUTE_STORAGE_IMAGE_READ)
+    // KosmicKrisp (Vulkan-on-Metal) rejects OpImageRead from a storage image in
+    // compute, so the transmittance LUT is bound as a sampler2D and read with
+    // texelFetch (OpImageFetch), which the driver accepts. texelFetch is an
+    // unfiltered single-texel read at lod 0, so the values match imageLoad and
+    // the manual bilinear below is identical.
+    vec3 t00 = texelFetch(s_transmittance, ivec2(i0.x, i0.y), 0).rgb;
+    vec3 t10 = texelFetch(s_transmittance, ivec2(i1.x, i0.y), 0).rgb;
+    vec3 t01 = texelFetch(s_transmittance, ivec2(i0.x, i1.y), 0).rgb;
+    vec3 t11 = texelFetch(s_transmittance, ivec2(i1.x, i1.y), 0).rgb;
+#else
     vec3 t00 = imageLoad(i_transmittance, ivec2(i0.x, i0.y)).rgb;
     vec3 t10 = imageLoad(i_transmittance, ivec2(i1.x, i0.y)).rgb;
     vec3 t01 = imageLoad(i_transmittance, ivec2(i0.x, i1.y)).rgb;
     vec3 t11 = imageLoad(i_transmittance, ivec2(i1.x, i1.y)).rgb;
+#endif
     return mix(mix(t00, t10, f.x), mix(t01, t11, f.x), f.y);
 }
 
