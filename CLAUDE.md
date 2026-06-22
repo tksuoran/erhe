@@ -183,6 +183,58 @@ The minidump and `logs/log.txt` are a starting hypothesis, not the diagnosis -- 
 - The startup project is `editor`; `build_status` reports `NoBuildPerformed` until a build is triggered through VS or the MCP build tools.
 - This complements -- does not replace -- the log-based workflow below (`logs/log.txt`) and the Quest/Android debugging flows, which run on-device and are out of VS's reach.
 
+## Building / diagnostics on macOS (Xcode MCP server)
+
+On macOS, prefer the **`xcode` MCP server** (Apple's official Xcode MCP, prefix `mcp__xcode__`) for build, diagnostics, and in-project file navigation over ad-hoc shell `xcodebuild` invocations. It drives a *live* Xcode instance that has the erhe `.xcodeproj` open, so it builds the exact scheme/config the user is working in and returns structured errors. Verified working against `build_xcode_vulkan/erhe.xcodeproj` (the Xcode-generated project is one logical `erhe` tree; C++ sources are reachable, e.g. `erhe/erhe-executables/editor/main.cpp`).
+
+**Always call `mcp__xcode__XcodeListWindows` first** to get the `tabIdentifier` (e.g. `windowtab1`) and confirm which workspace is loaded -- every other tool requires that `tabIdentifier`. If no Xcode window is open, fall back to the `scripts/configure_xcode_*.sh` + `cmake --build` flow.
+
+**What it CAN do (use these):**
+- **Build + diagnostics**: `BuildProject` (builds the active scheme, waits for completion), `GetBuildLog` (errors/warnings/remarks, filterable by `severity` / `pattern` regex / `glob`; reports `buildIsRunning` and `buildResult`), `XcodeListNavigatorIssues` (live Issue-Navigator issues incl. package/config problems -- can be huge, filter by `severity`/`glob`/`pattern`), `XcodeRefreshCodeIssuesInFile` (per-file compiler diagnostics).
+- **Project navigation / editing within the Xcode project organization** (NOT filesystem paths): `XcodeLS`, `XcodeGlob`, `XcodeGrep` (regex; remember double-escaping in the JSON arg, e.g. `\\d`), `XcodeRead`, `XcodeWrite`, `XcodeUpdate`, `XcodeMV`, `XcodeRM`, `XcodeMakeDir`, `XcodeGetCurrentFile`. For ordinary editing of erhe sources the regular Read/Edit/Write/Grep/Glob tools on real filesystem paths are usually simpler; reach for the `Xcode*` file tools when you specifically need project-organization semantics (e.g. adding a file to the project).
+- **Apple docs**: `DocumentationSearch` (semantic search of Apple Developer Documentation; useful for Metal API questions).
+
+**What it CANNOT do (do NOT expect VS-MCP-style live debugging):**
+- **No debugger control whatsoever** -- there is no launch-under-debugger, breakpoints, step, continue, attach, callstack, or locals/variable inspection. This is the key difference from the Windows Visual Studio MCP server. To debug an erhe crash on macOS you still need lldb directly (or Xcode's UI), plus `logs/log.txt`.
+- **No scheme / run-destination / launch-target selection** -- all build/test/run tools act on whatever scheme is *currently active* in the Xcode UI (here: `editor`). You cannot switch scheme or run target via MCP; ask the user to set it in Xcode.
+- **No way to launch and drive the running editor app.** The only "run" tools are `RunAllTests` / `RunSomeTests` (active scheme's XCTest test plan -- erhe's `editor` scheme has 0 XCTest tests, so not useful here), `ExecuteSnippet` (builds & runs a *Swift* snippet and returns its `print` output -- N/A to a C++ project), and `RenderPreview` (SwiftUI preview snapshots -- N/A). To actually run/inspect the editor, use the build scripts + the in-editor MCP server / headless screenshots described below.
+
+**Bottom line:** on macOS the Xcode MCP server is the preferred tool for *building and reading diagnostics* (and Apple-docs lookup), but it is NOT a debugger and cannot launch or drive the editor. For runtime behavior use `logs/log.txt` and the in-editor MCP server; for live debugging use lldb as described next.
+
+## Debugging on macOS (lldb, for Claude Code)
+
+There is no Visual-Studio-MCP equivalent on macOS (the Xcode MCP server has zero debugger control). The debugger is `lldb`, already installed at `/usr/bin/lldb` (ships with Xcode 26 / Command Line Tools - no install or plugin needed). Claude Code drives it through the **Bash tool**. All three Debug builds expose full symbols (`build_xcode_{metal,opengl,vulkan}/src/editor/Debug/editor`), verified down to source lines (`editor::run_editor()` -> `editor.cpp`).
+
+### Which interface to use (most efficient first)
+
+lldb offers several machine interfaces. Ranked by efficiency *for an automated agent*:
+
+1. **Python SB API emitting JSON - PREFERRED, default for almost everything.** lldb embeds a Python interpreter with the full scripting API (`SBDebugger`, `SBTarget`, `SBProcess`, `SBThread`, `SBFrame`, `SBValue`, ...). Write a script that drives the debugger and `print`s a single JSON blob in a schema *you* control, then run it in one batch call and parse stdout. This beats every other option because you fetch exactly the fields you need (minimal tokens), there is no protocol handshake or event loop, and you never scrape human-formatted `bt` / `frame variable` text. Invocation (verified):
+
+   ```bash
+   lldb --batch -o "command script import /tmp/probe.py" -o "quit"
+   ```
+   where `probe.py` defines `def __lldb_init_module(debugger, internal_dict):` and does the work on the passed-in `debugger` (set `debugger.SetAsync(False)` for synchronous control). Delimit the JSON with sentinels (e.g. `print("JSON_BEGIN"+json.dumps(out)+"JSON_END")`) and extract it, since lldb interleaves its own chatter on stdout. (`lldb -P` prints the SB-API module path if you ever want to `import lldb` from a matching python instead.)
+
+2. **lldb-dap (Debug Adapter Protocol) - only when you need a *persistent interactive* session across multiple tool calls.** `xcrun -f lldb-dap` -> `/Applications/Xcode.app/Contents/Developer/usr/bin/lldb-dap`. DAP is a standard JSON-RPC protocol (`launch`, `setBreakpoints`, `stackTrace`, `scopes`, `variables`, `evaluate`, plus async `stopped` events). Run it in the background on a socket (`lldb-dap --connection listen://localhost:PORT`) and send DAP requests across tool calls so the debuggee stays stopped between your inspections. More plumbing than the SB API (Content-Length framing, seq correlation, event vs. response handling) - use it only for genuine step-debugging, not one-shot captures.
+
+3. **lldb's built-in MCP server - generally NOT worth it for Claude Code.** Inside an lldb session, `protocol-server start MCP listen://localhost:PORT` starts an `lldb-mcp` server (the only supported protocol is `MCP`). It exposes exactly one tool, `lldb_command` (run an lldb command, text back), and a resource per debugger instance (`lldb://debugger/N`). The payload is unstructured text and the transport is raw TCP (needs a stdio bridge to register as a `mcp__*` server), so it adds plumbing for no structured-data gain over just running lldb commands via Bash. Skip it unless a GUI MCP client is sharing the session.
+
+4. **Plain CLI text** (`lldb -b -o "..." -o "..."`) - fine for a quick one-line peek; otherwise prefer the SB API so output is structured.
+
+5. **GDB/MI** is a dead end here: Apple does not ship `lldb-mi`.
+
+### Canonical recipes (all via the SB API / Bash)
+
+- **Reproduce-and-capture a crash / VERIFY / FATAL / C++ exception** (the macOS analog of the Windows VS-MCP "launch -> break on unhandled exception -> dump callstack + locals" flow): SB-API script that creates the target, sets breakpoints (or relies on the stop on the fatal signal/throw), `Launch`es, and on stop walks `SBProcess` -> threads -> frames -> `SBValue` variables, emitting JSON. One call, structured result in your schema.
+- **Snapshot a hung / deadlocked editor** (get *all* threads' callstacks, per the multithreading-debug guidance): attach by pid, iterate every `SBThread`, dump each frame's function/file/line to JSON, then detach - e.g. `lldb -b -o "attach -p <pid>" -o "thread backtrace all" -o "detach" -o "quit"` for a quick text snapshot, or the SB-API form for JSON.
+- **Post-mortem**: `ulimit -c unlimited`, reproduce, then load the core: `lldb <editor> -c /cores/core.<pid>` (or `target create` + `target.LoadCore` in the SB API).
+
+### Constraints
+
+- **The windowed editor needs a live display.** Metal/OpenGL builds have no headless variant (unlike the Vulkan headless build on Windows), so a *windowed* launch under lldb still aborts at startup if the display is off/asleep. Attaching to an editor that is already running is unaffected.
+- **Per the user's setup, do not launch/build the editor unprompted** (the user runs the Metal builds). Static/batch SB-API inspection that does not start the process (target/symbol/breakpoint queries, core-dump post-mortems) is fine; *launching* the GUI editor under lldb should be confirmed first. Attaching to an editor the user is already running is the friction-free path.
+
 ## Runtime logs
 
 The editor and other apps write their spdlog output to `logs/` relative to the working directory (typically the repo root): `logs/log.txt` is the main log, `logs/vulkan.txt` and `logs/openxr.txt` capture backend-specific traces. Redirecting `stdout` of `editor.exe` is not enough -- the file sink writes via spdlog and a redirected stdout will be empty even when the app is running fine. Always `grep` / `findstr` against `logs/log.txt` to verify init-time and runtime behavior. On Android / Quest, the same log lines flow through the `android_sink` and are visible via `adb logcat` (tag `erhe`).
