@@ -23,6 +23,18 @@ namespace erhe::graphics {
 
 namespace {
 
+// A render-target attachment image view must always be a 2D-family view
+// (VK_IMAGE_VIEW_TYPE_2D / 2D_ARRAY), never cube/cube-array/3D, regardless of the
+// attached texture's native type. The view type is selected purely from the number
+// of layers the view spans: a single layer is a plain 2D view; multiple layers
+// (layered / multiview rendering) is a 2D_ARRAY view. (Texture_impl::get_vk_image_view
+// otherwise derives the view type from the texture type, which is correct for
+// sampling but invalid for attachments of e.g. a cube-map-array texture.)
+auto attachment_image_view_type(const uint32_t layer_count) -> VkImageViewType
+{
+    return (layer_count > 1u) ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D;
+}
+
 auto image_usage_mask_str(uint64_t mask) -> std::string
 {
     if (mask == Image_usage_flag_bit_mask::invalid) {
@@ -710,7 +722,8 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
                 static_cast<uint32_t>(att.texture_layer),
                 multiview_layer_count,
                 static_cast<uint32_t>(att.texture_level),
-                1
+                1,
+                attachment_image_view_type(multiview_layer_count)
             );
             image_views.push_back(view);
 
@@ -758,7 +771,7 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
                     .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT
                 });
                 VkImageView resolve_view = const_cast<Texture_impl&>(att.resolve_texture->get_impl()).get_vk_image_view(
-                    VK_IMAGE_ASPECT_COLOR_BIT, 0, multiview_layer_count, 0, 1
+                    VK_IMAGE_ASPECT_COLOR_BIT, 0, multiview_layer_count, 0, 1, attachment_image_view_type(multiview_layer_count)
                 );
                 image_views.push_back(resolve_view);
                 m_clear_values.push_back(VkClearValue{}); // resolve doesn't use clear
@@ -906,7 +919,8 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
                 static_cast<uint32_t>(m_depth_attachment.texture_layer),
                 multiview_layer_count,
                 static_cast<uint32_t>(m_depth_attachment.texture_level),
-                1
+                1,
+                attachment_image_view_type(multiview_layer_count)
             );
             image_views.push_back(view);
 
@@ -970,7 +984,7 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
                 stencil_resolve_mode_vk = stencil_resolves ? to_vk_resolve_mode(m_stencil_attachment.resolve_mode) : VK_RESOLVE_MODE_NONE;
 
                 VkImageView resolve_view = const_cast<Texture_impl&>(resolve_texture->get_impl()).get_vk_image_view(
-                    resolve_aspect, 0, multiview_layer_count, 0, 1
+                    resolve_aspect, 0, multiview_layer_count, 0, 1, attachment_image_view_type(multiview_layer_count)
                 );
                 image_views.push_back(resolve_view);
                 m_clear_values.push_back(VkClearValue{}); // resolve doesn't use clear
@@ -1019,7 +1033,7 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
             // FDM image view: COLOR aspect, spanning the same layers as color/depth
             // (one FDM layer per view under multiview), base layer 0, level 0.
             VkImageView fdm_view = const_cast<Texture_impl&>(fdm->get_impl()).get_vk_image_view(
-                VK_IMAGE_ASPECT_COLOR_BIT, 0, multiview_layer_count, 0, 1
+                VK_IMAGE_ASPECT_COLOR_BIT, 0, multiview_layer_count, 0, 1, attachment_image_view_type(multiview_layer_count)
             );
             image_views.push_back(fdm_view);
             // Keep m_clear_values index-aligned with the attachment array. The FDM

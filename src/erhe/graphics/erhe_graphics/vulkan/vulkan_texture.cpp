@@ -296,7 +296,10 @@ auto Texture_impl::get_vk_image_view(
     const uint32_t           layer_count
 ) -> VkImageView
 {
-    return get_vk_image_view(aspect_mask, base_layer, layer_count, 0, static_cast<uint32_t>(m_level_count));
+    // Sampling / storage views derive the view type from the texture's native
+    // type (cube, cube-array, 3D, ...). Render-pass attachment views must instead
+    // use a 2D-family type and call the explicit-view-type overload below.
+    return get_vk_image_view(aspect_mask, base_layer, layer_count, 0, static_cast<uint32_t>(m_level_count), to_vk_image_view_type(m_type));
 }
 
 auto Texture_impl::get_vk_image_view(
@@ -304,7 +307,8 @@ auto Texture_impl::get_vk_image_view(
     const uint32_t           base_layer,
     const uint32_t           layer_count,
     const uint32_t           base_level,
-    const uint32_t           level_count
+    const uint32_t           level_count,
+    const VkImageViewType    view_type
 ) -> VkImageView
 {
     // Check cache
@@ -313,7 +317,8 @@ auto Texture_impl::get_vk_image_view(
             (cached.base_layer  == base_layer) &&
             (cached.layer_count == layer_count) &&
             (cached.base_level  == base_level) &&
-            (cached.level_count == level_count))
+            (cached.level_count == level_count) &&
+            (cached.view_type   == view_type))
         {
             return cached.image_view;
         }
@@ -331,7 +336,7 @@ auto Texture_impl::get_vk_image_view(
         .pNext            = nullptr,
         .flags            = 0,
         .image            = m_vk_image,
-        .viewType         = to_vk_image_view_type(m_type),
+        .viewType         = view_type,
         .format           = vk_format,
         .components       = {
             .r = VK_COMPONENT_SWIZZLE_R,
@@ -361,6 +366,7 @@ auto Texture_impl::get_vk_image_view(
         .layer_count = layer_count,
         .base_level  = base_level,
         .level_count = level_count,
+        .view_type   = view_type,
         .image_view  = image_view
     });
 
