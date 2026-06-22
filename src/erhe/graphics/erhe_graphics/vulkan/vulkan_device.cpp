@@ -724,6 +724,16 @@ auto Device_impl::choose_physical_device(
         }
 
         if (selected_device == VK_NULL_HANDLE) {
+            // Every enumerated device scored 0 (rejected). With a window surface
+            // the usual cause is a missing present-capable queue because the
+            // display is off/asleep/disconnected; the caller logs the headless
+            // recommendation.
+            const bool surface_present_required = (surface_impl != nullptr) && !surface_impl->is_headless();
+            log_context->critical(
+                "choose_physical_device(): none of {} enumerated physical device(s) were usable{}",
+                physical_device_count,
+                surface_present_required ? " (no present-capable queue for the window surface -- display off?)" : ""
+            );
             return false;
         }
     }

@@ -552,7 +552,24 @@ Device_impl::Device_impl(
     std::vector<const char*> device_extensions_c_str{};
     const bool physical_device_ok = choose_physical_device(surface_impl.get(), device_extensions_c_str);
     if (!physical_device_ok) {
-        log_context->critical("vkCreateInstance() failed with {} {}", static_cast<int32_t>(result), c_str(result));
+        // NOTE: this is choose_physical_device() failing, NOT vkCreateInstance()
+        // (which already succeeded above). The most common cause for the windowed
+        // build is that the display is powered off / asleep / disconnected: the
+        // window swapchain then has no present-capable queue, every device scores
+        // 0, and no physical device is selected. The headless build is immune
+        // because it is surfaceless.
+        if (!headless) {
+            log_context->critical(
+                "No suitable Vulkan physical device with a present-capable queue was found for the window "
+                "surface. This usually means the display is powered off, asleep, or disconnected (a windowed "
+                "swapchain needs a present queue on the surface). Switch to the HEADLESS build, which renders "
+                "to an emulated swapchain and needs no display: "
+                "scripts/configure_vs2026_vulkan_headless.bat -> "
+                "build_vs2026_vulkan_headless/src/editor/Debug/editor.exe (ERHE_WINDOW_LIBRARY=none)."
+            );
+        } else {
+            log_context->critical("choose_physical_device() failed: no suitable Vulkan physical device was found.");
+        }
         abort();
     }
 
