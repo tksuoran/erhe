@@ -1,9 +1,15 @@
 #include "erhe_graphics/gl/gl_compute_command_encoder.hpp"
 #include "erhe_graphics/gl/gl_device.hpp"
 #include "erhe_graphics/gl/gl_state_tracker.hpp"
+#include "erhe_graphics/gl/gl_texture.hpp"
 #include "erhe_graphics/compute_pipeline_state.hpp"
+#include "erhe_graphics/texture.hpp"
 
+#include "erhe_gl/gl_helpers.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_verify/verify.hpp"
+
+#include <optional>
 
 namespace erhe::graphics {
 
@@ -23,12 +29,24 @@ void Compute_command_encoder_impl::set_bind_group_layout(const Bind_group_layout
 
 void Compute_command_encoder_impl::set_storage_image(uint32_t binding_point, const Texture& texture)
 {
-    // Storage-image compute is not wired on the OpenGL backend (the
-    // generated gl wrappers do not expose glBindImageTexture). The atmosphere
-    // LUT generation that uses this is Vulkan-only for now; see
-    // doc/procedural_sky.md.
-    static_cast<void>(binding_point);
-    static_cast<void>(texture);
+    // Bind the texture's level 0 as a load/store image at image unit
+    // binding_point, matching the shader's layout(binding = binding_point)
+    // image2D declaration injected by the bind group layout. read_write is
+    // always safe for both LUT passes (transmittance writes; multi-scatter
+    // reads unit 0 and writes unit 1).
+    const Texture_impl& texture_impl = texture.get_impl();
+    const std::optional<gl::Internal_format> internal_format_opt =
+        gl_helpers::convert_to_gl(texture_impl.get_pixelformat());
+    ERHE_VERIFY(internal_format_opt.has_value());
+    gl::bind_image_texture(
+        binding_point,                 // unit
+        texture_impl.gl_name(),        // texture
+        0,                             // level
+        GL_FALSE,                      // layered (single-layer 2D)
+        0,                             // layer
+        gl::Buffer_access::read_write, // access
+        internal_format_opt.value()    // format
+    );
 }
 
 void Compute_command_encoder_impl::set_compute_pipeline_state(const Compute_pipeline_state& pipeline)

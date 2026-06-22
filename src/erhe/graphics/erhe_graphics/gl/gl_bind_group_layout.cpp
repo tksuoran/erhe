@@ -78,11 +78,12 @@ Bind_group_layout_impl::Bind_group_layout_impl(Device& device, const Bind_group_
     }
 
     // Mirror every combined_image_sampler binding into the default uniform
-    // block as a "uniform sampler* name;" declaration. The preamble emitter
-    // reads these declarations and injects them into the GLSL source; the
-    // GL <4.30 fallback and the Metal shader-stages prototype also use them
-    // (the former for sampler-unit location lookup, the latter for
-    // texture-heap classification).
+    // block as a "uniform sampler* name;" declaration, and every storage_image
+    // binding as a "layout(binding = N, <format>) uniform image2D name;"
+    // declaration. The preamble emitter reads these declarations and injects
+    // them into the GLSL source; the GL <4.30 fallback and the Metal
+    // shader-stages prototype also use the sampler declarations (the former for
+    // sampler-unit location lookup, the latter for texture-heap classification).
     //
     // Shader_resource::add_sampler forbids dedicated_texture_unit on
     // texture-heap samplers (they auto-allocate from m_location). For the
@@ -90,20 +91,31 @@ Bind_group_layout_impl::Bind_group_layout_impl(Device& device, const Bind_group_
     // must be processed in ascending binding_point order -- which today
     // they always are at every call site.
     for (const Bind_group_layout_binding& binding : create_info.bindings) {
-        if (binding.type != Binding_type::combined_image_sampler) {
-            continue;
+        if (binding.type == Binding_type::combined_image_sampler) {
+            const std::optional<uint32_t> dedicated_texture_unit = binding.is_texture_heap
+                ? std::optional<uint32_t>{}
+                : std::optional<uint32_t>{binding.binding_point};
+            m_default_uniform_block.add_sampler(
+                binding.name,
+                binding.glsl_type,
+                binding.sampler_aspect,
+                binding.is_texture_heap,
+                dedicated_texture_unit,
+                (binding.array_size > 0) ? std::optional<std::size_t>{binding.array_size} : std::optional<std::size_t>{}
+            );
+        } else if (binding.type == Binding_type::storage_image) {
+            // Storage images are emitted into the GLSL preamble as
+            // "layout(binding = N, <format>) uniform image2D name;" and use the
+            // raw binding_point as the image unit (GL has a separate image-unit
+            // namespace; no sampler-binding offset). set_storage_image() binds
+            // image unit N directly to match.
+            m_default_uniform_block.add_image(
+                binding.name,
+                binding.glsl_type,
+                binding.image_format,
+                static_cast<int>(binding.binding_point)
+            );
         }
-        const std::optional<uint32_t> dedicated_texture_unit = binding.is_texture_heap
-            ? std::optional<uint32_t>{}
-            : std::optional<uint32_t>{binding.binding_point};
-        m_default_uniform_block.add_sampler(
-            binding.name,
-            binding.glsl_type,
-            binding.sampler_aspect,
-            binding.is_texture_heap,
-            dedicated_texture_unit,
-            (binding.array_size > 0) ? std::optional<std::size_t>{binding.array_size} : std::optional<std::size_t>{}
-        );
     }
 
     // On the GL sampler-array path the texture heap reads its materials
