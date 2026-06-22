@@ -258,8 +258,11 @@ void convert_texture_dimensions_from_gl(const gl::Texture_target target, int& wi
             return;
         }
         case gl::Texture_target::texture_cube_map_array: {
+            // Inverse of convert_texture_dimensions_to_gl: GL stores the total
+            // layer-face count in the depth; the Vulkan-style abstraction carries it
+            // as array_layer_count (6 * cubes) with depth == 1.
             ERHE_VERIFY(depth % 6 == 0);
-            array_layer_count = depth / 6;
+            array_layer_count = depth;
             depth = 1;
             ERHE_VERIFY(width >= 1);
             ERHE_VERIFY(height >= 1);
@@ -340,11 +343,16 @@ void convert_texture_dimensions_to_gl(const gl::Texture_target target, int& widt
             return;
         }
         case gl::Texture_target::texture_cube_map_array: {
+            // A cube map array is N cubes x 6 faces. Like the plain cube case, the
+            // Vulkan-style abstraction expresses every layer-face as an array layer
+            // (array_layer_count == 6*N at creation; the face count being copied
+            // otherwise) with depth unused, so fold that count into the GL depth.
+            // GL cube-array storage is 3D (texture_storage_3d) with depth == the
+            // total number of layer-faces.
             ERHE_VERIFY(width >= 1);
             ERHE_VERIFY(height >= 1);
-            ERHE_VERIFY(depth == 6);
             ERHE_VERIFY(array_layer_count >= 1);
-            depth = 6 * array_layer_count;
+            depth = array_layer_count;
             return;
         }
 
@@ -393,7 +401,11 @@ void convert_texture_offset_to_gl(const gl::Texture_target target, int& x, int& 
             return;
         }
         case gl::Texture_target::texture_cube_map_array: {
-            z = 6 * array_layer;
+            // The Vulkan-style array layer is already the absolute layer-face index
+            // (6 * cube + face, faces in order +X,-X,+Y,-Y,+Z,-Z), so it selects the
+            // slice directly via the z offset, exactly like the plain cube and 2D
+            // array cases. No scaling.
+            z = array_layer;
             return;
         }
 

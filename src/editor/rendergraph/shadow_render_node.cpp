@@ -298,7 +298,7 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, er
                     .width             = point_res,
                     .height            = point_res,
                     .depth             = 1,
-                    .array_layer_count = 1,
+                    .array_layer_count = 0, // plain 2D texture (non-array); see Texture_create_info default
                     .debug_label       = "Point shadow cube depth scratch"
                 }
             );
