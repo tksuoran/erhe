@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
 renderdoc_mcp_proxy.py -- stdio MCP proxy in front of the RenderDoc fork's
-embedded HTTP MCP server (qrenderdoc --mcp-server).
+embedded HTTP MCP server (qrenderdoc --mcp-server). The fork is
+https://github.com/tksuoran/renderdoc (branch mcp-server), cloned and built
+locally; this proxy talks to that local qrenderdoc build.
 
 Why this exists
 ---------------
@@ -46,6 +48,10 @@ import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCHEMA_PATH = os.path.join(HERE, "renderdoc_tools.json")
 
+# Default points at THIS machine's local build of the fork
+# (https://github.com/tksuoran/renderdoc, branch mcp-server). It is a built
+# binary, so it cannot be a URL; override ERHE_RENDERDOC_QRENDERDOC to match your
+# own checkout location.
 QRENDERDOC_PATH = os.environ.get(
     "ERHE_RENDERDOC_QRENDERDOC",
     r"D:\renderdoc\x64\Development\qrenderdoc.exe",

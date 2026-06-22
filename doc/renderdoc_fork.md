@@ -4,15 +4,18 @@ This documents a **tested, end-to-end GPU debugging workflow** for the erhe
 editor on Windows/Vulkan that combines three live tools driven from Claude Code:
 
 - the **Visual Studio MCP server** -- to build and *debug-launch* the editor;
-- the **RenderDoc fork MCP server** (`D:\renderdoc`, branch `mcp-server`) -- an
+- the **RenderDoc fork MCP server**
+  ([`tksuoran/renderdoc`](https://github.com/tksuoran/renderdoc), branch
+  `mcp-server`, cloned and built locally) -- an
   MCP server embedded in `qrenderdoc` that exposes the currently open / captured
   frame to an agent (`list_targets`, `connect_to_target`, `trigger_capture`,
   then `get_pipeline_state` / `get_texture_stats` / `get_pixel_history` / ...);
 - erhe's own **in-application RenderDoc API**, which makes the running editor a
   RenderDoc *target* the fork can connect to and capture without injecting.
 
-The fork's full tool reference and design notes live in
-[`D:\renderdoc\docs\mcp.md`](file:///D:/renderdoc/docs/mcp.md). This file is the
+The fork's full tool reference and design notes live in its
+[`docs/mcp.md`](https://github.com/tksuoran/renderdoc/blob/mcp-server/docs/mcp.md)
+(`docs/mcp.md` under your local clone). This file is the
 erhe-specific recipe and a worked example (the "black atmosphere sky" bug, found
 and fixed with exactly this loop).
 
@@ -42,9 +45,11 @@ It **must** be the fork's DLL: a target-control connection is version-sensitive,
 so the editor's in-app layer and the connecting `qrenderdoc` have to be the
 **same build**.
 
-This path is machine-specific (an absolute path into a local checkout); keep it
-as a **local, uncommitted** working-tree change, not something pushed to the
-repo.
+This path is machine-specific -- an absolute path into your local clone/build of
+the fork ([`tksuoran/renderdoc`](https://github.com/tksuoran/renderdoc)). The
+`D:\renderdoc\...` paths throughout this doc are just this machine's checkout
+location; substitute your own. Keep `renderdoc_library_path` as a **local,
+uncommitted** working-tree change, not something pushed to the repo.
 
 `initialize_frame_capture()` in
 `src/erhe/window/erhe_window/renderdoc_capture.cpp` reads the override and, on
@@ -343,6 +348,7 @@ Rd-Tool trigger_capture   @{ open = $true; timeoutMs = 25000 }
 Rd-Tool get_texture_stats @{ resourceId = "ResourceId::436" }
 ```
 
-Tool arguments are exactly the schemas in
-[`D:\renderdoc\docs\mcp.md`](file:///D:/renderdoc/docs/mcp.md); the result of each
-`tools/call` is a single text block containing the tool's JSON payload.
+Tool arguments are exactly the schemas in the fork's
+[`docs/mcp.md`](https://github.com/tksuoran/renderdoc/blob/mcp-server/docs/mcp.md);
+the result of each `tools/call` is a single text block containing the tool's JSON
+payload.
