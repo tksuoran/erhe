@@ -215,6 +215,16 @@ auto Shader_stages_create_info::final_source(
 
     sb << "#define ERHE_GLSL_VERSION " << graphics_device.get_info().glsl_version << "\n";
 
+    // Driver-workaround defines. We deliberately do NOT expose the graphics API
+    // (Vulkan/Metal/GL) to shaders; shaders branch on the specific capability or
+    // workaround they need, not on the backend. Each WORKAROUND_* macro is
+    // emitted only on devices detected to need it (see Device_info and the
+    // backend device init), so it becomes part of the shader variant. Policy:
+    // doc/shader_workarounds.md.
+    if (graphics_device.get_info().workaround_no_compute_storage_image_read) {
+        sb << "#define WORKAROUND_NO_COMPUTE_STORAGE_IMAGE_READ 1\n";
+    }
+
     // Gate shader code that uses gl_ClipDistance / user clip planes. On
     // Vulkan this corresponds to the shaderClipDistance device feature
     // (e.g. Mali-G715 does not expose it). On GL this is universally

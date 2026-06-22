@@ -126,6 +126,16 @@ void Compute_command_encoder_impl::set_storage_image(uint32_t binding_point, con
     m_encoder->setTexture(mtl_texture, static_cast<NS::UInteger>(binding_point));
 }
 
+void Compute_command_encoder_impl::set_sampled_image(uint32_t binding_point, const Texture& texture, const Sampler& sampler)
+{
+    // No-op: the Metal multi-scatter compute path reads the LUT as a storage
+    // image (set_storage_image above). Only the Vulkan KosmicKrisp workaround
+    // samples the LUT in compute (WORKAROUND_NO_COMPUTE_STORAGE_IMAGE_READ).
+    static_cast<void>(binding_point);
+    static_cast<void>(texture);
+    static_cast<void>(sampler);
+}
+
 void Compute_command_encoder_impl::set_compute_pipeline_state(const Compute_pipeline_state& pipeline)
 {
     const Compute_pipeline_data& data = pipeline.data;

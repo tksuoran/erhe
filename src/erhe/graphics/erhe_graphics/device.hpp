@@ -208,6 +208,21 @@ public:
     // wide-line edge renderer instead of solid wireframe.
     bool use_solid_wireframe         {true};
 
+    // Driver workarounds. Each flag marks a specific spec-valid construct that a
+    // particular driver mishandles; it is detected at device init (usually by
+    // driver ID) and drives both a WORKAROUND_* shader define (see
+    // shader_stages_create_info.cpp) and matching C++ resource setup. We never
+    // branch shaders on the graphics API itself - only on the concrete
+    // capability/workaround. Policy: doc/shader_workarounds.md.
+    //
+    // Mesa KosmicKrisp (Vulkan-on-Metal) rejects OpImageRead from a storage
+    // image (imageLoad on a `uniform image2D`) at vkCreateComputePipelines with
+    // VK_ERROR_INVALID_SHADER_NV, even though the SPIR-V is valid and the same
+    // driver accepts OpImageWrite. Shaders that need to read such an image must
+    // instead sample it (texelFetch on a sampler2D); the bind group binds the
+    // source as a combined_image_sampler. Emits WORKAROUND_NO_COMPUTE_STORAGE_IMAGE_READ.
+    bool workaround_no_compute_storage_image_read{false};
+
     // limits
     int max_compute_workgroup_count[3] = { 1, 1, 1 };
     int max_compute_workgroup_size [3] = { 1, 1, 1 };

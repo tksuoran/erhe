@@ -71,6 +71,12 @@ private:
     erhe::scene_renderer::Program_interface& m_program_interface;
     int                                      m_view_count;
     bool                                     m_luts_ready{false};
+    // True when the device rejects storage-image reads in compute (KosmicKrisp):
+    // the multi-scatter pass then samples the transmittance LUT instead of
+    // reading it as a storage image. Set from Device_info at construction so the
+    // bind group layout and the LUT generation agree. See
+    // WORKAROUND_NO_COMPUTE_STORAGE_IMAGE_READ.
+    bool                                     m_sample_transmittance_lut{false};
 
     // GPU resources. Constructed on backends with storage-image compute
     // (Vulkan, or OpenGL 4.3+); null elsewhere -> is_atmosphere_supported() == false.

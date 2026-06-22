@@ -7,9 +7,13 @@
 #include "erhe_graphics/vulkan/vulkan_render_pass.hpp"
 #include "erhe_graphics/vulkan/vulkan_shader_stages.hpp"
 #include "erhe_graphics/vulkan/vulkan_texture.hpp"
+#include "erhe_graphics/vulkan/vulkan_sampler.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/command_buffer.hpp"
+#include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/texture.hpp"
+
+#include <algorithm>
 #include "erhe_graphics/compute_pipeline_state.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/graphics_log.hpp"
@@ -126,6 +130,86 @@ void Compute_command_encoder_impl::set_storage_image(const uint32_t binding_poin
         .dstArrayElement  = 0,
         .descriptorCount  = 1,
         .descriptorType   = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+        .pImageInfo       = &image_info,
+        .pBufferInfo      = nullptr,
+        .pTexelBufferView = nullptr
+    };
+
+    vkCmdPushDescriptorSetKHR(
+        command_buffer,
+        VK_PIPELINE_BIND_POINT_COMPUTE,
+        m_pipeline_layout,
+        0, // set index
+        1,
+        &write
+    );
+}
+
+void Compute_command_encoder_impl::set_sampled_image(const uint32_t binding_point, const Texture& texture, const Sampler& sampler)
+{
+    VkCommandBuffer command_buffer = get_active_vk_command_buffer();
+    if (command_buffer == VK_NULL_HANDLE) {
+        return;
+    }
+
+    Device_impl& device_impl = m_device.get_impl();
+    ERHE_VERIFY(device_impl.has_push_descriptor()); // todo: descriptor-set fallback
+    ERHE_VERIFY(m_pipeline_layout != VK_NULL_HANDLE);
+    ERHE_VERIFY(m_bind_group_layout != nullptr);
+
+    // Combined image samplers are bound past the buffer bindings; resolve the
+    // actual Vulkan binding (and aspect / immutability) from the layout, exactly
+    // as Render_command_encoder_impl::set_sampled_image does.
+    const Bind_group_layout_impl& layout_impl  = m_bind_group_layout->get_impl();
+    const Sampler_aspect          aspect       = layout_impl.get_sampler_aspect_for_binding(binding_point);
+    const uint32_t                vk_binding   = layout_impl.get_vulkan_binding_for_sampler(binding_point);
+    const bool                    is_immutable = layout_impl.is_sampler_binding_immutable(binding_point);
+
+    VkImageAspectFlags vk_aspect    = VK_IMAGE_ASPECT_COLOR_BIT;
+    VkImageLayout      image_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    switch (aspect) {
+        case Sampler_aspect::color:
+            vk_aspect    = VK_IMAGE_ASPECT_COLOR_BIT;
+            image_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            break;
+        case Sampler_aspect::depth:
+            vk_aspect    = VK_IMAGE_ASPECT_DEPTH_BIT;
+            image_layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+            break;
+        case Sampler_aspect::stencil:
+            vk_aspect    = VK_IMAGE_ASPECT_STENCIL_BIT;
+            image_layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+            break;
+    }
+
+    Texture_impl& texture_impl = const_cast<Texture_impl&>(texture.get_impl());
+    VkImageView image_view = texture_impl.get_vk_image_view(
+        vk_aspect,
+        0,
+        std::max(1, texture_impl.get_array_layer_count())
+    );
+    VkSampler vk_sampler = sampler.get_impl().get_vulkan_sampler();
+    if (image_view == VK_NULL_HANDLE) {
+        return;
+    }
+    if (!is_immutable && (vk_sampler == VK_NULL_HANDLE)) {
+        return;
+    }
+
+    const VkDescriptorImageInfo image_info{
+        .sampler     = is_immutable ? VK_NULL_HANDLE : vk_sampler,
+        .imageView   = image_view,
+        .imageLayout = image_layout
+    };
+
+    const VkWriteDescriptorSet write{
+        .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .pNext            = nullptr,
+        .dstSet           = VK_NULL_HANDLE, // ignored for push descriptors
+        .dstBinding       = vk_binding,
+        .dstArrayElement  = 0,
+        .descriptorCount  = 1,
+        .descriptorType   = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
         .pImageInfo       = &image_info,
         .pBufferInfo      = nullptr,
         .pTexelBufferView = nullptr

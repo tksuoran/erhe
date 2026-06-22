@@ -40,6 +40,10 @@ void Compute_command_encoder::set_storage_image(uint32_t binding_point, const Te
 {
     m_impl->set_storage_image(binding_point, texture);
 }
+void Compute_command_encoder::set_sampled_image(uint32_t binding_point, const Texture& texture, const Sampler& sampler)
+{
+    m_impl->set_sampled_image(binding_point, texture, sampler);
+}
 void Compute_command_encoder::set_compute_pipeline_state(const Compute_pipeline_state& pipeline)
 {
     m_impl->set_compute_pipeline_state(pipeline);

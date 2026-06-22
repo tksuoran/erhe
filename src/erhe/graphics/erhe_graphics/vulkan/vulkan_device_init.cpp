@@ -1374,6 +1374,16 @@ Device_impl::Device_impl(
             has_multi_draw_indirect, has_shader_draw_parameters, is_moltenvk
         );
     }
+    // Mesa KosmicKrisp (Vulkan-on-Metal) rejects OpImageRead from a storage
+    // image (imageLoad on a `uniform image2D`) at vkCreateComputePipelines with
+    // VK_ERROR_INVALID_SHADER_NV, even though the SPIR-V is valid and the same
+    // driver accepts OpImageWrite. Shaders that need to read such an image must
+    // sample it instead; see WORKAROUND_NO_COMPUTE_STORAGE_IMAGE_READ.
+    const bool is_kosmickrisp = (m_driver_properties.driverID == VK_DRIVER_ID_MESA_KOSMICKRISP);
+    m_info.workaround_no_compute_storage_image_read = is_kosmickrisp;
+    if (is_kosmickrisp) {
+        log_startup->info("Driver workaround (KosmicKrisp): reading storage-image LUTs via sampler in compute (WORKAROUND_NO_COMPUTE_STORAGE_IMAGE_READ)");
+    }
     m_info.use_multi_draw_indirect_arb = false;
     m_info.use_compute_shader          = true;
     m_info.use_shader_storage_buffers  = true;
