@@ -27,12 +27,22 @@ struct("Graphics_config",
             developer=False
         ),
         field(
-            "renderdoc_library_path",
+            "renderdoc_library_path_override_enable",
+            Bool,
+            added_in=1,
+            default="false",
+            short_desc="Enable RenderDoc Library Path Override",
+            long_desc="When enabled, loads the RenderDoc capture library from renderdoc_library_path_override instead of the system-installed one. Kept separate from the path so the path can stay configured while the override is toggled on and off. Has no effect unless renderdoc_capture_support is also enabled. Only meaningful for debugging.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "renderdoc_library_path_override",
             String,
             added_in=1,
             default='""',
             short_desc="RenderDoc Library Path Override",
-            long_desc="When non-empty, loads the RenderDoc capture library from this path instead of the system-installed one (e.g. an experimental RenderDoc fork). On Vulkan, the parent directory is added to the loader's implicit layer search path (VK_ADD_IMPLICIT_LAYER_PATH) and the system RenderDoc capture layers are disabled so the override is the one that gets used. Only meaningful for debugging.",
+            long_desc="Path to the RenderDoc capture library to load when renderdoc_library_path_override_enable is true (e.g. an experimental RenderDoc fork) instead of the system-installed one. On Vulkan, the parent directory is added to the loader's implicit layer search path (VK_ADD_IMPLICIT_LAYER_PATH) and the system RenderDoc capture layers are disabled so the override is the one that gets used. Only meaningful for debugging.",
             visible=True,
             developer=False
         ),

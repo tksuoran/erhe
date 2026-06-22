@@ -233,7 +233,7 @@ Context_window::Context_window(const Window_configuration& configuration)
 {
     ERHE_PROFILE_FUNCTION();
     if (configuration.initialize_frame_capture) {
-        initialize_frame_capture(configuration.renderdoc_library_path);
+        initialize_frame_capture(configuration.renderdoc_library_path_override);
     }
 
     const bool ok = open(configuration);
