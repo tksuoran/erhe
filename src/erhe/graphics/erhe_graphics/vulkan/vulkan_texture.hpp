@@ -45,7 +45,7 @@ public:
     [[nodiscard]] auto get_vk_image              () const -> VkImage;
     [[nodiscard]] auto get_view_base_array_layer () const -> int;
     [[nodiscard]] auto get_vk_image_view         (VkImageAspectFlags aspect_mask, uint32_t base_layer, uint32_t layer_count) -> VkImageView;
-    [[nodiscard]] auto get_vk_image_view         (VkImageAspectFlags aspect_mask, uint32_t base_layer, uint32_t layer_count, uint32_t base_level, uint32_t level_count) -> VkImageView;
+    [[nodiscard]] auto get_vk_image_view         (VkImageAspectFlags aspect_mask, uint32_t base_layer, uint32_t layer_count, uint32_t base_level, uint32_t level_count, VkImageViewType view_type) -> VkImageView;
     [[nodiscard]] auto get_current_layout        () const -> VkImageLayout;
 
     void clear() const;
@@ -64,6 +64,7 @@ private:
         uint32_t           layer_count{0};
         uint32_t           base_level {0};
         uint32_t           level_count{0};
+        VkImageViewType    view_type  {VK_IMAGE_VIEW_TYPE_2D};
         VkImageView        image_view {VK_NULL_HANDLE};
     };
 
