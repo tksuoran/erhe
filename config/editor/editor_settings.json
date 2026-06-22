@@ -624,7 +624,7 @@
                 "scene_name": "Default Scene",
                 "camera_name": "Camera A",
                 "shadow_fit_override_camera_name": "",
-                "shader_debug": 4,
+                "shader_debug": 0,
                 "renderer_choice": 0
             }
         },
