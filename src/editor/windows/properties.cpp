@@ -260,6 +260,13 @@ void Properties::light_properties(erhe::scene::Light& light)
         add_entry("Outer Spot", [&](){ ImGui::SliderFloat("##", &light.outer_spot_angle, 0.0f, glm::pi<float>()); });
     }
     add_entry("Range",     [&](){ ImGui::SliderFloat("##", &light.range,     1.00f, 20000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
+    if ((light.type == erhe::scene::Light::Type::point) && (light.range <= 0.0f)) {
+        add_entry("Warning", [&](){
+            ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 160, 32, 255));
+            ImGui::TextWrapped("Point light range is 0: it reaches nowhere, so it emits no light and casts no shadow. Set a positive range.");
+            ImGui::PopStyleColor();
+        });
+    }
     add_entry("Intensity", [&](){ ImGui::SliderFloat("##", &light.intensity, 0.01f, 20000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
     add_entry("Color",     [&](){ ImGui::ColorEdit3 ("##", &light.color.x,   ImGuiColorEditFlags_Float); });
 

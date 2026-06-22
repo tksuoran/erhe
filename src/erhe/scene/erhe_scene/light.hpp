@@ -134,6 +134,26 @@ public:
     [[nodiscard]] auto projection           (const Light_projection_parameters& parameters) const -> Projection;
     [[nodiscard]] auto projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms;
 
+    // Whether this light contributes to rendering at all this frame. A point
+    // light's range is the distance its light reaches, so range <= 0 means it
+    // reaches nowhere: it emits no light and is excluded from the rendered light
+    // set entirely (no illumination, no shadow). Such a range also cannot define
+    // a valid shadow cube far plane (z_far = range must exceed z_near).
+    // Directional and spot lights do not gate on range here. This is the single
+    // source of truth consulted by the light-layer partition, the light buffer,
+    // and the shadow renderer, so they always agree on which lights participate.
+    [[nodiscard]] auto is_active() const -> bool
+    {
+        return (type != Type::point) || (range > 0.0f);
+    }
+
+    // Whether this light should cast a (rendered) shadow this frame: it must be
+    // active and have its shadow flag set.
+    [[nodiscard]] auto casts_shadow() const -> bool
+    {
+        return is_active() && cast_shadow;
+    }
+
     Type        type             {Type::directional};
     glm::vec3   color            {1.0f, 1.0f, 1.0f};
     float       intensity        {1.0f};

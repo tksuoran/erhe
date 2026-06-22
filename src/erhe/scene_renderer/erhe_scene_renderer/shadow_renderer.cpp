@@ -353,7 +353,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 
     erhe::graphics::Render_pass* previous_render_pass = nullptr;
     for (const auto& light : lights) {
-        if (!light->cast_shadow) {
+        if (!light->casts_shadow()) {
             continue;
         }
 
@@ -520,7 +520,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 
         erhe::graphics::Render_pass* previous_cube_render_pass = nullptr;
         for (const auto& light : lights) {
-            if (!light->cast_shadow || (light->type != erhe::scene::Light_type::point)) {
+            if (!light->casts_shadow() || (light->type != erhe::scene::Light_type::point)) {
                 continue;
             }
             auto* lpt = parameters.light_projections.get_light_projection_transforms_for_light(light.get());

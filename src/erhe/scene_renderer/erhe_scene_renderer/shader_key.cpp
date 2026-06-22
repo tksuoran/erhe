@@ -255,6 +255,13 @@ auto compute_light_layer_partition(std::span<const std::shared_ptr<erhe::scene::
         if (!light) {
             continue;
         }
+        if (!light->is_active()) {
+            // Inactive light (e.g. a zero-range point light, which reaches
+            // nowhere) contributes nothing, so it is counted in neither the
+            // shadow nor the non-shadow bucket and the shader's per-type light
+            // loops skip it entirely.
+            continue;
+        }
         const std::size_t t = type_index(light->type);
         if (light->cast_shadow) {
             ++partition.per_type_shadow[t];

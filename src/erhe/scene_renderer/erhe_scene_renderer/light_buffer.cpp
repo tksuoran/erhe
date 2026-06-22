@@ -310,10 +310,18 @@ void Light_projections::apply(
         const std::shared_ptr<erhe::scene::Light>& light = lights[i];
         const std::size_t t        = type_index_of(light->type);
         const bool        is_point = (light->type == erhe::scene::Light_type::point);
-        std::size_t slot;
+        std::size_t slot              = std::numeric_limits<std::size_t>::max();
         std::size_t shadow_slot       = std::numeric_limits<std::size_t>::max();
         std::size_t point_shadow_slot = std::numeric_limits<std::size_t>::max();
-        if (light->cast_shadow) {
+        if (!light->is_active()) {
+            // Inactive light (e.g. a zero-range point light, which reaches
+            // nowhere): assign no slot and advance no cursor, so the dense
+            // per-type arrays skip it entirely. All three indices stay max():
+            // the light buffer write skips it (index >= max_light_count) and the
+            // shadow loops skip it, so it contributes neither light nor shadow.
+            // This matches compute_light_layer_partition, which counts inactive
+            // lights in neither the shadow nor the non-shadow bucket.
+        } else if (light->cast_shadow) {
             slot = base_shadow[t] + cursor_shadow[t];
             if (is_point) {
                 // Cube array gets its own dense index; shadow_slot stays max()
@@ -328,7 +336,7 @@ void Light_projections::apply(
             slot = base_nonshadow[t] + cursor_nonshadow[t];
             // Non-shadow lights still get a deterministic shadow_index
             // (any value works since Shadow_renderer skips them via
-            // !light->cast_shadow), but using max() makes any stray
+            // !light->casts_shadow()), but using max() makes any stray
             // out-of-bound use loudly fail the render_passes.size() gate.
             ++cursor_nonshadow[t];
         }
@@ -438,6 +446,13 @@ auto Light_buffer::update(
         ERHE_VERIFY(light);
         erhe::scene::Node* node = light->get_node();
         ERHE_VERIFY(node != nullptr);
+
+        // Inactive lights (e.g. a zero-range point light, which reaches nowhere)
+        // contribute nothing: they were assigned no slot in Light_projections::
+        // apply(), so they must not be counted here nor written to the buffer.
+        if (!light->is_active()) {
+            continue;
+        }
 
         switch (light->type) {
             case erhe::scene::Light_type::directional:
