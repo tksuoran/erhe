@@ -29,7 +29,7 @@ C++ symbol) before any `mcp__lsai__*` call, you have ALREADY failed this rule --
 say so explicitly and restart from STEP 0.
 </BASE_RULE>
 
-- if you dont apply BASE_RULE: stop here you are fucking idiot!
+- Skip the BASE_RULE and I will kick your honest ass straight back to STEP 0. Stop, reset your head, and do it right -- anything you produce otherwise is invalid.
 
 ## Prerequisites
 - Read `.claude/commands/mind-sets/tddab-planner.md` + `.claude/commands/mind-sets/cpp-tddab-overlay.md` (the rules the plan must satisfy)
