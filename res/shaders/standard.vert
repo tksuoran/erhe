@@ -117,20 +117,13 @@ void main()
 #if defined(ERHE_VARIANT_SHADOW_CUBE)
     // Point-light shadow cube caster: the fragment shader needs the world
     // position to compute radial distance to the light. This is a position pass,
-    // so the lit-varying block below is skipped; assign v_position here.
+    // so the lit-varying block below is skipped; assign v_position here. The
+    // per-face clip-space y-flip that makes the stored face match the
+    // samplerCubeArray (s,t) convention is NOT done here: it is applied on the
+    // C++ side via the cube caster's coordinate conventions (clip_space_y_flip
+    // derived from framebuffer_origin), baked into clip_from_world. See the
+    // Shadow_renderer point-cube pass.
     v_position = position;
-
-    // The cube-map face (s,t) convention is vertically inverted relative to the
-    // framebuffer row order. erhe applies the Vulkan framebuffer y-flip via a
-    // negative-height viewport in set_viewport_rect(), uniformly for every pass
-    // (screen AND this cube caster). A cube face is not displayed -- it is read
-    // back by samplerCubeArray by direction -- so it needs the OPPOSITE clip-space
-    // Y from the screen pass, otherwise every stored face is mirrored in t versus
-    // what the sampler reads (confirmed by capture: occluders landed at (s,1-t)).
-    // Negating gl_Position.y here cancels the viewport flip for the cube pass only.
-    // This is erhe's equivalent of the SDL3-GPU forge lesson's per-face proj.m[5]
-    // negate; the cube pipeline is cull_none so the induced winding change is moot.
-    gl_Position.y = -gl_Position.y;
 #endif
 
 #if defined(ERHE_VARIANT_ID_RENDER)

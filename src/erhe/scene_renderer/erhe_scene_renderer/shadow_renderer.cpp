@@ -474,9 +474,8 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 
         // Cube face look / up vectors in Vulkan cube-face order (+X, -X, +Y, -Y,
         // +Z, -Z), matching the layer order written here and the direction-based
-        // samplerCubeArray lookup in the forward pass. Reverse-Z and the
-        // device clip-space y-flip are applied centrally through Projection /
-        // the caster pipeline, so no SDL3-GPU-style proj.m[5] negate is needed.
+        // samplerCubeArray lookup in the forward pass. These match the GL/forge
+        // cube up-vectors.
         static const glm::vec3 cube_look[6] = {
             { 1.0f,  0.0f,  0.0f}, {-1.0f,  0.0f,  0.0f},
             { 0.0f,  1.0f,  0.0f}, { 0.0f, -1.0f,  0.0f},
@@ -487,6 +486,27 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             { 0.0f,  0.0f,  1.0f}, { 0.0f,  0.0f, -1.0f},
             { 0.0f, -1.0f,  0.0f}, { 0.0f, -1.0f,  0.0f}
         };
+
+        // Cube-shadow caster coordinate conventions. Unlike a 2D color target or
+        // the 2D shadow map (which is sampled through a texture_from_world matrix
+        // that absorbs the flip via Light::get_texture_from_clip), a cube face is
+        // sampled by raw direction through the API's FIXED cube-map (s,t)
+        // convention, which is vertically inverted relative to the framebuffer
+        // row order. So the stored face must be physically oriented to match it:
+        // the cube caster needs its clip-space Y flipped OPPOSITE to the screen
+        // pass. erhe's framebuffer y-flip is the framebuffer_origin compensation
+        // (a negative-height viewport on top_left backends, none on bottom_left
+        // GL). We express the cube's counter-flip the same convention-driven way
+        // get_texture_from_clip does -- derived from framebuffer_origin, via
+        // clip_space_y_flip: on a top_left framebuffer the projection y-negate
+        // cancels the viewport flip (net GL-native orientation == the cube
+        // convention); on bottom_left GL nothing is flipped. This is the one
+        // legitimate use of clip_space_y_flip (disabled device-wide otherwise).
+        erhe::math::Coordinate_conventions cube_conventions = parameters.conventions;
+        cube_conventions.clip_space_y_flip =
+            (parameters.conventions.framebuffer_origin == erhe::math::Framebuffer_origin::top_left)
+                ? erhe::math::Clip_space_y_flip::enabled
+                : erhe::math::Clip_space_y_flip::disabled;
         const uint32_t cube_force_enable = erhe::scene_renderer::make_shader_bool_mask(
             erhe::scene_renderer::Shader_bool::VARIANT_SHADOW_CUBE
         );
@@ -562,7 +582,8 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                     Sky_parameters{},
                     0,                         // frame number
                     parameters.reverse_depth,
-                    parameters.depth_range
+                    parameters.depth_range,
+                    cube_conventions           // clip_space_y_flip per framebuffer_origin (see above)
                 );
                 m_camera_buffer.bind(encoder, camera_range);
 

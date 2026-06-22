@@ -37,43 +37,51 @@ solids had their exact near-surface distance at (s,1-t) with **clear (1e30) at
 (s,t)**; 0 matched (s,t). (The 2 "ambiguous" solids sat near the vertical centre
 where (s,t)~=(s,1-t).) That is an unambiguous vertical face flip.
 
-**The fix.** `res/shaders/standard.vert`, under `ERHE_VARIANT_SHADOW_CUBE`,
-negates `gl_Position.y` so the cube caster gets the **opposite** clip-space Y
-from the screen pass, cancelling the viewport flip for the cube pass only. This
-is erhe's equivalent of the SDL3-GPU forge lesson's per-face `proj.m[5]` negate
-(the cube pipeline is `cull_none`, so the induced winding change is moot). It
-flips the stored t, moving geometry from (s,1-t) back to (s,t).
+**The fix (convention-driven, the erhe-idiomatic form).** In `Shadow_renderer`'s
+point-cube pass (`shadow_renderer.cpp`), the cube caster's `camera_buffer.update`
+is given a `Coordinate_conventions` whose `clip_space_y_flip` is **enabled iff
+`framebuffer_origin == top_left`** -- exactly the way the 2D shadow map derives
+its flip from `framebuffer_origin` in `Light::get_texture_from_clip`. On a
+top_left framebuffer (Vulkan/Metal) the projection y-negate cancels the
+negative-viewport flip, so the cube face is stored in the GL-native orientation
+that the fixed cube-map (s,t) convention expects; on bottom_left GL nothing is
+flipped (its native rendering already matches). This is the single legitimate use
+of `clip_space_y_flip` (disabled device-wide otherwise). No shader-side
+`gl_Position` negate is used (an earlier iteration did `gl_Position.y = -...`,
+but that is unconditional -- correct on Vulkan, wrong on bottom_left GL -- so it
+was replaced with the framebuffer_origin-gated convention).
 
 **Verified.** With the fix, point shadows render as proper contact shadows
 directly under the occluders (before: detached / displaced into the foreground),
-a ~47k-pixel change versus the pre-fix frame (the earlier `conventions` attempt
-changed nothing). Deductively the fix is the exact inverse of the confirmed
-flip, and it is purely vertical (s untouched).
+a ~47k-pixel change versus the pre-fix frame. The convention-driven form is
+pixel-identical (0.01% AA jitter) to the shader-negate form on Vulkan.
+Deductively it is the exact inverse of the confirmed flip and purely vertical
+(s untouched). GL/Metal are unverified at runtime (no headless GL; the windowed
+build needs a live display) but are correct by construction of the
+framebuffer_origin gate.
 
-### Note: the clip-space-y-flip candidate fix is INERT (why the earlier attempt failed)
+### Note: why the FIRST `conventions` attempt was inert (the path was right, the value was wrong)
 
-The doc's original "leading hypothesis" was correct (a per-face y-flip), but the
-candidate *implementation* -- "suppress the central clip-space y-flip for the
-cube caster" via `Coordinate_conventions` -- is a **no-op**:
+The original "leading hypothesis" (a per-face y-flip) was correct, and
+`Coordinate_conventions` *is* the right vehicle -- but the first attempt passed
+the wrong value:
 
-- **`clip_space_y_flip` is `disabled` on every backend.** Vulkan
-  (`vulkan_device_init.cpp:1386`), OpenGL (`gl_device.cpp:1053`) and Metal
+- **`clip_space_y_flip` is `disabled` on every backend's DEVICE conventions.**
+  Vulkan (`vulkan_device_init.cpp:1403`), OpenGL (`gl_device.cpp:1053`) and Metal
   (`metal_device.cpp:217`) all set
-  `coordinate_conventions.clip_space_y_flip = disabled`. The projection-level
-  y-negate in `Projection::get_projection_matrix` (`projection.cpp:122`) is
-  therefore never taken in practice. On Vulkan the y-flip is done entirely by a
-  **negative-height viewport** in `set_viewport_rect`
-  (`vulkan_render_command_encoder.cpp:456`, VK_KHR_maintenance1), applied
-  **uniformly** to the cube caster and the main screen pass.
-- Consequence: passing `parameters.conventions` (or any `Coordinate_conventions`)
-  to the cube `camera_buffer.update` changes nothing. This was tried and produced
-  a **pixel-identical** before/after headless capture (only the FPS readout
-  differed). So the candidate fix "suppress the central clip-space y-flip for the
-  cube caster" is a **no-op** -- do not pursue it via `conventions`. If an extra
-  cube-pass flip is genuinely needed (see below), it must be done at the viewport
-  level (give the cube caster a **positive** viewport height so it does NOT
-  inherit the screen's negative-viewport flip) or by negating the cube
-  projection's Y row directly -- NOT via the conventions/`clip_space_y_flip` path.
+  `coordinate_conventions.clip_space_y_flip = disabled`; the per-backend
+  framebuffer y-flip is done elsewhere (a negative-height viewport in
+  `set_viewport_rect` on Vulkan, internal `(1-y)` on Metal, none on GL). So
+  passing the **device** `parameters.conventions` (clip_space_y_flip already
+  disabled) to the cube `camera_buffer.update` changes nothing -- the first
+  attempt did exactly this and produced a **pixel-identical** capture. The fix
+  above instead constructs a conventions value with `clip_space_y_flip` **enabled**
+  for the cube pass (gated on `framebuffer_origin`), which is what actually flips
+  the projection Y. Equivalent alternatives that were considered: a
+  framebuffer_origin-gated shader `gl_Position.y` negate, or a **positive**-height
+  viewport for the cube pass (do NOT inherit the screen's negative-viewport flip).
+  All three are the same flip; the convention-driven form keeps it traceable to
+  `framebuffer_origin` like the rest of erhe's coordinate handling.
 
 ### What was verified empirically (headless + in-editor MCP)
 
