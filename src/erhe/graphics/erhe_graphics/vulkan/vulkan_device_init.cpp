@@ -991,6 +991,13 @@ Device_impl::Device_impl(
         .sType    = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
         .pNext    = nullptr,
         .features = {
+            // erhe samples cube-map-array textures (e.g. the point-light cube
+            // shadow maps) via samplerCubeArray, whose SPIR-V declares the
+            // SampledCubeArray capability. That capability requires the
+            // imageCubeArray device feature to be enabled, else shaders trip
+            // VUID-VkShaderModuleCreateInfo-pCode-08740. Desktop drivers do not
+            // enforce it; KosmicKrisp / the validation layer do.
+            .imageCubeArray                 = qf.imageCubeArray,
             .geometryShader                 = qf.geometryShader,
             .sampleRateShading              = qf.sampleRateShading,
             .multiDrawIndirect              = qf.multiDrawIndirect,
