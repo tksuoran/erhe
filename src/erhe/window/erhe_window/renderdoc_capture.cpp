@@ -47,7 +47,7 @@ void set_env_or_warn(const char* key, const char* value)
 // override RenderDoc library's implicit capture layer (an experimental fork at
 // a custom location) instead of the system-installed RenderDoc layer. Must run
 // before vkCreateInstance. The layer search path is derived from the override
-// library's own directory so it stays in sync with renderdoc_library_path.
+// library's own directory so it stays in sync with the override library path.
 void apply_renderdoc_override_env(std::string_view library_path_override)
 {
     const std::filesystem::path library_path{library_path_override};

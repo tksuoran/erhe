@@ -46,21 +46,25 @@ In `config/editor/erhe_graphics.json`:
 
 ```json
 "renderdoc_capture_support": true,
-"renderdoc_library_path": "D:\\renderdoc\\x64\\Development\\renderdoc.dll",
+"renderdoc_library_path_override_enable": true,
+"renderdoc_library_path_override": "D:\\renderdoc\\x64\\Development\\renderdoc.dll",
 ```
 
 `renderdoc_capture_support` makes erhe load the RenderDoc in-application API at
-startup; `renderdoc_library_path` overrides *which* `renderdoc.dll` is loaded
-(default would be `C:\Program Files\RenderDoc\renderdoc.dll`, the stock install).
-It **must** be the fork's DLL: a target-control connection is version-sensitive,
-so the editor's in-app layer and the connecting `qrenderdoc` have to be the
-**same build**.
+startup; `renderdoc_library_path_override` selects *which* `renderdoc.dll` is
+loaded (default would be `C:\Program Files\RenderDoc\renderdoc.dll`, the stock
+install), but only takes effect when `renderdoc_library_path_override_enable` is
+`true`. The enable flag is kept separate from the path so you can toggle the fork
+override on and off without losing the configured path. It **must** be the fork's
+DLL: a target-control connection is version-sensitive, so the editor's in-app
+layer and the connecting `qrenderdoc` have to be the **same build**.
 
 This path is machine-specific -- an absolute path into your local clone/build of
 the fork ([`tksuoran/renderdoc`](https://github.com/tksuoran/renderdoc)). The
 `D:\renderdoc\...` paths throughout this doc are just this machine's checkout
-location; substitute your own. Keep `renderdoc_library_path` as a **local,
-uncommitted** working-tree change, not something pushed to the repo.
+location; substitute your own. Keep `renderdoc_library_path_override` (and the
+enable toggle) as a **local, uncommitted** working-tree change, not something
+pushed to the repo. The setup script writes both for you.
 
 `initialize_frame_capture()` in
 `src/erhe/window/erhe_window/renderdoc_capture.cpp` reads the override and, on
@@ -312,8 +316,8 @@ fix -> prove cycle was driven from the agent via these two MCP servers.
 - **Connect, don't inject.** The editor already has the in-app RenderDoc, so use
   `list_targets` + `connect_to_target`. `attach_to_process` would inject a second
   copy and conflict.
-- **Same build on both ends.** The editor's `renderdoc_library_path` DLL and the
-  `qrenderdoc.exe` you run `--mcp-server` from must be the same fork build.
+- **Same build on both ends.** The editor's `renderdoc_library_path_override` DLL
+  and the `qrenderdoc.exe` you run `--mcp-server` from must be the same fork build.
 - **Once-at-startup work isn't in a mid-run frame capture.** The sky LUTs are
   generated once (`ensure_luts` sets a ready flag), so a frame-1408 capture has no
   `Sky LUT generation` dispatch -- inspect the **LUT textures** as persistent

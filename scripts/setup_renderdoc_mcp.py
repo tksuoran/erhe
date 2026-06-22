@@ -17,8 +17,9 @@ Phases (each can be skipped):
   1. Clone/update the fork at --renderdoc-dir on branch --branch.
   2. Build renderdoc.sln (Development|x64) with the v145 toolset override and the
      stdext_compat.h forced-include shim, then verify the artifacts.
-  3. Configure erhe: set renderdoc_library_path in config/editor/erhe_graphics.json
-     (a deliberately LOCAL, uncommitted change).
+  3. Configure erhe: write the machine-specific renderdoc_library_path_override and
+     enable it (renderdoc_library_path_override_enable) in
+     config/editor/erhe_graphics.json (a deliberately LOCAL, uncommitted change).
   4. Install the proxy into .mcp.json (stdio server, with ERHE_RENDERDOC_QRENDERDOC
      pointing at the built qrenderdoc.exe).
   5. Generate scripts/renderdoc_tools.json (the proxy's baked schema).
@@ -149,29 +150,45 @@ def build(rd_dir, configuration, shim_path, qrenderdoc_exe, renderdoc_dll, rende
     ok("built " + qrenderdoc_exe)
 
 
+# Matches a JSON scalar value (string / bool / null / number) after a "key":.
+_JSON_VALUE = r'(?:"[^"]*"|true|false|null|-?\d+(?:\.\d+)?)'
+
+
+def _set_json_field(text, key, value_literal, nl, anchor_key):
+    """Set "key": value_literal in a strict-JSON text with a minimal-diff edit.
+    Replaces the value in place if the key exists, else inserts a new line right
+    after the anchor_key line (preserving its indentation). Returns
+    (new_text, "updated"|"inserted")."""
+    value_pat = r'("' + re.escape(key) + r'"\s*:\s*)' + _JSON_VALUE
+    if re.search(value_pat, text):
+        # lambda replacement so backslashes in paths are not treated as group refs
+        return re.sub(value_pat, lambda m: m.group(1) + value_literal, text), "updated"
+    anchor_pat = r'(?m)^(?P<indent>[ \t]*)"' + re.escape(anchor_key) + r'"\s*:\s*' + _JSON_VALUE + r'\s*,?'
+    m = re.search(anchor_pat, text)
+    if not m:
+        raise SetupError("could not find %s to anchor the insert of %s" % (anchor_key, key))
+    indent = m.group("indent")
+    insert_at = m.end()
+    new_line = nl + indent + '"' + key + '": ' + value_literal + ','
+    return text[:insert_at] + new_line + text[insert_at:], "inserted"
+
+
 def configure_erhe(cfg_path, dll_path):
     text = read_text(cfg_path)
     nl = detect_newline(text)
-    dll_literal = json.dumps(dll_path)  # quoted, JSON-escaped string
 
-    if re.search(r'"renderdoc_library_path"\s*:\s*"[^"]*"', text):
-        # lambda replacement so backslashes in the path are not treated as group refs
-        text = re.sub(r'"renderdoc_library_path"\s*:\s*"[^"]*"',
-                      lambda m: '"renderdoc_library_path": ' + dll_literal, text)
-        info("updated existing renderdoc_library_path")
-    else:
-        m = re.search(r'(?m)^(?P<indent>[ \t]*)"renderdoc_capture_support"\s*:\s*(?:true|false)\s*,?', text)
-        if not m:
-            raise SetupError("could not find renderdoc_capture_support in %s to anchor the insert" % cfg_path)
-        indent = m.group("indent")
-        insert_at = m.end()
-        new_line = nl + indent + '"renderdoc_library_path": ' + dll_literal + ','
-        text = text[:insert_at] + new_line + text[insert_at:]
-        info("inserted renderdoc_library_path after renderdoc_capture_support")
-
-    # Ensure capture support is on (required to load the in-app API at startup).
-    text = re.sub(r'"renderdoc_capture_support"\s*:\s*false',
-                  '"renderdoc_capture_support": true', text)
+    # Capture support must be on for the in-app RenderDoc API to load at startup.
+    text, _ = _set_json_field(text, "renderdoc_capture_support", "true", nl,
+                              anchor_key="renderdoc_capture_support")
+    # Enable the override and write the machine-specific path (kept after the
+    # enable toggle, matching the struct field order). Enabling here makes the
+    # freshly built fork actually get used; toggle the enable off to fall back to
+    # the system RenderDoc without losing the configured path.
+    text, a_en = _set_json_field(text, "renderdoc_library_path_override_enable", "true", nl,
+                                 anchor_key="renderdoc_capture_support")
+    text, a_path = _set_json_field(text, "renderdoc_library_path_override", json.dumps(dll_path), nl,
+                                   anchor_key="renderdoc_library_path_override_enable")
+    info("%s renderdoc_library_path_override_enable=true; %s renderdoc_library_path_override" % (a_en, a_path))
     write_text(cfg_path, text)
 
 
@@ -272,7 +289,7 @@ def main():
         build(rd_dir, args.configuration, shim_path, qrenderdoc_exe, renderdoc_dll, renderdoc_json)
 
     # phase 3: configure erhe
-    step("Configure erhe (renderdoc_library_path -> built DLL)")
+    step("Configure erhe (renderdoc_library_path_override -> built DLL, enabled)")
     configure_erhe(erhe_gfx_json, renderdoc_dll)
     warn("this is a LOCAL change to a tracked file -- keep it uncommitted.")
     ok("erhe graphics config points at " + renderdoc_dll)
