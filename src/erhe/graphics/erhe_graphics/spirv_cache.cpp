@@ -37,7 +37,7 @@ auto shader_type_string(Shader_type type) -> const char*
 auto make_settings_salt() -> std::string
 {
     return fmt::format(
-        "vulkan_1_1:spv_1_6:debug:noopt:validate:includer:glslang{}.{}.{}{}:v4",
+        "vulkan_1_1:spv_1_6:debug:noopt:validate:includer:glslang{}.{}.{}{}:v7",
         GLSLANG_VERSION_MAJOR,
         GLSLANG_VERSION_MINOR,
         GLSLANG_VERSION_PATCH,
