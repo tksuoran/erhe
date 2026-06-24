@@ -32,6 +32,7 @@ namespace erhe::scene {
     class Skin;
 }
 namespace erhe::scene_renderer {
+    class Content_wide_line_renderer;
     class Joint_buffer;
     class Mesh_memory;
     class Program_interface;
@@ -112,6 +113,21 @@ public:
     void render            (const Render_parameters& parameters);
     void next_frame        ();
 
+    // ID-buffer edge-line method: render the content edge ribbons -- already
+    // queued and compute-expanded by the caller into wide_line_renderer in id
+    // mode -- into a viewport-sized rgba8 face-ID buffer with depth test, BEFORE
+    // the main viewport pass. The polygon-fill shader then samples
+    // get_edge_id_texture() and paints an edge line wherever the stored face id
+    // matches its own facet id. This framebuffer is separate from the picking
+    // one above: its color is sampled in-frame (not read back) and its depth is
+    // cleared then discarded.
+    void render_content_edge_id(
+        erhe::graphics::Command_buffer&                   command_buffer,
+        const erhe::math::Viewport&                       viewport,
+        erhe::scene_renderer::Content_wide_line_renderer& wide_line_renderer
+    );
+    [[nodiscard]] auto get_edge_id_texture() const -> erhe::graphics::Texture*;
+
     [[nodiscard]] auto get(int x, int y, uint32_t& out_id, float& out_depth, uint64_t& out_frame_number) -> bool;
     [[nodiscard]] auto get(int x, int y) -> Id_query_result;
 
@@ -148,6 +164,7 @@ private:
     [[nodiscard]] auto get_current_transfer_entry() -> Transfer_entry&;
 
     void update_framebuffer(erhe::math::Viewport viewport);
+    void update_edge_id_framebuffer(erhe::math::Viewport viewport);
 
     bool                                         m_enabled{true};
     erhe::math::Viewport                         m_viewport{0, 0, 0, 0};
@@ -173,6 +190,12 @@ private:
     std::unique_ptr<erhe::graphics::Texture>     m_depth_texture;
     std::unique_ptr<erhe::graphics::Render_pass> m_render_pass;
     std::unique_ptr<erhe::graphics::Gpu_timer>   m_gpu_timer;
+    // Edge-ID pre-pass render target (ID-buffer edge-line method), separate from
+    // the picking framebuffer above: color is sampled by the polygon-fill pass
+    // the same frame, depth is cleared then discarded, and nothing is read back.
+    std::unique_ptr<erhe::graphics::Texture>     m_edge_id_color_texture;
+    std::unique_ptr<erhe::graphics::Texture>     m_edge_id_depth_texture;
+    std::unique_ptr<erhe::graphics::Render_pass> m_edge_id_render_pass;
     erhe::graphics::Ring_buffer_client           m_texture_read_buffer;
 
     std::array<Transfer_entry, s_transfer_entry_count> m_transfer_entries;

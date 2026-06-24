@@ -96,7 +96,8 @@ Content_wide_line_interface::Content_wide_line_interface(
     //   float  window_to_ndc_scale;         // tent depth-range convention factor
     //   uint   use_tent;                    // 0 = simple quad, 1 = two-face tent
     //   float  line_bias_clamp;             // max toward-camera extrapolation (ULPs)
-    //   float  _padding0..1;                // pad to 16-byte boundary
+    //   uint   id_mode;                     // 0 = write line color, 1 = write face id
+    //   uint   id_base;                     // per-dispatch face-id base (id mode)
     //
     // Per-eye data is grouped into cameras[] so the multiview compute
     // shader can write one triangle set per view in a single dispatch
@@ -120,8 +121,14 @@ Content_wide_line_interface::Content_wide_line_interface(
     offsets.window_to_ndc_scale  = view_block.add_float("window_to_ndc_scale" )->get_offset_in_parent();
     offsets.use_tent             = view_block.add_uint ("use_tent"            )->get_offset_in_parent();
     offsets.line_bias_clamp      = view_block.add_float("line_bias_clamp"     )->get_offset_in_parent();
-    offsets.padding0             = view_block.add_float("_padding0"           )->get_offset_in_parent();
-    offsets.padding1             = view_block.add_float("_padding1"           )->get_offset_in_parent();
+    // ID-buffer edge-line method (Content_wide_line_renderer id mode): id_mode
+    // selects whether the compute shader writes the line color (0) or the
+    // encoded face id (1) into the triangle color slot; id_base is the
+    // per-primitive face-id base (added to each half-quad's facet index before
+    // vec3_from_uint encoding) so a fill fragment can match face for face.
+    // These reuse the two former pad-to-16 slots, so the block size is unchanged.
+    offsets.id_mode              = view_block.add_uint ("id_mode"             )->get_offset_in_parent();
+    offsets.id_base              = view_block.add_uint ("id_base"             )->get_offset_in_parent();
 
     // Skinned geometry-shader bind group layout: view UBO + global joint
     // block. The vertex shader reads a_joint_indices_0 + a_joint_weights_0

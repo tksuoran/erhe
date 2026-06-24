@@ -24,6 +24,7 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
+#include "erhe_scene_renderer/content_wide_line_renderer.hpp"
 #include "erhe_scene_renderer/joint_buffer.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_scene_renderer/shader_variant_cache.hpp"
@@ -193,6 +194,123 @@ void Id_renderer::update_framebuffer(const erhe::math::Viewport viewport)
             entry.data.resize(color_image_size + depth_image_size);
         }
     }
+}
+
+void Id_renderer::update_edge_id_framebuffer(const erhe::math::Viewport viewport)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if (
+        m_edge_id_color_texture &&
+        (m_edge_id_color_texture->get_width()  == viewport.width) &&
+        (m_edge_id_color_texture->get_height() == viewport.height)
+    ) {
+        return;
+    }
+
+    m_edge_id_color_texture.reset();
+    m_edge_id_depth_texture.reset();
+    m_edge_id_render_pass.reset();
+
+    m_edge_id_color_texture = std::make_unique<Texture>(
+        m_graphics_device,
+        erhe::graphics::Texture_create_info{
+            .device      = m_graphics_device,
+            .usage_mask  =
+                erhe::graphics::Image_usage_flag_bit_mask::color_attachment |
+                erhe::graphics::Image_usage_flag_bit_mask::sampled,
+            .type        = erhe::graphics::Texture_type::texture_2d,
+            .pixelformat = erhe::dataformat::Format::format_8_vec4_unorm,
+            .use_mipmaps = false,
+            .width       = viewport.width,
+            .height      = viewport.height,
+            .debug_label = "Content edge ID color"
+        }
+    );
+    m_edge_id_depth_texture = std::make_unique<Texture>(
+        m_graphics_device,
+        erhe::graphics::Texture_create_info{
+            .device      = m_graphics_device,
+            .usage_mask  = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment,
+            .type        = erhe::graphics::Texture_type::texture_2d,
+            .pixelformat = erhe::dataformat::Format::format_d32_sfloat,
+            .use_mipmaps = false,
+            .width       = viewport.width,
+            .height      = viewport.height,
+            .debug_label = "Content edge ID depth"
+        }
+    );
+
+    erhe::graphics::Render_pass_descriptor render_pass_descriptor;
+    // Color: cleared to 0 (the background / "no edge" id), stored, and left in a
+    // shader-read state so the polygon-fill pass can sample it in the same frame.
+    render_pass_descriptor.color_attachments[0].texture       = m_edge_id_color_texture.get();
+    render_pass_descriptor.color_attachments[0].load_action   = erhe::graphics::Load_action::Clear;
+    render_pass_descriptor.color_attachments[0].store_action  = erhe::graphics::Store_action::Store;
+    render_pass_descriptor.color_attachments[0].clear_value   = {0.0, 0.0, 0.0, 0.0};
+    render_pass_descriptor.color_attachments[0].usage_before  = erhe::graphics::Image_usage_flag_bit_mask::sampled;
+    render_pass_descriptor.color_attachments[0].layout_before = erhe::graphics::Image_layout::shader_read_only_optimal;
+    render_pass_descriptor.color_attachments[0].usage_after   = erhe::graphics::Image_usage_flag_bit_mask::sampled;
+    render_pass_descriptor.color_attachments[0].layout_after  = erhe::graphics::Image_layout::shader_read_only_optimal;
+    // Depth: cleared to the convention's far value, used only to resolve which
+    // edge wins per pixel, then discarded (store dont_care, never sampled).
+    render_pass_descriptor.depth_attachment.texture           = m_edge_id_depth_texture.get();
+    render_pass_descriptor.depth_attachment.load_action       = erhe::graphics::Load_action::Clear;
+    render_pass_descriptor.depth_attachment.clear_value[0]    = m_graphics_device.get_reverse_depth() ? 0.0 : 1.0;
+    render_pass_descriptor.depth_attachment.store_action      = erhe::graphics::Store_action::Dont_care;
+    render_pass_descriptor.depth_attachment.usage_before      = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
+    render_pass_descriptor.depth_attachment.layout_before     = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;
+    render_pass_descriptor.depth_attachment.usage_after       = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
+    render_pass_descriptor.depth_attachment.layout_after      = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;
+    render_pass_descriptor.render_target_width                = viewport.width;
+    render_pass_descriptor.render_target_height               = viewport.height;
+    render_pass_descriptor.debug_label                        = "Content edge ID";
+    m_edge_id_render_pass = std::make_unique<Render_pass>(m_graphics_device, render_pass_descriptor);
+}
+
+void Id_renderer::render_content_edge_id(
+    erhe::graphics::Command_buffer&                   command_buffer,
+    const erhe::math::Viewport&                       viewport,
+    erhe::scene_renderer::Content_wide_line_renderer& wide_line_renderer
+)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if (!m_enabled) {
+        return;
+    }
+    if ((viewport.width == 0) || (viewport.height == 0)) {
+        return;
+    }
+
+    update_edge_id_framebuffer(viewport);
+
+    erhe::graphics::Scoped_debug_group debug_group{command_buffer, "Id_renderer::render_content_edge_id()"};
+
+    erhe::graphics::Render_command_encoder encoder = m_graphics_device.make_render_command_encoder(command_buffer);
+    erhe::graphics::Scoped_render_pass scoped_render_pass{*m_edge_id_render_pass.get(), command_buffer};
+    encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
+    encoder.set_scissor_rect (viewport.x, viewport.y, viewport.width, viewport.height);
+
+    // The wide-line renderer overrides its own shader stages / bind group layout
+    // / topology; from the pipeline we hand it, it reads only depth_stencil +
+    // multisample + rasterization + viewport_depth_range. m_pipeline already
+    // enables the depth test (with depth writes), which is exactly what the
+    // edge-id pass needs so a nearer edge wins per pixel. Blending is disabled so
+    // the face id is written exactly. group 0: the id pass carries every content
+    // edge (selection coloring is handled later by the fill composition passes).
+    wide_line_renderer.render(
+        encoder,
+        m_pipeline,
+        &erhe::graphics::Color_blend_state::color_blend_disabled,
+        0u,
+        false
+    );
+}
+
+auto Id_renderer::get_edge_id_texture() const -> erhe::graphics::Texture*
+{
+    return m_edge_id_color_texture.get();
 }
 
 void Id_renderer::render_meshes(

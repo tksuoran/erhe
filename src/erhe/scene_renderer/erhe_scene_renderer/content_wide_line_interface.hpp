@@ -46,8 +46,11 @@ public:
     std::size_t window_to_ndc_scale   {0};
     std::size_t use_tent              {0};
     std::size_t line_bias_clamp       {0};
-    std::size_t padding0              {0};
-    std::size_t padding1              {0};
+    // ID-buffer edge-line method: id_mode (0 = write line color, 1 = write
+    // encoded face id) and id_base (per-primitive face-id base). Occupy the two
+    // former pad-to-16 slots, so the view block size is unchanged.
+    std::size_t id_mode               {0};
+    std::size_t id_base               {0};
 };
 
 // Shader-interface description for the content wide-line renderer. Owns

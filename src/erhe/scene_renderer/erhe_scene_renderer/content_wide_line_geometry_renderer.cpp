@@ -69,7 +69,8 @@ protected:
         float                               line_width,
         uint32_t                            group,
         bool                                mesh_is_skinned,
-        uint32_t                            base_joint_index
+        uint32_t                            base_joint_index,
+        uint32_t                            id_base
     ) override;
 
     void release_backend_state() override;
@@ -157,9 +158,13 @@ void Content_wide_line_geometry_renderer::add_primitive(
     const float                         line_width,
     const uint32_t                      group,
     const bool                          mesh_is_skinned,
-    const uint32_t                      base_joint_index
+    const uint32_t                      base_joint_index,
+    const uint32_t                      id_base
 )
 {
+    // id_base is unused: the geometry-shader backend does not implement the
+    // ID-buffer edge-line method (compute backend only, per scope).
+    static_cast<void>(id_base);
     const erhe::primitive::Index_range& edge_indices = buffer_mesh.edge_line_indices;
     if (edge_indices.index_count == 0) {
         return;
@@ -344,7 +349,8 @@ void Content_wide_line_geometry_renderer::render(
             dispatch.line_width,
             dispatch.edge_count,
             0u,  // stride_per_view: unused by the geometry-shader vertex stage
-            dispatch.base_joint_index
+            dispatch.base_joint_index,
+            0u   // id_base: ID-buffer edge-line method is compute-backend only
         );
         view_buffer_range.bytes_written(view_size);
         view_buffer_range.close();

@@ -1145,8 +1145,21 @@ void Build_context::build_edge_lines()
                     : normal_a;
             }
 
-            const float data_a[8] = { pos_a.x, pos_a.y, pos_a.z, 0.0f, normal_a.x, normal_a.y, normal_a.z, sign_a };
-            const float data_b[8] = { pos_b.x, pos_b.y, pos_b.z, 0.0f, normal_b.x, normal_b.y, normal_b.z, 0.0f   };
+            // Per-endpoint adjacent facet id for the ID-buffer edge-line method
+            // (Content_wide_line_renderer id mode): endpoint 0 carries face A's
+            // facet index, endpoint 1 carries face B's (falling back to A on a
+            // boundary edge / to 0 on a facet-less edge). Stored in the otherwise
+            // spare position.w slot so the edge SSBO struct size is unchanged; the
+            // (toggle-off) color path ignores position.w. These facet indices are
+            // the SAME index space build_polygon_id() writes into the fill mesh's
+            // custom_attribute_id, so the fill fragment can match face for face.
+            const uint32_t id_a = (facet_a != GEO::NO_INDEX) ? static_cast<uint32_t>(facet_a) : 0u;
+            const uint32_t id_b = (facet_b != GEO::NO_INDEX) ? static_cast<uint32_t>(facet_b)
+                                : (facet_a != GEO::NO_INDEX) ? static_cast<uint32_t>(facet_a)
+                                : 0u;
+
+            const float data_a[8] = { pos_a.x, pos_a.y, pos_a.z, static_cast<float>(id_a), normal_a.x, normal_a.y, normal_a.z, sign_a };
+            const float data_b[8] = { pos_b.x, pos_b.y, pos_b.z, static_cast<float>(id_b), normal_b.x, normal_b.y, normal_b.z, 0.0f   };
             memcpy(edge_line_vertex_data.data() + edge_vertex_write_offset, data_a, vertex_element_size);
             edge_vertex_write_offset += vertex_element_size;
             memcpy(edge_line_vertex_data.data() + edge_vertex_write_offset, data_b, vertex_element_size);

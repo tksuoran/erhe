@@ -66,7 +66,8 @@ protected:
         float                               line_width,
         uint32_t                            group,
         bool                                mesh_is_skinned,
-        uint32_t                            base_joint_index
+        uint32_t                            base_joint_index,
+        uint32_t                            id_base
     ) override;
 
     void release_backend_state() override;
@@ -85,6 +86,9 @@ private:
         glm::vec4   color                  {1.0f};
         float       line_width             {1.0f};
         uint32_t    group                  {0};
+        // Per-primitive face-id base for the id mode (added to each half-quad's
+        // facet index before encoding). Zero for the normal color path.
+        uint32_t    id_base                {0};
 
         // Skinned dispatch state (skinned == false leaves the joint
         // fields unused). joint_buffer/_byte_offset/_byte_size identify
@@ -193,7 +197,8 @@ void Content_wide_line_compute_renderer::add_primitive(
     const float                         line_width,
     const uint32_t                      group,
     const bool                          mesh_is_skinned,
-    const uint32_t                      base_joint_index
+    const uint32_t                      base_joint_index,
+    const uint32_t                      id_base
 )
 {
     const erhe::primitive::Buffer_range& edge_range = buffer_mesh.edge_line_vertex_buffer_range;
@@ -231,6 +236,7 @@ void Content_wide_line_compute_renderer::add_primitive(
         .color                    = color,
         .line_width               = line_width,
         .group                    = group,
+        .id_base                  = id_base,
         .skinned                  = dispatch_is_skinned,
         .joint_buffer             = joint_buffer,
         .joint_buffer_byte_offset = joint_buffer_byte_offset,
@@ -322,7 +328,8 @@ void Content_wide_line_compute_renderer::compute(erhe::graphics::Compute_command
             dispatch.line_width,
             static_cast<uint32_t>(dispatch.edge_count),
             stride_per_view_v,
-            dispatch.base_joint_index
+            dispatch.base_joint_index,
+            dispatch.id_base
         );
         view_buffer_range.bytes_written(view_size);
         view_buffer_range.close();

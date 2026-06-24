@@ -104,6 +104,7 @@ void Content_wide_line_renderer::set_view_params(
         .window_to_ndc_scale  = reverse_depth ? 1.0f : 2.0f,
         .use_tent             = m_use_tent ? 1u : 0u,
         .line_bias_clamp      = m_line_bias_clamp,
+        .id_mode              = m_id_mode ? 1u : 0u,
     };
     m_view_params_set = true;
 }
@@ -120,11 +121,12 @@ void Content_wide_line_renderer::set_joint_buffer(
 }
 
 void Content_wide_line_renderer::add_mesh(
-    Mesh_memory&             mesh_memory,
-    const erhe::scene::Mesh& mesh,
-    const glm::vec4&         color,
-    const float              line_width,
-    const uint32_t           group
+    Mesh_memory&                 mesh_memory,
+    const erhe::scene::Mesh&     mesh,
+    const glm::vec4&             color,
+    const float                  line_width,
+    const uint32_t               group,
+    const Face_id_base_provider* id_base_provider
 )
 {
     const erhe::scene::Node* node = mesh.get_node();
@@ -137,7 +139,9 @@ void Content_wide_line_renderer::add_mesh(
     const bool                                mesh_is_skinned  = (skin != nullptr);
     const uint32_t                            base_joint_index = mesh_is_skinned ? skin->skin_data.joint_buffer_index : 0u;
 
+    std::size_t primitive_index = 0;
     for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh.get_primitives()) {
+        const std::size_t this_primitive_index = primitive_index++;
         if (!mesh_primitive.primitive) {
             continue;
         }
@@ -145,6 +149,12 @@ void Content_wide_line_renderer::add_mesh(
         if (buffer_mesh == nullptr) {
             continue;
         }
+        // Per-primitive face-id base for the id mode (0 for the color path). The
+        // editor's shared assignment guarantees the same base the polygon-fill
+        // pass uses for this (mesh, primitive), so face ids match across passes.
+        const uint32_t id_base = (id_base_provider != nullptr)
+            ? id_base_provider->get_face_id_base(mesh, this_primitive_index)
+            : 0u;
         add_primitive(
             mesh_memory,
             *buffer_mesh,
@@ -153,7 +163,8 @@ void Content_wide_line_renderer::add_mesh(
             line_width,
             group,
             mesh_is_skinned,
-            base_joint_index
+            base_joint_index,
+            id_base
         );
     }
 }

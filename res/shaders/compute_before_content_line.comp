@@ -5,6 +5,18 @@
 
 layout(local_size_x = 32) in;
 
+// Pack a 24-bit integer id into an rgb triple. Must match standard.frag's
+// vec3_from_uint and the build_polygon_id / picker encoding so that, in the
+// ID-buffer edge-line method, an edge half-quad's encoded face id is bit-exact
+// with the value the polygon-fill fragment computes for the same face.
+vec3 vec3_from_uint(uint i)
+{
+    uint r = (i >> 16u) & 0xffu;
+    uint g = (i >>  8u) & 0xffu;
+    uint b = (i >>  0u) & 0xffu;
+    return vec3(float(r) / 255.0, float(g) / 255.0, float(b) / 255.0);
+}
+
 float get_line_width(vec4 position, float thickness, vec4 fov, vec4 viewport)
 {
     // Negative thickness = fixed screen-space pixel width (no distance scaling)
@@ -129,6 +141,12 @@ void do_wide_line(uint view_index, uint in_line_index, uint out_triangle_index)
     float sign_a          = edge_line_vertex_buffer.vertices[in_i0].normal.w;
     vec3  local_normal_b  = edge_line_vertex_buffer.vertices[in_i1].normal.xyz;
 
+    // Adjacent facet id per endpoint for the ID-buffer edge-line method
+    // (build_edge_lines packs them into position.w). Endpoint 0 -> face A's
+    // facet, endpoint 1 -> face B's. Ignored unless view.id_mode != 0.
+    uint facet_id_a = uint(edge_line_vertex_buffer.vertices[in_i0].position.w);
+    uint facet_id_b = uint(edge_line_vertex_buffer.vertices[in_i1].position.w);
+
     mat4 clip_from_world = view.cameras[view_index].clip_from_world;
 
 #ifdef ERHE_USE_SKINNING
@@ -232,6 +250,13 @@ void do_wide_line(uint view_index, uint in_line_index, uint out_triangle_index)
         float e0_z = v0_in_ndc.z;
         float e1_z = v1_in_ndc.z;
 
+        // Face-id routing for the ID-buffer method: the +side half-quad (a, b)
+        // and the -side half-quad (c, d) each carry the facet id of the face
+        // they hug. Default a->A / c->B; refined below once the surface frame
+        // tells us which face landed on the +side in screen space.
+        uint id_plus  = facet_id_a;
+        uint id_minus = facet_id_b;
+
         // Surface-aligned tent only when at least one adjacent face normal is
         // present; otherwise keep a flat ribbon at endpoint depth.
         if ((dot(world_normal_a, world_normal_a) > 1e-8) || (dot(world_normal_b, world_normal_b) > 1e-8)) {
@@ -253,11 +278,17 @@ void do_wide_line(uint view_index, uint in_line_index, uint out_triangle_index)
                 bool a_on_plus   = dot(tangent_ndc, side_in_ndc) >= 0.0;
                 plus_normal  = a_on_plus ? world_normal_a : world_normal_b;
                 minus_normal = a_on_plus ? world_normal_b : world_normal_a;
+                // Route facet ids to match the plane each half-quad hugs.
+                id_plus  = a_on_plus ? facet_id_a : facet_id_b;
+                id_minus = a_on_plus ? facet_id_b : facet_id_a;
             } else {
                 // Degenerate face A normal: hug whichever face we have, both sides.
-                vec3 n = (dot(world_normal_a, world_normal_a) >= dot(world_normal_b, world_normal_b)) ? world_normal_a : world_normal_b;
+                bool use_a = dot(world_normal_a, world_normal_a) >= dot(world_normal_b, world_normal_b);
+                vec3 n = use_a ? world_normal_a : world_normal_b;
                 plus_normal  = n;
                 minus_normal = n;
+                id_plus  = use_a ? facet_id_a : facet_id_b;
+                id_minus = id_plus;
             }
 
             // Clip-space planes: pi_clip = transpose(inverse(clip_from_world)) * pi_world.
@@ -328,9 +359,21 @@ void do_wide_line(uint view_index, uint in_line_index, uint out_triangle_index)
         //   +side: (e0, a, b), (e0, b, e1)
         //   -side: (e0, e1, c), (e0, c, d)
         vec4 verts[12] = vec4[12](e0, a, b,  e0, b, e1,  e0, e1, c,  e0, c, d);
+        // In id mode write the encoded face id per half-quad (base + facet);
+        // the +side triangles (slots 0..5) get id_plus, the -side (6..11)
+        // id_minus. All three vertices of a triangle share its id, so the
+        // graphics-stage interpolation is constant per triangle and the
+        // fragment recovers an exact value. In color mode every vertex gets
+        // the line color, as before.
+        vec4 color_plus  = color;
+        vec4 color_minus = color;
+        if (view.id_mode != 0u) {
+            color_plus  = vec4(vec3_from_uint(view.id_base + id_plus ), 1.0);
+            color_minus = vec4(vec3_from_uint(view.id_base + id_minus), 1.0);
+        }
         for (uint k = 0u; k < 12u; ++k) {
             triangle_vertex_buffer.vertices[out_i0 + k].position_0 = verts[k];
-            triangle_vertex_buffer.vertices[out_i0 + k].color_0    = color;
+            triangle_vertex_buffer.vertices[out_i0 + k].color_0    = (k < 6u) ? color_plus : color_minus;
             triangle_vertex_buffer.vertices[out_i0 + k].custom_0   = l_in_screen;
         }
         return;

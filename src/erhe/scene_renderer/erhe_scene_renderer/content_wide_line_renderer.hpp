@@ -34,6 +34,22 @@ namespace erhe::scene_renderer {
 class Content_wide_line_interface;
 class Mesh_memory;
 
+// Supplies the per-primitive face-id base for the ID-buffer edge-line method.
+// The edge-id pre-pass (this renderer in id mode) and the polygon-fill pass
+// must derive the SAME base for the same (mesh, primitive) so a fill fragment
+// can match face for face; the editor builds one shared per-frame assignment
+// and exposes it through this interface. Only consulted when the renderer is in
+// id mode (add_mesh with a non-null provider).
+class Face_id_base_provider
+{
+public:
+    virtual ~Face_id_base_provider() noexcept = default;
+    [[nodiscard]] virtual auto get_face_id_base(
+        const erhe::scene::Mesh& mesh,
+        std::size_t              primitive_index
+    ) const -> uint32_t = 0;
+};
+
 // Abstract owner of the content wide-line rendering path. The editor
 // constructs exactly one concrete subclass per device via a factory
 // (see make_content_wide_line_compute_renderer /
@@ -78,6 +94,16 @@ public:
     void               set_line_bias_clamp (float ulps)   { m_line_bias_clamp = ulps; }
     [[nodiscard]] auto get_line_bias_clamp () const -> float { return m_line_bias_clamp; }
 
+    // ID-buffer edge-line method. When enabled, the compute backend writes the
+    // encoded face id (per-half-quad facet + per-dispatch id_base) into the
+    // triangle color slot instead of the line color, so an earlier edge-id
+    // pre-pass produces a face-ID buffer the polygon-fill shader samples. The
+    // caller pairs this with set_use_tent(true) + set_line_bias_margin(0) (no
+    // toward-camera lift -> half-quad depth == face plane) and renders into the
+    // edge-id framebuffer with blending disabled.
+    void               set_id_mode(bool value) { m_id_mode = value; }
+    [[nodiscard]] auto get_id_mode() const -> bool { return m_id_mode; }
+
     // True for the compute backend (compute() runs a real dispatch and
     // callers must emit a compute->vertex memory barrier afterwards),
     // false for the geometry-shader backend (compute() is a no-op, there
@@ -110,12 +136,17 @@ public:
     // partitions dispatches across composition passes (selection
     // outline, selected, not_selected, ...). Subclass picks which
     // primitives carry usable edge data for its backend.
+    // id_base_provider supplies the per-primitive face-id base for the id mode
+    // (nullptr for the normal color path). When non-null, each queued primitive's
+    // dispatch carries get_face_id_base(mesh, primitive_index), which the compute
+    // shader adds to the facet index before encoding.
     void add_mesh(
-        Mesh_memory&             mesh_memory,
-        const erhe::scene::Mesh& mesh,
-        const glm::vec4&         color,
-        float                    line_width,
-        uint32_t                 group = 0
+        Mesh_memory&                 mesh_memory,
+        const erhe::scene::Mesh&     mesh,
+        const glm::vec4&             color,
+        float                        line_width,
+        uint32_t                     group              = 0,
+        const Face_id_base_provider* id_base_provider   = nullptr
     );
 
     // Run the compute pre-pass that pre-transforms edge endpoints into
@@ -164,7 +195,8 @@ protected:
         float                               line_width,
         uint32_t                            group,
         bool                                mesh_is_skinned,
-        uint32_t                            base_joint_index
+        uint32_t                            base_joint_index,
+        uint32_t                            id_base
     ) = 0;
 
     // Subclass hook for end_frame() -- release any per-dispatch ring
@@ -198,6 +230,10 @@ private:
     bool                               m_use_tent{false};
     float                              m_line_bias_margin{1024.0f};
     float                              m_line_bias_clamp{2048.0f};
+
+    // ID-buffer edge-line method: when set, set_view_params() stamps id_mode = 1
+    // into the per-frame params so the compute backend writes encoded face ids.
+    bool                               m_id_mode{false};
 
     erhe::graphics::Ring_buffer_client* m_joint_buffer_client{nullptr};
     erhe::graphics::Ring_buffer_range   m_joint_buffer_range;
