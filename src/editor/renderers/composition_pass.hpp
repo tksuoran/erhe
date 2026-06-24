@@ -30,6 +30,12 @@ class Composition_pass_data
 {
 public:
     bool                                                                   enabled{true}; // TODO consider using Item visibility flag
+    // ID-buffer edge-line method: this pass is a lit content polygon-fill pass
+    // that should paint edge lines from the face-ID buffer when the method is
+    // active (Render_context::edge_id_texture set). Gated so the method is only
+    // applied where Primitive_buffer also stamps the face-id base into
+    // primitive.color (these passes get the Face_id_base_provider).
+    bool                                                                   edge_lines_from_id_capable{false};
     uint32_t                                                               content_wide_line_group{0};
     std::vector<erhe::scene::Layer_id>                                     mesh_layers;
     std::size_t                                                            non_mesh_vertex_count{0};

@@ -5,12 +5,16 @@
 
 #include "erhe_rendergraph/texture_rendergraph_node.hpp"
 #include "erhe_scene/camera.hpp"
+#include "erhe_scene_renderer/face_id_base_provider.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
 #include "erhe_math/viewport.hpp"
 
 #include <glm/glm.hpp>
 
+#include <cstdint>
 #include <memory>
+#include <unordered_map>
+#include <vector>
 
 namespace erhe::geometry {
     class Geometry;
@@ -34,6 +38,7 @@ namespace erhe::rendergraph {
 }
 namespace erhe::scene {
     class Camera;
+    class Mesh;
 }
 namespace erhe::scene_renderer {
     class Forward_renderer;
@@ -74,6 +79,26 @@ class Tools;
 class Transform_tool;
 class Viewport_scene_view;
 class Scene_views;
+
+// Per-frame assignment of a unique face-id base to each (content mesh,
+// primitive) for the ID-buffer edge-line method. Built once per viewport frame
+// and consulted by BOTH the edge-id pre-pass (Content_wide_line_renderer id
+// mode) and the polygon-fill pass (Primitive_buffer), so the face ids agree.
+// Bases start at 1 (0 = background / "no edge"); each primitive's base is spaced
+// by its fill index count (an upper bound on its facet count), so base + facet
+// never collides with the next primitive. Unregistered meshes return 0, which
+// the EDGE_LINES_FROM_ID vertex shader treats as "no edge".
+class Face_id_registry : public erhe::scene_renderer::Face_id_base_provider
+{
+public:
+    void clear();
+    void add_mesh(const erhe::scene::Mesh& mesh);
+    [[nodiscard]] auto get_face_id_base(const erhe::scene::Mesh& mesh, std::size_t primitive_index) const -> uint32_t override;
+
+private:
+    std::unordered_map<const erhe::scene::Mesh*, std::vector<uint32_t>> m_bases;
+    uint32_t m_next_base{1};
+};
 
 // Rendergraph producer node for rendering contents of scene into output rendergraph node.
 // - See execute_rendergraph_node(): render_viewport_main() is used to render to connected
@@ -178,6 +203,10 @@ private:
     bool                               m_relative_hold_enable           {false};
     std::unique_ptr<ImViewGuizmo::Context> m_navigation_gizmo;
     Property_editor m_property_editor;
+
+    // Rebuilt each frame the ID-buffer edge-line method is active; feeds the same
+    // per-(mesh,primitive) base to the edge-id pre-pass and the polygon-fill pass.
+    Face_id_registry                   m_face_id_registry;
 
 };
 

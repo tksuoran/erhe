@@ -230,7 +230,11 @@ void main()
 #       else
         uint facet_id = 0u;
 #       endif
-        v_edge_face_id = face_id_base + facet_id;
+        // base 0 = this mesh has no face-id assignment (not registered for the
+        // edge method, e.g. controller / rendertarget meshes in a shared fill
+        // pass). 0 is the buffer's "no edge" id, so it can never match -> these
+        // meshes simply render the normal fill.
+        v_edge_face_id = (face_id_base != 0u) ? (face_id_base + facet_id) : 0u;
     }
 #   endif
 

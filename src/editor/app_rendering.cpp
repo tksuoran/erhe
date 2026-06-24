@@ -172,6 +172,7 @@ App_rendering::App_rendering(
     auto content_fill_not_selected = make_composition_pass(
         "Content fill opaque not selected",
         Composition_pass_data{
+            .edge_lines_from_id_capable{true},
             .mesh_layers          {Mesh_layer_id::content, Mesh_layer_id::controller, Mesh_layer_id::rendertarget},
             .blending_mode_policy {Blending_mode_policy::opaque_primitives_only},
             .primitive_mode       {Primitive_mode::polygon_fill},
@@ -189,6 +190,7 @@ App_rendering::App_rendering(
     auto content_fill_selected_or_hovered = make_composition_pass(
         "Content fill selected",
         Composition_pass_data{
+            .edge_lines_from_id_capable{true},
             .mesh_layers         {Mesh_layer_id::content, Mesh_layer_id::controller},
             .blending_mode_policy{Blending_mode_policy::opaque_primitives_only},
             .primitive_mode      {Primitive_mode::polygon_fill},
@@ -289,6 +291,12 @@ App_rendering::App_rendering(
                 // (macOS GL 4.1) its toggle is inert, so the wide-line edges
                 // must not be suppressed by it.
                 [solid_wireframe_supported](const Render_context& context) -> bool {
+                    // The ID-buffer method paints edges from the polygon-fill pass
+                    // instead, so suppress the wide-line edge pass (it would also
+                    // draw the id-mode dispatches as color into the main pass).
+                    if (context.app_context.editor_settings->content_edge_lines.use_id_buffer) {
+                        return false;
+                    }
                     return !solid_wireframe_supported || !context.viewport_config.render_style_not_selected.solid_wireframe;
                 }
             }
@@ -307,6 +315,9 @@ App_rendering::App_rendering(
             .get_appearance                {appearance_selected},
             .is_enabled                    {
                 [solid_wireframe_supported](const Render_context& context) -> bool {
+                    if (context.app_context.editor_settings->content_edge_lines.use_id_buffer) {
+                        return false;
+                    }
                     return !solid_wireframe_supported || !context.viewport_config.render_style_selected.solid_wireframe;
                 }
             }

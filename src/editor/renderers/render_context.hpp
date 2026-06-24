@@ -12,6 +12,10 @@ namespace erhe::graphics {
     class Command_buffer;
     class Render_pass;
     class Shader_stages;
+    class Texture;
+}
+namespace erhe::scene_renderer {
+    class Face_id_base_provider;
 }
 namespace erhe::scene {
     class Camera;
@@ -45,6 +49,14 @@ public:
     erhe::math::Viewport                    viewport           {0, 0, 0, 0};
     erhe::scene_renderer::Shader_debug      shader_debug       {erhe::scene_renderer::Shader_debug::none};
     std::span<const erhe::scene_renderer::Camera_view_input> views; // multiview
+
+    // ID-buffer edge-line method (active for the frame only when set by
+    // Viewport_scene_view). edge_id_texture is the face-ID buffer the
+    // EDGE_LINES_FROM_ID fill variant samples; face_id_base_provider supplies the
+    // matching per-primitive base. Null when the method is off, so capable fill
+    // passes fall back to the normal fill.
+    const erhe::graphics::Texture*                   edge_id_texture      {nullptr};
+    const erhe::scene_renderer::Face_id_base_provider* face_id_base_provider{nullptr};
 };
 
 }

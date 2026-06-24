@@ -208,6 +208,33 @@ void Composition_pass::render(const Render_context& context)
                 );
             }
         } else {
+            // ID-buffer edge-line method: when active (Viewport_scene_view set
+            // the face-ID buffer on the context) and this is a capable lit
+            // content fill pass, force-enable the EDGE_LINES_FROM_ID variant, hand
+            // the fill the face-ID buffer + the matching per-primitive base
+            // provider, and source the edge-line color from this pass's appearance
+            // (edge_lines mode), so the selected / not-selected split colors fall
+            // out of the separate fill passes.
+            const bool apply_edge_id = (context.edge_id_texture != nullptr) && data.edge_lines_from_id_capable;
+
+            uint32_t force_enable_mask = data.shader_key_force_enable_mask;
+            erhe::scene_renderer::Primitive_interface_settings primitive_settings =
+                data.primitive_settings.has_value()
+                    ? data.primitive_settings.value()
+                    : data.get_appearance
+                        ? get_primitive_settings(data.get_appearance(context), data.primitive_mode)
+                        : erhe::scene_renderer::Primitive_interface_settings{};
+            const erhe::graphics::Texture* edge_id_texture = nullptr;
+            glm::vec4                      edge_line_color {0.0f, 0.0f, 0.0f, 1.0f};
+            if (apply_edge_id) {
+                force_enable_mask |= erhe::scene_renderer::make_shader_bool_mask(erhe::scene_renderer::Shader_bool::EDGE_LINES_FROM_ID);
+                primitive_settings.face_id_base_provider = context.face_id_base_provider;
+                edge_id_texture = context.edge_id_texture;
+                if (data.get_appearance) {
+                    edge_line_color = get_primitive_settings(data.get_appearance(context), erhe::primitive::Primitive_mode::edge_lines).constant_color0;
+                }
+            }
+
             // log_draw->trace("Render pass {} filter = {}", get_name(), filter.describe());
             context.app_context.forward_renderer->render(
                 erhe::scene_renderer::Forward_renderer::Render_parameters{
@@ -222,23 +249,20 @@ void Composition_pass::render(const Render_context& context)
                         .lights            = layers.light()->lights,
                         .skins             = scene->get_skins(),
                         .materials         = materials,
-                        .shader_key_boolean_mask_force_enable  = data.shader_key_force_enable_mask,
+                        .shader_key_boolean_mask_force_enable  = force_enable_mask,
                         .shader_key_boolean_mask_force_disable = data.shader_key_force_disable_mask,
                         .reverse_depth     = context.scene_view.get_reverse_depth(),
                         .depth_range       = context.scene_view.get_depth_range(),
                         .conventions       = context.scene_view.get_conventions(),
+                        .edge_id_texture   = edge_id_texture,
+                        .edge_line_color   = edge_line_color,
                         .debug_label       = get_name(),
                     },
                     .mesh_spans             = m_mesh_spans,
                     .base_render_pipelines  = data.base_render_pipelines,
                     .blending_mode_policy   = data.blending_mode_policy,
                     .primitive_mode         = data.primitive_mode,
-                    .primitive_settings     =
-                        data.primitive_settings.has_value()
-                            ? data.primitive_settings.value()
-                            : data.get_appearance
-                                ? get_primitive_settings(data.get_appearance(context), data.primitive_mode)
-                                : erhe::scene_renderer::Primitive_interface_settings{},
+                    .primitive_settings     = primitive_settings,
                     .filter                 = data.filter,
                     .shader_debug           = context.shader_debug,
                     // Shader Debug override visualization applies to content meshes only; brush,

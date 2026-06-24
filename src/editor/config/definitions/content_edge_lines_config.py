@@ -10,7 +10,7 @@ from erhe_codegen import *
 # flatter but more predictable), so both are kept and chosen here. Defaults match
 # the Content_wide_line_renderer member defaults.
 struct("Content_edge_lines_config",
-    version=1,
+    version=2,
     short_desc="Content Edge Lines",
     long_desc="Editor-global content edge-line (wide-line) method and bias tuning",
     developer=False,
@@ -18,5 +18,10 @@ struct("Content_edge_lines_config",
         field("use_tent",         Bool,  added_in=1, default="false",   short_desc="Surface Tent", long_desc="Draw content edge lines as a two-face surface tent instead of the simple flat quad."),
         field("line_bias_margin", Float, added_in=1, default="1024.0f", short_desc="Tent Bias (ULPs)",       long_desc="Surface-line depth-bias headroom in depth ULPs (used when Surface Tent is enabled)."),
         field("line_bias_clamp",  Float, added_in=1, default="2048.0f", short_desc="Tent Bias Clamp (ULPs)", long_desc="Maximum surface-line depth bias in depth ULPs (used when Surface Tent is enabled)."),
+        # ID-buffer edge-line method: render edge ribbons into a screen-space
+        # face-ID buffer pre-pass, then paint the edge line from the polygon-fill
+        # fragment where the stored face id matches its own -> no depth bias, no
+        # Z-fight. Replaces the depth-biased wide-line passes when enabled.
+        field("use_id_buffer",    Bool,  added_in=2, default="false",   short_desc="ID Buffer Edge Lines",  long_desc="Render content edge lines via a face-ID buffer pre-pass (no depth bias, no Z-fight) instead of depth-biased wide-line ribbons."),
     ],
 )
