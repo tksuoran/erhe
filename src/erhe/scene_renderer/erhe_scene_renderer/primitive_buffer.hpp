@@ -23,6 +23,7 @@ namespace erhe::scene {
 
 namespace erhe::scene_renderer {
 
+class Face_id_base_provider;
 class Render_bucket;
 
 class Primitive_struct
@@ -96,6 +97,13 @@ public:
     glm::vec4              constant_color1{1.0f, 0.0f, 0.0f, 1.0f};
     Primitive_size_source  size_source    {Primitive_size_source::constant_size};
     float                  constant_size  {1.0f};
+    // ID-buffer edge-line method: when non-null, the per-primitive face-id base
+    // is written into primitive.color (as a raw float in .x) instead of the
+    // color_source value. The lit polygon-fill variant does not read
+    // primitive.color, so this is free; the EDGE_LINES_FROM_ID vertex shader
+    // reads it back as the base to add to its facet id. Both this fill stamp and
+    // the edge-id pre-pass read the same provider, so face ids match.
+    const Face_id_base_provider* face_id_base_provider{nullptr};
 };
 
 class Primitive_buffer : public erhe::graphics::Ring_buffer_client

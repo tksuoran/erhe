@@ -115,6 +115,12 @@ layout(location = 15) flat in vec4  v_wire_color;
 layout(location = 16) flat in float v_wire_width;
 #endif
 
+// ID-buffer edge-line method: this fragment's own face id (per-primitive base +
+// facet id), computed in standard.vert. Compared against the face-ID buffer.
+#if defined(ERHE_EDGE_LINES_FROM_ID)
+layout(location = 17) flat in uint v_edge_face_id;
+#endif
+
 // "Lit-path locals are required" gate: true when the BxDF runs lighting
 // OR when a debug visualization needs N / V / T / B / sampled
 // material properties. The debug overrides read those even in the
@@ -177,6 +183,27 @@ void main()
 // top of this file. Gate the body on POSITION_PASS too so the ID-render
 // variant does not pull them in.
 #if !defined(ERHE_VARIANT_POSITION_PASS)
+#if defined(ERHE_EDGE_LINES_FROM_ID)
+    // Sample the face-ID buffer rendered earlier this frame at this fragment's
+    // own pixel (texelFetch: exact, no filtering). If the stored edge face id
+    // equals this fragment's face id, this pixel is on this face's edge -> paint
+    // the edge-line color at the fill's exact depth (no separate line geometry,
+    // hence no Z-fight). Otherwise fall through to the normal lit fill.
+    {
+        uvec2 edge_id_tex = camera.cameras[c_view_index].edge_id_texture;
+        vec2  vp_offset   = camera.cameras[c_view_index].viewport.xy;
+        ivec2 edge_px     = ivec2(gl_FragCoord.xy - vp_offset);
+        vec4  edge_texel  = texel_fetch(edge_id_tex, edge_px);
+        uint  edge_id     = (uint(edge_texel.r * 255.0 + 0.5) << 16) |
+                            (uint(edge_texel.g * 255.0 + 0.5) <<  8) |
+                             uint(edge_texel.b * 255.0 + 0.5);
+        if ((v_edge_face_id != 0u) && (edge_id == v_edge_face_id)) {
+            out_color = camera.cameras[c_view_index].edge_line_color;
+            return;
+        }
+    }
+#endif
+
     Material material   = material.materials[v_material_index];
     vec3     base_color = material.base_color.rgb;
 

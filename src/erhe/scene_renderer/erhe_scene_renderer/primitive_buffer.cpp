@@ -2,6 +2,7 @@
 
 #include "erhe_scene_renderer/primitive_buffer.hpp"
 #include "erhe_scene_renderer/buffer_binding_points.hpp"
+#include "erhe_scene_renderer/face_id_base_provider.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_graphics/span.hpp"
 
@@ -342,8 +343,17 @@ auto Primitive_buffer::update(
         const float     skinning_factor  = skin ? 1.0f : 0.0f;
         const uint32_t  base_joint_index = skin ? skin->skin_data.joint_buffer_index : 0;
 
+        // ID-buffer edge-line method: stamp the per-primitive face-id base into
+        // primitive.color (raw float in .x) so the EDGE_LINES_FROM_ID fill
+        // variant can add its facet id and compare against the edge-id buffer.
+        // The same provider feeds the edge-id pre-pass, so the bases match.
+        const glm::vec4 face_id_base_vec4 = (settings.face_id_base_provider != nullptr)
+            ? glm::vec4{static_cast<float>(settings.face_id_base_provider->get_face_id_base(*mesh, entry.mesh_primitive_index)), 0.0f, 0.0f, 0.0f}
+            : glm::vec4{0.0f};
+
         using erhe::graphics::as_span;
         const auto color_span =
+            (settings.face_id_base_provider != nullptr)                            ? as_span(face_id_base_vec4) :
             (settings.color_source == Primitive_color_source::id_offset           ) ? as_span(id_offset_vec4 ) :
             (settings.color_source == Primitive_color_source::mesh_wireframe_color) ? as_span(wireframe_color) :
             use_primary_color                                                       ? as_span(settings.constant_color0) :

@@ -119,7 +119,8 @@ inline constexpr const char* c_shader_debug_strings[] = {
     X(VARIANT_SHADOW_DISTANCE)          \
     X(VARIANT_SHADOW_CUBE)              \
     X(VARIANT_POINTS)                   \
-    X(SOLID_WIREFRAME)
+    X(SOLID_WIREFRAME)                  \
+    X(EDGE_LINES_FROM_ID)
 
 #define ERHE_SHADER_INT(X) \
     X(LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED)     \

@@ -118,6 +118,19 @@ void Forward_renderer::render(const Render_parameters& parameters)
     using Ring_buffer_range = erhe::graphics::Ring_buffer_range;
     std::optional<Ring_buffer_range> camera_buffer_range{};
 
+    // Reset the texture heap BEFORE the camera update so the ID-buffer edge-line
+    // method can allocate the face-ID buffer into the heap and write its
+    // (now-valid) heap handle into the camera UBO. The material / light buffers
+    // below allocate into the same already-reset heap. Texelfetch sampling makes
+    // the sampler irrelevant, so the nearest m_fallback_sampler is fine.
+    m_texture_heap->reset_heap(render_encoder.get_command_buffer());
+
+    Edge_lines_parameters edge_lines_parameters{};
+    if (base.edge_id_texture != nullptr) {
+        edge_lines_parameters.edge_id_texture_handle = m_texture_heap->allocate(base.edge_id_texture, &m_fallback_sampler);
+        edge_lines_parameters.edge_line_color        = base.edge_line_color;
+    }
+
     ERHE_VERIFY(!base.views.empty());
     // Single-view passes (size 1) call update() so the trailing
     // cameras[] entries get zero-filled when the program was built
@@ -134,7 +147,8 @@ void Forward_renderer::render(const Render_parameters& parameters)
             base.frame_number,
             base.reverse_depth,
             base.depth_range,
-            base.conventions
+            base.conventions,
+            edge_lines_parameters
         );
     } else {
         const Camera_view_input& view = base.views[0];
@@ -150,7 +164,8 @@ void Forward_renderer::render(const Render_parameters& parameters)
             base.frame_number,
             base.reverse_depth,
             base.depth_range,
-            base.conventions
+            base.conventions,
+            edge_lines_parameters
         );
     }
     m_camera_buffer.bind(render_encoder, camera_buffer_range.value());
@@ -158,8 +173,6 @@ void Forward_renderer::render(const Render_parameters& parameters)
     // Static glyph curve data (grid axis labels); bound unconditionally
     // so the shared bind group is always complete.
     m_glyph_buffer.bind(render_encoder);
-
-    m_texture_heap->reset_heap(render_encoder.get_command_buffer());
 
     Ring_buffer_range material_range = m_material_buffer.update(*m_texture_heap.get(), base.materials);
     m_material_buffer.bind(render_encoder, material_range);

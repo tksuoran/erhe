@@ -64,7 +64,26 @@ public:
     std::size_t sun_direction;        // vec4 xyz = world dir toward sun, w = sun illuminance
     std::size_t atmosphere;           // vec4 x = march steps, y = observer altitude (km), z = cos(sun angular radius), w = sun disc brightness
     std::size_t frame_number;         // uvec2
-    std::size_t padding;              // uvec2
+    // ID-buffer edge-line method: the face-ID buffer's texture-heap handle
+    // (uvec2; .x == max_u32 means "no edge id buffer") and the edge-line color
+    // the EDGE_LINES_FROM_ID fill variant paints where a face matches. Read only
+    // by that variant; every other pass ignores them. edge_id_texture reuses the
+    // former trailing pad-uvec2 slot.
+    std::size_t edge_id_texture;      // uvec2
+    std::size_t edge_line_color;      // vec4
+};
+
+// Edge-line parameters written to the camera UBO for the ID-buffer edge-line
+// method; read by the EDGE_LINES_FROM_ID fill variant. A default-constructed
+// instance disables the effect (handle .x == max_u32), so passes that do not use
+// the method can omit it.
+class Edge_lines_parameters
+{
+public:
+    // Texture-heap shader handle of the face-ID buffer (from Texture_heap::
+    // allocate). Default = max_u32 sentinel -> shader reads "no edge id buffer".
+    uint64_t  edge_id_texture_handle{0xFFFFFFFFFFFFFFFFull};
+    glm::vec4 edge_line_color        {0.0f, 0.0f, 0.0f, 1.0f};
 };
 
 // Grid rendering parameters written to the camera UBO; read by the
@@ -163,7 +182,8 @@ public:
         uint64_t                                  frame_number,
         bool                                      reverse_depth,
         erhe::math::Depth_range                   depth_range,
-        const erhe::math::Coordinate_conventions& conventions = erhe::math::Coordinate_conventions{}
+        const erhe::math::Coordinate_conventions& conventions = erhe::math::Coordinate_conventions{},
+        const Edge_lines_parameters&              edge_lines_parameters = {}
     ) -> erhe::graphics::Ring_buffer_range;
 
     // Overload taking a precomputed world<->camera Transform instead of
@@ -184,7 +204,8 @@ public:
         uint64_t                                  frame_number,
         bool                                      reverse_depth,
         erhe::math::Depth_range                   depth_range,
-        const erhe::math::Coordinate_conventions& conventions = erhe::math::Coordinate_conventions{}
+        const erhe::math::Coordinate_conventions& conventions = erhe::math::Coordinate_conventions{},
+        const Edge_lines_parameters&              edge_lines_parameters = {}
     ) -> erhe::graphics::Ring_buffer_range;
 
     // Multi-view variant: writes one Camera_struct entry per view into
@@ -200,7 +221,8 @@ public:
         uint64_t                                  frame_number,
         bool                                      reverse_depth,
         erhe::math::Depth_range                   depth_range,
-        const erhe::math::Coordinate_conventions& conventions = erhe::math::Coordinate_conventions{}
+        const erhe::math::Coordinate_conventions& conventions = erhe::math::Coordinate_conventions{},
+        const Edge_lines_parameters&              edge_lines_parameters = {}
     ) -> erhe::graphics::Ring_buffer_range;
 
 private:

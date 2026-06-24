@@ -111,6 +111,12 @@ public:
         // checker pattern) written to the camera UBO; ignored by passes
         // that do not draw the sky.
         const Sky_parameters                                               sky_parameters   {};
+        // ID-buffer edge-line method: the face-ID buffer to sample (allocated
+        // into the texture heap by render() and its handle written to the camera
+        // UBO) and the color the EDGE_LINES_FROM_ID fill variant paints where a
+        // face matches. null texture -> the effect is disabled for this pass.
+        const erhe::graphics::Texture*                                     edge_id_texture  {nullptr};
+        glm::vec4                                                          edge_line_color  {0.0f, 0.0f, 0.0f, 1.0f};
         const std::string_view                                             debug_label;
     };
 

@@ -61,6 +61,28 @@ vec4 sample_texture_lod_bias(uvec2 texture_handle, vec2 texcoord, float lod_bias
     return v;
 }
 
+// Exact (filter-independent) integer texel fetch through the texture heap.
+// Used by the ID-buffer edge-line method to read the face-ID buffer at a
+// fragment's own pixel; bilinear sampling would blend neighbouring ids, so the
+// comparison must use texelFetch. Returns 0 for an unbound handle.
+vec4 texel_fetch(uvec2 texture_handle, ivec2 coord) {
+    if (texture_handle.x == max_u32) {
+        return vec4(0.0, 0.0, 0.0, 0.0);
+    }
+#if defined(ERHE_TEXTURE_HEAP_OPENGL_BINDLESS)
+    sampler2D s_texture = sampler2D(texture_handle);
+    return texelFetch(s_texture, coord, 0);
+#elif defined(ERHE_TEXTURE_HEAP_VULKAN_DESCRIPTOR_INDEXING)
+    return texelFetch(erhe_texture_heap[texture_handle.x], coord, 0);
+#elif defined(ERHE_TEXTURE_HEAP_METAL_ARGUMENT_BUFFER)
+    return texelFetch(s_texture[texture_handle.x], coord, 0);
+#elif defined(ERHE_TEXTURE_HEAP_OPENGL_SAMPLER_ARRAY)
+    return texelFetch(s_texture[texture_handle.x], coord, 0);
+#else
+    return vec4(0.0, 0.0, 0.0, 0.0);
+#endif
+}
+
 vec2 get_texture_size(uvec2 texture_handle) {
     if (texture_handle.x == max_u32) {
         return vec2(1.0, 1.0);

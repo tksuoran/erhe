@@ -49,7 +49,8 @@ Camera_interface::Camera_interface(erhe::graphics::Device& graphics_device, cons
         .sun_direction            = camera_struct.add_vec4 ("sun_direction"           )->get_offset_in_parent(),
         .atmosphere               = camera_struct.add_vec4 ("atmosphere"              )->get_offset_in_parent(),
         .frame_number             = camera_struct.add_uvec2("frame_number"            )->get_offset_in_parent(),
-        .padding                  = camera_struct.add_uvec2("padding"                 )->get_offset_in_parent(),
+        .edge_id_texture          = camera_struct.add_uvec2("edge_id_texture"         )->get_offset_in_parent(),
+        .edge_line_color          = camera_struct.add_vec4 ("edge_line_color"         )->get_offset_in_parent(),
     }
     , max_camera_count{static_cast<std::size_t>(max_camera_count)}
     , view_count{static_cast<std::size_t>(view_count)}
@@ -84,7 +85,8 @@ void write_camera_entry(
     uint64_t                                  frame_number,
     const bool                                reverse_depth,
     const erhe::math::Depth_range             depth_range,
-    const erhe::math::Coordinate_conventions& conventions
+    const erhe::math::Coordinate_conventions& conventions,
+    const Edge_lines_parameters&              edge_lines_parameters
 )
 {
     const glm::mat4&              world_from_camera_node     = world_from_camera.get_matrix();
@@ -155,7 +157,8 @@ void write_camera_entry(
     write(gpu_data, write_offset + offsets.sun_direction,        as_span(sky_parameters.sun_direction        ));
     write(gpu_data, write_offset + offsets.atmosphere,           as_span(sky_parameters.atmosphere           ));
     write(gpu_data, write_offset + offsets.frame_number,         as_span(frame_number                        ));
-    write(gpu_data, write_offset + offsets.padding,              as_span(frame_number                        ));
+    write(gpu_data, write_offset + offsets.edge_id_texture,      as_span(edge_lines_parameters.edge_id_texture_handle));
+    write(gpu_data, write_offset + offsets.edge_line_color,      as_span(edge_lines_parameters.edge_line_color));
 }
 
 } // anonymous namespace
@@ -170,7 +173,8 @@ auto Camera_buffer::update(
     uint64_t                                  frame_number,
     const bool                                reverse_depth,
     const erhe::math::Depth_range             depth_range,
-    const erhe::math::Coordinate_conventions& conventions
+    const erhe::math::Coordinate_conventions& conventions,
+    const Edge_lines_parameters&              edge_lines_parameters
 ) -> erhe::graphics::Ring_buffer_range
 {
     ERHE_PROFILE_FUNCTION();
@@ -192,7 +196,7 @@ auto Camera_buffer::update(
         camera_projection, camera_node.world_from_node_transform(),
         viewport,
         exposure, grid_parameters, sky_parameters, frame_number,
-        reverse_depth, depth_range, conventions
+        reverse_depth, depth_range, conventions, edge_lines_parameters
     );
     if (block_size > entry_size) {
         std::memset(gpu_data.data() + entry_size, 0, block_size - entry_size);
@@ -214,7 +218,8 @@ auto Camera_buffer::update(
     uint64_t                                  frame_number,
     const bool                                reverse_depth,
     const erhe::math::Depth_range             depth_range,
-    const erhe::math::Coordinate_conventions& conventions
+    const erhe::math::Coordinate_conventions& conventions,
+    const Edge_lines_parameters&              edge_lines_parameters
 ) -> erhe::graphics::Ring_buffer_range
 {
     ERHE_PROFILE_FUNCTION();
@@ -232,7 +237,7 @@ auto Camera_buffer::update(
         world_from_camera,
         viewport,
         exposure, grid_parameters, sky_parameters, frame_number,
-        reverse_depth, depth_range, conventions
+        reverse_depth, depth_range, conventions, edge_lines_parameters
     );
     if (block_size > entry_size) {
         std::memset(gpu_data.data() + entry_size, 0, block_size - entry_size);
@@ -252,7 +257,8 @@ auto Camera_buffer::update_views(
     uint64_t                                  frame_number,
     const bool                                reverse_depth,
     const erhe::math::Depth_range             depth_range,
-    const erhe::math::Coordinate_conventions& conventions
+    const erhe::math::Coordinate_conventions& conventions,
+    const Edge_lines_parameters&              edge_lines_parameters
 ) -> erhe::graphics::Ring_buffer_range
 {
     ERHE_PROFILE_FUNCTION();
@@ -279,7 +285,7 @@ auto Camera_buffer::update_views(
             view.node->world_from_node_transform(),
             view.viewport,
             exposure, grid_parameters, sky_parameters, frame_number,
-            reverse_depth, depth_range, conventions
+            reverse_depth, depth_range, conventions, edge_lines_parameters
         );
         write_offset += entry_size;
     }

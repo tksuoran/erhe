@@ -97,6 +97,14 @@ layout(location = 15) flat out vec4  v_wire_color;
 layout(location = 16) flat out float v_wire_width;
 #endif
 
+// ID-buffer edge-line method: this fragment's own face id (per-primitive base
+// from primitive.color.x + this triangle's facet id from a_custom_0). The
+// fragment compares it against the face-ID buffer it samples and paints an edge
+// line on a match. Flat: every vertex of a triangle shares one facet id.
+#if defined(ERHE_EDGE_LINES_FROM_ID)
+layout(location = 17) flat out uint v_edge_face_id;
+#endif
+
 void main()
 {
     mat4 world_from_node;
@@ -207,6 +215,24 @@ void main()
     v_position       = position;
 
     v_material_index = primitive.primitives[ERHE_DRAW_ID].material_index;
+
+#   if defined(ERHE_EDGE_LINES_FROM_ID)
+    // Recover the per-primitive face-id base (raw float in primitive.color.x,
+    // stamped by Primitive_buffer via the shared Face_id_base_provider) and add
+    // this triangle's facet id (a_custom_0 = vec4_from_uint(facet)). The result
+    // matches what the edge-id pre-pass encoded for the same face.
+    {
+        uint face_id_base = uint(primitive.primitives[ERHE_DRAW_ID].color.x + 0.5);
+#       if defined(ERHE_ATTRIBUTE_a_custom_0)
+        uint facet_id = (uint(a_custom_0.r * 255.0 + 0.5) << 16) |
+                        (uint(a_custom_0.g * 255.0 + 0.5) <<  8) |
+                         uint(a_custom_0.b * 255.0 + 0.5);
+#       else
+        uint facet_id = 0u;
+#       endif
+        v_edge_face_id = face_id_base + facet_id;
+    }
+#   endif
 
 #   if defined(ERHE_USE_VERTEX_VARYING_TEXCOORD0)
     v_texcoord_0     = a_texcoord_0;

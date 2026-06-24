@@ -6,6 +6,7 @@
 #include "erhe_math/viewport.hpp"
 #include "erhe_scene_renderer/camera_buffer.hpp"
 #include "erhe_scene_renderer/content_wide_line_view_writer.hpp"
+#include "erhe_scene_renderer/face_id_base_provider.hpp"
 
 #include <glm/glm.hpp>
 
@@ -33,22 +34,6 @@ namespace erhe::scene_renderer {
 
 class Content_wide_line_interface;
 class Mesh_memory;
-
-// Supplies the per-primitive face-id base for the ID-buffer edge-line method.
-// The edge-id pre-pass (this renderer in id mode) and the polygon-fill pass
-// must derive the SAME base for the same (mesh, primitive) so a fill fragment
-// can match face for face; the editor builds one shared per-frame assignment
-// and exposes it through this interface. Only consulted when the renderer is in
-// id mode (add_mesh with a non-null provider).
-class Face_id_base_provider
-{
-public:
-    virtual ~Face_id_base_provider() noexcept = default;
-    [[nodiscard]] virtual auto get_face_id_base(
-        const erhe::scene::Mesh& mesh,
-        std::size_t              primitive_index
-    ) const -> uint32_t = 0;
-};
 
 // Abstract owner of the content wide-line rendering path. The editor
 // constructs exactly one concrete subclass per device via a factory
