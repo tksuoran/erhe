@@ -362,9 +362,10 @@ Device_impl::Device_impl(
     };
 
     // SDL_Vulkan_GetInstanceExtensions() will request KHR_SURFACE and platform specific required instance extensions.
-    // On macOS SDL also returns VK_KHR_portability_enumeration, which the loader only advertises on portability-subset
-    // drivers (e.g. MoltenVK) and which the RenderDoc capture layer does not pass through. Filter SDL's list against
-    // what the loader actually advertises so we don't request an extension that will make vkCreateInstance() fail.
+    // Filter SDL's list against what the loader actually advertises so we don't request an extension that would make
+    // vkCreateInstance() fail (the RenderDoc capture layer hides some extensions from vkEnumerateInstanceExtensionProperties).
+    // VK_KHR_portability_enumeration is handled separately below: on macOS it must be enabled for MoltenVK even when it
+    // is not advertised through the (RenderDoc-filtered) list, so it is intentionally not subject to this filter.
     // Headless (no native window surface): run Vulkan surfaceless with an
     // emulated swapchain. Skip all surface / swapchain instance + device
     // extensions and the present queue.
@@ -390,6 +391,24 @@ Device_impl::Device_impl(
             }
         }
     }
+
+#if defined(ERHE_OS_MACOS)
+    // MoltenVK is a portability-subset driver: per the Vulkan spec the instance must enable
+    // VK_KHR_portability_enumeration and set VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR,
+    // otherwise the loader rejects MoltenVK with VK_ERROR_INCOMPATIBLE_DRIVER. The extension is
+    // provided by the *loader* (whenever a portability ICD such as MoltenVK is installed), but
+    // the RenderDoc capture layer does not re-advertise it through
+    // vkEnumerateInstanceExtensionProperties, and current SDL does not include it in its
+    // required-extension list either - so the advertised-list filter above never enables it.
+    // Enable it explicitly here so MoltenVK works with or without the capture layer. On a
+    // native macOS Vulkan driver (e.g. KosmicKrisp) this flag is harmless - it only widens
+    // physical-device enumeration to also include portability drivers.
+    if (!portability_enumeration_enabled) {
+        enabled_instance_extensions_c_str.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+        portability_enumeration_enabled = true;
+        log_debug->info("  Enabling {} (macOS portability driver requirement)", VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+    }
+#endif
 
     auto check_instance_extension = [&](const char* name, bool& enable)
     {
