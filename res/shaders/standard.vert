@@ -224,9 +224,14 @@ void main()
     {
         uint face_id_base = uint(primitive.primitives[ERHE_DRAW_ID].color.x + 0.5);
 #       if defined(ERHE_ATTRIBUTE_a_custom_0)
-        uint facet_id = (uint(a_custom_0.r * 255.0 + 0.5) << 16) |
-                        (uint(a_custom_0.g * 255.0 + 0.5) <<  8) |
-                         uint(a_custom_0.b * 255.0 + 0.5);
+        // a_custom_0 is build_polygon_id()'s vec4_from_uint(facet): r = (facet>>24),
+        // g = (facet>>16), b = (facet>>8), a = (facet>>0). Small facet indices live
+        // entirely in .a, so all four components must be recombined (decoding only
+        // r,g,b yields 0 for every facet < 256 -> only facet 0 ever matches).
+        uint facet_id = (uint(a_custom_0.r * 255.0 + 0.5) << 24) |
+                        (uint(a_custom_0.g * 255.0 + 0.5) << 16) |
+                        (uint(a_custom_0.b * 255.0 + 0.5) <<  8) |
+                         uint(a_custom_0.a * 255.0 + 0.5);
 #       else
         uint facet_id = 0u;
 #       endif
