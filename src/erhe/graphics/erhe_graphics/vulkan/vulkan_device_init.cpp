@@ -227,7 +227,47 @@ Device_impl::Device_impl(
 #endif
 #if defined(ERHE_OS_MACOS)
         //set_env_or_warn("VK_LOADER_LAYERS_DISABLE", "~implicit~");
-        if (graphics_config.vulkan.use_kosmickrisp) {
+        if (graphics_config.vulkan.use_moltenvk) {
+            // Force the MoltenVK ICD (Vulkan-on-Metal). Useful when KosmicKrisp is also
+            // installed, since the loader would otherwise enumerate both and may pick
+            // KosmicKrisp; pinning VK_DRIVER_FILES makes the choice explicit. Prefer the
+            // ICD shipped with the Vulkan SDK, falling back to a system-wide install.
+            // Must be set before volkInitialize() / vkCreateInstance().
+            std::string vulkan_sdk_dir;
+            const char* vulkan_sdk_env = std::getenv("VULKAN_SDK");
+            if ((vulkan_sdk_env != nullptr) && (vulkan_sdk_env[0] != '\0')) {
+                vulkan_sdk_dir = vulkan_sdk_env;
+            } else {
+                vulkan_sdk_dir = find_vulkan_sdk_macos_dir();
+            }
+            std::error_code ec;
+            std::string     icd_path;
+            if (!vulkan_sdk_dir.empty()) {
+                const std::string sdk_icd = fmt::format("{}/share/vulkan/icd.d/MoltenVK_icd.json", vulkan_sdk_dir);
+                if (std::filesystem::exists(sdk_icd, ec)) {
+                    icd_path = sdk_icd;
+                }
+            }
+            if (icd_path.empty()) {
+                const std::string system_icd = "/usr/local/share/vulkan/icd.d/MoltenVK_icd.json";
+                if (std::filesystem::exists(system_icd, ec)) {
+                    icd_path = system_icd;
+                }
+            }
+            if (icd_path.empty()) {
+                log_context->warn(
+                    "use_moltenvk is enabled but no MoltenVK_icd.json was found "
+                    "(checked the Vulkan SDK and /usr/local/share/vulkan/icd.d). Install the LunarG SDK or molten-vk."
+                );
+            } else {
+                log_context->info("MoltenVK selected: VK_DRIVER_FILES={}", icd_path);
+                set_env_or_warn("VK_DRIVER_FILES", icd_path.c_str());
+            }
+            if (graphics_config.vulkan.use_kosmickrisp) {
+                log_context->warn("Both use_moltenvk and use_kosmickrisp are enabled; using MoltenVK (use_moltenvk takes precedence).");
+            }
+        }
+        if (graphics_config.vulkan.use_kosmickrisp && !graphics_config.vulkan.use_moltenvk) {
             // KosmicKrisp ICD lives at <vulkan_sdk>/share/vulkan/icd.d/libkosmickrisp_icd.json
             // (LunarG SDK >= 1.4.335). Point the loader at it explicitly so it is used
             // instead of MoltenVK. Must be set before volkInitialize() / vkCreateInstance().

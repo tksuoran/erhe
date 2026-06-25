@@ -26,5 +26,15 @@ struct("Vulkan_config",
             visible=True,
             developer=False
         ),
+        field(
+            "use_moltenvk",
+            Bool,
+            added_in=1,
+            default="false",
+            short_desc="Use MoltenVK Vulkan driver (macOS)",
+            long_desc="On macOS, point VK_DRIVER_FILES at MoltenVK_icd.json (preferring the Vulkan SDK, falling back to /usr/local/share/vulkan/icd.d) so the Vulkan loader uses the MoltenVK ICD. Useful when KosmicKrisp is also installed, since the loader would otherwise enumerate both and may pick KosmicKrisp. Takes precedence over use_kosmickrisp. No effect on other platforms.",
+            visible=True,
+            developer=False
+        ),
     ],
 )

@@ -17,6 +17,7 @@
     },
     "vulkan": {
         "vulkan_validation_layers": false,
-        "use_kosmickrisp": false
+        "use_kosmickrisp": false,
+        "use_moltenvk": false
     }
 }
