@@ -8,15 +8,20 @@ branch mcp-server), builds qrenderdoc with its embedded MCP server, points erhe 
 the freshly built renderdoc.dll, registers the stdio proxy with Claude Code, and
 captures the proxy's baked tool schema. Idempotent: safe to re-run.
 
-Windows only (the fork builds with MSBuild / the v145 toolset). Run with the py
-launcher:
+Cross-platform:
+  - Windows: builds renderdoc.sln with MSBuild / the v145 toolset.
+  - macOS / Linux: builds with CMake (the fork's documented Unix path), Qt5.
 
-    py -3 scripts/setup_renderdoc_mcp.py [options]
+Run with:
+
+    py -3 scripts/setup_renderdoc_mcp.py [options]      # Windows
+    python3 scripts/setup_renderdoc_mcp.py [options]    # macOS / Linux
 
 Phases (each can be skipped):
   1. Clone/update the fork at --renderdoc-dir on branch --branch.
-  2. Build renderdoc.sln (Development|x64) with the v145 toolset override and the
-     stdext_compat.h forced-include shim, then verify the artifacts.
+  2. Build qrenderdoc (Windows: renderdoc.sln Development|x64 with the v145 toolset
+     override + the stdext_compat.h forced-include shim; macOS/Linux: CMake +
+     make), then verify the artifacts.
   3. Configure erhe: write the machine-specific renderdoc_library_path_override and
      enable it (renderdoc_library_path_override_enable) in
      config/editor/erhe_graphics.json (a deliberately LOCAL, uncommitted change).
@@ -38,6 +43,11 @@ import re
 import shutil
 import subprocess
 import sys
+
+
+IS_WINDOWS = (os.name == "nt")
+IS_MAC = (sys.platform == "darwin")
+IS_LINUX = sys.platform.startswith("linux")
 
 
 # flush=True so our phase logs stay correctly ordered relative to the inherited
@@ -150,6 +160,56 @@ def build(rd_dir, configuration, shim_path, qrenderdoc_exe, renderdoc_dll, rende
     ok("built " + qrenderdoc_exe)
 
 
+def find_qt5_prefix():
+    """Best-effort Qt5 install prefix for CMAKE_PREFIX_PATH on macOS/Linux.
+    Returns a path or None (None lets CMake's own find_package(Qt5) try)."""
+    for env_var in ("QT5_DIR", "Qt5_DIR", "QTDIR"):
+        v = os.environ.get(env_var)
+        if v and os.path.isdir(v):
+            return v
+    # Homebrew keg-only qt@5 (the RenderDoc-required Qt 5.15).
+    brew = shutil.which("brew")
+    if brew is not None:
+        cp = subprocess.run([brew, "--prefix", "qt@5"], capture_output=True, text=True)
+        prefix = cp.stdout.strip()
+        if cp.returncode == 0 and prefix and os.path.isdir(prefix):
+            return prefix
+    for cand in ("/opt/homebrew/opt/qt@5", "/usr/local/opt/qt@5"):
+        if os.path.isdir(cand):
+            return cand
+    return None
+
+
+def build_cmake(rd_dir, build_dir, qrenderdoc_exe, renderdoc_lib):
+    step("Build qrenderdoc (CMake)")
+    require_command("cmake", "Install CMake (macOS: brew install cmake).")
+    require_command("make", "Install make (macOS: xcode-select --install).")
+
+    cmake_args = ["cmake", "-DCMAKE_BUILD_TYPE=Debug", "-B", build_dir, "-S", rd_dir]
+    if IS_MAC:
+        qt5 = find_qt5_prefix()
+        if qt5 is not None:
+            info("Qt5 prefix: " + qt5)
+            cmake_args.append("-DCMAKE_PREFIX_PATH=" + qt5)
+        else:
+            warn("Qt5 prefix not found; relying on CMake find_package(Qt5). "
+                 "If configure fails, 'brew install qt@5' and re-run.")
+    info("configure: " + " ".join(cmake_args))
+    if subprocess.run(cmake_args).returncode != 0:
+        raise SetupError("cmake configure failed in " + build_dir)
+
+    jobs = os.cpu_count() or 4
+    make_args = ["make", "-C", build_dir, "-j%d" % jobs]
+    info("build (this can take several minutes): " + " ".join(make_args))
+    if subprocess.run(make_args).returncode != 0:
+        raise SetupError("make failed in " + build_dir)
+
+    for f in (qrenderdoc_exe, renderdoc_lib):
+        if not os.path.isfile(f):
+            raise SetupError("build reported success but expected artifact is missing: " + f)
+    ok("built " + qrenderdoc_exe)
+
+
 # Matches a JSON scalar value (string / bool / null / number) after a "key":.
 _JSON_VALUE = r'(?:"[^"]*"|true|false|null|-?\d+(?:\.\d+)?)'
 
@@ -201,9 +261,13 @@ def install_proxy(mcp_path, proxy_py, qrenderdoc_exe, port):
     else:
         data = {}
     servers = data.setdefault("mcpServers", {})
+    if IS_WINDOWS:
+        command, args = "py", ["-3", proxy_py.replace("\\", "/")]
+    else:
+        command, args = "python3", [proxy_py]
     servers["renderdoc"] = {
-        "command": "py",
-        "args": ["-3", proxy_py.replace("\\", "/")],
+        "command": command,
+        "args": args,
         "env": {
             "ERHE_RENDERDOC_QRENDERDOC": qrenderdoc_exe,
             "ERHE_RENDERDOC_MCP_PORT": str(port),
@@ -214,10 +278,11 @@ def install_proxy(mcp_path, proxy_py, qrenderdoc_exe, port):
 
 def main():
     p = argparse.ArgumentParser(
-        description="Set up the RenderDoc fork MCP server + erhe stdio proxy (Windows)."
+        description="Set up the RenderDoc fork MCP server + erhe stdio proxy."
     )
-    p.add_argument("--renderdoc-dir", default=r"D:\renderdoc",
-                   help="fork checkout / build location (default: D:\\renderdoc)")
+    p.add_argument("--renderdoc-dir", default=None,
+                   help="fork checkout / build location "
+                        "(default: D:\\renderdoc on Windows, else <erhe>/../renderdoc)")
     p.add_argument("--repo-url", default="https://github.com/tksuoran/renderdoc.git")
     p.add_argument("--branch", default="mcp-server")
     p.add_argument("--configuration", default="Development")
@@ -227,8 +292,8 @@ def main():
     p.add_argument("--skip-schema", action="store_true")
     args = p.parse_args()
 
-    if os.name != "nt":
-        raise SetupError("This setup script is Windows-only (the fork builds with MSBuild).")
+    if not (IS_WINDOWS or IS_MAC or IS_LINUX):
+        raise SetupError("Unsupported platform '%s' (Windows, macOS and Linux only)." % sys.platform)
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     erhe_root = os.path.dirname(script_dir)
@@ -238,23 +303,42 @@ def main():
     erhe_gfx_json = os.path.join(erhe_root, "config", "editor", "erhe_graphics.json")
     mcp_json = os.path.join(erhe_root, ".mcp.json")
 
+    # Default fork location: D:\renderdoc on Windows, else a sibling of the erhe
+    # checkout (matches the common ~/git/<user>/renderdoc layout).
     rd_dir = args.renderdoc_dir
-    dev_dir = os.path.join(rd_dir, "x64", args.configuration)
-    qrenderdoc_exe = os.path.join(dev_dir, "qrenderdoc.exe")
-    renderdoc_dll = os.path.join(dev_dir, "renderdoc.dll")
-    renderdoc_json = os.path.join(dev_dir, "renderdoc.json")
+    if rd_dir is None:
+        rd_dir = r"D:\renderdoc" if IS_WINDOWS else os.path.join(os.path.dirname(erhe_root), "renderdoc")
+
+    # Per-platform build output + artifacts. shim_path / renderdoc_json are
+    # Windows-only (the MSBuild path); CMake builds set renderdoc_json = None.
     shim_path = os.path.join(rd_dir, "x64", "stdext_compat.h")
+    if IS_WINDOWS:
+        build_dir = os.path.join(rd_dir, "x64", args.configuration)
+        qrenderdoc_exe = os.path.join(build_dir, "qrenderdoc.exe")
+        renderdoc_lib = os.path.join(build_dir, "renderdoc.dll")
+        renderdoc_json = os.path.join(build_dir, "renderdoc.json")
+    elif IS_MAC:
+        build_dir = os.path.join(rd_dir, "build_mac")
+        qrenderdoc_exe = os.path.join(build_dir, "bin", "qrenderdoc.app", "Contents", "MacOS", "qrenderdoc")
+        renderdoc_lib = os.path.join(build_dir, "lib", "librenderdoc.dylib")
+        renderdoc_json = None
+    else:  # Linux
+        build_dir = os.path.join(rd_dir, "build")
+        qrenderdoc_exe = os.path.join(build_dir, "bin", "qrenderdoc")
+        renderdoc_lib = os.path.join(build_dir, "lib", "librenderdoc.so")
+        renderdoc_json = None
 
     step("Preflight")
-    require_command("git", "Install Git for Windows.")
+    require_command("git", "Install Git.")
     for f in (proxy_py, capture_py):
         if not os.path.isfile(f):
             raise SetupError("required script missing: " + f)
     if not os.path.isfile(erhe_gfx_json):
         raise SetupError("erhe graphics config missing: " + erhe_gfx_json)
+    info("platform       : " + sys.platform)
     info("erhe root      : " + erhe_root)
     info("renderdoc dir  : " + rd_dir)
-    info("dev output dir : " + dev_dir)
+    info("build output   : " + build_dir)
 
     # phase 1: clone / update
     if args.skip_clone:
@@ -277,27 +361,29 @@ def main():
                 raise SetupError("git clone failed")
         ok("fork checkout ready")
 
-    if not os.path.isfile(os.path.join(rd_dir, "renderdoc.sln")):
-        raise SetupError("renderdoc.sln not found under %s -- clone did not produce the expected tree." % rd_dir)
+    if not os.path.isfile(os.path.join(rd_dir, "CMakeLists.txt")):
+        raise SetupError("CMakeLists.txt not found under %s -- clone did not produce the expected tree." % rd_dir)
 
     # phase 2: build
     if args.skip_build:
         step("Build (skipped)")
         if not os.path.isfile(qrenderdoc_exe):
-            raise SetupError("--skip-build given but %s does not exist. Build it first (VS2026, Development|x64) or drop --skip-build." % qrenderdoc_exe)
+            raise SetupError("--skip-build given but %s does not exist. Build it first or drop --skip-build." % qrenderdoc_exe)
+    elif IS_WINDOWS:
+        build(rd_dir, args.configuration, shim_path, qrenderdoc_exe, renderdoc_lib, renderdoc_json)
     else:
-        build(rd_dir, args.configuration, shim_path, qrenderdoc_exe, renderdoc_dll, renderdoc_json)
+        build_cmake(rd_dir, build_dir, qrenderdoc_exe, renderdoc_lib)
 
     # phase 3: configure erhe
-    step("Configure erhe (renderdoc_library_path_override -> built DLL, enabled)")
-    configure_erhe(erhe_gfx_json, renderdoc_dll)
+    step("Configure erhe (renderdoc_library_path_override -> built library, enabled)")
+    configure_erhe(erhe_gfx_json, renderdoc_lib)
     warn("this is a LOCAL change to a tracked file -- keep it uncommitted.")
-    ok("erhe graphics config points at " + renderdoc_dll)
+    ok("erhe graphics config points at " + renderdoc_lib)
 
     # phase 4: install proxy
     step("Install stdio proxy into .mcp.json")
     install_proxy(mcp_json, proxy_py, qrenderdoc_exe, args.port)
-    ok("registered 'renderdoc' stdio proxy (py -3 %s)" % proxy_py)
+    ok("registered 'renderdoc' stdio proxy -> %s" % proxy_py)
     info("if you previously ran 'claude mcp add --transport http renderdoc ...', remove it: claude mcp remove renderdoc")
 
     # phase 5: capture baked schema
@@ -308,6 +394,9 @@ def main():
         env = os.environ.copy()
         env["ERHE_RENDERDOC_QRENDERDOC"] = qrenderdoc_exe
         env["ERHE_RENDERDOC_MCP_PORT"] = str(args.port)
+        # qrenderdoc runs with its visible UI on all platforms (the user collaborates
+        # with the live window), so the schema capture brings up a window -- it needs
+        # a live display. Never force QT_QPA_PLATFORM=offscreen.
         rc = subprocess.run([sys.executable, capture_py], env=env).returncode
         if rc != 0 or not os.path.isfile(schema_json):
             warn("schema capture did not complete (qrenderdoc may need a live display). "

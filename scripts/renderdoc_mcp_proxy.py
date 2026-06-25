@@ -176,22 +176,32 @@ def launch_qrenderdoc():
     global _launched_pid
     if not os.path.isfile(QRENDERDOC_PATH):
         raise FileNotFoundError(
-            f"qrenderdoc.exe not found at '{QRENDERDOC_PATH}'. Set "
-            f"ERHE_RENDERDOC_QRENDERDOC to the fork build's qrenderdoc.exe."
+            f"qrenderdoc not found at '{QRENDERDOC_PATH}'. Set "
+            f"ERHE_RENDERDOC_QRENDERDOC to the fork build's qrenderdoc binary "
+            f"(Windows: x64\\Development\\qrenderdoc.exe; macOS: "
+            f"build_mac/bin/qrenderdoc.app/Contents/MacOS/qrenderdoc; "
+            f"Linux: build/bin/qrenderdoc)."
         )
-    creationflags = 0
-    # Detach from this proxy's console / process group so it keeps running after
-    # Claude Code (and this proxy) exit.
-    creationflags |= getattr(subprocess, "DETACHED_PROCESS", 0)
-    creationflags |= getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
     log(f"launching {QRENDERDOC_PATH} --mcp-server --mcp-port {PORT}")
-    proc = subprocess.Popen(
-        [QRENDERDOC_PATH, "--mcp-server", "--mcp-port", str(PORT)],
-        creationflags=creationflags,
+    # Detach from this proxy's console / process group so qrenderdoc keeps running
+    # after Claude Code (and this proxy) exit. Windows uses creation flags; POSIX
+    # (macOS / Linux) uses a new session.
+    popen_kwargs = dict(
         close_fds=True,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
+    )
+    if os.name == "nt":
+        popen_kwargs["creationflags"] = (
+            getattr(subprocess, "DETACHED_PROCESS", 0)
+            | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        )
+    else:
+        popen_kwargs["start_new_session"] = True
+    proc = subprocess.Popen(
+        [QRENDERDOC_PATH, "--mcp-server", "--mcp-port", str(PORT)],
+        **popen_kwargs,
     )
     _launched_pid = proc.pid
     return proc.pid
