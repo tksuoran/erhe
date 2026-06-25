@@ -226,6 +226,7 @@ void Composition_pass::render(const Render_context& context)
                         : erhe::scene_renderer::Primitive_interface_settings{};
             const erhe::graphics::Texture* edge_id_texture = nullptr;
             glm::vec4                      edge_line_color {0.0f, 0.0f, 0.0f, 1.0f};
+            float                          edge_line_width {1.0f};
             if (apply_edge_id) {
                 force_enable_mask |= erhe::scene_renderer::make_shader_bool_mask(erhe::scene_renderer::Shader_bool::EDGE_LINES_FROM_ID);
                 primitive_settings.face_id_base_provider = context.face_id_base_provider;
@@ -233,6 +234,15 @@ void Composition_pass::render(const Render_context& context)
                 if (data.get_appearance) {
                     edge_line_color = get_primitive_settings(data.get_appearance(context), erhe::primitive::Primitive_mode::edge_lines).constant_color0;
                 }
+            }
+            // Corner-cap overlay pass: source the cap's edge-line color AND width
+            // from the edge_lines appearance (matching the wide-line ribbon) and
+            // forward both to the camera UBO. No face-ID texture is involved.
+            if (data.edge_lines_corner_cap && data.get_appearance) {
+                const erhe::scene_renderer::Primitive_interface_settings edge_settings =
+                    get_primitive_settings(data.get_appearance(context), erhe::primitive::Primitive_mode::edge_lines);
+                edge_line_color = edge_settings.constant_color0;
+                edge_line_width = edge_settings.constant_size;
             }
 
             // log_draw->trace("Render pass {} filter = {}", get_name(), filter.describe());
@@ -256,6 +266,7 @@ void Composition_pass::render(const Render_context& context)
                         .conventions       = context.scene_view.get_conventions(),
                         .edge_id_texture   = edge_id_texture,
                         .edge_line_color   = edge_line_color,
+                        .edge_line_width   = edge_line_width,
                         .debug_label       = get_name(),
                     },
                     .mesh_spans             = m_mesh_spans,

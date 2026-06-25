@@ -71,6 +71,13 @@ public:
     // former trailing pad-uvec2 slot.
     std::size_t edge_id_texture;      // uvec2
     std::size_t edge_line_color;      // vec4
+    // Corner-cap (EDGE_LINES_CORNER_CAP) plumbing. vp_y_sign = -1.0 on a top-left
+    // framebuffer origin (the cap projects corners to screen and must flip Y to
+    // match gl_FragCoord, mirroring the wide-line vp_y_sign path), +1.0 otherwise.
+    // edge_line_width is the edge-line width fed to the cap's screen-space
+    // half-width so the cap disk matches the wide-line ribbon thickness.
+    std::size_t vp_y_sign;            // float
+    std::size_t edge_line_width;      // float
 };
 
 // Edge-line parameters written to the camera UBO for the ID-buffer edge-line
@@ -84,6 +91,9 @@ public:
     // allocate). Default = max_u32 sentinel -> shader reads "no edge id buffer".
     uint64_t  edge_id_texture_handle{0xFFFFFFFFFFFFFFFFull};
     glm::vec4 edge_line_color        {0.0f, 0.0f, 0.0f, 1.0f};
+    // Edge-line width fed to the EDGE_LINES_CORNER_CAP variant's screen-space
+    // half-width (matches the wide-line ribbon). Ignored by every other variant.
+    float     edge_line_width        {1.0f};
 };
 
 // Grid rendering parameters written to the camera UBO; read by the

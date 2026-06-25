@@ -125,10 +125,16 @@ void Forward_renderer::render(const Render_parameters& parameters)
     // the sampler irrelevant, so the nearest m_fallback_sampler is fine.
     m_texture_heap->reset_heap(render_encoder.get_command_buffer());
 
+    // edge_line_color / edge_line_width feed both edge-line variants: the
+    // EDGE_LINES_FROM_ID fill (which also needs the face-ID texture handle) and
+    // the EDGE_LINES_CORNER_CAP overlay (which does not). Set the color/width
+    // unconditionally so the corner-cap pass gets them even with no ID texture;
+    // variants that read neither simply ignore the fields.
     Edge_lines_parameters edge_lines_parameters{};
+    edge_lines_parameters.edge_line_color = base.edge_line_color;
+    edge_lines_parameters.edge_line_width = base.edge_line_width;
     if (base.edge_id_texture != nullptr) {
         edge_lines_parameters.edge_id_texture_handle = m_texture_heap->allocate(base.edge_id_texture, &m_fallback_sampler);
-        edge_lines_parameters.edge_line_color        = base.edge_line_color;
     }
 
     ERHE_VERIFY(!base.views.empty());

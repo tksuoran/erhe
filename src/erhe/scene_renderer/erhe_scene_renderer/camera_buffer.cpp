@@ -51,6 +51,8 @@ Camera_interface::Camera_interface(erhe::graphics::Device& graphics_device, cons
         .frame_number             = camera_struct.add_uvec2("frame_number"            )->get_offset_in_parent(),
         .edge_id_texture          = camera_struct.add_uvec2("edge_id_texture"         )->get_offset_in_parent(),
         .edge_line_color          = camera_struct.add_vec4 ("edge_line_color"         )->get_offset_in_parent(),
+        .vp_y_sign                = camera_struct.add_float("vp_y_sign"               )->get_offset_in_parent(),
+        .edge_line_width          = camera_struct.add_float("edge_line_width"         )->get_offset_in_parent(),
     }
     , max_camera_count{static_cast<std::size_t>(max_camera_count)}
     , view_count{static_cast<std::size_t>(view_count)}
@@ -159,6 +161,14 @@ void write_camera_entry(
     write(gpu_data, write_offset + offsets.frame_number,         as_span(frame_number                        ));
     write(gpu_data, write_offset + offsets.edge_id_texture,      as_span(edge_lines_parameters.edge_id_texture_handle));
     write(gpu_data, write_offset + offsets.edge_line_color,      as_span(edge_lines_parameters.edge_line_color));
+    // vp_y_sign mirrors the wide-line / debug-renderer convention: a top-left
+    // framebuffer origin (Metal / Vulkan) needs the corner-cap screen projection
+    // flipped in Y to match gl_FragCoord (clip_space_y_flip is disabled
+    // device-wide on the main view, so clip_from_world is y-up NDC). See
+    // content_wide_line_renderer.cpp.
+    const float vp_y_sign = (conventions.framebuffer_origin == erhe::math::Framebuffer_origin::top_left) ? -1.0f : 1.0f;
+    write(gpu_data, write_offset + offsets.vp_y_sign,            as_span(vp_y_sign));
+    write(gpu_data, write_offset + offsets.edge_line_width,      as_span(edge_lines_parameters.edge_line_width));
 }
 
 } // anonymous namespace

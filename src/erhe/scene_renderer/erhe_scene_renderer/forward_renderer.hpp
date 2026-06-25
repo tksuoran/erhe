@@ -117,6 +117,9 @@ public:
         // face matches. null texture -> the effect is disabled for this pass.
         const erhe::graphics::Texture*                                     edge_id_texture  {nullptr};
         glm::vec4                                                          edge_line_color  {0.0f, 0.0f, 0.0f, 1.0f};
+        // Edge-line width for the EDGE_LINES_CORNER_CAP overlay's screen-space
+        // half-width (matches the wide-line ribbon). Ignored by other variants.
+        float                                                              edge_line_width  {1.0f};
         const std::string_view                                             debug_label;
     };
 

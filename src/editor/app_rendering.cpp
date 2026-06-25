@@ -247,6 +247,56 @@ App_rendering::App_rendering(
         selected
     );
 
+    // ID-buffer edge-line method, corner caps. The EDGE_LINES_FROM_ID fill paints
+    // edges where the per-pixel face-ID buffer matches, but at a shared vertex the
+    // overlapping ribbons store one id/pixel, so the other faces' fills find no
+    // match -> corner gaps. These overlay passes redraw the expanded fill soup
+    // (Primitive_mode::solid_wireframe -> same depth-less-or-equal, no-depth-write
+    // overlay pipeline) with the EDGE_LINES_CORNER_CAP variant, which paints the
+    // edge color within the ribbon half-width of each real projected corner -- a
+    // pure screen-space distance test, so every face meeting at the vertex fills
+    // its own side. Additive on top of the working fill path: only enabled when the
+    // ID-buffer method is active. No get_render_style -> not gated on the
+    // solid_wireframe render-style flag; gated on use_id_buffer instead. The
+    // appearance supplies the edge color + width (matching the wide-line ribbon).
+    auto content_edge_corner_cap_not_selected = make_composition_pass(
+        "Content edge corner caps not selected",
+        Composition_pass_data{
+            .edge_lines_corner_cap        {true},
+            .mesh_layers                  {Mesh_layer_id::content},
+            .blending_mode_policy         {Blending_mode_policy::opaque_primitives_only},
+            .primitive_mode               {Primitive_mode::solid_wireframe},
+            .filter                       {filter_not_selected},
+            .shader_key_force_enable_mask {make_shader_bool_mask(Shader_bool::EDGE_LINES_CORNER_CAP)},
+            .get_appearance               {appearance_not_selected},
+            .is_enabled                   {
+                [](const Render_context& context) -> bool {
+                    return context.app_context.editor_settings->content_edge_lines.use_id_buffer;
+                }
+            }
+        },
+        not_selected
+    );
+
+    auto content_edge_corner_cap_selected = make_composition_pass(
+        "Content edge corner caps selected",
+        Composition_pass_data{
+            .edge_lines_corner_cap        {true},
+            .mesh_layers                  {Mesh_layer_id::content},
+            .blending_mode_policy         {Blending_mode_policy::opaque_primitives_only},
+            .primitive_mode               {Primitive_mode::solid_wireframe},
+            .filter                       {filter_selected},
+            .shader_key_force_enable_mask {make_shader_bool_mask(Shader_bool::EDGE_LINES_CORNER_CAP)},
+            .get_appearance               {appearance_selected},
+            .is_enabled                   {
+                [](const Render_context& context) -> bool {
+                    return context.app_context.editor_settings->content_edge_lines.use_id_buffer;
+                }
+            }
+        },
+        selected
+    );
+
     // When selection Polygon Fill is disabled, content_fill_selected_or_hovered
     // no-ops and never writes selection stencil bit 7, so selection_outline has
     // no mask and floods the whole object. This pass writes that stencil mask

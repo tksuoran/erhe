@@ -121,6 +121,15 @@ layout(location = 16) flat in float v_wire_width;
 layout(location = 17) flat in uint v_edge_face_id;
 #endif
 
+// ID-buffer edge-line method, corner caps: this triangle's 3 corners in
+// viewport-relative screen space (xy), ribbon half-width (z, px), used flag (w).
+// See standard.vert.
+#if defined(ERHE_EDGE_LINES_CORNER_CAP)
+layout(location = 18) flat in vec4 v_cap0;
+layout(location = 19) flat in vec4 v_cap1;
+layout(location = 20) flat in vec4 v_cap2;
+#endif
+
 // "Lit-path locals are required" gate: true when the BxDF runs lighting
 // OR when a debug visualization needs N / V / T / B / sampled
 // material properties. The debug overrides read those even in the
@@ -175,6 +184,27 @@ void main()
     // texels keep the large clear value, which the receiver reads as "lit".
     out_color = vec4(length(v_position.xyz - light_control_block.point_light_position.xyz));
     return;
+#endif
+
+#if defined(ERHE_EDGE_LINES_CORNER_CAP)
+    // Corner-cap overlay: paint the edge color within the ribbon half-width of any
+    // real projected corner, then stop. A pure screen-space distance test (no
+    // face-ID match), so every face meeting at a shared vertex caps its own side --
+    // filling the gaps the EDGE_LINES_FROM_ID per-pixel match leaves there. The
+    // overlay pass's depth test (less-or-equal, no write) lets the frontmost face
+    // win each pixel, so the cap sits on the visible surface at the fill's depth.
+    {
+        vec2 frag = gl_FragCoord.xy - camera.cameras[c_view_index].viewport.xy;
+        if (
+            ((v_cap0.w > 0.5) && (distance(frag, v_cap0.xy) <= v_cap0.z)) ||
+            ((v_cap1.w > 0.5) && (distance(frag, v_cap1.xy) <= v_cap1.z)) ||
+            ((v_cap2.w > 0.5) && (distance(frag, v_cap2.xy) <= v_cap2.z))
+        ) {
+            out_color = camera.cameras[c_view_index].edge_line_color;
+            return;
+        }
+        discard;
+    }
 #endif
 
 // The lit-path locals + light loops reference v_material_index,

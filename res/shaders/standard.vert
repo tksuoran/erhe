@@ -4,6 +4,51 @@
 
 #define a_valency_edge_count a_custom_2
 
+#if defined(ERHE_EDGE_LINES_CORNER_CAP)
+// Screen-space ribbon width (px) at a clip-space point, replicating the wide-line
+// expansion (compute_before_content_line.comp get_line_width) so the corner-cap
+// disk exactly covers the ribbon thickness at the corner. thickness < 0 == fixed
+// screen-space pixel width (no distance scaling).
+float cap_line_width(vec4 position, float thickness, vec4 fov, vec4 viewport)
+{
+    if (thickness < 0.0) {
+        return -thickness;
+    }
+    float fov_width        = fov[1] - fov[0];
+    float viewport_width   = viewport[2];
+    float max_size         = 4.0 * thickness;
+    float scaled_thickness = max(max_size / position.w, 1.0);
+    return (1.0 / 1024.0) * viewport_width * scaled_thickness / fov_width;
+}
+
+// Project one real triangle corner (object space) to a viewport-relative screen
+// position, returning vec4(screen.xy, ribbon_half_width_px, used). vp_y_sign < 0
+// (top-left framebuffer origin) flips screen Y to match gl_FragCoord -- mirrors the
+// wide-line vp_y_sign path, since clip_from_world is y-up NDC on the main view.
+vec4 project_corner_cap(
+    vec3  corner_obj,
+    bool  used,
+    mat4  clip_from_world,
+    mat4  world_from_node,
+    vec4  vp,
+    vec4  fov,
+    float vp_y_sign,
+    float line_width
+)
+{
+    vec4 clip_c = clip_from_world * (world_from_node * vec4(corner_obj, 1.0));
+    // A corner at or behind the eye plane (w <= 0) has no valid screen position.
+    if (clip_c.w <= 0.0) {
+        return vec4(0.0);
+    }
+    vec2  ndc_c  = clip_c.xy / clip_c.w;
+    vec2  scr    = (ndc_c * 0.5 + 0.5) * vp.zw;
+    scr.y        = mix(scr.y, vp.w - scr.y, step(vp_y_sign, 0.0));
+    float half_w = 0.5 * cap_line_width(clip_c, line_width, fov, vp);
+    return vec4(scr, half_w, used ? 1.0 : 0.0);
+}
+#endif
+
 #if defined(ERHE_VARIANT_ID_RENDER)
 // Locations 0 and 1 are reused under the ID-render variant for the two
 // flat outputs the fragment packs into an RGB id. The lit varyings below
@@ -103,6 +148,18 @@ layout(location = 16) flat out float v_wire_width;
 // line on a match. Flat: every vertex of a triangle shares one facet id.
 #if defined(ERHE_EDGE_LINES_FROM_ID)
 layout(location = 17) flat out uint v_edge_face_id;
+#endif
+
+// ID-buffer edge-line method, corner caps: this triangle's 3 corners projected to
+// viewport-relative screen space (xy), each with its ribbon half-width (z, px) and
+// a used flag (w; 1 = real shared vertex that should be capped, 0 = internal
+// fan-triangulation corner that must not be). The fragment paints the edge color
+// within half-width of any used corner, filling the gaps the per-pixel id match
+// leaves at shared vertices.
+#if defined(ERHE_EDGE_LINES_CORNER_CAP)
+layout(location = 18) flat out vec4 v_cap0;
+layout(location = 19) flat out vec4 v_cap1;
+layout(location = 20) flat out vec4 v_cap2;
 #endif
 
 void main()
@@ -240,6 +297,31 @@ void main()
         // pass). 0 is the buffer's "no edge" id, so it can never match -> these
         // meshes simply render the normal fill.
         v_edge_face_id = (face_id_base != 0u) ? (face_id_base + facet_id) : 0u;
+    }
+#   endif
+
+#   if defined(ERHE_EDGE_LINES_CORNER_CAP)
+    // Project this triangle's 3 real corners (object positions in a_custom_5/6/7,
+    // replicated to all 3 soup vertices by build_expanded_polygon_fill) so the
+    // fragment can cap shared vertices. used = the corner is an endpoint of a real
+    // polygon edge: edge_mask (a_custom_4 bits 2..4) bit b gates the edge opposite
+    // corner b, so corner c is real when either of the two bits != c is set --
+    // internal fan-triangulation corners (no real edge) are left uncapped.
+    {
+        vec4  vp        = camera.cameras[c_view_index].viewport;
+        vec4  fov       = camera.cameras[c_view_index].fov;
+        float vp_y_sign = camera.cameras[c_view_index].vp_y_sign;
+        float lw        = camera.cameras[c_view_index].edge_line_width;
+#       if defined(ERHE_ATTRIBUTE_a_custom_4) && defined(ERHE_ATTRIBUTE_a_custom_5) && defined(ERHE_ATTRIBUTE_a_custom_6) && defined(ERHE_ATTRIBUTE_a_custom_7)
+        uint edge_mask = (a_custom_4 >> 2u) & 7u;
+        v_cap0 = project_corner_cap(a_custom_5, (edge_mask & 0x6u) != 0u, clip_from_world, world_from_node, vp, fov, vp_y_sign, lw);
+        v_cap1 = project_corner_cap(a_custom_6, (edge_mask & 0x5u) != 0u, clip_from_world, world_from_node, vp, fov, vp_y_sign, lw);
+        v_cap2 = project_corner_cap(a_custom_7, (edge_mask & 0x3u) != 0u, clip_from_world, world_from_node, vp, fov, vp_y_sign, lw);
+#       else
+        v_cap0 = vec4(0.0);
+        v_cap1 = vec4(0.0);
+        v_cap2 = vec4(0.0);
+#       endif
     }
 #   endif
 
