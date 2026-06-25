@@ -113,7 +113,10 @@ Mesh_memory::Mesh_memory(
             {
                 3,
                 {
-                    { Format::format_32_scalar_uint, Vertex_attribute_usage::custom, erhe::dataformat::custom_attribute_wireframe}
+                    { Format::format_32_scalar_uint, Vertex_attribute_usage::custom, erhe::dataformat::custom_attribute_wireframe},
+                    { Format::format_32_vec3_float,  Vertex_attribute_usage::custom, erhe::dataformat::custom_attribute_corner_position_0},
+                    { Format::format_32_vec3_float,  Vertex_attribute_usage::custom, erhe::dataformat::custom_attribute_corner_position_1},
+                    { Format::format_32_vec3_float,  Vertex_attribute_usage::custom, erhe::dataformat::custom_attribute_corner_position_2}
                 }
             }
         }
@@ -150,7 +153,10 @@ Mesh_memory::Mesh_memory(
             {
                 3,
                 {
-                    { Format::format_32_scalar_uint, Vertex_attribute_usage::custom, erhe::dataformat::custom_attribute_wireframe}
+                    { Format::format_32_scalar_uint, Vertex_attribute_usage::custom, erhe::dataformat::custom_attribute_wireframe},
+                    { Format::format_32_vec3_float,  Vertex_attribute_usage::custom, erhe::dataformat::custom_attribute_corner_position_0},
+                    { Format::format_32_vec3_float,  Vertex_attribute_usage::custom, erhe::dataformat::custom_attribute_corner_position_1},
+                    { Format::format_32_vec3_float,  Vertex_attribute_usage::custom, erhe::dataformat::custom_attribute_corner_position_2}
                 }
             }
         }

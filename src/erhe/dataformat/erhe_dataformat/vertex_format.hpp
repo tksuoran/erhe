@@ -56,6 +56,13 @@ static constexpr std::size_t custom_attribute_aniso_control      = 1; // anisotr
 static constexpr std::size_t custom_attribute_valency_edge_count = 2; // uvec2 vertex valency and polygon edge count
 static constexpr std::size_t custom_attribute_metallic_roughness = 3; // TODO metallic roughess_x roughness_y
 static constexpr std::size_t custom_attribute_wireframe          = 4; // uint: corner index (bits 0..1) + real-edge mask (bits 2..4), expanded solid-wireframe fill
+// Expanded soup fill only: the three corner object positions of this vertex's
+// triangle, replicated onto all three of its vertices. Used by the ID-buffer
+// edge-line method to cap corners in the fill fragment (project each corner to
+// screen, shade as edge line within half-line-width of a real-edge corner).
+static constexpr std::size_t custom_attribute_corner_position_0  = 5;
+static constexpr std::size_t custom_attribute_corner_position_1  = 6;
+static constexpr std::size_t custom_attribute_corner_position_2  = 7;
 
 enum class Vertex_step : unsigned int
 {

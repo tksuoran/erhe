@@ -899,6 +899,21 @@ void Build_context::build_expanded_polygon_fill()
 
     Vertex_buffer_writer* wireframe_writer = expanded_writer_for(Vertex_attribute_usage::custom, custom_attribute_wireframe);
 
+    // Corner-cap data for the ID-buffer edge-line method: the triangle's three
+    // corner object positions, replicated onto its three soup vertices so the
+    // fill fragment can project them and cap real-edge corners (no Z-fight: the
+    // cap is shaded by the fill fragment at the fill's own depth).
+    const Vertex_attribute_info corner_pos_info[3] = {
+        Vertex_attribute_info{*expanded_format, Vertex_attribute_usage::custom, custom_attribute_corner_position_0},
+        Vertex_attribute_info{*expanded_format, Vertex_attribute_usage::custom, custom_attribute_corner_position_1},
+        Vertex_attribute_info{*expanded_format, Vertex_attribute_usage::custom, custom_attribute_corner_position_2}
+    };
+    Vertex_buffer_writer* corner_pos_writer[3] = {
+        expanded_writer_for(Vertex_attribute_usage::custom, custom_attribute_corner_position_0),
+        expanded_writer_for(Vertex_attribute_usage::custom, custom_attribute_corner_position_1),
+        expanded_writer_for(Vertex_attribute_usage::custom, custom_attribute_corner_position_2)
+    };
+
     // Redirect the build_vertex_* helpers' writers to the expanded streams for
     // the duration of this pass; the per-attribute offsets in
     // root.vertex_attributes are valid because the expanded format mirrors the
@@ -982,6 +997,11 @@ void Build_context::build_expanded_polygon_fill()
 
             const GEO::index_t tri_corners [3] = { corner0, corner1, corner2 };
             const GEO::index_t tri_vertices[3] = { vertex0, vertex1, vertex2 };
+            const GEO::vec3f   corner_positions[3] = {
+                get_pointf(root.mesh.vertices, vertex0),
+                get_pointf(root.mesh.vertices, vertex1),
+                get_pointf(root.mesh.vertices, vertex2)
+            };
 
             const uint32_t base = expanded_vertex_index;
             index_writer.write_expanded_triangle(base + 0u, base + 1u, base + 2u);
@@ -1007,6 +1027,12 @@ void Build_context::build_expanded_polygon_fill()
                 if (wireframe_writer != nullptr) {
                     const uint32_t packed = j | (edge_mask << 2);
                     wireframe_writer->write(wireframe_info, packed);
+                }
+
+                for (uint32_t k = 0; k < 3u; ++k) {
+                    if (corner_pos_writer[k] != nullptr) {
+                        corner_pos_writer[k]->write(corner_pos_info[k], corner_positions[k]);
+                    }
                 }
 
                 for (std::unique_ptr<Vertex_buffer_writer>& w : expanded_writers) {
