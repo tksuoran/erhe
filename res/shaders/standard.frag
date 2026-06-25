@@ -223,13 +223,22 @@ void main()
         uvec2 edge_id_tex = camera.cameras[c_view_index].edge_id_texture;
         vec2  vp_offset   = camera.cameras[c_view_index].viewport.xy;
         ivec2 edge_px     = ivec2(gl_FragCoord.xy - vp_offset);
-        vec4  edge_texel  = texel_fetch(edge_id_tex, edge_px);
-        uint  edge_id     = (uint(edge_texel.r * 255.0 + 0.5) << 16) |
-                            (uint(edge_texel.g * 255.0 + 0.5) <<  8) |
-                             uint(edge_texel.b * 255.0 + 0.5);
-        if ((v_edge_face_id != 0u) && (edge_id == v_edge_face_id)) {
-            out_color = camera.cameras[c_view_index].edge_line_color;
-            return;
+        // texelFetch() does not clamp: out-of-range integer coordinates are undefined
+        // behaviour (no robustImageAccess) and hang the GPU on some drivers (the Apple
+        // GPU via MoltenVK). A fragment outside the face-ID buffer carries no edge data,
+        // so only sample when the pixel lies inside the texture; otherwise it is no edge.
+        if (edge_id_tex.x != max_u32) {
+            ivec2 edge_size = ivec2(get_texture_size(edge_id_tex));
+            if (all(greaterThanEqual(edge_px, ivec2(0))) && all(lessThan(edge_px, edge_size))) {
+                vec4 edge_texel = texel_fetch(edge_id_tex, edge_px);
+                uint edge_id    = (uint(edge_texel.r * 255.0 + 0.5) << 16) |
+                                  (uint(edge_texel.g * 255.0 + 0.5) <<  8) |
+                                   uint(edge_texel.b * 255.0 + 0.5);
+                if ((v_edge_face_id != 0u) && (edge_id == v_edge_face_id)) {
+                    out_color = camera.cameras[c_view_index].edge_line_color;
+                    return;
+                }
+            }
         }
     }
 #endif
