@@ -20,6 +20,36 @@ void main(void)
     // viewport.xy that this shader needs.
     vec2  vp_offset  = view.cameras[c_view_index].viewport.xy;
     vec2  frag_xy    = gl_FragCoord.xy - vp_offset;
+
+#ifdef ERHE_CONTENT_LINE_SEED_MASK
+    // ID-buffer edge-line SEED mask: reject this edge fragment unless the seed
+    // buffer's frontmost-visible-face id at this pixel equals this edge half-quad's
+    // own face id (encoded in v_color). This drops cap / overspray fragments that
+    // land on another face or on the background BEFORE they can write the edge-id
+    // color OR win the edge-id depth test, so the edge-id buffer is correct by
+    // construction. Integer texelFetch (no filtering -- ids must not blend); the
+    // seed buffer shares this pass's viewport so seed_px is in range, but the fetch
+    // is guarded anyway (out-of-range texelFetch is UB and hangs some drivers).
+    {
+        ivec2 seed_px   = ivec2(frag_xy);
+        ivec2 seed_size = ivec2(textureSize(s_seed_id, 0));
+        if (all(greaterThanEqual(seed_px, ivec2(0))) && all(lessThan(seed_px, seed_size))) {
+            vec4 seed_texel = texelFetch(s_seed_id, seed_px, 0);
+            uint seed_id = (uint(seed_texel.r * 255.0 + 0.5) << 16) |
+                           (uint(seed_texel.g * 255.0 + 0.5) <<  8) |
+                            uint(seed_texel.b * 255.0 + 0.5);
+            uint edge_id = (uint(v_color.r * 255.0 + 0.5) << 16) |
+                           (uint(v_color.g * 255.0 + 0.5) <<  8) |
+                            uint(v_color.b * 255.0 + 0.5);
+            if (seed_id != edge_id) {
+                discard;
+            }
+        } else {
+            discard;
+        }
+    }
+#endif
+
     vec2  start      = v_start_end.xy;
     vec2  end        = v_start_end.zw;
     vec2  line       = end - start;

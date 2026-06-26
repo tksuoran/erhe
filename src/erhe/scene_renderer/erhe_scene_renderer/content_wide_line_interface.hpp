@@ -115,6 +115,14 @@ public:
     // SSBO-read render paths: triangle SSBO + view UBO. nullptr when
     // SSBOs are not supported.
     std::unique_ptr<erhe::graphics::Bind_group_layout> graphics_bind_group_layout;
+    // Graphics pipeline layout for the ID-buffer edge-line method's SEED-masked
+    // edge-id draw: same triangle SSBO + view UBO as graphics_bind_group_layout
+    // plus a dedicated s_seed_id sampler (slot 0) that content_line_after_compute.frag
+    // (compiled with ERHE_CONTENT_LINE_SEED_MASK) texelFetches to reject edge
+    // fragments that do not land on their own face's visible surface. Separate
+    // layout so the color edge-line path's shader / layout are unchanged. nullptr
+    // when SSBOs are not supported.
+    std::unique_ptr<erhe::graphics::Bind_group_layout> graphics_seed_bind_group_layout;
 
     // Geometry-shader backend bind group layouts. The geometry-shader
     // path expands lines into quads inside the vertex/geom stages of an

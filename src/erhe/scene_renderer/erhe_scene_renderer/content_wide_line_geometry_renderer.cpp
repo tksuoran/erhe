@@ -57,7 +57,9 @@ public:
         erhe::graphics::Base_render_pipeline&   pipeline_state,
         erhe::graphics::Color_blend_state*      color_blend_state,
         uint32_t                                group,
-        bool                                    multiview
+        bool                                    multiview,
+        const erhe::graphics::Texture*          seed_texture,
+        const erhe::graphics::Sampler*          seed_sampler
     ) override;
 
 protected:
@@ -243,7 +245,9 @@ void Content_wide_line_geometry_renderer::render(
     erhe::graphics::Base_render_pipeline&   pipeline_state,
     erhe::graphics::Color_blend_state*      color_blend_state,
     const uint32_t                          group,
-    const bool                              multiview
+    const bool                              multiview,
+    const erhe::graphics::Texture*          seed_texture,
+    const erhe::graphics::Sampler*          seed_sampler
 )
 {
     // Geometry-shader backend does not currently support multiview
@@ -252,6 +256,11 @@ void Content_wide_line_geometry_renderer::render(
     // backend; this path is desktop-only.
     ERHE_VERIFY(!multiview);
     static_cast<void>(multiview);
+    // The ID-buffer edge-line method requires the compute backend (the seed mask
+    // runs in the compute-expanded edge-id draw); the geometry backend never
+    // receives a seed texture.
+    static_cast<void>(seed_texture);
+    static_cast<void>(seed_sampler);
 
     if (m_dispatches.empty()) {
         return;

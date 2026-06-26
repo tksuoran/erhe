@@ -144,9 +144,10 @@ layout(location = 16) flat out float v_wire_width;
 
 // ID-buffer edge-line method: this fragment's own face id (per-primitive base
 // from primitive.color.x + this triangle's facet id from a_custom_0). The
-// fragment compares it against the face-ID buffer it samples and paints an edge
-// line on a match. Flat: every vertex of a triangle shares one facet id.
-#if defined(ERHE_EDGE_LINES_FROM_ID)
+// EDGE_LINES_FROM_ID fill compares it against the face-ID buffer it samples and
+// paints an edge line on a match; the FACE_ID_SEED seed pass writes it out as the
+// frontmost-visible-face id. Flat: every vertex of a triangle shares one facet id.
+#if defined(ERHE_EDGE_LINES_FROM_ID) || defined(ERHE_VARIANT_FACE_ID_SEED)
 layout(location = 17) flat out uint v_edge_face_id;
 #endif
 
@@ -211,6 +212,36 @@ void main()
     v_primitive_id = gl_VertexID / 3;
 #endif
 
+#if defined(ERHE_EDGE_LINES_FROM_ID) || defined(ERHE_VARIANT_FACE_ID_SEED)
+    // ID-buffer edge-line method face id. Recover the per-primitive face-id base
+    // (raw float in primitive.color.x, stamped by Primitive_buffer via the shared
+    // Face_id_base_provider) and add this triangle's facet id (a_custom_0 =
+    // vec4_from_uint(facet)). The result matches what the edge-id pre-pass encoded
+    // for the same face and what the seed pass writes out for the same face.
+    // Computed here -- outside the !POSITION_PASS lit block -- so the FACE_ID_SEED
+    // position-pass variant (which skips that block) still gets it.
+    {
+        uint face_id_base = uint(primitive.primitives[ERHE_DRAW_ID].color.x + 0.5);
+#       if defined(ERHE_ATTRIBUTE_a_custom_0)
+        // a_custom_0 is build_polygon_id()'s vec4_from_uint(facet): r = (facet>>24),
+        // g = (facet>>16), b = (facet>>8), a = (facet>>0). Small facet indices live
+        // entirely in .a, so all four components must be recombined (decoding only
+        // r,g,b yields 0 for every facet < 256 -> only facet 0 ever matches).
+        uint facet_id = (uint(a_custom_0.r * 255.0 + 0.5) << 24) |
+                        (uint(a_custom_0.g * 255.0 + 0.5) << 16) |
+                        (uint(a_custom_0.b * 255.0 + 0.5) <<  8) |
+                         uint(a_custom_0.a * 255.0 + 0.5);
+#       else
+        uint facet_id = 0u;
+#       endif
+        // base 0 = this mesh has no face-id assignment (not registered for the
+        // edge method, e.g. controller / rendertarget meshes in a shared fill
+        // pass). 0 is the buffer's "no edge" id, so it can never match -> these
+        // meshes simply render the normal fill / seed to 0 (occluder, no edge).
+        v_edge_face_id = (face_id_base != 0u) ? (face_id_base + facet_id) : 0u;
+    }
+#endif
+
 #if defined(ERHE_VARIANT_POINTS)
     // Point size and color are per-draw-primitive values from the primitive
     // buffer. gl_PointSize uses 1/distance attenuation (floored at 2 px). The
@@ -272,33 +303,6 @@ void main()
     v_position       = position;
 
     v_material_index = primitive.primitives[ERHE_DRAW_ID].material_index;
-
-#   if defined(ERHE_EDGE_LINES_FROM_ID)
-    // Recover the per-primitive face-id base (raw float in primitive.color.x,
-    // stamped by Primitive_buffer via the shared Face_id_base_provider) and add
-    // this triangle's facet id (a_custom_0 = vec4_from_uint(facet)). The result
-    // matches what the edge-id pre-pass encoded for the same face.
-    {
-        uint face_id_base = uint(primitive.primitives[ERHE_DRAW_ID].color.x + 0.5);
-#       if defined(ERHE_ATTRIBUTE_a_custom_0)
-        // a_custom_0 is build_polygon_id()'s vec4_from_uint(facet): r = (facet>>24),
-        // g = (facet>>16), b = (facet>>8), a = (facet>>0). Small facet indices live
-        // entirely in .a, so all four components must be recombined (decoding only
-        // r,g,b yields 0 for every facet < 256 -> only facet 0 ever matches).
-        uint facet_id = (uint(a_custom_0.r * 255.0 + 0.5) << 24) |
-                        (uint(a_custom_0.g * 255.0 + 0.5) << 16) |
-                        (uint(a_custom_0.b * 255.0 + 0.5) <<  8) |
-                         uint(a_custom_0.a * 255.0 + 0.5);
-#       else
-        uint facet_id = 0u;
-#       endif
-        // base 0 = this mesh has no face-id assignment (not registered for the
-        // edge method, e.g. controller / rendertarget meshes in a shared fill
-        // pass). 0 is the buffer's "no edge" id, so it can never match -> these
-        // meshes simply render the normal fill.
-        v_edge_face_id = (face_id_base != 0u) ? (face_id_base + facet_id) : 0u;
-    }
-#   endif
 
 #   if defined(ERHE_EDGE_LINES_CORNER_CAP)
     // Project this triangle's 3 real corners (object positions in a_custom_5/6/7,

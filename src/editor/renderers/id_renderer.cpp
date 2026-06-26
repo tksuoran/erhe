@@ -15,6 +15,7 @@
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/ring_buffer.hpp"
 #include "erhe_graphics/ring_buffer_range.hpp"
+#include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/scoped_debug_group.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/texture.hpp"
@@ -268,6 +269,95 @@ void Id_renderer::update_edge_id_framebuffer(const erhe::math::Viewport viewport
     m_edge_id_render_pass = std::make_unique<Render_pass>(m_graphics_device, render_pass_descriptor);
 }
 
+void Id_renderer::update_seed_framebuffer(const erhe::math::Viewport viewport)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    // Nearest sampler, created once (size-independent). The edge-id pass
+    // texelFetches the seed by integer pixel coordinate, so filtering never
+    // applies; a plain nearest sampler keeps the dedicated sampler descriptor
+    // valid for the seed-mask graphics variant.
+    if (!m_seed_sampler) {
+        m_seed_sampler = std::make_unique<erhe::graphics::Sampler>(
+            m_graphics_device,
+            erhe::graphics::Sampler_create_info{
+                .min_filter  = erhe::graphics::Filter::nearest,
+                .mag_filter  = erhe::graphics::Filter::nearest,
+                .mipmap_mode = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
+                .debug_label = "Id_renderer seed sampler"
+            }
+        );
+    }
+
+    if (
+        m_seed_color_texture &&
+        (m_seed_color_texture->get_width()  == viewport.width) &&
+        (m_seed_color_texture->get_height() == viewport.height)
+    ) {
+        return;
+    }
+
+    m_seed_color_texture.reset();
+    m_seed_depth_texture.reset();
+    m_seed_render_pass.reset();
+
+    m_seed_color_texture = std::make_unique<Texture>(
+        m_graphics_device,
+        erhe::graphics::Texture_create_info{
+            .device      = m_graphics_device,
+            .usage_mask  =
+                erhe::graphics::Image_usage_flag_bit_mask::color_attachment |
+                erhe::graphics::Image_usage_flag_bit_mask::sampled,
+            .type        = erhe::graphics::Texture_type::texture_2d,
+            .pixelformat = erhe::dataformat::Format::format_8_vec4_unorm,
+            .use_mipmaps = false,
+            .width       = viewport.width,
+            .height      = viewport.height,
+            .debug_label = "Content seed face ID color"
+        }
+    );
+    m_seed_depth_texture = std::make_unique<Texture>(
+        m_graphics_device,
+        erhe::graphics::Texture_create_info{
+            .device      = m_graphics_device,
+            .usage_mask  = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment,
+            .type        = erhe::graphics::Texture_type::texture_2d,
+            .pixelformat = erhe::dataformat::Format::format_d32_sfloat,
+            .use_mipmaps = false,
+            .width       = viewport.width,
+            .height      = viewport.height,
+            .debug_label = "Content seed face ID depth"
+        }
+    );
+
+    erhe::graphics::Render_pass_descriptor render_pass_descriptor;
+    // Color: cleared to 0 (id 0 = "no visible face" / background, never a real
+    // face id), stored, and left shader-readable so the edge-id pass can sample
+    // it in the same frame (the post-pass barrier makes the writes visible).
+    render_pass_descriptor.color_attachments[0].texture       = m_seed_color_texture.get();
+    render_pass_descriptor.color_attachments[0].load_action   = erhe::graphics::Load_action::Clear;
+    render_pass_descriptor.color_attachments[0].store_action  = erhe::graphics::Store_action::Store;
+    render_pass_descriptor.color_attachments[0].clear_value   = {0.0, 0.0, 0.0, 0.0};
+    render_pass_descriptor.color_attachments[0].usage_before  = erhe::graphics::Image_usage_flag_bit_mask::sampled;
+    render_pass_descriptor.color_attachments[0].layout_before = erhe::graphics::Image_layout::shader_read_only_optimal;
+    render_pass_descriptor.color_attachments[0].usage_after   = erhe::graphics::Image_usage_flag_bit_mask::sampled;
+    render_pass_descriptor.color_attachments[0].layout_after  = erhe::graphics::Image_layout::shader_read_only_optimal;
+    // Depth: cleared to the convention's far value, used only to keep the
+    // frontmost face per pixel, then discarded (store dont_care, never sampled).
+    render_pass_descriptor.depth_attachment.texture           = m_seed_depth_texture.get();
+    render_pass_descriptor.depth_attachment.load_action       = erhe::graphics::Load_action::Clear;
+    render_pass_descriptor.depth_attachment.clear_value[0]    = m_graphics_device.get_reverse_depth() ? 0.0 : 1.0;
+    render_pass_descriptor.depth_attachment.store_action      = erhe::graphics::Store_action::Dont_care;
+    render_pass_descriptor.depth_attachment.usage_before      = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
+    render_pass_descriptor.depth_attachment.layout_before     = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;
+    render_pass_descriptor.depth_attachment.usage_after       = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
+    render_pass_descriptor.depth_attachment.layout_after      = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;
+    render_pass_descriptor.render_target_width                = viewport.width;
+    render_pass_descriptor.render_target_height               = viewport.height;
+    render_pass_descriptor.debug_label                        = "Content seed face ID";
+    m_seed_render_pass = std::make_unique<Render_pass>(m_graphics_device, render_pass_descriptor);
+}
+
 void Id_renderer::render_content_edge_id(
     erhe::graphics::Command_buffer&                   command_buffer,
     const erhe::math::Viewport&                       viewport,
@@ -299,18 +389,128 @@ void Id_renderer::render_content_edge_id(
     // edge-id pass needs so a nearer edge wins per pixel. Blending is disabled so
     // the face id is written exactly. group 0: the id pass carries every content
     // edge (selection coloring is handled later by the fill composition passes).
+    //
+    // Pass the seed face-ID buffer (rendered by render_content_seed() earlier this
+    // frame) + its sampler: the wide-line renderer draws with the seed-masked
+    // variant, discarding any edge fragment whose own face id does not equal the
+    // seed's frontmost-visible-face id there. So cap / overspray fragments landing
+    // on another face or the background never write the edge-id color or win the
+    // edge-id depth test -- the edge-id buffer is correct by construction.
     wide_line_renderer.render(
         encoder,
         m_pipeline,
         &erhe::graphics::Color_blend_state::color_blend_disabled,
         0u,
-        false
+        false,
+        m_seed_color_texture.get(),
+        m_seed_sampler.get()
     );
 }
 
 auto Id_renderer::get_edge_id_texture() const -> erhe::graphics::Texture*
 {
     return m_edge_id_color_texture.get();
+}
+
+auto Id_renderer::get_seed_id_texture() const -> erhe::graphics::Texture*
+{
+    return m_seed_color_texture.get();
+}
+
+auto Id_renderer::get_seed_sampler() const -> const erhe::graphics::Sampler*
+{
+    return m_seed_sampler.get();
+}
+
+void Id_renderer::render_content_seed(const Seed_render_parameters& parameters)
+{
+    using namespace erhe::graphics;
+
+    ERHE_PROFILE_FUNCTION();
+
+    if (!m_enabled) {
+        return;
+    }
+    const erhe::math::Viewport& viewport = parameters.viewport;
+    if ((viewport.width == 0) || (viewport.height == 0)) {
+        return;
+    }
+
+    update_seed_framebuffer(viewport);
+
+    Scoped_debug_group debug_group{parameters.command_buffer, "Id_renderer::render_content_seed()"};
+
+    // Same camera UBO the picking pass uses; update() acquires a disjoint ring
+    // range, so calling it again this frame is fine.
+    Ring_buffer_range camera_range = m_camera_buffers.update(
+        *parameters.camera.projection(),
+        *parameters.camera.get_node(),
+        viewport,
+        1.0f,
+        erhe::scene_renderer::Grid_parameters{}, // unused by the seed shader
+        erhe::scene_renderer::Sky_parameters{},  // unused by the seed shader
+        0,
+        parameters.reverse_depth,
+        parameters.depth_range,
+        parameters.conventions // match the fill's clip_from_world (y-flip etc.)
+    );
+
+    // Joint UBO/SSBO so skinned content is posed in the seed exactly as in the
+    // fill (otherwise the seed surface would not match for skinned meshes).
+    Ring_buffer_range joint_range{};
+    const bool        bind_joint_buffer = (parameters.joint_buffer != nullptr);
+    if (bind_joint_buffer) {
+        joint_range = parameters.joint_buffer->update(
+            glm::uvec4{0u, 0u, 0u, 0u},
+            {},
+            parameters.skins
+        );
+    }
+
+    {
+        Render_command_encoder encoder = m_graphics_device.make_render_command_encoder(parameters.command_buffer);
+        erhe::graphics::Scoped_render_pass scoped_render_pass{*m_seed_render_pass.get(), parameters.command_buffer};
+        encoder.set_bind_group_layout(m_bind_group_layout);
+        m_camera_buffers.bind(encoder, camera_range);
+        if (bind_joint_buffer) {
+            parameters.joint_buffer->bind(encoder, joint_range);
+        }
+        // Full viewport (no pointer-rect scissor): the seed must cover every pixel
+        // an edge could touch, not just the picking readback rect.
+        encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
+        encoder.set_scissor_rect (viewport.x, viewport.y, viewport.width, viewport.height);
+
+        // NOTE: deliberately NOT reset_id_ranges() here -- the picking pass
+        // populated m_primitive_buffers.id_ranges() earlier this frame and its
+        // async readback still needs them. The seed uses use_id_ranges = false
+        // (and the face-id-base provider for color), so update() touches neither
+        // m_id_ranges nor the running id_offset count.
+        const erhe::Item_filter content_filter{
+            .require_all_bits_set           = erhe::Item_flags::visible,
+            .require_at_least_one_bit_set   = 0u,
+            .require_all_bits_clear         = 0u,
+            .require_at_least_one_bit_clear = 0u
+        };
+        const erhe::scene_renderer::Primitive_interface_settings primitive_settings{
+            .face_id_base_provider = parameters.face_id_base_provider
+        };
+
+        render_buckets(
+            encoder,
+            m_pipeline,
+            *m_seed_render_pass.get(),
+            primitive_settings,
+            erhe::scene_renderer::make_shader_bool_mask(erhe::scene_renderer::Shader_bool::VARIANT_FACE_ID_SEED),
+            false, // use_id_ranges: seed color is sampled in-frame, never read back
+            content_filter,
+            parameters.meshes
+        );
+    }
+
+    camera_range.release();
+    if (bind_joint_buffer) {
+        joint_range.release();
+    }
 }
 
 void Id_renderer::render_meshes(
@@ -333,8 +533,6 @@ void Id_renderer::render_meshes(
         .color_source = erhe::scene_renderer::Primitive_color_source::id_offset
     };
 
-    const erhe::primitive::Primitive_mode primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
-
     // Pre-filter the input mesh span when the caller asked for skinned-only
     // (the hybrid picker delegates static meshes to the raytrace path).
     // A pointer-vector copy is cheap; doing it here keeps the
@@ -354,20 +552,47 @@ void Id_renderer::render_meshes(
         return;
     }
 
-    using namespace erhe::scene_renderer;
-    std::vector<Render_bucket> buckets;
-    const uint32_t boolean_mask_force_enable = erhe::scene_renderer::make_shader_bool_mask(
-        erhe::scene_renderer::Shader_bool::VARIANT_ID_RENDER
+    render_buckets(
+        render_encoder,
+        pipeline,
+        *m_render_pass.get(),
+        primitive_settings,
+        erhe::scene_renderer::make_shader_bool_mask(erhe::scene_renderer::Shader_bool::VARIANT_ID_RENDER),
+        true, // use_id_ranges: record the id_offset->mesh table the readback walks
+        id_filter,
+        meshes_to_render
     );
+}
+
+void Id_renderer::render_buckets(
+    erhe::graphics::Render_command_encoder&                    render_encoder,
+    erhe::graphics::Base_render_pipeline&                      pipeline,
+    const erhe::graphics::Render_pass&                         render_pass,
+    const erhe::scene_renderer::Primitive_interface_settings&  primitive_settings,
+    const uint32_t                                             force_enable_mask,
+    const bool                                                 use_id_ranges,
+    const erhe::Item_filter&                                   filter,
+    const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes
+)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if (meshes.empty()) {
+        return;
+    }
+
+    using namespace erhe::scene_renderer;
+    const erhe::primitive::Primitive_mode primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
+    std::vector<Render_bucket> buckets;
     const uint32_t boolean_mask_force_disable = 0; // TODO: Maybe disable some features for ID rendering?
     bucket_primitives(
         buckets,
-        boolean_mask_force_enable,
+        force_enable_mask,
         boolean_mask_force_disable,
         m_mesh_memory,
         Shader_key{},
-        meshes_to_render,
-        id_filter,
+        meshes,
+        filter,
         primitive_mode,
         Blending_mode_policy::override_with_base_render_pipeline // TODO
     );
@@ -394,14 +619,13 @@ void Id_renderer::render_meshes(
         }
         const erhe::graphics::Shader_stages* shader_stages = &reloadable_shader_stages->shader_stages;
 
-        // The active render pass is the Id_renderer's own internal pass
-        // (see Scoped_render_pass in render()); the pipeline format must
-        // match that pass, not an externally supplied one. The caller has
-        // no knowledge of this internal framebuffer. Mirrored (negative
-        // determinant) buckets get the front-face-flipped variant so that
+        // The pipeline format must match the supplied render pass (the picking
+        // pass for render_meshes, the seed pass for render_content_seed); the
+        // caller has no knowledge of these internal framebuffers. Mirrored
+        // (negative determinant) buckets get the front-face-flipped variant so
         // back-face culling removes the same faces the forward pass culls.
         erhe::graphics::Render_pipeline* render_pipeline = pipeline.get_pipeline_for(
-            m_render_pass->get_descriptor(),
+            render_pass.get_descriptor(),
             nullptr,
             shader_stages,
             vertex_input.vertex_input.get(),
@@ -453,10 +677,9 @@ void Id_renderer::render_meshes(
 
         // use_id_ranges = true records the (id_offset .. id_offset+count,
         // mesh, primitive) table that Id_renderer::get() walks to turn the
-        // GPU-written id back into a (mesh, primitive, triangle) hit. Without
-        // it the readback yields a valid id but id_ranges() is empty, so no
-        // hover is ever produced.
-        erhe::graphics::Ring_buffer_range primitive_range = m_primitive_buffers.update(bucket, primitive_mode, primitive_settings, true);
+        // GPU-written id back into a (mesh, primitive, triangle) hit (picking).
+        // The seed pass passes false: its color is sampled in-frame, not read back.
+        erhe::graphics::Ring_buffer_range primitive_range = m_primitive_buffers.update(bucket, primitive_mode, primitive_settings, use_id_ranges);
         erhe::scene_renderer::Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffers.update(bucket, primitive_mode);
         ERHE_VERIFY(draw_indirect_buffer_range.draw_indirect_count == bucket.entries.size());
 

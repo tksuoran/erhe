@@ -25,7 +25,16 @@
 // a flat color); the fragment shader either has no body (depth-only) or
 // emits a packed ID color / flat point color directly. Use this gate at
 // every "skip lit machinery" #if so the variants stay in lock-step.
-#if defined(ERHE_VARIANT_DEPTH_ONLY) || defined(ERHE_VARIANT_ID_RENDER) || defined(ERHE_VARIANT_SHADOW_DISTANCE) || defined(ERHE_VARIANT_SHADOW_CUBE) || defined(ERHE_VARIANT_POINTS)
+// ERHE_VARIANT_FACE_ID_SEED is the ID-buffer edge-line method's seed pass: it
+// renders the visible content fill outputting each fragment's encoded face id
+// (per-primitive base + facet id, the SAME registry namespace the EDGE_LINES_FROM_ID
+// fill and the edge-id pre-pass use) into a dedicated face-ID buffer with depth
+// test, so the buffer holds the FRONTMOST visible face id per pixel. The edge-id
+// pre-pass then samples that buffer to reject edge fragments that do not land on
+// their own face's visible surface. Like ID_RENDER it skips the lit / debug
+// machinery (it only needs gl_Position plus the flat face-id varying), so it is a
+// position pass.
+#if defined(ERHE_VARIANT_DEPTH_ONLY) || defined(ERHE_VARIANT_ID_RENDER) || defined(ERHE_VARIANT_SHADOW_DISTANCE) || defined(ERHE_VARIANT_SHADOW_CUBE) || defined(ERHE_VARIANT_POINTS) || defined(ERHE_VARIANT_FACE_ID_SEED)
 #  define ERHE_VARIANT_POSITION_PASS 1
 #endif
 

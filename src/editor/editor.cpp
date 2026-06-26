@@ -1260,6 +1260,39 @@ public:
                             m_content_wide_line_graphics_stages = std::make_unique<Shader_stages>(*m_graphics_device, std::move(prototype));
                         }
                     }
+                    // Seed-masked single-view graphics shader (ID-buffer edge-line
+                    // method): same vertex/fragment pair as above, but the fragment
+                    // is compiled with ERHE_CONTENT_LINE_SEED_MASK and the seed bind
+                    // group layout (adds the s_seed_id sampler). The edge-id pass
+                    // draws with this variant so each edge fragment is discarded
+                    // unless it lands on its own face's visible surface (per the seed
+                    // face-ID buffer). Only built when the seed layout exists (SSBO
+                    // device); the color edge-line path keeps the unmasked variant.
+                    if (m_content_wide_line_interface->graphics_seed_bind_group_layout != nullptr) {
+                        Shader_stages_create_info create_info{
+                            .name             = "content_line_after_compute_seed",
+                            .defines          = { { "ERHE_CONTENT_LINE_SEED_MASK", "1" } },
+                            .struct_types     = {
+                                m_content_wide_line_interface->triangle_vertex_struct.get(),
+                                &m_content_wide_line_interface->view_camera_struct
+                            },
+                            .interface_blocks = {
+                                m_content_wide_line_interface->triangle_vertex_buffer_read_block.get(),
+                                &m_content_wide_line_interface->view_block
+                            },
+                            .fragment_outputs = &m_content_wide_line_interface->fragment_outputs,
+                            .no_vertex_input  = true,
+                            .shaders = {
+                                { Shader_type::vertex_shader,   shader_path / "line_after_compute.vert"        },
+                                { Shader_type::fragment_shader, shader_path / "content_line_after_compute.frag" }
+                            },
+                            .bind_group_layout = m_content_wide_line_interface->graphics_seed_bind_group_layout.get(),
+                        };
+                        Shader_stages_prototype prototype = build_shader_stages(*m_graphics_device, create_info);
+                        if (prototype.is_valid()) {
+                            m_content_wide_line_graphics_seed_stages = std::make_unique<Shader_stages>(*m_graphics_device, std::move(prototype));
+                        }
+                    }
                     // Multiview-compiled graphics shader pair. Compiled
                     // only when the headset can drive multiview
                     // (view_count >= 2); not used by single-view
@@ -1304,7 +1337,8 @@ public:
                         m_content_wide_line_compute_stages.get(),
                         m_content_wide_line_compute_stages_skinned.get(), // may be null if joint block missing
                         m_content_wide_line_graphics_stages.get(),
-                        m_content_wide_line_multiview_graphics_stages.get()
+                        m_content_wide_line_multiview_graphics_stages.get(),
+                        m_content_wide_line_graphics_seed_stages.get() // may be null; seed mask then no-ops
                     );
                 } else {
                     // Geometry-shader backend (used when the device does not
@@ -2655,6 +2689,7 @@ public:
     std::unique_ptr<erhe::graphics::Shader_stages>                    m_content_wide_line_compute_stages;
     std::unique_ptr<erhe::graphics::Shader_stages>                    m_content_wide_line_compute_stages_skinned;
     std::unique_ptr<erhe::graphics::Shader_stages>                    m_content_wide_line_graphics_stages;
+    std::unique_ptr<erhe::graphics::Shader_stages>                    m_content_wide_line_graphics_seed_stages;
     std::unique_ptr<erhe::graphics::Shader_stages>                    m_content_wide_line_multiview_graphics_stages;
     std::unique_ptr<erhe::graphics::Shader_stages>                    m_content_wide_line_geometry_stages_not_skinned;
     std::unique_ptr<erhe::graphics::Shader_stages>                    m_content_wide_line_geometry_stages_skinned;

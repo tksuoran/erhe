@@ -16,7 +16,9 @@
 // ID-render variant.
 layout(location = 0) flat in int v_draw_id;
 layout(location = 1) flat in int v_primitive_id;
+#endif
 
+#if defined(ERHE_VARIANT_ID_RENDER) || defined(ERHE_VARIANT_FACE_ID_SEED)
 vec3 vec3_from_uint(uint i)
 {
     uint r = (i >> 16u) & 0xffu;
@@ -116,8 +118,9 @@ layout(location = 16) flat in float v_wire_width;
 #endif
 
 // ID-buffer edge-line method: this fragment's own face id (per-primitive base +
-// facet id), computed in standard.vert. Compared against the face-ID buffer.
-#if defined(ERHE_EDGE_LINES_FROM_ID)
+// facet id), computed in standard.vert. The EDGE_LINES_FROM_ID fill compares it
+// against the face-ID buffer; the FACE_ID_SEED seed pass writes it out.
+#if defined(ERHE_EDGE_LINES_FROM_ID) || defined(ERHE_VARIANT_FACE_ID_SEED)
 layout(location = 17) flat in uint v_edge_face_id;
 #endif
 
@@ -161,6 +164,16 @@ void main()
     vec3 id_rgb      = vec3_from_uint(triangle_id);
     vec3 id          = id_rgb + primitive.primitives[v_draw_id].color.xyz;
     out_color        = vec4(id, 1.0);
+    return;
+#endif
+
+#if defined(ERHE_VARIANT_FACE_ID_SEED)
+    // ID-buffer edge-line seed pass: write this fragment's encoded face id
+    // (per-primitive base + facet id, computed in standard.vert) into the seed
+    // buffer. The depth test keeps the FRONTMOST face per pixel, so the seed holds
+    // the visible-surface face id; the edge-id pre-pass samples it to reject edge
+    // fragments that do not land on their own face. No lighting / varyings.
+    out_color = vec4(vec3_from_uint(v_edge_face_id), 1.0);
     return;
 #endif
 

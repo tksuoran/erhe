@@ -208,6 +208,11 @@ private:
     // per-(mesh,primitive) base to the edge-id pre-pass and the polygon-fill pass.
     Face_id_registry                   m_face_id_registry;
 
+    // The content meshes registered for the edge method this frame, collected
+    // during the edge feed so the seed pass can render exactly that visible
+    // content. Persistent (cleared, capacity kept) to avoid per-frame allocation.
+    std::vector<std::shared_ptr<erhe::scene::Mesh>> m_seed_meshes;
+
 };
 
 }

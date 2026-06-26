@@ -44,7 +44,8 @@ public:
         erhe::graphics::Shader_stages* compute_shader_stages,
         erhe::graphics::Shader_stages* compute_shader_stages_skinned,
         erhe::graphics::Shader_stages* graphics_shader_stages,
-        erhe::graphics::Shader_stages* multiview_graphics_shader_stages
+        erhe::graphics::Shader_stages* multiview_graphics_shader_stages,
+        erhe::graphics::Shader_stages* graphics_shader_stages_seed
     );
 
     [[nodiscard]] auto uses_compute() const -> bool override { return true; }
@@ -54,7 +55,9 @@ public:
         erhe::graphics::Base_render_pipeline&   pipeline_state,
         erhe::graphics::Color_blend_state*      color_blend_state,
         uint32_t                                group,
-        bool                                    multiview
+        bool                                    multiview,
+        const erhe::graphics::Texture*          seed_texture,
+        const erhe::graphics::Sampler*          seed_sampler
     ) override;
 
 protected:
@@ -122,6 +125,10 @@ private:
     erhe::graphics::Shader_stages* m_compute_shader_stages_skinned   {nullptr};
     erhe::graphics::Shader_stages* m_graphics_shader_stages          {nullptr};
     erhe::graphics::Shader_stages* m_multiview_graphics_shader_stages{nullptr};
+    // Seed-masked single-view graphics variant (ERHE_CONTENT_LINE_SEED_MASK +
+    // graphics_seed_bind_group_layout). Null when not compiled; render() then
+    // skips the seed mask and falls back to the unmasked edge-id draw.
+    erhe::graphics::Shader_stages* m_graphics_shader_stages_seed     {nullptr};
 
     std::optional<erhe::graphics::Compute_pipeline> m_compute_pipeline;
     std::optional<erhe::graphics::Compute_pipeline> m_compute_pipeline_skinned;
@@ -145,13 +152,15 @@ Content_wide_line_compute_renderer::Content_wide_line_compute_renderer(
     erhe::graphics::Shader_stages* compute_shader_stages,
     erhe::graphics::Shader_stages* compute_shader_stages_skinned,
     erhe::graphics::Shader_stages* graphics_shader_stages,
-    erhe::graphics::Shader_stages* multiview_graphics_shader_stages
+    erhe::graphics::Shader_stages* multiview_graphics_shader_stages,
+    erhe::graphics::Shader_stages* graphics_shader_stages_seed
 )
     : Content_wide_line_renderer        {graphics_device, interface_}
     , m_compute_shader_stages           {compute_shader_stages}
     , m_compute_shader_stages_skinned   {compute_shader_stages_skinned}
     , m_graphics_shader_stages          {graphics_shader_stages}
     , m_multiview_graphics_shader_stages{multiview_graphics_shader_stages}
+    , m_graphics_shader_stages_seed     {graphics_shader_stages_seed}
     , m_empty_vertex_input              {graphics_device, erhe::graphics::Vertex_input_state_data{}}
     , m_triangle_vertex_buffer_client{
         graphics_device,
@@ -417,7 +426,9 @@ void Content_wide_line_compute_renderer::render(
     erhe::graphics::Base_render_pipeline&   pipeline_state,
     erhe::graphics::Color_blend_state*      color_blend_state,
     const uint32_t                          group,
-    const bool                              multiview
+    const bool                              multiview,
+    const erhe::graphics::Texture*          seed_texture,
+    const erhe::graphics::Sampler*          seed_sampler
 )
 {
     if (m_dispatches.empty()) {
@@ -449,12 +460,28 @@ void Content_wide_line_compute_renderer::render(
     // pattern in debug_renderer_bucket.cpp / forward_renderer.cpp and
     // avoids the need for the caller's Base_render_pipeline to know about
     // the renderer's shader stages or bind group layout.
-    erhe::graphics::Shader_stages* shader_stages = multiview
-        ? m_multiview_graphics_shader_stages
-        : m_graphics_shader_stages;
+    // ID-buffer edge-line SEED mask: when the caller supplies a seed texture +
+    // sampler (the edge-id pass) AND the seed-masked variant compiled, draw with
+    // it so edge fragments off their own face's visible surface are discarded. The
+    // seed-masked variant is single-view only (the edge-id pass is single-view).
+    const bool use_seed_mask =
+        (seed_texture != nullptr) &&
+        (seed_sampler != nullptr) &&
+        !multiview &&
+        (m_graphics_shader_stages_seed != nullptr) &&
+        m_graphics_shader_stages_seed->is_valid() &&
+        (m_interface.graphics_seed_bind_group_layout != nullptr);
+
+    erhe::graphics::Shader_stages* shader_stages = use_seed_mask
+        ? m_graphics_shader_stages_seed
+        : (multiview ? m_multiview_graphics_shader_stages : m_graphics_shader_stages);
     if ((shader_stages == nullptr) || !shader_stages->is_valid()) {
         return;
     }
+
+    erhe::graphics::Bind_group_layout* bind_group_layout = use_seed_mask
+        ? m_interface.graphics_seed_bind_group_layout.get()
+        : m_interface.graphics_bind_group_layout.get();
 
     // Culling is disabled for the wide-line draw (both the tent and simple-quad
     // paths). The compute shader's tent path emits two screen-space half-quads per
@@ -491,8 +518,16 @@ void Content_wide_line_compute_renderer::render(
         }
     };
 
-    render_encoder.set_bind_group_layout(m_interface.graphics_bind_group_layout.get());
+    render_encoder.set_bind_group_layout(bind_group_layout);
     render_encoder.set_render_pipeline_state(temp_state);
+
+    // Bind the seed face-ID texture once (it is constant for every dispatch). The
+    // seed-masked fragment shader texelFetches it at slot 0 (s_seed_id) to reject
+    // edge fragments off their own face. Bound after the pipeline/layout so the
+    // push-descriptor write targets the correct (seed) layout.
+    if (use_seed_mask) {
+        render_encoder.set_sampled_image(0u, *seed_texture, *seed_sampler);
+    }
 
     for (const Dispatch_entry& dispatch : m_dispatches) {
         if (!dispatch.dispatched || (dispatch.group != group)) {
@@ -534,7 +569,8 @@ auto make_content_wide_line_compute_renderer(
     erhe::graphics::Shader_stages* compute_shader_stages,
     erhe::graphics::Shader_stages* compute_shader_stages_skinned,
     erhe::graphics::Shader_stages* graphics_shader_stages,
-    erhe::graphics::Shader_stages* multiview_graphics_shader_stages
+    erhe::graphics::Shader_stages* multiview_graphics_shader_stages,
+    erhe::graphics::Shader_stages* graphics_shader_stages_seed
 ) -> std::unique_ptr<Content_wide_line_renderer>
 {
     if ((compute_shader_stages  == nullptr) || !compute_shader_stages ->is_valid()) {
@@ -543,13 +579,16 @@ auto make_content_wide_line_compute_renderer(
     if ((graphics_shader_stages == nullptr) || !graphics_shader_stages->is_valid()) {
         return nullptr;
     }
+    // graphics_shader_stages_seed may be null/invalid; the renderer falls back to
+    // the unmasked edge-id draw, so do not fail construction on it.
     return std::make_unique<Content_wide_line_compute_renderer>(
         graphics_device,
         interface_,
         compute_shader_stages,
         compute_shader_stages_skinned,
         graphics_shader_stages,
-        multiview_graphics_shader_stages
+        multiview_graphics_shader_stages,
+        graphics_shader_stages_seed
     );
 }
 

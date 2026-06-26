@@ -351,6 +351,10 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
                                     if (filter(mesh->get_flag_bits())) {
                                         if (use_id_edge_lines) {
                                             m_face_id_registry.add_mesh(*mesh);
+                                            // Collect this content mesh for the seed
+                                            // pass: it renders exactly the visible
+                                            // content the edge method covers.
+                                            m_seed_meshes.push_back(mesh);
                                         }
                                         m_context.content_wide_line_renderer->add_mesh(
                                             *m_context.mesh_memory,
@@ -373,6 +377,7 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
                         // selection / translucent outlines are a separate visual
                         // and stay on the wide-line path; they are simply off here.
                         m_face_id_registry.clear();
+                        m_seed_meshes.clear(); // capacity kept; refilled by feed_pass
                         {
                             erhe::graphics::Scoped_debug_group feed_debug_group{command_buffer, "edge_id_not_selected"};
                             feed_pass(m_context.app_rendering->edge_lines_not_selected.get());
@@ -449,6 +454,44 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
                         glm::uvec4{0, 0, 0, 0}, {}, scene_for_joints->get_skins()
                     );
                     m_context.content_wide_line_renderer->set_joint_buffer(&joint_buffer, std::move(joint_buffer_range));
+                }
+
+                // ID-buffer edge-line method: render the SEED face-ID buffer
+                // (visible content fill -> frontmost-visible-face id per pixel) in
+                // its own render pass BEFORE the edge compute + edge-id pass, so the
+                // seed-masked edge-id draw can reject edge fragments that do not land
+                // on their own face's visible surface. Run order per the handoff:
+                // seed -> edge compute -> edge-id (masked) -> fill.
+                if (
+                    use_id_edge_lines &&
+                    (m_context.id_renderer != nullptr) &&
+                    !m_seed_meshes.empty() &&
+                    (context.camera != nullptr)
+                ) {
+                    erhe::scene_renderer::Joint_buffer* seed_joint_buffer =
+                        (m_context.forward_renderer != nullptr) ? &m_context.forward_renderer->get_joint_buffer() : nullptr;
+                    std::span<const std::shared_ptr<erhe::scene::Skin>> seed_skins{};
+                    const std::shared_ptr<Scene_root>& seed_scene_root = context.scene_view.get_scene_root();
+                    if (seed_scene_root) {
+                        erhe::scene::Scene* seed_scene = seed_scene_root->get_hosted_scene();
+                        if (seed_scene != nullptr) {
+                            seed_skins = seed_scene->get_skins();
+                        }
+                    }
+                    m_context.id_renderer->render_content_seed(
+                        Id_renderer::Seed_render_parameters{
+                            .command_buffer        = command_buffer,
+                            .viewport              = context.viewport,
+                            .camera                = *context.camera,
+                            .meshes                = m_seed_meshes,
+                            .face_id_base_provider = &m_face_id_registry,
+                            .reverse_depth         = get_reverse_depth(),
+                            .depth_range           = get_depth_range(),
+                            .conventions           = get_conventions(),
+                            .joint_buffer          = seed_joint_buffer,
+                            .skins                 = seed_skins
+                        }
+                    );
                 }
 
                 // Compute pre-pass + compute->vertex barrier only on the

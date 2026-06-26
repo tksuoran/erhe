@@ -21,7 +21,9 @@ namespace erhe::graphics {
     class Compute_command_encoder;
     class Device;
     class Render_command_encoder;
+    class Sampler;
     class Shader_stages;
+    class Texture;
 }
 namespace erhe::primitive {
     class Buffer_mesh;
@@ -149,12 +151,22 @@ public:
     // overrides pipeline_state's blend. The caller's
     // pipeline_state.data.shader_stages, vertex_input, and
     // bind_group_layout are ignored.
+    //
+    // ID-buffer edge-line method SEED mask: when seed_texture is non-null (the
+    // edge-id pass passes the face-ID seed buffer + its sampler), the compute
+    // backend draws with the seed-masked graphics variant, which discards any edge
+    // fragment whose own face id does not equal the seed's frontmost-visible-face
+    // id at that pixel. Always single-view (the edge-id pass is single-view). The
+    // color edge-line path leaves both null and is unaffected; the geometry
+    // backend ignores them (the id method requires the compute backend).
     virtual void render(
         erhe::graphics::Render_command_encoder& render_encoder,
         erhe::graphics::Base_render_pipeline&   pipeline_state,
         erhe::graphics::Color_blend_state*      color_blend_state,
-        uint32_t                                group     = 0,
-        bool                                    multiview = false
+        uint32_t                                group        = 0,
+        bool                                    multiview    = false,
+        const erhe::graphics::Texture*          seed_texture = nullptr,
+        const erhe::graphics::Sampler*          seed_sampler = nullptr
     ) = 0;
 
     void end_frame();
@@ -235,13 +247,19 @@ private:
 //
 // multiview_graphics_shader_stages may be null for single-view-only
 // builds; the multiview render path will then no-op.
+// graphics_shader_stages_seed is the seed-masked single-view graphics variant
+// (content_line_after_compute.frag compiled with ERHE_CONTENT_LINE_SEED_MASK,
+// using graphics_seed_bind_group_layout). May be null; the seed-masked draw then
+// no-ops and the ID-buffer edge-line method falls back to the unmasked edge-id
+// buffer.
 auto make_content_wide_line_compute_renderer(
     erhe::graphics::Device&        graphics_device,
     Content_wide_line_interface&   interface_,
     erhe::graphics::Shader_stages* compute_shader_stages,
     erhe::graphics::Shader_stages* compute_shader_stages_skinned,
     erhe::graphics::Shader_stages* graphics_shader_stages,
-    erhe::graphics::Shader_stages* multiview_graphics_shader_stages
+    erhe::graphics::Shader_stages* multiview_graphics_shader_stages,
+    erhe::graphics::Shader_stages* graphics_shader_stages_seed
 ) -> std::unique_ptr<Content_wide_line_renderer>;
 
 // Factory for the geometry-shader backend (used when the device does

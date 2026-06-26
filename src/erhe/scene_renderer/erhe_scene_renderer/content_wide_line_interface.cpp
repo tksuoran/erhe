@@ -11,6 +11,10 @@ constexpr int c_edge_line_vertex_binding_point        = 0;
 constexpr int c_triangle_vertex_binding_point         = 1;
 constexpr int c_edge_line_joint_vertex_binding_point  = 2;
 constexpr int c_view_binding_point                    = 3;
+// Sampler slot (separate binding-point namespace from the buffers above) for the
+// ID-buffer edge-line method's seed face-ID texture, sampled by the seed-masked
+// edge-id fragment shader.
+constexpr int c_seed_id_sampler_binding_point         = 0;
 
 [[nodiscard]] auto make_block_binding(
     const erhe::graphics::Shader_resource& block,
@@ -236,6 +240,34 @@ Content_wide_line_interface::Content_wide_line_interface(
                 make_block_binding(view_block, erhe::graphics::Shader_stage_flags::vertex | erhe::graphics::Shader_stage_flags::fragment)
             },
             .debug_label       = "Content wide line graphics",
+            .uses_texture_heap = false
+        }
+    );
+
+    // Seed-masked edge-id draw layout (ID-buffer edge-line method): same triangle
+    // SSBO + view UBO as above, plus a dedicated s_seed_id sampler. The
+    // ERHE_CONTENT_LINE_SEED_MASK fragment variant texelFetches the seed face-ID
+    // buffer to reject edge fragments off their own face's visible surface. The
+    // sampler is bound at runtime via set_sampled_image() (a plain nearest sampler,
+    // not a comparison sampler -- safe via push descriptors on MoltenVK), so it is
+    // not pinned as an immutable sampler here.
+    graphics_seed_bind_group_layout = std::make_unique<erhe::graphics::Bind_group_layout>(
+        graphics_device,
+        erhe::graphics::Bind_group_layout_create_info{
+            .bindings = {
+                {.binding_point = c_triangle_vertex_binding_point, .type = erhe::graphics::Binding_type::storage_buffer, .stage_flags = erhe::graphics::Shader_stage_flags::vertex},
+                make_block_binding(view_block, erhe::graphics::Shader_stage_flags::vertex | erhe::graphics::Shader_stage_flags::fragment),
+                {
+                    .binding_point   = c_seed_id_sampler_binding_point,
+                    .type            = erhe::graphics::Binding_type::combined_image_sampler,
+                    .sampler_aspect  = erhe::graphics::Sampler_aspect::color,
+                    .name            = "s_seed_id",
+                    .glsl_type       = erhe::graphics::Glsl_type::sampler_2d,
+                    .is_texture_heap = false,
+                    .stage_flags     = erhe::graphics::Shader_stage_flags::fragment
+                }
+            },
+            .debug_label       = "Content wide line graphics seed",
             .uses_texture_heap = false
         }
     );
