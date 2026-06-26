@@ -1539,31 +1539,19 @@ public:
             ERHE_TASK_HEADER(default_scene_task)
             {
                 ERHE_GET_GL_CONTEXT
-                auto content_library = std::make_shared<Content_library>();
-                add_default_materials(*content_library.get());
-                add_default_physics_materials(*content_library.get());
-
-                const bool enable_physics = m_editor_settings.physics.static_enable;
-                m_default_scene = std::make_shared<Scene_root>(
-                    m_app_message_bus.get(),
-                    content_library,
-                    "Default Scene",
-                    enable_physics
-                );
-                m_default_scene->register_to_editor_scenes(*m_app_scenes);
-                m_default_content_library_window = std::make_shared<Content_library_window>(
-                    *m_imgui_renderer.get(),
-                    *m_imgui_windows.get(),
-                    m_app_context,
-                    content_library,
-                    m_default_scene->get_name()
-                );
-                m_default_scene_browser = m_default_scene->make_browser_window(
-                    *m_imgui_renderer.get(), *m_imgui_windows.get(), m_app_context, m_app_settings
-                );
+                // Only the content library (brushes / materials) is created at init,
+                // because Scene_builder builds brushes into it. The Scene_root itself
+                // is created later by the scene.create startup command (or a loaded
+                // scene becomes the only scene) -- so a commands.json that just loads a
+                // scene yields exactly one scene, with no empty default. The scene_root
+                // and its windows are built in create_default_scene(); see
+                // run_startup_script().
+                m_default_content_library = std::make_shared<Content_library>();
+                add_default_materials(*m_default_content_library.get());
+                add_default_physics_materials(*m_default_content_library.get());
             }
             ERHE_TASK_FOOTER(
-                .name("Default scene")
+                .name("Default content library")
                 .succeed(imgui_renderer_task, imgui_windows_task)
             );
 
@@ -1571,14 +1559,16 @@ public:
             {
                 ERHE_GET_GL_CONTEXT
                 m_scene_builder = std::make_unique<Scene_builder>(
-                    m_editor_settings.scene,           //const Scene_config&                scene_config
-                    m_editor_settings.post_processing, //bool                               enable_post_processing
-                    m_default_scene,                   //std::shared_ptr<Scene_root>        scene
-                    *m_executor.get(),                 //tf::Executor&                      executor
-                    m_app_context,                     //App_context&                       app_context
-                    m_app_settings,                    //App_settings&                      app_settings
-                    *m_mesh_memory.get()               //erhe::scene_renderer::Mesh_memory& mesh_memory
+                    m_editor_settings.scene,                  //const Scene_config&                scene_config
+                    m_editor_settings.post_processing,        //bool                               enable_post_processing
+                    m_default_content_library,                //std::shared_ptr<Content_library>   content_library
+                    *m_executor.get(),                        //tf::Executor&                      executor
+                    m_app_context,                            //App_context&                       app_context
+                    m_app_settings,                           //App_settings&                      app_settings
+                    *m_mesh_memory.get()                      //erhe::scene_renderer::Mesh_memory& mesh_memory
                 );
+                // The scene_root is assigned to Scene_builder later, by
+                // create_default_scene() (the scene.create startup command).
             }
             ERHE_TASK_FOOTER(
                 .name("Scene_builder")
@@ -1621,11 +1611,9 @@ public:
 
             ERHE_TASK_HEADER(headset_attach_task)
             {
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-                if (m_app_context.OpenXR) {
-                    m_headset_view->attach_to_scene(m_default_scene, *m_mesh_memory.get());
-                }
-#endif
+                // The Headset_view attaches to the scene when one first exists, via
+                // the Scene_created_message handler (on_scene_created) rather than
+                // here -- no scene_root is created at init any more.
             }
             ERHE_TASK_FOOTER(
                 .name("Headset (attach)")
@@ -1688,6 +1676,9 @@ public:
                     *m_scene_builder.get(),
                     *m_tools.get()
                 );
+                // Hud/Hotbar attach to the scene when one first exists (driven by the
+                // Scene_created_message in on_scene_created), not here -- no scene_root
+                // is created at init any more.
                 m_inventory_window = std::make_unique<Inventory_window>(
                     *m_imgui_renderer.get(),
                     *m_imgui_windows.get(),
@@ -2091,6 +2082,15 @@ public:
 #endif
         m_tools->set_priority_tool(m_physics_tool.get());
 
+        // Attach the global tools to the first scene that is created (scene.create)
+        // or loaded. Subscribed here, after Hud/Hotbar/Headset_view are constructed
+        // and before run_startup_script() can publish Scene_created_message.
+        m_scene_created_subscription = m_app_message_bus->scene_created.subscribe(
+            [this](Scene_created_message& message) {
+                on_scene_created(message);
+            }
+        );
+
         // Run the startup command script while the init-time command
         // buffer is still open. Several scripted commands (e.g.
         // scene.add_cameras building the default Viewport_scene_view +
@@ -2233,6 +2233,7 @@ public:
         m_default_scene_browser.reset();
         m_default_content_library_window.reset();
         m_default_scene.reset();
+        m_default_content_library.reset();
 
         // Tear the operation stack down ahead of Scene_builder so any
         // pending or executed operations holding raw Scene_builder*
@@ -2371,6 +2372,60 @@ public:
         return true;
     }
 
+    // Build the default scene: a Scene_root with the given name, registered into
+    // the editor scene list, given its content-library + browser windows, and handed
+    // to Scene_builder so scene.add_* can populate it. Invoked by the scene.create
+    // startup command. Publishing Scene_created_message attaches the global tools
+    // (Hud / Hotbar / OpenXR Headset_view) to this scene.
+    void create_default_scene(const std::string& name)
+    {
+        if (m_default_scene) {
+            log_startup->warn("scene.create: a scene already exists ('{}'); ignoring", m_default_scene->get_name());
+            return;
+        }
+        const bool enable_physics = m_editor_settings.physics.static_enable;
+        m_default_scene = std::make_shared<Scene_root>(
+            m_app_message_bus.get(),
+            m_default_content_library,
+            name,
+            enable_physics
+        );
+        m_default_scene->register_to_editor_scenes(*m_app_scenes);
+        m_default_content_library_window = std::make_shared<Content_library_window>(
+            *m_imgui_renderer.get(),
+            *m_imgui_windows.get(),
+            m_app_context,
+            m_default_content_library,
+            m_default_scene->get_name()
+        );
+        m_default_scene_browser = m_default_scene->make_browser_window(
+            *m_imgui_renderer.get(), *m_imgui_windows.get(), m_app_context, m_app_settings
+        );
+        m_scene_builder->set_scene_root(m_default_scene);
+        m_app_message_bus->scene_created.send_message(Scene_created_message{m_default_scene});
+    }
+
+    // Attach the global tools to the FIRST scene that is created (scene.create) or
+    // loaded. Subsequent scenes do not re-home the tools.
+    void on_scene_created(Scene_created_message& message)
+    {
+        if (m_tools_attached_to_scene || !message.scene_root) {
+            return;
+        }
+        m_tools_attached_to_scene = true;
+        if (m_hud) {
+            m_hud->attach_to_scene(message.scene_root);
+        }
+        if (m_hotbar) {
+            m_hotbar->attach_to_scene(message.scene_root);
+        }
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+        if (m_app_context.OpenXR && m_headset_view) {
+            m_headset_view->attach_to_scene(message.scene_root, *m_mesh_memory.get());
+        }
+#endif
+    }
+
     void run_startup_script()
     {
         ERHE_PROFILE_FUNCTION();
@@ -2455,6 +2510,27 @@ public:
                 continue;
             }
 
+            // scene.create builds the (previously always-on) default scene: a
+            // Scene_root with the given name, registered and given its content-library
+            // and browser windows, and handed to Scene_builder so the scene.add_*
+            // commands can populate it. Put it FIRST in commands.json, before the
+            // add_* steps. Omitting it -- e.g. a load-only commands.json -- leaves no
+            // default scene, so only a loaded scene exists. Handled directly (not via
+            // the command registry) because it is editor-level scene lifecycle, not a
+            // Scene_commands building step.
+            if (name == "scene.create") {
+                std::string scene_name = "Default Scene";
+                if (has_args) {
+                    std::string_view name_sv;
+                    if (args_obj.find_field_unordered("name").get_string().get(name_sv) == simdjson::SUCCESS) {
+                        scene_name = std::string{name_sv};
+                    }
+                }
+                log_startup->info("commands.json: scene.create '{}'", scene_name);
+                create_default_scene(scene_name);
+                continue;
+            }
+
             erhe::commands::Command* command = m_commands->find_command(name);
             if (command == nullptr) {
                 log_startup->warn("commands.json: unknown command '{}'", name);
@@ -2470,6 +2546,20 @@ public:
                 (name == "scene.add_curved_shapes")   ||
                 (name == "scene.add_chain")           ||
                 (name == "scene.add_toruses");
+
+            // The scene.add_* commands populate the default scene through
+            // Scene_builder, which only has a scene_root after scene.create. Skip
+            // them with a clear warning otherwise, so a malformed commands.json
+            // (add before create, or a load-only script) cannot crash.
+            const bool needs_scene =
+                is_mesh_command ||
+                (name == "scene.add_cameras") ||
+                (name == "scene.add_lights")  ||
+                (name == "scene.add_room");
+            if (needs_scene && !m_default_scene) {
+                log_startup->warn("commands.json: '{}' needs a scene; run scene.create first (skipping)", name);
+                continue;
+            }
 
             if (is_mesh_command) {
                 Make_mesh_args args{};
@@ -2657,9 +2747,20 @@ public:
     // heap memory in steady-state frames (its std::string keeps capacity).
     erhe::geometry::Geogram_progress_state m_geogram_progress;
 
+    // Created at init (brushes are built into it by Scene_builder). The scene_root
+    // and its windows below are created later, by create_default_scene() when the
+    // scene.create startup command runs -- or stay null when commands.json only
+    // loads a scene.
+    std::shared_ptr<Content_library>        m_default_content_library;
     std::shared_ptr<Scene_root>             m_default_scene;
     std::shared_ptr<Content_library_window> m_default_content_library_window;
     std::shared_ptr<Item_tree_window>       m_default_scene_browser;
+
+    // Global tools (Hud / Hotbar / OpenXR Headset_view) live inside a scene, but no
+    // scene exists at init; this subscription attaches them to the first scene that
+    // is created or loaded. m_tools_attached_to_scene makes that happen exactly once.
+    erhe::message_bus::Subscription<Scene_created_message> m_scene_created_subscription;
+    bool                                    m_tools_attached_to_scene{false};
 
     // No dependencies (constructors)
     std::unique_ptr<erhe::commands::Commands      > m_commands;

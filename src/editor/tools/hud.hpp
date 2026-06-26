@@ -29,6 +29,7 @@ class Icon_set;
 class Quad_view;
 class Rendertarget_imgui_host;
 class Scene_builder;
+class Scene_root;
 class Tools;
 class Scene_views;
 
@@ -81,6 +82,11 @@ public:
 
     void imgui();
 
+    // Builds the scene-dependent Quad_view and parents it into the scene. The
+    // scene is created later (by the scene.create startup command), so this is
+    // called once a scene becomes available rather than at construction.
+    void attach_to_scene(const std::shared_ptr<Scene_root>& scene_root);
+
     // Public APi
     [[nodiscard]] auto get_rendertarget_imgui_viewport() const -> std::shared_ptr<Rendertarget_imgui_host>;
     auto toggle_mesh_visibility() -> bool;
@@ -110,6 +116,19 @@ private:
 
     std::weak_ptr<erhe::scene::Node>          m_drag_node;
     bool                                      m_mesh_visible{true};
+
+    // Stored at construction so the scene-dependent Quad_view can be built later
+    // in attach_to_scene() once a scene exists (the scene.create startup command
+    // creates it after all parts are constructed).
+    erhe::graphics::Device*            m_graphics_device{nullptr};
+    erhe::imgui::Imgui_renderer*       m_imgui_renderer {nullptr};
+    erhe::rendergraph::Rendergraph*    m_rendergraph    {nullptr};
+    erhe::scene_renderer::Mesh_memory* m_mesh_memory    {nullptr};
+    Headset_view*                      m_headset_view   {nullptr};
+    App_windows*                       m_app_windows    {nullptr};
+    int   m_width {0};
+    int   m_height{0};
+    float m_ppm   {0.0f};
 
     std::unique_ptr<Quad_view>                m_quad_view;
     glm::mat4                                 m_world_from_hud{1.0f};

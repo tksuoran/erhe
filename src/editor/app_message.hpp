@@ -77,6 +77,15 @@ struct Open_scene_message
     std::shared_ptr<Scene_root> scene_root{};
 };
 
+// Published when a scene_root is first created and registered -- by the
+// scene.create startup command, or by loading a scene file. Global editor tools
+// that must live inside a scene (Hud, Hotbar, the OpenXR Headset_view) build
+// their scene content the first time this fires, since no scene exists at init.
+struct Scene_created_message
+{
+    std::shared_ptr<Scene_root> scene_root{};
+};
+
 struct Load_scene_file_message
 {
     std::filesystem::path path{};

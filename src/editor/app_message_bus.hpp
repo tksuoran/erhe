@@ -25,6 +25,7 @@ public:
     erhe::message_bus::Message_bus<Node_touched_message,          sync>  node_touched;
     erhe::message_bus::Message_bus<Mesh_geometry_changed_message, sync>  mesh_geometry_changed;
     erhe::message_bus::Message_bus<Open_scene_message,            sync>  open_scene;
+    erhe::message_bus::Message_bus<Scene_created_message,         sync>  scene_created;
     erhe::message_bus::Message_bus<Load_scene_file_message,       queue> load_scene_file;
     erhe::message_bus::Message_bus<Tool_select_message,           sync>  tool_select;
     erhe::message_bus::Message_bus<Render_scene_view_message,     sync>  render_scene_view;

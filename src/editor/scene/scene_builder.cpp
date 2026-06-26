@@ -78,7 +78,7 @@ using glm::vec4;
 Scene_builder::Scene_builder(
     const Scene_config&                scene_config,
     const bool                         enable_post_processing,
-    std::shared_ptr<Scene_root>        scene,
+    std::shared_ptr<Content_library>   content_library,
     tf::Executor&                      executor,
     App_context&                       context,
     App_settings&                      app_settings,
@@ -89,7 +89,10 @@ Scene_builder::Scene_builder(
     , m_enable_post_processing{enable_post_processing}
 {
     ERHE_PROFILE_FUNCTION();
-    m_scene_root = scene;
+    // The scene_root is assigned later via set_scene_root() (the scene.create
+    // startup command builds it); only the content library -- into which the
+    // brushes are built below -- is needed at construction time.
+    m_content_library = content_library;
 
     ERHE_VERIFY(context.current_command_buffer != nullptr);
 
@@ -235,7 +238,7 @@ auto Scene_builder::make_brush(Content_library_node& folder, Brush_data&& brush_
 {
     // TODO This is very crude locking.
     //      We could be able to do more in parallel - check if we can do more fine grained locking.
-    const std::shared_ptr<Content_library>& content_library = m_scene_root->get_content_library();
+    const std::shared_ptr<Content_library>& content_library = m_content_library;
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
 
     return folder.make<Brush>(brush_create_info);
@@ -650,7 +653,7 @@ void Scene_builder::make_json_brushes(
 
 auto Scene_builder::get_brushes() -> Content_library_node&
 {
-    auto content_library = m_scene_root->get_content_library();
+    auto content_library = m_content_library;
     return *(content_library->brushes.get());
 }
 
@@ -896,7 +899,7 @@ void Scene_builder::add_torus_chain(const Make_mesh_config& config, bool connect
     const float major_radius = 1.0f  * config.object_scale;
     const float minor_radius = 0.25f * config.object_scale;
 
-    auto&       material_library = m_scene_root->get_content_library()->materials;
+    auto&       material_library = m_content_library->materials;
     const auto& materials        = material_library->get_all<erhe::primitive::Material>();
     std::size_t material_index   = 0;
 
@@ -1035,7 +1038,7 @@ void Scene_builder::make_mesh_nodes(const Make_mesh_config& config, std::vector<
     {
         ERHE_PROFILE_SCOPE("make instances");
 
-        auto&       material_library = m_scene_root->get_content_library()->materials;
+        auto&       material_library = m_content_library->materials;
         const auto& materials        = material_library->get_all<erhe::primitive::Material>();
         std::size_t material_index   = 0;
 
@@ -1140,7 +1143,7 @@ void Scene_builder::add_cubes(glm::ivec3 shape, float scale, float gap)
 
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
 
-    auto& material_library = m_scene_root->get_content_library()->materials;
+    auto& material_library = m_content_library->materials;
     auto material = material_library->make<erhe::primitive::Material>(
         erhe::primitive::Material_create_info{
             .name = "cube",
@@ -1514,6 +1517,11 @@ auto Scene_builder::get_scene_root() const -> std::shared_ptr<Scene_root>
     return m_scene_root;
 }
 
+void Scene_builder::set_scene_root(const std::shared_ptr<Scene_root>& scene_root)
+{
+    m_scene_root = scene_root;
+}
+
 void Scene_builder::register_floor_resources(
     const std::shared_ptr<Brush>&                           brush,
     const std::shared_ptr<erhe::physics::ICollision_shape>& collision_shape,
@@ -1535,7 +1543,7 @@ void Scene_builder::register_floor_resources(
     }
 
     if (material && m_scene_root) {
-        const std::shared_ptr<Content_library>& content_library = m_scene_root->get_content_library();
+        const std::shared_ptr<Content_library>& content_library = m_content_library;
         if (content_library && content_library->materials) {
             std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
             content_library->materials->add(material);
@@ -1566,7 +1574,7 @@ void Scene_builder::unregister_floor_resources(
     }
 
     if (material && m_scene_root) {
-        const std::shared_ptr<Content_library>& content_library = m_scene_root->get_content_library();
+        const std::shared_ptr<Content_library>& content_library = m_content_library;
         if (content_library && content_library->materials) {
             std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
             content_library->materials->remove(material);

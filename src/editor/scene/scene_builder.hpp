@@ -57,6 +57,7 @@ namespace editor {
 
 class Brush;
 class Brush_data;
+class Content_library;
 class Content_library_node;
 class Depth_visualization_window;
 class App_context;
@@ -80,7 +81,7 @@ public:
     Scene_builder(
         const Scene_config&                scene_config,
         bool                               enable_post_processing,
-        std::shared_ptr<Scene_root>        scene,
+        std::shared_ptr<Content_library>   content_library,
         tf::Executor&                      executor,
         App_context&                       app_context,
         App_settings&                      app_settings,
@@ -90,6 +91,12 @@ public:
 
     // Public API
     [[nodiscard]] auto get_scene_root() const -> std::shared_ptr<Scene_root>;
+
+    // The Scene_root is created later (by the scene.create startup command,
+    // not at editor init), so Scene_builder is constructed with only the
+    // content library (brushes are built into it eagerly) and the scene_root
+    // is assigned here once it exists. The add_* methods require it to be set.
+    void set_scene_root(const std::shared_ptr<Scene_root>& scene_root);
 
     void add_cameras        (const Add_cameras_args& args);
     void add_room           (const Add_room_args&    args);
@@ -224,6 +231,11 @@ private:
     float m_mass_scale    {1.0f};
     int   m_detail        {4};
     bool  m_brushes_built {false};
+
+    // Content library holds the brushes/materials and outlives any scene_root.
+    // Set at construction; the scene_root below is assigned later by
+    // set_scene_root() once the scene.create startup command builds it.
+    std::shared_ptr<Content_library>     m_content_library;
 
     // Output
     std::shared_ptr<Scene_root>          m_scene_root;

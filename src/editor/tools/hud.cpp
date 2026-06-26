@@ -110,9 +110,18 @@ Hud::Hud(
 {
     ERHE_PROFILE_FUNCTION();
 
-    int   width  = hud_config.width;
-    int   height = hud_config.height;
-    float ppm    = hud_config.ppm;
+    // Stored for the deferred attach_to_scene(): the scene-dependent Quad_view is
+    // built there once a scene exists (the scene.create startup command creates
+    // the scene after all parts are constructed), not at construction time.
+    m_graphics_device = &graphics_device;
+    m_imgui_renderer  = &imgui_renderer;
+    m_rendergraph     = &rendergraph;
+    m_mesh_memory     = &mesh_memory;
+    m_headset_view    = &headset_view;
+    m_app_windows     = &app_windows;
+    m_width           = hud_config.width;
+    m_height          = hud_config.height;
+    m_ppm             = hud_config.ppm;
 
     m_enabled = hud_config.enabled;
     m_x       = hud_config.x;
@@ -146,24 +155,38 @@ Hud::Hud(
     static_cast<void>(headset_view);
 #endif
 
-    // App_context pointers are not yet initialized during part construction, so
-    // Quad_view is given the resources explicitly (current_command_buffer is the
-    // init command buffer, populated before parts are constructed).
-    ERHE_VERIFY(app_context.current_command_buffer != nullptr);
-    auto scene_root = scene_builder.get_scene_root();
+    // The scene-dependent Quad_view is built later in attach_to_scene(), once the
+    // scene.create startup command has created a scene (see Phase-3 wiring).
+
+    m_hover_scene_view_subscription = app_message_bus.hover_scene_view.subscribe(
+        [&](Hover_scene_view_message& message) {
+            Tool::on_message(message);
+        }
+    );
+}
+
+void Hud::attach_to_scene(const std::shared_ptr<Scene_root>& scene_root)
+{
+    if (!m_enabled) {
+        return;
+    }
+
+    // current_command_buffer is the init command buffer during the startup script,
+    // or the per-frame buffer when a scene is loaded later; either is valid here.
+    ERHE_VERIFY(m_context.current_command_buffer != nullptr);
     ERHE_VERIFY(scene_root);
     m_quad_view = std::make_unique<Quad_view>(
-        app_context,
-        graphics_device,
-        *app_context.current_command_buffer,
-        mesh_memory,
-        imgui_renderer,
-        rendergraph,
+        m_context,
+        *m_graphics_device,
+        *m_context.current_command_buffer,
+        *m_mesh_memory,
+        *m_imgui_renderer,
+        *m_rendergraph,
         *scene_root,
-        &headset_view,
-        width,
-        height,
-        ppm,
+        m_headset_view,
+        m_width,
+        m_height,
+        m_ppm,
         "Hud Viewport",
         true
     );
@@ -195,10 +218,10 @@ Hud::Hud(
     // try to record into the device cb after Xr_session::render_frame
     // already submitted the frame, asserting in
     // Device_impl::acquire_shared_command_buffer.
-    if (app_context.OpenXR) {
-        erhe::rendergraph::Rendergraph_node* headset_node = headset_view.get_rendergraph_node();
+    if (m_context.OpenXR) {
+        erhe::rendergraph::Rendergraph_node* headset_node = m_headset_view->get_rendergraph_node();
         if (headset_node != nullptr) {
-            rendergraph.connect(
+            m_rendergraph->connect(
                 erhe::rendergraph::Rendergraph_node_key::rendertarget_texture,
                 host,
                 headset_node
@@ -208,18 +231,12 @@ Hud::Hud(
 #endif
 
     host->set_begin_callback(
-        [&app_windows](erhe::imgui::Imgui_host& imgui_host) {
-            app_windows.viewport_menu(imgui_host);
+        [this](erhe::imgui::Imgui_host& imgui_host) {
+            m_app_windows->viewport_menu(imgui_host);
         }
     );
 
     set_mesh_visibility(true);
-
-    m_hover_scene_view_subscription = app_message_bus.hover_scene_view.subscribe(
-        [&](Hover_scene_view_message& message) {
-            Tool::on_message(message);
-        }
-    );
 }
 
 Hud::~Hud() noexcept = default;

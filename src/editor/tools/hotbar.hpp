@@ -127,6 +127,11 @@ public:
     );
     ~Hotbar() noexcept;
 
+    // Builds the scene-dependent radial menu into the scene. The scene is created
+    // later (by the scene.create startup command), so this is called once a scene
+    // becomes available rather than at construction.
+    void attach_to_scene       (const std::shared_ptr<Scene_root>& scene_root);
+
     void get_all_tools();
     void set_slots             (const std::vector<Slot_entry>& slots);
     void rebuild_if_needed     ();
@@ -178,6 +183,9 @@ private:
 #endif
 
     Headset_view*                                   m_headset_view{nullptr};
+    // Stored at construction so the scene-dependent radial menu can be built later
+    // in attach_to_scene() once a scene exists.
+    erhe::scene_renderer::Mesh_memory*              m_mesh_memory{nullptr};
     erhe::rendergraph::Rendergraph_node*            m_connected_consumer_node{nullptr};
 
     std::unique_ptr<Quad_view>                      m_quad_view;

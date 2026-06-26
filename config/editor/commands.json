@@ -1,6 +1,12 @@
 {
     "commands": [
         {
+            "name": "scene.create",
+            "args": {
+                "name": "Default Scene"
+            }
+        },
+        {
             "name": "scene.add_cameras",
             "args": {
                 "camera_exposure": 1,
