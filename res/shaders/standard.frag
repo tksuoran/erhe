@@ -228,10 +228,10 @@ void main()
 #if !defined(ERHE_VARIANT_POSITION_PASS)
 #if defined(ERHE_EDGE_LINES_FROM_ID)
     // Sample the face-ID buffer rendered earlier this frame at this fragment's
-    // own pixel (texelFetch: exact, no filtering). If the stored edge face id
-    // equals this fragment's face id, this pixel is on this face's edge -> paint
-    // the edge-line color at the fill's exact depth (no separate line geometry,
-    // hence no Z-fight). Otherwise fall through to the normal lit fill.
+    // own pixel (texelFetch: exact, no filtering) and paint the edge-line color
+    // at the fill's exact depth (no separate line geometry, hence no Z-fight)
+    // where it holds a valid edge id for this visible surface. Otherwise fall
+    // through to the normal lit fill.
     {
         uvec2 edge_id_tex = camera.cameras[c_view_index].edge_id_texture;
         vec2  vp_offset   = camera.cameras[c_view_index].viewport.xy;
@@ -247,7 +247,20 @@ void main()
                 uint edge_id    = (uint(edge_texel.r * 255.0 + 0.5) << 16) |
                                   (uint(edge_texel.g * 255.0 + 0.5) <<  8) |
                                    uint(edge_texel.b * 255.0 + 0.5);
-                if ((v_edge_face_id != 0u) && (edge_id == v_edge_face_id)) {
+                // Accept BOTH face ids the edge uses: this fragment's own facet
+                // (edge_id == v_edge_face_id) AND the adjacent facet that shares the
+                // edge. The seed pre-pass masks the edge-id buffer to the FRONTMOST
+                // VISIBLE face per pixel, so any non-zero value here is necessarily
+                // an edge of THIS visible surface -- either this fragment's own
+                // facet, or, at the 1px crease between the two edge half-quads where
+                // the fill's rasterized face and the edge-id pass's face disagree,
+                // the other facet of the same edge. Accepting the non-matching case
+                // closes that seam without painting any unrelated face's edge (the
+                // seed mask already discarded occluded / wrong-cap ids from the
+                // buffer). v_edge_face_id must be non-zero too: an unregistered fill
+                // mesh (base 0) has no edges, and the seed leaves background /
+                // unregistered occluders at id 0.
+                if ((v_edge_face_id != 0u) && (edge_id != 0u)) {
                     out_color = camera.cameras[c_view_index].edge_line_color;
                     return;
                 }
