@@ -227,6 +227,12 @@ void main()
 // variant does not pull them in.
 #if !defined(ERHE_VARIANT_POSITION_PASS)
 #if defined(ERHE_EDGE_LINES_FROM_ID)
+    // Sub-pixel coverage of this fragment by the ID-buffer edge line. Captured here
+    // and applied at the END of main() as mix(lit_fill, edge_line_color, edge_coverage),
+    // so the band's outer edge is anti-aliased against the lit surface instead of a hard
+    // 1px step. A fully covered fragment short-circuits to pure edge color below (skipping
+    // the lit fill, preserving the pre-AA behaviour and its lighting-skip optimization).
+    float edge_coverage = 0.0;
     // Sample the face-ID buffer rendered earlier this frame at this fragment's
     // own pixel (texelFetch: exact, no filtering) and paint the edge-line color
     // at the fill's exact depth (no separate line geometry, hence no Z-fight)
@@ -261,8 +267,17 @@ void main()
                 // mesh (base 0) has no edges, and the seed leaves background /
                 // unregistered occluders at id 0.
                 if ((v_edge_face_id != 0u) && (edge_id != 0u)) {
-                    out_color = camera.cameras[c_view_index].edge_line_color;
-                    return;
+                    // alpha carries the sub-pixel capsule coverage written by the
+                    // edge-id pass (content_line_after_compute.frag); rgb is the id.
+                    edge_coverage = edge_texel.a;
+                    if (edge_coverage >= 0.996) {
+                        // Fully inside the band: pure edge color, skip the lit fill
+                        // (matches the pre-AA behaviour and its lighting-skip).
+                        out_color = camera.cameras[c_view_index].edge_line_color;
+                        return;
+                    }
+                    // Partial coverage (the ~1px boundary fringe): fall through to the
+                    // lit fill; the deferred mix at the end of main() composites it.
                 }
             }
         }
@@ -809,6 +824,16 @@ void main()
         float wire       = 1.0 - min(min(edge_a.x, edge_a.y), edge_a.z);
         float wire_alpha = wire * v_wire_color.a;
         out_color.rgb    = mix(out_color.rgb, srgb_to_linear(v_wire_color.rgb), wire_alpha);
+    }
+#endif
+
+#if defined(ERHE_EDGE_LINES_FROM_ID)
+    // Anti-aliased band edge: composite the edge-line color over the lit fill by the
+    // sub-pixel coverage captured at the top of main(). Fully covered fragments already
+    // returned pure edge color; here only the ~1px boundary fringe (0 < coverage < 1)
+    // is blended, smoothing the band's outer edge against the MSAA-smooth surface.
+    if (edge_coverage > 0.0) {
+        out_color.rgb = mix(out_color.rgb, camera.cameras[c_view_index].edge_line_color.rgb, edge_coverage);
     }
 #endif
 #endif

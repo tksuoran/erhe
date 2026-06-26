@@ -300,10 +300,38 @@ void do_wide_line(uint view_index, uint in_line_index, uint out_triangle_index)
         vec2 side_in_screen  = vec2(-axis_in_screen.y, axis_in_screen.x);
         vec2 axis_in_ndc     = ndc_from_screen_direction(axis_in_screen, vp_size);
         vec2 side_in_ndc     = ndc_from_screen_direction(side_in_screen, vp_size);
-        vec2 offset_a_in_ndc = ( side_in_ndc - axis_in_ndc) * width0;
-        vec2 offset_b_in_ndc = ( side_in_ndc + axis_in_ndc) * width1;
-        vec2 offset_c_in_ndc = (-side_in_ndc + axis_in_ndc) * width1;
-        vec2 offset_d_in_ndc = (-side_in_ndc - axis_in_ndc) * width0;
+        // Perpendicular AA headroom for the ID path. The edge-id fragment shader
+        // (content_line_after_compute.frag, seed-mask path) writes a capsule-SDF
+        // coverage = clamp(half_width - dist + 0.5, 0, 1) with half_width = width0 * 0.5
+        // (the on-screen perpendicular half-extent), so the coverage ramp reaches 0 at
+        // screen dist == half_width + 0.5 px. With Stage-1 geometry (perpendicular extent
+        // == half_width) the ramp is hard-clipped by the rasterized edge at ~0.5 coverage
+        // -> only half-amplitude AA. Widen the SIDE (perpendicular) component so the ramp
+        // completes (1 -> 0) inside the geometry and the hard geometry edge falls in a
+        // coverage-0 (discarded) region -> full AA.
+        //
+        // UNITS: side0/side1 are in width0 units; the on-screen perpendicular extent is
+        // HALF of that, because side_in_ndc = side_in_screen / vp_size while screen_from_ndc
+        // maps an NDC direction back as ndc * 0.5 * vp_size (the 0.5 / factor-of-2 NDC<->px
+        // round trip). So screen extent = side0 * 0.5 px = half_width + aa_margin * 0.5.
+        // To reach the ramp end (half_width + 0.5) the margin must be >= 1.0; aa_margin = 2.0
+        // adds ~1.0 screen px, i.e. ~0.5 px of coverage-0 headroom past the ramp end so the
+        // hard geometry edge is reliably invisible. The AXIS (along-edge) component and the
+        // carried half-width .w in emit_quad stay width0/width1, so the VISIBLE line width is
+        // unchanged (the frag's coverage uses the carried v_line_width, not the geometry
+        // extent). The color path (id_mode == 0) is left untouched -- widening it would
+        // change the drawn line width.
+        float side0 = width0;
+        float side1 = width1;
+        if (view.id_mode != 0u) {
+            const float aa_margin = 2.0; // width0 units; ~1.0 screen px (covers the 1px ramp + headroom)
+            side0 += aa_margin;
+            side1 += aa_margin;
+        }
+        vec2 offset_a_in_ndc = ( side_in_ndc * side0 - axis_in_ndc * width0);
+        vec2 offset_b_in_ndc = ( side_in_ndc * side1 + axis_in_ndc * width1);
+        vec2 offset_c_in_ndc = (-side_in_ndc * side1 + axis_in_ndc * width1);
+        vec2 offset_d_in_ndc = (-side_in_ndc * side0 - axis_in_ndc * width0);
 
         // a, b on the +side of the edge; c, d on the -side.
         vec2 a_in_ndc = v0_in_ndc.xy + offset_a_in_ndc;

@@ -59,6 +59,39 @@ void main(void)
     vec2  projection = start + clamp(t, 0.0, 1.0) * line;
     vec2  delta      = frag_xy - projection;
     float d2         = dot(delta, delta);
+
+#ifdef ERHE_CONTENT_LINE_SEED_MASK
+    // ID-buffer edge-line path: write a sub-pixel CAPSULE-SDF COVERAGE into the
+    // edge-id buffer's alpha channel; the rgb keeps the exact 24-bit face id. The
+    // fill (standard.frag ERHE_EDGE_LINES_FROM_ID) samples this alpha and mixes the
+    // edge color by it, anti-aliasing the band's outer edge from this single-sample
+    // buffer with no MSAA on the buffer and no extra attachment.
+    //
+    // d2 is the squared distance to the edge CENTERLINE segment (perpendicular in the
+    // body, to-endpoint in the caps), so sqrt(d2) is a true capsule distance field --
+    // unlike the color path's k/end_weight, whose body term is forced to 1.0 and so
+    // leaves the band's long outer edge defined by the hard half-quad geometry edge
+    // (the source of the dense-mesh noise).
+    //
+    // The half-width is v_line_width * 0.5, NOT v_line_width: the on-screen perpendicular
+    // half-extent of the band geometry is width0 * 0.5 px. The compute shader offsets each
+    // outer corner by side_in_ndc * width0 where side_in_ndc = side_in_screen / vp_size,
+    // and screen_from_ndc maps an NDC *direction* back to screen as ndc * 0.5 * vp_size --
+    // so the round trip carries a factor of 0.5 (NDC spans 2 over vp_size px). v_line_width
+    // is width0 (the carried .w), hence the true screen half-width is v_line_width * 0.5.
+    // This matches the color path's radius (s = (v_line_width*0.5)^2 below), so the visible
+    // line width is identical; the 50%-coverage contour sits exactly at the old hard edge.
+    // +0.5 gives a ~1px coverage ramp straddling the half-width.
+    //
+    // rgb is NOT premultiplied by coverage: this pass draws with blend disabled, so the
+    // stored rgb must stay bit-exact for the fill's integer id decode.
+    float half_width = v_line_width * 0.5;
+    float coverage   = clamp(half_width - sqrt(d2) + 0.5, 0.0, 1.0);
+    if (coverage <= 0.0) {
+        discard;
+    }
+    out_color = vec4(v_color.rgb, coverage);
+#else
     float s          = v_line_width * v_line_width * 0.25;
     float k          = clamp(s - d2, 0.0, 1.0);
     float end_weight = step(abs(t * 2.0 - 1.0), 1.0);
@@ -68,4 +101,5 @@ void main(void)
         discard;
     }
     out_color = vec4(v_color.rgb * v_color.a, v_color.a);
+#endif
 }
