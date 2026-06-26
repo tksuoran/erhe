@@ -456,14 +456,15 @@ void Content_wide_line_compute_renderer::render(
         return;
     }
 
-    // Wide-line ribbons are screen-facing thin geometry whose triangle winding
-    // is not a meaningful front/back face: the tent's two half-quads fold at the
-    // edge crease and depth-displace onto different planes, so no single winding
-    // survives backface culling (RenderDoc shows every tent triangle culled when
-    // the caller's solid-mesh cull state is honoured). Disable culling for the
-    // wide-line draw (matching Debug_renderer's cull_mode_none); the simpler quad
-    // path is unaffected (a correctly-wound quad renders the same with culling
-    // off). Other rasterization settings (depth clamp, polygon mode) are kept.
+    // Culling is disabled for the wide-line draw (both the tent and simple-quad
+    // paths). The compute shader's tent path emits two screen-space half-quads per
+    // edge -- one per adjacent face, each on its own face plane -- whose projected
+    // winding encodes the placement side, not the face's 3D facing, so hardware
+    // back-face culling cannot select front vs back (at a silhouette both half-quads
+    // land on the same side with the same winding). The front face is instead selected
+    // in the compute shader by an explicit per-face world-space facing test, which
+    // collapses the back face's half-quad (see compute_before_content_line.comp).
+    // Other rasterization settings (depth clamp, polygon mode) are kept from the caller.
     erhe::graphics::Rasterization_state rasterization = pipeline_state.data.rasterization;
     rasterization.face_cull_enable = false;
 

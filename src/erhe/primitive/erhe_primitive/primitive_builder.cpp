@@ -1058,10 +1058,12 @@ void Build_context::build_edge_lines()
     }
 
     // Edge-line vertex data feeds Content_wide_line_renderer's compute
-    // expansion. Two vec4s per edge endpoint (position + per-edge face normal;
-    // normal.w on endpoint 0 carries the interior-tangent sign) matching the
-    // compute shader's edge_line_vertex SSBO struct. The buffer range itself is
-    // allocated up front by Build_context_root::allocate_edge_line_vertex_buffer().
+    // expansion. Two vec4s per edge endpoint (position + per-edge face normal)
+    // matching the compute shader's edge_line_vertex SSBO struct. position.w packs
+    // the adjacent facet id; normal.w packs two per-face signs (its sign = the
+    // interior-tangent sign, its magnitude = the edge-traversal winding tdir; see
+    // the pack site below). The buffer range itself is allocated up front by
+    // Build_context_root::allocate_edge_line_vertex_buffer().
     const bool has_edge_line_vertex_buffer = (root.buffer_mesh.edge_line_vertex_buffer_range.count > 0);
     std::vector<uint8_t> edge_line_vertex_data;
     const std::size_t    vertex_element_size = 8 * sizeof(float); // vec4 position + vec4 normal
@@ -1089,7 +1091,19 @@ void Build_context::build_edge_lines()
     // adjacency from the raw GEO::Mesh by walking every facet's consecutive
     // corner pairs (same construction as erhe::geometry::Geometry's
     // m_edge_to_facets). Cold path: runs once per mesh at build time.
-    std::unordered_map<uint64_t, std::pair<GEO::index_t, GEO::index_t>> edge_to_facets;
+    // Per shared edge: the (up to two) adjacent facets AND the direction each
+    // facet walks the edge in its own corner loop (forward = lo -> hi). That
+    // traversal direction is the face's winding at the edge; the wide-line compute
+    // shader needs it to decide front/back the SAME way the rasterizer culls the
+    // polygon fill (projected signed area), instead of a normal-vs-view dot that
+    // assumes outward normals and misclassifies at grazing silhouettes.
+    class Edge_facets
+    {
+    public:
+        GEO::index_t facet  [2]{GEO::NO_INDEX, GEO::NO_INDEX};
+        bool         forward[2]{false, false}; // facet[i] walks the edge lo -> hi
+    };
+    std::unordered_map<uint64_t, Edge_facets> edge_to_facets;
     if (has_edge_line_vertex_buffer) {
         for (GEO::index_t facet : root.mesh.facets) {
             const GEO::index_t facet_corner_count = root.mesh.facets.nb_corners(facet);
@@ -1101,13 +1115,14 @@ void Build_context::build_edge_lines()
                 const GEO::index_t lo          = (va < vb) ? va : vb;
                 const GEO::index_t hi          = (va < vb) ? vb : va;
                 const uint64_t     key         = (static_cast<uint64_t>(lo) << 32) | static_cast<uint64_t>(hi);
-                std::pair<GEO::index_t, GEO::index_t>& facets = edge_to_facets.try_emplace(
-                    key, std::pair<GEO::index_t, GEO::index_t>{GEO::NO_INDEX, GEO::NO_INDEX}
-                ).first->second;
-                if (facets.first == GEO::NO_INDEX) {
-                    facets.first = facet;
-                } else if ((facets.second == GEO::NO_INDEX) && (facet != facets.first)) {
-                    facets.second = facet;
+                const bool         forward     = (va == lo); // this facet walks lo -> hi
+                Edge_facets&       facets      = edge_to_facets.try_emplace(key, Edge_facets{}).first->second;
+                if (facets.facet[0] == GEO::NO_INDEX) {
+                    facets.facet[0]   = facet;
+                    facets.forward[0] = forward;
+                } else if ((facets.facet[1] == GEO::NO_INDEX) && (facet != facets.facet[0])) {
+                    facets.facet[1]   = facet;
+                    facets.forward[1] = forward;
                 }
             }
         }
@@ -1146,29 +1161,58 @@ void Build_context::build_edge_lines()
             const uint64_t     edge_key  = (static_cast<uint64_t>(edge_lo) << 32) | static_cast<uint64_t>(edge_hi);
             GEO::index_t       facet_a   = GEO::NO_INDEX;
             GEO::index_t       facet_b   = GEO::NO_INDEX;
+            bool               fwd_a     = false;
+            bool               fwd_b     = false;
             const auto         facets_it = edge_to_facets.find(edge_key);
             if (facets_it != edge_to_facets.end()) {
-                facet_a = facets_it->second.first;
-                facet_b = facets_it->second.second;
+                facet_a = facets_it->second.facet[0];
+                facet_b = facets_it->second.facet[1];
+                fwd_a   = facets_it->second.forward[0];
+                fwd_b   = facets_it->second.forward[1];
             }
+            // Edge-traversal winding tdir per face, relative to the SSBO endpoint
+            // order (mesh_vertex_a -> mesh_vertex_b): +1 if the face walks the edge
+            // in that same order, -1 if reversed. (forward[] is lo -> hi; the SSBO
+            // order is lo -> hi iff mesh_vertex_a < mesh_vertex_b.)
+            const bool a_to_b_is_lo_to_hi = (mesh_vertex_a < mesh_vertex_b);
 
             GEO::vec3f normal_a = fb_normal_a;
             GEO::vec3f normal_b = fb_normal_b;
             float      sign_a   = 0.0f;
+            float      sign_b   = 0.0f;
+            float      tdir_a   = 0.0f; // edge-traversal winding (+/-1), 0 if facet-less
+            float      tdir_b   = 0.0f;
             if (facet_a != GEO::NO_INDEX) {
                 normal_a = GEO::normalize(mesh_facet_normalf(root.mesh, facet_a));
+                const GEO::vec3f edge_dir      = pos_b - pos_a;
+                const GEO::vec3f edge_mid      = 0.5f * (pos_a + pos_b);
                 // Interior-tangent sign for face A: sign so that
                 // sign_a * cross(normal_a, edge_dir) points from the edge
                 // midpoint toward face A's centroid.
-                const GEO::vec3f edge_dir      = pos_b - pos_a;
                 const GEO::vec3f tangent_a     = GEO::cross(normal_a, edge_dir);
                 const GEO::vec3f center_a      = mesh_facet_centerf(root.mesh, facet_a);
-                const GEO::vec3f edge_mid      = 0.5f * (pos_a + pos_b);
                 const GEO::vec3f to_interior_a = center_a - edge_mid;
                 sign_a = (GEO::dot(tangent_a, to_interior_a) >= 0.0f) ? 1.0f : -1.0f;
-                normal_b = (facet_b != GEO::NO_INDEX)
-                    ? GEO::normalize(mesh_facet_normalf(root.mesh, facet_b))
-                    : normal_a;
+                tdir_a = (fwd_a == a_to_b_is_lo_to_hi) ? 1.0f : -1.0f;
+                if (facet_b != GEO::NO_INDEX) {
+                    normal_b = GEO::normalize(mesh_facet_normalf(root.mesh, facet_b));
+                    // Interior-tangent sign for face B, computed the SAME way from
+                    // face B's own centroid. The compute shader needs each face's
+                    // true interior side to place its half-quad: at a silhouette
+                    // edge both interiors project to the same screen side, which
+                    // only a per-face sign (not a heuristic) gets right.
+                    const GEO::vec3f tangent_b     = GEO::cross(normal_b, edge_dir);
+                    const GEO::vec3f center_b      = mesh_facet_centerf(root.mesh, facet_b);
+                    const GEO::vec3f to_interior_b = center_b - edge_mid;
+                    sign_b = (GEO::dot(tangent_b, to_interior_b) >= 0.0f) ? 1.0f : -1.0f;
+                    tdir_b = (fwd_b == a_to_b_is_lo_to_hi) ? 1.0f : -1.0f;
+                } else {
+                    // Boundary edge (one facet): face B reuses face A's plane on the
+                    // opposite interior side, so the two half-quads form a full ribbon.
+                    normal_b = normal_a;
+                    sign_b   = -sign_a;
+                    tdir_b   = -tdir_a;
+                }
             }
 
             // Per-endpoint adjacent facet id for the ID-buffer edge-line method
@@ -1184,8 +1228,17 @@ void Build_context::build_edge_lines()
                                 : (facet_a != GEO::NO_INDEX) ? static_cast<uint32_t>(facet_a)
                                 : 0u;
 
-            const float data_a[8] = { pos_a.x, pos_a.y, pos_a.z, static_cast<float>(id_a), normal_a.x, normal_a.y, normal_a.z, sign_a };
-            const float data_b[8] = { pos_b.x, pos_b.y, pos_b.z, static_cast<float>(id_b), normal_b.x, normal_b.y, normal_b.z, 0.0f   };
+            // Pack BOTH per-face signs into normal.w: its SIGN carries the
+            // interior-tangent sign (sign_a/sign_b, +/-1), its MAGNITUDE carries the
+            // edge-traversal winding tdir (tdir > 0 -> 1, tdir < 0 -> 2). Exact in
+            // fp32 (values are +/-1 or +/-2). The tent wide-line path decodes both;
+            // the simple-quad and geometry-shader backends read only normal.xyz, so
+            // the packed .w does not affect them. A facet-less edge keeps sign 0 ->
+            // packed 0 -> the shader's degenerate-frame path.
+            const float packed_w_a = sign_a * ((tdir_a < 0.0f) ? 2.0f : 1.0f);
+            const float packed_w_b = sign_b * ((tdir_b < 0.0f) ? 2.0f : 1.0f);
+            const float data_a[8] = { pos_a.x, pos_a.y, pos_a.z, static_cast<float>(id_a), normal_a.x, normal_a.y, normal_a.z, packed_w_a };
+            const float data_b[8] = { pos_b.x, pos_b.y, pos_b.z, static_cast<float>(id_b), normal_b.x, normal_b.y, normal_b.z, packed_w_b };
             memcpy(edge_line_vertex_data.data() + edge_vertex_write_offset, data_a, vertex_element_size);
             edge_vertex_write_offset += vertex_element_size;
             memcpy(edge_line_vertex_data.data() + edge_vertex_write_offset, data_b, vertex_element_size);

@@ -125,6 +125,65 @@ float clamp_toward_camera(float plane_z, float ref_z, float max_forward, float c
     return ref_z + deviation * toward;
 }
 
+// NDC depth of a ribbon corner on a face plane, with the toward-camera clamp and
+// the surface-line lift applied (shared by both per-face full quads of an edge).
+float corner_z(vec4 pi, vec2 xy, float base_z, float clampv, float liftv, float cdd)
+{
+    float z = surface_plane_ndc_depth(pi, xy, base_z);
+    z = clamp_toward_camera(z, base_z, clampv, cdd);
+    z -= liftv * cdd;
+    return z;
+}
+
+// Emit a ribbon half-quad (trapezoid q0,q1,q2,q3: q0-q1 the crease edge on the
+// shared mesh edge, q3-q2 the outer edge on the face's interior side) as two
+// triangles into slots base..base+5. `keep` is this face's front-facing flag: when
+// false (face back-facing) the quad is collapsed to a degenerate (zero-area) pair
+// so it is not rasterized.
+//
+// Selecting the surviving half-quad by an explicit per-face FRONT/BACK test -- not
+// by depth, and not by hardware culling of the screen-space winding -- is what
+// makes silhouette edges robust. At a silhouette the two adjacent faces GRAZE, so
+// (1) their surface planes nearly coincide => a depth test z-fights and the back
+// face can win the visible pixels, and (2) both half-quads land on the same screen
+// side with the same drawn winding => hardware back-face culling cannot tell them
+// apart. The front/back test is the PROJECTED SIGNED AREA the rasterizer itself
+// uses to cull the polygon fill (see do_wide_line), so it agrees with the fill edge
+// for edge and stays correct at grazing angles. cull_none stays on; only the front
+// face's half-quad is emitted at a silhouette (no overlap to resolve), and at an
+// interior edge both faces are front so both are kept (their half-quads sit on
+// opposite sides, also no overlap).
+void emit_quad(uint base, vec4 q0, vec4 q1, vec4 q2, vec4 q3, vec4 col, vec4 lscreen, bool keep)
+{
+    vec4 q1k = keep ? q1 : q0;
+    vec4 q2k = keep ? q2 : q0;
+    vec4 q3k = keep ? q3 : q0;
+    vec4 tri[6] = vec4[6](q0, q1k, q2k, q0, q2k, q3k);
+    for (uint k = 0u; k < 6u; ++k) {
+        triangle_vertex_buffer.vertices[base + k].position_0 = tri[k];
+        triangle_vertex_buffer.vertices[base + k].color_0    = col;
+        triangle_vertex_buffer.vertices[base + k].custom_0   = lscreen;
+    }
+}
+
+// Sign of the 2D orientation (signed area) of three points AFTER perspective
+// projection, evaluated from their homogeneous clip coords WITHOUT dividing by
+// w. The 3x3 determinant of the rows (x, y, w) equals w0*w1*w2 times the
+// orientation of the perspective-divided points, so folding in sign(w0*w1*w2)
+// recovers the projected orientation's sign. This is EXACT and never cancels to
+// noise -- unlike a difference of perspective-divided screen points (the old
+// da/db placement test), which collapses to ~zero with an unreliable sign when a
+// face is foreshortened across the edge. A positive result means p2 projects to
+// the +side (screen-left) of the directed edge p0->p1, matching side_in_screen.
+float projected_orient_sign(vec4 p0, vec4 p1, vec4 p2)
+{
+    float det =
+        p0.x * (p1.y * p2.w - p2.y * p1.w)
+      - p0.y * (p1.x * p2.w - p2.x * p1.w)
+      + p0.w * (p1.x * p2.y - p2.x * p1.y);
+    return det * sign(p0.w) * sign(p1.w) * sign(p2.w);
+}
+
 void do_wide_line(uint view_index, uint in_line_index, uint out_triangle_index)
 {
     uint in_i0           = 2 * in_line_index;
@@ -132,14 +191,27 @@ void do_wide_line(uint view_index, uint in_line_index, uint out_triangle_index)
     uint out_i0          = 3 * out_triangle_index;
 
     // Read object-local positions and the per-edge surface frame from the edge
-    // line vertex buffer. Endpoint 0 carries face A's normal plus the
-    // interior-tangent sign in normal.w; endpoint 1 carries face B's normal
+    // line vertex buffer. Each endpoint carries its face's normal plus that face's
+    // interior-tangent sign in normal.w: endpoint 0 -> face A, endpoint 1 -> face B
     // (see Build_context::build_edge_lines).
     vec3  local_position0 = edge_line_vertex_buffer.vertices[in_i0].position.xyz;
     vec3  local_position1 = edge_line_vertex_buffer.vertices[in_i1].position.xyz;
     vec3  local_normal_a  = edge_line_vertex_buffer.vertices[in_i0].normal.xyz;
-    float sign_a          = edge_line_vertex_buffer.vertices[in_i0].normal.w;
     vec3  local_normal_b  = edge_line_vertex_buffer.vertices[in_i1].normal.xyz;
+    // normal.w packs TWO per-face signs (see Build_context::build_edge_lines):
+    // its SIGN is the interior-tangent sign (orients cross(normal, edge) toward the
+    // face centroid), its MAGNITUDE is the edge-traversal winding tdir
+    // (|w| == 1 -> +1, |w| == 2 -> -1). tdir is the direction this face walks the
+    // shared edge in its own corner loop, i.e. the face's winding at this edge;
+    // the tent path uses it to pick front/back the SAME way the rasterizer culls
+    // the polygon fill (projected signed area), not a normal-vs-view dot. A
+    // facet-less edge stores 0 (sign 0 -> the existing degenerate-frame path).
+    float packed_w_a      = edge_line_vertex_buffer.vertices[in_i0].normal.w;
+    float packed_w_b      = edge_line_vertex_buffer.vertices[in_i1].normal.w;
+    float sign_a          = (packed_w_a < 0.0) ? -1.0 : ((packed_w_a > 0.0) ? 1.0 : 0.0);
+    float sign_b          = (packed_w_b < 0.0) ? -1.0 : ((packed_w_b > 0.0) ? 1.0 : 0.0);
+    float tdir_a          = (abs(packed_w_a) > 1.5) ? -1.0 : 1.0;
+    float tdir_b          = (abs(packed_w_b) > 1.5) ? -1.0 : 1.0;
 
     // Adjacent facet id per endpoint for the ID-buffer edge-line method
     // (build_edge_lines packs them into position.w). Endpoint 0 -> face A's
@@ -243,107 +315,144 @@ void do_wide_line(uint view_index, uint in_line_index, uint out_triangle_index)
         vec2 e0_in_ndc = v0_in_ndc.xy - axis_in_ndc * width0;
         vec2 e1_in_ndc = v1_in_ndc.xy + axis_in_ndc * width1;
 
-        float a_z  = v0_in_ndc.z;
-        float b_z  = v1_in_ndc.z;
-        float c_z  = v1_in_ndc.z;
-        float d_z  = v0_in_ndc.z;
-        float e0_z = v0_in_ndc.z;
-        float e1_z = v1_in_ndc.z;
+        // Each adjacent face gets a HALF-QUAD on ITS OWN interior side: the two
+        // crease vertices (e0,e1, on the edge) plus the two outer corners on the
+        // side that face's interior projects to (a_on_plus / b_on_plus). A back-
+        // facing face's half-quad is discarded (see emit_quad), so only the visible
+        // face stamps each pixel. At an INTERIOR edge the two interiors
+        // project to OPPOSITE screen sides, so the half-quads do not overlap and
+        // each side is stamped with its own face -- correct routing with NO
+        // cross-edge plane extrapolation. At a SILHOUETTE both interiors project to
+        // the SAME (inside) side, so the half-quads overlap there and culling keeps
+        // only the FRONT face's, stamped with the front facet id the visible fill
+        // fragment also carries.
+        //
+        // Defaults (no surface frame): flat ribbon, both faces front (nothing
+        // culled), face A on the +side and face B on the -side.
+        bool  a_on_plus = true;
+        bool  b_on_plus = false;
+        bool  a_front   = true;   // face A front-facing (no surface frame -> keep)
+        bool  b_front   = true;   // face B front-facing
+        float za_e0 = v0_in_ndc.z, za_e1 = v1_in_ndc.z, za_o0 = v0_in_ndc.z, za_o1 = v1_in_ndc.z;
+        float zb_e0 = v0_in_ndc.z, zb_e1 = v1_in_ndc.z, zb_o0 = v0_in_ndc.z, zb_o1 = v1_in_ndc.z;
 
-        // Face-id routing for the ID-buffer method: the +side half-quad (a, b)
-        // and the -side half-quad (c, d) each carry the facet id of the face
-        // they hug. Default a->A / c->B; refined below once the surface frame
-        // tells us which face landed on the +side in screen space.
-        uint id_plus  = facet_id_a;
-        uint id_minus = facet_id_b;
-
-        // Surface-aligned tent only when at least one adjacent face normal is
-        // present; otherwise keep a flat ribbon at endpoint depth.
         if ((dot(world_normal_a, world_normal_a) > 1e-8) || (dot(world_normal_b, world_normal_b) > 1e-8)) {
-            vec3 edge_point = world_pos0.xyz;                 // on both face planes
+            vec3 edge_point = world_pos0.xyz;                  // on both face planes
             vec3 edge_dir   = world_pos1.xyz - world_pos0.xyz; // world edge direction
 
-            // Side assignment: project face A's interior tangent into NDC via the
-            // exact clip-space Jacobian of the perspective divide,
-            //   d(ndc.xy) ~ dct.xy * w - clip.xy * dct.w   (up to a positive
-            // 1/w^2 that does not affect the sign). cross(normal_a, edge_dir)
-            // lies in face A perpendicular to the edge; sign_a orients it toward
-            // A's interior.
+            mat4  clip_from_world_inv_t = transpose(inverse(clip_from_world));
+            float cdd    = view.clip_depth_direction;
+            float ulp0   = surface_line_ulp(v0_in_ndc.z, view.window_to_ndc_scale) * view.window_to_ndc_scale;
+            float ulp1   = surface_line_ulp(v1_in_ndc.z, view.window_to_ndc_scale) * view.window_to_ndc_scale;
+            float clamp0 = view.line_bias_clamp  * ulp0;
+            float clamp1 = view.line_bias_clamp  * ulp1;
+            float lift0  = view.line_bias_margin * ulp0;
+            float lift1  = view.line_bias_margin * ulp1;
+
+            // Interior tangents. cross(normal, edge_dir) lies in the face plane,
+            // perpendicular to the edge; each face's own sign (sign_a / sign_b,
+            // computed on the CPU from that face's centroid) orients it toward that
+            // face's interior. Using face B's TRUE sign -- not a heuristic -- is
+            // what makes the half-quad land on the correct screen side for every
+            // orientation, silhouettes included.
             vec3 tangent_a = sign_a * cross(world_normal_a, edge_dir);
-            vec3 plus_normal;
-            vec3 minus_normal;
-            if (dot(tangent_a, tangent_a) > 1e-12) {
-                vec4 dct         = clip_from_world * vec4(tangent_a, 0.0);
-                vec2 tangent_ndc = (dct.xy * v0_clipped.w) - (v0_clipped.xy * dct.w);
-                bool a_on_plus   = dot(tangent_ndc, side_in_ndc) >= 0.0;
-                plus_normal  = a_on_plus ? world_normal_a : world_normal_b;
-                minus_normal = a_on_plus ? world_normal_b : world_normal_a;
-                // Route facet ids to match the plane each half-quad hugs.
-                id_plus  = a_on_plus ? facet_id_a : facet_id_b;
-                id_minus = a_on_plus ? facet_id_b : facet_id_a;
+            vec3 tangent_b = sign_b * cross(world_normal_b, edge_dir);
+
+            bool have_a = (dot(world_normal_a, world_normal_a) > 1e-8) && (dot(tangent_a, tangent_a) > 1e-12);
+            bool have_b = (dot(world_normal_b, world_normal_b) > 1e-8) && (dot(tangent_b, tangent_b) > 1e-12);
+            // If one face's frame is degenerate (e.g. a boundary edge) reuse the
+            // other's plane for it on the opposite side, so the two half-quads still
+            // form a full ribbon hugging the available surface.
+            vec3 normal_a = have_a ? world_normal_a : world_normal_b;
+            vec3 normal_b = have_b ? world_normal_b : world_normal_a;
+            if (!have_a) { tangent_a = -tangent_b; }
+            if (!have_b) { tangent_b = -tangent_a; }
+
+            // Project a real point a step INTO each face (edge midpoint + that
+            // face's interior tangent) to clip space. Its orientation relative to the
+            // projected edge tells which screen side that face's interior lands on
+            // (the placement test below). Projecting an actual POINT is robust at
+            // grazing angles, where projecting the tangent DIRECTION (perspective
+            // Jacobian) collapses to ~zero and flips the side unpredictably.
+            vec3 edge_mid_world = 0.5 * (world_pos0.xyz + world_pos1.xyz);
+            vec4 cpa = clip_from_world * vec4(edge_mid_world + tangent_a, 1.0);
+            vec4 cpb = clip_from_world * vec4(edge_mid_world + tangent_b, 1.0);
+
+            // Per-face front/back (visibility) by WORLD-SPACE FACING: the sign of
+            // dot(outward_normal, view_dir). For a planar triangle this is exactly the
+            // rasterizer's back-face cull (cull_mode_back_ccw), so a face is selected
+            // here iff the polygon fill draws it -- a per-FACE property that is the
+            // same for all of that face's edges (so a visible face cannot drop out on
+            // one of its edges).
+            //
+            // This replaces the screen-space projected-winding test (front_sign * tdir
+            // * da). da was dot(projected_interior - projected_mid, side): a difference
+            // of perspective-divided screen points, which CATASTROPHICALLY CANCELS to a
+            // noise-level value with an unreliable sign when a front face is
+            // foreshortened across the edge (verified: a front face whose other edges
+            // gave da ~ 1e-4 produced da ~ 7e-6 with the wrong sign on a third edge,
+            // dropping it). A single dot product has no such cancellation: it is stable
+            // down to the true 3D silhouette, where it crosses zero and fails safe (the
+            // fill is equally borderline there).
+            //
+            // (tdir_F * sign_F) re-orients the stored geometric normal OUTWARD by
+            // construction, so the test does not assume mesh_facet_normalf is outward:
+            // sign_F is the centroid-derived interior side and tdir_F is the face's
+            // edge-traversal winding, and (outward normal) ~ (tdir_F * sign_F) *
+            // world_normal_F.
+            vec3 vdir = view.cameras[view_index].view_position_in_world.xyz - edge_point;
+            a_front = ((tdir_a * sign_a) * dot(world_normal_a, vdir)) > 0.0;
+            b_front = ((tdir_b * sign_b) * dot(world_normal_b, vdir)) > 0.0;
+
+            // PLACEMENT: which screen side of the edge each face's half-quad sits on.
+            // Use the EXACT homogeneous orientation of the projected triangle
+            // (v0, v1, interior) -- the un-divided 3x3 determinant -- NOT a difference
+            // of perspective-divided screen points (the old da/db). da/db cancel to
+            // noise with an unreliable sign when a face is foreshortened across the
+            // edge -- the SAME numerical trap that broke facing -- which placed a lone
+            // front-face half-quad on the wrong (background) side at a silhouette, so
+            // its id never matched the fill and the edge went MISSING in the viewport.
+            // The homogeneous test never cancels and gives the true screen side down to
+            // the real 3D silhouette.
+            float da_h = projected_orient_sign(v0_clipped, v1_clipped, cpa);
+            float db_h = projected_orient_sign(v0_clipped, v1_clipped, cpb);
+            if (a_front && b_front) {
+                // Interior edge: the two face interiors lie on OPPOSITE screen sides of
+                // the edge by construction. Trust the face whose interior projects
+                // further off the edge line (the more face-on one, larger |area|) and
+                // place the other strictly opposite, so a near-edge-on partner cannot
+                // collapse both half-quads onto one side.
+                if (abs(da_h) >= abs(db_h)) { a_on_plus = da_h >= 0.0; b_on_plus = !a_on_plus; }
+                else                        { b_on_plus = db_h >= 0.0; a_on_plus = !b_on_plus; }
             } else {
-                // Degenerate face A normal: hug whichever face we have, both sides.
-                bool use_a = dot(world_normal_a, world_normal_a) >= dot(world_normal_b, world_normal_b);
-                vec3 n = use_a ? world_normal_a : world_normal_b;
-                plus_normal  = n;
-                minus_normal = n;
-                id_plus  = use_a ? facet_id_a : facet_id_b;
-                id_minus = id_plus;
+                // Silhouette / boundary edge: only the front face's half-quad survives,
+                // so place each on its own interior's true screen side.
+                a_on_plus = da_h >= 0.0;
+                b_on_plus = db_h >= 0.0;
             }
 
-            // Clip-space planes: pi_clip = transpose(inverse(clip_from_world)) * pi_world.
-            mat4 clip_from_world_inv_t = transpose(inverse(clip_from_world));
-            vec4 pi_plus  = clip_from_world_inv_t * vec4(plus_normal,  -dot(plus_normal,  edge_point));
-            vec4 pi_minus = clip_from_world_inv_t * vec4(minus_normal, -dot(minus_normal, edge_point));
+            // Clip-space plane per face: pi = transpose(inverse(clip_from_world)) * pi_world.
+            vec4 pi_a = clip_from_world_inv_t * vec4(normal_a, -dot(normal_a, edge_point));
+            vec4 pi_b = clip_from_world_inv_t * vec4(normal_b, -dot(normal_b, edge_point));
 
-            a_z = surface_plane_ndc_depth(pi_plus,  a_in_ndc, v0_in_ndc.z);
-            b_z = surface_plane_ndc_depth(pi_plus,  b_in_ndc, v1_in_ndc.z);
-            c_z = surface_plane_ndc_depth(pi_minus, c_in_ndc, v1_in_ndc.z);
-            d_z = surface_plane_ndc_depth(pi_minus, d_in_ndc, v0_in_ndc.z);
-            // Crease vertices are on the edge -> both planes agree; use pi_plus.
-            e0_z = surface_plane_ndc_depth(pi_plus, e0_in_ndc, v0_in_ndc.z);
-            e1_z = surface_plane_ndc_depth(pi_plus, e1_in_ndc, v1_in_ndc.z);
+            // Each face's plane is evaluated ONLY on its own interior side (crease
+            // e0/e1 on the edge + the two outer corners) -- never extrapolated
+            // across the edge. e0/o0 are at endpoint 0 (clamp0/lift0), e1/o1 at
+            // endpoint 1 (clamp1/lift1).
+            vec2 a_o0 = a_on_plus ? a_in_ndc : d_in_ndc;
+            vec2 a_o1 = a_on_plus ? b_in_ndc : c_in_ndc;
+            za_e0 = corner_z(pi_a, e0_in_ndc, v0_in_ndc.z, clamp0, lift0, cdd);
+            za_e1 = corner_z(pi_a, e1_in_ndc, v1_in_ndc.z, clamp1, lift1, cdd);
+            za_o0 = corner_z(pi_a, a_o0,      v0_in_ndc.z, clamp0, lift0, cdd);
+            za_o1 = corner_z(pi_a, a_o1,      v1_in_ndc.z, clamp1, lift1, cdd);
 
-            // Per-endpoint ULP (depth-buffer resolvable step) used both for the
-            // toward-camera extrapolation clamp and the surface-line lift.
-            float cdd  = view.clip_depth_direction;
-            float ulp0 = surface_line_ulp(v0_in_ndc.z, view.window_to_ndc_scale) * view.window_to_ndc_scale;
-            float ulp1 = surface_line_ulp(v1_in_ndc.z, view.window_to_ndc_scale) * view.window_to_ndc_scale;
-
-            // Clamp toward-camera plane extrapolation so a steep / grazing thin
-            // face cannot shoot a corner far in front of unrelated geometry.
-            float clamp0 = view.line_bias_clamp * ulp0;
-            float clamp1 = view.line_bias_clamp * ulp1;
-            a_z  = clamp_toward_camera(a_z,  v0_in_ndc.z, clamp0, cdd);
-            d_z  = clamp_toward_camera(d_z,  v0_in_ndc.z, clamp0, cdd);
-            e0_z = clamp_toward_camera(e0_z, v0_in_ndc.z, clamp0, cdd);
-            b_z  = clamp_toward_camera(b_z,  v1_in_ndc.z, clamp1, cdd);
-            c_z  = clamp_toward_camera(c_z,  v1_in_ndc.z, clamp1, cdd);
-            e1_z = clamp_toward_camera(e1_z, v1_in_ndc.z, clamp1, cdd);
-
-            // Lift toward the viewer so the line wins the depth test against its
-            // own surface.
-            float lift0 = view.line_bias_margin * ulp0;
-            float lift1 = view.line_bias_margin * ulp1;
-            a_z  -= lift0 * cdd;
-            d_z  -= lift0 * cdd;
-            e0_z -= lift0 * cdd;
-            b_z  -= lift1 * cdd;
-            c_z  -= lift1 * cdd;
-            e1_z -= lift1 * cdd;
+            vec2 b_o0 = b_on_plus ? a_in_ndc : d_in_ndc;
+            vec2 b_o1 = b_on_plus ? b_in_ndc : c_in_ndc;
+            zb_e0 = corner_z(pi_b, e0_in_ndc, v0_in_ndc.z, clamp0, lift0, cdd);
+            zb_e1 = corner_z(pi_b, e1_in_ndc, v1_in_ndc.z, clamp1, lift1, cdd);
+            zb_o0 = corner_z(pi_b, b_o0,      v0_in_ndc.z, clamp0, lift0, cdd);
+            zb_o1 = corner_z(pi_b, b_o1,      v1_in_ndc.z, clamp1, lift1, cdd);
         }
-
-        // .w carries the full-width line thickness in screen pixels for
-        // content_line_after_compute.frag. In the content convention the corner
-        // side offset (side_in_ndc * width) yields a full width of `width`
-        // pixels, so .w = width (not 2 * width as in the debug renderer, whose
-        // ndc_from_screen_direction differs by a factor of two).
-        vec4 a  = vec4(a_in_ndc,  a_z,  width0);
-        vec4 b  = vec4(b_in_ndc,  b_z,  width1);
-        vec4 c  = vec4(c_in_ndc,  c_z,  width1);
-        vec4 d  = vec4(d_in_ndc,  d_z,  width0);
-        vec4 e0 = vec4(e0_in_ndc, e0_z, width0);
-        vec4 e1 = vec4(e1_in_ndc, e1_z, width1);
 
         // Line endpoints in VIEWPORT-RELATIVE pixel coordinates for the fragment
         // shader (see note in the simple-quad path below). Flip y on top-left
@@ -354,28 +463,33 @@ void do_wide_line(uint view_index, uint in_line_index, uint out_triangle_index)
         v1_frag_screen.y = mix(v1_frag_screen.y, vp_size.y - v1_in_screen.y, step(view.vp_y_sign, 0.0));
         vec4 l_in_screen = vec4(v0_frag_screen, v1_frag_screen);
 
-        // Two coplanar half-quads meeting at the crease, 4 triangles. Culling is
-        // disabled for the wide-line pipeline so winding is unconstrained.
-        //   +side: (e0, a, b), (e0, b, e1)
-        //   -side: (e0, e1, c), (e0, c, d)
-        vec4 verts[12] = vec4[12](e0, a, b,  e0, b, e1,  e0, e1, c,  e0, c, d);
-        // In id mode write the encoded face id per half-quad (base + facet);
-        // the +side triangles (slots 0..5) get id_plus, the -side (6..11)
-        // id_minus. All three vertices of a triangle share its id, so the
-        // graphics-stage interpolation is constant per triangle and the
-        // fragment recovers an exact value. In color mode every vertex gets
-        // the line color, as before.
-        vec4 color_plus  = color;
-        vec4 color_minus = color;
+        // Per-face half-quads (face A -> slots 0..5, face B -> slots 6..11). In id
+        // mode each carries its own facet id; in color mode both use the line
+        // color. emit_quad() takes the trapezoid as (crease0, crease1, outer1,
+        // outer0); the a_front / b_front flag (front/back by projected winding)
+        // keeps the front face's half-quad and collapses the back face's.
+        vec4 col_a = color;
+        vec4 col_b = color;
         if (view.id_mode != 0u) {
-            color_plus  = vec4(vec3_from_uint(view.id_base + id_plus ), 1.0);
-            color_minus = vec4(vec3_from_uint(view.id_base + id_minus), 1.0);
+            col_a = vec4(vec3_from_uint(view.id_base + facet_id_a), 1.0);
+            col_b = vec4(vec3_from_uint(view.id_base + facet_id_b), 1.0);
         }
-        for (uint k = 0u; k < 12u; ++k) {
-            triangle_vertex_buffer.vertices[out_i0 + k].position_0 = verts[k];
-            triangle_vertex_buffer.vertices[out_i0 + k].color_0    = (k < 6u) ? color_plus : color_minus;
-            triangle_vertex_buffer.vertices[out_i0 + k].custom_0   = l_in_screen;
-        }
+        vec2 a_emit_o0 = a_on_plus ? a_in_ndc : d_in_ndc;
+        vec2 a_emit_o1 = a_on_plus ? b_in_ndc : c_in_ndc;
+        emit_quad(
+            out_i0 + 0u,
+            vec4(e0_in_ndc, za_e0, width0), vec4(e1_in_ndc, za_e1, width1),
+            vec4(a_emit_o1, za_o1, width1), vec4(a_emit_o0, za_o0, width0),
+            col_a, l_in_screen, a_front
+        );
+        vec2 b_emit_o0 = b_on_plus ? a_in_ndc : d_in_ndc;
+        vec2 b_emit_o1 = b_on_plus ? b_in_ndc : c_in_ndc;
+        emit_quad(
+            out_i0 + 6u,
+            vec4(e0_in_ndc, zb_e0, width0), vec4(e1_in_ndc, zb_e1, width1),
+            vec4(b_emit_o1, zb_o1, width1), vec4(b_emit_o0, zb_o0, width0),
+            col_b, l_in_screen, b_front
+        );
         return;
     }
 
