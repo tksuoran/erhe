@@ -811,6 +811,14 @@ Operations::Operations(
                         scene_root->get_name(),
                         ""
                     );
+
+                    // Attach the global tools (Hud / Hotbar / OpenXR Headset_view) to
+                    // this scene if none existed yet -- e.g. a load-only commands.json
+                    // with no scene.create. on_scene_created() ignores this once the
+                    // tools are already homed in an earlier (created) scene.
+                    m_context.app_message_bus->scene_created.send_message(
+                        Scene_created_message{ scene_root }
+                    );
                 }
             } catch (...) {
                 log_operations->error("exception: load scene");
@@ -2013,6 +2021,16 @@ static void s_export_callback(void* userdata, const char* const* filelist, int f
     Operations* operations = static_cast<Operations*>(userdata);
     operations->export_callback(filelist, filter);
 }
+static void s_save_scene_callback(void* userdata, const char* const* filelist, int filter)
+{
+    Operations* operations = static_cast<Operations*>(userdata);
+    operations->save_scene_callback(filelist, filter);
+}
+static void s_load_scene_callback(void* userdata, const char* const* filelist, int filter)
+{
+    Operations* operations = static_cast<Operations*>(userdata);
+    operations->load_scene_callback(filelist, filter);
+}
 #endif
 
 void Operations::export_callback(const char* const* filelist, int filter)
@@ -2087,38 +2105,114 @@ void Operations::export_gltf()
 
 void Operations::save_scene()
 {
+    // Open a native Save dialog and do the actual save in save_scene_callback().
+    // The SDL3 dialog is async (callback-based) and works on macOS / Linux /
+    // Windows; the old synchronous erhe::file::select_file_for_write() is a no-op
+    // stub on every platform except Windows, which is why this command silently did
+    // nothing on macOS before. (File > Export glTF already used this SDL path.)
+#if defined(ERHE_WINDOW_LIBRARY_SDL)
+    SDL_DialogFileFilter filters[2];
+    filters[0].name    = "Scene files";
+    filters[0].pattern = "json";
+    filters[1].name    = "All files";
+    filters[1].pattern = "*";
+    SDL_Window* window = static_cast<SDL_Window*>(m_context.context_window->get_sdl_window());
+    SDL_ShowSaveFileDialog(s_save_scene_callback, this, window, filters, 2, nullptr);
+#elif defined(ERHE_OS_WINDOWS)
+    try {
+        std::optional<std::filesystem::path> path_opt = erhe::file::select_file_for_write();
+        if (path_opt.has_value()) {
+            std::string path = path_opt.value().string();
+            const char* const filelist[2] = {
+                path.data(),
+                nullptr
+            };
+            save_scene_callback(filelist, 0);
+        }
+    } catch (...) {
+        log_operations->error("exception: file dialog / save scene");
+    }
+#else
+    log_operations->warn("save_scene: no native file dialog available on this platform");
+#endif
+}
+
+void Operations::save_scene_callback(const char* const* filelist, int filter)
+{
+    static_cast<void>(filter);
+    if (filelist == nullptr) {
+        // error
+        return;
+    }
+    const char* const file = *filelist;
+    if (file == nullptr) {
+        // nothing chosen / canceled
+        return;
+    }
+
     std::shared_ptr<Scene_root> scene_root = get_target_scene_root();
     if (!scene_root) {
         return;
     }
 
     try {
-        std::optional<std::filesystem::path> path_opt = erhe::file::select_file_for_write();
-        if (path_opt.has_value()) {
-            editor::save_scene(*scene_root, path_opt.value());
-        }
+        editor::save_scene(*scene_root, std::filesystem::path{file});
     } catch (...) {
-        log_operations->error("exception: file dialog / save scene");
+        log_operations->error("exception: save scene");
     }
 }
 
 void Operations::load_scene()
 {
+    // Open a native Open dialog and queue the load in load_scene_callback(). Same
+    // rationale as save_scene(): the synchronous erhe::file::select_file_for_read()
+    // is a Windows-only stub, so this silently did nothing on macOS / Linux before.
+#if defined(ERHE_WINDOW_LIBRARY_SDL)
+    SDL_DialogFileFilter filters[2];
+    filters[0].name    = "Scene / glTF files";
+    filters[0].pattern = "json;gltf;glb";
+    filters[1].name    = "All files";
+    filters[1].pattern = "*";
+    SDL_Window* window = static_cast<SDL_Window*>(m_context.context_window->get_sdl_window());
+    SDL_ShowOpenFileDialog(s_load_scene_callback, this, window, filters, 2, nullptr, false);
+#elif defined(ERHE_OS_WINDOWS)
     try {
         std::optional<std::filesystem::path> path_opt = erhe::file::select_file_for_read();
-        if (!path_opt.has_value()) {
-            return;
+        if (path_opt.has_value()) {
+            std::string path = path_opt.value().string();
+            const char* const filelist[2] = {
+                path.data(),
+                nullptr
+            };
+            load_scene_callback(filelist, 0);
         }
-
-        // Queue the load to happen outside ImGui iteration
-        m_context.app_message_bus->load_scene_file.queue_message(
-            Load_scene_file_message{
-                .path = path_opt.value(),
-            }
-        );
     } catch (...) {
         log_operations->error("exception: file dialog / load scene");
     }
+#else
+    log_operations->warn("load_scene: no native file dialog available on this platform");
+#endif
+}
+
+void Operations::load_scene_callback(const char* const* filelist, int filter)
+{
+    static_cast<void>(filter);
+    if (filelist == nullptr) {
+        // error
+        return;
+    }
+    const char* const file = *filelist;
+    if (file == nullptr) {
+        // nothing chosen / canceled
+        return;
+    }
+
+    // Queue the load to happen outside ImGui iteration
+    m_context.app_message_bus->load_scene_file.queue_message(
+        Load_scene_file_message{
+            .path = std::filesystem::path{file},
+        }
+    );
 }
 
 void Operations::create_material()

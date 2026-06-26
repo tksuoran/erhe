@@ -2531,6 +2531,29 @@ public:
                 continue;
             }
 
+            // scene.load_scene loads a saved scene file (path given in args)
+            // instead of building a scene procedurally, so a commands.json can
+            // replace the scene.add_* building steps with a single load. It is
+            // handled here directly rather than through the command registry
+            // because loading is a queued file action -- it reuses the exact same
+            // path as File > Open Scene (Load_scene_file_message -> editor::load_scene
+            // plus content-library / browser / viewport window setup) -- not a
+            // Scene_commands building step. The queued message is delivered once the
+            // main loop starts pumping the message bus.
+            if (name == "scene.load_scene") {
+                std::string_view path_sv;
+                if (has_args && (args_obj.find_field_unordered("path").get_string().get(path_sv) == simdjson::SUCCESS)) {
+                    std::filesystem::path path{std::string{path_sv}};
+                    log_startup->info("commands.json: scene.load_scene '{}'", path.string());
+                    m_app_message_bus->load_scene_file.queue_message(
+                        Load_scene_file_message{ .path = path }
+                    );
+                } else {
+                    log_startup->warn("commands.json: scene.load_scene requires a string 'args.path'");
+                }
+                continue;
+            }
+
             erhe::commands::Command* command = m_commands->find_command(name);
             if (command == nullptr) {
                 log_startup->warn("commands.json: unknown command '{}'", name);

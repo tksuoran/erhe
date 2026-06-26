@@ -161,7 +161,9 @@ public:
     void export_callback(const char* const* filelist, int filter);
 
     void save_scene();
+    void save_scene_callback(const char* const* filelist, int filter);
     void load_scene();
+    void load_scene_callback(const char* const* filelist, int filter);
 
     void create_material();
     void create_brush();
