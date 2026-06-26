@@ -717,6 +717,70 @@
       "name": "save_texture"
     },
     {
+      "description": "Save a CROPPED, optionally pixel-magnified rectangle of a texture subresource to an image FILE and return its path - for zooming into a small feature (a thin wide-line edge, a few-pixel artifact) that is invisible in the full save_texture. Crops [x,y,width,height] (mip pixels, top-left origin) and upscales by 'scale' with nearest-neighbor so exact 8-bit values are preserved (id buffers stay decodable). Built on RenderDoc's faithful encode + a Qt crop/scale; raster formats png/jpg/bmp only (png default). Same temp-dir/no-overwrite path policy as save_texture; surface the file to the user yourself (e.g. SendUserFile).",
+      "inputSchema": {
+        "properties": {
+          "filename": {
+            "description": "Optional output file name (basename only, no path separators) written into %TEMP%/renderdoc_mcp. Auto-named if omitted.",
+            "type": "string"
+          },
+          "format": {
+            "description": "Image file format: png (default), jpg or bmp. Use png for id/data buffers (lossless).",
+            "type": "string"
+          },
+          "height": {
+            "description": "Region height in pixels (default 256; clamped to the texture).",
+            "type": "integer"
+          },
+          "mip": {
+            "description": "Mip level (default 0).",
+            "type": "integer"
+          },
+          "overwrite": {
+            "description": "Allow replacing an existing file (default false).",
+            "type": "boolean"
+          },
+          "path": {
+            "description": "Optional explicit ABSOLUTE output path (parent dir must exist). Overrides 'filename'.",
+            "type": "string"
+          },
+          "resourceId": {
+            "description": "The texture resource id (from list_textures).",
+            "type": "string"
+          },
+          "sample": {
+            "description": "MSAA sample index. Omit to resolve-average.",
+            "type": "integer"
+          },
+          "scale": {
+            "description": "Integer nearest-neighbor magnification of the cropped region (default 1, max 64). Pixel values are preserved exactly - magnifies thin features without resampling.",
+            "type": "integer"
+          },
+          "slice": {
+            "description": "Array/3D/cubemap slice (default 0).",
+            "type": "integer"
+          },
+          "width": {
+            "description": "Region width in pixels (default 256; clamped to the texture).",
+            "type": "integer"
+          },
+          "x": {
+            "description": "Region origin x in mip pixels (top-left origin, default 0).",
+            "type": "integer"
+          },
+          "y": {
+            "description": "Region origin y in mip pixels (top-left origin, default 0).",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "resourceId"
+        ],
+        "type": "object"
+      },
+      "name": "save_texture_region"
+    },
+    {
       "description": "Export the full pipeline state at the CURRENT event to a JSON file (for diff/archival/attaching to a bug): the summary, vertex input, viewports/scissors, rasterizer, blend, depth-stencil, multisample, push/root constants and root signature, plus per-stage resource bindings and constant-buffer metadata. WRITES A FILE under the same path policy as save_texture (temp dir by default, no blind overwrite); returns the path. Use set_event first to choose the event.",
       "inputSchema": {
         "properties": {
