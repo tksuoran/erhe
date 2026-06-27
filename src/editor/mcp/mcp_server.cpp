@@ -287,6 +287,121 @@ auto resolve_mesh_geometry(
     return static_cast<bool>(out_geometry);
 }
 
+// ---------------------------------------------------------------------------
+// Mesh attribute introspection helpers (for get_mesh_geometry_info /
+// get_mesh_attribute_values). The Geometry's per-domain attributes are visited
+// generically so a value of any GEO::vecng type serializes uniformly.
+// ---------------------------------------------------------------------------
+
+template <typename T>
+auto geo_type_name() -> const char*
+{
+    if constexpr (std::is_same_v<T, GEO::vec2f>) { return "vec2f"; }
+    else if constexpr (std::is_same_v<T, GEO::vec3f>) { return "vec3f"; }
+    else if constexpr (std::is_same_v<T, GEO::vec4f>) { return "vec4f"; }
+    else if constexpr (std::is_same_v<T, GEO::vec4u>) { return "vec4u"; }
+    else if constexpr (std::is_same_v<T, GEO::vec2i>) { return "vec2i"; }
+    else { return "vec"; }
+}
+
+template <typename T>
+auto geo_type_name_of(const erhe::geometry::Attribute_present<T>&) -> const char*
+{
+    return geo_type_name<T>();
+}
+
+template <typename T>
+auto geo_vec_to_json(const T& v) -> json
+{
+    json arr = json::array();
+    for (GEO::index_t i = 0; i < T::dim; ++i) {
+        arr.push_back(v[i]);
+    }
+    return arr;
+}
+
+// {"present": bool, "value": [...]} for one attribute at one element key.
+template <typename T>
+auto attribute_value_json(const erhe::geometry::Attribute_present<T>& ap, const GEO::index_t key) -> json
+{
+    json e;
+    const bool present = ap.has(key);
+    e["present"] = present;
+    if (present) {
+        e["value"] = geo_vec_to_json(ap.get(key));
+    }
+    return e;
+}
+
+template <typename F>
+void for_each_facet_attribute(erhe::geometry::Mesh_attributes& a, F&& f)
+{
+    f("facet_id",            a.facet_id);
+    f("facet_centroid",      a.facet_centroid);
+    f("facet_normal",        a.facet_normal);
+    f("facet_tangent",       a.facet_tangent);
+    f("facet_bitangent",     a.facet_bitangent);
+    f("facet_color_0",       a.facet_color_0);
+    f("facet_color_1",       a.facet_color_1);
+    f("facet_aniso_control", a.facet_aniso_control);
+}
+
+template <typename F>
+void for_each_vertex_attribute(erhe::geometry::Mesh_attributes& a, F&& f)
+{
+    f("vertex_normal",             a.vertex_normal);
+    f("vertex_normal_smooth",      a.vertex_normal_smooth);
+    f("vertex_texcoord_0",         a.vertex_texcoord_0);
+    f("vertex_texcoord_1",         a.vertex_texcoord_1);
+    f("vertex_tangent",            a.vertex_tangent);
+    f("vertex_bitangent",          a.vertex_bitangent);
+    f("vertex_color_0",            a.vertex_color_0);
+    f("vertex_color_1",            a.vertex_color_1);
+    f("vertex_joint_indices_0",    a.vertex_joint_indices_0);
+    f("vertex_joint_indices_1",    a.vertex_joint_indices_1);
+    f("vertex_joint_weights_0",    a.vertex_joint_weights_0);
+    f("vertex_joint_weights_1",    a.vertex_joint_weights_1);
+    f("vertex_aniso_control",      a.vertex_aniso_control);
+    f("vertex_valency_edge_count", a.vertex_valency_edge_count);
+}
+
+template <typename F>
+void for_each_corner_attribute(erhe::geometry::Mesh_attributes& a, F&& f)
+{
+    f("corner_normal",        a.corner_normal);
+    f("corner_texcoord_0",    a.corner_texcoord_0);
+    f("corner_texcoord_1",    a.corner_texcoord_1);
+    f("corner_tangent",       a.corner_tangent);
+    f("corner_bitangent",     a.corner_bitangent);
+    f("corner_color_0",       a.corner_color_0);
+    f("corner_color_1",       a.corner_color_1);
+    f("corner_aniso_control", a.corner_aniso_control);
+}
+
+// Per-domain summary: one entry per attribute that is present on at least one
+// element, with its type and how many elements carry it.
+template <typename ForEach>
+auto attribute_presence_summary(erhe::geometry::Mesh_attributes& attributes, const GEO::index_t element_count, ForEach&& for_each) -> json
+{
+    json arr = json::array();
+    for_each(attributes, [&](const char* name, auto& ap) {
+        GEO::index_t present_count = 0;
+        for (GEO::index_t key = 0; key < element_count; ++key) {
+            if (ap.has(key)) {
+                ++present_count;
+            }
+        }
+        if (present_count > 0) {
+            arr.push_back({
+                {"name",          name},
+                {"type",          geo_type_name_of(ap)},
+                {"present_count", present_count}
+            });
+        }
+    });
+    return arr;
+}
+
 auto motion_mode_to_string(const erhe::physics::Motion_mode motion_mode) -> const char*
 {
     switch (motion_mode) {
@@ -933,6 +1048,8 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "set_mesh_component_mode")        result = action_set_mesh_component_mode(req->arguments);
         else if (req->tool_name == "select_mesh_components")         result = action_select_mesh_components(req->arguments);
         else if (req->tool_name == "get_mesh_component_selection")   result = query_mesh_component_selection(req->arguments);
+        else if (req->tool_name == "get_mesh_geometry_info")         result = query_mesh_geometry_info(req->arguments);
+        else if (req->tool_name == "get_mesh_attribute_values")      result = query_mesh_attribute_values(req->arguments);
         else if (req->tool_name == "clear_mesh_component_selection") result = action_clear_mesh_component_selection(req->arguments);
         else if (req->tool_name == "align_components")              result = action_align_components(req->arguments);
         else if (req->tool_name == "add_joint")                    result = action_add_joint(req->arguments);
@@ -1404,6 +1521,29 @@ void Mcp_server::refresh_tool_list()
         {"required", json::array({"scene_name"})}
     }});
     m_tool_infos.push_back({"get_mesh_component_selection", "Get the current mesh-component selection: mode plus each entry's node, primitive index, selected vertices / edges / facets, and whether it is live.", schema_no_args()});
+    m_tool_infos.push_back({"get_mesh_geometry_info", "Inspect a node's render geometry: element counts (vertices, edges, facets, corners) and, per domain (facet / vertex / corner), the list of attributes that are present (name, GEO type, and how many elements carry the attribute). Use this before get_mesh_attribute_values to learn what to query. Note: a flat-shaded mesh stores per-corner normals (corner_normal); a smooth mesh stores per-vertex normals.", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name",      {{"type", "string"},  {"description", "Name of the scene"}}},
+            {"node_id",         {{"type", "integer"}, {"description", "Node ID (preferred over node_name when both given)"}}},
+            {"node_name",       {{"type", "string"},  {"description", "Node name (used when node_id is absent)"}}},
+            {"primitive_index", {{"type", "integer"}, {"description", "Mesh primitive index (default 0)"}}}
+        }},
+        {"required", json::array({"scene_name"})}
+    }});
+    m_tool_infos.push_back({"get_mesh_attribute_values", "Read attribute presence and values for specific mesh elements of a node's render geometry. Pick a domain (vertex / corner / facet / edge) and pass the element indices; each element reports its per-attribute {present, value}. vertex elements also report position; corner elements report their vertex + facet; facet elements report their corner + vertex lists; edge elements report endpoint vertices + adjacent facets (edges carry no stored attributes). Optionally restrict to named attributes; default returns all attributes of the domain.", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name",      {{"type", "string"},  {"description", "Name of the scene"}}},
+            {"node_id",         {{"type", "integer"}, {"description", "Node ID (preferred over node_name when both given)"}}},
+            {"node_name",       {{"type", "string"},  {"description", "Node name (used when node_id is absent)"}}},
+            {"primitive_index", {{"type", "integer"}, {"description", "Mesh primitive index (default 0)"}}},
+            {"domain",          {{"type", "string"},  {"enum", json::array({"vertex", "corner", "facet", "edge"})}, {"description", "Which element domain the indices address"}}},
+            {"indices",         {{"type", "array"},   {"items", {{"type", "integer"}}}, {"description", "Element indices to read (max 4096)"}}},
+            {"attributes",      {{"type", "array"},   {"items", {{"type", "string"}}}, {"description", "Optional attribute-name filter (e.g. [\"corner_normal\"]); default: all attributes in the domain"}}}
+        }},
+        {"required", json::array({"scene_name", "domain", "indices"})}
+    }});
     m_tool_infos.push_back({"clear_mesh_component_selection", "Clear the entire mesh-component selection", schema_no_args()});
     m_tool_infos.push_back({"align_components", "Align the two selected mesh components (of the active vertex/edge/face mode) on two distinct nodes: colocate vertices, align edges, or glue faces. apply_scale also matches scale (edge/face only). Requires exactly two components selected on two distinct nodes. Undoable.", {
         {"type", "object"},
@@ -4561,6 +4701,150 @@ auto Mcp_server::action_clear_mesh_component_selection(const json& args) -> std:
     }
     m_context.mesh_component_selection->clear_all();
     return make_json_content({{"cleared", true}}).dump();
+}
+
+auto Mcp_server::query_mesh_geometry_info(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (!node) {
+        return make_error_content("Node not found (give node_id or node_name)");
+    }
+    const std::size_t primitive_index = args.value("primitive_index", std::size_t{0});
+    std::shared_ptr<erhe::scene::Mesh>        mesh;
+    std::shared_ptr<erhe::geometry::Geometry> geometry;
+    if (!resolve_mesh_geometry(node, primitive_index, mesh, geometry)) {
+        return make_error_content("Node has no mesh geometry at primitive_index " + std::to_string(primitive_index) + ": " + node->get_name());
+    }
+
+    const GEO::Mesh&                 geo_mesh     = geometry->get_mesh();
+    erhe::geometry::Mesh_attributes& attributes   = geometry->get_attributes();
+    const GEO::index_t               vertex_count = geo_mesh.vertices.nb();
+    const GEO::index_t               edge_count   = geo_mesh.edges.nb();
+    const GEO::index_t               facet_count  = geo_mesh.facets.nb();
+    const GEO::index_t               corner_count = geo_mesh.facet_corners.nb();
+
+    return make_json_content({
+        {"node",            node->get_name()},
+        {"node_id",         node->get_id()},
+        {"primitive_index", primitive_index},
+        {"geometry_name",   geometry->get_name()},
+        {"counts", {
+            {"vertices", vertex_count},
+            {"edges",    edge_count},
+            {"facets",   facet_count},
+            {"corners",  corner_count}
+        }},
+        {"attributes", {
+            {"facet",  attribute_presence_summary(attributes, facet_count,  [](erhe::geometry::Mesh_attributes& a, auto&& f){ for_each_facet_attribute (a, f); })},
+            {"vertex", attribute_presence_summary(attributes, vertex_count, [](erhe::geometry::Mesh_attributes& a, auto&& f){ for_each_vertex_attribute(a, f); })},
+            {"corner", attribute_presence_summary(attributes, corner_count, [](erhe::geometry::Mesh_attributes& a, auto&& f){ for_each_corner_attribute(a, f); })}
+        }}
+    }).dump();
+}
+
+auto Mcp_server::query_mesh_attribute_values(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (!node) {
+        return make_error_content("Node not found (give node_id or node_name)");
+    }
+    const std::size_t primitive_index = args.value("primitive_index", std::size_t{0});
+    std::shared_ptr<erhe::scene::Mesh>        mesh;
+    std::shared_ptr<erhe::geometry::Geometry> geometry;
+    if (!resolve_mesh_geometry(node, primitive_index, mesh, geometry)) {
+        return make_error_content("Node has no mesh geometry at primitive_index " + std::to_string(primitive_index) + ": " + node->get_name());
+    }
+
+    const std::string domain = args.value("domain", "");
+    if ((domain != "vertex") && (domain != "corner") && (domain != "facet") && (domain != "edge")) {
+        return make_error_content("domain is required (vertex, corner, facet, edge)");
+    }
+    if (!args.contains("indices") || !args["indices"].is_array()) {
+        return make_error_content("indices array is required");
+    }
+    if (args["indices"].size() > 4096) {
+        return make_error_content("too many indices (max 4096 per call)");
+    }
+
+    // Optional attribute-name filter; empty means "all attributes in the domain".
+    std::set<std::string> filter;
+    if (args.contains("attributes") && args["attributes"].is_array()) {
+        for (const auto& a : args["attributes"]) {
+            filter.insert(a.get<std::string>());
+        }
+    }
+    const auto wanted = [&](const char* name) -> bool {
+        return filter.empty() || (filter.count(name) != 0);
+    };
+
+    const GEO::Mesh&                 geo_mesh   = geometry->get_mesh();
+    erhe::geometry::Mesh_attributes& attributes = geometry->get_attributes();
+
+    json elements = json::array();
+    for (const auto& idx_j : args["indices"]) {
+        const GEO::index_t idx = idx_j.get<GEO::index_t>();
+        json elem;
+        elem["index"] = idx;
+        json attrs = json::object();
+        if (domain == "vertex") {
+            if (idx >= geo_mesh.vertices.nb()) {
+                return make_error_content("vertex index out of range: " + std::to_string(idx) + " >= " + std::to_string(geo_mesh.vertices.nb()));
+            }
+            elem["position"] = geo_vec_to_json(erhe::geometry::get_pointf(geo_mesh.vertices, idx));
+            for_each_vertex_attribute(attributes, [&](const char* name, auto& ap){ if (wanted(name)) { attrs[name] = attribute_value_json(ap, idx); } });
+        } else if (domain == "corner") {
+            if (idx >= geo_mesh.facet_corners.nb()) {
+                return make_error_content("corner index out of range: " + std::to_string(idx) + " >= " + std::to_string(geo_mesh.facet_corners.nb()));
+            }
+            elem["vertex"] = geo_mesh.facet_corners.vertex(idx);
+            elem["facet"]  = geometry->get_corner_facet(idx);
+            for_each_corner_attribute(attributes, [&](const char* name, auto& ap){ if (wanted(name)) { attrs[name] = attribute_value_json(ap, idx); } });
+        } else if (domain == "facet") {
+            if (idx >= geo_mesh.facets.nb()) {
+                return make_error_content("facet index out of range: " + std::to_string(idx) + " >= " + std::to_string(geo_mesh.facets.nb()));
+            }
+            json corners  = json::array();
+            json vertices = json::array();
+            for (const GEO::index_t corner : geo_mesh.facets.corners(idx)) {
+                corners.push_back(corner);
+                vertices.push_back(geo_mesh.facet_corners.vertex(corner));
+            }
+            elem["corners"]  = corners;
+            elem["vertices"] = vertices;
+            for_each_facet_attribute(attributes, [&](const char* name, auto& ap){ if (wanted(name)) { attrs[name] = attribute_value_json(ap, idx); } });
+        } else { // edge
+            if (idx >= geo_mesh.edges.nb()) {
+                return make_error_content("edge index out of range: " + std::to_string(idx) + " >= " + std::to_string(geo_mesh.edges.nb()));
+            }
+            elem["vertices"] = json::array({geo_mesh.edges.vertex(idx, 0), geo_mesh.edges.vertex(idx, 1)});
+            json facets = json::array();
+            for (const GEO::index_t facet : geometry->get_edge_facets(idx)) {
+                facets.push_back(facet);
+            }
+            elem["facets"] = facets;
+            // Edge attributes are not stored (see interpolate_mesh_attributes TODO).
+        }
+        elem["attributes"] = attrs;
+        elements.push_back(elem);
+    }
+
+    return make_json_content({
+        {"node",            node->get_name()},
+        {"node_id",         node->get_id()},
+        {"primitive_index", primitive_index},
+        {"domain",          domain},
+        {"elements",        elements}
+    }).dump();
 }
 
 auto Mcp_server::action_align_components(const json& args) -> std::string
