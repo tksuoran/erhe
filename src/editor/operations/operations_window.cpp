@@ -567,12 +567,68 @@ public:
 
 } // anonymous namespace
 
-template<typename T>
-void Operations::async_mesh_operation()
+auto Operations::is_component_selection_active() const -> bool
 {
+    const Mesh_component_selection* mesh_component_selection = m_context.mesh_component_selection;
+    return (mesh_component_selection != nullptr) &&
+           (mesh_component_selection->get_mode() != Mesh_component_mode::object) &&
+           !mesh_component_selection->is_empty();
+}
+
+auto Operations::resolve_operation_items(
+    const bool                                     selection_aware,
+    std::vector<std::shared_ptr<erhe::Item_base>>& out_items
+) const -> bool
+{
+    out_items.clear();
+    if (is_component_selection_active()) {
+        if (!selection_aware) {
+            log_operations->info("Operation is not available while a mesh-component selection is active");
+            return false;
+        }
+        // Gather the distinct nodes carrying a live component selection.
+        Mesh_component_selection* mesh_component_selection = m_context.mesh_component_selection;
+        std::set<erhe::scene::Node*> seen;
+        for (const Mesh_component_entry& entry : mesh_component_selection->get_entries()) {
+            if (!mesh_component_selection->is_live(entry)) {
+                continue;
+            }
+            const std::shared_ptr<erhe::scene::Mesh> mesh = entry.mesh.lock();
+            if (!mesh) {
+                continue;
+            }
+            erhe::scene::Node* node = mesh->get_node();
+            if (node == nullptr) {
+                continue;
+            }
+            if (!seen.insert(node).second) {
+                continue;
+            }
+            std::shared_ptr<erhe::Item_base> item = std::dynamic_pointer_cast<erhe::Item_base>(node->shared_from_this());
+            if (item) {
+                out_items.push_back(std::move(item));
+            }
+        }
+        if (!out_items.empty()) {
+            return true;
+        }
+        // A component mode is active but nothing is live (e.g. all entries dormant):
+        // fall through to the object selection rather than silently doing nothing.
+    }
+    out_items = m_context.selection->get_selected_items();
+    return true;
+}
+
+template<typename T>
+void Operations::async_mesh_operation(const bool selection_aware)
+{
+    std::vector<std::shared_ptr<erhe::Item_base>> items;
+    if (!resolve_operation_items(selection_aware, items)) {
+        return;
+    }
     async_for_nodes_with_mesh(
         m_context,
-        m_context.selection->get_selected_items(),
+        items,
         [this](Mesh_operation_parameters&& mesh_operation_parameters)
         {
             m_context.operation_stack->queue(
@@ -582,9 +638,13 @@ void Operations::async_mesh_operation()
     );
 }
 
-void Operations::async_for_selected_nodes_with_mesh(std::function<void(Mesh_operation_parameters&&)> op)
+void Operations::async_for_selected_nodes_with_mesh(std::function<void(Mesh_operation_parameters&&)> op, const bool selection_aware)
 {
-    async_for_nodes_with_mesh(m_context, m_context.selection->get_selected_items(), op);
+    std::vector<std::shared_ptr<erhe::Item_base>> items;
+    if (!resolve_operation_items(selection_aware, items)) {
+        return;
+    }
+    async_for_nodes_with_mesh(m_context, items, op);
 }
 
 Operations::Operations(
@@ -988,7 +1048,13 @@ void Operations::imgui()
         }
     }
 
-    const auto has_selection_mode = (selected_mesh_count >= 1) ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
+    // While a mesh-component selection is active, only selection-aware geometry
+    // operations are available. has_selection_mode (used by every generic geometry
+    // button) is therefore disabled in component mode; Catmull-Clark, which is
+    // selection-aware, uses catmull_clark_mode and stays enabled.
+    const bool component_active   = is_component_selection_active();
+    const auto has_selection_mode = ((selected_mesh_count >= 1) && !component_active) ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
+    const auto catmull_clark_mode = (component_active || (selected_mesh_count >= 1)) ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
 
     //if (make_button("Unparent", has_selection_mode, button_size)) {
     //    const auto& node0 = selection.get<erhe::scene::Node>();
@@ -1039,7 +1105,7 @@ void Operations::imgui()
         flip_joint();
     }
 
-    if (make_button("Catmull-Clark", has_selection_mode, button_size)) {
+    if (make_button("Catmull-Clark", catmull_clark_mode, button_size)) {
         catmull_clark();
     }
     if (make_button("Sqrt3", has_selection_mode, button_size)) {
@@ -1921,7 +1987,9 @@ void Operations::union_()
 
 void Operations::catmull_clark()
 {
-    async_mesh_operation<Catmull_clark_subdivision_operation>();
+    // Selection-aware: when a face-mode mesh-component selection is active, only the
+    // selected facets are subdivided (the rest of the mesh stays connected).
+    async_mesh_operation<Catmull_clark_subdivision_operation>(true);
 }
 
 void Operations::sqrt3()

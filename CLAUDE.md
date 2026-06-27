@@ -233,7 +233,7 @@ lldb offers several machine interfaces. Ranked by efficiency *for an automated a
 ### Constraints
 
 - **The windowed editor needs a live display.** Metal/OpenGL builds have no headless variant (unlike the Vulkan headless build on Windows), so a *windowed* launch under lldb still aborts at startup if the display is off/asleep. Attaching to an editor that is already running is unaffected.
-- **Per the user's setup, do not launch/build the editor unprompted** (the user runs the Metal builds). Static/batch SB-API inspection that does not start the process (target/symbol/breakpoint queries, core-dump post-mortems) is fine; *launching* the GUI editor under lldb should be confirmed first. Attaching to an editor the user is already running is the friction-free path.
+- **Building and launching the editor to verify changes is self-serve.** You may `cmake --build build_xcode_metal --target editor --config Debug` and launch the resulting `build_xcode_metal/src/editor/Debug/editor` (e.g. to drive the in-editor MCP server) on your own initiative -- you do not need to ask first. Only ask if the user explicitly tells you to. (Be aware of the live-display requirement above: a windowed launch aborts at startup when the display is off.) Attaching to an editor the user is already running remains the friction-free path for lldb inspection.
 
 ## Runtime logs
 

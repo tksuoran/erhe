@@ -414,6 +414,74 @@ void Geometry_operation::copy_mesh_attributes()
     copy_attribute<GEO::vec2f>(s.corner_aniso_control,   d.corner_aniso_control   );
 }
 
+auto Geometry_operation::is_facet_selected(const GEO::index_t facet) const -> bool
+{
+    return (m_selected_facets == nullptr) || (m_selected_facets->find(facet) != m_selected_facets->end());
+}
+
+auto Geometry_operation::is_boundary_vertex(const GEO::index_t vertex) const -> bool
+{
+    if (m_selected_facets == nullptr) {
+        return false;
+    }
+    bool has_selected   = false;
+    bool has_unselected = false;
+    for (const GEO::index_t corner : source.get_vertex_corners(vertex)) {
+        if (is_facet_selected(source.get_corner_facet(corner))) {
+            has_selected = true;
+        } else {
+            has_unselected = true;
+        }
+    }
+    return has_selected && has_unselected;
+}
+
+void Geometry_operation::emit_unselected_facets_with_boundary_splice()
+{
+    if (m_selected_facets == nullptr) {
+        return; // Whole-mesh operation: there are no unselected facets.
+    }
+
+    // One destination corner slot: either a copied source corner, or an interface
+    // edge midpoint vertex spliced between two source corners.
+    struct Splice_entry
+    {
+        bool         is_midpoint;
+        GEO::index_t value; // src_corner when !is_midpoint, dst vertex when is_midpoint
+    };
+    std::vector<Splice_entry> entries;
+
+    for (const GEO::index_t src_facet : source_mesh.facets) {
+        if (is_facet_selected(src_facet)) {
+            continue;
+        }
+        const GEO::index_t corner_count = source_mesh.facets.nb_vertices(src_facet);
+        if (corner_count < 3) {
+            continue;
+        }
+        entries.clear();
+        for (GEO::index_t local_corner = 0; local_corner < corner_count; ++local_corner) {
+            const GEO::index_t src_corner  = source_mesh.facets.corner(src_facet, local_corner);
+            const GEO::index_t va          = source_mesh.facet_corners.vertex(src_corner);
+            const GEO::index_t next_corner = source_mesh.facets.corner(src_facet, (local_corner + 1) % corner_count);
+            const GEO::index_t vb          = source_mesh.facet_corners.vertex(next_corner);
+            entries.push_back(Splice_entry{.is_midpoint = false, .value = src_corner});
+            const GEO::index_t midpoint = get_src_edge_new_vertex(va, vb, 0);
+            if (midpoint != GEO::NO_VERTEX) {
+                entries.push_back(Splice_entry{.is_midpoint = true, .value = midpoint});
+            }
+        }
+        const GEO::index_t new_dst_facet = make_new_dst_facet_from_src_facet(src_facet, static_cast<GEO::index_t>(entries.size()));
+        for (GEO::index_t slot = 0; slot < static_cast<GEO::index_t>(entries.size()); ++slot) {
+            if (entries[slot].is_midpoint) {
+                make_new_dst_corner_from_dst_vertex(new_dst_facet, slot, entries[slot].value);
+            } else {
+                make_new_dst_corner_from_src_corner(new_dst_facet, slot, entries[slot].value);
+            }
+        }
+    }
+}
+
 void Geometry_operation::post_processing(const uint64_t process_flags)
 {
     interpolate_mesh_attributes();

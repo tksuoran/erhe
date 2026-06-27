@@ -172,9 +172,21 @@ public:
     void create_joint_settings();
 
 private:
-    void async_for_selected_nodes_with_mesh(std::function<void(Mesh_operation_parameters&&)> op);
+    void async_for_selected_nodes_with_mesh(std::function<void(Mesh_operation_parameters&&)> op, bool selection_aware = false);
 
     [[nodiscard]] auto count_selected_meshes() const -> size_t;
+
+    // True when a mesh-component selection (vertex / edge / face mode) is active and
+    // non-empty. Geometry operations that are not selection-aware are unavailable in
+    // this state; a selection-aware operation (Catmull-Clark) acts on the selection.
+    [[nodiscard]] auto is_component_selection_active() const -> bool;
+
+    // Decide which items a geometry operation runs on. Returns false (operation
+    // skipped) when a component selection is active but the operation is not
+    // selection-aware. Otherwise fills out_items with the component-selected nodes
+    // (when a component selection is active and the operation is selection-aware) or
+    // the object selection.
+    [[nodiscard]] auto resolve_operation_items(bool selection_aware, std::vector<std::shared_ptr<erhe::Item_base>>& out_items) const -> bool;
 
     // True when exactly two components of the active mesh-component mode
     // (vertex / edge / face) are selected on two distinct nodes, i.e. when
@@ -193,7 +205,7 @@ private:
     // hovered, falls back to the sole scene when exactly one exists.
     [[nodiscard]] auto get_target_scene_root() -> std::shared_ptr<Scene_root>;
 
-    template<typename T> void async_mesh_operation();
+    template<typename T> void async_mesh_operation(bool selection_aware = false);
 
     erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
     erhe::message_bus::Subscription<Load_scene_file_message>  m_load_scene_file_subscription;

@@ -1,9 +1,13 @@
 #include "items.hpp"
+#include "app_context.hpp"
 #include "editor_log.hpp"
 #include "operations/mesh_operation.hpp"
 #include "scene/scene_root.hpp"
+#include "tools/mesh_component_selection.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 
+#include "erhe_geometry/geometry.hpp"
+#include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -85,9 +89,33 @@ void async_for_nodes_with_mesh(
         return;
     }
 
+    // Snapshot the per-Geometry selected-facet sets while the scene lock is held on
+    // the main thread. The Mesh_component_selection store is mutated on the main
+    // thread, so it must not be read from the async worker; the snapshot is captured
+    // by value into the worker lambda below. Keyed by Geometry identity, matching
+    // the lookup in Mesh_operation::make_entries. Only face-mode, live entries with
+    // selected facets contribute.
+    std::unordered_map<const erhe::geometry::Geometry*, std::set<GEO::index_t>> selected_facets;
+    if ((context.mesh_component_selection != nullptr) &&
+        (context.mesh_component_selection->get_mode() == Mesh_component_mode::face)) {
+        for (const Mesh_component_entry& entry : context.mesh_component_selection->get_entries()) {
+            if (entry.facets.empty()) {
+                continue;
+            }
+            if (!context.mesh_component_selection->is_live(entry)) {
+                continue;
+            }
+            const std::shared_ptr<erhe::geometry::Geometry> geometry = entry.geometry.lock();
+            if (!geometry) {
+                continue;
+            }
+            selected_facets[geometry.get()] = entry.facets;
+        }
+    }
+
     ++context.pending_async_ops;
     tf::AsyncTask task = context.executor->silent_dependent_async(
-        [&context, op, items]()
+        [&context, op, items, selected_facets = std::move(selected_facets)]()
         {
             ++context.running_async_ops;
             // Geometry operations call into Geogram, whose assertion mechanism
@@ -112,7 +140,8 @@ void async_for_nodes_with_mesh(
                     }
                 };
 
-                parameters.items = items;
+                parameters.items           = items;
+                parameters.selected_facets = selected_facets;
                 op(std::move(parameters));
             } catch (const std::exception& e) {
                 log_operations->error("Async mesh operation failed: {}", e.what());

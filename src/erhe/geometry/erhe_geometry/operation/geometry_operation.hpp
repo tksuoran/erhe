@@ -3,6 +3,7 @@
 #include "erhe_geometry/geometry.hpp"
 #include <geogram/mesh/mesh.h>
 
+#include <set>
 #include <utility>
 #include <vector>
 #include <unordered_map>
@@ -75,6 +76,34 @@ protected:
         erhe::geometry::Geometry::process_flag_compute_facet_centroids;
 
     void post_processing(uint64_t process_flags = default_post_process_flags);
+
+    // Optional selection of source facets the operation should act on. When
+    // nullptr, the operation processes the whole mesh (every facet is treated as
+    // selected). When set, an operation restricts its topology change to the
+    // selected facets and keeps the result connected to the rest of the mesh by
+    // pinning the selection-boundary vertices, putting boundary-edge midpoints on
+    // the original edges, and re-emitting each unselected boundary facet as an
+    // n-gon that splices in those midpoints (no cracks, no T-junctions).
+    const std::set<GEO::index_t>* m_selected_facets{nullptr};
+
+    // True when the facet is in the active selection (or when there is no active
+    // selection, i.e. whole-mesh operation).
+    [[nodiscard]] auto is_facet_selected(GEO::index_t facet) const -> bool;
+
+    // True when the vertex is on the boundary of the selection: incident to both a
+    // selected and an unselected facet. Such vertices must be pinned so the
+    // modified region stays welded to the unmodified remainder. Always false when
+    // there is no active selection.
+    [[nodiscard]] auto is_boundary_vertex(GEO::index_t vertex) const -> bool;
+
+    // Re-emit every unselected facet into the destination. A facet not adjacent to
+    // the selection is copied 1:1; a facet sharing one or more interface edges (an
+    // edge that also borders a selected facet, hence carries operation-inserted
+    // midpoints) is rebuilt as an n-gon with those midpoint vertices spliced into
+    // its corner loop. Relies on m_src_edge_to_dst_vertex / get_src_edge_new_vertex
+    // so both sides of an interface edge reference the same destination vertex.
+    // No-op when there is no active selection.
+    void emit_unselected_facets_with_boundary_splice();
 
     const erhe::geometry::Geometry&  source;
     const erhe::geometry::Geometry*  rhs{nullptr};

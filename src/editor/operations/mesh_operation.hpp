@@ -5,11 +5,14 @@
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_scene/mesh.hpp"
 
+#include <geogram/basic/numeric.h>
 #include <glm/glm.hpp>
 
 #include <functional>
 #include <memory>
 #include <optional>
+#include <set>
+#include <unordered_map>
 #include <vector>
 
 namespace erhe::geometry {
@@ -36,6 +39,13 @@ public:
     std::optional<glm::mat4>    transform{};
 
     std::vector<std::shared_ptr<erhe::Item_base>> items{};
+
+    // Per-Geometry selected-facet snapshot, taken on the main thread from the
+    // Mesh_component_selection store (which must not be read from the async worker
+    // thread). Keyed by the Geometry the facet indices index into; a selection-aware
+    // operation (e.g. Catmull-Clark) looks up the geometry it is about to process and
+    // restricts the topology change to those facets. Empty / missing => whole mesh.
+    std::unordered_map<const erhe::geometry::Geometry*, std::set<GEO::index_t>> selected_facets{};
 
     // std::function<
     //     bool(
@@ -86,6 +96,22 @@ public:
 
     // Public API
     void add_entry   (Entry&& entry);
+
+    // Most general form. The geometry operation additionally receives the
+    // selected-facet set for the geometry it is processing (nullptr when the mesh
+    // has no live component selection), so a selection-aware operation can restrict
+    // its topology change to those facets. The other make_entries overloads delegate
+    // here, passing nullptr.
+    void make_entries(
+        std::function<
+            void(
+                const erhe::geometry::Geometry& before_geometry,
+                erhe::geometry::Geometry&       after_geometry,
+                erhe::scene::Node*              node,
+                const std::set<GEO::index_t>*   selected_facets
+            )
+        > geometry_operation
+    );
     void make_entries(
         std::function<
             void(

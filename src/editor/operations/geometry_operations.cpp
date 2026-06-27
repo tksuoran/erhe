@@ -42,7 +42,16 @@ Catmull_clark_subdivision_operation::Catmull_clark_subdivision_operation(Mesh_op
     : Mesh_operation{std::move(context)}
 {
     set_description("Catmull_clark");
-    make_entries(erhe::geometry::operation::catmull_clark_subdivision);
+    make_entries(
+        [](
+            const erhe::geometry::Geometry& before_geometry,
+            erhe::geometry::Geometry&       after_geometry,
+            erhe::scene::Node*              /*node*/,
+            const std::set<GEO::index_t>*   selected_facets
+        ) -> void {
+            erhe::geometry::operation::catmull_clark_subdivision(before_geometry, after_geometry, selected_facets);
+        }
+    );
     set_description(fmt::format("Catmull_clark {}", describe_entries()));
 }
 

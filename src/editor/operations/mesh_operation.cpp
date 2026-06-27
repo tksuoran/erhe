@@ -189,6 +189,22 @@ void Mesh_operation::make_entries(
 )
 {
     make_entries(
+        [geometry_operation](
+            const erhe::geometry::Geometry& before_geometry,
+            erhe::geometry::Geometry&       after_geometry,
+            erhe::scene::Node*              node,
+            const std::set<GEO::index_t>*   /*selected_facets*/
+        ) -> void {
+            geometry_operation(before_geometry, after_geometry, node);
+        }
+    );
+}
+
+void Mesh_operation::make_entries(
+    const std::function<void(const erhe::geometry::Geometry&, erhe::geometry::Geometry&, erhe::scene::Node*, const std::set<GEO::index_t>*)> geometry_operation
+)
+{
+    make_entries(
         [this, geometry_operation](const std::shared_ptr<erhe::scene::Mesh>& scene_mesh)
         {
             erhe::scene::Node* node = scene_mesh->get_node();
@@ -212,8 +228,16 @@ void Mesh_operation::make_entries(
                 if (!before_geometry) {
                     continue;
                 }
+                // A live mesh-component selection on this exact Geometry restricts the
+                // operation to the selected facets (the snapshot was keyed by Geometry
+                // identity on the main thread). No entry / empty set => whole mesh.
+                const std::set<GEO::index_t>* selected_facets = nullptr;
+                const auto facet_set_i = m_parameters.selected_facets.find(before_geometry.get());
+                if ((facet_set_i != m_parameters.selected_facets.end()) && !facet_set_i->second.empty()) {
+                    selected_facets = &facet_set_i->second;
+                }
                 auto after_geometry = std::make_shared<erhe::geometry::Geometry>();
-                geometry_operation(*before_geometry.get(), *after_geometry.get(), node);
+                geometry_operation(*before_geometry.get(), *after_geometry.get(), node, selected_facets);
 
                 auto sanitize_warnings = after_geometry->sanitize();
                 if (!sanitize_warnings.empty()) {
