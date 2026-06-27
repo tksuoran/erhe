@@ -7,6 +7,7 @@
 #include "erhe_geometry/operation/conway/join.hpp"
 #include "erhe_geometry/operation/conway/gyro.hpp"
 #include "erhe_geometry/operation/conway/truncate.hpp"
+#include "erhe_geometry/operation/subdivision/sqrt3_subdivision.hpp"
 
 #include <geogram/basic/geometry.h>
 
@@ -579,6 +580,126 @@ TEST(SelectiveOperationNormals, Selective_Truncate_Watertight_And_Keeps_Unmodifi
     }
     EXPECT_EQ(bad_direction, 0u) << bad_direction << " directed edges traversed more than once (flipped facet)";
     EXPECT_EQ(missing_twin,  0u) << missing_twin  << " edges have no opposite-direction twin (crack / hole at a corner cap)";
+
+    const long long V = static_cast<long long>(mesh.vertices.nb());
+    const long long E = static_cast<long long>(mesh.edges.nb());
+    const long long F = static_cast<long long>(mesh.facets.nb());
+    EXPECT_EQ(V - E + F, 2) << "Euler characteristic != 2 (V=" << V << " E=" << E << " F=" << F << ")";
+}
+
+// sqrt(3) subdivision both SMOOTHS interior-selected vertices and FLIPS interior
+// edges (the original edge becomes a centroid-centroid diagonal), so it is the
+// hardest selective op: an interior-to-selection edge flips across both centroids,
+// while a selection-boundary edge must keep its original segment (a centroid fan
+// triangle) so the unselected neighbor welds to it. To exercise BOTH paths, select
+// every facet incident to source vertex 0: vertex 0 becomes interior to the
+// selection (it is smoothed, and its incident spoke edges - each shared by two
+// selected facets - flip), while the surrounding ring of vertices stays on the
+// boundary (their facets' outer edges keep the original segment via a fan).
+//
+// Unlike the fan ops, an interior-selected vertex legitimately MOVES, so the
+// flatness invariant only holds for KEPT (non-interior-selected) original vertices.
+// sqrt3 carries over every vertex 1:1 (interior ones smoothed in place), so an
+// original vertex is still identified by "result vertex index < source vertex
+// count"; we additionally skip the interior-selected originals when checking
+// flatness. The result must still be a closed, consistently-oriented manifold.
+TEST(SelectiveOperationNormals, Selective_Sqrt3_Watertight_And_Keeps_Unmodified_Region_Flat)
+{
+    std::unique_ptr<Geometry> box = make_box_geometry(2);
+    const GEO::Mesh& src_mesh = box->get_mesh();
+    const GEO::index_t source_vertex_count = src_mesh.vertices.nb();
+
+    // Select every facet incident to source vertex 0.
+    std::set<GEO::index_t> selected_facets;
+    for (const GEO::index_t corner : box->get_vertex_corners(0)) {
+        selected_facets.insert(box->get_corner_facet(corner));
+    }
+    ASSERT_GE(selected_facets.size(), 3u) << "expected vertex 0 to be incident to at least three facets";
+
+    // Replicate the operation's interior-selected classification so the flatness
+    // check can skip the (legitimately moved) smoothed vertices.
+    std::vector<uint8_t> touches_selected  (source_vertex_count, 0);
+    std::vector<uint8_t> touches_unselected(source_vertex_count, 0);
+    for (GEO::index_t facet : src_mesh.facets) {
+        const bool selected = selected_facets.count(facet) != 0;
+        for (GEO::index_t corner : src_mesh.facets.corners(facet)) {
+            const GEO::index_t v = src_mesh.facet_corners.vertex(corner);
+            (selected ? touches_selected : touches_unselected)[v] = 1;
+        }
+    }
+    const auto interior_selected = [&](const GEO::index_t v) -> bool {
+        return (v < source_vertex_count) && (touches_selected[v] != 0) && (touches_unselected[v] == 0);
+    };
+    // The chosen selection must actually make vertex 0 interior (exercise the flip +
+    // smoothing path), otherwise the test would silently only cover fans.
+    ASSERT_TRUE(interior_selected(0)) << "vertex 0 should be interior to the selection";
+
+    std::unique_ptr<Geometry> result = std::make_unique<Geometry>("sqrt3_subset");
+    erhe::geometry::operation::sqrt3_subdivision(*box, *result, &selected_facets);
+
+    const GEO::Mesh& mesh = result->get_mesh();
+    const erhe::geometry::Mesh_attributes& attr = result->get_attributes();
+
+    // (1) The KEPT (non-interior) unmodified region stays flat; every result corner
+    // keeps a unit normal.
+    GEO::index_t total = 0;
+    GEO::index_t missing = 0;
+    GEO::index_t not_unit = 0;
+    GEO::index_t original_not_flat = 0;
+    for (GEO::index_t facet : mesh.facets) {
+        for (GEO::index_t corner : mesh.facets.corners(facet)) {
+            ++total;
+            const GEO::index_t v = mesh.facet_corners.vertex(corner);
+            if (!attr.corner_normal.has(corner)) {
+                ++missing;
+                continue;
+            }
+            const GEO::vec3f n   = attr.corner_normal.get(corner);
+            const float      len = GEO::length(n);
+            if (std::abs(len - 1.0f) > 1e-3f) {
+                ++not_unit;
+            }
+            // Skip the interior-selected originals: they are smoothed, so their
+            // adjacent corners legitimately leave the axis-aligned face.
+            const bool is_kept_original = (v < source_vertex_count) && !interior_selected(v);
+            if (is_kept_original && !is_axis_aligned(n)) {
+                ++original_not_flat;
+                EXPECT_TRUE(false)
+                    << "corner " << corner << " on kept original vertex " << v
+                    << " is no longer flat: (" << n.x << ", " << n.y << ", " << n.z << ")";
+            }
+        }
+    }
+    EXPECT_EQ(missing,           0u) << missing           << " / " << total << " result corners lost corner_normal";
+    EXPECT_EQ(not_unit,          0u) << not_unit          << " / " << total << " result corner normals are not unit length";
+    EXPECT_EQ(original_not_flat, 0u) << original_not_flat << " unmodified-region corners were smoothed";
+
+    // (2) Closed, consistently-oriented manifold (catches an unflipped / doubly
+    // flipped interior edge or a mis-wound boundary fan).
+    std::map<std::pair<GEO::index_t, GEO::index_t>, int> directed_edges;
+    for (GEO::index_t facet : mesh.facets) {
+        const GEO::index_t corner_count = mesh.facets.nb_corners(facet);
+        for (GEO::index_t lc = 0; lc < corner_count; ++lc) {
+            const GEO::index_t c  = mesh.facets.corner(facet, lc);
+            const GEO::index_t cn = mesh.facets.corner(facet, (lc + 1) % corner_count);
+            const GEO::index_t v0 = mesh.facet_corners.vertex(c);
+            const GEO::index_t v1 = mesh.facet_corners.vertex(cn);
+            ++directed_edges[std::make_pair(v0, v1)];
+        }
+    }
+    GEO::index_t bad_direction = 0;
+    GEO::index_t missing_twin  = 0;
+    for (const auto& [edge, count] : directed_edges) {
+        if (count != 1) {
+            ++bad_direction;
+        }
+        const std::pair<GEO::index_t, GEO::index_t> twin{edge.second, edge.first};
+        if (directed_edges.find(twin) == directed_edges.end()) {
+            ++missing_twin;
+        }
+    }
+    EXPECT_EQ(bad_direction, 0u) << bad_direction << " directed edges traversed more than once (flipped facet)";
+    EXPECT_EQ(missing_twin,  0u) << missing_twin  << " edges have no opposite-direction twin (crack / unflipped edge)";
 
     const long long V = static_cast<long long>(mesh.vertices.nb());
     const long long E = static_cast<long long>(mesh.edges.nb());

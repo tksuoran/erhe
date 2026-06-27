@@ -59,7 +59,16 @@ Sqrt3_subdivision_operation::Sqrt3_subdivision_operation(Mesh_operation_paramete
     : Mesh_operation{std::move(context)}
 {
     set_description("Sqrt3");
-    make_entries(erhe::geometry::operation::sqrt3_subdivision);
+    make_entries(
+        [](
+            const erhe::geometry::Geometry& before_geometry,
+            erhe::geometry::Geometry&       after_geometry,
+            erhe::scene::Node*              /*node*/,
+            const std::set<GEO::index_t>*   selected_facets
+        ) -> void {
+            erhe::geometry::operation::sqrt3_subdivision(before_geometry, after_geometry, selected_facets);
+        }
+    );
     set_description(fmt::format("Sqrt3 {}", describe_entries()));
 }
 

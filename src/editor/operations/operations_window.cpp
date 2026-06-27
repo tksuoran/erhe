@@ -1994,7 +1994,9 @@ void Operations::catmull_clark()
 
 void Operations::sqrt3()
 {
-    async_mesh_operation<Sqrt3_subdivision_operation>();
+    // Selection-aware: when a face-mode mesh-component selection is active, only the
+    // selected facets are subdivided (the rest of the mesh stays connected).
+    async_mesh_operation<Sqrt3_subdivision_operation>(true);
 }
 
 void Operations::dual()
