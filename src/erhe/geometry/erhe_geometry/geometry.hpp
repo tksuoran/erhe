@@ -528,7 +528,11 @@ inline void interpolate_attribute(
             continue;
         }
 
-        T dst_value{0};
+        // Value-initialize (empty braces): GEO::vecng's std::initializer_list
+        // constructor only assigns the listed components, so "T dst_value{0}"
+        // would leave .y/.z (and .w) uninitialized. "T dst_value{}" invokes the
+        // default constructor, which zeroes every component.
+        T dst_value{};
 
         if constexpr (!std::is_same_v<T, GEO::vec4u>) { // std::is_same_v<T::value_type, Numeric::uint32> ?
             for (auto j : src_keys) {
