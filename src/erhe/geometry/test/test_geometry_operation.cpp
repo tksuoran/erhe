@@ -154,7 +154,12 @@ TEST(ConwayTopology, Gyro_Cube)
 TEST(ConwayTopology, Meta_Cube)
 {
     std::unique_ptr<erhe::geometry::Geometry> cube = make_solid("cube", erhe::geometry::shapes::make_cube);
-    std::unique_ptr<erhe::geometry::Geometry> result = apply_op(*cube, "meta_cube", erhe::geometry::operation::meta);
+    std::unique_ptr<erhe::geometry::Geometry> result = apply_op(
+        *cube, "meta_cube",
+        [](const erhe::geometry::Geometry& source, erhe::geometry::Geometry& destination) {
+            erhe::geometry::operation::meta(source, destination);
+        }
+    );
     const GEO::Mesh& m = result->get_mesh();
     EXPECT_EQ(m.vertices.nb(), 26u);
     EXPECT_EQ(m.facets.nb(),   48u);

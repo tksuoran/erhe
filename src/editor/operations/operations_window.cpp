@@ -2021,7 +2021,9 @@ void Operations::kis()
 
 void Operations::meta()
 {
-    async_mesh_operation<Meta_operation>();
+    // Selection-aware: when a face-mode mesh-component selection is active, only the
+    // selected facets are split (the rest of the mesh stays connected).
+    async_mesh_operation<Meta_operation>(true);
 }
 
 void Operations::ortho()

@@ -112,7 +112,16 @@ Meta_operation::Meta_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     set_description("Meta");
-    make_entries(erhe::geometry::operation::meta);
+    make_entries(
+        [](
+            const erhe::geometry::Geometry& before_geometry,
+            erhe::geometry::Geometry&       after_geometry,
+            erhe::scene::Node*              /*node*/,
+            const std::set<GEO::index_t>*   selected_facets
+        ) -> void {
+            erhe::geometry::operation::meta(before_geometry, after_geometry, selected_facets);
+        }
+    );
     set_description(fmt::format("Meta {}", describe_entries()));
 }
 
