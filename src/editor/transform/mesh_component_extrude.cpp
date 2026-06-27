@@ -530,12 +530,30 @@ void finalize_extrude_normals(Geometry& geometry)
             attributes.vertex_normal.set(vertex, s);
         }
     }
-    // Collapse stored corner normals to the smooth vertex normal (hard-edge shading on
-    // the new faces is a known limitation, matching Move_mesh_vertices_operation).
-    for (GEO::index_t corner = 0, corner_end = mesh.facet_corners.nb(); corner < corner_end; ++corner) {
-        if (attributes.corner_normal.try_get(corner).has_value()) {
-            const GEO::index_t vertex = mesh.facet_corners.vertex(corner);
-            attributes.corner_normal.set(corner, attributes.vertex_normal_smooth.get(vertex));
+    // Corner normals: preserve the unmodified region and keep the new walls hard.
+    //
+    // The result geometry began as a copy of the source, so every ORIGINAL face
+    // corner already carries the source's per-corner normal (present). Those
+    // faces are either untouched (the surrounding surface) or a pure translation
+    // of the selected facets (the extruded cap); a translation does not change a
+    // normal, so their flat shading must be left exactly as copied - overwriting
+    // them with a smooth average is what rounded the whole mesh.
+    //
+    // The newly created side-wall / cap faces were built with set_vertex only, so
+    // their corners have no stored normal yet. Give each such corner its facet's
+    // hard normal, so a wall reads as a crisp flat face with a hard crease against
+    // both the cap and the surrounding surface (the expected look of an extrusion).
+    // Degenerate new faces (e.g. the vertex-extrude 2-gons) are left without a
+    // corner normal so they fall back to the renderer's facet/derived normal.
+    for (GEO::index_t facet = 0, facet_end = mesh.facets.nb(); facet < facet_end; ++facet) {
+        const std::optional<GEO::vec3f> facet_normal = attributes.facet_normal.try_get(facet);
+        if (!facet_normal.has_value() || (length2(facet_normal.value()) < 1e-20f)) {
+            continue;
+        }
+        for (const GEO::index_t corner : mesh.facets.corners(facet)) {
+            if (!attributes.corner_normal.try_get(corner).has_value()) {
+                attributes.corner_normal.set(corner, facet_normal.value());
+            }
         }
     }
 }
