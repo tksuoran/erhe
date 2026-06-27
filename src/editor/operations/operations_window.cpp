@@ -2058,12 +2058,15 @@ void Operations::truncate()
 void Operations::gyro()
 {
     const float ratio = m_gyro_ratio;
+    // Selection-aware: when a face-mode mesh-component selection is active, only the
+    // selected facets are gyrated (the rest of the mesh stays connected).
     async_for_selected_nodes_with_mesh(
         [this, ratio](Mesh_operation_parameters&& params) {
             m_context.operation_stack->queue(
                 std::make_shared<Gyro_operation>(std::move(params), ratio)
             );
-        }
+        },
+        true
     );
 }
 

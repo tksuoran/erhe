@@ -136,6 +136,51 @@ void Geometry_operation::make_edge_midpoints(const std::initializer_list<float> 
     ERHE_VERIFY(new_dst_vertex == new_dst_vertex_end);
 }
 
+void Geometry_operation::make_selected_edge_midpoints(const std::initializer_list<float> relative_positions)
+{
+    geo_assert(relative_positions.size() != 0);
+    ERHE_VERIFY(m_src_edge_to_dst_vertex.empty());
+    for (GEO::index_t src_edge : source_mesh.edges) {
+        const std::vector<GEO::index_t>& src_edge_facets = source.get_edge_facets(src_edge);
+        bool any_selected = false;
+        for (const GEO::index_t src_facet : src_edge_facets) {
+            if (is_facet_selected(src_facet)) {
+                any_selected = true;
+                break;
+            }
+        }
+        if (!any_selected) {
+            continue; // Edge not touched by the selection: no midpoint.
+        }
+        const GEO::index_t                          src_vertex_a = source_mesh.edges.vertex(src_edge, 0);
+        const GEO::index_t                          src_vertex_b = source_mesh.edges.vertex(src_edge, 1);
+        const std::pair<GEO::index_t, GEO::index_t> src_edge_key = std::make_pair(src_vertex_a, src_vertex_b);
+        ERHE_VERIFY(src_vertex_a < src_vertex_b);
+        GEO::index_t split_slot = 0;
+        for (const float t : relative_positions) {
+            const float        weight_a       = t;
+            const float        weight_b       = 1.0f - t;
+            const GEO::index_t new_dst_vertex = destination_mesh.vertices.create_vertices(1);
+            log_operation->trace(
+                "creating selected edge midpoint: src edge {} slot {}: w0 = {}, v0 = {}, w1 = {} v1 = {}, new dst vertex = {}",
+                src_edge, split_slot, weight_a, src_vertex_a, weight_b, src_vertex_b, new_dst_vertex
+            );
+            m_src_edge_to_dst_vertex[src_edge_key].push_back(new_dst_vertex);
+            for (const GEO::index_t src_facet : src_edge_facets) {
+                const GEO::index_t local_src_corner_a = source_mesh.facets.find_vertex(src_facet, src_vertex_a);
+                const GEO::index_t local_src_corner_b = source_mesh.facets.find_vertex(src_facet, src_vertex_b);
+                const GEO::index_t src_corner_a       = source_mesh.facets.corner(src_facet, local_src_corner_a);
+                const GEO::index_t src_corner_b       = source_mesh.facets.corner(src_facet, local_src_corner_b);
+                add_vertex_source       (new_dst_vertex, weight_a, src_vertex_a);
+                add_vertex_source       (new_dst_vertex, weight_b, src_vertex_b);
+                add_vertex_corner_source(new_dst_vertex, weight_a, src_corner_a);
+                add_vertex_corner_source(new_dst_vertex, weight_b, src_corner_b);
+            }
+            ++split_slot;
+        }
+    }
+}
+
 auto Geometry_operation::get_src_edge_new_vertex(GEO::index_t src_vertex_a, GEO::index_t src_vertex_b, GEO::index_t vertex_split_position) const -> GEO::index_t
 {
     const bool swapped = src_vertex_a > src_vertex_b;
@@ -466,8 +511,15 @@ void Geometry_operation::emit_unselected_facets_with_boundary_splice()
             const GEO::index_t next_corner = source_mesh.facets.corner(src_facet, (local_corner + 1) % corner_count);
             const GEO::index_t vb          = source_mesh.facet_corners.vertex(next_corner);
             entries.push_back(Splice_entry{.is_midpoint = false, .value = src_corner});
-            const GEO::index_t midpoint = get_src_edge_new_vertex(va, vb, 0);
-            if (midpoint != GEO::NO_VERTEX) {
+            // Splice in every split slot on this edge, in va->vb traversal order, so
+            // multi-split operations (gyro: two midpoints per edge) weld as cleanly
+            // as single-split ones. get_src_edge_new_vertex returns the split slots in
+            // traversal order and NO_VERTEX once they are exhausted.
+            for (GEO::index_t split = 0; ; ++split) {
+                const GEO::index_t midpoint = get_src_edge_new_vertex(va, vb, split);
+                if (midpoint == GEO::NO_VERTEX) {
+                    break;
+                }
                 entries.push_back(Splice_entry{.is_midpoint = true, .value = midpoint});
             }
         }

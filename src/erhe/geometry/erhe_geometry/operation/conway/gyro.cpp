@@ -1,35 +1,64 @@
 #include "erhe_geometry/operation/conway/gyro.hpp"
 #include "erhe_geometry/operation/geometry_operation.hpp"
+#include "erhe_verify/verify.hpp"
 
 namespace erhe::geometry::operation {
 
 class Gyro : public Geometry_operation
 {
 public:
-    Gyro(const Geometry& source, Geometry& destination, float ratio);
+    Gyro(const Geometry& source, Geometry& destination, float ratio, const std::set<GEO::index_t>* selected_facets);
 
     void build();
     float m_ratio;
 };
 
-Gyro::Gyro(const Geometry& source, Geometry& destination, float ratio)
+Gyro::Gyro(const Geometry& source, Geometry& destination, float ratio, const std::set<GEO::index_t>* selected_facets)
     : Geometry_operation{source, destination}
     , m_ratio{ratio}
 {
+    m_selected_facets = selected_facets;
 }
 
 void Gyro::build()
 {
-    // For each corner in the src facet, create a pentagon from:
+    // For each corner in a selected src facet, create a pentagon from:
     // (prev edge midpoint 0, prev edge midpoint 1, corner vertex,
     //  next edge midpoint 0, face centroid)
-    // ratio controls edge split positions (ratio and 1-ratio).
+    // ratio controls the edge split positions (ratio and 1 - ratio).
+    //
+    // Gyro keeps both split points on the original edge segment (it never moves a
+    // vertex or split point off the geometry), so unlike Catmull-Clark there is no
+    // boundary smoothing to suppress. An active selection only restricts which edges
+    // are split, which facets get a centroid, and which facets are fanned; the
+    // unselected facets bordering the selection are re-emitted as n-gons that splice
+    // in BOTH boundary-edge split points so the seam stays watertight. With no active
+    // selection every edge / facet qualifies, reproducing the whole-mesh behavior.
 
+    // Every source vertex maps 1:1 to a destination vertex, pinned to itself.
     make_dst_vertices_from_src_vertices();
-    make_facet_centroids();
-    make_edge_midpoints({m_ratio, 1.0f - m_ratio});
 
+    // Facet centroids: only for selected facets. Pre-size the lookup so
+    // make_new_dst_corner_from_src_facet_centroid's bound assert holds even when the
+    // highest-indexed facet is unselected.
+    m_src_facet_centroid_to_dst_vertex.resize(source_mesh.facets.nb());
     for (const GEO::index_t src_facet : source_mesh.facets) {
+        if (!is_facet_selected(src_facet)) {
+            continue;
+        }
+        make_new_dst_vertex_from_src_facet_centroid(src_facet);
+    }
+
+    // Two split points (ratio, 1 - ratio) on every edge incident to a selected facet.
+    make_selected_edge_midpoints({m_ratio, 1.0f - m_ratio});
+
+    // Fan each selected facet into pentagons. All edges of a selected facet carry
+    // both split points, so the NO_VERTEX guard never fires here; it is kept for
+    // safety.
+    for (const GEO::index_t src_facet : source_mesh.facets) {
+        if (!is_facet_selected(src_facet)) {
+            continue;
+        }
         const GEO::index_t src_corner_count = source_mesh.facets.nb_corners(src_facet);
         if (src_corner_count < 3) {
             continue;
@@ -58,14 +87,30 @@ void Gyro::build()
         }
     }
 
+    // Re-emit the unselected facets, splicing both interface-edge split points into
+    // the ones that border the selection so the seam is welded (no T-junctions).
+    emit_unselected_facets_with_boundary_splice();
+
+#if !defined(NDEBUG)
+    // Gyro never smooths a vertex: every destination vertex carried over from a
+    // source vertex must end with exactly one source (1.0, itself). Anything else
+    // means a stray contribution leaked onto it and the boundary would crack.
+    for (GEO::index_t vertex = 0; vertex < source_mesh.vertices.nb(); ++vertex) {
+        const GEO::index_t dst_vertex = m_vertex_src_to_dst[vertex];
+        const std::vector<std::pair<float, GEO::index_t>>& sources = m_dst_vertex_sources.get(dst_vertex);
+        ERHE_VERIFY(sources.size() == 1);
+        ERHE_VERIFY(sources[0].first == 1.0f);
+        ERHE_VERIFY(sources[0].second == vertex);
+    }
+#endif
+
     post_processing();
 }
 
-void gyro(const Geometry& source, Geometry& destination, float ratio)
+void gyro(const Geometry& source, Geometry& destination, float ratio, const std::set<GEO::index_t>* selected_facets)
 {
-    Gyro operation{source, destination, ratio};
+    Gyro operation{source, destination, ratio, selected_facets};
     operation.build();
 }
-
 
 } // namespace erhe::geometry::operation

@@ -144,8 +144,13 @@ Gyro_operation::Gyro_operation(Mesh_operation_parameters&& context, float ratio)
 {
     set_description("Gyro");
     make_entries(
-        [ratio](const erhe::geometry::Geometry& source, erhe::geometry::Geometry& destination) {
-            erhe::geometry::operation::gyro(source, destination, ratio);
+        [ratio](
+            const erhe::geometry::Geometry& before_geometry,
+            erhe::geometry::Geometry&       after_geometry,
+            erhe::scene::Node*              /*node*/,
+            const std::set<GEO::index_t>*   selected_facets
+        ) -> void {
+            erhe::geometry::operation::gyro(before_geometry, after_geometry, ratio, selected_facets);
         }
     );
     set_description(fmt::format("Gyro {}", describe_entries()));

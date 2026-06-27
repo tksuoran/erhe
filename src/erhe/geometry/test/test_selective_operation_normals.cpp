@@ -5,6 +5,7 @@
 #include "erhe_geometry/operation/conway/meta.hpp"
 #include "erhe_geometry/operation/conway/kis.hpp"
 #include "erhe_geometry/operation/conway/join.hpp"
+#include "erhe_geometry/operation/conway/gyro.hpp"
 
 #include <geogram/basic/geometry.h>
 
@@ -374,6 +375,98 @@ TEST(SelectiveOperationNormals, Selective_Join_Is_Watertight_And_Keeps_Unmodifie
     }
     EXPECT_EQ(bad_direction, 0u) << bad_direction << " directed edges traversed more than once (flipped facet)";
     EXPECT_EQ(missing_twin,  0u) << missing_twin  << " edges have no opposite-direction twin (crack / hole)";
+
+    const long long V = static_cast<long long>(mesh.vertices.nb());
+    const long long E = static_cast<long long>(mesh.edges.nb());
+    const long long F = static_cast<long long>(mesh.facets.nb());
+    EXPECT_EQ(V - E + F, 2) << "Euler characteristic != 2 (V=" << V << " E=" << E << " F=" << F << ")";
+}
+
+// Conway "gyro" is the first multi-split selective op: it puts TWO midpoints on
+// every edge, so the boundary weld must splice both of them into the unselected
+// neighbor (a single-midpoint splice would leave a T-junction). Like the other fan
+// ops gyro keeps both split points on the original segment, so the unmodified region
+// stays flat; and the result must remain a closed, consistently-oriented manifold.
+TEST(SelectiveOperationNormals, Selective_Gyro_Watertight_And_Keeps_Unmodified_Region_Flat)
+{
+    std::unique_ptr<Geometry> box = make_box_geometry(2);
+    const GEO::Mesh& src_mesh = box->get_mesh();
+    const GEO::index_t source_vertex_count = src_mesh.vertices.nb();
+
+    // Select two adjacent facets, so both the interior-to-selection shared edge (its
+    // two midpoints serve both pentagons) and the multi-split boundary weld are
+    // exercised.
+    std::set<GEO::index_t> selected_facets;
+    for (GEO::index_t e = 0; (e < src_mesh.edges.nb()) && selected_facets.empty(); ++e) {
+        const std::vector<GEO::index_t>& facets = box->get_edge_facets(e);
+        if (facets.size() == 2) {
+            selected_facets.insert(facets[0]);
+            selected_facets.insert(facets[1]);
+        }
+    }
+    ASSERT_EQ(selected_facets.size(), 2u) << "could not find two adjacent facets to select";
+
+    std::unique_ptr<Geometry> result = std::make_unique<Geometry>("gyro_subset");
+    erhe::geometry::operation::gyro(*box, *result, 1.0f / 3.0f, &selected_facets);
+
+    const GEO::Mesh& mesh = result->get_mesh();
+    const erhe::geometry::Mesh_attributes& attr = result->get_attributes();
+
+    // (1) Unmodified region stays flat; every result corner keeps a unit normal.
+    GEO::index_t total = 0;
+    GEO::index_t missing = 0;
+    GEO::index_t not_unit = 0;
+    GEO::index_t original_not_flat = 0;
+    for (GEO::index_t facet : mesh.facets) {
+        for (GEO::index_t corner : mesh.facets.corners(facet)) {
+            ++total;
+            const GEO::index_t v = mesh.facet_corners.vertex(corner);
+            if (!attr.corner_normal.has(corner)) {
+                ++missing;
+                continue;
+            }
+            const GEO::vec3f n   = attr.corner_normal.get(corner);
+            const float      len = GEO::length(n);
+            if (std::abs(len - 1.0f) > 1e-3f) {
+                ++not_unit;
+            }
+            if ((v < source_vertex_count) && !is_axis_aligned(n)) {
+                ++original_not_flat;
+                EXPECT_TRUE(false)
+                    << "corner " << corner << " on original vertex " << v
+                    << " is no longer flat: (" << n.x << ", " << n.y << ", " << n.z << ")";
+            }
+        }
+    }
+    EXPECT_EQ(missing,           0u) << missing           << " / " << total << " result corners lost corner_normal";
+    EXPECT_EQ(not_unit,          0u) << not_unit          << " / " << total << " result corner normals are not unit length";
+    EXPECT_EQ(original_not_flat, 0u) << original_not_flat << " unmodified-region corners were smoothed";
+
+    // (2) Closed, consistently-oriented manifold (catches a multi-split T-junction).
+    std::map<std::pair<GEO::index_t, GEO::index_t>, int> directed_edges;
+    for (GEO::index_t facet : mesh.facets) {
+        const GEO::index_t corner_count = mesh.facets.nb_corners(facet);
+        for (GEO::index_t lc = 0; lc < corner_count; ++lc) {
+            const GEO::index_t c  = mesh.facets.corner(facet, lc);
+            const GEO::index_t cn = mesh.facets.corner(facet, (lc + 1) % corner_count);
+            const GEO::index_t v0 = mesh.facet_corners.vertex(c);
+            const GEO::index_t v1 = mesh.facet_corners.vertex(cn);
+            ++directed_edges[std::make_pair(v0, v1)];
+        }
+    }
+    GEO::index_t bad_direction = 0;
+    GEO::index_t missing_twin  = 0;
+    for (const auto& [edge, count] : directed_edges) {
+        if (count != 1) {
+            ++bad_direction;
+        }
+        const std::pair<GEO::index_t, GEO::index_t> twin{edge.second, edge.first};
+        if (directed_edges.find(twin) == directed_edges.end()) {
+            ++missing_twin;
+        }
+    }
+    EXPECT_EQ(bad_direction, 0u) << bad_direction << " directed edges traversed more than once (flipped facet)";
+    EXPECT_EQ(missing_twin,  0u) << missing_twin  << " edges have no opposite-direction twin (crack / T-junction)";
 
     const long long V = static_cast<long long>(mesh.vertices.nb());
     const long long E = static_cast<long long>(mesh.edges.nb());

@@ -100,9 +100,12 @@ protected:
     // the selection is copied 1:1; a facet sharing one or more interface edges (an
     // edge that also borders a selected facet, hence carries operation-inserted
     // midpoints) is rebuilt as an n-gon with those midpoint vertices spliced into
-    // its corner loop. Relies on m_src_edge_to_dst_vertex / get_src_edge_new_vertex
-    // so both sides of an interface edge reference the same destination vertex.
-    // No-op when there is no active selection.
+    // its corner loop. Every split slot on an interface edge is spliced in, in the
+    // unselected facet's traversal order, so multi-split operations (e.g. gyro, which
+    // puts two midpoints on each edge) weld as cleanly as single-split ones. Relies
+    // on m_src_edge_to_dst_vertex / get_src_edge_new_vertex so both sides of an
+    // interface edge reference the same destination vertices. No-op when there is no
+    // active selection.
     void emit_unselected_facets_with_boundary_splice();
 
     const erhe::geometry::Geometry&  source;
@@ -143,6 +146,14 @@ protected:
     //// [[nodiscard]] auto get_dst_vertex_from_src_edge(GEO::index_t src_edge) -> GEO::index_t;
 
     void make_edge_midpoints(std::initializer_list<float> relative_positions);
+
+    // Selection-aware variant of make_edge_midpoints: creates the same split
+    // midpoints (registered in m_src_edge_to_dst_vertex in relative_positions order)
+    // but only for edges incident to at least one selected facet. With no active
+    // selection every edge qualifies, reproducing make_edge_midpoints. Used by
+    // selective operations so a midpoint is created exactly where the selected region
+    // and its welded boundary need one.
+    void make_selected_edge_midpoints(std::initializer_list<float> relative_positions);
 
     [[nodiscard]] auto get_src_edge_new_vertex(GEO::index_t src_vertex_a, GEO::index_t src_vertex_b, GEO::index_t vertex_split_position) const -> GEO::index_t;
 
