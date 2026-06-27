@@ -2010,12 +2010,15 @@ void Operations::join()
 void Operations::kis()
 {
     const float height = m_kis_height;
+    // Selection-aware: when a face-mode mesh-component selection is active, only the
+    // selected facets are raised (the rest of the mesh stays connected).
     async_for_selected_nodes_with_mesh(
         [this, height](Mesh_operation_parameters&& params) {
             m_context.operation_stack->queue(
                 std::make_shared<Kis_operation>(std::move(params), height)
             );
-        }
+        },
+        true
     );
 }
 

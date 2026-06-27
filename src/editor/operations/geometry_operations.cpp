@@ -84,8 +84,13 @@ Kis_operation::Kis_operation(Mesh_operation_parameters&& context, float height)
 {
     set_description("Kis");
     make_entries(
-        [height](const erhe::geometry::Geometry& source, erhe::geometry::Geometry& destination) {
-            erhe::geometry::operation::kis(source, destination, height);
+        [height](
+            const erhe::geometry::Geometry& before_geometry,
+            erhe::geometry::Geometry&       after_geometry,
+            erhe::scene::Node*              /*node*/,
+            const std::set<GEO::index_t>*   selected_facets
+        ) -> void {
+            erhe::geometry::operation::kis(before_geometry, after_geometry, height, selected_facets);
         }
     );
     set_description(fmt::format("Kis {}", describe_entries()));

@@ -1,29 +1,55 @@
 #include "erhe_geometry/operation/conway/kis.hpp"
 #include "erhe_geometry/operation/geometry_operation.hpp"
+#include "erhe_verify/verify.hpp"
 
 namespace erhe::geometry::operation {
 
 class Kis : public Geometry_operation
 {
 public:
-    Kis(const Geometry& source, Geometry& destination, float height);
+    Kis(const Geometry& source, Geometry& destination, float height, const std::set<GEO::index_t>* selected_facets);
 
     void build();
     float m_height;
 };
 
-Kis::Kis(const Geometry& source, Geometry& destination, float height)
+Kis::Kis(const Geometry& source, Geometry& destination, float height, const std::set<GEO::index_t>* selected_facets)
     : Geometry_operation{source, destination}
     , m_height{height}
 {
+    m_selected_facets = selected_facets;
 }
 
 void Kis::build()
 {
-    make_dst_vertices_from_src_vertices();
-    make_facet_centroids();
+    // Raise a centroid over each selected facet and fan it into triangles
+    // (centroid, corner, next corner). Kis keeps every original edge intact (no edge
+    // midpoints), so vertices stay pinned at weight 1.0 and the selected fan
+    // triangles share their boundary edges with the untouched neighbors. An active
+    // selection therefore only restricts which facets get a centroid and are fanned;
+    // the unselected facets are copied through (no midpoints to splice in) so the
+    // result stays watertight. With no active selection every facet qualifies,
+    // reproducing the whole-mesh behavior.
 
-    for (GEO::index_t src_facet : source_mesh.facets) {
+    // Every source vertex maps 1:1 to a destination vertex, pinned to itself.
+    make_dst_vertices_from_src_vertices();
+
+    // Facet centroids: only for selected facets. Pre-size the lookup so
+    // make_new_dst_corner_from_src_facet_centroid's bound assert holds even when the
+    // highest-indexed facet is unselected.
+    m_src_facet_centroid_to_dst_vertex.resize(source_mesh.facets.nb());
+    for (const GEO::index_t src_facet : source_mesh.facets) {
+        if (!is_facet_selected(src_facet)) {
+            continue;
+        }
+        make_new_dst_vertex_from_src_facet_centroid(src_facet);
+    }
+
+    // Fan each selected facet from its centroid.
+    for (const GEO::index_t src_facet : source_mesh.facets) {
+        if (!is_facet_selected(src_facet)) {
+            continue;
+        }
         const GEO::index_t src_facet_corner_count = source_mesh.facets.nb_corners(src_facet);
         if (src_facet_corner_count < 3) {
             continue;
@@ -38,12 +64,30 @@ void Kis::build()
         }
     }
 
+    // Re-emit the unselected facets. Kis inserts no edge midpoints, so this copies
+    // each one 1:1 (no splicing); it is still required so the unselected region
+    // reaches the destination. No-op when there is no active selection.
+    emit_unselected_facets_with_boundary_splice();
+
+#if !defined(NDEBUG)
+    // Kis never smooths a vertex: every destination vertex carried over from a
+    // source vertex must end with exactly one source (1.0, itself). Anything else
+    // means a stray contribution leaked onto it and the boundary would crack.
+    for (GEO::index_t vertex = 0; vertex < source_mesh.vertices.nb(); ++vertex) {
+        const GEO::index_t dst_vertex = m_vertex_src_to_dst[vertex];
+        const std::vector<std::pair<float, GEO::index_t>>& sources = m_dst_vertex_sources.get(dst_vertex);
+        ERHE_VERIFY(sources.size() == 1);
+        ERHE_VERIFY(sources[0].first == 1.0f);
+        ERHE_VERIFY(sources[0].second == vertex);
+    }
+#endif
+
     post_processing();
 
-    // Offset each centroid vertex along the face normal by height
+    // Offset each selected facet's centroid vertex along the face normal by height.
     if (m_height != 0.0f) {
-        for (GEO::index_t src_facet : source_mesh.facets) {
-            if (src_facet >= m_src_facet_centroid_to_dst_vertex.size()) {
+        for (const GEO::index_t src_facet : source_mesh.facets) {
+            if (!is_facet_selected(src_facet)) {
                 continue;
             }
             const GEO::index_t dst_vertex = m_src_facet_centroid_to_dst_vertex[src_facet];
@@ -57,9 +101,9 @@ void Kis::build()
     }
 }
 
-void kis(const Geometry& source, Geometry& destination, float height)
+void kis(const Geometry& source, Geometry& destination, float height, const std::set<GEO::index_t>* selected_facets)
 {
-    Kis operation{source, destination, height};
+    Kis operation{source, destination, height, selected_facets};
     operation.build();
 }
 
