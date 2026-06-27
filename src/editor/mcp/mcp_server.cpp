@@ -1060,6 +1060,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "generate_texture_coordinates") result = action_generate_texture_coordinates(req->arguments);
         else if (req->tool_name == "set_transform_reference_mode") result = action_set_transform_reference_mode(req->arguments);
         else if (req->tool_name == "set_transform_mode")           result = action_set_transform_mode          (req->arguments);
+        else if (req->tool_name == "get_transform_state")          result = query_transform_state              (req->arguments);
         else                                              result = execute_command       (req->tool_name);
 
         } catch (const std::exception& e) {
@@ -1608,17 +1609,18 @@ void Mcp_server::refresh_tool_list()
     }});
 
     // Transform reference frame for the transform gizmo / numeric edits.
-    m_tool_infos.push_back({"set_transform_reference_mode", "Set the orientation reference frame of the transform tool: global (world axes), local (selection's own orientation), reference (a chosen reference node's orientation), or selection (a frame derived from the active mesh-component selection). For reference mode, give reference_node_id or reference_node_name (searched across scenes, or within scene_name when given).", {
+    m_tool_infos.push_back({"set_transform_reference_mode", "Set the orientation reference frame (transform space) of the transform tool: global/world (world axes), local (selection's own orientation), reference (a chosen reference node's orientation), or selection (a frame derived from the active mesh-component selection). For reference mode, give reference_node_id or reference_node_name (searched across scenes, or within scene_name when given) - this is how you set the reference. edge_normal_blend tunes the selection-mode frame. Read the current state back with get_transform_state.", {
         {"type", "object"},
         {"properties", {
-            {"mode",                {{"type", "string"}, {"enum", json::array({"global", "local", "reference", "selection"})}, {"description", "Reference mode"}}},
+            {"mode",                {{"type", "string"}, {"enum", json::array({"global", "world", "local", "reference", "selection"})}, {"description", "Transform space / reference mode ('world' is an alias for 'global')"}}},
             {"scene_name",          {{"type", "string"},  {"description", "Scene to resolve reference_node in (optional; otherwise all scenes are searched)"}}},
-            {"reference_node_id",   {{"type", "integer"}, {"description", "Reference-mode node ID"}}},
-            {"reference_node_name", {{"type", "string"},  {"description", "Reference-mode node name"}}},
+            {"reference_node_id",   {{"type", "integer"}, {"description", "Reference-mode node ID (sets the reference)"}}},
+            {"reference_node_name", {{"type", "string"},  {"description", "Reference-mode node name (sets the reference)"}}},
             {"edge_normal_blend",   {{"type", "number"},  {"description", "Selection mode: [0,1] blend between the two faces sharing a selected edge"}}}
         }},
         {"required", json::array({"mode"})}
     }});
+    m_tool_infos.push_back({"get_transform_state", "Read the transform tool's current state: reference frame / transform space (reference_mode: global/local/reference/selection), the chosen reference_node (for reference mode), edge_normal_blend (selection mode), the mesh transform_mode (move/extrude/...), whether a mesh-component selection is driving the gizmo (component_mode), the selected node count, and the resolved world-space anchor_frame (origin + orientation the gizmo and local-space numeric edits operate in). Complements set_transform_reference_mode / set_transform_mode.", schema_no_args()});
     m_tool_infos.push_back({"set_transform_mode", "Set what the transform tool does to a mesh-component (vertex/edge/face) selection when the gizmo is dragged: move (translate/rotate/scale in place), extrude (duplicate the selection boundary, bridge it with new faces, then move along the gizmo delta), extrude_group_normal (same topology, but each disjoint selection subset slides along its own average normal by an amount derived from the drag), or extrude_vertex_normal (same topology, but each vertex slides along its own normal). Persisted in editor settings; applies to subsequent component edits.", {
         {"type", "object"},
         {"properties", {
@@ -5003,11 +5005,12 @@ auto Mcp_server::action_set_transform_reference_mode(const json& args) -> std::s
     const std::string mode_str = args.value("mode", "");
     Transform_reference_mode mode = Transform_reference_mode::global;
     if      (mode_str == "global")    { mode = Transform_reference_mode::global;    }
+    else if (mode_str == "world")     { mode = Transform_reference_mode::global;    } // alias for global
     else if (mode_str == "local")     { mode = Transform_reference_mode::local;     }
     else if (mode_str == "reference") { mode = Transform_reference_mode::reference; }
     else if (mode_str == "selection") { mode = Transform_reference_mode::selection; }
     else {
-        return make_error_content("Invalid mode: " + mode_str + " (global, local, reference, selection)");
+        return make_error_content("Invalid mode: " + mode_str + " (global/world, local, reference, selection)");
     }
 
     Transform_tool_shared& shared = m_context.transform_tool->shared;
@@ -5059,6 +5062,45 @@ auto Mcp_server::action_set_transform_mode(const json& args) -> std::string
     }
     m_context.editor_settings->transform_mode = mode;
     return make_json_content(json{{"mode", std::string{::to_string(mode)}}}).dump();
+}
+
+auto Mcp_server::query_transform_state(const json& args) -> std::string
+{
+    static_cast<void>(args);
+    if (m_context.transform_tool == nullptr) {
+        return make_error_content("Transform tool not available");
+    }
+    const Transform_tool_shared& shared = m_context.transform_tool->shared;
+
+    json result;
+    result["reference_mode"]         = transform_reference_mode_lc(shared.settings.reference_mode);
+    result["edge_normal_blend"]      = shared.settings.edge_normal_blend;
+    result["use_anchor_orientation"] = shared.settings.use_anchor_orientation();
+    result["component_mode"]         = shared.component_mode;
+    result["selected_node_count"]    = shared.entries.size();
+
+    const std::shared_ptr<erhe::scene::Node> ref_node = shared.reference_node.lock();
+    if (ref_node) {
+        result["reference_node"] = {{"name", ref_node->get_name()}, {"id", ref_node->get_id()}};
+    } else {
+        result["reference_node"] = nullptr;
+    }
+
+    if (m_context.editor_settings != nullptr) {
+        result["transform_mode"] = std::string{::to_string(m_context.editor_settings->transform_mode)};
+    }
+
+    // The resolved gizmo anchor frame in world space (origin + orientation the
+    // gizmo and the local-space numeric edits operate in).
+    const erhe::scene::Trs_transform& anchor = shared.world_from_anchor;
+    const glm::vec3 t = anchor.get_translation();
+    const glm::quat r = anchor.get_rotation();
+    result["anchor_frame"] = {
+        {"translation",   {t.x, t.y, t.z}},
+        {"rotation_xyzw", {r.x, r.y, r.z, r.w}}
+    };
+
+    return make_json_content(result).dump();
 }
 
 } // namespace editor
