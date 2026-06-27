@@ -2004,7 +2004,9 @@ void Operations::dual()
 
 void Operations::join()
 {
-    async_mesh_operation<Join_operation>();
+    // Selection-aware: when a face-mode mesh-component selection is active, only the
+    // selected facets are joined (the rest of the mesh stays connected).
+    async_mesh_operation<Join_operation>(true);
 }
 
 void Operations::kis()

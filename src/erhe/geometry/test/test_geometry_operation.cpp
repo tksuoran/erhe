@@ -123,7 +123,12 @@ TEST(ConwayTopology, Kis_Height_Offsets_Centroid)
 TEST(ConwayTopology, Join_Cube)
 {
     std::unique_ptr<erhe::geometry::Geometry> cube = make_solid("cube", erhe::geometry::shapes::make_cube);
-    std::unique_ptr<erhe::geometry::Geometry> result = apply_op(*cube, "join_cube", erhe::geometry::operation::join);
+    std::unique_ptr<erhe::geometry::Geometry> result = apply_op(
+        *cube, "join_cube",
+        [](const erhe::geometry::Geometry& source, erhe::geometry::Geometry& destination) {
+            erhe::geometry::operation::join(source, destination);
+        }
+    );
     const GEO::Mesh& m = result->get_mesh();
     EXPECT_EQ(m.vertices.nb(), 14u); // 8 + 6
     EXPECT_EQ(m.facets.nb(),   12u); // one per edge

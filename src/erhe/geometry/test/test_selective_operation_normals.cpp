@@ -4,13 +4,16 @@
 #include "erhe_geometry/operation/conway/subdivide.hpp"
 #include "erhe_geometry/operation/conway/meta.hpp"
 #include "erhe_geometry/operation/conway/kis.hpp"
+#include "erhe_geometry/operation/conway/join.hpp"
 
 #include <geogram/basic/geometry.h>
 
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <map>
 #include <set>
+#include <utility>
 
 using erhe::geometry::Geometry;
 
@@ -277,4 +280,103 @@ TEST(SelectiveOperationNormals, Selective_Kis_Keeps_Unmodified_Region_Flat)
     EXPECT_EQ(missing,           0u) << missing           << " / " << total << " result corners lost corner_normal";
     EXPECT_EQ(not_unit,          0u) << not_unit          << " / " << total << " result corner normals are not unit length";
     EXPECT_EQ(original_not_flat, 0u) << original_not_flat << " unmodified-region corners were smoothed (cube no longer flat there)";
+}
+
+// Conway "join" rewires each facet into centroid kites and CONSUMES the original
+// edge (it becomes a quad diagonal), so unlike the fan ops join does not carry a
+// corner_normal onto its endpoint corners - only the centroid corners and the
+// untouched 1:1-copied unselected facets do. The selective-join guarantees are
+// therefore expressed differently:
+//   1. The unselected region is preserved bit-for-bit: every corner that has a
+//      corner_normal and references an original vertex stays axis-aligned (this is
+//      exactly where the interpolation-corruption bug surfaced), and there are many
+//      such corners (the bulk of the box that was not selected).
+//   2. The result is a closed, consistently-oriented manifold: every undirected
+//      edge is shared by exactly two facets, each traversed once in each direction
+//      (a flipped boundary triangle or a crack would break this), and Euler
+//      V - E + F = 2.
+TEST(SelectiveOperationNormals, Selective_Join_Is_Watertight_And_Keeps_Unmodified_Region_Flat)
+{
+    std::unique_ptr<Geometry> box = make_box_geometry(2);
+    const GEO::Mesh& src_mesh = box->get_mesh();
+    const GEO::index_t source_vertex_count = src_mesh.vertices.nb();
+
+    // Select two facets that share an edge, so the straddling-quad path (interior to
+    // the selection) AND the boundary-triangle path are both exercised.
+    std::set<GEO::index_t> selected_facets;
+    for (GEO::index_t e = 0; (e < src_mesh.edges.nb()) && selected_facets.empty(); ++e) {
+        const std::vector<GEO::index_t>& facets = box->get_edge_facets(e);
+        if (facets.size() == 2) {
+            selected_facets.insert(facets[0]);
+            selected_facets.insert(facets[1]);
+        }
+    }
+    ASSERT_EQ(selected_facets.size(), 2u) << "could not find two adjacent facets to select";
+
+    std::unique_ptr<Geometry> result = std::make_unique<Geometry>("join_subset");
+    erhe::geometry::operation::join(*box, *result, &selected_facets);
+
+    const GEO::Mesh& mesh = result->get_mesh();
+    const erhe::geometry::Mesh_attributes& attr = result->get_attributes();
+
+    // (1) Unselected region stays flat.
+    GEO::index_t present_original = 0;
+    GEO::index_t original_not_flat = 0;
+    GEO::index_t not_unit = 0;
+    for (GEO::index_t facet : mesh.facets) {
+        for (GEO::index_t corner : mesh.facets.corners(facet)) {
+            const GEO::index_t v = mesh.facet_corners.vertex(corner);
+            if (!attr.corner_normal.has(corner)) {
+                continue;
+            }
+            const GEO::vec3f n   = attr.corner_normal.get(corner);
+            const float      len = GEO::length(n);
+            if (std::abs(len - 1.0f) > 1e-3f) {
+                ++not_unit;
+            }
+            if (v < source_vertex_count) {
+                ++present_original;
+                if (!is_axis_aligned(n)) {
+                    ++original_not_flat;
+                    EXPECT_TRUE(false)
+                        << "corner " << corner << " on original vertex " << v
+                        << " is no longer flat: (" << n.x << ", " << n.y << ", " << n.z << ")";
+                }
+            }
+        }
+    }
+    EXPECT_EQ(original_not_flat, 0u) << original_not_flat << " unmodified-region corners were smoothed";
+    EXPECT_EQ(not_unit,          0u) << not_unit          << " result corner normals are not unit length";
+    EXPECT_GT(present_original, 200u) << "expected the large unselected region to keep its corner normals";
+
+    // (2) Closed, consistently-oriented manifold.
+    std::map<std::pair<GEO::index_t, GEO::index_t>, int> directed_edges;
+    for (GEO::index_t facet : mesh.facets) {
+        const GEO::index_t corner_count = mesh.facets.nb_corners(facet);
+        for (GEO::index_t lc = 0; lc < corner_count; ++lc) {
+            const GEO::index_t c  = mesh.facets.corner(facet, lc);
+            const GEO::index_t cn = mesh.facets.corner(facet, (lc + 1) % corner_count);
+            const GEO::index_t v0 = mesh.facet_corners.vertex(c);
+            const GEO::index_t v1 = mesh.facet_corners.vertex(cn);
+            ++directed_edges[std::make_pair(v0, v1)];
+        }
+    }
+    GEO::index_t bad_direction = 0;
+    GEO::index_t missing_twin  = 0;
+    for (const auto& [edge, count] : directed_edges) {
+        if (count != 1) {
+            ++bad_direction; // an edge traversed twice the same way => flipped facet
+        }
+        const std::pair<GEO::index_t, GEO::index_t> twin{edge.second, edge.first};
+        if (directed_edges.find(twin) == directed_edges.end()) {
+            ++missing_twin; // open edge / crack
+        }
+    }
+    EXPECT_EQ(bad_direction, 0u) << bad_direction << " directed edges traversed more than once (flipped facet)";
+    EXPECT_EQ(missing_twin,  0u) << missing_twin  << " edges have no opposite-direction twin (crack / hole)";
+
+    const long long V = static_cast<long long>(mesh.vertices.nb());
+    const long long E = static_cast<long long>(mesh.edges.nb());
+    const long long F = static_cast<long long>(mesh.facets.nb());
+    EXPECT_EQ(V - E + F, 2) << "Euler characteristic != 2 (V=" << V << " E=" << E << " F=" << F << ")";
 }
