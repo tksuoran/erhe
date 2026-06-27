@@ -2046,12 +2046,15 @@ void Operations::ambo()
 void Operations::truncate()
 {
     const float ratio = m_truncate_ratio;
+    // Selection-aware: when a face-mode mesh-component selection is active, only the
+    // selected facets are truncated (the rest of the mesh stays connected).
     async_for_selected_nodes_with_mesh(
         [this, ratio](Mesh_operation_parameters&& params) {
             m_context.operation_stack->queue(
                 std::make_shared<Truncate_operation>(std::move(params), ratio)
             );
-        }
+        },
+        true
     );
 }
 

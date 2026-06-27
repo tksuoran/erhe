@@ -6,6 +6,7 @@
 #include "erhe_geometry/operation/conway/kis.hpp"
 #include "erhe_geometry/operation/conway/join.hpp"
 #include "erhe_geometry/operation/conway/gyro.hpp"
+#include "erhe_geometry/operation/conway/truncate.hpp"
 
 #include <geogram/basic/geometry.h>
 
@@ -14,6 +15,7 @@
 #include <cmath>
 #include <map>
 #include <set>
+#include <tuple>
 #include <utility>
 
 using erhe::geometry::Geometry;
@@ -467,6 +469,116 @@ TEST(SelectiveOperationNormals, Selective_Gyro_Watertight_And_Keeps_Unmodified_R
     }
     EXPECT_EQ(bad_direction, 0u) << bad_direction << " directed edges traversed more than once (flipped facet)";
     EXPECT_EQ(missing_twin,  0u) << missing_twin  << " edges have no opposite-direction twin (crack / T-junction)";
+
+    const long long V = static_cast<long long>(mesh.vertices.nb());
+    const long long E = static_cast<long long>(mesh.edges.nb());
+    const long long F = static_cast<long long>(mesh.facets.nb());
+    EXPECT_EQ(V - E + F, 2) << "Euler characteristic != 2 (V=" << V << " E=" << E << " F=" << F << ")";
+}
+
+// Conway "truncate" removes original vertices (each becomes a vertex-face) and
+// shrinks every facet, so the selective version needs custom watertight boundary
+// geometry the other ops did not: kept boundary vertices, vertex-faces only where a
+// vertex is interior to the selection, and a corner-cap triangle at each selected
+// facet's cut corner on a kept vertex. To exercise BOTH paths, select every facet
+// incident to one vertex (that vertex becomes interior -> a vertex-face; the
+// surrounding ring of vertices stays boundary -> corner caps). The result must keep
+// the unmodified region flat and be a closed, consistently-oriented manifold.
+TEST(SelectiveOperationNormals, Selective_Truncate_Watertight_And_Keeps_Unmodified_Region_Flat)
+{
+    std::unique_ptr<Geometry> box = make_box_geometry(2);
+    const GEO::Mesh& src_mesh = box->get_mesh();
+    const GEO::index_t source_vertex_count = src_mesh.vertices.nb();
+
+    // Select every facet incident to source vertex 0, so vertex 0 is interior to the
+    // selection (it becomes a vertex-face) while its neighbors stay on the boundary
+    // (corner caps). This drives both selective-truncate boundary paths at once.
+    std::set<GEO::index_t> selected_facets;
+    for (const GEO::index_t corner : box->get_vertex_corners(0)) {
+        selected_facets.insert(box->get_corner_facet(corner));
+    }
+    ASSERT_GE(selected_facets.size(), 3u) << "expected vertex 0 to be incident to at least three facets";
+
+    std::unique_ptr<Geometry> result = std::make_unique<Geometry>("truncate_subset");
+    erhe::geometry::operation::truncate(*box, *result, 1.0f / 3.0f, &selected_facets);
+
+    const GEO::Mesh& mesh = result->get_mesh();
+    const erhe::geometry::Mesh_attributes& attr = result->get_attributes();
+
+    // Truncate compacts the vertex index space (interior vertices are removed and the
+    // kept ones renumbered), so "result vertex index < source vertex count" no longer
+    // identifies an original vertex. Identify the kept originals by POSITION instead:
+    // a result vertex coincides with an original vertex iff its position matches one
+    // of the source vertex positions (edge split points are strictly interior to an
+    // edge, so they never collide with a vertex).
+    const auto position_key = [](const GEO::vec3f p) -> std::tuple<long, long, long> {
+        return std::make_tuple(
+            static_cast<long>(std::lround(p.x * 1000.0f)),
+            static_cast<long>(std::lround(p.y * 1000.0f)),
+            static_cast<long>(std::lround(p.z * 1000.0f))
+        );
+    };
+    std::set<std::tuple<long, long, long>> original_positions;
+    for (GEO::index_t v = 0; v < source_vertex_count; ++v) {
+        original_positions.insert(position_key(erhe::geometry::get_pointf(src_mesh.vertices, v)));
+    }
+
+    // (1) Unmodified region stays flat; every result corner keeps a unit normal.
+    GEO::index_t total = 0;
+    GEO::index_t missing = 0;
+    GEO::index_t not_unit = 0;
+    GEO::index_t original_not_flat = 0;
+    for (GEO::index_t facet : mesh.facets) {
+        for (GEO::index_t corner : mesh.facets.corners(facet)) {
+            ++total;
+            const GEO::index_t v = mesh.facet_corners.vertex(corner);
+            if (!attr.corner_normal.has(corner)) {
+                ++missing;
+                continue;
+            }
+            const GEO::vec3f n   = attr.corner_normal.get(corner);
+            const float      len = GEO::length(n);
+            if (std::abs(len - 1.0f) > 1e-3f) {
+                ++not_unit;
+            }
+            const bool is_original = original_positions.count(position_key(erhe::geometry::get_pointf(mesh.vertices, v))) != 0;
+            if (is_original && !is_axis_aligned(n)) {
+                ++original_not_flat;
+                EXPECT_TRUE(false)
+                    << "corner " << corner << " on original vertex (position) " << v
+                    << " is no longer flat: (" << n.x << ", " << n.y << ", " << n.z << ")";
+            }
+        }
+    }
+    EXPECT_EQ(missing,           0u) << missing           << " / " << total << " result corners lost corner_normal";
+    EXPECT_EQ(not_unit,          0u) << not_unit          << " / " << total << " result corner normals are not unit length";
+    EXPECT_EQ(original_not_flat, 0u) << original_not_flat << " unmodified-region corners were smoothed";
+
+    // (2) Closed, consistently-oriented manifold (catches a missing / mis-wound cap).
+    std::map<std::pair<GEO::index_t, GEO::index_t>, int> directed_edges;
+    for (GEO::index_t facet : mesh.facets) {
+        const GEO::index_t corner_count = mesh.facets.nb_corners(facet);
+        for (GEO::index_t lc = 0; lc < corner_count; ++lc) {
+            const GEO::index_t c  = mesh.facets.corner(facet, lc);
+            const GEO::index_t cn = mesh.facets.corner(facet, (lc + 1) % corner_count);
+            const GEO::index_t v0 = mesh.facet_corners.vertex(c);
+            const GEO::index_t v1 = mesh.facet_corners.vertex(cn);
+            ++directed_edges[std::make_pair(v0, v1)];
+        }
+    }
+    GEO::index_t bad_direction = 0;
+    GEO::index_t missing_twin  = 0;
+    for (const auto& [edge, count] : directed_edges) {
+        if (count != 1) {
+            ++bad_direction;
+        }
+        const std::pair<GEO::index_t, GEO::index_t> twin{edge.second, edge.first};
+        if (directed_edges.find(twin) == directed_edges.end()) {
+            ++missing_twin;
+        }
+    }
+    EXPECT_EQ(bad_direction, 0u) << bad_direction << " directed edges traversed more than once (flipped facet)";
+    EXPECT_EQ(missing_twin,  0u) << missing_twin  << " edges have no opposite-direction twin (crack / hole at a corner cap)";
 
     const long long V = static_cast<long long>(mesh.vertices.nb());
     const long long E = static_cast<long long>(mesh.edges.nb());
