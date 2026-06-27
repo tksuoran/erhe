@@ -20,11 +20,11 @@ public:
     class Vertex_data
     {
     public:
-        GEO::vec3f position {0.0f, 0.0f, 0.0f};
-        GEO::vec3f normal   {0.0f};
-        GEO::vec4f tangent  {0.0f};
-        GEO::vec3f bitangent{0.0f};
-        GEO::vec2f texcoord {0.0f};
+        GEO::vec3f position {};
+        GEO::vec3f normal   {};
+        GEO::vec4f tangent  {};
+        GEO::vec3f bitangent{};
+        GEO::vec2f texcoord {};
     };
 
     Sphere_builder(GEO::Mesh& mesh, const scalar radius, const int slice_count, const int stack_count)

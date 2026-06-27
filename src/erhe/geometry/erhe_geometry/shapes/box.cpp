@@ -75,8 +75,8 @@ class Box_builder
 {
 public:
     GEO::Mesh& mesh;
-    GEO::vec3f size{0.0f};
-    GEO::vec3i div {0};
+    GEO::vec3f size{};
+    GEO::vec3i div {};
     float      p   {0.0f};
 
     std::map<int, GEO::index_t> key_to_vertex;
