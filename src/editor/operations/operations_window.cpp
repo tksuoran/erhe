@@ -2026,7 +2026,9 @@ void Operations::meta()
 
 void Operations::ortho()
 {
-    async_mesh_operation<Subdivide_operation>();
+    // Selection-aware: when a face-mode mesh-component selection is active, only the
+    // selected facets are subdivided (the rest of the mesh stays connected).
+    async_mesh_operation<Subdivide_operation>(true);
 }
 
 void Operations::ambo()

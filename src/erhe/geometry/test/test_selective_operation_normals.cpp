@@ -1,6 +1,7 @@
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/shapes/box.hpp"
 #include "erhe_geometry/operation/subdivision/catmull_clark_subdivision.hpp"
+#include "erhe_geometry/operation/conway/subdivide.hpp"
 
 #include <geogram/basic/geometry.h>
 
@@ -126,5 +127,55 @@ TEST(SelectiveOperationNormals, Selective_CatmullClark_Keeps_Unmodified_Region_F
 
     EXPECT_EQ(missing,           0u) << missing       << " / " << total << " result corners lost corner_normal";
     EXPECT_EQ(not_unit,          0u) << not_unit      << " / " << total << " result corner normals are not unit length";
+    EXPECT_EQ(original_not_flat, 0u) << original_not_flat << " unmodified-region corners were smoothed (cube no longer flat there)";
+}
+
+// Same invariant for the Conway "ortho" subdivide. Subdivide never moves a vertex
+// or edge midpoint off the original geometry, so EVERY corner that references an
+// original source vertex must keep its axis-aligned (flat) normal - the only
+// corners allowed to differ are the brand-new edge-midpoint / centroid vertices
+// created on the selected facet (and, on a box silhouette edge, those midpoints
+// legitimately average two face normals).
+TEST(SelectiveOperationNormals, Selective_Subdivide_Keeps_Unmodified_Region_Flat)
+{
+    std::unique_ptr<Geometry> box = make_box_geometry(2);
+    const GEO::index_t source_vertex_count = box->get_mesh().vertices.nb();
+
+    std::set<GEO::index_t> selected_facets{0};
+    std::unique_ptr<Geometry> result = std::make_unique<Geometry>("subdivide_subset");
+    erhe::geometry::operation::subdivide(*box, *result, &selected_facets);
+
+    const GEO::Mesh& mesh = result->get_mesh();
+    const erhe::geometry::Mesh_attributes& attr = result->get_attributes();
+
+    GEO::index_t total             = 0;
+    GEO::index_t missing           = 0;
+    GEO::index_t not_unit          = 0;
+    GEO::index_t original_not_flat = 0;
+    for (GEO::index_t facet : mesh.facets) {
+        for (GEO::index_t corner : mesh.facets.corners(facet)) {
+            ++total;
+            const GEO::index_t v = mesh.facet_corners.vertex(corner);
+            if (!attr.corner_normal.has(corner)) {
+                ++missing;
+                continue;
+            }
+            const GEO::vec3f n   = attr.corner_normal.get(corner);
+            const float      len = GEO::length(n);
+            if (std::abs(len - 1.0f) > 1e-3f) {
+                ++not_unit;
+            }
+            const bool is_original_vertex = (v < source_vertex_count);
+            if (is_original_vertex && !is_axis_aligned(n)) {
+                ++original_not_flat;
+                EXPECT_TRUE(false)
+                    << "corner " << corner << " on original vertex " << v
+                    << " is no longer flat: (" << n.x << ", " << n.y << ", " << n.z << ")";
+            }
+        }
+    }
+
+    EXPECT_EQ(missing,           0u) << missing           << " / " << total << " result corners lost corner_normal";
+    EXPECT_EQ(not_unit,          0u) << not_unit          << " / " << total << " result corner normals are not unit length";
     EXPECT_EQ(original_not_flat, 0u) << original_not_flat << " unmodified-region corners were smoothed (cube no longer flat there)";
 }

@@ -95,7 +95,16 @@ Subdivide_operation::Subdivide_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     set_description("Subdivide");
-    make_entries(erhe::geometry::operation::subdivide);
+    make_entries(
+        [](
+            const erhe::geometry::Geometry& before_geometry,
+            erhe::geometry::Geometry&       after_geometry,
+            erhe::scene::Node*              /*node*/,
+            const std::set<GEO::index_t>*   selected_facets
+        ) -> void {
+            erhe::geometry::operation::subdivide(before_geometry, after_geometry, selected_facets);
+        }
+    );
     set_description(fmt::format("Subdivide {}", describe_entries()));
 }
 

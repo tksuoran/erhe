@@ -168,7 +168,12 @@ TEST(ConwayTopology, Meta_Cube)
 TEST(ConwayTopology, Subdivide_Cube)
 {
     std::unique_ptr<erhe::geometry::Geometry> cube = make_solid("cube", erhe::geometry::shapes::make_cube);
-    std::unique_ptr<erhe::geometry::Geometry> result = apply_op(*cube, "sub_cube", erhe::geometry::operation::subdivide);
+    std::unique_ptr<erhe::geometry::Geometry> result = apply_op(
+        *cube, "sub_cube",
+        [](const erhe::geometry::Geometry& source, erhe::geometry::Geometry& destination) {
+            erhe::geometry::operation::subdivide(source, destination);
+        }
+    );
     const GEO::Mesh& m = result->get_mesh();
     EXPECT_EQ(m.vertices.nb(), 26u);
     EXPECT_EQ(m.facets.nb(),   24u);
@@ -219,7 +224,12 @@ TEST(ConwayTopology, Truncate_Half_Same_Topology_As_Ambo)
 TEST(ConwayTopology, Subdivide_Midpoints_At_Edge_Centers)
 {
     std::unique_ptr<erhe::geometry::Geometry> cube = make_solid("cube", erhe::geometry::shapes::make_cube);
-    std::unique_ptr<erhe::geometry::Geometry> result = apply_op(*cube, "sub_cube", erhe::geometry::operation::subdivide);
+    std::unique_ptr<erhe::geometry::Geometry> result = apply_op(
+        *cube, "sub_cube",
+        [](const erhe::geometry::Geometry& source, erhe::geometry::Geometry& destination) {
+            erhe::geometry::operation::subdivide(source, destination);
+        }
+    );
     const GEO::Mesh& src = cube->get_mesh();
     const GEO::Mesh& dst = result->get_mesh();
 
