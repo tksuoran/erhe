@@ -2232,6 +2232,27 @@ private:
     }
 }
 
+namespace {
+
+// fastgltf's loadGltf() rejects an empty base directory with
+// fastgltf::Error::InvalidPath ("The glTF directory passed to load*GLTF is
+// invalid"). A relative path with no directory component -- e.g. "scene.glb"
+// resolved against the process cwd, which is how load_scene hands a companion
+// .glb whose scene file lives in the working directory -- has an empty
+// parent_path(). Its correct resolution base for external glTF resources is the
+// current directory, so substitute "." rather than letting the whole parse fail
+// (which silently drops every material and texture, leaving meshes unlit).
+[[nodiscard]] auto gltf_base_directory(const std::filesystem::path& path) -> std::filesystem::path
+{
+    std::filesystem::path directory = path.parent_path();
+    if (directory.empty()) {
+        return std::filesystem::path{"."};
+    }
+    return directory;
+}
+
+} // namespace
+
 auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
 {
     ERHE_PROFILE_FUNCTION();
@@ -2346,7 +2367,7 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
 
     fastgltf::Expected<fastgltf::Asset> asset = fastgltf_parser.loadGltf(
         data.get(),
-        arguments.path.parent_path(),
+        gltf_base_directory(arguments.path),
         fastgltf::Options::LoadExternalBuffers // TODO Consider | fastgltf::Options::DecomposeNodeMatrices
     );
     if (auto error = asset.error(); error != fastgltf::Error::None) {
@@ -2441,7 +2462,7 @@ auto scan_gltf(std::filesystem::path path) -> Gltf_scan
     fastgltf::Parser fastgltf_parser{extensions};
     fastgltf::Expected<fastgltf::Asset> asset_expected = fastgltf_parser.loadGltf(
         data.get(),
-        path.parent_path(),
+        gltf_base_directory(path),
         fastgltf::Options::None
     );
     if (auto error = asset_expected.error(); error != fastgltf::Error::None) {
