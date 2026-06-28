@@ -1,0 +1,46 @@
+// Box/paint mesh-component selection - pass 2 of 2 (GPU compaction).
+//
+// One thread per bitmask word produced by pass 1 (id_scan_gather.comp).
+// Stream-compacts the set bits into a dense id vector: for each word, reserve
+// popcount(word) output slots with a single atomicAdd, then write the id of
+// each set bit (id = word*32 + bit). The result is { uint count; uint ids[]; },
+// read back to the CPU which resolves each id to (mesh, primitive, facet) via
+// the id-range snapshot. Order is irrelevant (the CPU resolves each id).
+//
+// count may exceed max_output if a scan covers more unique ids than the output
+// buffer holds; ids past max_output are not written and the CPU clamps + logs.
+//
+// Interface blocks (id_scan_bitmask / id_scan_output / id_scan_params) are
+// declared in C++ (Id_scan_compute_interface) and injected by
+// build_shader_stages; this file only references them by name.
+
+layout(local_size_x = 64) in;
+
+void main()
+{
+    uint w = gl_GlobalInvocationID.x;
+    if (w >= id_scan_params.bitmask_word_count) {
+        return;
+    }
+
+    uint bits = id_scan_bitmask.words[w];
+    if (bits == 0u) {
+        return;
+    }
+
+    // Reserve all slots for this word at once to keep atomic traffic to one add
+    // per non-empty word rather than one per set bit.
+    uint n    = uint(bitCount(bits));
+    uint base = atomicAdd(id_scan_output.count, n);
+
+    uint k = 0u;
+    while (bits != 0u) {
+        uint b = uint(findLSB(bits));
+        bits  &= bits - 1u;            // clear the lowest set bit
+        uint slot = base + k;
+        if (slot < id_scan_params.max_output) {
+            id_scan_output.ids[slot] = (w << 5u) + b;
+        }
+        ++k;
+    }
+}

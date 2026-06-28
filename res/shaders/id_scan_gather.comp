@@ -1,0 +1,60 @@
+// Box/paint mesh-component selection - pass 1 of 2 (GPU gather).
+//
+// One thread per pixel of the blitted id-buffer scan region. Decodes each
+// pixel's packed id (the same encoding Id_renderer's readback uses:
+// id = (r << 16) | (g << 8) | b), applies the optional brush-disk mask, and
+// sets the corresponding bit in a bitmask over the id space (atomicOr). The
+// bitmask is the dedup: every distinct id ends up as exactly one set bit,
+// regardless of how many pixels carry it.
+//
+// Pass 2 (id_scan_compact.comp) compacts the set bits into a dense id vector.
+//
+// Interface blocks (id_scan_input / id_scan_bitmask / id_scan_params) are
+// declared in C++ (Id_scan_compute_interface) and injected by
+// build_shader_stages; this file only references them by name.
+
+layout(local_size_x = 64) in;
+
+// rgba8-unorm pixel in memory is bytes [R, G, B, A]; copy_from_texture packs
+// them little-endian, so R is the low byte of the 32-bit word. Recombine to the
+// 24-bit id the same way Id_renderer::get()/take_scan_result() do on the CPU.
+uint id_from_pixel(uint packed)
+{
+    uint r = (packed >>  0u) & 0xffu;
+    uint g = (packed >>  8u) & 0xffu;
+    uint b = (packed >> 16u) & 0xffu;
+    return (r << 16u) | (g << 8u) | b;
+}
+
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= id_scan_params.pixel_count) {
+        return;
+    }
+
+    uint rx = i % id_scan_params.width;
+    uint ry = i / id_scan_params.width;
+
+    // Brush (paint) mask: skip pixels outside the disk. brush_center is in the
+    // same viewport pixel space as (region_x + rx, region_y + ry).
+    if (id_scan_params.is_brush != 0u) {
+        float dx = float(int(id_scan_params.region_x) + int(rx)) - id_scan_params.brush_center_x;
+        float dy = float(int(id_scan_params.region_y) + int(ry)) - id_scan_params.brush_center_y;
+        if ((dx * dx + dy * dy) > (id_scan_params.brush_radius * id_scan_params.brush_radius)) {
+            return;
+        }
+    }
+
+    // row_stride_uints accounts for the 256-byte row alignment of the blit;
+    // padding uints past width are never read.
+    uint packed = id_scan_input.pixels[ry * id_scan_params.row_stride_uints + rx];
+    uint id     = id_from_pixel(packed);
+
+    // id 0 is the background clear value; ids >= max_id cannot index a real range.
+    if ((id == 0u) || (id >= id_scan_params.max_id)) {
+        return;
+    }
+
+    atomicOr(id_scan_bitmask.words[id >> 5u], 1u << (id & 31u));
+}

@@ -214,11 +214,32 @@ of the overlays in the deformed pose (skinning the overlay positions).
 
 ### 7.5 GPU compute-shader selection
 
-Replace / augment the per-click CPU picking with compute-shader selection over
-the GPU vertex / index buffers: e.g. box / lasso / paint selection that marks
-components in parallel, and component ID-buffer picking. This pairs naturally
-with 7.4 (the deformed positions already live on the GPU) and would let large
-selections be computed without CPU geometry traversal.
+**Box / paint face selection: implemented (GPU compute gather).** Region (box)
+and paint-brush face selection no longer read every scanned pixel back to the
+CPU and dedup there. When the device supports compute shaders and shader storage
+buffers (Vulkan, Metal, OpenGL >= 4.3), `Id_renderer::submit_scan_compute()`
+runs two compute passes over the blitted id-buffer scan region:
+
+1. `res/shaders/id_scan_gather.comp` -- one thread per pixel: decodes each
+   pixel's packed id (`id = (r << 16) | (g << 8) | b`), applies the optional
+   brush-disk mask, and `atomicOr`s the id's bit into a bitmask over the id
+   space. The bitmask is the dedup (each distinct id becomes one set bit).
+2. `res/shaders/id_scan_compact.comp` -- one thread per bitmask word: stream-
+   compacts the set bits into a dense `{ uint count; uint ids[]; }` vector with
+   a single `atomicAdd` per non-empty word.
+
+Only the small compacted result is read back; `Id_renderer::take_scan_result()`
+resolves each id to (mesh, primitive, facet) via the scan-frame id-range
+snapshot. The interface blocks (`id_scan_input` / `id_scan_bitmask` /
+`id_scan_output` / `id_scan_params`) are declared in C++ (`ensure_scan_compute()`)
+and injected by `build_shader_stages`. The bitmask is sized dynamically to the
+live max id and the output to the total facet count (both from the id-range
+snapshot). On devices without compute (e.g. macOS OpenGL 4.1) the original
+per-pixel CPU readback + dedup path is kept as a fallback.
+
+Still future work: compute-shader selection over the GPU vertex / index buffers
+themselves (vertex / edge marking, lasso), and component ID-buffer picking on
+skinned meshes in the deformed pose (pairs with 7.4).
 
 ## 8. Testing notes
 

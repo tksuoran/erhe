@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_graphics/buffer.hpp"
+#include "erhe_graphics/compute_pipeline_state.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/ring_buffer_range.hpp"
 #include "erhe_scene_renderer/draw_indirect_buffer.hpp"
@@ -27,10 +28,13 @@ namespace erhe {
 namespace erhe::graphics {
     class Bind_group_layout;
     class Command_buffer;
+    class Compute_command_encoder;
     class Render_pass;
     class Gpu_timer;
     class Device;
     class Sampler;
+    class Shader_resource;
+    class Shader_stages;
     class Texture;
 }
 namespace erhe::scene {
@@ -325,6 +329,15 @@ private:
         bool                              is_brush    {false};
         uint64_t                          frame_number{0};
         Transfer_entry::State             state       {Transfer_entry::State::Unused};
+        // GPU compute-gather path: when used_compute is true the scan was resolved
+        // by the two compute passes, the small {count, ids} result was read back
+        // into compact_data (not the per-pixel `data` above), and take_scan_result()
+        // resolves scan_count ids from it instead of looping texels. compact_range
+        // is the CPU_read ring range the completion handler copied from.
+        bool                              used_compute{false};
+        erhe::graphics::Ring_buffer_range compact_range;
+        std::vector<uint8_t>              compact_data{}; // {uint count; uint ids[max_output];}
+        uint32_t                          max_output  {0};
         // Snapshot of the id-range table as it was when this scan was submitted.
         // The live m_primitive_buffers.id_ranges() is rebuilt every frame from the
         // meshes actually drawn that frame, and a scan frame forces
@@ -344,6 +357,52 @@ private:
     // the MCP id-range-mapping query can report it after a scan. Cleared-and-filled
     // (capacity kept) in take_scan_result().
     std::vector<erhe::scene_renderer::Primitive_buffer::Id_range> m_last_scan_id_ranges;
+
+    // ---- Box/paint GPU compute gather --------------------------------------
+    // Two compute passes replace the per-pixel CPU readback + dedup loop when the
+    // device supports compute shaders (Vulkan / Metal / GL >= 4.3): pass 1
+    // (id_scan_gather.comp) scans the blitted region id buffer and atomicOrs each
+    // decoded id into a bitmask (the dedup); pass 2 (id_scan_compact.comp) compacts
+    // the set bits into a dense {count, ids} vector that is read back. On devices
+    // without compute (e.g. macOS GL 4.1) m_scan_compute_available stays false and
+    // the CPU region-scan path is used. Built lazily on first scan.
+    void                                               ensure_scan_compute();
+    [[nodiscard]] auto submit_scan_compute(
+        erhe::graphics::Command_buffer& command_buffer,
+        Region_entry&                   region,
+        int scan_x, int scan_y, int scan_w, int scan_h
+    ) -> bool;
+    bool                                               m_scan_compute_attempted{false};
+    bool                                               m_scan_compute_available{false};
+    std::unique_ptr<erhe::graphics::Shader_resource>   m_scan_input_block;   // binding 0 readonly SSBO (region pixels)
+    std::unique_ptr<erhe::graphics::Shader_resource>   m_scan_bitmask_block; // binding 1 rw SSBO (dedup bitmask)
+    std::unique_ptr<erhe::graphics::Shader_resource>   m_scan_output_block;  // binding 2 rw SSBO ({count, ids})
+    std::unique_ptr<erhe::graphics::Shader_resource>   m_scan_params_block;  // binding 3 UBO (scan params)
+    // One bind group layout per pass, each matching exactly the blocks its
+    // shader references (gather: input + bitmask + params; compact: bitmask +
+    // output + params). Exact-match layouts avoid bound-but-unused-binding
+    // descriptor validation friction.
+    std::unique_ptr<erhe::graphics::Bind_group_layout> m_scan_gather_bind_group_layout;
+    std::unique_ptr<erhe::graphics::Bind_group_layout> m_scan_compact_bind_group_layout;
+    std::unique_ptr<erhe::graphics::Shader_stages>     m_scan_gather_stages;
+    std::unique_ptr<erhe::graphics::Shader_stages>     m_scan_compact_stages;
+    std::optional<erhe::graphics::Compute_pipeline>    m_scan_gather_pipeline;
+    std::optional<erhe::graphics::Compute_pipeline>    m_scan_compact_pipeline;
+    erhe::graphics::Ring_buffer_client                 m_scan_input_buffer;   // GPU storage: region pixels (texture blit dst)
+    erhe::graphics::Ring_buffer_client                 m_scan_bitmask_buffer; // GPU storage: dedup bitmask
+    erhe::graphics::Ring_buffer_client                 m_scan_output_buffer;  // GPU storage: {count, ids}
+    erhe::graphics::Ring_buffer_client                 m_scan_params_buffer;  // CPU_write UBO: scan params
+    erhe::graphics::Ring_buffer_client                 m_scan_result_buffer;  // CPU_read: {count, ids} readback
+    // std140 field offsets inside the scan-params UBO, captured when the block is built.
+    class Scan_param_offsets
+    {
+    public:
+        std::size_t width{0}, height{0}, pixel_count{0}, row_stride_uints{0};
+        std::size_t region_x{0}, region_y{0}, is_brush{0};
+        std::size_t brush_center_x{0}, brush_center_y{0}, brush_radius{0};
+        std::size_t max_id{0}, bitmask_word_count{0}, max_output{0};
+    };
+    Scan_param_offsets                                 m_scan_param_offsets;
 
     class Range
     {
