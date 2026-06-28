@@ -1273,11 +1273,17 @@ void App_rendering::render_id(const Render_context& context)
         return;
     }
 
-    const auto position_opt = context.viewport_scene_view->get_position_in_viewport();
-    if (!position_opt.has_value()) {
+    // A pending region selection scan must render the ID pass even when the
+    // pointer is not over the viewport (e.g. a programmatic scan), so fall back
+    // to the viewport centre for the pointer-pick rect in that case.
+    const std::optional<glm::vec2> position_opt = context.viewport_scene_view->get_position_in_viewport();
+    const bool scan_pending = (m_context.id_renderer != nullptr) && m_context.id_renderer->has_pending_scan();
+    if (!position_opt.has_value() && !scan_pending) {
         return;
     }
-    const auto position = position_opt.value();
+    const glm::vec2 position = position_opt.has_value()
+        ? position_opt.value()
+        : glm::vec2{static_cast<float>(context.viewport.width) * 0.5f, static_cast<float>(context.viewport.height) * 0.5f};
 
     const auto& layers = scene_root->layers();
     Scene_root* tool_scene_root = m_context.tools->get_tool_scene_root().get();
@@ -1313,7 +1319,12 @@ void App_rendering::render_id(const Render_context& context)
     // everything (legacy "all-id" behaviour) and the raytrace path's
     // contribution becomes whichever per-slot hit it returns sooner. The
     // viewport_scene_view merge picks the closer hit per slot either way.
-    const Id_renderer::Skinning_filter skinning_filter = m_context.id_renderer->enabled
+    // A pending region selection scan (box / paint) reads only the ID color
+    // texture, so static meshes -- normally picked by the raytrace BVH and left
+    // out of the ID pass -- must be rasterized into it for that frame, or the
+    // scan would select nothing on them. Force the all-meshes filter whenever a
+    // scan is pending this frame (scan_pending computed above).
+    const Id_renderer::Skinning_filter skinning_filter = (m_context.id_renderer->enabled || scan_pending)
         ? Id_renderer::Skinning_filter::all
         : Id_renderer::Skinning_filter::skinned_only;
 

@@ -239,7 +239,10 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
     // BVH is rest-pose only). The id_renderer.enabled config knob is
     // repurposed inside App_rendering::render_id to switch the ID pass
     // between skinned-only (default) and skinned + static (force-id).
-    if (do_render && m_is_scene_view_hovered) {
+    // It also runs when a region selection scan is pending, so a programmatic
+    // (non-hovered) scan still renders the ID pass it reads back.
+    const bool scan_pending = (m_context.id_renderer != nullptr) && m_context.id_renderer->has_pending_scan();
+    if (do_render && (m_is_scene_view_hovered || scan_pending)) {
         m_context.app_rendering->render_id(context);
     }
 

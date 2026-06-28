@@ -142,6 +142,7 @@ private:
     auto on_xr_vector2f_event(const erhe::window::Input_event&) -> bool override;
 
     void sort_mouse_bindings        ();
+    void sort_mouse_wheel_bindings  ();
     void sort_controller_bindings   ();
     void sort_xr_bindings           ();
     void inactivate_ready_commands  ();

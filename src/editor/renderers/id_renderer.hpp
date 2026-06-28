@@ -12,8 +12,11 @@
 
 #include <glm/glm.hpp>
 
+#include <array>
 #include <cstdint>
 #include <memory>
+#include <optional>
+#include <set>
 #include <vector>
 
 typedef struct __GLsync *GLsync;
@@ -174,6 +177,57 @@ public:
     // texel (get(get_extent()/2, get_extent()/2)).
     [[nodiscard]] static constexpr auto get_extent() -> int { return s_extent; }
 
+    // Region selection scan (box / paint select). A selection gesture requests
+    // a scan of a viewport-pixel rectangle (optionally masked to a brush disk)
+    // of the ID buffer; render() rasterizes and blits that rectangle to a
+    // CPU-read buffer, and take_scan_result() resolves the completed readback
+    // into the set of visible (mesh, primitive, triangle) hits a few frames
+    // later (async, same latency as the pointer pick). Faces only for now; the
+    // caller maps triangle -> facet.
+    class Scan_request
+    {
+    public:
+        int       x           {0};      // viewport-pixel bounding rect (clamped to the viewport in render())
+        int       y           {0};
+        int       width       {0};
+        int       height      {0};
+        glm::vec2 brush_center {0.0f, 0.0f};
+        float     brush_radius {0.0f};  // > 0 with is_brush => disk mask over the rect, else whole rect
+        bool      is_brush     {false};
+    };
+    class Scan_hit
+    {
+    public:
+        std::shared_ptr<erhe::scene::Mesh> mesh           {};
+        std::size_t                        primitive_index{0};
+        std::size_t                        triangle_id    {0};
+    };
+    class Scan_result
+    {
+    public:
+        bool                  ready       {false};
+        uint64_t              frame_number{0};   // frame the scanned pixels came from; lets callers detect a fresh scan
+        std::vector<Scan_hit> hits        {};
+    };
+
+    // Request a region scan for the next render(). The gesture re-requests every
+    // frame it wants a scan; the request is consumed (and reset) by render().
+    void request_scan(const Scan_request& request);
+    [[nodiscard]] auto has_pending_scan() const -> bool;
+    // Resolve the newest completed region readback (if any newer than the last
+    // resolved) into the scan result and return it. The returned reference is
+    // stable; check .ready and compare .frame_number against the last value the
+    // caller consumed to detect a freshly completed scan.
+    [[nodiscard]] auto take_scan_result() -> const Scan_result&;
+
+    // The id-range table captured by the most recently resolved region scan
+    // (offset, length, mesh, primitive index). This is the offset->mesh/face
+    // mapping the readback inverts: a decoded id in [offset, offset+length)
+    // selects this primitive, and (id - offset) is its 0-based facet index.
+    // Empty until a scan has been resolved. Used by the MCP id-range-mapping
+    // query to expose the encoding for inspection.
+    [[nodiscard]] auto get_last_scan_id_ranges() const -> const std::vector<erhe::scene_renderer::Primitive_buffer::Id_range>&;
+
 
 private:
     static constexpr int s_transfer_entry_count = 4;
@@ -246,6 +300,46 @@ private:
 
     std::array<Transfer_entry, s_transfer_entry_count> m_transfer_entries;
     int                                                m_current_transfer_entry_slot{0};
+
+    // Region selection scan state (box / paint). A small ring of color-only
+    // readback entries, sized per-scan (the scan rect, not s_extent), so several
+    // scans can be in flight while a gesture drags. Parallel to the pointer-pick
+    // Transfer_entry ring above but independent of it.
+    static constexpr int s_region_entry_count = 3;
+    class Region_entry
+    {
+    public:
+        erhe::graphics::Ring_buffer_range buffer_range;
+        std::vector<uint8_t>              data        {};
+        int                               x           {0};
+        int                               y           {0};
+        int                               width       {0};
+        int                               height      {0};
+        int                               row_stride  {0}; // bytes per row in `data` (256-byte aligned for the GPU copy)
+        glm::vec2                         brush_center{0.0f, 0.0f};
+        float                             brush_radius{0.0f};
+        bool                              is_brush    {false};
+        uint64_t                          frame_number{0};
+        Transfer_entry::State             state       {Transfer_entry::State::Unused};
+        // Snapshot of the id-range table as it was when this scan was submitted.
+        // The live m_primitive_buffers.id_ranges() is rebuilt every frame from the
+        // meshes actually drawn that frame, and a scan frame forces
+        // Skinning_filter::all (different mesh set => different id_offsets) than the
+        // normal skinned_only frame on which the async result is resolved. Resolving
+        // against this self-contained snapshot keeps each scan correct regardless of
+        // intervening frames. Cleared-and-refilled (capacity kept) to avoid per-scan
+        // allocation churn (CLAUDE.md run-time allocation discipline).
+        std::vector<erhe::scene_renderer::Primitive_buffer::Id_range> id_ranges{};
+    };
+    std::optional<Scan_request>                    m_pending_scan;
+    std::array<Region_entry, s_region_entry_count> m_region_entries;
+    erhe::graphics::Ring_buffer_client             m_region_read_buffer;
+    Scan_result                                    m_scan_result;
+    std::set<uint32_t>                             m_scan_id_scratch; // reused id-dedup set; cleared per resolve
+    // Snapshot of the id-range table from the most recently resolved scan, kept so
+    // the MCP id-range-mapping query can report it after a scan. Cleared-and-filled
+    // (capacity kept) in take_scan_result().
+    std::vector<erhe::scene_renderer::Primitive_buffer::Id_range> m_last_scan_id_ranges;
 
     class Range
     {

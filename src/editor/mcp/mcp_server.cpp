@@ -30,9 +30,11 @@
 #include "scene/physics_edits.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
+#include "renderers/id_renderer.hpp"
 #include "scene/scene_serialization.hpp"
 #include "scene/shadow_fit_debug.hpp"
 #include "tools/mesh_component_selection.hpp"
+#include "tools/mesh_component_selection_tool.hpp"
 #include "tools/selection_tool.hpp"
 #include "transform/transform_tool.hpp"
 #include "transform/transform_tool_settings.hpp"
@@ -1048,6 +1050,8 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "set_mesh_component_mode")        result = action_set_mesh_component_mode(req->arguments);
         else if (req->tool_name == "select_mesh_components")         result = action_select_mesh_components(req->arguments);
         else if (req->tool_name == "get_mesh_component_selection")   result = query_mesh_component_selection(req->arguments);
+        else if (req->tool_name == "get_id_range_mapping")           result = query_id_range_mapping(req->arguments);
+        else if (req->tool_name == "debug_region_select")            result = action_debug_region_select(req->arguments);
         else if (req->tool_name == "get_mesh_geometry_info")         result = query_mesh_geometry_info(req->arguments);
         else if (req->tool_name == "get_mesh_attribute_values")      result = query_mesh_attribute_values(req->arguments);
         else if (req->tool_name == "clear_mesh_component_selection") result = action_clear_mesh_component_selection(req->arguments);
@@ -1522,6 +1526,21 @@ void Mcp_server::refresh_tool_list()
         {"required", json::array({"scene_name"})}
     }});
     m_tool_infos.push_back({"get_mesh_component_selection", "Get the current mesh-component selection: mode plus each entry's node, primitive index, selected vertices / edges / facets, and whether it is live.", schema_no_args()});
+    m_tool_infos.push_back({"get_id_range_mapping", "Report the GPU ID-buffer range mapping from the most recently resolved region scan: for each drawn primitive, its id_offset, length (index count), triangle_count, base_vertex, and the owning mesh/node/primitive_index. A decoded pixel id in [id_offset, id_offset+length) selects that primitive and (id - id_offset) is its 0-based facet index. Run a box/paint select (or debug_region_select) first to populate it.", schema_no_args()});
+    m_tool_infos.push_back({"debug_region_select", "Debug/test: drive a region face-select (box or paint brush) over an explicit viewport-pixel rectangle, bypassing the mouse. Forces Face component mode, requests a GPU id-buffer scan, and commits the visible faces a few frames later (poll get_mesh_component_selection afterwards). x,y,width,height are in viewport pixels; is_brush masks to a disk of brush_radius centered in the rect.", {
+        {"type", "object"},
+        {"properties", {
+            {"x",            {{"type", "integer"}, {"description", "Rectangle left in viewport pixels"}}},
+            {"y",            {{"type", "integer"}, {"description", "Rectangle top in viewport pixels"}}},
+            {"width",        {{"type", "integer"}, {"description", "Rectangle width in viewport pixels"}}},
+            {"height",       {{"type", "integer"}, {"description", "Rectangle height in viewport pixels"}}},
+            {"is_brush",     {{"type", "boolean"}, {"description", "Mask the rectangle to a centered disk (paint brush), default false"}}},
+            {"brush_radius", {{"type", "number"},  {"description", "Disk radius in pixels when is_brush is true"}}},
+            {"replace",      {{"type", "boolean"}, {"description", "Clear the selection before adding (default true)"}}},
+            {"subtract",     {{"type", "boolean"}, {"description", "Remove the scanned faces instead of adding (default false)"}}}
+        }},
+        {"required", json::array({"x", "y", "width", "height"})}
+    }});
     m_tool_infos.push_back({"get_mesh_geometry_info", "Inspect a node's render geometry: element counts (vertices, edges, facets, corners) and, per domain (facet / vertex / corner), the list of attributes that are present (name, GEO type, and how many elements carry the attribute). Use this before get_mesh_attribute_values to learn what to query. Note: a flat-shaded mesh stores per-corner normals (corner_normal); a smooth mesh stores per-vertex normals.", {
         {"type", "object"},
         {"properties", {
@@ -4692,6 +4711,85 @@ auto Mcp_server::query_mesh_component_selection(const json& args) -> std::string
     return make_json_content({
         {"mode",    mesh_component_mode_lc(selection->get_mode())},
         {"entries", entries}
+    }).dump();
+}
+
+auto Mcp_server::query_id_range_mapping(const json& args) -> std::string
+{
+    static_cast<void>(args);
+    if (m_context.id_renderer == nullptr) {
+        return make_error_content("Id_renderer not available");
+    }
+    // The id-range table is rebuilt every frame and is only meaningful right after
+    // an ID render; report the snapshot captured by the most recently resolved
+    // region scan. Run a box/paint select (or debug_region_select) first to populate it.
+    const std::vector<erhe::scene_renderer::Primitive_buffer::Id_range>& ranges =
+        m_context.id_renderer->get_last_scan_id_ranges();
+    json range_array = json::array();
+    for (const erhe::scene_renderer::Primitive_buffer::Id_range& range : ranges) {
+        // A decoded pixel id in [offset, offset+length) selects this primitive;
+        // (id - offset) is the 0-based renderable-triangle index, which
+        // get_mesh_facet_from_triangle() maps to a geometry facet. length is the
+        // index count, so triangle_count = length / 3.
+        json entry = {
+            {"id_offset",      range.offset},
+            {"length",         range.length},
+            {"triangle_count", range.length / 3u},
+            {"primitive_index", range.index_of_gltf_primitive_in_mesh}
+        };
+        if (range.mesh != nullptr) {
+            entry["mesh_name"] = range.mesh->get_name();
+            const erhe::scene::Node* node = range.mesh->get_node();
+            if (node != nullptr) {
+                entry["node_id"]   = node->get_id();
+                entry["node_name"] = node->get_name();
+            }
+            // The per-primitive base vertex in the shared pool: the ID shader
+            // subtracts this from gl_VertexID so the packed triangle id is the
+            // 0-based local facet index. Surfaced so the encoding can be verified.
+            const std::vector<erhe::scene::Mesh_primitive>& primitives = range.mesh->get_primitives();
+            if (range.index_of_gltf_primitive_in_mesh < primitives.size()) {
+                const erhe::primitive::Primitive* primitive = primitives[range.index_of_gltf_primitive_in_mesh].primitive.get();
+                if (primitive != nullptr) {
+                    const erhe::primitive::Buffer_mesh* buffer_mesh = primitive->get_renderable_mesh();
+                    if (buffer_mesh != nullptr) {
+                        entry["base_vertex"] = buffer_mesh->base_vertex();
+                    }
+                }
+            }
+        }
+        range_array.push_back(entry);
+    }
+    return make_json_content({
+        {"note",   "Snapshot from the most recently resolved region scan. id = id_offset + local_facet_index; a pixel id in [id_offset, id_offset+length) maps to (mesh, primitive_index) and facet (id - id_offset)."},
+        {"count",  range_array.size()},
+        {"ranges", range_array}
+    }).dump();
+}
+
+auto Mcp_server::action_debug_region_select(const json& args) -> std::string
+{
+    if ((m_context.mesh_component_selection == nullptr) || (m_context.mesh_component_selection_tool == nullptr)) {
+        return make_error_content("Mesh component selection not available");
+    }
+    const int   x            = args.value("x", 0);
+    const int   y            = args.value("y", 0);
+    const int   width        = args.value("width", 0);
+    const int   height       = args.value("height", 0);
+    const bool  is_brush     = args.value("is_brush", false);
+    const float brush_radius = args.value("brush_radius", 0.0f);
+    const bool  replace      = args.value("replace", true);
+    const bool  subtract     = args.value("subtract", false);
+    if ((width <= 0) || (height <= 0)) {
+        return make_error_content("width and height (viewport pixels) are required and must be > 0");
+    }
+    // Force Face mode so the scan resolves to facets.
+    m_context.mesh_component_selection->set_mode(Mesh_component_mode::face);
+    m_context.mesh_component_selection_tool->debug_region_select(x, y, width, height, is_brush, brush_radius, replace, subtract);
+    return make_json_content({
+        {"status", "scan requested; poll get_mesh_component_selection in a few frames"},
+        {"x", x}, {"y", y}, {"width", width}, {"height", height},
+        {"is_brush", is_brush}, {"replace", replace}, {"subtract", subtract}
     }).dump();
 }
 

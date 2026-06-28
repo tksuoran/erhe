@@ -92,8 +92,23 @@ Id_renderer::Id_renderer(
         erhe::graphics::Buffer_target::transfer_dst,
         "Id_renderer::m_texture_read_buffer"
     }
+    , m_region_read_buffer{
+        graphics_device,
+        erhe::graphics::Buffer_target::transfer_dst,
+        "Id_renderer::m_region_read_buffer"
+    }
 {
     enabled = id_renderer_config.enabled;
+}
+
+void Id_renderer::request_scan(const Scan_request& request)
+{
+    m_pending_scan = request;
+}
+
+auto Id_renderer::has_pending_scan() const -> bool
+{
+    return m_pending_scan.has_value();
 }
 
 Id_renderer::~Id_renderer() noexcept
@@ -755,6 +770,39 @@ void Id_renderer::render(const Render_parameters& parameters)
     const int read_height = std::min(static_cast<int>(s_extent), static_cast<int>(viewport.height) - entry.y_offset);
     entry.clip_from_world = clip_from_world;
 
+    // Region selection scan (box / paint): if a gesture requested a scan this
+    // frame, clamp its rectangle to the viewport (same discipline as the pointer
+    // rect above -- an unclamped rect yields a negative copy extent ->
+    // VK_ERROR_DEVICE_LOST) and pick a free region slot. The scissor below then
+    // covers the union of the pointer rect and the scan rect (so the per-frame
+    // hover pick keeps working during a drag), and the transfer block blits the
+    // scan rect. If all region slots are busy the scan is skipped this frame; the
+    // gesture re-requests next frame.
+    int  scan_x      = 0;
+    int  scan_y      = 0;
+    int  scan_w      = 0;
+    int  scan_h      = 0;
+    int  region_slot = -1;
+    bool do_scan     = false;
+    if (m_pending_scan.has_value()) {
+        const Scan_request& req = m_pending_scan.value();
+        const int rx0 = std::clamp(req.x,              0, static_cast<int>(viewport.width));
+        const int ry0 = std::clamp(req.y,              0, static_cast<int>(viewport.height));
+        const int rx1 = std::clamp(req.x + req.width,  0, static_cast<int>(viewport.width));
+        const int ry1 = std::clamp(req.y + req.height, 0, static_cast<int>(viewport.height));
+        scan_x = rx0;
+        scan_y = ry0;
+        scan_w = rx1 - rx0;
+        scan_h = ry1 - ry0;
+        for (int i = 0; i < s_region_entry_count; ++i) {
+            if (m_region_entries[i].state == Transfer_entry::State::Unused) {
+                region_slot = i;
+                break;
+            }
+        }
+        do_scan = (scan_w > 0) && (scan_h > 0) && (region_slot >= 0);
+    }
+
     // log_id_render->info(
     //     "render(): pointer=({},{}) offset=({},{}) slot={} frame={} viewport={}x{}",
     //     x, y, entry.x_offset, entry.y_offset,
@@ -817,8 +865,18 @@ void Id_renderer::render(const Render_parameters& parameters)
             // Optimization: only rasterize the readback rect around the
             // pointer (the only region the readback blit copies). Use the
             // framebuffer-clamped extent so a viewport smaller than s_extent
-            // does not produce a scissor larger than the framebuffer.
-            encoder.set_scissor_rect(entry.x_offset, entry.y_offset, read_width, read_height);
+            // does not produce a scissor larger than the framebuffer. When a
+            // region scan is active this frame, widen the scissor to also cover
+            // the scan rect so its facets are rasterized for the scan blit.
+            if (do_scan) {
+                const int ux0 = std::min(entry.x_offset, scan_x);
+                const int uy0 = std::min(entry.y_offset, scan_y);
+                const int ux1 = std::max(entry.x_offset + read_width,  scan_x + scan_w);
+                const int uy1 = std::max(entry.y_offset + read_height, scan_y + scan_h);
+                encoder.set_scissor_rect(ux0, uy0, ux1 - ux0, uy1 - uy0);
+            } else {
+                encoder.set_scissor_rect(entry.x_offset, entry.y_offset, read_width, read_height);
+            }
         } else {
             encoder.set_scissor_rect(viewport.x, viewport.y, viewport.width, viewport.height);
         }
@@ -922,6 +980,73 @@ void Id_renderer::render(const Render_parameters& parameters)
             }
         );
     }
+
+    // Region selection scan readback (box / paint). Blit the scan rectangle of
+    // the color texture (depth is not needed for face selection) into a
+    // dedicated CPU-read buffer; the completion handler copies it into the
+    // region entry, and take_scan_result() resolves it to facet hits on the
+    // main thread a few frames later.
+    if (do_scan) {
+        Region_entry&     region          = m_region_entries[region_slot];
+        const std::size_t bytes_per_pixel = erhe::dataformat::get_format_size_bytes(m_color_texture->get_pixelformat());
+        // The texture->buffer blit requires a 256-byte-aligned destination row
+        // stride (the pointer pick readback above always uses s_extent*4 == 1024,
+        // which is aligned; an arbitrary scan_w*4 such as 5600 is not and yields a
+        // sheared / corrupted readback). Round the row stride up to 256 bytes; the
+        // padding bytes past scan_w*bytes_per_pixel are skipped on decode.
+        const std::size_t row_stride_bytes = (((static_cast<std::size_t>(scan_w) * bytes_per_pixel) + 255u) / 256u) * 256u;
+        const std::size_t region_bytes     = row_stride_bytes * static_cast<std::size_t>(scan_h);
+        region.data.resize(region_bytes);
+        region.x            = scan_x;
+        region.y            = scan_y;
+        region.width        = scan_w;
+        region.height       = scan_h;
+        region.row_stride   = static_cast<int>(row_stride_bytes);
+        region.brush_center = m_pending_scan->brush_center;
+        region.brush_radius = m_pending_scan->brush_radius;
+        region.is_brush     = m_pending_scan->is_brush;
+        region.frame_number = m_graphics_device.get_frame_index();
+        region.buffer_range = m_region_read_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_read, region_bytes);
+
+        // Snapshot the id-range table built by the render_meshes loop above (this
+        // scan frame, Skinning_filter::all). take_scan_result() resolves against
+        // this snapshot, not the live table which a later frame may have rebuilt
+        // with a different mesh set. Clear-and-fill to keep the vector's capacity.
+        region.id_ranges.clear();
+        const std::vector<erhe::scene_renderer::Primitive_buffer::Id_range>& live_ranges = m_primitive_buffers.id_ranges();
+        region.id_ranges.insert(region.id_ranges.end(), live_ranges.begin(), live_ranges.end());
+
+        Blit_command_encoder encoder           = m_graphics_device.make_blit_command_encoder(parameters.command_buffer);
+        const Buffer*        dst_buffer        = region.buffer_range.get_buffer()->get_buffer();
+        const std::uintptr_t dst_offset        = region.buffer_range.get_byte_start_offset_in_buffer();
+        const std::uintptr_t dst_bytes_per_row = row_stride_bytes;
+        const std::uintptr_t dst_bytes_per_img = row_stride_bytes * static_cast<std::uintptr_t>(scan_h);
+        encoder.copy_from_texture(
+            m_color_texture.get(),
+            0,
+            0,
+            glm::ivec3{scan_x, scan_y, 0},
+            glm::ivec3{scan_w, scan_h, 1},
+            dst_buffer,
+            dst_offset,
+            dst_bytes_per_row,
+            dst_bytes_per_img
+        );
+        region.state = Transfer_entry::State::Waiting_for_read;
+        m_graphics_device.add_completion_handler(
+            [&region]() {
+                std::span<std::byte> gpu_data = region.buffer_range.get_span();
+                memcpy(region.data.data(), gpu_data.data(), gpu_data.size_bytes());
+                region.buffer_range.bytes_gpu_used(gpu_data.size_bytes());
+                region.buffer_range.close();
+                region.buffer_range.release();
+                region.state = Transfer_entry::State::Read_complete;
+            }
+        );
+    }
+    // Consume the request whether or not a slot was free; the gesture re-requests
+    // every frame it wants a scan.
+    m_pending_scan.reset();
 
     camera_range.release();
     if (bind_joint_buffer) {
@@ -1028,6 +1153,92 @@ auto Id_renderer::get(const int x, const int y) -> Id_query_result
     }
 
     return result;
+}
+
+auto Id_renderer::take_scan_result() -> const Scan_result&
+{
+    // Find the newest completed region readback we have not resolved yet.
+    int      best_slot  = -1;
+    uint64_t best_frame = m_scan_result.frame_number;
+    for (int i = 0; i < s_region_entry_count; ++i) {
+        const Region_entry& region = m_region_entries[i];
+        if ((region.state == Transfer_entry::State::Read_complete) && (region.frame_number > best_frame)) {
+            best_frame = region.frame_number;
+            best_slot  = i;
+        }
+    }
+    if (best_slot < 0) {
+        // No newer result. Free any completed entries we have already resolved
+        // (or that are stale) so their slots can be reused by render().
+        for (Region_entry& region : m_region_entries) {
+            if (
+                (region.state == Transfer_entry::State::Read_complete) &&
+                (region.frame_number <= m_scan_result.frame_number)
+            ) {
+                region.state = Transfer_entry::State::Unused;
+            }
+        }
+        return m_scan_result;
+    }
+
+    Region_entry& region = m_region_entries[best_slot];
+
+    // Decode the region's texels into a deduplicated id set. For a brush scan,
+    // skip texels outside the disk. id 0 is the background sentinel.
+    m_scan_id_scratch.clear();
+    const int stride = region.row_stride;
+    for (int ry = 0; ry < region.height; ++ry) {
+        for (int rx = 0; rx < region.width; ++rx) {
+            if (region.is_brush) {
+                const float dx = static_cast<float>(region.x + rx) - region.brush_center.x;
+                const float dy = static_cast<float>(region.y + ry) - region.brush_center.y;
+                if ((dx * dx + dy * dy) > (region.brush_radius * region.brush_radius)) {
+                    continue;
+                }
+            }
+            const uint8_t  r  = region.data[rx * 4 + ry * stride + 0];
+            const uint8_t  g  = region.data[rx * 4 + ry * stride + 1];
+            const uint8_t  b  = region.data[rx * 4 + ry * stride + 2];
+            const uint32_t id = (static_cast<uint32_t>(r) << 16u) | (static_cast<uint32_t>(g) << 8u) | static_cast<uint32_t>(b);
+            if (id != 0) {
+                m_scan_id_scratch.insert(id);
+            }
+        }
+    }
+
+    // Resolve each unique id to (mesh, primitive, triangle) via the id-range
+    // snapshot captured when this scan was submitted (the scan frame, drawn with
+    // Skinning_filter::all). Resolving against the live table would be wrong
+    // because a later frame may have rebuilt it with a different mesh set and thus
+    // different id_offsets.
+    m_scan_result.hits.clear();
+    const std::vector<erhe::scene_renderer::Primitive_buffer::Id_range>& ranges = region.id_ranges;
+    for (const uint32_t id : m_scan_id_scratch) {
+        for (const erhe::scene_renderer::Primitive_buffer::Id_range& range : ranges) {
+            if ((id >= range.offset) && (id < (range.offset + range.length))) {
+                Scan_hit hit;
+                hit.mesh            = std::dynamic_pointer_cast<erhe::scene::Mesh>(range.mesh->shared_from_this());
+                hit.primitive_index = range.index_of_gltf_primitive_in_mesh;
+                hit.triangle_id     = id - range.offset;
+                m_scan_result.hits.push_back(std::move(hit));
+                break;
+            }
+        }
+    }
+
+    m_scan_result.ready        = true;
+    m_scan_result.frame_number = region.frame_number;
+    // Keep the resolved scan's id-range snapshot for the MCP id-range-mapping
+    // query (clear-and-fill to retain capacity).
+    m_last_scan_id_ranges.clear();
+    m_last_scan_id_ranges.insert(m_last_scan_id_ranges.end(), ranges.begin(), ranges.end());
+    region.state = Transfer_entry::State::Unused;
+    return m_scan_result;
+}
+
+auto Id_renderer::get_last_scan_id_ranges() const -> const std::vector<erhe::scene_renderer::Primitive_buffer::Id_range>&
+{
+    return m_last_scan_id_ranges;
 }
 
 }

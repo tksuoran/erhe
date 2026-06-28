@@ -423,6 +423,27 @@ void Commands::sort_mouse_bindings()
     // }
 }
 
+void Commands::sort_mouse_wheel_bindings()
+{
+    std::sort(
+        m_mouse_wheel_bindings.begin(),
+        m_mouse_wheel_bindings.end(),
+        [this](
+            const std::unique_ptr<Mouse_wheel_binding>& lhs,
+            const std::unique_ptr<Mouse_wheel_binding>& rhs
+        ) -> bool {
+            auto* const lhs_command = lhs.get()->get_command();
+            auto* const rhs_command = rhs.get()->get_command();
+            ERHE_VERIFY(lhs_command != nullptr);
+            ERHE_VERIFY(rhs_command != nullptr);
+            // Higher priority first (mirrors sort_mouse_bindings). A command kept
+            // in Ready state (e.g. the brush-radius command while paint-selecting)
+            // thereby out-ranks an Inactive wheel command (fly-camera zoom).
+            return get_command_priority(lhs_command) > get_command_priority(rhs_command);
+        }
+    );
+}
+
 void Commands::sort_controller_bindings()
 {
     std::sort(
@@ -614,7 +635,7 @@ auto Commands::on_mouse_wheel_event(const erhe::window::Input_event& input_event
     const erhe::window::Mouse_wheel_event& mouse_wheel_event = input_event.u.mouse_wheel_event;
     m_last_modifier_mask = mouse_wheel_event.modifier_mask;
 
-    sort_mouse_bindings();
+    sort_mouse_wheel_bindings();
 
     Input_arguments input{
         .modifier_mask = mouse_wheel_event.modifier_mask,

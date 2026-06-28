@@ -15,6 +15,7 @@
 #include "scene/viewport_scene_view.hpp"
 #include "scene/viewport_scene_views.hpp"
 #include "tools/material_paint_tool.hpp"
+#include "tools/mesh_component_selection_tool.hpp"
 
 #include "erhe_defer/defer.hpp"
 #include "erhe_imgui/imgui_host.hpp"
@@ -250,6 +251,13 @@ void Viewport_window::imgui()
 
         m_request_cursor_relative_hold = gizmo.IsUsing();
     }
+
+    // Selection gesture overlay (box rubber-band / brush circle), drawn on top
+    // of the viewport image in this child window's draw list.
+    if ((m_app_context.mesh_component_selection_tool != nullptr) && viewport_scene_view) {
+        m_app_context.mesh_component_selection_tool->draw_gesture_overlay(viewport_scene_view.get());
+    }
+
     ImGui::EndChild();
 }
 
