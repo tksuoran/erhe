@@ -1,6 +1,6 @@
 ---
 name: erhe-renderdoc-gpu-debug
-description: GPU-debug the erhe editor by capturing a frame of the windowed Vulkan build with the tksuoran/renderdoc fork MCP server and reading back pipeline state, render targets, and per-texel statistics. Use this for "renders nothing / renders wrong / which texture actually holds what" bugs where the in-editor MCP screenshot and CPU readback show the symptom but not the GPU-level cause. Works on macOS (build_xcode_vulkan + build_mac qrenderdoc) and Windows (build_vs2026_vulkan); RenderDoc needs a windowed Vulkan build with a live display (not Metal, not OpenGL, not the headless emulated swapchain).
+description: GPU-debug the erhe editor by capturing a frame of the windowed Vulkan build with the tksuoran/renderdoc fork MCP server and reading back pipeline state, render targets, per-texel statistics, AND the decoded shader uniform/constant-buffer values feeding any draw. Use this whenever you need to SEE the rendering result or the exact parameters fed to a shader -- "renders nothing / renders wrong / why does X look different from Y / which texture or uniform actually holds what". This is the tool for any "I need to see it" question on the windowed build: save a render target to PNG and Read it, and read the live uniform-buffer values at a specific draw. On macOS the in-editor MCP capture_screenshot only works headless-Vulkan and screencapture is permission-blocked, so RenderDoc is the way to see a Metal-or-windowed-Vulkan frame. Works on macOS (build_xcode_vulkan + build_mac qrenderdoc) and Windows (build_vs2026_vulkan); RenderDoc needs a windowed Vulkan build with a live display (not Metal, not OpenGL, not the headless emulated swapchain) -- so to GPU-debug a bug seen on the Metal build, reproduce it on build_xcode_vulkan.
 ---
 
 # erhe RenderDoc GPU debugging (windowed Vulkan)
@@ -125,6 +125,61 @@ mcp__renderdoc__detach_process                          # when done; editor keep
 `get_texture_stats` and `get_pixel_history` are the highest-signal tools: stats
 tell you instantly if a target is all-zero / NaN / uniform; pixel history tells
 you whether a fragment was depth/stencil-rejected vs ran-and-wrote-the-wrong-value.
+
+## Step 5a -- SEE the frame (save a render target and Read the PNG)
+
+When the question is "what does it actually look like" (and you cannot screenshot
+-- Metal MCP capture is headless-only, macOS `screencapture` is permission-blocked
+when driving headless), this is how you see it:
+
+```
+mcp__renderdoc__save_texture {"resourceId":"<viewport color>","filename":"frame.png","overwrite":true}
+# -> returns a path under <temp>/renderdoc_mcp/frame.png
+```
+then `Read` that path -- the image tool renders it inline so you literally see the
+frame. The viewport color target's debug label is `Viewport window color texture`
+(the resolved, non-multisampled sibling of `Viewport window multisampled color
+texture`); always save the resolved one. It is `R16G16B16A16F` (HDR) but
+`save_texture` applies the Texture-Viewer default tonemap so the PNG is viewable
+(judge brightness from `get_texture_stats`, not the PNG, per the HDR gotcha below).
+`SendUserFile` the PNG too when the user should see what you see.
+
+## Step 5b -- read the SHADER UNIFORMS feeding a draw
+
+To see the exact parameters a shader received (the highest-signal "why does it
+look wrong" answer), navigate to the draw and read its constant buffers:
+
+```
+mcp__renderdoc__search_actions {"query":"<marker>"}     # e.g. "grid" -> the "Grid" PushMarker
+mcp__renderdoc__set_event {"eventId":<the DRAW eventId, usually marker eventId+1>}
+mcp__renderdoc__get_pipeline_state                       # confirm bound shaders (e.g. "grid fragment")
+mcp__renderdoc__get_constant_buffers {"stage":"fragment","onlyUsed":true}   # list blocks + their slot index
+mcp__renderdoc__get_constant_buffer_contents {"stage":"fragment","slot":<index>}  # decoded named values
+```
+
+`get_constant_buffers` gives you the slot index per named block; `get_constant_buffer_contents`
+returns the fully decoded variable tree (scalars/vectors/matrices/structs/arrays)
+exactly as the shader sees it. In erhe the per-frame `camera` block carries not just
+the matrices but the grid params (`grid_color[0..3]`, `grid_label_color`, `grid_size`,
+`grid_line_width`), the sky params, and `exposure` -- so reading the `camera` block at
+the grid draw tells you the literal grid colors on the GPU. (`light_block` is a
+different slot; `onlyUsed:true` keeps the list short and tells you which slot is which.)
+
+## Step 5c -- compare two states (A/B capture)
+
+To answer "why does scene/state A look different from B", capture both and diff the
+same numbers -- do not eyeball. Capture A (`save_texture` + read the uniform block),
+then relaunch the editor in state B, **`list_targets` + `connect_to_target` again
+(the pid changes every launch)**, capture B, and read the identical texture/uniforms.
+Byte-identical uniforms prove that subsystem is NOT the cause and redirect the
+investigation. Worked example -- the "grid colors wrong in a loaded scene" report:
+saving `Viewport window color texture` for the loaded scene vs the default scene
+showed the loaded scene rendered unlit (white ground, wireframe meshes) while the
+default was lit; reading the `camera` block at the grid draw in BOTH showed
+`grid_color` byte-identical (all `(0,0,0,1)`). That proved the grid was fine and the
+real bug was the loaded scene rendering with `material_count==0` (its companion
+`.glb` failed to parse), not the grid -- a conclusion impossible to reach by staring
+at the symptom.
 
 ### erhe-specific texture labels worth knowing
 

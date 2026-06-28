@@ -154,6 +154,8 @@ Many systems have swappable backends selected at CMake configure time via `#ifde
 
 ## Debugging on Windows / MSVC (Visual Studio MCP server)
 
+**Skill:** for any C++ crash / abort / `VERIFY` / `ERHE_FATAL` / thrown exception / hang, invoke the **`erhe-cpp-debugging`** skill -- it is the cross-platform run-book that condenses this section and the macOS-lldb section below into one invokable workflow (Windows VS-MCP here, lldb on macOS/Linux). For GPU "renders wrong" bugs use **`erhe-renderdoc-gpu-debug`** instead.
+
 On Windows, prefer the **`visualstudio` MCP server** ([CodingWithCalvin/VS-MCPServer](https://github.com/CodingWithCalvin/VS-MCPServer)) for interactive debugging and build/diagnostic queries over ad-hoc print debugging. It lets Claude Code drive a *live* Visual Studio instance: set breakpoints, launch under the debugger, step, and inspect program state, all without leaving the conversation.
 
 **Prerequisites (one-time, done by the user):**
@@ -202,6 +204,8 @@ On macOS, prefer the **`xcode` MCP server** (Apple's official Xcode MCP, prefix 
 **Bottom line:** on macOS the Xcode MCP server is the preferred tool for *building and reading diagnostics* (and Apple-docs lookup), but it is NOT a debugger and cannot launch or drive the editor. For runtime behavior use `logs/log.txt` and the in-editor MCP server; for live debugging use lldb as described next.
 
 ## Debugging on macOS (lldb, for Claude Code)
+
+**Skill:** the **`erhe-cpp-debugging`** skill is the invokable run-book for the workflow in this section (crash / abort / VERIFY / FATAL / hang -> real callstack + live locals). For GPU "renders wrong / wrong color / which texture or uniform holds what" bugs use **`erhe-renderdoc-gpu-debug`** instead -- that is CPU vs GPU, not macOS vs Windows.
 
 There is no Visual-Studio-MCP equivalent on macOS (the Xcode MCP server has zero debugger control). The debugger is `lldb`, already installed at `/usr/bin/lldb` (ships with Xcode 26 / Command Line Tools - no install or plugin needed). Claude Code drives it through the **Bash tool**. All three Debug builds expose full symbols (`build_xcode_{metal,opengl,vulkan}/src/editor/Debug/editor`), verified down to source lines (`editor::run_editor()` -> `editor.cpp`).
 
@@ -261,6 +265,8 @@ Invoke-RestMethod http://127.0.0.1:8080/mcp -Method POST -Body $body -ContentTyp
 **Augment the API when a capability is missing.** If a debugging task needs an editor action the MCP server does not expose, add a new tool (a `query_*`/`action_*` handler + the `req->tool_name == "..."` dispatch entry + its `tools/list` schema in `refresh_tool_list`) rather than working around it from outside. Growing this surface makes the live editor scriptable for the next investigation; treat it as first-class debugging infrastructure.
 
 ## GPU frame debugging (RenderDoc fork MCP server)
+
+**Skill:** invoke the **`erhe-renderdoc-gpu-debug`** skill for any "renders nothing / renders wrong / wrong color / why does X look different from Y / I need to SEE the frame or the exact uniform values feeding a shader" bug. It is the condensed run-book for this section: capture a frame, `save_texture` a render target to PNG and `Read` it to see the frame, and read decoded constant-buffer values (`get_constant_buffers` -> `get_constant_buffer_contents`) at a specific draw. On macOS reproduce the bug on `build_xcode_vulkan` first (RenderDoc cannot capture Metal/OpenGL or the headless emulated swapchain).
 
 For **windowed Vulkan GPU debugging** -- inspecting a captured frame's pipeline state, render targets, texture statistics (min/max/mean, NaN/Inf/zero counts), pixel history, constant-buffer contents, post-VS geometry, and saving textures -- use the **RenderDoc fork MCP server** ([`tksuoran/renderdoc`](https://github.com/tksuoran/renderdoc), branch `mcp-server`, cloned and built locally), an MCP server embedded in `qrenderdoc` that connects to the running editor (which loads the fork's in-app `renderdoc.dll`) and reads back the captured frame programmatically. This is the tool for "renders nothing / renders wrong" bugs that the headless `capture_screenshot` and the in-editor MCP cannot diagnose (they show *what* is wrong, not *why* at the GPU level). It needs a **live display** (real WSI swapchain) -- it does not work against the headless emulated swapchain. The full tested recipe, gotchas, and a worked example (the "black atmosphere sky" bug) are in [`doc/renderdoc_fork.md`](doc/renderdoc_fork.md); the fork's own tool reference is its [`docs/mcp.md`](https://github.com/tksuoran/renderdoc/blob/mcp-server/docs/mcp.md) (the `D:\renderdoc\...` paths in that doc are just this machine's clone/build location of the fork).
 
