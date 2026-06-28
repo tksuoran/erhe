@@ -67,6 +67,7 @@ Id_renderer::Id_renderer(
     Programs&                                   programs
 )
     : m_graphics_device      {graphics_device}
+    , m_id_renderer_config   {id_renderer_config}
     , m_mesh_memory          {mesh_memory}
     , m_shader_variant_cache {shader_variant_cache}
     , m_programs             {programs}
@@ -1363,10 +1364,16 @@ void Id_renderer::render(const Render_parameters& parameters)
         const std::vector<erhe::scene_renderer::Primitive_buffer::Id_range>& live_ranges = m_primitive_buffers.id_ranges();
         region.id_ranges.insert(region.id_ranges.end(), live_ranges.begin(), live_ranges.end());
 
-        ensure_scan_compute();
+        // The GPU compute gather is used only when both the device supports it
+        // and the (live, Settings-window-editable) toggle is on; otherwise the
+        // CPU path below runs. Build the compute resources lazily on first use so
+        // toggling the option off at startup costs nothing.
         bool submitted = false;
-        if (m_scan_compute_available) {
-            submitted = submit_scan_compute(parameters.command_buffer, region, scan_x, scan_y, scan_w, scan_h);
+        if (m_id_renderer_config.box_select_use_compute) {
+            ensure_scan_compute();
+            if (m_scan_compute_available) {
+                submitted = submit_scan_compute(parameters.command_buffer, region, scan_x, scan_y, scan_w, scan_h);
+            }
         }
 
         if (!submitted) {

@@ -270,6 +270,10 @@ private:
 
     // TODO Do not store these here?
     erhe::graphics::Device&                      m_graphics_device;
+    // Live reference to the editor's Id_renderer_config (m_editor_settings.id_renderer).
+    // Read at runtime (e.g. box_select_use_compute) so a Settings-window toggle takes
+    // effect without reconstructing the renderer. Stable for the app lifetime.
+    const Id_renderer_config&                    m_id_renderer_config;
     erhe::scene_renderer::Mesh_memory&           m_mesh_memory;
     erhe::scene_renderer::Shader_variant_cache&  m_shader_variant_cache;
     Programs&                                    m_programs;
