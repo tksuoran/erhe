@@ -4735,9 +4735,9 @@ auto Mcp_server::query_id_range_mapping(const json& args) -> std::string
     json range_array = json::array();
     for (const erhe::scene_renderer::Primitive_buffer::Id_range& range : ranges) {
         // A decoded pixel id in [offset, offset+length) selects this primitive;
-        // (id - offset) is the 0-based renderable-triangle index, which
-        // get_mesh_facet_from_triangle() maps to a geometry facet. length is the
-        // index count, so triangle_count = length / 3.
+        // (id - offset) is the GEO facet index directly (the id pass emits the
+        // facet id per vertex). length is the index count, so the fill triangle
+        // count is length / 3 (facet ids are <= triangle count).
         json entry = {
             {"id_offset",      range.offset},
             {"length",         range.length},

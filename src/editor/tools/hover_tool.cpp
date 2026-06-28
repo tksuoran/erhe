@@ -205,7 +205,9 @@ void Hover_tool::window_imgui()
             const std::string text = fmt::format("Nearest Primitive Index: {}", nearest->scene_mesh_primitive_index);
             ImGui::TextUnformatted(text.c_str());
         }
-        {
+        // Only the raytrace hover path carries a triangle index; the GPU id path
+        // resolves a facet directly and leaves triangle at its sentinel.
+        if (nearest->triangle != std::numeric_limits<uint32_t>::max()) {
             const std::string text = fmt::format("Nearest triangle: {}", nearest->triangle);
             ImGui::TextUnformatted(text.c_str());
         }

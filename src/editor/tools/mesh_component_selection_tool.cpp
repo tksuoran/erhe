@@ -938,10 +938,13 @@ void apply_scan_hits_to_selection(
         if (!geometry) {
             continue;
         }
-        const GEO::index_t facet = shape->get_mesh_facet_from_triangle(static_cast<uint32_t>(hit.triangle_id));
-        if (facet == GEO::NO_INDEX) {
-            continue;
+        // The GPU id pass emits the GEO facet index per vertex, so hit.facet_id is
+        // the facet directly (same index space as geometry's GEO mesh facets).
+        const GEO::index_t facet_count = static_cast<GEO::index_t>(geometry->get_mesh().facets.nb());
+        if (hit.facet_id >= facet_count) {
+            continue; // out of range (identity-only mesh writes facet id 0 with no geometry)
         }
+        const GEO::index_t facet = static_cast<GEO::index_t>(hit.facet_id);
         Mesh_component_entry& entry = selection.find_or_create_entry(mesh, hit.primitive_index, geometry);
         if (subtract) {
             entry.facets.erase(facet);

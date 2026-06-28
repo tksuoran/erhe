@@ -66,8 +66,11 @@ void Build_context_root::get_mesh_info()
     if (primitive_types.fill_triangles) {
         total_index_count += mesh_info.index_count_fill_triangles;
         allocate_index_range(Primitive_type::triangles, mesh_info.index_count_fill_triangles, buffer_mesh.triangle_fill_indices);
-        const std::size_t primitive_count = mesh_info.index_count_fill_triangles;
-        element_mappings.triangle_to_mesh_facet.resize(primitive_count);
+        // One entry per fill triangle (the map is keyed by the 0-based triangle
+        // index), not per index: index_count_fill_triangles counts 3 indices per
+        // triangle, so divide by 3.
+        const std::size_t triangle_count = mesh_info.index_count_fill_triangles / 3;
+        element_mappings.triangle_to_mesh_facet.resize(triangle_count);
     }
 
     // Expanded solid-wireframe fill: one sequential index per expanded vertex

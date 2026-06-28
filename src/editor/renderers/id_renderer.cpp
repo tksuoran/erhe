@@ -1147,7 +1147,7 @@ auto Id_renderer::get(const int x, const int y) -> Id_query_result
             result.valid                           = true;
             result.mesh                            = std::dynamic_pointer_cast<erhe::scene::Mesh>(r.mesh->shared_from_this());
             result.index_of_gltf_primitive_in_mesh = r.index_of_gltf_primitive_in_mesh;
-            result.triangle_id                     = result.id - r.offset;
+            result.facet_id                        = result.id - r.offset;
             return result;
         }
     }
@@ -1219,7 +1219,7 @@ auto Id_renderer::take_scan_result() -> const Scan_result&
                 Scan_hit hit;
                 hit.mesh            = std::dynamic_pointer_cast<erhe::scene::Mesh>(range.mesh->shared_from_this());
                 hit.primitive_index = range.index_of_gltf_primitive_in_mesh;
-                hit.triangle_id     = id - range.offset;
+                hit.facet_id        = id - range.offset;
                 m_scan_result.hits.push_back(std::move(hit));
                 break;
             }
@@ -1228,6 +1228,7 @@ auto Id_renderer::take_scan_result() -> const Scan_result&
 
     m_scan_result.ready        = true;
     m_scan_result.frame_number = region.frame_number;
+
     // Keep the resolved scan's id-range snapshot for the MCP id-range-mapping
     // query (clear-and-fill to retain capacity).
     m_last_scan_id_ranges.clear();

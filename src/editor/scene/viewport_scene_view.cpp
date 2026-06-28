@@ -817,10 +817,10 @@ void Viewport_scene_view::update_hover_with_id_render()
         .valid                      = id_query.valid,
         .scene_mesh_weak            = id_query.mesh,
         .scene_mesh_primitive_index = id_query.index_of_gltf_primitive_in_mesh,
-        .position                   = get_position_in_world_viewport_depth(id_query.depth),
-        .triangle                   = static_cast<uint32_t>(id_query.triangle_id) // TODO Consider these types
+        .position                   = get_position_in_world_viewport_depth(id_query.depth)
+        // The GPU id pass yields a GEO facet id (not a triangle); entry.triangle is
+        // left at its sentinel and entry.facet is set from id_query.facet_id below.
     };
-    // log_controller_ray->trace("id_query.triangle_id = {}", id_query.triangle_id);
 
     // log_controller_ray->trace("position in world = {}", entry.position.value());
 
@@ -835,7 +835,12 @@ void Viewport_scene_view::update_hover_with_id_render()
             entry.geometry = shape->get_geometry();
             if (entry.geometry) {
                 const GEO::Mesh& geo_mesh = entry.geometry->get_mesh();
-                entry.facet = shape->get_mesh_facet_from_triangle(entry.triangle);
+                // The id pass emits the GEO facet index per vertex, so id_query.facet_id
+                // is the facet directly (same index space as geo_mesh.facets). Guard
+                // against an out-of-range value (identity-only meshes write facet id 0).
+                const GEO::index_t facet_count   = static_cast<GEO::index_t>(geo_mesh.facets.nb());
+                const GEO::index_t hovered_facet = static_cast<GEO::index_t>(id_query.facet_id);
+                entry.facet = (hovered_facet < facet_count) ? hovered_facet : GEO::NO_INDEX;
                 if (entry.facet != GEO::NO_INDEX) {
                     // log_controller_ray->trace("hover facet = {}", entry.facet);
 

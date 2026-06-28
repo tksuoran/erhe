@@ -152,18 +152,18 @@ void main()
 #endif
 
 #if defined(ERHE_VARIANT_ID_RENDER)
-    // Pack draw_id + per-triangle index into RGB. The draw_id contribution
+    // Pack draw_id + per-vertex facet id into RGB. The draw_id contribution
     // comes from a per-primitive color offset assigned by
     // erhe::scene_renderer::Primitive_buffer when color_source =
-    // id_offset; the triangle index is the per-vertex flat output from
-    // standard.vert. Id_renderer::get() unpacks (r << 16) | (g << 8) | b
-    // and walks the range table to recover (mesh, primitive_index,
-    // triangle_id). No lighting, no varyings, no UBO reads beyond the
-    // shared primitive block.
-    uint triangle_id = uint(v_primitive_id);
-    vec3 id_rgb      = vec3_from_uint(triangle_id);
-    vec3 id          = id_rgb + primitive.primitives[v_draw_id].color.xyz;
-    out_color        = vec4(id, 1.0);
+    // id_offset; the facet id is the flat output from standard.vert (the GEO
+    // facet index, decoded from a_custom_0). Id_renderer::get() unpacks
+    // (r << 16) | (g << 8) | b and walks the range table to recover
+    // (mesh, primitive_index, facet_id). No lighting, no varyings, no UBO
+    // reads beyond the shared primitive block.
+    uint facet_id = uint(v_primitive_id);
+    vec3 id_rgb   = vec3_from_uint(facet_id);
+    vec3 id       = id_rgb + primitive.primitives[v_draw_id].color.xyz;
+    out_color     = vec4(id, 1.0);
     return;
 #endif
 

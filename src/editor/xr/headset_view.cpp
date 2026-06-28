@@ -588,8 +588,9 @@ void Headset_view::update_hover_with_id_render()
         .valid                      = id_query.valid,
         .scene_mesh_weak            = id_query.mesh,
         .scene_mesh_primitive_index = id_query.index_of_gltf_primitive_in_mesh,
-        .position                   = get_pick_position_in_world(id_query.depth),
-        .triangle                   = static_cast<uint32_t>(id_query.triangle_id)
+        .position                   = get_pick_position_in_world(id_query.depth)
+        // The GPU id pass yields a GEO facet id (not a triangle); entry.facet is
+        // set from id_query.facet_id below.
     };
 
     std::shared_ptr<erhe::scene::Mesh> scene_mesh = entry.scene_mesh_weak.lock();
@@ -603,7 +604,11 @@ void Headset_view::update_hover_with_id_render()
             entry.geometry = shape->get_geometry();
             if (entry.geometry) {
                 const GEO::Mesh& geo_mesh = entry.geometry->get_mesh();
-                entry.facet = shape->get_mesh_facet_from_triangle(entry.triangle);
+                // The id pass emits the GEO facet index per vertex, so id_query.facet_id
+                // is the facet directly. Guard against an out-of-range value.
+                const GEO::index_t facet_count   = static_cast<GEO::index_t>(geo_mesh.facets.nb());
+                const GEO::index_t hovered_facet = static_cast<GEO::index_t>(id_query.facet_id);
+                entry.facet = (hovered_facet < facet_count) ? hovered_facet : GEO::NO_INDEX;
                 if (entry.facet != GEO::NO_INDEX) {
                     const bool       negative_determinant   = (node->get_flag_bits() & erhe::Item_flags::negative_determinant) == erhe::Item_flags::negative_determinant;
                     const GEO::vec3f facet_normal           = erhe::geometry::mesh_facet_normalf(geo_mesh, entry.facet);

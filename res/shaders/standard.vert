@@ -205,19 +205,28 @@ void main()
 
 #if defined(ERHE_VARIANT_ID_RENDER)
     v_draw_id      = ERHE_DRAW_ID;
-    // Reading gl_PrimitiveID in a fragment shader pulls in the SPIR-V
-    // Geometry capability (and on Metal is not supported at all). The
-    // ID pass always draws triangle lists, so the vertex shader writes
-    // a per-vertex triangle index instead.
-    //
-    // gl_VertexID is a vertex index into the SHARED mesh vertex pool, so it
-    // carries this primitive's base-vertex offset (thousands for any primitive
-    // not at pool start). Subtract base_vertex (the same value the draw uses as
-    // vertexOffset) so the packed triangle id is the 0-based per-primitive facet
-    // index that id_ranges()/get_mesh_facet_from_triangle() invert. Without this,
-    // ids land far outside their recorded [id_offset, id_offset+length) range and
-    // every region/picking resolve on a pooled primitive fails.
-    v_primitive_id = (gl_VertexID - int(primitive.primitives[ERHE_DRAW_ID].base_vertex)) / 3;
+    // Emit this facet's GEO index directly, decoded from the per-vertex facet-id
+    // attribute (a_custom_0 = build_polygon_id()'s vec4_from_uint(facet)). Every
+    // corner of a facet carries the same value, so this flat output is the facet
+    // id regardless of provoking vertex or how the facet was triangulated -- the
+    // value Id_renderer's readback packs as (id_offset + facet_id) and the picking
+    // resolve consumes as a GEO facet index (the same index space mesh-component
+    // selection and the facet debug viz use). Deriving it arithmetically from
+    // gl_VertexID/3 over the shared fan-triangulated pool was wrong for any facet
+    // with more than 3 corners; this attribute is robust by construction.
+#   if defined(ERHE_ATTRIBUTE_a_custom_0)
+    // a_custom_0: r = (facet>>24), g = (facet>>16), b = (facet>>8), a = (facet>>0);
+    // small facet indices live entirely in .a, so all four components recombine.
+    v_primitive_id = int(
+        (uint(a_custom_0.r * 255.0 + 0.5) << 24) |
+        (uint(a_custom_0.g * 255.0 + 0.5) << 16) |
+        (uint(a_custom_0.b * 255.0 + 0.5) <<  8) |
+         uint(a_custom_0.a * 255.0 + 0.5));
+#   else
+    // Identity-only meshes (rendertarget / tools) whose vertex format lacks the
+    // attribute: mesh identity comes from the id_offset range, not this value.
+    v_primitive_id = 0;
+#   endif
 #endif
 
 #if defined(ERHE_EDGE_LINES_FROM_ID) || defined(ERHE_VARIANT_FACE_ID_SEED)

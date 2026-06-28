@@ -65,7 +65,10 @@ public:
         float                              depth          {0.0f};
         std::shared_ptr<erhe::scene::Mesh> mesh           {};
         std::size_t                        index_of_gltf_primitive_in_mesh{0};
-        std::size_t                        triangle_id    {std::numeric_limits<std::size_t>::max()};
+        // The GEO facet index under the queried pixel, decoded as (id - range.offset).
+        // The id pass emits the facet id per vertex (a_custom_0), so this is the
+        // facet directly -- no triangle_to_mesh_facet indirection on the GPU path.
+        std::size_t                        facet_id       {std::numeric_limits<std::size_t>::max()};
         bool                               valid          {false};
         uint64_t                           frame_number   {0};
     };
@@ -200,7 +203,8 @@ public:
     public:
         std::shared_ptr<erhe::scene::Mesh> mesh           {};
         std::size_t                        primitive_index{0};
-        std::size_t                        triangle_id    {0};
+        // GEO facet index for the scanned pixel (decoded as id - range.offset).
+        std::size_t                        facet_id       {0};
     };
     class Scan_result
     {
