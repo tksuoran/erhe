@@ -161,14 +161,19 @@ namespace {
 
 void grow_facets(const erhe::geometry::Geometry& geometry, Mesh_component_entry& entry)
 {
-    const GEO::Mesh& mesh = geometry.get_mesh();
+    const GEO::Mesh&       mesh   = geometry.get_mesh();
     std::set<GEO::index_t> result = entry.facets;
     for (const GEO::index_t facet : entry.facets) {
         const GEO::index_t corner_count = mesh.facets.nb_corners(facet);
-        for (GEO::index_t local_edge = 0; local_edge < corner_count; ++local_edge) {
-            const GEO::index_t neighbor = mesh.facets.adjacent(facet, local_edge);
-            if (neighbor != GEO::NO_INDEX) {
-                result.insert(neighbor);
+        for (GEO::index_t i = 0; i < corner_count; ++i) {
+            const GEO::index_t corner = mesh.facets.corner(facet, i);
+            const GEO::index_t vertex = mesh.facet_corners.vertex(corner);
+            // Blender "Face Step" (the Select More default): a face grows across
+            // shared *vertices*, not just shared edges, so the diagonal neighbors
+            // that touch the selection at a single corner are included too. Add
+            // every facet incident to each of this facet's vertices.
+            for (const GEO::index_t vertex_corner : geometry.get_vertex_corners(vertex)) {
+                result.insert(geometry.get_corner_facet(vertex_corner));
             }
         }
     }
