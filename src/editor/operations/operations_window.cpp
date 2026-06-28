@@ -879,6 +879,19 @@ Operations::Operations(
                     m_context.app_message_bus->scene_created.send_message(
                         Scene_created_message{ scene_root }
                     );
+
+                    // Restore the per-scene window-docking layout saved next to the
+                    // scene file (see save_scene_callback / action_save_scene), so the
+                    // viewport and content-library windows come back docked the way
+                    // they were saved instead of floating. Applied after the windows
+                    // are created so ImGui matches the saved settings to them by name.
+                    if (m_context.imgui_windows != nullptr) {
+                        const std::filesystem::path ini_path = editor::scene_imgui_ini_path(message.path);
+                        std::error_code ec;
+                        if (std::filesystem::exists(ini_path, ec)) {
+                            m_context.imgui_windows->load_imgui_ini(ini_path.string());
+                        }
+                    }
                 }
             } catch (...) {
                 log_operations->error("exception: load scene");
@@ -2243,7 +2256,12 @@ void Operations::save_scene_callback(const char* const* filelist, int filter)
     }
 
     try {
-        editor::save_scene(*scene_root, std::filesystem::path{file});
+        const std::filesystem::path scene_path{file};
+        if (editor::save_scene(*scene_root, scene_path) && (m_context.imgui_windows != nullptr)) {
+            // Persist the current window-docking layout next to the scene file so a
+            // later load can restore how the windows were docked at save time.
+            m_context.imgui_windows->save_imgui_ini(editor::scene_imgui_ini_path(scene_path).string());
+        }
     } catch (...) {
         log_operations->error("exception: save scene");
     }

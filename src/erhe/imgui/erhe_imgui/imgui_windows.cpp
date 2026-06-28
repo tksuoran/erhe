@@ -157,6 +157,20 @@ void Imgui_windows::save_window_state()
     }
 }
 
+void Imgui_windows::save_imgui_ini(const std::string& path)
+{
+    if (m_window_imgui_host) {
+        m_window_imgui_host->save_imgui_ini(path);
+    }
+}
+
+void Imgui_windows::load_imgui_ini(const std::string& path)
+{
+    if (m_window_imgui_host) {
+        m_window_imgui_host->load_imgui_ini(path);
+    }
+}
+
 void Imgui_windows::process_events(const float dt_s, const int64_t time_ns)
 {
     ERHE_VERIFY(!m_iterating);

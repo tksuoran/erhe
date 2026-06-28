@@ -16,6 +16,11 @@ auto save_scene(
     const std::filesystem::path& path
 ) -> bool;
 
+// Companion ImGui layout (.ini) path for a scene file: <dir>/<stem>_imgui.ini.
+// The editor saves the window-docking layout there when a scene is saved and
+// restores it when the scene is loaded.
+auto scene_imgui_ini_path(const std::filesystem::path& scene_path) -> std::filesystem::path;
+
 auto load_scene(
     App_context*                            context,
     App_message_bus*                        app_message_bus,

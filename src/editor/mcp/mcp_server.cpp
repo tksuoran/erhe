@@ -39,6 +39,8 @@
 #include "transform/transform_tool.hpp"
 #include "transform/transform_tool_settings.hpp"
 
+#include "erhe_imgui/imgui_windows.hpp"
+
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_primitive/primitive.hpp"
 
@@ -3757,6 +3759,11 @@ auto Mcp_server::action_save_scene(const json& args) -> std::string
         json r = make_text_content("save_scene failed: " + path_str);
         r["isError"] = true;
         return r.dump();
+    }
+    // Persist the current window-docking layout next to the scene file so a later
+    // load can restore how the windows were docked at save time.
+    if (m_context.imgui_windows != nullptr) {
+        m_context.imgui_windows->save_imgui_ini(editor::scene_imgui_ini_path(path).string());
     }
     return make_json_content({
         {"saved", true},

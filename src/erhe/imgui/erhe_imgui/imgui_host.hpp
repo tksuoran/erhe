@@ -83,6 +83,13 @@ public:
     [[nodiscard]] auto get_imgui_renderer() -> Imgui_renderer&;
     [[nodiscard]] auto get_imgui_context () -> ImGuiContext*;
 
+    // Save / load this host's ImGui layout (window positions, sizes and docking)
+    // to / from an explicit .ini path, independent of io.IniFilename. Used to
+    // persist a per-scene window layout next to the scene file so that loading a
+    // scene restores how its windows were docked when it was saved.
+    void save_imgui_ini(const std::string& path);
+    void load_imgui_ini(const std::string& path);
+
 protected:
     std::function<void(Imgui_host& viewport)> m_begin_callback;
     std::string     m_imgui_ini_path;

@@ -61,6 +61,12 @@ public:
     auto get_windows            () -> std::vector<Imgui_window*>&;
     void save_window_state      ();
 
+    // Save / load the window-host ImGui layout (.ini) to / from an explicit path,
+    // used to persist a per-scene window layout next to the scene file. No-op when
+    // there is no window imgui host (e.g. OpenXR).
+    void save_imgui_ini         (const std::string& path);
+    void load_imgui_ini         (const std::string& path);
+
     [[nodiscard]] auto get_window_imgui_host     () -> std::shared_ptr<Window_imgui_host>;
     [[nodiscard]] auto want_capture_keyboard     () const -> bool;
     [[nodiscard]] auto want_capture_mouse        () const -> bool;

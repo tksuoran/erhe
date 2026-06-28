@@ -206,6 +206,24 @@ auto Imgui_host::name() const -> const std::string&
     return m_name;
 }
 
+void Imgui_host::save_imgui_ini(const std::string& path)
+{
+    if (path.empty()) {
+        return;
+    }
+    Scoped_imgui_context imgui_context{*this};
+    ImGui::SaveIniSettingsToDisk(path.c_str());
+}
+
+void Imgui_host::load_imgui_ini(const std::string& path)
+{
+    if (path.empty()) {
+        return;
+    }
+    Scoped_imgui_context imgui_context{*this};
+    ImGui::LoadIniSettingsFromDisk(path.c_str());
+}
+
 auto Imgui_host::want_capture_keyboard() const -> bool
 {
     ImGuiIO& io = m_imgui_context->IO;

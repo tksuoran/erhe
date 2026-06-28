@@ -538,6 +538,13 @@ auto get_node_id(
 
 } // anonymous namespace
 
+auto scene_imgui_ini_path(const std::filesystem::path& scene_path) -> std::filesystem::path
+{
+    const std::filesystem::path dir  = scene_path.parent_path();
+    const std::string           stem = scene_path.stem().string();
+    return dir / (stem + "_imgui.ini");
+}
+
 auto save_scene(
     const Scene_root&            scene_root,
     const std::filesystem::path& path
