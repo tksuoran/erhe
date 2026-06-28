@@ -757,8 +757,9 @@ public:
         return std::make_unique<erhe::window::Context_window>(configuration);
     }
 
-    Editor()
-        : m_graphics_config     {erhe::codegen::load_config<Graphics_config>       ("config/editor/erhe_graphics.json")}
+    explicit Editor(std::string startup_commands_path)
+        : m_startup_commands_path{std::move(startup_commands_path)}
+        , m_graphics_config     {erhe::codegen::load_config<Graphics_config>       ("config/editor/erhe_graphics.json")}
         , m_mesh_memory_config  {erhe::codegen::load_config<Mesh_memory_config>    ("config/editor/mesh_memory.json")}
         , m_renderer_config     {erhe::codegen::load_config<Renderer_config>       ("config/editor/renderer.json")}
         , m_text_renderer_config{erhe::codegen::load_config<Text_renderer_config>  ("config/editor/text_renderer.json")}
@@ -2430,9 +2431,9 @@ public:
     {
         ERHE_PROFILE_FUNCTION();
 
-        std::optional<std::string> file_content = erhe::file::read("commands script", "config/editor/commands.json");
+        std::optional<std::string> file_content = erhe::file::read("commands script", m_startup_commands_path);
         if (!file_content.has_value()) {
-            log_startup->info("commands.json not found; skipping startup script");
+            log_startup->info("startup commands script '{}' not found; skipping startup script", m_startup_commands_path);
             return;
         }
 
@@ -2747,6 +2748,7 @@ public:
     std::size_t             m_tick_thread_hash{0}; // guarded by m_watchdog_mutex; set once in tick()
 
 
+    std::string                         m_startup_commands_path; // startup script path (--commands); declared first so it initializes before run_startup_script() runs
     Graphics_config                     m_graphics_config;
     Mesh_memory_config                  m_mesh_memory_config;
     Renderer_config                     m_renderer_config;
@@ -2899,7 +2901,7 @@ public:
     std::unique_ptr<Mcp_server         >                     m_mcp_server;
 };
 
-void run_editor()
+void run_editor(const std::string& startup_commands_path)
 {
 //#if defined(ERHE_PROFILE_LIBRARY_TRACY) && TRACY_ENABLE
 //    while (!TracyIsConnected) {
@@ -3029,7 +3031,7 @@ void run_editor()
         //    editor.tick();
         //}
 
-        Editor editor{};
+        Editor editor{startup_commands_path};
         editor.run();
     }
 

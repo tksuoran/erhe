@@ -1,0 +1,10 @@
+{
+    "commands": [
+        {
+            "name": "scene.load_scene",
+            "args": {
+                "path": "cuboctahedron.json"
+            }
+        }
+    ]
+}

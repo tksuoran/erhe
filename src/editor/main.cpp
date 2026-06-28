@@ -1,6 +1,10 @@
 #include "crash_handler.hpp"
 #include "editor.hpp"
 
+#include <cxxopts.hpp>
+
+#include <string>
+
 #if defined(ERHE_WINDOW_LIBRARY_SDL)
 #   include <SDL3/SDL_main.h>
 #endif
@@ -11,12 +15,34 @@
 #   include <unistd.h>
 #endif
 
-auto main(int, char**) -> int
+auto main(int argc, char** argv) -> int
 {
     // Install before anything else so a fatal abort() (e.g. OpenNL's nl_assert
     // during a Geogram remesh) writes a minidump and exits instead of hanging on
     // a modal Abort / Retry / Ignore dialog.
     editor::install_crash_handler();
+
+    // Command-line options. --commands overrides the startup script that sets up
+    // the scene (e.g. --commands config/editor/commands_cuboctahedron.json loads a
+    // single-mesh debug scene instead of the default). Unknown options are ignored
+    // (the OS / launcher may append its own), and any parse error falls back to the
+    // default rather than failing to start.
+    std::string startup_commands_path{"config/editor/commands.json"};
+    try {
+        cxxopts::Options options{"editor", "erhe editor"};
+        options.add_options()
+            ("commands", "Startup commands script (scene setup) JSON path", cxxopts::value<std::string>()->default_value("config/editor/commands.json"))
+            ("h,help",   "Print usage");
+        options.allow_unrecognised_options();
+        const cxxopts::ParseResult result = options.parse(argc, argv);
+        if (result.count("help") != 0) {
+            std::printf("%s\n", options.help().c_str());
+            return 0;
+        }
+        startup_commands_path = result["commands"].as<std::string>();
+    } catch (const std::exception&) {
+        // Keep the default startup_commands_path on any parse failure.
+    }
 
 #if defined(ERHE_OS_ANDROID)
     // Android starts the process at cwd "/", which is read-only and outside
@@ -38,6 +64,6 @@ auto main(int, char**) -> int
     // android-project/app/build.gradle.
     (void)erhe::file::migrate_android_assets_to_writable("erhe_migrate_manifest.txt");
 #endif
-    editor::run_editor();
+    editor::run_editor(startup_commands_path);
     return 0;
 }

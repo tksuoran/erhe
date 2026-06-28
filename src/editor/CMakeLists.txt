@@ -16,6 +16,7 @@ erhe_target_sources_grouped(
     ${_target} TREE "${PROJECT_SOURCE_DIR}" FILES
 
     config/editor/commands.json
+    config/editor/commands_cuboctahedron.json
     config/editor/desktop_window_imgui_host_imgui.ini
     config/editor/desktop_windows.json
     config/editor/editor_settings.json
@@ -840,6 +841,7 @@ target_link_libraries(
         erhe::commands
         httplib::httplib
         nlohmann_json::nlohmann_json
+        cxxopts
         erhe::defer
         erhe::dataformat
         erhe::file
