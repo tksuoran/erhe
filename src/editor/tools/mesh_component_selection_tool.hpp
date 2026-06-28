@@ -275,6 +275,14 @@ private:
     glm::vec2              m_brush_center_window     {0.0f, 0.0f};
     float                  m_brush_radius            {32.0f};
     uint64_t               m_paint_last_applied_frame{0};
+    // Frame index when the current stroke began. Scan results are async (the
+    // readback completes a few frames after the request), and the post-release
+    // drain re-requests more scans than it consumes, so completed-but-unconsumed
+    // results from a previous stroke can still be sitting in the Id_renderer when
+    // the next stroke starts. Applying only results with frame_number >= this
+    // gate (mirroring the box path's m_box_commit_request_frame) keeps a new
+    // stroke from picking up the previous stroke's last brush position.
+    uint64_t               m_paint_stroke_start_frame{0};
     // Post-release drain target, captured ONCE on the first post-release frame
     // (mirrors m_box_commit_request_frame): the drain ends when a scan from
     // at-or-after this frame has been applied. It must be frozen, not advanced

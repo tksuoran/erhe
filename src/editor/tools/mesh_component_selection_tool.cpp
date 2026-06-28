@@ -1095,6 +1095,12 @@ void Mesh_component_selection_tool::paint_select_update(const glm::vec2 window_p
             m_paint_scene_view           = get_hover_scene_view();
             m_paint_last_applied_frame   = 0;
             m_paint_commit_request_frame = 0;
+            // Gate frame for this stroke: ignore any scan result that predates it
+            // (leftovers from a previous stroke's drain) so the new stroke does
+            // not start with the previous stroke's last brush position.
+            m_paint_stroke_start_frame   = (m_context.graphics_device != nullptr)
+                ? m_context.graphics_device->get_frame_index()
+                : 0;
             const bool shift = (m_context.input_state != nullptr) && m_context.input_state->shift;
             m_paint_subtract = (m_context.input_state != nullptr) && m_context.input_state->control;
             if (!m_paint_subtract && !shift) {
@@ -1246,8 +1252,15 @@ void Mesh_component_selection_tool::gesture_update()
                 }
                 request_paint_scan();
             }
+            // Apply only results from this stroke (frame_number >= the stroke's
+            // gate); a result older than the gate is a leftover from a previous
+            // stroke's drain and must not be applied to this one.
             const Id_renderer::Scan_result& result = m_context.id_renderer->take_scan_result();
-            if (result.ready && (result.frame_number > m_paint_last_applied_frame)) {
+            if (
+                result.ready &&
+                (result.frame_number >= m_paint_stroke_start_frame) &&
+                (result.frame_number >  m_paint_last_applied_frame)
+            ) {
                 apply_scan_hits_to_selection(m_mesh_component_selection, result, m_paint_subtract);
                 m_paint_last_applied_frame = result.frame_number;
             }
