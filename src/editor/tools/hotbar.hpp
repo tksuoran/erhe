@@ -188,6 +188,12 @@ private:
     erhe::scene_renderer::Mesh_memory*              m_mesh_memory{nullptr};
     erhe::rendergraph::Rendergraph_node*            m_connected_consumer_node{nullptr};
 
+    // The scene this hotbar is homed in, set by attach_to_scene(). init_hotbar()
+    // builds the hotbar quad into this scene; using it (rather than the
+    // Scene_builder's default scene) is what lets the hotbar work for a scene that
+    // was loaded rather than created by the scene.create startup command.
+    std::weak_ptr<Scene_root>                       m_scene_root;
+
     std::unique_ptr<Quad_view>                      m_quad_view;
 
     std::shared_ptr<erhe::scene::Node>              m_radial_menu_node;

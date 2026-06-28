@@ -325,6 +325,12 @@ void Hotbar::attach_to_scene(const std::shared_ptr<Scene_root>& scene_root)
         return;
     }
     ERHE_VERIFY(scene_root);
+    // Remember which scene the hotbar is homed in, so init_hotbar() builds the quad
+    // into THIS scene -- the one passed by on_scene_created -- rather than the
+    // Scene_builder's default scene. A scene that was loaded (scene.load_scene) is
+    // never set as the Scene_builder scene root, so reading it there would leave the
+    // hotbar quad unbuilt and the hotbar window rendering in the main window.
+    m_scene_root = scene_root;
     if (m_use_radial) {
         init_radial_menu(*m_mesh_memory, *scene_root);
     }
@@ -352,12 +358,12 @@ void Hotbar::init_hotbar()
     ERHE_VERIFY(m_context.mesh_memory            != nullptr);
     ERHE_VERIFY(m_context.imgui_renderer         != nullptr);
     ERHE_VERIFY(m_context.rendergraph            != nullptr);
-    ERHE_VERIFY(m_context.scene_builder          != nullptr);
-    const std::shared_ptr<Scene_root> scene_root = m_context.scene_builder->get_scene_root();
+    const std::shared_ptr<Scene_root> scene_root = m_scene_root.lock();
     if (!scene_root) {
-        // No scene yet (deferred creation): get_all_tools() populates the slots at
-        // init, before any scene exists. The hotbar quad is built once a scene is
-        // created -- attach_to_scene() re-runs init_hotbar() then.
+        // No scene attached yet (deferred creation): get_all_tools() populates the
+        // slots at init, before any scene exists. The hotbar quad is built once a
+        // scene becomes available -- attach_to_scene() stores it and re-runs
+        // init_hotbar() then.
         return;
     }
     m_quad_view = std::make_unique<Quad_view>(
