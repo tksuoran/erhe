@@ -152,6 +152,12 @@ public:
     void gyro();
     void chamfer3();
 
+    // Blender Select More / Select Less for the active mesh-component selection.
+    // Not geometry edits and not undoable - they only change the selection set
+    // (see Mesh_component_selection::grow / shrink).
+    void grow_component_selection();
+    void shrink_component_selection();
+
     void generate_tangents();
     void generate_frame_field_tangents();
     void make_geometry();

@@ -100,6 +100,16 @@ public:
     void               clear_all();
     [[nodiscard]] auto is_empty() const -> bool;
 
+    // Blender-style Select More / Select Less. Expand (grow) or contract (shrink)
+    // the selection by one ring of border components, in the current mode, for
+    // every live entry. Grow adds the immediate neighbors of the selection's
+    // boundary; shrink drops the components that lie on that boundary. No-op in
+    // object mode and for non-live entries. Like the other selection mutators
+    // (clear_all / set_after_operation), these are not undoable and publish no
+    // message - tool_render reads the selection each frame.
+    void grow();
+    void shrink();
+
     // Install the post-operation component selection for (mesh, primitive_index) on
     // the operation's result Geometry. Called on the main thread after a topology
     // operation swaps in new geometry, so the selection follows the change onto the

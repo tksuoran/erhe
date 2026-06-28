@@ -331,6 +331,34 @@ auto Component_gesture_hotkey_command::try_call() -> bool
     }
     return m_context.mesh_component_selection_tool->try_set_gesture_hotkey(m_mode);
 }
+
+Component_grow_selection_command::Component_grow_selection_command(erhe::commands::Commands& commands, App_context& context)
+    : Command  {commands, "Mesh_component_selection.grow"}
+    , m_context{context}
+{
+}
+
+auto Component_grow_selection_command::try_call() -> bool
+{
+    if (m_context.mesh_component_selection_tool == nullptr) {
+        return false;
+    }
+    return m_context.mesh_component_selection_tool->grow_selection();
+}
+
+Component_shrink_selection_command::Component_shrink_selection_command(erhe::commands::Commands& commands, App_context& context)
+    : Command  {commands, "Mesh_component_selection.shrink"}
+    , m_context{context}
+{
+}
+
+auto Component_shrink_selection_command::try_call() -> bool
+{
+    if (m_context.mesh_component_selection_tool == nullptr) {
+        return false;
+    }
+    return m_context.mesh_component_selection_tool->shrink_selection();
+}
 #pragma endregion Commands
 
 Mesh_component_selection_tool::Mesh_component_selection_tool(
@@ -349,6 +377,8 @@ Mesh_component_selection_tool::Mesh_component_selection_tool(
     , m_brush_radius_command    {commands, context}
     , m_box_hotkey_command      {commands, context, "Mesh_component_selection.hotkey_box",   Component_gesture_mode::box}
     , m_paint_hotkey_command    {commands, context, "Mesh_component_selection.hotkey_paint", Component_gesture_mode::paint}
+    , m_grow_selection_command  {commands, context}
+    , m_shrink_selection_command{commands, context}
 {
     set_base_priority(c_priority);
     set_description  ("Mesh Component Selection");
@@ -391,6 +421,20 @@ Mesh_component_selection_tool::Mesh_component_selection_tool(
     m_paint_hotkey_command.set_host(this);
     commands.register_command(&m_paint_hotkey_command);
     commands.bind_command_to_key(&m_paint_hotkey_command, erhe::window::Key_c, true);
+
+    // Blender Select More / Select Less. Bound to both the numpad +/- (Blender's
+    // exact keys) and the main-row =/- (the '+' lives on '='), so it works on
+    // keyboards without a numpad. Gated to component modes in grow_selection /
+    // shrink_selection so the key falls through in Object mode.
+    m_grow_selection_command.set_host(this);
+    commands.register_command(&m_grow_selection_command);
+    commands.bind_command_to_key(&m_grow_selection_command, erhe::window::Key_kp_add, true, erhe::window::Key_modifier_bit_ctrl);
+    commands.bind_command_to_key(&m_grow_selection_command, erhe::window::Key_equal,  true, erhe::window::Key_modifier_bit_ctrl);
+
+    m_shrink_selection_command.set_host(this);
+    commands.register_command(&m_shrink_selection_command);
+    commands.bind_command_to_key(&m_shrink_selection_command, erhe::window::Key_kp_subtract, true, erhe::window::Key_modifier_bit_ctrl);
+    commands.bind_command_to_key(&m_shrink_selection_command, erhe::window::Key_minus,       true, erhe::window::Key_modifier_bit_ctrl);
 
     m_hover_scene_view_subscription = app_message_bus.hover_scene_view.subscribe(
         [this](Hover_scene_view_message& message) {
@@ -979,6 +1023,26 @@ auto Mesh_component_selection_tool::try_set_gesture_hotkey(const Component_gestu
         return false;
     }
     m_gesture_mode = mode;
+    return true;
+}
+
+auto Mesh_component_selection_tool::grow_selection() -> bool
+{
+    // Only act (and consume the key) while a component mode is active; in Object
+    // mode the key falls through to other bindings.
+    if (m_mesh_component_selection.get_mode() == Mesh_component_mode::object) {
+        return false;
+    }
+    m_mesh_component_selection.grow();
+    return true;
+}
+
+auto Mesh_component_selection_tool::shrink_selection() -> bool
+{
+    if (m_mesh_component_selection.get_mode() == Mesh_component_mode::object) {
+        return false;
+    }
+    m_mesh_component_selection.shrink();
     return true;
 }
 

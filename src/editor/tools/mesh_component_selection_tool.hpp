@@ -128,6 +128,32 @@ private:
     Component_gesture_mode m_mode;
 };
 
+// Key that grows (Select More) the mesh component selection by one border ring,
+// in the current component mode. Consumes the key only while in a component mode
+// (returns false in Object mode so the key falls through). Blender: Ctrl+Numpad+.
+class Component_grow_selection_command : public erhe::commands::Command
+{
+public:
+    Component_grow_selection_command(erhe::commands::Commands& commands, App_context& context);
+    auto try_call() -> bool override;
+
+private:
+    App_context& m_context;
+};
+
+// Key that shrinks (Select Less) the mesh component selection by one border ring,
+// in the current component mode. Consumes the key only while in a component mode
+// (returns false in Object mode so the key falls through). Blender: Ctrl+Numpad-.
+class Component_shrink_selection_command : public erhe::commands::Command
+{
+public:
+    Component_shrink_selection_command(erhe::commands::Commands& commands, App_context& context);
+    auto try_call() -> bool override;
+
+private:
+    App_context& m_context;
+};
+
 // Blender-style mesh component selection tool. A background tool whose mode
 // (Object / Vertex / Edge / Face, held by Mesh_component_selection) controls
 // whether it intercepts viewport clicks. Renders the current selection and the
@@ -164,6 +190,13 @@ public:
     // B / C hotkey: switch to `mode` and consume, but only while in Face
     // component mode (returns false otherwise so the key falls through).
     [[nodiscard]] auto try_set_gesture_hotkey(Component_gesture_mode mode) -> bool;
+
+    // Called by Component_grow_selection_command / Component_shrink_selection_command
+    // (Blender Select More / Select Less). Grow/shrink the component selection by
+    // one border ring in the current mode; consumes the key (returns true) only
+    // while a component mode is active, so in Object mode the key falls through.
+    [[nodiscard]] auto grow_selection  () -> bool;
+    [[nodiscard]] auto shrink_selection() -> bool;
 
     // Called by Component_box_select_command.
     [[nodiscard]] auto box_select_try_ready() const -> bool;
@@ -246,6 +279,8 @@ private:
     Component_brush_radius_command                            m_brush_radius_command;
     Component_gesture_hotkey_command                          m_box_hotkey_command;
     Component_gesture_hotkey_command                          m_paint_hotkey_command;
+    Component_grow_selection_command                          m_grow_selection_command;
+    Component_shrink_selection_command                        m_shrink_selection_command;
 
     // Gesture sub-mode + box-select state (faces only). The box is stored in
     // window coordinates (for the ImGui overlay) and converted to viewport

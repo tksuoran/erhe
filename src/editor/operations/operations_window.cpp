@@ -575,6 +575,20 @@ auto Operations::is_component_selection_active() const -> bool
            !mesh_component_selection->is_empty();
 }
 
+void Operations::grow_component_selection()
+{
+    if (m_context.mesh_component_selection != nullptr) {
+        m_context.mesh_component_selection->grow();
+    }
+}
+
+void Operations::shrink_component_selection()
+{
+    if (m_context.mesh_component_selection != nullptr) {
+        m_context.mesh_component_selection->shrink();
+    }
+}
+
 auto Operations::resolve_operation_items(
     const bool                                     selection_aware,
     std::vector<std::shared_ptr<erhe::Item_base>>& out_items
@@ -1070,6 +1084,17 @@ void Operations::imgui()
     const bool component_active     = is_component_selection_active();
     const auto has_selection_mode   = ((selected_mesh_count >= 1) && !component_active) ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
     const auto selection_aware_mode = (component_active || (selected_mesh_count >= 1)) ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
+
+    // Blender Select More / Select Less. Enabled only with a non-empty component
+    // selection (component_active), since they grow/shrink that selection by one
+    // border ring. Same effect as the Ctrl+Numpad +/- (or Ctrl += / -) hotkeys.
+    const auto component_select_mode = component_active ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
+    if (make_button("Grow Selection", component_select_mode, button_size)) {
+        grow_component_selection();
+    }
+    if (make_button("Shrink Selection", component_select_mode, button_size)) {
+        shrink_component_selection();
+    }
 
     //if (make_button("Unparent", has_selection_mode, button_size)) {
     //    const auto& node0 = selection.get<erhe::scene::Node>();

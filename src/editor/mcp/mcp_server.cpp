@@ -1051,6 +1051,8 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "edit_physics_joint_settings")   result = action_edit_physics_joint_settings(req->arguments);
         else if (req->tool_name == "set_mesh_component_mode")        result = action_set_mesh_component_mode(req->arguments);
         else if (req->tool_name == "select_mesh_components")         result = action_select_mesh_components(req->arguments);
+        else if (req->tool_name == "grow_mesh_selection")           result = action_grow_mesh_selection(req->arguments);
+        else if (req->tool_name == "shrink_mesh_selection")         result = action_shrink_mesh_selection(req->arguments);
         else if (req->tool_name == "get_mesh_component_selection")   result = query_mesh_component_selection(req->arguments);
         else if (req->tool_name == "get_id_range_mapping")           result = query_id_range_mapping(req->arguments);
         else if (req->tool_name == "debug_region_select")            result = action_debug_region_select(req->arguments);
@@ -1528,6 +1530,8 @@ void Mcp_server::refresh_tool_list()
         {"required", json::array({"scene_name"})}
     }});
     m_tool_infos.push_back({"get_mesh_component_selection", "Get the current mesh-component selection: mode plus each entry's node, primitive index, selected vertices / edges / facets, and whether it is live.", schema_no_args()});
+    m_tool_infos.push_back({"grow_mesh_selection", "Blender Select More: grow the current mesh-component selection by one border ring, in the active mode (vertex / edge / face). No-op in object mode. Returns the resulting selection (same shape as get_mesh_component_selection).", schema_no_args()});
+    m_tool_infos.push_back({"shrink_mesh_selection", "Blender Select Less: shrink the current mesh-component selection by dropping the components on its border, in the active mode (vertex / edge / face). No-op in object mode. Returns the resulting selection (same shape as get_mesh_component_selection).", schema_no_args()});
     m_tool_infos.push_back({"get_id_range_mapping", "Report the GPU ID-buffer range mapping from the most recently resolved region scan: for each drawn primitive, its id_offset, length (index count), triangle_count, base_vertex, and the owning mesh/node/primitive_index. A decoded pixel id in [id_offset, id_offset+length) selects that primitive and (id - id_offset) is its 0-based facet index. Run a box/paint select (or debug_region_select) first to populate it.", schema_no_args()});
     m_tool_infos.push_back({"debug_region_select", "Debug/test: drive a region face-select (box or paint brush) over an explicit viewport-pixel rectangle, bypassing the mouse. Forces Face component mode, requests a GPU id-buffer scan, and commits the visible faces a few frames later (poll get_mesh_component_selection afterwards). x,y,width,height are in viewport pixels; is_brush masks to a disk of brush_radius centered in the rect.", {
         {"type", "object"},
@@ -4719,6 +4723,27 @@ auto Mcp_server::query_mesh_component_selection(const json& args) -> std::string
         {"mode",    mesh_component_mode_lc(selection->get_mode())},
         {"entries", entries}
     }).dump();
+}
+
+auto Mcp_server::action_grow_mesh_selection(const json& args) -> std::string
+{
+    if (m_context.mesh_component_selection == nullptr) {
+        return make_error_content("Mesh component selection not available");
+    }
+    // Blender Select More. No-op in object mode (see Mesh_component_selection::grow).
+    // Returns the resulting selection so the caller can read the grown set back.
+    m_context.mesh_component_selection->grow();
+    return query_mesh_component_selection(args);
+}
+
+auto Mcp_server::action_shrink_mesh_selection(const json& args) -> std::string
+{
+    if (m_context.mesh_component_selection == nullptr) {
+        return make_error_content("Mesh component selection not available");
+    }
+    // Blender Select Less. No-op in object mode (see Mesh_component_selection::shrink).
+    m_context.mesh_component_selection->shrink();
+    return query_mesh_component_selection(args);
 }
 
 auto Mcp_server::query_id_range_mapping(const json& args) -> std::string

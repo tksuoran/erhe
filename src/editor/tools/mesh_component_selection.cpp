@@ -2,10 +2,12 @@
 
 #include "app_message_bus.hpp"
 
+#include "erhe_geometry/geometry.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 
+#include <set>
 #include <vector>
 
 namespace editor {
@@ -147,6 +149,183 @@ void Mesh_component_selection::clear_all()
 {
     m_entries.clear();
 }
+
+#pragma region Grow / Shrink
+namespace {
+
+// One-ring grow/shrink helpers. Each reads the entry's current set for one mode,
+// computes the new set from a snapshot of the old one (so a single step does not
+// cascade within itself), then assigns it back. Adjacency comes from the already
+// built Geometry connectivity (facets.connect / build_edges). This is a cold path
+// (user keypress / button), so transient containers here are acceptable.
+
+void grow_facets(const erhe::geometry::Geometry& geometry, Mesh_component_entry& entry)
+{
+    const GEO::Mesh& mesh = geometry.get_mesh();
+    std::set<GEO::index_t> result = entry.facets;
+    for (const GEO::index_t facet : entry.facets) {
+        const GEO::index_t corner_count = mesh.facets.nb_corners(facet);
+        for (GEO::index_t local_edge = 0; local_edge < corner_count; ++local_edge) {
+            const GEO::index_t neighbor = mesh.facets.adjacent(facet, local_edge);
+            if (neighbor != GEO::NO_INDEX) {
+                result.insert(neighbor);
+            }
+        }
+    }
+    entry.facets = std::move(result);
+}
+
+void shrink_facets(const erhe::geometry::Geometry& geometry, Mesh_component_entry& entry)
+{
+    const GEO::Mesh&              mesh     = geometry.get_mesh();
+    const std::set<GEO::index_t>& selected = entry.facets;
+    std::set<GEO::index_t>        result;
+    for (const GEO::index_t facet : selected) {
+        const GEO::index_t corner_count = mesh.facets.nb_corners(facet);
+        bool is_border = false;
+        for (GEO::index_t local_edge = 0; local_edge < corner_count; ++local_edge) {
+            const GEO::index_t neighbor = mesh.facets.adjacent(facet, local_edge);
+            // A mesh boundary (no neighbor) or an unselected neighbor makes this a
+            // border facet.
+            if ((neighbor == GEO::NO_INDEX) || (selected.find(neighbor) == selected.end())) {
+                is_border = true;
+                break;
+            }
+        }
+        if (!is_border) {
+            result.insert(facet);
+        }
+    }
+    entry.facets = std::move(result);
+}
+
+void grow_edges(const erhe::geometry::Geometry& geometry, Mesh_component_entry& entry)
+{
+    const GEO::Mesh&        mesh   = geometry.get_mesh();
+    std::set<Mesh_edge_key> result = entry.edges;
+    for (const Mesh_edge_key& key : entry.edges) {
+        const GEO::index_t endpoints[2] = {key.first, key.second};
+        for (const GEO::index_t vertex : endpoints) {
+            for (const GEO::index_t edge : geometry.get_vertex_edges(vertex)) {
+                result.insert(make_edge_key(mesh.edges.vertex(edge, 0), mesh.edges.vertex(edge, 1)));
+            }
+        }
+    }
+    entry.edges = std::move(result);
+}
+
+void shrink_edges(const erhe::geometry::Geometry& geometry, Mesh_component_entry& entry)
+{
+    const GEO::Mesh&               mesh     = geometry.get_mesh();
+    const std::set<Mesh_edge_key>& selected = entry.edges;
+
+    // A vertex is interior when every edge incident to it is selected; an edge
+    // is kept only when both its endpoints are interior.
+    const auto is_interior_vertex = [&](const GEO::index_t vertex) -> bool {
+        for (const GEO::index_t edge : geometry.get_vertex_edges(vertex)) {
+            const Mesh_edge_key key = make_edge_key(mesh.edges.vertex(edge, 0), mesh.edges.vertex(edge, 1));
+            if (selected.find(key) == selected.end()) {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    std::set<Mesh_edge_key> result;
+    for (const Mesh_edge_key& key : selected) {
+        if (is_interior_vertex(key.first) && is_interior_vertex(key.second)) {
+            result.insert(key);
+        }
+    }
+    entry.edges = std::move(result);
+}
+
+void grow_vertices(const erhe::geometry::Geometry& geometry, Mesh_component_entry& entry)
+{
+    const GEO::Mesh&       mesh   = geometry.get_mesh();
+    std::set<GEO::index_t> result = entry.vertices;
+    for (const GEO::index_t vertex : entry.vertices) {
+        for (const GEO::index_t edge : geometry.get_vertex_edges(vertex)) {
+            const GEO::index_t a     = mesh.edges.vertex(edge, 0);
+            const GEO::index_t b     = mesh.edges.vertex(edge, 1);
+            const GEO::index_t other = (a == vertex) ? b : a;
+            result.insert(other);
+        }
+    }
+    entry.vertices = std::move(result);
+}
+
+void shrink_vertices(const erhe::geometry::Geometry& geometry, Mesh_component_entry& entry)
+{
+    const GEO::Mesh&              mesh     = geometry.get_mesh();
+    const std::set<GEO::index_t>& selected = entry.vertices;
+    std::set<GEO::index_t>        result;
+    for (const GEO::index_t vertex : selected) {
+        bool is_border = false;
+        for (const GEO::index_t edge : geometry.get_vertex_edges(vertex)) {
+            const GEO::index_t a     = mesh.edges.vertex(edge, 0);
+            const GEO::index_t b     = mesh.edges.vertex(edge, 1);
+            const GEO::index_t other = (a == vertex) ? b : a;
+            if (selected.find(other) == selected.end()) {
+                is_border = true;
+                break;
+            }
+        }
+        if (!is_border) {
+            result.insert(vertex);
+        }
+    }
+    entry.vertices = std::move(result);
+}
+
+} // anonymous namespace
+
+void Mesh_component_selection::grow()
+{
+    if (m_mode == Mesh_component_mode::object) {
+        return;
+    }
+    for (Mesh_component_entry& entry : m_entries) {
+        if (!is_live(entry)) {
+            continue;
+        }
+        const std::shared_ptr<erhe::geometry::Geometry> geometry = entry.geometry.lock();
+        if (!geometry) {
+            continue;
+        }
+        switch (m_mode) {
+            case Mesh_component_mode::vertex: grow_vertices(*geometry, entry); break;
+            case Mesh_component_mode::edge:   grow_edges   (*geometry, entry); break;
+            case Mesh_component_mode::face:   grow_facets  (*geometry, entry); break;
+            case Mesh_component_mode::object: break;
+            default:                          break;
+        }
+    }
+}
+
+void Mesh_component_selection::shrink()
+{
+    if (m_mode == Mesh_component_mode::object) {
+        return;
+    }
+    for (Mesh_component_entry& entry : m_entries) {
+        if (!is_live(entry)) {
+            continue;
+        }
+        const std::shared_ptr<erhe::geometry::Geometry> geometry = entry.geometry.lock();
+        if (!geometry) {
+            continue;
+        }
+        switch (m_mode) {
+            case Mesh_component_mode::vertex: shrink_vertices(*geometry, entry); break;
+            case Mesh_component_mode::edge:   shrink_edges   (*geometry, entry); break;
+            case Mesh_component_mode::face:   shrink_facets  (*geometry, entry); break;
+            case Mesh_component_mode::object: break;
+            default:                          break;
+        }
+    }
+}
+#pragma endregion Grow / Shrink
 
 void Mesh_component_selection::set_after_operation(
     const std::shared_ptr<erhe::scene::Mesh>&        mesh,
