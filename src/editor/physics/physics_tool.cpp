@@ -376,6 +376,15 @@ void Physics_tool::release_target()
 
 auto Physics_tool::on_drag_ready() -> bool
 {
+    // When dynamic physics is disabled there is nothing to drag, so the tool must
+    // not become ready: otherwise its right-mouse-drag binding (bound with
+    // call_on_button_down_without_motion) consumes the button-down event and blocks
+    // the camera turn / tumble that share the right mouse button. This mirrors the
+    // guard in on_drag().
+    if (!m_context.editor_settings->physics.dynamic_enable) {
+        return false;
+    }
+
     if (!acquire_target()) {
         return false;
     }
