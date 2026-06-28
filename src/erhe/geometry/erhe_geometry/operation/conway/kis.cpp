@@ -101,10 +101,13 @@ void Kis::build()
     }
 }
 
-void kis(const Geometry& source, Geometry& destination, float height, const std::set<GEO::index_t>* selected_facets)
+void kis(const Geometry& source, Geometry& destination, float height, const std::set<GEO::index_t>* selected_facets, Component_remap* remap)
 {
     Kis operation{source, destination, height, selected_facets};
     operation.build();
+    if ((remap != nullptr) && (remap->source != nullptr) && (remap->destination != nullptr)) {
+        operation.remap_component_selection(*remap->source, *remap->destination);
+    }
 }
 
 } // namespace erhe::geometry::operation

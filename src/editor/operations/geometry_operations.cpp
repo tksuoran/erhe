@@ -47,9 +47,12 @@ Catmull_clark_subdivision_operation::Catmull_clark_subdivision_operation(Mesh_op
             const erhe::geometry::Geometry& before_geometry,
             erhe::geometry::Geometry&       after_geometry,
             erhe::scene::Node*              /*node*/,
-            const std::set<GEO::index_t>*   selected_facets
+            const std::set<GEO::index_t>*   selected_facets,
+            const erhe::geometry::operation::Geometry_component_selection* remap_source,
+            erhe::geometry::operation::Geometry_component_selection*       remap_destination
         ) -> void {
-            erhe::geometry::operation::catmull_clark_subdivision(before_geometry, after_geometry, selected_facets);
+            erhe::geometry::operation::Component_remap remap{remap_source, remap_destination};
+            erhe::geometry::operation::catmull_clark_subdivision(before_geometry, after_geometry, selected_facets, &remap);
         }
     );
     set_description(fmt::format("Catmull_clark {}", describe_entries()));
@@ -64,9 +67,12 @@ Sqrt3_subdivision_operation::Sqrt3_subdivision_operation(Mesh_operation_paramete
             const erhe::geometry::Geometry& before_geometry,
             erhe::geometry::Geometry&       after_geometry,
             erhe::scene::Node*              /*node*/,
-            const std::set<GEO::index_t>*   selected_facets
+            const std::set<GEO::index_t>*   selected_facets,
+            const erhe::geometry::operation::Geometry_component_selection* remap_source,
+            erhe::geometry::operation::Geometry_component_selection*       remap_destination
         ) -> void {
-            erhe::geometry::operation::sqrt3_subdivision(before_geometry, after_geometry, selected_facets);
+            erhe::geometry::operation::Component_remap remap{remap_source, remap_destination};
+            erhe::geometry::operation::sqrt3_subdivision(before_geometry, after_geometry, selected_facets, &remap);
         }
     );
     set_description(fmt::format("Sqrt3 {}", describe_entries()));
@@ -89,9 +95,12 @@ Join_operation::Join_operation(Mesh_operation_parameters&& context)
             const erhe::geometry::Geometry& before_geometry,
             erhe::geometry::Geometry&       after_geometry,
             erhe::scene::Node*              /*node*/,
-            const std::set<GEO::index_t>*   selected_facets
+            const std::set<GEO::index_t>*   selected_facets,
+            const erhe::geometry::operation::Geometry_component_selection* remap_source,
+            erhe::geometry::operation::Geometry_component_selection*       remap_destination
         ) -> void {
-            erhe::geometry::operation::join(before_geometry, after_geometry, selected_facets);
+            erhe::geometry::operation::Component_remap remap{remap_source, remap_destination};
+            erhe::geometry::operation::join(before_geometry, after_geometry, selected_facets, &remap);
         }
     );
     set_description(fmt::format("Join {}", describe_entries()));
@@ -106,9 +115,12 @@ Kis_operation::Kis_operation(Mesh_operation_parameters&& context, float height)
             const erhe::geometry::Geometry& before_geometry,
             erhe::geometry::Geometry&       after_geometry,
             erhe::scene::Node*              /*node*/,
-            const std::set<GEO::index_t>*   selected_facets
+            const std::set<GEO::index_t>*   selected_facets,
+            const erhe::geometry::operation::Geometry_component_selection* remap_source,
+            erhe::geometry::operation::Geometry_component_selection*       remap_destination
         ) -> void {
-            erhe::geometry::operation::kis(before_geometry, after_geometry, height, selected_facets);
+            erhe::geometry::operation::Component_remap remap{remap_source, remap_destination};
+            erhe::geometry::operation::kis(before_geometry, after_geometry, height, selected_facets, &remap);
         }
     );
     set_description(fmt::format("Kis {}", describe_entries()));
@@ -123,9 +135,12 @@ Subdivide_operation::Subdivide_operation(Mesh_operation_parameters&& context)
             const erhe::geometry::Geometry& before_geometry,
             erhe::geometry::Geometry&       after_geometry,
             erhe::scene::Node*              /*node*/,
-            const std::set<GEO::index_t>*   selected_facets
+            const std::set<GEO::index_t>*   selected_facets,
+            const erhe::geometry::operation::Geometry_component_selection* remap_source,
+            erhe::geometry::operation::Geometry_component_selection*       remap_destination
         ) -> void {
-            erhe::geometry::operation::subdivide(before_geometry, after_geometry, selected_facets);
+            erhe::geometry::operation::Component_remap remap{remap_source, remap_destination};
+            erhe::geometry::operation::subdivide(before_geometry, after_geometry, selected_facets, &remap);
         }
     );
     set_description(fmt::format("Subdivide {}", describe_entries()));
@@ -140,9 +155,12 @@ Meta_operation::Meta_operation(Mesh_operation_parameters&& context)
             const erhe::geometry::Geometry& before_geometry,
             erhe::geometry::Geometry&       after_geometry,
             erhe::scene::Node*              /*node*/,
-            const std::set<GEO::index_t>*   selected_facets
+            const std::set<GEO::index_t>*   selected_facets,
+            const erhe::geometry::operation::Geometry_component_selection* remap_source,
+            erhe::geometry::operation::Geometry_component_selection*       remap_destination
         ) -> void {
-            erhe::geometry::operation::meta(before_geometry, after_geometry, selected_facets);
+            erhe::geometry::operation::Component_remap remap{remap_source, remap_destination};
+            erhe::geometry::operation::meta(before_geometry, after_geometry, selected_facets, &remap);
         }
     );
     set_description(fmt::format("Meta {}", describe_entries()));
@@ -157,9 +175,12 @@ Gyro_operation::Gyro_operation(Mesh_operation_parameters&& context, float ratio)
             const erhe::geometry::Geometry& before_geometry,
             erhe::geometry::Geometry&       after_geometry,
             erhe::scene::Node*              /*node*/,
-            const std::set<GEO::index_t>*   selected_facets
+            const std::set<GEO::index_t>*   selected_facets,
+            const erhe::geometry::operation::Geometry_component_selection* remap_source,
+            erhe::geometry::operation::Geometry_component_selection*       remap_destination
         ) -> void {
-            erhe::geometry::operation::gyro(before_geometry, after_geometry, ratio, selected_facets);
+            erhe::geometry::operation::Component_remap remap{remap_source, remap_destination};
+            erhe::geometry::operation::gyro(before_geometry, after_geometry, ratio, selected_facets, &remap);
         }
     );
     set_description(fmt::format("Gyro {}", describe_entries()));
@@ -202,9 +223,12 @@ Truncate_operation::Truncate_operation(Mesh_operation_parameters&& context, floa
             const erhe::geometry::Geometry& before_geometry,
             erhe::geometry::Geometry&       after_geometry,
             erhe::scene::Node*              /*node*/,
-            const std::set<GEO::index_t>*   selected_facets
+            const std::set<GEO::index_t>*   selected_facets,
+            const erhe::geometry::operation::Geometry_component_selection* remap_source,
+            erhe::geometry::operation::Geometry_component_selection*       remap_destination
         ) -> void {
-            erhe::geometry::operation::truncate(before_geometry, after_geometry, ratio, selected_facets);
+            erhe::geometry::operation::Component_remap remap{remap_source, remap_destination};
+            erhe::geometry::operation::truncate(before_geometry, after_geometry, ratio, selected_facets, &remap);
         }
     );
     set_description(fmt::format("Truncate {}", describe_entries()));

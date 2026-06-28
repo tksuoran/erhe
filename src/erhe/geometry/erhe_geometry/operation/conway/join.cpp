@@ -151,10 +151,13 @@ void Join::build()
     post_processing();
 }
 
-void join(const Geometry& source, Geometry& destination, const std::set<GEO::index_t>* selected_facets)
+void join(const Geometry& source, Geometry& destination, const std::set<GEO::index_t>* selected_facets, Component_remap* remap)
 {
     Join operation{source, destination, selected_facets};
     operation.build();
+    if ((remap != nullptr) && (remap->source != nullptr) && (remap->destination != nullptr)) {
+        operation.remap_component_selection(*remap->source, *remap->destination);
+    }
 }
 
 } // namespace erhe::geometry::operation

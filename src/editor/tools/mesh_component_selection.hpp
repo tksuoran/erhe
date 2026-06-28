@@ -100,6 +100,21 @@ public:
     void               clear_all();
     [[nodiscard]] auto is_empty() const -> bool;
 
+    // Install the post-operation component selection for (mesh, primitive_index) on
+    // the operation's result Geometry. Called on the main thread after a topology
+    // operation swaps in new geometry, so the selection follows the change onto the
+    // newly created components. Idempotent across redo (keyed by the result Geometry
+    // identity via find_or_create_entry). The pre-operation entry is left in place
+    // (dormant) so undo revives it automatically. No-op when all sets are empty.
+    void set_after_operation(
+        const std::shared_ptr<erhe::scene::Mesh>&        mesh,
+        std::size_t                                      primitive_index,
+        const std::shared_ptr<erhe::geometry::Geometry>& after_geometry,
+        const std::set<GEO::index_t>&                    vertices,
+        const std::set<GEO::index_t>&                    facets,
+        const std::set<Mesh_edge_key>&                   edges
+    );
+
     // Drop entries whose mesh or geometry has been freed, or that hold no
     // components. Dormant-but-alive entries (geometry not currently bound but
     // still referenced, e.g. retained by an undo operation) are kept, so undo can

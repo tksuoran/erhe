@@ -89,33 +89,61 @@ void async_for_nodes_with_mesh(
         return;
     }
 
-    // Snapshot the per-Geometry selected-facet sets while the scene lock is held on
+    // Snapshot the per-Geometry component selection while the scene lock is held on
     // the main thread. The Mesh_component_selection store is mutated on the main
-    // thread, so it must not be read from the async worker; the snapshot is captured
-    // by value into the worker lambda below. Keyed by Geometry identity, matching
-    // the lookup in Mesh_operation::make_entries. Only face-mode, live entries with
-    // selected facets contribute.
+    // thread, so it must not be read from the async worker; the snapshots are
+    // captured by value into the worker lambda below. Both are keyed by Geometry
+    // identity, matching the lookups in Mesh_operation::make_entries, and only live
+    // entries contribute. selected_facets (face mode only) drives a selection-aware
+    // operation's topology restriction; component_selection carries the selected
+    // components of the active mode so the operation can remap them onto its result.
     std::unordered_map<const erhe::geometry::Geometry*, std::set<GEO::index_t>> selected_facets;
-    if ((context.mesh_component_selection != nullptr) &&
-        (context.mesh_component_selection->get_mode() == Mesh_component_mode::face)) {
-        for (const Mesh_component_entry& entry : context.mesh_component_selection->get_entries()) {
-            if (entry.facets.empty()) {
-                continue;
+    std::unordered_map<const erhe::geometry::Geometry*, erhe::geometry::operation::Geometry_component_selection> component_selection;
+    if (context.mesh_component_selection != nullptr) {
+        const Mesh_component_mode mode = context.mesh_component_selection->get_mode();
+        if (mode != Mesh_component_mode::object) {
+            for (const Mesh_component_entry& entry : context.mesh_component_selection->get_entries()) {
+                if (!context.mesh_component_selection->is_live(entry)) {
+                    continue;
+                }
+                const std::shared_ptr<erhe::geometry::Geometry> geometry = entry.geometry.lock();
+                if (!geometry) {
+                    continue;
+                }
+                switch (mode) {
+                    case Mesh_component_mode::face: {
+                        if (entry.facets.empty()) {
+                            continue;
+                        }
+                        selected_facets[geometry.get()]            = entry.facets;
+                        component_selection[geometry.get()].facets = entry.facets;
+                        break;
+                    }
+                    case Mesh_component_mode::vertex: {
+                        if (entry.vertices.empty()) {
+                            continue;
+                        }
+                        component_selection[geometry.get()].vertices = entry.vertices;
+                        break;
+                    }
+                    case Mesh_component_mode::edge: {
+                        if (entry.edges.empty()) {
+                            continue;
+                        }
+                        component_selection[geometry.get()].edges = entry.edges;
+                        break;
+                    }
+                    default: {
+                        break;
+                    }
+                }
             }
-            if (!context.mesh_component_selection->is_live(entry)) {
-                continue;
-            }
-            const std::shared_ptr<erhe::geometry::Geometry> geometry = entry.geometry.lock();
-            if (!geometry) {
-                continue;
-            }
-            selected_facets[geometry.get()] = entry.facets;
         }
     }
 
     ++context.pending_async_ops;
     tf::AsyncTask task = context.executor->silent_dependent_async(
-        [&context, op, items, selected_facets = std::move(selected_facets)]()
+        [&context, op, items, selected_facets = std::move(selected_facets), component_selection = std::move(component_selection)]()
         {
             ++context.running_async_ops;
             // Geometry operations call into Geogram, whose assertion mechanism
@@ -140,8 +168,9 @@ void async_for_nodes_with_mesh(
                     }
                 };
 
-                parameters.items           = items;
-                parameters.selected_facets = selected_facets;
+                parameters.items               = items;
+                parameters.selected_facets     = selected_facets;
+                parameters.component_selection = component_selection;
                 op(std::move(parameters));
             } catch (const std::exception& e) {
                 log_operations->error("Async mesh operation failed: {}", e.what());

@@ -261,10 +261,13 @@ void Catmull_clark_subdivision::build()
     post_processing();
 }
 
-void catmull_clark_subdivision(const Geometry& source, Geometry& destination, const std::set<GEO::index_t>* selected_facets)
+void catmull_clark_subdivision(const Geometry& source, Geometry& destination, const std::set<GEO::index_t>* selected_facets, Component_remap* remap)
 {
     Catmull_clark_subdivision operation{source, destination, selected_facets};
     operation.build();
+    if ((remap != nullptr) && (remap->source != nullptr) && (remap->destination != nullptr)) {
+        operation.remap_component_selection(*remap->source, *remap->destination);
+    }
 }
 
 } // namespace erhe::geometry::operation

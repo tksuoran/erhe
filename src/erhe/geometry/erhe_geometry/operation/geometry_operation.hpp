@@ -20,6 +20,33 @@ public:
     }
 };
 
+// A set of mesh sub-components addressed by GEO indices into one Geometry's
+// GEO::Mesh: vertex indices, facet indices, and canonical (min, max) edge keys.
+// Used to carry a component selection through an operation so it can be remapped
+// from the source mesh to the components the operation produces.
+class Geometry_component_selection
+{
+public:
+    std::set<GEO::index_t>                          vertices;
+    std::set<GEO::index_t>                          facets;
+    std::set<std::pair<GEO::index_t, GEO::index_t>> edges; // canonical: first < second
+
+    [[nodiscard]] auto is_empty() const -> bool
+    {
+        return vertices.empty() && facets.empty() && edges.empty();
+    }
+};
+
+// In/out pair handed to a selection-aware operation: source carries the components
+// selected on the source mesh; destination receives the components they map to on
+// the operation's result. Both pointers must be non-null for remapping to happen.
+class Component_remap
+{
+public:
+    const Geometry_component_selection* source     {nullptr};
+    Geometry_component_selection*       destination{nullptr};
+};
+
 // Tracks weighted provenance from source elements to destination elements.
 // Each destination element can have multiple source elements with weights.
 // Used for attribute interpolation (positions, normals, texcoords, etc.).
@@ -56,6 +83,15 @@ public:
         , destination_mesh{destination.get_mesh()}
     {
     }
+
+    // Map a source-side component selection to the components this operation
+    // produced. Must be called after build(), while the operation's mapping tables
+    // are still alive. Faces map to their descendant facets (every destination facet
+    // whose provenance includes a selected source facet); vertices map to their
+    // destination image; edges map to the chain of destination sub-edges along the
+    // original edge (endpoint images plus any inserted split midpoints). Components
+    // with no destination image are dropped. dst is cleared first.
+    void remap_component_selection(const Geometry_component_selection& src, Geometry_component_selection& dst) const;
 
 protected:
     // Default finalization: rebuild connectivity / edges / centroids and

@@ -7,6 +7,7 @@
 #include "items.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
+#include "tools/mesh_component_selection.hpp"
 
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_physics/icollision_shape.hpp"
@@ -113,6 +114,27 @@ void Mesh_operation::execute(App_context& context)
             Mesh_geometry_changed_message{.mesh = entry.scene_mesh}
         );
     }
+
+    // Move the mesh-component selection onto the components the operation produced
+    // from the previously-selected ones (faces -> new faces, edges -> new edges,
+    // vertices -> new vertices). The pre-operation entry stays in the store (now
+    // dormant, addressed against the old Geometry which is held alive by
+    // before.primitives), so undo revives it automatically and redo re-runs this -
+    // find_or_create keeps it idempotent.
+    if (context.mesh_component_selection != nullptr) {
+        for (const auto& entry : m_entries) {
+            for (const Entry::Selection_remap& remap : entry.selection_remaps) {
+                context.mesh_component_selection->set_after_operation(
+                    entry.scene_mesh,
+                    remap.primitive_index,
+                    remap.after_geometry,
+                    remap.components.vertices,
+                    remap.components.facets,
+                    remap.components.edges
+                );
+            }
+        }
+    }
 }
 
 void Mesh_operation::undo(App_context& context)
@@ -193,7 +215,9 @@ void Mesh_operation::make_entries(
             const erhe::geometry::Geometry& before_geometry,
             erhe::geometry::Geometry&       after_geometry,
             erhe::scene::Node*              node,
-            const std::set<GEO::index_t>*   /*selected_facets*/
+            const std::set<GEO::index_t>*   /*selected_facets*/,
+            const erhe::geometry::operation::Geometry_component_selection* /*remap_source*/,
+            erhe::geometry::operation::Geometry_component_selection*       /*remap_destination*/
         ) -> void {
             geometry_operation(before_geometry, after_geometry, node);
         }
@@ -201,7 +225,16 @@ void Mesh_operation::make_entries(
 }
 
 void Mesh_operation::make_entries(
-    const std::function<void(const erhe::geometry::Geometry&, erhe::geometry::Geometry&, erhe::scene::Node*, const std::set<GEO::index_t>*)> geometry_operation
+    const std::function<
+        void(
+            const erhe::geometry::Geometry&,
+            erhe::geometry::Geometry&,
+            erhe::scene::Node*,
+            const std::set<GEO::index_t>*,
+            const erhe::geometry::operation::Geometry_component_selection*,
+            erhe::geometry::operation::Geometry_component_selection*
+        )
+    > geometry_operation
 )
 {
     make_entries(
@@ -236,8 +269,19 @@ void Mesh_operation::make_entries(
                 if ((facet_set_i != m_parameters.selected_facets.end()) && !facet_set_i->second.empty()) {
                     selected_facets = &facet_set_i->second;
                 }
+
+                // Source component selection to remap onto the result (nullptr when this
+                // primitive carries no live component selection). A selection-aware
+                // operation fills remap_destination with the components produced from it.
+                const erhe::geometry::operation::Geometry_component_selection* remap_source = nullptr;
+                const auto component_i = m_parameters.component_selection.find(before_geometry.get());
+                if ((component_i != m_parameters.component_selection.end()) && !component_i->second.is_empty()) {
+                    remap_source = &component_i->second;
+                }
+                erhe::geometry::operation::Geometry_component_selection remap_destination;
+
                 auto after_geometry = std::make_shared<erhe::geometry::Geometry>();
-                geometry_operation(*before_geometry.get(), *after_geometry.get(), node, selected_facets);
+                geometry_operation(*before_geometry.get(), *after_geometry.get(), node, selected_facets, remap_source, &remap_destination);
 
                 auto sanitize_warnings = after_geometry->sanitize();
                 if (!sanitize_warnings.empty()) {
@@ -282,6 +326,20 @@ void Mesh_operation::make_entries(
                 const bool raytrace_ok   = after_primitive->make_raytrace();
                 ERHE_VERIFY(renderable_ok && raytrace_ok);
                 entry.after.primitives.emplace_back(after_primitive, mesh_primitive.material);
+
+                // If this primitive carried a component selection that mapped to a
+                // non-empty result, record it so execute() can move the selection onto
+                // the newly created components. primitive_index is this primitive's slot
+                // in the post-swap primitive list (== after.primitives index).
+                if ((remap_source != nullptr) && !remap_destination.is_empty()) {
+                    entry.selection_remaps.push_back(
+                        Entry::Selection_remap{
+                            .primitive_index = entry.after.primitives.size() - 1,
+                            .after_geometry  = after_geometry,
+                            .components      = std::move(remap_destination)
+                        }
+                    );
+                }
 
                 if (m_parameters.context.editor_settings->physics.static_enable) {
 

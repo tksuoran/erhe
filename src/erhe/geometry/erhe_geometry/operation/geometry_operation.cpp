@@ -5,6 +5,8 @@
 
 #include <geogram/mesh/mesh.h>
 
+#include <algorithm>
+
 namespace erhe::geometry::operation {
 
 void Source_table::add(GEO::index_t dst_index, float weight, GEO::index_t src_index)
@@ -529,6 +531,99 @@ void Geometry_operation::emit_unselected_facets_with_boundary_splice()
                 make_new_dst_corner_from_dst_vertex(new_dst_facet, slot, entries[slot].value);
             } else {
                 make_new_dst_corner_from_src_corner(new_dst_facet, slot, entries[slot].value);
+            }
+        }
+    }
+}
+
+void Geometry_operation::remap_component_selection(const Geometry_component_selection& src, Geometry_component_selection& dst) const
+{
+    dst.vertices.clear();
+    dst.facets.clear();
+    dst.edges.clear();
+
+    const GEO::index_t nb_dst_vertices = destination_mesh.vertices.nb();
+    const GEO::index_t nb_dst_facets   = destination_mesh.facets.nb();
+
+    // Faces: a destination facet is a descendant when its provenance lists a
+    // selected source facet. m_dst_facet_sources is sized to nb_dst_facets by
+    // interpolate_mesh_attributes() (run from post_processing()); clamp to its
+    // length so a sanitize()-removed degenerate facet cannot drive an out-of-range
+    // read.
+    if (!src.facets.empty()) {
+        const GEO::index_t facet_source_count = std::min(nb_dst_facets, static_cast<GEO::index_t>(m_dst_facet_sources.size()));
+        for (GEO::index_t dst_facet = 0; dst_facet < facet_source_count; ++dst_facet) {
+            for (const std::pair<float, GEO::index_t>& source : m_dst_facet_sources.get(dst_facet)) {
+                if (src.facets.find(source.second) != src.facets.end()) {
+                    dst.facets.insert(dst_facet);
+                    break;
+                }
+            }
+        }
+    }
+
+    // A source vertex maps to m_vertex_src_to_dst[src_vertex]. That table is
+    // value-initialized (gaps read as 0) and an operation may legitimately drop a
+    // source vertex (e.g. truncate), so confirm the candidate destination vertex
+    // really derives from this source vertex before accepting it.
+    const auto image_of_src_vertex = [&](const GEO::index_t src_vertex) -> GEO::index_t {
+        if (static_cast<std::size_t>(src_vertex) >= m_vertex_src_to_dst.size()) {
+            return GEO::NO_VERTEX;
+        }
+        const GEO::index_t dst_vertex = m_vertex_src_to_dst[src_vertex];
+        if (dst_vertex >= nb_dst_vertices) {
+            return GEO::NO_VERTEX;
+        }
+        if (static_cast<std::size_t>(dst_vertex) < m_dst_vertex_sources.size()) {
+            for (const std::pair<float, GEO::index_t>& source : m_dst_vertex_sources.get(dst_vertex)) {
+                if (source.second == src_vertex) {
+                    return dst_vertex;
+                }
+            }
+        }
+        return GEO::NO_VERTEX;
+    };
+
+    if (!src.vertices.empty()) {
+        for (const GEO::index_t src_vertex : src.vertices) {
+            const GEO::index_t dst_vertex = image_of_src_vertex(src_vertex);
+            if (dst_vertex != GEO::NO_VERTEX) {
+                dst.vertices.insert(dst_vertex);
+            }
+        }
+    }
+
+    // Each source edge maps to the chain of destination vertices along it: the
+    // image of its first endpoint, then any inserted split midpoints in traversal
+    // order, then the image of its second endpoint. Consecutive pairs are the
+    // destination sub-edges (one for an unsplit edge, two or more when split).
+    if (!src.edges.empty()) {
+        std::vector<GEO::index_t> chain;
+        for (const std::pair<GEO::index_t, GEO::index_t>& edge : src.edges) {
+            const GEO::index_t a = edge.first;
+            const GEO::index_t b = edge.second;
+            const GEO::index_t a_image = image_of_src_vertex(a);
+            const GEO::index_t b_image = image_of_src_vertex(b);
+            if ((a_image == GEO::NO_VERTEX) || (b_image == GEO::NO_VERTEX)) {
+                continue;
+            }
+            chain.clear();
+            chain.push_back(a_image);
+            for (GEO::index_t split = 0; ; ++split) {
+                const GEO::index_t midpoint = get_src_edge_new_vertex(a, b, split);
+                if (midpoint == GEO::NO_VERTEX) {
+                    break;
+                }
+                chain.push_back(midpoint);
+            }
+            chain.push_back(b_image);
+            for (std::size_t i = 0; (i + 1) < chain.size(); ++i) {
+                const GEO::index_t u = chain[i];
+                const GEO::index_t v = chain[i + 1];
+                if (u == v) {
+                    continue;
+                }
+                dst.edges.insert((u < v) ? std::make_pair(u, v) : std::make_pair(v, u));
             }
         }
     }

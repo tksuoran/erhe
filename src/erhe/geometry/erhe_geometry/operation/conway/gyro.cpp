@@ -107,10 +107,13 @@ void Gyro::build()
     post_processing();
 }
 
-void gyro(const Geometry& source, Geometry& destination, float ratio, const std::set<GEO::index_t>* selected_facets)
+void gyro(const Geometry& source, Geometry& destination, float ratio, const std::set<GEO::index_t>* selected_facets, Component_remap* remap)
 {
     Gyro operation{source, destination, ratio, selected_facets};
     operation.build();
+    if ((remap != nullptr) && (remap->source != nullptr) && (remap->destination != nullptr)) {
+        operation.remap_component_selection(*remap->source, *remap->destination);
+    }
 }
 
 } // namespace erhe::geometry::operation

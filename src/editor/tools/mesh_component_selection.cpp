@@ -148,6 +148,24 @@ void Mesh_component_selection::clear_all()
     m_entries.clear();
 }
 
+void Mesh_component_selection::set_after_operation(
+    const std::shared_ptr<erhe::scene::Mesh>&        mesh,
+    const std::size_t                                primitive_index,
+    const std::shared_ptr<erhe::geometry::Geometry>& after_geometry,
+    const std::set<GEO::index_t>&                    vertices,
+    const std::set<GEO::index_t>&                    facets,
+    const std::set<Mesh_edge_key>&                   edges
+)
+{
+    if (vertices.empty() && facets.empty() && edges.empty()) {
+        return;
+    }
+    Mesh_component_entry& entry = find_or_create_entry(mesh, primitive_index, after_geometry);
+    entry.vertices = vertices;
+    entry.facets   = facets;
+    entry.edges    = edges;
+}
+
 auto Mesh_component_selection::is_empty() const -> bool
 {
     for (const Mesh_component_entry& entry : m_entries) {

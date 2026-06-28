@@ -2,6 +2,7 @@
 
 #include "operations/operation.hpp"
 
+#include "erhe_geometry/operation/geometry_operation.hpp"
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_scene/mesh.hpp"
 
@@ -47,6 +48,14 @@ public:
     // restricts the topology change to those facets. Empty / missing => whole mesh.
     std::unordered_map<const erhe::geometry::Geometry*, std::set<GEO::index_t>> selected_facets{};
 
+    // Per-Geometry component-selection snapshot (whichever component type the active
+    // mesh-component mode selects: vertices, facets, or edges), taken on the main
+    // thread alongside selected_facets. A selection-aware topology operation remaps
+    // these source components to the components it produces, so the selection follows
+    // the geometry change to the newly created components. Keyed by Geometry identity;
+    // empty / missing => nothing to remap.
+    std::unordered_map<const erhe::geometry::Geometry*, erhe::geometry::operation::Geometry_component_selection> component_selection{};
+
     // std::function<
     //     bool(
     //         const std::shared_ptr<erhe::Item_base>& item
@@ -85,6 +94,22 @@ public:
         };
         Version before{};
         Version after{};
+
+        // Post-operation mesh-component selection for one result primitive: the
+        // components the operation produced from this mesh's selected source
+        // components, addressed against the result Geometry. Installed into the
+        // Mesh_component_selection store by execute() so the selection follows the
+        // topology change. primitive_index indexes the post-swap primitive list
+        // (i.e. after.primitives). Only present when this primitive carried a live
+        // component selection that mapped to a non-empty result.
+        class Selection_remap
+        {
+        public:
+            std::size_t                                            primitive_index{0};
+            std::shared_ptr<erhe::geometry::Geometry>              after_geometry{};
+            erhe::geometry::operation::Geometry_component_selection components{};
+        };
+        std::vector<Selection_remap> selection_remaps{};
     };
 
     explicit Mesh_operation(Mesh_operation_parameters&& parameters);
@@ -100,15 +125,20 @@ public:
     // Most general form. The geometry operation additionally receives the
     // selected-facet set for the geometry it is processing (nullptr when the mesh
     // has no live component selection), so a selection-aware operation can restrict
-    // its topology change to those facets. The other make_entries overloads delegate
-    // here, passing nullptr.
+    // its topology change to those facets. It also receives a source component
+    // selection to remap (nullptr when none) and a destination component selection to
+    // fill with the components produced from it, so the mesh-component selection can
+    // follow the topology change. The other make_entries overloads delegate here,
+    // passing nullptr for all three.
     void make_entries(
         std::function<
             void(
-                const erhe::geometry::Geometry& before_geometry,
-                erhe::geometry::Geometry&       after_geometry,
-                erhe::scene::Node*              node,
-                const std::set<GEO::index_t>*   selected_facets
+                const erhe::geometry::Geometry&                               before_geometry,
+                erhe::geometry::Geometry&                                     after_geometry,
+                erhe::scene::Node*                                            node,
+                const std::set<GEO::index_t>*                                 selected_facets,
+                const erhe::geometry::operation::Geometry_component_selection* remap_source,
+                erhe::geometry::operation::Geometry_component_selection*       remap_destination
             )
         > geometry_operation
     );
