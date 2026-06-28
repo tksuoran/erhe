@@ -784,10 +784,16 @@ Fly_camera_tool::Fly_camera_tool(
     commands.bind_command_to_key(&m_deserialize_transform_command,  erhe::window::Key_page_down, true);
 
     commands.register_command(&m_turn_command);
-    commands.bind_command_to_mouse_drag(&m_turn_command, erhe::window::Mouse_button_left, false, 0);
+    // Turn (look around) is on RIGHT mouse drag so plain LEFT drag is free for the
+    // mesh-component box / paint region-selection gestures. Left+menu (tumble) and
+    // middle+menu (track) are unchanged.
+    commands.bind_command_to_mouse_drag(&m_turn_command, erhe::window::Mouse_button_right, false, 0);
 
     commands.register_command(&m_tumble_command);
-    commands.bind_command_to_mouse_drag(&m_tumble_command, erhe::window::Mouse_button_left, true, erhe::window::Key_modifier_bit_menu);
+    // Tumble (orbit) on Alt + RIGHT mouse drag, matching turn on the right button so
+    // the entire left-drag space (plain / Shift / Ctrl) stays free for the
+    // mesh-component box / paint region-selection gestures.
+    commands.bind_command_to_mouse_drag(&m_tumble_command, erhe::window::Mouse_button_right, true, erhe::window::Key_modifier_bit_menu);
 
     commands.register_command(&m_track_command);
     commands.bind_command_to_mouse_drag(&m_track_command, erhe::window::Mouse_button_middle, true, erhe::window::Key_modifier_bit_menu);
