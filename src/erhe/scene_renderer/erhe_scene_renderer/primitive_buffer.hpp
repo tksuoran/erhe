@@ -36,6 +36,9 @@ public:
     std::size_t size;               // float 1 * 4 bytes - point size / line width
     std::size_t skinning_factor;    // float 1 * 4 bytes
     std::size_t base_joint_index;   // uint  1 * 4 bytes
+    std::size_t base_vertex;        // uint  1 * 4 bytes - first vertex of this primitive in the shared vertex pool;
+                                    // the ID-render shader subtracts it from gl_VertexID so the packed triangle id
+                                    // is the 0-based per-primitive facet index (not a pool-global vertex index).
 };
 
 class Primitive_interface

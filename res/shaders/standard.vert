@@ -209,7 +209,15 @@ void main()
     // Geometry capability (and on Metal is not supported at all). The
     // ID pass always draws triangle lists, so the vertex shader writes
     // a per-vertex triangle index instead.
-    v_primitive_id = gl_VertexID / 3;
+    //
+    // gl_VertexID is a vertex index into the SHARED mesh vertex pool, so it
+    // carries this primitive's base-vertex offset (thousands for any primitive
+    // not at pool start). Subtract base_vertex (the same value the draw uses as
+    // vertexOffset) so the packed triangle id is the 0-based per-primitive facet
+    // index that id_ranges()/get_mesh_facet_from_triangle() invert. Without this,
+    // ids land far outside their recorded [id_offset, id_offset+length) range and
+    // every region/picking resolve on a pooled primitive fails.
+    v_primitive_id = (gl_VertexID - int(primitive.primitives[ERHE_DRAW_ID].base_vertex)) / 3;
 #endif
 
 #if defined(ERHE_EDGE_LINES_FROM_ID) || defined(ERHE_VARIANT_FACE_ID_SEED)

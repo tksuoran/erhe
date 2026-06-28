@@ -41,7 +41,8 @@ Primitive_interface::Primitive_interface(erhe::graphics::Device& graphics_device
         .material_index   = primitive_struct.add_uint ("material_index"        )->get_offset_in_parent(),
         .size             = primitive_struct.add_float("size"                  )->get_offset_in_parent(),
         .skinning_factor  = primitive_struct.add_float("skinning_factor"       )->get_offset_in_parent(),
-        .base_joint_index = primitive_struct.add_uint ("base_joint_index"      )->get_offset_in_parent()
+        .base_joint_index = primitive_struct.add_uint ("base_joint_index"      )->get_offset_in_parent(),
+        .base_vertex      = primitive_struct.add_uint ("base_vertex"           )->get_offset_in_parent()
     }
     , max_primitive_count{static_cast<std::size_t>(max_primitive_count)}
 {
@@ -211,6 +212,10 @@ auto Primitive_buffer::update(
             const auto&     skin             = mesh->skin;
             const float     skinning_factor  = skin ? 1.0f : 0.0f;
             const uint32_t  base_joint_index = skin ? skin->skin_data.joint_buffer_index : 0;
+            // First vertex of this primitive in the shared vertex pool (the same value the draw uses as
+            // vertexOffset). The ID-render shader subtracts it from gl_VertexID so the packed triangle id is
+            // the 0-based per-primitive facet index that id_ranges()/get_mesh_facet_from_triangle() expect.
+            const uint32_t  base_vertex      = buffer_mesh->base_vertex();
 
             SPDLOG_LOGGER_TRACE(
                 log_primitive_buffer, 
@@ -245,6 +250,7 @@ auto Primitive_buffer::update(
                 write(primitive_gpu_data, write_offset + offsets.size,             size_span                );
                 write(primitive_gpu_data, write_offset + offsets.skinning_factor,  as_span(skinning_factor ));
                 write(primitive_gpu_data, write_offset + offsets.base_joint_index, as_span(base_joint_index));
+                write(primitive_gpu_data, write_offset + offsets.base_vertex,      as_span(base_vertex     ));
 
             }
             write_offset += entry_size;
@@ -342,6 +348,7 @@ auto Primitive_buffer::update(
         const auto&     skin             = mesh->skin;
         const float     skinning_factor  = skin ? 1.0f : 0.0f;
         const uint32_t  base_joint_index = skin ? skin->skin_data.joint_buffer_index : 0;
+        const uint32_t  base_vertex      = buffer_mesh->base_vertex();
 
         // ID-buffer edge-line method: stamp the per-primitive face-id base into
         // primitive.color (raw float in .x) so the EDGE_LINES_FROM_ID fill
@@ -371,6 +378,7 @@ auto Primitive_buffer::update(
         write(primitive_gpu_data, write_offset + offsets.size,             size_span                );
         write(primitive_gpu_data, write_offset + offsets.skinning_factor,  as_span(skinning_factor ));
         write(primitive_gpu_data, write_offset + offsets.base_joint_index, as_span(base_joint_index));
+        write(primitive_gpu_data, write_offset + offsets.base_vertex,      as_span(base_vertex     ));
         write_offset += entry_size;
 
         if (use_id_ranges) {
