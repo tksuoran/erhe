@@ -1050,11 +1050,13 @@ void Operations::imgui()
 
     // While a mesh-component selection is active, only selection-aware geometry
     // operations are available. has_selection_mode (used by every generic geometry
-    // button) is therefore disabled in component mode; Catmull-Clark, which is
-    // selection-aware, uses catmull_clark_mode and stays enabled.
-    const bool component_active   = is_component_selection_active();
-    const auto has_selection_mode = ((selected_mesh_count >= 1) && !component_active) ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
-    const auto catmull_clark_mode = (component_active || (selected_mesh_count >= 1)) ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
+    // button) is therefore disabled in component mode. Selection-aware operations
+    // (Catmull-Clark, Sqrt3, Join, Kis, Meta, Ortho, Gyro, Truncate - those passing
+    // selection_aware=true to their async runner) use selection_aware_mode instead
+    // and stay enabled, operating on just the selected facets.
+    const bool component_active     = is_component_selection_active();
+    const auto has_selection_mode   = ((selected_mesh_count >= 1) && !component_active) ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
+    const auto selection_aware_mode = (component_active || (selected_mesh_count >= 1)) ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
 
     //if (make_button("Unparent", has_selection_mode, button_size)) {
     //    const auto& node0 = selection.get<erhe::scene::Node>();
@@ -1105,16 +1107,16 @@ void Operations::imgui()
         flip_joint();
     }
 
-    if (make_button("Catmull-Clark", catmull_clark_mode, button_size)) {
+    if (make_button("Catmull-Clark", selection_aware_mode, button_size)) {
         catmull_clark();
     }
-    if (make_button("Sqrt3", has_selection_mode, button_size)) {
+    if (make_button("Sqrt3", selection_aware_mode, button_size)) {
         sqrt3();
     }
     if (make_button("Triangulate", has_selection_mode, button_size)) {
         triangulate();
     }
-    if (make_button("Join", has_selection_mode, button_size)) {
+    if (make_button("Join", selection_aware_mode, button_size)) {
         join();
     }
     ImGui::PushID("Kis");
@@ -1122,14 +1124,14 @@ void Operations::imgui()
     ImGui::SliderFloat("##", &m_kis_height, -1.0f, 1.0f, "%.2f");
     if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Kis: Apex height along face normal (0 = flat)"); }
     ImGui::PopID();
-    if (make_button("Kis", has_selection_mode, button_size)) {
+    if (make_button("Kis", selection_aware_mode, button_size)) {
         kis();
     }
     ImGui::PopID();
-    if (make_button("Meta", has_selection_mode, button_size)) {
+    if (make_button("Meta", selection_aware_mode, button_size)) {
         meta();
     }
-    if (make_button("Ortho", has_selection_mode, button_size)) {
+    if (make_button("Ortho", selection_aware_mode, button_size)) {
         ortho();
     }
     ImGui::PushID("Gyro");
@@ -1137,7 +1139,7 @@ void Operations::imgui()
     ImGui::SliderFloat("##", &m_gyro_ratio, 0.01f, 0.49f, "%.2f");
     if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Gyro: Edge split position (1/3 = standard gyro)"); }
     ImGui::PopID();
-    if (make_button("Gyro", has_selection_mode, button_size)) {
+    if (make_button("Gyro", selection_aware_mode, button_size)) {
         gyro();
     }
     ImGui::PopID();
@@ -1161,7 +1163,7 @@ void Operations::imgui()
     ImGui::SliderFloat("##", &m_truncate_ratio, 0.01f, 0.5f, "%.2f");
     if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Truncate: Cut depth (1/3 = standard, 0.5 = ambo)"); }
     ImGui::PopID();
-    if (make_button("Truncate", has_selection_mode, button_size)) {
+    if (make_button("Truncate", selection_aware_mode, button_size)) {
         truncate();
     }
     ImGui::PopID();
