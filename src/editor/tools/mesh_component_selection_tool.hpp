@@ -202,6 +202,11 @@ private:
     void request_box_scan();
     // Build and submit an id-buffer disk scan for the current brush.
     void request_paint_scan();
+    // Abandon any in-flight async region-scan drains (box deferred commit, paint
+    // post-release drain, MCP debug scan) so their results are not applied. Used
+    // by the Clear button: an explicit clear must be authoritative even while a
+    // just-released gesture's final scan is still completing a few frames later.
+    void cancel_pending_scans();
     // Component under the pointer for the active mode, resolved from the
     // content Hover_entry. Edge fields hold the picked edge's vertex pair.
     class Pick_result
@@ -269,8 +274,16 @@ private:
     Scene_view*            m_paint_scene_view        {nullptr};
     glm::vec2              m_brush_center_window     {0.0f, 0.0f};
     float                  m_brush_radius            {32.0f};
-    uint64_t               m_paint_last_request_frame{0};
     uint64_t               m_paint_last_applied_frame{0};
+    // Post-release drain target, captured ONCE on the first post-release frame
+    // (mirrors m_box_commit_request_frame): the drain ends when a scan from
+    // at-or-after this frame has been applied. It must be frozen, not advanced
+    // per frame -- the post-release drain re-requests the brush scan every frame
+    // (to survive a dropped release-frame request), so a target that tracked the
+    // latest request would forever outrun the readback-lagged applied frame and
+    // the last dab would be re-applied every frame (which, among other things,
+    // undid the Clear button).
+    uint64_t               m_paint_commit_request_frame{0};
 
     // Debug region-select state (MCP-driven, viewport coordinates directly).
     bool                   m_debug_pending      {false};

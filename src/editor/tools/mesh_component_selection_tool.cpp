@@ -884,6 +884,10 @@ void Mesh_component_selection_tool::viewport_toolbar()
     }
 
     if (ImGui::Button("Clear")) {
+        // Abandon any in-flight gesture scan first; otherwise a just-released
+        // paint/box stroke's final scan would re-populate the selection a few
+        // frames after this clear.
+        cancel_pending_scans();
         selection.clear_all();
     }
     if (ImGui::IsItemHovered()) {
@@ -1086,10 +1090,11 @@ void Mesh_component_selection_tool::paint_select_update(const glm::vec2 window_p
         if (!m_paint_active) {
             // Stroke just started: lock to the starting view, capture modifiers,
             // and (for a plain stroke) clear the selection once before adding.
-            m_paint_active             = true;
-            m_paint_pending            = true;
-            m_paint_scene_view         = get_hover_scene_view();
-            m_paint_last_applied_frame = 0;
+            m_paint_active               = true;
+            m_paint_pending              = true;
+            m_paint_scene_view           = get_hover_scene_view();
+            m_paint_last_applied_frame   = 0;
+            m_paint_commit_request_frame = 0;
             const bool shift = (m_context.input_state != nullptr) && m_context.input_state->shift;
             m_paint_subtract = (m_context.input_state != nullptr) && m_context.input_state->control;
             if (!m_paint_subtract && !shift) {
@@ -1123,9 +1128,6 @@ void Mesh_component_selection_tool::request_paint_scan()
     request.brush_center = center;
     request.brush_radius = radius;
     m_context.id_renderer->request_scan(request);
-    if (m_context.graphics_device != nullptr) {
-        m_paint_last_request_frame = m_context.graphics_device->get_frame_index();
-    }
 }
 
 void Mesh_component_selection_tool::paint_select_release()
@@ -1134,6 +1136,21 @@ void Mesh_component_selection_tool::paint_select_release()
         return;
     }
     m_paint_active = false; // m_paint_pending stays set so gesture_update drains the last results
+}
+
+void Mesh_component_selection_tool::cancel_pending_scans()
+{
+    // Drop any in-flight async region-scan drains so their (already-rendered)
+    // results are not applied on a later frame. Only the pending/target
+    // bookkeeping is reset; the *_active gesture lifecycle is owned by the input
+    // commands and left untouched (a genuinely active drag is not interrupted by
+    // a toolbar button press).
+    m_box_commit_pending         = false;
+    m_box_commit_request_frame   = 0;
+    m_paint_pending              = false;
+    m_paint_commit_request_frame = 0;
+    m_debug_pending              = false;
+    m_debug_request_frame        = 0;
 }
 
 void Mesh_component_selection_tool::adjust_brush_radius(const float wheel_delta)
@@ -1215,8 +1232,18 @@ void Mesh_component_selection_tool::gesture_update()
             m_paint_pending = false;
         } else {
             // After release, re-request the final brush so its faces are not
-            // missed if the release-frame scan was dropped (all slots busy).
+            // missed if the release-frame scan was dropped (all slots busy), and
+            // freeze the drain target to the first post-release frame. The target
+            // must be captured once and not advance: because we re-request the
+            // scan every drain frame, a target that tracked the latest request
+            // would forever outrun the readback-lagged applied frame, so the
+            // drain would never end and the last dab would be re-applied every
+            // frame -- which, among other things, undid the Clear button. Mirrors
+            // the box path's m_box_commit_request_frame.
             if (!m_paint_active) {
+                if (m_paint_commit_request_frame == 0) {
+                    m_paint_commit_request_frame = m_context.graphics_device->get_frame_index();
+                }
                 request_paint_scan();
             }
             const Id_renderer::Scan_result& result = m_context.id_renderer->take_scan_result();
@@ -1224,8 +1251,13 @@ void Mesh_component_selection_tool::gesture_update()
                 apply_scan_hits_to_selection(m_mesh_component_selection, result, m_paint_subtract);
                 m_paint_last_applied_frame = result.frame_number;
             }
-            if (!m_paint_active && (m_paint_last_applied_frame >= m_paint_last_request_frame)) {
-                m_paint_pending = false;
+            if (
+                !m_paint_active &&
+                (m_paint_commit_request_frame != 0) &&
+                (m_paint_last_applied_frame >= m_paint_commit_request_frame)
+            ) {
+                m_paint_pending              = false;
+                m_paint_commit_request_frame = 0;
             }
         }
     }
