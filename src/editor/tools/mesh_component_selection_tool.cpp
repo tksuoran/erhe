@@ -21,6 +21,7 @@
 #include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_window/window_event_handler.hpp"
 
 #include <geogram/mesh/mesh.h>
@@ -158,6 +159,15 @@ public:
         frame.normal_b = frame.normal_a;
     }
     return frame;
+}
+
+// Only meshes flagged as scene content are valid mesh-component-selection
+// targets. Tool / brush / controller / rendertarget / id meshes (and any other
+// non-content mesh) must never be selectable as components, nor show a hover
+// highlight. Used by both the single-click/hover pick() and the box/paint scan.
+[[nodiscard]] auto is_content_mesh(const erhe::scene::Mesh& mesh) -> bool
+{
+    return erhe::utility::test_bit_set(mesh.get_flag_bits(), erhe::Item_flags::content);
 }
 
 } // anonymous namespace
@@ -457,6 +467,15 @@ auto Mesh_component_selection_tool::pick(Scene_view& scene_view) const -> Pick_r
         (content.facet == GEO::NO_INDEX) ||
         (content.scene_mesh_primitive_index == std::numeric_limits<std::size_t>::max())
     ) {
+        return result;
+    }
+
+    // Only scene content is selectable. Non-content meshes (tools, brushes,
+    // controllers, rendertargets, id meshes, ...) must not be component-
+    // selectable nor show a hover highlight. pick() is the single choke point
+    // for try_ready(), on_select() and the hover highlight, so rejecting here
+    // suppresses all three.
+    if (!is_content_mesh(*mesh)) {
         return result;
     }
 
@@ -962,6 +981,9 @@ void apply_scan_hits_to_selection(
         const std::shared_ptr<erhe::scene::Mesh> mesh = hit.mesh;
         if (!mesh) {
             continue;
+        }
+        if (!is_content_mesh(*mesh)) {
+            continue; // only scene content is component-selectable
         }
         if (mesh->skin) {
             continue; // skinned meshes deform on the GPU; CPU geometry does not match

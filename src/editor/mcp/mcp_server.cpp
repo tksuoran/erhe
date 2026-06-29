@@ -4627,6 +4627,14 @@ auto Mcp_server::action_select_mesh_components(const json& args) -> std::string
         return make_error_content("Node has no mesh geometry at primitive_index " + std::to_string(primitive_index) + ": " + node->get_name());
     }
 
+    // Only scene content is component-selectable; tool / brush / controller /
+    // rendertarget / id meshes are not. This mirrors the interactive pick path
+    // (Mesh_component_selection_tool::pick / apply_scan_hits_to_selection) so the
+    // selection store only ever holds content meshes.
+    if ((mesh->get_flag_bits() & erhe::Item_flags::content) == 0) {
+        return make_error_content("Mesh is not scene content (Item_flags::content not set); not component-selectable: " + node->get_name());
+    }
+
     if (args.contains("mode")) {
         const std::string mode_str = args.value("mode", "");
         if (!is_valid_mesh_component_mode(mode_str)) {
