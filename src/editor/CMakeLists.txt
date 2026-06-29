@@ -413,6 +413,8 @@ erhe_target_sources_grouped(
     windows/inventory_slot_payload.hpp
     windows/inventory_window.cpp
     windows/inventory_window.hpp
+    windows/item_reference.cpp
+    windows/item_reference.hpp
     windows/item_tree_window.cpp
     windows/item_tree_window.hpp
     windows/properties.cpp
