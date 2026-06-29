@@ -12,7 +12,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 message(STATUS "Compiler: ${CMAKE_CXX_COMPILER_ID}")
 
-if("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
+if(MSVC)
+    # CMake sets MSVC for any MSVC-ABI compiler -- both cl.exe and clang-cl.
+    # clang-cl reports CMAKE_CXX_COMPILER_ID=Clang, so it must be caught here
+    # (before the Clang id check) and routed through the MSVC flag branch.
+    # The GNU-style else() branch below does set(CMAKE_CXX_FLAGS "-Wall"),
+    # which overwrites the toolchain default /EHsc and makes every `throw`
+    # fail to compile under clang-cl ("cannot use 'throw' with exceptions
+    # disabled"). The MSVC branch leaves CMAKE_CXX_FLAGS (hence /EHsc) intact.
     set(COMPILER_MSVC 1)
 elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
     set(COMPILER_CLANG 1)
