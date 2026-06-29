@@ -1096,6 +1096,17 @@ void Operations::imgui()
         shrink_component_selection();
     }
 
+    // Merge Faces dissolves the selected facets into one polygon per edge-connected
+    // group, so it requires a non-empty FACE-mode component selection.
+    const bool face_component_active =
+        (m_context.mesh_component_selection != nullptr) &&
+        (m_context.mesh_component_selection->get_mode() == Mesh_component_mode::face) &&
+        !m_context.mesh_component_selection->is_empty();
+    const auto face_component_mode = face_component_active ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
+    if (make_button("Merge Faces", face_component_mode, button_size)) {
+        merge_faces();
+    }
+
     //if (make_button("Unparent", has_selection_mode, button_size)) {
     //    const auto& node0 = selection.get<erhe::scene::Node>();
     //    if (node0) {
@@ -2128,6 +2139,20 @@ void Operations::chamfer3(const float bevel_ratio)
         [this, bevel_ratio](Mesh_operation_parameters&& params) {
             m_context.operation_stack->queue(
                 std::make_shared<Chamfer3_operation>(std::move(params), bevel_ratio)
+            );
+        },
+        true
+    );
+}
+
+void Operations::merge_faces()
+{
+    // Selection-aware: merges each edge-connected group of the selected facets into a
+    // single polygon. Requires a face-mode mesh-component selection (gated in the UI).
+    async_for_selected_nodes_with_mesh(
+        [this](Mesh_operation_parameters&& params) {
+            m_context.operation_stack->queue(
+                std::make_shared<Merge_faces_operation>(std::move(params))
             );
         },
         true

@@ -152,6 +152,7 @@ public:
     void gyro();
     void chamfer3();
     void chamfer3(float bevel_ratio);
+    void merge_faces();
 
     // Blender Select More / Select Less for the active mesh-component selection.
     // Not geometry edits and not undoable - they only change the selection set

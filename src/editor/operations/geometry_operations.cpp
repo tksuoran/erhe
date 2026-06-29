@@ -22,6 +22,7 @@
 #include "erhe_geometry/operation/generate_frame_field_tangents.hpp"
 #include "erhe_geometry/operation/generate_tangents.hpp"
 #include "erhe_geometry/operation/make_atlas.hpp"
+#include "erhe_geometry/operation/merge_faces.hpp"
 #include "erhe_geometry/operation/normalize.hpp"
 #include "erhe_geometry/operation/remesh.hpp"
 #include "erhe_geometry/operation/repair.hpp"
@@ -240,6 +241,26 @@ Truncate_operation::Truncate_operation(Mesh_operation_parameters&& context, floa
         }
     );
     set_description(fmt::format("Truncate {}", describe_entries()));
+}
+
+Merge_faces_operation::Merge_faces_operation(Mesh_operation_parameters&& context)
+    : Mesh_operation{std::move(context)}
+{
+    set_description("Merge Faces");
+    make_entries(
+        [](
+            const erhe::geometry::Geometry& before_geometry,
+            erhe::geometry::Geometry&       after_geometry,
+            erhe::scene::Node*              /*node*/,
+            const std::set<GEO::index_t>*   selected_facets,
+            const erhe::geometry::operation::Geometry_component_selection* remap_source,
+            erhe::geometry::operation::Geometry_component_selection*       remap_destination
+        ) -> void {
+            erhe::geometry::operation::Component_remap remap{remap_source, remap_destination};
+            erhe::geometry::operation::merge_faces(before_geometry, after_geometry, selected_facets, &remap);
+        }
+    );
+    set_description(fmt::format("Merge Faces {}", describe_entries()));
 }
 
 Reverse_operation::Reverse_operation(Mesh_operation_parameters&& context)

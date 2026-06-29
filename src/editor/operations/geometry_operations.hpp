@@ -80,6 +80,12 @@ public:
     Truncate_operation(Mesh_operation_parameters&& context, float ratio);
 };
 
+class Merge_faces_operation : public Mesh_operation
+{
+public:
+    explicit Merge_faces_operation(Mesh_operation_parameters&& context);
+};
+
 class Reverse_operation : public Mesh_operation
 {
 public:

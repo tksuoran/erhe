@@ -151,6 +151,7 @@ private:
     auto action_decimate                      (const nlohmann::json& args) -> std::string;
     auto action_smooth                        (const nlohmann::json& args) -> std::string;
     auto action_chamfer3                      (const nlohmann::json& args) -> std::string;
+    auto action_merge_faces                   (const nlohmann::json& args) -> std::string;
     auto action_generate_texture_coordinates  (const nlohmann::json& args) -> std::string;
     auto action_set_transform_reference_mode  (const nlohmann::json& args) -> std::string;
     auto action_set_transform_mode            (const nlohmann::json& args) -> std::string;

@@ -58,6 +58,8 @@ erhe_target_sources_grouped(
     erhe_geometry/operation/geometry_operation.hpp
     erhe_geometry/operation/make_atlas.cpp
     erhe_geometry/operation/make_atlas.hpp
+    erhe_geometry/operation/merge_faces.cpp
+    erhe_geometry/operation/merge_faces.hpp
     erhe_geometry/operation/normalize.cpp
     erhe_geometry/operation/normalize.hpp
     erhe_geometry/operation/remesh.cpp

@@ -1066,6 +1066,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "decimate")                     result = action_decimate(req->arguments);
         else if (req->tool_name == "smooth")                       result = action_smooth(req->arguments);
         else if (req->tool_name == "chamfer")                      result = action_chamfer3(req->arguments);
+        else if (req->tool_name == "merge_faces")                  result = action_merge_faces(req->arguments);
         else if (req->tool_name == "generate_texture_coordinates") result = action_generate_texture_coordinates(req->arguments);
         else if (req->tool_name == "set_transform_reference_mode") result = action_set_transform_reference_mode(req->arguments);
         else if (req->tool_name == "set_transform_mode")           result = action_set_transform_mode          (req->arguments);
@@ -1630,6 +1631,7 @@ void Mcp_server::refresh_tool_list()
             {"bevel_ratio", {{"type", "number"}, {"description", "How much each face shrinks toward its centroid, [0,1] (default 0.25)"}}}
         }}
     }});
+    m_tool_infos.push_back({"merge_faces", "Merge (dissolve) the selected facets of the mesh node(s) into one polygon per edge-connected group: facets connected through a shared EDGE (not merely a shared vertex) become a single polygon spanning their boundary loop, dropping the now-interior edges and vertices. Requires an active FACE-mode mesh-component selection (set_mesh_component_mode face + select_mesh_components). A group whose boundary is not a single simple loop (encloses a hole / pinches) is left unchanged. Queued; the rest of the mesh stays watertight.", schema_no_args()});
     m_tool_infos.push_back({"generate_texture_coordinates", "Generate texture coordinates for the selected mesh node(s) via Geogram mesh_make_atlas (queued). Writes UVs into the given corner texcoord channel. Acts on the current object selection.", {
         {"type", "object"},
         {"properties", {
@@ -5123,6 +5125,15 @@ auto Mcp_server::action_chamfer3(const json& args) -> std::string
     const float bevel_ratio = args.value("bevel_ratio", 0.25f);
     m_context.operations->chamfer3(bevel_ratio);
     return make_json_content({{"queued", true}, {"bevel_ratio", bevel_ratio}}).dump();
+}
+
+auto Mcp_server::action_merge_faces(const json& /*args*/) -> std::string
+{
+    if (m_context.operations == nullptr) {
+        return make_error_content("Operations not available");
+    }
+    m_context.operations->merge_faces();
+    return make_json_content({{"queued", true}}).dump();
 }
 
 auto Mcp_server::action_generate_texture_coordinates(const json& args) -> std::string
