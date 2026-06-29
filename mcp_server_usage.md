@@ -1,6 +1,6 @@
 # erhe Editor MCP Server
 
-The editor embeds an MCP (Model Context Protocol) server that exposes editor commands and scene/content-library queries over HTTP using JSON-RPC 2.0. The server starts automatically with the editor on `127.0.0.1:8080`.
+The editor embeds an MCP (Model Context Protocol) server that exposes editor commands and scene/content-library queries over HTTP using JSON-RPC 2.0. The server starts automatically with the editor on `127.0.0.1:8080`. If that port is already in use it falls back to the next free port, scanning `[8080, 8100)`; the port it actually bound is logged as `MCP server: listening on 127.0.0.1:<port>`.
 
 ## Endpoints
 
@@ -364,7 +364,26 @@ The HTTP server runs on a dedicated background thread. All `tools/call` requests
 
 ## Configuration
 
-The server listens on `127.0.0.1:8080` by default (localhost only). The port can be changed via the `Mcp_server` constructor parameter.
+The server listens on `127.0.0.1:8080` by default (localhost only). The preferred port can be changed via the `Mcp_server` constructor parameter. If the preferred port is already bound, the server retries the next ports in sequence - up to 20 attempts, i.e. the range `[8080, 8100)` - and binds the first that is free, logging `MCP server: listening on 127.0.0.1:<port>`. If all 20 are unavailable it logs `failed to bind any port in [8080, 8100)` and the server stays offline (the editor otherwise runs normally).
+
+## Accessing the server on Quest / Android
+
+On device the server binds the same loopback address (`127.0.0.1:8080`), which is not reachable from the host directly. Forward the port over adb and then talk to it exactly as on desktop:
+
+```bash
+# host -> device loopback (re-run after each device reconnect)
+adb forward tcp:8080 tcp:8080
+curl -X POST http://127.0.0.1:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"list_scenes","arguments":{}}}'
+```
+
+The Quest / Android APK declares the `INTERNET` permission (`android-project/app/src/main/AndroidManifest.xml`). Android gates **all** socket creation - even loopback `127.0.0.1` - behind this permission: an app not in the `AID_INET` group gets `EACCES` from `socket()`/`bind()` on **every** port. Without it the server's port-fallback loop logs `failed to bind any port in [8080, 8100)` (a blanket denial, not a port clash). The permission is granted at install; confirm with:
+
+```bash
+adb shell dumpsys package org.libsdl.app.quest | grep INTERNET
+# -> android.permission.INTERNET: granted=true
+```
 
 ## Source Files
 
