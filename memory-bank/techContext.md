@@ -18,13 +18,16 @@ Official::scripts\configure_vs2026_vulkan.bat→build_vs2026_vulkan/{VS-solution
   Bundled@VS18{cmake+ninja+VsDevCmd}
 !NinjaNeedsMSVC-env::launch-from-x64-NativeTools-prompt{cl+INCLUDE}
 clang-cl-build::editor.exe-builds-clean✓{2026-06-29}>was::editor-link-fails
-  fix#5@clang-cl-guarded{FRONTEND_VARIANT-MSVC→cl.exe+linux-clang-unaffected}:
-    tracy-pin{VERSION-0.13.1→GIT_TAG-master-4cd6c389}{=nullptr→(nullptr),deleted-atomic-copy-ctor<C++17}
+  tracy-pin{VERSION-0.13.1→GIT_TAG-master-4cd6c389}::ALL-builds-2-consequences:
+    +want::=nullptr→(nullptr){clang-cl-rejects-deleted-atomic-copy-ctor<C++17}
+    +must::OPTIONS+"TRACY_ENABLE ON"{master-flipped-default-ON→OFF;else-no-profiling+TracyClient-stops-defining-TRACY_ENABLE→editor.cpp-unused-name-/W4/WX-cl.exe}
+  fix#4@clang-cl-guarded{FRONTEND_VARIANT-MSVC→cl.exe+linux-clang-unaffected}:
     mango{if(MSVC)→MSVC-flag-branch¬else-set(CMAKE_CXX_FLAGS)-clobbered-/EHsc}
     Clang.cmake{-g3-GNU-frontend-only,clang-cl-rejects→Jolt-Werror-fatal}
     Jolt{set(ENABLE_ALL_WARNINGS-OFF)@clang-cl::/Wall=-Weverything+/WX→-Wpadded-fatal}
     Clang.cmake{global-avx2-baseline@clang-cl::Jolt-PUBLIC-avx2-vs-shared-erhe_pch-feature-mismatch{clang-PCH-check-symmetric}}
   also::compile_commands@configure{lsai/clangd,still-works}
+  verified✓::editor.exe-links{clang-cl:build_ninja_win_clang|cl.exe:build_ninja_win_vulkan}{cl.exe-run-caught-TRACY_ENABLE-regression-clang-stale-cache-hid}
 
 [CLANGD_SEMANTIC]
 .clangd→CompilationDatabase::build_ninja_win_clang

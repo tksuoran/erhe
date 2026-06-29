@@ -27,7 +27,9 @@
   faa6104e::Clang.cmake-g3-GNU-frontend-only{Jolt-Werror-fatal-on-clang-cl-unknown-arg}
   6c0fea37::Jolt-ENABLE_ALL_WARNINGS-OFF@clang-cl{/Wall=-Weverything+/WX→-Wpadded}
   ce656f05::Clang.cmake-global-avx2@clang-cl{Jolt-PUBLIC-avx2-vs-shared-erhe_pch,clang-PCH-feature-check-symmetric}
->verified::editor.exe{68MB,[1487/1490],0-FAILED,0-pch-mismatch}✓
+  d756c994::tracy-OPTIONS+"TRACY_ENABLE ON"{master-flipped-default-ON→OFF,ALL-builds;cl.exe-/W4/WX-on-editor.cpp-unused-name-outside-#if;clang-passed-only-on-stale-cached-ON}
+>verified::editor.exe×2{clang-cl-build_ninja_win_clang-68MB,[1487/1490]+cl.exe-build_ninja_win_vulkan-73MB,[613/614];both-0-FAILED}✓
+>learning::run-2nd-compiler(cl.exe)-caught-regression-clang-cl-missed{stale-cache-hid-tracy-default-flip}
 >reviewed::upstream-mango-cmake{no-clang-cl-handling-but-never-clobbers-CMAKE_CXX_FLAGS}+jolt-native-flags{ENABLE_ALL_WARNINGS-knob}
 >archived-from-activeContext::SkillKit-delivery-task©vulcan{Deliver-Cpp-Semantic-MCP+SkillKit→tksuoran,issue#10}
   pending-was{commit+push→LadislavSopko/erhe-fork|PR→tksuoran:main|comment-issue#10}{status-unknown,superseded-by-Timo-clang-cl-focus}
