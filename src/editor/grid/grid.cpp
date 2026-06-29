@@ -28,6 +28,31 @@ Grid::Grid()
     update();
 }
 
+// Clone constructor for node duplication. Copies all grid data while the base
+// (Item / Node_attachment for_clone) gives the clone a fresh id and leaves it
+// detached (m_node reset). Keep this in sync with the data members below.
+Grid::Grid(const Grid& src, erhe::for_clone)
+    : Item                 {src, erhe::for_clone{}}
+    , m_plane_type         {src.m_plane_type         }
+    , m_intersect_enable   {src.m_intersect_enable   }
+    , m_snap_enabled       {src.m_snap_enabled       }
+    , m_rotation           {src.m_rotation           }
+    , m_center             {src.m_center             }
+    , m_cell_size          {src.m_cell_size          }
+    , m_cell_div           {src.m_cell_div           }
+    , m_cell_count         {src.m_cell_count         }
+    , m_label_enable       {src.m_label_enable       }
+    , m_label_text_fraction{src.m_label_text_fraction}
+    , m_label_spacing      {src.m_label_spacing      }
+    , m_label_fade         {src.m_label_fade         }
+    , m_level_colors       {src.m_level_colors       }
+    , m_level_widths       {src.m_level_widths       }
+    , m_label_color        {src.m_label_color        }
+    , m_world_from_grid    {src.m_world_from_grid    }
+    , m_grid_from_world    {src.m_grid_from_world    }
+{
+}
+
 void Grid::read_config(const Grid_config& config)
 {
     set_visible(config.visible);

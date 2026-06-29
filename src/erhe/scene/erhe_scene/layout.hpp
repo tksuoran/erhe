@@ -67,9 +67,6 @@ public:
         return erhe::Item_type::node_attachment | erhe::Item_type::layout;
     }
 
-    // Implements Node_attachment
-    auto clone_attachment() const -> std::shared_ptr<Node_attachment> override;
-
     // Public API
     // Recompute and apply the local transform of every direct child. The editor
     // calls this once per frame for every layout node (App_scenes::update_layout_nodes)

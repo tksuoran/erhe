@@ -21,9 +21,4 @@ Layout_item::Layout_item(const Layout_item& src, erhe::for_clone)
 {
 }
 
-auto Layout_item::clone_attachment() const -> std::shared_ptr<Node_attachment>
-{
-    return std::make_shared<Layout_item>(*this, erhe::for_clone{});
-}
-
 } // namespace erhe::scene

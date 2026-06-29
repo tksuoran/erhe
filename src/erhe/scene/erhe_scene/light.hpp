@@ -106,7 +106,7 @@ public:
     Transform     texture_from_world;
 };
 
-class Light : public erhe::Item<Item_base, Node_attachment, Light>
+class Light : public erhe::Item<Item_base, Node_attachment, Light, erhe::Item_kind::clone_using_custom_clone_constructor>
 {
 public:
     using Type = Light_type;
@@ -122,6 +122,7 @@ public:
     ~Light() noexcept override;
 
     explicit Light(std::string_view name);
+    Light(const Light& src, erhe::for_clone);
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Light"};

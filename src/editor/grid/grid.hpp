@@ -33,10 +33,11 @@ static constexpr const char* grid_plane_type_strings[] = {
 
 auto get_plane_transform(Grid_plane_type plane_type) -> glm::mat4;
 
-class Grid : public erhe::Item<erhe::Item_base, erhe::scene::Node_attachment, Grid>
+class Grid : public erhe::Item<erhe::Item_base, erhe::scene::Node_attachment, Grid, erhe::Item_kind::clone_using_custom_clone_constructor>
 {
 public:
     Grid();
+    Grid(const Grid& src, erhe::for_clone);
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Grid"};
     [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::node_attachment | erhe::Item_type::grid; }

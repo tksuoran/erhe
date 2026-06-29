@@ -72,6 +72,19 @@ Light::Light(const std::string_view name)
 {
 }
 
+Light::Light(const Light& src, erhe::for_clone)
+    : Item            {src, erhe::for_clone{}}
+    , type            {src.type            }
+    , color           {src.color           }
+    , intensity       {src.intensity       }
+    , range           {src.range           }
+    , inner_spot_angle{src.inner_spot_angle}
+    , outer_spot_angle{src.outer_spot_angle}
+    , cast_shadow     {src.cast_shadow     }
+    , layer_id        {src.layer_id        }
+{
+}
+
 void Light::handle_item_host_update(erhe::Item_host* const old_item_host, erhe::Item_host* const new_item_host)
 {
     const auto shared_this = std::static_pointer_cast<Light>(shared_from_this()); // keep alive

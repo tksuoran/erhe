@@ -47,9 +47,6 @@ public:
         return erhe::Item_type::node_attachment | erhe::Item_type::layout_item;
     }
 
-    // Implements Node_attachment
-    auto clone_attachment() const -> std::shared_ptr<Node_attachment> override;
-
     // Parameters (per local axis x = 0, y = 1, z = 2)
     std::array<Layout_alignment, 3> alignment{
         Layout_alignment::negative,

@@ -24,7 +24,15 @@ Node_attachment::Node_attachment(const Node_attachment& src, for_clone)
 
 auto Node_attachment::clone_attachment() const -> std::shared_ptr<Node_attachment>
 {
-    return std::make_shared<Node_attachment>(static_cast<const Node_attachment&>(*this), erhe::for_clone{});
+    // Defer to the polymorphic clone(), which already encodes each concrete
+    // attachment type's clonability (via Item_kind) and any custom clone().
+    // This is the single source of truth for attachment duplication:
+    //  - clone_using_copy_constructor / clone_using_custom_clone_constructor
+    //    produce a proper typed clone (Light, Camera, Mesh, ...).
+    //  - not_clonable types (Brush_placement, Frame_controller) return nullptr,
+    //    so Node's clone constructor skips them instead of attaching a sliced,
+    //    meaningless base Node_attachment.
+    return std::dynamic_pointer_cast<Node_attachment>(clone());
 }
 
 Node_attachment::Node_attachment(const std::string_view name)

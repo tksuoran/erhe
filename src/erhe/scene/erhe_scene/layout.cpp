@@ -292,11 +292,6 @@ Layout::Layout(const Layout& src, erhe::for_clone)
 {
 }
 
-auto Layout::clone_attachment() const -> std::shared_ptr<Node_attachment>
-{
-    return std::make_shared<Layout>(*this, erhe::for_clone{});
-}
-
 void Layout::update()
 {
     Node* const layout_node = get_node();

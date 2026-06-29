@@ -35,7 +35,6 @@ public:
     [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::node_attachment | erhe::Item_type::physics; }
 
     // Implements / overrides Node_attachment
-    auto clone_attachment       () const -> std::shared_ptr<Node_attachment>                     override;
     void handle_item_host_update(erhe::Item_host* old_item_host, erhe::Item_host* new_item_host) override;
 
     // Public API

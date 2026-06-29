@@ -23,11 +23,6 @@ Camera::Camera(const Camera& src, erhe::for_clone)
 {
 }
 
-auto Camera::clone_attachment() const -> std::shared_ptr<Node_attachment>
-{
-    return std::make_shared<Camera>(*this, for_clone{});
-}
-
 void Camera::handle_item_host_update(Item_host* const old_item_host, Item_host* const new_item_host)
 {
     const auto shared_this = std::static_pointer_cast<Camera>(shared_from_this()); // keep alive

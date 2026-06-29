@@ -99,11 +99,6 @@ Node_joint::~Node_joint() noexcept
     set_node(nullptr);
 }
 
-auto Node_joint::clone_attachment() const -> std::shared_ptr<Node_attachment>
-{
-    return std::make_shared<Node_joint>(*this, erhe::for_clone{});
-}
-
 void Node_joint::handle_item_host_update(erhe::Item_host* const old_item_host, erhe::Item_host* const new_item_host)
 {
     ERHE_VERIFY(old_item_host != new_item_host);

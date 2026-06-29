@@ -94,11 +94,6 @@ Mesh::Mesh(const Mesh& src, erhe::for_clone)
     set_primitives(src.get_primitives());
 }
 
-auto Mesh::clone_attachment() const -> std::shared_ptr<Node_attachment>
-{
-    return std::make_shared<Mesh>(*this, for_clone{});
-}
-
 Mesh::~Mesh() noexcept
 {
     if (m_rt_scene != nullptr) {
