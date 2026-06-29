@@ -44,6 +44,21 @@ endif ()
 # on aarch64, where the flags are invalid and fpng compiles no SSE path.
 if (("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "x86_64") OR ("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "AMD64"))
     add_compile_options(-msse4.1 -mpclmul)
+
+    # clang-cl shared-PCH consistency. Jolt exports an AVX2 baseline to its
+    # consumers (Jolt/Jolt.cmake: target_compile_options(Jolt PUBLIC -mavx2 -mbmi
+    # -mpopcnt -mlzcnt -mf16c)), so erhe targets that link Jolt are built with
+    # those target features while erhe_pch (which does not link Jolt) is not.
+    # clang requires a precompiled header and every consuming TU to share an
+    # identical target-feature set, so a single shared PCH forces this baseline
+    # to be global. Apply it to clang-cl only: GNU-frontend clang (Linux/macOS)
+    # already gets the equivalent flags globally via JoltPhysicsCompatibility's
+    # non-MSVC branch. The editor already requires AVX2 at runtime because Jolt
+    # is compiled with it, so this raises no CPU requirement. Keep this set in
+    # sync with Jolt's PUBLIC options.
+    if (CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+        add_compile_options(-mavx2 -mbmi -mpopcnt -mlzcnt -mf16c)
+    endif ()
 endif ()
 
 function (erhe_target_settings_toolchain target)
