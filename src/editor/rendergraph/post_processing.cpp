@@ -603,12 +603,60 @@ Post_processing::Post_processing(erhe::graphics::Device& d, erhe::graphics::Comm
             }
         }
     }
+    , m_overlay_copy_bind_group_layout{
+        d,
+        erhe::graphics::Bind_group_layout_create_info{
+            .bindings = {
+                {
+                    .binding_point   = 0,
+                    .type            = erhe::graphics::Binding_type::combined_image_sampler,
+                    .sampler_aspect  = erhe::graphics::Sampler_aspect::color,
+                    .name            = "s_input",
+                    .glsl_type       = erhe::graphics::Glsl_type::sampler_2d,
+                    .is_texture_heap = false,
+                    .stage_flags     = erhe::graphics::Shader_stage_flags::fragment
+                }
+            },
+            .debug_label       = "Overlay copy",
+            .uses_texture_heap = false
+        }
+    }
+    , m_overlay_copy_shader{
+        d,
+        erhe::graphics::Shader_stages_create_info{
+            .name                = "overlay_copy",
+            .defines             =
+                (d.get_info().coordinate_conventions.framebuffer_origin == erhe::math::Framebuffer_origin::top_left)
+                    ? std::vector<std::pair<std::string, std::string>>{ {"FRAMEBUFFER_TOP_LEFT", "1"} }
+                    : std::vector<std::pair<std::string, std::string>>{},
+            .fragment_outputs    = &m_fragment_outputs,
+            .shaders = {
+                { erhe::graphics::Shader_type::vertex_shader,   m_shader_path / std::filesystem::path{"post_processing.vert"} },
+                { erhe::graphics::Shader_type::fragment_shader, m_shader_path / std::filesystem::path{"overlay_copy.frag"} }
+            },
+            .extra_include_paths = {
+                std::filesystem::path{"res"} / std::filesystem::path{"shaders"},
+                std::filesystem::path{"res"} / std::filesystem::path{"editor"} / std::filesystem::path{"shaders"}
+            },
+            .bind_group_layout   = &m_overlay_copy_bind_group_layout
+        }
+    }
+    , m_overlay_copy_pipeline{
+        d,
+        erhe::graphics::Base_render_pipeline_create_info{
+            .debug_label    = erhe::utility::Debug_label{"Overlay copy"},
+            .input_assembly = erhe::graphics::Input_assembly_state::triangle,
+            .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
+            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled
+        }
+    }
 {
     d.get_shader_monitor().add(m_shader_stages.downsample_with_lowpass_input);
     d.get_shader_monitor().add(m_shader_stages.downsample_with_lowpass      );
     d.get_shader_monitor().add(m_shader_stages.downsample                   );
     d.get_shader_monitor().add(m_shader_stages.upsample                     );
     d.get_shader_monitor().add(m_shader_stages.upsample_last                );
+    d.get_shader_monitor().add(m_overlay_copy_shader                        );
 
     m_texture_heap = std::make_unique<erhe::graphics::Texture_heap>(
         d,
@@ -829,6 +877,34 @@ void Post_processing::post_process(Post_processing_node& node, erhe::graphics::C
     }
 
     m_texture_heap->unbind(command_buffer);
+}
+
+void Post_processing::composite_input(
+    erhe::graphics::Render_command_encoder& encoder,
+    const erhe::graphics::Render_pass&      render_pass,
+    const erhe::graphics::Texture&          input_texture)
+{
+    const erhe::scene_renderer::Vertex_input_entry& empty_vertex_input = m_context.mesh_memory->get_empty_vertex_input();
+
+    erhe::graphics::Render_pipeline* pipeline = m_overlay_copy_pipeline.get_pipeline_for(
+        render_pass.get_descriptor(),
+        nullptr,
+        &m_overlay_copy_shader.shader_stages,
+        empty_vertex_input.vertex_input.get(),
+        &empty_vertex_input.vertex_format
+    );
+    if (pipeline == nullptr) {
+        return;
+    }
+
+    const int w = render_pass.get_render_target_width();
+    const int h = render_pass.get_render_target_height();
+    encoder.set_render_pipeline(*pipeline);
+    encoder.set_bind_group_layout(&m_overlay_copy_bind_group_layout);
+    encoder.set_sampled_image(0, input_texture, m_sampler_linear);
+    encoder.set_viewport_rect(0, 0, w, h);
+    encoder.set_scissor_rect (0, 0, w, h);
+    encoder.draw_primitives(erhe::graphics::Primitive_type::triangle, 0, 3);
 }
 
 }

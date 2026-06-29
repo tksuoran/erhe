@@ -27,6 +27,9 @@ public:
     erhe::dataformat::Format   color_format        {erhe::dataformat::Format::format_undefined};
     erhe::dataformat::Format   depth_stencil_format{erhe::dataformat::Format::format_undefined};
     int                        sample_count        {0};
+    // Forwarded to Render_target: store depth/stencil so a later pass can load
+    // the same attachment (post-processing overlay pass, issue #230).
+    bool                       store_depth_stencil {false};
 };
 
 // Rendergraph node that holds a render target (color/depth textures and render pass).

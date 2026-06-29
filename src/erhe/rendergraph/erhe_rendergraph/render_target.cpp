@@ -15,6 +15,7 @@ Render_target::Render_target(const Render_target_create_info& create_info)
     , m_color_format       {create_info.color_format}
     , m_depth_stencil_format{create_info.depth_stencil_format}
     , m_sample_count       {create_info.sample_count}
+    , m_store_depth_stencil{create_info.store_depth_stencil}
 {
 }
 
@@ -177,11 +178,18 @@ void Render_target::update(int width, int height, erhe::graphics::Swapchain* swa
                 render_pass_descriptor.color_attachments[0].usage_after     = erhe::graphics::Image_usage_flag_bit_mask::sampled;
                 render_pass_descriptor.color_attachments[0].layout_after   = erhe::graphics::Image_layout::shader_read_only_optimal;
             }
+            // When store_depth_stencil is requested, keep the depth/stencil
+            // contents after the pass so a later pass (the editor's
+            // post-processing overlay) can load the same attachment and
+            // depth/stencil-test against this render target. See issue #230.
+            const erhe::graphics::Store_action depth_stencil_store_action = m_store_depth_stencil
+                ? erhe::graphics::Store_action::Store
+                : erhe::graphics::Store_action::Dont_care;
             if (m_depth_stencil_texture) {
                 if (erhe::dataformat::get_depth_size_bits(m_depth_stencil_format) > 0) {
                     render_pass_descriptor.depth_attachment.texture         = m_depth_stencil_texture.get();
                     render_pass_descriptor.depth_attachment.load_action     = erhe::graphics::Load_action::Clear;
-                    render_pass_descriptor.depth_attachment.store_action    = erhe::graphics::Store_action::Dont_care;
+                    render_pass_descriptor.depth_attachment.store_action    = depth_stencil_store_action;
                     render_pass_descriptor.depth_attachment.clear_value[0]  = m_graphics_device.get_reverse_depth() ? 0.0 : 1.0;
                     render_pass_descriptor.depth_attachment.usage_before    = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
                     render_pass_descriptor.depth_attachment.layout_before  = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;
@@ -191,7 +199,7 @@ void Render_target::update(int width, int height, erhe::graphics::Swapchain* swa
                 if (erhe::dataformat::get_stencil_size_bits(m_depth_stencil_format) > 0) {
                     render_pass_descriptor.stencil_attachment.texture      = m_depth_stencil_texture.get();
                     render_pass_descriptor.stencil_attachment.load_action  = erhe::graphics::Load_action::Clear;
-                    render_pass_descriptor.stencil_attachment.store_action = erhe::graphics::Store_action::Dont_care;
+                    render_pass_descriptor.stencil_attachment.store_action = depth_stencil_store_action;
                     render_pass_descriptor.stencil_attachment.usage_before  = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
                     render_pass_descriptor.stencil_attachment.layout_before = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;
                     render_pass_descriptor.stencil_attachment.usage_after   = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;

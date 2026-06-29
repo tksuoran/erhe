@@ -312,6 +312,8 @@ erhe_target_sources_grouped(
     rendergraph/post_processing.hpp
     rendergraph/shadow_render_node.cpp
     rendergraph/shadow_render_node.hpp
+    rendergraph/viewport_overlay_node.cpp
+    rendergraph/viewport_overlay_node.hpp
     mesh_rendertarget_view.cpp
     mesh_rendertarget_view.hpp
     rendertarget_imgui_host.cpp

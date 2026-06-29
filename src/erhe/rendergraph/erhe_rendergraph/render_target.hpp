@@ -24,6 +24,11 @@ public:
     erhe::dataformat::Format   color_format        {erhe::dataformat::Format::format_undefined};
     erhe::dataformat::Format   depth_stencil_format {erhe::dataformat::Format::format_undefined};
     int                        sample_count         {0};
+    // When true the render pass stores (instead of discarding) the depth and
+    // stencil attachments, so a later pass can load the same attachment and
+    // depth-test against this render target's content. Used by the editor's
+    // post-processing overlay pass (issue #230).
+    bool                       store_depth_stencil  {false};
 };
 
 // Manages color texture (possibly multisampled), depth/stencil texture,
@@ -48,6 +53,7 @@ private:
     erhe::dataformat::Format                     m_color_format;
     erhe::dataformat::Format                     m_depth_stencil_format;
     int                                          m_sample_count;
+    bool                                         m_store_depth_stencil{false};
     std::shared_ptr<erhe::graphics::Texture>     m_color_texture;
     std::shared_ptr<erhe::graphics::Texture>     m_multisampled_color_texture;
     std::unique_ptr<erhe::graphics::Texture>     m_depth_stencil_texture;

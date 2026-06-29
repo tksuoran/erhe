@@ -30,6 +30,17 @@ class Composition_pass_data
 {
 public:
     bool                                                                   enabled{true}; // TODO consider using Item visibility flag
+    // Tool / rendertarget overlay meshes must not be scaled by camera exposure
+    // (issue #230). When set, Composition_pass::render forces exposure = 1.0
+    // instead of camera->get_exposure(), so the gizmo handles and the hotbar
+    // rendertarget mesh look identical regardless of the camera exposure.
+    bool                                                                   ignore_exposure{false};
+    // Overlay passes (tool / rendertarget) are rendered AFTER post-processing
+    // when it is enabled (in a separate render pass that loads the content depth
+    // attachment), so bloom / tonemap do not affect them. When post-processing
+    // is disabled they render inline in the content pass. Composer::render uses
+    // this to split the content phase from the overlay phase.
+    bool                                                                   overlay{false};
     // ID-buffer edge-line method: this pass is a lit content polygon-fill pass
     // that should paint edge lines from the face-ID buffer when the method is
     // active (Render_context::edge_id_texture set). Gated so the method is only

@@ -29,7 +29,13 @@ public:
     [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::composer; }
 
     // Public API
-    void render(const Render_context& context);
+    // Renders the composition passes selected by phase:
+    //  - include_content: passes with data.overlay == false (scene content).
+    //  - include_overlay: passes with data.overlay == true (tool gizmo /
+    //    rendertarget meshes). When post-processing is enabled these are drawn
+    //    in a separate pass after it; otherwise both phases run in one pass.
+    // See issue #230.
+    void render(const Render_context& context, bool include_content, bool include_overlay);
 
     void imgui();
 

@@ -268,6 +268,10 @@ Tools::Tools(
     auto tool = app_rendering.make_composition_pass(
         "Tool",
         Composition_pass_data{
+            // Tool (gizmo) meshes ignore camera exposure and render as an overlay
+            // (after post-processing when it is enabled). See issue #230.
+            .ignore_exposure     {true},
+            .overlay             {true},
             .mesh_layers         {Mesh_layer_id::tool},
             .blending_mode_policy{erhe::scene_renderer::Blending_mode_policy::allow_all},
             .primitive_mode      {erhe::primitive::Primitive_mode::polygon_fill},

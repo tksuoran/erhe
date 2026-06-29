@@ -15,7 +15,8 @@ Texture_rendergraph_node::Texture_rendergraph_node(const Texture_rendergraph_nod
             .debug_label          = create_info.debug_label,
             .color_format         = create_info.color_format,
             .depth_stencil_format = create_info.depth_stencil_format,
-            .sample_count         = create_info.sample_count
+            .sample_count         = create_info.sample_count,
+            .store_depth_stencil  = create_info.store_depth_stencil
         }
     }
     , m_output_key{create_info.output_key}

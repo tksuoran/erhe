@@ -11,6 +11,7 @@
 #include "graphics/icon_set.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "rendergraph/post_processing.hpp"
+#include "rendergraph/viewport_overlay_node.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_scene_view.hpp"
 #include "tools/selection_tool.hpp"
@@ -109,6 +110,7 @@ Scene_views::~Scene_views() noexcept
         windows.swap(m_viewport_windows);
     }
     m_post_processing_nodes.clear();
+    m_overlay_nodes.clear();
 }
 
 
@@ -173,6 +175,17 @@ void Scene_views::destroy_viewport_scene_view(
         }
     }
 
+    // Drop the overlay node belonging to this viewport (issue #230) so its
+    // Rendergraph_node dtor unregisters it and disconnects its links.
+    const auto overlay_end = std::remove_if(
+        m_overlay_nodes.begin(),
+        m_overlay_nodes.end(),
+        [&viewport_scene_view](const std::shared_ptr<Viewport_overlay_node>& entry) {
+            return !entry || (entry->get_viewport_scene_view() == viewport_scene_view);
+        }
+    );
+    m_overlay_nodes.erase(overlay_end, m_overlay_nodes.end());
+
     // Erase from m_viewport_scene_views explicitly so the only remaining
     // strong reference is the caller's. When the caller releases it, the
     // Viewport_scene_view dtor's erase(this) call becomes a no-op (the
@@ -224,7 +237,8 @@ auto Scene_views::create_viewport_scene_view(
         nullptr, // no ini for viewport windows for now
         scene_root,
         camera,
-        msaa_sample_count
+        msaa_sample_count,
+        enable_post_processing
     );
 
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
@@ -254,9 +268,20 @@ auto Scene_views::create_viewport_scene_view(
             post_processing,
             erhe::utility::Debug_label{fmt::format("Post processing for {}", name)}
         );
-        out_rendergraph_output_node = post_processing_node;
         m_post_processing_nodes.push_back(post_processing_node);
         rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::viewport_texture, new_viewport.get(), post_processing_node.get());
+
+        // Overlay node draws the tool gizmo / hotbar rendertarget meshes on top
+        // of the post-processed image, depth-testing against the content depth.
+        // It becomes the viewport's output node. See issue #230.
+        auto overlay_node = std::make_shared<Viewport_overlay_node>(
+            rendergraph,
+            new_viewport,
+            erhe::utility::Debug_label{fmt::format("Overlay for {}", name)}
+        );
+        m_overlay_nodes.push_back(overlay_node);
+        rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::viewport_texture, post_processing_node.get(), overlay_node.get());
+        out_rendergraph_output_node = overlay_node;
     } else {
         out_rendergraph_output_node = new_viewport;
     }

@@ -31,6 +31,7 @@ class App_rendering;
 class App_settings;
 class Post_processing;
 class Post_processing_node;
+class Viewport_overlay_node;
 class Scene_root;
 class Scene_views;
 class Tools;
@@ -148,6 +149,10 @@ private:
     std::vector<std::shared_ptr<Viewport_window>>       m_viewport_windows;
     std::vector<std::shared_ptr<Viewport_scene_view>>   m_viewport_scene_views;
     std::vector<std::shared_ptr<Post_processing_node>>  m_post_processing_nodes;
+    // Overlay nodes for post-processing viewports (issue #230). One per viewport
+    // that has post-processing enabled; owns the after-post-processing overlay
+    // rendergraph node.
+    std::vector<std::shared_ptr<Viewport_overlay_node>> m_overlay_nodes;
     std::vector<std::weak_ptr<Viewport_scene_view>>     m_hover_stack;
     std::shared_ptr<Viewport_scene_view>                m_hover_scene_view;
     std::weak_ptr<Viewport_scene_view>                  m_last_scene_view;

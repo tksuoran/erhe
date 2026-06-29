@@ -23,6 +23,7 @@ namespace erhe::graphics {
     class Command_buffer;
     class Render_pass;
     class Renderbuffer;
+    class Texture;
 }
 namespace erhe::imgui {
     class Imgui_host;
@@ -123,7 +124,8 @@ public:
         const char*                                 ini_label,
         const std::shared_ptr<Scene_root>&          scene_root,
         const std::shared_ptr<erhe::scene::Camera>& camera,
-        int                                         msaa_sample_count
+        int                                         msaa_sample_count,
+        bool                                        enable_post_processing
     );
     ~Viewport_scene_view() noexcept override;
 
@@ -140,6 +142,18 @@ public:
     // Implements Rendergraph_node
     auto get_type_name           () const -> std::string_view override { return "Viewport_scene_view"; }
     void execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer) override;
+
+    // Post-processing overlay pass (issue #230). Called by Viewport_overlay_node
+    // AFTER the post-processing node when post-processing is enabled. Draws the
+    // tool gizmo / hotbar rendertarget overlay meshes on top of the
+    // post-processed image (input_texture), depth-testing against this view's
+    // content render target depth/stencil attachment (which is stored for that
+    // purpose). get_overlay_output_texture returns the resulting image.
+    void render_overlay_pass(
+        erhe::graphics::Command_buffer&                 command_buffer,
+        const std::shared_ptr<erhe::graphics::Texture>& input_texture
+    );
+    [[nodiscard]] auto get_overlay_output_texture() const -> std::shared_ptr<erhe::graphics::Texture>;
 
     // Public API
     void set_window_viewport         (erhe::math::Viewport viewport);
@@ -175,6 +189,11 @@ public:
 
 private:
     void update_hover_with_id_render();
+
+    // (Re)builds the overlay render target (color matching the content sample
+    // count + single-sample resolved output) and its render pass, which loads
+    // the content render target's depth/stencil attachment. See issue #230.
+    void update_overlay_render_target(int width, int height);
 
     // Implements Scene_view per-view "Scene and Camera" persistence: adds the
     // camera, shader_debug and renderer_choice that live on this derived view.
@@ -213,6 +232,16 @@ private:
     // content. Persistent (cleared, capacity kept) to avoid per-frame allocation.
     std::vector<std::shared_ptr<erhe::scene::Mesh>> m_seed_meshes;
 
+    // Post-processing overlay pass (issue #230). When post-processing is enabled
+    // the content render pass stores depth/stencil and these resources draw the
+    // tool / rendertarget overlay after post-processing, sharing that depth.
+    bool                                         m_post_processing_enabled{false};
+    std::shared_ptr<erhe::graphics::Texture>     m_overlay_color_texture;    // multisampled when MSAA, else == resolved
+    std::shared_ptr<erhe::graphics::Texture>     m_overlay_resolved_texture; // single-sample output shown by ImGui
+    std::unique_ptr<erhe::graphics::Render_pass> m_overlay_render_pass;
+    const erhe::graphics::Texture*               m_overlay_depth_texture{nullptr};
+    int                                          m_overlay_width {0};
+    int                                          m_overlay_height{0};
 };
 
 }

@@ -115,9 +115,16 @@ public:
     auto destroy_shadow_node(const std::shared_ptr<Shadow_render_node>& shadow_render_node) -> bool;
 
     void trigger_capture            ();
-    void render_viewport_main       (const Render_context& context);
+    // include_overlay=false renders only content passes (the overlay -- tool /
+    // rendertarget meshes -- is then drawn after post-processing by
+    // render_overlay). When post-processing is disabled, pass true to render
+    // content + overlay in the same pass. See issue #230.
+    void render_viewport_main       (const Render_context& context, bool include_overlay);
+    void render_overlay             (const Render_context& context);
     void render_viewport_renderables(const Render_context& context);
-    void render_composer            (const Render_context& context);
+    // Renders the selected composition-pass phases (content and/or overlay).
+    // The VR path renders both in one pass (no post-processing).
+    void render_composer            (const Render_context& context, bool include_content, bool include_overlay);
     void render_id                  (const Render_context& context);
     void process_start_capture      ();
     void process_end_capture        ();
@@ -169,6 +176,9 @@ public:
     std::shared_ptr<Composition_pass> edge_lines_not_selected;
     std::shared_ptr<Composition_pass> edge_lines_selected;
     std::shared_ptr<Composition_pass> translucent_outline;
+    // Overlay pass that draws rendertarget meshes (e.g. the hotbar), ignoring
+    // camera exposure and rendered after post-processing when enabled (#230).
+    std::shared_ptr<Composition_pass> rendertarget;
 
 private:
     void handle_graphics_settings_changed(Graphics_preset_entry* graphics_preset);

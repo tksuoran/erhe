@@ -18,7 +18,7 @@
 #include <string>
 #include <string_view>
 
-namespace erhe::graphics       { class Command_buffer; class Gpu_timer; class Texture; class Texture_heap; }
+namespace erhe::graphics       { class Command_buffer; class Gpu_timer; class Render_command_encoder; class Render_pass; class Texture; class Texture_heap; }
 namespace erhe::scene_renderer { class Program_interface; }
 
 namespace editor {
@@ -136,6 +136,16 @@ public:
     [[nodiscard]] auto get_nodes() -> const std::vector<std::shared_ptr<Post_processing_node>>&;
     void post_process(Post_processing_node& node, erhe::graphics::Command_buffer& command_buffer);
 
+    // Fullscreen 1:1 copy of input_texture into the currently-bound render pass.
+    // Used by the post-processing overlay pass to seed its (multisampled) color
+    // buffer with the post-processed image before tool / rendertarget overlay
+    // meshes are drawn on top. See issue #230.
+    void composite_input(
+        erhe::graphics::Render_command_encoder& encoder,
+        const erhe::graphics::Render_pass&      render_pass,
+        const erhe::graphics::Texture&          input_texture
+    );
+
     auto get_offsets                      () const -> const Offsets&                         { return m_offsets; }
     auto get_parameter_block              () const -> const erhe::graphics::Shader_resource& { return m_parameter_block; }
     auto get_sampler_linear               () const -> const erhe::graphics::Sampler&         { return m_sampler_linear; }
@@ -195,6 +205,13 @@ private:
     std::filesystem::path                              m_shader_path;
     Shader_stages                                      m_shader_stages;
     Pipelines                                          m_pipelines;
+
+    // Overlay composite (issue #230): a minimal fullscreen 1:1 texture copy
+    // (its own one-sampler bind group layout + shader + pipeline) used to seed
+    // the overlay color buffer with the post-processed image.
+    erhe::graphics::Bind_group_layout                  m_overlay_copy_bind_group_layout;
+    erhe::graphics::Reloadable_shader_stages           m_overlay_copy_shader;
+    erhe::graphics::Base_render_pipeline               m_overlay_copy_pipeline;
     // TODO Re-add per-pass GPU timers; downsample/upsample render passes
     // are stored on Bloom_node and could each carry their own Gpu_timer.
 };

@@ -126,9 +126,13 @@ App_rendering::App_rendering(
     // composition passes: bucket_primitives partitions buckets by the
     // negative-determinant flag and Forward_renderer selects the
     // front-face-flipped pipeline variant per bucket.
+    // Rendertarget meshes (e.g. the hotbar) are no longer drawn by the content
+    // fill passes: they are rendered by a dedicated overlay "Rendertarget" pass
+    // (below) that ignores camera exposure and, when post-processing is enabled,
+    // runs after it. See issue #230.
     const Item_filter filter_not_selected{
         .require_all_bits_set         = Item_flags::visible,
-        .require_at_least_one_bit_set = Item_flags::content  | Item_flags::controller | Item_flags::rendertarget,
+        .require_at_least_one_bit_set = Item_flags::content  | Item_flags::controller,
         .require_all_bits_clear       = Item_flags::selected | Item_flags::hovered_in_item_tree
     };
     const Item_filter filter_selected{
@@ -173,7 +177,7 @@ App_rendering::App_rendering(
         "Content fill opaque not selected",
         Composition_pass_data{
             .edge_lines_from_id_capable{true},
-            .mesh_layers          {Mesh_layer_id::content, Mesh_layer_id::controller, Mesh_layer_id::rendertarget},
+            .mesh_layers          {Mesh_layer_id::content, Mesh_layer_id::controller},
             .blending_mode_policy {Blending_mode_policy::opaque_primitives_only},
             .primitive_mode       {Primitive_mode::polygon_fill},
             .filter               {filter_not_selected},
@@ -528,6 +532,28 @@ App_rendering::App_rendering(
             &m_pipeline_passes.brush_back,
             &m_pipeline_passes.brush_front
         }
+    );
+
+    // Rendertarget meshes (the hotbar quad and any other rendertarget-mesh UI)
+    // render in their own pass that ignores camera exposure and is marked as an
+    // overlay so that, when post-processing is enabled, it runs after it (issue
+    // #230). The hotbar material is unlit + alpha-blended, so allow_all selects
+    // the translucent (alpha-blended) bucket here.
+    rendertarget = make_composition_pass(
+        "Rendertarget",
+        Composition_pass_data{
+            .ignore_exposure     {true},
+            .overlay             {true},
+            .mesh_layers         {Mesh_layer_id::rendertarget},
+            .blending_mode_policy{Blending_mode_policy::allow_all},
+            .primitive_mode      {erhe::primitive::Primitive_mode::polygon_fill},
+            .filter{
+                .require_all_bits_set         = Item_flags::visible | Item_flags::rendertarget,
+                .require_at_least_one_bit_set = 0,
+                .require_all_bits_clear       = 0
+            }
+        },
+        not_selected
     );
 
     m_graphics_settings_subscription = app_message_bus.graphics_settings.subscribe(
@@ -1221,13 +1247,22 @@ void App_rendering::remove(Renderable* renderable)
     m_renderables.erase(i);
 }
 
-void App_rendering::render_viewport_main(const Render_context& context)
+void App_rendering::render_viewport_main(const Render_context& context, const bool include_overlay)
 {
     ERHE_PROFILE_FUNCTION();
 
     // log_frame->trace("App_rendering::render_viewport_main()");
 
-    render_composer(context);
+    render_composer(context, true, include_overlay);
+}
+
+void App_rendering::render_overlay(const Render_context& context)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    // log_frame->trace("App_rendering::render_overlay()");
+
+    render_composer(context, false, true);
 }
 
 void App_rendering::render_viewport_renderables(const Render_context& context)
@@ -1247,17 +1282,20 @@ void App_rendering::render_viewport_renderables(const Render_context& context)
     context.scene_view.render_debug_visualizations(context);
 }
 
-void App_rendering::render_composer(const Render_context& context)
+void App_rendering::render_composer(const Render_context& context, const bool include_content, const bool include_overlay)
 {
     // log_frame->trace("App_rendering::render_composer()");
 
     ERHE_VERIFY(context.command_buffer != nullptr);
+    const char* const zone_label = include_content ? "Main" : "Overlay";
     erhe::graphics::Scoped_debug_group pass_scope{*context.command_buffer, "Composer"};
-    erhe::graphics::Scoped_gpu_zone   gpu_zone  {*context.command_buffer, "Main"};
+    erhe::graphics::Scoped_gpu_zone   gpu_zone  {*context.command_buffer, zone_label};
 
-    update_sky_parameters();
+    if (include_content) {
+        update_sky_parameters();
+    }
 
-    m_composer.render(context);
+    m_composer.render(context, include_content, include_overlay);
 
     ///// TODO Check m_context.graphics_device->opengl_state_tracker.depth_stencil.reset(); // workaround issue in stencil state tracking
 }

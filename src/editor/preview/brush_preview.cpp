@@ -267,7 +267,9 @@ void Brush_preview::render_preview(
             .viewport            = viewport,
             .views               = std::span<const erhe::scene_renderer::Camera_view_input>(&single_view_input, 1)
         };
-        m_composer.render(context);
+        // No post-processing for the preview: render content + overlay phases in
+        // one pass (issue #230). The preview composer has no overlay passes.
+        m_composer.render(context, true, true);
     }
 
     {

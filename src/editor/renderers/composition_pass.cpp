@@ -131,6 +131,11 @@ void Composition_pass::render(const Render_context& context)
     //    renderpass.pipeline.data.shader_stages = context.override_shader_stages;
     //}
 
+    // Tool / rendertarget overlay passes ignore camera exposure (issue #230).
+    const float exposure = (!data.ignore_exposure && (context.camera != nullptr))
+        ? context.camera->get_exposure()
+        : 1.0f;
+
     if (data.mesh_layers.empty()) {
         // log_composer->debug("render_fullscreen");
         context.app_context.forward_renderer->draw_primitives(
@@ -140,7 +145,7 @@ void Composition_pass::render(const Render_context& context)
                     .render_pass       = context.render_pass,
                     .viewport          = context.viewport,
                     .views             = context.views,
-                    .exposure          = (context.camera != nullptr) ? context.camera->get_exposure() : 1.0f,
+                    .exposure          = exposure,
                     .light_projections = nullptr,
                     .lights            = {},
                     .skins             = {},
@@ -253,7 +258,7 @@ void Composition_pass::render(const Render_context& context)
                         .render_pass       = context.render_pass,
                         .viewport          = context.viewport,
                         .views             = context.views,
-                        .exposure          = (context.camera != nullptr) ? context.camera->get_exposure() : 1.0f,
+                        .exposure          = exposure,
                         .ambient_light     = layers.light()->ambient_light,
                         .light_projections = context.scene_view.get_light_projections(),
                         .lights            = layers.light()->lights,

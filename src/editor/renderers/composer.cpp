@@ -43,12 +43,16 @@ Composer::Composer(const std::string_view name)
 {
 }
 
-void Composer::render(const Render_context& context)
+void Composer::render(const Render_context& context, const bool include_content, const bool include_overlay)
 {
     //log_composer->trace("Composer::render()");
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{mutex};
 
     for (const auto& composition_pass : composition_passes) {
+        const bool is_overlay = composition_pass->data.overlay;
+        if (is_overlay ? !include_overlay : !include_content) {
+            continue;
+        }
         // log_composer->trace("  rp: {}", composition_pass->describe());
         composition_pass->render(context);
     }

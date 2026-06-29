@@ -1061,7 +1061,10 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                     .shader_debug        = static_cast<erhe::scene_renderer::Shader_debug>(m_selected_shader_debug),
                     .views               = std::span<const erhe::scene_renderer::Camera_view_input>{view_inputs}
                 };
-                m_app_context.app_rendering->render_composer(render_context);
+                // No post-processing in VR: render content + overlay (tool /
+                // rendertarget) in one pass. Tool / rendertarget passes still
+                // ignore camera exposure (issue #230).
+                m_app_context.app_rendering->render_composer(render_context, true, true);
 
                 // Debug_renderer multiview render. Inside the multiview
                 // render pass so gl_ViewIndex resolves to the right
@@ -1234,7 +1237,7 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
 
                 // When in mirror mode, speed up rendering by only rendering first view
                 if (!m_context.OpenXR_mirror || first_view) {
-                    m_context.app_rendering ->render_composer(render_context);
+                    m_context.app_rendering ->render_composer(render_context, true, true);
                     m_context.debug_renderer->render(encoder, *render_pass, render_context.viewport);
                 }
             } // end of render encoder scope - end of render pass

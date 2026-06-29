@@ -18,6 +18,7 @@
 #include "renderers/render_style.hpp"
 #include "renderers/render_context.hpp"
 #include "renderers/sky_renderer.hpp"
+#include "rendergraph/post_processing.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_scene_views.hpp"
@@ -139,7 +140,8 @@ Viewport_scene_view::Viewport_scene_view(
     const char*                                 ini_label,
     const std::shared_ptr<Scene_root>&          scene_root,
     const std::shared_ptr<erhe::scene::Camera>& camera,
-    int                                         msaa_sample_count
+    int                                         msaa_sample_count,
+    bool                                        enable_post_processing
 )
     : Scene_view              {context, editor_settings_store, name, make_viewport_config(viewport_config_data)}
     , Texture_rendergraph_node{
@@ -149,13 +151,18 @@ Viewport_scene_view::Viewport_scene_view(
             .output_key           = erhe::rendergraph::Rendergraph_node_key::viewport_texture,
             .color_format         = erhe::dataformat::Format::format_16_vec4_float,
             .depth_stencil_format = erhe::dataformat::Format::format_d32_sfloat_s8_uint,
-            .sample_count         = msaa_sample_count
+            .sample_count         = msaa_sample_count,
+            // Store depth/stencil so the post-processing overlay pass can load
+            // the same attachment and depth-test the tool / rendertarget meshes
+            // against the content (issue #230).
+            .store_depth_stencil  = enable_post_processing
         }
     }
     , m_name           {name}
     , m_ini_label      {ini_label}
     , m_tool_scene_root{tools.get_tool_scene_root()}
     , m_camera         {camera}
+    , m_post_processing_enabled{enable_post_processing}
 {
     set_scene_root(scene_root);
 
@@ -585,7 +592,11 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
         }
     );
 
-    m_context.app_rendering ->render_viewport_main(context);
+    // When post-processing is enabled the overlay (tool / rendertarget) meshes
+    // are drawn later by Viewport_overlay_node, after post-processing, sharing
+    // this pass's stored depth. Otherwise they render inline in this same pass.
+    // See issue #230.
+    m_context.app_rendering ->render_viewport_main(context, !m_post_processing_enabled);
     m_context.app_rendering ->render_viewport_renderables(context); // This time with render encoder set
     m_context.debug_renderer->render(encoder, *m_render_target.get_render_pass(), context.viewport);
     m_context.debug_renderer->end_frame();
@@ -593,6 +604,186 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
         m_context.content_wide_line_renderer->end_frame();
     }
     m_context.text_renderer ->render(encoder, *m_render_target.get_render_pass(), context.viewport);
+}
+
+void Viewport_scene_view::update_overlay_render_target(const int width, const int height)
+{
+    erhe::graphics::Texture* depth_texture = m_render_target.get_depth_stencil_texture();
+    if ((depth_texture == nullptr) || (width < 1) || (height < 1)) {
+        m_overlay_render_pass.reset();
+        m_overlay_color_texture.reset();
+        m_overlay_resolved_texture.reset();
+        m_overlay_depth_texture = nullptr;
+        m_overlay_width  = 0;
+        m_overlay_height = 0;
+        return;
+    }
+
+    // Up to date? The content depth texture pointer changes on resize, so it is
+    // part of the key.
+    if (m_overlay_render_pass &&
+        (m_overlay_width  == width ) &&
+        (m_overlay_height == height) &&
+        (m_overlay_depth_texture == depth_texture)) {
+        return;
+    }
+
+    erhe::graphics::Device& graphics_device = m_rendergraph.get_graphics_device();
+    const int  sample_count = depth_texture->get_sample_count();
+    const bool is_msaa      = sample_count > 1;
+    const erhe::dataformat::Format color_format = erhe::dataformat::Format::format_16_vec4_float;
+    const uint64_t color_usage =
+        erhe::graphics::Image_usage_flag_bit_mask::color_attachment |
+        erhe::graphics::Image_usage_flag_bit_mask::sampled          |
+        erhe::graphics::Image_usage_flag_bit_mask::transfer_src     |
+        erhe::graphics::Image_usage_flag_bit_mask::transfer_dst;
+
+    m_overlay_render_pass.reset();
+    m_overlay_color_texture.reset();
+    m_overlay_resolved_texture.reset();
+
+    // Multisampled color attachment (only when MSAA); the post-processed image is
+    // composited into it and the overlay meshes drawn on top, then resolved into
+    // m_overlay_resolved_texture. Without MSAA we render straight into the
+    // single-sample resolved texture.
+    if (is_msaa) {
+        m_overlay_color_texture = std::make_shared<Texture>(
+            graphics_device,
+            erhe::graphics::Texture_create_info{
+                .device       = graphics_device,
+                .usage_mask   = color_usage,
+                .type         = erhe::graphics::Texture_type::texture_2d,
+                .pixelformat  = color_format,
+                .sample_count = sample_count,
+                .width        = width,
+                .height       = height,
+                .debug_label  = erhe::utility::Debug_label{"Viewport overlay multisampled color"}
+            }
+        );
+    }
+    m_overlay_resolved_texture = std::make_shared<Texture>(
+        graphics_device,
+        erhe::graphics::Texture_create_info{
+            .device       = graphics_device,
+            .usage_mask   = color_usage,
+            .type         = erhe::graphics::Texture_type::texture_2d,
+            .pixelformat  = color_format,
+            .sample_count = 0,
+            .width        = width,
+            .height       = height,
+            .debug_label  = erhe::utility::Debug_label{"Viewport overlay color"}
+        }
+    );
+
+    erhe::graphics::Render_pass_descriptor render_pass_descriptor{};
+    if (is_msaa) {
+        render_pass_descriptor.color_attachments[0].texture         = m_overlay_color_texture.get();
+        render_pass_descriptor.color_attachments[0].resolve_texture = m_overlay_resolved_texture.get();
+        render_pass_descriptor.color_attachments[0].load_action     = erhe::graphics::Load_action::Dont_care;
+        render_pass_descriptor.color_attachments[0].store_action    = erhe::graphics::Store_action::Multisample_resolve;
+        render_pass_descriptor.color_attachments[0].usage_before    = erhe::graphics::Image_usage_flag_bit_mask::color_attachment;
+        render_pass_descriptor.color_attachments[0].layout_before   = erhe::graphics::Image_layout::color_attachment_optimal;
+        render_pass_descriptor.color_attachments[0].usage_after     = erhe::graphics::Image_usage_flag_bit_mask::sampled;
+        render_pass_descriptor.color_attachments[0].layout_after    = erhe::graphics::Image_layout::shader_read_only_optimal;
+    } else {
+        render_pass_descriptor.color_attachments[0].texture         = m_overlay_resolved_texture.get();
+        render_pass_descriptor.color_attachments[0].load_action     = erhe::graphics::Load_action::Dont_care;
+        render_pass_descriptor.color_attachments[0].store_action    = erhe::graphics::Store_action::Store;
+        render_pass_descriptor.color_attachments[0].usage_before    = erhe::graphics::Image_usage_flag_bit_mask::sampled;
+        render_pass_descriptor.color_attachments[0].layout_before   = erhe::graphics::Image_layout::shader_read_only_optimal;
+        render_pass_descriptor.color_attachments[0].usage_after     = erhe::graphics::Image_usage_flag_bit_mask::sampled;
+        render_pass_descriptor.color_attachments[0].layout_after    = erhe::graphics::Image_layout::shader_read_only_optimal;
+    }
+
+    // Depth + stencil: load (and keep) the content render target's stored
+    // depth/stencil so the overlay meshes depth/stencil-test against content.
+    render_pass_descriptor.depth_attachment.texture        = depth_texture;
+    render_pass_descriptor.depth_attachment.load_action    = erhe::graphics::Load_action::Load;
+    render_pass_descriptor.depth_attachment.store_action   = erhe::graphics::Store_action::Dont_care;
+    render_pass_descriptor.depth_attachment.usage_before   = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
+    render_pass_descriptor.depth_attachment.layout_before  = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;
+    render_pass_descriptor.depth_attachment.usage_after    = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
+    render_pass_descriptor.depth_attachment.layout_after   = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;
+    render_pass_descriptor.stencil_attachment.texture      = depth_texture;
+    render_pass_descriptor.stencil_attachment.load_action  = erhe::graphics::Load_action::Load;
+    render_pass_descriptor.stencil_attachment.store_action = erhe::graphics::Store_action::Dont_care;
+    render_pass_descriptor.stencil_attachment.usage_before  = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
+    render_pass_descriptor.stencil_attachment.layout_before = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;
+    render_pass_descriptor.stencil_attachment.usage_after   = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
+    render_pass_descriptor.stencil_attachment.layout_after  = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;
+
+    render_pass_descriptor.render_target_width  = width;
+    render_pass_descriptor.render_target_height = height;
+    render_pass_descriptor.debug_label          = erhe::utility::Debug_label{"Viewport overlay renderpass"};
+
+    m_overlay_render_pass   = std::make_unique<Render_pass>(graphics_device, render_pass_descriptor);
+    m_overlay_depth_texture = depth_texture;
+    m_overlay_width         = width;
+    m_overlay_height        = height;
+}
+
+void Viewport_scene_view::render_overlay_pass(
+    erhe::graphics::Command_buffer&                 command_buffer,
+    const std::shared_ptr<erhe::graphics::Texture>& input_texture)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if ((m_projection_viewport.width < 1) || (m_projection_viewport.height < 1)) {
+        return;
+    }
+    if (!input_texture || (m_context.post_processing == nullptr) || (m_context.app_rendering == nullptr)) {
+        return;
+    }
+    std::shared_ptr<erhe::scene::Camera> camera = m_camera.lock();
+    if (!camera) {
+        return;
+    }
+    const std::shared_ptr<Scene_root>& scene_root = get_scene_root();
+    if (!scene_root) {
+        return;
+    }
+
+    update_overlay_render_target(m_projection_viewport.width, m_projection_viewport.height);
+    if (!m_overlay_render_pass) {
+        return;
+    }
+
+    erhe::graphics::Device&                 graphics_device = m_rendergraph.get_graphics_device();
+    erhe::graphics::Render_command_encoder  encoder         = graphics_device.make_render_command_encoder(command_buffer);
+    erhe::graphics::Scoped_render_pass      scoped_render_pass{*m_overlay_render_pass, command_buffer};
+    erhe::graphics::Scoped_debug_group      debug_group{command_buffer, "Viewport overlay"};
+
+    // Seed the overlay color with the already post-processed image, then draw
+    // the tool gizmo / hotbar rendertarget overlay meshes on top of it. The
+    // overlay shares the content depth/stencil so depth/stencil tests are
+    // correct; exposure is ignored by the overlay composition passes (#230).
+    m_context.post_processing->composite_input(encoder, *m_overlay_render_pass, *input_texture);
+
+    erhe::scene_renderer::Camera_view_input single_view_input{
+        .projection = camera->projection(),
+        .node       = camera->get_node(),
+        .viewport   = m_projection_viewport
+    };
+    Render_context context{
+        .command_buffer      = &command_buffer,
+        .encoder             = &encoder,
+        .render_pass         = m_overlay_render_pass.get(),
+        .app_context         = m_context,
+        .scene_view          = *this,
+        .viewport_config     = m_viewport_config,
+        .camera              = camera.get(),
+        .viewport_scene_view = this,
+        .viewport            = m_projection_viewport,
+        .shader_debug        = m_shader_debug,
+        .views               = std::span<const erhe::scene_renderer::Camera_view_input>(&single_view_input, 1)
+    };
+
+    m_context.app_rendering->render_overlay(context);
+}
+
+auto Viewport_scene_view::get_overlay_output_texture() const -> std::shared_ptr<erhe::graphics::Texture>
+{
+    return m_overlay_resolved_texture;
 }
 
 void Viewport_scene_view::set_window_viewport(erhe::math::Viewport viewport)
