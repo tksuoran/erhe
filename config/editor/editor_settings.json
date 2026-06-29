@@ -115,9 +115,11 @@
     "gizmo_scale": 4.5,
     "clear_color": [0,0,0,0.4],
     "content_edge_lines": {
+        "_version": 2,
         "use_tent": false,
         "line_bias_margin": 1024,
-        "line_bias_clamp": 2048
+        "line_bias_clamp": 2048,
+        "use_id_buffer": false
     },
     "scene_views": [
         {
@@ -516,7 +518,9 @@
         "z": -0.03
     },
     "id_renderer": {
-        "enabled": false
+        "_version": 2,
+        "enabled": false,
+        "box_select_use_compute": true
     },
     "inventory": {
         "column_count": 9,
