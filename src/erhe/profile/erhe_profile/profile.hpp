@@ -19,6 +19,14 @@
 #       define glGetQueryObjectiv    gl::glGetQueryObjectiv
 #       define glGetQueryObjectui64v gl::glGetQueryObjectui64v
 #       define glQueryCounter        gl::glQueryCounter
+        // Tracy >= (master past 0.13.1) probes the GL context/extensions in
+        // TracyOpenGL.hpp, adding these entry points on top of the timestamp
+        // queries above. erhe uses a dynamic gl:: loader rather than raw gl*
+        // prototypes, so alias them too.
+#       define glGetError            gl::glGetError
+#       define glGetIntegerv         gl::glGetIntegerv
+#       define glGetString           gl::glGetString
+#       define glGetStringi          gl::glGetStringi
 #   endif
 #   include <tracy/Tracy.hpp>
 
@@ -36,6 +44,10 @@
 #       undef glGetQueryObjectiv
 #       undef glGetQueryObjectui64v
 #       undef glQueryCounter
+#       undef glGetError
+#       undef glGetIntegerv
+#       undef glGetString
+#       undef glGetStringi
 #   endif
 #
 
