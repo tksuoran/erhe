@@ -758,9 +758,42 @@ void Mcp_server::start()
 
     refresh_tool_list();
 
-    m_http_server = std::make_unique<httplib::Server>();
-    m_http_server->set_payload_max_length(k_max_payload_bytes);
-    setup_routes();
+    // Bind the preferred port, falling back through up to k_port_retry_count-1
+    // successors (e.g. 8080..8099) when it is already in use. This matters on
+    // Quest, where another service may already hold 8080; without the fallback
+    // the editor came up with no reachable MCP endpoint. Each FAILED
+    // httplib::Server::bind_to_port() permanently decommissions that Server
+    // instance (it sets is_decommissioned, after which every later bind on the
+    // same object returns -1 regardless of port), so each attempt must use a
+    // FRESH Server. Binding is non-blocking, so it runs here on the caller
+    // thread; only the blocking accept loop (listen_after_bind) runs on
+    // m_server_thread.
+    constexpr int k_port_retry_count = 20;
+    const int     preferred_port     = m_port;
+    int           bound_port         = -1;
+    for (int candidate = preferred_port; candidate < (preferred_port + k_port_retry_count); ++candidate) {
+        m_http_server = std::make_unique<httplib::Server>();
+        m_http_server->set_payload_max_length(k_max_payload_bytes);
+        setup_routes();
+        if (m_http_server->bind_to_port("127.0.0.1", candidate)) {
+            bound_port = candidate;
+            break;
+        }
+        m_http_server.reset(); // decommissioned by the failed bind; retry with a fresh Server
+    }
+
+    if (bound_port < 0) {
+        log_mcp->error(
+            "MCP server: failed to bind any port in [{}, {}) - all in use?",
+            preferred_port, preferred_port + k_port_retry_count
+        );
+        return;
+    }
+
+    m_port = bound_port;
+    if (bound_port != preferred_port) {
+        log_mcp->warn("MCP server: port {} unavailable; bound to {} instead", preferred_port, bound_port);
+    }
 
     m_running.store(true);
     m_server_thread = std::thread{&Mcp_server::server_thread_main, this};
@@ -799,11 +832,13 @@ auto Mcp_server::is_running() const -> bool
 
 void Mcp_server::server_thread_main()
 {
+    // m_http_server is already bound to m_port by start(); enter the blocking
+    // accept loop. stop() unblocks this via m_http_server->stop().
     log_mcp->info("MCP server: listening on 127.0.0.1:{}", m_port);
 
-    if (!m_http_server->listen("127.0.0.1", m_port)) {
+    if (!m_http_server->listen_after_bind()) {
         if (m_running.load()) {
-            log_mcp->error("MCP server: failed to listen on port {}", m_port);
+            log_mcp->error("MCP server: listen_after_bind() failed on port {}", m_port);
         }
     }
 
