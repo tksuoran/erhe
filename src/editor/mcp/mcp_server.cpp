@@ -1025,6 +1025,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "create_node")        result = action_create_node    (req->arguments);
         else if (req->tool_name == "create_light")       result = action_create_light   (req->arguments);
         else if (req->tool_name == "edit_light")         result = action_edit_light     (req->arguments);
+        else if (req->tool_name == "edit_camera")        result = action_edit_camera    (req->arguments);
         else if (req->tool_name == "toggle_physics")     result = action_toggle_physics (req->arguments);
         else if (req->tool_name == "reparent_node")      result = action_reparent_node  (req->arguments);
         else if (req->tool_name == "lock_items")         result = action_lock_items     (req->arguments);
@@ -1213,6 +1214,17 @@ void Mcp_server::refresh_tool_list()
             {"cast_shadow",      {{"type", "boolean"}, {"description", "Whether the light casts shadows"}}},
             {"inner_spot_angle", {{"type", "number"}, {"description", "Spot inner cone angle in radians"}}},
             {"outer_spot_angle", {{"type", "number"}, {"description", "Spot outer cone angle in radians"}}}
+        }},
+        {"required", json::array({"scene_name"})}
+    }});
+    m_tool_infos.push_back({"edit_camera",         "Edit an existing camera in place (by camera_id or camera_name). 'exposure' scales scene content brightness in the standard shader; overlay meshes (transform gizmo, hotbar) deliberately ignore it. Only the provided fields change.", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name",   {{"type", "string"},  {"description", "Name of the scene"}}},
+            {"camera_id",    {{"type", "integer"}, {"description", "ID of the camera to edit (from get_scene_cameras)"}}},
+            {"camera_name",  {{"type", "string"},  {"description", "Name of the camera to edit (alternative to camera_id)"}}},
+            {"exposure",     {{"type", "number"},  {"description", "New exposure value (1.0 = neutral)"}}},
+            {"shadow_range", {{"type", "number"},  {"description", "New shadow range / far distance"}}}
         }},
         {"required", json::array({"scene_name"})}
     }});
@@ -3059,6 +3071,51 @@ auto Mcp_server::action_edit_light(const json& args) -> std::string
         {"light_id",   light->get_id()},
         {"light_name", light->get_name()},
         {"changed",    changed}
+    }).dump();
+}
+
+auto Mcp_server::action_edit_camera(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    const std::size_t camera_id   = args.contains("camera_id") ? args.value("camera_id", std::size_t{0}) : args.value("id", std::size_t{0});
+    const std::string camera_name = args.contains("camera_name") ? args.value("camera_name", "") : args.value("name", "");
+    std::shared_ptr<erhe::scene::Camera> camera{};
+    for (const std::shared_ptr<erhe::scene::Camera>& candidate : sr->get_scene().get_cameras()) {
+        if ((camera_id != 0) ? (candidate->get_id() == camera_id) : (!camera_name.empty() && (candidate->get_name() == camera_name))) {
+            camera = candidate;
+            break;
+        }
+    }
+    if (!camera) {
+        json r = make_text_content("Camera not found (specify camera_id or camera_name)");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    json changed = json::object();
+    {
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{sr->item_host_mutex};
+        if (args.contains("exposure")) {
+            camera->set_exposure(args.value("exposure", camera->get_exposure()));
+            changed["exposure"] = camera->get_exposure();
+        }
+        if (args.contains("shadow_range")) {
+            camera->set_shadow_range(args.value("shadow_range", camera->get_shadow_range()));
+            changed["shadow_range"] = camera->get_shadow_range();
+        }
+    }
+
+    return make_json_content({
+        {"camera_id",   camera->get_id()},
+        {"camera_name", camera->get_name()},
+        {"changed",     changed}
     }).dump();
 }
 

@@ -110,6 +110,7 @@ private:
     auto action_create_node     (const nlohmann::json& args) -> std::string;
     auto action_create_light    (const nlohmann::json& args) -> std::string;
     auto action_edit_light      (const nlohmann::json& args) -> std::string;
+    auto action_edit_camera     (const nlohmann::json& args) -> std::string;
     auto action_toggle_physics  (const nlohmann::json& args) -> std::string;
     auto action_reparent_node   (const nlohmann::json& args) -> std::string;
     auto action_lock_items      (const nlohmann::json& args) -> std::string;
