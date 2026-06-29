@@ -191,8 +191,16 @@ Chamfer3_operation::Chamfer3_operation(Mesh_operation_parameters&& context, floa
 {
     set_description("Chamfer3");
     make_entries(
-        [bevel_ratio](const erhe::geometry::Geometry& source, erhe::geometry::Geometry& destination) {
-            erhe::geometry::operation::chamfer3(source, destination, bevel_ratio);
+        [bevel_ratio](
+            const erhe::geometry::Geometry& before_geometry,
+            erhe::geometry::Geometry&       after_geometry,
+            erhe::scene::Node*              /*node*/,
+            const std::set<GEO::index_t>*   selected_facets,
+            const erhe::geometry::operation::Geometry_component_selection* remap_source,
+            erhe::geometry::operation::Geometry_component_selection*       remap_destination
+        ) -> void {
+            erhe::geometry::operation::Component_remap remap{remap_source, remap_destination};
+            erhe::geometry::operation::chamfer3(before_geometry, after_geometry, bevel_ratio, selected_facets, &remap);
         }
     );
     set_description(fmt::format("Chamfer3 {}", describe_entries()));

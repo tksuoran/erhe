@@ -1065,6 +1065,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "remesh")                       result = action_remesh(req->arguments);
         else if (req->tool_name == "decimate")                     result = action_decimate(req->arguments);
         else if (req->tool_name == "smooth")                       result = action_smooth(req->arguments);
+        else if (req->tool_name == "chamfer")                      result = action_chamfer3(req->arguments);
         else if (req->tool_name == "generate_texture_coordinates") result = action_generate_texture_coordinates(req->arguments);
         else if (req->tool_name == "set_transform_reference_mode") result = action_set_transform_reference_mode(req->arguments);
         else if (req->tool_name == "set_transform_mode")           result = action_set_transform_mode          (req->arguments);
@@ -1621,6 +1622,12 @@ void Mcp_server::refresh_tool_list()
             {"iterations",            {{"type", "integer"}, {"description", "Smoothing iterations (default 5)"}}},
             {"strength",              {{"type", "number"},  {"description", "Smoothing strength [0,1] (default 0.5)"}}},
             {"regenerate_attributes", {{"type", "boolean"}, {"description", "Regenerate smooth normals and texture coordinates (default true)"}}}
+        }}
+    }});
+    m_tool_infos.push_back({"chamfer", "Conway chamfer of the selected mesh node(s) (queued): shrink each facet toward its centroid by bevel_ratio and replace every edge with a hexagonal face. When a FACE-mode mesh-component selection is active, only the selected facets are chamfered and the result stays welded watertight to the rest of the mesh (selected facets inset, interior shared edges become hexagons, boundary edges become bevel quads); otherwise the whole mesh is chamfered. Acts on the current object or face-component selection.", {
+        {"type", "object"},
+        {"properties", {
+            {"bevel_ratio", {{"type", "number"}, {"description", "How much each face shrinks toward its centroid, [0,1] (default 0.25)"}}}
         }}
     }});
     m_tool_infos.push_back({"generate_texture_coordinates", "Generate texture coordinates for the selected mesh node(s) via Geogram mesh_make_atlas (queued). Writes UVs into the given corner texcoord channel. Acts on the current object selection.", {
@@ -5106,6 +5113,16 @@ auto Mcp_server::action_smooth(const json& args) -> std::string
     const bool         regen      = args.value("regenerate_attributes", true);
     m_context.operations->smooth(iterations, strength, regen);
     return make_json_content({{"queued", true}, {"iterations", iterations}, {"strength", strength}, {"regenerate_attributes", regen}}).dump();
+}
+
+auto Mcp_server::action_chamfer3(const json& args) -> std::string
+{
+    if (m_context.operations == nullptr) {
+        return make_error_content("Operations not available");
+    }
+    const float bevel_ratio = args.value("bevel_ratio", 0.25f);
+    m_context.operations->chamfer3(bevel_ratio);
+    return make_json_content({{"queued", true}, {"bevel_ratio", bevel_ratio}}).dump();
 }
 
 auto Mcp_server::action_generate_texture_coordinates(const json& args) -> std::string

@@ -1078,8 +1078,8 @@ void Operations::imgui()
     // While a mesh-component selection is active, only selection-aware geometry
     // operations are available. has_selection_mode (used by every generic geometry
     // button) is therefore disabled in component mode. Selection-aware operations
-    // (Catmull-Clark, Sqrt3, Join, Kis, Meta, Ortho, Gyro, Truncate - those passing
-    // selection_aware=true to their async runner) use selection_aware_mode instead
+    // (Catmull-Clark, Sqrt3, Join, Kis, Meta, Ortho, Gyro, Truncate, Chamfer - those
+    // passing selection_aware=true to their async runner) use selection_aware_mode instead
     // and stay enabled, operating on just the selected facets.
     const bool component_active     = is_component_selection_active();
     const auto has_selection_mode   = ((selected_mesh_count >= 1) && !component_active) ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
@@ -1186,7 +1186,7 @@ void Operations::imgui()
     ImGui::SliderFloat("##", &m_bevel_ratio, 0.0f, 1.0f, "%.2f");
     if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Chamfer: Bevel ratio (how much each face shrinks)"); }
     ImGui::PopID();
-    if (make_button("Chamfer", has_selection_mode, button_size)) {
+    if (make_button("Chamfer", selection_aware_mode, button_size)) {
         chamfer3();
     }
     ImGui::PopID();
@@ -2117,13 +2117,20 @@ void Operations::gyro()
 
 void Operations::chamfer3()
 {
-    const float ratio = m_bevel_ratio;
+    chamfer3(m_bevel_ratio);
+}
+
+void Operations::chamfer3(const float bevel_ratio)
+{
+    // Selection-aware: when a face-mode mesh-component selection is active, only the
+    // selected facets are chamfered (the rest of the mesh stays connected).
     async_for_selected_nodes_with_mesh(
-        [this, ratio](Mesh_operation_parameters&& params) {
+        [this, bevel_ratio](Mesh_operation_parameters&& params) {
             m_context.operation_stack->queue(
-                std::make_shared<Chamfer3_operation>(std::move(params), ratio)
+                std::make_shared<Chamfer3_operation>(std::move(params), bevel_ratio)
             );
-        }
+        },
+        true
     );
 }
 

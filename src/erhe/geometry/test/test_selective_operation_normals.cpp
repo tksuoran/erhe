@@ -7,6 +7,7 @@
 #include "erhe_geometry/operation/conway/join.hpp"
 #include "erhe_geometry/operation/conway/gyro.hpp"
 #include "erhe_geometry/operation/conway/truncate.hpp"
+#include "erhe_geometry/operation/conway/chamfer3.hpp"
 #include "erhe_geometry/operation/subdivision/sqrt3_subdivision.hpp"
 
 #include <geogram/basic/geometry.h>
@@ -700,6 +701,136 @@ TEST(SelectiveOperationNormals, Selective_Sqrt3_Watertight_And_Keeps_Unmodified_
     }
     EXPECT_EQ(bad_direction, 0u) << bad_direction << " directed edges traversed more than once (flipped facet)";
     EXPECT_EQ(missing_twin,  0u) << missing_twin  << " edges have no opposite-direction twin (crack / unflipped edge)";
+
+    const long long V = static_cast<long long>(mesh.vertices.nb());
+    const long long E = static_cast<long long>(mesh.edges.nb());
+    const long long F = static_cast<long long>(mesh.facets.nb());
+    EXPECT_EQ(V - E + F, 2) << "Euler characteristic != 2 (V=" << V << " E=" << E << " F=" << F << ")";
+}
+
+// Conway "chamfer" shrinks each selected facet toward its centroid and replaces
+// edges with faces: an edge interior to the selection becomes a hexagon, a
+// selection-boundary edge becomes a bevel quad welding the shrunk facet to the
+// unchanged neighbor, and an interior-to-selection vertex is moved to its
+// least-squares-fitted V'. To exercise ALL THREE paths, select the coplanar patch
+// of facets around a face-center vertex (a source vertex all of whose incident
+// facets are coplanar): that vertex becomes interior (V' fit), the edges inside the
+// patch become hexagons, and the patch border becomes bevel quads.
+//
+// Chamfer regenerates smooth vertex normals via process() (it carries no per-corner
+// normal attribute, unlike the fan ops), so the "unmodified region" invariant is
+// stated on GEOMETRY instead of normals: every EXTERIOR source vertex (one that
+// touches no selected facet, hence is referenced only by the 1:1-copied unselected
+// facets) must survive at its exact original position. The result must also be a
+// closed, consistently-oriented manifold (this is what catches a mis-wound bevel quad).
+TEST(SelectiveOperationNormals, Selective_Chamfer3_Watertight_And_Keeps_Unmodified_Region_Flat)
+{
+    std::unique_ptr<Geometry> box = make_box_geometry(2);
+    const GEO::Mesh& src_mesh = box->get_mesh();
+    const GEO::index_t source_vertex_count = src_mesh.vertices.nb();
+
+    // Find a face-center vertex: every incident facet coplanar, at least three of them.
+    std::set<GEO::index_t> selected_facets;
+    GEO::index_t interior_vertex = GEO::NO_INDEX;
+    for (GEO::index_t v = 0; (v < source_vertex_count) && (interior_vertex == GEO::NO_INDEX); ++v) {
+        std::vector<GEO::index_t> facets;
+        for (const GEO::index_t corner : box->get_vertex_corners(v)) {
+            facets.push_back(box->get_corner_facet(corner));
+        }
+        if (facets.size() < 3) {
+            continue;
+        }
+        const GEO::vec3f n0 = GEO::normalize(erhe::geometry::mesh_facet_normalf(src_mesh, facets[0]));
+        bool coplanar = true;
+        for (const GEO::index_t f : facets) {
+            const GEO::vec3f nf = GEO::normalize(erhe::geometry::mesh_facet_normalf(src_mesh, f));
+            if (GEO::dot(n0, nf) < 0.999f) {
+                coplanar = false;
+                break;
+            }
+        }
+        if (coplanar) {
+            interior_vertex = v;
+            for (const GEO::index_t f : facets) {
+                selected_facets.insert(f);
+            }
+        }
+    }
+    ASSERT_NE(interior_vertex, GEO::NO_INDEX) << "could not find a coplanar face-center vertex to select around";
+    ASSERT_GE(selected_facets.size(), 3u);
+
+    std::unique_ptr<Geometry> result = std::make_unique<Geometry>("chamfer_subset");
+    erhe::geometry::operation::chamfer3(*box, *result, 0.25f, &selected_facets, nullptr);
+
+    const GEO::Mesh& mesh = result->get_mesh();
+
+    // Exterior source vertices: touch no selected facet. Identify them by position so
+    // the check is robust to any vertex renumbering in process(). Inset / V' / boundary
+    // vertices never coincide with an exterior vertex position on the box.
+    std::vector<uint8_t> touches_selected  (source_vertex_count, 0);
+    std::vector<uint8_t> touches_unselected(source_vertex_count, 0);
+    for (GEO::index_t facet : src_mesh.facets) {
+        const bool selected = selected_facets.count(facet) != 0;
+        for (GEO::index_t corner : src_mesh.facets.corners(facet)) {
+            const GEO::index_t v = src_mesh.facet_corners.vertex(corner);
+            (selected ? touches_selected : touches_unselected)[v] = 1;
+        }
+    }
+    const auto position_key = [](const GEO::vec3f p) -> std::tuple<long, long, long> {
+        return std::make_tuple(
+            static_cast<long>(std::lround(p.x * 1000.0f)),
+            static_cast<long>(std::lround(p.y * 1000.0f)),
+            static_cast<long>(std::lround(p.z * 1000.0f))
+        );
+    };
+    std::set<std::tuple<long, long, long>> exterior_positions;
+    for (GEO::index_t v = 0; v < source_vertex_count; ++v) {
+        if ((touches_selected[v] == 0) && (touches_unselected[v] != 0)) {
+            exterior_positions.insert(position_key(erhe::geometry::get_pointf(src_mesh.vertices, v)));
+        }
+    }
+    ASSERT_FALSE(exterior_positions.empty()) << "expected an unselected region outside the patch";
+
+    // (1) The unselected region is preserved bit-for-bit: every exterior source vertex
+    // survives in the result at its exact original position (the selective op moved
+    // nothing outside the selected patch).
+    std::set<std::tuple<long, long, long>> result_positions;
+    for (GEO::index_t v : mesh.vertices) {
+        result_positions.insert(position_key(erhe::geometry::get_pointf(mesh.vertices, v)));
+    }
+    GEO::index_t exterior_moved = 0;
+    for (const std::tuple<long, long, long>& key : exterior_positions) {
+        if (result_positions.count(key) == 0) {
+            ++exterior_moved;
+        }
+    }
+    EXPECT_EQ(exterior_moved, 0u) << exterior_moved << " exterior (unselected-region) vertices were moved / dropped";
+
+    // (2) Closed, consistently-oriented manifold (catches a mis-wound bevel quad).
+    std::map<std::pair<GEO::index_t, GEO::index_t>, int> directed_edges;
+    for (GEO::index_t facet : mesh.facets) {
+        const GEO::index_t corner_count = mesh.facets.nb_corners(facet);
+        for (GEO::index_t lc = 0; lc < corner_count; ++lc) {
+            const GEO::index_t c  = mesh.facets.corner(facet, lc);
+            const GEO::index_t cn = mesh.facets.corner(facet, (lc + 1) % corner_count);
+            const GEO::index_t v0 = mesh.facet_corners.vertex(c);
+            const GEO::index_t v1 = mesh.facet_corners.vertex(cn);
+            ++directed_edges[std::make_pair(v0, v1)];
+        }
+    }
+    GEO::index_t bad_direction = 0;
+    GEO::index_t missing_twin  = 0;
+    for (const auto& [edge, count] : directed_edges) {
+        if (count != 1) {
+            ++bad_direction;
+        }
+        const std::pair<GEO::index_t, GEO::index_t> twin{edge.second, edge.first};
+        if (directed_edges.find(twin) == directed_edges.end()) {
+            ++missing_twin;
+        }
+    }
+    EXPECT_EQ(bad_direction, 0u) << bad_direction << " directed edges traversed more than once (flipped / mis-wound facet)";
+    EXPECT_EQ(missing_twin,  0u) << missing_twin  << " edges have no opposite-direction twin (crack / hole)";
 
     const long long V = static_cast<long long>(mesh.vertices.nb());
     const long long E = static_cast<long long>(mesh.edges.nb());
