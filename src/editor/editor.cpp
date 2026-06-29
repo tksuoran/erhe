@@ -1662,7 +1662,6 @@ public:
                     *m_app_windows.get(),
                     *m_headset_view.get(),
                     *m_mesh_memory.get(),
-                    *m_scene_builder.get(),
                     *m_tools.get()
                 );
                 m_hotbar = std::make_unique<Hotbar>(
@@ -1674,7 +1673,6 @@ public:
                     *m_app_message_bus.get(),
                     *m_headset_view.get(),
                     *m_mesh_memory.get(),
-                    *m_scene_builder.get(),
                     *m_tools.get()
                 );
                 // Hud/Hotbar attach to the scene when one first exists (driven by the

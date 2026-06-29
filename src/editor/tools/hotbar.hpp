@@ -48,7 +48,6 @@ class Brush;
 class Hotbar;
 class Icon_set;
 class Quad_view;
-class Scene_builder;
 class Scene_root;
 class Tools;
 class Scene_views;
@@ -122,7 +121,6 @@ public:
         App_message_bus&                   app_message_bus,
         Headset_view&                      headset_view,
         erhe::scene_renderer::Mesh_memory& mesh_memory,
-        Scene_builder&                     scene_builder,
         Tools&                             tools
     );
     ~Hotbar() noexcept;

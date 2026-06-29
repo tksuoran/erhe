@@ -13,7 +13,6 @@
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "scene/node_raytrace.hpp"
-#include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_scene_view.hpp"
 #include "scene/viewport_scene_views.hpp"
@@ -202,7 +201,6 @@ Hotbar::Hotbar(
     App_message_bus&                   app_message_bus,
     Headset_view&                      headset_view,
     erhe::scene_renderer::Mesh_memory& mesh_memory,
-    Scene_builder&                     scene_builder,
     Tools&                             tools
 )
     : Tool                       {app_context}

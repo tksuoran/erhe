@@ -28,7 +28,6 @@ class Headset_view;
 class Icon_set;
 class Quad_view;
 class Rendertarget_imgui_host;
-class Scene_builder;
 class Scene_root;
 class Tools;
 class Scene_views;
@@ -72,7 +71,6 @@ public:
         App_windows&                       app_windows,
         Headset_view&                      headset_view,
         erhe::scene_renderer::Mesh_memory& mesh_memory,
-        Scene_builder&                     scene_builder,
         Tools&                             tools
     );
     ~Hud() noexcept;

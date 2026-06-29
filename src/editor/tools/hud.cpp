@@ -4,7 +4,6 @@
 #include "app_message_bus.hpp"
 #include "app_windows.hpp"
 #include "scene/node_raytrace.hpp"
-#include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/tools.hpp"
 #include "quad_view.hpp"
@@ -95,7 +94,6 @@ Hud::Hud(
     App_windows&                       app_windows,
     Headset_view&                      headset_view,
     erhe::scene_renderer::Mesh_memory& mesh_memory,
-    Scene_builder&                     scene_builder,
     Tools&                             tools
 )
     : Tool                                {app_context}
