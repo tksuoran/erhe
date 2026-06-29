@@ -1543,6 +1543,21 @@ auto Headset_view::update_actions() -> bool
         return false;
     }
 
+    // Scene attachment is deferred: the default scene is created from a
+    // scene.create command, and a saved scene arrives via scene.load_scene -
+    // both run after init (from the startup script or a file dialog), so the
+    // first ticks can execute before on_scene_created() -> attach_to_scene()
+    // has built m_headset_node via setup_root_camera(). update_camera_node()
+    // and the scene-relative pointer/action handling below require it, so idle
+    // until the headset has been attached to a scene. Returning false also
+    // keeps m_update_actions_ok false, so render_headset() skips the frame too.
+    // Mirrors Scene_view::update_transforms()'s no-scene-root guard. The XR
+    // session stays healthy because poll_events()/begin_frame()/xrSyncActions
+    // have already run for this frame above.
+    if (m_headset_node == nullptr) {
+        return false;
+    }
+
     update_camera_node();
 
     update_pointer_context_from_controller();
