@@ -6,8 +6,15 @@ if (ERHE_CXX_HAS_NO_UNQUALIFIED_STD_CAST_CALL_FLAG)
     add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-Wno-deprecated-copy>")
 endif ()
 add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-Woverloaded-virtual>")
-add_compile_options("$<$<CONFIG:RELEASE>:-O3>")
-add_compile_options("$<$<CONFIG:DEBUG>:-O0;-g3>")
+# Optimization / debug levels, GNU-style. clang-cl (the MSVC-ABI clang driver)
+# rejects -g3 as an unknown argument -- normally just a -Wunknown-argument
+# warning, but Jolt compiles with -Werror, which makes it fatal -- and it
+# ignores -O0/-O3. Apply these only to the GNU-frontend clang driver; clang-cl
+# uses CMake's MSVC debug/release defaults (/Od /Zi for Debug, /O2 for Release).
+if (NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+    add_compile_options("$<$<CONFIG:RELEASE>:-O3>")
+    add_compile_options("$<$<CONFIG:DEBUG>:-O0;-g3>")
+endif ()
 
 # TODO For now, to enable sanitizers, uncomment lines here
 
