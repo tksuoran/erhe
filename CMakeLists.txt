@@ -641,6 +641,13 @@ elseif (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")
         GIT_TAG           4cd6c38932e9ce193ba2ec9775a1374f2e0b3127
         GITHUB_REPOSITORY wolfpld/tracy
         OPTIONS
+            # Tracy master defaults TRACY_ENABLE OFF; v0.13.1 defaulted it ON.
+            # erhe relied on that default, so enable it explicitly -- otherwise
+            # ERHE_PROFILE_LIBRARY=tracy compiles in no profiling and the
+            # TracyClient INTERFACE stops defining TRACY_ENABLE for consumers
+            # (e.g. editor.cpp's #if TRACY_ENABLE block, which then trips
+            # /W4 /WX on an unused variable under MSVC).
+            "TRACY_ENABLE ON"
             "TRACY_ON_DEMAND ON"
     )
     message(STATUS "Erhe configured to use Tracy for profiling.")
