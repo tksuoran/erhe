@@ -18,16 +18,17 @@ Official::scripts\configure_vs2026_vulkan.bat→build_vs2026_vulkan/{VS-solution
   Bundled@VS18{cmake+ninja+VsDevCmd}
 !NinjaNeedsMSVC-env::launch-from-x64-NativeTools-prompt{cl+INCLUDE}
 clang-cl-build::editor.exe-builds-clean✓{2026-06-29}>was::editor-link-fails
-  tracy-pin{VERSION-0.13.1→GIT_TAG-master-4cd6c389}::ALL-builds-2-consequences:
+  tracy-pin{VERSION-0.13.1→GIT_TAG-master-4cd6c389}::ALL-builds-3-consequences:
     +want::=nullptr→(nullptr){clang-cl-rejects-deleted-atomic-copy-ctor<C++17}
     +must::OPTIONS+"TRACY_ENABLE ON"{master-flipped-default-ON→OFF;else-no-profiling+TracyClient-stops-defining-TRACY_ENABLE→editor.cpp-unused-name-/W4/WX-cl.exe}
+    +must::profile.hpp-alias-4-more-gl*{glGetError+glGetIntegerv+glGetString+glGetStringi;master-TracyOpenGL.hpp-probes-GL-context;OpenGL-backend-only;C3861-in-erhe_profile}
   fix#4@clang-cl-guarded{FRONTEND_VARIANT-MSVC→cl.exe+linux-clang-unaffected}:
     mango{if(MSVC)→MSVC-flag-branch¬else-set(CMAKE_CXX_FLAGS)-clobbered-/EHsc}
     Clang.cmake{-g3-GNU-frontend-only,clang-cl-rejects→Jolt-Werror-fatal}
     Jolt{set(ENABLE_ALL_WARNINGS-OFF)@clang-cl::/Wall=-Weverything+/WX→-Wpadded-fatal}
     Clang.cmake{global-avx2-baseline@clang-cl::Jolt-PUBLIC-avx2-vs-shared-erhe_pch-feature-mismatch{clang-PCH-check-symmetric}}
   also::compile_commands@configure{lsai/clangd,still-works}
-  verified✓::editor.exe-links{clang-cl:build_ninja_win_clang|cl.exe:build_ninja_win_vulkan}{cl.exe-run-caught-TRACY_ENABLE-regression-clang-stale-cache-hid}
+  verified✓::editor.exe-links×4{clang-cl:build_ninja_win_clang|cl.exe:build_ninja_win_vulkan|VS:build_vs2026_vulkan|VS:build_vs2026_opengl}{running-2nd-compiler+OpenGL-backend-each-exposed-a-tracy-pin-regression}
 
 [CLANGD_SEMANTIC]
 .clangd→CompilationDatabase::build_ninja_win_clang

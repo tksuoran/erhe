@@ -1,25 +1,26 @@
 §MBEL:5.0
 
-[TASK::clang-cl+cl.exe-builds-editor-clean]
-@status::✓COMPLETE{editor.exe-links-both-compilers,6-commits-on-main}
+[TASK::clang-cl+cl.exe+VS-solution-builds-editor-clean]
+@status::✓COMPLETE{editor.exe-links-4-configs,7-commits-on-main}
 
 >DONE:
-tracy-pin-master-4cd6c389✓{cc9e5fd5}{>v0.13.1,atomic-copy-init→direct-init-upstream-fix}
-mango-clang-cl→MSVC-flag-branch✓{0faceae9}{/EHsc-+-/GR-+-/DWIN32-restored}@clang-cl
-Clang.cmake-g3-GNU-frontend-only✓{faa6104e}{Jolt-Werror-no-longer-fatal-clang-cl}@clang-cl
-Jolt-ENABLE_ALL_WARNINGS-OFF✓{6c0fea37}{native-Build-no-longer-/Wall-/WX}@clang-cl
-Clang.cmake-global-avx2-baseline✓{ce656f05}{shared-erhe_pch+all-TUs-feature-uniform}@clang-cl
-tracy-OPTIONS+"TRACY_ENABLE ON"✓{d756c994}{master-flipped-default-ON→OFF,ALL-builds,restores-profiling+fixes-cl.exe-/W4/WX}
-verify::editor.exe×2✓{clang-cl-build_ninja_win_clang-68MB,[1487/1490]|cl.exe-build_ninja_win_vulkan-73MB,[613/614];both-0-FAILED}
+cc9e5fd5::tracy-pin-master-4cd6c389{>v0.13.1,atomic-copy-init→direct-init}
+0faceae9::mango-clang-cl→MSVC-flag-branch{/EHsc-restored}@clang-cl
+faa6104e::Clang.cmake-g3-GNU-frontend-only{Jolt-Werror}@clang-cl
+6c0fea37::Jolt-ENABLE_ALL_WARNINGS-OFF{no-/Wall-/WX}@clang-cl
+ce656f05::Clang.cmake-global-avx2-baseline{shared-PCH-feature-uniform}@clang-cl
+d756c994::tracy-OPTIONS+"TRACY_ENABLE ON"{master-default-ON→OFF,ALL-builds}
+60d63927::profile.hpp-alias-4-more-gl*-TracyOpenGL{master-GL-probe,OpenGL-backend}
+verify::editor.exe×4✓{clang-cl-ninja|cl.exe-ninja-vulkan-73MB|VS-vulkan-73MB|VS-opengl-68MB;all-0-error}
 techContext+memory-bank-updated✓
 
 ?PENDING:
-optional::VS2026-vulkan/opengl-cl.exe-builds{redundant-with-ninja-vulkan-cl.exe;VS-open→reconfigure-reload-dialog-risk}
+optional::VS-asan+headless-variants{share-CMakeLists,low-value}
 
 [BLOCKERS]
-none::both-builds-clean-end-to-end
+none::4-build-configs-clean
 
 [NOTES]
-!key-learning::running-2nd-compiler(cl.exe)-caught-a-regression-clang-cl-missed{stale-cached-TRACY_ENABLE=ON-hid-it-in-clang-dir}
-!fix-6=ALL-builds{tracy-default-change};fixes-1..5=clang-cl-guarded{cl.exe+linux-unaffected}
-!tracy-pin-consequences#2{atomic-copy-init-fix-wanted+TRACY_ENABLE-default-flip-unwanted→had-to-re-enable}
+!tracy-pin-3-consequences{atomic-fix-wanted|TRACY_ENABLE-default-flip-OFF|TracyOpenGL-new-gl-probes}→last-2-unwanted,fixed
+!each-build-config-caught-a-distinct-regression{cl.exe→TRACY_ENABLE;OpenGL→TracyOpenGL;clang-only-build-masked-both}→value-of-building-all-local-configs
+!VS-builds-need-VS-closed{reconfigure-pops-reload-dialog};generator=VS18-2026,build-via-cmake--build--config-Debug
