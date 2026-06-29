@@ -775,6 +775,12 @@ public:
 
         if (m_editor_settings.headset.openxr) {
             m_editor_settings.hud.enabled = true;
+            // Default to camera passthrough on OpenXR: with the sky composition
+            // pass disabled the scene background keeps the transparent render-pass
+            // clear value, so passthrough shows through instead of a rendered sky
+            // (see App_rendering::update_sky_parameters()). Still runtime-toggleable
+            // via the Settings window.
+            m_editor_settings.sky.enabled = false;
         }
 
         if (m_graphics_config.renderdoc_capture_support) {
