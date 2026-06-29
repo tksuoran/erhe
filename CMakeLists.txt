@@ -629,8 +629,16 @@ if (${ERHE_PROFILE_LIBRARY} STREQUAL "nvtx")
 elseif (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")
     CPMAddPackage(
         NAME              tracy
-        VERSION           0.13.1
-        GIT_SHALLOW       TRUE
+        # Pinned to a master commit past the v0.13.1 release for the clang-cl
+        # (build_ninja_win_clang) build fix. v0.13.1's TracyProfiler.cpp has:
+        #   static std::atomic<Thread*> s_sysTraceThread = nullptr;
+        # That copy-initialization requires the (deleted) std::atomic copy
+        # constructor under clang-cl's pre-C++17 default standard, so the
+        # TracyClient target fails to compile (MSVC cl tolerates it, clang-cl
+        # does not). Upstream changed it to direct-init "(nullptr)" after the
+        # release. Drop this pin and move back to VERSION 0.13.x once a release
+        # newer than 0.13.1 ships that change.
+        GIT_TAG           4cd6c38932e9ce193ba2ec9775a1374f2e0b3127
         GITHUB_REPOSITORY wolfpld/tracy
         OPTIONS
             "TRACY_ON_DEMAND ON"
