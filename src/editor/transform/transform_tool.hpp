@@ -302,6 +302,8 @@ private:
 
     Mesh_component_transform m_component_transform;
 
+    // Reused scratch for the Reference node picker popup (cleared + refilled each frame).
+    std::vector<std::shared_ptr<erhe::Item_base>> m_reference_candidates;
 };
 
 }

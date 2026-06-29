@@ -20,6 +20,7 @@
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 #include "transform/handle_enums.hpp"
+#include "windows/item_reference.hpp"
 
 #include "erhe_commands/commands.hpp"
 #include "config/generated/transform_tool_config.hpp"
@@ -304,38 +305,29 @@ void Transform_tool::window_imgui()
     reference_mode_button("Selection", Transform_reference_mode::selection);
 
     if (settings.reference_mode == Transform_reference_mode::reference) {
-        const std::shared_ptr<erhe::scene::Node> current = shared.reference_node.lock();
-        const char* const preview = current ? current->get_name().c_str() : "(none)";
-        if (ImGui::BeginCombo("Reference node", preview, ImGuiComboFlags_WidthFitPreview)) {
-            Scene_root* scene_root = m_context.scene_commands->get_scene_root(static_cast<erhe::scene::Node*>(nullptr));
-            if (scene_root != nullptr) {
-                for (const std::shared_ptr<erhe::scene::Node>& node : scene_root->get_scene().get_flat_nodes()) {
-                    if (!node) {
-                        continue;
-                    }
-                    const bool selected = (node == current);
-                    if (ImGui::Selectable(node->get_name().c_str(), selected)) {
-                        shared.reference_node = node;
-                        on_reference_settings_changed();
-                    }
+        // Build the picker candidate list (reused scratch, capacity retained).
+        m_reference_candidates.clear();
+        Scene_root* scene_root = m_context.scene_commands->get_scene_root(static_cast<erhe::scene::Node*>(nullptr));
+        if (scene_root != nullptr) {
+            for (const std::shared_ptr<erhe::scene::Node>& node : scene_root->get_scene().get_flat_nodes()) {
+                if (node) {
+                    m_reference_candidates.push_back(node);
                 }
             }
-            ImGui::EndCombo();
         }
-        // Drag a node from the scene tree onto the combo to set the reference.
-        if (ImGui::BeginDragDropTarget()) {
-            const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Node", ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
-            if ((payload != nullptr) && (payload->Data != nullptr) && (payload->DataSize == sizeof(erhe::Item_base*))) {
-                erhe::Item_base* const item_raw = *static_cast<erhe::Item_base**>(payload->Data);
-                const std::shared_ptr<erhe::scene::Node> dropped = (item_raw != nullptr)
-                    ? std::dynamic_pointer_cast<erhe::scene::Node>(item_raw->shared_from_this())
-                    : std::shared_ptr<erhe::scene::Node>{};
-                if (dropped) {
-                    shared.reference_node = dropped;
-                    on_reference_settings_changed();
-                }
-            }
-            ImGui::EndDragDropTarget();
+        Item_reference_options options;
+        options.candidates = m_reference_candidates;
+        ImGui::TextUnformatted("Reference node");
+        ImGui::SameLine();
+        // Reference node: drag a node from the scene tree onto the field (shows the drop-target
+        // highlight), drag the field out to use the node elsewhere, pick from the list, or add it
+        // to the selection to inspect it in the Properties window.
+        if (
+            item_reference_imgui<erhe::scene::Node>(
+                m_context, "##reference_node", shared.reference_node, erhe::scene::Node::get_static_type(), options
+            )
+        ) {
+            on_reference_settings_changed();
         }
     }
 
