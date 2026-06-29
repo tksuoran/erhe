@@ -800,6 +800,16 @@ if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
     )
     if (JoltPhysics_ADDED)
         set(OVERRIDE_CXX_FLAGS OFF)
+        # Jolt's ENABLE_ALL_WARNINGS (default ON) adds /Wall /WX in its native
+        # Build/CMakeLists.txt. Under clang-cl, /Wall maps to -Weverything and
+        # /WX to -Werror, so warnings its in-source JPH_SUPPRESS_WARNING pragmas
+        # do not cover (e.g. -Wpadded on Jolt's own structs) become fatal. cl.exe
+        # is unaffected (the pragmas cover its C-numbered warnings) and other
+        # compilers want the warnings, so disable Jolt's warnings-as-errors for
+        # clang-cl (the MSVC-ABI clang driver) only.
+        if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+            set(ENABLE_ALL_WARNINGS OFF)
+        endif ()
         set(CROSS_PLATFORM_DETERMINISTIC ON)
         set(INTERPROCEDURAL_OPTIMIZATION OFF)
         set(FLOATING_POINT_EXCEPTIONS_ENABLED ON)
