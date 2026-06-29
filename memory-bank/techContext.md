@@ -17,7 +17,14 @@ Official::scripts\configure_vs2026_vulkan.bat→build_vs2026_vulkan/{VS-solution
   build_ninja_win_<clang|vulkan>.bat <target>
   Bundled@VS18{cmake+ninja+VsDevCmd}
 !NinjaNeedsMSVC-env::launch-from-x64-NativeTools-prompt{cl+INCLUDE}
-clang-cl-build::editor-link-fails{mango-no-/EHsc+tracy-atomic-copy}¬needed-for-lsai{compile_commands@configure}
+clang-cl-build::editor.exe-builds-clean✓{2026-06-29}>was::editor-link-fails
+  fix#5@clang-cl-guarded{FRONTEND_VARIANT-MSVC→cl.exe+linux-clang-unaffected}:
+    tracy-pin{VERSION-0.13.1→GIT_TAG-master-4cd6c389}{=nullptr→(nullptr),deleted-atomic-copy-ctor<C++17}
+    mango{if(MSVC)→MSVC-flag-branch¬else-set(CMAKE_CXX_FLAGS)-clobbered-/EHsc}
+    Clang.cmake{-g3-GNU-frontend-only,clang-cl-rejects→Jolt-Werror-fatal}
+    Jolt{set(ENABLE_ALL_WARNINGS-OFF)@clang-cl::/Wall=-Weverything+/WX→-Wpadded-fatal}
+    Clang.cmake{global-avx2-baseline@clang-cl::Jolt-PUBLIC-avx2-vs-shared-erhe_pch-feature-mismatch{clang-PCH-check-symmetric}}
+  also::compile_commands@configure{lsai/clangd,still-works}
 
 [CLANGD_SEMANTIC]
 .clangd→CompilationDatabase::build_ninja_win_clang

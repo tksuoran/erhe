@@ -19,3 +19,15 @@
 >insight::lsai-must-parasite-build{compile_commands#0-occurrences}¬scan→issues#28/#29/#30/#31©vulcan+Ladislav+lsai
 >replied::tksuoran-issue#10{vs-mcp-roslyn-no-cpp,lsai-fills-gap}✓
 >initialized::memory-bank{MBEL5.0,6-core-files}©vulcan
+
+[2026-06-29]
+>FIXED::build_ninja_win_clang-editor.exe-builds-clean✓©Timo{5-commits-main}
+  cc9e5fd5::tracy-pin-master-4cd6c389{=nullptr→(nullptr),clang-cl-deleted-atomic-copy-ctor<C++17;no-release>0.13.1-yet}
+  0faceae9::mango-route-clang-cl→MSVC-flag-branch{else-set(CMAKE_CXX_FLAGS)-clobbered-/EHsc}
+  faa6104e::Clang.cmake-g3-GNU-frontend-only{Jolt-Werror-fatal-on-clang-cl-unknown-arg}
+  6c0fea37::Jolt-ENABLE_ALL_WARNINGS-OFF@clang-cl{/Wall=-Weverything+/WX→-Wpadded}
+  ce656f05::Clang.cmake-global-avx2@clang-cl{Jolt-PUBLIC-avx2-vs-shared-erhe_pch,clang-PCH-feature-check-symmetric}
+>verified::editor.exe{68MB,[1487/1490],0-FAILED,0-pch-mismatch}✓
+>reviewed::upstream-mango-cmake{no-clang-cl-handling-but-never-clobbers-CMAKE_CXX_FLAGS}+jolt-native-flags{ENABLE_ALL_WARNINGS-knob}
+>archived-from-activeContext::SkillKit-delivery-task©vulcan{Deliver-Cpp-Semantic-MCP+SkillKit→tksuoran,issue#10}
+  pending-was{commit+push→LadislavSopko/erhe-fork|PR→tksuoran:main|comment-issue#10}{status-unknown,superseded-by-Timo-clang-cl-focus}
