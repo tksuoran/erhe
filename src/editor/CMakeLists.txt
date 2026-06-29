@@ -24,6 +24,7 @@ erhe_target_sources_grouped(
     config/editor/graphics_presets.json
     config/editor/logging.json
     config/editor/mesh_memory.json
+    config/editor/openxr_commands.json
     config/editor/openxr_windows.json
     config/editor/renderer.json
     config/editor/text_renderer.json

@@ -2435,9 +2435,25 @@ public:
     {
         ERHE_PROFILE_FUNCTION();
 
-        std::optional<std::string> file_content = erhe::file::read("commands script", m_startup_commands_path);
+        // On OpenXR, prefer config/editor/openxr_commands.json (a smaller room
+        // sized for room-scale passthrough) when the caller did not override
+        // --commands. Mirrors the openxr_windows.json / graphics_presets_openxr.json
+        // variants. A missing OpenXR script falls back to the default commands.json.
+        std::string                commands_path = m_startup_commands_path;
+        std::optional<std::string> file_content;
+        if (m_editor_settings.headset.openxr && (commands_path == "config/editor/commands.json")) {
+            const std::string openxr_commands_path = "config/editor/openxr_commands.json";
+            file_content = erhe::file::read("commands script", openxr_commands_path);
+            if (file_content.has_value()) {
+                commands_path = openxr_commands_path;
+                log_startup->info("Using OpenXR startup commands script '{}'", commands_path);
+            }
+        }
         if (!file_content.has_value()) {
-            log_startup->info("startup commands script '{}' not found; skipping startup script", m_startup_commands_path);
+            file_content = erhe::file::read("commands script", commands_path);
+        }
+        if (!file_content.has_value()) {
+            log_startup->info("startup commands script '{}' not found; skipping startup script", commands_path);
             return;
         }
 
