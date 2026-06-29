@@ -553,8 +553,8 @@ void Geometry_operation::remap_component_selection(const Geometry_component_sele
     if (!src.facets.empty()) {
         const GEO::index_t facet_source_count = std::min(nb_dst_facets, static_cast<GEO::index_t>(m_dst_facet_sources.size()));
         for (GEO::index_t dst_facet = 0; dst_facet < facet_source_count; ++dst_facet) {
-            for (const std::pair<float, GEO::index_t>& source : m_dst_facet_sources.get(dst_facet)) {
-                if (src.facets.find(source.second) != src.facets.end()) {
+            for (const std::pair<float, GEO::index_t>& src_entry : m_dst_facet_sources.get(dst_facet)) {
+                if (src.facets.find(src_entry.second) != src.facets.end()) {
                     dst.facets.insert(dst_facet);
                     break;
                 }
@@ -575,8 +575,8 @@ void Geometry_operation::remap_component_selection(const Geometry_component_sele
             return GEO::NO_VERTEX;
         }
         if (static_cast<std::size_t>(dst_vertex) < m_dst_vertex_sources.size()) {
-            for (const std::pair<float, GEO::index_t>& source : m_dst_vertex_sources.get(dst_vertex)) {
-                if (source.second == src_vertex) {
+            for (const std::pair<float, GEO::index_t>& src_entry : m_dst_vertex_sources.get(dst_vertex)) {
+                if (src_entry.second == src_vertex) {
                     return dst_vertex;
                 }
             }

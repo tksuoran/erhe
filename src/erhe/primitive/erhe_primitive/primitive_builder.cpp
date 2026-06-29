@@ -1032,9 +1032,9 @@ void Build_context::build_expanded_polygon_fill()
                     wireframe_writer->write(wireframe_info, packed);
                 }
 
-                for (uint32_t k = 0; k < 3u; ++k) {
-                    if (corner_pos_writer[k] != nullptr) {
-                        corner_pos_writer[k]->write(corner_pos_info[k], corner_positions[k]);
+                for (uint32_t c = 0; c < 3u; ++c) {
+                    if (corner_pos_writer[c] != nullptr) {
+                        corner_pos_writer[c]->write(corner_pos_info[c], corner_positions[c]);
                     }
                 }
 
