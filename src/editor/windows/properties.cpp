@@ -24,6 +24,7 @@
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
+#include "windows/item_reference.hpp"
 
 #include "erhe_defer/defer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
@@ -631,38 +632,17 @@ void Properties::brush_properties(const std::shared_ptr<Brush>& brush)
     push_group("Brush", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed, m_indent);
 
     add_entry("Material", [brush, this]() {
-        const std::shared_ptr<erhe::primitive::Material>& brush_material = brush->get_material();
-        const char* material_name = brush_material ? brush_material->get_name().c_str() : "(none)";
-        ImGui::Button(material_name, ImVec2{-FLT_MIN, 0.0f});
-
-        // Accept material drag-and-drop from content library
-        if (ImGui::BeginDragDropTarget()) {
-            const ImGuiPayload* node_payload = ImGui::AcceptDragDropPayload(
-                Content_library_node::static_type_name.data()
-            );
-            if (node_payload != nullptr) {
-                erhe::Item_base* item_base = *static_cast<erhe::Item_base**>(node_payload->Data);
-                Content_library_node* node = dynamic_cast<Content_library_node*>(item_base);
-                if (node != nullptr) {
-                    std::shared_ptr<erhe::primitive::Material> material =
-                        std::dynamic_pointer_cast<erhe::primitive::Material>(node->item);
-                    if (material) {
-                        brush->set_material(material);
-                    }
-                }
-            }
-            // Also accept direct Material payload
-            const ImGuiPayload* mat_payload = ImGui::AcceptDragDropPayload("Material");
-            if (mat_payload != nullptr) {
-                erhe::Item_base* item_base = *static_cast<erhe::Item_base**>(mat_payload->Data);
-                erhe::primitive::Material* raw_material = dynamic_cast<erhe::primitive::Material*>(item_base);
-                if (raw_material != nullptr) {
-                    brush->set_material(
-                        std::dynamic_pointer_cast<erhe::primitive::Material>(raw_material->shared_from_this())
-                    );
-                }
-            }
-            ImGui::EndDragDropTarget();
+        // Accept a Material dragged directly or from the content library (Content_library_node).
+        std::shared_ptr<erhe::Item_base> value = brush->get_material();
+        Item_reference_options options;
+        options.accept_content_library_node = true;
+        options.show_clear_button           = false; // a brush keeps its material; no unset
+        if (
+            item_reference_imgui(
+                m_context, "##brush_material", value, erhe::primitive::Material::get_static_type(), options
+            )
+        ) {
+            brush->set_material(std::dynamic_pointer_cast<erhe::primitive::Material>(value));
         }
     });
 
@@ -893,19 +873,20 @@ void Properties::node_joint_properties(Node_joint& node_joint)
 
     add_entry(
         "Connected Node",
-        [&node_joint]() {
-            const std::shared_ptr<erhe::scene::Node> connected_node = node_joint.get_connected_node();
-            ImGui::Button(connected_node ? connected_node->get_name().c_str() : "(world)", ImVec2{-FLT_MIN, 0.0f});
-            if (ImGui::BeginDragDropTarget()) {
-                const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(erhe::scene::Node::static_type_name.data());
-                if (payload != nullptr) {
-                    erhe::Item_base* item_base = *(static_cast<erhe::Item_base**>(payload->Data));
-                    erhe::scene::Node* dropped_node = dynamic_cast<erhe::scene::Node*>(item_base);
-                    if ((dropped_node != nullptr) && (dropped_node != node_joint.get_node())) {
-                        node_joint.set_connected_node(std::static_pointer_cast<erhe::scene::Node>(dropped_node->shared_from_this()));
-                    }
+        [this, &node_joint]() {
+            // Empty reference == constrained to the world. Self-connection is rejected below.
+            std::shared_ptr<erhe::Item_base> value = node_joint.get_connected_node();
+            Item_reference_options options;
+            options.none_text = "(world)";
+            if (
+                item_reference_imgui(
+                    m_context, "##connected_node", value, erhe::scene::Node::get_static_type(), options
+                )
+            ) {
+                const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(value);
+                if (node.get() != node_joint.get_node()) {
+                    node_joint.set_connected_node(node);
                 }
-                ImGui::EndDragDropTarget();
             }
         },
         "Drop a node here to connect the joint to it; no connected node constrains to the world"
