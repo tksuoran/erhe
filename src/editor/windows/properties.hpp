@@ -97,6 +97,9 @@ private:
     std::vector<std::string> m_primitive_labels;
     std::vector<std::string> m_rt_primitive_labels;
     std::vector<std::string> m_ngon_labels;
+
+    // Reused scratch for the mesh-primitive material picker (cleared + refilled each use).
+    std::vector<std::shared_ptr<erhe::Item_base>> m_material_candidates;
 };
 
 }

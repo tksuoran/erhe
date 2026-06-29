@@ -565,7 +565,23 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh)
             m_primitive_labels.push_back(fmt::format("Primitive {}", m_primitive_labels.size()));
         }
         push_group(m_primitive_labels.at(primitive_index).c_str(), ImGuiTreeNodeFlags_DefaultOpen, m_indent);
-        add_entry("Material", [&](){ material_library->combo(m_context, "##", mesh_primitive.material, false); });
+        add_entry("Material", [&](){
+            // Picker candidates: the scene's content-library materials (reused scratch).
+            m_material_candidates.clear();
+            for (const std::shared_ptr<erhe::primitive::Material>& material : material_library->get_all<erhe::primitive::Material>()) {
+                if (material) {
+                    m_material_candidates.push_back(material);
+                }
+            }
+            std::shared_ptr<erhe::Item_base> value = mesh_primitive.material;
+            Item_reference_options options;
+            options.candidates                  = m_material_candidates;
+            options.accept_content_library_node = true;
+            options.show_clear_button           = false; // match the previous combo: a primitive keeps its material
+            if (item_reference_imgui(m_context, "##material", value, erhe::primitive::Material::get_static_type(), options)) {
+                mesh_primitive.material = std::dynamic_pointer_cast<erhe::primitive::Material>(value);
+            }
+        });
         if (m_context.developer_mode) {
             if (mesh_primitive.material) {
                 add_entry("Material Buffer Index", [&](){ ImGui::Text("%u", mesh_primitive.material->material_buffer_index); });
