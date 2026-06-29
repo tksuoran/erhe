@@ -15,11 +15,11 @@ context::clang-cl-strictness+running-other-configs(cl.exe,OpenGL-backend)-each-e
   d756c994::tracy-OPTIONS+"TRACY_ENABLE ON"{master-flipped-default-ON→OFF,ALL-builds;cl.exe-/W4/WX-editor.cpp-unused-name-outside-#if}
   60d63927::profile.hpp-alias-4-more-gl*-for-TracyOpenGL{glGetError/Integerv/String/Stringi;master-probes-GL-context;OpenGL-backend-only,C3861-erhe_profile}
 >guards::fixes-1..5=clang-cl-only{FRONTEND_VARIANT-MSVC}|fix-6=all-builds{tracy-default}|fix-7=all-OpenGL-builds{tracy-OpenGL-probe}
->verified::editor.exe-links✓×4{clang-cl-build_ninja_win_clang|cl.exe-build_ninja_win_vulkan-73MB|VS-build_vs2026_vulkan-73MB|VS-build_vs2026_opengl-68MB;all-0-error}
+>verified::editor.exe-links✓×8{clang-cl-ninja|cl.exe-ninja-vulkan|VS:vulkan+opengl+vulkan_asan(112MB)+opengl_asan(124MB)+headless-null(57MB)+vulkan_headless(66MB);all-0-error}{asan+headless-needed-no-new-fix,share-CMakeLists}
 >insight::tracy-pin-had-3-consequences{1-wanted-atomic-fix+2-unwanted-TRACY_ENABLE-default-flip+TracyOpenGL-new-gl-probes};each-surfaced-by-a-different-build-config
 
 [NEXT]
-?optional::VS-asan+headless-variants{build_vs2026_{vulkan,opengl}_asan,*_headless;share-same-CMakeLists,low-incremental-value}
+>DONE::all-8-local-build-configs-verified✓{none-pending}
 
 [DECISIONS_RESOLVED]
 ©Timo>PCH::keep{¬disable-clang-cl}→global-avx2-baseline{clang-PCH-feature-check-symmetric}

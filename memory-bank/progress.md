@@ -11,14 +11,15 @@ faa6104e::Clang.cmake-g3-GNU-frontend-only{Jolt-Werror}@clang-cl
 ce656f05::Clang.cmake-global-avx2-baseline{shared-PCH-feature-uniform}@clang-cl
 d756c994::tracy-OPTIONS+"TRACY_ENABLE ON"{master-default-ON→OFF,ALL-builds}
 60d63927::profile.hpp-alias-4-more-gl*-TracyOpenGL{master-GL-probe,OpenGL-backend}
-verify::editor.exe×4✓{clang-cl-ninja|cl.exe-ninja-vulkan-73MB|VS-vulkan-73MB|VS-opengl-68MB;all-0-error}
+verify::editor.exe×8✓{clang-cl-ninja|cl.exe-ninja-vulkan|VS:vulkan+opengl+vulkan_asan+opengl_asan+headless-null+vulkan_headless;all-0-error}
+  asan+headless::needed-no-new-fix{7-fixes-cover-all-configs}
 techContext+memory-bank-updated✓
 
 ?PENDING:
-optional::VS-asan+headless-variants{share-CMakeLists,low-value}
+none
 
 [BLOCKERS]
-none::4-build-configs-clean
+none::all-8-build-configs-clean
 
 [NOTES]
 !tracy-pin-3-consequences{atomic-fix-wanted|TRACY_ENABLE-default-flip-OFF|TracyOpenGL-new-gl-probes}→last-2-unwanted,fixed

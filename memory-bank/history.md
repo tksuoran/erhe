@@ -31,6 +31,7 @@
   60d63927::profile.hpp-alias-4-more-gl*-for-TracyOpenGL{glGetError+glGetIntegerv+glGetString+glGetStringi;master-TracyOpenGL.hpp-probes-GL-context;OpenGL-backend-only-C3861}
 >verified::editor.exe×4{clang-cl-ninja+cl.exe-ninja-vulkan+VS-vulkan+VS-opengl;all-0-error}✓
 >learning::each-extra-build-config-exposed-a-tracy-pin-regression{cl.exe→TRACY_ENABLE-default-flip;OpenGL-backend→TracyOpenGL-new-gl-probes;clang-only-build_ninja_win_clang-masked-both}
+>verified-also::VS-asan×2(vulkan+opengl)+headless-null+vulkan_headless✓{all-0-error,needed-no-new-fix}→8-local-build-configs-total-clean
 >reviewed::upstream-mango-cmake{no-clang-cl-handling-but-never-clobbers-CMAKE_CXX_FLAGS}+jolt-native-flags{ENABLE_ALL_WARNINGS-knob}
 >archived-from-activeContext::SkillKit-delivery-task©vulcan{Deliver-Cpp-Semantic-MCP+SkillKit→tksuoran,issue#10}
   pending-was{commit+push→LadislavSopko/erhe-fork|PR→tksuoran:main|comment-issue#10}{status-unknown,superseded-by-Timo-clang-cl-focus}

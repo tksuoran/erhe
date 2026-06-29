@@ -28,7 +28,7 @@ clang-cl-build::editor.exe-builds-clean✓{2026-06-29}>was::editor-link-fails
     Jolt{set(ENABLE_ALL_WARNINGS-OFF)@clang-cl::/Wall=-Weverything+/WX→-Wpadded-fatal}
     Clang.cmake{global-avx2-baseline@clang-cl::Jolt-PUBLIC-avx2-vs-shared-erhe_pch-feature-mismatch{clang-PCH-check-symmetric}}
   also::compile_commands@configure{lsai/clangd,still-works}
-  verified✓::editor.exe-links×4{clang-cl:build_ninja_win_clang|cl.exe:build_ninja_win_vulkan|VS:build_vs2026_vulkan|VS:build_vs2026_opengl}{running-2nd-compiler+OpenGL-backend-each-exposed-a-tracy-pin-regression}
+  verified✓::editor.exe-links×8{clang-cl-ninja|cl.exe-ninja-vulkan|VS:vulkan+opengl+vulkan_asan+opengl_asan+headless(null-backend)+vulkan_headless;all-0-error}{2nd-compiler+OpenGL-backend-each-exposed-a-tracy-pin-regression;asan/headless-needed-no-new-fix}
 
 [CLANGD_SEMANTIC]
 .clangd→CompilationDatabase::build_ninja_win_clang
