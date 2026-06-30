@@ -29,6 +29,7 @@
 #include "erhe_commands/commands.hpp"
 #include "erhe_commands/input_arguments.hpp"
 #include "config/generated/hotbar_config.hpp"
+#include "config/generated/editor_settings_config.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_item/item.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
@@ -93,6 +94,22 @@
 namespace editor {
 
 using glm::vec3;
+
+namespace {
+
+// Resolve the configured anchor: platform_default picks the bottom of the
+// vertical FOV on desktop and the top in OpenXR (matching where the hotbar has
+// historically sat on each platform); an explicit bottom/top is used verbatim.
+[[nodiscard]] auto resolve_hotbar_anchor(Hotbar_anchor config_anchor, bool openxr) -> Hotbar_anchor
+{
+    switch (config_anchor) {
+        case Hotbar_anchor::bottom: return Hotbar_anchor::bottom;
+        case Hotbar_anchor::top:    return Hotbar_anchor::top;
+        default:                    return openxr ? Hotbar_anchor::top : Hotbar_anchor::bottom;
+    }
+}
+
+} // namespace
 
 #pragma region Commmands
 Toggle_menu_visibility_command::Toggle_menu_visibility_command(erhe::commands::Commands& commands, App_context& context)
@@ -238,6 +255,9 @@ Hotbar::Hotbar(
     static_cast<void>(headset_view);
 #endif
 
+    // Initial values; the geometry settings (x, z, height, padding, anchor) are
+    // re-read from the live config every frame in update_node_transform() so
+    // Settings-window edits take effect immediately. m_y is computed each frame.
     m_enabled    = hotbar_config.enabled;
     m_show       = hotbar_config.show;
     m_use_radial = hotbar_config.use_radial;
@@ -245,16 +265,7 @@ Hotbar::Hotbar(
     m_z          = hotbar_config.z;
     m_height     = hotbar_config.height;
     m_padding    = hotbar_config.padding;
-
-    // Resolve the configured anchor. platform_default picks the bottom of the
-    // vertical FOV on desktop and the top in OpenXR (matching where the hotbar
-    // has historically sat on each platform). m_y itself is computed every
-    // frame from the camera FOV in update_node_transform().
-    switch (hotbar_config.anchor) {
-        case Hotbar_anchor::bottom: m_anchor = Hotbar_anchor::bottom; break;
-        case Hotbar_anchor::top:    m_anchor = Hotbar_anchor::top;    break;
-        default:                    m_anchor = app_context.OpenXR ? Hotbar_anchor::top : Hotbar_anchor::bottom; break;
-    }
+    m_anchor     = resolve_hotbar_anchor(hotbar_config.anchor, app_context.OpenXR);
 
     if (!m_enabled) {
         m_window.hide_window();
@@ -614,6 +625,21 @@ void Hotbar::update_node_transform()
         return;
     }
 
+    // Re-read the live config so Settings-window edits to the geometry (x, z,
+    // anchor, height, padding) take effect immediately. The config object is the
+    // same Hotbar_config the settings UI mutates (editor_settings->hotbar); the
+    // values are otherwise only read once at construction. (enabled / show /
+    // use_radial stay construction-time: they gate creation / visibility / the
+    // mesh build, not the per-frame transform.)
+    if (m_context.editor_settings != nullptr) {
+        const Hotbar_config& config = m_context.editor_settings->hotbar;
+        m_x       = config.x;
+        m_z       = config.z;
+        m_height  = config.height;
+        m_padding = config.padding;
+        m_anchor  = resolve_hotbar_anchor(config.anchor, m_context.OpenXR);
+    }
+
     const erhe::scene::Node*           camera_node{nullptr};
     std::shared_ptr<erhe::scene::Node> root_node;
     glm::mat4                          world_from_node{1.0f};
@@ -829,6 +855,13 @@ void Hotbar::set_position(glm::vec3 position)
     m_x = position.x;
     m_y = position.y;
     m_z = position.z;
+    // Write through to the live config so the change persists past the per-frame
+    // refresh in update_node_transform() (which re-reads x/z from the config).
+    // m_y is computed from the FOV and is not stored in the config.
+    if (m_context.editor_settings != nullptr) {
+        m_context.editor_settings->hotbar.x = position.x;
+        m_context.editor_settings->hotbar.z = position.z;
+    }
 }
 
 auto Hotbar::get_locked() const -> bool
