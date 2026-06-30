@@ -862,13 +862,18 @@ void Hotbar::slot_button(const uint32_t id, Slot_entry& entry)
         }
     } else if (entry.command != nullptr) {
         // Operation slot: a labeled button that invokes the stored operation with
-        // its frozen params against the current selection on click.
+        // its frozen params against the current selection on click. The hotbar lays
+        // items out horizontally by having each item call ImGui::SameLine() after
+        // itself (icon_button does this for the tool/brush/material slots), so this
+        // branch must do the same or the following slots wrap to a new row.
         const ImVec2 button_size{icon_size, icon_size};
-        if (ImGui::Button(operation_short_label(entry.command), button_size) && (m_context.operations != nullptr)) {
-            m_context.operations->run_operation(entry.command, entry.operation_params);
-        }
+        const bool pressed = ImGui::Button(operation_short_label(entry.command), button_size);
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("%s", entry.command->get_name());
+        }
+        ImGui::SameLine();
+        if (pressed && (m_context.operations != nullptr)) {
+            m_context.operations->run_operation(entry.command, entry.operation_params);
         }
     }
 
