@@ -1259,7 +1259,8 @@ void Mcp_server::refresh_tool_list()
             {"camera_id",    {{"type", "integer"}, {"description", "ID of the camera to edit (from get_scene_cameras)"}}},
             {"camera_name",  {{"type", "string"},  {"description", "Name of the camera to edit (alternative to camera_id)"}}},
             {"exposure",     {{"type", "number"},  {"description", "New exposure value (1.0 = neutral)"}}},
-            {"shadow_range", {{"type", "number"},  {"description", "New shadow range / far distance"}}}
+            {"shadow_range", {{"type", "number"},  {"description", "New shadow range / far distance"}}},
+            {"fov_y",        {{"type", "number"},  {"description", "New vertical field of view in radians (perspective_vertical cameras)"}}}
         }},
         {"required", json::array({"scene_name"})}
     }});
@@ -2011,12 +2012,14 @@ auto Mcp_server::query_scene_cameras(const json& args) -> std::string
     json cameras = json::array();
     for (const auto& camera : sr->get_scene().get_cameras()) {
         const auto* node = camera->get_node();
+        const erhe::scene::Projection* projection = camera->projection();
         cameras.push_back({
             {"name",         camera->get_name()},
             {"id",           camera->get_id()},
             {"node",         node ? node->get_name() : ""},
             {"exposure",     camera->get_exposure()},
-            {"shadow_range", camera->get_shadow_range()}
+            {"shadow_range", camera->get_shadow_range()},
+            {"fov_y",        (projection != nullptr) ? projection->fov_y : 0.0f}
         });
     }
 
@@ -3144,6 +3147,13 @@ auto Mcp_server::action_edit_camera(const json& args) -> std::string
         if (args.contains("shadow_range")) {
             camera->set_shadow_range(args.value("shadow_range", camera->get_shadow_range()));
             changed["shadow_range"] = camera->get_shadow_range();
+        }
+        if (args.contains("fov_y")) {
+            erhe::scene::Projection* projection = camera->projection();
+            if (projection != nullptr) {
+                projection->fov_y = args.value("fov_y", projection->fov_y);
+                changed["fov_y"] = projection->fov_y;
+            }
         }
     }
 
