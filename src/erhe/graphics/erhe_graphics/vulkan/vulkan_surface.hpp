@@ -66,6 +66,10 @@ public:
 
     [[nodiscard]] auto get_surface_create_info() const -> const Surface_create_info&;
 
+    // Presentation pre-rotation the swapchain was last (re)created with, mapped
+    // to the backend-agnostic enum. See update_swapchain().
+    [[nodiscard]] auto get_surface_transform() const -> Surface_transform;
+
 private:
     void fail();
     void choose_surface_format();
@@ -84,6 +88,11 @@ private:
     VkPresentModeKHR                m_present_mode    {VK_PRESENT_MODE_FIFO_KHR};
     uint32_t                        m_image_count     {0};
     VkExtent2D                      m_swapchain_extent{0, 0};
+    // currentTransform the live swapchain was created with. Used both to detect
+    // a rotation change that needs a swapchain recreate (90 <-> 270 keeps the
+    // native extent but flips the transform) and to report the pre-rotation the
+    // renderer must apply.
+    VkSurfaceTransformFlagBitsKHR   m_swapchain_transform{VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR};
     VkSwapchainKHR                  m_vulkan_swapchain{VK_NULL_HANDLE};
     std::unique_ptr<Swapchain>               m_swapchain;
     std::unique_ptr<Emulated_swapchain_impl> m_emulated_swapchain;

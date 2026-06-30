@@ -58,6 +58,7 @@ class Imgui_draw_parameter_block_offsets
 public:
     std::size_t scale                      {0}; // vec2
     std::size_t translate                  {0}; // vec2
+    std::size_t clip_rotation              {0}; // vec4 (column-major mat2: c0=xy, c1=zw)
     std::size_t draw_parameter_struct_array{0}; // struct
 };
 
@@ -135,9 +136,14 @@ public:
     // does not permit inside a render pass.
     void update_draw_data_textures(erhe::graphics::Command_buffer& command_buffer);
 
+    // transform applies the presentation pre-rotation (Android landscape on a
+    // portrait-native panel) to the final swapchain pass: it rotates clip space
+    // and swaps the framebuffer viewport for 90/270. Defaults to identity, which
+    // every offscreen / render-to-texture host (and all desktop platforms) uses.
     void render_draw_data(
         erhe::graphics::Render_command_encoder& encoder,
-        const erhe::graphics::Render_pass&      render_pass
+        const erhe::graphics::Render_pass&      render_pass,
+        erhe::graphics::Surface_transform       transform = erhe::graphics::Surface_transform::identity
     );
 
     void begin_frame    ();

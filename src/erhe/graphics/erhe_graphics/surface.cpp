@@ -29,6 +29,18 @@ auto Surface::get_swapchain() -> Swapchain*
     return m_impl->get_swapchain();
 }
 
+auto Surface::get_surface_transform() const -> Surface_transform
+{
+#if defined(ERHE_GRAPHICS_API_VULKAN)
+    return m_impl->get_surface_transform();
+#else
+    // Only the Vulkan backend tracks a presentation pre-rotation; on every
+    // other backend (and on platforms without a rotating display) the surface
+    // is presented as-rendered.
+    return Surface_transform::identity;
+#endif
+}
+
 #if defined(ERHE_GRAPHICS_API_VULKAN)
 auto Surface::get_color_format() -> erhe::dataformat::Format
 {

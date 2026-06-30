@@ -276,7 +276,9 @@ void Window_imgui_host::execute_rendergraph_node(erhe::graphics::Command_buffer&
 
     erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder(command_buffer);
     erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get(), command_buffer};
-    m_imgui_renderer.render_draw_data(render_encoder, *m_render_pass);
+    // This host renders directly into the swapchain image, so it must apply the
+    // presentation pre-rotation (Android landscape on a portrait-native panel).
+    m_imgui_renderer.render_draw_data(render_encoder, *m_render_pass, m_graphics_device.get_surface_transform());
 }
 
 auto Window_imgui_host::get_viewport() const -> erhe::math::Viewport

@@ -786,6 +786,39 @@ auto Surface_impl::is_valid() -> bool
     return m_is_valid;
 }
 
+namespace {
+
+[[nodiscard]] auto to_erhe_surface_transform(VkSurfaceTransformFlagBitsKHR transform) -> Surface_transform
+{
+    switch (transform) {
+        case VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR:   return Surface_transform::identity;
+        case VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR:  return Surface_transform::rotate_90;
+        case VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR: return Surface_transform::rotate_180;
+        case VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR: return Surface_transform::rotate_270;
+        // Mirror / unknown transforms are not produced by Android display
+        // rotation; present as-rendered (no pre-rotation).
+        default:                                      return Surface_transform::identity;
+    }
+}
+
+[[nodiscard]] auto c_str(VkSurfaceTransformFlagBitsKHR transform) -> const char*
+{
+    switch (transform) {
+        case VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR:   return "IDENTITY";
+        case VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR:  return "ROTATE_90";
+        case VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR: return "ROTATE_180";
+        case VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR: return "ROTATE_270";
+        default:                                      return "OTHER";
+    }
+}
+
+} // anonymous namespace
+
+auto Surface_impl::get_surface_transform() const -> Surface_transform
+{
+    return to_erhe_surface_transform(m_swapchain_transform);
+}
+
 auto Surface_impl::update_swapchain(Vulkan_swapchain_create_info& out_swapchain_create_info) -> bool
 {
     log_context->debug("Surface_impl::configure_swapchain()");
@@ -802,6 +835,17 @@ auto Surface_impl::update_swapchain(Vulkan_swapchain_create_info& out_swapchain_
         log_context->debug("vkGetPhysicalDeviceSurfaceCapabilitiesKHR() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         return false;
     }
+
+    // Android pre-rotation: when the display panel's native orientation differs
+    // from the (landscape-locked) app orientation, currentTransform is ROTATE_90
+    // or ROTATE_270. We keep preTransform = currentTransform and render
+    // pre-rotated, so for those transforms the swapchain images are created in
+    // the surface's NATIVE orientation (width/height swapped vs the window's
+    // logical size). See Imgui_renderer's clip-space rotation.
+    const VkSurfaceTransformFlagBitsKHR current_transform   = surface_capabilities.currentTransform;
+    const bool                          transform_swaps_wh  =
+        (current_transform == VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR) ||
+        (current_transform == VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR);
 
     // Source the target extent from the window's pixel size rather than from
     // surface_capabilities.currentExtent. On Windows / Linux the two are
@@ -827,8 +871,16 @@ auto Surface_impl::update_swapchain(Vulkan_swapchain_create_info& out_swapchain_
         extent.width  = surface_capabilities.currentExtent.width;
         extent.height = surface_capabilities.currentExtent.height;
     }
-    log_context->debug(
-        "  Swapchain target extent : {} x {} (currentExtent : {} x {})",
+    // Swap to native orientation for a 90/270 transform (see comment above). Done
+    // before clamping so the clamp uses the surface's native min/max extents.
+    if (transform_swaps_wh) {
+        const uint32_t swap_tmp = extent.width;
+        extent.width  = extent.height;
+        extent.height = swap_tmp;
+    }
+    log_context->info(
+        "  Surface transform : {} ; swapchain native extent : {} x {} (currentExtent : {} x {})",
+        c_str(current_transform),
         extent.width, extent.height,
         surface_capabilities.currentExtent.width, surface_capabilities.currentExtent.height
     );
@@ -856,9 +908,14 @@ auto Surface_impl::update_swapchain(Vulkan_swapchain_create_info& out_swapchain_
     extent.width  = std::max(extent.width,  surface_capabilities.minImageExtent.width);
     extent.height = std::max(extent.height, surface_capabilities.minImageExtent.height);
 
+    // Recreate when the native extent changed OR the surface transform changed.
+    // A LandscapeLeft <-> LandscapeRight flip keeps the native extent identical
+    // but flips the transform between ROTATE_90 and ROTATE_270, which still needs
+    // a new swapchain (and a different pre-rotation in the renderer).
     if (
-        (extent.width  == m_swapchain_extent.width) &&
-        (extent.height == m_swapchain_extent.height)
+        (extent.width      == m_swapchain_extent.width ) &&
+        (extent.height     == m_swapchain_extent.height) &&
+        (current_transform == m_swapchain_transform)
     ) {
         return false;
     }
@@ -1002,7 +1059,8 @@ auto Surface_impl::update_swapchain(Vulkan_swapchain_create_info& out_swapchain_
     // Without this, m_swapchain_extent stays at {0,0} and every
     // request_resize pass rebuilds the swapchain even when the size did not
     // change.
-    m_swapchain_extent = extent;
+    m_swapchain_extent    = extent;
+    m_swapchain_transform = current_transform;
     return true;
 }
 

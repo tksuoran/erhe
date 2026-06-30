@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_dataformat/dataformat.hpp"
+#include "erhe_graphics/enums.hpp"
 
 #include <memory>
 
@@ -28,6 +29,11 @@ public:
     ~Surface() noexcept;
 
     [[nodiscard]] auto get_swapchain() -> Swapchain*;
+
+    // Rotation the presentation engine expects the application to pre-apply to
+    // its rendered content (Android pre-rotation). identity on non-Vulkan
+    // backends and whenever no rotation is in effect.
+    [[nodiscard]] auto get_surface_transform() const -> Surface_transform;
 
 #if defined(ERHE_GRAPHICS_API_VULKAN)
     // Current backbuffer formats. The headless (surfaceless) emulated swapchain

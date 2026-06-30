@@ -58,6 +58,14 @@ auto Device::get_surface() -> Surface*
 {
     return m_impl->get_surface();
 }
+auto Device::get_surface_transform() -> Surface_transform
+{
+    Surface* surface = m_impl->get_surface();
+    if (surface == nullptr) {
+        return Surface_transform::identity;
+    }
+    return surface->get_surface_transform();
+}
 auto Device::capture_last_frame(
     int&                      out_width,
     int&                      out_height,

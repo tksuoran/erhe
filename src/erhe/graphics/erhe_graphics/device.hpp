@@ -439,6 +439,9 @@ public:
     ) -> bool;
 
     [[nodiscard]] auto get_surface                        () -> Surface*;
+    // Presentation pre-rotation the renderer must apply to its final swapchain
+    // pass (Android landscape on a portrait-native panel). identity elsewhere.
+    [[nodiscard]] auto get_surface_transform              () -> Surface_transform;
     [[nodiscard]] auto get_handle                         (const Texture& texture, const Sampler& sampler) const -> uint64_t;
     // Creates a tiny 2x2 fallback texture, populated with a debug
     // pattern. The pixel upload is recorded into init_command_buffer;

@@ -93,8 +93,13 @@ void main()
 {
     vec2 scale         = draw.scale.xy;
     vec2 translate     = draw.translate.xy;
+    // Presentation pre-rotation (Android). Column-major mat2 packed in a vec4;
+    // identity for every non-rotated host. Applied to the NDC position only --
+    // the clip distances below stay in unrotated layout space and so still clip
+    // correctly regardless of the final rotation.
+    mat2 clip_rotation = mat2(draw.clip_rotation.x, draw.clip_rotation.y, draw.clip_rotation.z, draw.clip_rotation.w);
     vec4 clip_rect     = draw.draw_parameters[ERHE_DRAW_ID].clip_rect;
-    gl_Position        = vec4(a_position * scale + translate, 0, 1);
+    gl_Position        = vec4(clip_rotation * (a_position * scale + translate), 0, 1);
 #if defined(ERHE_HAS_CLIP_DISTANCE)
     gl_ClipDistance[0] = a_position.x - clip_rect[0];
     gl_ClipDistance[1] = a_position.y - clip_rect[1];
@@ -172,14 +177,17 @@ Imgui_program_interface::Imgui_program_interface(erhe::graphics::Device& graphic
         .padding     = draw_parameter_struct.add_uint  ("padding")    ->get_offset_in_parent()
     }
     , block_offsets{
-        .scale                       = draw_parameter_block.add_vec4  ("scale"    )->get_offset_in_parent(),
-        .translate                   = draw_parameter_block.add_vec4  ("translate")->get_offset_in_parent(),
+        .scale                       = draw_parameter_block.add_vec4  ("scale"        )->get_offset_in_parent(),
+        .translate                   = draw_parameter_block.add_vec4  ("translate"    )->get_offset_in_parent(),
+        .clip_rotation               = draw_parameter_block.add_vec4  ("clip_rotation")->get_offset_in_parent(),
         .draw_parameter_struct_array = draw_parameter_block.add_struct(
             "draw_parameters",
             &draw_parameter_struct,
             graphics_device.get_info().use_shader_storage_buffers
                 ? erhe::graphics::Shader_resource::unsized_array
-                : std::optional<std::size_t>{(static_cast<std::size_t>(graphics_device.get_info().max_uniform_block_size) - 2 * sizeof(glm::vec4)) / draw_parameter_struct.get_size_bytes()}
+                // Subtract the fixed block header (scale + translate + clip_rotation = 3 vec4)
+                // before dividing the remaining UBO space into draw-parameter entries.
+                : std::optional<std::size_t>{(static_cast<std::size_t>(graphics_device.get_info().max_uniform_block_size) - 3 * sizeof(glm::vec4)) / draw_parameter_struct.get_size_bytes()}
         )->get_offset_in_parent()
     }
     , fragment_outputs{
@@ -1132,7 +1140,8 @@ void Imgui_renderer::update_draw_data_textures(erhe::graphics::Command_buffer& c
 
 void Imgui_renderer::render_draw_data(
     erhe::graphics::Render_command_encoder& render_encoder,
-    const erhe::graphics::Render_pass&      render_pass
+    const erhe::graphics::Render_pass&      render_pass,
+    erhe::graphics::Surface_transform       transform
 )
 {
     SPDLOG_LOGGER_TRACE(log_frame, "begin Imgui_renderer::render_draw_data()");
@@ -1180,6 +1189,37 @@ void Imgui_renderer::render_draw_data(
          1.0f - draw_data->DisplayPos.y * scale[1]
     };
 
+    // Presentation pre-rotation (Android). clip_rotation is a column-major mat2
+    // packed as (c0.x, c0.y, c1.x, c1.y), applied to the NDC position in the
+    // vertex shader; identity unless the swapchain was created with a rotated
+    // surface transform. For 90/270 the swapchain framebuffer is in the
+    // surface's native (portrait) orientation, so the full-frame viewport and
+    // scissor below must use the swapped extent.
+    float clip_rotation[4] = {1.0f, 0.0f, 0.0f, 1.0f};
+    bool  transform_swaps_wh = false;
+    switch (transform) {
+        case erhe::graphics::Surface_transform::identity: {
+            break;
+        }
+        case erhe::graphics::Surface_transform::rotate_90: {
+            clip_rotation[0] =  0.0f; clip_rotation[1] = -1.0f;
+            clip_rotation[2] =  1.0f; clip_rotation[3] =  0.0f;
+            transform_swaps_wh = true;
+            break;
+        }
+        case erhe::graphics::Surface_transform::rotate_180: {
+            clip_rotation[0] = -1.0f; clip_rotation[1] =  0.0f;
+            clip_rotation[2] =  0.0f; clip_rotation[3] = -1.0f;
+            break;
+        }
+        case erhe::graphics::Surface_transform::rotate_270: {
+            clip_rotation[0] =  0.0f; clip_rotation[1] =  1.0f;
+            clip_rotation[2] = -1.0f; clip_rotation[3] =  0.0f;
+            transform_swaps_wh = true;
+            break;
+        }
+    }
+
     using Ring_buffer_range = erhe::graphics::Ring_buffer_range;
     using erhe::graphics::write;
     constexpr erhe::graphics::Ring_buffer_usage usage{erhe::graphics::Ring_buffer_usage::CPU_write};
@@ -1205,8 +1245,12 @@ void Imgui_renderer::render_draw_data(
         return;
     }
     render_encoder.set_render_pipeline(*pipeline);
-    render_encoder.set_viewport_rect(0, 0, fb_width, fb_height);
-    render_encoder.set_scissor_rect(0, 0, fb_width, fb_height);
+    // For a 90/270 transform the swapchain framebuffer is in native (portrait)
+    // orientation, so the full-frame viewport/scissor use the swapped extent.
+    const int vp_width  = transform_swaps_wh ? fb_height : fb_width;
+    const int vp_height = transform_swaps_wh ? fb_width  : fb_height;
+    render_encoder.set_viewport_rect(0, 0, vp_width, vp_height);
+    render_encoder.set_scissor_rect(0, 0, vp_width, vp_height);
 
     m_texture_heap->reset_heap(render_encoder.get_command_buffer());
 
@@ -1308,11 +1352,13 @@ void Imgui_renderer::render_draw_data(
 
             std::size_t draw_indirect_count{0};
 
-            // Write scale and translate
-            const std::span<const float> scale_cpu_data    {&scale    [0], 2};
-            const std::span<const float> translate_cpu_data{&translate[0], 2};
-            write(draw_parameter_gpu_data, draw_parameter_write_offset + m_imgui_program_interface.block_offsets.scale,     scale_cpu_data);
-            write(draw_parameter_gpu_data, draw_parameter_write_offset + m_imgui_program_interface.block_offsets.translate, translate_cpu_data);
+            // Write scale, translate and clip-space rotation
+            const std::span<const float> scale_cpu_data        {&scale        [0], 2};
+            const std::span<const float> translate_cpu_data    {&translate    [0], 2};
+            const std::span<const float> clip_rotation_cpu_data{&clip_rotation[0], 4};
+            write(draw_parameter_gpu_data, draw_parameter_write_offset + m_imgui_program_interface.block_offsets.scale,         scale_cpu_data);
+            write(draw_parameter_gpu_data, draw_parameter_write_offset + m_imgui_program_interface.block_offsets.translate,     translate_cpu_data);
+            write(draw_parameter_gpu_data, draw_parameter_write_offset + m_imgui_program_interface.block_offsets.clip_rotation, clip_rotation_cpu_data);
             draw_parameter_write_offset += m_imgui_program_interface.block_offsets.draw_parameter_struct_array;
 
             const ImVec2 clip_off   = draw_data->DisplayPos;
