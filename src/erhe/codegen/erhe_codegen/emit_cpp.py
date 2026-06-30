@@ -15,6 +15,60 @@ def _can_use_serialize_template(t: TypeBase) -> bool:
     return isinstance(t, (ScalarType, GlmType))
 
 
+def _at_default_condition(f: FieldSchema) -> str:
+    """C++ bool expression that is true iff value.<name> equals its current default.
+
+    Used both to suppress default-valued fields during omit-defaults serialization and
+    to build the per-struct is_default() predicate. Types without a meaningful scalar
+    default (arrays, enums without a default) return "false" so they are always emitted.
+    """
+    t = f.type
+    expr = f"value.{f.name}"
+    if isinstance(t, ScalarType):
+        if t.cpp_type == "std::string":
+            if f.default is None or f.default == '""':
+                return f"{expr}.empty()"
+            return f"{expr} == ({f.default})"
+        if f.default is not None:
+            return f"{expr} == ({f.default})"
+        return f"{expr} == ({t.cpp_type}{{}})"
+    if isinstance(t, GlmType):
+        # glm defaults are the braced-initializer contents (e.g. "1.0f" broadcasts, or
+        # "1.0f, 0.5f, 0.0f"); construct the glm type so the comparison type-matches the
+        # member initializer ({cpp_type}{default}), not a bare scalar.
+        inner = f.default if f.default is not None else ""
+        return f"{expr} == ({t.cpp_type}{{{inner}}})"
+    if isinstance(t, VectorType):
+        return f"{expr}.empty()"
+    if isinstance(t, MapType):
+        return f"{expr}.empty()"
+    if isinstance(t, OptionalType):
+        return f"!{expr}.has_value()"
+    if isinstance(t, StructRefType):
+        return f"is_default({expr})"
+    if isinstance(t, EnumRefType):
+        if f.default is not None:
+            return f"{expr} == ({f.default})"
+        return "false"
+    # ArrayType and anything else: no per-element default mechanism, always emit.
+    return "false"
+
+
+def _has_float_comparison(s: StructSchema) -> bool:
+    """True if is_default()/omit-defaults serialize would perform a floating-point ==.
+
+    Covers float/double scalars and glm vector/matrix types (whose operator== compares
+    floats). Used to gate a -Wfloat-equal suppression pragma in the generated source.
+    """
+    for f in s.fields:
+        t = f.type
+        if isinstance(t, ScalarType) and t.cpp_type in ("float", "double"):
+            return True
+        if isinstance(t, GlmType):
+            return True
+    return False
+
+
 def _deserialize_element_code(t: TypeBase, target: str, indent: str) -> list[str]:
     """Generate deserialization for an element inside a vector/array loop (uses elem_val)."""
     lines: list[str] = []
@@ -177,7 +231,18 @@ def _deserialize_field_code(f: FieldSchema, indent: str = "    ") -> list[str]:
     lines.append(f'{inner}if (!obj["{f.name}"].get(val)) {{')
     lines.extend(_deserialize_value_code(f.type, f"out.{f.name}", inner + "    "))
 
-    lines.append(f"{inner}}}")
+    if f.default_history:
+        # Field absent from the document: reconstruct the default that was current at the
+        # document's _version, instead of keeping the latest member-initializer default.
+        lines.append(f"{inner}}} else {{")
+        ladder_inner = inner + "    "
+        lines.append(f"{ladder_inner}// {f.name} absent: reconstruct version-appropriate default")
+        for idx, (changed_in, prev_default) in enumerate(f.default_history):
+            prefix = "if" if idx == 0 else "else if"
+            lines.append(f"{ladder_inner}{prefix} (version < {changed_in}) {{ out.{f.name} = {prev_default}; }}")
+        lines.append(f"{inner}}}")
+    else:
+        lines.append(f"{inner}}}")
 
     if guard:
         lines.append(f"{indent}}}")
@@ -299,15 +364,22 @@ def emit_struct_cpp(s: StructSchema) -> str:
     lines.append("#include <erhe_codegen/migration.hpp>")
     lines.append("")
 
-    # Suppress deprecation warnings for removed fields accessed in deserialize/reflection
+    # Suppress deprecation warnings for removed fields accessed in deserialize/reflection,
+    # and -Wfloat-equal for the floating-point == comparisons in is_default()/omit-defaults.
     has_deprecated = any(f.removed_in is not None for f in s.fields)
-    if has_deprecated:
+    needs_float_guard = _has_float_comparison(s)
+    needs_guard = has_deprecated or needs_float_guard
+    if needs_guard:
         lines.append("#if defined(_MSC_VER)")
         lines.append("#   pragma warning(push)")
-        lines.append('#   pragma warning(disable : 4996)')
+        if has_deprecated:
+            lines.append('#   pragma warning(disable : 4996)')
         lines.append("#elif defined(__GNUC__) || defined(__clang__)")
         lines.append('#   pragma GCC diagnostic push')
-        lines.append('#   pragma GCC diagnostic ignored "-Wdeprecated-declarations"')
+        if has_deprecated:
+            lines.append('#   pragma GCC diagnostic ignored "-Wdeprecated-declarations"')
+        if needs_float_guard:
+            lines.append('#   pragma GCC diagnostic ignored "-Wfloat-equal"')
         lines.append("#endif")
         lines.append("")
 
@@ -322,7 +394,15 @@ def emit_struct_cpp(s: StructSchema) -> str:
 
     active_fields = s.active_fields()
     for f in active_fields:
-        lines.extend(_serialize_field_code(f))
+        if s.omit_defaults:
+            # Emit the field only when it differs from its current default. The trailing-comma
+            # cleanup below tolerates any number of skipped fields; the _version line (when
+            # version > 1) keeps the object non-empty.
+            lines.append(f"    if (!({_at_default_condition(f)})) {{")
+            lines.extend(_serialize_field_code(f, indent="        "))
+            lines.append("    }")
+        else:
+            lines.extend(_serialize_field_code(f))
 
     lines.append("    if (out.size() >= 2 && out[out.size()-2] == ',' && out.back() == '\\n') {")
     lines.append("        out.resize(out.size() - 2);")
@@ -366,11 +446,26 @@ def emit_struct_cpp(s: StructSchema) -> str:
     lines.append("}")
     lines.append("")
 
+    # --- is_default ---
+    lines.append(f"auto is_default(const {s.name}& value) -> bool")
+    lines.append("{")
+    lines.append("    static_cast<void>(value);")
+    active_for_default = s.active_fields()
+    if not active_for_default:
+        lines.append("    return true;")
+    else:
+        lines.append("    return")
+        for idx, f in enumerate(active_for_default):
+            sep = " &&" if idx < len(active_for_default) - 1 else ";"
+            lines.append(f"        ({_at_default_condition(f)}){sep}")
+    lines.append("}")
+    lines.append("")
+
     # --- Reflection ---
     from erhe_codegen.emit_reflect import emit_struct_reflect
     lines.append(emit_struct_reflect(s))
 
-    if has_deprecated:
+    if needs_guard:
         lines.append("#if defined(_MSC_VER)")
         lines.append("#   pragma warning(pop)")
         lines.append("#elif defined(__GNUC__) || defined(__clang__)")

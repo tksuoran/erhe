@@ -286,6 +286,7 @@ def emit_struct_serialization_hpp(s: StructSchema) -> str:
     # Function declarations
     lines.append(f"auto serialize  (const {s.name}& value, int indent = 0) -> std::string;")
     lines.append(f"auto deserialize(simdjson::ondemand::object obj, {s.name}& out) -> simdjson::error_code;")
+    lines.append(f"auto is_default (const {s.name}& value) -> bool;")
     lines.append("")
     lines.append(f"auto get_struct_info(const {s.name}*) -> const erhe::codegen::Struct_info&;")
     lines.append(f"auto get_fields     (const {s.name}*) -> std::span<const erhe::codegen::Field_info>;")

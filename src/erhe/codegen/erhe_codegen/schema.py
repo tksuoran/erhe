@@ -20,6 +20,7 @@ class FieldSchema:
         added_in: int,
         removed_in: Optional[int] = None,
         default: Optional[str] = None,
+        default_history: Optional[list[tuple[int, str]]] = None,
         short_desc: Optional[str] = None,
         long_desc: Optional[str] = None,
         path: str = "",
@@ -36,6 +37,11 @@ class FieldSchema:
         self.added_in = added_in
         self.removed_in = removed_in
         self.default = default
+        # Ordered list of (changed_in_version, previous_default_value). Each entry means
+        # documents whose _version is below changed_in_version used previous_default_value
+        # as the default for this field. Used to reconstruct version-appropriate defaults
+        # for absent fields. previous_default_value is a raw C++ expression string.
+        self.default_history = default_history
         self.short_desc = short_desc
         self.long_desc = long_desc
         self.path = path
@@ -114,6 +120,7 @@ class StructSchema:
         short_desc: Optional[str] = None,
         long_desc: Optional[str] = None,
         developer: bool = False,
+        omit_defaults: bool = False,
     ):
         self.name = name
         self.fields = fields
@@ -121,6 +128,9 @@ class StructSchema:
         self.short_desc = short_desc
         self.long_desc = long_desc
         self.developer = developer
+        # When True, serialize() skips any field whose value equals its current default
+        # (and absent fields keep their member-initializer default on deserialize).
+        self.omit_defaults = omit_defaults
         self.include_prefix = ""  # set for external structs, e.g. "erhe_graphics/generated/"
 
     def active_fields(self, version: Optional[int] = None) -> list[FieldSchema]:
@@ -165,6 +175,7 @@ def field(
     added_in: int,
     removed_in: Optional[int] = None,
     default: Optional[str] = None,
+    default_history: Optional[list[tuple[int, str]]] = None,
     short_desc: Optional[str] = None,
     long_desc: Optional[str] = None,
     path: str = "",
@@ -182,6 +193,7 @@ def field(
         added_in=added_in,
         removed_in=removed_in,
         default=default,
+        default_history=default_history,
         short_desc=short_desc,
         long_desc=long_desc,
         path=path,
@@ -217,10 +229,11 @@ def struct(
     short_desc: Optional[str] = None,
     long_desc: Optional[str] = None,
     developer: bool = False,
+    omit_defaults: bool = False,
     fields: list[FieldSchema],
 ) -> StructSchema:
     """Register a struct definition."""
-    schema = StructSchema(name, fields, version=version, short_desc=short_desc, long_desc=long_desc, developer=developer)
+    schema = StructSchema(name, fields, version=version, short_desc=short_desc, long_desc=long_desc, developer=developer, omit_defaults=omit_defaults)
     _validate_struct(schema)
     _struct_registry[name] = schema
     return schema
@@ -279,6 +292,35 @@ def _validate_struct(s: StructSchema) -> None:
                     f"Struct {s.name!r}, field {f.name!r}: "
                     f"numeric limit options are only valid on numeric scalar types, got {f.type!r}"
                 )
+
+        # Versioned default history
+        if f.default_history:
+            # Only assignable leaf types can have a version-appropriate default assigned.
+            if not isinstance(f.type, (ScalarType, GlmType, EnumRefType)):
+                raise ValueError(
+                    f"Struct {s.name!r}, field {f.name!r}: "
+                    f"default_history is only valid on scalar, glm or enum fields, got {f.type!r}"
+                )
+            # A current default is required to fall through to.
+            if f.default is None:
+                raise ValueError(
+                    f"Struct {s.name!r}, field {f.name!r}: "
+                    f"default_history requires a current default to be set"
+                )
+            prev_version: Optional[int] = None
+            for changed_in, _prev_default in f.default_history:
+                if changed_in <= f.added_in or changed_in > s.version:
+                    raise ValueError(
+                        f"Struct {s.name!r}, field {f.name!r}: "
+                        f"default_history version {changed_in} must be in "
+                        f"(added_in={f.added_in}, version={s.version}]"
+                    )
+                if prev_version is not None and changed_in <= prev_version:
+                    raise ValueError(
+                        f"Struct {s.name!r}, field {f.name!r}: "
+                        f"default_history versions must be strictly ascending"
+                    )
+                prev_version = changed_in
 
 
 def _validate_enum(e: EnumSchema) -> None:

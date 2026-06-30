@@ -6,6 +6,7 @@ add_executable(${_target})
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     test_migration.cpp
+    test_omit_defaults.cpp
 )
 
 # Generated sources (listed explicitly so CMake knows about them)
@@ -13,6 +14,12 @@ set(_generated_sources
     ${_codegen_out}/settings.hpp
     ${_codegen_out}/settings_serialization.hpp
     ${_codegen_out}/settings.cpp
+    ${_codegen_out}/demo_params.hpp
+    ${_codegen_out}/demo_params_serialization.hpp
+    ${_codegen_out}/demo_params.cpp
+    ${_codegen_out}/demo_slot.hpp
+    ${_codegen_out}/demo_slot_serialization.hpp
+    ${_codegen_out}/demo_slot.cpp
 )
 set_source_files_properties(${_generated_sources} PROPERTIES GENERATED TRUE)
 target_sources(${_target} PRIVATE ${_generated_sources})
@@ -41,5 +48,6 @@ erhe_codegen_generate(
         "${_test_defs}/color.py"
         "${_test_defs}/light.py"
         "${_test_defs}/material.py"
+        "${_test_defs}/omit_defaults_demo.py"
         "${_test_defs}/settings.py"
 )
