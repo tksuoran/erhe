@@ -499,12 +499,15 @@
         "foveation_dynamic": true
     },
     "hotbar": {
+        "_version": 4,
         "enabled": true,
         "show": true,
         "use_radial": false,
         "x": 0,
-        "y": -0.14,
-        "z": -0.5
+        "z": -0.7,
+        "anchor": "bottom",
+        "height": 0.1,
+        "padding": 0.01
     },
     "hud": {
         "enabled": false,
