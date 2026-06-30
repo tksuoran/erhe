@@ -96,6 +96,7 @@ public:
     void handle_controller_axis_event     (int64_t timestamp, int device, int axis, int value);
     void handle_controller_button_event   (int64_t timestamp, int device, int button, bool pressed);
     void handle_window_resize_event       (int64_t timestamp, int width, int height);
+    void handle_window_scale_event        (int64_t timestamp);
     void handle_window_refresh_event      (int64_t timestamp);
     void handle_window_close_event        (int64_t timestamp);
     void handle_window_focus_event        (int64_t timestamp, bool focused);

@@ -177,7 +177,8 @@ enum class Input_event_type : unsigned int {
     window_close_event      = 13,
     xr_boolean_event        = 14,
     xr_float_event          = 15,
-    xr_vector2f_event       = 16
+    xr_vector2f_event       = 16,
+    window_scale_event      = 17
 };
 
 class Key_event
@@ -297,6 +298,14 @@ public:
     [[nodiscard]] auto describe() const -> std::string;
 };
 
+class Window_scale_event
+{
+public:
+    float scale;
+
+    [[nodiscard]] auto describe() const -> std::string;
+};
+
 class Xr_boolean_event
 {
 public:
@@ -345,6 +354,7 @@ public:
         Window_resize_event     window_resize_event;
         Window_close_event      window_close_event;
         Window_refresh_event    window_refresh_event;
+        Window_scale_event      window_scale_event;
         Xr_boolean_event        xr_boolean_event;
         Xr_float_event          xr_float_event;
         Xr_vector2f_event       xr_vector2f_event;
@@ -373,6 +383,7 @@ public:
     virtual auto on_window_resize_event    (const Input_event&) -> bool { return false; }
     virtual auto on_window_close_event     (const Input_event&) -> bool { return false; }
     virtual auto on_window_refresh_event   (const Input_event&) -> bool { return false; }
+    virtual auto on_window_scale_event     (const Input_event&) -> bool { return false; }
     virtual auto on_xr_boolean_event       (const Input_event&) -> bool { return false; }
     virtual auto on_xr_float_event         (const Input_event&) -> bool { return false; }
     virtual auto on_xr_vector2f_event      (const Input_event&) -> bool { return false; }

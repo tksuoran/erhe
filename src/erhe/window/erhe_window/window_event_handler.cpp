@@ -168,6 +168,7 @@ auto Input_event_handler::dispatch_input_event(erhe::window::Input_event& input_
         case Input_event_type::window_resize_event    : input_event.handled = on_window_resize_event    (input_event); break;
         case Input_event_type::window_close_event     : input_event.handled = on_window_close_event     (input_event); break;
         case Input_event_type::window_refresh_event   : input_event.handled = on_window_refresh_event   (input_event); break;
+        case Input_event_type::window_scale_event     : input_event.handled = on_window_scale_event     (input_event); break;
         case Input_event_type::xr_boolean_event       : input_event.handled = on_xr_boolean_event       (input_event); break;
         case Input_event_type::xr_float_event         : input_event.handled = on_xr_float_event         (input_event); break;
         case Input_event_type::xr_vector2f_event      : input_event.handled = on_xr_vector2f_event      (input_event); break;
@@ -193,6 +194,7 @@ auto Input_event_handler::dispatch_input_event(erhe::window::Input_event& input_
         case Input_event_type::window_resize_event    : return u.window_resize_event.describe();
         case Input_event_type::window_close_event     : return u.window_close_event.describe();
         case Input_event_type::window_refresh_event   : return u.window_refresh_event.describe();
+        case Input_event_type::window_scale_event     : return u.window_scale_event.describe();
         case Input_event_type::xr_boolean_event       : return u.xr_boolean_event.describe();
         case Input_event_type::xr_float_event         : return u.xr_float_event.describe();
         case Input_event_type::xr_vector2f_event      : return u.xr_vector2f_event.describe();
@@ -263,6 +265,11 @@ auto Input_event_handler::dispatch_input_event(erhe::window::Input_event& input_
 [[nodiscard]] auto Window_focus_event::describe() const -> std::string
 {
     return fmt::format("Window_focus_event focused = {}", focused);
+}
+
+[[nodiscard]] auto Window_scale_event::describe() const -> std::string
+{
+    return fmt::format("Window_scale_event scale = {}", scale);
 }
 
 [[nodiscard]] auto Xr_boolean_event::describe() const -> std::string

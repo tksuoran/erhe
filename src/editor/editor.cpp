@@ -2366,6 +2366,23 @@ public:
         return true;
     }
 
+    auto on_window_scale_event(const erhe::window::Input_event& input_event) -> bool override
+    {
+        // Runtime DPI / display-scale change (e.g. window moved to a
+        // different-density external display). Update only the ImGui font
+        // scale; fonts rescale on demand (ImGui 1.92 dynamic font atlas), so
+        // no atlas rebuild is needed. Deliberately not apply_limits() - only
+        // scale_factor changes here. The framebuffer/swapchain side is driven
+        // separately by the paired SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED, which
+        // arrives as a window_resize_event.
+        const float new_scale = input_event.u.window_scale_event.scale;
+        if (new_scale != m_app_settings.imgui.scale_factor) {
+            m_app_settings.imgui.scale_factor = new_scale;
+            m_imgui_renderer->on_font_config_changed(m_app_settings.imgui);
+        }
+        return true;
+    }
+
     auto on_window_close_event(const erhe::window::Input_event&) -> bool override
     {
         m_close_requested = true;

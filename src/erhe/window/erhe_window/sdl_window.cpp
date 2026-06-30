@@ -789,6 +789,25 @@ void Context_window::handle_sdl_event(void* sdl_event)
                 handle_window_resize_event(timestamp, poll_event.window.data1, poll_event.window.data2);
                 break;
             }
+            case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED: {
+                // Pixel (framebuffer) size changed. This fires on a pure DPI
+                // change (e.g. window moved to a different-density display) even
+                // when the logical size is unchanged, so SDL_EVENT_WINDOW_RESIZED
+                // would not. Route through the resize path: it recaches
+                // m_pixel_density and drives swapchain recreation at the new
+                // pixel extent (the editor re-queries get_width()/get_height()).
+                //// log_window_event->info("SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED {} x {}", poll_event.window.data1, poll_event.window.data2);
+                handle_window_resize_event(timestamp, poll_event.window.data1, poll_event.window.data2);
+                break;
+            }
+            case SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED: {
+                // Display scale (pixel density * content scale) changed. Emit a
+                // window_scale_event so the UI can rescale fonts to keep their
+                // physical size.
+                //// log_window_event->info("SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED");
+                handle_window_scale_event(timestamp);
+                break;
+            }
             case SDL_EVENT_WINDOW_CLOSE_REQUESTED: {
                 //// log_window_event->info("SDL_EVENT_WINDOW_CLOSE_REQUESTED");
                 handle_window_close_event(timestamp);
@@ -1002,6 +1021,23 @@ void Context_window::handle_window_resize_event(int64_t timestamp, int width, in
                 .window_resize_event = {
                     .width  = width,
                     .height = height
+                }
+            }
+        }
+    );
+}
+
+void Context_window::handle_window_scale_event(int64_t timestamp)
+{
+    auto* window = static_cast<SDL_Window*>(m_sdl_window);
+    const float scale = (window != nullptr) ? SDL_GetWindowDisplayScale(window) : 1.0f;
+    m_input_events[m_input_event_queue_write].push_back(
+        Input_event{
+            .type = Input_event_type::window_scale_event,
+            .timestamp_ns = timestamp,
+            .u = {
+                .window_scale_event = {
+                    .scale = scale
                 }
             }
         }
