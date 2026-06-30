@@ -370,6 +370,17 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
         SDL_SetHint(SDL_HINT_VIDEO_WAYLAND_ALLOW_LIBDECOR, "1");
         SDL_SetHint(SDL_HINT_VIDEO_WAYLAND_PREFER_LIBDECOR, "1");
 #endif
+#if defined(ERHE_OS_ANDROID) && !defined(ERHE_XR_LIBRARY_OPENXR)
+        // The 2D (non-OpenXR) editor is a desktop-style ImGui application whose
+        // layout assumes a wide screen; lock it to landscape on phones/tablets.
+        // Both landscape orientations are allowed (SDL maps this to
+        // SCREEN_ORIENTATION_USER_LANDSCAPE) so the device may still flip
+        // between them, but never rotates to portrait. The OpenXR (Quest)
+        // flavor renders through the XR compositor and must not constrain the
+        // flat activity orientation, hence the !ERHE_XR_LIBRARY_OPENXR guard.
+        // SDL_HINT_ORIENTATIONS must be set before SDL_Init.
+        SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
+#endif
 
         SDL_InitFlags init_flags = SDL_INIT_VIDEO | SDL_INIT_EVENTS;
         if (configuration.enable_joystick) {
