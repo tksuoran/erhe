@@ -122,10 +122,12 @@ void Inventory_window::collect_tools()
     }
     m_saved_hotbar_names.clear();
 
-    // If hotbar has no configured slots, populate with all tools (first-run default)
+    // If hotbar has no configured slots, populate with all tools (first-run default).
+    // An operation (command) slot counts as configured too, so a hotbar filled only
+    // with operations is not overwritten by the default tools on reload.
     bool hotbar_empty = true;
     for (const Slot_entry& entry : m_hotbar_slots) {
-        if ((entry.tool != nullptr) || entry.brush || entry.material) {
+        if ((entry.tool != nullptr) || entry.brush || entry.material || (entry.command != nullptr)) {
             hotbar_empty = false;
             break;
         }
