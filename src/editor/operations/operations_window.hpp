@@ -1,11 +1,14 @@
 #pragma once
 
 #include "erhe_imgui/imgui_window.hpp"
+#include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_commands/command.hpp"
 #include "app_message.hpp"
 #include "erhe_message_bus/message_bus.hpp"
 
+#include <functional>
 #include <memory>
+#include <unordered_map>
 #include <vector>
 #include "scene/scene_builder.hpp"
 #include "operations/mesh_operation.hpp"
@@ -14,8 +17,10 @@
 #include <imgui/imgui.h>
 
 namespace erhe::imgui { class Imgui_windows; }
+namespace erhe::commands { class Command; }
 
 struct Scene_config;
+struct Operation_params; // codegen struct (config/generated/operation_params.hpp)
 
 namespace editor {
 
@@ -95,6 +100,12 @@ public:
     // Implements Window
     void imgui() override;
 
+    // Invoke an operation that was captured into an inventory slot: dispatches to
+    // the matching parameterized operation method using the frozen params snapshot,
+    // operating on the current selection. No-op when command is not a recognised
+    // draggable operation. Called by Inventory_window when a command slot is clicked.
+    void run_operation(erhe::commands::Command* command, const Operation_params& params);
+
     void merge();
     auto align_selection(bool apply_scale) -> bool;
     // Compound: align the two selected components, then create a physics joint
@@ -147,11 +158,14 @@ public:
     void dual();
     void join();
     void kis();
+    void kis(float height);
     void meta();
     void ortho();
     void ambo();
     void truncate();
+    void truncate(float ratio);
     void gyro();
+    void gyro(float ratio);
     void chamfer3();
     void chamfer3(float bevel_ratio);
     void merge_faces();
@@ -164,6 +178,7 @@ public:
 
     void generate_tangents();
     void generate_frame_field_tangents();
+    void generate_frame_field_tangents(float sharp_angle_deg);
     void make_geometry();
     void make_raytrace();
 
@@ -183,6 +198,21 @@ public:
 
 private:
     void async_for_selected_nodes_with_mesh(std::function<void(Mesh_operation_parameters&&)> op, bool selection_aware = false);
+
+    // Snapshot the live operation-parameter slider values into an Operation_params,
+    // for an operation dragged out of the Operations window into an inventory slot.
+    [[nodiscard]] auto current_params() const -> Operation_params;
+
+    // Emit an ImGui drag-drop source for the operation button just drawn, carrying
+    // the command plus current_params(). Call immediately after make_button() for
+    // each operation backed by a registered command; only fires while that button
+    // item is being dragged.
+    void operation_drag_source(erhe::commands::Command* command, const char* label);
+
+    // make_button() for an operation plus its operation_drag_source(): draws the
+    // button, registers the drag source, and returns true when the button was
+    // pressed this frame. Use in place of make_button() for any draggable operation.
+    auto operation_button(const char* label, erhe::commands::Command* command, erhe::imgui::Item_mode mode, ImVec2 size) -> bool;
 
     [[nodiscard]] auto count_selected_meshes() const -> size_t;
 
@@ -220,6 +250,12 @@ private:
     erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
     erhe::message_bus::Subscription<Load_scene_file_message>  m_load_scene_file_subscription;
     App_context& m_context;
+
+    // Maps each draggable operation's registered command to a thunk that runs that
+    // operation with an explicit Operation_params snapshot. Built in the constructor
+    // alongside the Lambda_commands; its key set is exactly the set of operations
+    // that expose a drag source / can be invoked from an inventory slot.
+    std::unordered_map<const erhe::commands::Command*, std::function<void(const Operation_params&)>> m_param_invokers;
 
     erhe::commands::Lambda_command m_merge_command;
     erhe::commands::Lambda_command m_align_command;

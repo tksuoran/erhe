@@ -667,6 +667,9 @@ set(_config_sources
     ${_config_out}/hud_config.hpp
     ${_config_out}/hud_config_serialization.hpp
     ${_config_out}/hud_config.cpp
+    ${_config_out}/operation_params.hpp
+    ${_config_out}/operation_params_serialization.hpp
+    ${_config_out}/operation_params.cpp
     ${_config_out}/inventory_slot.hpp
     ${_config_out}/inventory_slot_serialization.hpp
     ${_config_out}/inventory_slot.cpp

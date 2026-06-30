@@ -40,6 +40,8 @@
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_window/window_event_handler.hpp"
 #include "config/generated/scene_config.hpp"
+#include "config/generated/operation_params.hpp"
+#include "operations/operation_drag_payload.hpp"
 #include "erhe_defer/defer.hpp"
 #include "erhe_file/file.hpp"
 #include "erhe_gltf/gltf.hpp"
@@ -822,6 +824,45 @@ Operations::Operations(
     commands.bind_command_to_key(&m_align_command,            erhe::window::Key_f8);
     commands.bind_command_to_key(&m_align_with_scale_command, erhe::window::Key_f7);
 
+    // Parameterized invokers for operations that can be dragged into / invoked from
+    // an inventory slot. Each thunk runs its operation with the explicit snapshot
+    // params (parameterless operations ignore the argument). The key set is exactly
+    // the set of operation buttons that expose a drag source (operation_drag_source).
+    m_param_invokers[&m_merge_command]                         = [this](const Operation_params&  ){ merge(); };
+    m_param_invokers[&m_align_command]                         = [this](const Operation_params&  ){ align_selection(false); };
+    m_param_invokers[&m_align_with_scale_command]              = [this](const Operation_params&  ){ align_selection(true); };
+    m_param_invokers[&m_add_joint_command]                     = [this](const Operation_params& p){ add_joint (static_cast<Add_joint_avoidance>(p.add_joint_avoidance)); };
+    m_param_invokers[&m_flip_joint_command]                    = [this](const Operation_params& p){ flip_joint(static_cast<Add_joint_avoidance>(p.add_joint_avoidance)); };
+    m_param_invokers[&m_bake_transform_command]                = [this](const Operation_params&  ){ bake_transform(); };
+    m_param_invokers[&m_center_transform_command]              = [this](const Operation_params&  ){ center_transform(); };
+    m_param_invokers[&m_triangulate_command]                   = [this](const Operation_params&  ){ triangulate(); };
+    m_param_invokers[&m_normalize_command]                     = [this](const Operation_params&  ){ normalize(); };
+    m_param_invokers[&m_reverse_command]                       = [this](const Operation_params&  ){ reverse(); };
+    m_param_invokers[&m_repair_command]                        = [this](const Operation_params&  ){ repair(); };
+    m_param_invokers[&m_weld_command]                          = [this](const Operation_params&  ){ weld(); };
+    m_param_invokers[&m_remesh_command]                        = [this](const Operation_params& p){ remesh(static_cast<unsigned int>(p.remesh_target_vertex_count), p.remesh_regenerate_attributes); };
+    m_param_invokers[&m_anisotropic_remesh_command]            = [this](const Operation_params& p){ anisotropic_remesh(static_cast<unsigned int>(p.remesh_target_vertex_count), p.anisotropy, p.remesh_regenerate_attributes); };
+    m_param_invokers[&m_decimate_command]                      = [this](const Operation_params& p){ decimate(static_cast<unsigned int>(p.decimate_bins), p.remesh_regenerate_attributes); };
+    m_param_invokers[&m_smooth_command]                        = [this](const Operation_params& p){ smooth(static_cast<unsigned int>(p.smooth_iterations), p.smooth_strength, p.remesh_regenerate_attributes); };
+    m_param_invokers[&m_make_atlas_command]                    = [this](const Operation_params& p){ make_atlas(static_cast<std::size_t>(p.atlas_texcoord_slot), p.atlas_hard_angles_deg, p.atlas_parameterizer, p.atlas_packer); };
+    m_param_invokers[&m_catmull_clark_command]                 = [this](const Operation_params&  ){ catmull_clark(); };
+    m_param_invokers[&m_sqrt3_command]                         = [this](const Operation_params&  ){ sqrt3(); };
+    m_param_invokers[&m_dual_command]                          = [this](const Operation_params&  ){ dual(); };
+    m_param_invokers[&m_join_command]                          = [this](const Operation_params&  ){ join(); };
+    m_param_invokers[&m_kis_command]                           = [this](const Operation_params& p){ kis(p.kis_height); };
+    m_param_invokers[&m_meta_command]                          = [this](const Operation_params&  ){ meta(); };
+    m_param_invokers[&m_ortho_command]                         = [this](const Operation_params&  ){ ortho(); };
+    m_param_invokers[&m_ambo_command]                          = [this](const Operation_params&  ){ ambo(); };
+    m_param_invokers[&m_truncate_command]                      = [this](const Operation_params& p){ truncate(p.truncate_ratio); };
+    m_param_invokers[&m_gyro_command]                          = [this](const Operation_params& p){ gyro(p.gyro_ratio); };
+    m_param_invokers[&m_chamfer3_command]                      = [this](const Operation_params& p){ chamfer3(p.bevel_ratio); };
+    m_param_invokers[&m_generate_tangents_command]             = [this](const Operation_params&  ){ generate_tangents(); };
+    m_param_invokers[&m_generate_frame_field_tangents_command] = [this](const Operation_params& p){ generate_frame_field_tangents(p.frame_field_sharp_angle_deg); };
+    m_param_invokers[&m_make_geometry_command]                 = [this](const Operation_params&  ){ make_geometry(); };
+    m_param_invokers[&m_make_raytrace_command]                 = [this](const Operation_params&  ){ make_raytrace(); };
+    m_param_invokers[&m_export_gltf_command]                   = [this](const Operation_params&  ){ export_gltf(); };
+    m_param_invokers[&m_create_brush]                          = [this](const Operation_params&  ){ create_brush(); };
+
     m_make_mesh_config.instance_count = scene_config.instance_count;
     m_make_mesh_config.instance_gap   = scene_config.instance_gap;
     m_make_mesh_config.object_scale   = scene_config.object_scale;
@@ -1112,17 +1153,17 @@ void Operations::imgui()
     }
 
     if (section("Transform & Joints")) {
-        if (visible("Merge") && make_button("Merge", multi_select_meshes, button_size)) {
+        if (visible("Merge") && operation_button("Merge", &m_merge_command, multi_select_meshes, button_size)) {
             merge();
         }
-        if (visible("Align") && make_button("Align", align_mode, button_size)) {
+        if (visible("Align") && operation_button("Align", &m_align_command, align_mode, button_size)) {
             align_selection(false);
         }
-        if (visible("Align with Scale") && make_button("Align with Scale", align_mode, button_size)) {
+        if (visible("Align with Scale") && operation_button("Align with Scale", &m_align_with_scale_command, align_mode, button_size)) {
             align_selection(true);
         }
         if (visible("Add Joint")) {
-            if (make_button("Add Joint", align_mode, button_size)) {
+            if (operation_button("Add Joint", &m_add_joint_command, align_mode, button_size)) {
                 add_joint();
             }
             // Controls what the Add Joint initial-orientation search avoids intersecting.
@@ -1136,31 +1177,31 @@ void Operations::imgui()
                 ImGui::SetTooltip("Add Joint / Flip Joint: obstacles avoided when searching the non-intersecting orientation");
             }
         }
-        if (visible("Flip Joint") && make_button("Flip Joint", flip_joint_mode, button_size)) {
+        if (visible("Flip Joint") && operation_button("Flip Joint", &m_flip_joint_command, flip_joint_mode, button_size)) {
             flip_joint();
         }
-        if (visible("Bake Transform") && make_button("Bake Transform", has_selection_mode, button_size)) {
+        if (visible("Bake Transform") && operation_button("Bake Transform", &m_bake_transform_command, has_selection_mode, button_size)) {
             bake_transform();
         }
-        if (visible("Center Transform") && make_button("Center Transform", has_selection_mode, button_size)) {
+        if (visible("Center Transform") && operation_button("Center Transform", &m_center_transform_command, has_selection_mode, button_size)) {
             center_transform();
         }
     }
 
     if (section("Subdivision")) {
-        if (visible("Catmull-Clark") && make_button("Catmull-Clark", selection_aware_mode, button_size)) {
+        if (visible("Catmull-Clark") && operation_button("Catmull-Clark", &m_catmull_clark_command, selection_aware_mode, button_size)) {
             catmull_clark();
         }
-        if (visible("Sqrt3") && make_button("Sqrt3", selection_aware_mode, button_size)) {
+        if (visible("Sqrt3") && operation_button("Sqrt3", &m_sqrt3_command, selection_aware_mode, button_size)) {
             sqrt3();
         }
-        if (visible("Triangulate") && make_button("Triangulate", has_selection_mode, button_size)) {
+        if (visible("Triangulate") && operation_button("Triangulate", &m_triangulate_command, has_selection_mode, button_size)) {
             triangulate();
         }
     }
 
     if (section("Conway")) {
-        if (visible("Join") && make_button("Join", selection_aware_mode, button_size)) {
+        if (visible("Join") && operation_button("Join", &m_join_command, selection_aware_mode, button_size)) {
             join();
         }
         if (visible("Kis")) {
@@ -1169,15 +1210,15 @@ void Operations::imgui()
             ImGui::SliderFloat("##", &m_kis_height, -1.0f, 1.0f, "%.2f");
             if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Kis: Apex height along face normal (0 = flat)"); }
             ImGui::PopID();
-            if (make_button("Kis", selection_aware_mode, button_size)) {
+            if (operation_button("Kis", &m_kis_command, selection_aware_mode, button_size)) {
                 kis();
             }
             ImGui::PopID();
         }
-        if (visible("Meta") && make_button("Meta", selection_aware_mode, button_size)) {
+        if (visible("Meta") && operation_button("Meta", &m_meta_command, selection_aware_mode, button_size)) {
             meta();
         }
-        if (visible("Ortho") && make_button("Ortho", selection_aware_mode, button_size)) {
+        if (visible("Ortho") && operation_button("Ortho", &m_ortho_command, selection_aware_mode, button_size)) {
             ortho();
         }
         if (visible("Gyro")) {
@@ -1186,7 +1227,7 @@ void Operations::imgui()
             ImGui::SliderFloat("##", &m_gyro_ratio, 0.01f, 0.49f, "%.2f");
             if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Gyro: Edge split position (1/3 = standard gyro)"); }
             ImGui::PopID();
-            if (make_button("Gyro", selection_aware_mode, button_size)) {
+            if (operation_button("Gyro", &m_gyro_command, selection_aware_mode, button_size)) {
                 gyro();
             }
             ImGui::PopID();
@@ -1197,15 +1238,15 @@ void Operations::imgui()
             ImGui::SliderFloat("##", &m_bevel_ratio, 0.0f, 1.0f, "%.2f");
             if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Chamfer: Bevel ratio (how much each face shrinks)"); }
             ImGui::PopID();
-            if (make_button("Chamfer", selection_aware_mode, button_size)) {
+            if (operation_button("Chamfer", &m_chamfer3_command, selection_aware_mode, button_size)) {
                 chamfer3();
             }
             ImGui::PopID();
         }
-        if (visible("Dual") && make_button("Dual", has_selection_mode, button_size)) {
+        if (visible("Dual") && operation_button("Dual", &m_dual_command, has_selection_mode, button_size)) {
             dual();
         }
-        if (visible("Ambo") && make_button("Ambo", has_selection_mode, button_size)) {
+        if (visible("Ambo") && operation_button("Ambo", &m_ambo_command, has_selection_mode, button_size)) {
             ambo();
         }
         if (visible("Truncate")) {
@@ -1214,23 +1255,23 @@ void Operations::imgui()
             ImGui::SliderFloat("##", &m_truncate_ratio, 0.01f, 0.5f, "%.2f");
             if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Truncate: Cut depth (1/3 = standard, 0.5 = ambo)"); }
             ImGui::PopID();
-            if (make_button("Truncate", selection_aware_mode, button_size)) {
+            if (operation_button("Truncate", &m_truncate_command, selection_aware_mode, button_size)) {
                 truncate();
             }
             ImGui::PopID();
         }
     }
     if (section("Remesh & Cleanup")) {
-        if (visible("Normalize") && make_button("Normalize", has_selection_mode, button_size)) {
+        if (visible("Normalize") && operation_button("Normalize", &m_normalize_command, has_selection_mode, button_size)) {
             normalize();
         }
-        if (visible("Reverse") && make_button("Reverse", has_selection_mode, button_size)) {
+        if (visible("Reverse") && operation_button("Reverse", &m_reverse_command, has_selection_mode, button_size)) {
             reverse();
         }
-        if (visible("Repair") && make_button("Repair", has_selection_mode, button_size)) {
+        if (visible("Repair") && operation_button("Repair", &m_repair_command, has_selection_mode, button_size)) {
             repair();
         }
-        if (visible("Weld") && make_button("Weld", has_selection_mode, button_size)) {
+        if (visible("Weld") && operation_button("Weld", &m_weld_command, has_selection_mode, button_size)) {
             weld();
         }
         if (visible("Isotropic Remesh")) {
@@ -1241,7 +1282,7 @@ void Operations::imgui()
             ImGui::SliderInt("##", &m_remesh_target_vertex_count, 50, 100000, "%d", ImGuiSliderFlags_Logarithmic);
             if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Remesh: target vertex count"); }
             ImGui::PopID();
-            if (make_button("Isotropic Remesh", has_selection_mode, button_size)) {
+            if (operation_button("Isotropic Remesh", &m_remesh_command, has_selection_mode, button_size)) {
                 remesh();
             }
             ImGui::PopID();
@@ -1252,7 +1293,7 @@ void Operations::imgui()
             ImGui::SliderFloat("##", &m_anisotropy, 0.0f, 0.5f, "%.3f");
             if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Anisotropic Remesh: anisotropy strength (uses the Isotropic Remesh target vertex count)"); }
             ImGui::PopID();
-            if (make_button("Anisotropic Remesh", has_selection_mode, button_size)) {
+            if (operation_button("Anisotropic Remesh", &m_anisotropic_remesh_command, has_selection_mode, button_size)) {
                 anisotropic_remesh();
             }
             ImGui::PopID();
@@ -1263,7 +1304,7 @@ void Operations::imgui()
             ImGui::SliderInt("##", &m_decimate_bins, 4, 512, "%d");
             if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Decimate: clustering grid resolution (higher = more detail kept)"); }
             ImGui::PopID();
-            if (make_button("Decimate", has_selection_mode, button_size)) {
+            if (operation_button("Decimate", &m_decimate_command, has_selection_mode, button_size)) {
                 decimate();
             }
             ImGui::PopID();
@@ -1278,7 +1319,7 @@ void Operations::imgui()
             ImGui::SliderFloat("##", &m_smooth_strength, 0.0f, 1.0f, "%.2f");
             if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Smooth: per-step Laplacian strength (lambda)"); }
             ImGui::PopID();
-            if (make_button("Smooth", has_selection_mode, button_size)) {
+            if (operation_button("Smooth", &m_smooth_command, has_selection_mode, button_size)) {
                 smooth();
             }
             ImGui::PopID();
@@ -1309,12 +1350,12 @@ void Operations::imgui()
                 if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Make Atlas: chart packing in texture space (XAtlas = best)"); }
                 ImGui::PopID();
             }
-            if (make_button("Generate Texture Coordinates", has_selection_mode, button_size)) {
+            if (operation_button("Generate Texture Coordinates", &m_make_atlas_command, has_selection_mode, button_size)) {
                 make_atlas();
             }
             ImGui::PopID();
         }
-        if (visible("Gen Tangents") && make_button("Gen Tangents", has_selection_mode, button_size)) {
+        if (visible("Gen Tangents") && operation_button("Gen Tangents", &m_generate_tangents_command, has_selection_mode, button_size)) {
             generate_tangents();
         }
         if (visible("Gen Frame Field Tangents")) {
@@ -1323,7 +1364,7 @@ void Operations::imgui()
             ImGui::SliderFloat("##", &m_frame_field_sharp_angle_deg, 0.0f, 180.0f, "%.0f deg");
             if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Gen Frame Field Tangents: dihedral angle above which an edge is treated as a sharp feature the cross field aligns to"); }
             ImGui::PopID();
-            if (make_button("Gen Frame Field Tangents", has_selection_mode, button_size)) {
+            if (operation_button("Gen Frame Field Tangents", &m_generate_frame_field_tangents_command, has_selection_mode, button_size)) {
                 generate_frame_field_tangents();
             }
             ImGui::PopID();
@@ -1331,19 +1372,74 @@ void Operations::imgui()
     }
 
     if (section("Convert & Export")) {
-        if (visible("Make Geometry") && make_button("Make Geometry", has_selection_mode, button_size)) {
+        if (visible("Make Geometry") && operation_button("Make Geometry", &m_make_geometry_command, has_selection_mode, button_size)) {
             make_geometry();
         }
-        if (visible("Make Raytrace") && make_button("Make Raytrace", has_selection_mode, button_size)) {
+        if (visible("Make Raytrace") && operation_button("Make Raytrace", &m_make_raytrace_command, has_selection_mode, button_size)) {
             make_raytrace();
         }
-        if (visible("Create Brush") && make_button("Create Brush", has_selection_mode, button_size)) {
+        if (visible("Create Brush") && operation_button("Create Brush", &m_create_brush, has_selection_mode, button_size)) {
             create_brush();
         }
-        if (visible("Export glTF") && make_button("Export glTF", erhe::imgui::Item_mode::normal, button_size)) {
+        if (visible("Export glTF") && operation_button("Export glTF", &m_export_gltf_command, erhe::imgui::Item_mode::normal, button_size)) {
             export_gltf();
         }
     }
+}
+
+auto Operations::current_params() const -> Operation_params
+{
+    Operation_params params{};
+    params.kis_height                   = m_kis_height;
+    params.gyro_ratio                   = m_gyro_ratio;
+    params.bevel_ratio                  = m_bevel_ratio;
+    params.truncate_ratio               = m_truncate_ratio;
+    params.remesh_target_vertex_count   = m_remesh_target_vertex_count;
+    params.decimate_bins                = m_decimate_bins;
+    params.anisotropy                   = m_anisotropy;
+    params.smooth_iterations            = m_smooth_iterations;
+    params.smooth_strength              = m_smooth_strength;
+    params.remesh_regenerate_attributes = m_remesh_regenerate_attributes;
+    params.atlas_texcoord_slot          = m_atlas_texcoord_slot;
+    params.atlas_hard_angles_deg        = m_atlas_hard_angles_deg;
+    params.atlas_parameterizer          = m_atlas_parameterizer;
+    params.atlas_packer                 = m_atlas_packer;
+    params.frame_field_sharp_angle_deg  = m_frame_field_sharp_angle_deg;
+    params.add_joint_avoidance          = static_cast<int>(m_add_joint_avoidance);
+    return params;
+}
+
+void Operations::run_operation(erhe::commands::Command* command, const Operation_params& params)
+{
+    const auto i = m_param_invokers.find(command);
+    if (i != m_param_invokers.end()) {
+        i->second(params);
+    }
+}
+
+void Operations::operation_drag_source(erhe::commands::Command* command, const char* label)
+{
+    // Only operations registered in m_param_invokers are draggable. The source is
+    // tied to the immediately-preceding make_button() item, and only fires while
+    // that item is actually being dragged.
+    if ((command == nullptr) || !m_param_invokers.contains(command)) {
+        return;
+    }
+    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+        Operation_drag_payload payload{};
+        payload.command = command;
+        payload.params  = current_params();
+        ImGui::SetDragDropPayload(c_operation_payload_type, &payload, sizeof(payload));
+        ImGui::TextUnformatted(label);
+        ImGui::EndDragDropSource();
+    }
+}
+
+auto Operations::operation_button(const char* label, erhe::commands::Command* command, const erhe::imgui::Item_mode mode, const ImVec2 size) -> bool
+{
+    const bool pressed = make_button(label, mode, size);
+    operation_drag_source(command, label);
+    return pressed;
 }
 
 void Operations::merge()
@@ -1947,11 +2043,15 @@ void Operations::generate_tangents()
 
 void Operations::generate_frame_field_tangents()
 {
-    const float sharp_angle = m_frame_field_sharp_angle_deg;
+    generate_frame_field_tangents(m_frame_field_sharp_angle_deg);
+}
+
+void Operations::generate_frame_field_tangents(const float sharp_angle_deg)
+{
     async_for_selected_nodes_with_mesh(
-        [this, sharp_angle](Mesh_operation_parameters&& params) {
+        [this, sharp_angle_deg](Mesh_operation_parameters&& params) {
             m_context.operation_stack->queue(
-                std::make_shared<Generate_frame_field_tangents_operation>(std::move(params), sharp_angle)
+                std::make_shared<Generate_frame_field_tangents_operation>(std::move(params), sharp_angle_deg)
             );
         }
     );
@@ -2078,7 +2178,11 @@ void Operations::join()
 
 void Operations::kis()
 {
-    const float height = m_kis_height;
+    kis(m_kis_height);
+}
+
+void Operations::kis(const float height)
+{
     // Selection-aware: when a face-mode mesh-component selection is active, only the
     // selected facets are raised (the rest of the mesh stays connected).
     async_for_selected_nodes_with_mesh(
@@ -2112,7 +2216,11 @@ void Operations::ambo()
 
 void Operations::truncate()
 {
-    const float ratio = m_truncate_ratio;
+    truncate(m_truncate_ratio);
+}
+
+void Operations::truncate(const float ratio)
+{
     // Selection-aware: when a face-mode mesh-component selection is active, only the
     // selected facets are truncated (the rest of the mesh stays connected).
     async_for_selected_nodes_with_mesh(
@@ -2127,7 +2235,11 @@ void Operations::truncate()
 
 void Operations::gyro()
 {
-    const float ratio = m_gyro_ratio;
+    gyro(m_gyro_ratio);
+}
+
+void Operations::gyro(const float ratio)
+{
     // Selection-aware: when a face-mode mesh-component selection is active, only the
     // selected facets are gyrated (the rest of the mesh stays connected).
     async_for_selected_nodes_with_mesh(

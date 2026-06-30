@@ -7,6 +7,8 @@
 #include "app_message.hpp"
 #include "erhe_message_bus/message_bus.hpp"
 
+#include "config/generated/operation_params.hpp"
+
 #include <glm/glm.hpp>
 
 #include <memory>
@@ -59,6 +61,8 @@ public:
     Tool*                                      tool    {nullptr};
     std::shared_ptr<Brush>                     brush   {};  // Non-null for brush slots
     std::shared_ptr<erhe::primitive::Material> material{}; // Non-null for material slots
+    erhe::commands::Command*                   command {nullptr}; // Non-null for operation slots
+    Operation_params                           operation_params{}; // Frozen parameter snapshot for the operation slot
 };
 
 class Toggle_menu_visibility_command : public erhe::commands::Command

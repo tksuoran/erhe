@@ -11,6 +11,8 @@
 #include "preview/brush_preview.hpp"
 #include "preview/material_preview.hpp"
 #include "erhe_primitive/material.hpp"
+#include "operations/operation_drag_payload.hpp"
+#include "operations/operations_window.hpp"
 #include "tools/hotbar.hpp"
 #include "tools/tool.hpp"
 #include "tools/tools.hpp"
@@ -18,6 +20,8 @@
 #include "config/generated/inventory_slot.hpp"
 #include "config/generated/inventory_config.hpp"
 
+#include "erhe_commands/command.hpp"
+#include "erhe_commands/commands.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_utility/bit_helpers.hpp"
 
@@ -30,6 +34,21 @@ namespace {
 constexpr float c_slot_size = 48.0f;
 
 using Slot_section = Slot_drag_payload::Section;
+
+// Short display label for an operation slot button: the last dotted segment of the
+// command name (e.g. "Geometry.Conway.Kis" -> "Kis"). Returns a pointer into the
+// command's own name storage, valid for the lifetime of the command.
+auto operation_slot_label(const erhe::commands::Command* command) -> const char*
+{
+    const char* name = command->get_name();
+    const char* last = name;
+    for (const char* p = name; *p != '\0'; ++p) {
+        if (*p == '.') {
+            last = p + 1;
+        }
+    }
+    return last;
+}
 
 } // anonymous namespace
 
@@ -52,11 +71,11 @@ Inventory_window::Inventory_window(
     // Save slot names for later resolution (after tools are registered)
     m_saved_grid_names.reserve(config.grid_slots.size());
     for (const Inventory_slot& slot : config.grid_slots) {
-        m_saved_grid_names.push_back(Saved_slot_name{slot.tool_name, slot.brush_name, slot.material_name});
+        m_saved_grid_names.push_back(Saved_slot_name{slot.tool_name, slot.brush_name, slot.material_name, slot.command_name, slot.operation_params});
     }
     m_saved_hotbar_names.reserve(config.hotbar_slots.size());
     for (const Inventory_slot& slot : config.hotbar_slots) {
-        m_saved_hotbar_names.push_back(Saved_slot_name{slot.tool_name, slot.brush_name, slot.material_name});
+        m_saved_hotbar_names.push_back(Saved_slot_name{slot.tool_name, slot.brush_name, slot.material_name, slot.command_name, slot.operation_params});
     }
 }
 
@@ -80,6 +99,10 @@ void Inventory_window::collect_tools()
         if (i < static_cast<int>(m_saved_grid_names.size())) {
             const Saved_slot_name& saved = m_saved_grid_names[i];
             m_grid_slots[i].tool  = resolve_tool(saved.tool_name);
+            if (!saved.command_name.empty() && (m_context.commands != nullptr)) {
+                m_grid_slots[i].command          = m_context.commands->find_command(saved.command_name);
+                m_grid_slots[i].operation_params = saved.operation_params;
+            }
             // Brush resolution would require content library access - deferred for now
             // Brushes are resolved by name when the content library is available
         }
@@ -91,6 +114,10 @@ void Inventory_window::collect_tools()
         if (i < static_cast<int>(m_saved_hotbar_names.size())) {
             const Saved_slot_name& saved = m_saved_hotbar_names[i];
             m_hotbar_slots[i].tool = resolve_tool(saved.tool_name);
+            if (!saved.command_name.empty() && (m_context.commands != nullptr)) {
+                m_hotbar_slots[i].command          = m_context.commands->find_command(saved.command_name);
+                m_hotbar_slots[i].operation_params = saved.operation_params;
+            }
         }
     }
     m_saved_hotbar_names.clear();
@@ -128,7 +155,7 @@ auto Inventory_window::resolve_tool(const std::string& tool_name) const -> Tool*
 auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is_source, const bool is_target, const int section, const int slot_index) -> bool
 {
     bool changed  = false;
-    bool has_item = (slot.tool != nullptr) || slot.brush || slot.material;
+    bool has_item = (slot.tool != nullptr) || slot.brush || slot.material || (slot.command != nullptr);
 
     const ImVec2 button_size{c_slot_size, c_slot_size};
 
@@ -172,7 +199,7 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
     }
 
     if (!thumbnail_drawn) {
-        // Tool slot or empty: render icon button
+        // Tool slot, operation slot, or empty: render a button
         ImGui::PushStyleColor(ImGuiCol_Button,        bg_color);
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered,  ImVec4{0.3f, 0.3f, 0.6f, 0.9f});
         ImGui::PushStyleColor(ImGuiCol_ButtonActive,   ImVec4{0.4f, 0.4f, 0.7f, 1.0f});
@@ -191,6 +218,14 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
             } else {
                 ImGui::Button("?", button_size);
             }
+        } else if (slot.command != nullptr) {
+            // Operation slot: a labeled button that invokes the stored operation
+            // (with its frozen params) against the current selection on click.
+            // ImGui::Button returns false when the click became a drag, so the
+            // click-vs-drag distinction is handled for us.
+            if (ImGui::Button(operation_slot_label(slot.command), button_size) && (m_context.operations != nullptr)) {
+                m_context.operations->run_operation(slot.command, slot.operation_params);
+            }
         } else {
             ImGui::Button("##empty", button_size);
         }
@@ -201,6 +236,10 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
         if ((slot.tool != nullptr) && !slot.brush && !slot.material && ImGui::IsItemHovered()) {
             ImGui::SetTooltip("%s", slot.tool->get_description());
         }
+        // Tooltip for operation slots: the full (dotted) command name.
+        if ((slot.tool == nullptr) && (slot.command != nullptr) && ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s", slot.command->get_name());
+        }
     }
 
     // Drag source
@@ -210,6 +249,8 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
                 .tool     = slot.tool,
                 .brush    = slot.brush.get(),
                 .material = slot.material.get(),
+                .command  = slot.command,
+                .params   = slot.operation_params,
                 .section  = static_cast<Slot_section>(section),
                 .index    = slot_index
             };
@@ -220,6 +261,8 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
                 ImGui::Text("%s", slot.material->get_name().c_str());
             } else if (slot.tool != nullptr) {
                 ImGui::Text("%s", slot.tool->get_description());
+            } else if (slot.command != nullptr) {
+                ImGui::Text("%s", slot.command->get_name());
             }
             ImGui::EndDragDropSource();
         }
@@ -230,6 +273,7 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
         slot.tool = nullptr;
         slot.brush.reset();
         slot.material.reset();
+        slot.command = nullptr;
         changed = true;
     }
 
@@ -250,6 +294,8 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
                 if (source.material != nullptr) {
                     source_entry.material = std::dynamic_pointer_cast<erhe::primitive::Material>(source.material->shared_from_this());
                 }
+                source_entry.command          = source.command;
+                source_entry.operation_params = source.params;
 
                 // Find the source slot and swap (palette sources are copy-only)
                 Slot_entry* source_slot = nullptr;
@@ -275,6 +321,18 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
                 changed = true;
             }
 
+            // Accept an operation dragged out of the Operations window.
+            const ImGuiPayload* op_payload = ImGui::AcceptDragDropPayload(c_operation_payload_type);
+            if (op_payload != nullptr) {
+                const Operation_drag_payload& op = *static_cast<const Operation_drag_payload*>(op_payload->Data);
+                slot.tool = nullptr;
+                slot.brush.reset();
+                slot.material.reset();
+                slot.command          = op.command;
+                slot.operation_params = op.params;
+                changed = true;
+            }
+
             // Accept content library node drops (brushes and materials)
             const ImGuiPayload* node_payload = ImGui::AcceptDragDropPayload("Content_library_node");
             if (node_payload != nullptr) {
@@ -286,6 +344,7 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
                         slot.brush    = dropped_brush;
                         slot.material.reset();
                         slot.tool     = m_context.brush_tool;
+                        slot.command  = nullptr;
                         changed       = true;
                     }
                     std::shared_ptr<erhe::primitive::Material> dropped_material =
@@ -300,6 +359,7 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
                             slot.brush.reset();
                             slot.tool     = m_context.material_paint_tool;
                         }
+                        slot.command = nullptr;
                         changed = true;
                     }
                 }
@@ -444,6 +504,8 @@ void Inventory_window::write_config(Inventory_config& config) const
         slot.tool_name     = (entry.tool != nullptr) ? entry.tool->get_description() : "";
         slot.brush_name    = entry.brush    ? entry.brush->get_name()    : "";
         slot.material_name = entry.material ? entry.material->get_name() : "";
+        slot.command_name  = (entry.command != nullptr) ? entry.command->get_name() : "";
+        slot.operation_params = entry.operation_params;
         config.grid_slots.push_back(slot);
     }
 
@@ -453,6 +515,8 @@ void Inventory_window::write_config(Inventory_config& config) const
         slot.tool_name     = (entry.tool != nullptr) ? entry.tool->get_description() : "";
         slot.brush_name    = entry.brush    ? entry.brush->get_name()    : "";
         slot.material_name = entry.material ? entry.material->get_name() : "";
+        slot.command_name  = (entry.command != nullptr) ? entry.command->get_name() : "";
+        slot.operation_params = entry.operation_params;
         config.hotbar_slots.push_back(slot);
     }
 }

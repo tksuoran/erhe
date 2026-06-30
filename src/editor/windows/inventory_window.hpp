@@ -2,8 +2,12 @@
 
 #include "erhe_imgui/imgui_window.hpp"
 
+#include "config/generated/operation_params.hpp"
+
 #include <string>
 #include <vector>
+
+namespace erhe::commands { class Command; }
 
 struct Inventory_config;
 struct Inventory_slot;
@@ -59,9 +63,11 @@ private:
     // Saved config slot names (resolved in collect_tools)
     struct Saved_slot_name
     {
-        std::string tool_name;
-        std::string brush_name;
-        std::string material_name;
+        std::string      tool_name;
+        std::string      brush_name;
+        std::string      material_name;
+        std::string      command_name;
+        Operation_params operation_params{};
     };
     std::vector<Saved_slot_name> m_saved_grid_names;
     std::vector<Saved_slot_name> m_saved_hotbar_names;
