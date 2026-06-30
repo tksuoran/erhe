@@ -1,8 +1,7 @@
 #pragma once
 
 #include "config/generated/operation_params.hpp"
-
-namespace erhe::commands { class Command; }
+#include "erhe_commands/command.hpp"
 
 namespace editor {
 
@@ -20,5 +19,20 @@ public:
     erhe::commands::Command* command{nullptr};
     Operation_params         params {};
 };
+
+// Short display label for an operation slot button: the last dotted segment of
+// the command name (e.g. "Geometry.Conway.Kis" -> "Kis"). Returns a pointer into
+// the command's own name storage, valid for the command's lifetime.
+[[nodiscard]] inline auto operation_short_label(const erhe::commands::Command* command) -> const char*
+{
+    const char* name = command->get_name();
+    const char* last = name;
+    for (const char* p = name; *p != '\0'; ++p) {
+        if (*p == '.') {
+            last = p + 1;
+        }
+    }
+    return last;
+}
 
 }

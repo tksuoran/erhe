@@ -18,6 +18,8 @@
 #include "scene/viewport_scene_views.hpp"
 #include "tools/tool.hpp"
 #include "tools/tools.hpp"
+#include "operations/operation_drag_payload.hpp"
+#include "operations/operations_window.hpp"
 #include "quad_view.hpp"
 #include "rendertarget_imgui_host.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -857,6 +859,16 @@ void Hotbar::slot_button(const uint32_t id, Slot_entry& entry)
             if (is_pressed) {
                 m_context.tools->set_priority_tool(is_boosted ? nullptr : tool);
             }
+        }
+    } else if (entry.command != nullptr) {
+        // Operation slot: a labeled button that invokes the stored operation with
+        // its frozen params against the current selection on click.
+        const ImVec2 button_size{icon_size, icon_size};
+        if (ImGui::Button(operation_short_label(entry.command), button_size) && (m_context.operations != nullptr)) {
+            m_context.operations->run_operation(entry.command, entry.operation_params);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s", entry.command->get_name());
         }
     }
 

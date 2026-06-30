@@ -35,21 +35,6 @@ constexpr float c_slot_size = 48.0f;
 
 using Slot_section = Slot_drag_payload::Section;
 
-// Short display label for an operation slot button: the last dotted segment of the
-// command name (e.g. "Geometry.Conway.Kis" -> "Kis"). Returns a pointer into the
-// command's own name storage, valid for the lifetime of the command.
-auto operation_slot_label(const erhe::commands::Command* command) -> const char*
-{
-    const char* name = command->get_name();
-    const char* last = name;
-    for (const char* p = name; *p != '\0'; ++p) {
-        if (*p == '.') {
-            last = p + 1;
-        }
-    }
-    return last;
-}
-
 } // anonymous namespace
 
 Inventory_window::Inventory_window(
@@ -225,7 +210,7 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
             // (with its frozen params) against the current selection on click.
             // ImGui::Button returns false when the click became a drag, so the
             // click-vs-drag distinction is handled for us.
-            if (ImGui::Button(operation_slot_label(slot.command), button_size) && (m_context.operations != nullptr)) {
+            if (ImGui::Button(operation_short_label(slot.command), button_size) && (m_context.operations != nullptr)) {
                 m_context.operations->run_operation(slot.command, slot.operation_params);
             }
         } else {
@@ -487,7 +472,7 @@ void Inventory_window::apply_hotbar()
     std::vector<Slot_entry> filtered;
     filtered.reserve(m_hotbar_slots.size());
     for (const Slot_entry& entry : m_hotbar_slots) {
-        if ((entry.tool != nullptr) || entry.brush || entry.material) {
+        if ((entry.tool != nullptr) || entry.brush || entry.material || (entry.command != nullptr)) {
             filtered.push_back(entry);
         }
     }
