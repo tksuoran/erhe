@@ -462,9 +462,18 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
 #if defined(ERHE_GRAPHICS_API_METAL)
     window_flags |= SDL_WINDOW_METAL;
 #endif
-    if (configuration.fullscreen) { 
+    if (configuration.fullscreen) {
         window_flags |= SDL_WINDOW_FULLSCREEN;
     }
+#if defined(ERHE_OS_ANDROID)
+    // On Android the activity always covers the whole display, and
+    // SDL_WINDOW_FULLSCREEN is what drives SDL's immersive system-UI handling
+    // (SDLActivity.setWindowStyle -> SYSTEM_UI_FLAG_IMMERSIVE_STICKY, plus the
+    // re-hide-after-swipe loop). Without it the editor renders behind the top
+    // status bar (clock/battery) and the bottom navigation bar. Force it on so
+    // the mobile editor runs edge-to-edge regardless of the window configuration.
+    window_flags |= SDL_WINDOW_FULLSCREEN;
+#endif
     if (configuration.framebuffer_transparency) {
         window_flags |= SDL_WINDOW_TRANSPARENT;
     }
