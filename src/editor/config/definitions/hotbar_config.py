@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Hotbar_config",
-    version=2,
+    version=3,
     short_desc="Hotbar",
     long_desc="",
     developer=True,
@@ -89,6 +89,18 @@ struct("Hotbar_config",
             long_desc="Extra inward offset from the frustum plane, in meters (0 = edge touches the plane). Useful for OpenXR comfort.",
             visible=True,
             developer=False
+        ),
+        field(
+            "height",
+            Float,
+            added_in=3,
+            default="0.06f",
+            short_desc="Height",
+            long_desc="Apparent hotbar height as a fraction of the viewport vertical extent (0..1). The hotbar quad is scaled to this fraction every frame so it keeps a constant on-screen size regardless of camera FOV.",
+            visible=True,
+            developer=False,
+            ui_min="0.01f",
+            ui_max="0.5f"
         ),
     ],
 )

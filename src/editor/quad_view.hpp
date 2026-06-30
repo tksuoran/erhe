@@ -103,6 +103,13 @@ public:
     // parent the node once (e.g. Hud) use this for per-frame repositioning.
     void set_world_from_node(const glm::mat4& world_from_quad);
 
+    // Uniform scale applied about the quad center on top of the world transform
+    // (default 1 = the natural width/height/pixels_per_meter size). Path A
+    // scales the rendertarget node transform; Path B scales the composition
+    // layer size while keeping the (unscaled) pose. Used by the Hotbar to keep a
+    // constant on-screen size regardless of camera FOV.
+    void set_scale(float scale);
+
     // Toggle the quad's visibility and the ImGui host's enabled state. Does not
     // touch any owning tool's window visibility -- the tool handles that.
     void set_visible(bool visible);
@@ -137,6 +144,12 @@ public:
 #endif
 
 private:
+    // Recomputes m_world_from_quad from m_base_world_from_quad * m_scale and
+    // applies it: Path A sets the rendertarget node world transform; Path B sets
+    // the composition layer pose (from the unscaled base) and the scaled size.
+    // Does not reparent.
+    void apply_transform();
+
     App_context&                             m_context;
     Headset_view*                            m_headset_view{nullptr};
     bool                                     m_uses_composition_layer{false};
@@ -154,10 +167,16 @@ private:
     std::shared_ptr<Rendertarget_mesh>       m_rendertarget_mesh;
     std::shared_ptr<erhe::scene::Node>       m_rendertarget_node;
 
-    // Path B. m_world_from_quad is the world transform last set via
-    // set_world_from_quad/set_world_from_node, used both to derive the stage-
-    // space quad layer pose and to map the controller ray to window coords.
+    // m_base_world_from_quad is the (unscaled, orthonormal) world transform last
+    // set via set_world_from_quad/set_world_from_node; the Path B quad-layer
+    // pose is derived from it. m_world_from_quad is the effective transform with
+    // m_scale folded in (m_base * scale), used for the Path A node transform and
+    // for every geometry query (intersect_ray / world_to_window / plane), so a
+    // scaled quad hit-tests against its rendered size. m_scale is the uniform
+    // scale applied about the quad center.
+    glm::mat4                                m_base_world_from_quad{1.0f};
     glm::mat4                                m_world_from_quad{1.0f};
+    float                                    m_scale{1.0f};
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     std::unique_ptr<erhe::xr::Quad_layer>    m_quad_layer;
     // Render passes for the quad swapchain images, keyed by the wrapped texture

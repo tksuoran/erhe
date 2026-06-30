@@ -184,37 +184,51 @@ namespace {
 } // namespace
 #endif
 
-void Quad_view::set_world_from_quad(const std::shared_ptr<erhe::scene::Node>& parent_node, const glm::mat4& world_from_quad)
+void Quad_view::apply_transform()
 {
-    m_world_from_quad = world_from_quad;
+    // Effective transform = base * uniform scale about the quad center. Built
+    // explicitly to avoid depending on glm transform headers.
+    glm::mat4 scale_matrix{1.0f};
+    scale_matrix[0][0] = m_scale;
+    scale_matrix[1][1] = m_scale;
+    scale_matrix[2][2] = m_scale;
+    m_world_from_quad = m_base_world_from_quad * scale_matrix;
+
     if (m_rendertarget_node) {
-        // set_parent with a null parent detaches the node; callers rely on this
-        // (e.g. Hotbar detaches when there is no valid hovered scene view).
-        m_rendertarget_node->set_parent(parent_node);
-        m_rendertarget_node->set_world_from_node(world_from_quad);
+        m_rendertarget_node->set_world_from_node(m_world_from_quad);
     }
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     if (m_quad_layer) {
         const glm::vec3 camera_offset = (m_headset_view != nullptr) ? m_headset_view->get_camera_offset() : glm::vec3{0.0f};
-        m_quad_layer->set_pose(stage_pose_from_world(world_from_quad, camera_offset));
-        m_quad_layer->set_size(XrExtent2Df{m_local_width, m_local_height});
+        // The quad layer takes an (unscaled) pose plus an explicit size, so the
+        // scale goes into the size rather than the pose matrix.
+        m_quad_layer->set_pose(stage_pose_from_world(m_base_world_from_quad, camera_offset));
+        m_quad_layer->set_size(XrExtent2Df{m_local_width * m_scale, m_local_height * m_scale});
     }
 #endif
 }
 
+void Quad_view::set_world_from_quad(const std::shared_ptr<erhe::scene::Node>& parent_node, const glm::mat4& world_from_quad)
+{
+    m_base_world_from_quad = world_from_quad;
+    if (m_rendertarget_node) {
+        // set_parent with a null parent detaches the node; callers rely on this
+        // (e.g. Hotbar detaches when there is no valid hovered scene view).
+        m_rendertarget_node->set_parent(parent_node);
+    }
+    apply_transform();
+}
+
 void Quad_view::set_world_from_node(const glm::mat4& world_from_quad)
 {
-    m_world_from_quad = world_from_quad;
-    if (m_rendertarget_node) {
-        m_rendertarget_node->set_world_from_node(world_from_quad);
-    }
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-    if (m_quad_layer) {
-        const glm::vec3 camera_offset = (m_headset_view != nullptr) ? m_headset_view->get_camera_offset() : glm::vec3{0.0f};
-        m_quad_layer->set_pose(stage_pose_from_world(world_from_quad, camera_offset));
-        m_quad_layer->set_size(XrExtent2Df{m_local_width, m_local_height});
-    }
-#endif
+    m_base_world_from_quad = world_from_quad;
+    apply_transform();
+}
+
+void Quad_view::set_scale(float scale)
+{
+    m_scale = scale;
+    apply_transform();
 }
 
 void Quad_view::set_visible(bool visible)

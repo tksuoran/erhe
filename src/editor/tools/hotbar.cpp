@@ -244,6 +244,7 @@ Hotbar::Hotbar(
     m_x          = hotbar_config.x;
     m_z          = hotbar_config.z;
     m_margin     = hotbar_config.margin;
+    m_height     = hotbar_config.height;
 
     // Resolve the configured anchor. platform_default picks the bottom of the
     // vertical FOV on desktop and the top in OpenXR (matching where the hotbar
@@ -607,14 +608,6 @@ auto Hotbar::get_camera() const -> std::shared_ptr<erhe::scene::Camera>
     return viewport_scene_view->get_camera();
 }
 
-auto Hotbar::get_hotbar_half_height() const -> float
-{
-    if (m_use_radial) {
-        return 1.0f; // radial disc outer_radius (see init_radial_menu)
-    }
-    return (m_quad_view != nullptr) ? (0.5f * m_quad_view->get_local_height()) : 0.0f;
-}
-
 void Hotbar::update_node_transform()
 {
     if (m_locked) {
@@ -624,7 +617,8 @@ void Hotbar::update_node_transform()
     const erhe::scene::Node*           camera_node{nullptr};
     std::shared_ptr<erhe::scene::Node> root_node;
     glm::mat4                          world_from_node{1.0f};
-    [this, &camera_node, &root_node, &world_from_node]() {
+    float                              quad_scale{1.0f};
+    [this, &camera_node, &root_node, &world_from_node, &quad_scale]() {
         const Scene_view* scene_view = get_hover_scene_view();
         if (scene_view == nullptr) {
             return;
@@ -640,8 +634,12 @@ void Hotbar::update_node_transform()
 
         const auto& world_from_camera = camera_node->world_from_node();
 
-        // Anchor the hotbar to the camera's vertical FOV: offset the panel
-        // center inward by half its height (plus margin) so the near edge
+        // Anchor the hotbar to the camera's vertical FOV and keep a constant
+        // apparent size. The frustum vertical extent at the hotbar depth is
+        // depth * (tan(fov.up) - tan(fov.down)); sizing the panel to m_height of
+        // that extent makes its on-screen height a constant fraction of the
+        // viewport regardless of FOV (and of depth). The panel center is then
+        // offset inward by half that height (plus margin) so the near edge
         // touches the top/bottom frustum plane while the panel stays inside the
         // frustum. The panel's local +Y stays aligned with the camera up (the
         // rotate below only flips X/Z), so this is a pure camera-space Y offset
@@ -657,8 +655,22 @@ void Hotbar::update_node_transform()
                 viewport = viewport_scene_view->get_projection_viewport();
             }
             const erhe::scene::Projection::Fov_sides fov = projection->get_fov_sides(viewport);
-            const float depth       = -m_z; // m_z < 0 (forward along -Z); depth is the forward distance
-            const float half_height = get_hotbar_half_height();
+            const float depth = -m_z; // m_z < 0 (forward along -Z); depth is the forward distance
+
+            float half_height = 0.0f;
+            if (m_use_radial) {
+                // The radial disc keeps its fixed local radius (outer_radius = 1)
+                // and is not constant-size scaled.
+                half_height = 1.0f;
+            } else {
+                const float frustum_full_height = depth * (std::tan(fov.up) - std::tan(fov.down));
+                const float physical_height     = m_height * frustum_full_height;
+                half_height = 0.5f * physical_height;
+                const float base_height = (m_quad_view != nullptr) ? m_quad_view->get_local_height() : 0.0f;
+                if ((m_quad_view != nullptr) && (base_height > 0.0f)) {
+                    quad_scale = physical_height / base_height;
+                }
+            }
             m_y = (m_anchor == Hotbar_anchor::top)
                 ? (depth * std::tan(fov.up)   - half_height - m_margin)
                 : (depth * std::tan(fov.down) + half_height + m_margin);
@@ -691,6 +703,7 @@ void Hotbar::update_node_transform()
     }();
 
     if (m_quad_view) {
+        m_quad_view->set_scale(quad_scale);
         m_quad_view->set_world_from_quad(root_node, world_from_node);
     }
 
