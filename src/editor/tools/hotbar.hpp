@@ -8,6 +8,7 @@
 #include "erhe_message_bus/message_bus.hpp"
 
 #include "config/generated/operation_params.hpp"
+#include "config/generated/hotbar_anchor.hpp"
 
 #include <glm/glm.hpp>
 
@@ -154,6 +155,10 @@ private:
     void on_tool_select_message      (Tool_select_message& message);
     void on_render_scene_view_message(Render_scene_view_message& message);
     void update_node_transform ();
+    // Half-height (meters) of the hotbar panel, used to offset its center
+    // inward from the anchored frustum plane so the near edge touches the
+    // plane and the panel stays inside the frustum.
+    [[nodiscard]] auto get_hotbar_half_height() const -> float;
     void slot_button           (uint32_t id, Slot_entry& entry);
     void handle_slot_update    ();
     void update_slot_from_tool (Tool* tool);
@@ -208,9 +213,11 @@ private:
     bool  m_show      {true};
     bool  m_use_radial{true};
     bool  m_locked    {false};
-    float m_x         { 0.0f};
-    float m_y         { 0.07f};
-    float m_z         {-0.4f};
+    float m_x         { 0.0f};  // horizontal offset (meters); 0 = centered
+    float m_y         { 0.07f}; // computed each frame from the camera vertical FOV (see update_node_transform)
+    float m_z         {-0.4f};  // distance in front of the camera (meters; negative = forward)
+    Hotbar_anchor m_anchor{Hotbar_anchor::bottom}; // resolved from config (platform_default -> bottom desktop / top OpenXR)
+    float         m_margin{0.0f};                  // extra inward offset from the anchored frustum plane (meters)
 
     std::size_t        m_slot      {0};
     std::size_t        m_slot_first{0};

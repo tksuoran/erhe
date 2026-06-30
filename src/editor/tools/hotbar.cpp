@@ -39,10 +39,15 @@
 #include "erhe_primitive/primitive_builder.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
+#include "erhe_scene/projection.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_math/viewport.hpp"
 #include "erhe_utility/bit_helpers.hpp"
 #include "erhe_verify/verify.hpp"
+
+#include <cmath>
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
@@ -236,20 +241,19 @@ Hotbar::Hotbar(
     m_enabled    = hotbar_config.enabled;
     m_show       = hotbar_config.show;
     m_use_radial = hotbar_config.use_radial;
+    m_x          = hotbar_config.x;
+    m_z          = hotbar_config.z;
+    m_margin     = hotbar_config.margin;
 
-    if (app_context.OpenXR) {
-        m_x = -0.02f;
-        m_y =  0.09f;
-        m_z = -0.28f;
-    } else {
-        m_x =  0.0f  ; // 64
-        m_y = -0.140f; // 64
-        m_z = -0.5f  ; // 64
+    // Resolve the configured anchor. platform_default picks the bottom of the
+    // vertical FOV on desktop and the top in OpenXR (matching where the hotbar
+    // has historically sat on each platform). m_y itself is computed every
+    // frame from the camera FOV in update_node_transform().
+    switch (hotbar_config.anchor) {
+        case Hotbar_anchor::bottom: m_anchor = Hotbar_anchor::bottom; break;
+        case Hotbar_anchor::top:    m_anchor = Hotbar_anchor::top;    break;
+        default:                    m_anchor = app_context.OpenXR ? Hotbar_anchor::top : Hotbar_anchor::bottom; break;
     }
-
-    m_x = hotbar_config.x;
-    m_y = hotbar_config.y;
-    m_z = hotbar_config.z;
 
     if (!m_enabled) {
         m_window.hide_window();
@@ -603,6 +607,14 @@ auto Hotbar::get_camera() const -> std::shared_ptr<erhe::scene::Camera>
     return viewport_scene_view->get_camera();
 }
 
+auto Hotbar::get_hotbar_half_height() const -> float
+{
+    if (m_use_radial) {
+        return 1.0f; // radial disc outer_radius (see init_radial_menu)
+    }
+    return (m_quad_view != nullptr) ? (0.5f * m_quad_view->get_local_height()) : 0.0f;
+}
+
 void Hotbar::update_node_transform()
 {
     if (m_locked) {
@@ -627,6 +639,30 @@ void Hotbar::update_node_transform()
         }
 
         const auto& world_from_camera = camera_node->world_from_node();
+
+        // Anchor the hotbar to the camera's vertical FOV: offset the panel
+        // center inward by half its height (plus margin) so the near edge
+        // touches the top/bottom frustum plane while the panel stays inside the
+        // frustum. The panel's local +Y stays aligned with the camera up (the
+        // rotate below only flips X/Z), so this is a pure camera-space Y offset
+        // applied via m_y. On desktop get_fov_sides() returns the
+        // perspective_vertical up/down; in OpenXR the hover camera is the
+        // Headset_view root camera whose projection is the union of the left
+        // and right eye fovs (the same combined frustum used for shadow fit).
+        const erhe::scene::Projection* projection = camera->projection();
+        if (projection != nullptr) {
+            erhe::math::Viewport viewport{};
+            const Viewport_scene_view* viewport_scene_view = scene_view->as_viewport_scene_view();
+            if (viewport_scene_view != nullptr) {
+                viewport = viewport_scene_view->get_projection_viewport();
+            }
+            const erhe::scene::Projection::Fov_sides fov = projection->get_fov_sides(viewport);
+            const float depth       = -m_z; // m_z < 0 (forward along -Z); depth is the forward distance
+            const float half_height = get_hotbar_half_height();
+            m_y = (m_anchor == Hotbar_anchor::top)
+                ? (depth * std::tan(fov.up)   - half_height - m_margin)
+                : (depth * std::tan(fov.down) + half_height + m_margin);
+        }
 
         // Lookat creates transform which looks along negative Z.
         // Rotate around local Y.

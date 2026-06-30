@@ -78,6 +78,13 @@ public:
     // set_world_from_node). Valid in both paths.
     [[nodiscard]] auto get_world_from_quad() const -> glm::mat4;
 
+    // The quad's physical extents in meters (content pixels / pixels_per_meter).
+    // The quad mesh is centered at its node origin, so the half-height is
+    // 0.5 * get_local_height(). Used by the Hotbar to anchor itself to the
+    // camera frustum top/bottom plane.
+    [[nodiscard]] auto get_local_width () const -> float { return m_local_width;  }
+    [[nodiscard]] auto get_local_height() const -> float { return m_local_height; }
+
     // Intersect a world-space ray with the quad rectangle. Returns the world
     // hit point if the ray crosses the quad within its bounds, else nullopt.
     // Used by the Hud drag to grab the quad in the composition-layer path,

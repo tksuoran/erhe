@@ -110,8 +110,14 @@ void Layers_window::imgui()
         ImGui::ColorEdit4("Hover",    &color_hover.x,    ImGuiColorEditFlags_Float);
         ImGui::ColorEdit4("Active",   &color_active.x,   ImGuiColorEditFlags_Float);
 
-        auto position = hotbar.get_position();
-        if (ImGui::DragFloat3("Position", &position.x, 0.01f, -1.0f, 1.0f)) {
+        // The vertical position (Y) is computed each frame from the camera
+        // vertical FOV (anchor + margin, see Hotbar::update_node_transform), so
+        // only the horizontal offset (X) and distance (Z) are editable here.
+        glm::vec3 position = hotbar.get_position();
+        float offset_distance[2] = { position.x, position.z };
+        if (ImGui::DragFloat2("Offset X / Distance Z", offset_distance, 0.01f, -1.0f, 1.0f)) {
+            position.x = offset_distance[0];
+            position.z = offset_distance[1];
             hotbar.set_position(position);
         }
         ImGui::TreePop();

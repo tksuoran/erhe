@@ -631,6 +631,7 @@ erhe_codegen_generate(
         "${_config_defs}/shadow_bias_mode.py"
         "${_config_defs}/shadow_cull_mode.py"
         "${_config_defs}/shadow_technique_mode.py"
+        "${_config_defs}/hotbar_anchor.py"
         "${_config_defs}/graphics_preset_entry.py"
         "${_config_defs}/graphics_presets_config.py"
         "${_config_defs}/fly_camera_config.py"
@@ -661,6 +662,8 @@ set(_config_sources
     ${_config_out}/grid_config.hpp
     ${_config_out}/grid_config_serialization.hpp
     ${_config_out}/grid_config.cpp
+    ${_config_out}/hotbar_anchor.hpp
+    ${_config_out}/hotbar_anchor.cpp
     ${_config_out}/hotbar_config.hpp
     ${_config_out}/hotbar_config_serialization.hpp
     ${_config_out}/hotbar_config.cpp
