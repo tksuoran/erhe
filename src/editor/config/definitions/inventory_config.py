@@ -5,6 +5,7 @@ struct("Operation_params",
     short_desc="Operation parameters",
     long_desc="Frozen snapshot of the Operations-window parameter sliders, captured when an operation is dragged into an inventory slot and replayed verbatim when the slot is invoked. An all-scalar superset of every operation's parameters; an operation reads only the field(s) it needs and ignores the rest.",
     developer=False,
+    omit_defaults=True,
     fields=[
         field("kis_height",                   Float, added_in=1, default="0.0f",       short_desc="Kis apex height",            long_desc="Conway Kis: apex height along the face normal (0 = flat).",                          visible=True, developer=False),
         field("gyro_ratio",                   Float, added_in=1, default="1.0f / 3.0f", short_desc="Gyro ratio",                 long_desc="Conway Gyro: edge split position (1/3 = standard gyro).",                            visible=True, developer=False),
@@ -30,6 +31,7 @@ struct("Inventory_slot",
     short_desc="Inventory Slot",
     long_desc="A single slot in the inventory or hotbar grid",
     developer=False,
+    omit_defaults=True,
     fields=[
         field(
             "tool_name",
@@ -88,6 +90,7 @@ struct("Inventory_config",
     short_desc="Inventory",
     long_desc="Inventory and hotbar layout configuration",
     developer=False,
+    omit_defaults=True,
     fields=[
         field(
             "column_count",
