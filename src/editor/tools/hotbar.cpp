@@ -243,8 +243,8 @@ Hotbar::Hotbar(
     m_use_radial = hotbar_config.use_radial;
     m_x          = hotbar_config.x;
     m_z          = hotbar_config.z;
-    m_margin     = hotbar_config.margin;
     m_height     = hotbar_config.height;
+    m_padding    = hotbar_config.padding;
 
     // Resolve the configured anchor. platform_default picks the bottom of the
     // vertical FOV on desktop and the top in OpenXR (matching where the hotbar
@@ -657,14 +657,19 @@ void Hotbar::update_node_transform()
             const erhe::scene::Projection::Fov_sides fov = projection->get_fov_sides(viewport);
             const float depth = -m_z; // m_z < 0 (forward along -Z); depth is the forward distance
 
+            // Vertical extent of the frustum at the hotbar depth, in meters. Both
+            // the constant-size scaling and the padding are expressed as fractions
+            // of this, so they stay a constant on-screen size regardless of FOV.
+            const float frustum_full_height = depth * (std::tan(fov.up) - std::tan(fov.down));
+            const float padding_offset      = m_padding * frustum_full_height;
+
             float half_height = 0.0f;
             if (m_use_radial) {
                 // The radial disc keeps its fixed local radius (outer_radius = 1)
                 // and is not constant-size scaled.
                 half_height = 1.0f;
             } else {
-                const float frustum_full_height = depth * (std::tan(fov.up) - std::tan(fov.down));
-                const float physical_height     = m_height * frustum_full_height;
+                const float physical_height = m_height * frustum_full_height;
                 half_height = 0.5f * physical_height;
                 const float base_height = (m_quad_view != nullptr) ? m_quad_view->get_local_height() : 0.0f;
                 if ((m_quad_view != nullptr) && (base_height > 0.0f)) {
@@ -672,8 +677,8 @@ void Hotbar::update_node_transform()
                 }
             }
             m_y = (m_anchor == Hotbar_anchor::top)
-                ? (depth * std::tan(fov.up)   - half_height - m_margin)
-                : (depth * std::tan(fov.down) + half_height + m_margin);
+                ? (depth * std::tan(fov.up)   - half_height - padding_offset)
+                : (depth * std::tan(fov.down) + half_height + padding_offset);
         }
 
         // Lookat creates transform which looks along negative Z.

@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Hotbar_config",
-    version=3,
+    version=4,
     short_desc="Hotbar",
     long_desc="",
     developer=True,
@@ -80,10 +80,13 @@ struct("Hotbar_config",
             visible=True,
             developer=False
         ),
+        # margin was an absolute (meters) inward offset; replaced in v4 by the
+        # FOV-consistent fraction-based `padding` below.
         field(
             "margin",
             Float,
             added_in=2,
+            removed_in=4,
             default="0.0f",
             short_desc="Margin",
             long_desc="Extra inward offset from the frustum plane, in meters (0 = edge touches the plane). Useful for OpenXR comfort.",
@@ -100,6 +103,18 @@ struct("Hotbar_config",
             visible=True,
             developer=False,
             ui_min="0.01f",
+            ui_max="0.5f"
+        ),
+        field(
+            "padding",
+            Float,
+            added_in=4,
+            default="0.0f",
+            short_desc="Padding",
+            long_desc="Extra inward gap between the hotbar near edge and the anchored frustum plane, as a fraction of the viewport vertical extent (0 = edge touches the plane). Stays a constant on-screen gap regardless of camera FOV; mostly useful for OpenXR comfort where the FOV extremes are hard to see.",
+            visible=True,
+            developer=False,
+            ui_min="0.0f",
             ui_max="0.5f"
         ),
     ],

@@ -213,8 +213,8 @@ private:
     float m_y         { 0.07f}; // computed each frame from the camera vertical FOV (see update_node_transform)
     float m_z         {-0.4f};  // distance in front of the camera (meters; negative = forward)
     Hotbar_anchor m_anchor{Hotbar_anchor::bottom}; // resolved from config (platform_default -> bottom desktop / top OpenXR)
-    float         m_margin{0.0f};                  // extra inward offset from the anchored frustum plane (meters)
     float         m_height{0.06f};                 // apparent height as a fraction of the viewport vertical extent
+    float         m_padding{0.0f};                 // extra inward gap from the anchored frustum plane, fraction of viewport vertical extent
 
     std::size_t        m_slot      {0};
     std::size_t        m_slot_first{0};
