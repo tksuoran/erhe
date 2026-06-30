@@ -11,6 +11,8 @@
 #include "operations/mesh_operation.hpp"
 #include "windows/property_editor.hpp"
 
+#include <imgui/imgui.h>
+
 namespace erhe::imgui { class Imgui_windows; }
 
 struct Scene_config;
@@ -327,6 +329,11 @@ private:
 
     Make_mesh_config m_make_mesh_config{};
     Property_editor  m_property_editor{};
+
+    // Operations-window search box. When non-empty, the collapsing section headers
+    // are bypassed and a flat list of operations whose label passes the filter is
+    // shown instead (see Operations::imgui()).
+    ImGuiTextFilter  m_filter{};
 };
 
 }
