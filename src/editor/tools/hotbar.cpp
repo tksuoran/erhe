@@ -685,11 +685,19 @@ void Hotbar::update_node_transform()
              0.0f, 0.0f, 0.0f, 1.0f
         };
 
+        // Face the camera straight (panel parallel to the image plane), not
+        // aimed at the camera origin. Building the orientation from an on-axis
+        // eye (0, 0, m_z) makes it look straight down the camera axis regardless
+        // of the x/y offset (an off-axis eye would tilt the panel toward the
+        // origin); the panel is then positioned at the actual offset by
+        // overwriting the translation. At m_x = m_y = 0 this equals a plain
+        // look-at, so the centered case is unchanged.
         world_from_node = erhe::math::create_look_at(
-            glm::vec3{world_from_camera * glm::vec4{m_x, m_y, m_z, 1.0}}, // eye
-            glm::vec3{world_from_camera * glm::vec4{0.0, 0.0, 0.0, 1.0}}, // target
-            glm::vec3{world_from_camera * glm::vec4{0.0, 1.0, 0.0, 0.0}}  // up
+            glm::vec3{world_from_camera * glm::vec4{0.0f, 0.0f, m_z, 1.0f}}, // on-axis eye -> image-plane-parallel orientation
+            glm::vec3{world_from_camera * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}}, // target (camera origin)
+            glm::vec3{world_from_camera * glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}}  // up
         ) * rotate;
+        world_from_node[3] = world_from_camera * glm::vec4{m_x, m_y, m_z, 1.0f}; // move to the offset, keep orientation
 
         auto scene_root = scene_view->get_scene_root();
         if (!scene_root) {
