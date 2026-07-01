@@ -28,6 +28,25 @@ Manages 3D scene data for the editor: scene roots (the top-level scene container
 
 - **`Node_raytrace`** -- Handles raytrace instance creation/destruction for mesh nodes.
 
+## Scene serialization (directory bundles, #241)
+
+`scene_serialization.{hpp,cpp}` saves/loads a scene as a **directory bundle** named
+`<name>.erhescene` (dedicated extension on the directory, like an `.xcodeproj`),
+rather than a loose set of sibling files. `save_scene()` / `load_scene()` take the
+bundle directory; inside it the fixed layout is:
+
+- `scene.json` -- root JSON (`Scene_file`, codegen `definitions/scene_file.py`, version 5)
+- `data.glb` -- meshes + materials (only when the scene has meshes)
+- `mesh_<i>_p<p>.geogram` -- geometry-normative primitives
+- `imgui.ini` -- window docking layout (`scene_imgui_ini_path()`)
+
+The default bundle location is `res/editor/scenes`. Save/Load use a native *folder*
+dialog (`SDL_ShowOpenFolderDialog` / `erhe::file::select_folder`); the selected
+folder is the bundle root and its name is normalized to carry `.erhescene`. The
+Asset Browser lists each `.erhescene` directory as a single `Asset_file_scene` leaf
+with a "Load" action (raw glTF import/open stays on `Asset_file_gltf`). Loading is
+bundles-only; the JSON schema is unchanged from the previous flat-file format.
+
 ## Public API / Integration Points
 
 - `Scene_root::register_to_editor_scenes()` -- registers with `App_scenes`

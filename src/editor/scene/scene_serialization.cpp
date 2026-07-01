@@ -538,16 +538,15 @@ auto get_node_id(
 
 } // anonymous namespace
 
-auto scene_imgui_ini_path(const std::filesystem::path& scene_path) -> std::filesystem::path
+auto scene_imgui_ini_path(const std::filesystem::path& bundle_dir) -> std::filesystem::path
 {
-    const std::filesystem::path dir  = scene_path.parent_path();
-    const std::string           stem = scene_path.stem().string();
-    return dir / (stem + "_imgui.ini");
+    // Companion ImGui layout inside the scene directory bundle (#241).
+    return bundle_dir / "imgui.ini";
 }
 
 auto save_scene(
     const Scene_root&            scene_root,
-    const std::filesystem::path& path
+    const std::filesystem::path& bundle_dir
 ) -> bool
 {
     const erhe::scene::Scene& scene = scene_root.get_scene();
@@ -557,9 +556,15 @@ auto save_scene(
         return false;
     }
 
-    const std::filesystem::path scene_dir  = path.parent_path();
-    const std::string           scene_stem = path.stem().string();
-    const std::string           glb_filename = scene_stem + ".glb";
+    // Scene directory bundle (#241): create the .erhescene directory and write the
+    // root JSON plus all referenced files inside it with fixed names (each bundle
+    // is isolated, so no per-scene stem prefix is needed).
+    if (!erhe::file::ensure_directory_exists(bundle_dir)) {
+        log_parsers->error("save_scene: failed to create bundle directory: {}", bundle_dir.string());
+        return false;
+    }
+    const std::filesystem::path scene_dir    = bundle_dir;
+    const std::string           glb_filename = "data.glb";
 
     // Build node ID map
     std::unordered_map<const erhe::scene::Node*, uint64_t> node_id_map;
@@ -867,7 +872,7 @@ auto save_scene(
             // Save geometry files for geometry-normative meshes
             std::string geometry_base;
             if (geom_normative) {
-                geometry_base = fmt::format("{}_mesh_{}", scene_stem, mesh_index);
+                geometry_base = fmt::format("mesh_{}", mesh_index);
                 for (size_t p = 0; p < primitives.size(); ++p) {
                     const auto& prim = primitives[p];
                     if (!prim.primitive || !prim.primitive->render_shape) {
@@ -932,9 +937,9 @@ auto save_scene(
         }
     }
 
-    // Write scene JSON
+    // Write root scene JSON inside the bundle
     const std::string json = serialize(scene_file);
-    return erhe::file::write_file(path, json);
+    return erhe::file::write_file(bundle_dir / "scene.json", json);
 }
 
 auto load_scene(
@@ -942,16 +947,14 @@ auto load_scene(
     App_message_bus*                        app_message_bus,
     App_scenes*                             app_scenes,
     const std::shared_ptr<Content_library>& content_library,
-    const std::filesystem::path&            path
+    const std::filesystem::path&            bundle_dir
 ) -> std::shared_ptr<Scene_root>
 {
-    // Read file
-    std::optional<std::string> file_content = erhe::file::read("scene file", path);
-    const bool file_has_content = file_content.has_value();
-    if (file_has_content) {
-        log_parsers->debug("Path A");
-    } else {
-        log_parsers->debug("Path B");
+    // Read the root JSON from inside the scene directory bundle (#241).
+    const std::filesystem::path scene_json_path = bundle_dir / "scene.json";
+    std::optional<std::string> file_content = erhe::file::read("scene file", scene_json_path);
+    if (!file_content.has_value()) {
+        log_parsers->error("load_scene: could not read {}", scene_json_path.string());
         return {};
     }
 
@@ -1186,7 +1189,7 @@ auto load_scene(
         return scene_root;
     }
 
-    const std::filesystem::path scene_dir = path.parent_path();
+    const std::filesystem::path scene_dir = bundle_dir;
 
     constexpr uint64_t mesh_flags =
         erhe::Item_flags::visible     |

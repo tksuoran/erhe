@@ -19,6 +19,13 @@ auto write_file(std::filesystem::path path, const std::string& text) -> bool;
 [[nodiscard]] auto select_file_for_read() -> std::optional<std::filesystem::path>;
 [[nodiscard]] auto select_file_for_write() -> std::optional<std::filesystem::path>;
 
+// Select an existing (or newly created) directory. Used for scene directory
+// bundles (see editor scene save / load). The optional default_dir is the
+// folder the dialog opens at. Returns empty if cancelled or unsupported on the
+// platform. On SDL builds the editor uses SDL_ShowOpenFolderDialog directly;
+// this is the native Windows fallback for non-SDL builds.
+[[nodiscard]] auto select_folder(const std::filesystem::path& default_dir = {}) -> std::optional<std::filesystem::path>;
+
 [[nodiscard]] auto check_is_existing_non_empty_regular_file(
     std::string_view             description,
     const std::filesystem::path& path,

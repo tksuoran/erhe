@@ -2316,6 +2316,22 @@ static void s_load_scene_callback(void* userdata, const char* const* filelist, i
 }
 #endif
 
+// Default location for scene directory bundles (#241): res/editor/scenes,
+// relative to the editor working directory (repo root). Created if missing so the
+// native folder dialog opens there and the asset browser can list saved bundles.
+static auto default_scene_bundle_dir() -> std::filesystem::path
+{
+    std::error_code ec;
+    std::filesystem::path dir = std::filesystem::absolute(
+        std::filesystem::path{"res"} / "editor" / "scenes", ec
+    );
+    if (ec) {
+        dir = std::filesystem::path{"res"} / "editor" / "scenes";
+    }
+    static_cast<void>(erhe::file::ensure_directory_exists(dir));
+    return dir;
+}
+
 void Operations::export_callback(const char* const* filelist, int filter)
 {
     static_cast<void>(filter);
@@ -2388,22 +2404,18 @@ void Operations::export_gltf()
 
 void Operations::save_scene()
 {
-    // Open a native Save dialog and do the actual save in save_scene_callback().
-    // The SDL3 dialog is async (callback-based) and works on macOS / Linux /
-    // Windows; the old synchronous erhe::file::select_file_for_write() is a no-op
-    // stub on every platform except Windows, which is why this command silently did
-    // nothing on macOS before. (File > Export glTF already used this SDL path.)
+    // Scenes are saved as directory bundles (#241): the folder the user selects
+    // IS the bundle root. Open a native folder dialog defaulted to res/editor/scenes
+    // and do the actual save in save_scene_callback(). The SDL3 dialog is async
+    // (callback-based) and works on macOS / Linux / Windows; the native Windows
+    // fallback (erhe::file::select_folder) is used for non-SDL Windows builds.
 #if defined(ERHE_WINDOW_LIBRARY_SDL)
-    SDL_DialogFileFilter filters[2];
-    filters[0].name    = "Scene files";
-    filters[0].pattern = "json";
-    filters[1].name    = "All files";
-    filters[1].pattern = "*";
+    const std::string default_location = erhe::file::to_string(default_scene_bundle_dir());
     SDL_Window* window = static_cast<SDL_Window*>(m_context.context_window->get_sdl_window());
-    SDL_ShowSaveFileDialog(s_save_scene_callback, this, window, filters, 2, nullptr);
+    SDL_ShowOpenFolderDialog(s_save_scene_callback, this, window, default_location.c_str(), false);
 #elif defined(ERHE_OS_WINDOWS)
     try {
-        std::optional<std::filesystem::path> path_opt = erhe::file::select_file_for_write();
+        std::optional<std::filesystem::path> path_opt = erhe::file::select_folder(default_scene_bundle_dir());
         if (path_opt.has_value()) {
             std::string path = path_opt.value().string();
             const char* const filelist[2] = {
@@ -2413,10 +2425,10 @@ void Operations::save_scene()
             save_scene_callback(filelist, 0);
         }
     } catch (...) {
-        log_operations->error("exception: file dialog / save scene");
+        log_operations->error("exception: folder dialog / save scene");
     }
 #else
-    log_operations->warn("save_scene: no native file dialog available on this platform");
+    log_operations->warn("save_scene: no native folder dialog available on this platform");
 #endif
 }
 
@@ -2439,11 +2451,17 @@ void Operations::save_scene_callback(const char* const* filelist, int filter)
     }
 
     try {
-        const std::filesystem::path scene_path{file};
-        if (editor::save_scene(*scene_root, scene_path) && (m_context.imgui_windows != nullptr)) {
-            // Persist the current window-docking layout next to the scene file so a
-            // later load can restore how the windows were docked at save time.
-            m_context.imgui_windows->save_imgui_ini(editor::scene_imgui_ini_path(scene_path).string());
+        // The selected folder IS the scene bundle (#241). Normalize its name to
+        // carry the .erhescene extension so the asset browser recognizes it and the
+        // user does not have to type the extension.
+        std::filesystem::path bundle{file};
+        if (bundle.extension() != std::filesystem::path{".erhescene"}) {
+            bundle = std::filesystem::path{bundle.string() + ".erhescene"};
+        }
+        if (editor::save_scene(*scene_root, bundle) && (m_context.imgui_windows != nullptr)) {
+            // Persist the current window-docking layout inside the bundle so a later
+            // load can restore how the windows were docked at save time.
+            m_context.imgui_windows->save_imgui_ini(editor::scene_imgui_ini_path(bundle).string());
         }
     } catch (...) {
         log_operations->error("exception: save scene");
@@ -2452,20 +2470,18 @@ void Operations::save_scene_callback(const char* const* filelist, int filter)
 
 void Operations::load_scene()
 {
-    // Open a native Open dialog and queue the load in load_scene_callback(). Same
-    // rationale as save_scene(): the synchronous erhe::file::select_file_for_read()
-    // is a Windows-only stub, so this silently did nothing on macOS / Linux before.
+    // Load a scene directory bundle (#241): the user selects the .erhescene folder.
+    // Raw glTF import / open-as-scene stays in the Asset Browser. Open a native
+    // folder dialog defaulted to res/editor/scenes and queue the load in
+    // load_scene_callback(); the native Windows fallback (select_folder) is used for
+    // non-SDL Windows builds.
 #if defined(ERHE_WINDOW_LIBRARY_SDL)
-    SDL_DialogFileFilter filters[2];
-    filters[0].name    = "Scene / glTF files";
-    filters[0].pattern = "json;gltf;glb";
-    filters[1].name    = "All files";
-    filters[1].pattern = "*";
+    const std::string default_location = erhe::file::to_string(default_scene_bundle_dir());
     SDL_Window* window = static_cast<SDL_Window*>(m_context.context_window->get_sdl_window());
-    SDL_ShowOpenFileDialog(s_load_scene_callback, this, window, filters, 2, nullptr, false);
+    SDL_ShowOpenFolderDialog(s_load_scene_callback, this, window, default_location.c_str(), false);
 #elif defined(ERHE_OS_WINDOWS)
     try {
-        std::optional<std::filesystem::path> path_opt = erhe::file::select_file_for_read();
+        std::optional<std::filesystem::path> path_opt = erhe::file::select_folder(default_scene_bundle_dir());
         if (path_opt.has_value()) {
             std::string path = path_opt.value().string();
             const char* const filelist[2] = {
@@ -2475,10 +2491,10 @@ void Operations::load_scene()
             load_scene_callback(filelist, 0);
         }
     } catch (...) {
-        log_operations->error("exception: file dialog / load scene");
+        log_operations->error("exception: folder dialog / load scene");
     }
 #else
-    log_operations->warn("load_scene: no native file dialog available on this platform");
+    log_operations->warn("load_scene: no native folder dialog available on this platform");
 #endif
 }
 

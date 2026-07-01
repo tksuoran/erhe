@@ -1350,18 +1350,18 @@ void Mcp_server::refresh_tool_list()
         {"required", json::array({"scene_name", "material_name"})}
     }});
 
-    m_tool_infos.push_back({"save_scene",         "Save a scene to an editor scene .json file (plus companion .glb), without a file dialog", {
+    m_tool_infos.push_back({"save_scene",         "Save a scene as an editor scene directory bundle (.erhescene folder containing scene.json, data.glb and geometry files), without a file dialog", {
         {"type", "object"},
         {"properties", {
             {"scene_name", {{"type", "string"}, {"description", "Name of the scene"}}},
-            {"path",       {{"type", "string"}, {"description", "Destination .json file path"}}}
+            {"path",       {{"type", "string"}, {"description", "Destination bundle directory path; a .erhescene extension is appended if missing"}}}
         }},
         {"required", json::array({"scene_name", "path"})}
     }});
-    m_tool_infos.push_back({"load_scene",         "Load an editor scene .json file (saved by save_scene) as a new scene, without a file dialog", {
+    m_tool_infos.push_back({"load_scene",         "Load an editor scene directory bundle (.erhescene folder saved by save_scene) as a new scene, without a file dialog", {
         {"type", "object"},
         {"properties", {
-            {"path", {{"type", "string"}, {"description", "Source .json file path"}}}
+            {"path", {{"type", "string"}, {"description", "Source .erhescene bundle directory path"}}}
         }},
         {"required", json::array({"path"})}
     }});
@@ -3883,21 +3883,27 @@ auto Mcp_server::action_save_scene(const json& args) -> std::string
         r["isError"] = true;
         return r.dump();
     }
-    const std::filesystem::path path{path_str};
-    const bool ok = editor::save_scene(*sr, path);
+    // Scenes are saved as directory bundles (#241): treat path as the bundle
+    // directory and normalize its name to carry the .erhescene extension, matching
+    // the File > Save Scene dialog behavior.
+    std::filesystem::path bundle{path_str};
+    if (bundle.extension() != std::filesystem::path{".erhescene"}) {
+        bundle = std::filesystem::path{bundle.string() + ".erhescene"};
+    }
+    const bool ok = editor::save_scene(*sr, bundle);
     if (!ok) {
-        json r = make_text_content("save_scene failed: " + path_str);
+        json r = make_text_content("save_scene failed: " + bundle.string());
         r["isError"] = true;
         return r.dump();
     }
-    // Persist the current window-docking layout next to the scene file so a later
-    // load can restore how the windows were docked at save time.
+    // Persist the current window-docking layout inside the bundle so a later load
+    // can restore how the windows were docked at save time.
     if (m_context.imgui_windows != nullptr) {
-        m_context.imgui_windows->save_imgui_ini(editor::scene_imgui_ini_path(path).string());
+        m_context.imgui_windows->save_imgui_ini(editor::scene_imgui_ini_path(bundle).string());
     }
     return make_json_content({
         {"saved", true},
-        {"path",  path_str}
+        {"path",  bundle.string()}
     }).dump();
 }
 
@@ -3909,9 +3915,10 @@ auto Mcp_server::action_load_scene(const json& args) -> std::string
         r["isError"] = true;
         return r.dump();
     }
+    // path is the .erhescene bundle directory (#241); load_scene reads scene.json
+    // from inside it. Each loaded scene gets its own content library, mirroring the
+    // file-dialog load path in Operations::load_scene.
     const std::filesystem::path path{path_str};
-    // Each loaded scene gets its own content library, mirroring the file-dialog
-    // load path in Operations::load_scene.
     std::shared_ptr<Content_library> content_library = std::make_shared<Content_library>();
     std::shared_ptr<Scene_root> scene_root = editor::load_scene(
         &m_context,

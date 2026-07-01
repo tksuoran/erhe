@@ -89,6 +89,23 @@ public:
     [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::asset_file_other; }
 };
 
+// An erhe scene directory bundle (#241): a directory whose name ends in
+// .erhescene, containing scene.json and its referenced assets. Shown as a single
+// leaf asset (not descended into) that can be loaded.
+class Asset_file_scene : public erhe::Item<erhe::Item_base, Asset_node, Asset_file_scene>
+{
+public:
+    explicit Asset_file_scene(const Asset_file_scene& src);
+    Asset_file_scene& operator=(const Asset_file_scene& src);
+    ~Asset_file_scene() noexcept override;
+
+    explicit Asset_file_scene(const std::filesystem::path& path);
+
+    // Implements Item_base
+    static constexpr std::string_view static_type_name{"Asset_file_scene"};
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::asset_file_scene; }
+};
+
 class Asset_browser;
 
 class Asset_browser_window : public Item_tree_window
@@ -130,6 +147,8 @@ private:
     auto try_open  (const std::shared_ptr<Asset_file_gltf>& gltf) -> bool;
 
     auto try_import(const std::shared_ptr<Asset_file_geogram>& geogram) -> bool;
+
+    auto try_load  (const std::shared_ptr<Asset_file_scene>& scene) -> bool;
 
     App_context& m_context;
 

@@ -372,6 +372,72 @@ auto select_file_for_write() -> std::optional<std::filesystem::path>
     }
 }
 
+auto select_folder(const std::filesystem::path& default_dir) -> std::optional<std::filesystem::path>
+{
+    try {
+        HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+        if (!SUCCEEDED(hr)) {
+            return {};
+        }
+        ERHE_DEFER( CoUninitialize(); );
+
+        IFileOpenDialog* file_open_dialog{nullptr};
+        hr = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_ALL, IID_IFileOpenDialog, reinterpret_cast<void**>(&file_open_dialog));
+        if (!SUCCEEDED(hr) || (file_open_dialog == nullptr)) {
+            return {};
+        }
+        ERHE_DEFER( file_open_dialog->Release(); );
+
+        FILEOPENDIALOGOPTIONS options{0};
+        hr = file_open_dialog->GetOptions(&options);
+        if (!SUCCEEDED(hr)) {
+            return {};
+        }
+        options = options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM;
+
+        hr = file_open_dialog->SetOptions(options);
+        if (!SUCCEEDED(hr)) {
+            return {};
+        }
+
+        if (!default_dir.empty()) {
+            IShellItem* default_item{nullptr};
+            const std::wstring default_dir_w = default_dir.wstring();
+            const HRESULT default_hr = SHCreateItemFromParsingName(
+                default_dir_w.c_str(), nullptr, IID_IShellItem, reinterpret_cast<void**>(&default_item)
+            );
+            if (SUCCEEDED(default_hr) && (default_item != nullptr)) {
+                file_open_dialog->SetFolder(default_item);
+                default_item->Release();
+            }
+        }
+
+        hr = file_open_dialog->Show(nullptr);
+        if (!SUCCEEDED(hr)) {
+            return {};
+        }
+
+        IShellItem* item{nullptr};
+        hr = file_open_dialog->GetResult(&item);
+        if (!SUCCEEDED(hr) || (item == nullptr)) {
+            return {};
+        }
+        ERHE_DEFER( item->Release(); );
+
+        PWSTR path{nullptr};
+        hr = item->GetDisplayName(SIGDN_FILESYSPATH, &path);
+        if (!SUCCEEDED(hr) || (path == nullptr)) {
+            return {};
+        }
+        ERHE_DEFER( CoTaskMemFree(path); );
+
+        return std::filesystem::path(path);
+    } catch (...) {
+        if (log_file) log_file->error("Exception was thrown in erhe::file::select_folder()");
+        return {};
+    }
+}
+
 #else
 
 auto write_file(std::filesystem::path path, const std::string& text) -> bool
