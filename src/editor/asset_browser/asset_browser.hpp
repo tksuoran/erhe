@@ -150,6 +150,10 @@ private:
 
     auto try_load  (const std::shared_ptr<Asset_file_scene>& scene) -> bool;
 
+    // Adds "Copy path to clipboard" / "Copy relative path to clipboard" context
+    // menu items for an asset that has a source path (folders and scene bundles).
+    void add_copy_path_menu_items(const std::shared_ptr<erhe::Item_base>& item, bool& close);
+
     App_context& m_context;
 
     std::shared_ptr<Asset_node>           m_root;

@@ -244,6 +244,12 @@ Asset_browser::Asset_browser(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::
                 if (try_load(scene)) {
                     close = true;
                 }
+                add_copy_path_menu_items(scene, close);
+                return;
+            }
+            const std::shared_ptr<Asset_folder> folder = std::dynamic_pointer_cast<Asset_folder>(item);
+            if (folder) {
+                add_copy_path_menu_items(folder, close);
                 return;
             }
             const std::shared_ptr<Asset_file_geogram> geogram = std::dynamic_pointer_cast<Asset_file_geogram>(item);
@@ -410,6 +416,31 @@ auto Asset_browser::try_load(const std::shared_ptr<Asset_file_scene>& scene) -> 
         return true;
     }
     return false;
+}
+
+void Asset_browser::add_copy_path_menu_items(const std::shared_ptr<erhe::Item_base>& item, bool& close)
+{
+    const std::filesystem::path* source_path = item->get_source_path();
+    if (source_path == nullptr) {
+        return;
+    }
+    if (ImGui::MenuItem("Copy path to clipboard")) {
+        // Absolute path (resolved against the editor working directory / repo root).
+        std::error_code error_code;
+        const std::filesystem::path absolute_path = std::filesystem::absolute(*source_path, error_code);
+        const std::string text = erhe::file::to_string(error_code ? *source_path : absolute_path);
+        ImGui::SetClipboardText(text.c_str());
+        close = true;
+    }
+    if (ImGui::MenuItem("Copy relative path to clipboard")) {
+        // Path relative to the erhe repository root (the editor working directory).
+        // Assets are scanned from repo-relative roots, so the stored source path is
+        // already repo-relative; emit it with forward slashes (e.g.
+        // "res/editor/assets/...").
+        const std::string text = source_path->generic_string();
+        ImGui::SetClipboardText(text.c_str());
+        close = true;
+    }
 }
 
 auto Asset_browser::item_callback(const std::shared_ptr<erhe::Item_base>& item) -> bool
