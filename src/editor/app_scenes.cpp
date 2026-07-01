@@ -5,6 +5,8 @@
 #include "app_settings.hpp"
 #include "tools/tools.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/scene_settings_resolve.hpp"
+#include "config/generated/physics_config.hpp"
 
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/layout.hpp"
@@ -80,14 +82,13 @@ void App_scenes::update_physics_simulation_fixed_step(const Time_context& time_c
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (
-        !m_context.editor_settings->physics.static_enable ||
-        !m_context.editor_settings->physics.dynamic_enable
-    ) {
-        return;
-    }
-
+    // Physics enable is resolved per scene (#239): a scene may override it off
+    // while others keep simulating, so the gate is inside the per-scene loop.
     for (const auto& scene_root : m_scene_roots) {
+        const Physics_config& physics = get_effective_physics(*m_context.editor_settings, *scene_root);
+        if (!physics.static_enable || !physics.dynamic_enable) {
+            continue;
+        }
         scene_root->update_physics_simulation_fixed_step(time_context.simulation_dt_s);
     }
 }
@@ -96,11 +97,11 @@ void App_scenes::before_physics_simulation_steps()
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!m_context.editor_settings->physics.static_enable || !m_context.editor_settings->physics.dynamic_enable) {
-        return;
-    }
-
     for (const auto& scene_root : m_scene_roots) {
+        const Physics_config& physics = get_effective_physics(*m_context.editor_settings, *scene_root);
+        if (!physics.static_enable || !physics.dynamic_enable) {
+            continue;
+        }
         scene_root->before_physics_simulation_steps();
     }
 }
@@ -163,11 +164,11 @@ void App_scenes::after_physics_simulation_steps()
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!m_context.editor_settings->physics.static_enable || !m_context.editor_settings->physics.dynamic_enable) {
-        return;
-    }
-
     for (const auto& scene_root : m_scene_roots) {
+        const Physics_config& physics = get_effective_physics(*m_context.editor_settings, *scene_root);
+        if (!physics.static_enable || !physics.dynamic_enable) {
+            continue;
+        }
         scene_root->after_physics_simulation_steps();
     }
 }

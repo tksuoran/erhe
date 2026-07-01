@@ -2,7 +2,9 @@
 
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
+#include "app_scenes.hpp"
 #include "app_settings.hpp"
+#include "scene/scene_root.hpp"
 #include "windows/inventory_window.hpp"
 #include "tools/debug_visualizations.hpp"
 #include "editor_settings_store.hpp"
@@ -698,6 +700,83 @@ void Settings_window::imgui()
             }
         });
         pop_group();
+
+        // Per-scene setting overrides (issue #239). For the current scene (the
+        // single registered scene root), each group can override the matching
+        // editor-global setting above; an unchecked override falls back to the
+        // editor default, a checked one edits the scene's own copy (saved with the
+        // scene). Capturing a reference to the registered Scene_root's settings is
+        // safe here: it outlives show_entries() (App_scenes owns the Scene_root).
+        if (m_context.app_scenes != nullptr) {
+            const std::shared_ptr<Scene_root> scene_root = m_context.app_scenes->get_single_scene_root();
+            if (scene_root) {
+                Scene_settings& scene_settings = scene_root->get_scene_settings();
+
+                push_group("Scene Overrides", ImGuiTreeNodeFlags_Framed);
+
+                // Whole-config-group override: an "Override" checkbox that engages
+                // the scene's optional (seeded from the current editor value) or
+                // clears it, followed by the group's editable fields when engaged.
+                auto override_struct = [&](auto& optional_field, const auto& editor_value, const char* name) {
+                    add_entry(std::string{name}, [&optional_field, &editor_value]() {
+                        bool overridden = optional_field.has_value();
+                        if (ImGui::Checkbox("##", &overridden)) {
+                            if (overridden) {
+                                optional_field = editor_value;
+                            } else {
+                                optional_field.reset();
+                            }
+                        }
+                    }, "Override this setting for the current scene. Unchecked uses the editor-global default.");
+                    if (optional_field.has_value()) {
+                        const std::string section_label = std::string{name} + " (scene override)";
+                        add_config_section(optional_field.value(), section_label.c_str());
+                    }
+                };
+
+                override_struct(scene_settings.sky,                settings.sky,                "Sky");
+                override_struct(scene_settings.grid,               settings.grid,               "Grid");
+                override_struct(scene_settings.physics,            settings.physics,            "Physics");
+                override_struct(scene_settings.shadow_frustum_fit, settings.shadow_frustum_fit, "Shadow Frustum Fit");
+                override_struct(scene_settings.viewport,           settings.viewport,           "Viewport");
+                override_struct(scene_settings.camera_controls,    settings.camera_controls,    "Camera Controls");
+
+                add_entry("Clear Color", [&scene_settings, &settings]() {
+                    bool overridden = scene_settings.clear_color.has_value();
+                    if (ImGui::Checkbox("##", &overridden)) {
+                        if (overridden) {
+                            scene_settings.clear_color = settings.clear_color;
+                        } else {
+                            scene_settings.clear_color.reset();
+                        }
+                    }
+                    if (scene_settings.clear_color.has_value()) {
+                        ImGui::SameLine();
+                        ImGui::ColorEdit4("##value", &scene_settings.clear_color.value().x, ImGuiColorEditFlags_Float);
+                    }
+                }, "Override the viewport clear color for the current scene.");
+
+                add_entry("Post Processing", [&scene_settings, &settings]() {
+                    bool overridden = scene_settings.post_processing.has_value();
+                    if (ImGui::Checkbox("##", &overridden)) {
+                        if (overridden) {
+                            scene_settings.post_processing = settings.post_processing;
+                        } else {
+                            scene_settings.post_processing.reset();
+                        }
+                    }
+                    if (scene_settings.post_processing.has_value()) {
+                        ImGui::SameLine();
+                        bool value = scene_settings.post_processing.value();
+                        if (ImGui::Checkbox("##value", &value)) {
+                            scene_settings.post_processing = value;
+                        }
+                    }
+                }, "Override post-processing enable for the current scene.");
+
+                pop_group();
+            }
+        }
     }
 
     show_entries("Settings", ImVec2{1.0f, 1.0f});
