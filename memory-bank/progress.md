@@ -4,29 +4,30 @@
 @status::⚡IN-PROGRESS{plan-approved-2026-07-01}
 
 >DONE:
-PhaseA::reference-data-captured✓
-  doc/editor_settings_codegen_scene_reference.md{settings-map+codegen-how-to+scene-serialization-map}
-  auto-memory::reference_settings_codegen_scene+project_239_per_scene_settings{+MEMORY.md-index}
-  memory-bank::activeContext+progress-updated
-plan::approved{Optional-per-config-group,scene_file-v3→v4,Scene_root-storage}
+PhaseA::reference-data-captured✓{doc+auto-memory+memory-bank}
+30ca9659::docs(#239)-reference+memory-bank-record
+f2a3a31e::DATA-LAYER+RESOLVERS✓{builds-clean-ninja-vulkan}
+  scene_settings.py{scene-unit,Optional×8:6-StructRef+clear_color-Vec4+post_processing-Bool}
+  CMake::scene-unit-EXTRA_DEFINITIONS_DIRS{config+gfx+renderer+scene_renderer+xr}
+  scene_file.py::+scene_settings-field-v3→v4{old-v3=all-null=defaults}
+  Scene_root::+m_scene_settings+get_scene_settings()const+mutable
+  scene_serialization.cpp::save/load-wired
+  scene_settings_resolve.{hpp,cpp}::get_effective_<x>(Editor_settings_config&,Scene_root&)-API-ready
+verify-codegen::ran-generate.py-manually✓{Optional(StructRef)-serialize/deserialize/is_default-correct}
 
-?PENDING:
-PhaseB1::mechanism-end-to-end
-  1-scene_settings.py{scene-unit,Optional(StructRef)×6+Optional(Vec4)clear_color+Optional(Bool)post_processing}
-  2-CMake::EXTRA_DEFINITIONS_DIRS"${_config_defs}:config/generated/"+DEFINITIONS+_codegen_sources
-  3-scene_file.py::+scene_settings-field{StructRef,added_in=4}+version→4
-  4-Scene_root::+m_scene_settings+get_scene_settings()
-  5-scene_serialization.cpp::save/load-wire
-  6-resolvers::get_effective_<x>(Editor_settings_config&,Scene_root&)+rewire-consumers
-  7-UI::reflection-driven-override-checkbox/group
-PhaseB2::polish
+?PENDING::consumer-wiring+UI+live-verify→see-next_prompt.txt
+  UI::settings_window"Scene Overrides"{current-scene_root+Override-checkbox/group+reuse-add_config_section-reflection}
+  consumers::NOT-mechanical-read-swap{per-subsystem-wrinkles}
+  live-verify::rebuild-headless→MCP-save/load-v4+screenshot-effective-sky
 
 [BLOCKERS]
-none
+none{data-layer-complete;consumer-wiring-is-integration-work}
 
 [NOTES]
 !enabler::codegen-Optional(StructRef)+is_default()-already-support-"unset=use-default"→¬new-primitive
+!FINDING::SKY-is-GLOBAL-composition-pass{app_rendering.update_sky_parameters-no-scene-ctx;only-atmosphere-subpath-has-per-viewport-scene_root}→per-scene-sky-needs-per-viewport-pass¬read-swap
+!FINDING::5/8-settings-consumed-at-INIT{editor.cpp-passes-camera_controls/post_processing/grid;grid_tool.write_config}→need-per-frame-re-read-w-scene_root
+!FINDING::physics-reads-gate-simulation{app_scenes+operations+tools}¬redirect-WRITE-sites{physics_window/mcp-edit-editor-global}
+!piecemeal-consumer-swap=band-aid{inconsistent-half-per-scene}→wire-per-subsystem-w-UI-together
 !build-twice-after-codegen-def-change{stale-.cpp}
-!Scene_root-not-erhe::scene::Scene{latter-graphics-agnostic}
-!verify-via-headless-MCP{save/load-roundtrip+v3-back-compat+screenshot-effective-value}
-!consumer-rewire-grep::editor_settings->{sky,grid,physics,shadow_frustum_fit,viewport,camera_controls,post_processing,clear_color}
+!windowed-vulkan-needs-live-display{ninja-build-cant-run-unattended}→headless-build-for-MCP-verify
