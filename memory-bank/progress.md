@@ -14,11 +14,17 @@ f2a3a31e::DATA-LAYER+RESOLVERS✓{builds-clean-ninja-vulkan}
   scene_serialization.cpp::save/load-wired
   scene_settings_resolve.{hpp,cpp}::get_effective_<x>(Editor_settings_config&,Scene_root&)-API-ready
 verify-codegen::ran-generate.py-manually✓{Optional(StructRef)-serialize/deserialize/is_default-correct}
+eefd4801::UI+PHYSICS-GATE✓{builds+links}
+  UI::settings_window"Scene Overrides"{single-scene,Override-checkbox/group,reuse-add_config_section,capture-binds-registered-Scene_root}
+  physics::app_scenes-before/update/after-resolve-get_effective_physics-per-scene_root{gate-moved-inside-loop}
+LIVE-VERIFIED✓::headless-save_scene→"_version":4+scene_settings-block-all-null{serialize-runtime-confirmed}
 
-?PENDING::consumer-wiring+UI+live-verify→see-next_prompt.txt
-  UI::settings_window"Scene Overrides"{current-scene_root+Override-checkbox/group+reuse-add_config_section-reflection}
-  consumers::NOT-mechanical-read-swap{per-subsystem-wrinkles}
-  live-verify::rebuild-headless→MCP-save/load-v4+screenshot-effective-sky
+?PENDING::remaining-consumers+live-deserialize-verify→see-next_prompt.txt
+  sky::GLOBAL-pass→needs-per-viewport{not-done}
+  init-consumed::grid+viewport+camera_controls+clear_color+post_processing{per-frame-re-read}
+  physics-other::operations+physics_tool+debug_draw+asset_browser+item_tree{stepping-DONE}
+  shadow::shadow_render_node.cpp:405
+  live-deserialize::no-load_scene-MCP-tool→add-one(+set_scene_setting_override)→round-trip+physics-behavior+v3-backcompat
 
 [BLOCKERS]
 none{data-layer-complete;consumer-wiring-is-integration-work}
