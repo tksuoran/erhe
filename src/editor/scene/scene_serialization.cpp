@@ -573,6 +573,7 @@ auto save_scene(
     scene_file.name           = scene.get_name();
     scene_file.enable_physics = true; // TODO: track this properly
     scene_file.scene_settings = scene_root.get_scene_settings(); // per-scene setting overrides (#239)
+    scene_file.ambient_light  = scene.ambient_light;             // scene ambient light color (#237)
 
     // Serialize nodes
     for (const auto& node : flat_nodes) {
@@ -991,6 +992,7 @@ auto load_scene(
     }
 
     erhe::scene::Scene& scene = scene_root->get_scene();
+    scene.ambient_light = scene_file.ambient_light; // scene ambient light color (#237)
     const auto scene_root_node = scene.get_root_node();
 
     // Build node map: serial id -> shared_ptr<Node>

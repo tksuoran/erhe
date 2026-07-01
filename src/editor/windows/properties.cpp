@@ -24,7 +24,20 @@
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
+#include "windows/config_ui.hpp"
 #include "windows/item_reference.hpp"
+
+// Per-scene overrides (issues #239 / #240): the editor-global defaults type plus
+// the reflection helpers (get_struct_info / get_fields) for each overridable
+// config group, needed to instantiate add_config_section in scene_properties.
+#include "config/generated/editor_settings_config.hpp"
+#include "config/generated/developer_config.hpp"
+#include "config/generated/camera_controls_config_serialization.hpp"
+#include "config/generated/grid_config_serialization.hpp"
+#include "config/generated/physics_config_serialization.hpp"
+#include "config/generated/shadow_frustum_fit_config_serialization.hpp"
+#include "config/generated/sky_config_serialization.hpp"
+#include "config/generated/viewport_config_data_serialization.hpp"
 
 #include "erhe_defer/defer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
@@ -139,6 +152,98 @@ void Properties::animation_properties(erhe::scene::Animation& animation)
         return;
     }
     scene->update_node_transforms();
+}
+
+void Properties::scene_properties(erhe::scene::Scene& scene)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    Scene_root* scene_root = static_cast<Scene_root*>(scene.get_item_host());
+    if (scene_root == nullptr) {
+        return;
+    }
+
+    // Ambient light color is a scene property now (issues #237 / #240). Direct
+    // edit, matching the other color properties in this window.
+    add_entry("Ambient Light", [&scene]() {
+        ImGui::ColorEdit3("##", &scene.ambient_light.x, ImGuiColorEditFlags_Float);
+    }, "Scene-wide ambient light color.");
+
+    // Per-scene setting overrides (issues #239 / #240). Each group can override
+    // the matching editor-global setting; an unchecked override falls back to
+    // the editor default, a checked one edits the scene's own copy (saved with
+    // the scene). Moved here from the Settings window so it is keyed on the
+    // selected scene.
+    if (m_context.editor_settings == nullptr) {
+        return;
+    }
+    Editor_settings_config& settings       = *m_context.editor_settings;
+    Scene_settings&         scene_settings = scene_root->get_scene_settings();
+    const bool              show_developer  = (m_context.developer_config != nullptr) && m_context.developer_config->enable;
+
+    push_group("Scene Overrides", ImGuiTreeNodeFlags_Framed);
+
+    // Whole-config-group override: an "Override" checkbox that engages the
+    // scene's optional (seeded from the current editor value) or clears it,
+    // followed by the group's editable fields when engaged.
+    auto override_struct = [this, show_developer](auto& optional_field, const auto& editor_value, const char* name) {
+        add_entry(std::string{name}, [&optional_field, &editor_value]() {
+            bool overridden = optional_field.has_value();
+            if (ImGui::Checkbox("##", &overridden)) {
+                if (overridden) {
+                    optional_field = editor_value;
+                } else {
+                    optional_field.reset();
+                }
+            }
+        }, "Override this setting for this scene. Unchecked uses the editor-global default.");
+        if (optional_field.has_value()) {
+            const std::string section_label = std::string{name} + " (scene override)";
+            add_config_section(*this, show_developer, optional_field.value(), section_label.c_str());
+        }
+    };
+
+    override_struct(scene_settings.sky,                settings.sky,                "Sky");
+    override_struct(scene_settings.grid,               settings.grid,               "Grid");
+    override_struct(scene_settings.physics,            settings.physics,            "Physics");
+    override_struct(scene_settings.shadow_frustum_fit, settings.shadow_frustum_fit, "Shadow Frustum Fit");
+    override_struct(scene_settings.viewport,           settings.viewport,           "Viewport");
+    override_struct(scene_settings.camera_controls,    settings.camera_controls,    "Camera Controls");
+
+    add_entry("Clear Color", [&scene_settings, &settings]() {
+        bool overridden = scene_settings.clear_color.has_value();
+        if (ImGui::Checkbox("##", &overridden)) {
+            if (overridden) {
+                scene_settings.clear_color = settings.clear_color;
+            } else {
+                scene_settings.clear_color.reset();
+            }
+        }
+        if (scene_settings.clear_color.has_value()) {
+            ImGui::SameLine();
+            ImGui::ColorEdit4("##value", &scene_settings.clear_color.value().x, ImGuiColorEditFlags_Float);
+        }
+    }, "Override the viewport clear color for this scene.");
+
+    add_entry("Post Processing", [&scene_settings, &settings]() {
+        bool overridden = scene_settings.post_processing.has_value();
+        if (ImGui::Checkbox("##", &overridden)) {
+            if (overridden) {
+                scene_settings.post_processing = settings.post_processing;
+            } else {
+                scene_settings.post_processing.reset();
+            }
+        }
+        if (scene_settings.post_processing.has_value()) {
+            ImGui::SameLine();
+            bool value = scene_settings.post_processing.value();
+            if (ImGui::Checkbox("##value", &value)) {
+                scene_settings.post_processing = value;
+            }
+        }
+    }, "Override post-processing enable for this scene.");
+
+    pop_group();
 }
 
 void Properties::camera_properties(erhe::scene::Camera& camera)
@@ -271,19 +376,8 @@ void Properties::light_properties(erhe::scene::Light& light)
     add_entry("Intensity", [&](){ ImGui::SliderFloat("##", &light.intensity, 0.01f, 20000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
     add_entry("Color",     [&](){ ImGui::ColorEdit3 ("##", &light.color.x,   ImGuiColorEditFlags_Float); });
 
-    // TODO Move to scene
-    const auto* node = light.get_node();
-    if (node != nullptr) {
-        auto* scene_root = static_cast<Scene_root*>(node->get_item_host());
-        if (scene_root != nullptr) {
-            const auto& layers = scene_root->layers();
-            ImGui::ColorEdit3(
-                "Ambient",
-                &layers.light()->ambient_light.x,
-                ImGuiColorEditFlags_Float
-            );
-        }
-    }
+    // Ambient light color is a scene property now (issues #237 / #240); it is
+    // shown in Scene properties (Properties::scene_properties), not per light.
 }
 
 void Properties::layout_properties(erhe::scene::Layout& layout)
@@ -1286,6 +1380,7 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
     const auto& node_physics    = std::dynamic_pointer_cast<Node_physics           >(item);
     const auto& node_joint      = std::dynamic_pointer_cast<Node_joint             >(item);
     const auto& rendertarget    = std::dynamic_pointer_cast<Rendertarget_mesh      >(item);
+    const auto& scene           = std::dynamic_pointer_cast<erhe::scene::Scene     >(item);
     const auto& camera          = std::dynamic_pointer_cast<erhe::scene::Camera    >(item);
     const auto& layout          = std::dynamic_pointer_cast<erhe::scene::Layout    >(item);
     const auto& layout_item     = std::dynamic_pointer_cast<erhe::scene::Layout_item>(item);
@@ -1433,6 +1528,10 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
 
     if (physics_joint) {
         physics_joint_settings_properties(physics_joint);
+    }
+
+    if (scene) {
+        scene_properties(*scene);
     }
 
     if (camera) {

@@ -1,5 +1,6 @@
 #include "windows/settings_window.hpp"
 
+#include "windows/config_ui.hpp"
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
 #include "app_scenes.hpp"
@@ -63,135 +64,6 @@
 
 #include <imgui/imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
-
-namespace {
-
-void imgui_field(void* base, const erhe::codegen::Field_info& field)
-{
-    using erhe::codegen::Field_type;
-    void* ptr = static_cast<char*>(base) + field.offset;
-
-    switch (field.field_type) {
-        case Field_type::bool_:
-            ImGui::Checkbox("##", static_cast<bool*>(ptr));
-            break;
-        case Field_type::int_:
-        case Field_type::int8:
-        case Field_type::int16:
-        case Field_type::int32:
-        case Field_type::int64:
-            if (field.numeric_limits.has_ui_min && field.numeric_limits.has_ui_max) {
-                ImGui::SliderInt("##", static_cast<int*>(ptr),
-                    static_cast<int>(field.numeric_limits.ui_min),
-                    static_cast<int>(field.numeric_limits.ui_max));
-            } else {
-                ImGui::DragInt("##", static_cast<int*>(ptr));
-            }
-            break;
-        case Field_type::unsigned_int:
-        case Field_type::uint8:
-        case Field_type::uint16:
-        case Field_type::uint32:
-        case Field_type::uint64:
-            ImGui::DragInt("##", static_cast<int*>(ptr));
-            break;
-        case Field_type::float_:
-            if (field.numeric_limits.has_ui_min && field.numeric_limits.has_ui_max) {
-                ImGui::SliderFloat("##", static_cast<float*>(ptr),
-                    static_cast<float>(field.numeric_limits.ui_min),
-                    static_cast<float>(field.numeric_limits.ui_max));
-            } else {
-                ImGui::DragFloat("##", static_cast<float*>(ptr), 0.01f);
-            }
-            break;
-        case Field_type::double_:
-            {
-                float v = static_cast<float>(*static_cast<double*>(ptr));
-                if (ImGui::DragFloat("##", &v, 0.01f)) {
-                    *static_cast<double*>(ptr) = static_cast<double>(v);
-                }
-            }
-            break;
-        case Field_type::string:
-            ImGui::InputText("##", static_cast<std::string*>(ptr));
-            break;
-        case Field_type::vec2:
-            ImGui::DragFloat2("##", static_cast<float*>(ptr), 0.01f);
-            break;
-        case Field_type::vec3:
-            ImGui::ColorEdit3("##", static_cast<float*>(ptr));
-            break;
-        case Field_type::vec4:
-            ImGui::ColorEdit4("##", static_cast<float*>(ptr));
-            break;
-        case Field_type::ivec2:
-            ImGui::DragInt2("##", static_cast<int*>(ptr));
-            break;
-        case Field_type::ivec3:
-            ImGui::DragInt3("##", static_cast<int*>(ptr));
-            break;
-        case Field_type::mat4:
-        case Field_type::vector:
-        case Field_type::array:
-        case Field_type::optional:
-        case Field_type::map:
-        case Field_type::struct_ref:
-            ImGui::TextUnformatted(field.type_name);
-            break;
-        case Field_type::enum_ref: {
-            if ((field.enum_info == nullptr) || field.enum_info->values.empty()) {
-                ImGui::TextUnformatted(field.type_name);
-                break;
-            }
-            // The codegen emits enums as `enum class <Name> : <underlying>` and
-            // generates field offsets that match the underlying integer width.
-            // size carries that width so we can read/write the right type.
-            int64_t current_value = 0;
-            switch (field.size) {
-                case 1: current_value = static_cast<int64_t>(*static_cast<int8_t* >(ptr)); break;
-                case 2: current_value = static_cast<int64_t>(*static_cast<int16_t*>(ptr)); break;
-                case 4: current_value = static_cast<int64_t>(*static_cast<int32_t*>(ptr)); break;
-                case 8: current_value = *static_cast<int64_t*>(ptr); break;
-                default: ImGui::TextUnformatted(field.type_name); return;
-            }
-
-            int current_index = -1;
-            for (std::size_t i = 0; i < field.enum_info->values.size(); ++i) {
-                if (field.enum_info->values[i].value == current_value) {
-                    current_index = static_cast<int>(i);
-                    break;
-                }
-            }
-
-            const char* preview = (current_index >= 0)
-                ? field.enum_info->values[current_index].name
-                : "(unknown)";
-
-            if (ImGui::BeginCombo("##", preview)) {
-                for (std::size_t i = 0; i < field.enum_info->values.size(); ++i) {
-                    const erhe::codegen::Enum_value_info& v = field.enum_info->values[i];
-                    const bool selected = (current_index == static_cast<int>(i));
-                    if (ImGui::Selectable(v.name, selected)) {
-                        const int64_t new_value = v.value;
-                        switch (field.size) {
-                            case 1: *static_cast<int8_t* >(ptr) = static_cast<int8_t >(new_value); break;
-                            case 2: *static_cast<int16_t*>(ptr) = static_cast<int16_t>(new_value); break;
-                            case 4: *static_cast<int32_t*>(ptr) = static_cast<int32_t>(new_value); break;
-                            case 8: *static_cast<int64_t*>(ptr) = new_value; break;
-                        }
-                    }
-                    if (selected) {
-                        ImGui::SetItemDefaultFocus();
-                    }
-                }
-                ImGui::EndCombo();
-            }
-            break;
-        }
-    }
-}
-
-} // anonymous namespace
 
 namespace editor {
 
@@ -557,44 +429,11 @@ void Settings_window::imgui()
 
     const bool show_developer = (m_context.developer_config != nullptr) && m_context.developer_config->enable;
 
-    // label_override gives a distinct group header when the same struct type is
-    // shown more than once (e.g. the Default vs Selection Render_style_appearance).
+    // Thin forwarder to the shared reflection renderer (windows/config_ui.hpp),
+    // so the many call sites below stay terse. label_override gives a distinct
+    // group header when the same struct type is shown more than once.
     auto add_config_section = [this, show_developer](auto& section, const char* label_override = nullptr) {
-        const auto& struct_info = get_struct_info(static_cast<const std::remove_reference_t<decltype(section)>*>(nullptr));
-        if (struct_info.developer && !show_developer) {
-            return;
-        }
-        const char* label = (label_override != nullptr)
-            ? label_override
-            : (struct_info.short_desc != nullptr && struct_info.short_desc[0] != '\0')
-                ? struct_info.short_desc
-                : struct_info.name;
-        push_group(label, ImGuiTreeNodeFlags_Framed);
-        const auto fields = get_fields(static_cast<const std::remove_reference_t<decltype(section)>*>(nullptr));
-        for (const auto& field : fields) {
-            if (field.removed_in != 0) {
-                continue;
-            }
-            if (field.developer && !show_developer) {
-                continue;
-            }
-            // Nested StructRef fields are rendered as their own sections via
-            // explicit add_config_section calls on the sub-struct; skip them
-            // here so we don't emit a useless "Type_name" text row.
-            if (field.field_type == erhe::codegen::Field_type::struct_ref) {
-                continue;
-            }
-            const char* entry_label = (field.short_desc != nullptr && field.short_desc[0] != '\0')
-                ? field.short_desc
-                : field.name;
-            std::string tooltip = (field.long_desc != nullptr && field.long_desc[0] != '\0')
-                ? std::string{field.long_desc}
-                : std::string{};
-            add_entry(std::string{entry_label}, [&section, &field]() {
-                imgui_field(&section, field);
-            }, std::move(tooltip));
-        }
-        pop_group();
+        editor::add_config_section(*this, show_developer, section, label_override);
     };
 
     push_group("Startup Configuration", ImGuiTreeNodeFlags_Framed);
@@ -701,82 +540,10 @@ void Settings_window::imgui()
         });
         pop_group();
 
-        // Per-scene setting overrides (issue #239). For the current scene (the
-        // single registered scene root), each group can override the matching
-        // editor-global setting above; an unchecked override falls back to the
-        // editor default, a checked one edits the scene's own copy (saved with the
-        // scene). Capturing a reference to the registered Scene_root's settings is
-        // safe here: it outlives show_entries() (App_scenes owns the Scene_root).
-        if (m_context.app_scenes != nullptr) {
-            const std::shared_ptr<Scene_root> scene_root = m_context.app_scenes->get_single_scene_root();
-            if (scene_root) {
-                Scene_settings& scene_settings = scene_root->get_scene_settings();
-
-                push_group("Scene Overrides", ImGuiTreeNodeFlags_Framed);
-
-                // Whole-config-group override: an "Override" checkbox that engages
-                // the scene's optional (seeded from the current editor value) or
-                // clears it, followed by the group's editable fields when engaged.
-                auto override_struct = [&](auto& optional_field, const auto& editor_value, const char* name) {
-                    add_entry(std::string{name}, [&optional_field, &editor_value]() {
-                        bool overridden = optional_field.has_value();
-                        if (ImGui::Checkbox("##", &overridden)) {
-                            if (overridden) {
-                                optional_field = editor_value;
-                            } else {
-                                optional_field.reset();
-                            }
-                        }
-                    }, "Override this setting for the current scene. Unchecked uses the editor-global default.");
-                    if (optional_field.has_value()) {
-                        const std::string section_label = std::string{name} + " (scene override)";
-                        add_config_section(optional_field.value(), section_label.c_str());
-                    }
-                };
-
-                override_struct(scene_settings.sky,                settings.sky,                "Sky");
-                override_struct(scene_settings.grid,               settings.grid,               "Grid");
-                override_struct(scene_settings.physics,            settings.physics,            "Physics");
-                override_struct(scene_settings.shadow_frustum_fit, settings.shadow_frustum_fit, "Shadow Frustum Fit");
-                override_struct(scene_settings.viewport,           settings.viewport,           "Viewport");
-                override_struct(scene_settings.camera_controls,    settings.camera_controls,    "Camera Controls");
-
-                add_entry("Clear Color", [&scene_settings, &settings]() {
-                    bool overridden = scene_settings.clear_color.has_value();
-                    if (ImGui::Checkbox("##", &overridden)) {
-                        if (overridden) {
-                            scene_settings.clear_color = settings.clear_color;
-                        } else {
-                            scene_settings.clear_color.reset();
-                        }
-                    }
-                    if (scene_settings.clear_color.has_value()) {
-                        ImGui::SameLine();
-                        ImGui::ColorEdit4("##value", &scene_settings.clear_color.value().x, ImGuiColorEditFlags_Float);
-                    }
-                }, "Override the viewport clear color for the current scene.");
-
-                add_entry("Post Processing", [&scene_settings, &settings]() {
-                    bool overridden = scene_settings.post_processing.has_value();
-                    if (ImGui::Checkbox("##", &overridden)) {
-                        if (overridden) {
-                            scene_settings.post_processing = settings.post_processing;
-                        } else {
-                            scene_settings.post_processing.reset();
-                        }
-                    }
-                    if (scene_settings.post_processing.has_value()) {
-                        ImGui::SameLine();
-                        bool value = scene_settings.post_processing.value();
-                        if (ImGui::Checkbox("##value", &value)) {
-                            scene_settings.post_processing = value;
-                        }
-                    }
-                }, "Override post-processing enable for the current scene.");
-
-                pop_group();
-            }
-        }
+        // Per-scene setting overrides (issues #239 / #240) moved to the
+        // Properties window: they are shown there when a Scene is selected
+        // (Properties::scene_properties), keyed on the selected scene rather
+        // than only the single registered scene root.
     }
 
     show_entries("Settings", ImVec2{1.0f, 1.0f});

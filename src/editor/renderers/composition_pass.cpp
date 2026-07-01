@@ -259,7 +259,7 @@ void Composition_pass::render(const Render_context& context)
                         .viewport          = context.viewport,
                         .views             = context.views,
                         .exposure          = exposure,
-                        .ambient_light     = layers.light()->ambient_light,
+                        .ambient_light     = scene->ambient_light,
                         .light_projections = context.scene_view.get_light_projections(),
                         .lights            = layers.light()->lights,
                         .skins             = scene->get_skins(),

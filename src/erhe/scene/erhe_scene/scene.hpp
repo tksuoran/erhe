@@ -52,7 +52,6 @@ public:
     void remove(const std::shared_ptr<Light>& light);
 
     std::vector<std::shared_ptr<Light>> lights;
-    glm::vec4                           ambient_light{0.0f, 0.0f, 0.0f, 0.0f};
     std::string                         name;
     Layer_id                            id;
 };
@@ -107,6 +106,11 @@ public:
     void unregister_skin  (const std::shared_ptr<Skin>& skin);
     void register_light   (const std::shared_ptr<Light>& light);
     void unregister_light (const std::shared_ptr<Light>& light);
+
+    // Scene-wide ambient light color (issues #237 / #240). Fed to the forward
+    // renderer as the ambient term and serialized with the scene (scene file
+    // v5). Moved here from Light_layer so it is an intrinsic scene property.
+    glm::vec4 ambient_light{0.0f, 0.0f, 0.0f, 0.0f};
 
 private:
     Scene_host*                               m_host       {nullptr};

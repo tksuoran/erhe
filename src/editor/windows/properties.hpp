@@ -24,6 +24,7 @@ namespace erhe::scene {
     class Light;
     class Mesh;
     class Node;
+    class Scene;
     class Skin;
 }
 namespace erhe::geometry {
@@ -62,6 +63,7 @@ public:
 private:
 
     void animation_properties         (erhe::scene::Animation& animation);
+    void scene_properties             (erhe::scene::Scene& scene);
     void camera_properties            (erhe::scene::Camera& camera);
     void light_properties             (erhe::scene::Light& light);
     void layout_properties            (erhe::scene::Layout& layout);

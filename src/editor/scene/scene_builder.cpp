@@ -1300,8 +1300,6 @@ auto Scene_builder::make_point_light(
 
 void Scene_builder::add_lights(const Add_lights_args& args)
 {
-    const Scene_layers&       layers           = m_scene_root->layers();
-    erhe::scene::Light_layer* light_layer      = layers.light();
     const glm::vec4           target_ambient   {0.04f, 0.04f, 0.04f, 0.0f};
 
     const float directional_light_intensity         = args.directional_light_intensity;
@@ -1447,14 +1445,15 @@ void Scene_builder::add_lights(const Add_lights_args& args)
         light_nodes.push_back(make_point_light(name, position, color, intensity, cast_shadow));
     }
 
-    if (light_nodes.empty() && (light_layer->ambient_light == target_ambient)) {
+    erhe::scene::Scene& scene = m_scene_root->get_scene();
+    if (light_nodes.empty() && (scene.ambient_light == target_ambient)) {
         return;
     }
 
-    const std::shared_ptr<erhe::scene::Node>& root_node = m_scene_root->get_scene().get_root_node();
+    const std::shared_ptr<erhe::scene::Node>& root_node = scene.get_root_node();
     std::vector<std::shared_ptr<Operation>> operations;
     operations.reserve(light_nodes.size() + 1);
-    operations.push_back(std::make_shared<Ambient_light_operation>(light_layer, target_ambient));
+    operations.push_back(std::make_shared<Ambient_light_operation>(&scene, target_ambient));
     for (const std::shared_ptr<erhe::scene::Node>& light_node : light_nodes) {
         operations.push_back(
             std::make_shared<Item_insert_remove_operation>(
