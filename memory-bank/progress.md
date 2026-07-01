@@ -14,17 +14,19 @@ f2a3a31e::DATA-LAYER+RESOLVERS✓{builds-clean-ninja-vulkan}
   scene_serialization.cpp::save/load-wired
   scene_settings_resolve.{hpp,cpp}::get_effective_<x>(Editor_settings_config&,Scene_root&)-API-ready
 verify-codegen::ran-generate.py-manually✓{Optional(StructRef)-serialize/deserialize/is_default-correct}
-eefd4801::UI+PHYSICS-GATE✓{builds+links}
-  UI::settings_window"Scene Overrides"{single-scene,Override-checkbox/group,reuse-add_config_section,capture-binds-registered-Scene_root}
-  physics::app_scenes-before/update/after-resolve-get_effective_physics-per-scene_root{gate-moved-inside-loop}
-LIVE-VERIFIED✓::headless-save_scene→"_version":4+scene_settings-block-all-null{serialize-runtime-confirmed}
+eefd4801::UI+PHYSICS-STEPPING-GATE✓
+  UI::settings_window"Scene Overrides"{single-scene,Override-checkbox/group,reuse-add_config_section}
+  physics::app_scenes-before/update/after-resolve-get_effective_physics-per-scene_root
+f5e45397::shadow_frustum_fit(shadow_render_node)+physics-debug_draw(debug_visualizations)+load_scene-MCP-tool✓
+0c4857b7::SKY-per-scene-all-render-paths✓{app_rendering-update_sky_parameters(context)+Sky_composition_pass-gate,sky_renderer-render_atmosphere,viewport_scene_view-LUT-gate,headset_view-XR-passthrough+2-LUT-gates}
+  !insight::sky-pass-refreshed-per-viewport-in-render_composer(context)→per-scene-works-w/o-new-pass
+LIVE-VERIFIED✓::headless-MCP{save_scene→v4+scene_settings;load_scene-round-trips-all-null-AND-engaged-physics-override-values-preserved;v3-scene-loads→all-null-defaults}
 
-?PENDING::remaining-consumers+live-deserialize-verify→see-next_prompt.txt
-  sky::GLOBAL-pass→needs-per-viewport{not-done}
-  init-consumed::grid+viewport+camera_controls+clear_color+post_processing{per-frame-re-read}
-  physics-other::operations+physics_tool+debug_draw+asset_browser+item_tree{stepping-DONE}
-  shadow::shadow_render_node.cpp:405
-  live-deserialize::no-load_scene-MCP-tool→add-one(+set_scene_setting_override)→round-trip+physics-behavior+v3-backcompat
+?PENDING::remaining-consumers→see-next_prompt.txt
+  WIRED-per-scene✓::physics(stepping+debug)+shadow_frustum_fit+sky(all-paths)
+  init-consumed-NOT-applied::grid+viewport+camera_controls+post_processing{subsystem-holds-own-config→needs-per-frame-re-read-refactor,¬read-swap}
+  clear_color::NO-consumer-anywhere{editor-global-clear_color-only-written-never-read;per-view-Viewport_config.clear_color-is-real-one}→decide-wire||drop
+  sky-visual-verify::needs-runtime-override-setter-MCP-tool→capture_screenshot-before/after
 
 [BLOCKERS]
 none{data-layer-complete;consumer-wiring-is-integration-work}
