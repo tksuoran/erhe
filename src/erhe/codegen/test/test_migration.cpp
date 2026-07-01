@@ -228,6 +228,9 @@ void test_no_version_key_defaults_to_v1()
 // Defined in test_omit_defaults.cpp
 void run_omit_defaults_tests();
 
+// Defined in test_version_upgrade.cpp
+void run_version_upgrade_tests();
+
 int main()
 {
     register_settings_migrations();
@@ -238,6 +241,7 @@ int main()
     test_no_version_key_defaults_to_v1();
 
     run_omit_defaults_tests();
+    run_version_upgrade_tests();
 
     std::printf("\nAll migration tests passed!\n");
     return 0;

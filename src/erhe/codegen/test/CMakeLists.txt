@@ -7,6 +7,7 @@ erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     test_migration.cpp
     test_omit_defaults.cpp
+    test_version_upgrade.cpp
 )
 
 # Generated sources (listed explicitly so CMake knows about them)

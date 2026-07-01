@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_file/file.hpp"
+#include "migration.hpp"
 
 #include <simdjson.h>
 
@@ -12,9 +13,17 @@ namespace erhe::codegen {
 
 // Load a codegen-generated config struct from a JSON file.
 // Returns default-constructed T if the file is missing or malformed.
+//
+// If out_upgraded is non-null, it is set to true when deserialization detected any
+// struct (top-level or nested) whose stored _version was older than the code's current
+// version -- i.e. the file was written by an older schema. Callers can use this to
+// rewrite the file immediately in the current format.
 template <typename T>
-auto load_config(std::string_view file_path) -> T
+auto load_config(std::string_view file_path, bool* out_upgraded = nullptr) -> T
 {
+    if (out_upgraded != nullptr) {
+        *out_upgraded = false;
+    }
     T config{};
     std::optional<std::string> contents = erhe::file::read("load_config", file_path);
     if (!contents.has_value()) {
@@ -32,7 +41,11 @@ auto load_config(std::string_view file_path) -> T
     if (error) {
         return config;
     }
+    clear_deserialized_old_version_flag();
     deserialize(obj, config);
+    if (out_upgraded != nullptr) {
+        *out_upgraded = deserialized_old_version();
+    }
     return config;
 }
 
