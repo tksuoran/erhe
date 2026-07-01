@@ -8,6 +8,7 @@
 #include "editor_log.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/scene_settings_resolve.hpp"
 #include "scene/scene_view.hpp"
 #include "scene/viewport_scene_view.hpp"
 
@@ -402,7 +403,8 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
     // (edited in the Settings window). m_fit_settings must outlive the render
     // call; Light_projection_parameters keeps a pointer to it.
     if (m_context.editor_settings != nullptr) {
-        const Shadow_frustum_fit_config& config = m_context.editor_settings->shadow_frustum_fit;
+        // Resolve per scene (#239): a scene may override shadow frustum fit.
+        const Shadow_frustum_fit_config& config = get_effective_shadow_frustum_fit(*m_context.editor_settings, *scene_root);
         m_fit_settings = erhe::scene::Shadow_frustum_fit_settings{
             .fit_to_view_frustum    = config.fit_to_view_frustum,
             .fit_to_casters         = config.fit_to_casters,

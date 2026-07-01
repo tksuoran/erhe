@@ -1069,6 +1069,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "remove_tags")        result = action_remove_tags    (req->arguments);
         else if (req->tool_name == "edit_material")      result = action_edit_material  (req->arguments);
         else if (req->tool_name == "save_scene")         result = action_save_scene     (req->arguments);
+        else if (req->tool_name == "load_scene")         result = action_load_scene     (req->arguments);
         else if (req->tool_name == "export_gltf")        result = action_export_gltf    (req->arguments);
         else if (req->tool_name == "import_gltf")        result = action_import_gltf    (req->arguments);
         else if (req->tool_name == "capture_screenshot") result = action_capture_screenshot(req->arguments);
@@ -1356,6 +1357,13 @@ void Mcp_server::refresh_tool_list()
             {"path",       {{"type", "string"}, {"description", "Destination .json file path"}}}
         }},
         {"required", json::array({"scene_name", "path"})}
+    }});
+    m_tool_infos.push_back({"load_scene",         "Load an editor scene .json file (saved by save_scene) as a new scene, without a file dialog", {
+        {"type", "object"},
+        {"properties", {
+            {"path", {{"type", "string"}, {"description", "Source .json file path"}}}
+        }},
+        {"required", json::array({"path"})}
     }});
     m_tool_infos.push_back({"export_gltf",        "Export a scene to a glTF file, without a file dialog", {
         {"type", "object"},
@@ -3883,6 +3891,37 @@ auto Mcp_server::action_save_scene(const json& args) -> std::string
     return make_json_content({
         {"saved", true},
         {"path",  path_str}
+    }).dump();
+}
+
+auto Mcp_server::action_load_scene(const json& args) -> std::string
+{
+    const std::string path_str = args.value("path", "");
+    if (path_str.empty()) {
+        json r = make_text_content("Missing required argument: path");
+        r["isError"] = true;
+        return r.dump();
+    }
+    const std::filesystem::path path{path_str};
+    // Each loaded scene gets its own content library, mirroring the file-dialog
+    // load path in Operations::load_scene.
+    std::shared_ptr<Content_library> content_library = std::make_shared<Content_library>();
+    std::shared_ptr<Scene_root> scene_root = editor::load_scene(
+        &m_context,
+        m_context.app_message_bus,
+        m_context.app_scenes,
+        content_library,
+        path
+    );
+    if (!scene_root) {
+        json r = make_text_content("load_scene failed: " + path_str);
+        r["isError"] = true;
+        return r.dump();
+    }
+    return make_json_content({
+        {"loaded",     true},
+        {"path",       path_str},
+        {"scene_name", scene_root->get_name()}
     }).dump();
 }
 

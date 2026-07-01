@@ -119,6 +119,7 @@ private:
     auto action_remove_tags     (const nlohmann::json& args) -> std::string;
     auto action_edit_material   (const nlohmann::json& args) -> std::string;
     auto action_save_scene      (const nlohmann::json& args) -> std::string;
+    auto action_load_scene      (const nlohmann::json& args) -> std::string;
     auto action_export_gltf     (const nlohmann::json& args) -> std::string;
     auto action_import_gltf     (const nlohmann::json& args) -> std::string;
     auto action_wake_physics_bodies(const nlohmann::json& args) -> std::string;

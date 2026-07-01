@@ -16,6 +16,7 @@
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/scene_settings_resolve.hpp"
 #include "scene/scene_view.hpp"
 #include "scene/viewport_scene_view.hpp"
 #include "tools/selection_tool.hpp"
@@ -1608,7 +1609,8 @@ void Debug_visualizations::physics_nodes_visualization(const Render_context& con
 
 #if defined(ERHE_PHYSICS_LIBRARY_JOLT) && defined(JPH_DEBUG_RENDERER)
     App_context& app_context = context.app_context;
-    if (app_context.editor_settings->physics.debug_draw) {
+    // Resolve per scene (#239): physics debug draw follows the scene's override.
+    if (get_effective_physics(*app_context.editor_settings, *scene_root).debug_draw) {
         glm::vec4 camera_position = camera->get_node()->position_in_world();
         const JPH::Vec3 camera_position_jolt{camera_position.x, camera_position.y, camera_position.z};
         app_context.jolt_debug_renderer->SetCameraPos(camera_position_jolt);
