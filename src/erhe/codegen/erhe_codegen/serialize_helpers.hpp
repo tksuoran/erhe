@@ -1,6 +1,8 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -39,6 +41,35 @@ inline void serialize_element(std::string& out, uint64_t value)           { seri
 inline void serialize_element(std::string& out, float value)              { serialize_float(out, value); }
 inline void serialize_element(std::string& out, double value)             { serialize_double(out, value); }
 inline void serialize_element(std::string& out, const std::string& value) { serialize_string(out, value); }
+
+// Post-process a fully built object string ("{\n ... \n<indent>}") produced by a
+// generated serialize(): collapse it onto one line when it has exactly one member and
+// that member is a single-line, non-object value. An omit-defaults struct that reduced to
+// just its version key then prints as "{ \"_version\": 2 }" instead of three lines, so
+// arrays of such structs read one element per line.
+//
+// Detection is by newline count: a lone scalar / inline member yields exactly two newlines
+// (one after '{', one before '}'); a second member, or a multi-line value (nested object,
+// array of objects), adds more and is left untouched. A single member whose value is
+// itself an object ('{') is also left multi-line, per "single non-struct member".
+inline void collapse_single_line_object(std::string& out)
+{
+    if (std::count(out.begin(), out.end(), '\n') != 2) {
+        return;
+    }
+    const std::size_t first_newline = out.find('\n');
+    const std::size_t last_newline  = out.rfind('\n');
+    std::size_t member_begin = first_newline + 1;
+    while ((member_begin < last_newline) && (out[member_begin] == ' ')) {
+        ++member_begin;
+    }
+    const std::string member = out.substr(member_begin, last_newline - member_begin);
+    const std::size_t separator = member.find("\": ");
+    if ((separator != std::string::npos) && ((separator + 3) < member.size()) && (member[separator + 3] == '{')) {
+        return;
+    }
+    out = "{ " + member + " }";
+}
 
 // Deserialization helpers (scalar) — inline to avoid simdjson ABI mismatch
 // (simdjson::ondemand::value resolves to a platform-specific namespace like

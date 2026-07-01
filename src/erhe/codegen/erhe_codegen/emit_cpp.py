@@ -410,6 +410,7 @@ def emit_struct_cpp(s: StructSchema) -> str:
     lines.append("    }")
     lines.append("    out.append(indent * 4, ' ');")
     lines.append("    out += '}';")
+    lines.append("    erhe::codegen::collapse_single_line_object(out);")
     lines.append("    return out;")
     lines.append("}")
     lines.append("")

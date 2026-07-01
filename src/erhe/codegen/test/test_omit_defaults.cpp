@@ -150,6 +150,26 @@ void test_versioned_default_current_document()
     std::printf("PASSED\n");
 }
 
+// A struct that reduces to a single non-object member (here just its version key)
+// serializes onto one line: "{ "_version": 2 }". A struct with more than one member
+// stays multi-line.
+void test_single_member_collapse()
+{
+    std::printf("test_single_member_collapse... ");
+
+    Demo_params all_default{};
+    assert(serialize(all_default) == "{ \"_version\": 2 }");
+
+    Demo_params two{};
+    two.scale = 2.0f; // now _version + scale -> two members
+    const std::string two_json = serialize(two);
+    assert(two_json.find('\n') != std::string::npos); // multi-line
+    assert(contains(two_json, "_version"));
+    assert(contains(two_json, "scale"));
+
+    std::printf("PASSED\n");
+}
+
 } // namespace
 
 void run_omit_defaults_tests()
@@ -158,4 +178,5 @@ void run_omit_defaults_tests()
     test_partial_emission();
     test_versioned_default_old_document();
     test_versioned_default_current_document();
+    test_single_member_collapse();
 }
