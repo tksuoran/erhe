@@ -221,6 +221,11 @@ public:
 
 private:
     void update_camera();
+    // Adopt the camera-control settings effective for the hovered scene (#239:
+    // per-scene override or editor-global default). Called when the hovered scene
+    // view changes, so switching scenes adopts that scene's controls while live
+    // edits persist within a scene.
+    void apply_camera_controls_from_scene();
     void window_imgui();
     void show_input_axis_ui(const char* label, erhe::math::Input_axis& input_axis) const;
 

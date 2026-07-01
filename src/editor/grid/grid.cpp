@@ -3,8 +3,12 @@
 #include "app_context.hpp"
 #include "app_rendering.hpp"
 #include "config/generated/grid_config.hpp"
+#include "config/generated/editor_settings_config.hpp"
 #include "items.hpp"
 #include "renderers/render_context.hpp"
+#include "scene/scene_root.hpp"
+#include "scene/scene_settings_resolve.hpp"
+#include "scene/scene_view.hpp"
 #include "tools/selection_tool.hpp"
 
 #include "erhe_imgui/imgui_helpers.hpp"
@@ -155,21 +159,49 @@ auto Grid::grid_from_world() const -> glm::mat4
 
 void Grid::render(const Render_context& context)
 {
+    // Grid appearance / sizing looks up the Grid_config effective for this
+    // viewport's scene (#239: per-scene override, else the editor-global default).
+    // Falls back to this grid's own cached members when no editor settings are
+    // available. The grid's placement (transform / plane) stays per-grid.
+    const App_context& app_context = context.app_context;
+    const Grid_config* cfg = nullptr;
+    if (app_context.editor_settings != nullptr) {
+        const std::shared_ptr<Scene_root> scene_root = context.scene_view.get_scene_root();
+        cfg = (scene_root != nullptr)
+            ? &get_effective_grid(*app_context.editor_settings, *scene_root)
+            : &app_context.editor_settings->grid;
+    }
+
+    const bool  visible       = (cfg != nullptr) ? cfg->visible             : is_visible();
+    const bool  label_enable  = (cfg != nullptr) ? cfg->label_enable        : m_label_enable;
+    const float label_text_fr = (cfg != nullptr) ? cfg->label_text_fraction : m_label_text_fraction;
+    const float label_spacing = (cfg != nullptr) ? cfg->label_spacing       : m_label_spacing;
+    const float label_fade    = (cfg != nullptr) ? cfg->label_fade          : m_label_fade;
+    const glm::vec4 label_color = (cfg != nullptr) ? cfg->label_color       : m_label_color;
+    const std::array<glm::vec4, 4> level_colors = (cfg != nullptr)
+        ? std::array<glm::vec4, 4>{cfg->level0_color, cfg->level1_color, cfg->level2_color, cfg->level3_color}
+        : m_level_colors;
+    const std::array<float, 4> level_widths = (cfg != nullptr)
+        ? std::array<float, 4>{cfg->level0_width, cfg->level1_width, cfg->level2_width, cfg->level3_width}
+        : m_level_widths;
+    const int   cell_div  = (cfg != nullptr) ? cfg->cell_div  : m_cell_div;
+    const float cell_size = (cfg != nullptr) ? cfg->cell_size : m_cell_size;
+
     // TODO Handling visibility here may add latency, but I guess that is okay.
     //      If Gr\id overrided handle_flag_bits_update(), it could handle visibility
     //      changes more directly, but it would then need access to App_rendering.
-    context.app_context.app_rendering->set_grid_visibility(is_visible());
+    context.app_context.app_rendering->set_grid_visibility(visible);
     context.app_context.app_rendering->set_grid_label(
         glm::vec4{
-            m_label_enable ? 1.0f : 0.0f,
-            m_label_text_fraction,
-            std::max(1.0f, std::round(m_label_spacing)), // shader formats integer values only
-            m_label_fade
+            label_enable ? 1.0f : 0.0f,
+            label_text_fr,
+            std::max(1.0f, std::round(label_spacing)), // shader formats integer values only
+            label_fade
         }
     );
-    context.app_context.app_rendering->set_grid_colors(m_level_colors, m_label_color);
+    context.app_context.app_rendering->set_grid_colors(level_colors, label_color);
     context.app_context.app_rendering->set_grid_line_widths(
-        glm::vec4{m_level_widths[0], m_level_widths[1], m_level_widths[2], m_level_widths[3]}
+        glm::vec4{level_widths[0], level_widths[1], level_widths[2], level_widths[3]}
     );
 
     // Derive the 4 grid LOD level cell sizes from cell size and cell div,
@@ -178,8 +210,8 @@ void Grid::render(const Render_context& context)
     // extended geometrically to level0 (super-major) and level3
     // (sub-minor). Defaults (size 1, div 10) reproduce the historical
     // shader level sizes {10, 1, 0.1, 0.01}.
-    const float div  = static_cast<float>(std::max(1, m_cell_div));
-    const float size = std::max(0.001f, m_cell_size);
+    const float div  = static_cast<float>(std::max(1, cell_div));
+    const float size = std::max(0.001f, cell_size);
     context.app_context.app_rendering->set_grid_sizes(
         glm::vec4{size * div, size, size / div, size / (div * div)}
     );

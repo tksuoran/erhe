@@ -14,6 +14,8 @@
 #include "erhe_commands/input_arguments.hpp"
 #include "erhe_commands/commands.hpp"
 #include "config/generated/camera_controls_config.hpp"
+#include "config/generated/editor_settings_config.hpp"
+#include "scene/scene_settings_resolve.hpp"
 #include "config/generated/fly_camera_config.hpp"
 #include "config/generated/fly_camera_config_serialization.hpp"
 #include "erhe_codegen/config_io.hpp"
@@ -931,8 +933,38 @@ void Fly_camera_tool::set_framed_aabb(erhe::math::Aabb& aabb)
     return m_framed_aabb;
 }
 
+void Fly_camera_tool::apply_camera_controls_from_scene()
+{
+    if (m_context.editor_settings == nullptr) {
+        return;
+    }
+    const Scene_view* scene_view = get_hover_scene_view();
+    const std::shared_ptr<Scene_root> scene_root = (scene_view != nullptr)
+        ? scene_view->get_scene_root()
+        : std::shared_ptr<Scene_root>{};
+    const Camera_controls_config& camera_controls = (scene_root != nullptr)
+        ? get_effective_camera_controls(*m_context.editor_settings, *scene_root)
+        : m_context.editor_settings->camera_controls;
+
+    config.invert_x           = camera_controls.invert_x;
+    config.invert_y           = camera_controls.invert_y;
+    config.velocity_damp      = camera_controls.velocity_damp;
+    config.velocity_max_delta = camera_controls.velocity_max_delta;
+    m_sensitivity             = camera_controls.sensitivity;
+    m_rotate_scale_x = config.invert_x ? -1.0f / 512.0f : 1.0f / 512.f;
+    m_rotate_scale_y = config.invert_y ? -1.0f / 512.0f : 1.0f / 512.f;
+    if (m_camera_controller) {
+        m_camera_controller->get_variable(Variable::translate_x).set_damp_and_max_delta(config.velocity_damp, config.velocity_max_delta);
+        m_camera_controller->get_variable(Variable::translate_y).set_damp_and_max_delta(config.velocity_damp, config.velocity_max_delta);
+        m_camera_controller->get_variable(Variable::translate_z).set_damp_and_max_delta(config.velocity_damp, config.velocity_max_delta);
+    }
+}
+
 void Fly_camera_tool::on_hover_viewport_change()
 {
+    // Adopt the newly-hovered scene's effective camera controls (#239).
+    apply_camera_controls_from_scene();
+
     m_camera_controller->translate_x.reset();
     m_camera_controller->translate_y.reset();
     m_camera_controller->translate_z.reset();
