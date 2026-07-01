@@ -208,38 +208,10 @@ void Properties::scene_properties(erhe::scene::Scene& scene)
     override_struct(scene_settings.shadow_frustum_fit, settings.shadow_frustum_fit, "Shadow Frustum Fit");
     override_struct(scene_settings.camera_controls,    settings.camera_controls,    "Camera Controls");
 
-    add_entry("Clear Color", [&scene_settings, &settings]() {
-        bool overridden = scene_settings.clear_color.has_value();
-        if (ImGui::Checkbox("##", &overridden)) {
-            if (overridden) {
-                scene_settings.clear_color = settings.clear_color;
-            } else {
-                scene_settings.clear_color.reset();
-            }
-        }
-        if (scene_settings.clear_color.has_value()) {
-            ImGui::SameLine();
-            ImGui::ColorEdit4("##value", &scene_settings.clear_color.value().x, ImGuiColorEditFlags_Float);
-        }
-    }, "Override the viewport clear color for this scene.");
-
-    add_entry("Post Processing", [&scene_settings, &settings]() {
-        bool overridden = scene_settings.post_processing.has_value();
-        if (ImGui::Checkbox("##", &overridden)) {
-            if (overridden) {
-                scene_settings.post_processing = settings.post_processing;
-            } else {
-                scene_settings.post_processing.reset();
-            }
-        }
-        if (scene_settings.post_processing.has_value()) {
-            ImGui::SameLine();
-            bool value = scene_settings.post_processing.value();
-            if (ImGui::Checkbox("##value", &value)) {
-                scene_settings.post_processing = value;
-            }
-        }
-    }, "Override post-processing enable for this scene.");
+    // Clear Color and Post Processing per-scene overrides are intentionally not
+    // surfaced here for now (the Scene_settings fields remain and still
+    // serialize). Re-add add_entry rows for scene_settings.clear_color /
+    // .post_processing when their per-scene effect is wired up.
 
     pop_group();
 }
