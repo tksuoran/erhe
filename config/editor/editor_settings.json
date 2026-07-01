@@ -1,5 +1,5 @@
 {
-    "_version": 11,
+    "_version": 12,
     "camera_controls": {
         "invert_x": false,
         "invert_y": false,
@@ -526,191 +526,125 @@
         "box_select_use_compute": true
     },
     "inventory": {
-        "column_count": 9,
-        "row_count": 3,
-        "hotbar_slot_count": 9,
         "grid_slots": [
             {
-                "tool_name": "",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2
             },
             {
-                "tool_name": "",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2
             },
             {
-                "tool_name": "",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2
             },
             {
-                "tool_name": "",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2
             },
             {
-                "tool_name": "",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2
             },
             {
-                "tool_name": "",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2
             },
             {
-                "tool_name": "",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2
             },
             {
-                "tool_name": "",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2
             },
             {
-                "tool_name": "",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2
             },
             {
-                "tool_name": "",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2
             },
             {
-                "tool_name": "",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2
             },
             {
-                "tool_name": "",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2
             },
             {
-                "tool_name": "",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2
             },
             {
-                "tool_name": "",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2
             },
             {
-                "tool_name": "",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2
             },
             {
-                "tool_name": "",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2
             },
             {
-                "tool_name": "",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2
             },
             {
-                "tool_name": "",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2
             },
             {
-                "tool_name": "",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2
             },
             {
-                "tool_name": "",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2,
+                "tool_name": "Move Tool"
             },
             {
-                "tool_name": "",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2
             },
             {
-                "tool_name": "",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2
             },
             {
-                "tool_name": "",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2
             },
             {
-                "tool_name": "",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2
             },
             {
-                "tool_name": "",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2
             },
             {
-                "tool_name": "",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2
             },
             {
-                "tool_name": "",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2
             }
         ],
         "hotbar_slots": [
             {
-                "tool_name": "Move Tool",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2,
+                "command_name": "Geometry.Subdivision.Catmull-Clark"
             },
             {
-                "tool_name": "Rotate",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2,
+                "tool_name": "Rotate"
             },
             {
-                "tool_name": "Scale",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2,
+                "tool_name": "Scale"
             },
             {
-                "tool_name": "Brush Tool",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2,
+                "tool_name": "Brush Tool"
             },
             {
-                "tool_name": "Material Paint Tool (command host)",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2,
+                "tool_name": "Material Paint Tool (command host)"
             },
             {
-                "tool_name": "Paint Tool",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2,
+                "tool_name": "Paint Tool"
             },
             {
-                "tool_name": "Physics Tool",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2,
+                "tool_name": "Physics Tool"
             },
             {
-                "tool_name": "Selection Tool",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2,
+                "tool_name": "Selection Tool"
             },
             {
-                "tool_name": "",
-                "brush_name": "",
-                "material_name": ""
+                "_version": 2
             }
         ]
     },
