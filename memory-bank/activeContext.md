@@ -1,7 +1,13 @@
 §MBEL:5.0
 
 [FOCUS]
-@task::#239-per-scene-settings{editor-global→override-per-scene}⚡
+@task::#240-selectable-scene+scene-properties✓{builds-on-#239}
+©Timo>goal::selectable-Scene-row-in-Hierarchy+Scene-properties-panel{ambient#237+per-scene-overrides}
+>done::2026-07-01{2-commits-main:1fd65017-hierarchy+MCP,faacc975-scene-props+ambient}
+>verified::headless-MCP{Scene-row+nested-content-library-screenshot;scene-file-v5+ambient-serialized+load-roundtrip;Scene-selected→Properties-shows-Ambient+Scene-Overrides}
+
+[PRIOR]
+@task::#239-per-scene-settings{editor-global→override-per-scene}✓{data-layer+consumers+UI}
 ©Timo>goal::subset-of-editor-settings-overridable-per-scene,stored-in-scene,codegen-based
 >plan::APPROVED{2026-07-01}{plans-dir:https-github-com-tksuoran-erhe-issues-23-robust-wolf.md}
 >alsoDone::reference-data-captured✓{doc/editor_settings_codegen_scene_reference.md+auto-memory-ptr}

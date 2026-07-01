@@ -1,5 +1,22 @@
 §MBEL:5.0
 
+[TASK::#240-selectable-scene+scene-properties]
+@status::✓DONE{2026-07-01}
+>DONE:
+1fd65017::PART1-hierarchy+MCP✓
+  erhe::scene::Scene-is-Item_base→selectable-row-top-of-Hierarchy{Scene_root::m_scene-unique→shared_ptr+get_scene_item()+show_in_ui-flag}
+  Item_tree::set_header_item(){flatten-before-root@indent0}+Scene-special-case-nests-content-library{via-scene->get_item_host()->Scene_root::get_content_library()->root}
+  should_show::Content_library_node-bypasses-type-filter{else-hidden-under-show_in_ui-scene-tree}
+  App_scenes::unregister-drops-scene-item-from-selection{¬dangling-Scene_host}
+  MCP::find_items_by_ids-matches-scene-item+list_scenes-returns-scene-id{→scene-selectable-headlessly}
+faacc975::PART2+3-scene-properties✓
+  #237-ambient::Light_layer::ambient_light→erhe::scene::Scene::ambient_light{serialized,scene_file-v4→v5,old=0-default}+consumers{composition_pass+brush_preview+scene_builder+Ambient_light_operation→Scene*}
+  config_ui.{hpp,cpp}::extract-imgui_field+add_config_section-template{shared-Settings+Properties,via-Property_editor-base}
+  Properties::scene_properties(){Ambient-ColorEdit3+Scene-Overrides-group}+dispatch-if(scene)
+  settings_window::Scene-Overrides-REMOVED{moved-to-Properties,was-single-scene-only}+use-shared-add_config_section
+LIVE-VERIFIED✓::headless-MCP{Scene-row+Content-Library-nested-screenshot;save→v5+ambient[0.04];load-roundtrip;select-scene(id-676)→Properties-Ambient-Light+Scene-Overrides-screenshot;node-props-regression-ok}
+!build✓::ninja-vulkan{windowed}+vs-vulkan-headless{both-editor.exe-clean}
+
 [TASK::#239-per-scene-settings]
 @status::⚡IN-PROGRESS{plan-approved-2026-07-01}
 
