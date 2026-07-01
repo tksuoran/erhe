@@ -22,11 +22,16 @@ f5e45397::shadow_frustum_fit(shadow_render_node)+physics-debug_draw(debug_visual
   !insight::sky-pass-refreshed-per-viewport-in-render_composer(context)→per-scene-works-w/o-new-pass
 LIVE-VERIFIED✓::headless-MCP{save_scene→v4+scene_settings;load_scene-round-trips-all-null-AND-engaged-physics-override-values-preserved;v3-scene-loads→all-null-defaults}
 
+abd6f838::GRID+FLY-CAMERA-per-scene✓
+  grid::Grid::render-resolves-get_effective_grid-for-viewport-scene{appearance/labels/colors/widths/cell-sizes;placement-stays-per-grid}
+  camera_controls::Fly_camera_tool::apply_camera_controls_from_scene()-in-on_hover_viewport_change{adopt-on-scene-switch,live-edits-persist}
+  verify::headless-screenshot-default-scene→grid-renders-normal{no-regression}
+
 ?PENDING::remaining-consumers→see-next_prompt.txt
-  WIRED-per-scene✓::physics(stepping+debug)+shadow_frustum_fit+sky(all-paths)
-  init-consumed-NOT-applied::grid+viewport+camera_controls+post_processing{subsystem-holds-own-config→needs-per-frame-re-read-refactor,¬read-swap}
-  clear_color::NO-consumer-anywhere{editor-global-clear_color-only-written-never-read;per-view-Viewport_config.clear_color-is-real-one}→decide-wire||drop
-  sky-visual-verify::needs-runtime-override-setter-MCP-tool→capture_screenshot-before/after
+  WIRED-per-scene✓::physics(stepping+debug)+shadow_frustum_fit+sky(all-paths)+grid+camera_controls
+  init-consumed-NOT-applied::viewport(Viewport_config_data)+post_processing{viewport-creation-time→needs-per-scene-refactor}
+  clear_color::NO-consumer-anywhere{editor-global-clear_color-written-never-read;per-view-Viewport_config.clear_color-is-real-one}→decide-wire||drop
+  sky/grid-visual-override-verify::needs-runtime-override-setter-MCP-tool→capture_screenshot-before/after
 
 [BLOCKERS]
 none{data-layer-complete;consumer-wiring-is-integration-work}
