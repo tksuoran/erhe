@@ -40,12 +40,15 @@ bundle directory; inside it the fixed layout is:
 - `mesh_<i>_p<p>.geogram` -- geometry-normative primitives
 - `imgui.ini` -- window docking layout (`scene_imgui_ini_path()`)
 
-The default bundle location is `res/editor/scenes`. Save/Load use a native *folder*
-dialog (`SDL_ShowOpenFolderDialog` / `erhe::file::select_folder`); the selected
-folder is the bundle root and its name is normalized to carry `.erhescene`. The
-Asset Browser lists each `.erhescene` directory as a single `Asset_file_scene` leaf
-with a "Load" action (raw glTF import/open stays on `Asset_file_gltf`). Loading is
-bundles-only; the JSON schema is unchanged from the previous flat-file format.
+The default bundle location is `res/editor/scenes`. Save uses a native *Save-file*
+dialog (pre-filled with `<scene name>.erhescene`) because a folder picker cannot
+name a new bundle; the chosen path is treated as the bundle root and its name is
+normalized to carry `.erhescene`. Load uses a native *folder* picker
+(`SDL_ShowOpenFolderDialog` / `erhe::file::select_folder`) to select an existing
+bundle. The Asset Browser lists each `.erhescene` directory as a single
+`Asset_file_scene` leaf with a "Load" action (raw glTF import/open stays on
+`Asset_file_gltf`). Loading is bundles-only; the JSON schema is unchanged from the
+previous flat-file format.
 
 ## Public API / Integration Points
 
