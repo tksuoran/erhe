@@ -9,7 +9,6 @@ struct Sky_config;
 struct Grid_config;
 struct Physics_config;
 struct Shadow_frustum_fit_config;
-struct Viewport_config_data;
 struct Camera_controls_config;
 
 namespace editor {
@@ -24,7 +23,6 @@ class Scene_root;
 [[nodiscard]] auto get_effective_grid              (const Editor_settings_config& editor_settings, const Scene_root& scene_root) -> const Grid_config&;
 [[nodiscard]] auto get_effective_physics           (const Editor_settings_config& editor_settings, const Scene_root& scene_root) -> const Physics_config&;
 [[nodiscard]] auto get_effective_shadow_frustum_fit(const Editor_settings_config& editor_settings, const Scene_root& scene_root) -> const Shadow_frustum_fit_config&;
-[[nodiscard]] auto get_effective_viewport          (const Editor_settings_config& editor_settings, const Scene_root& scene_root) -> const Viewport_config_data&;
 [[nodiscard]] auto get_effective_camera_controls   (const Editor_settings_config& editor_settings, const Scene_root& scene_root) -> const Camera_controls_config&;
 [[nodiscard]] auto get_effective_clear_color       (const Editor_settings_config& editor_settings, const Scene_root& scene_root) -> const glm::vec4&;
 [[nodiscard]] auto get_effective_post_processing   (const Editor_settings_config& editor_settings, const Scene_root& scene_root) -> bool;

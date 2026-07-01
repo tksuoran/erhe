@@ -37,7 +37,6 @@
 #include "config/generated/physics_config_serialization.hpp"
 #include "config/generated/shadow_frustum_fit_config_serialization.hpp"
 #include "config/generated/sky_config_serialization.hpp"
-#include "config/generated/viewport_config_data_serialization.hpp"
 
 #include "erhe_defer/defer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
@@ -207,7 +206,6 @@ void Properties::scene_properties(erhe::scene::Scene& scene)
     override_struct(scene_settings.grid,               settings.grid,               "Grid");
     override_struct(scene_settings.physics,            settings.physics,            "Physics");
     override_struct(scene_settings.shadow_frustum_fit, settings.shadow_frustum_fit, "Shadow Frustum Fit");
-    override_struct(scene_settings.viewport,           settings.viewport,           "Viewport");
     override_struct(scene_settings.camera_controls,    settings.camera_controls,    "Camera Controls");
 
     add_entry("Clear Color", [&scene_settings, &settings]() {
