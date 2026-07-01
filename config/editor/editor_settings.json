@@ -1,5 +1,5 @@
 {
-    "_version": 12,
+    "_version": 13,
     "camera_controls": {
         "invert_x": false,
         "invert_y": false,
@@ -451,9 +451,7 @@
             }
         }
     ],
-    "developer": {
-        "enable": true
-    },
+    "developer": { "enable": true },
     "grid": {
         "_version": 3,
         "snap_enabled": true,
@@ -527,88 +525,36 @@
     },
     "inventory": {
         "grid_slots": [
-            {
-                "_version": 2
-            },
-            {
-                "_version": 2
-            },
-            {
-                "_version": 2
-            },
-            {
-                "_version": 2
-            },
-            {
-                "_version": 2
-            },
-            {
-                "_version": 2
-            },
-            {
-                "_version": 2
-            },
-            {
-                "_version": 2
-            },
-            {
-                "_version": 2
-            },
-            {
-                "_version": 2
-            },
-            {
-                "_version": 2
-            },
-            {
-                "_version": 2
-            },
-            {
-                "_version": 2
-            },
-            {
-                "_version": 2
-            },
-            {
-                "_version": 2
-            },
-            {
-                "_version": 2
-            },
-            {
-                "_version": 2
-            },
-            {
-                "_version": 2
-            },
-            {
-                "_version": 2
-            },
+            { "_version": 2 },
+            { "_version": 2 },
+            { "_version": 2 },
+            { "_version": 2 },
+            { "_version": 2 },
+            { "_version": 2 },
+            { "_version": 2 },
+            { "_version": 2 },
+            { "_version": 2 },
+            { "_version": 2 },
+            { "_version": 2 },
+            { "_version": 2 },
+            { "_version": 2 },
+            { "_version": 2 },
+            { "_version": 2 },
+            { "_version": 2 },
+            { "_version": 2 },
+            { "_version": 2 },
+            { "_version": 2 },
             {
                 "_version": 2,
                 "tool_name": "Move Tool"
             },
-            {
-                "_version": 2
-            },
-            {
-                "_version": 2
-            },
-            {
-                "_version": 2
-            },
-            {
-                "_version": 2
-            },
-            {
-                "_version": 2
-            },
-            {
-                "_version": 2
-            },
-            {
-                "_version": 2
-            }
+            { "_version": 2 },
+            { "_version": 2 },
+            { "_version": 2 },
+            { "_version": 2 },
+            { "_version": 2 },
+            { "_version": 2 },
+            { "_version": 2 }
         ],
         "hotbar_slots": [
             {
@@ -643,9 +589,7 @@
                 "_version": 2,
                 "tool_name": "Selection Tool"
             },
-            {
-                "_version": 2
-            }
+            { "_version": 2 }
         ]
     },
     "network": {
@@ -738,9 +682,7 @@
         "large_icon_size": 32,
         "hotbar_icon_size": 80
     },
-    "threading": {
-        "thread_count": 8
-    },
+    "threading": { "thread_count": 8 },
     "post_processing": true,
     "geometry_edit_mode": "fork",
     "transform_mode": "extrude_group_normal",
