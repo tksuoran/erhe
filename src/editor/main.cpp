@@ -22,16 +22,22 @@ auto main(int argc, char** argv) -> int
     // a modal Abort / Retry / Ignore dialog.
     editor::install_crash_handler();
 
-    // Command-line options. --commands overrides the startup script that sets up
-    // the scene (e.g. --commands config/editor/commands_cuboctahedron.json loads a
-    // single-mesh debug scene instead of the default). Unknown options are ignored
-    // (the OS / launcher may append its own), and any parse error falls back to the
-    // default rather than failing to start.
+    // Command-line options.
+    //   --commands overrides the startup script that sets up the scene (e.g.
+    //     --commands config/editor/commands_cuboctahedron.json loads a single-mesh
+    //     debug scene instead of the default).
+    //   --scene loads a saved scene directory bundle (.erhescene) on startup
+    //     instead of building a scene procedurally, e.g.
+    //     --scene "res/editor/scenes/Default Scene.erhescene".
+    // Unknown options are ignored (the OS / launcher may append its own), and any
+    // parse error falls back to the defaults rather than failing to start.
     std::string startup_commands_path{"config/editor/commands.json"};
+    std::string startup_scene_path{};
     try {
         cxxopts::Options options{"editor", "erhe editor"};
         options.add_options()
             ("commands", "Startup commands script (scene setup) JSON path", cxxopts::value<std::string>()->default_value("config/editor/commands.json"))
+            ("scene",    "Scene directory bundle (.erhescene) to load on startup instead of building the default scene", cxxopts::value<std::string>()->default_value(""))
             ("h,help",   "Print usage");
         options.allow_unrecognised_options();
         const cxxopts::ParseResult result = options.parse(argc, argv);
@@ -40,8 +46,9 @@ auto main(int argc, char** argv) -> int
             return 0;
         }
         startup_commands_path = result["commands"].as<std::string>();
+        startup_scene_path    = result["scene"].as<std::string>();
     } catch (const std::exception&) {
-        // Keep the default startup_commands_path on any parse failure.
+        // Keep the default startup paths on any parse failure.
     }
 
 #if defined(ERHE_OS_ANDROID)
@@ -64,6 +71,6 @@ auto main(int argc, char** argv) -> int
     // android-project/app/build.gradle.
     (void)erhe::file::migrate_android_assets_to_writable("erhe_migrate_manifest.txt");
 #endif
-    editor::run_editor(startup_commands_path);
+    editor::run_editor(startup_commands_path, startup_scene_path);
     return 0;
 }
