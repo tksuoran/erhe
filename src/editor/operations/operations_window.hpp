@@ -74,7 +74,6 @@ struct Tool_slot
 
 class App_context;
 class App_message_bus;
-class Content_library_window;
 class Scene_root;
 class Scene_view;
 
@@ -349,19 +348,6 @@ private:
 
     Scene_view*                    m_hover_scene_view     {nullptr};
     Scene_view*                    m_last_hover_scene_view{nullptr};
-
-    // Each entry pairs the Content_library_window with a weak_ptr to
-    // the Scene_root that loaded it. prune_loaded_scene_windows()
-    // drops entries whose Scene_root has expired so the vector does
-    // not grow monotonically across scene loads / unloads.
-    struct Loaded_scene_window
-    {
-        std::weak_ptr<Scene_root>               scene_root;
-        std::shared_ptr<Content_library_window> content_library_window;
-    };
-    std::vector<Loaded_scene_window> m_loaded_content_library_windows;
-
-    void prune_loaded_scene_windows();
 
     Make_mesh_config m_make_mesh_config{};
     Property_editor  m_property_editor{};

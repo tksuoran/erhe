@@ -6,7 +6,6 @@
 #include "brushes/brush.hpp"
 #include "app_settings.hpp"
 #include "content_library/content_library.hpp"
-#include "content_library/content_library_window.hpp"
 #include "items.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/flip_joint_operation.hpp"
@@ -890,19 +889,9 @@ Operations::Operations(
                 );
                 if (scene_root) {
                     log_operations->info("Scene loaded: {}", scene_root->get_name());
-                    prune_loaded_scene_windows();
-                    m_loaded_content_library_windows.push_back(
-                        Loaded_scene_window{
-                            .scene_root = scene_root,
-                            .content_library_window = std::make_shared<Content_library_window>(
-                                *m_context.imgui_renderer,
-                                *m_context.imgui_windows,
-                                m_context,
-                                content_library,
-                                scene_root->get_name()
-                            )
-                        }
-                    );
+                    // The content library is shown nested under the Scene row in the
+                    // Hierarchy (browser) window (#240); the standalone Content
+                    // Library window was removed (#241).
                     auto browser_window = scene_root->make_browser_window(
                         *m_context.imgui_renderer,
                         *m_context.imgui_windows,
@@ -2723,23 +2712,6 @@ void Operations::create_brush()
             new_brush->set_material(first_primitive.material);
         }
     }
-}
-
-void Operations::prune_loaded_scene_windows()
-{
-    // Drop entries whose Scene_root has been released (closed scene).
-    // Stable in-place erase to keep insertion order of the remaining
-    // entries identical to load order.
-    m_loaded_content_library_windows.erase(
-        std::remove_if(
-            m_loaded_content_library_windows.begin(),
-            m_loaded_content_library_windows.end(),
-            [](const Loaded_scene_window& entry) {
-                return entry.scene_root.expired();
-            }
-        ),
-        m_loaded_content_library_windows.end()
-    );
 }
 
 }

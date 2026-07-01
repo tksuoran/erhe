@@ -6,7 +6,6 @@
 #include "app_message_bus.hpp"
 #include "app_settings.hpp"
 #include "content_library/content_library.hpp"
-#include "content_library/content_library_window.hpp"
 #include "editor_log.hpp"
 #include "operations/operation.hpp"
 #include "operations/operation_stack.hpp"
@@ -37,10 +36,9 @@ public:
     void undo   (App_context& context) override;
 
 private:
-    std::filesystem::path                  m_path;
-    std::shared_ptr<Scene_root>            m_scene_root;
-    std::shared_ptr<Content_library>       m_content_library;
-    std::shared_ptr<Content_library_window> m_content_library_window;
+    std::filesystem::path            m_path;
+    std::shared_ptr<Scene_root>      m_scene_root;
+    std::shared_ptr<Content_library> m_content_library;
 };
 
 Scene_open_operation::Scene_open_operation(const std::filesystem::path& path)
@@ -69,20 +67,10 @@ void Scene_open_operation::execute(App_context& context)
     }
     m_scene_root->register_to_editor_scenes(*context.app_scenes);
 
-    // Re-create the per-window UI state every time the operation
-    // executes (initial run + redo). undo() drops these explicitly,
-    // so without the reset here a redo would leak the prior
-    // Content_library_window. The shared_ptr resets are defensive on
-    // the first-time path too -- they're already null then.
-    m_content_library_window.reset();
-    m_content_library_window = std::make_shared<Content_library_window>(
-        *context.imgui_renderer,
-        *context.imgui_windows,
-        context,
-        m_content_library,
-        m_scene_root->get_name()
-    );
-
+    // The content library is shown nested under the Scene row in the Hierarchy
+    // (browser) window (#240); the standalone Content Library window was removed
+    // (#241). Re-create the browser window every time the operation executes
+    // (initial run + redo); undo() drops it via remove_browser_window().
     auto browser_window = m_scene_root->make_browser_window(
         *context.imgui_renderer,
         *context.imgui_windows,
@@ -121,11 +109,6 @@ void Scene_open_operation::undo(App_context& context)
     ERHE_VERIFY(m_scene_root);
     m_scene_root->unregister_from_editor_scenes(*context.app_scenes);
     m_scene_root->remove_browser_window();
-    // Drop the Content_library_window we created in execute(). Without
-    // this, redo() re-allocates a fresh window while the previous one
-    // still holds an imgui-windows registration, leaking ImGui state
-    // and producing a duplicate "Content Library - ..." entry.
-    m_content_library_window.reset();
 }
 
 //

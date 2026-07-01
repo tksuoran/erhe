@@ -48,7 +48,6 @@
 #include "asset_browser/asset_browser.hpp"
 #include "brushes/brush.hpp"
 #include "content_library/brdf_slice.hpp"
-#include "content_library/content_library_window.hpp"
 #include "developer/clipboard_window.hpp"
 #include "developer/commands_window.hpp"
 #include "developer/composer_window.hpp"
@@ -2236,7 +2235,6 @@ public:
             m_mcp_server.reset();
         }
         m_default_scene_browser.reset();
-        m_default_content_library_window.reset();
         m_default_scene.reset();
         m_default_content_library.reset();
 
@@ -2413,13 +2411,8 @@ public:
             enable_physics
         );
         m_default_scene->register_to_editor_scenes(*m_app_scenes);
-        m_default_content_library_window = std::make_shared<Content_library_window>(
-            *m_imgui_renderer.get(),
-            *m_imgui_windows.get(),
-            m_app_context,
-            m_default_content_library,
-            m_default_scene->get_name()
-        );
+        // The content library is shown nested under the Scene row in the Hierarchy
+        // window (#240); the standalone Content Library window was removed (#241).
         m_default_scene_browser = m_default_scene->make_browser_window(
             *m_imgui_renderer.get(), *m_imgui_windows.get(), m_app_context, m_app_settings
         );
@@ -2815,7 +2808,6 @@ public:
     // loads a scene.
     std::shared_ptr<Content_library>        m_default_content_library;
     std::shared_ptr<Scene_root>             m_default_scene;
-    std::shared_ptr<Content_library_window> m_default_content_library_window;
     std::shared_ptr<Item_tree_window>       m_default_scene_browser;
 
     // Global tools (Hud / Hotbar / OpenXR Headset_view) live inside a scene, but no

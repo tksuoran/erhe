@@ -119,8 +119,6 @@ erhe_target_sources_grouped(
     content_library/brdf_slice.hpp
     content_library/content_library.cpp
     content_library/content_library.hpp
-    content_library/content_library_window.cpp
-    content_library/content_library_window.hpp
     content_library/material_library.cpp
     content_library/material_library.hpp
     create/create.cpp

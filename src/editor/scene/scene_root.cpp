@@ -8,6 +8,8 @@
 
 #include "app_context.hpp"
 #include "content_library/content_library.hpp"
+#include "operations/item_insert_remove_operation.hpp"
+#include "operations/operation_stack.hpp"
 #include "scene/node_joint.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_commands.hpp"
@@ -313,8 +315,61 @@ auto Scene_root::make_browser_window(
             }
     );
     m_node_tree_window->set_item_callback(
-        [this](const std::shared_ptr<erhe::Item_base>& item) {
-            return ImGui::IsDragDropActive() && m_node_tree_window->drag_and_drop_target(item);
+        [this, &context](const std::shared_ptr<erhe::Item_base>& item) -> bool {
+            if (!ImGui::IsDragDropActive()) {
+                return false;
+            }
+            // Material cross-library drop (migrated from the removed Content Library
+            // window, #241 follow-up): dropping a material from another scene's
+            // content library onto this scene's Materials folder (or a material in
+            // it) copies the material into this library.
+            const auto content_node = std::dynamic_pointer_cast<Content_library_node>(item);
+            if (content_node) {
+                const auto& materials_folder = get_content_library()->materials;
+                const bool is_materials_folder = (content_node == materials_folder);
+                const bool is_material_item    = !is_materials_folder &&
+                    content_node->item &&
+                    std::dynamic_pointer_cast<erhe::primitive::Material>(content_node->item) &&
+                    (content_node->get_parent().lock() == materials_folder);
+                if (is_materials_folder || is_material_item) {
+                    const ImGuiPayload* payload_peek = ImGui::GetDragDropPayload();
+                    if ((payload_peek != nullptr) && payload_peek->IsDataType("Content_library_node")) {
+                        erhe::Item_base* payload_item_base = *(static_cast<erhe::Item_base**>(payload_peek->Data));
+                        auto source_node = std::dynamic_pointer_cast<Content_library_node>(payload_item_base->shared_from_this());
+                        if (source_node && source_node->item) {
+                            auto source_material = std::dynamic_pointer_cast<erhe::primitive::Material>(source_node->item);
+                            if (source_material) {
+                                bool is_same_library = false;
+                                for (auto check = source_node->get_parent().lock(); check; check = check->get_parent().lock()) {
+                                    if (check == get_content_library()->root) {
+                                        is_same_library = true;
+                                        break;
+                                    }
+                                }
+                                if (!is_same_library && ImGui::BeginDragDropTarget()) {
+                                    const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Content_library_node");
+                                    if (payload != nullptr) {
+                                        auto new_material = std::make_shared<erhe::primitive::Material>(*source_material);
+                                        auto new_node = std::make_shared<Content_library_node>(new_material);
+                                        auto op = std::make_shared<Item_insert_remove_operation>(
+                                            Item_insert_remove_operation::Parameters{
+                                                .context = context,
+                                                .item    = new_node,
+                                                .parent  = materials_folder,
+                                                .mode    = Item_insert_remove_operation::Mode::insert
+                                            }
+                                        );
+                                        context.operation_stack->queue(op);
+                                    }
+                                    ImGui::EndDragDropTarget();
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return m_node_tree_window->drag_and_drop_target(item);
         }
     );
     m_node_tree_window->set_hover_callback(
@@ -401,6 +456,52 @@ auto Scene_root::make_browser_window(
                     close = true;
                 }
                 ImGui::EndMenu();
+            }
+        }
+    );
+    // Content-library context menu (migrated from the removed Content Library
+    // window, #241 follow-up): "Create Material" on this scene's Materials folder.
+    m_node_tree_window->add_item_context_menu_callback(
+        [this, &context](
+            const std::shared_ptr<erhe::Item_base>& item,
+            std::vector<std::function<void()>>&     deferred_operations,
+            bool&                                   close
+        ) {
+            const auto content_node = std::dynamic_pointer_cast<Content_library_node>(item);
+            if (!content_node) {
+                return;
+            }
+            const bool is_folder = !content_node->item && (content_node->type_code != 0);
+            if (is_folder && (content_node->type_code == erhe::Item_type::material)) {
+                auto         materials   = get_content_library()->materials;
+                App_context* context_ptr = &context;
+                if (ImGui::MenuItem("Create Material")) {
+                    deferred_operations.push_back(
+                        [context_ptr, materials]() {
+                            auto new_material = std::make_shared<erhe::primitive::Material>(
+                                erhe::primitive::Material_create_info{
+                                    .name = "New Material",
+                                    .data = {
+                                        .base_color = glm::vec3{0.5f, 0.5f, 0.5f},
+                                        .roughness  = glm::vec2{0.5f, 0.5f},
+                                        .metallic   = 1.0f
+                                    }
+                                }
+                            );
+                            auto new_node = std::make_shared<Content_library_node>(new_material);
+                            auto op = std::make_shared<Item_insert_remove_operation>(
+                                Item_insert_remove_operation::Parameters{
+                                    .context = *context_ptr,
+                                    .item    = new_node,
+                                    .parent  = materials,
+                                    .mode    = Item_insert_remove_operation::Mode::insert
+                                }
+                            );
+                            context_ptr->operation_stack->queue(op);
+                        }
+                    );
+                    close = true;
+                }
             }
         }
     );
