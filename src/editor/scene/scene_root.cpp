@@ -117,9 +117,12 @@ Scene_root::Scene_root(
 {
     ERHE_PROFILE_FUNCTION();
 
-    m_scene = std::make_unique<Scene>(name, this);
+    m_scene = std::make_shared<Scene>(name, this);
     m_layers.add_layers_to_scene(*m_scene.get());
 
+    // The Scene item is selectable and shown as the top row of the Hierarchy
+    // window (issue #240); make it pass the window's show_in_ui filter.
+    m_scene->enable_flag_bits(erhe::Item_flags::show_in_ui);
     m_scene->get_root_node()->enable_flag_bits(erhe::Item_flags::invisible_parent);
     if (enable_physics) {
         m_physics_world = erhe::physics::IWorld::create_unique();
@@ -290,6 +293,10 @@ auto Scene_root::make_browser_window(
         ""
     );
     m_node_tree_window->set_root(m_scene->get_root_node());
+    // Show a selectable Scene item at the top of the Hierarchy window, with the
+    // Content Library nested under it (issue #240). The scene root node's child
+    // nodes continue to render at top level via set_root above.
+    m_node_tree_window->set_header_item(get_scene_item());
     m_node_tree_window->set_item_filter(
         app_settings.node_tree_show_all
             ? erhe::Item_filter{
@@ -830,6 +837,11 @@ auto Scene_root::get_scene() const -> const erhe::scene::Scene&
 {
     ERHE_VERIFY(m_scene);
     return *m_scene.get();
+}
+
+auto Scene_root::get_scene_item() -> std::shared_ptr<erhe::scene::Scene>
+{
+    return m_scene;
 }
 
 auto Scene_root::get_name() const -> const std::string&

@@ -182,6 +182,9 @@ public:
     [[nodiscard]] auto get_raytrace_scene() -> erhe::raytrace::IScene&;
     [[nodiscard]] auto get_scene         () -> erhe::scene::Scene&;
     [[nodiscard]] auto get_scene         () const -> const erhe::scene::Scene&;
+    // Stable shared_ptr to the Scene item, used to make the Scene selectable and
+    // to show it as the top row of the Hierarchy window (issue #240).
+    [[nodiscard]] auto get_scene_item    () -> std::shared_ptr<erhe::scene::Scene>;
     [[nodiscard]] auto get_name          () const -> const std::string&;
 
     // Per-scene setting overrides (issue #239). Each field is an optional; a
@@ -240,7 +243,7 @@ private:
     std::deque<std::string>                         m_trigger_event_log;
     uint64_t                                        m_trigger_event_counter{0};
 
-    std::unique_ptr<erhe::scene::Scene>             m_scene;
+    std::shared_ptr<erhe::scene::Scene>             m_scene;
     Scene_layers                                    m_layers;
     Scene_settings                                  m_scene_settings;
 

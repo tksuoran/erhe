@@ -58,6 +58,11 @@ public:
     )>;
 
     void set_root                       (const std::shared_ptr<erhe::Hierarchy>& root);
+    // Optional item flattened before the root, at indent 0 (a sibling of the
+    // root's rows). Used by the scene hierarchy window to show a selectable
+    // Scene item with the Content Library nested under it (issue #240); left
+    // null by other windows, which are then unaffected.
+    void set_header_item                (const std::shared_ptr<erhe::Item_base>& item);
     void set_item_filter                (const erhe::Item_filter& filter);
     void clear_cached_rows              ();
     void set_item_callback              (std::function<bool(const std::shared_ptr<erhe::Item_base>&)> fun);
@@ -154,6 +159,7 @@ private:
     erhe::Item_filter                                            m_filter;
     ImGuiTextFilter                                              m_text_filter;
     std::shared_ptr<erhe::Hierarchy>                             m_root;
+    std::shared_ptr<erhe::Item_base>                             m_header_item;
     std::function<bool(const std::shared_ptr<erhe::Item_base>&)> m_item_callback;
     std::function<void()>                                        m_hover_callback;
     std::vector<Context_menu_callback>                           m_item_context_menu_callbacks;

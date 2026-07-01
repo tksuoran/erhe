@@ -8,6 +8,7 @@
 #include "app_scenes.hpp"
 #include "app_settings.hpp"
 #include "brushes/brush.hpp"
+#include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "graphics/icon_set.hpp"
 #include "graphics/thumbnails.hpp"
@@ -58,6 +59,12 @@ Item_tree::Item_tree(App_context& context)
 void Item_tree::set_root(const std::shared_ptr<erhe::Hierarchy>& root)
 {
     m_root = root;
+    m_flat_rows_dirty = true;
+}
+
+void Item_tree::set_header_item(const std::shared_ptr<erhe::Item_base>& item)
+{
+    m_header_item = item;
     m_flat_rows_dirty = true;
 }
 
@@ -1239,7 +1246,12 @@ void Item_tree::item_icon_and_text(const std::shared_ptr<erhe::Item_base>& item)
 
 auto Item_tree::should_show(const std::shared_ptr<erhe::Item_base>& item) -> Show_mode
 {
-    const bool show_by_type = m_filter(item->get_flag_bits());
+    // Content-library nodes (issue #240) do not carry show_in_ui, so bypass the
+    // tree's type filter for them; this lets the Content Library nested under the
+    // Scene item show in the scene hierarchy window (which filters on show_in_ui)
+    // and does not affect the standalone content library window (all-accepting).
+    const bool is_content_library = std::dynamic_pointer_cast<Content_library_node>(item) != nullptr;
+    const bool show_by_type = is_content_library || m_filter(item->get_flag_bits());
     const bool show_by_name = m_text_filter.PassFilter(item->get_name().c_str());
     if (show_by_type && show_by_name) {
         return Show_mode::Show;
@@ -1297,11 +1309,33 @@ void Item_tree::flatten_visible_rows(const std::shared_ptr<erhe::Item_base>& ite
     const auto& scene     = std::dynamic_pointer_cast<erhe::scene::Scene>(item);
     const auto& node      = std::dynamic_pointer_cast<erhe::scene::Node >(item);
     bool is_leaf = true;
-    if (hierarchy && (hierarchy->get_child_count(m_filter) > 0)) {
-        is_leaf = false;
+    const bool is_content_library_node = std::dynamic_pointer_cast<Content_library_node>(item) != nullptr;
+    if (hierarchy) {
+        // Content-library nodes bypass the tree's type filter (issue #240), so
+        // count their children unfiltered; other hierarchies use the filter.
+        const std::size_t child_count = is_content_library_node
+            ? hierarchy->get_child_count()
+            : hierarchy->get_child_count(m_filter);
+        if (child_count > 0) {
+            is_leaf = false;
+        }
     }
-    if (scene && scene->get_root_node() && scene->get_root_node()->get_child_count(m_filter) > 0) {
-        is_leaf = false;
+    // A Scene item (issue #240) is not itself a Hierarchy; its single tree child
+    // is the Content Library, reached via the scene's host (Scene_root). The
+    // scene root node's child nodes are NOT nested here - they render separately
+    // (the scene hierarchy window sets the scene root node as its root).
+    std::shared_ptr<erhe::Hierarchy> scene_content_library_root;
+    if (scene) {
+        Scene_root* scene_root = static_cast<Scene_root*>(scene->get_item_host());
+        if (scene_root != nullptr) {
+            const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
+            if (content_library) {
+                scene_content_library_root = content_library->root;
+            }
+        }
+        if (scene_content_library_root) {
+            is_leaf = false;
+        }
     }
 
     const bool expand =
@@ -1391,6 +1425,12 @@ void Item_tree::flatten_visible_rows(const std::shared_ptr<erhe::Item_base>& ite
         for (const auto& child_node : hierarchy->get_children()) {
             flatten_visible_rows(child_node, indent + indent_spacing);
         }
+    }
+    // Nest the Content Library under the Scene item (issue #240). Scene is not a
+    // Hierarchy, so this is handled explicitly rather than via the block above.
+    if (scene_content_library_root) {
+        const float indent_spacing = ImGui::GetStyle().IndentSpacing;
+        flatten_visible_rows(scene_content_library_root, indent + indent_spacing);
     }
 }
 
@@ -1539,6 +1579,12 @@ void Item_tree::imgui_tree(float ui_scale)
         m_icon_y_offset  = std::max(0.0f, (ImGui::GetFrameHeight() - icon_font_size) * 0.5f);
         m_label_y_offset = style.FramePadding.y;
         m_flat_rows.clear();
+        // Optional header (the selectable Scene item, issue #240) is flattened
+        // first at indent 0 so it and the root's rows are siblings; the scene
+        // root node's child nodes below are unaffected.
+        if (m_header_item) {
+            flatten_visible_rows(m_header_item, 0.0f);
+        }
         flatten_visible_rows(m_root, 0.0f);
     }
 

@@ -1790,6 +1790,7 @@ auto Mcp_server::query_list_scenes(const json& args) -> std::string
 
         scenes.push_back({
             {"name",                sr->get_name()},
+            {"id",                  scene.get_id()}, // Scene item id (selectable, issue #240)
             {"node_count",          static_cast<int>(scene.get_flat_nodes().size())},
             {"camera_count",        static_cast<int>(scene.get_cameras().size())},
             {"light_count",         light_count},
@@ -2331,6 +2332,12 @@ auto Mcp_server::find_items_by_ids(Scene_root& sr, const std::set<std::size_t>& 
     std::vector<std::shared_ptr<erhe::Item_base>> result;
 
     const auto& scene = sr.get_scene();
+    // The Scene item itself is selectable (issue #240); match it too so it can
+    // be selected via MCP (e.g. to show Scene properties in the Properties window).
+    const std::shared_ptr<erhe::scene::Scene> scene_item = sr.get_scene_item();
+    if (scene_item && target_ids.contains(scene_item->get_id())) {
+        result.push_back(scene_item);
+    }
     for (const auto& node : scene.get_flat_nodes()) {
         if (target_ids.contains(node->get_id())) {
             result.push_back(node);

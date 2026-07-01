@@ -4,6 +4,7 @@
 #include "editor_log.hpp"
 #include "app_settings.hpp"
 #include "tools/tools.hpp"
+#include "tools/selection_tool.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_settings_resolve.hpp"
 #include "config/generated/physics_config.hpp"
@@ -68,6 +69,14 @@ void App_scenes::unregister_scene_root(Scene_root* scene_root)
         log_scene->error("Scene '{}' not registered in App_scenes", scene_root->get_name());
     } else {
         m_scene_roots.erase(i, m_scene_roots.end());
+    }
+
+    // If this scene's own item (issue #240) is currently selected, drop it from
+    // the selection now: a torn-down Scene_root would otherwise leave the
+    // Selection holding a Scene whose get_item_host() back-pointer dangles.
+    const std::shared_ptr<erhe::scene::Scene> scene_item = scene_root->get_scene_item();
+    if ((m_context.selection != nullptr) && scene_item && scene_item->is_selected()) {
+        m_context.selection->remove_from_selection(scene_item);
     }
 }
 
