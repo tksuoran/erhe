@@ -1,27 +1,32 @@
 §MBEL:5.0
 
-[TASK::clang-cl+cl.exe+VS-solution-builds-editor-clean]
-@status::✓COMPLETE{editor.exe-links-4-configs,7-commits-on-main}
+[TASK::#239-per-scene-settings]
+@status::⚡IN-PROGRESS{plan-approved-2026-07-01}
 
 >DONE:
-cc9e5fd5::tracy-pin-master-4cd6c389{>v0.13.1,atomic-copy-init→direct-init}
-0faceae9::mango-clang-cl→MSVC-flag-branch{/EHsc-restored}@clang-cl
-faa6104e::Clang.cmake-g3-GNU-frontend-only{Jolt-Werror}@clang-cl
-6c0fea37::Jolt-ENABLE_ALL_WARNINGS-OFF{no-/Wall-/WX}@clang-cl
-ce656f05::Clang.cmake-global-avx2-baseline{shared-PCH-feature-uniform}@clang-cl
-d756c994::tracy-OPTIONS+"TRACY_ENABLE ON"{master-default-ON→OFF,ALL-builds}
-60d63927::profile.hpp-alias-4-more-gl*-TracyOpenGL{master-GL-probe,OpenGL-backend}
-verify::editor.exe×8✓{clang-cl-ninja|cl.exe-ninja-vulkan|VS:vulkan+opengl+vulkan_asan+opengl_asan+headless-null+vulkan_headless;all-0-error}
-  asan+headless::needed-no-new-fix{7-fixes-cover-all-configs}
-techContext+memory-bank-updated✓
+PhaseA::reference-data-captured✓
+  doc/editor_settings_codegen_scene_reference.md{settings-map+codegen-how-to+scene-serialization-map}
+  auto-memory::reference_settings_codegen_scene+project_239_per_scene_settings{+MEMORY.md-index}
+  memory-bank::activeContext+progress-updated
+plan::approved{Optional-per-config-group,scene_file-v3→v4,Scene_root-storage}
 
 ?PENDING:
-none
+PhaseB1::mechanism-end-to-end
+  1-scene_settings.py{scene-unit,Optional(StructRef)×6+Optional(Vec4)clear_color+Optional(Bool)post_processing}
+  2-CMake::EXTRA_DEFINITIONS_DIRS"${_config_defs}:config/generated/"+DEFINITIONS+_codegen_sources
+  3-scene_file.py::+scene_settings-field{StructRef,added_in=4}+version→4
+  4-Scene_root::+m_scene_settings+get_scene_settings()
+  5-scene_serialization.cpp::save/load-wire
+  6-resolvers::get_effective_<x>(Editor_settings_config&,Scene_root&)+rewire-consumers
+  7-UI::reflection-driven-override-checkbox/group
+PhaseB2::polish
 
 [BLOCKERS]
-none::all-8-build-configs-clean
+none
 
 [NOTES]
-!tracy-pin-3-consequences{atomic-fix-wanted|TRACY_ENABLE-default-flip-OFF|TracyOpenGL-new-gl-probes}→last-2-unwanted,fixed
-!each-build-config-caught-a-distinct-regression{cl.exe→TRACY_ENABLE;OpenGL→TracyOpenGL;clang-only-build-masked-both}→value-of-building-all-local-configs
-!VS-builds-need-VS-closed{reconfigure-pops-reload-dialog};generator=VS18-2026,build-via-cmake--build--config-Debug
+!enabler::codegen-Optional(StructRef)+is_default()-already-support-"unset=use-default"→¬new-primitive
+!build-twice-after-codegen-def-change{stale-.cpp}
+!Scene_root-not-erhe::scene::Scene{latter-graphics-agnostic}
+!verify-via-headless-MCP{save/load-roundtrip+v3-back-compat+screenshot-effective-value}
+!consumer-rewire-grep::editor_settings->{sky,grid,physics,shadow_frustum_fit,viewport,camera_controls,post_processing,clear_color}
