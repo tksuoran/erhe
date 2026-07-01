@@ -756,9 +756,10 @@ public:
         return std::make_unique<erhe::window::Context_window>(configuration);
     }
 
-    Editor(std::string startup_commands_path, std::string startup_scene_path)
+    Editor(std::string startup_commands_path, std::string startup_scene_path, bool no_startup_scene)
         : m_startup_commands_path{std::move(startup_commands_path)}
         , m_startup_scene_path   {std::move(startup_scene_path)}
+        , m_no_startup_scene     {no_startup_scene}
         , m_graphics_config     {erhe::codegen::load_config<Graphics_config>       ("config/editor/erhe_graphics.json")}
         , m_mesh_memory_config  {erhe::codegen::load_config<Mesh_memory_config>    ("config/editor/mesh_memory.json")}
         , m_renderer_config     {erhe::codegen::load_config<Renderer_config>       ("config/editor/renderer.json")}
@@ -2446,6 +2447,13 @@ public:
     {
         ERHE_PROFILE_FUNCTION();
 
+        // --no-scene: start with an empty editor -- do not procedurally build the
+        // default scene and do not load any scene. Takes precedence over --scene.
+        if (m_no_startup_scene) {
+            log_startup->info("Starting with no scene (--no-scene); skipping procedural startup script and scene load");
+            return;
+        }
+
         // --scene <bundle>: load a saved scene directory bundle (.erhescene) on
         // startup instead of procedurally building the default scene. Uses the same
         // queued load path as File > Load Scene / the scene.load_scene command; the
@@ -2795,6 +2803,7 @@ public:
 
     std::string                         m_startup_commands_path; // startup script path (--commands); declared first so it initializes before run_startup_script() runs
     std::string                         m_startup_scene_path;    // startup scene bundle path (--scene); when set, loaded instead of running the commands.json scene build
+    bool                                m_no_startup_scene{false}; // --no-scene: start empty (no procedural scene, no scene load); takes precedence over --scene
     Graphics_config                     m_graphics_config;
     Mesh_memory_config                  m_mesh_memory_config;
     Renderer_config                     m_renderer_config;
@@ -2946,7 +2955,7 @@ public:
     std::unique_ptr<Mcp_server         >                     m_mcp_server;
 };
 
-void run_editor(const std::string& startup_commands_path, const std::string& startup_scene_path)
+void run_editor(const std::string& startup_commands_path, const std::string& startup_scene_path, const bool no_startup_scene)
 {
 //#if defined(ERHE_PROFILE_LIBRARY_TRACY) && TRACY_ENABLE
 //    while (!TracyIsConnected) {
@@ -3076,7 +3085,7 @@ void run_editor(const std::string& startup_commands_path, const std::string& sta
         //    editor.tick();
         //}
 
-        Editor editor{startup_commands_path, startup_scene_path};
+        Editor editor{startup_commands_path, startup_scene_path, no_startup_scene};
         editor.run();
     }
 
