@@ -1,4 +1,5 @@
 #include "editor_settings_store.hpp"
+#include "editor_log.hpp"
 
 #include "config/generated/editor_settings_config_serialization.hpp"
 #include "erhe_codegen/config_io.hpp"
@@ -12,11 +13,16 @@ Editor_settings_store::Editor_settings_store()
 {
     bool upgraded = false;
     m_settings = erhe::codegen::load_config<Editor_settings_config>(c_editor_settings_file_path, &upgraded);
+    log_startup->info(
+        "Editor settings loaded from {} (current schema version {}, older-version detected: {})",
+        c_editor_settings_file_path, Editor_settings_config::current_version, upgraded
+    );
     if (upgraded) {
         // The file (or a nested section) was written by an older schema version. Rewrite
         // it now in the current format so the on-disk file is upgraded immediately on
         // load, instead of waiting for the next settings change to trigger an autosave.
-        erhe::codegen::save_config(m_settings, c_editor_settings_file_path);
+        const bool ok = erhe::codegen::save_config(m_settings, c_editor_settings_file_path);
+        log_startup->info("Rewrote {} in current schema format (ok={})", c_editor_settings_file_path, ok);
     }
 }
 
