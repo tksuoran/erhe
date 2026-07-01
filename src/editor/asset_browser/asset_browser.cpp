@@ -239,25 +239,18 @@ Asset_browser::Asset_browser(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::
             std::vector<std::function<void()>>&     /*deferred_operations*/,
             bool&                                   close
         ) {
+            // Primary type-specific actions.
             const std::shared_ptr<Asset_file_scene> scene = std::dynamic_pointer_cast<Asset_file_scene>(item);
             if (scene) {
                 if (try_load(scene)) {
                     close = true;
                 }
-                add_copy_path_menu_items(scene, close);
-                return;
-            }
-            const std::shared_ptr<Asset_folder> folder = std::dynamic_pointer_cast<Asset_folder>(item);
-            if (folder) {
-                add_copy_path_menu_items(folder, close);
-                return;
             }
             const std::shared_ptr<Asset_file_geogram> geogram = std::dynamic_pointer_cast<Asset_file_geogram>(item);
             if (geogram) {
                 if (try_import(geogram)) {
                     close = true;
                 }
-                return;
             }
             const std::shared_ptr<Asset_file_gltf> gltf = std::dynamic_pointer_cast<Asset_file_gltf>(item);
             if (gltf) {
@@ -265,6 +258,9 @@ Asset_browser::Asset_browser(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::
                     close = true;
                 }
             }
+            // Copy-path items for every asset that has a source path: folders and
+            // all file-based assets (gltf/glb, geogram, scene bundles, other).
+            add_copy_path_menu_items(item, close);
         }
     );
     scan();
