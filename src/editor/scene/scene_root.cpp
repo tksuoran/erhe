@@ -838,6 +838,16 @@ auto Scene_root::get_name() const -> const std::string&
     return m_scene->get_name();
 }
 
+auto Scene_root::get_scene_settings() -> Scene_settings&
+{
+    return m_scene_settings;
+}
+
+auto Scene_root::get_scene_settings() const -> const Scene_settings&
+{
+    return m_scene_settings;
+}
+
 auto Scene_root::camera_combo(
     const char*           label,
     erhe::scene::Camera*& selected_camera,

@@ -349,6 +349,8 @@ erhe_target_sources_grouped(
     scene/scene_root.hpp
     scene/scene_serialization.cpp
     scene/scene_serialization.hpp
+    scene/scene_settings_resolve.cpp
+    scene/scene_settings_resolve.hpp
     scene/scene_view.cpp
     scene/scene_view.hpp
     scene/shadow_fit_debug.cpp
@@ -466,6 +468,17 @@ if (ERHE_USE_MIMALLOC)
     target_link_libraries(${_target} PUBLIC mimalloc-static)
 endif ()
 
+# Editor config / library definition dirs (shared by the scene and config codegen
+# units below). The scene unit references the editor config structs (Sky_config,
+# Grid_config, ...) from Scene_settings, so it must load the same reference-only
+# definition dirs the config unit uses (config itself plus graphics/renderer/
+# scene_renderer/xr), otherwise validate_references() fails on editor_settings_config.
+set(_config_defs         "${CMAKE_CURRENT_SOURCE_DIR}/config/definitions")
+set(_gfx_config_defs     "${CMAKE_SOURCE_DIR}/src/erhe/graphics/definitions")
+set(_renderer_defs       "${CMAKE_SOURCE_DIR}/src/erhe/renderer/definitions")
+set(_scene_renderer_defs "${CMAKE_SOURCE_DIR}/src/erhe/scene_renderer/definitions")
+set(_xr_config_defs      "${CMAKE_SOURCE_DIR}/src/erhe/xr/definitions")
+
 # Scene serialization codegen — generate into build directory
 set(_codegen_defs "${CMAKE_CURRENT_SOURCE_DIR}/scene/definitions")
 set(_codegen_out  "${CMAKE_CURRENT_BINARY_DIR}/scene/generated")
@@ -474,6 +487,12 @@ erhe_codegen_generate(
     TARGET          ${_target}
     DEFINITIONS_DIR "${_codegen_defs}"
     OUTPUT_DIR      "${_codegen_out}"
+    EXTRA_DEFINITIONS_DIRS
+        "${_config_defs}:config/generated/"
+        "${_gfx_config_defs}:erhe_graphics/generated/"
+        "${_renderer_defs}:erhe_renderer/generated/"
+        "${_scene_renderer_defs}:erhe_scene_renderer/generated/"
+        "${_xr_config_defs}:erhe_xr/generated/"
     DEFINITIONS
         "${_codegen_defs}/camera_data.py"
         "${_codegen_defs}/collision_filter_data.py"
@@ -498,6 +517,7 @@ erhe_codegen_generate(
         "${_codegen_defs}/physics_material_data.py"
         "${_codegen_defs}/projection_data.py"
         "${_codegen_defs}/scene_file.py"
+        "${_codegen_defs}/scene_settings.py"
         "${_codegen_defs}/transform_data.py"
 )
 
@@ -576,6 +596,9 @@ set(_codegen_sources
     ${_codegen_out}/scene_file.hpp
     ${_codegen_out}/scene_file_serialization.hpp
     ${_codegen_out}/scene_file.cpp
+    ${_codegen_out}/scene_settings.hpp
+    ${_codegen_out}/scene_settings_serialization.hpp
+    ${_codegen_out}/scene_settings.cpp
     ${_codegen_out}/transform_data.hpp
     ${_codegen_out}/transform_data_serialization.hpp
     ${_codegen_out}/transform_data.cpp
@@ -585,13 +608,9 @@ target_sources(${_target} PRIVATE ${_codegen_sources})
 source_group("codegen generated/scene" FILES ${_codegen_sources})
 
 # Editor config codegen — generate into build directory
-set(_config_defs "${CMAKE_CURRENT_SOURCE_DIR}/config/definitions")
+# (_config_defs / _gfx_config_defs / _renderer_defs / _scene_renderer_defs /
+#  _xr_config_defs are defined above, before the scene codegen unit.)
 set(_config_out  "${CMAKE_CURRENT_BINARY_DIR}/config/generated")
-
-set(_gfx_config_defs "${CMAKE_SOURCE_DIR}/src/erhe/graphics/definitions")
-set(_renderer_defs   "${CMAKE_SOURCE_DIR}/src/erhe/renderer/definitions")
-set(_scene_renderer_defs "${CMAKE_SOURCE_DIR}/src/erhe/scene_renderer/definitions")
-set(_xr_config_defs "${CMAKE_SOURCE_DIR}/src/erhe/xr/definitions")
 
 erhe_codegen_generate(
     TARGET          ${_target}

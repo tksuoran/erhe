@@ -572,6 +572,7 @@ auto save_scene(
     Scene_file scene_file;
     scene_file.name           = scene.get_name();
     scene_file.enable_physics = true; // TODO: track this properly
+    scene_file.scene_settings = scene_root.get_scene_settings(); // per-scene setting overrides (#239)
 
     // Serialize nodes
     for (const auto& node : flat_nodes) {
@@ -984,6 +985,7 @@ auto load_scene(
         scene_file.name,
         scene_file.enable_physics
     );
+    scene_root->get_scene_settings() = scene_file.scene_settings; // per-scene setting overrides (#239)
     if (app_scenes != nullptr) {
         scene_root->register_to_editor_scenes(*app_scenes);
     }

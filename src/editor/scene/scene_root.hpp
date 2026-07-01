@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app_message.hpp"
+#include "scene/generated/scene_settings.hpp"
 
 #include "erhe_message_bus/message_bus.hpp"
 #include "erhe_profile/profile.hpp"
@@ -183,6 +184,12 @@ public:
     [[nodiscard]] auto get_scene         () const -> const erhe::scene::Scene&;
     [[nodiscard]] auto get_name          () const -> const std::string&;
 
+    // Per-scene setting overrides (issue #239). Each field is an optional; a
+    // disengaged optional means "use the editor-global default". Effective values
+    // are resolved by the helpers in scene/scene_settings_resolve.hpp.
+    [[nodiscard]] auto get_scene_settings()       -> Scene_settings&;
+    [[nodiscard]] auto get_scene_settings() const -> const Scene_settings&;
+
     void imgui();
 
     auto camera_combo(const char* label, erhe::scene::Camera*& camera, bool nullptr_option = false) const -> bool;
@@ -235,6 +242,7 @@ private:
 
     std::unique_ptr<erhe::scene::Scene>             m_scene;
     Scene_layers                                    m_layers;
+    Scene_settings                                  m_scene_settings;
 
     std::shared_ptr<Item_tree_window>               m_node_tree_window;
 };

@@ -1,10 +1,11 @@
 from erhe_codegen import *
 
 struct("Scene_file",
-    version=3,
+    version=4,
     fields=[
         field("name",              String,                                     added_in=1, default='""'),
         field("enable_physics",    Bool,                                       added_in=1, default="true"),
+        field("scene_settings",    StructRef("Scene_settings"),                added_in=4, short_desc="Per-scene setting overrides"),
         field("nodes",             Vector(StructRef("Node_data_serial")),      added_in=1),
         field("cameras",           Vector(StructRef("Camera_data")),           added_in=1),
         field("lights",            Vector(StructRef("Light_data")),            added_in=1),
