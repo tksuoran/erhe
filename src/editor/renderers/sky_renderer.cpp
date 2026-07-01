@@ -7,6 +7,7 @@
 #include "editor_log.hpp"
 #include "renderers/render_context.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/scene_settings_resolve.hpp"
 #include "scene/scene_view.hpp"
 
 #include "erhe_graphics/bind_group_layout.hpp"
@@ -432,16 +433,19 @@ void Sky_renderer::render_atmosphere(const Render_context& context)
         return;
     }
 
-    // Sun direction + atmosphere parameters from config, overridden by the
+    // Sun direction + atmosphere parameters from the sky config effective for this
+    // scene (#239: per-scene override or editor-global default), overridden by the
     // scene's first directional light when present.
-    const Sky_config& sky_config = m_context.editor_settings->sky;
+    const std::shared_ptr<Scene_root> scene_root = context.scene_view.get_scene_root();
+    const Sky_config& sky_config = (scene_root != nullptr)
+        ? get_effective_sky(*m_context.editor_settings, *scene_root)
+        : m_context.editor_settings->sky;
 
     const float elevation = glm::radians(sky_config.sun_elevation_deg);
     const float azimuth   = glm::radians(sky_config.sun_azimuth_deg);
     const float cos_el    = std::cos(elevation);
     glm::vec3   toward_sun{cos_el * std::cos(azimuth), std::sin(elevation), cos_el * std::sin(azimuth)};
 
-    const std::shared_ptr<Scene_root> scene_root = context.scene_view.get_scene_root();
     if (scene_root) {
         for (const std::shared_ptr<erhe::scene::Light>& light : scene_root->layers().light()->lights) {
             if (!light || (light->type != erhe::scene::Light_type::directional)) {

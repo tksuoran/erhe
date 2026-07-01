@@ -3,6 +3,7 @@
 #include "app_context.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/sky_config.hpp"
+#include "scene/scene_settings_resolve.hpp"
 #include "editor_log.hpp"
 #include "app_message_bus.hpp"
 #include "app_settings.hpp"
@@ -71,9 +72,15 @@ public:
         }
         App_context&  app_context  = context.app_context;
         Sky_renderer* sky_renderer = app_context.sky_renderer;
+        // Resolve sky mode per scene (#239), consistent with update_sky_parameters().
+        const std::shared_ptr<Scene_root> scene_root = context.scene_view.get_scene_root();
+        const int sky_mode = (app_context.editor_settings == nullptr)
+            ? 0
+            : ((scene_root != nullptr)
+                ? get_effective_sky(*app_context.editor_settings, *scene_root).mode
+                : app_context.editor_settings->sky.mode);
         const bool atmosphere =
-            (app_context.editor_settings != nullptr) &&
-            (app_context.editor_settings->sky.mode == 1) &&
+            (sky_mode == 1) &&
             (sky_renderer != nullptr) &&
             sky_renderer->is_atmosphere_supported();
         if (atmosphere) {
@@ -1174,12 +1181,17 @@ void App_rendering::set_grid_sizes(const glm::vec4& level_cell_sizes)
     }
 }
 
-void App_rendering::update_sky_parameters()
+void App_rendering::update_sky_parameters(const Render_context& context)
 {
     if ((m_sky_composition_pass == nullptr) || (m_context.editor_settings == nullptr)) {
         return;
     }
-    const Sky_config& sky = m_context.editor_settings->sky;
+    // Resolve per scene (#239): each viewport's composition uses its own scene's
+    // sky (override if engaged, else the editor-global default).
+    const std::shared_ptr<Scene_root> scene_root = context.scene_view.get_scene_root();
+    const Sky_config& sky = (scene_root != nullptr)
+        ? get_effective_sky(*m_context.editor_settings, *scene_root)
+        : m_context.editor_settings->sky;
     // Applied every frame (render_composer() calls this) so the Settings
     // window checkbox takes effect immediately; same mechanism as
     // set_grid_visibility(). With the sky pass disabled the scene background
@@ -1292,7 +1304,7 @@ void App_rendering::render_composer(const Render_context& context, const bool in
     erhe::graphics::Scoped_gpu_zone   gpu_zone  {*context.command_buffer, zone_label};
 
     if (include_content) {
-        update_sky_parameters();
+        update_sky_parameters(context);
     }
 
     m_composer.render(context, include_content, include_overlay);

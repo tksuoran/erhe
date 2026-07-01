@@ -23,6 +23,7 @@
 #include "renderers/sky_renderer.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/scene_settings_resolve.hpp"
 #include "time.hpp"
 #include "tools/tools.hpp"
 #include "xr/controller_visualization.hpp"
@@ -686,9 +687,17 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
     // with passthrough, and the first rendered scene frame settles it to the
     // state the Settings imply.
     if (m_frame_timing.should_render) {
+        // Sky enable resolved per scene (#239): a scene may override the sky off,
+        // which enables passthrough for this headset view.
+        const std::shared_ptr<Scene_root> sky_scene_root = get_scene_root();
+        const bool sky_enabled = (m_app_context.editor_settings == nullptr)
+            ? true
+            : ((sky_scene_root != nullptr)
+                ? get_effective_sky(*m_app_context.editor_settings, *sky_scene_root).enabled
+                : m_app_context.editor_settings->sky.enabled);
         const bool want_passthrough =
             m_headset->get_configuration().passthrough_fb ||
-            ((m_app_context.editor_settings != nullptr) && !m_app_context.editor_settings->sky.enabled);
+            !sky_enabled;
         m_headset->set_passthrough_active(want_passthrough);
     }
 
@@ -1037,10 +1046,15 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
             erhe::graphics::Render_pass multiview_render_pass{*m_app_context.graphics_device, render_pass_descriptor};
 
             // Generate the atmosphere LUTs once before the render pass (compute
-            // dispatches + barriers cannot run inside a render pass).
-            if ((m_app_context.sky_renderer != nullptr) &&
-                (m_app_context.editor_settings != nullptr) &&
-                (m_app_context.editor_settings->sky.mode == 1)) {
+            // dispatches + barriers cannot run inside a render pass). Sky mode is
+            // resolved per scene (#239).
+            const std::shared_ptr<Scene_root> sky_scene_root = get_scene_root();
+            const int sky_mode = (m_app_context.editor_settings == nullptr)
+                ? 0
+                : ((sky_scene_root != nullptr)
+                    ? get_effective_sky(*m_app_context.editor_settings, *sky_scene_root).mode
+                    : m_app_context.editor_settings->sky.mode);
+            if ((m_app_context.sky_renderer != nullptr) && (sky_mode == 1)) {
                 m_app_context.sky_renderer->ensure_luts(*m_app_context.graphics_device, views_cb);
             }
 
@@ -1207,10 +1221,15 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                 );
             }
 
-            // Generate the atmosphere LUTs once before the render pass.
-            if ((m_app_context.sky_renderer != nullptr) &&
-                (m_app_context.editor_settings != nullptr) &&
-                (m_app_context.editor_settings->sky.mode == 1)) {
+            // Generate the atmosphere LUTs once before the render pass. Sky mode is
+            // resolved per scene (#239).
+            const std::shared_ptr<Scene_root> sky_scene_root = get_scene_root();
+            const int sky_mode = (m_app_context.editor_settings == nullptr)
+                ? 0
+                : ((sky_scene_root != nullptr)
+                    ? get_effective_sky(*m_app_context.editor_settings, *sky_scene_root).mode
+                    : m_app_context.editor_settings->sky.mode);
+            if ((m_app_context.sky_renderer != nullptr) && (sky_mode == 1)) {
                 m_app_context.sky_renderer->ensure_luts(graphics_device, view_cb);
             }
 

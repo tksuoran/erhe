@@ -21,6 +21,7 @@
 #include "rendergraph/post_processing.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/scene_settings_resolve.hpp"
 #include "scene/viewport_scene_views.hpp"
 #include "time.hpp"
 #include "tools/mesh_component_selection_tool.hpp"
@@ -562,9 +563,16 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
     // issues compute dispatches + image barriers) when the physically-based
     // sky mode is active.
     if ((m_context.sky_renderer != nullptr) &&
-        (m_context.editor_settings != nullptr) &&
-        (m_context.editor_settings->sky.mode == 1)) {
-        m_context.sky_renderer->ensure_luts(graphics_device, command_buffer);
+        (m_context.editor_settings != nullptr)) {
+        // Resolve sky mode per scene (#239) so the atmosphere LUTs are generated
+        // when this viewport's scene uses the physically-based sky.
+        const std::shared_ptr<Scene_root> sky_scene_root = get_scene_root();
+        const int sky_mode = (sky_scene_root != nullptr)
+            ? get_effective_sky(*m_context.editor_settings, *sky_scene_root).mode
+            : m_context.editor_settings->sky.mode;
+        if (sky_mode == 1) {
+            m_context.sky_renderer->ensure_luts(graphics_device, command_buffer);
+        }
     }
 
     m_render_target.update(m_projection_viewport.width, m_projection_viewport.height, nullptr);

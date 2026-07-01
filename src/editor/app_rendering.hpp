@@ -133,9 +133,9 @@ public:
     void set_grid_colors            (const std::array<glm::vec4, 4>& level_colors, const glm::vec4& label_color);
     void set_grid_line_widths       (const glm::vec4& level_widths);
     void set_grid_sizes             (const glm::vec4& level_cell_sizes);
-    // Refreshes the sky composition pass parameters from
-    // Editor_settings_config::sky (edited in the Settings window).
-    void update_sky_parameters      ();
+    // Refreshes the sky composition pass parameters from the sky config effective
+    // for the render context's scene (per-scene override or editor-global default).
+    void update_sky_parameters      (const Render_context& context);
 
     void add   (Renderable* renderable);
     void remove(Renderable* renderable);
