@@ -9,8 +9,15 @@
 namespace editor {
 
 Editor_settings_store::Editor_settings_store()
-    : m_settings{erhe::codegen::load_config<Editor_settings_config>(c_editor_settings_file_path)}
 {
+    bool upgraded = false;
+    m_settings = erhe::codegen::load_config<Editor_settings_config>(c_editor_settings_file_path, &upgraded);
+    if (upgraded) {
+        // The file (or a nested section) was written by an older schema version. Rewrite
+        // it now in the current format so the on-disk file is upgraded immediately on
+        // load, instead of waiting for the next settings change to trigger an autosave.
+        erhe::codegen::save_config(m_settings, c_editor_settings_file_path);
+    }
 }
 
 auto Editor_settings_store::register_collect_callback(Collect_callback callback) -> std::size_t
