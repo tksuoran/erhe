@@ -6,12 +6,124 @@ functionality in the erhe editor.
 
 ## Table of Contents
 
-1. [Blender Geometry Nodes Architecture](#blender-geometry-nodes-architecture)
-2. [erhe Existing Infrastructure](#erhe-existing-infrastructure)
-3. [Gap Analysis](#gap-analysis)
-4. [Implementation Plan](#implementation-plan)
-5. [Phase Details](#phase-details)
-6. [Key Files Reference](#key-files-reference)
+1. [Implementation Status](#implementation-status)
+2. [Blender Geometry Nodes Architecture](#blender-geometry-nodes-architecture)
+3. [erhe Existing Infrastructure](#erhe-existing-infrastructure)
+4. [Gap Analysis](#gap-analysis)
+5. [Implementation Plan](#implementation-plan)
+6. [Phase Details](#phase-details)
+7. [Key Files Reference](#key-files-reference)
+
+---
+
+## Implementation Status
+
+Phases 1-5 plus undo/redo and graph serialization are implemented (2026-07-02,
+branch `geometry_nodes`). Phase 6 remains future work. All code lives in
+`src/editor/geometry_graph/`.
+
+| Work item                                            | Status | Commit   |
+|------------------------------------------------------|--------|----------|
+| Phase 1: foundation (payload, node base, graph, window) | DONE | 713eb22d |
+| Phase 2: mesh primitive nodes                        | DONE   | cf4060d1 |
+| Phase 3: geometry operation nodes                    | DONE   | 09e51836 |
+| Phase 4: combiner and value nodes                    | DONE   | 53ca69ee |
+| Phase 5: scene output node                           | DONE   | c961b319 |
+| In-editor MCP tools (headless graph scripting)       | DONE   | cfe79f68 |
+| Undo/redo for graph edits                            | DONE   | a8dad173 |
+| Graph serialization (save / load JSON)               | DONE   | e9d7bd44 |
+| Phase 6: caching, CoW, fields, instances, groups     | future | -        |
+
+Verified end to end in the headless Vulkan build driven over the in-editor MCP
+server: box -> output and box -> conway dual -> output chains render in the
+viewport, the produced scene nodes are ordinary content (selectable, movable
+with the Transform tool), undo/redo round-trips structural edits and
+load/clear, and JSON save/load round-trips node types, parameters, canvas
+positions and links.
+
+### Deviations from the plan below
+
+- **Evaluation is dirty-flag driven, not per-frame.**
+  `Geometry_graph::evaluate_if_dirty()` re-evaluates only when topology or a
+  node parameter changed (node widgets call `mark_dirty()`); geometry
+  operations are too expensive to run every frame the way `Shader_graph` does.
+- **Parameterless operations share one class.** Triangulate, Normalize,
+  Reverse and Repair are instances of `Geometry_unary_operation_node`
+  (label + function pointer) instead of four near-identical classes.
+- **No popups inside the node canvas.** ImGui `Combo` cannot be used inside
+  ax::NodeEditor; enum parameters use arrow-stepper widgets
+  (`imgui_index_stepper` / `imgui_enum_stepper`).
+- **Join has a single multi-link input pin.** Multi-link accumulation in
+  `Geometry_payload::operator+=()` merges geometries, so Join needs no A/B
+  pins (Blender-style multi-input socket).
+- **Upstream geometry is never mutated.** Nodes allocate new `Geometry`
+  objects; the output node copies before render processing; a single-link
+  Join passes the upstream `shared_ptr` through untouched. Intermediate nodes
+  process outputs with connect + build_edges only; render-oriented processing
+  (normals, tangents, texture coordinates) happens once in the output node.
+- **Undo/redo is structural**, not the before/after mesh snapshot pattern
+  sketched in the original Phase 5 text (see below).
+
+### Undo/redo (as built)
+
+All structural edits (add / remove node, connect / disconnect link, graph
+load / clear) go through the editor `Operation_stack`
+(`geometry_graph_operations.{hpp,cpp}`):
+
+- `Geometry_graph_node_insert_remove_operation` - removing a node captures its
+  links and canvas position; undo restores the node exactly, links included.
+  Link records hold owning-node `shared_ptr`s so pin pointers stay valid while
+  operations sit in the stacks; LIFO undo order guarantees nodes are restored
+  before their links reconnect.
+- `Geometry_graph_link_insert_remove_operation` - connect / disconnect.
+- `Geometry_graph_replace_operation` - whole-graph replacement used by load
+  and clear; captures the previous nodes / links / positions on first execute,
+  so undoing a load restores the prior graph exactly.
+- `Operation_stack::execute_now()` (added for this) executes immediately on
+  the main thread and records for undo, so toolbar / canvas gestures and MCP
+  calls observe their effects in the same frame. Every operation re-evaluates
+  the graph after execute/undo, so the scene output stays current even when
+  the graph window is hidden.
+- Nodes leaving the graph get the `on_removed_from_graph()` hook (deletion,
+  undo of add, clear / load). The node object may stay alive in the undo
+  stack, so side effects outside the graph - the output node's scene mesh -
+  are released there, not in the destructor.
+
+### Serialization (as built)
+
+`Geometry_graph_window::save_graph()` / `load_graph()` / `clear_graph()`
+(`geometry_graph_serialization.cpp`), JSON version 1:
+
+```json
+{
+    "version": 1,
+    "nodes": [ { "type": "box", "position": [0.0, 0.0], "parameters": {} } ],
+    "links": [ { "source_node": 0, "source_slot": 0, "sink_node": 1, "sink_slot": 0 } ]
+}
+```
+
+- Links reference nodes by index into the `nodes` array; pins by slot index.
+- Node `type` is the window factory name
+  (`Geometry_graph_node::get_factory_type_name()`, named to avoid clashing
+  with the `erhe::Item::get_type_name()` virtual); `make_node()` recreates
+  the class on load.
+- Parameters go through per-node `write_parameters()` / `read_parameters()`
+  virtuals. The output node saves scene and material by name and re-resolves
+  them on load.
+- Canvas positions round-trip. ax::NodeEditor reports `ImVec2{FLT_MAX}` for
+  nodes it has never drawn; `is_valid_node_position()` filters those on both
+  save and restore.
+- The window has a path field with Save / Load / Clear buttons (default
+  `res/editor/graphs/geometry_graph.json`).
+
+### In-editor MCP tools
+
+The geometry graph is fully scriptable over the in-editor MCP server:
+`get_geometry_graph`, `geometry_graph_add_node`, `geometry_graph_remove_node`,
+`geometry_graph_connect`, `geometry_graph_disconnect`, `geometry_graph_save`,
+`geometry_graph_load`, `geometry_graph_clear`. Structural mutations are
+undoable and re-evaluate the graph immediately (no window visibility needed).
+`App_context` carries a `geometry_graph_window` pointer for the handlers.
 
 ---
 
@@ -431,6 +543,9 @@ All items must be `std::make_shared` (uses `enable_shared_from_this`).
 
 ## Gap Analysis
 
+(Analysis as of planning time; see [Implementation Status](#implementation-status)
+for what has since been built.)
+
 ### What Already Exists vs What's Needed
 
 | Requirement                    | Existing                              | Gap                                   |
@@ -481,7 +596,7 @@ but keeping them separate initially is simpler.
 
 ## Implementation Plan
 
-### Phase 1: Foundation Framework
+### Phase 1: Foundation Framework (IMPLEMENTED)
 
 Create the geometry graph infrastructure paralleling the shader graph pattern.
 
@@ -537,9 +652,11 @@ Extends `erhe::imgui::Imgui_window` following `Graph_window` pattern:
 - Calls `graph.evaluate()` each frame (or on change)
 - Node deletion with selection integration
 
-### Phase 2: Mesh Primitive Nodes (Input Nodes)
+### Phase 2: Mesh Primitive Nodes (Input Nodes) (IMPLEMENTED)
 
 These have no geometry inputs, only parameter inputs and a geometry output.
+As built, scalar parameters are exposed both as in-node widgets and as
+float/int input pins; a connected input overrides the widget value.
 Each wraps an existing shape generator from `erhe::geometry::shapes`:
 
 **Mesh_box_node:**
@@ -572,9 +689,12 @@ Each node's `evaluate()` creates a new `Geometry`, calls the shape generator,
 calls `geometry.process(flags)` to compute normals/tangents, then sets the output
 payload. The `imgui()` override renders parameter sliders/inputs.
 
-### Phase 3: Geometry Operation Nodes
+### Phase 3: Geometry Operation Nodes (IMPLEMENTED)
 
-These have one geometry input and one geometry output, wrapping existing operations.
+These have one geometry input and one geometry output, wrapping existing
+operations. As built, Triangulate / Normalize / Reverse / Repair share the
+`Geometry_unary_operation_node` class instead of one class each; Transform
+uses `Geometry::copy_with_transform()` (which also copies connectivity).
 
 **Subdivide_node:**
 - Input: Geometry
@@ -615,12 +735,14 @@ These have one geometry input and one geometry output, wrapping existing operati
 - Output: Geometry
 - Wraps: `repair()`
 
-### Phase 4: Combiner and Value Nodes
+### Phase 4: Combiner and Value Nodes (IMPLEMENTED)
 
 **Join_geometry_node:**
 - Inputs: Geometry A, Geometry B (or multiple via repeated connections)
 - Output: Geometry
 - Wraps: `Geometry::merge_with_transform()`
+- As built: one multi-link input pin; merging happens in
+  `Geometry_payload::operator+=()` during input accumulation.
 
 **Boolean_node (CSG):**
 - Inputs: Geometry A, Geometry B
@@ -647,7 +769,7 @@ These have one geometry input and one geometry output, wrapping existing operati
 - Output: Float
 - Wraps: corresponding math operation
 
-### Phase 5: Scene Output Node
+### Phase 5: Scene Output Node (IMPLEMENTED)
 
 This is the key integration point connecting the geometry graph to the scene.
 
@@ -656,22 +778,26 @@ This is the key integration point connecting the geometry graph to the scene.
 - Parameters: material (Material combo), mesh layer (enum)
 - No outputs (terminal node)
 
-On evaluation:
-1. Takes the input `Geometry`
-2. Calls `geometry.process(flags)` to ensure normals/tangents/texcoords
-3. Creates or updates a `Primitive` via `Primitive_builder` with `Build_info`
-4. Creates or updates a `Mesh_primitive` (Primitive + Material)
-5. Attaches to an `erhe::scene::Mesh` on a `Node` in the scene
-6. Optionally creates/updates `Node_physics` (collision shape from convex hull)
-7. Triggers GPU buffer upload
+On evaluation (as built):
+1. Takes the input `Geometry` and copies it (the input is shared with
+   upstream nodes and must not be mutated)
+2. Calls `geometry.process(flags)` on the copy for normals / centroids /
+   facet texcoords / tangents
+3. Builds a `Primitive` via `Primitive(geometry)` +
+   `make_renderable_mesh(build_info, normal_style)` + `make_raytrace()`
+   (buffers allocated through `Mesh_memory` sinks; the per-frame
+   `Mesh_memory::flush()` in the editor tick uploads them)
+4. Creates or updates one owned `erhe::scene::Node` + `erhe::scene::Mesh`
+   in place (content layer, shadow_cast); the scene node is removed via
+   `on_removed_from_graph()` when the graph node leaves the graph
+5. Scene defaults to the single registered scene root, material to the first
+   content library material; both selectable with in-node steppers
 
-The output node maintains a reference to its scene `Mesh` so it can update in place
-when the graph is re-evaluated rather than creating new meshes each time.
+`Node_physics` (step 6 of the original sketch) is not implemented.
 
-**Integration with undo/redo:**
-When the user modifies graph parameters, the graph evaluation produces new geometry.
-A `Geometry_graph_operation` stores the before/after state of the output mesh(es),
-using the same pattern as `Mesh_operation`.
+**Integration with undo/redo:** implemented differently from the sketch here -
+graph edits themselves are undoable operations (structural, not before/after
+mesh snapshots); see [Implementation Status](#implementation-status).
 
 ### Phase 6: Enhancements (Future)
 
@@ -716,20 +842,25 @@ using the same pattern as `Mesh_operation`.
 
 ### Estimated Effort per Phase
 
-| Phase | Description                    | New Classes        | Effort    | Reuse % |
-|-------|-------------------------------|--------------------|-----------|---------|
-| 1     | Foundation framework          | ~4 classes         | Small     | ~90% follows Shader_graph pattern |
-| 2     | Mesh primitive nodes          | ~5 node classes    | Small     | Wrapping existing shape generators |
-| 3     | Geometry operation nodes      | ~7 node classes    | Small     | Wrapping existing geometry ops |
-| 4     | Combiner and value nodes      | ~6 node classes    | Small     | Simple logic + existing merge |
-| 5     | Scene output node             | ~2 classes         | Medium    | New: output -> Primitive_builder -> scene |
-| 6a    | Caching                       | Modifications      | Small     | Use existing Mesh_serials pattern |
-| 6b    | Copy-on-write                 | Modifications      | Small     | Wrapper around shared_ptr |
-| 6c    | Field system                  | ~5+ classes        | Large     | Architecturally new |
-| 6d    | Instancing                    | ~3 node classes    | Medium    | New geometry concept for erhe |
-| 6e    | Node groups                   | ~3 classes         | Medium    | Graph-in-graph management |
+| Phase | Description                    | New Classes        | Effort    | Status |
+|-------|-------------------------------|--------------------|-----------|--------|
+| 1     | Foundation framework          | 4 classes          | Small     | DONE |
+| 2     | Mesh primitive nodes          | 5 node classes     | Small     | DONE |
+| 3     | Geometry operation nodes      | 4 node classes (unary ops share one) | Small | DONE |
+| 4     | Combiner and value nodes      | 6 node classes     | Small     | DONE |
+| 5     | Scene output node             | 1 class            | Medium    | DONE |
+| -     | Undo/redo for graph edits     | 3 operation classes | Medium   | DONE |
+| -     | Graph serialization           | Window methods + per-node parameter IO | Small | DONE |
+| 6a    | Caching                       | Modifications      | Small     | future |
+| 6b    | Copy-on-write                 | Modifications      | Small     | future |
+| 6c    | Field system                  | ~5+ classes        | Large     | future |
+| 6d    | Instancing                    | ~3 node classes    | Medium    | future |
+| 6e    | Node groups                   | ~3 classes         | Medium    | future |
 
-### First Working Demo (Phases 1-5 Minimal)
+### First Working Demo (Phases 1-5 Minimal) - ACHIEVED
+
+The demo works: nodes created in the Geometry Graph window (or over MCP)
+produce meshes rendered in the viewport, live-updating as parameters change.
 
 Minimum set for a demo where you can visually create geometry in a node graph
 and see it rendered in the viewport:
@@ -750,42 +881,43 @@ This is ~11 classes. Each node class is ~30-60 lines (constructor setting up pin
 `evaluate()` calling the wrapped operation, `imgui()` rendering parameter widgets).
 The framework classes (1-4) follow the shader graph pattern closely.
 
-### File Organization
+### File Organization (as built)
 
 ```
 src/editor/geometry_graph/
-    geometry_graph.hpp / .cpp          -- Geometry_graph (extends erhe::graph::Graph)
-    geometry_graph_node.hpp / .cpp     -- Base class (extends erhe::graph::Node)
-    geometry_graph_window.hpp / .cpp   -- ImGui window (extends Imgui_window)
-    geometry_payload.hpp / .cpp        -- Variant payload type
+    geometry_graph.hpp / .cpp             -- Geometry_graph (extends erhe::graph::Graph, dirty-flag evaluation)
+    geometry_graph_node.hpp / .cpp        -- Base class + stepper widgets + JSON vec3 helpers
+    geometry_graph_operations.hpp / .cpp  -- Undoable node / link / whole-graph-replace operations
+    geometry_graph_serialization.cpp      -- save_graph / load_graph / clear_graph (window members)
+    geometry_graph_window.hpp / .cpp      -- ImGui window (extends Imgui_window), node factory, edit API
+    geometry_payload.hpp / .cpp           -- Variant payload type + typed pin keys
     nodes/
+        boolean_node.hpp / .cpp                  -- CSG union / intersection / difference
+        conway_node.hpp / .cpp                   -- all 9 Conway operators via enum + per-op ratio
+        geometry_output_node.hpp / .cpp          -- scene output (terminal node)
+        geometry_unary_operation_node.hpp / .cpp -- Triangulate / Normalize / Reverse / Repair
+        join_geometry_node.hpp / .cpp
+        math_node.hpp / .cpp
         mesh_box_node.hpp / .cpp
-        mesh_sphere_node.hpp / .cpp
-        mesh_torus_node.hpp / .cpp
         mesh_cone_node.hpp / .cpp
         mesh_disc_node.hpp / .cpp
-        subdivide_node.hpp / .cpp
-        conway_node.hpp / .cpp
-        triangulate_node.hpp / .cpp
+        mesh_sphere_node.hpp / .cpp
+        mesh_torus_node.hpp / .cpp
+        subdivide_node.hpp / .cpp                -- Catmull-Clark / Sqrt3, iteration count
         transform_node.hpp / .cpp
-        normalize_node.hpp / .cpp
-        reverse_node.hpp / .cpp
-        repair_node.hpp / .cpp
-        join_geometry_node.hpp / .cpp
-        boolean_node.hpp / .cpp
-        float_value_node.hpp / .cpp
-        vector_value_node.hpp / .cpp
-        integer_value_node.hpp / .cpp
-        math_node.hpp / .cpp
-        geometry_output_node.hpp / .cpp
+        value_nodes.hpp / .cpp                   -- Float / Integer / Vector constants
 ```
+
+Related changes outside the directory: `App_context::geometry_graph_window`
+pointer, `Operation_stack::execute_now()`, geometry graph tools in
+`src/editor/mcp/mcp_server.{hpp,cpp}`, window construction in `editor.cpp`.
 
 ### CMake Integration
 
-Add `geometry_graph` as a new source group in `src/editor/CMakeLists.txt` using
-`erhe_target_sources_grouped()`. All source files listed explicitly (no globbing
-per project conventions). Dependencies: `erhe_graph`, `erhe_geometry`, `erhe_primitive`,
-`erhe_scene`, `erhe_imgui`.
+All source files are listed explicitly in `src/editor/CMakeLists.txt`
+(no globbing per project conventions). No new link dependencies were needed;
+the editor target already links `erhe_graph`, `erhe_geometry`,
+`erhe_primitive`, `erhe_scene` and `erhe_imgui`.
 
 ---
 
@@ -843,10 +975,12 @@ per project conventions). Dependencies: `erhe_graph`, `erhe_geometry`, `erhe_pri
 | `src/editor/scene/scene_builder.hpp` | Example: how meshes are created and added to scene |
 | `src/editor/operations/mesh_operation.hpp` | Mesh before/after state for undo |
 
-### Editor Integration (for wiring into the application)
+### Editor Integration (wired into the application)
 
 | File | Purpose |
 |------|---------|
-| `src/editor/app_context.hpp` | Service locator -- add geometry_graph_window pointer |
-| `src/editor/editor.cpp` | Construction order -- create Geometry_graph_window |
-| `src/editor/CMakeLists.txt` | Add new source files |
+| `src/editor/app_context.hpp` | Service locator -- geometry_graph_window pointer (done) |
+| `src/editor/editor.cpp` | Construction -- Geometry_graph_window created with the other windows (done) |
+| `src/editor/CMakeLists.txt` | Source files listed explicitly (done) |
+| `src/editor/operations/operation_stack.hpp` | execute_now() used by geometry graph edits (done) |
+| `src/editor/mcp/mcp_server.cpp` | geometry_graph_* MCP tools (done) |
