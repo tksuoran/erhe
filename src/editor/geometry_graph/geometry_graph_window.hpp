@@ -54,7 +54,8 @@ public:
     // Type names: box, sphere, torus, cone, disc, subdivide, conway,
     // transform, triangulate, normalize, reverse, repair, distribute,
     // instance, realize, join, boolean, float, integer, vector, math,
-    // output.
+    // output, group_input, group_output, group (see
+    // make_geometry_graph_node()).
     auto add_node_of_type(const std::string& type_name) -> Geometry_graph_node*;
     void remove_node     (const std::shared_ptr<Geometry_graph_node>& node);
     auto connect         (erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool;

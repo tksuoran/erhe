@@ -177,6 +177,8 @@ erhe_target_sources_grouped(
     geometry_graph/geometry_graph.hpp
     geometry_graph/geometry_graph_node.cpp
     geometry_graph/geometry_graph_node.hpp
+    geometry_graph/geometry_graph_node_factory.cpp
+    geometry_graph/geometry_graph_node_factory.hpp
     geometry_graph/geometry_graph_operations.cpp
     geometry_graph/geometry_graph_operations.hpp
     geometry_graph/geometry_graph_serialization.cpp
@@ -192,6 +194,8 @@ erhe_target_sources_grouped(
     geometry_graph/nodes/geometry_output_node.hpp
     geometry_graph/nodes/geometry_unary_operation_node.cpp
     geometry_graph/nodes/geometry_unary_operation_node.hpp
+    geometry_graph/nodes/group_nodes.cpp
+    geometry_graph/nodes/group_nodes.hpp
     geometry_graph/nodes/instance_nodes.cpp
     geometry_graph/nodes/instance_nodes.hpp
     geometry_graph/nodes/join_geometry_node.cpp
