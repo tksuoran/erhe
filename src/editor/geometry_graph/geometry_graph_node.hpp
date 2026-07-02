@@ -16,6 +16,13 @@ namespace editor {
 class App_context;
 class Geometry_graph;
 
+// Applies the Geometry::process() flags every generator / operation node
+// needs on its output geometry, so downstream operation nodes find
+// connectivity and edges present. Final render oriented processing
+// (normals, tangents, texture coordinates) happens in the scene output
+// node.
+void process_for_graph(erhe::geometry::Geometry& geometry);
+
 // Base class for all geometry graph nodes.
 //
 // Follows the Shader_graph_node pattern: payload storage per pin slot,

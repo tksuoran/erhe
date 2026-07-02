@@ -3,6 +3,7 @@
 #include "tools/selection_tool.hpp"
 
 #include "erhe_defer/defer.hpp"
+#include "erhe_geometry/geometry.hpp"
 #include "erhe_graph/link.hpp"
 #include "erhe_graph/pin.hpp"
 #include "erhe_imgui/imgui_node_editor.h"
@@ -10,6 +11,17 @@
 #include <imgui/imgui.h>
 
 namespace editor {
+
+void process_for_graph(erhe::geometry::Geometry& geometry)
+{
+    geometry.process(
+        {
+            .flags =
+                erhe::geometry::Geometry::process_flag_connect |
+                erhe::geometry::Geometry::process_flag_build_edges
+        }
+    );
+}
 
 Geometry_graph_node::Geometry_graph_node(const char* label)
     : erhe::graph::Node{label}

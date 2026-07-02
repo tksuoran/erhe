@@ -4,6 +4,11 @@
 
 #include "geometry_graph/geometry_graph_window.hpp"
 #include "geometry_graph/geometry_graph_node.hpp"
+#include "geometry_graph/nodes/mesh_box_node.hpp"
+#include "geometry_graph/nodes/mesh_cone_node.hpp"
+#include "geometry_graph/nodes/mesh_disc_node.hpp"
+#include "geometry_graph/nodes/mesh_sphere_node.hpp"
+#include "geometry_graph/nodes/mesh_torus_node.hpp"
 
 #include "app_context.hpp"
 #include "tools/selection_tool.hpp"
@@ -50,8 +55,11 @@ void Geometry_graph_window::add_node(const std::shared_ptr<Geometry_graph_node>&
 
 void Geometry_graph_window::node_toolbar()
 {
-    // Node types are added in later phases (mesh primitives, geometry
-    // operations, combiners, values, scene output).
+                       if (ImGui::Button("Box"))    { add_node(std::make_shared<Mesh_box_node   >()); }
+    ImGui::SameLine(); if (ImGui::Button("Sphere")) { add_node(std::make_shared<Mesh_sphere_node>()); }
+    ImGui::SameLine(); if (ImGui::Button("Torus"))  { add_node(std::make_shared<Mesh_torus_node >()); }
+    ImGui::SameLine(); if (ImGui::Button("Cone"))   { add_node(std::make_shared<Mesh_cone_node  >()); }
+    ImGui::SameLine(); if (ImGui::Button("Disc"))   { add_node(std::make_shared<Mesh_disc_node  >()); }
 }
 
 void Geometry_graph_window::imgui()

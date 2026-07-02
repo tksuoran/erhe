@@ -181,6 +181,16 @@ erhe_target_sources_grouped(
     geometry_graph/geometry_graph_window.hpp
     geometry_graph/geometry_payload.cpp
     geometry_graph/geometry_payload.hpp
+    geometry_graph/nodes/mesh_box_node.cpp
+    geometry_graph/nodes/mesh_box_node.hpp
+    geometry_graph/nodes/mesh_cone_node.cpp
+    geometry_graph/nodes/mesh_cone_node.hpp
+    geometry_graph/nodes/mesh_disc_node.cpp
+    geometry_graph/nodes/mesh_disc_node.hpp
+    geometry_graph/nodes/mesh_sphere_node.cpp
+    geometry_graph/nodes/mesh_sphere_node.hpp
+    geometry_graph/nodes/mesh_torus_node.cpp
+    geometry_graph/nodes/mesh_torus_node.hpp
     graph/add.cpp
     graph/add.hpp
     graph/constant.cpp
