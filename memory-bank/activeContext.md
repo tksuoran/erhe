@@ -5,9 +5,9 @@
 @branch::geometry_nodes{unmerged,ahead-main}
 >done::2026-07-02{phases1-5+MCP+undo-redo+serialization+6a-incremental+6b-CoW+param-undo}✓
 >done::2026-07-02{output-physics+6d-instances+6e-groups+6c-design+SMOKE-SWEEP-65/65✓+2-real-bugs-fixed}✓
-?next::6c-fields-implementation{design-in-plan-doc-awaits-review,4-slices}
-?queued::doc-audit{future_prompt.txt,52-files,4-dangling-refs}
-?follow-up::batch-element-creation-for-other-Geometry_operations{conway-ops-still-quadratic-on-large-inputs}|geogram-fork-for-create_sub_elements-growth-bug{upstream-main-has-it-too}
+?next::catmull-clark-performance{next_prompt.txt+doc/catmull_clark.md;harness-first{Release-numbers}→items-11→12→1→3→2;shared-base-items-benefit-conway/CSG}
+?queued::smoke-coverage-extensions{future_prompt_1.txt}|doc-audit{future_prompt_2.txt}|6c-fields-implementation{awaits-design-review}
+>done::geogram-growth-bug{fork-fix+pin-daf9e192{commit-88376b78}+upstream-issue-371;per-element-create-amortized-O(1)-again;batching-remaining-ops=constant-factor-only-now}
 
 [STATE]
 code::src/editor/geometry_graph/{payload+node-base+graph+window+node-factory+operations+serialization+nodes/}
