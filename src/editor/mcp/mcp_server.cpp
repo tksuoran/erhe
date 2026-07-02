@@ -11,6 +11,9 @@
 #include "create/create_cone.hpp"
 #include "create/create_torus.hpp"
 #include "create/create_uv_sphere.hpp"
+#include "geometry_graph/geometry_graph.hpp"
+#include "geometry_graph/geometry_graph_node.hpp"
+#include "geometry_graph/geometry_graph_window.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/item_parent_change_operation.hpp"
 #include "operations/material_change_operation.hpp"
@@ -42,6 +45,8 @@
 #include "erhe_imgui/imgui_windows.hpp"
 
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_graph/link.hpp"
+#include "erhe_graph/pin.hpp"
 #include "erhe_primitive/primitive.hpp"
 
 #include "erhe_scene_renderer/mesh_memory.hpp"
@@ -1108,6 +1113,9 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "set_transform_reference_mode") result = action_set_transform_reference_mode(req->arguments);
         else if (req->tool_name == "set_transform_mode")           result = action_set_transform_mode          (req->arguments);
         else if (req->tool_name == "get_transform_state")          result = query_transform_state              (req->arguments);
+        else if (req->tool_name == "get_geometry_graph")           result = query_geometry_graph               (req->arguments);
+        else if (req->tool_name == "geometry_graph_add_node")      result = action_geometry_graph_add_node     (req->arguments);
+        else if (req->tool_name == "geometry_graph_connect")       result = action_geometry_graph_connect      (req->arguments);
         else                                              result = execute_command       (req->tool_name);
 
         } catch (const std::exception& e) {
@@ -1717,6 +1725,26 @@ void Mcp_server::refresh_tool_list()
             {"mode", {{"type", "string"}, {"enum", json::array({"move", "extrude", "extrude_group_normal", "extrude_vertex_normal"})}, {"description", "Mesh transform mode"}}}
         }},
         {"required", json::array({"mode"})}
+    }});
+
+    // Geometry node graph (Geometry Graph window)
+    m_tool_infos.push_back({"get_geometry_graph", "List the geometry node graph: nodes with ids, type labels, input/output pins (slot, key, name, connection count) and all links.", schema_no_args()});
+    m_tool_infos.push_back({"geometry_graph_add_node", "Add a node to the geometry node graph. Returns the new node's id and pin layout.", {
+        {"type", "object"},
+        {"properties", {
+            {"type", {{"type", "string"}, {"enum", json::array({"box", "sphere", "torus", "cone", "disc", "subdivide", "conway", "transform", "triangulate", "normalize", "reverse", "repair", "join", "boolean", "float", "integer", "vector", "math", "output"})}, {"description", "Node type to create"}}}
+        }},
+        {"required", json::array({"type"})}
+    }});
+    m_tool_infos.push_back({"geometry_graph_connect", "Connect an output pin of one geometry graph node to an input pin of another (pins are addressed by node id + pin slot index; pin keys must match). The graph re-evaluates immediately.", {
+        {"type", "object"},
+        {"properties", {
+            {"source_node_id", {{"type", "integer"}, {"description", "Id of the node providing the output"}}},
+            {"source_slot",    {{"type", "integer"}, {"description", "Output pin slot index on the source node (default 0)"}}},
+            {"sink_node_id",   {{"type", "integer"}, {"description", "Id of the node receiving the input"}}},
+            {"sink_slot",      {{"type", "integer"}, {"description", "Input pin slot index on the sink node (default 0)"}}}
+        }},
+        {"required", json::array({"source_node_id", "sink_node_id"})}
     }});
 
     // Editor commands
@@ -5421,6 +5449,134 @@ auto Mcp_server::query_transform_state(const json& args) -> std::string
         {"rotation_xyzw", {r.x, r.y, r.z, r.w}}
     };
 
+    return make_json_content(result).dump();
+}
+
+namespace {
+
+[[nodiscard]] auto geometry_graph_pin_json(const erhe::graph::Pin& pin) -> json
+{
+    return json{
+        {"slot",        pin.get_slot()},
+        {"key",         pin.get_key()},
+        {"name",        std::string{pin.get_name()}},
+        {"link_count",  pin.get_links().size()}
+    };
+}
+
+[[nodiscard]] auto geometry_graph_node_json(const Geometry_graph_node& node) -> json
+{
+    json inputs  = json::array();
+    json outputs = json::array();
+    for (const erhe::graph::Pin& pin : node.get_input_pins()) {
+        inputs.push_back(geometry_graph_pin_json(pin));
+    }
+    for (const erhe::graph::Pin& pin : node.get_output_pins()) {
+        outputs.push_back(geometry_graph_pin_json(pin));
+    }
+    return json{
+        {"id",      node.get_id()},
+        {"name",    node.get_name()},
+        {"inputs",  inputs},
+        {"outputs", outputs}
+    };
+}
+
+[[nodiscard]] auto find_geometry_graph_node(
+    const std::vector<std::shared_ptr<Geometry_graph_node>>& nodes,
+    const std::size_t                                        id
+) -> Geometry_graph_node*
+{
+    for (const std::shared_ptr<Geometry_graph_node>& node : nodes) {
+        if (node->get_id() == id) {
+            return node.get();
+        }
+    }
+    return nullptr;
+}
+
+} // anonymous namespace
+
+auto Mcp_server::query_geometry_graph(const json& args) -> std::string
+{
+    static_cast<void>(args);
+    Geometry_graph_window* window = m_context.geometry_graph_window;
+    if (window == nullptr) {
+        return make_error_content("Geometry graph window not available");
+    }
+
+    json nodes = json::array();
+    for (const std::shared_ptr<Geometry_graph_node>& node : window->get_nodes()) {
+        nodes.push_back(geometry_graph_node_json(*node.get()));
+    }
+
+    json links = json::array();
+    for (const std::unique_ptr<erhe::graph::Link>& link : window->get_graph().get_links()) {
+        links.push_back({
+            {"source_node_id", link->get_source()->get_owner_node()->get_id()},
+            {"source_slot",    link->get_source()->get_slot()},
+            {"sink_node_id",   link->get_sink()->get_owner_node()->get_id()},
+            {"sink_slot",      link->get_sink()->get_slot()}
+        });
+    }
+
+    json result;
+    result["nodes"] = nodes;
+    result["links"] = links;
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_geometry_graph_add_node(const json& args) -> std::string
+{
+    Geometry_graph_window* window = m_context.geometry_graph_window;
+    if (window == nullptr) {
+        return make_error_content("Geometry graph window not available");
+    }
+    const std::string type_name = args.value("type", "");
+    Geometry_graph_node* node = window->add_node_of_type(type_name);
+    if (node == nullptr) {
+        return make_error_content("Unknown geometry graph node type: " + type_name);
+    }
+    window->get_graph().evaluate_if_dirty();
+    return make_json_content(geometry_graph_node_json(*node)).dump();
+}
+
+auto Mcp_server::action_geometry_graph_connect(const json& args) -> std::string
+{
+    Geometry_graph_window* window = m_context.geometry_graph_window;
+    if (window == nullptr) {
+        return make_error_content("Geometry graph window not available");
+    }
+    const std::size_t source_node_id = args.value("source_node_id", std::size_t{0});
+    const std::size_t source_slot    = args.value("source_slot",    std::size_t{0});
+    const std::size_t sink_node_id   = args.value("sink_node_id",   std::size_t{0});
+    const std::size_t sink_slot      = args.value("sink_slot",      std::size_t{0});
+
+    Geometry_graph_node* source_node = find_geometry_graph_node(window->get_nodes(), source_node_id);
+    Geometry_graph_node* sink_node   = find_geometry_graph_node(window->get_nodes(), sink_node_id);
+    if (source_node == nullptr) {
+        return make_error_content("Source node not found");
+    }
+    if (sink_node == nullptr) {
+        return make_error_content("Sink node not found");
+    }
+    if (source_slot >= source_node->get_output_pins().size()) {
+        return make_error_content("Source slot out of range");
+    }
+    if (sink_slot >= sink_node->get_input_pins().size()) {
+        return make_error_content("Sink slot out of range");
+    }
+    erhe::graph::Pin* source_pin = &source_node->get_output_pins().at(source_slot);
+    erhe::graph::Pin* sink_pin   = &sink_node->get_input_pins().at(sink_slot);
+    erhe::graph::Link* link = window->get_graph().connect(source_pin, sink_pin);
+    if (link == nullptr) {
+        return make_error_content("Connect failed (pin key mismatch?)");
+    }
+    window->get_graph().mark_dirty();
+    window->get_graph().evaluate_if_dirty();
+
+    json result;
+    result["connected"] = true;
     return make_json_content(result).dump();
 }
 
