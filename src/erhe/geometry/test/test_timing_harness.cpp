@@ -17,6 +17,7 @@
 
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/operation/operation_timing.hpp"
+#include "erhe_geometry/operation/post_processing.hpp"
 #include "erhe_geometry/operation/subdivision/catmull_clark_subdivision.hpp"
 #include "erhe_geometry/shapes/regular_polyhedron.hpp"
 
@@ -42,13 +43,11 @@ auto make_processed_cube() -> std::unique_ptr<erhe::geometry::Geometry>
     return geometry;
 }
 
-} // anonymous namespace
-
-TEST(TimingHarness, DISABLED_CatmullClarkChain)
+// 7 iterations from a 6-facet cube; the last iteration subdivides a
+// 24576-facet input into 98304 facets, matching the editor's
+// "subdivide x6 on the default 24-facet box" stress case.
+void run_catmull_clark_chain(const bool structural_intermediates)
 {
-    // 7 iterations from a 6-facet cube; the last iteration subdivides a
-    // 24576-facet input into 98304 facets, matching the editor's
-    // "subdivide x6 on the default 24-facet box" stress case.
     constexpr int iteration_count = 7;
 
     const char* const phase_names[] = {
@@ -68,22 +67,29 @@ TEST(TimingHarness, DISABLED_CatmullClarkChain)
     }
     fmt::print(" {:>10} {:>10}\n", "other", "total");
 
+    double chain_total_ms = 0.0;
     std::unique_ptr<erhe::geometry::Geometry> current = make_processed_cube();
     for (int i = 0; i < iteration_count; ++i) {
         const GEO::index_t src_facet_count  = current->get_mesh().facets.nb();
         const GEO::index_t src_vertex_count = current->get_mesh().vertices.nb();
+
+        const erhe::geometry::operation::Post_processing post_processing_level =
+            (structural_intermediates && ((i + 1) < iteration_count))
+                ? erhe::geometry::operation::Post_processing::structural_only
+                : erhe::geometry::operation::Post_processing::full_default;
 
         erhe::geometry::operation::Operation_timing timing;
         erhe::geometry::operation::Operation_timing* const previous = erhe::geometry::operation::Operation_timing::install(&timing);
 
         std::unique_ptr<erhe::geometry::Geometry> next = std::make_unique<erhe::geometry::Geometry>("subdivided");
         const std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
-        erhe::geometry::operation::catmull_clark_subdivision(*current.get(), *next.get());
+        erhe::geometry::operation::catmull_clark_subdivision(*current.get(), *next.get(), nullptr, nullptr, post_processing_level);
         const std::chrono::steady_clock::time_point end_time = std::chrono::steady_clock::now();
 
         erhe::geometry::operation::Operation_timing::install(previous);
 
         const double total_ms = std::chrono::duration<double, std::milli>{end_time - start_time}.count();
+        chain_total_ms += total_ms;
         double accounted_ms = 0.0;
         fmt::print("{:>10} {:>10}", src_facet_count, src_vertex_count);
         for (const char* phase_name : phase_names) {
@@ -100,4 +106,21 @@ TEST(TimingHarness, DISABLED_CatmullClarkChain)
 
         current = std::move(next);
     }
+    fmt::print("chain total: {:.1f} ms\n", chain_total_ms);
+}
+
+} // anonymous namespace
+
+// Every iteration runs the full default post-processing (the pre-item-11
+// behavior; kept for comparison).
+TEST(TimingHarness, DISABLED_CatmullClarkChain)
+{
+    run_catmull_clark_chain(false);
+}
+
+// Intermediate iterations run structural-only post-processing, the way the
+// editor's subdivide node runs the chain (doc/catmull_clark.md item 11).
+TEST(TimingHarness, DISABLED_CatmullClarkChainStructuralIntermediates)
+{
+    run_catmull_clark_chain(true);
 }

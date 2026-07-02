@@ -10,7 +10,7 @@ class Sqrt3_subdivision : public Geometry_operation
 public:
     Sqrt3_subdivision(const Geometry& source, Geometry& destination, const std::set<GEO::index_t>* selected_facets);
 
-    void build();
+    void build(Post_processing post_processing_level);
 };
 
 Sqrt3_subdivision::Sqrt3_subdivision(const Geometry& source, Geometry& destination, const std::set<GEO::index_t>* selected_facets)
@@ -32,7 +32,7 @@ Sqrt3_subdivision::Sqrt3_subdivision(const Geometry& source, Geometry& destinati
 //  (2) S(p) := (1 - alpha_n) p + alpha_n 1/n SUM p_i
 //
 //  (6) alpha_n = (4 - 2 cos(2Pi/n)) / 9
-void Sqrt3_subdivision::build()
+void Sqrt3_subdivision::build(const Post_processing post_processing_level)
 {
     constexpr static float pi = 3.141592653589793238462643383279502884197169399375105820974944592308f;
 
@@ -153,13 +153,13 @@ void Sqrt3_subdivision::build()
     }
 #endif
 
-    post_processing();
+    post_processing(post_process_flags(post_processing_level));
 }
 
-void sqrt3_subdivision(const Geometry& source, Geometry& destination, const std::set<GEO::index_t>* selected_facets, Component_remap* remap)
+void sqrt3_subdivision(const Geometry& source, Geometry& destination, const std::set<GEO::index_t>* selected_facets, Component_remap* remap, const Post_processing post_processing_level)
 {
     Sqrt3_subdivision operation{source, destination, selected_facets};
-    operation.build();
+    operation.build(post_processing_level);
     if ((remap != nullptr) && (remap->source != nullptr) && (remap->destination != nullptr)) {
         operation.remap_component_selection(*remap->source, *remap->destination);
     }

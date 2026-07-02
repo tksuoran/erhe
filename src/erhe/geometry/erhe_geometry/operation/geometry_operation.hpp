@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_geometry/operation/post_processing.hpp"
 #include <geogram/mesh/mesh.h>
 
 #include <set>
@@ -112,6 +113,11 @@ protected:
         erhe::geometry::Geometry::process_flag_compute_facet_centroids;
 
     void post_processing(uint64_t process_flags = default_post_process_flags);
+
+    // Maps the caller-facing Post_processing level to the process flag sets
+    // above, for entry points that let the caller choose (iterated
+    // subdivision chains).
+    [[nodiscard]] static auto post_process_flags(Post_processing post_processing_level) -> uint64_t;
 
     // Runs Geogram's exact-arithmetic mesh_boolean_operation() ("A+B",
     // "A*B", "A-B") for the two-source constructor. Geogram's CSG reads

@@ -662,6 +662,13 @@ void Geometry_operation::remap_component_selection(const Geometry_component_sele
     }
 }
 
+auto Geometry_operation::post_process_flags(const Post_processing post_processing_level) -> uint64_t
+{
+    return (post_processing_level == Post_processing::structural_only)
+        ? structural_post_process_flags
+        : default_post_process_flags;
+}
+
 void Geometry_operation::post_processing(const uint64_t process_flags)
 {
     {

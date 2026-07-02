@@ -34,9 +34,18 @@ void Subdivide_node::evaluate(Geometry_graph&)
     std::shared_ptr<erhe::geometry::Geometry> current = source;
     for (int i = 0; i < iterations; ++i) {
         std::shared_ptr<erhe::geometry::Geometry> next = std::make_shared<erhe::geometry::Geometry>("subdivided");
+        // Intermediate iterations only need structure (connect + build_edges +
+        // centroids): their normals / texture coordinates would be discarded
+        // and re-derived from positions by the next iteration. The final
+        // iteration runs the full default post-processing so the output
+        // payload carries them.
+        const erhe::geometry::operation::Post_processing post_processing_level =
+            ((i + 1) < iterations)
+                ? erhe::geometry::operation::Post_processing::structural_only
+                : erhe::geometry::operation::Post_processing::full_default;
         switch (m_mode) {
-            case Mode::catmull_clark: erhe::geometry::operation::catmull_clark_subdivision(*current.get(), *next.get()); break;
-            case Mode::sqrt3:         erhe::geometry::operation::sqrt3_subdivision        (*current.get(), *next.get()); break;
+            case Mode::catmull_clark: erhe::geometry::operation::catmull_clark_subdivision(*current.get(), *next.get(), nullptr, nullptr, post_processing_level); break;
+            case Mode::sqrt3:         erhe::geometry::operation::sqrt3_subdivision        (*current.get(), *next.get(), nullptr, nullptr, post_processing_level); break;
         }
         process_for_graph(*next.get());
         current = next;
