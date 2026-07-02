@@ -40,6 +40,38 @@ Alternative configurations:
 
 **Always use the `scripts\` build scripts on Windows.** Do not invoke `cmake --preset` directly -- the wrappers encode the project's intended configure flow (CPM caching, MSVC env init, etc.).
 
+### Windows CLI builds (the day-to-day verification loop)
+
+For command-line build verification (no Visual Studio needed), use the ninja
+wrappers -- they locate VS 2026's bundled cmake/ninja and set up the MSVC
+environment themselves, so they work from any shell:
+
+```bat
+scripts\configure_ninja_win_vulkan.bat        REM once -> build_ninja_win_vulkan/ (MSVC cl)
+scripts\build_ninja_win_vulkan.bat editor     REM build a target (this is the usual edit-build loop)
+```
+
+`configure_ninja_win_clang.bat` / `build_ninja_win_clang.bat` are the clang-cl
+equivalents (their configure also regenerates `compile_commands.json` for
+clangd). The **headless Vulkan build** (needed for MCP-driven verification and
+`capture_screenshot`, see "In-editor MCP server" below) is a VS solution
+configured with `scripts\configure_vs2026_vulkan_headless.bat`; build it from
+the CLI with:
+
+```bat
+cmake --build build_vs2026_vulkan_headless --target editor --config Debug
+```
+
+### clangd diagnostics vs the real build
+
+IDE diagnostics come from clangd via `build_ninja_win_clang/compile_commands.json`.
+Newly created source files are not in the compilation database until the next
+CMake configure, so clangd reports masses of false "file not found" / "unknown
+type" errors for them (and for files that include them). Do not chase these --
+the ninja/VS build is the ground truth. Re-run
+`scripts\configure_ninja_win_clang.bat` to refresh the database when the noise
+gets in the way.
+
 ### macOS (Xcode)
 
 Use the build scripts in `scripts/`:
@@ -88,6 +120,29 @@ Required packages: `libwayland-dev libxkbcommon-dev xorg-dev` (Ubuntu) or equiva
 | `ERHE_XR_LIBRARY` | `openxr` | `openxr` or `none` |
 | `ERHE_USE_ASAN` | `OFF` | AddressSanitizer |
 | `ERHE_USE_PRECOMPILED_HEADERS` | `OFF` | Speeds up builds |
+| `ERHE_BUILD_TESTS` | `OFF` | gtest unit test targets (see Testing below) |
+
+## Testing
+
+Several `erhe::*` libraries have gtest suites under `src/erhe/<name>/test/`
+(circular_ring_buffer, codegen, dataformat, geometry, graphics, item, math,
+raytrace), plus `mcp_server_tests` for the editor's MCP server. Each builds an
+`erhe_<name>_tests` executable, gated behind `-DERHE_BUILD_TESTS=ON`
+(default OFF).
+
+- The macOS `configure_xcode_*.sh` scripts enable tests by default. On Windows,
+  `scripts\configure_tests_asan.bat` produces a dedicated test configuration
+  (`build_tests_asan/`, OpenGL + ASAN + tests ON); other Windows configure
+  scripts leave tests off -- pass `-DERHE_BUILD_TESTS=ON` through the wrapper
+  if you want tests in a regular build tree.
+- Run via `ctest` from the build directory, or invoke the
+  `.../src/erhe/<name>/test/<config>/erhe_<name>_tests.exe` binary directly.
+  Run suites serially and fix one failure at a time -- an abort hides the rest
+  of the run.
+- When adding pure-logic code to an `erhe::*` library that already has a
+  `test/` directory (geometry operations, math, item/graph logic, dataformat),
+  add or extend a test for it. Editor-level behavior is instead verified live
+  through the in-editor MCP server (below).
 
 ## Architecture
 
@@ -245,14 +300,32 @@ The editor and other apps write their spdlog output to `logs/` relative to the w
 
 **Always use erhe logging in the editor -- never `printf` / `fprintf` / `std::cout` / `std::cerr`, not even for temporary debug tracing.** Editor code logs through the `log_*` spdlog categories declared in `src/editor/editor_log.hpp` (e.g. `log_startup->info("...", ...)`); pick the closest existing category or add a new one in `editor_log.{hpp,cpp}` (declare `extern`, create it in `initialize_logging()` via `make_logger("editor.<name>")`). Library (`erhe::*`) code uses that library's own `erhe::log::make_logger(...)` category. Only erhe logging reaches `logs/log.txt` and the Android logcat `erhe` tag, honors per-category levels in `config/editor/logging.json`, and carries timestamps -- raw `printf`/`std::cout` bypasses the file sink (see the redirect note above) and is invisible to the standard `grep logs/log.txt` verification flow. This applies to throwaway diagnostics too: add a temporary `log_*->info/trace(...)` line, not a `printf`, and remove it (or keep a concise permanent line) when done.
 
+## Editor runs dirty the ImGui ini file
+
+Any editor run rewrites `config/editor/desktop_window_imgui_host_imgui.ini`
+(window layout state) on exit. After a verification run, restore it with
+`git checkout -- config/editor/desktop_window_imgui_host_imgui.ini` and never
+commit changes to it (or to other erhe_imgui window/ini state files).
+
 ## In-editor MCP server (live scene scripting + headless screenshots)
+
+**Skill:** invoke **`erhe-headless-verify`** for the standard verification
+loop (build headless -> launch -> wait for the MCP server -> drive tools ->
+screenshot -> clean up); the prose below is the full reference.
 
 The `editor` executable embeds its own MCP server (`src/editor/mcp/mcp_server.{hpp,cpp}`), auto-started at launch on `http://127.0.0.1:8080/mcp` (JSON-RPC 2.0 over `POST`; methods `initialize`, `tools/list`, `tools/call`). If `8080` is taken it falls back to the next free port, scanning `[8080, 8100)`; grep `logs/log.txt` (or logcat on Quest) for `MCP server: listening on 127.0.0.1:<port>` to learn the bound port. It runs on a background thread and dispatches each call to the main thread (`process_queued_requests()` once per frame), so it is safe to drive a *running* editor. Auth is **off** unless `~/.claude/erhe_mcp_token` exists (mode 0600); when present, every request needs `Authorization: Bearer <token>`. This server is usually NOT registered as native `mcp__*` tools in a Claude Code session (it only exists while the editor is running), so drive it over plain HTTP, e.g.:
 
-```powershell
-$body = '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_scene_lights","arguments":{}}}'
-Invoke-RestMethod http://127.0.0.1:8080/mcp -Method POST -Body $body -ContentType application/json
+```bash
+py -3 scripts/mcp_call.py --list                  # list tool names (optionally: --list <substring>)
+py -3 scripts/mcp_call.py get_scene_lights        # call with no arguments
+py -3 scripts/mcp_call.py create_shape b64:eyJzaGFwZSI6ICJib3gifQ==   # args as base64 JSON
 ```
+
+**Always use `scripts/mcp_call.py` to drive it** -- it handles the JSON-RPC
+envelope, the bearer token, and (via the `b64:` argument form or `-` for
+stdin) sidesteps PowerShell 5.1's quote mangling, which reliably corrupts
+inline JSON containing spaces. Raw HTTP works too (`POST` the JSON-RPC body to
+`http://127.0.0.1:8080/mcp`) but is only worth it from code.
 
 **Use this to set up / inspect / mutate a scene for any debugging need**, rather than only poking at the UI by hand. Tools fall into:
 - **Queries**: `list_scenes`, `get_scene_nodes`, `get_node_details`, `get_scene_cameras`, `get_scene_lights`, `get_scene_materials`, `get_material_details`, `get_scene_textures`, `get_scene_brushes`, `get_selection`, `get_undo_redo_stack`, `get_physics_items`, `get_shadow_fit_debug`, `get_async_status`.
