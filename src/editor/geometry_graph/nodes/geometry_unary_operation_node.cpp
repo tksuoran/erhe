@@ -22,9 +22,11 @@ void Geometry_unary_operation_node::evaluate(Geometry_graph&)
         set_output(0, Geometry_payload{});
         return;
     }
+    // No process_for_graph() here: every wrapped operation (triangulate,
+    // normalize, reverse, repair) runs its own full post-processing (connect +
+    // build_edges included), so re-running them would be pure redundancy.
     std::shared_ptr<erhe::geometry::Geometry> destination = std::make_shared<erhe::geometry::Geometry>(get_name());
     m_operation(*source.get(), *destination.get());
-    process_for_graph(*destination.get());
     set_output(0, Geometry_payload{.value = destination});
 }
 

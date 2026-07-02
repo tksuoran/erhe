@@ -32,6 +32,9 @@ void Conway_node::evaluate(Geometry_graph&)
         return;
     }
 
+    // No process_for_graph() here: every Conway operation runs its own full
+    // post-processing (connect + build_edges included), so re-running them
+    // would be pure redundancy.
     std::shared_ptr<erhe::geometry::Geometry> destination = std::make_shared<erhe::geometry::Geometry>("conway");
     switch (m_operation) {
         case Conway_operation::ambo:      erhe::geometry::operation::ambo     (*source.get(), *destination.get()); break;
@@ -44,7 +47,6 @@ void Conway_node::evaluate(Geometry_graph&)
         case Conway_operation::chamfer:   erhe::geometry::operation::chamfer3 (*source.get(), *destination.get(), m_chamfer_ratio); break;
         case Conway_operation::gyro:      erhe::geometry::operation::gyro     (*source.get(), *destination.get(), m_gyro_ratio); break;
     }
-    process_for_graph(*destination.get());
     set_output(0, Geometry_payload{.value = destination});
 }
 

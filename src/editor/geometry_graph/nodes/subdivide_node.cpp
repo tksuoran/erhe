@@ -43,11 +43,13 @@ void Subdivide_node::evaluate(Geometry_graph&)
             ((i + 1) < iterations)
                 ? erhe::geometry::operation::Post_processing::structural_only
                 : erhe::geometry::operation::Post_processing::full_default;
+        // No process_for_graph() here: both subdivision operations post-process
+        // internally with at least connect + build_edges (structural_only and
+        // full_default alike), so re-running them would be pure redundancy.
         switch (m_mode) {
             case Mode::catmull_clark: erhe::geometry::operation::catmull_clark_subdivision(*current.get(), *next.get(), nullptr, nullptr, post_processing_level); break;
             case Mode::sqrt3:         erhe::geometry::operation::sqrt3_subdivision        (*current.get(), *next.get(), nullptr, nullptr, post_processing_level); break;
         }
-        process_for_graph(*next.get());
         current = next;
     }
     set_output(0, Geometry_payload{.value = current});
