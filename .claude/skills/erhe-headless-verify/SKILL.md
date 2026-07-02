@@ -55,6 +55,17 @@ py -3 scripts/mcp_call.py get_scene_nodes b64:<base64-of-{"scene_name":"Default 
   effect synchronously -- query tools immediately reflect them, and the
   geometry graph tools are undoable (drive `undo` / `redo` as tools, inspect
   with `get_undo_redo_stack`).
+- Long evaluations: a mutation that triggers heavy main-thread work makes the
+  server reply "Request timed out" (-32000) -- but the queued request STILL
+  EXECUTES when the main thread gets to it ("Server busy: request queue full"
+  requests are dropped instead). Retry queries freely; NEVER blindly re-issue
+  a timed-out mutation (it double-executes and corrupts undo/redo counts) --
+  poll a cheap query until the server drains. Reference implementation:
+  `call()` / `mutate()` in `scripts/geometry_nodes_smoke_test.py`.
+- Geometry nodes regression sweep: `py -3 scripts/geometry_nodes_smoke_test.py`
+  (65 checks; exit 0 = pass). Its incremental section needs
+  `config/editor/logging.json` `"editor.graph_editor": "trace"` before launch
+  -- revert before committing. Clean up `res/editor/graphs/smoke_*.json` after.
 - After `capture_screenshot`, `Read` `logs/mcp_screenshot.png` to actually see
   the frame. A useful trick to identify an object visually: select it and
   `transform_selection` it, then re-screenshot and diff by eye.
