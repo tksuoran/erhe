@@ -40,7 +40,8 @@ remain future work. All code lives in `src/editor/geometry_graph/`.
 | Editable output scene node name                      | DONE   | 120e9176 |
 | Phase 6b: copy-on-write pass-through                 | DONE   | 0881e107 |
 | Optional physics on output node (plan step 6 of phase 5) | DONE | ff414965 |
-| Phase 6c / 6d / 6e: fields, instances, groups        | future | -        |
+| Phase 6d: instance system                            | DONE   | 823cf2f1 |
+| Phase 6c / 6e: fields, groups                        | future | -        |
 
 Verified end to end in the headless Vulkan build driven over the in-editor MCP
 server: box -> output and box -> conway dual -> output chains render in the
@@ -851,10 +852,21 @@ mesh snapshots); see [Implementation Status](#implementation-status).
   parallel chunks
 - This is architecturally significant and requires careful design
 
-**6d. Instance System:**
-- `Instance_on_points_node` -- instantiate geometry at point locations
-- `Realize_instances_node` -- flatten to actual geometry
-- `Distribute_points_node` -- scatter points on surfaces (Poisson disk)
+**6d. Instance System:** (DONE - commit 823cf2f1)
+- `Distribute_points_node` -- scatters points on the surface: facets are
+  fan triangulated, triangles picked with probability proportional to
+  area, points sampled uniformly inside the triangle. Deterministic per
+  (geometry, count, seed); each point carries its facet normal. (Random
+  sampling, not Poisson disk.)
+- `Instance_on_points_node` -- one instance transform per point; uniform
+  scale parameter and optional +Y-to-normal alignment.
+- `Realize_instances_node` -- flattens to real geometry with one
+  `merge_with_transform()` per instance.
+- Two new payload types with their own type-safe pin keys: `Point_cloud`
+  (parallel position / normal arrays) and `Geometry_instances` (entries
+  of shared source geometry + per-instance transforms; the referenced
+  geometries are never mutated). Multi-link accumulation concatenates
+  both into newly allocated sets.
 
 **6e. Node Groups:**
 - `Group_input_node` / `Group_output_node` defining interface
