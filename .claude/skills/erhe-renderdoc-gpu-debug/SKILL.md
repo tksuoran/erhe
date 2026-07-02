@@ -33,11 +33,17 @@ This skill is the condensed, cross-platform run-book.
   it shows up as a *target*. Use `list_targets` + `connect_to_target`.
   `attach_to_process` would inject a conflicting second copy.
 
-## Machine setup (this repo, already wired)
+## Machine setup (VERIFY, do not assume)
 
-- `.mcp.json` registers the `renderdoc` stdio proxy
-  (`scripts/renderdoc_mcp_proxy.py`); the `mcp__renderdoc__*` tools are therefore
-  always available and the proxy launches `qrenderdoc --mcp-server` lazily on the
+- The `renderdoc` stdio proxy (`scripts/renderdoc_mcp_proxy.py`) must be
+  registered in the repo-local `.mcp.json` (machine-specific, untracked) for
+  the `mcp__renderdoc__*` tools to exist. **Check first**: if the tools are
+  absent from this session, look for `.mcp.json` in the repo root; if it is
+  missing, wire it with `py -3 scripts/setup_renderdoc_mcp.py --skip-build`
+  (or create `.mcp.json` registering `py -3 <repo>/scripts/renderdoc_mcp_proxy.py`
+  as a stdio server). MCP servers connect only at session start, so after
+  wiring, the session must be restarted before the tools appear.
+- When registered, the proxy launches `qrenderdoc --mcp-server` lazily on the
   first tool call. `renderdoc_launch` pre-warms it; `renderdoc_status` confirms.
 - `config/editor/erhe_graphics.json` already sets
   `renderdoc_capture_support:true`, `renderdoc_library_path_override_enable:true`,
