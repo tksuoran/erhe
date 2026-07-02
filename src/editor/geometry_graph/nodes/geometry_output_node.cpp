@@ -17,8 +17,10 @@
 #include "erhe_scene_renderer/mesh_memory.hpp"
 
 #include <imgui/imgui.h>
+#include <imgui/misc/cpp/imgui_stdlib.h>
 #include <nlohmann/json.hpp>
 
+#include <cfloat>
 #include <mutex>
 
 namespace editor {
@@ -47,6 +49,16 @@ void Geometry_output_node::remove_scene_node()
     }
     m_node.reset();
     m_mesh.reset();
+}
+
+void Geometry_output_node::apply_scene_node_name()
+{
+    if (m_node) {
+        m_node->set_name(m_scene_node_name);
+    }
+    if (m_mesh) {
+        m_mesh->set_name(m_scene_node_name + " Mesh");
+    }
 }
 
 void Geometry_output_node::evaluate(Geometry_graph&)
@@ -120,9 +132,9 @@ void Geometry_output_node::evaluate(Geometry_graph&)
 
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
     if (!m_node) {
-        m_node = std::make_shared<erhe::scene::Node>("Geometry Graph");
+        m_node = std::make_shared<erhe::scene::Node>(m_scene_node_name);
         m_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::show_in_ui);
-        m_mesh = std::make_shared<erhe::scene::Mesh>("Geometry Graph Mesh");
+        m_mesh = std::make_shared<erhe::scene::Mesh>(m_scene_node_name + " Mesh");
         m_mesh->layer_id = m_scene_root->layers().content()->id;
         m_mesh->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::shadow_cast);
         m_node->attach(m_mesh);
@@ -134,6 +146,15 @@ void Geometry_output_node::evaluate(Geometry_graph&)
 
 void Geometry_output_node::imgui()
 {
+    // Scene node name; committed (and made undoable via the parameter
+    // edit gesture) when the input defocuses, not on every keystroke.
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    ImGui::InputText("##scene_node_name", &m_scene_node_name);
+    if (ImGui::IsItemDeactivatedAfterEdit()) {
+        apply_scene_node_name();
+        mark_dirty();
+    }
+
     // Scene selection
     const std::vector<std::shared_ptr<Scene_root>>& scene_roots = m_context.app_scenes->get_scene_roots();
     if (scene_roots.size() > 1) {
@@ -188,6 +209,7 @@ void Geometry_output_node::imgui()
 
 void Geometry_output_node::write_parameters(nlohmann::json& out) const
 {
+    out["name"] = m_scene_node_name;
     if (m_scene_root) {
         out["scene"] = m_scene_root->get_name();
     }
@@ -198,6 +220,11 @@ void Geometry_output_node::write_parameters(nlohmann::json& out) const
 
 void Geometry_output_node::read_parameters(const nlohmann::json& in)
 {
+    const std::string scene_node_name = in.value("name", m_scene_node_name);
+    if (scene_node_name != m_scene_node_name) {
+        m_scene_node_name = scene_node_name;
+        apply_scene_node_name();
+    }
     const std::string scene_name = in.value("scene", "");
     if (!scene_name.empty()) {
         for (const std::shared_ptr<Scene_root>& scene_root : m_context.app_scenes->get_scene_roots()) {

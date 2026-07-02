@@ -3,6 +3,7 @@
 #include "geometry_graph/geometry_graph_node.hpp"
 
 #include <memory>
+#include <string>
 
 namespace erhe::primitive { class Material; }
 namespace erhe::scene {
@@ -37,12 +38,14 @@ public:
 
 private:
     void remove_scene_node();
+    void apply_scene_node_name();
 
     App_context&                               m_context;
     std::shared_ptr<Scene_root>                m_scene_root;
     std::shared_ptr<erhe::primitive::Material> m_material;
     std::shared_ptr<erhe::scene::Node>         m_node;
     std::shared_ptr<erhe::scene::Mesh>         m_mesh;
+    std::string                                m_scene_node_name{"Geometry Graph"};
 };
 
 }
