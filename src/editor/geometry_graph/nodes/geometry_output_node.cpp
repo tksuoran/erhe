@@ -155,7 +155,11 @@ void Geometry_output_node::evaluate(Geometry_graph&)
         return;
     }
 
-    if (!source) {
+    // A facet-less geometry (e.g. an out-of-range Conway operation index,
+    // a boolean of empty inputs) has nothing to render; treat it like a
+    // disconnected input rather than asking the primitive builder to
+    // build zero-index buffers (which it refuses with a VERIFY abort).
+    if (!source || (source->get_mesh().facets.nb() == 0)) {
         if (m_mesh) {
             std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
             m_mesh->clear_primitives();
