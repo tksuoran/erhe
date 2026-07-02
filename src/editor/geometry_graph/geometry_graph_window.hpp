@@ -52,8 +52,9 @@ public:
     // the operation stack. Used by the toolbar / canvas gestures and the
     // in-editor MCP server.
     // Type names: box, sphere, torus, cone, disc, subdivide, conway,
-    // transform, triangulate, normalize, reverse, repair, join, boolean,
-    // float, integer, vector, math, output.
+    // transform, triangulate, normalize, reverse, repair, distribute,
+    // instance, realize, join, boolean, float, integer, vector, math,
+    // output.
     auto add_node_of_type(const std::string& type_name) -> Geometry_graph_node*;
     void remove_node     (const std::shared_ptr<Geometry_graph_node>& node);
     auto connect         (erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool;

@@ -57,6 +57,27 @@ auto Geometry_payload::get_material() const -> std::shared_ptr<erhe::primitive::
     return (material != nullptr) ? *material : std::shared_ptr<erhe::primitive::Material>{};
 }
 
+auto Geometry_payload::get_points() const -> std::shared_ptr<Point_cloud>
+{
+    const std::shared_ptr<Point_cloud>* points = std::get_if<std::shared_ptr<Point_cloud>>(&value);
+    return (points != nullptr) ? *points : std::shared_ptr<Point_cloud>{};
+}
+
+auto Geometry_payload::get_instances() const -> std::shared_ptr<Geometry_instances>
+{
+    const std::shared_ptr<Geometry_instances>* instances = std::get_if<std::shared_ptr<Geometry_instances>>(&value);
+    return (instances != nullptr) ? *instances : std::shared_ptr<Geometry_instances>{};
+}
+
+auto Geometry_instances::instance_count() const -> std::size_t
+{
+    std::size_t count = 0;
+    for (const Entry& entry : entries) {
+        count += entry.transforms.size();
+    }
+    return count;
+}
+
 auto Geometry_payload::operator+=(const Geometry_payload& rhs) -> Geometry_payload&
 {
     if (!rhs.has_value()) {
@@ -87,6 +108,52 @@ auto Geometry_payload::operator+=(const Geometry_payload& rhs) -> Geometry_paylo
         merged->merge_with_transform(*lhs_geometry.get(), identity);
         merged->merge_with_transform(*rhs_geometry.get(), identity);
         value = merged;
+        return *this;
+    }
+
+    if (std::holds_alternative<std::shared_ptr<Point_cloud>>(value) &&
+        std::holds_alternative<std::shared_ptr<Point_cloud>>(rhs.value)
+    ) {
+        // Concatenate into a new point cloud; neither input is modified.
+        const std::shared_ptr<Point_cloud> lhs_points = get_points();
+        const std::shared_ptr<Point_cloud> rhs_points = rhs.get_points();
+        if (!lhs_points) {
+            value = rhs.value;
+            return *this;
+        }
+        if (!rhs_points) {
+            return *this;
+        }
+        std::shared_ptr<Point_cloud> combined = std::make_shared<Point_cloud>();
+        combined->positions = lhs_points->positions;
+        combined->positions.insert(combined->positions.end(), rhs_points->positions.begin(), rhs_points->positions.end());
+        // Normals stay parallel to positions only when both sides carry them.
+        if (!lhs_points->normals.empty() && !rhs_points->normals.empty()) {
+            combined->normals = lhs_points->normals;
+            combined->normals.insert(combined->normals.end(), rhs_points->normals.begin(), rhs_points->normals.end());
+        }
+        value = combined;
+        return *this;
+    }
+
+    if (std::holds_alternative<std::shared_ptr<Geometry_instances>>(value) &&
+        std::holds_alternative<std::shared_ptr<Geometry_instances>>(rhs.value)
+    ) {
+        // Concatenate entry lists into a new instance set; neither input
+        // is modified. The referenced geometries stay shared.
+        const std::shared_ptr<Geometry_instances> lhs_instances = get_instances();
+        const std::shared_ptr<Geometry_instances> rhs_instances = rhs.get_instances();
+        if (!lhs_instances) {
+            value = rhs.value;
+            return *this;
+        }
+        if (!rhs_instances) {
+            return *this;
+        }
+        std::shared_ptr<Geometry_instances> combined = std::make_shared<Geometry_instances>();
+        combined->entries = lhs_instances->entries;
+        combined->entries.insert(combined->entries.end(), rhs_instances->entries.begin(), rhs_instances->entries.end());
+        value = combined;
         return *this;
     }
 

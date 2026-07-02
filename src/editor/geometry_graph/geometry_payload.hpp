@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <memory>
 #include <variant>
+#include <vector>
 
 namespace erhe::geometry  { class Geometry; }
 namespace erhe::primitive { class Material; }
@@ -26,6 +27,38 @@ public:
     static constexpr std::size_t vec4_value  = 6;
     static constexpr std::size_t mat4_value  = 7;
     static constexpr std::size_t material    = 8;
+    static constexpr std::size_t points      = 9;
+    static constexpr std::size_t instances   = 10;
+};
+
+// Points scattered on a surface, flowing through "points" pins
+// (Distribute_points_node output). Positions and normals are parallel
+// arrays; normals may be empty when the source provides none.
+class Point_cloud
+{
+public:
+    std::vector<glm::vec3> positions;
+    std::vector<glm::vec3> normals;
+};
+
+// Instanced geometry flowing through "instances" pins: source geometries
+// with per-instance world transforms (Instance_on_points_node output).
+// The referenced geometries are shared with upstream nodes and must not
+// be mutated; Realize_instances_node flattens instances into real
+// geometry.
+class Geometry_instances
+{
+public:
+    class Entry
+    {
+    public:
+        std::shared_ptr<erhe::geometry::Geometry> geometry;
+        std::vector<glm::mat4>                    transforms;
+    };
+
+    [[nodiscard]] auto instance_count() const -> std::size_t;
+
+    std::vector<Entry> entries;
 };
 
 // Value carried through geometry graph pins.
@@ -41,23 +74,28 @@ public:
         glm::vec3,
         glm::vec4,
         glm::mat4,
-        std::shared_ptr<erhe::primitive::Material>
+        std::shared_ptr<erhe::primitive::Material>,
+        std::shared_ptr<Point_cloud>,
+        std::shared_ptr<Geometry_instances>
     >;
 
-    [[nodiscard]] auto has_value   () const -> bool;
-    [[nodiscard]] auto get_geometry() const -> std::shared_ptr<erhe::geometry::Geometry>;
-    [[nodiscard]] auto get_float   (float fallback = 0.0f) const -> float;
-    [[nodiscard]] auto get_int     (int fallback = 0) const -> int;
-    [[nodiscard]] auto get_bool    (bool fallback = false) const -> bool;
-    [[nodiscard]] auto get_vec3    (const glm::vec3& fallback = glm::vec3{0.0f}) const -> glm::vec3;
-    [[nodiscard]] auto get_vec4    (const glm::vec4& fallback = glm::vec4{0.0f}) const -> glm::vec4;
-    [[nodiscard]] auto get_mat4    (const glm::mat4& fallback = glm::mat4{1.0f}) const -> glm::mat4;
-    [[nodiscard]] auto get_material() const -> std::shared_ptr<erhe::primitive::Material>;
+    [[nodiscard]] auto has_value    () const -> bool;
+    [[nodiscard]] auto get_geometry () const -> std::shared_ptr<erhe::geometry::Geometry>;
+    [[nodiscard]] auto get_float    (float fallback = 0.0f) const -> float;
+    [[nodiscard]] auto get_int      (int fallback = 0) const -> int;
+    [[nodiscard]] auto get_bool     (bool fallback = false) const -> bool;
+    [[nodiscard]] auto get_vec3     (const glm::vec3& fallback = glm::vec3{0.0f}) const -> glm::vec3;
+    [[nodiscard]] auto get_vec4     (const glm::vec4& fallback = glm::vec4{0.0f}) const -> glm::vec4;
+    [[nodiscard]] auto get_mat4     (const glm::mat4& fallback = glm::mat4{1.0f}) const -> glm::mat4;
+    [[nodiscard]] auto get_material () const -> std::shared_ptr<erhe::primitive::Material>;
+    [[nodiscard]] auto get_points   () const -> std::shared_ptr<Point_cloud>;
+    [[nodiscard]] auto get_instances() const -> std::shared_ptr<Geometry_instances>;
 
     // Accumulation used when multiple links feed one input pin:
     // - empty += x adopts x
     // - numeric and vector types add
     // - geometries merge into a newly allocated combined geometry
+    // - point clouds and instances concatenate into newly allocated sets
     // - materials keep the first connected value
     auto operator+=(const Geometry_payload& rhs) -> Geometry_payload&;
 

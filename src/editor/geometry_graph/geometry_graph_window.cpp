@@ -9,6 +9,7 @@
 #include "geometry_graph/nodes/conway_node.hpp"
 #include "geometry_graph/nodes/geometry_output_node.hpp"
 #include "geometry_graph/nodes/geometry_unary_operation_node.hpp"
+#include "geometry_graph/nodes/instance_nodes.hpp"
 #include "geometry_graph/nodes/join_geometry_node.hpp"
 #include "geometry_graph/nodes/math_node.hpp"
 #include "geometry_graph/nodes/mesh_box_node.hpp"
@@ -204,6 +205,9 @@ auto Geometry_graph_window::make_node(const std::string& type_name) -> std::shar
     else if (type_name == "normalize")   { node = std::make_shared<Geometry_unary_operation_node>("Normalize",   &erhe::geometry::operation::normalize); }
     else if (type_name == "reverse")     { node = std::make_shared<Geometry_unary_operation_node>("Reverse",     &erhe::geometry::operation::reverse); }
     else if (type_name == "repair")      { node = std::make_shared<Geometry_unary_operation_node>("Repair",      &erhe::geometry::operation::repair); }
+    else if (type_name == "distribute")  { node = std::make_shared<Distribute_points_node >(); }
+    else if (type_name == "instance")    { node = std::make_shared<Instance_on_points_node>(); }
+    else if (type_name == "realize")     { node = std::make_shared<Realize_instances_node >(); }
     else if (type_name == "join")        { node = std::make_shared<Join_geometry_node>(); }
     else if (type_name == "boolean")     { node = std::make_shared<Boolean_node      >(); }
     else if (type_name == "float")       { node = std::make_shared<Float_value_node  >(); }
@@ -277,6 +281,10 @@ void Geometry_graph_window::node_toolbar()
     ImGui::SameLine(); if (ImGui::Button("Normalize"))   { add_node_of_type("normalize"); }
     ImGui::SameLine(); if (ImGui::Button("Reverse"))     { add_node_of_type("reverse"); }
     ImGui::SameLine(); if (ImGui::Button("Repair"))      { add_node_of_type("repair"); }
+
+                       if (ImGui::Button("Distribute")) { add_node_of_type("distribute"); }
+    ImGui::SameLine(); if (ImGui::Button("Instance"))   { add_node_of_type("instance"); }
+    ImGui::SameLine(); if (ImGui::Button("Realize"))    { add_node_of_type("realize"); }
 
                        if (ImGui::Button("Join"))    { add_node_of_type("join"); }
     ImGui::SameLine(); if (ImGui::Button("Boolean")) { add_node_of_type("boolean"); }
