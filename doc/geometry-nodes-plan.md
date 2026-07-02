@@ -39,6 +39,7 @@ remain future work. All code lives in `src/editor/geometry_graph/`.
 | New node spawn grid (no more stacking at origin)     | DONE   | 7fb5b32b |
 | Editable output scene node name                      | DONE   | 120e9176 |
 | Phase 6b: copy-on-write pass-through                 | DONE   | 0881e107 |
+| Optional physics on output node (plan step 6 of phase 5) | DONE | ff414965 |
 | Phase 6c / 6d / 6e: fields, instances, groups        | future | -        |
 
 Verified end to end in the headless Vulkan build driven over the in-editor MCP
@@ -819,7 +820,12 @@ On evaluation (as built):
 5. Scene defaults to the single registered scene root, material to the first
    content library material; both selectable with in-node steppers
 
-`Node_physics` (step 6 of the original sketch) is not implemented.
+`Node_physics` (step 6 of the original sketch) is implemented as an
+opt-in: a Physics checkbox plus motion mode stepper (static / kinematic /
+dynamic) on the node. When enabled, a `Node_physics` attachment with a
+convex hull collision shape built from the render geometry (non-convex
+results are approximated by their hull) is kept in sync with the mesh on
+every re-evaluation and released together with the scene node.
 
 **Integration with undo/redo:** implemented differently from the sketch here -
 graph edits themselves are undoable operations (structural, not before/after
