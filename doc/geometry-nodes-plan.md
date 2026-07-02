@@ -18,9 +18,10 @@ functionality in the erhe editor.
 
 ## Implementation Status
 
-Phases 1-5 plus undo/redo and graph serialization are implemented (2026-07-02,
-branch `geometry_nodes`). Phase 6 remains future work. All code lives in
-`src/editor/geometry_graph/`.
+Phases 1-5 plus undo/redo, graph serialization, incremental evaluation (6a)
+and copy-on-write pass-through (6b) are implemented (2026-07-02, branch
+`geometry_nodes`). Phases 6c (fields), 6d (instances) and 6e (node groups)
+remain future work. All code lives in `src/editor/geometry_graph/`.
 
 | Work item                                            | Status | Commit   |
 |------------------------------------------------------|--------|----------|
@@ -32,7 +33,13 @@ branch `geometry_nodes`). Phase 6 remains future work. All code lives in
 | In-editor MCP tools (headless graph scripting)       | DONE   | cfe79f68 |
 | Undo/redo for graph edits                            | DONE   | a8dad173 |
 | Graph serialization (save / load JSON)               | DONE   | e9d7bd44 |
-| Phase 6: caching, CoW, fields, instances, groups     | future | -        |
+| Phase 6a: incremental evaluation (dirty propagation) | DONE   | a11abd21 |
+| Undoable parameter edits                             | DONE   | 7585efe7 |
+| MCP geometry_graph_set_parameter + parameters in get_geometry_graph | DONE | 1fcc38fc |
+| New node spawn grid (no more stacking at origin)     | DONE   | 7fb5b32b |
+| Editable output scene node name                      | DONE   | 120e9176 |
+| Phase 6b: copy-on-write pass-through                 | DONE   | 0881e107 |
+| Phase 6c / 6d / 6e: fields, instances, groups        | future | -        |
 
 Verified end to end in the headless Vulkan build driven over the in-editor MCP
 server: box -> output and box -> conway dual -> output chains render in the
@@ -43,10 +50,19 @@ positions and links.
 
 ### Deviations from the plan below
 
-- **Evaluation is dirty-flag driven, not per-frame.**
+- **Evaluation is dirty-flag driven, not per-frame - and incremental.**
   `Geometry_graph::evaluate_if_dirty()` re-evaluates only when topology or a
   node parameter changed (node widgets call `mark_dirty()`); geometry
   operations are too expensive to run every frame the way `Shader_graph` does.
+  Since phase 6a, only dirty nodes and their downstream dependents re-run:
+  dirtiness propagates along links while nodes are visited in topological
+  order, clean nodes keep their cached output payloads, and structural edits
+  mark only the directly affected nodes dirty at the edit site
+  (`Geometry_graph_window` insert / erase / connect / disconnect).
+- **Copy-on-write is the sharing model (phase 6b).** Geometry flows through
+  the graph as `shared_ptr` and is only copied by nodes that actually modify
+  it. Pass-through cases share the upstream pointer: single-link Join,
+  0-iteration Subdivide, identity Transform.
 - **Parameterless operations share one class.** Triangulate, Normalize,
   Reverse and Repair are instances of `Geometry_unary_operation_node`
   (label + function pointer) instead of four near-identical classes.
@@ -88,6 +104,12 @@ load / clear) go through the editor `Operation_stack`
   undo of add, clear / load). The node object may stay alive in the undo
   stack, so side effects outside the graph - the output node's scene mesh -
   are released there, not in the destructor.
+- `Geometry_graph_parameter_operation` - node parameter edits. Holds before /
+  after state as `write_parameters()` JSON dumps applied via
+  `read_parameters()`; the values are already live when the operation is
+  pushed, so the first execute only records state. Widget edits commit one
+  operation per completed gesture (pushed when the active widget
+  deactivates); the MCP set-parameter tool pushes through the same class.
 
 ### Serialization (as built)
 
@@ -120,10 +142,14 @@ load / clear) go through the editor `Operation_stack`
 
 The geometry graph is fully scriptable over the in-editor MCP server:
 `get_geometry_graph`, `geometry_graph_add_node`, `geometry_graph_remove_node`,
-`geometry_graph_connect`, `geometry_graph_disconnect`, `geometry_graph_save`,
-`geometry_graph_load`, `geometry_graph_clear`. Structural mutations are
-undoable and re-evaluate the graph immediately (no window visibility needed).
-`App_context` carries a `geometry_graph_window` pointer for the handlers.
+`geometry_graph_set_parameter`, `geometry_graph_connect`,
+`geometry_graph_disconnect`, `geometry_graph_save`, `geometry_graph_load`,
+`geometry_graph_clear`. All mutations are undoable and re-evaluate the graph
+immediately (no window visibility needed). `get_geometry_graph` and
+`geometry_graph_add_node` report each node's current `parameters` object;
+`geometry_graph_set_parameter` accepts the same shape with partial updates
+(omitted keys keep current values). `App_context` carries a
+`geometry_graph_window` pointer for the handlers.
 
 ---
 
@@ -801,12 +827,12 @@ mesh snapshots); see [Implementation Status](#implementation-status).
 
 ### Phase 6: Enhancements (Future)
 
-**6a. Caching and Incremental Evaluation:**
+**6a. Caching and Incremental Evaluation:** (DONE - see Implementation Status)
 - Per-node dirty flag / serial number
 - Only re-evaluate nodes whose inputs changed
 - Cache output geometry per node (use `Mesh_serials` pattern)
 
-**6b. Copy-on-Write Geometry:**
+**6b. Copy-on-Write Geometry:** (DONE - see Implementation Status)
 - `shared_ptr` with reference counting
 - Clone-on-modify for efficiency when geometry passes through unchanged
 
@@ -851,8 +877,8 @@ mesh snapshots); see [Implementation Status](#implementation-status).
 | 5     | Scene output node             | 1 class            | Medium    | DONE |
 | -     | Undo/redo for graph edits     | 3 operation classes | Medium   | DONE |
 | -     | Graph serialization           | Window methods + per-node parameter IO | Small | DONE |
-| 6a    | Caching                       | Modifications      | Small     | future |
-| 6b    | Copy-on-write                 | Modifications      | Small     | future |
+| 6a    | Caching                       | Modifications      | Small     | DONE |
+| 6b    | Copy-on-write                 | Modifications      | Small     | DONE |
 | 6c    | Field system                  | ~5+ classes        | Large     | future |
 | 6d    | Instancing                    | ~3 node classes    | Medium    | future |
 | 6e    | Node groups                   | ~3 classes         | Medium    | future |

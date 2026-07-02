@@ -15,10 +15,19 @@ e9d7bd44::serialization{JSON-v1+write/read_parameters-virtuals+factory_type_name
 d812547c::plan-doc{Implementation-Status-section+as-built-notes}
 LIVE-VERIFIED✓::headless-MCP{box→output+box→dual→output-render;undo/redo-roundtrip{links+node-removal+load/clear};save-file-inspected;load-restores-scene-mesh;screenshots}
 
-?PENDING::phase6→next_prompt.txt
-6a::incremental-eval{per-node-m_dirty-exists,evaluate()-runs-all}!first
-polish::node-placement-(0,0)-stacking+unique-scene-node-names+MCP-set-parameter+param-edit-undo+Node_physics-optional
-6b::CoW 6d::instances 6e::groups 6c::fields{large}
+[TASK::geometry-nodes-phase6-2026-07-02]
+@status::✓DONE{6a+6b+polish;6c/6d/6e=future}
+>commits::a11abd21..0881e107
+a11abd21::6a-incremental-eval{dirty-propagates-downstream-topo-order-in-evaluate();clean-nodes-keep-cached-output-payloads;structural-edits-mark-affected-nodes{insert→node,erase→sinks-of-outgoing-pre-unregister,connect/disconnect→sink};graph-mark_dirty=forced-full}
+7585efe7::param-undo{Geometry_graph_parameter_operation{before/after-write_parameters-JSON-dumps,apply-via-read_parameters,first-execute-skips-apply{values-already-live},redo-applies};widget-gesture{node_editor-detects-mark_dirty-during-imgui()→commit-op-on-!IsAnyItemActive;m_committed_parameters-baseline};output-read_parameters-scene-switch-now-releases-scene-node}
+1fcc38fc::MCP-set_parameter{window::set_node_parameters;partial-JSON-ok{read_parameters-fallback=current};get_geometry_graph+add_node-expose-parameters-object}
+7fb5b32b::spawn-grid{add_node_of_type-places-4-col-grid-320×200;clear_graph-resets;¬(0,0)-stacking}
+120e9176::output-name{InputText-in-node{commit-on-defocus¬keystroke}+apply_scene_node_name;serialized-"name";undoable-via-param-gesture}
+0881e107::6b-CoW{identity-Transform-passes-source-through;single-link-Join+0-iter-Subdivide-already-did;doc-states-sharing-model}
+LIVE-VERIFIED✓::headless-MCP{2-independent-chains:disconnect/undo/redo/set_parameter-re-eval-ONLY-affected-chain{trace-log};param-undo/redo-roundtrip-values+scene-node-name;spawn-positions-(0,0)/(320,0)/(640,0)-in-save-file;screenshots}
+skipped::Node_physics-optional-on-output{low-value-now}
+
+?PENDING::6c::fields{large} 6d::instances 6e::groups
 
 [TASK::session-tooling-2026-07-02]
 @status::✓DONE
