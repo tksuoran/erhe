@@ -1,10 +1,14 @@
 # Catmull-Clark subdivision: optimization notes
 
-Status: analysis only, not yet implemented. Picked up later.
+Status: the dominant (quadratic) cost was found and FIXED on 2026-07-02 (see
+"Measured findings" below); the candidate list further down is still analysis
+only and is the queue for the follow-up performance work. Per-phase Debug
+measurements now exist; Release measurements and the timing harness do not.
 
 This document records candidate optimizations for erhe's Catmull-Clark
 implementation, with rough gain / complexity / risk for each. It is the result
-of comparing erhe's implementation against Geogram's `mesh_split_catmull_clark`.
+of comparing erhe's implementation against Geogram's `mesh_split_catmull_clark`,
+updated with the measurements from the 2026-07-02 geometry nodes smoke sweep.
 
 ## Where the code lives
 
@@ -42,18 +46,88 @@ its unified `Mesh_attributes` model, and regenerates normals/UVs. Geogram's CC
 only interpolates vertex attributes and leaves mesh boundaries unsmoothed.
 
 Estimated gap: erhe is roughly 4-10x slower wall-clock, and likely
-allocation-bound on large meshes. These are analytical estimates, not measured.
+allocation-bound on large meshes. These are analytical estimates; the 2026-07-02
+session added the Debug per-phase measurements below but no Release numbers yet.
+
+## Measured findings (2026-07-02, Debug / MSVC, headless editor)
+
+The geometry nodes stress sweep (box -> subdivide x5/x6 -> output) exposed a
+cost NOT in the candidate list below, and it dominated everything else:
+
+**Per-element destination creation was O(n) per call - CC was O(n^2).**
+Geogram's `MeshSubElementsStore::create_sub_elements()` computed its capacity
+doubling from the store SIZE instead of the store capacity, so once size passed
+the last reservation every `create_vertices(1)` / `create_polygon()` issued a
+reservation a hair above the previous one and `std::vector::reserve` satisfied
+it with an exact reallocation of every attribute store. Measured: accumulated
+`create_vertices(1)` time in the edge-midpoint loop grew 2 -> 26 -> 380 ->
+6674 ms while edges grew 48 -> 192 -> 768 -> 3072 (x13-18 per x4); one CC
+iteration on a 1536-facet input took 14370 ms; subdivide x6 on a box (98304
+facets) was a practical hang (55+ minutes, unfinished). Fixed twice over:
+
+- erhe side (commit 8e52a1b9): CC batch creates its destination elements (one
+  `create_vertices(n)` per phase, one `create_quads(n)` for the subdivided
+  facets) registered through new no-create `Geometry_operation` helpers
+  (`map_dst_vertex_from_src_vertex`, `map_dst_vertex_from_src_facet_centroid`,
+  `map_dst_facet_from_src_facet`). Other operations still create per element.
+- geogram side (fork commit on `tksuoran/geogram`, erhe pin bumped in
+  88376b78, upstream report
+  https://github.com/BrunoLevy/geogram/issues/371): the growth loop now starts
+  from `attributes_.capacity()`, restoring amortized O(1) per-element creation
+  for ALL per-element callers (Conway operators included).
+
+After both fixes (Debug, box source, includes each iteration's internal
+post_processing):
+
+| src facets | classify | initial_p | midpoints | centroids | quads | post_processing | iteration total |
+|---|---|---|---|---|---|---|---|
+| 384  | 0 | 0 | 7   | 5  | 39  | 57   | 114 ms  |
+| 1536 | 0 | 1 | 30  | 24 | 174 | 289  | 542 ms  |
+| 6144 | 1 | 8 | 159 | 94 | 760 | 1113 | 2215 ms |
+
+Scaling is now ~linear (x4 per level). Full chains in the editor: subdivide x5
+5.5 s, x6 25.1 s total (the x6 total includes the output node's render
+processing of the 98304-facet result: process ~8 s, renderable ~5.7 s,
+raytrace ~3.1 s; and each subdivide-node iteration also runs a redundant
+`process_for_graph` re-doing connect+build_edges, ~2.4 s at the last level).
+
+Two observations that adjust the priorities below:
+
+- **The "out of scope" reprocess tail is now the biggest measured share.**
+  `quads` + `post_processing` dominate the in-build cost, and outside build()
+  the editor chain pays the reprocess three ways: CC's own internal
+  `post_processing()` runs the FULL default flags (smooth normals + facet
+  texcoords) on every intermediate iteration whose attributes are immediately
+  re-subdivided away; the geometry-graph subdivide node then runs
+  `process_for_graph` (connect + build_edges AGAIN) on the same mesh; and the
+  output node re-processes the final result with the full render flags anyway.
+  Candidates 11-12 below address this.
+- The formerly suspected allocation-bound phases (`initial_p`, `midpoints`,
+  `centroids` - Source_table + edge map traffic) are comparatively small in
+  Debug after the creation fix. Candidates 1-6 remain valid but should be
+  re-ranked against Release measurements before investing.
+
+Also noted while reading the reprocess tail:
+`build_extra_connectivity()` (geometry.cpp) contains an early `return` (not
+`continue`) when ANY vertex has fewer than 3 corners, silently leaving the
+remaining vertices' corner rings unsorted. Correctness quirk to investigate
+while in the area.
 
 ## Scope of this document
 
-The `process()` reprocess (connect / update_connectivity / build_edges / smooth
-normals / facet centroids / texcoord regeneration) is treated as FIXED and is
-out of scope here. The "in-scope" cost being optimized is the CC `build()`
-itself plus `interpolate_mesh_attributes()`. Within that, the dominant costs are:
+Originally the `process()` reprocess (connect / update_connectivity /
+build_edges / smooth normals / facet centroids / texcoord regeneration) was
+treated as FIXED and out of scope. The 2026-07-02 measurements overturned
+that: after the creation fix the reprocess tail is the largest measured share
+of an editor subdivide chain, so candidates 11-12 bring it in scope. The
+original "in-scope" cost is the CC `build()` itself plus
+`interpolate_mesh_attributes()`; within that, the presumed dominant costs are:
 
 1. `Source_table` allocation traffic (one alloc per destination element).
 2. The ~24-channel interpolation pass.
 3. The edge hash map (2 lookups per corner).
+
+(Presumed: re-rank against Release measurements first - see the last section.)
 
 Confirmed facts the candidates rely on:
 - `get_vertex_corners` / `get_corner_facet` / `get_edge_facets` are O(1)
@@ -76,6 +150,8 @@ Confirmed facts the candidates rely on:
 | 8 | Fuse CC build passes | low-med | medium | medium | CC-local |
 | 9 | Parallelize interpolation pass | high (big meshes) | high | high | shared base |
 | 10 | Specialized in-place CC (Geogram-style) | very high | very high | very high | CC rewrite |
+| 11 | Structural-only post-processing for intermediate iterations | high (chains) | low-med | low | shared base |
+| 12 | Drop redundant process_for_graph after operations that post-process | medium (chains) | low | low | editor graph |
 
 ### 1. Skip channels that are unbound or will be regenerated
 `interpolate_mesh_attributes()` calls `interpolate_attribute` for ~24 channels;
@@ -171,21 +247,65 @@ rewrite that abandons the unified operation model and is most likely to regress
 UV-seam / hard-normal handling. Only worth it if CC speed becomes a real
 bottleneck and the other items are not enough.
 
+### 11. Structural-only post-processing for intermediate iterations
+`catmull_clark_subdivision()` ends with `post_processing()` using
+`default_post_process_flags` (connect, build_edges, facet centroids, smooth
+vertex normals, facet texcoords) on EVERY iteration -- but in an iterated
+chain (the subdivide node loops CC N times; the editor's Catmull-Clark
+operation can be applied repeatedly too) the normals/texcoords of every
+intermediate result are discarded: the next iteration re-derives everything
+from positions + connectivity, and the final consumer (the geometry graph
+output node, or `Mesh_operation`'s rebuild) re-processes with its own flags.
+Give the subdivision entry points a way to request
+`structural_post_process_flags` (connect + build_edges + centroids only --
+the parameter already exists on `post_processing()`) for intermediate
+iterations, keeping the full flags for the final one. Combined with #1(b)
+(skip interpolating regenerated channels) this removes both the *computation*
+and the *interpolation* of throwaway normals/texcoords per level. Measured
+share at the last x6 level: post_processing was ~1.1 s of a 2.2 s iteration
+at src 6144 in Debug (grows with level). Risk: low -- flags plumb through
+existing machinery; verify normals/UVs on the FINAL output are unchanged.
+
+### 12. Drop the redundant process_for_graph after self-post-processing operations
+The geometry graph's subdivide node runs `process_for_graph()` (connect +
+build_edges) after `catmull_clark_subdivision()`, which just ran the same
+steps inside its own `post_processing()`. Same pattern in other operation
+nodes wrapping `Geometry_operation`-based ops. Measured: ~2.4 s of redundant
+work at the x6 last level (Debug). Either drop the call for operations that
+post-process, or fold it into #11's flag plumbing (node requests the flags it
+needs, operation guarantees them). Risk: low; editor-side only.
+
 ## Recommended order
 
-Do 1 -> 3 -> 2 first: all low-risk, and together they likely remove a large share
-of in-scope time (skipped channels + single normalization + no outer reallocs)
-with minimal blast radius. Then evaluate 5 (arena) over 4 (CSR) -- same
-allocation win, far less caller churn. 6 is a clean CC-local follow-up. Treat 9
-and 10 as separate, sign-off-required efforts.
+Revised after the 2026-07-02 measurements: build the timing harness first
+(below), then do 11 -> 12 -> 1 -> 3 -> 2. Items 11/12 attack the largest
+measured share (the reprocess tail of iterated chains) at low risk; 1/3/2 are
+the low-risk shared-base wins (skipped channels + single normalization + no
+outer reallocs). Then evaluate 5 (arena) over 4 (CSR) -- same allocation win,
+far less caller churn -- and 6 as a clean CC-local follow-up, all gated on
+what the Release numbers actually show. Treat 9 and 10 as separate,
+sign-off-required efforts.
 
-Note: items 1-5 and 9 touch the shared `Geometry_operation` base, so they also
-benefit the Conway operators, CSG, and other operations that build provenance --
-not just Catmull-Clark.
+Note: items 1-5, 9 and 11 touch the shared `Geometry_operation` base, so they
+also benefit the Conway operators, CSG, and other operations that build
+provenance -- not just Catmull-Clark. Two further shared-base notes from
+2026-07-02: per-element destination creation is amortized O(1) again since the
+geogram fork fix, but converting the remaining per-element operations (Conway
+ops etc.) to batch creation via the `map_dst_*` helpers still removes
+per-call overhead (reserve/resize/notify across every attribute store per
+element) -- a constant-factor win, no longer a complexity-class one. And
+`build_extra_connectivity()`'s early-return quirk (see Measured findings)
+should be understood before optimizing around it.
 
 ## Before committing to any of these: measure
 
-These are analytical estimates. Add a timing harness in
-`src/erhe/geometry/test/` that subdivides a known mesh through the current path
-and prints per-phase timings (build vs. interpolation vs. the excluded
-reprocess), so each optimization can be measured in isolation rather than guessed.
+Debug per-phase numbers exist (see Measured findings) but MSVC Debug container
+overhead distorts the ranking; Release numbers do not exist yet. Add a timing
+harness in `src/erhe/geometry/test/` that subdivides a known mesh through the
+current path and prints per-phase timings (build phases vs. interpolation vs.
+the reprocess tail), runnable in both configs, so each optimization can be
+measured in isolation rather than guessed. The 2026-07-02 session's throwaway
+pattern works well as a starting point: `std::chrono::steady_clock` around
+each phase, logged via `log_geometry->info` (temporary in-editor variant) or
+printed from a gtest; keep the harness as a permanent (possibly DISABLED_)
+test instead of re-instrumenting every time.
