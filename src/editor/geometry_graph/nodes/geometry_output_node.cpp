@@ -4,9 +4,11 @@
 #include "app_scenes.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
+#include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_physics/icollision_shape.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_primitive/primitive_builder.hpp"
@@ -16,6 +18,8 @@
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 
+#include <geogram/mesh/mesh.h>
+
 #include <imgui/imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
 #include <nlohmann/json.hpp>
@@ -24,6 +28,32 @@
 #include <mutex>
 
 namespace editor {
+
+namespace {
+
+// Motion modes exposed on the output node, in stepper order. Serialized
+// by name; maps to erhe::physics::Motion_mode e_static /
+// e_kinematic_physical / e_dynamic.
+constexpr const char* c_physics_motion_names[] = { "Static", "Kinematic", "Dynamic" };
+
+[[nodiscard]] auto physics_motion_mode_to_string(erhe::physics::Motion_mode motion_mode) -> const char*
+{
+    switch (motion_mode) {
+        case erhe::physics::Motion_mode::e_dynamic:             return "dynamic";
+        case erhe::physics::Motion_mode::e_kinematic_physical:  return "kinematic";
+        default:                                                return "static";
+    }
+}
+
+[[nodiscard]] auto physics_motion_mode_from_string(const std::string& name, erhe::physics::Motion_mode fallback) -> erhe::physics::Motion_mode
+{
+    if (name == "dynamic")   { return erhe::physics::Motion_mode::e_dynamic; }
+    if (name == "kinematic") { return erhe::physics::Motion_mode::e_kinematic_physical; }
+    if (name == "static")    { return erhe::physics::Motion_mode::e_static; }
+    return fallback;
+}
+
+}
 
 Geometry_output_node::Geometry_output_node(App_context& context)
     : Geometry_graph_node{"Output"}
@@ -44,11 +74,63 @@ void Geometry_output_node::on_removed_from_graph()
 
 void Geometry_output_node::remove_scene_node()
 {
+    remove_node_physics();
     if (m_node) {
         m_node->set_parent({});
     }
     m_node.reset();
     m_mesh.reset();
+}
+
+void Geometry_output_node::remove_node_physics()
+{
+    if (m_node_physics && m_node) {
+        m_node->detach(m_node_physics.get());
+    }
+    m_node_physics.reset();
+}
+
+void Geometry_output_node::update_node_physics(const std::shared_ptr<erhe::geometry::Geometry>& render_geometry)
+{
+    if (!m_physics_enabled || !m_node || !render_geometry) {
+        remove_node_physics();
+        return;
+    }
+
+    GEO::Mesh convex_hull{};
+    const bool convex_hull_ok = erhe::geometry::make_convex_hull(render_geometry->get_mesh(), convex_hull);
+    if (!convex_hull_ok) {
+        log_graph_editor->warn("Geometry_output_node: failed to build convex hull collision shape for '{}'", render_geometry->get_name());
+        remove_node_physics();
+        return;
+    }
+
+    std::vector<float> coordinates;
+    coordinates.resize(3 * convex_hull.vertices.nb());
+    for (GEO::index_t vertex : convex_hull.vertices) {
+        const GEO::vec3f p = erhe::geometry::get_pointf(convex_hull.vertices, vertex);
+        coordinates[(3 * vertex) + 0] = p.x;
+        coordinates[(3 * vertex) + 1] = p.y;
+        coordinates[(3 * vertex) + 2] = p.z;
+    }
+    const std::shared_ptr<erhe::physics::ICollision_shape> collision_shape = erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
+        coordinates.data(),
+        static_cast<int>(convex_hull.vertices.nb()),
+        static_cast<int>(3 * sizeof(float))
+    );
+
+    if (!m_node_physics) {
+        const erhe::physics::IRigid_body_create_info create_info{
+            .collision_shape = collision_shape,
+            .debug_label     = m_scene_node_name,
+            .motion_mode     = m_physics_motion_mode
+        };
+        m_node_physics = std::make_shared<Node_physics>(create_info);
+        m_node->attach(m_node_physics);
+    } else {
+        m_node_physics->set_collision_shape(collision_shape);
+        m_node_physics->set_motion_mode(m_physics_motion_mode);
+    }
 }
 
 void Geometry_output_node::apply_scene_node_name()
@@ -77,6 +159,7 @@ void Geometry_output_node::evaluate(Geometry_graph&)
         if (m_mesh) {
             std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
             m_mesh->clear_primitives();
+            remove_node_physics();
         }
         return;
     }
@@ -142,6 +225,7 @@ void Geometry_output_node::evaluate(Geometry_graph&)
     }
     m_mesh->clear_primitives();
     m_mesh->add_primitive(primitive, m_material);
+    update_node_physics(render_geometry);
 }
 
 void Geometry_output_node::imgui()
@@ -198,6 +282,24 @@ void Geometry_output_node::imgui()
         }
     }
 
+    // Optional physics: convex hull collision shape + rigid body
+    if (ImGui::Checkbox("Physics", &m_physics_enabled)) {
+        mark_dirty();
+    }
+    if (m_physics_enabled) {
+        ImGui::SameLine();
+        int motion_index =
+            (m_physics_motion_mode == erhe::physics::Motion_mode::e_dynamic            ) ? 2 :
+            (m_physics_motion_mode == erhe::physics::Motion_mode::e_kinematic_physical ) ? 1 : 0;
+        if (imgui_enum_stepper("physics_motion", motion_index, c_physics_motion_names, 3)) {
+            m_physics_motion_mode =
+                (motion_index == 2) ? erhe::physics::Motion_mode::e_dynamic :
+                (motion_index == 1) ? erhe::physics::Motion_mode::e_kinematic_physical :
+                                      erhe::physics::Motion_mode::e_static;
+            mark_dirty();
+        }
+    }
+
     const std::shared_ptr<erhe::geometry::Geometry> geometry = get_input(0).get_geometry();
     if (geometry) {
         const GEO::Mesh& mesh = geometry->get_mesh();
@@ -216,6 +318,8 @@ void Geometry_output_node::write_parameters(nlohmann::json& out) const
     if (m_material) {
         out["material"] = m_material->get_name();
     }
+    out["physics"] = m_physics_enabled;
+    out["physics_motion"] = physics_motion_mode_to_string(m_physics_motion_mode);
 }
 
 void Geometry_output_node::read_parameters(const nlohmann::json& in)
@@ -253,6 +357,8 @@ void Geometry_output_node::read_parameters(const nlohmann::json& in)
             }
         }
     }
+    m_physics_enabled = in.value("physics", m_physics_enabled);
+    m_physics_motion_mode = physics_motion_mode_from_string(in.value("physics_motion", ""), m_physics_motion_mode);
     mark_dirty();
 }
 
