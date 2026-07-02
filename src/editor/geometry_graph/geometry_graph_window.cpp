@@ -4,11 +4,20 @@
 
 #include "geometry_graph/geometry_graph_window.hpp"
 #include "geometry_graph/geometry_graph_node.hpp"
+#include "geometry_graph/nodes/conway_node.hpp"
+#include "geometry_graph/nodes/geometry_unary_operation_node.hpp"
 #include "geometry_graph/nodes/mesh_box_node.hpp"
 #include "geometry_graph/nodes/mesh_cone_node.hpp"
 #include "geometry_graph/nodes/mesh_disc_node.hpp"
 #include "geometry_graph/nodes/mesh_sphere_node.hpp"
 #include "geometry_graph/nodes/mesh_torus_node.hpp"
+#include "geometry_graph/nodes/subdivide_node.hpp"
+#include "geometry_graph/nodes/transform_node.hpp"
+
+#include "erhe_geometry/operation/normalize.hpp"
+#include "erhe_geometry/operation/repair.hpp"
+#include "erhe_geometry/operation/reverse.hpp"
+#include "erhe_geometry/operation/triangulate.hpp"
 
 #include "app_context.hpp"
 #include "tools/selection_tool.hpp"
@@ -60,6 +69,14 @@ void Geometry_graph_window::node_toolbar()
     ImGui::SameLine(); if (ImGui::Button("Torus"))  { add_node(std::make_shared<Mesh_torus_node >()); }
     ImGui::SameLine(); if (ImGui::Button("Cone"))   { add_node(std::make_shared<Mesh_cone_node  >()); }
     ImGui::SameLine(); if (ImGui::Button("Disc"))   { add_node(std::make_shared<Mesh_disc_node  >()); }
+
+                       if (ImGui::Button("Subdivide"))   { add_node(std::make_shared<Subdivide_node>()); }
+    ImGui::SameLine(); if (ImGui::Button("Conway"))      { add_node(std::make_shared<Conway_node   >()); }
+    ImGui::SameLine(); if (ImGui::Button("Transform"))   { add_node(std::make_shared<Transform_node>()); }
+    ImGui::SameLine(); if (ImGui::Button("Triangulate")) { add_node(std::make_shared<Geometry_unary_operation_node>("Triangulate", &erhe::geometry::operation::triangulate)); }
+    ImGui::SameLine(); if (ImGui::Button("Normalize"))   { add_node(std::make_shared<Geometry_unary_operation_node>("Normalize",   &erhe::geometry::operation::normalize)); }
+    ImGui::SameLine(); if (ImGui::Button("Reverse"))     { add_node(std::make_shared<Geometry_unary_operation_node>("Reverse",     &erhe::geometry::operation::reverse)); }
+    ImGui::SameLine(); if (ImGui::Button("Repair"))      { add_node(std::make_shared<Geometry_unary_operation_node>("Repair",      &erhe::geometry::operation::repair)); }
 }
 
 void Geometry_graph_window::imgui()

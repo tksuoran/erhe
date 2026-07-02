@@ -181,6 +181,10 @@ erhe_target_sources_grouped(
     geometry_graph/geometry_graph_window.hpp
     geometry_graph/geometry_payload.cpp
     geometry_graph/geometry_payload.hpp
+    geometry_graph/nodes/conway_node.cpp
+    geometry_graph/nodes/conway_node.hpp
+    geometry_graph/nodes/geometry_unary_operation_node.cpp
+    geometry_graph/nodes/geometry_unary_operation_node.hpp
     geometry_graph/nodes/mesh_box_node.cpp
     geometry_graph/nodes/mesh_box_node.hpp
     geometry_graph/nodes/mesh_cone_node.cpp
@@ -191,6 +195,10 @@ erhe_target_sources_grouped(
     geometry_graph/nodes/mesh_sphere_node.hpp
     geometry_graph/nodes/mesh_torus_node.cpp
     geometry_graph/nodes/mesh_torus_node.hpp
+    geometry_graph/nodes/subdivide_node.cpp
+    geometry_graph/nodes/subdivide_node.hpp
+    geometry_graph/nodes/transform_node.cpp
+    geometry_graph/nodes/transform_node.hpp
     graph/add.cpp
     graph/add.hpp
     graph/constant.cpp
