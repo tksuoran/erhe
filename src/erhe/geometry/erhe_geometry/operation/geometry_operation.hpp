@@ -226,10 +226,11 @@ protected:
     // is quadratic: Geogram's MeshSubElementsStore::create_sub_elements()
     // computes its capacity growth from the store SIZE instead of the
     // store capacity, so once the size passes a power of two every
-    // per-element create reallocates every attribute store (also in
-    // upstream geogram main as of 2026-07). Operations that know their
-    // counts should create all elements with one create_vertices(n) /
-    // create_quads(n) / ... call and register them through these.
+    // per-element create reallocates every attribute store (upstream
+    // report: https://github.com/BrunoLevy/geogram/issues/371).
+    // Operations that know their counts should create all elements with
+    // one create_vertices(n) / create_quads(n) / ... call and register
+    // them through these.
     void map_dst_vertex_from_src_vertex        (GEO::index_t dst_vertex, float vertex_weight, GEO::index_t src_vertex);
     void map_dst_vertex_from_src_facet_centroid(GEO::index_t dst_vertex, GEO::index_t src_facet);
     void map_dst_facet_from_src_facet          (GEO::index_t dst_facet, GEO::index_t src_facet);

@@ -46,7 +46,7 @@ The `editor.watchdog` breadcrumb ring localized the 2026-07-02 CC hang only appr
 
 ### 9. Batch element creation in remaining Geometry_operations (Medium effort, Medium impact)
 
-Geogram's `MeshSubElementsStore::create_sub_elements()` computes capacity growth from store SIZE, not capacity (bug also in upstream geogram main 2026-07), so per-element `create_vertices(1)` / `create_polygon()` is O(n) each and any operation using the one-at-a-time `make_new_dst_*` helpers is O(n^2) on large meshes. Catmull-Clark was converted to batch creation (8e52a1b9, `map_dst_*` helpers); the conway operations (ambo, kis, gyro, meta, truncate, chamfer, dual, subdivide) and others still create per element. Convert them via the same pattern; alternatively fix the growth policy in a geogram fork (needs a user-provided fork repo per CLAUDE.md).
+Geogram's `MeshSubElementsStore::create_sub_elements()` computes capacity growth from store SIZE, not capacity (reported upstream: https://github.com/BrunoLevy/geogram/issues/371), so per-element `create_vertices(1)` / `create_polygon()` is O(n) each and any operation using the one-at-a-time `make_new_dst_*` helpers is O(n^2) on large meshes. Catmull-Clark was converted to batch creation (8e52a1b9, `map_dst_*` helpers); the conway operations (ambo, kis, gyro, meta, truncate, chamfer, dual, subdivide) and others still create per element. Convert them via the same pattern; alternatively pick up the upstream fix once the issue is resolved, or fix the growth policy in a geogram fork meanwhile (needs a user-provided fork repo per CLAUDE.md).
 
 ## Past work
 
