@@ -153,7 +153,11 @@ void Sqrt3_subdivision::build(const Post_processing post_processing_level)
     }
 #endif
 
-    post_processing(post_process_flags(post_processing_level));
+    // regeneration_flags is always the full default set: with structural_only
+    // the caller (an iterated chain) has declared the regenerated-class
+    // channels throwaway - the chain's final full post-processing re-derives
+    // them from positions - so their interpolation is skipped as well.
+    post_processing(post_process_flags(post_processing_level), default_post_process_flags);
 }
 
 void sqrt3_subdivision(const Geometry& source, Geometry& destination, const std::set<GEO::index_t>* selected_facets, Component_remap* remap, const Post_processing post_processing_level)

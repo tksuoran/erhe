@@ -400,12 +400,20 @@ void Geometry_operation::add_edge_source(const GEO::index_t dst_edge, const floa
     m_dst_edge_sources.add(dst_edge, edge_weight, src_edge);
 }
 
-void Geometry_operation::interpolate_mesh_attributes()
+void Geometry_operation::interpolate_mesh_attributes(const uint64_t regeneration_flags)
 {
     m_dst_vertex_sources.resize(destination_mesh.vertices.nb());
     m_dst_facet_sources .resize(destination_mesh.facets.nb());
     m_dst_corner_sources.resize(destination_mesh.facet_corners.nb());
     m_dst_edge_sources  .resize(destination_mesh.edges.nb());
+
+    // Channels that will be regenerated from positions + topology before the
+    // result is consumed (see post_processing()); interpolating them would be
+    // wasted work, the regeneration overwrites every element.
+    const bool skip_smooth_vertex_normals =
+        (regeneration_flags & erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals) != 0;
+    const bool skip_facet_texture_coordinates =
+        (regeneration_flags & erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates) != 0;
 
     const Mesh_attributes& s = source.get_attributes();
     Mesh_attributes&       d = destination.get_attributes();
@@ -439,7 +447,9 @@ void Geometry_operation::interpolate_mesh_attributes()
     interpolate_attribute<GEO::vec4f>(s.facet_color_1,          d.facet_color_1,          m_dst_facet_sources.data());
     interpolate_attribute<GEO::vec2f>(s.facet_aniso_control,    d.facet_aniso_control,    m_dst_facet_sources.data());
     interpolate_attribute<GEO::vec3f>(s.vertex_normal,          d.vertex_normal,          m_dst_vertex_sources.data());
-    interpolate_attribute<GEO::vec3f>(s.vertex_normal_smooth,   d.vertex_normal_smooth,   m_dst_vertex_sources.data());
+    if (!skip_smooth_vertex_normals) {
+        interpolate_attribute<GEO::vec3f>(s.vertex_normal_smooth, d.vertex_normal_smooth, m_dst_vertex_sources.data());
+    }
     interpolate_attribute<GEO::vec2f>(s.vertex_texcoord_0,      d.vertex_texcoord_0,      m_dst_vertex_sources.data());
     interpolate_attribute<GEO::vec2f>(s.vertex_texcoord_1,      d.vertex_texcoord_1,      m_dst_vertex_sources.data());
     interpolate_attribute<GEO::vec4f>(s.vertex_tangent,         d.vertex_tangent,         m_dst_vertex_sources.data());
@@ -453,7 +463,11 @@ void Geometry_operation::interpolate_mesh_attributes()
     interpolate_attribute<GEO::vec2f>(s.vertex_aniso_control,   d.vertex_aniso_control,   m_dst_vertex_sources.data());
     interpolate_attribute<GEO::vec3f>(s.corner_normal,          d.corner_normal,          m_dst_corner_sources.data());
     interpolate_attribute<GEO::vec2f>(s.corner_texcoord_0,      d.corner_texcoord_0,      m_dst_corner_sources.data());
-    interpolate_attribute<GEO::vec2f>(s.corner_texcoord_1,      d.corner_texcoord_1,      m_dst_corner_sources.data());
+    if (!skip_facet_texture_coordinates) {
+        // corner_texcoord_1 is the slot process_flag_generate_facet_texture_coordinates
+        // writes (Geometry_process_parameters::facet_texcoord_usage_index default).
+        interpolate_attribute<GEO::vec2f>(s.corner_texcoord_1,  d.corner_texcoord_1,      m_dst_corner_sources.data());
+    }
     interpolate_attribute<GEO::vec4f>(s.corner_tangent,         d.corner_tangent,         m_dst_corner_sources.data());
     interpolate_attribute<GEO::vec3f>(s.corner_bitangent,       d.corner_bitangent,       m_dst_corner_sources.data());
     interpolate_attribute<GEO::vec4f>(s.corner_color_0,         d.corner_color_0,         m_dst_corner_sources.data());
@@ -671,9 +685,14 @@ auto Geometry_operation::post_process_flags(const Post_processing post_processin
 
 void Geometry_operation::post_processing(const uint64_t process_flags)
 {
+    post_processing(process_flags, process_flags);
+}
+
+void Geometry_operation::post_processing(const uint64_t process_flags, const uint64_t regeneration_flags)
+{
     {
         Scoped_phase_timer phase_timer{"interpolate"};
-        interpolate_mesh_attributes();
+        interpolate_mesh_attributes(regeneration_flags);
     }
 
     {

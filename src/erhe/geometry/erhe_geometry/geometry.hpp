@@ -513,6 +513,21 @@ inline void interpolate_attribute(
         return;
     }
 
+    // Skip channels with no present source values: the per-destination pass
+    // below could only ever hit sum_weights == 0 and write nothing. Most
+    // channels of a typical mesh (colors, joint weights, second texcoord
+    // set, tangents) are empty, so this removes most of the ~24 passes.
+    {
+        const GEO::index_t source_size = static_cast<GEO::index_t>(source_present.size());
+        GEO::index_t first_present = 0;
+        while ((first_present < source_size) && !source_present[first_present]) {
+            ++first_present;
+        }
+        if (first_present == source_size) {
+            return;
+        }
+    }
+
     for (GEO::index_t dst_key = 0, end = static_cast<GEO::index_t>(key_dst_to_src.size()); dst_key < end; ++dst_key) {
         const std::vector<std::pair<float, GEO::index_t>>& src_keys = key_dst_to_src[dst_key];
         float sum_weights{0.0f};
