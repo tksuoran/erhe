@@ -27,6 +27,7 @@ scripts/mcp_call.py::committed{b64-args+--list+token+port;tested-offline+live}
 CLAUDE.md::+cli-ninja-builds+headless-build-cmd+Testing-section{ERHE_BUILD_TESTS,erhe_<name>_tests,configure_tests_asan.bat}+clangd-false-positives+imgui-ini-restore+mcp_call.py-usage
 erhe-renderdoc-skill::"already-wired"→"verify-first"{.mcp.json-was-absent}
 .mcp.json::recreated{renderdoc-proxy;gitignored}
+CLAUDE.md-slimmed::macOS+Quest-sections→skills{2c7a129e+70216207;new-erhe-macos-xcode;cpp-debugging+quest-launch-now-self-contained;CLAUDE.md-keeps-pointers+invariants{headset-protocol,display-constraint,self-serve-launch}}
 
 [TASK::#239-per-scene-settings]{parked}
 ?PENDING::viewport+post_processing{init-consumed¬applied→needs-per-scene-refactor}+clear_color{editor-global-never-read→decide-wire||drop}+sky/grid-override-visual-verify{needs-runtime-override-setter-MCP-tool}
