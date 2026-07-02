@@ -418,14 +418,29 @@ void Geometry_operation::interpolate_mesh_attributes(const uint64_t regeneration
     const Mesh_attributes& s = source.get_attributes();
     Mesh_attributes&       d = destination.get_attributes();
 
+    // Per-destination-element weight sums, computed once per Source_table
+    // (positions plus every fully-present channel share them) instead of
+    // once per channel. Same additions in the same order as the per-channel
+    // loops they replace, so the sums are bit-identical.
+    const auto compute_sum_weights = [](Source_table& table, std::vector<float>& sums) {
+        const std::vector<std::vector<std::pair<float, GEO::index_t>>>& entries = table.data();
+        sums.clear();
+        sums.resize(entries.size(), 0.0f);
+        for (std::size_t i = 0, end = entries.size(); i < end; ++i) {
+            float sum_weights{0.0f};
+            for (const std::pair<float, GEO::index_t>& entry : entries[i]) {
+                sum_weights += entry.first;
+            }
+            sums[i] = sum_weights;
+        }
+    };
+    compute_sum_weights(m_dst_vertex_sources, m_dst_vertex_sum_weights);
+    compute_sum_weights(m_dst_corner_sources, m_dst_corner_sum_weights);
+    compute_sum_weights(m_dst_facet_sources,  m_dst_facet_sum_weights);
+
     for (GEO::index_t vertex : destination_mesh.vertices) {
         const std::vector<std::pair<float, GEO::index_t>>& src_keys = m_dst_vertex_sources.get(vertex);
-        float sum_weights{0.0f};
-        for (auto j : src_keys) {
-            //const GEO::index_t src_key = j.second;
-            sum_weights += j.first;
-        }
-
+        const float sum_weights = m_dst_vertex_sum_weights[vertex];
         if (sum_weights == 0.0f) {
             continue;
         }
@@ -443,36 +458,36 @@ void Geometry_operation::interpolate_mesh_attributes(const uint64_t regeneration
     }
 
     // Recompute facet_id, facet_centroid, facet_normal
-    interpolate_attribute<GEO::vec4f>(s.facet_color_0,          d.facet_color_0,          m_dst_facet_sources.data());
-    interpolate_attribute<GEO::vec4f>(s.facet_color_1,          d.facet_color_1,          m_dst_facet_sources.data());
-    interpolate_attribute<GEO::vec2f>(s.facet_aniso_control,    d.facet_aniso_control,    m_dst_facet_sources.data());
-    interpolate_attribute<GEO::vec3f>(s.vertex_normal,          d.vertex_normal,          m_dst_vertex_sources.data());
+    interpolate_attribute<GEO::vec4f>(s.facet_color_0,          d.facet_color_0,          m_dst_facet_sources.data(),  &m_dst_facet_sum_weights);
+    interpolate_attribute<GEO::vec4f>(s.facet_color_1,          d.facet_color_1,          m_dst_facet_sources.data(),  &m_dst_facet_sum_weights);
+    interpolate_attribute<GEO::vec2f>(s.facet_aniso_control,    d.facet_aniso_control,    m_dst_facet_sources.data(),  &m_dst_facet_sum_weights);
+    interpolate_attribute<GEO::vec3f>(s.vertex_normal,          d.vertex_normal,          m_dst_vertex_sources.data(), &m_dst_vertex_sum_weights);
     if (!skip_smooth_vertex_normals) {
-        interpolate_attribute<GEO::vec3f>(s.vertex_normal_smooth, d.vertex_normal_smooth, m_dst_vertex_sources.data());
+        interpolate_attribute<GEO::vec3f>(s.vertex_normal_smooth, d.vertex_normal_smooth, m_dst_vertex_sources.data(), &m_dst_vertex_sum_weights);
     }
-    interpolate_attribute<GEO::vec2f>(s.vertex_texcoord_0,      d.vertex_texcoord_0,      m_dst_vertex_sources.data());
-    interpolate_attribute<GEO::vec2f>(s.vertex_texcoord_1,      d.vertex_texcoord_1,      m_dst_vertex_sources.data());
-    interpolate_attribute<GEO::vec4f>(s.vertex_tangent,         d.vertex_tangent,         m_dst_vertex_sources.data());
-    interpolate_attribute<GEO::vec3f>(s.vertex_bitangent,       d.vertex_bitangent,       m_dst_vertex_sources.data());
-    interpolate_attribute<GEO::vec4f>(s.vertex_color_0,         d.vertex_color_0,         m_dst_vertex_sources.data());
-    interpolate_attribute<GEO::vec4f>(s.vertex_color_1,         d.vertex_color_1,         m_dst_vertex_sources.data());
-    interpolate_attribute<GEO::vec4f>(s.vertex_joint_weights_0, d.vertex_joint_weights_0, m_dst_vertex_sources.data());
-    interpolate_attribute<GEO::vec4f>(s.vertex_joint_weights_1, d.vertex_joint_weights_1, m_dst_vertex_sources.data());
-    interpolate_attribute<GEO::vec4u>(s.vertex_joint_indices_0, d.vertex_joint_indices_0, m_dst_vertex_sources.data());
-    interpolate_attribute<GEO::vec4u>(s.vertex_joint_indices_1, d.vertex_joint_indices_1, m_dst_vertex_sources.data());
-    interpolate_attribute<GEO::vec2f>(s.vertex_aniso_control,   d.vertex_aniso_control,   m_dst_vertex_sources.data());
-    interpolate_attribute<GEO::vec3f>(s.corner_normal,          d.corner_normal,          m_dst_corner_sources.data());
-    interpolate_attribute<GEO::vec2f>(s.corner_texcoord_0,      d.corner_texcoord_0,      m_dst_corner_sources.data());
+    interpolate_attribute<GEO::vec2f>(s.vertex_texcoord_0,      d.vertex_texcoord_0,      m_dst_vertex_sources.data(), &m_dst_vertex_sum_weights);
+    interpolate_attribute<GEO::vec2f>(s.vertex_texcoord_1,      d.vertex_texcoord_1,      m_dst_vertex_sources.data(), &m_dst_vertex_sum_weights);
+    interpolate_attribute<GEO::vec4f>(s.vertex_tangent,         d.vertex_tangent,         m_dst_vertex_sources.data(), &m_dst_vertex_sum_weights);
+    interpolate_attribute<GEO::vec3f>(s.vertex_bitangent,       d.vertex_bitangent,       m_dst_vertex_sources.data(), &m_dst_vertex_sum_weights);
+    interpolate_attribute<GEO::vec4f>(s.vertex_color_0,         d.vertex_color_0,         m_dst_vertex_sources.data(), &m_dst_vertex_sum_weights);
+    interpolate_attribute<GEO::vec4f>(s.vertex_color_1,         d.vertex_color_1,         m_dst_vertex_sources.data(), &m_dst_vertex_sum_weights);
+    interpolate_attribute<GEO::vec4f>(s.vertex_joint_weights_0, d.vertex_joint_weights_0, m_dst_vertex_sources.data(), &m_dst_vertex_sum_weights);
+    interpolate_attribute<GEO::vec4f>(s.vertex_joint_weights_1, d.vertex_joint_weights_1, m_dst_vertex_sources.data(), &m_dst_vertex_sum_weights);
+    interpolate_attribute<GEO::vec4u>(s.vertex_joint_indices_0, d.vertex_joint_indices_0, m_dst_vertex_sources.data(), &m_dst_vertex_sum_weights);
+    interpolate_attribute<GEO::vec4u>(s.vertex_joint_indices_1, d.vertex_joint_indices_1, m_dst_vertex_sources.data(), &m_dst_vertex_sum_weights);
+    interpolate_attribute<GEO::vec2f>(s.vertex_aniso_control,   d.vertex_aniso_control,   m_dst_vertex_sources.data(), &m_dst_vertex_sum_weights);
+    interpolate_attribute<GEO::vec3f>(s.corner_normal,          d.corner_normal,          m_dst_corner_sources.data(), &m_dst_corner_sum_weights);
+    interpolate_attribute<GEO::vec2f>(s.corner_texcoord_0,      d.corner_texcoord_0,      m_dst_corner_sources.data(), &m_dst_corner_sum_weights);
     if (!skip_facet_texture_coordinates) {
         // corner_texcoord_1 is the slot process_flag_generate_facet_texture_coordinates
         // writes (Geometry_process_parameters::facet_texcoord_usage_index default).
-        interpolate_attribute<GEO::vec2f>(s.corner_texcoord_1,  d.corner_texcoord_1,      m_dst_corner_sources.data());
+        interpolate_attribute<GEO::vec2f>(s.corner_texcoord_1,  d.corner_texcoord_1,      m_dst_corner_sources.data(), &m_dst_corner_sum_weights);
     }
-    interpolate_attribute<GEO::vec4f>(s.corner_tangent,         d.corner_tangent,         m_dst_corner_sources.data());
-    interpolate_attribute<GEO::vec3f>(s.corner_bitangent,       d.corner_bitangent,       m_dst_corner_sources.data());
-    interpolate_attribute<GEO::vec4f>(s.corner_color_0,         d.corner_color_0,         m_dst_corner_sources.data());
-    interpolate_attribute<GEO::vec4f>(s.corner_color_1,         d.corner_color_1,         m_dst_corner_sources.data());
-    interpolate_attribute<GEO::vec2f>(s.corner_aniso_control,   d.corner_aniso_control,   m_dst_corner_sources.data());
+    interpolate_attribute<GEO::vec4f>(s.corner_tangent,         d.corner_tangent,         m_dst_corner_sources.data(), &m_dst_corner_sum_weights);
+    interpolate_attribute<GEO::vec3f>(s.corner_bitangent,       d.corner_bitangent,       m_dst_corner_sources.data(), &m_dst_corner_sum_weights);
+    interpolate_attribute<GEO::vec4f>(s.corner_color_0,         d.corner_color_0,         m_dst_corner_sources.data(), &m_dst_corner_sum_weights);
+    interpolate_attribute<GEO::vec4f>(s.corner_color_1,         d.corner_color_1,         m_dst_corner_sources.data(), &m_dst_corner_sum_weights);
+    interpolate_attribute<GEO::vec2f>(s.corner_aniso_control,   d.corner_aniso_control,   m_dst_corner_sources.data(), &m_dst_corner_sum_weights);
 
     // TODO edge attributes
 }

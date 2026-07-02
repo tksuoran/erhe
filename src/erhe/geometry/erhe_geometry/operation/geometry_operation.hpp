@@ -186,6 +186,14 @@ protected:
     Source_table                      m_dst_facet_sources;
     Source_table                      m_dst_edge_sources;
 
+    // Per-destination-element weight sums, computed once per Source_table by
+    // interpolate_mesh_attributes() instead of once per channel; channels
+    // whose source presence is complete use them directly (see
+    // interpolate_attribute()).
+    std::vector<float>                m_dst_vertex_sum_weights;
+    std::vector<float>                m_dst_corner_sum_weights;
+    std::vector<float>                m_dst_facet_sum_weights;
+
     std::unordered_map<
         std::pair<GEO::index_t, GEO::index_t>,
         std::vector<GEO::index_t>,

@@ -500,8 +500,9 @@ template <typename T>
 inline void interpolate_attribute(
     const Attribute_present<T>&                                     source_,
     Attribute_present<T>&                                           destination_,
-    const std::vector<std::vector<std::pair<float, GEO::index_t>>>& key_dst_to_src
-) 
+    const std::vector<std::vector<std::pair<float, GEO::index_t>>>& key_dst_to_src,
+    const std::vector<float>*                                       precomputed_sum_weights = nullptr
+)
 {
     const GEO::Attribute<T>&    source              = source_.attribute;
     const GEO::Attribute<bool>& source_present      = source_.present;
@@ -513,30 +514,42 @@ inline void interpolate_attribute(
         return;
     }
 
-    // Skip channels with no present source values: the per-destination pass
-    // below could only ever hit sum_weights == 0 and write nothing. Most
-    // channels of a typical mesh (colors, joint weights, second texcoord
-    // set, tangents) are empty, so this removes most of the ~24 passes.
+    // One pass over source presence classifies the channel: a channel with
+    // no present values is skipped outright (the per-destination pass below
+    // could only ever hit sum_weights == 0 and write nothing - most channels
+    // of a typical mesh are empty); a fully present channel can use the
+    // caller's precomputed per-destination weight sums and skip the
+    // per-source presence checks, because presence-filtered sums equal the
+    // full sums exactly (same additions in the same order, bit-identical).
+    bool fully_present = true;
     {
-        const GEO::index_t source_size = static_cast<GEO::index_t>(source_present.size());
-        GEO::index_t first_present = 0;
-        while ((first_present < source_size) && !source_present[first_present]) {
-            ++first_present;
+        const GEO::index_t source_size   = static_cast<GEO::index_t>(source_present.size());
+        GEO::index_t       present_count = 0;
+        for (GEO::index_t key = 0; key < source_size; ++key) {
+            if (source_present[key]) {
+                ++present_count;
+            }
         }
-        if (first_present == source_size) {
+        if (present_count == 0) {
             return;
         }
+        fully_present = (present_count == source_size);
     }
+    const bool use_precomputed_sums = fully_present && (precomputed_sum_weights != nullptr);
 
     for (GEO::index_t dst_key = 0, end = static_cast<GEO::index_t>(key_dst_to_src.size()); dst_key < end; ++dst_key) {
         const std::vector<std::pair<float, GEO::index_t>>& src_keys = key_dst_to_src[dst_key];
         float sum_weights{0.0f};
-        for (auto j : src_keys) {
-            const GEO::index_t src_key = j.second;
-            if (!source_present[src_key]) {
-                continue;
+        if (use_precomputed_sums) {
+            sum_weights = (*precomputed_sum_weights)[dst_key];
+        } else {
+            for (auto j : src_keys) {
+                const GEO::index_t src_key = j.second;
+                if (!source_present[src_key]) {
+                    continue;
+                }
+                sum_weights += j.first;
             }
-            sum_weights += j.first;
         }
 
         if (sum_weights == 0.0f) {
@@ -552,7 +565,7 @@ inline void interpolate_attribute(
         if constexpr (!std::is_same_v<T, GEO::vec4u>) { // std::is_same_v<T::value_type, Numeric::uint32> ?
             for (auto j : src_keys) {
                 const GEO::index_t src_key = j.second;
-                if (!source_present[src_key]) {
+                if (!use_precomputed_sums && !source_present[src_key]) {
                     continue;
                 }
 
