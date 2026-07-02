@@ -5,7 +5,10 @@ Drives the in-editor MCP server (headless build) through the full
 geometry nodes feature: every node type, parameter sweeps with undo/redo,
 incremental evaluation proof (trace log), multi-link join, structural
 churn with deep undo/redo, serialization round-trip, output node edge
-cases, and stress chains. Prints a structured PASS/FAIL report.
+cases, multi-link partial disconnects, invalid connect rejection
+(type mismatch, self links, cycles), error-path serialization (malformed
+files, bad group assets), out-of-range parameter abuse, output physics
+edge cases, and stress chains. Prints a structured PASS/FAIL report.
 """
 
 import json
@@ -104,6 +107,23 @@ def connect(src, sslot, dst, dslot):
         "source_node_id": src, "source_slot": sslot, "sink_node_id": dst, "sink_slot": dslot})
 
 
+# A rejected call returns an MCP error immediately (rejection happens
+# before evaluation, so re-issuing on a busy server is harmless).
+# Returns the error text, or None when the call unexpectedly succeeded.
+# Busy errors are retried, not reported as the expected rejection.
+def call_expect_error(tool, args=None):
+    try:
+        call(tool, args)
+        return None
+    except RuntimeError as error:
+        return str(error)
+
+
+def connect_expect_error(src, sslot, dst, dslot):
+    return call_expect_error("geometry_graph_connect", {
+        "source_node_id": src, "source_slot": sslot, "sink_node_id": dst, "sink_slot": dslot})
+
+
 def disconnect(src, sslot, dst, dslot):
     return mutate("geometry_graph_disconnect", {
         "source_node_id": src, "source_slot": sslot, "sink_node_id": dst, "sink_slot": dslot})
@@ -151,6 +171,11 @@ def undo(n=1):
 def redo(n=1):
     for _ in range(n):
         mutate("redo")
+
+
+def undo_depth():
+    stack = call("get_undo_redo_stack")
+    return len(stack.get("undo", []))
 
 
 def scene_nodes():
@@ -320,6 +345,8 @@ def section_every_node_type():
     set_param(group, {"path": "res/editor/graphs/smoke_group.json"})
     g = geometry_counts(group)
     check(S, "group applies asset subgraph (CC on 26/24 box = 98/96)", g == (98, 96), f"counts={g}")
+
+    call("capture_screenshot", {"path": "logs/smoke_nodes.png"})
 
 
 def section_parameter_sweeps():
@@ -729,6 +756,427 @@ def section_output_edge_cases():
     connect(box, 0, out1, 0)
 
 
+def section_multilink_partial_disconnect():
+    """Disconnect ONE link of a multi-link pin; the merged output must
+    shrink by exactly that input's contribution, with undo/redo."""
+    S = "multilink"
+
+    # Join with 3 inputs.
+    clear_graph()
+    box = add_node("box")["id"]
+    sphere = add_node("sphere")["id"]
+    torus = add_node("torus")["id"]
+    join = add_node("join")["id"]
+    output = add_node("output")["id"]
+    for node_id in (box, sphere, torus):
+        connect(node_id, 0, join, 0)
+    connect(join, 0, output, 0)
+    box_counts = geometry_counts(box)
+    sphere_counts = geometry_counts(sphere)
+    torus_counts = geometry_counts(torus)
+    full = (box_counts[0] + sphere_counts[0] + torus_counts[0],
+            box_counts[1] + sphere_counts[1] + torus_counts[1])
+    check(S, "join (3 inputs) merges all", geometry_counts(join) == full, f"join={geometry_counts(join)} expected={full}")
+    disconnect(sphere, 0, join, 0)
+    partial = (full[0] - sphere_counts[0], full[1] - sphere_counts[1])
+    check(S, "disconnecting one join input shrinks by exactly that primitive",
+          geometry_counts(join) == partial, f"join={geometry_counts(join)} expected={partial}")
+    undo(1)
+    check(S, "undo restores merged counts", geometry_counts(join) == full, f"join={geometry_counts(join)}")
+    redo(1)
+    check(S, "redo shrinks again", geometry_counts(join) == partial, f"join={geometry_counts(join)}")
+
+    # Instance points pin: two distribute nodes into one instance node.
+    clear_graph()
+    sphere = add_node("sphere")["id"]
+    dist_a = add_node("distribute")["id"]
+    dist_b = add_node("distribute")["id"]
+    box = add_node("box")["id"]
+    inst = add_node("instance")["id"]
+    real = add_node("realize")["id"]
+    output = add_node("output")["id"]
+    connect(sphere, 0, dist_a, 0)
+    connect(sphere, 0, dist_b, 0)
+    set_param(dist_a, {"count": 20, "seed": 1})
+    set_param(dist_b, {"count": 30, "seed": 2})
+    connect(dist_a, 0, inst, 0)
+    connect(dist_b, 0, inst, 0)
+    connect(box, 0, inst, 1)
+    connect(inst, 0, real, 0)
+    connect(real, 0, output, 0)
+    check(S, "instance points pin accumulates two distributes (20+30)",
+          out_payload(inst).get("instance_count") == 50, f"inst={out_payload(inst)}")
+    disconnect(dist_b, 0, inst, 0)
+    check(S, "disconnecting one distribute shrinks instances to 20",
+          out_payload(inst).get("instance_count") == 20, f"inst={out_payload(inst)}")
+    undo(1)
+    check(S, "undo restores 50 instances", out_payload(inst).get("instance_count") == 50, f"inst={out_payload(inst)}")
+
+    # Realize instances pin: two instance nodes into one realize.
+    clear_graph()
+    sphere = add_node("sphere")["id"]
+    dist_a = add_node("distribute")["id"]
+    dist_b = add_node("distribute")["id"]
+    box = add_node("box")["id"]
+    inst_a = add_node("instance")["id"]
+    inst_b = add_node("instance")["id"]
+    real = add_node("realize")["id"]
+    output = add_node("output")["id"]
+    connect(sphere, 0, dist_a, 0)
+    connect(sphere, 0, dist_b, 0)
+    set_param(dist_a, {"count": 20, "seed": 1})
+    set_param(dist_b, {"count": 30, "seed": 2})
+    connect(dist_a, 0, inst_a, 0)
+    connect(dist_b, 0, inst_b, 0)
+    connect(box, 0, inst_a, 1)
+    connect(box, 0, inst_b, 1)
+    connect(inst_a, 0, real, 0)
+    connect(inst_b, 0, real, 0)
+    connect(real, 0, output, 0)
+    check(S, "realize pin accumulates two instance nodes (50 boxes)",
+          geometry_counts(real) == (50 * 26, 50 * 24), f"real={geometry_counts(real)}")
+    disconnect(inst_b, 0, real, 0)
+    check(S, "disconnecting one instance node shrinks realize to 20 boxes",
+          geometry_counts(real) == (20 * 26, 20 * 24), f"real={geometry_counts(real)}")
+    undo(1)
+    check(S, "undo restores 50 realized boxes",
+          geometry_counts(real) == (50 * 26, 50 * 24), f"real={geometry_counts(real)}")
+
+
+def section_invalid_connects():
+    """Type-mismatched, self, and cycle-forming connects must be
+    rejected: MCP error, no link created, no undo stack entry, and the
+    evaluation must settle (no perpetual re-evaluation)."""
+    S = "invalid-connect"
+    clear_graph()
+    fv = add_node("float")["id"]
+    box = add_node("box")["id"]
+    sub = add_node("subdivide")["id"]
+    math_node = add_node("math")["id"]
+    tr_a = add_node("transform")["id"]
+    tr_b = add_node("transform")["id"]
+    tr_c = add_node("transform")["id"]
+    connect(box, 0, sub, 0)          # valid baseline link
+    connect(tr_a, 0, tr_b, 0)        # A -> B
+    connect(tr_b, 0, tr_c, 0)        # B -> C
+    links_before = len(get_graph()["links"])
+    depth_before = undo_depth()
+
+    error = connect_expect_error(fv, 0, sub, 0)  # float -> geometry
+    check(S, "float -> geometry input rejected", error is not None, f"error={error}")
+    error = connect_expect_error(box, 0, math_node, 0)  # geometry -> float
+    check(S, "geometry -> float input rejected", error is not None, f"error={error}")
+    error = connect_expect_error(box, 0, sub, 1)  # geometry -> int (iterations pin)
+    check(S, "geometry -> int input rejected", error is not None, f"error={error}")
+    error = connect_expect_error(sub, 0, sub, 0)  # self link
+    check(S, "self connect rejected", error is not None, f"error={error}")
+    error = connect_expect_error(tr_b, 0, tr_a, 0)  # 2-node cycle
+    check(S, "two node cycle (B -> A) rejected", error is not None, f"error={error}")
+    error = connect_expect_error(tr_c, 0, tr_a, 0)  # 3-node cycle
+    check(S, "three node cycle (C -> A) rejected", error is not None, f"error={error}")
+
+    links_after = len(get_graph()["links"])
+    check(S, "no links created by rejected connects", links_after == links_before,
+          f"before={links_before} after={links_after}")
+    check(S, "no undo entries from rejected connects", undo_depth() == depth_before,
+          f"before={depth_before} after={undo_depth()}")
+
+    # The graph must settle: no sort failures, no per-frame re-evaluation.
+    time.sleep(1.0)
+    mark = log_size()
+    time.sleep(1.5)
+    tail = log_tail(mark)
+    check(S, "evaluation settles after rejected connects",
+          ("evaluating node" not in tail) and ("not acyclic" not in tail),
+          f"tail={tail[-300:]}")
+
+
+def section_serialization_errors():
+    """Malformed graph files and bad group assets must fail gracefully:
+    MCP error, unchanged graph, no undo entries, no crash."""
+    S = "serialization-errors"
+    graphs_dir = pathlib.Path("res/editor/graphs")
+    graphs_dir.mkdir(parents=True, exist_ok=True)
+
+    clear_graph()
+    box = add_node("box")["id"]
+    output = add_node("output")["id"]
+    connect(box, 0, output, 0)
+    nodes_before = len(get_graph()["nodes"])
+    links_before = len(get_graph()["links"])
+    depth_before = undo_depth()
+
+    def expect_load_error(name, path):
+        error = call_expect_error("geometry_graph_load", {"path": path})
+        graph = get_graph()
+        check(S, name,
+              (error is not None) and (len(graph["nodes"]) == nodes_before) and (len(graph["links"]) == links_before),
+              f"error={error} nodes={len(graph['nodes'])} links={len(graph['links'])}")
+
+    expect_load_error("load nonexistent path fails, graph unchanged", "res/editor/graphs/smoke_does_not_exist.json")
+
+    (graphs_dir / "smoke_bad_json.json").write_text("this is not json {{{", encoding="utf-8")
+    expect_load_error("load non-JSON file fails, graph unchanged", "res/editor/graphs/smoke_bad_json.json")
+
+    (graphs_dir / "smoke_bad_version.json").write_text(
+        json.dumps({"version": 99, "nodes": [], "links": []}), encoding="utf-8")
+    expect_load_error("load unsupported version fails", "res/editor/graphs/smoke_bad_version.json")
+
+    (graphs_dir / "smoke_bad_type.json").write_text(
+        json.dumps({"version": 1, "nodes": [{"type": "warp_drive", "parameters": {}}], "links": []}),
+        encoding="utf-8")
+    expect_load_error("load unknown node type fails", "res/editor/graphs/smoke_bad_type.json")
+
+    (graphs_dir / "smoke_bad_link_index.json").write_text(
+        json.dumps({"version": 1, "nodes": [{"type": "box", "parameters": {}}],
+                    "links": [{"source_node": 0, "source_slot": 0, "sink_node": 5, "sink_slot": 0}]}),
+        encoding="utf-8")
+    expect_load_error("load out-of-range link node index fails", "res/editor/graphs/smoke_bad_link_index.json")
+
+    (graphs_dir / "smoke_bad_link_slot.json").write_text(
+        json.dumps({"version": 1, "nodes": [{"type": "box", "parameters": {}}, {"type": "output", "parameters": {}}],
+                    "links": [{"source_node": 0, "source_slot": 7, "sink_node": 1, "sink_slot": 0}]}),
+        encoding="utf-8")
+    expect_load_error("load out-of-range pin slot fails", "res/editor/graphs/smoke_bad_link_slot.json")
+
+    (graphs_dir / "smoke_bad_link_key.json").write_text(
+        json.dumps({"version": 1, "nodes": [{"type": "float", "parameters": {}}, {"type": "subdivide", "parameters": {}}],
+                    "links": [{"source_node": 0, "source_slot": 0, "sink_node": 1, "sink_slot": 0}]}),
+        encoding="utf-8")
+    expect_load_error("load pin key mismatch link fails", "res/editor/graphs/smoke_bad_link_key.json")
+
+    (graphs_dir / "smoke_bad_cycle.json").write_text(
+        json.dumps({"version": 1,
+                    "nodes": [{"type": "transform", "parameters": {}}, {"type": "transform", "parameters": {}}],
+                    "links": [{"source_node": 0, "source_slot": 0, "sink_node": 1, "sink_slot": 0},
+                              {"source_node": 1, "source_slot": 0, "sink_node": 0, "sink_slot": 0}]}),
+        encoding="utf-8")
+    expect_load_error("load cycle-forming links fails", "res/editor/graphs/smoke_bad_cycle.json")
+
+    error = call_expect_error("geometry_graph_save", {"path": "res/editor/graphs"})
+    check(S, "save to a directory path fails", error is not None, f"error={error}")
+    check(S, "no undo entries from failed loads/saves", undo_depth() == depth_before,
+          f"before={depth_before} after={undo_depth()}")
+
+    # Group node error paths: bad path, non-graph file, no Group Output.
+    clear_graph()
+    box = add_node("box")["id"]
+    group = add_node("group")["id"]
+    output = add_node("output")["id"]
+    connect(box, 0, group, 0)
+    connect(group, 0, output, 0)
+    set_param(group, {"path": "res/editor/graphs/smoke_does_not_exist.json"})
+    payload = out_payload(group)
+    check(S, "group with nonexistent asset evaluates to empty",
+          payload is not None and payload.get("type") == "empty", f"payload={payload}")
+    set_param(group, {"path": "res/editor/graphs/smoke_bad_json.json"})
+    payload = out_payload(group)
+    check(S, "group with non-graph asset evaluates to empty",
+          payload is not None and payload.get("type") == "empty", f"payload={payload}")
+
+    # Author an asset without a Group Output node, then reference it.
+    clear_graph()
+    gi = add_node("group_input")["id"]
+    sd = add_node("subdivide")["id"]
+    connect(gi, 0, sd, 0)
+    call("geometry_graph_save", {"path": "res/editor/graphs/smoke_group_no_output.json"})
+    clear_graph()
+    box = add_node("box")["id"]
+    group = add_node("group")["id"]
+    output = add_node("output")["id"]
+    connect(box, 0, group, 0)
+    connect(group, 0, output, 0)
+    set_param(group, {"path": "res/editor/graphs/smoke_group_no_output.json"})
+    payload = out_payload(group)
+    check(S, "group asset without Group Output evaluates to empty",
+          payload is not None and payload.get("type") == "empty", f"payload={payload}")
+
+    # Nested groups: asset A contains a group node referencing asset B.
+    clear_graph()
+    gi = add_node("group_input")["id"]
+    inner = add_node("group")["id"]
+    go = add_node("group_output")["id"]
+    connect(gi, 0, inner, 0)
+    connect(inner, 0, go, 0)
+    set_param(inner, {"path": "res/editor/graphs/smoke_group.json"})
+    call("geometry_graph_save", {"path": "res/editor/graphs/smoke_group_nested.json"})
+    clear_graph()
+    box = add_node("box")["id"]
+    group = add_node("group")["id"]
+    output = add_node("output")["id"]
+    connect(box, 0, group, 0)
+    connect(group, 0, output, 0)
+    set_param(group, {"path": "res/editor/graphs/smoke_group_nested.json"})
+    g = geometry_counts(group)
+    check(S, "nested group (A references B) applies inner subdivide", g == (98, 96), f"counts={g}")
+
+    # Self-referencing group asset: the evaluation depth guard must break
+    # the cycle (warn + empty output), not hang or crash.
+    clear_graph()
+    gi = add_node("group_input")["id"]
+    inner = add_node("group")["id"]
+    go = add_node("group_output")["id"]
+    connect(gi, 0, inner, 0)
+    connect(inner, 0, go, 0)
+    set_param(inner, {"path": "res/editor/graphs/smoke_group_self.json"})
+    call("geometry_graph_save", {"path": "res/editor/graphs/smoke_group_self.json"})
+    clear_graph()
+    box = add_node("box")["id"]
+    group = add_node("group")["id"]
+    output = add_node("output")["id"]
+    connect(box, 0, group, 0)
+    connect(group, 0, output, 0)
+    mark = log_size()
+    set_param(group, {"path": "res/editor/graphs/smoke_group_self.json"})
+    payload = out_payload(group)
+    tail = log_tail(mark)
+    check(S, "self-referencing group breaks at depth guard (warn + empty)",
+          payload is not None and payload.get("type") == "empty" and ("nesting depth exceeds" in tail),
+          f"payload={payload} warned={'nesting depth exceeds' in tail}")
+    check(S, "editor alive after group error paths", len(get_graph()["nodes"]) == 3)
+
+
+def section_parameter_abuse():
+    """Out-of-range and degenerate parameter values must clamp or behave
+    harmlessly - never crash."""
+    S = "param-abuse"
+
+    # Subdivide iterations clamp to [0, 6].
+    clear_graph()
+    box = add_node("box")["id"]
+    sub = add_node("subdivide")["id"]
+    output = add_node("output")["id"]
+    connect(box, 0, sub, 0)
+    connect(sub, 0, output, 0)
+    set_param(sub, {"iterations": -5})
+    counts = geometry_counts(sub)
+    check(S, "subdivide iterations -5 clamps to 0 (pass-through)", counts == (26, 24), f"counts={counts}")
+    set_param(sub, {"iterations": 99})
+    counts = geometry_counts(sub)
+    check(S, "subdivide iterations 99 clamps to 6", counts is not None and counts[1] == 24 * (4 ** 6),
+          f"counts={counts}")
+    set_param(sub, {"iterations": 0})
+
+    # Distribute count clamps to >= 0; empty points flow downstream.
+    clear_graph()
+    sphere = add_node("sphere")["id"]
+    dist = add_node("distribute")["id"]
+    box = add_node("box")["id"]
+    inst = add_node("instance")["id"]
+    real = add_node("realize")["id"]
+    output = add_node("output")["id"]
+    connect(sphere, 0, dist, 0)
+    connect(dist, 0, inst, 0)
+    connect(box, 0, inst, 1)
+    connect(inst, 0, real, 0)
+    connect(real, 0, output, 0)
+    set_param(dist, {"count": -10})
+    payload = out_payload(dist)
+    check(S, "distribute count -10 clamps to 0 points",
+          payload is not None and payload.get("point_count") == 0, f"payload={payload}")
+    payload = out_payload(real)
+    check(S, "realize of empty instances evaluates to empty",
+          payload is not None and payload.get("type") == "empty", f"payload={payload}")
+
+    # Instance scale 0 produces degenerate but valid geometry.
+    set_param(dist, {"count": 10})
+    set_param(inst, {"scale": 0.0})
+    counts = geometry_counts(real)
+    check(S, "instance scale 0 realizes degenerate but valid geometry",
+          counts == (10 * 26, 10 * 24), f"counts={counts}")
+
+    # Box size 0 / negative.
+    clear_graph()
+    box = add_node("box")["id"]
+    output = add_node("output")["id"]
+    connect(box, 0, output, 0)
+    set_param(box, {"size": [0.0, 0.0, 0.0]})
+    counts = geometry_counts(box)
+    check(S, "box size 0 survives (degenerate geometry)", counts == (26, 24), f"counts={counts}")
+    set_param(box, {"size": [-2.0, 1.0, 1.0]})
+    counts = geometry_counts(box)
+    check(S, "box negative size survives", counts == (26, 24), f"counts={counts}")
+
+    # Out-of-range operation indices: no enum case matches; the node
+    # must produce an empty/zero result, not crash.
+    clear_graph()
+    box = add_node("box")["id"]
+    conway = add_node("conway")["id"]
+    output = add_node("output")["id"]
+    connect(box, 0, conway, 0)
+    connect(conway, 0, output, 0)
+    set_param(conway, {"operation": 42})
+    counts = geometry_counts(conway)
+    check(S, "conway operation 42 yields empty geometry, no crash", counts == (0, 0), f"counts={counts}")
+    set_param(conway, {"operation": 0})
+    counts = geometry_counts(conway)
+    check(S, "conway recovers after out-of-range operation", counts is not None and counts[0] > 0, f"counts={counts}")
+
+    clear_graph()
+    box_a = add_node("box")["id"]
+    box_b = add_node("box")["id"]
+    boolean = add_node("boolean")["id"]
+    output = add_node("output")["id"]
+    connect(box_a, 0, boolean, 0)
+    connect(box_b, 0, boolean, 1)
+    connect(boolean, 0, output, 0)
+    set_param(boolean, {"operation": 99})
+    counts = geometry_counts(boolean)
+    check(S, "boolean operation 99 yields empty geometry, no crash", counts == (0, 0), f"counts={counts}")
+
+    clear_graph()
+    math_node = add_node("math")["id"]
+    set_param(math_node, {"operation": 99, "a": 3.0, "b": 4.0})
+    payload = out_payload(math_node)
+    check(S, "math operation 99 yields 0.0, no crash",
+          payload is not None and payload.get("value") == 0.0, f"payload={payload}")
+    check(S, "editor alive after parameter abuse", len(get_graph()["nodes"]) == 1)
+
+
+def section_output_physics_edges():
+    """Output node physics: attachment follows connect state, all motion
+    modes work, duplicate scene node names coexist."""
+    S = "output-physics"
+    clear_graph()
+    box = add_node("box")["id"]
+    output = add_node("output")["id"]
+    connect(box, 0, output, 0)
+    set_param(output, {"name": "Phys Edge", "physics": True, "physics_motion": "dynamic"})
+
+    def has_physics(name):
+        entries = scene_node_by_name(name)
+        return (len(entries) == 1) and ("Node_physics" in entries[0].get("attachment_types", []))
+
+    check(S, "physics attachment present after enable", has_physics("Phys Edge"))
+
+    # All three motion modes.
+    for motion in ("static", "kinematic", "dynamic"):
+        set_param(output, {"physics_motion": motion})
+        params = node_by_id(get_graph(), output)["parameters"]
+        check(S, f"physics motion mode '{motion}' applies and keeps attachment",
+              (params.get("physics_motion") == motion) and has_physics("Phys Edge"), f"params={params}")
+
+    # Disconnecting the input must remove the physics attachment (the
+    # scene node itself remains).
+    disconnect(box, 0, output, 0)
+    entries = scene_node_by_name("Phys Edge")
+    check(S, "disconnect removes physics attachment, keeps scene node",
+          (len(entries) == 1) and ("Node_physics" not in entries[0].get("attachment_types", [])),
+          f"attachments={entries[0].get('attachment_types') if entries else None}")
+    connect(box, 0, output, 0)
+    check(S, "reconnect restores physics attachment", has_physics("Phys Edge"))
+
+    # Two output nodes with the SAME scene node name coexist.
+    out2 = add_node("output")["id"]
+    connect(box, 0, out2, 0)
+    set_param(out2, {"name": "Phys Edge"})
+    entries = scene_node_by_name("Phys Edge")
+    check(S, "two outputs with the same name coexist", len(entries) == 2, f"count={len(entries)}")
+    set_param(out2, {"name": "Phys Edge B"})
+    check(S, "renaming one resolves the collision",
+          len(scene_node_by_name("Phys Edge")) == 1 and len(scene_node_by_name("Phys Edge B")) == 1)
+
+
 def section_stress():
     S = "stress"
     clear_graph()
@@ -773,6 +1221,8 @@ def section_stress():
     check(S, "boolean of two subdivided (x3) meshes", counts is not None and counts[0] > 0, f"counts={counts} t={tb:.1f}s")
     print(f"  (boolean of two subdiv3 timing: {tb:.1f}s)")
 
+    call("capture_screenshot", {"path": "logs/smoke_stress.png"})
+
 
 def main():
     sections = [
@@ -782,6 +1232,11 @@ def main():
         section_structural_churn,
         section_serialization,
         section_output_edge_cases,
+        section_multilink_partial_disconnect,
+        section_invalid_connects,
+        section_serialization_errors,
+        section_parameter_abuse,
+        section_output_physics_edges,
         section_stress,
     ]
     for section in sections:
