@@ -42,6 +42,7 @@ remain future work. All code lives in `src/editor/geometry_graph/`.
 | Optional physics on output node (plan step 6 of phase 5) | DONE | ff414965 |
 | Phase 6d: instance system                            | DONE   | 823cf2f1 |
 | Phase 6e: node groups                                | DONE   | e953ce5f |
+| Comprehensive smoke test sweep (all 65 checks pass)  | DONE   | a2a36dd5 (script) |
 | Phase 6c: field system                               | designed, awaiting review (see 6c below) | - |
 
 Verified end to end in the headless Vulkan build driven over the in-editor MCP
@@ -140,6 +141,48 @@ load / clear) go through the editor `Operation_stack`
   save and restore.
 - The window has a path field with Save / Load / Clear buttons (default
   `res/editor/graphs/geometry_graph.json`).
+
+### Comprehensive smoke test (2026-07-02)
+
+`scripts/geometry_nodes_smoke_test.py` sweeps the whole feature against a
+running headless editor over MCP; all 65 checks pass in one long editor
+session. Coverage: every node type with per-node output payload
+verification (`get_geometry_graph` now reports vertex / facet / point /
+instance counts per output), parameter sweeps with undo/redo round-trips
+on every parameter of every node type (conway all 9 operators, boolean
+all 3 modes, math operators, output physics, group path), incremental
+evaluation proof from the trace log (editing one chain re-evaluates only
+that chain), multi-link join (5 inputs), value -> math -> math chains,
+vector-driven transform pins, structural churn (17 undos to empty and 17
+redos back), save/clear/load round-trip over a graph containing every
+node type (undo load, undo clear, redo x2), output node edge cases
+(rename, removal + undo restores scene mesh and physics, two outputs at
+once, disconnect), and stress chains.
+
+The sweep found and led to fixing two real defects:
+
+- **CSG assert (fixed, 4c28f849):** Geogram's exact-arithmetic
+  `mesh_boolean_operation()` asserts on erhe's single precision meshes;
+  the editor died the first time a Boolean node evaluated with both
+  inputs. CSG now runs on double precision copies
+  (`Geometry_operation::run_mesh_boolean_operation()`), with gtest
+  regression coverage (`test_csg.cpp`).
+- **Quadratic Catmull-Clark (fixed, 8e52a1b9):** per-element
+  `create_vertices(1)` / `create_polygon()` is O(n) each in Geogram
+  (capacity growth computed from store size; also in upstream geogram
+  main), making CC subdivision O(n^2) - subdivide x6 on a box was a
+  practical hang (55+ min, unfinished). CC now batch creates its
+  destination elements; x6 (98304 facets) completes in ~27 s in a Debug
+  build. Other `Geometry_operation`-based operations still create per
+  element and keep the quadratic behavior on large inputs - converting
+  them to the same batch pattern (and/or fixing the growth policy in a
+  geogram fork) is follow-up work.
+
+Known limitation (by design for now): graph evaluation runs
+synchronously on the main thread, so heavy chains (subdivide x6 -> ~27 s)
+freeze the UI and can outlive the MCP server's per-request wait (the
+request still executes; the smoke script waits for the server to drain).
+Async graph evaluation is a possible future enhancement.
 
 ### In-editor MCP tools
 

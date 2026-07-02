@@ -27,7 +27,21 @@ a11abd21::6a-incremental-eval{dirty-propagates-downstream-topo-order-in-evaluate
 LIVE-VERIFIED✓::headless-MCP{2-independent-chains:disconnect/undo/redo/set_parameter-re-eval-ONLY-affected-chain{trace-log};param-undo/redo-roundtrip-values+scene-node-name;spawn-positions-(0,0)/(320,0)/(640,0)-in-save-file;screenshots}
 skipped::Node_physics-optional-on-output{low-value-now}
 
-?PENDING::6c::fields{large} 6d::instances 6e::groups
+[TASK::geometry-nodes-phase6-completion-2026-07-02]
+@status::✓DONE{output-physics+6d+6e+6c-design+comprehensive-smoke-sweep;6c-implementation=awaits-design-review}
+>commits::ff414965..a2a36dd5
+ff414965::output-physics{Physics-checkbox+motion-stepper{static/kinematic/dynamic};Node_physics+convex-hull{brush-pattern};sync-on-re-eval-via-set_collision_shape;released-with-scene-node;serialized+param-undo}
+823cf2f1::6d-instances{Distribute_points{area-weighted-fan-tri-sampling,count+seed-deterministic,facet-normals}+Instance_on_points{scale+align-Y-to-normal}+Realize_instances{merge_with_transform/instance};Point_cloud+Geometry_instances-payloads+own-pin-keys;multi-link-concat}
+e953ce5f::6e-groups{Group_node{path→private-subgraph,inline-eval,gi-feeds/go-reads}+Group_input/Group_output-interface-nodes;factory→make_geometry_graph_node-free-fn{shared:window+load+group-assets};thread_local-depth-guard-8{cycle→warn+empty};edit-groups-via-window-file-toolbar}
+1dafd986::6c-design{plan-doc:value-or-field-payloads-on-existing-pin-keys+promoting-accessors,immutable-shared-expr-trees,memoized-vertex-domain-bulk-eval,dual-mode-Math_node,Set_position_node,4-slices}
+4c28f849::CSG-FIX{geogram-mesh_boolean_operation-asserts-!single_precision→editor-death-on-boolean-with-2-inputs{found-by-sweep};run_mesh_boolean_operation{double-copies,remesh/decimate-pattern};test_csg.cpp;difference.cpp-dead-#else-dropped}
+e466691b::MCP-output_payloads{per-node-per-slot:geometry-v/f-counts|points-count|instances-count|scalar-values→scripted-verification-evidence}
+8e52a1b9::CC-QUADRATIC-FIX{geogram-create_sub_elements-growth-from-SIZE-not-capacity{upstream-main-too}→per-element-create-O(n)→CC-O(n²)→subdiv-x6=55min-practical-hang;batch-create_vertices/create_quads+map_dst_vertex_from_src_vertex/map_dst_vertex_from_src_facet_centroid/map_dst_facet_from_src_facet;iter-on-1536-facets-14370ms→542ms;x6-total-27s;82-gtests-pass-ASAN}
+a2a36dd5::smoke-script{scripts/geometry_nodes_smoke_test.py;65-checks;busy-tolerant{queries-retry,mutations-once+drain-wait}}
+SMOKE-SWEEP✓::65/65{every-node-type+param-sweeps-w-undo/redo+incremental-proof{trace-log}+multi-link-join-5-inputs+churn-17-undo/redo+serialization-all-types-roundtrip+output-edge-cases+stress{x5-6.9s,x6-26.9s,boolean-of-2-subdiv3-5.3s};one-long-session;final-screenshot-read}
+!default-box=26v/24f{make_box-div1=2-segments/axis}→CC×1=98/96
+
+?PENDING::6c-fields-implementation{after-design-review} batch-creation-for-other-ops{conway-still-quadratic-on-large-inputs} geogram-growth-fix{needs-fork,ask-user}
 
 [TASK::session-tooling-2026-07-02]
 @status::✓DONE
