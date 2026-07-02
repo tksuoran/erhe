@@ -61,6 +61,7 @@
 #include "experiments/gradient_editor.hpp"
 #include "experiments/network_window.hpp"
 #include "experiments/sheet_window.hpp"
+#include "geometry_graph/geometry_graph_window.hpp"
 #include "graph/graph_window.hpp"
 #include "graph/node_properties.hpp"
 #include "graphics/icon_set.hpp"
@@ -1484,6 +1485,7 @@ public:
                 m_settings_window        = std::make_unique<Settings_window                 >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
                 m_clipboard_window       = std::make_unique<Clipboard_window                >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_commands_window        = std::make_unique<Commands_window                 >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
+                m_geometry_graph_window  = std::make_unique<Geometry_graph_window           >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_graph_window           = std::make_unique<Graph_window                    >(*m_commands.get(),       *m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
                 m_node_properties_window = std::make_unique<Node_properties_window          >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_gradient_editor        = std::make_unique<Gradient_editor                 >(*m_imgui_renderer.get(), *m_imgui_windows.get());
@@ -2894,6 +2896,7 @@ public:
     std::unique_ptr<Scene_commands                  >        m_scene_commands;
     std::unique_ptr<Clipboard_window                >        m_clipboard_window;
     std::unique_ptr<Commands_window                 >        m_commands_window;
+    std::unique_ptr<Geometry_graph_window           >        m_geometry_graph_window;
     std::unique_ptr<Graph_window                    >        m_graph_window;
     std::unique_ptr<Node_properties_window          >        m_node_properties_window;
     std::unique_ptr<Gradient_editor                 >        m_gradient_editor;

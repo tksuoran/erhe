@@ -173,6 +173,14 @@ erhe_target_sources_grouped(
     GenerateIconFontCppHeaders.py
     init_status_display.cpp
     init_status_display.hpp
+    geometry_graph/geometry_graph.cpp
+    geometry_graph/geometry_graph.hpp
+    geometry_graph/geometry_graph_node.cpp
+    geometry_graph/geometry_graph_node.hpp
+    geometry_graph/geometry_graph_window.cpp
+    geometry_graph/geometry_graph_window.hpp
+    geometry_graph/geometry_payload.cpp
+    geometry_graph/geometry_payload.hpp
     graph/add.cpp
     graph/add.hpp
     graph/constant.cpp
