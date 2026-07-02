@@ -37,6 +37,11 @@ void Catmull_clark_subdivision::build(const Post_processing post_processing_leve
 {
     const GEO::index_t vertex_count = source_mesh.vertices.nb();
 
+    // Pre-size the source-vertex lookup so map_dst_vertex_from_src_vertex()
+    // never grows it; the Source_tables are pre-sized after each batch
+    // create below, once the destination counts are known.
+    m_vertex_src_to_dst.resize(vertex_count);
+
     // Per-vertex classification driving the boundary-pinning rules. An
     // interior-selected vertex (all incident facets selected) gets the full
     // Catmull-Clark smoothing; every other vertex (a selection-boundary vertex, a
@@ -74,6 +79,8 @@ void Catmull_clark_subdivision::build(const Post_processing post_processing_leve
     {
         Scoped_phase_timer phase_timer{"cc_initial_points"};
         const GEO::index_t first_dst_vertex = destination_mesh.vertices.create_vertices(vertex_count);
+        m_dst_vertex_sources       .resize(destination_mesh.vertices.nb());
+        m_dst_vertex_corner_sources.resize(destination_mesh.vertices.nb());
         for (GEO::index_t vertex : source_mesh.vertices) {
             const GEO::index_t dst_vertex = first_dst_vertex + vertex;
             const std::vector<GEO::index_t>& corners = source.get_vertex_corners(vertex);
@@ -126,6 +133,8 @@ void Catmull_clark_subdivision::build(const Post_processing post_processing_leve
             }
         }
         GEO::index_t next_dst_vertex = destination_mesh.vertices.create_vertices(midpoint_count);
+        m_dst_vertex_sources       .resize(destination_mesh.vertices.nb());
+        m_dst_vertex_corner_sources.resize(destination_mesh.vertices.nb());
 
         for (GEO::index_t src_edge : source_mesh.edges) {
             const std::vector<GEO::index_t>& src_edge_facets = source.get_edge_facets(src_edge);
@@ -214,6 +223,8 @@ void Catmull_clark_subdivision::build(const Post_processing post_processing_leve
             }
         }
         GEO::index_t next_centroid_dst_vertex = destination_mesh.vertices.create_vertices(centroid_count);
+        m_dst_vertex_sources       .resize(destination_mesh.vertices.nb());
+        m_dst_vertex_corner_sources.resize(destination_mesh.vertices.nb());
 
         for (GEO::index_t src_facet : source_mesh.facets) {
             if (!is_facet_selected(src_facet)) {
@@ -267,6 +278,8 @@ void Catmull_clark_subdivision::build(const Post_processing post_processing_leve
             quad_count += corner_count;
         }
         const GEO::index_t first_dst_facet = destination_mesh.facets.create_quads(quad_count);
+        m_dst_facet_sources .resize(destination_mesh.facets.nb());
+        m_dst_corner_sources.resize(destination_mesh.facet_corners.nb());
         GEO::index_t next_dst_facet = first_dst_facet;
 
         for (GEO::index_t src_facet : source_mesh.facets) {
