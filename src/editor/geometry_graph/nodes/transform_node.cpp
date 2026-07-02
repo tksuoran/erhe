@@ -5,6 +5,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <imgui/imgui.h>
+#include <nlohmann/json.hpp>
 
 namespace editor {
 
@@ -54,6 +55,21 @@ void Transform_node::imgui()
     ImGui::TextUnformatted("Scale");
     ImGui::SetNextItemWidth(140.0f);
     if (ImGui::DragFloat3("##scale", &m_scale.x, 0.01f)) { mark_dirty(); }
+}
+
+void Transform_node::write_parameters(nlohmann::json& out) const
+{
+    write_vec3(out, "translation", m_translation);
+    write_vec3(out, "rotation",    m_rotation_degrees);
+    write_vec3(out, "scale",       m_scale);
+}
+
+void Transform_node::read_parameters(const nlohmann::json& in)
+{
+    m_translation      = read_vec3(in, "translation", m_translation);
+    m_rotation_degrees = read_vec3(in, "rotation",    m_rotation_degrees);
+    m_scale            = read_vec3(in, "scale",       m_scale);
+    mark_dirty();
 }
 
 }

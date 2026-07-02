@@ -4,6 +4,7 @@
 #include "erhe_geometry/shapes/disc.hpp"
 
 #include <imgui/imgui.h>
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
 
@@ -51,6 +52,23 @@ void Mesh_disc_node::imgui()
         const GEO::Mesh& mesh = geometry->get_mesh();
         ImGui::Text("Vertices: %u Facets: %u", mesh.vertices.nb(), mesh.facets.nb());
     }
+}
+
+void Mesh_disc_node::write_parameters(nlohmann::json& out) const
+{
+    out["outer_radius"] = m_outer_radius;
+    out["inner_radius"] = m_inner_radius;
+    out["slices"]       = m_slice_count;
+    out["stacks"]       = m_stack_count;
+}
+
+void Mesh_disc_node::read_parameters(const nlohmann::json& in)
+{
+    m_outer_radius = in.value("outer_radius", m_outer_radius);
+    m_inner_radius = in.value("inner_radius", m_inner_radius);
+    m_slice_count  = in.value("slices",       m_slice_count);
+    m_stack_count  = in.value("stacks",       m_stack_count);
+    mark_dirty();
 }
 
 }

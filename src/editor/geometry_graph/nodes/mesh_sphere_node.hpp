@@ -11,6 +11,8 @@ public:
 
     void evaluate(Geometry_graph&) override;
     void imgui   () override;
+    void write_parameters(nlohmann::json& out) const override;
+    void read_parameters (const nlohmann::json& in) override;
 
 private:
     float m_radius        {1.0f};

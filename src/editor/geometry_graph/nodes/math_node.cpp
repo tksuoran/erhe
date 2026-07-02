@@ -1,6 +1,7 @@
 #include "geometry_graph/nodes/math_node.hpp"
 
 #include <imgui/imgui.h>
+#include <nlohmann/json.hpp>
 
 #include <cmath>
 
@@ -52,6 +53,21 @@ void Math_node::imgui()
     ImGui::SetNextItemWidth(140.0f);
     if (ImGui::DragFloat("##b", &m_b, 0.01f)) { mark_dirty(); }
     ImGui::Text("= %f", static_cast<double>(get_output(0).get_float()));
+}
+
+void Math_node::write_parameters(nlohmann::json& out) const
+{
+    out["operation"] = static_cast<int>(m_operation);
+    out["a"]         = m_a;
+    out["b"]         = m_b;
+}
+
+void Math_node::read_parameters(const nlohmann::json& in)
+{
+    m_operation = static_cast<Math_operation>(in.value("operation", static_cast<int>(m_operation)));
+    m_a         = in.value("a", m_a);
+    m_b         = in.value("b", m_b);
+    mark_dirty();
 }
 
 }

@@ -17,6 +17,7 @@
 #include "erhe_scene_renderer/mesh_memory.hpp"
 
 #include <imgui/imgui.h>
+#include <nlohmann/json.hpp>
 
 #include <mutex>
 
@@ -183,6 +184,43 @@ void Geometry_output_node::imgui()
     } else {
         ImGui::TextUnformatted("(no geometry)");
     }
+}
+
+void Geometry_output_node::write_parameters(nlohmann::json& out) const
+{
+    if (m_scene_root) {
+        out["scene"] = m_scene_root->get_name();
+    }
+    if (m_material) {
+        out["material"] = m_material->get_name();
+    }
+}
+
+void Geometry_output_node::read_parameters(const nlohmann::json& in)
+{
+    const std::string scene_name = in.value("scene", "");
+    if (!scene_name.empty()) {
+        for (const std::shared_ptr<Scene_root>& scene_root : m_context.app_scenes->get_scene_roots()) {
+            if (scene_root->get_name() == scene_name) {
+                m_scene_root = scene_root;
+                break;
+            }
+        }
+    }
+    const std::string material_name = in.value("material", "");
+    if (!material_name.empty() && m_scene_root) {
+        const std::shared_ptr<Content_library> library = m_scene_root->get_content_library();
+        if (library && library->materials) {
+            const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials = library->materials->get_all<erhe::primitive::Material>();
+            for (const std::shared_ptr<erhe::primitive::Material>& material : materials) {
+                if (material->get_name() == material_name) {
+                    m_material = material;
+                    break;
+                }
+            }
+        }
+    }
+    mark_dirty();
 }
 
 }

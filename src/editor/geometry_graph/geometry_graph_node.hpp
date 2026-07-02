@@ -4,6 +4,9 @@
 
 #include "erhe_graph/node.hpp"
 
+#include <nlohmann/json_fwd.hpp>
+
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -30,6 +33,12 @@ auto imgui_index_stepper(const char* id, int& index, int count) -> bool;
 
 // Index stepper followed by the current entry name.
 auto imgui_enum_stepper(const char* id, int& index, const char* const* names, int count) -> bool;
+
+// JSON helpers for node parameter (de)serialization.
+void write_vec3 (nlohmann::json& out, const char* key, const glm::vec3& value);
+void write_ivec3(nlohmann::json& out, const char* key, const glm::ivec3& value);
+[[nodiscard]] auto read_vec3 (const nlohmann::json& in, const char* key, const glm::vec3& fallback) -> glm::vec3;
+[[nodiscard]] auto read_ivec3(const nlohmann::json& in, const char* key, const glm::ivec3& fallback) -> glm::ivec3;
 
 // Base class for all geometry graph nodes.
 //
@@ -77,6 +86,15 @@ public:
     // the destructor.
     virtual void on_removed_from_graph();
 
+    // Graph serialization: the factory type name is the
+    // Geometry_graph_window factory name that recreates this node on
+    // load (set by the factory); parameters are the node's editable
+    // values. (Named to avoid clashing with erhe::Item::get_type_name().)
+    [[nodiscard]] auto get_factory_type_name() const -> const std::string&;
+    void set_factory_type_name(const std::string& type_name);
+    virtual void write_parameters(nlohmann::json& out) const;
+    virtual void read_parameters (const nlohmann::json& in);
+
 protected:
     void show_pins(
         ax::NodeEditor::EditorContext&                        node_editor,
@@ -88,6 +106,7 @@ protected:
 
     std::vector<Geometry_payload> m_input_payloads;
     std::vector<Geometry_payload> m_output_payloads;
+    std::string                   m_type_name;
     bool                          m_dirty{true};
 };
 

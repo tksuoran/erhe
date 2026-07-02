@@ -4,6 +4,7 @@
 #include "erhe_geometry/shapes/cone.hpp"
 
 #include <imgui/imgui.h>
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
 
@@ -53,6 +54,25 @@ void Mesh_cone_node::imgui()
         const GEO::Mesh& mesh = geometry->get_mesh();
         ImGui::Text("Vertices: %u Facets: %u", mesh.vertices.nb(), mesh.facets.nb());
     }
+}
+
+void Mesh_cone_node::write_parameters(nlohmann::json& out) const
+{
+    out["height"]     = m_height;
+    out["radius"]     = m_bottom_radius;
+    out["use_bottom"] = m_use_bottom;
+    out["slices"]     = m_slice_count;
+    out["stacks"]     = m_stack_division;
+}
+
+void Mesh_cone_node::read_parameters(const nlohmann::json& in)
+{
+    m_height         = in.value("height",     m_height);
+    m_bottom_radius  = in.value("radius",     m_bottom_radius);
+    m_use_bottom     = in.value("use_bottom", m_use_bottom);
+    m_slice_count    = in.value("slices",     m_slice_count);
+    m_stack_division = in.value("stacks",     m_stack_division);
+    mark_dirty();
 }
 
 }

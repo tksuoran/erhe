@@ -6,6 +6,7 @@
 #include "erhe_geometry/operation/csg/union.hpp"
 
 #include <imgui/imgui.h>
+#include <nlohmann/json.hpp>
 
 namespace editor {
 
@@ -52,6 +53,17 @@ void Boolean_node::imgui()
         const GEO::Mesh& mesh = geometry->get_mesh();
         ImGui::Text("Vertices: %u Facets: %u", mesh.vertices.nb(), mesh.facets.nb());
     }
+}
+
+void Boolean_node::write_parameters(nlohmann::json& out) const
+{
+    out["operation"] = static_cast<int>(m_operation);
+}
+
+void Boolean_node::read_parameters(const nlohmann::json& in)
+{
+    m_operation = static_cast<Boolean_operation>(in.value("operation", static_cast<int>(m_operation)));
+    mark_dirty();
 }
 
 }

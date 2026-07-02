@@ -35,6 +35,7 @@
 #include "erhe_imgui/imgui_windows.hpp"
 
 #include <imgui/imgui.h>
+#include <imgui/misc/cpp/imgui_stdlib.h>
 
 #include <algorithm>
 
@@ -155,26 +156,30 @@ void Geometry_graph_window::disconnect(erhe::graph::Pin* source_pin, erhe::graph
 
 auto Geometry_graph_window::make_node(const std::string& type_name) -> std::shared_ptr<Geometry_graph_node>
 {
-    if (type_name == "box")         { return std::make_shared<Mesh_box_node   >(); }
-    if (type_name == "sphere")      { return std::make_shared<Mesh_sphere_node>(); }
-    if (type_name == "torus")       { return std::make_shared<Mesh_torus_node >(); }
-    if (type_name == "cone")        { return std::make_shared<Mesh_cone_node  >(); }
-    if (type_name == "disc")        { return std::make_shared<Mesh_disc_node  >(); }
-    if (type_name == "subdivide")   { return std::make_shared<Subdivide_node  >(); }
-    if (type_name == "conway")      { return std::make_shared<Conway_node     >(); }
-    if (type_name == "transform")   { return std::make_shared<Transform_node  >(); }
-    if (type_name == "triangulate") { return std::make_shared<Geometry_unary_operation_node>("Triangulate", &erhe::geometry::operation::triangulate); }
-    if (type_name == "normalize")   { return std::make_shared<Geometry_unary_operation_node>("Normalize",   &erhe::geometry::operation::normalize); }
-    if (type_name == "reverse")     { return std::make_shared<Geometry_unary_operation_node>("Reverse",     &erhe::geometry::operation::reverse); }
-    if (type_name == "repair")      { return std::make_shared<Geometry_unary_operation_node>("Repair",      &erhe::geometry::operation::repair); }
-    if (type_name == "join")        { return std::make_shared<Join_geometry_node>(); }
-    if (type_name == "boolean")     { return std::make_shared<Boolean_node      >(); }
-    if (type_name == "float")       { return std::make_shared<Float_value_node  >(); }
-    if (type_name == "integer")     { return std::make_shared<Integer_value_node>(); }
-    if (type_name == "vector")      { return std::make_shared<Vector_value_node >(); }
-    if (type_name == "math")        { return std::make_shared<Math_node         >(); }
-    if (type_name == "output")      { return std::make_shared<Geometry_output_node>(m_app_context); }
-    return {};
+    std::shared_ptr<Geometry_graph_node> node{};
+    if      (type_name == "box")         { node = std::make_shared<Mesh_box_node   >(); }
+    else if (type_name == "sphere")      { node = std::make_shared<Mesh_sphere_node>(); }
+    else if (type_name == "torus")       { node = std::make_shared<Mesh_torus_node >(); }
+    else if (type_name == "cone")        { node = std::make_shared<Mesh_cone_node  >(); }
+    else if (type_name == "disc")        { node = std::make_shared<Mesh_disc_node  >(); }
+    else if (type_name == "subdivide")   { node = std::make_shared<Subdivide_node  >(); }
+    else if (type_name == "conway")      { node = std::make_shared<Conway_node     >(); }
+    else if (type_name == "transform")   { node = std::make_shared<Transform_node  >(); }
+    else if (type_name == "triangulate") { node = std::make_shared<Geometry_unary_operation_node>("Triangulate", &erhe::geometry::operation::triangulate); }
+    else if (type_name == "normalize")   { node = std::make_shared<Geometry_unary_operation_node>("Normalize",   &erhe::geometry::operation::normalize); }
+    else if (type_name == "reverse")     { node = std::make_shared<Geometry_unary_operation_node>("Reverse",     &erhe::geometry::operation::reverse); }
+    else if (type_name == "repair")      { node = std::make_shared<Geometry_unary_operation_node>("Repair",      &erhe::geometry::operation::repair); }
+    else if (type_name == "join")        { node = std::make_shared<Join_geometry_node>(); }
+    else if (type_name == "boolean")     { node = std::make_shared<Boolean_node      >(); }
+    else if (type_name == "float")       { node = std::make_shared<Float_value_node  >(); }
+    else if (type_name == "integer")     { node = std::make_shared<Integer_value_node>(); }
+    else if (type_name == "vector")      { node = std::make_shared<Vector_value_node >(); }
+    else if (type_name == "math")        { node = std::make_shared<Math_node         >(); }
+    else if (type_name == "output")      { node = std::make_shared<Geometry_output_node>(m_app_context); }
+    if (node) {
+        node->set_factory_type_name(type_name); // used by graph serialization to recreate the node
+    }
+    return node;
 }
 
 auto Geometry_graph_window::add_node_of_type(const std::string& type_name) -> Geometry_graph_node*
@@ -199,6 +204,15 @@ auto Geometry_graph_window::get_graph() -> Geometry_graph&
 auto Geometry_graph_window::get_nodes() const -> const std::vector<std::shared_ptr<Geometry_graph_node>>&
 {
     return m_nodes;
+}
+
+void Geometry_graph_window::file_toolbar()
+{
+    ImGui::SetNextItemWidth(320.0f);
+    ImGui::InputText("##graph_path", &m_graph_path);
+    ImGui::SameLine(); if (ImGui::Button("Save"))  { save_graph(std::filesystem::path{m_graph_path}); }
+    ImGui::SameLine(); if (ImGui::Button("Load"))  { load_graph(std::filesystem::path{m_graph_path}); }
+    ImGui::SameLine(); if (ImGui::Button("Clear")) { clear_graph(); }
 }
 
 void Geometry_graph_window::node_toolbar()
@@ -228,6 +242,7 @@ void Geometry_graph_window::node_toolbar()
 
 void Geometry_graph_window::imgui()
 {
+    file_toolbar();
     node_toolbar();
 
     m_graph.evaluate_if_dirty();

@@ -1118,6 +1118,9 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "geometry_graph_remove_node")   result = action_geometry_graph_remove_node  (req->arguments);
         else if (req->tool_name == "geometry_graph_connect")       result = action_geometry_graph_connect      (req->arguments);
         else if (req->tool_name == "geometry_graph_disconnect")    result = action_geometry_graph_disconnect   (req->arguments);
+        else if (req->tool_name == "geometry_graph_save")          result = action_geometry_graph_save         (req->arguments);
+        else if (req->tool_name == "geometry_graph_load")          result = action_geometry_graph_load         (req->arguments);
+        else if (req->tool_name == "geometry_graph_clear")         result = action_geometry_graph_clear        (req->arguments);
         else                                              result = execute_command       (req->tool_name);
 
         } catch (const std::exception& e) {
@@ -1765,6 +1768,21 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"node_id"})}
     }});
+    m_tool_infos.push_back({"geometry_graph_save", "Save the geometry node graph to a JSON file (node types, parameters, canvas positions, links).", {
+        {"type", "object"},
+        {"properties", {
+            {"path", {{"type", "string"}, {"description", "File path to save to (parent directories are created)"}}}
+        }},
+        {"required", json::array({"path"})}
+    }});
+    m_tool_infos.push_back({"geometry_graph_load", "Load the geometry node graph from a JSON file, replacing the current graph content. Undoable (single operation).", {
+        {"type", "object"},
+        {"properties", {
+            {"path", {{"type", "string"}, {"description", "File path to load from"}}}
+        }},
+        {"required", json::array({"path"})}
+    }});
+    m_tool_infos.push_back({"geometry_graph_clear", "Remove all nodes and links from the geometry node graph. Undoable (single operation).", schema_no_args()});
 
     // Editor commands
     const auto& registered_commands = m_commands.get_commands();
@@ -5637,6 +5655,59 @@ auto Mcp_server::action_geometry_graph_disconnect(const json& args) -> std::stri
 
     json result;
     result["disconnected"] = true;
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_geometry_graph_save(const json& args) -> std::string
+{
+    Geometry_graph_window* window = m_context.geometry_graph_window;
+    if (window == nullptr) {
+        return make_error_content("Geometry graph window not available");
+    }
+    const std::string path = args.value("path", "");
+    if (path.empty()) {
+        return make_error_content("Missing 'path'");
+    }
+    const bool ok = window->save_graph(std::filesystem::path{path});
+    if (!ok) {
+        return make_error_content("Save failed: " + path);
+    }
+    json result;
+    result["saved"] = true;
+    result["path"]  = path;
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_geometry_graph_load(const json& args) -> std::string
+{
+    Geometry_graph_window* window = m_context.geometry_graph_window;
+    if (window == nullptr) {
+        return make_error_content("Geometry graph window not available");
+    }
+    const std::string path = args.value("path", "");
+    if (path.empty()) {
+        return make_error_content("Missing 'path'");
+    }
+    const bool ok = window->load_graph(std::filesystem::path{path});
+    if (!ok) {
+        return make_error_content("Load failed: " + path);
+    }
+    json result;
+    result["loaded"] = true;
+    result["path"]   = path;
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_geometry_graph_clear(const json& args) -> std::string
+{
+    static_cast<void>(args);
+    Geometry_graph_window* window = m_context.geometry_graph_window;
+    if (window == nullptr) {
+        return make_error_content("Geometry graph window not available");
+    }
+    window->clear_graph();
+    json result;
+    result["cleared"] = true;
     return make_json_content(result).dump();
 }
 

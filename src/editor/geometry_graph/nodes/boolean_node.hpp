@@ -18,6 +18,8 @@ public:
 
     void evaluate(Geometry_graph&) override;
     void imgui   () override;
+    void write_parameters(nlohmann::json& out) const override;
+    void read_parameters (const nlohmann::json& in) override;
 
 private:
     Boolean_operation m_operation{Boolean_operation::union_operation};

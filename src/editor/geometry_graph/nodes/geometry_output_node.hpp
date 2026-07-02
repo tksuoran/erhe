@@ -32,6 +32,8 @@ public:
     void evaluate(Geometry_graph&) override;
     void imgui   () override;
     void on_removed_from_graph() override;
+    void write_parameters(nlohmann::json& out) const override;
+    void read_parameters (const nlohmann::json& in) override;
 
 private:
     void remove_scene_node();

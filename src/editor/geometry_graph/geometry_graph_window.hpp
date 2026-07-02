@@ -4,6 +4,7 @@
 
 #include "erhe_imgui/imgui_window.hpp"
 
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <vector>
@@ -59,6 +60,13 @@ public:
     [[nodiscard]] auto get_graph() -> Geometry_graph&;
     [[nodiscard]] auto get_nodes() const -> const std::vector<std::shared_ptr<Geometry_graph_node>>&;
 
+    // Graph serialization (JSON: node types + parameters + canvas
+    // positions, links by node index + pin slot). Load and clear are
+    // undoable (single Geometry_graph_replace_operation).
+    auto save_graph (const std::filesystem::path& path) -> bool;
+    auto load_graph (const std::filesystem::path& path) -> bool;
+    void clear_graph();
+
     // Non-undoable primitives used by the geometry graph operations
     // (and graph load); prefer the undoable edits above.
     void insert_node    (const std::shared_ptr<Geometry_graph_node>& node);
@@ -70,6 +78,7 @@ public:
 
 private:
     auto make_node       (const std::string& type_name) -> std::shared_ptr<Geometry_graph_node>;
+    void file_toolbar    ();
     void node_toolbar    ();
     void handle_link_create();
     void handle_deletions();
@@ -78,6 +87,7 @@ private:
     Geometry_graph                                    m_graph;
     std::unique_ptr<ax::NodeEditor::EditorContext>    m_node_editor;
     std::vector<std::shared_ptr<Geometry_graph_node>> m_nodes;
+    std::string                                       m_graph_path{"res/editor/graphs/geometry_graph.json"};
 };
 
 }

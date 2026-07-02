@@ -5,6 +5,7 @@
 #include "erhe_geometry/operation/subdivision/sqrt3_subdivision.hpp"
 
 #include <imgui/imgui.h>
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
 
@@ -60,6 +61,19 @@ void Subdivide_node::imgui()
         const GEO::Mesh& mesh = geometry->get_mesh();
         ImGui::Text("Vertices: %u Facets: %u", mesh.vertices.nb(), mesh.facets.nb());
     }
+}
+
+void Subdivide_node::write_parameters(nlohmann::json& out) const
+{
+    out["mode"]       = static_cast<int>(m_mode);
+    out["iterations"] = m_iterations;
+}
+
+void Subdivide_node::read_parameters(const nlohmann::json& in)
+{
+    m_mode       = static_cast<Mode>(in.value("mode", static_cast<int>(m_mode)));
+    m_iterations = in.value("iterations", m_iterations);
+    mark_dirty();
 }
 
 }

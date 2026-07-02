@@ -9,6 +9,7 @@
 #include "erhe_imgui/imgui_node_editor.h"
 
 #include <imgui/imgui.h>
+#include <nlohmann/json.hpp>
 
 namespace editor {
 
@@ -46,6 +47,32 @@ auto imgui_enum_stepper(const char* id, int& index, const char* const* names, co
     ImGui::SameLine();
     ImGui::TextUnformatted(((index >= 0) && (index < count)) ? names[index] : "?");
     return changed;
+}
+
+void write_vec3(nlohmann::json& out, const char* key, const glm::vec3& value)
+{
+    out[key] = { value.x, value.y, value.z };
+}
+
+void write_ivec3(nlohmann::json& out, const char* key, const glm::ivec3& value)
+{
+    out[key] = { value.x, value.y, value.z };
+}
+
+auto read_vec3(const nlohmann::json& in, const char* key, const glm::vec3& fallback) -> glm::vec3
+{
+    if (in.contains(key) && in[key].is_array() && (in[key].size() == 3)) {
+        return glm::vec3{in[key][0].get<float>(), in[key][1].get<float>(), in[key][2].get<float>()};
+    }
+    return fallback;
+}
+
+auto read_ivec3(const nlohmann::json& in, const char* key, const glm::ivec3& fallback) -> glm::ivec3
+{
+    if (in.contains(key) && in[key].is_array() && (in[key].size() == 3)) {
+        return glm::ivec3{in[key][0].get<int>(), in[key][1].get<int>(), in[key][2].get<int>()};
+    }
+    return fallback;
 }
 
 Geometry_graph_node::Geometry_graph_node(const char* label)
@@ -133,6 +160,24 @@ void Geometry_graph_node::imgui()
 }
 
 void Geometry_graph_node::on_removed_from_graph()
+{
+}
+
+auto Geometry_graph_node::get_factory_type_name() const -> const std::string&
+{
+    return m_type_name;
+}
+
+void Geometry_graph_node::set_factory_type_name(const std::string& type_name)
+{
+    m_type_name = type_name;
+}
+
+void Geometry_graph_node::write_parameters(nlohmann::json&) const
+{
+}
+
+void Geometry_graph_node::read_parameters(const nlohmann::json&)
 {
 }
 

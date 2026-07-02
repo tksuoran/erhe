@@ -4,6 +4,7 @@
 #include "erhe_geometry/shapes/torus.hpp"
 
 #include <imgui/imgui.h>
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
 
@@ -51,6 +52,23 @@ void Mesh_torus_node::imgui()
         const GEO::Mesh& mesh = geometry->get_mesh();
         ImGui::Text("Vertices: %u Facets: %u", mesh.vertices.nb(), mesh.facets.nb());
     }
+}
+
+void Mesh_torus_node::write_parameters(nlohmann::json& out) const
+{
+    out["major_radius"] = m_major_radius;
+    out["minor_radius"] = m_minor_radius;
+    out["major_steps"]  = m_major_steps;
+    out["minor_steps"]  = m_minor_steps;
+}
+
+void Mesh_torus_node::read_parameters(const nlohmann::json& in)
+{
+    m_major_radius = in.value("major_radius", m_major_radius);
+    m_minor_radius = in.value("minor_radius", m_minor_radius);
+    m_major_steps  = in.value("major_steps",  m_major_steps);
+    m_minor_steps  = in.value("minor_steps",  m_minor_steps);
+    mark_dirty();
 }
 
 }

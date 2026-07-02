@@ -4,6 +4,7 @@
 #include "erhe_geometry/shapes/box.hpp"
 
 #include <imgui/imgui.h>
+#include <nlohmann/json.hpp>
 
 namespace editor {
 
@@ -51,6 +52,21 @@ void Mesh_box_node::imgui()
         const GEO::Mesh& mesh = geometry->get_mesh();
         ImGui::Text("Vertices: %u Facets: %u", mesh.vertices.nb(), mesh.facets.nb());
     }
+}
+
+void Mesh_box_node::write_parameters(nlohmann::json& out) const
+{
+    write_vec3 (out, "size",  m_size);
+    write_ivec3(out, "steps", m_steps);
+    out["power"] = m_power;
+}
+
+void Mesh_box_node::read_parameters(const nlohmann::json& in)
+{
+    m_size  = read_vec3 (in, "size",  m_size);
+    m_steps = read_ivec3(in, "steps", m_steps);
+    m_power = in.value("power", m_power);
+    mark_dirty();
 }
 
 }

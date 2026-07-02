@@ -4,6 +4,7 @@
 #include "erhe_geometry/shapes/sphere.hpp"
 
 #include <imgui/imgui.h>
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
 
@@ -53,6 +54,21 @@ void Mesh_sphere_node::imgui()
         const GEO::Mesh& mesh = geometry->get_mesh();
         ImGui::Text("Vertices: %u Facets: %u", mesh.vertices.nb(), mesh.facets.nb());
     }
+}
+
+void Mesh_sphere_node::write_parameters(nlohmann::json& out) const
+{
+    out["radius"] = m_radius;
+    out["slices"] = m_slice_count;
+    out["stacks"] = m_stack_division;
+}
+
+void Mesh_sphere_node::read_parameters(const nlohmann::json& in)
+{
+    m_radius         = in.value("radius", m_radius);
+    m_slice_count    = in.value("slices", m_slice_count);
+    m_stack_division = in.value("stacks", m_stack_division);
+    mark_dirty();
 }
 
 }

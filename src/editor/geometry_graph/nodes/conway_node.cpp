@@ -12,6 +12,7 @@
 #include "erhe_geometry/operation/conway/truncate.hpp"
 
 #include <imgui/imgui.h>
+#include <nlohmann/json.hpp>
 
 namespace editor {
 
@@ -91,6 +92,25 @@ void Conway_node::imgui()
         const GEO::Mesh& mesh = geometry->get_mesh();
         ImGui::Text("Vertices: %u Facets: %u", mesh.vertices.nb(), mesh.facets.nb());
     }
+}
+
+void Conway_node::write_parameters(nlohmann::json& out) const
+{
+    out["operation"]      = static_cast<int>(m_operation);
+    out["kis_height"]     = m_kis_height;
+    out["truncate_ratio"] = m_truncate_ratio;
+    out["chamfer_ratio"]  = m_chamfer_ratio;
+    out["gyro_ratio"]     = m_gyro_ratio;
+}
+
+void Conway_node::read_parameters(const nlohmann::json& in)
+{
+    m_operation      = static_cast<Conway_operation>(in.value("operation", static_cast<int>(m_operation)));
+    m_kis_height     = in.value("kis_height",     m_kis_height);
+    m_truncate_ratio = in.value("truncate_ratio", m_truncate_ratio);
+    m_chamfer_ratio  = in.value("chamfer_ratio",  m_chamfer_ratio);
+    m_gyro_ratio     = in.value("gyro_ratio",     m_gyro_ratio);
+    mark_dirty();
 }
 
 }

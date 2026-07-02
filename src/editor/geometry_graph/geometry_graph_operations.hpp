@@ -27,6 +27,12 @@ public:
 
 [[nodiscard]] auto make_link_record(erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> Geometry_graph_link_record;
 
+// ax::NodeEditor::EditorContext::GetNodePosition() returns
+// ImVec2{FLT_MAX, FLT_MAX} for nodes it has never seen (e.g. the graph
+// window has not been drawn yet). Such positions must not be saved or
+// restored.
+[[nodiscard]] auto is_valid_node_position(const ImVec2& position) -> bool;
+
 // Undoable add / delete of one geometry graph node. Removing a node
 // also removes its links; they are recorded and restored on undo,
 // together with the node's position on the editor canvas.
@@ -58,6 +64,42 @@ private:
     std::vector<Geometry_graph_link_record> m_links;
     ImVec2                                  m_position    {0.0f, 0.0f};
     bool                                    m_has_position{false};
+};
+
+// Snapshot of the full graph content: nodes, links and canvas node
+// positions (parallel to nodes; non-finite position = leave default).
+class Geometry_graph_content
+{
+public:
+    std::vector<std::shared_ptr<Geometry_graph_node>> nodes;
+    std::vector<Geometry_graph_link_record>           links;
+    std::vector<ImVec2>                               positions;
+};
+
+// Undoable replacement of the entire graph content; used by graph load
+// (new content from file) and clear (empty content). The previous
+// content is captured on first execute so undo restores it exactly.
+class Geometry_graph_replace_operation : public Operation
+{
+public:
+    Geometry_graph_replace_operation(
+        Geometry_graph_window&    window,
+        Geometry_graph_content&&  new_content,
+        const char*               description
+    );
+
+    // Implements Operation
+    void execute(App_context& context) override;
+    void undo   (App_context& context) override;
+
+private:
+    void apply(const Geometry_graph_content& content);
+    [[nodiscard]] auto capture() -> Geometry_graph_content;
+
+    Geometry_graph_window& m_window;
+    Geometry_graph_content m_new_content;
+    Geometry_graph_content m_old_content;
+    bool                   m_old_captured{false};
 };
 
 // Undoable connect / disconnect of one geometry graph link.
