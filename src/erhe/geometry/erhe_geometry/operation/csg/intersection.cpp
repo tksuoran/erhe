@@ -1,8 +1,6 @@
 #include "erhe_geometry/operation/csg/intersection.hpp"
 #include "erhe_geometry/operation/geometry_operation.hpp"
 
-#include <geogram/mesh/mesh_intersection.h>
-
 namespace erhe::geometry::operation {
 
 class Intersection : public Geometry_operation
@@ -20,7 +18,7 @@ Intersection::Intersection(const Geometry& lhs, const Geometry& rhs, Geometry& d
 
 void Intersection::build()
 {
-    GEO::mesh_boolean_operation(destination_mesh, source_mesh, *rhs_mesh, "A*B", true);
+    run_mesh_boolean_operation("A*B");
 
     //post_processing();
     interpolate_mesh_attributes();

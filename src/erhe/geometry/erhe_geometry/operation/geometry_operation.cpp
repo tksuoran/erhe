@@ -4,10 +4,28 @@
 #include "erhe_verify/verify.hpp"
 
 #include <geogram/mesh/mesh.h>
+#include <geogram/mesh/mesh_intersection.h>
 
 #include <algorithm>
 
 namespace erhe::geometry::operation {
+
+void Geometry_operation::run_mesh_boolean_operation(const char* operation)
+{
+    ERHE_VERIFY(rhs_mesh != nullptr);
+    GEO::Mesh lhs_double;
+    lhs_double.copy(source_mesh, true);
+    lhs_double.vertices.set_double_precision();
+    GEO::Mesh rhs_double;
+    rhs_double.copy(*rhs_mesh, true);
+    rhs_double.vertices.set_double_precision();
+
+    destination.get_attributes().unbind();
+    destination_mesh.vertices.set_double_precision();
+    GEO::mesh_boolean_operation(destination_mesh, lhs_double, rhs_double, operation, false);
+    destination_mesh.vertices.set_single_precision();
+    destination.get_attributes().bind();
+}
 
 void Source_table::add(GEO::index_t dst_index, float weight, GEO::index_t src_index)
 {

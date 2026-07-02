@@ -1,9 +1,6 @@
 #include "erhe_geometry/operation/csg/difference.hpp"
 #include "erhe_geometry/operation/geometry_operation.hpp"
 
-#include <geogram/mesh/mesh_intersection.h>
-//#include <geogram/mesh/mesh_CSG.h>
-
 namespace erhe::geometry::operation {
 
 class Difference : public Geometry_operation
@@ -21,35 +18,9 @@ Difference::Difference(const Geometry& lhs, const Geometry& rhs, Geometry& desti
 
 void Difference::build()
 {
-#if 1
-    GEO::mesh_boolean_operation(destination_mesh, source_mesh, *rhs_mesh, "A-B", true);
-#else // TODO does either path make more sense?
-    GEO::CSGMesh_var lhs_mesh = new GEO::CSGMesh;
-    source.extract_geogram_mesh(*lhs_mesh.get());
-    lhs_mesh->facets.connect();
-    lhs_mesh->facets.triangulate();
-    lhs_mesh->facets.compute_borders();
-    lhs_mesh->update_bbox();
+    run_mesh_boolean_operation("A-B");
 
-    GEO::CSGMesh_var rhs_mesh = new GEO::CSGMesh;
-    rhs.extract_geogram_mesh(*rhs_mesh.get());
-    rhs_mesh->facets.connect();
-    rhs_mesh->facets.triangulate();
-    rhs_mesh->facets.compute_borders();
-    rhs_mesh->update_bbox();
-
-    GEO::CSGScope scope{};
-    scope.push_back(std::move(lhs_mesh));
-    scope.push_back(std::move(rhs_mesh));
-
-    GEO::CSGBuilder builder{};
-    GEO::CSGMesh_var out_mesh = builder.difference(scope);
-
-    geometry_from_geogram(destination, *out_mesh.get());
-#endif
-
-    // This will not work as we are not in single precision
-    // post_processing();
+    //post_processing();
     interpolate_mesh_attributes();
 }
 

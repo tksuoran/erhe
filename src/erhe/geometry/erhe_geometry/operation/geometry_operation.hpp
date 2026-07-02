@@ -113,6 +113,15 @@ protected:
 
     void post_processing(uint64_t process_flags = default_post_process_flags);
 
+    // Runs Geogram's exact-arithmetic mesh_boolean_operation() ("A+B",
+    // "A*B", "A-B") for the two-source constructor. Geogram's CSG reads
+    // and writes vertices through the double precision accessors and
+    // asserts on erhe's single precision meshes, so this runs the
+    // operation on double precision copies of both inputs and converts
+    // the result back to single precision (same bridging pattern as
+    // Remesh / Decimate).
+    void run_mesh_boolean_operation(const char* operation);
+
     // Optional selection of source facets the operation should act on. When
     // nullptr, the operation processes the whole mesh (every facet is treated as
     // selected). When set, an operation restricts its topology change to the
