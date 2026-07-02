@@ -217,6 +217,17 @@ auto Geometry_graph_window::make_node(const std::string& type_name) -> std::shar
     return node;
 }
 
+auto Geometry_graph_window::next_node_spawn_position() -> ImVec2
+{
+    constexpr float step_x  = 320.0f; // node width is ~290 (70 + 150 + 70 pin/center columns)
+    constexpr float step_y  = 200.0f;
+    constexpr int   columns = 4;
+    const int index  = m_spawn_count++;
+    const int column = index % columns;
+    const int row    = index / columns;
+    return ImVec2{static_cast<float>(column) * step_x, static_cast<float>(row) * step_y};
+}
+
 auto Geometry_graph_window::add_node_of_type(const std::string& type_name) -> Geometry_graph_node*
 {
     const std::shared_ptr<Geometry_graph_node> node = make_node(type_name);
@@ -228,6 +239,7 @@ auto Geometry_graph_window::add_node_of_type(const std::string& type_name) -> Ge
             *this, node, Geometry_graph_node_insert_remove_operation::Mode::insert
         )
     );
+    set_node_position(*node.get(), next_node_spawn_position());
     return node.get();
 }
 

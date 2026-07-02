@@ -176,6 +176,7 @@ void Geometry_graph_window::clear_graph()
     m_app_context.operation_stack->execute_now(
         std::make_shared<Geometry_graph_replace_operation>(*this, Geometry_graph_content{}, "Geometry graph clear")
     );
+    m_spawn_count = 0; // new nodes start from the canvas origin again
 }
 
 }

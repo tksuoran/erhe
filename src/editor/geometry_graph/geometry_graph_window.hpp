@@ -91,11 +91,17 @@ private:
     void handle_link_create();
     void handle_deletions();
 
+    // Canvas position for the next newly created node: a grid that
+    // advances with every add_node_of_type(), so new nodes do not all
+    // stack at (0, 0). Reset by clear_graph().
+    auto next_node_spawn_position() -> ImVec2;
+
     App_context&                                      m_app_context;
     Geometry_graph                                    m_graph;
     std::unique_ptr<ax::NodeEditor::EditorContext>    m_node_editor;
     std::vector<std::shared_ptr<Geometry_graph_node>> m_nodes;
     std::string                                       m_graph_path{"res/editor/graphs/geometry_graph.json"};
+    int                                               m_spawn_count{0};
 };
 
 }
