@@ -10,9 +10,9 @@ variable values at the fault site. Do NOT try to reason a crash out from
 `logs/log.txt` plus a stripped console backtrace alone, and do not just stare at a
 `logs/editor_crash_*.dmp` minidump -- they are a hypothesis, not the diagnosis.
 
-This is the condensed run-book; the full prose (every recipe, interface ranking and
-constraint) lives in CLAUDE.md under "Debugging on macOS (lldb, for Claude Code)"
-and "Debugging on Windows / MSVC (Visual Studio MCP server)".
+This is the authoritative macOS/Linux lldb run-book. The Windows VS-MCP prose
+(full tool list, typical flow, gotchas) lives in CLAUDE.md under "Debugging on
+Windows / MSVC (Visual Studio MCP server)".
 
 ## Pick the platform path
 
@@ -44,11 +44,16 @@ and "Debugging on Windows / MSVC (Visual Studio MCP server)".
    path if you want to `import lldb` from a matching python.)
 2. **lldb-dap** (`xcrun -f lldb-dap`) only when you need a *persistent interactive*
    session across multiple tool calls (genuine step-debugging) -- run it backgrounded
-   on a socket and send DAP requests so the debuggee stays stopped between
-   inspections. More plumbing; not for one-shot captures.
+   on a socket (`lldb-dap --connection listen://localhost:PORT`) and send DAP
+   JSON-RPC requests (`launch`, `setBreakpoints`, `stackTrace`, `scopes`,
+   `variables`, `evaluate`, async `stopped` events; Content-Length framing, seq
+   correlation) so the debuggee stays stopped between inspections. More plumbing;
+   not for one-shot captures.
 3. **Plain CLI** (`lldb -b -o "..." -o "..."`) -- fine for a quick one-line peek.
-4. lldb's built-in MCP server and GDB/MI are NOT worth it here (unstructured text /
-   Apple ships no `lldb-mi`).
+4. lldb's built-in MCP server and GDB/MI are NOT worth it here. Inside lldb,
+   `protocol-server start MCP listen://localhost:PORT` starts an `lldb-mcp` server,
+   but it exposes exactly one tool (`lldb_command`, text back) over raw TCP --
+   plumbing for no structured-data gain. Apple ships no `lldb-mi`.
 
 ## Canonical recipes (macOS, via the SB API / Bash)
 
