@@ -41,7 +41,8 @@ remain future work. All code lives in `src/editor/geometry_graph/`.
 | Phase 6b: copy-on-write pass-through                 | DONE   | 0881e107 |
 | Optional physics on output node (plan step 6 of phase 5) | DONE | ff414965 |
 | Phase 6d: instance system                            | DONE   | 823cf2f1 |
-| Phase 6c / 6e: fields, groups                        | future | -        |
+| Phase 6e: node groups                                | DONE   | e953ce5f |
+| Phase 6c: field system                               | future | -        |
 
 Verified end to end in the headless Vulkan build driven over the in-editor MCP
 server: box -> output and box -> conway dual -> output chains render in the
@@ -868,11 +869,20 @@ mesh snapshots); see [Implementation Status](#implementation-status).
   geometries are never mutated). Multi-link accumulation concatenates
   both into newly allocated sets.
 
-**6e. Node Groups:**
-- `Group_input_node` / `Group_output_node` defining interface
-- Inline expansion during evaluation
-- Serialization as separate graph assets
-- UI for entering/exiting group editing
+**6e. Node Groups:** (DONE - commit e953ce5f)
+- `Group_input_node` / `Group_output_node` define the interface (one
+  geometry pin each in this minimal version).
+- `Group_node` references a graph asset by path (a JSON file saved by
+  the graph window that contains the interface nodes), loads it into a
+  private subgraph, and evaluates it inline: the group's input feeds
+  the asset's Group Input, the asset's Group Output becomes the group's
+  output. The shared node factory (`make_geometry_graph_node()`) is
+  used for both window graphs and group assets.
+- Groups nest; a thread-local depth guard (8) breaks reference cycles
+  with a warning.
+- Group editing UI is the window's existing file toolbar: load the
+  asset file, edit it like any graph, save it back. Group nodes pick up
+  changes when their path is re-committed or the graph reloads.
 
 **6f. Additional Node Types:**
 - Convex hull, extrude, merge by distance, set material
