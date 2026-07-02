@@ -39,6 +39,14 @@ void Transform_node::evaluate(Geometry_graph&)
     transform = glm::rotate   (transform, glm::radians(rotation_degrees.x), glm::vec3{1.0f, 0.0f, 0.0f});
     transform = glm::scale    (transform, scale);
 
+    if (transform == glm::mat4{1.0f}) {
+        // Copy-on-write: an identity transform passes the upstream
+        // geometry through unchanged instead of copying it. Safe because
+        // nodes never mutate shared upstream geometry.
+        set_output(0, Geometry_payload{.value = source});
+        return;
+    }
+
     std::shared_ptr<erhe::geometry::Geometry> destination = std::make_shared<erhe::geometry::Geometry>("transformed");
     destination->copy_with_transform(*source.get(), erhe::geometry::to_geo_mat4f(transform));
     set_output(0, Geometry_payload{.value = destination});
