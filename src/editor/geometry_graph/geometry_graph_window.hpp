@@ -8,6 +8,11 @@
 #include <string>
 #include <vector>
 
+struct ImVec2;
+
+namespace erhe::graph {
+    class Pin;
+}
 namespace erhe::imgui {
     class Imgui_renderer;
     class Imgui_windows;
@@ -40,17 +45,31 @@ public:
     void imgui() override;
     auto flags() -> ImGuiWindowFlags override;
 
-    // Programmatic access (used by the in-editor MCP server).
+    // Undoable edits: each creates an Operation and executes it through
+    // the operation stack. Used by the toolbar / canvas gestures and the
+    // in-editor MCP server.
     // Type names: box, sphere, torus, cone, disc, subdivide, conway,
     // transform, triangulate, normalize, reverse, repair, join, boolean,
     // float, integer, vector, math, output.
     auto add_node_of_type(const std::string& type_name) -> Geometry_graph_node*;
+    void remove_node     (const std::shared_ptr<Geometry_graph_node>& node);
+    auto connect         (erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool;
+    void disconnect      (erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin);
+
     [[nodiscard]] auto get_graph() -> Geometry_graph&;
     [[nodiscard]] auto get_nodes() const -> const std::vector<std::shared_ptr<Geometry_graph_node>>&;
 
+    // Non-undoable primitives used by the geometry graph operations
+    // (and graph load); prefer the undoable edits above.
+    void insert_node    (const std::shared_ptr<Geometry_graph_node>& node);
+    void erase_node     (const std::shared_ptr<Geometry_graph_node>& node);
+    auto connect_pins   (erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool;
+    auto disconnect_pins(erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool;
+    [[nodiscard]] auto get_node_position(const Geometry_graph_node& node) -> ImVec2;
+    void set_node_position(const Geometry_graph_node& node, const ImVec2& position);
+
 private:
     auto make_node       (const std::string& type_name) -> std::shared_ptr<Geometry_graph_node>;
-    void add_node        (const std::shared_ptr<Geometry_graph_node>& node);
     void node_toolbar    ();
     void handle_link_create();
     void handle_deletions();

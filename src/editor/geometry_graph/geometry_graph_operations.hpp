@@ -1,0 +1,92 @@
+#pragma once
+
+#include "operations/operation.hpp"
+
+#include <imgui/imgui.h>
+
+#include <memory>
+#include <vector>
+
+namespace erhe::graph { class Pin; }
+
+namespace editor {
+
+class Geometry_graph_node;
+class Geometry_graph_window;
+
+// A link endpoint pair, with owning-node shared pointers keeping the
+// Pin objects alive while the record sits in the undo / redo stacks.
+class Geometry_graph_link_record
+{
+public:
+    std::shared_ptr<Geometry_graph_node> source_node;
+    std::shared_ptr<Geometry_graph_node> sink_node;
+    erhe::graph::Pin*                    source_pin{nullptr};
+    erhe::graph::Pin*                    sink_pin  {nullptr};
+};
+
+[[nodiscard]] auto make_link_record(erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> Geometry_graph_link_record;
+
+// Undoable add / delete of one geometry graph node. Removing a node
+// also removes its links; they are recorded and restored on undo,
+// together with the node's position on the editor canvas.
+class Geometry_graph_node_insert_remove_operation : public Operation
+{
+public:
+    enum class Mode : unsigned int {
+        insert = 0,
+        remove
+    };
+
+    Geometry_graph_node_insert_remove_operation(
+        Geometry_graph_window&                      window,
+        const std::shared_ptr<Geometry_graph_node>& node,
+        Mode                                        mode
+    );
+
+    // Implements Operation
+    void execute(App_context& context) override;
+    void undo   (App_context& context) override;
+
+private:
+    void insert();
+    void remove();
+
+    Geometry_graph_window&                  m_window;
+    std::shared_ptr<Geometry_graph_node>    m_node;
+    Mode                                    m_mode;
+    std::vector<Geometry_graph_link_record> m_links;
+    ImVec2                                  m_position    {0.0f, 0.0f};
+    bool                                    m_has_position{false};
+};
+
+// Undoable connect / disconnect of one geometry graph link.
+class Geometry_graph_link_insert_remove_operation : public Operation
+{
+public:
+    enum class Mode : unsigned int {
+        insert = 0,
+        remove
+    };
+
+    Geometry_graph_link_insert_remove_operation(
+        Geometry_graph_window& window,
+        erhe::graph::Pin*      source_pin,
+        erhe::graph::Pin*      sink_pin,
+        Mode                   mode
+    );
+
+    // Implements Operation
+    void execute(App_context& context) override;
+    void undo   (App_context& context) override;
+
+private:
+    void insert();
+    void remove();
+
+    Geometry_graph_window&      m_window;
+    Geometry_graph_link_record  m_link;
+    Mode                        m_mode;
+};
+
+}

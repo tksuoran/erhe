@@ -58,6 +58,14 @@ public:
     [[nodiscard]] auto can_undo      () const -> bool;
     [[nodiscard]] auto can_redo      () const -> bool;
     void queue(const std::shared_ptr<Operation>& operation);
+
+    // Executes the operation immediately (caller must be on the main
+    // thread) and records it for undo. Used where the caller needs the
+    // operation's effects to be observable right away, e.g. the MCP
+    // server responding to a tool call, or geometry graph edits whose
+    // evaluation runs in the same frame.
+    void execute_now(const std::shared_ptr<Operation>& operation);
+
     void undo();
     void redo();
 

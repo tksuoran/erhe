@@ -1115,7 +1115,9 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "get_transform_state")          result = query_transform_state              (req->arguments);
         else if (req->tool_name == "get_geometry_graph")           result = query_geometry_graph               (req->arguments);
         else if (req->tool_name == "geometry_graph_add_node")      result = action_geometry_graph_add_node     (req->arguments);
+        else if (req->tool_name == "geometry_graph_remove_node")   result = action_geometry_graph_remove_node  (req->arguments);
         else if (req->tool_name == "geometry_graph_connect")       result = action_geometry_graph_connect      (req->arguments);
+        else if (req->tool_name == "geometry_graph_disconnect")    result = action_geometry_graph_disconnect   (req->arguments);
         else                                              result = execute_command       (req->tool_name);
 
         } catch (const std::exception& e) {
@@ -1736,7 +1738,7 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"type"})}
     }});
-    m_tool_infos.push_back({"geometry_graph_connect", "Connect an output pin of one geometry graph node to an input pin of another (pins are addressed by node id + pin slot index; pin keys must match). The graph re-evaluates immediately.", {
+    m_tool_infos.push_back({"geometry_graph_connect", "Connect an output pin of one geometry graph node to an input pin of another (pins are addressed by node id + pin slot index; pin keys must match). Undoable; the graph re-evaluates immediately.", {
         {"type", "object"},
         {"properties", {
             {"source_node_id", {{"type", "integer"}, {"description", "Id of the node providing the output"}}},
@@ -1745,6 +1747,23 @@ void Mcp_server::refresh_tool_list()
             {"sink_slot",      {{"type", "integer"}, {"description", "Input pin slot index on the sink node (default 0)"}}}
         }},
         {"required", json::array({"source_node_id", "sink_node_id"})}
+    }});
+    m_tool_infos.push_back({"geometry_graph_disconnect", "Disconnect a geometry graph link (addressed like geometry_graph_connect). Undoable.", {
+        {"type", "object"},
+        {"properties", {
+            {"source_node_id", {{"type", "integer"}, {"description", "Id of the node providing the output"}}},
+            {"source_slot",    {{"type", "integer"}, {"description", "Output pin slot index on the source node (default 0)"}}},
+            {"sink_node_id",   {{"type", "integer"}, {"description", "Id of the node receiving the input"}}},
+            {"sink_slot",      {{"type", "integer"}, {"description", "Input pin slot index on the sink node (default 0)"}}}
+        }},
+        {"required", json::array({"source_node_id", "sink_node_id"})}
+    }});
+    m_tool_infos.push_back({"geometry_graph_remove_node", "Remove a geometry graph node (its links are removed too). Undoable.", {
+        {"type", "object"},
+        {"properties", {
+            {"node_id", {{"type", "integer"}, {"description", "Id of the node to remove"}}}
+        }},
+        {"required", json::array({"node_id"})}
     }});
 
     // Editor commands
@@ -5537,8 +5556,25 @@ auto Mcp_server::action_geometry_graph_add_node(const json& args) -> std::string
     if (node == nullptr) {
         return make_error_content("Unknown geometry graph node type: " + type_name);
     }
-    window->get_graph().evaluate_if_dirty();
     return make_json_content(geometry_graph_node_json(*node)).dump();
+}
+
+auto Mcp_server::action_geometry_graph_remove_node(const json& args) -> std::string
+{
+    Geometry_graph_window* window = m_context.geometry_graph_window;
+    if (window == nullptr) {
+        return make_error_content("Geometry graph window not available");
+    }
+    const std::size_t node_id = args.value("node_id", std::size_t{0});
+    Geometry_graph_node* node = find_geometry_graph_node(window->get_nodes(), node_id);
+    if (node == nullptr) {
+        return make_error_content("Node not found");
+    }
+    window->remove_node(std::dynamic_pointer_cast<Geometry_graph_node>(node->node_from_this()));
+
+    json result;
+    result["removed"] = true;
+    return make_json_content(result).dump();
 }
 
 auto Mcp_server::action_geometry_graph_connect(const json& args) -> std::string
@@ -5568,15 +5604,39 @@ auto Mcp_server::action_geometry_graph_connect(const json& args) -> std::string
     }
     erhe::graph::Pin* source_pin = &source_node->get_output_pins().at(source_slot);
     erhe::graph::Pin* sink_pin   = &sink_node->get_input_pins().at(sink_slot);
-    erhe::graph::Link* link = window->get_graph().connect(source_pin, sink_pin);
-    if (link == nullptr) {
+    const bool connected = window->connect(source_pin, sink_pin);
+    if (!connected) {
         return make_error_content("Connect failed (pin key mismatch?)");
     }
-    window->get_graph().mark_dirty();
-    window->get_graph().evaluate_if_dirty();
 
     json result;
     result["connected"] = true;
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_geometry_graph_disconnect(const json& args) -> std::string
+{
+    Geometry_graph_window* window = m_context.geometry_graph_window;
+    if (window == nullptr) {
+        return make_error_content("Geometry graph window not available");
+    }
+    const std::size_t source_node_id = args.value("source_node_id", std::size_t{0});
+    const std::size_t source_slot    = args.value("source_slot",    std::size_t{0});
+    const std::size_t sink_node_id   = args.value("sink_node_id",   std::size_t{0});
+    const std::size_t sink_slot      = args.value("sink_slot",      std::size_t{0});
+
+    Geometry_graph_node* source_node = find_geometry_graph_node(window->get_nodes(), source_node_id);
+    Geometry_graph_node* sink_node   = find_geometry_graph_node(window->get_nodes(), sink_node_id);
+    if ((source_node == nullptr) || (sink_node == nullptr)) {
+        return make_error_content("Node not found");
+    }
+    if ((source_slot >= source_node->get_output_pins().size()) || (sink_slot >= sink_node->get_input_pins().size())) {
+        return make_error_content("Pin slot out of range");
+    }
+    window->disconnect(&source_node->get_output_pins().at(source_slot), &sink_node->get_input_pins().at(sink_slot));
+
+    json result;
+    result["disconnected"] = true;
     return make_json_content(result).dump();
 }
 

@@ -132,6 +132,10 @@ void Geometry_graph_node::imgui()
 {
 }
 
+void Geometry_graph_node::on_removed_from_graph()
+{
+}
+
 void Geometry_graph_node::node_editor(App_context& app_context, ax::NodeEditor::EditorContext& node_editor)
 {
     ImGui::PushID(static_cast<int>(get_id()));

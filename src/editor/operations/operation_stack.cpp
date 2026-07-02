@@ -89,6 +89,15 @@ void Operation_stack::queue(const std::shared_ptr<Operation>& operation)
     m_queued.push_back(operation);
 }
 
+void Operation_stack::execute_now(const std::shared_ptr<Operation>& operation)
+{
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+
+    operation->execute(m_context);
+    m_executed.push_back(operation);
+    m_undone.clear();
+}
+
 void Operation_stack::update()
 {
     ERHE_PROFILE_FUNCTION();

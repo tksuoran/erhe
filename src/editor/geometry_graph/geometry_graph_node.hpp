@@ -70,6 +70,13 @@ public:
     virtual void evaluate(Geometry_graph& graph);
     virtual void imgui   ();
 
+    // Called when the node leaves the graph (deletion, undo of add,
+    // graph clear / load). The node object may stay alive in the undo
+    // stack, so side effects outside the graph - like the scene mesh
+    // owned by the output node - must be released here rather than in
+    // the destructor.
+    virtual void on_removed_from_graph();
+
 protected:
     void show_pins(
         ax::NodeEditor::EditorContext&                        node_editor,

@@ -4,6 +4,7 @@
 
 #include "geometry_graph/geometry_graph_window.hpp"
 #include "geometry_graph/geometry_graph_node.hpp"
+#include "geometry_graph/geometry_graph_operations.hpp"
 #include "geometry_graph/nodes/boolean_node.hpp"
 #include "geometry_graph/nodes/conway_node.hpp"
 #include "geometry_graph/nodes/geometry_output_node.hpp"
@@ -25,6 +26,7 @@
 #include "erhe_geometry/operation/triangulate.hpp"
 
 #include "app_context.hpp"
+#include "operations/operation_stack.hpp"
 #include "tools/selection_tool.hpp"
 
 #include "erhe_graph/link.hpp"
@@ -58,13 +60,97 @@ auto Geometry_graph_window::flags() -> ImGuiWindowFlags
     return ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
 }
 
-void Geometry_graph_window::add_node(const std::shared_ptr<Geometry_graph_node>& node)
+void Geometry_graph_window::insert_node(const std::shared_ptr<Geometry_graph_node>& node)
 {
     constexpr uint64_t flags = erhe::Item_flags::visible | erhe::Item_flags::content | erhe::Item_flags::show_in_ui;
     node->enable_flag_bits(flags);
     m_nodes.push_back(node);
     m_graph.register_node(node.get());
     m_graph.mark_dirty();
+}
+
+void Geometry_graph_window::erase_node(const std::shared_ptr<Geometry_graph_node>& node)
+{
+    auto i = std::find(m_nodes.begin(), m_nodes.end(), node);
+    if (i == m_nodes.end()) {
+        return;
+    }
+    if (node->is_selected()) {
+        m_app_context.selection->remove_from_selection(node);
+    }
+    m_graph.unregister_node(node.get());
+    m_nodes.erase(i);
+    node->on_removed_from_graph();
+    m_graph.mark_dirty();
+}
+
+auto Geometry_graph_window::connect_pins(erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool
+{
+    erhe::graph::Link* link = m_graph.connect(source_pin, sink_pin);
+    if (link == nullptr) {
+        return false;
+    }
+    m_graph.mark_dirty();
+    return true;
+}
+
+auto Geometry_graph_window::disconnect_pins(erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool
+{
+    std::vector<std::unique_ptr<erhe::graph::Link>>& links = m_graph.get_links();
+    auto i = std::find_if(
+        links.begin(),
+        links.end(),
+        [source_pin, sink_pin](const std::unique_ptr<erhe::graph::Link>& entry) {
+            return (entry->get_source() == source_pin) && (entry->get_sink() == sink_pin);
+        }
+    );
+    if (i == links.end()) {
+        return false;
+    }
+    m_graph.disconnect(i->get());
+    m_graph.mark_dirty();
+    return true;
+}
+
+auto Geometry_graph_window::get_node_position(const Geometry_graph_node& node) -> ImVec2
+{
+    return m_node_editor->GetNodePosition(ax::NodeEditor::NodeId{node.get_id()});
+}
+
+void Geometry_graph_window::set_node_position(const Geometry_graph_node& node, const ImVec2& position)
+{
+    m_node_editor->SetNodePosition(ax::NodeEditor::NodeId{node.get_id()}, position);
+}
+
+void Geometry_graph_window::remove_node(const std::shared_ptr<Geometry_graph_node>& node)
+{
+    m_app_context.operation_stack->execute_now(
+        std::make_shared<Geometry_graph_node_insert_remove_operation>(
+            *this, node, Geometry_graph_node_insert_remove_operation::Mode::remove
+        )
+    );
+}
+
+auto Geometry_graph_window::connect(erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool
+{
+    if ((source_pin == nullptr) || (sink_pin == nullptr) || (source_pin->get_key() != sink_pin->get_key())) {
+        return false;
+    }
+    m_app_context.operation_stack->execute_now(
+        std::make_shared<Geometry_graph_link_insert_remove_operation>(
+            *this, source_pin, sink_pin, Geometry_graph_link_insert_remove_operation::Mode::insert
+        )
+    );
+    return true;
+}
+
+void Geometry_graph_window::disconnect(erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin)
+{
+    m_app_context.operation_stack->execute_now(
+        std::make_shared<Geometry_graph_link_insert_remove_operation>(
+            *this, source_pin, sink_pin, Geometry_graph_link_insert_remove_operation::Mode::remove
+        )
+    );
 }
 
 auto Geometry_graph_window::make_node(const std::string& type_name) -> std::shared_ptr<Geometry_graph_node>
@@ -97,7 +183,11 @@ auto Geometry_graph_window::add_node_of_type(const std::string& type_name) -> Ge
     if (!node) {
         return nullptr;
     }
-    add_node(node);
+    m_app_context.operation_stack->execute_now(
+        std::make_shared<Geometry_graph_node_insert_remove_operation>(
+            *this, node, Geometry_graph_node_insert_remove_operation::Mode::insert
+        )
+    );
     return node.get();
 }
 
@@ -188,15 +278,7 @@ void Geometry_graph_window::handle_link_create()
                 ) {
                     acceptable = true;
                     if (m_node_editor->AcceptNewItem()) { // mouse released?
-                        erhe::graph::Link* link = m_graph.connect(source_pin, sink_pin);
-                        if (link != nullptr) {
-                            m_node_editor->Link(
-                                ax::NodeEditor::LinkId{link},
-                                ax::NodeEditor::PinId{source_pin},
-                                ax::NodeEditor::PinId{sink_pin}
-                            );
-                            m_graph.mark_dirty();
-                        }
+                        connect(source_pin, sink_pin);
                     }
                 }
             }
@@ -219,13 +301,8 @@ void Geometry_graph_window::handle_deletions()
                     return entry_node_id == node_handle;
                 });
                 if (i != m_nodes.end()) {
-                    const std::shared_ptr<Geometry_graph_node>& geometry_graph_node = *i;
-                    if (geometry_graph_node->is_selected()) {
-                        m_app_context.selection->remove_from_selection(geometry_graph_node);
-                    }
-                    m_graph.unregister_node(i->get());
-                    m_nodes.erase(i);
-                    m_graph.mark_dirty();
+                    const std::shared_ptr<Geometry_graph_node> geometry_graph_node = *i; // copy - remove_node() erases from m_nodes
+                    remove_node(geometry_graph_node);
                 }
             }
         }
@@ -239,8 +316,7 @@ void Geometry_graph_window::handle_deletions()
                     return entry_link_id == link_handle;
                 });
                 if (i != links.end()) {
-                    m_graph.disconnect(i->get());
-                    m_graph.mark_dirty();
+                    disconnect((*i)->get_source(), (*i)->get_sink());
                 }
             }
         }

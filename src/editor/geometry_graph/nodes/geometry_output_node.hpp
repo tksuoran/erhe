@@ -31,6 +31,7 @@ public:
 
     void evaluate(Geometry_graph&) override;
     void imgui   () override;
+    void on_removed_from_graph() override;
 
 private:
     void remove_scene_node();

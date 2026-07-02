@@ -160,7 +160,9 @@ private:
     auto query_transform_state                (const nlohmann::json& args) -> std::string;
     auto query_geometry_graph                 (const nlohmann::json& args) -> std::string;
     auto action_geometry_graph_add_node       (const nlohmann::json& args) -> std::string;
+    auto action_geometry_graph_remove_node    (const nlohmann::json& args) -> std::string;
     auto action_geometry_graph_connect        (const nlohmann::json& args) -> std::string;
+    auto action_geometry_graph_disconnect     (const nlohmann::json& args) -> std::string;
     auto execute_command        (const std::string& tool_name) -> std::string;
 
     erhe::commands::Commands& m_commands;

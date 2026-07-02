@@ -34,6 +34,11 @@ Geometry_output_node::~Geometry_output_node() noexcept
     remove_scene_node();
 }
 
+void Geometry_output_node::on_removed_from_graph()
+{
+    remove_scene_node();
+}
+
 void Geometry_output_node::remove_scene_node()
 {
     if (m_node) {
