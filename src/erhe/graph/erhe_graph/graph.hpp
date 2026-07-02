@@ -33,6 +33,13 @@ public:
     void disconnect     (Link* link);
     void sort           ();
 
+    // True when linking source_pin to sink_pin would make the graph cyclic,
+    // i.e. the source pin's node is already reachable from the sink pin's
+    // node by following existing links downstream (a pin connected to its
+    // own node included). connect() refuses such links; UI link gestures
+    // can pre-query this to reject them visually before the drop.
+    [[nodiscard]] auto would_create_cycle(const Pin* source_pin, const Pin* sink_pin) const -> bool;
+
     [[nodiscard]] auto get_nodes() const -> const std::vector<Node*>&;
     [[nodiscard]] auto get_nodes()       -> std::vector<Node*>&;
     [[nodiscard]] auto get_links()       -> std::vector<std::unique_ptr<Link>>&;

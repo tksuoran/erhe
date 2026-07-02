@@ -28,6 +28,8 @@
 #include <cfloat>
 #include <fstream>
 #include <sstream>
+#include <utility>
+#include <vector>
 
 namespace editor {
 
@@ -44,6 +46,37 @@ namespace {
         }
     }
     return -1;
+}
+
+// Kahn's algorithm over (source_node_index, sink_node_index) pairs:
+// repeatedly remove nodes with no incoming links; leftovers mean the
+// links close a cycle (self links included).
+[[nodiscard]] auto links_form_cycle(const std::vector<std::pair<int, int>>& links, const int node_count) -> bool
+{
+    std::vector<int> in_degree(static_cast<std::size_t>(node_count), 0);
+    for (const std::pair<int, int>& link : links) {
+        ++in_degree[static_cast<std::size_t>(link.second)];
+    }
+    std::vector<int> ready;
+    for (int node = 0; node < node_count; ++node) {
+        if (in_degree[static_cast<std::size_t>(node)] == 0) {
+            ready.push_back(node);
+        }
+    }
+    int removed_count = 0;
+    while (!ready.empty()) {
+        const int node = ready.back();
+        ready.pop_back();
+        ++removed_count;
+        for (const std::pair<int, int>& link : links) {
+            if (link.first == node) {
+                if (--in_degree[static_cast<std::size_t>(link.second)] == 0) {
+                    ready.push_back(link.second);
+                }
+            }
+        }
+    }
+    return removed_count != node_count;
 }
 
 } // anonymous namespace
@@ -143,6 +176,7 @@ auto Geometry_graph_window::load_graph(const std::filesystem::path& path) -> boo
 
     const int node_count = static_cast<int>(content.nodes.size());
     const nlohmann::json links_json = root.value("links", nlohmann::json::array());
+    std::vector<std::pair<int, int>> link_endpoints;
     for (const nlohmann::json& link_json : links_json) {
         const int         source_node = link_json.value("source_node", -1);
         const std::size_t source_slot = link_json.value("source_slot", std::size_t{0});
@@ -158,9 +192,21 @@ auto Geometry_graph_window::load_graph(const std::filesystem::path& path) -> boo
             log_graph_editor->warn("Geometry graph load: link pin slot out of range in '{}'", path.string());
             return false;
         }
+        if (source->get_output_pins().at(source_slot).get_key() != sink->get_input_pins().at(sink_slot).get_key()) {
+            log_graph_editor->warn("Geometry graph load: link pin key mismatch in '{}'", path.string());
+            return false;
+        }
+        link_endpoints.emplace_back(source_node, sink_node);
         content.links.push_back(
             make_link_record(&source->get_output_pins().at(source_slot), &sink->get_input_pins().at(sink_slot))
         );
+    }
+    // The graph must stay acyclic (Graph::connect() would refuse the
+    // offending link at apply time); reject the whole file like the
+    // other validation failures above.
+    if (links_form_cycle(link_endpoints, node_count)) {
+        log_graph_editor->warn("Geometry graph load: links form a cycle in '{}'", path.string());
+        return false;
     }
 
     const std::size_t link_count = content.links.size();

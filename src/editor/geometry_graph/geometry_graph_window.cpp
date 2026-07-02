@@ -8,6 +8,7 @@
 #include "geometry_graph/geometry_graph_operations.hpp"
 
 #include "app_context.hpp"
+#include "editor_log.hpp"
 #include "operations/operation_stack.hpp"
 #include "tools/selection_tool.hpp"
 
@@ -140,6 +141,16 @@ void Geometry_graph_window::remove_node(const std::shared_ptr<Geometry_graph_nod
 auto Geometry_graph_window::connect(erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool
 {
     if ((source_pin == nullptr) || (sink_pin == nullptr) || (source_pin->get_key() != sink_pin->get_key())) {
+        return false;
+    }
+    // Validate before creating the operation: a refused link must not
+    // leave a no-op entry on the undo stack.
+    if (m_graph.would_create_cycle(source_pin, sink_pin)) {
+        log_graph_editor->warn(
+            "Geometry graph: connecting '{}' to '{}' would create a cycle - refusing",
+            source_pin->get_owner_node()->get_name(),
+            sink_pin  ->get_owner_node()->get_name()
+        );
         return false;
     }
     m_app_context.operation_stack->execute_now(
@@ -302,7 +313,8 @@ void Geometry_graph_window::handle_link_create()
                     (sink_pin != nullptr) &&
                     (source_pin != sink_pin) &&
                     (source_node != sink_node) &&
-                    (source_pin->get_key() == sink_pin->get_key())
+                    (source_pin->get_key() == sink_pin->get_key()) &&
+                    !m_graph.would_create_cycle(source_pin, sink_pin)
                 ) {
                     acceptable = true;
                     if (m_node_editor->AcceptNewItem()) { // mouse released?

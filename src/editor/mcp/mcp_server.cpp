@@ -5699,7 +5699,7 @@ auto Mcp_server::action_geometry_graph_connect(const json& args) -> std::string
     erhe::graph::Pin* sink_pin   = &sink_node->get_input_pins().at(sink_slot);
     const bool connected = window->connect(source_pin, sink_pin);
     if (!connected) {
-        return make_error_content("Connect failed (pin key mismatch?)");
+        return make_error_content("Connect failed (pin key mismatch, or the link would create a cycle)");
     }
 
     json result;

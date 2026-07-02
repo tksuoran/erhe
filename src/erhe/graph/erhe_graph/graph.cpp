@@ -7,6 +7,8 @@
 
 #include <spdlog/spdlog.h>
 
+#include <algorithm>
+
 namespace erhe::graph {
 
 void Graph::register_node(Node* node)
@@ -57,6 +59,35 @@ void Graph::unregister_node(Node* node)
     log_graph->trace("Unregistered Node {} {}", node->get_name(), node->get_id());
 }
 
+auto Graph::would_create_cycle(const Pin* source_pin, const Pin* sink_pin) const -> bool
+{
+    ERHE_VERIFY(source_pin != nullptr);
+    ERHE_VERIFY(sink_pin != nullptr);
+
+    const Node* source_node = source_pin->get_owner_node();
+    const Node* sink_node   = sink_pin->get_owner_node();
+    std::vector<const Node*> stack;
+    std::vector<const Node*> visited;
+    stack.push_back(sink_node);
+    while (!stack.empty()) {
+        const Node* node = stack.back();
+        stack.pop_back();
+        if (node == source_node) {
+            return true;
+        }
+        if (std::find(visited.begin(), visited.end(), node) != visited.end()) {
+            continue;
+        }
+        visited.push_back(node);
+        for (const Pin& pin : node->get_output_pins()) {
+            for (const Link* link : pin.get_links()) {
+                stack.push_back(link->get_sink()->get_owner_node());
+            }
+        }
+    }
+    return false;
+}
+
 auto Graph::connect(Pin* source_pin, Pin* sink_pin) -> Link*
 {
     ERHE_VERIFY(source_pin != nullptr);
@@ -64,6 +95,17 @@ auto Graph::connect(Pin* source_pin, Pin* sink_pin) -> Link*
 
     if (sink_pin->get_key() != source_pin->get_key()) {
         log_graph->warn("Sink pin key {} does not match source pin key {}", sink_pin->get_key(), source_pin->get_key());
+        return nullptr;
+    }
+    // sort() requires an acyclic graph; a link that closes a cycle (self
+    // links included) would leave the graph permanently unsortable and
+    // its nodes perpetually dirty, so refuse to create it.
+    if (would_create_cycle(source_pin, sink_pin)) {
+        log_graph->warn(
+            "Connecting {} {} to {} {} would create a cycle - refusing",
+            source_pin->get_owner_node()->get_name(), source_pin->get_name(),
+            sink_pin  ->get_owner_node()->get_name(), sink_pin  ->get_name()
+        );
         return nullptr;
     }
     m_links.push_back(std::make_unique<Link>(source_pin, sink_pin));

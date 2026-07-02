@@ -155,7 +155,12 @@ auto Group_node::load_subgraph(const std::filesystem::path& path) -> bool
             unload_subgraph();
             return false;
         }
-        m_subgraph.connect(&source->get_output_pins().at(source_slot), &sink->get_input_pins().at(sink_slot));
+        erhe::graph::Link* link = m_subgraph.connect(&source->get_output_pins().at(source_slot), &sink->get_input_pins().at(sink_slot));
+        if (link == nullptr) {
+            log_graph_editor->warn("Group node: link rejected (pin key mismatch or cycle) in group asset '{}'", path.string());
+            unload_subgraph();
+            return false;
+        }
     }
 
     for (const std::shared_ptr<Geometry_graph_node>& node : m_subgraph_nodes) {
