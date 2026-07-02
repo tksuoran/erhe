@@ -6,6 +6,7 @@
 #include "geometry_graph/geometry_graph_node.hpp"
 #include "geometry_graph/nodes/boolean_node.hpp"
 #include "geometry_graph/nodes/conway_node.hpp"
+#include "geometry_graph/nodes/geometry_output_node.hpp"
 #include "geometry_graph/nodes/geometry_unary_operation_node.hpp"
 #include "geometry_graph/nodes/join_geometry_node.hpp"
 #include "geometry_graph/nodes/math_node.hpp"
@@ -66,28 +67,73 @@ void Geometry_graph_window::add_node(const std::shared_ptr<Geometry_graph_node>&
     m_graph.mark_dirty();
 }
 
+auto Geometry_graph_window::make_node(const std::string& type_name) -> std::shared_ptr<Geometry_graph_node>
+{
+    if (type_name == "box")         { return std::make_shared<Mesh_box_node   >(); }
+    if (type_name == "sphere")      { return std::make_shared<Mesh_sphere_node>(); }
+    if (type_name == "torus")       { return std::make_shared<Mesh_torus_node >(); }
+    if (type_name == "cone")        { return std::make_shared<Mesh_cone_node  >(); }
+    if (type_name == "disc")        { return std::make_shared<Mesh_disc_node  >(); }
+    if (type_name == "subdivide")   { return std::make_shared<Subdivide_node  >(); }
+    if (type_name == "conway")      { return std::make_shared<Conway_node     >(); }
+    if (type_name == "transform")   { return std::make_shared<Transform_node  >(); }
+    if (type_name == "triangulate") { return std::make_shared<Geometry_unary_operation_node>("Triangulate", &erhe::geometry::operation::triangulate); }
+    if (type_name == "normalize")   { return std::make_shared<Geometry_unary_operation_node>("Normalize",   &erhe::geometry::operation::normalize); }
+    if (type_name == "reverse")     { return std::make_shared<Geometry_unary_operation_node>("Reverse",     &erhe::geometry::operation::reverse); }
+    if (type_name == "repair")      { return std::make_shared<Geometry_unary_operation_node>("Repair",      &erhe::geometry::operation::repair); }
+    if (type_name == "join")        { return std::make_shared<Join_geometry_node>(); }
+    if (type_name == "boolean")     { return std::make_shared<Boolean_node      >(); }
+    if (type_name == "float")       { return std::make_shared<Float_value_node  >(); }
+    if (type_name == "integer")     { return std::make_shared<Integer_value_node>(); }
+    if (type_name == "vector")      { return std::make_shared<Vector_value_node >(); }
+    if (type_name == "math")        { return std::make_shared<Math_node         >(); }
+    if (type_name == "output")      { return std::make_shared<Geometry_output_node>(m_app_context); }
+    return {};
+}
+
+auto Geometry_graph_window::add_node_of_type(const std::string& type_name) -> Geometry_graph_node*
+{
+    const std::shared_ptr<Geometry_graph_node> node = make_node(type_name);
+    if (!node) {
+        return nullptr;
+    }
+    add_node(node);
+    return node.get();
+}
+
+auto Geometry_graph_window::get_graph() -> Geometry_graph&
+{
+    return m_graph;
+}
+
+auto Geometry_graph_window::get_nodes() const -> const std::vector<std::shared_ptr<Geometry_graph_node>>&
+{
+    return m_nodes;
+}
+
 void Geometry_graph_window::node_toolbar()
 {
-                       if (ImGui::Button("Box"))    { add_node(std::make_shared<Mesh_box_node   >()); }
-    ImGui::SameLine(); if (ImGui::Button("Sphere")) { add_node(std::make_shared<Mesh_sphere_node>()); }
-    ImGui::SameLine(); if (ImGui::Button("Torus"))  { add_node(std::make_shared<Mesh_torus_node >()); }
-    ImGui::SameLine(); if (ImGui::Button("Cone"))   { add_node(std::make_shared<Mesh_cone_node  >()); }
-    ImGui::SameLine(); if (ImGui::Button("Disc"))   { add_node(std::make_shared<Mesh_disc_node  >()); }
+                       if (ImGui::Button("Box"))    { add_node_of_type("box"); }
+    ImGui::SameLine(); if (ImGui::Button("Sphere")) { add_node_of_type("sphere"); }
+    ImGui::SameLine(); if (ImGui::Button("Torus"))  { add_node_of_type("torus"); }
+    ImGui::SameLine(); if (ImGui::Button("Cone"))   { add_node_of_type("cone"); }
+    ImGui::SameLine(); if (ImGui::Button("Disc"))   { add_node_of_type("disc"); }
 
-                       if (ImGui::Button("Subdivide"))   { add_node(std::make_shared<Subdivide_node>()); }
-    ImGui::SameLine(); if (ImGui::Button("Conway"))      { add_node(std::make_shared<Conway_node   >()); }
-    ImGui::SameLine(); if (ImGui::Button("Transform"))   { add_node(std::make_shared<Transform_node>()); }
-    ImGui::SameLine(); if (ImGui::Button("Triangulate")) { add_node(std::make_shared<Geometry_unary_operation_node>("Triangulate", &erhe::geometry::operation::triangulate)); }
-    ImGui::SameLine(); if (ImGui::Button("Normalize"))   { add_node(std::make_shared<Geometry_unary_operation_node>("Normalize",   &erhe::geometry::operation::normalize)); }
-    ImGui::SameLine(); if (ImGui::Button("Reverse"))     { add_node(std::make_shared<Geometry_unary_operation_node>("Reverse",     &erhe::geometry::operation::reverse)); }
-    ImGui::SameLine(); if (ImGui::Button("Repair"))      { add_node(std::make_shared<Geometry_unary_operation_node>("Repair",      &erhe::geometry::operation::repair)); }
+                       if (ImGui::Button("Subdivide"))   { add_node_of_type("subdivide"); }
+    ImGui::SameLine(); if (ImGui::Button("Conway"))      { add_node_of_type("conway"); }
+    ImGui::SameLine(); if (ImGui::Button("Transform"))   { add_node_of_type("transform"); }
+    ImGui::SameLine(); if (ImGui::Button("Triangulate")) { add_node_of_type("triangulate"); }
+    ImGui::SameLine(); if (ImGui::Button("Normalize"))   { add_node_of_type("normalize"); }
+    ImGui::SameLine(); if (ImGui::Button("Reverse"))     { add_node_of_type("reverse"); }
+    ImGui::SameLine(); if (ImGui::Button("Repair"))      { add_node_of_type("repair"); }
 
-                       if (ImGui::Button("Join"))    { add_node(std::make_shared<Join_geometry_node>()); }
-    ImGui::SameLine(); if (ImGui::Button("Boolean")) { add_node(std::make_shared<Boolean_node      >()); }
-    ImGui::SameLine(); if (ImGui::Button("Float"))   { add_node(std::make_shared<Float_value_node  >()); }
-    ImGui::SameLine(); if (ImGui::Button("Integer")) { add_node(std::make_shared<Integer_value_node>()); }
-    ImGui::SameLine(); if (ImGui::Button("Vector"))  { add_node(std::make_shared<Vector_value_node >()); }
-    ImGui::SameLine(); if (ImGui::Button("Math"))    { add_node(std::make_shared<Math_node         >()); }
+                       if (ImGui::Button("Join"))    { add_node_of_type("join"); }
+    ImGui::SameLine(); if (ImGui::Button("Boolean")) { add_node_of_type("boolean"); }
+    ImGui::SameLine(); if (ImGui::Button("Float"))   { add_node_of_type("float"); }
+    ImGui::SameLine(); if (ImGui::Button("Integer")) { add_node_of_type("integer"); }
+    ImGui::SameLine(); if (ImGui::Button("Vector"))  { add_node_of_type("vector"); }
+    ImGui::SameLine(); if (ImGui::Button("Math"))    { add_node_of_type("math"); }
+    ImGui::SameLine(); if (ImGui::Button("Output"))  { add_node_of_type("output"); }
 }
 
 void Geometry_graph_window::imgui()

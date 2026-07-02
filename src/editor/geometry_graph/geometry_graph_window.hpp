@@ -5,6 +5,7 @@
 #include "erhe_imgui/imgui_window.hpp"
 
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace erhe::imgui {
@@ -39,7 +40,16 @@ public:
     void imgui() override;
     auto flags() -> ImGuiWindowFlags override;
 
+    // Programmatic access (used by the in-editor MCP server).
+    // Type names: box, sphere, torus, cone, disc, subdivide, conway,
+    // transform, triangulate, normalize, reverse, repair, join, boolean,
+    // float, integer, vector, math, output.
+    auto add_node_of_type(const std::string& type_name) -> Geometry_graph_node*;
+    [[nodiscard]] auto get_graph() -> Geometry_graph&;
+    [[nodiscard]] auto get_nodes() const -> const std::vector<std::shared_ptr<Geometry_graph_node>>&;
+
 private:
+    auto make_node       (const std::string& type_name) -> std::shared_ptr<Geometry_graph_node>;
     void add_node        (const std::shared_ptr<Geometry_graph_node>& node);
     void node_toolbar    ();
     void handle_link_create();

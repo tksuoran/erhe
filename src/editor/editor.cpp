@@ -2289,6 +2289,7 @@ public:
         m_app_context.editor_settings          = &m_editor_settings;
         m_app_context.app_windows              = m_app_windows           .get();
         m_app_context.fly_camera_tool          = m_fly_camera_tool       .get();
+        m_app_context.geometry_graph_window    = m_geometry_graph_window .get();
         m_app_context.navigation_gizmo_tool    = m_navigation_gizmo_tool .get();
         m_app_context.grid_tool                = m_grid_tool             .get();
 #if defined(ERHE_XR_LIBRARY_OPENXR)

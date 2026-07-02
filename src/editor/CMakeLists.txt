@@ -185,6 +185,8 @@ erhe_target_sources_grouped(
     geometry_graph/nodes/boolean_node.hpp
     geometry_graph/nodes/conway_node.cpp
     geometry_graph/nodes/conway_node.hpp
+    geometry_graph/nodes/geometry_output_node.cpp
+    geometry_graph/nodes/geometry_output_node.hpp
     geometry_graph/nodes/geometry_unary_operation_node.cpp
     geometry_graph/nodes/geometry_unary_operation_node.hpp
     geometry_graph/nodes/join_geometry_node.cpp

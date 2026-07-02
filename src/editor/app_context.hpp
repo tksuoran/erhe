@@ -58,6 +58,7 @@ class App_scenes;
 class App_settings;
 class App_windows;
 class Fly_camera_tool;
+class Geometry_graph_window;
 class Grid_tool;
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 class Hand_tracker;
@@ -163,6 +164,7 @@ public:
     App_settings*                      app_settings         {nullptr};
     App_windows*                       app_windows          {nullptr};
     Fly_camera_tool*                   fly_camera_tool      {nullptr};
+    Geometry_graph_window*             geometry_graph_window{nullptr};
     Grid_tool*                         grid_tool            {nullptr};
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     Hand_tracker*                      hand_tracker         {nullptr};
