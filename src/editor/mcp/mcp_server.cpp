@@ -1116,6 +1116,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "get_geometry_graph")           result = query_geometry_graph               (req->arguments);
         else if (req->tool_name == "geometry_graph_add_node")      result = action_geometry_graph_add_node     (req->arguments);
         else if (req->tool_name == "geometry_graph_remove_node")   result = action_geometry_graph_remove_node  (req->arguments);
+        else if (req->tool_name == "geometry_graph_set_parameter") result = action_geometry_graph_set_parameter(req->arguments);
         else if (req->tool_name == "geometry_graph_connect")       result = action_geometry_graph_connect      (req->arguments);
         else if (req->tool_name == "geometry_graph_disconnect")    result = action_geometry_graph_disconnect   (req->arguments);
         else if (req->tool_name == "geometry_graph_save")          result = action_geometry_graph_save         (req->arguments);
@@ -1767,6 +1768,14 @@ void Mcp_server::refresh_tool_list()
             {"node_id", {{"type", "integer"}, {"description", "Id of the node to remove"}}}
         }},
         {"required", json::array({"node_id"})}
+    }});
+    m_tool_infos.push_back({"geometry_graph_set_parameter", "Set parameters of a geometry graph node. Takes the same JSON object shape as the graph file's per-node 'parameters' (see get_geometry_graph); partial updates are allowed - omitted keys keep their current values. Undoable; the graph re-evaluates immediately.", {
+        {"type", "object"},
+        {"properties", {
+            {"node_id",    {{"type", "integer"}, {"description", "Id of the node"}}},
+            {"parameters", {{"type", "object"},  {"description", "Parameter key/values to set"}}}
+        }},
+        {"required", json::array({"node_id", "parameters"})}
     }});
     m_tool_infos.push_back({"geometry_graph_save", "Save the geometry node graph to a JSON file (node types, parameters, canvas positions, links).", {
         {"type", "object"},
@@ -5511,11 +5520,14 @@ namespace {
     for (const erhe::graph::Pin& pin : node.get_output_pins()) {
         outputs.push_back(geometry_graph_pin_json(pin));
     }
+    json parameters = json::object();
+    node.write_parameters(parameters);
     return json{
-        {"id",      node.get_id()},
-        {"name",    node.get_name()},
-        {"inputs",  inputs},
-        {"outputs", outputs}
+        {"id",         node.get_id()},
+        {"name",       node.get_name()},
+        {"parameters", parameters},
+        {"inputs",     inputs},
+        {"outputs",    outputs}
     };
 }
 
@@ -5593,6 +5605,27 @@ auto Mcp_server::action_geometry_graph_remove_node(const json& args) -> std::str
     json result;
     result["removed"] = true;
     return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_geometry_graph_set_parameter(const json& args) -> std::string
+{
+    Geometry_graph_window* window = m_context.geometry_graph_window;
+    if (window == nullptr) {
+        return make_error_content("Geometry graph window not available");
+    }
+    const std::size_t node_id = args.value("node_id", std::size_t{0});
+    Geometry_graph_node* node = find_geometry_graph_node(window->get_nodes(), node_id);
+    if (node == nullptr) {
+        return make_error_content("Node not found");
+    }
+    if (!args.contains("parameters") || !args["parameters"].is_object()) {
+        return make_error_content("Missing 'parameters' object");
+    }
+    window->set_node_parameters(
+        std::dynamic_pointer_cast<Geometry_graph_node>(node->node_from_this()),
+        args["parameters"]
+    );
+    return make_json_content(geometry_graph_node_json(*node)).dump();
 }
 
 auto Mcp_server::action_geometry_graph_connect(const json& args) -> std::string

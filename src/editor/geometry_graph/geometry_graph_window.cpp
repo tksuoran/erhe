@@ -177,6 +177,18 @@ void Geometry_graph_window::disconnect(erhe::graph::Pin* source_pin, erhe::graph
     );
 }
 
+void Geometry_graph_window::set_node_parameters(const std::shared_ptr<Geometry_graph_node>& node, const nlohmann::json& parameters)
+{
+    std::string before_parameters = node->dump_parameters();
+    node->read_parameters(parameters); // marks the node dirty
+    std::string after_parameters = node->dump_parameters();
+    m_app_context.operation_stack->execute_now(
+        std::make_shared<Geometry_graph_parameter_operation>(
+            *this, node, std::move(before_parameters), std::move(after_parameters)
+        )
+    );
+}
+
 auto Geometry_graph_window::make_node(const std::string& type_name) -> std::shared_ptr<Geometry_graph_node>
 {
     std::shared_ptr<Geometry_graph_node> node{};

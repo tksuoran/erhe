@@ -4,6 +4,8 @@
 
 #include "erhe_imgui/imgui_window.hpp"
 
+#include <nlohmann/json_fwd.hpp>
+
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -56,6 +58,12 @@ public:
     void remove_node     (const std::shared_ptr<Geometry_graph_node>& node);
     auto connect         (erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool;
     void disconnect      (erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin);
+
+    // Undoable parameter change: applies the (possibly partial) parameter
+    // object through read_parameters() and records before / after state
+    // in a Geometry_graph_parameter_operation. Used by the MCP
+    // geometry_graph_set_parameter tool.
+    void set_node_parameters(const std::shared_ptr<Geometry_graph_node>& node, const nlohmann::json& parameters);
 
     [[nodiscard]] auto get_graph() -> Geometry_graph&;
     [[nodiscard]] auto get_nodes() const -> const std::vector<std::shared_ptr<Geometry_graph_node>>&;
