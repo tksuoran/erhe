@@ -47,8 +47,9 @@ void write_ivec3(nlohmann::json& out, const char* key, const glm::ivec3& value);
 // input pins on the left edge and output pins on the right edge.
 //
 // Nodes are born dirty; parameter edits in imgui() must call mark_dirty().
-// Geometry_graph re-evaluates the whole graph when any node is dirty and
-// clears the flags afterwards.
+// Geometry_graph::evaluate() re-runs dirty nodes and everything downstream
+// of them (dirtiness propagates along links in topological order); clean
+// nodes keep their cached output payloads.
 class Geometry_graph_node : public erhe::graph::Node
 {
 public:

@@ -41,6 +41,20 @@
 
 namespace editor {
 
+namespace {
+
+// Incremental evaluation: structural edits mark only the directly affected
+// nodes dirty; Geometry_graph::evaluate() propagates dirtiness downstream.
+void mark_sink_node_dirty(erhe::graph::Pin* sink_pin)
+{
+    Geometry_graph_node* sink_node = dynamic_cast<Geometry_graph_node*>(sink_pin->get_owner_node());
+    if (sink_node != nullptr) {
+        sink_node->mark_dirty();
+    }
+}
+
+}
+
 Geometry_graph_window::Geometry_graph_window(
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
@@ -67,7 +81,10 @@ void Geometry_graph_window::insert_node(const std::shared_ptr<Geometry_graph_nod
     node->enable_flag_bits(flags);
     m_nodes.push_back(node);
     m_graph.register_node(node.get());
-    m_graph.mark_dirty();
+    // A node entering the graph must re-evaluate even when it was clean
+    // on removal (undo restore): the output node has to recreate its
+    // scene mesh, released in on_removed_from_graph().
+    node->mark_dirty();
 }
 
 void Geometry_graph_window::erase_node(const std::shared_ptr<Geometry_graph_node>& node)
@@ -79,10 +96,16 @@ void Geometry_graph_window::erase_node(const std::shared_ptr<Geometry_graph_node
     if (node->is_selected()) {
         m_app_context.selection->remove_from_selection(node);
     }
+    // Downstream nodes lose an input; capture them before
+    // unregister_node() disconnects the links.
+    for (erhe::graph::Pin& pin : node->get_output_pins()) {
+        for (erhe::graph::Link* link : pin.get_links()) {
+            mark_sink_node_dirty(link->get_sink());
+        }
+    }
     m_graph.unregister_node(node.get());
     m_nodes.erase(i);
     node->on_removed_from_graph();
-    m_graph.mark_dirty();
 }
 
 auto Geometry_graph_window::connect_pins(erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool
@@ -91,7 +114,7 @@ auto Geometry_graph_window::connect_pins(erhe::graph::Pin* source_pin, erhe::gra
     if (link == nullptr) {
         return false;
     }
-    m_graph.mark_dirty();
+    mark_sink_node_dirty(sink_pin);
     return true;
 }
 
@@ -109,7 +132,7 @@ auto Geometry_graph_window::disconnect_pins(erhe::graph::Pin* source_pin, erhe::
         return false;
     }
     m_graph.disconnect(i->get());
-    m_graph.mark_dirty();
+    mark_sink_node_dirty(sink_pin);
     return true;
 }
 
