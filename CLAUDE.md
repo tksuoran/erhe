@@ -134,7 +134,11 @@ raytrace), plus `mcp_server_tests` for the editor's MCP server. Each builds an
   `scripts\configure_tests_asan.bat` produces a dedicated test configuration
   (`build_tests_asan/`, OpenGL + ASAN + tests ON); other Windows configure
   scripts leave tests off -- pass `-DERHE_BUILD_TESTS=ON` through the wrapper
-  if you want tests in a regular build tree.
+  if you want tests in a regular build tree. For performance measurement,
+  `scripts\configure_tests.bat` produces `build_tests/` (no ASAN, profiler
+  none; VS generator, so `--config Release` and `--config Debug` build from
+  the same tree) -- used by the geometry timing harness, see
+  `doc/catmull_clark.md`.
 - Run via `ctest` from the build directory, or invoke the
   `.../src/erhe/<name>/test/<config>/erhe_<name>_tests.exe` binary directly.
   Run suites serially and fix one failure at a time -- an abort hides the rest

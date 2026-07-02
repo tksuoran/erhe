@@ -1,5 +1,6 @@
 #include "erhe_geometry/operation/subdivision/catmull_clark_subdivision.hpp"
 #include "erhe_geometry/operation/geometry_operation.hpp"
+#include "erhe_geometry/operation/operation_timing.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -45,14 +46,17 @@ void Catmull_clark_subdivision::build()
     // whole-mesh behavior.
     std::vector<uint8_t> vertex_touches_selected  (vertex_count, 0);
     std::vector<uint8_t> vertex_touches_unselected(vertex_count, 0);
-    for (GEO::index_t src_facet : source_mesh.facets) {
-        const bool selected = is_facet_selected(src_facet);
-        for (GEO::index_t src_corner : source_mesh.facets.corners(src_facet)) {
-            const GEO::index_t src_vertex = source_mesh.facet_corners.vertex(src_corner);
-            if (selected) {
-                vertex_touches_selected[src_vertex] = 1;
-            } else {
-                vertex_touches_unselected[src_vertex] = 1;
+    {
+        Scoped_phase_timer phase_timer{"cc_classify"};
+        for (GEO::index_t src_facet : source_mesh.facets) {
+            const bool selected = is_facet_selected(src_facet);
+            for (GEO::index_t src_corner : source_mesh.facets.corners(src_facet)) {
+                const GEO::index_t src_vertex = source_mesh.facet_corners.vertex(src_corner);
+                if (selected) {
+                    vertex_touches_selected[src_vertex] = 1;
+                } else {
+                    vertex_touches_unselected[src_vertex] = 1;
+                }
             }
         }
     }
@@ -68,6 +72,7 @@ void Catmull_clark_subdivision::build()
     // per phase); per-element creation is quadratic, see
     // map_dst_vertex_from_src_vertex().
     {
+        Scoped_phase_timer phase_timer{"cc_initial_points"};
         const GEO::index_t first_dst_vertex = destination_mesh.vertices.create_vertices(vertex_count);
         for (GEO::index_t vertex : source_mesh.vertices) {
             const GEO::index_t dst_vertex = first_dst_vertex + vertex;
@@ -99,6 +104,7 @@ void Catmull_clark_subdivision::build()
     //  --
     //   n
     {
+        Scoped_phase_timer phase_timer{"cc_edge_midpoints"};
         ERHE_VERIFY(m_src_edge_to_dst_vertex.empty());
 
         // Batch create the midpoint vertices (per-element creation is
@@ -196,6 +202,7 @@ void Catmull_clark_subdivision::build()
     // make_new_dst_corner_from_src_facet_centroid's bound assert holds even when the
     // highest-indexed facet is unselected.
     {
+        Scoped_phase_timer phase_timer{"cc_facet_centroids"};
         m_src_facet_centroid_to_dst_vertex.resize(source_mesh.facets.nb());
 
         // Batch create the centroid vertices (per-element creation is
@@ -247,6 +254,7 @@ void Catmull_clark_subdivision::build()
     // The quads are batch created (one create_quads() call); per-element
     // creation is quadratic, see map_dst_facet_from_src_facet().
     {
+        Scoped_phase_timer phase_timer{"cc_quads"};
         GEO::index_t quad_count = 0;
         for (GEO::index_t src_facet : source_mesh.facets) {
             if (!is_facet_selected(src_facet)) {

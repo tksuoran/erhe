@@ -19,6 +19,7 @@ add_executable(${_target}
     test_geometry_operation.cpp
     test_plane_intersection.cpp
     test_selective_operation_normals.cpp
+    test_timing_harness.cpp
 )
 
 target_link_libraries(${_target}

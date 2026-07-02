@@ -1,4 +1,5 @@
 #include "erhe_geometry/operation/geometry_operation.hpp"
+#include "erhe_geometry/operation/operation_timing.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/geometry_log.hpp"
 #include "erhe_verify/verify.hpp"
@@ -663,13 +664,22 @@ void Geometry_operation::remap_component_selection(const Geometry_component_sele
 
 void Geometry_operation::post_processing(const uint64_t process_flags)
 {
-    interpolate_mesh_attributes();
+    {
+        Scoped_phase_timer phase_timer{"interpolate"};
+        interpolate_mesh_attributes();
+    }
 
-    // Sanitize before process() to remove degenerate facets that would
-    // crash Geogram's connect() (e.g., facets with duplicate vertices).
-    destination.sanitize();
+    {
+        // Sanitize before process() to remove degenerate facets that would
+        // crash Geogram's connect() (e.g., facets with duplicate vertices).
+        Scoped_phase_timer phase_timer{"sanitize"};
+        destination.sanitize();
+    }
 
-    destination.process({.flags = process_flags});
+    {
+        Scoped_phase_timer phase_timer{"process"};
+        destination.process({.flags = process_flags});
+    }
 }
 
 } // namespace erhe::geometry::operation

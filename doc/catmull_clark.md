@@ -2,8 +2,9 @@
 
 Status: the dominant (quadratic) cost was found and FIXED on 2026-07-02 (see
 "Measured findings" below); the candidate list further down is still analysis
-only and is the queue for the follow-up performance work. Per-phase Debug
-measurements now exist; Release measurements and the timing harness do not.
+only and is the queue for the follow-up performance work. A permanent timing
+harness now exists (see "Timing harness" at the end) and both Debug and
+Release per-phase measurements are recorded below.
 
 This document records candidate optimizations for erhe's Catmull-Clark
 implementation, with rough gain / complexity / risk for each. It is the result
@@ -46,8 +47,9 @@ its unified `Mesh_attributes` model, and regenerates normals/UVs. Geogram's CC
 only interpolates vertex attributes and leaves mesh boundaries unsmoothed.
 
 Estimated gap: erhe is roughly 4-10x slower wall-clock, and likely
-allocation-bound on large meshes. These are analytical estimates; the 2026-07-02
-session added the Debug per-phase measurements below but no Release numbers yet.
+allocation-bound on large meshes. These are analytical estimates; the
+2026-07-02 session added the Debug per-phase measurements below, and the
+timing harness (last section) added Release numbers the same day.
 
 ## Measured findings (2026-07-02, Debug / MSVC, headless editor)
 
@@ -127,7 +129,9 @@ original "in-scope" cost is the CC `build()` itself plus
 2. The ~24-channel interpolation pass.
 3. The edge hash map (2 lookups per corner).
 
-(Presumed: re-rank against Release measurements first - see the last section.)
+(The Release baseline in the last section confirms this ranking: at src 24576
+the reprocess tail is ~215 ms, `cc_quads` ~121 ms, `interpolate` ~83 ms,
+midpoints+centroids ~77 ms combined.)
 
 Confirmed facts the candidates rely on:
 - `get_vertex_corners` / `get_corner_facet` / `get_edge_facets` are O(1)
@@ -297,15 +301,59 @@ element) -- a constant-factor win, no longer a complexity-class one. And
 `build_extra_connectivity()`'s early-return quirk (see Measured findings)
 should be understood before optimizing around it.
 
-## Before committing to any of these: measure
+## Timing harness (added 2026-07-02)
 
-Debug per-phase numbers exist (see Measured findings) but MSVC Debug container
-overhead distorts the ranking; Release numbers do not exist yet. Add a timing
-harness in `src/erhe/geometry/test/` that subdivides a known mesh through the
-current path and prints per-phase timings (build phases vs. interpolation vs.
-the reprocess tail), runnable in both configs, so each optimization can be
-measured in isolation rather than guessed. The 2026-07-02 session's throwaway
-pattern works well as a starting point: `std::chrono::steady_clock` around
-each phase, logged via `log_geometry->info` (temporary in-editor variant) or
-printed from a gtest; keep the harness as a permanent (possibly DISABLED_)
-test instead of re-instrumenting every time.
+Permanent per-phase timing exists now; re-measure with it after every change
+instead of re-instrumenting.
+
+- **Phase markers**: `erhe::geometry::operation::Operation_timing` +
+  `Scoped_phase_timer` (`erhe_geometry/operation/operation_timing.{hpp,cpp}`).
+  A thread-local collector the harness installs; inert (one branch per phase
+  scope, no clock reads, no allocation) when nothing is installed. Markers
+  live in `catmull_clark_subdivision.cpp` (`cc_classify`, `cc_initial_points`,
+  `cc_edge_midpoints`, `cc_facet_centroids`, `cc_quads`) and
+  `Geometry_operation::post_processing` (`interpolate`, `sanitize`,
+  `process`).
+- **Harness test**: `src/erhe/geometry/test/test_timing_harness.cpp`,
+  `TimingHarness.DISABLED_CatmullClarkChain` - 7 whole-mesh CC iterations from
+  a processed cube (last level: 24576 -> 98304 facets, the editor's
+  "subdivide x6 on the default box" stress case), one table row per level.
+- **Release + Debug on Windows**: `scripts\configure_tests.bat` generates
+  `build_tests/` (VS generator = multi-config, tests ON, **no ASAN, profiler
+  none** - both would distort timings). One tree serves both configs:
+
+  ```bat
+  scripts\configure_tests.bat
+  cmake --build build_tests --target erhe_geometry_tests --config Release
+  build_tests\src\erhe\geometry\test\Release\erhe_geometry_tests.exe ^
+      --gtest_also_run_disabled_tests --gtest_filter=*TimingHarness*
+  ```
+
+  (`build_tests_asan/` remains the correctness configuration.)
+
+### Baseline measurements (2026-07-02, before items 11/12/1/3/2)
+
+Release (MSVC, /O2), milliseconds per whole-mesh CC iteration:
+
+| src facets | classify | initial_p | midpoints | centroids | quads | interpolate | sanitize | process | other | total |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 384   | 0.0 | 0.1 | 0.7  | 0.4  | 1.8   | 0.4  | 0.2  | 2.5   | 0.3  | 6.2   |
+| 1536  | 0.0 | 0.2 | 2.6  | 1.7  | 6.9   | 1.8  | 0.7  | 10.4  | 1.2  | 25.6  |
+| 6144  | 0.1 | 1.0 | 10.5 | 7.1  | 29.8  | 10.0 | 2.8  | 42.1  | 7.3  | 110.8 |
+| 24576 | 0.2 | 3.3 | 44.0 | 33.0 | 120.6 | 82.7 | 11.5 | 215.3 | 29.7 | 540.3 |
+
+Debug (MSVC, ~10x Release, same ranking):
+
+| src facets | classify | initial_p | midpoints | centroids | quads | interpolate | sanitize | process | other | total |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 384   | 0.1 | 0.5  | 7.1   | 4.4   | 18.1   | 10.8  | 3.7   | 34.5   | 3.4   | 82.5   |
+| 1536  | 0.2 | 1.6  | 27.3  | 20.6  | 69.4   | 41.9  | 14.3  | 135.9  | 15.3  | 326.4  |
+| 6144  | 0.9 | 7.3  | 118.3 | 72.6  | 306.2  | 200.3 | 56.4  | 562.4  | 58.3  | 1382.7 |
+| 24576 | 3.6 | 26.0 | 494.9 | 363.0 | 1183.3 | 843.3 | 224.3 | 2308.7 | 244.2 | 5691.3 |
+
+The Release ranking confirms the Debug-based priorities: the `process`
+reprocess tail is the largest phase (40% of the last level), then `cc_quads`,
+then `interpolate`. Items 11/12 (reprocess tail) first, then 1/3/2
+(interpolation + Source_table), remains the right order. Debug's container
+overhead inflates the absolute numbers ~10x but does not reorder the phases
+on this workload.

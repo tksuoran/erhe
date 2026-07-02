@@ -62,6 +62,8 @@ erhe_target_sources_grouped(
     erhe_geometry/operation/merge_faces.hpp
     erhe_geometry/operation/normalize.cpp
     erhe_geometry/operation/normalize.hpp
+    erhe_geometry/operation/operation_timing.cpp
+    erhe_geometry/operation/operation_timing.hpp
     erhe_geometry/operation/remesh.cpp
     erhe_geometry/operation/remesh.hpp
     erhe_geometry/operation/repair.cpp

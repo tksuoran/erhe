@@ -48,6 +48,7 @@ build_test_raytrace_none
 build_test_raytrace_tinybvh
 build_vs2026_headless
 build_tests_asan
+build_tests
 build_opengl
 build_xcode_metal
 build_xcode_metal_asan

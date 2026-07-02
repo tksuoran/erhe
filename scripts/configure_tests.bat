@@ -1,0 +1,36 @@
+@echo off
+
+REM Test configuration WITHOUT AddressSanitizer, for performance measurement
+REM (ASAN and the profiler would distort timings). The Visual Studio
+REM generator is multi-config, so one tree serves both configurations:
+REM
+REM   cmake --build build_tests --target erhe_geometry_tests --config Debug
+REM   cmake --build build_tests --target erhe_geometry_tests --config Release
+REM
+REM Used by the timing harness (src/erhe/geometry/test/test_timing_harness.cpp,
+REM see doc/catmull_clark.md). For correctness runs prefer
+REM configure_tests_asan.bat.
+
+cmake ^
+ -G "Visual Studio 18 2026" ^
+ -A x64 ^
+ -B build_tests ^
+ -S . ^
+ -Wno-dev ^
+ %* ^
+ -DERHE_BUILD_TESTS=ON ^
+ -DERHE_USE_PRECOMPILED_HEADERS=ON ^
+ -DERHE_FONT_RASTERIZATION_LIBRARY=freetype ^
+ -DERHE_GLTF_LIBRARY=fastgltf ^
+ -DERHE_GUI_LIBRARY=imgui ^
+ -DERHE_GRAPHICS_API=opengl ^
+ -DERHE_PHYSICS_LIBRARY=jolt ^
+ -DERHE_NAVIGATION_LIBRARY=none ^
+ -DERHE_PROFILE_LIBRARY=none ^
+ -DERHE_RAYTRACE_LIBRARY=bvh ^
+ -DERHE_SVG_LIBRARY=plutosvg ^
+ -DERHE_TEXT_LAYOUT_LIBRARY=harfbuzz ^
+ -DERHE_WINDOW_LIBRARY=sdl ^
+ -DERHE_XR_LIBRARY=openxr ^
+ -DERHE_USE_ASAN:BOOL=OFF ^
+ -DERHE_SPIRV=OFF
