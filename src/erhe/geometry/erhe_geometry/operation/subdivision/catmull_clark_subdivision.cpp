@@ -63,8 +63,14 @@ void Catmull_clark_subdivision::build()
     //                       (n-3)P
     // Make initial P's with ------  (interior-selected vertices only; everything
     //                          n     else is pinned with weight 1.0 to itself).
+    //
+    // Destination vertices are batch created (one create_vertices() call
+    // per phase); per-element creation is quadratic, see
+    // map_dst_vertex_from_src_vertex().
     {
+        const GEO::index_t first_dst_vertex = destination_mesh.vertices.create_vertices(vertex_count);
         for (GEO::index_t vertex : source_mesh.vertices) {
+            const GEO::index_t dst_vertex = first_dst_vertex + vertex;
             const std::vector<GEO::index_t>& corners = source.get_vertex_corners(vertex);
             if (interior_selected(vertex) && (corners.size() >= 3)) {
                 const float n = static_cast<float>(corners.size());
@@ -72,9 +78,9 @@ void Catmull_clark_subdivision::build()
                 // n = 1,2 -> ?
                 // n = 3   -> ?
                 const float weight = (n - 3.0f) / n;
-                make_new_dst_vertex_from_src_vertex(weight, vertex);
+                map_dst_vertex_from_src_vertex(dst_vertex, weight, vertex);
             } else {
-                make_new_dst_vertex_from_src_vertex(1.0f, vertex);
+                map_dst_vertex_from_src_vertex(dst_vertex, 1.0f, vertex);
             }
         }
     }
@@ -94,6 +100,27 @@ void Catmull_clark_subdivision::build()
     //   n
     {
         ERHE_VERIFY(m_src_edge_to_dst_vertex.empty());
+
+        // Batch create the midpoint vertices (per-element creation is
+        // quadratic, see map_dst_vertex_from_src_vertex()): first count
+        // the edges touched by the selection, then create all midpoints
+        // with one call and consume them in order in the main pass.
+        const auto edge_touches_selection = [this](const GEO::index_t src_edge) -> bool {
+            for (GEO::index_t src_facet : source.get_edge_facets(src_edge)) {
+                if (is_facet_selected(src_facet)) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        GEO::index_t midpoint_count = 0;
+        for (GEO::index_t src_edge : source_mesh.edges) {
+            if (edge_touches_selection(src_edge)) {
+                ++midpoint_count;
+            }
+        }
+        GEO::index_t next_dst_vertex = destination_mesh.vertices.create_vertices(midpoint_count);
+
         for (GEO::index_t src_edge : source_mesh.edges) {
             const std::vector<GEO::index_t>& src_edge_facets = source.get_edge_facets(src_edge);
             GEO::index_t selected_facet_count   = 0;
@@ -113,7 +140,7 @@ void Catmull_clark_subdivision::build()
             const GEO::index_t src_vertex_a = source_mesh.edges.vertex(src_edge, 0);
             const GEO::index_t src_vertex_b = source_mesh.edges.vertex(src_edge, 1);
             const std::pair<GEO::index_t, GEO::index_t> src_edge_key = std::make_pair(src_vertex_a, src_vertex_b);
-            const GEO::index_t new_dst_vertex = destination_mesh.vertices.create_vertices(1);
+            const GEO::index_t new_dst_vertex = next_dst_vertex++;
             m_src_edge_to_dst_vertex[src_edge_key].push_back(new_dst_vertex);
             add_vertex_source(new_dst_vertex, 1.0f, src_vertex_a);
             add_vertex_source(new_dst_vertex, 1.0f, src_vertex_b);
@@ -170,11 +197,22 @@ void Catmull_clark_subdivision::build()
     // highest-indexed facet is unselected.
     {
         m_src_facet_centroid_to_dst_vertex.resize(source_mesh.facets.nb());
+
+        // Batch create the centroid vertices (per-element creation is
+        // quadratic, see map_dst_vertex_from_src_facet_centroid()).
+        GEO::index_t centroid_count = 0;
+        for (GEO::index_t src_facet : source_mesh.facets) {
+            if (is_facet_selected(src_facet)) {
+                ++centroid_count;
+            }
+        }
+        GEO::index_t next_centroid_dst_vertex = destination_mesh.vertices.create_vertices(centroid_count);
+
         for (GEO::index_t src_facet : source_mesh.facets) {
             if (!is_facet_selected(src_facet)) {
                 continue;
             }
-            make_new_dst_vertex_from_src_facet_centroid(src_facet);
+            map_dst_vertex_from_src_facet_centroid(next_centroid_dst_vertex++, src_facet);
 
             // Add facet centroids (F) to interior-selected corner vertices only.
             // F = average F of all n facet vertices for faces touching P
@@ -205,7 +243,24 @@ void Catmull_clark_subdivision::build()
     // Subdivide the selected facets into quads (centroid, prev edge midpoint,
     // corner, next edge midpoint). All edges of a selected facet carry a midpoint,
     // so the NO_VERTEX guard never fires here; it is kept for safety.
+    //
+    // The quads are batch created (one create_quads() call); per-element
+    // creation is quadratic, see map_dst_facet_from_src_facet().
     {
+        GEO::index_t quad_count = 0;
+        for (GEO::index_t src_facet : source_mesh.facets) {
+            if (!is_facet_selected(src_facet)) {
+                continue;
+            }
+            const GEO::index_t corner_count = source_mesh.facets.nb_vertices(src_facet);
+            if (corner_count < 3) {
+                continue;
+            }
+            quad_count += corner_count;
+        }
+        const GEO::index_t first_dst_facet = destination_mesh.facets.create_quads(quad_count);
+        GEO::index_t next_dst_facet = first_dst_facet;
+
         for (GEO::index_t src_facet : source_mesh.facets) {
             if (!is_facet_selected(src_facet)) {
                 continue;
@@ -228,13 +283,17 @@ void Catmull_clark_subdivision::build()
                 if (previous_edge_midpoint == GEO::NO_VERTEX || next_edge_midpoint == GEO::NO_VERTEX) {
                     continue;
                 }
-                const GEO::index_t new_dst_facet           = make_new_dst_facet_from_src_facet(src_facet, 4);
+                const GEO::index_t new_dst_facet           = next_dst_facet++;
+                map_dst_facet_from_src_facet(new_dst_facet, src_facet);
                 make_new_dst_corner_from_src_facet_centroid(new_dst_facet, 0, src_facet);
                 make_new_dst_corner_from_dst_vertex        (new_dst_facet, 1, previous_edge_midpoint);
                 make_new_dst_corner_from_src_corner        (new_dst_facet, 2, src_corner);
                 make_new_dst_corner_from_dst_vertex        (new_dst_facet, 3, next_edge_midpoint);
             }
         }
+        // Every batch created quad must have been consumed; a mismatch
+        // would leave degenerate all-zero quads in the mesh.
+        ERHE_VERIFY(next_dst_facet == (first_dst_facet + quad_count));
     }
 
     // Re-emit the unselected facets, splicing interface-edge midpoints into the

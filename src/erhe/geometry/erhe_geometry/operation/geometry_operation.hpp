@@ -221,6 +221,19 @@ protected:
     // registers each corner of the src_facet as source for the new vertex with weight 1.0.
     auto make_new_dst_vertex_from_src_facet_centroid(GEO::index_t src_facet) -> GEO::index_t;
 
+    // No-create variants of the make_new_dst_* helpers for batch created
+    // destination elements. Creating destination elements one at a time
+    // is quadratic: Geogram's MeshSubElementsStore::create_sub_elements()
+    // computes its capacity growth from the store SIZE instead of the
+    // store capacity, so once the size passes a power of two every
+    // per-element create reallocates every attribute store (also in
+    // upstream geogram main as of 2026-07). Operations that know their
+    // counts should create all elements with one create_vertices(n) /
+    // create_quads(n) / ... call and register them through these.
+    void map_dst_vertex_from_src_vertex        (GEO::index_t dst_vertex, float vertex_weight, GEO::index_t src_vertex);
+    void map_dst_vertex_from_src_facet_centroid(GEO::index_t dst_vertex, GEO::index_t src_facet);
+    void map_dst_facet_from_src_facet          (GEO::index_t dst_facet, GEO::index_t src_facet);
+
     void add_facet_centroid(GEO::index_t dst_vertex, float facet_weight, GEO::index_t src_facet);
 
     void add_vertex_ring(GEO::index_t dst_vertex, float vertex_weight, GEO::index_t src_vertex);

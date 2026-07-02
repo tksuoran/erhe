@@ -223,15 +223,19 @@ auto Geometry_operation::get_src_edge_new_vertex(GEO::index_t src_vertex_a, GEO:
 auto Geometry_operation::make_new_dst_vertex_from_src_vertex(const float vertex_weight, const GEO::index_t src_vertex) -> GEO::index_t
 {
     const GEO::index_t new_dst_vertex = destination_mesh.vertices.create_vertices(1);
+    map_dst_vertex_from_src_vertex(new_dst_vertex, vertex_weight, src_vertex);
+    return new_dst_vertex;
+}
 
-    add_vertex_source(new_dst_vertex, vertex_weight, src_vertex);
+void Geometry_operation::map_dst_vertex_from_src_vertex(const GEO::index_t dst_vertex, const float vertex_weight, const GEO::index_t src_vertex)
+{
+    add_vertex_source(dst_vertex, vertex_weight, src_vertex);
     const std::size_t i = static_cast<std::size_t>(src_vertex);
     const std::size_t old_size = m_vertex_src_to_dst.size();
     if (old_size <= i) {
         m_vertex_src_to_dst.resize(get_size_to_include(old_size, i));
     }
-    m_vertex_src_to_dst[i] = new_dst_vertex;
-    return new_dst_vertex;
+    m_vertex_src_to_dst[i] = dst_vertex;
 }
 
 auto Geometry_operation::make_new_dst_vertex_from_src_vertex(const GEO::index_t src_vertex) -> GEO::index_t
@@ -251,14 +255,19 @@ auto Geometry_operation::make_new_dst_vertex_from_src_vertex(const GEO::index_t 
 auto Geometry_operation::make_new_dst_vertex_from_src_facet_centroid(const GEO::index_t src_facet) -> GEO::index_t
 {
     const GEO::index_t new_dst_vertex = destination_mesh.vertices.create_vertices(1);
+    map_dst_vertex_from_src_facet_centroid(new_dst_vertex, src_facet);
+    return new_dst_vertex;
+}
+
+void Geometry_operation::map_dst_vertex_from_src_facet_centroid(const GEO::index_t dst_vertex, const GEO::index_t src_facet)
+{
     const std::size_t i = static_cast<size_t>(src_facet);
     const std::size_t old_size = m_src_facet_centroid_to_dst_vertex.size();
     if (old_size <= i) {
         m_src_facet_centroid_to_dst_vertex.resize(get_size_to_include(old_size, i));
     }
-    m_src_facet_centroid_to_dst_vertex[i] = new_dst_vertex;
-    add_facet_centroid(new_dst_vertex, 1.0f, src_facet);
-    return new_dst_vertex;
+    m_src_facet_centroid_to_dst_vertex[i] = dst_vertex;
+    add_facet_centroid(dst_vertex, 1.0f, src_facet);
 }
 
 void Geometry_operation::add_facet_centroid(const GEO::index_t dst_vertex, const float facet_weight, const GEO::index_t src_facet)
@@ -287,14 +296,19 @@ void Geometry_operation::add_vertex_ring(const GEO::index_t dst_vertex, const fl
 auto Geometry_operation::make_new_dst_facet_from_src_facet(const GEO::index_t src_facet, const GEO::index_t corner_count) -> GEO::index_t
 {
     const GEO::index_t new_dst_facet = destination_mesh.facets.create_polygon(corner_count);
-    add_facet_source(new_dst_facet, 1.0f, src_facet);
+    map_dst_facet_from_src_facet(new_dst_facet, src_facet);
+    return new_dst_facet;
+}
+
+void Geometry_operation::map_dst_facet_from_src_facet(const GEO::index_t dst_facet, const GEO::index_t src_facet)
+{
+    add_facet_source(dst_facet, 1.0f, src_facet);
     const std::size_t i = static_cast<std::size_t>(src_facet);
     const std::size_t old_size = m_facet_src_to_dst.size();
     if (old_size <= i) {
         m_facet_src_to_dst.resize(get_size_to_include(old_size, i));
     }
-    m_facet_src_to_dst[i] = new_dst_facet;
-    return new_dst_facet;
+    m_facet_src_to_dst[i] = dst_facet;
 }
 
 auto Geometry_operation::make_new_dst_corner_from_src_facet_centroid(
