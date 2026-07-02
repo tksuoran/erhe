@@ -42,7 +42,7 @@ remain future work. All code lives in `src/editor/geometry_graph/`.
 | Optional physics on output node (plan step 6 of phase 5) | DONE | ff414965 |
 | Phase 6d: instance system                            | DONE   | 823cf2f1 |
 | Phase 6e: node groups                                | DONE   | e953ce5f |
-| Phase 6c: field system                               | future | -        |
+| Phase 6c: field system                               | designed, awaiting review (see 6c below) | - |
 
 Verified end to end in the headless Vulkan build driven over the in-editor MCP
 server: box -> output and box -> conway dual -> output chains render in the
@@ -844,14 +844,72 @@ mesh snapshots); see [Implementation Status](#implementation-status).
 - `shared_ptr` with reference counting
 - Clone-on-modify for efficiency when geometry passes through unchanged
 
-**6c. Field System (Per-Element Computation):**
-- `Field<T>` -- lazy expression tree evaluated in bulk
-- `FieldInput` -- reads geometry attributes (position, normal, etc.)
-- `FieldOperation` -- wraps a function with child fields
-- `Set_position_node` accepts a field input
-- Evaluation: topological sort of field tree, allocate temp arrays, evaluate in
-  parallel chunks
-- This is architecturally significant and requires careful design
+**6c. Field System (Per-Element Computation):** (DESIGNED, not implemented -
+design below awaits review before implementation)
+
+Goal: per-element lazy computation over geometry domains, enabling
+`Set_position_node` (deform by a per-vertex expression), selection
+masks, and later field-driven instance scale. Blender's model, scaled
+down to erhe's graph.
+
+*Payload model - sockets carry value OR field (Blender style).* Field
+capable pins keep the existing `float_value` / `vec3_value` pin keys so
+current value nodes stay connectable. `Geometry_payload::Variant` gains
+`std::shared_ptr<Float_field>` and `std::shared_ptr<Vec3_field>`
+alternatives. New accessors `get_float_field(fallback)` /
+`get_vec3_field(fallback)` promote a plain value payload (or the
+fallback) to a constant field, so consumers handle exactly one case.
+Multi-link accumulation keeps the first connected field (no implicit
+Add), logged once.
+
+*Expression tree.* A field is a type-erased, immutable expression tree
+shared through `shared_ptr` (CoW-friendly, safe to cache in output
+payloads):
+- `Field_node_base` - abstract; `evaluate(Field_context&)` fills a bulk
+  output array for all elements at once.
+- Leaves: `Field_constant<T>`, `Field_input_position` (vertex position),
+  `Field_input_normal` (vertex normal, computed on demand),
+  `Field_input_index` (element index as float).
+- Interior: `Field_operation` wrapping a small enum of per-element
+  functions (add, sub, mul, div, min, max, sin, cos, length, normalize,
+  dot, cross, mix, vector compose / decompose) with child fields.
+
+*Evaluation.* `Field_context` holds `{const Geometry&, domain, element
+count}` plus a memo map from tree node to evaluated array, so a DAG
+shared subtree evaluates once. Consumers drive it: evaluate the tree
+bottom-up into scratch `std::vector` arrays and read the root's array.
+Initial version supports the vertex domain only and single-threaded
+bulk loops (graph evaluation is already off the per-frame hot path);
+parallel chunking is a later optimization. No fusion pass - a chain of
+N math nodes produces N arrays; acceptable at editor scale.
+
+*Graph nodes.*
+- Input nodes (no inputs, output = field): `Position`, `Normal`,
+  `Index`.
+- `Math_node` becomes dual-mode: when any input payload is a field it
+  outputs a `Field_operation` wrapping its operator (cheap tree build);
+  when all inputs are plain values it computes eagerly as today. A new
+  `Vector_math_node` follows the same pattern for vec3.
+- Consumer: `Set_position_node` - geometry in, position field (vec3,
+  defaults to input positions), selection field (float, defaults to 1;
+  values >= 0.5 keep the new position) - copies the geometry, evaluates
+  the fields over vertices, writes positions, re-runs
+  `process_for_graph()`.
+
+*What does not change.* Serialization (fields are graph topology, not
+data), incremental evaluation (field producing nodes rebuild cheap
+trees; consumers do the bulk work), undo (parameter edits go through
+the existing gesture operation).
+
+*Implementation slices (each buildable + verifiable):*
+1. `geometry_graph/field.{hpp,cpp}`: tree classes + context + driver;
+   payload alternatives + promoting accessors.
+2. Input nodes + `Set_position_node` with constant fields only
+   (verify: flatten a box by feeding constant y).
+3. Dual-mode `Math_node` + `Vector_math_node` (verify: sine-wave
+   displacement of a subdivided box via Position -> decompose ->
+   sin -> compose -> Set Position).
+4. Selection field input on `Set_position_node`.
 
 **6d. Instance System:** (DONE - commit 823cf2f1)
 - `Distribute_points_node` -- scatters points on the surface: facets are
