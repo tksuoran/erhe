@@ -1,10 +1,11 @@
 # Catmull-Clark subdivision: optimization notes
 
 Status: the dominant (quadratic) cost was found and FIXED on 2026-07-02 (see
-"Measured findings" below); the candidate list further down is still analysis
-only and is the queue for the follow-up performance work. A permanent timing
-harness now exists (see "Timing harness" at the end) and both Debug and
-Release per-phase measurements are recorded below.
+"Measured findings" below). The follow-up performance pass was DONE the same
+day: the timing harness (see "Timing harness" at the end) plus items 11, 12,
+1, 3 and 2 landed (see "Implemented optimizations (2026-07-02)"); the
+remaining candidates (4/5/6/7/8, and sign-off-gated 9/10) stay as the queue
+for any future round, re-ranked by the recorded Release numbers.
 
 This document records candidate optimizations for erhe's Catmull-Clark
 implementation, with rough gain / complexity / risk for each. It is the result
@@ -279,7 +280,53 @@ work at the x6 last level (Debug). Either drop the call for operations that
 post-process, or fold it into #11's flag plumbing (node requests the flags it
 needs, operation guarantees them). Risk: low; editor-side only.
 
-## Recommended order
+## Implemented optimizations (2026-07-02)
+
+The recommended order below was executed the same day; commits in branch
+`geometry_nodes` (harness 0171c8c4, item 11 299d0332, item 12 9ad251ae,
+item 1 70169d17, item 3 eeb93354, item 2 650dc354).
+
+- **Item 11** - `catmull_clark_subdivision()` / `sqrt3_subdivision()` take an
+  optional `Post_processing` level; the subdivide node runs intermediate
+  iterations with `structural_only`. `SubdivisionChain` gtests prove the
+  final output is bit-identical.
+- **Item 12** - the subdivide, conway, and unary-operation graph nodes no
+  longer run `process_for_graph()` on results whose operation just ran
+  connect + build_edges itself. Boolean / join / realize / source nodes keep
+  it (their results genuinely need it).
+- **Item 1** - `interpolate_attribute()` skips channels with no present
+  source values; `post_processing()` gained `regeneration_flags` so channels
+  the upcoming (or, for structural chains, the final) process() regenerates
+  (`vertex_normal_smooth`, `corner_texcoord_1`) are not interpolated.
+- **Item 3** - CC pre-sizes the provenance tables at each batch-create point
+  and `m_vertex_src_to_dst` up front; no outer-vector growth mid-build.
+- **Item 2** - per-destination weight sums are computed once per
+  `Source_table`; the position loop and every fully-present channel use them
+  (bit-identical: same additions, same order). Partially-present channels
+  keep the per-channel filtered sum.
+
+Measured results (same workloads as the baselines below):
+
+- Release harness chain (7 CC iterations, cube -> 98304 facets):
+  689 -> ~570 ms. Last-level `interpolate` 82.7 -> ~18 ms (item 1);
+  intermediate-level `process` -25..30% (item 11); the rest spread across
+  the cc_* phases (item 3).
+- Editor (Debug, headless, geometry-graph stress): subdivide x5
+  5.5 -> 4.4 s, x6 25.1 -> 17.8 s, boolean of two subdiv3 5.3 -> 4.5 s.
+  Full smoke sweep 65/65 after the changes.
+- Items 3 and 2 measured marginal on the harness chain (box content has few
+  present channels); item 2's win applies to attribute-rich meshes where
+  fully-present channels drop their per-element sum loops and presence
+  lookups.
+
+Returns were diminishing after item 2, so the pass stopped there per plan.
+The dominant remaining Release costs at the last level are `process`
+(~194 ms - now all legitimately needed connect/build_edges/normals/texcoord
+work on the final 98304-facet mesh) and `cc_quads` (~113 ms - the subdivide
+loop itself; items 6/8 territory), then midpoints + centroids (~75 ms -
+items 4/5 allocation work).
+
+## Recommended order (as planned before implementation)
 
 Revised after the 2026-07-02 measurements: build the timing harness first
 (below), then do 11 -> 12 -> 1 -> 3 -> 2. Items 11/12 attack the largest

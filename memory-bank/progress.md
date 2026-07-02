@@ -1,5 +1,17 @@
 §MBEL:5.0
 
+[TASK::catmull-clark-performance-2026-07-02]
+@status::✓DONE{harness+items-11→12→1→3→2;stopped-at-diminishing-returns-per-plan}
+>commits::0171c8c4..650dc354
+0171c8c4::harness{Operation_timing+Scoped_phase_timer{thread-local-collector,inert-uninstalled}+phase-markers{cc_classify/initial_points/edge_midpoints/facet_centroids/quads+interpolate/sanitize/process}+TimingHarness-DISABLED-gtest{cube-x7→98304-facets}+configure_tests.bat→build_tests{¬ASAN¬profiler,Debug+Release-one-tree};baseline-Release-689ms-chain{process-215ms>quads-121>interpolate-83@src-24576}=Debug-ranking-confirmed}
+299d0332::item11{Post_processing-enum{full_default|structural_only}on-cc+sqrt3-entry-points;subdivide-node-intermediates=structural;SubdivisionChain-gtests-prove-final-bit-identical{positions+regenerated+preserved-channels,cc+sqrt3}}
+9ad251ae::item12{subdivide+conway+unary-nodes-drop-process_for_graph{ops-self-post-process};boolean/join/realize/source-nodes-keep;x6-25.1→19.2s}
+70169d17::item1{interpolate_attribute-skips-zero-present-channels+post_processing-regeneration_flags{skip-vertex_normal_smooth+corner_texcoord_1-when-regenerated||declared-throwaway-by-structural-chain};make_atlas-unaffected{structural-flags-infer-no-skips};interpolate-82.7→19ms@last-level}
+eeb93354::item3{CC-pre-sizes-Source_tables-at-batch-create-points+m_vertex_src_to_dst;~583ms-chain}
+650dc354::item2{sum-weights-once-per-Source_table{member-scratch};position-loop+fully-present-channels-use-precomputed{bit-identical,same-order};partial-presence-keeps-filtered-sum;~570ms;marginal-on-box-harness{few-present-channels},wins-on-attribute-rich-meshes}
+RESULT::editor-Debug-stress{x5-5.5→4.4s,x6-25.1→17.8s,boolean-2×subdiv3-5.3→4.5s}+final-SMOKE-SWEEP-65/65✓+84/84-gtests{plain+ASAN}
+?future::items-4/5/6{re-rank-by-Release:cc_quads-113ms>midpoints+centroids-75ms;process-194ms=legitimate-final-work}|9/10{user-sign-off}|conway-batch-creation{constant-factor}
+
 [TASK::geometry-nodes]
 @status::✓DONE{2026-07-02,phases1-5+extras;phase6=future}
 >commits::713eb22d..d812547c
