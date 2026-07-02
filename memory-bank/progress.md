@@ -1,5 +1,14 @@
 §MBEL:5.0
 
+[TASK::smoke-coverage-extension-2026-07-03]
+@status::✓DONE{future_prompt_1.txt-handoff-executed;65→120-checks;2-real-defects-found+fixed}
+>commits::b553559b..bdc71123
+b553559b::cycle-fix{baseline-proved-live:MCP-accepted-self+2-node-cycle→"not acyclic"-~125-err/s+perpetual-per-frame-re-eval;fix=erhe::graph::Graph::would_create_cycle{DFS-sink→source-reachability}+connect-refuses+Geometry_graph_window::connect-pre-validates{¬noop-undo-entry}+ax-gesture-pre-query+load_graph-rejects-cycle{Kahn-over-indices}+key-mismatch-files+Group_node-load-checks-connect-result}
+4491835f::empty-geometry-crash{param-abuse-section-found:conway-op-42→empty-geometry→output-node→ERHE_VERIFY(total_index_count>0)-abort{Build_context_root::allocate_index_buffer};stack-via-crash-handler-cpptrace-stderr{¬VS-MCP,¬cdb-this-session};fix=output-evaluate-treats-0-facet-source-like-disconnected;VERIFY-kept}
+bdc71123::script{+5-sections:multilink-partial-disconnect{join-3-input+instance-points+realize-pins,exact-count-shrink+undo/redo}|invalid-connect{mismatch/self/2-3-cycle→error+no-link+no-undo-entry+settles}|serialization-errors{8-malformed-file-loads-unchanged-graph+save-to-dir+group-bad-path/no-output/nested-2-deep/self-ref-depth-guard}|param-abuse{subdiv=-5/99-clamp,distribute=-10,box-size-0/neg,conway/boolean/math-op-OOR,instance-scale-0}|output-physics{attachment-follows-connect-state+3-motion-modes+duplicate-names}+screenshots{smoke_nodes+smoke_stress+final}}
+VERIFY::sweep-120/120✓{one-session,x6-17.9s-Debug-unchanged}+both-builds-green{headless+ninja-msvc}+screenshots-read
+!repro-trick::headless-editor-launch-with-RedirectStandardError→crash-handler-prints-cpptrace-callstack+minidump-path-to-stderr{debugger-free-crash-diagnosis}
+
 [TASK::catmull-clark-performance-2026-07-02]
 @status::✓DONE{harness+items-11→12→1→3→2;stopped-at-diminishing-returns-per-plan}
 >commits::0171c8c4..650dc354

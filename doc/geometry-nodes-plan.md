@@ -42,7 +42,7 @@ remain future work. All code lives in `src/editor/geometry_graph/`.
 | Optional physics on output node (plan step 6 of phase 5) | DONE | ff414965 |
 | Phase 6d: instance system                            | DONE   | 823cf2f1 |
 | Phase 6e: node groups                                | DONE   | e953ce5f |
-| Comprehensive smoke test sweep (all 65 checks pass)  | DONE   | a2a36dd5 (script) |
+| Comprehensive smoke test sweep (all 120 checks pass) | DONE   | a2a36dd5, bdc71123 (script) |
 | Phase 6c: field system                               | designed, awaiting review (see 6c below) | - |
 
 Verified end to end in the headless Vulkan build driven over the in-editor MCP
@@ -183,6 +183,38 @@ synchronously on the main thread, so heavy chains (subdivide x6 -> ~27 s)
 freeze the UI and can outlive the MCP server's per-request wait (the
 request still executes; the smoke script waits for the server to drain).
 Async graph evaluation is a possible future enhancement.
+
+#### Coverage extension (2026-07-03)
+
+The sweep was extended from 65 to 120 checks (bdc71123): multi-link
+partial disconnects (join / instance points / realize pins shrink by
+exactly the removed input, with undo/redo), invalid connect rejection
+(type mismatch, self links, 2-/3-node cycles: MCP error, no link, no
+undo entry, evaluation settles), error-path serialization (malformed
+graph files fail with the graph unchanged; group asset error paths,
+nested groups, self-reference depth guard), out-of-range parameter
+abuse (clamps or degrades harmlessly), output physics edge cases
+(attachment follows connect state, all motion modes, duplicate scene
+node names), and screenshot checkpoints after the node-types and
+stress sections. The new checks found and led to fixing two more real
+defects:
+
+- **Cycle / self-link acceptance (fixed, b553559b):** the MCP connect
+  path (and crafted graph files) accepted links that made the graph
+  cyclic; `Graph::sort()` then failed every frame and the cycle
+  members could never clear their dirty flags, re-evaluating forever -
+  a permanent freeze once a heavy node joined the cycle.
+  `erhe::graph::Graph` now refuses cycle-creating links at connect
+  time (`would_create_cycle()`), the window pre-validates before
+  creating the undoable operation, graph file loads reject
+  cycle-forming / key-mismatched link sets wholesale, and group assets
+  with refused links fail to load.
+- **Facet-less geometry output crash (fixed, 4491835f):** an
+  out-of-range Conway / boolean operation index produces an empty
+  geometry; feeding it to the output node aborted in
+  `Primitive_builder` (`ERHE_VERIFY(total_index_count > 0)`). The
+  output node now treats a source with no facets like a disconnected
+  input (clears primitives, removes the physics attachment).
 
 ### In-editor MCP tools
 
