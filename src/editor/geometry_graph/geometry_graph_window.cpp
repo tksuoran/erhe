@@ -4,8 +4,11 @@
 
 #include "geometry_graph/geometry_graph_window.hpp"
 #include "geometry_graph/geometry_graph_node.hpp"
+#include "geometry_graph/nodes/boolean_node.hpp"
 #include "geometry_graph/nodes/conway_node.hpp"
 #include "geometry_graph/nodes/geometry_unary_operation_node.hpp"
+#include "geometry_graph/nodes/join_geometry_node.hpp"
+#include "geometry_graph/nodes/math_node.hpp"
 #include "geometry_graph/nodes/mesh_box_node.hpp"
 #include "geometry_graph/nodes/mesh_cone_node.hpp"
 #include "geometry_graph/nodes/mesh_disc_node.hpp"
@@ -13,6 +16,7 @@
 #include "geometry_graph/nodes/mesh_torus_node.hpp"
 #include "geometry_graph/nodes/subdivide_node.hpp"
 #include "geometry_graph/nodes/transform_node.hpp"
+#include "geometry_graph/nodes/value_nodes.hpp"
 
 #include "erhe_geometry/operation/normalize.hpp"
 #include "erhe_geometry/operation/repair.hpp"
@@ -77,6 +81,13 @@ void Geometry_graph_window::node_toolbar()
     ImGui::SameLine(); if (ImGui::Button("Normalize"))   { add_node(std::make_shared<Geometry_unary_operation_node>("Normalize",   &erhe::geometry::operation::normalize)); }
     ImGui::SameLine(); if (ImGui::Button("Reverse"))     { add_node(std::make_shared<Geometry_unary_operation_node>("Reverse",     &erhe::geometry::operation::reverse)); }
     ImGui::SameLine(); if (ImGui::Button("Repair"))      { add_node(std::make_shared<Geometry_unary_operation_node>("Repair",      &erhe::geometry::operation::repair)); }
+
+                       if (ImGui::Button("Join"))    { add_node(std::make_shared<Join_geometry_node>()); }
+    ImGui::SameLine(); if (ImGui::Button("Boolean")) { add_node(std::make_shared<Boolean_node      >()); }
+    ImGui::SameLine(); if (ImGui::Button("Float"))   { add_node(std::make_shared<Float_value_node  >()); }
+    ImGui::SameLine(); if (ImGui::Button("Integer")) { add_node(std::make_shared<Integer_value_node>()); }
+    ImGui::SameLine(); if (ImGui::Button("Vector"))  { add_node(std::make_shared<Vector_value_node >()); }
+    ImGui::SameLine(); if (ImGui::Button("Math"))    { add_node(std::make_shared<Math_node         >()); }
 }
 
 void Geometry_graph_window::imgui()
