@@ -1734,7 +1734,7 @@ void Mcp_server::refresh_tool_list()
     }});
 
     // Geometry node graph (Geometry Graph window)
-    m_tool_infos.push_back({"get_geometry_graph", "List the geometry node graph: nodes with ids, type labels, input/output pins (slot, key, name, connection count) and all links.", schema_no_args()});
+    m_tool_infos.push_back({"get_geometry_graph", "List the geometry node graph: nodes with ids, type labels, input/output pins (slot, key, name, connection count), per-output payload summaries (geometry vertex/facet counts, point/instance counts, scalar values) and all links.", schema_no_args()});
     m_tool_infos.push_back({"geometry_graph_add_node", "Add a node to the geometry node graph. Returns the new node's id and pin layout.", {
         {"type", "object"},
         {"properties", {
@@ -5510,6 +5510,43 @@ namespace {
     };
 }
 
+// Summary of a pin payload: type tag plus the stats that matter for
+// scripted verification (vertex / facet counts, point / instance counts,
+// scalar values).
+[[nodiscard]] auto geometry_payload_json(const Geometry_payload& payload) -> json
+{
+    const std::shared_ptr<erhe::geometry::Geometry> geometry = payload.get_geometry();
+    if (geometry) {
+        const GEO::Mesh& mesh = geometry->get_mesh();
+        return json{{"type", "geometry"}, {"vertex_count", mesh.vertices.nb()}, {"facet_count", mesh.facets.nb()}};
+    }
+    const std::shared_ptr<Point_cloud> points = payload.get_points();
+    if (points) {
+        return json{{"type", "points"}, {"point_count", points->positions.size()}};
+    }
+    const std::shared_ptr<Geometry_instances> instances = payload.get_instances();
+    if (instances) {
+        return json{{"type", "instances"}, {"instance_count", instances->instance_count()}};
+    }
+    if (std::holds_alternative<float>(payload.value)) {
+        return json{{"type", "float"}, {"value", payload.get_float()}};
+    }
+    if (std::holds_alternative<int>(payload.value)) {
+        return json{{"type", "int"}, {"value", payload.get_int()}};
+    }
+    if (std::holds_alternative<bool>(payload.value)) {
+        return json{{"type", "bool"}, {"value", payload.get_bool()}};
+    }
+    if (std::holds_alternative<glm::vec3>(payload.value)) {
+        const glm::vec3 v = payload.get_vec3();
+        return json{{"type", "vec3"}, {"value", {v.x, v.y, v.z}}};
+    }
+    if (!payload.has_value()) {
+        return json{{"type", "empty"}};
+    }
+    return json{{"type", "other"}};
+}
+
 [[nodiscard]] auto geometry_graph_node_json(const Geometry_graph_node& node) -> json
 {
     json inputs  = json::array();
@@ -5517,17 +5554,22 @@ namespace {
     for (const erhe::graph::Pin& pin : node.get_input_pins()) {
         inputs.push_back(geometry_graph_pin_json(pin));
     }
+    json output_payloads = json::array();
+    std::size_t output_slot = 0;
     for (const erhe::graph::Pin& pin : node.get_output_pins()) {
         outputs.push_back(geometry_graph_pin_json(pin));
+        output_payloads.push_back(geometry_payload_json(node.get_output(output_slot)));
+        ++output_slot;
     }
     json parameters = json::object();
     node.write_parameters(parameters);
     return json{
-        {"id",         node.get_id()},
-        {"name",       node.get_name()},
-        {"parameters", parameters},
-        {"inputs",     inputs},
-        {"outputs",    outputs}
+        {"id",              node.get_id()},
+        {"name",            node.get_name()},
+        {"parameters",      parameters},
+        {"inputs",          inputs},
+        {"outputs",         outputs},
+        {"output_payloads", output_payloads}
     };
 }
 
