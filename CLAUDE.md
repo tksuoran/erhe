@@ -331,113 +331,34 @@ Two zero-install tools. Both launch the editor in an isolated working directory 
 
 History: the 2026-06 idle leak (~850 MiB/min host heap + ~5 GiB/min GTT at uncapped fps) was `Device_impl::get_command_buffer()` calling `vkAllocateCommandBuffers` every frame; `vkResetCommandPool` resets but never frees pool-owned handles, so each frame leaked a `VkCommandBuffer` whose RADV command-stream/upload BOs stayed resident. Fixed by reusing handles across frame-in-flight cycles (`Per_thread_command_pool::vk_command_buffers` / `next_handle_index`). Exit-time stats (VMA dump, LSAN) looked clean because teardown's `vkDestroyCommandPool` freed everything -- steady growth needs over-time attribution, not exit-time leak checks.
 
-## Quest device launches
+## Quest / Android device work
 
-**For an individual / one-off launch, ALWAYS prompt the user to put the headset on and activate the controllers immediately before that launch.** Never assume the user is still wearing the headset for a one-off launch - the user may remove it after any single test, and an earlier "I'm ready / proceed" confirmation applies ONLY to that one launch, never to a later one. Each one-off `adb shell am start` (or `... quest run`) must be preceded by its own fresh prompt and explicit confirmation.
+**Skill:** invoke **`erhe-quest-launch`** for ANY Quest (or `mobile`-flavor
+Android) build / install / launch / log-capture work -- it is the full
+run-book: canonical script invocations, the persistent logcat capture
+(`scripts/quest_logcat.sh`, started BEFORE every launch), erhe-only log
+filtering, readiness signals, Android SDK/JDK probing, and the mobile
+sideload-dialog workaround. `erhe-quest-validation` (make silent GPU hangs
+abort loudly) and `erhe-quest-shader-failure` (vkCreateShaderModule /
+spirv-val aborts at startup) build on it.
 
-**Batch / soak runs are the exception to the per-launch prompt:** a single headset-readiness confirmation at the START of the batch is sufficient for the whole sweep - do NOT prompt between iterations. The user keeps the headset on for the duration while an automated loop (clean reinstall + launch + watch per iteration) runs unattended. If a batch detects that the headset has gone off-head mid-run (e.g. repeated INCONCLUSIVE results / no ticks), stop and re-confirm rather than silently burning iterations.
+The inviolable launch protocol, even when not using the skill: install the APK
+FIRST, then prompt the user to put the headset on and activate the
+controllers, and wait for explicit confirmation before EVERY one-off
+`adb shell am start`; a confirmation applies only to that one launch. Batch /
+soak runs are the exception: one confirmation at the start covers the whole
+unattended sweep -- do not prompt between iterations, but stop and re-confirm
+if results suggest the headset went off-head. Pure builds and installs need no
+prompt. Never blind-sleep waiting for the editor to come up; poll for a
+readiness signal (recipes in the skill).
 
-Do the install (`scripts\install_android.bat quest`) FIRST, while the user can keep their hands free. **Only after the APK is on the device**, prompt the user to put the headset on and pick up / activate the Touch controllers, and wait for explicit confirmation before running the launch (`adb shell am start -n org.libsdl.app.quest/...` or `scripts\install_android.bat quest run`). Quest's `RequiresControllersLaunchInterceptor` shows a system "Controllers Required" dialog that blocks the immersive app from coming to the foreground until controllers are detected as in-hand; launching while the headset is off the user's head wastes the attempt and we have to retry. Pure builds and installs (no app start) do not need the prompt.
-
-### Capturing logcat to a file on every Quest launch
-
-Always start `scripts/quest_logcat.sh` BEFORE the `adb shell am start ...` line. The in-memory logcat ring rolls over within seconds once the editor enters a per-frame error loop (e.g. the `XR_FRAME_DISCARDED` storm), so the only way to keep the full startup trace is to stream it to disk while it happens.
-
-```bash
-bash scripts/quest_logcat.sh             # prints the new capture path
-"$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe" shell am start -n org.libsdl.app.quest/org.libsdl.app.ErheActivity
-```
-
-The script enforces these invariants -- understand them before changing it:
-
-- **One extra process, ever.** The single backgrounded `adb logcat` is the only process owned by this workflow. `scripts/quest_logcat.sh` re-running kills the previous streamer before starting a new one; `scripts/quest_logcat.sh stop` kills it without starting a replacement. The shared `adb` server daemon is not "ours" -- it persists across sessions regardless.
-- **No leaks across Claude Code sessions.** The PID is tracked in `logs/.logcat.pid` (a real file in the repo, gitignored), so even a fresh shell finds and stops the prior capture.
-- **No PID-recycle hazard.** Before killing, the script confirms the recorded PID still points at an `adb` process via `ps -p PID`; if the PID was recycled to something unrelated, it leaves the new owner alone and just removes the stale PID file. Git Bash's `ps` reports the executable path only (no argv), so we match on `adb` -- this is fine because every other adb call in this workflow is short-lived.
-
-Capture files land in `logs/quest_<YYYYMMDD>_<HHMMSS>.log` (gitignored). To stop a capture explicitly (e.g. when wrapping up a session and you do not plan to launch again): `bash scripts/quest_logcat.sh stop`. If you forget, the next launch's start call cleans it up automatically.
-
-To grep the running capture: `tail -F logs/quest_<...>.log` or `grep <pattern> logs/quest_<...>.log`. The log file is appended to live by the streamer, so `tail -F` shows new entries as they land.
-
-### Filtering a capture down to erhe-only lines
-
-Raw logcat captures interleave hundreds of system tags (`MRSS`, `[CT]`, `wlan`, ...) with the editor's own output. A typical 30 s capture is 30k+ lines, which is too much to scan. Filter to just the editor's `erhe` spdlog tag:
-
-```bash
-bash scripts/quest_logcat.sh filter logs/quest_<YYYYMMDD>_<HHMMSS>.log
-# writes logs/quest_<YYYYMMDD>_<HHMMSS>_erhe.log
-```
-
-The filter is a single grep on ` erhe +:` (space, literal tag, optional padding, colon) anchored to logcat's threadtime tag column, so it does not match the substring "erhe" inside other tags or message bodies. Always work from the filtered file for analysis; reach for the unfiltered capture only when you need to correlate against OS-level events (e.g. `OpenXR`, `VrApi`, `MRSS`, `[CT]` tags from the Horizon runtime, or `WLAN`/`battery` for thermal-throttle context).
-
-### Knowing when the editor is ready (NEVER blind-sleep before capturing)
-
-The editor takes ~15-20 s to initialize on Quest and the exact time varies per run. `sleep N` before looking once wastes runs: too short misses the window, too long and the user may have removed the headset or exited. ALWAYS poll/stream for a definite readiness signal and act the instant it appears.
-
-Pick the signal that matches the state you need:
-
-- **XR session is up / projection depth is being submitted**: poll the live disk capture (from `scripts/quest_logcat.sh`) for a stable session line, e.g. `OpenXR submitted projection depth` or `OpenXR multiview depth swapchain`. Use the disk file, not the in-memory ring, so the line is not evicted before you grep it.
-- **Editor is actively rendering AND a specific compositor layer is present** (e.g. the HUD quad is open): enable the compositor layer dump and stream it through a watcher that exits the instant the editor's own block contains the layer you need. This is the robust trigger for any compositor-layer / depth-submission diagnostic, and the captured block itself carries the data (per-layer `Depth SwapChain` valid vs `BAD`, and `Depth Info min/max/near/far`):
-
-```bash
-ADB="$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe"
-"$ADB" shell setprop debug.oculus.logLayers 1   # enable per-frame layer dump (CompositorClient tag)
-# Stream the dump; exit the moment OUR app's block contains a QUAD (HUD open).
-# Replace "Type QUAD" with the condition you need; raise timeout for slow init.
-timeout 150 "$ADB" logcat -s CompositorClient | awk '
-  /LogLayers: Client/ {
-    if (cap && hit) { printf "%s", buf; found=1; exit }
-    cap = (index($0, "org.libsdl.app.quest") > 0); buf=""; hit=0
-  }
-  cap { buf = buf $0 "\n"; if (index($0,"Type QUAD")>0) hit=1 }
-  END { if (!found) print "[watcher] target block not seen (editor not rendering / HUD not open / headset off-head)" }
-'
-"$ADB" shell setprop debug.oculus.logLayers 0   # ALWAYS turn the flood back off when done
-```
-
-Two gotchas, both learned the hard way:
-
-- **`logLayers` floods logcat** at compositor framerate, so the editor's `erhe`-tagged startup lines are evicted from the in-memory ring within seconds. While `logLayers` is on, do NOT use `adb logcat -d -s erhe` to detect readiness -- use the streaming watcher above (event-driven) or the persistent disk capture.
-- **An off-head headset pauses the OpenXR session**: the app stops submitting and only `com.oculus.vrshell` (`FocusPlaceholderActivity`) appears in the dump / as the resumed activity. So "only vrshell in the dump" means "headset off-head or app backgrounded," NOT "editor broken." The editor being `topResumedActivity` is necessary but not sufficient -- it must also be submitting frames (its block present in the dump).
-
-### Locating Android tools in shell commands
-
-The scripts in `scripts\` (`install_android.bat`, `run_android.bat`, `build_android.bat`) all probe for the Android SDK and JDK in the same way; mirror this when running adb / gradle / java directly from a shell:
-
-- **`ANDROID_HOME`**: use `$ANDROID_HOME` if set, else fall back to `%LOCALAPPDATA%\Android\Sdk\` on Windows. Adb lives at `<ANDROID_HOME>\platform-tools\adb.exe`. In bash on Windows: `"$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe"`.
-- **`JAVA_HOME`** (only needed for direct gradle / gradlew calls; the scripts above set it for you): use `$JAVA_HOME` if set, else fall back to `C:\Program Files\Android\Android Studio\jbr` (Android Studio's bundled JDK 21). Gradle 8.12 + AGP do not support JDK 25.
-
-Prefer the wrapper scripts when possible -- they handle both probes plus device-state checks. Drop to direct invocations only when a script does not cover the case (e.g. passing a `-P` gradle property the script's bat-arg parser mangles; see "Vulkan validation layer on Quest / Android" below).
-
-### Disabling the sideload security-check dialog on mobile (non-Quest) Android
-
-When running on a regular Android phone via the `mobile` flavor (e.g. soaking the editor with `scripts/soak_quest.py --flavor mobile`, or any sideloaded APK), Play Protect / Samsung Auto Blocker pops a "Send app for a security check?" dialog on each `adb install`. It blocks the install until dismissed, which stalls and can crash an unattended clean-reinstall soak. **Always disable it before a mobile Android run**, and restore it afterward (these are global settings):
-
-```bash
-ADB="$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe"
-# disable for the soak:
-"$ADB" -s <serial> shell settings put global verifier_verify_adb_installs 0
-"$ADB" -s <serial> shell settings put global upload_apk_enable 0
-"$ADB" -s <serial> shell settings put global package_verifier_user_consent -1
-# restore afterward:
-"$ADB" -s <serial> shell settings put global verifier_verify_adb_installs 1
-"$ADB" -s <serial> shell settings put global upload_apk_enable 1
-"$ADB" -s <serial> shell settings put global package_verifier_user_consent 1
-```
-
-If the dialog still appears, it is Samsung Auto Blocker rather than Play Protect: toggle it off in Settings > Security and privacy > Auto Blocker. (The Quest never shows this dialog, but the `mobile` editor cannot run on the Quest anyway -- the Quest sleeps flat 2D activities and the editor then SIGSEGVs at Vulkan surface creation; soak the `mobile` editor on a phone instead. Alternatively, `scripts/soak_quest.py batch --no-reinstall` relaunches the already-installed app each iteration, dodging the install dialog entirely.)
-
-### Vulkan validation layer on Quest / Android
-
-Without validation layers, GPU-side errors (descriptor set mismatches, image-layout violations, multiview misuse) are silent on Quest -- the editor hangs on the first bad frame with no log line, and abort hooks never fire.
-
-The Khronos `VK_LAYER_KHRONOS_validation` `.so` is bundled into every Quest / Android APK by default. The Gradle task `fetchVulkanValidationLayer` downloads the .so for `arm64-v8a` from the Vulkan SDK release matching `validationLayerVersion` in `android-project/app/build.gradle` and stages it under `android-project/app/libs/arm64-v8a/`; from there Gradle's normal `jniLibs` packaging puts it in the APK. The download is cached after the first build. To drop the .so (saves ~10 MB but loses the diagnostic capability), pass `-Pvulkan_validation_skip` to gradle / `build_android.bat`.
-
-To actually USE the layer at runtime:
-
-1. Set `"vulkan_validation_layers": true` in `config/editor/erhe_graphics.json`. The C++ device init enables `VK_LAYER_KHRONOS_validation` only when both this config knob is on AND the layer is loadable from the APK; bundling the .so alone does NOT slow normal runs.
-2. Validation errors flow through `Device::device_message` -> the editor's callback (in `editor.cpp` line ~698) which calls `ERHE_FATAL` on `Message_severity::error`, so device-level Vulkan errors become loud aborts.
-
-When the layer is enabled there is noticeable per-frame overhead -- leave the config knob off for normal runs and flip it on when chasing a hang or visual corruption.
+Vulkan validation on Quest: without `VK_LAYER_KHRONOS_validation`, GPU-side
+errors are silent hangs. The layer .so is bundled in every APK by default; the
+runtime knob is `"vulkan_validation_layers"` in
+`config/editor/erhe_graphics.json` (device-level errors then abort via
+`ERHE_FATAL`). Leave the knob off for normal runs (per-frame overhead); the
+bundled .so alone costs nothing -- see `erhe-quest-validation` for the full
+flow including the SPIR-V cache wipe.
 
 ## Python
 
