@@ -47,8 +47,7 @@ void Subdivide_node::imgui()
 {
     const char* mode_names[] = { "Catmull-Clark", "Sqrt3" };
     int mode = static_cast<int>(m_mode);
-    ImGui::SetNextItemWidth(140.0f);
-    if (ImGui::Combo("##mode", &mode, mode_names, IM_ARRAYSIZE(mode_names))) {
+    if (imgui_enum_stepper("mode", mode, mode_names, IM_ARRAYSIZE(mode_names))) {
         m_mode = static_cast<Mode>(mode);
         mark_dirty();
     }

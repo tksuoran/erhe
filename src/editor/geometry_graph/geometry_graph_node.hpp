@@ -23,6 +23,14 @@ class Geometry_graph;
 // node.
 void process_for_graph(erhe::geometry::Geometry& geometry);
 
+// Left / right arrow buttons cycling index through [0, count).
+// ImGui popups (Combo, BeginPopup) cannot be used inside the
+// ax::NodeEditor canvas, so node content uses these steppers instead.
+auto imgui_index_stepper(const char* id, int& index, int count) -> bool;
+
+// Index stepper followed by the current entry name.
+auto imgui_enum_stepper(const char* id, int& index, const char* const* names, int count) -> bool;
+
 // Base class for all geometry graph nodes.
 //
 // Follows the Shader_graph_node pattern: payload storage per pin slot,

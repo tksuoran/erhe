@@ -41,8 +41,7 @@ void Math_node::imgui()
 {
     const char* operation_names[] = { "Add", "Subtract", "Multiply", "Divide", "Power", "Min", "Max", "Abs", "Sqrt", "Sin", "Cos" };
     int operation = static_cast<int>(m_operation);
-    ImGui::SetNextItemWidth(140.0f);
-    if (ImGui::Combo("##operation", &operation, operation_names, IM_ARRAYSIZE(operation_names))) {
+    if (imgui_enum_stepper("operation", operation, operation_names, IM_ARRAYSIZE(operation_names))) {
         m_operation = static_cast<Math_operation>(operation);
         mark_dirty();
     }
