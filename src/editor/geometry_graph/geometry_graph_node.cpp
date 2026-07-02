@@ -1,5 +1,8 @@
 #include "geometry_graph/geometry_graph_node.hpp"
+#include "geometry_graph/geometry_graph_operations.hpp"
+#include "geometry_graph/geometry_graph_window.hpp"
 #include "app_context.hpp"
+#include "operations/operation_stack.hpp"
 #include "tools/selection_tool.hpp"
 
 #include "erhe_defer/defer.hpp"
@@ -181,6 +184,23 @@ void Geometry_graph_node::read_parameters(const nlohmann::json&)
 {
 }
 
+auto Geometry_graph_node::dump_parameters() const -> std::string
+{
+    nlohmann::json parameters = nlohmann::json::object();
+    write_parameters(parameters);
+    return parameters.dump();
+}
+
+auto Geometry_graph_node::get_committed_parameters() const -> const std::string&
+{
+    return m_committed_parameters;
+}
+
+void Geometry_graph_node::set_committed_parameters(const std::string& parameters)
+{
+    m_committed_parameters = parameters;
+}
+
 void Geometry_graph_node::node_editor(App_context& app_context, ax::NodeEditor::EditorContext& node_editor)
 {
     ImGui::PushID(static_cast<int>(get_id()));
@@ -227,7 +247,14 @@ void Geometry_graph_node::node_editor(App_context& app_context, ax::NodeEditor::
 
     // Content
     ImGui::TableSetColumnIndex(1);
+    if (m_committed_parameters.empty()) {
+        m_committed_parameters = dump_parameters(); // baseline for parameter undo
+    }
+    const bool was_dirty_before_widgets = is_dirty();
     imgui();
+    if (!was_dirty_before_widgets && is_dirty()) {
+        m_parameter_edit_in_progress = true; // a widget changed a parameter this frame
+    }
 
     // Output pins on the right edge
     ImGui::TableSetColumnIndex(2);
@@ -241,6 +268,25 @@ void Geometry_graph_node::node_editor(App_context& app_context, ax::NodeEditor::
     ImGui::EndTable();
 
     node_editor.EndNode();
+
+    // Commit the parameter edit gesture once its widget deactivates
+    // (mouse released on a drag / stepper, text input defocused). One
+    // undoable operation per completed gesture.
+    if (m_parameter_edit_in_progress && !ImGui::IsAnyItemActive()) {
+        m_parameter_edit_in_progress = false;
+        std::string after_parameters = dump_parameters();
+        if (after_parameters != m_committed_parameters) {
+            std::string before_parameters = m_committed_parameters;
+            app_context.operation_stack->execute_now(
+                std::make_shared<Geometry_graph_parameter_operation>(
+                    *app_context.geometry_graph_window,
+                    std::dynamic_pointer_cast<Geometry_graph_node>(node_from_this()),
+                    std::move(before_parameters),
+                    std::move(after_parameters)
+                )
+            );
+        }
+    }
 
     const bool item_selection   = is_selected();
     const bool editor_selection = node_editor.IsNodeSelected(get_id());

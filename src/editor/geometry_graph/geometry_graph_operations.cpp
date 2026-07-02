@@ -7,6 +7,7 @@
 #include "erhe_graph/pin.hpp"
 
 #include <fmt/format.h>
+#include <nlohmann/json.hpp>
 
 #include <cfloat>
 #include <cmath>
@@ -158,6 +159,46 @@ void Geometry_graph_replace_operation::apply(const Geometry_graph_content& conte
         m_window.connect_pins(record.source_pin, record.sink_pin);
     }
     m_window.get_graph().evaluate_if_dirty();
+}
+
+Geometry_graph_parameter_operation::Geometry_graph_parameter_operation(
+    Geometry_graph_window&                      window,
+    const std::shared_ptr<Geometry_graph_node>& node,
+    std::string&&                               before_parameters,
+    std::string&&                               after_parameters
+)
+    : m_window           {window}
+    , m_node             {node}
+    , m_before_parameters{std::move(before_parameters)}
+    , m_after_parameters {std::move(after_parameters)}
+{
+    set_description(fmt::format("Geometry graph edit parameters of '{}'", node->get_name()));
+}
+
+void Geometry_graph_parameter_operation::execute(App_context&)
+{
+    if (m_first_execute) {
+        // The new values are already live; just record the committed state.
+        m_first_execute = false;
+        m_node->set_committed_parameters(m_after_parameters);
+    } else {
+        apply(m_after_parameters);
+    }
+    m_window.get_graph().evaluate_if_dirty();
+}
+
+void Geometry_graph_parameter_operation::undo(App_context&)
+{
+    apply(m_before_parameters);
+    m_window.get_graph().evaluate_if_dirty();
+}
+
+void Geometry_graph_parameter_operation::apply(const std::string& parameters)
+{
+    // The strings are write_parameters() dumps, always valid JSON.
+    const nlohmann::json in = nlohmann::json::parse(parameters);
+    m_node->read_parameters(in); // marks the node dirty
+    m_node->set_committed_parameters(parameters);
 }
 
 Geometry_graph_link_insert_remove_operation::Geometry_graph_link_insert_remove_operation(

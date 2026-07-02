@@ -5,6 +5,7 @@
 #include <imgui/imgui.h>
 
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace erhe::graph { class Pin; }
@@ -100,6 +101,36 @@ private:
     Geometry_graph_content m_new_content;
     Geometry_graph_content m_old_content;
     bool                   m_old_captured{false};
+};
+
+// Undoable change of one node's parameters. Holds before / after
+// parameter state as write_parameters() JSON dumps, applied through
+// read_parameters(). The new values are already live when the operation
+// is pushed (widget edit gestures commit on completion, and
+// Geometry_graph_window::set_node_parameters() applies before pushing),
+// so the first execute() skips the apply; redo applies normally.
+class Geometry_graph_parameter_operation : public Operation
+{
+public:
+    Geometry_graph_parameter_operation(
+        Geometry_graph_window&                      window,
+        const std::shared_ptr<Geometry_graph_node>& node,
+        std::string&&                               before_parameters,
+        std::string&&                               after_parameters
+    );
+
+    // Implements Operation
+    void execute(App_context& context) override;
+    void undo   (App_context& context) override;
+
+private:
+    void apply(const std::string& parameters);
+
+    Geometry_graph_window&               m_window;
+    std::shared_ptr<Geometry_graph_node> m_node;
+    std::string                          m_before_parameters;
+    std::string                          m_after_parameters;
+    bool                                 m_first_execute{true};
 };
 
 // Undoable connect / disconnect of one geometry graph link.

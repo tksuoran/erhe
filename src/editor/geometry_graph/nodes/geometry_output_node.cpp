@@ -202,7 +202,13 @@ void Geometry_output_node::read_parameters(const nlohmann::json& in)
     if (!scene_name.empty()) {
         for (const std::shared_ptr<Scene_root>& scene_root : m_context.app_scenes->get_scene_roots()) {
             if (scene_root->get_name() == scene_name) {
-                m_scene_root = scene_root;
+                if (m_scene_root != scene_root) {
+                    // Release the scene node from the previous scene; the
+                    // next evaluate() recreates it in the new one.
+                    remove_scene_node();
+                    m_material.reset();
+                    m_scene_root = scene_root;
+                }
                 break;
             }
         }

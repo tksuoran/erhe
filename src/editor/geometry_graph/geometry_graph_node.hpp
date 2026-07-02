@@ -96,6 +96,14 @@ public:
     virtual void write_parameters(nlohmann::json& out) const;
     virtual void read_parameters (const nlohmann::json& in);
 
+    // Parameter undo support. The committed state is the write_parameters()
+    // JSON dump the next Geometry_graph_parameter_operation uses as its
+    // "before" side; node_editor() captures widget edit gestures against it
+    // (one operation per completed gesture, pushed on widget deactivation).
+    [[nodiscard]] auto dump_parameters() const -> std::string;
+    [[nodiscard]] auto get_committed_parameters() const -> const std::string&;
+    void set_committed_parameters(const std::string& parameters);
+
 protected:
     void show_pins(
         ax::NodeEditor::EditorContext&                        node_editor,
@@ -108,7 +116,9 @@ protected:
     std::vector<Geometry_payload> m_input_payloads;
     std::vector<Geometry_payload> m_output_payloads;
     std::string                   m_type_name;
+    std::string                   m_committed_parameters;
     bool                          m_dirty{true};
+    bool                          m_parameter_edit_in_progress{false};
 };
 
 }
