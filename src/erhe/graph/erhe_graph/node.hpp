@@ -43,6 +43,10 @@ public:
     void base_make_output_pin(std::size_t key, std::string_view name);
 
 protected:
+    // Replicates other's pin structure (direction, key, name, slot) onto this
+    // node; the new pins are owned by this node and have no links.
+    void copy_pins_from(const Node& other);
+
     int                              m_graph_node_id;
     etl::vector<Pin, max_pin_count>  m_input_pins;
     etl::vector<Pin, max_pin_count>  m_output_pins;

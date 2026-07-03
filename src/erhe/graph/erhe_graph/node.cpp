@@ -4,9 +4,39 @@
 
 namespace erhe::graph {
 
-Node::Node(const Node&) = default;
+// A copied node replicates the source's pin structure (direction, key, name,
+// slot) but is an independent graph entity: its pins are owned by the copy
+// and carry no links (aliasing the source's Link* would let peer pins and
+// the graph dangle), and it has a fresh graph id.
+Node::Node(const Node& other)
+    : Item           {other}
+    , m_graph_node_id{make_graph_id()}
+{
+    copy_pins_from(other);
+}
 
-Node& Node::operator=(const Node&) = default;
+Node& Node::operator=(const Node& other)
+{
+    if (this == &other) {
+        return *this;
+    }
+    Item::operator=(other);
+    // Keep this node's own graph id: assignment replaces contents, not identity.
+    m_input_pins.clear();
+    m_output_pins.clear();
+    copy_pins_from(other);
+    return *this;
+}
+
+void Node::copy_pins_from(const Node& other)
+{
+    for (const Pin& pin : other.m_input_pins) {
+        base_make_input_pin(pin.get_key(), pin.get_name());
+    }
+    for (const Pin& pin : other.m_output_pins) {
+        base_make_output_pin(pin.get_key(), pin.get_name());
+    }
+}
 
 Node::Node()
     : Item           {}
