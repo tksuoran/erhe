@@ -1,0 +1,460 @@
+# Procedural Texture Graph for erhe Editor (issue #199)
+
+Analysis of Material Maker's architecture, assessment of erhe's existing
+infrastructure (geometry graph, runtime shader compilation, render-to-texture),
+and a phased implementation plan for a procedural texture node graph in the
+erhe editor.
+
+Reference implementation: https://github.com/RodZill4/material-maker
+(local clone: `D:\material-maker`, MIT license - GLSL snippets ported from it
+carry an attribution comment).
+
+## Table of Contents
+
+1. [Implementation Status](#implementation-status)
+2. [Material Maker Architecture](#material-maker-architecture)
+3. [erhe Existing Infrastructure](#erhe-existing-infrastructure)
+4. [Architecture Decisions](#architecture-decisions)
+5. [Implementation Plan (Phases)](#implementation-plan-phases)
+6. [Verification Strategy](#verification-strategy)
+7. [Key Files Reference](#key-files-reference)
+
+---
+
+## Implementation Status
+
+| Work item                                                   | Status  | Commit |
+|-------------------------------------------------------------|---------|--------|
+| Phase 0: `erhe::graph` unit tests (foundation hardening)    | planned | -      |
+| Phase 1: `erhe::texgen` codegen core + unit tests           | planned | -      |
+| Phase 2: GPU validation (compile + render composed shaders) | planned | -      |
+| Phase 3: editor MVP (window, payload, ~12 nodes, output)    | planned | -      |
+| Phase 3 (cont.): serialization, undo/redo, MCP tools        | planned | -      |
+| Phase 3 (cont.): headless smoke test script                 | planned | -      |
+| Phase 4: node library expansion + gradient/curve widgets    | planned | -      |
+| Phase 5: buffer nodes, async compile, seeds/variations      | planned | -      |
+| Phase 6: PBR material output, multi-channel bake, PNG export| planned | -      |
+
+---
+
+## Material Maker Architecture
+
+Material Maker (Godot 4, GDScript) is the reference. The load-bearing facts
+for the port, established by reading `D:\material-maker`:
+
+### GLSL source composition, not per-node render-to-texture
+
+Each node contributes GLSL *snippets*; the engine composes one monolithic
+shader per rendered output and runs it once into a texture. There is no
+per-node RTT except at explicit "buffer" nodes. The central data structure is
+`ShaderCode` (`addons/material_maker/engine/nodes/gen_base.gd`):
+
+- `globals[]` - function definitions, de-duplicated by exact code match
+- `uniforms[]` - scalar/color parameters (live-editable without recompile)
+- `defs` - per-node uniform declarations + emitted input-helper functions
+- `code` - inline statements (shared subexpressions)
+- `output_values[type]` - GLSL *expression* per output type, with `$uv` still
+  unresolved - a node output is "an expression that, given uv, yields a value"
+
+Composition (`gen_shader.gd::_get_shader_code`) walks the graph from an output
+back through inputs. When node A samples input `s1` at a coordinate
+(`$s1($uv + vec2(0.01, 0.0))`) the engine either *inlines* the source
+expression with `$uv` rebound, or emits a helper function
+`oNNN_input_s1(vec2 uv, ...)` wrapping the source subtree and substitutes a
+call - the function form is used for multiply-sampled inputs (blur, warp) and
+controlled by the input's `function: true` flag plus a variant-tracking
+context (`gen_context.gd`) that de-duplicates repeated subtrees.
+
+Final assembly fills a shader template (`buffer_compute.tres`):
+`@COMMON_SHADER_FUNCTIONS` (rand/hash library) + `@GLOBALS` + `@DEFINITIONS`
++ `void main() { vec2 uv = ...; @CODE; result = @OUTPUT_VALUE; }`.
+
+### Node definition format (.mmg)
+
+Nodes are JSON data (`addons/material_maker/nodes/*.mmg`), ~400 of them. The
+`shader_model` schema:
+
+- `inputs[]`: `{name, type, default (GLSL expr used when unconnected),
+  [function: true]}`
+- `outputs[]`: `{type, <typename>: "<GLSL expression>"}` e.g.
+  `"f": "perlin($(uv), vec2($(scale_x), $(scale_y)), ...)"`
+- `parameters[]`: `{name, type (float|color|enum|boolean|size|gradient|curve|
+  polygon|...), default, min, max, step, values[]}`
+- `global`: GLSL function library injected once
+- `code`: inline statements run before the output expression
+- `includes`: named shared function libraries
+
+Substitution grammar (`gen_shader.gd::replace_variables`):
+
+- `$name` / `$(name)` - parameter value or built-in; `float` becomes a
+  uniform `p_oNNN_name`, `enum` substitutes its `value` string *as a code
+  fragment* (`blend_$blend_type` -> `blend_multiply`), `boolean` a literal,
+  `size` -> `pow(2, v)`, `gradient`/`curve` -> a generated GLSL function
+- built-ins: `$uv` (current coordinate expr), `$seed`, `$time`,
+  `$name` -> unique node id `oNNN`, `$name_uv` -> variant-unique id
+- `$input_name(coord)` - sample an input at a coordinate (inline or call)
+- `$rnd(a, b)` -> `param_rnd(a, b, $seed + <positional offset>)`
+
+### Type system (io_types.mmt)
+
+| name    | GLSL  | signature | slot | meaning                |
+|---------|-------|-----------|------|------------------------|
+| `f`     | float | `vec2 uv` | 0    | grayscale              |
+| `rgb`   | vec3  | `vec2 uv` | 0    | color                  |
+| `rgba`  | vec4  | `vec2 uv` | 0    | color + alpha          |
+| `sdf2d` | float | `vec2 uv` | 1    | 2D signed distance     |
+| `sdf3d` | float | `vec3 p`  | 2    | 3D signed distance     |
+| ...     |       |           |      |                        |
+
+Connection compatibility = matching `slot` integer (`f`/`rgb`/`rgba` freely
+interconnect); conversions are expression-rewrite templates
+(`f`->`rgb` = `vec3($(value))`, `rgba`->`f` = `dot(rgb, vec3(1))/3`).
+
+### Buffers, seeds, widgets, material output
+
+- **Buffer node** (`gen_buffer.gd`): render my input subtree once into a real
+  texture at a fixed resolution, expose it as a `sampler2D` - the explicit
+  RTT cut point that stops expensive subtrees being inlined at every sample
+  site. Driven by a dependency/dirty system.
+- **Seeds**: `$seed` is a per-node uniform; seeds cascade from parent graphs;
+  hash functions (`rand`/`rand2`/`rand3`) live in the common library.
+- **Gradient/curve widgets** compile to GLSL helper functions plus uniform
+  arrays of control points; only structural edits (add/remove stop) recompile.
+- **Material node** (`material.mmg`): a node whose *inputs are the PBR
+  channels* (albedo rgb, metallic f, roughness f, emission rgb, normal rgb,
+  occlusion f, depth f, opacity f); each connected channel is baked to its own
+  texture at a power-of-two size (16^2..8192^2, default 1024^2). Export packs
+  channels (ORM) and emits engine-specific descriptors from text templates.
+
+### MVP node subset
+
+`uniform` (color constant), `perlin`, `voronoi`, `bricks`, `shape`, `blend`,
+`colorize`, `transform`, `brightness_contrast`, `normal_map`, plus an output
+node - covers the canonical noise -> warp -> colorize -> blend -> normal loop.
+
+---
+
+## erhe Existing Infrastructure
+
+### Graph core - reuse unchanged
+
+`src/erhe/graph/` (`erhe::graph`): `Graph`, `Node` (pins in fixed-capacity
+`etl::vector` for pointer stability), `Pin` (semantic `std::size_t` key),
+`Link`. `connect()` enforces key equality + acyclicity
+(`would_create_cycle`); `sort()` is topological. Fully payload-agnostic; pin
+keys are unenumerated so a texture graph adds its own. **Has no unit tests
+today** - Phase 0 fixes that (known issue list in
+`src/erhe/graph/claude_review.md`).
+
+### Geometry graph - the pattern to follow
+
+`src/editor/geometry_graph/` is the proven editor-level pattern: payload
+variant + pin keys (`geometry_payload.hpp`), node base with parallel payload
+vectors, dirty flags, `write/read_parameters` JSON + factory type name
+(`geometry_graph_node.hpp`), string factory
+(`geometry_graph_node_factory.cpp`), ax::NodeEditor window with undoable edits
+through `Operation_stack` (`geometry_graph_window.cpp`), four payload-agnostic
+undo operations (`geometry_graph_operations.cpp`), JSON v1 serialization with
+full validation (`geometry_graph_serialization.cpp`), MCP tool surface
+(`mcp_server.cpp`). The async shadow-clone evaluation exists because geometry
+ops are expensive; texture-graph evaluation is *string composition* (cheap),
+so that machinery is **not** copied - see decisions below.
+
+Note there is also an older, simpler `src/editor/graph/` ("Shader_graph",
+`Graph_window`) - a second consumer of `erhe::graph` that proves the copy
+precedent; it is unrelated to this feature despite the name.
+
+### Graphics - everything needed exists
+
+- **Shader from string**: `Shader_stages_create_info` (`.defines`,
+  `.interface_blocks`, `.fragment_outputs`, `.no_vertex_input`, stages from
+  `std::string_view`) -> `build_shader_stages()` -> `prototype.is_valid()`.
+  `final_source()` injects version/defines/blocks. On-disk SPIR-V cache keyed
+  by final source hash de-duplicates recompiles
+  (`src/erhe/graphics/erhe_graphics/{shader_stages,spirv_cache}.hpp`).
+- **Render-to-texture**: `Texture_create_info` (usage
+  `color_attachment | sampled [| transfer_src]`), `Render_pass_descriptor`,
+  fullscreen 3-vertex triangle from `gl_VertexID`. Working single-pass
+  RTT-into-ImGui template: `src/editor/content_library/brdf_slice.cpp`
+  (a `Texture_rendergraph_node` with `texture_for_gui` output); multi-pass
+  chain template: `src/editor/rendergraph/post_processing.cpp`.
+- **ImGui display**: `Imgui_renderer::image(Draw_texture_parameters)` takes a
+  `Texture` directly (with `get_rtt_uv0/uv1` flip helpers).
+- **Material binding**: assign into
+  `material->data.texture_samplers.base_color.texture`; `Material_buffer`
+  allocates the texture-heap handle automatically next frame. Register in
+  `Content_library` (`content_library->textures->add(...)`) so browsers and
+  `get_scene_textures` see it.
+- **Readback + PNG**: blit texture -> host buffer (pattern in
+  `src/erhe/graphics/test/gpu_test_fixture.cpp::read_texture_rgba8`), then
+  `Image_writer::write_png` (fpng, headless-capable).
+- **Headless GPU test suite**: `src/erhe/graphics/test/` runs a headless
+  Vulkan device, fails tests on validation messages, and already has
+  `draw_fullscreen_triangle(fragment_source, ...) -> pixels` - exactly the rig
+  to validate composed shaders.
+
+---
+
+## Architecture Decisions
+
+1. **Generation model: Material-Maker-faithful GLSL composition.** The value
+   flowing through graph links is a *shader code fragment* (globals +
+   uniforms + inline code + an output expression still containing `$uv`), not
+   a texture. Rendering happens only at sinks: node preview thumbnails, the
+   output node, and (Phase 5) buffer nodes. Rationale: the entire codegen core
+   is pure string logic - unit-testable without a GPU; no intermediate
+   quantization or VRAM cost; scalar parameter edits update uniforms without
+   recompiling; the SPIR-V cache absorbs recompiles of unchanged sources.
+
+2. **Fragment shader fullscreen pass, not compute.** Material Maker bakes via
+   compute; erhe's `set_storage_image` is Vulkan-only while the fragment RTT
+   path works on all backends and has the `brdf_slice`/`post_processing`
+   precedent. Compute can be revisited for iterative buffers later.
+
+3. **Pure codegen core is a new library `src/erhe/texgen/` (`erhe::texgen`)**
+   with its own gtest suite (`src/erhe/texgen/test/`), no graphics
+   dependency. It defines: the type system + conversion table, `Shader_code`,
+   the substitution engine, `Node_descriptor`, and the graph composer that
+   emits a complete fragment-shader body. GPU validation of composed sources
+   lives in the existing `src/erhe/graphics/test/` suite (it links
+   `erhe::texgen`), reusing the headless device fixture.
+
+4. **Nodes are data: C++ descriptor tables, one generic node class.**
+   Mirroring `.mmg` `shader_model`, a `Node_descriptor` holds inputs (name,
+   type, default expression, function flag), outputs (type + expression),
+   parameters (float/color/enum/bool/size...), global GLSL, and inline code -
+   most node types are a descriptor entry with GLSL in raw string literals,
+   not a bespoke class. This keeps the door open for loading
+   `.mmg`-compatible JSON later without committing to it now.
+
+5. **Editor integration copies the geometry-graph pattern**
+   (`src/editor/texture_graph/`): `Texture_payload` + `Texture_pin_key`,
+   `Texture_graph_node` base, factory, `Texture_graph_window`, the four undo
+   operations, JSON v1 serialization, MCP tools. `erhe::graph` is shared
+   unchanged. We deliberately do NOT extract shared window/evaluator templates
+   up front: the geometry graph is freshly stabilized behind a 120-check smoke
+   sweep, and the texture graph does not need the async shadow-clone engine
+   (composition is cheap; only shader *compiles* may need async, which is a
+   different mechanism). Once the texture window exists and its real shape is
+   known, a dedup pass across the three `erhe::graph` consumers can be
+   evaluated as separate follow-up work.
+
+6. **Unified expression payloads.** There are no separate scalar payload
+   types: a float constant node outputs type `f` with expression `0.5`; a
+   color constant outputs `rgba`. Pin compatibility follows Material Maker's
+   slot classes (`f`/`rgb`/`rgba` interconnect via conversion expressions).
+   MVP types: `f`, `rgb`, `rgba`; `sdf2d` arrives with the SDF nodes in
+   Phase 4.
+
+7. **Parameters as uniforms.** Float/color parameters become entries in one
+   std140 UBO per composed shader (respecting the project's explicit
+   alignment rules); editing them updates the UBO only. Enum/bool/size
+   parameters substitute code fragments/literals and therefore recompile on
+   change - matching Material Maker semantics.
+
+8. **Evaluation model: dirty-flag incremental, synchronous composition.**
+   Like the geometry graph, nodes are born dirty and widget edits call
+   `mark_dirty()`; evaluation walks topo order recomposing only dirty
+   subtrees. Each node caches its composed `Shader_code`. Preview rendering
+   and output baking are recorded during the editor frame (the window's
+   render hook), never blocking on GPU readback.
+
+---
+
+## Implementation Plan (Phases)
+
+Each phase ends with: build green (ninja MSVC), unit tests green, headless
+MCP verification where applicable, an independent review of the diff, and a
+commit. Phases are sized so one agent can own one phase (or one step of
+phase 3+) with fresh context.
+
+### Phase 0 - Foundation hardening: `erhe::graph` unit tests
+
+New `src/erhe/graph/test/` gtest target `erhe_graph_tests` (mirror
+`src/erhe/item/test/CMakeLists.txt`), gated behind `ERHE_BUILD_TESTS`:
+
+- `connect` accepts key-matched acyclic links, refuses key mismatch,
+  self-link, 2-node and 3-node cycles (`would_create_cycle`)
+- `disconnect` removes exactly the link from both pins
+- `sort` yields a valid topological order for chain / diamond / multi-root
+  graphs; `m_is_sorted` invalidation on structural edits
+- `unregister_node` leaves no dangling `Link*` on peer pins
+- multi-link fan-in/fan-out pin behavior
+
+Fix real defects these tests surface (candidates catalogued in
+`src/erhe/graph/claude_review.md`); geometry-graph smoke sweep must stay
+120/120 afterwards.
+
+### Phase 1 - `erhe::texgen` codegen core (the foundation)
+
+New library `src/erhe/texgen/` + `src/erhe/texgen/test/`. Deliverables:
+
+- **Type system**: `Texgen_type` (f, rgb, rgba; extensible), slot classes,
+  conversion-expression table, canonical coordinate signature (`vec2 uv`)
+- **`Shader_code`**: globals (deduped by content), uniform list (name, type,
+  default), defs, inline code, per-type output expressions
+- **Substitution engine**: `$name` / `$(name)` parameter and built-in
+  resolution (`$uv`, `$seed`, `$name` -> unique node id, `$name_uv`),
+  enum-as-code-fragment, `$input(coord)` sampling with inline and
+  emitted-helper-function forms, `$rnd(a, b)` positional-offset rewrite
+- **`Node_descriptor`** model (inputs with defaults + function flag, outputs,
+  parameters with min/max/step/enum values, global GLSL, inline code)
+- **Composer**: given a sink node in a graph of descriptor-driven nodes,
+  produce the complete fragment-shader body: common hash library + deduped
+  globals + defs + main() with `uv`, inline code, output expression wrapped
+  by output type (grayscale -> `vec4(vec3(v), 1.0)`), plus the UBO member
+  list for scalar parameters (std140-aligned) and default-expression
+  fallbacks for unconnected inputs
+
+Unit tests (no GPU): every substitution rule, conversion insertion, global
+dedup across nodes sharing a library, inline vs function input forms,
+unconnected-input defaults, unique-id collision freedom, golden composed
+sources for 2-3 small graphs (constant -> blend, perlin -> colorize).
+
+### Phase 2 - GPU validation of composed shaders
+
+In `src/erhe/graphics/test/` (links `erhe::texgen`): compose sources from
+descriptor graphs, `build_shader_stages` -> assert `is_valid()`, render 8x8
+via the fixture, `read_texture_rgba8`, assert pixels:
+
+- constant color node -> exact color
+- `f`->`rgba` conversion (gray expression) -> gray pixels
+- blend(multiply) of two constants -> product
+- uv gradient -> corner pixel ordering
+- perlin/hash library compiles and yields finite, deterministic values
+- parameter UBO: same shader, two uniform values -> two results (no recompile)
+
+This proves the erhe shader template (version, UBO layout, fragment output)
+before any editor code exists.
+
+### Phase 3 - Editor MVP (`src/editor/texture_graph/`)
+
+Follows the geometry-graph file layout. Steps, each independently
+committable:
+
+1. **Payload + node base + graph + window skeleton**: `Texture_payload`
+   (composed `Shader_code` handle + type), `Texture_pin_key`, pin colors,
+   `Texture_graph_node` (descriptor-driven: pins, parameter widgets with
+   steppers, write/read_parameters JSON), `Texture_graph` (dirty-flag topo
+   evaluation), `Texture_graph_window` (ax::NodeEditor canvas, link
+   validation, node toolbar, spawn grid), wiring in `editor.cpp` /
+   `App_context` / CMake.
+2. **MVP node set** (descriptors + ported GLSL, MIT attribution): uniform
+   color, perlin, voronoi, bricks, shape, blend, colorize (fixed 2-stop
+   gradient initially), transform, brightness_contrast, normal_map.
+3. **Preview + output node**: shared preview renderer (compose -> compile ->
+   fullscreen pass into a per-node thumbnail texture, rendered during the
+   editor frame; recompile only when composition changed - hash the source);
+   node thumbnails via `Imgui_renderer::image`; `Texture_output_node` bakes
+   at a power-of-two size parameter into a persistent `Texture`, registers it
+   in `Content_library` under an editable name, optional
+   assign-to-material (base color) selector.
+4. **Serialization + undo/redo**: JSON v1 save/load/clear with the geometry
+   graph's validation rules (factory names, slots, keys, cycles); the four
+   undo operations + parameter-gesture undo adapted to
+   `Texture_graph_window`.
+5. **MCP tools**: `get_texture_graph` (nodes, pins, links, parameters,
+   composed-source hash per node), `texture_graph_add_node` / `remove_node` /
+   `connect` / `disconnect` / `set_parameter` / `save` / `load` / `clear`,
+   plus `texture_graph_export_png` (readback + fpng) for scripted visual
+   verification.
+6. **Headless smoke test**: `scripts/texture_graph_smoke_test.py` modeled on
+   `scripts/geometry_nodes_smoke_test.py` - node CRUD, connect rules, param
+   sweeps with undo/redo, save/load round-trip, export_png pixel checks,
+   screenshots.
+
+Exit criteria: perlin -> colorize -> output produces a texture visible on a
+material in the headless viewport screenshot; smoke script green.
+
+### Phase 4 - Node library expansion + rich parameter widgets
+
+- **Gradient and curve widgets**: control-point editing in the node UI,
+  codegen to GLSL helper functions + uniform arrays (value edits =
+  uniform update; stop add/remove = recompile), real `colorize` and tone
+  `curve` nodes
+- **Nodes**: fbm (multi-basis), noise variants, tiling patterns (weave,
+  truchet, cairo), math, adjust_hsv, quantize, remap, invert, combine/decompose
+  channels, `sdf2d` type + shape/ops/stroke/fill nodes, switch, reroute
+- **Node palette**: searchable spawn menu replacing the fixed toolbar
+- Smoke-test extension per node family
+
+### Phase 5 - Buffers, async compile, seeds and variations
+
+- **Buffer node**: explicit RTT cut point - renders its input subtree to a
+  real texture (size + format parameters) and exposes a `sampler2D`-backed
+  expression downstream; dependency-driven re-render on upstream dirtiness
+- Buffer-dependent filters: blur/convolution, slope_blur, bevel, distance,
+  make_tileable
+- **Async shader compilation** on the existing `tf::Executor` (compose on
+  main thread - cheap; compile off-thread; swap pipeline when ready, keep
+  showing the stale preview meanwhile)
+- **Seed system**: per-node seed uniform, cascade from graph, `$rnd`
+  variations; reseed button on nodes
+- Performance pass: preview throttling, compile dedup metrics
+
+### Phase 6 - PBR material output, bake and export
+
+- **Material output node** with PBR channel inputs (albedo, metallic,
+  roughness, emission, normal, occlusion, height/depth, opacity): bakes each
+  connected channel at the chosen size, produces/updates a set of
+  `Content_library` textures, and drives a full `erhe::primitive::Material`
+  (base color + metallic-roughness + normal + occlusion + emissive samplers)
+- **PNG export** of any channel/output (readback + `Image_writer`), optional
+  ORM packing
+- **Node groups** (reuse the geometry graph's Group pattern) once the node
+  library is large enough to warrant them
+- Stretch: import a subset of `.mmg` node definitions directly
+
+---
+
+## Verification Strategy
+
+- **Unit tests** (every phase): `erhe_graph_tests` (Phase 0),
+  `erhe_texgen_tests` (Phase 1+, pure string logic), composed-shader GPU
+  tests in `erhe_graphics_tests` (Phase 2+, headless Vulkan). Run via ctest /
+  direct exe from `build_tests*` trees per `CLAUDE.md` Testing section.
+- **Headless end-to-end** (Phase 3+): `scripts/texture_graph_smoke_test.py`
+  against the headless Vulkan editor build over the in-editor MCP server,
+  including `texture_graph_export_png` pixel assertions and
+  `capture_screenshot` visual checks.
+- **Process**: per step - edit, build (ninja MSVC), tests, independent diff
+  review, fix, commit (per-topic commits). Restore
+  `config/editor/desktop_window_imgui_host_imgui.ini` after editor runs.
+
+---
+
+## Key Files Reference
+
+Material Maker (reference, `D:\material-maker`):
+
+- `addons/material_maker/engine/nodes/gen_base.gd` - ShaderCode + helpers
+- `addons/material_maker/engine/nodes/gen_shader.gd` - composition +
+  substitution (`_get_shader_code`, `replace_variables`, `replace_input`,
+  `process_parameters`)
+- `addons/material_maker/engine/pipeline/compute_shader.gd` +
+  `engine/nodes/buffer_compute.tres` - final shader assembly template
+- `addons/material_maker/nodes/io_types.mmt` - type system
+- `addons/material_maker/nodes/{perlin,blend,colorize,shape,material}.mmg` -
+  representative node definitions
+- `addons/material_maker/types/{gradient,curve}.gd` - widget codegen
+- `addons/material_maker/engine/nodes/gen_buffer.gd` - buffer semantics
+
+erhe (existing infrastructure):
+
+- `src/erhe/graph/erhe_graph/{graph,node,pin,link}.hpp` - shared graph core
+- `src/editor/geometry_graph/*` - the editor-level pattern being mirrored
+- `src/erhe/graphics/erhe_graphics/{shader_stages,spirv_cache}.hpp` - shader
+  from string + cache
+- `src/editor/content_library/brdf_slice.cpp` - single-pass RTT into ImGui
+- `src/editor/rendergraph/post_processing.cpp` - chained fullscreen passes
+- `src/erhe/graphics/test/gpu_test_fixture.{hpp,cpp}` - headless GPU fixture
+  (`draw_fullscreen_triangle`, `read_texture_rgba8`)
+- `src/erhe/primitive/erhe_primitive/material.hpp` - texture samplers on
+  materials
+- `src/erhe/graphics/erhe_graphics/image_writer.hpp` - PNG export
+
+erhe (new, this feature):
+
+- `src/erhe/texgen/` + `src/erhe/texgen/test/` - codegen core (Phase 1)
+- `src/editor/texture_graph/` - editor integration (Phase 3+)
+- `scripts/texture_graph_smoke_test.py` - headless verification (Phase 3)
