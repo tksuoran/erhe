@@ -14,6 +14,7 @@
 #include "geometry_graph/geometry_graph.hpp"
 #include "geometry_graph/geometry_graph_node.hpp"
 #include "geometry_graph/geometry_graph_window.hpp"
+#include "texture_graph/graph_texture.hpp"
 #include "texture_graph/texture_graph.hpp"
 #include "texture_graph/texture_graph_compose.hpp"
 #include "texture_graph/texture_graph_node.hpp"
@@ -1138,6 +1139,8 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "geometry_graph_save")          result = action_geometry_graph_save         (req->arguments);
         else if (req->tool_name == "geometry_graph_load")          result = action_geometry_graph_load         (req->arguments);
         else if (req->tool_name == "geometry_graph_clear")         result = action_geometry_graph_clear        (req->arguments);
+        else if (req->tool_name == "create_graph_texture")         result = action_create_graph_texture        (req->arguments);
+        else if (req->tool_name == "get_graph_textures")           result = query_graph_textures               (req->arguments);
         else if (req->tool_name == "get_texture_graph")            result = query_texture_graph                (req->arguments);
         else if (req->tool_name == "texture_graph_add_node")       result = action_texture_graph_add_node      (req->arguments);
         else if (req->tool_name == "texture_graph_remove_node")    result = action_texture_graph_remove_node   (req->arguments);
@@ -1820,7 +1823,21 @@ void Mcp_server::refresh_tool_list()
     }});
     m_tool_infos.push_back({"geometry_graph_clear", "Remove all nodes and links from the geometry node graph. Undoable (single operation).", schema_no_args()});
 
-    m_tool_infos.push_back({"get_texture_graph", "List the procedural texture node graph: nodes with ids, type labels, canvas positions, parameters, input pins (slot, value type, whether connected, source node id/slot) and output pins (slot, value type), plus a 'composable' flag per node, and all links. Texture graph evaluation is synchronous, so no wait is needed.", schema_no_args()});
+    m_tool_infos.push_back({"create_graph_texture", "Create a Graph Texture asset (a procedural texture backed by a node graph) in a scene's content library and select it. The selected Graph Texture is what the Texture Graph window edits and what the texture_graph_* tools operate on. A Material slot can then source from it (set_material_texture_source). Returns the new asset's id and name.", {
+        {"type", "object"},
+        {"properties", {
+            {"name",       {{"type", "string"}, {"description", "Name of the new Graph Texture asset (must be unique in the scene)"}}},
+            {"scene_name", {{"type", "string"}, {"description", "Target scene (default: the single/first scene)"}}}
+        }},
+        {"required", json::array({"name"})}
+    }});
+    m_tool_infos.push_back({"get_graph_textures", "List the Graph Texture assets in a scene's content library (or all scenes when scene_name is omitted): name, id, scene, node_count, and has_output (whether the graph currently bakes an output texture).", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name", {{"type", "string"}, {"description", "Scene to list (default: all scenes)"}}}
+        }}
+    }});
+    m_tool_infos.push_back({"get_texture_graph", "List the procedural texture node graph of the currently selected Graph Texture asset (or the window default when none is selected): the target asset name/id, nodes with ids, type labels, canvas positions, parameters, input pins (slot, value type, whether connected, source node id/slot) and output pins (slot, value type), plus a 'composable' flag per node, and all links. Texture graph evaluation is synchronous, so no wait is needed.", schema_no_args()});
     // Build the node-type enum from the descriptor registry (plus the bespoke
     // "output" sink) so it never drifts as node types are added.
     json texture_node_type_enum = json::array();
@@ -2556,6 +2573,13 @@ auto Mcp_server::find_items_by_ids(Scene_root& sr, const std::set<std::size_t>& 
             for (const auto& brush : library->brushes->get_all<Brush>()) {
                 if (target_ids.contains(brush->get_id())) {
                     result.push_back(brush);
+                }
+            }
+        }
+        if (library->graph_textures) {
+            for (const auto& graph_texture : library->graph_textures->get_all<Graph_texture>()) {
+                if (target_ids.contains(graph_texture->get_id())) {
+                    result.push_back(graph_texture);
                 }
             }
         }
@@ -6039,6 +6063,84 @@ namespace {
 
 } // anonymous namespace
 
+auto Mcp_server::action_create_graph_texture(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::shared_ptr<Content_library> library = sr->get_content_library();
+    if (!library) {
+        return make_error_content("Scene has no content library: " + scene_name);
+    }
+    const std::string name = args.value("name", "");
+    if (name.empty()) {
+        return make_error_content("name is required");
+    }
+    if (find_library_item<Graph_texture>(library->graph_textures, name)) {
+        return make_error_content("Graph texture already exists: " + name);
+    }
+
+    const std::shared_ptr<Graph_texture> item = std::make_shared<Graph_texture>(name);
+    // execute_now so the asset is live this frame and selectable immediately.
+    m_context.operation_stack->execute_now(
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context = m_context,
+                .item    = std::make_shared<Content_library_node>(item),
+                .parent  = library->graph_textures,
+                .mode    = Item_insert_remove_operation::Mode::insert
+            }
+        )
+    );
+    // Select it so the Texture Graph window and the texture_graph_* tools (which
+    // operate on the current selection) target this asset.
+    if (m_context.selection != nullptr) {
+        m_context.selection->set_selection({item});
+    }
+    return make_json_content({
+        {"created", true},
+        {"name",    name},
+        {"id",      item->get_id()}
+    }).dump();
+}
+
+auto Mcp_server::query_graph_textures(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    json graph_textures = json::array();
+    const auto append_from = [&graph_textures](Scene_root& scene_root) {
+        const std::shared_ptr<Content_library> library = scene_root.get_content_library();
+        if (!library || !library->graph_textures) {
+            return;
+        }
+        for (const std::shared_ptr<Graph_texture>& graph_texture : library->graph_textures->get_all<Graph_texture>()) {
+            graph_textures.push_back({
+                {"name",       graph_texture->get_name()},
+                {"id",         graph_texture->get_id()},
+                {"scene",      scene_root.get_name()},
+                {"node_count", graph_texture->nodes().size()},
+                {"has_output", graph_texture->get_referenced_texture() != nullptr}
+            });
+        }
+    };
+    if (!scene_name.empty()) {
+        Scene_root* sr = find_scene(scene_name);
+        if (sr == nullptr) {
+            return make_error_content("Scene not found: " + scene_name);
+        }
+        append_from(*sr);
+    } else if (m_context.app_scenes != nullptr) {
+        for (const std::shared_ptr<Scene_root>& sr : m_context.app_scenes->get_scene_roots()) {
+            append_from(*sr);
+        }
+    }
+    json result;
+    result["graph_textures"] = graph_textures;
+    return make_json_content(result).dump();
+}
+
 auto Mcp_server::query_texture_graph(const json& args) -> std::string
 {
     static_cast<void>(args);
@@ -6064,6 +6166,9 @@ auto Mcp_server::query_texture_graph(const json& args) -> std::string
     }
 
     json result;
+    const std::shared_ptr<Graph_texture>& current = window->get_current_graph_texture();
+    result["graph_texture_name"] = current->get_name();
+    result["graph_texture_id"]   = current->get_id();
     result["nodes"] = nodes;
     result["links"] = links;
     return make_json_content(result).dump();

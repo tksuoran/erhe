@@ -14,6 +14,7 @@
 #include "app_context.hpp"
 #include "app_scenes.hpp"
 #include "editor_log.hpp"
+#include "items.hpp"
 #include "content_library/content_library.hpp"
 #include "operations/operation_stack.hpp"
 #include "scene/scene_root.hpp"
@@ -101,7 +102,10 @@ void Texture_graph_window::refresh_current_graph_texture()
 {
     std::shared_ptr<Graph_texture> selected;
     if (m_app_context.selection != nullptr) {
-        selected = m_app_context.selection->get_last_selected<Graph_texture>();
+        // Content-library assets are selected wrapped in a Content_library_node;
+        // get<>() unwraps that (the pattern Properties uses for the selected
+        // Material), unlike Selection::get_last_selected<>().
+        selected = get<Graph_texture>(m_app_context.selection->get_selected_items());
     }
     m_graph_texture = selected ? selected : m_default_graph_texture;
 }
