@@ -6,8 +6,10 @@
 
 #include <nlohmann/json_fwd.hpp>
 
+#include <condition_variable>
 #include <filesystem>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -34,6 +36,18 @@ class Geometry_graph_node;
 // Follows the Graph_window (shader graph) pattern: toolbar for creating
 // nodes, ax::NodeEditor canvas rendering all nodes, link creation and
 // node / link deletion handling, selection integration.
+//
+// Evaluation runs in the background so a heavy chain does not freeze the
+// UI: update_evaluation() (called once per frame from the editor main
+// loop, window visible or not) snapshots the live graph into a shadow
+// clone - factory-built nodes with the same parameters, links, cached
+// output payloads and dirty flags - and evaluates the shadow on a
+// tf::Executor worker. The worker never touches live nodes, so the
+// canvas, undo / redo and the MCP mutations stay fully interactive
+// during evaluation; when the worker finishes, the payloads (and the
+// output nodes' evaluated scene products) are copied back on the main
+// thread. Edits made while a run is in flight simply re-mark nodes
+// dirty and trigger the next run.
 class Geometry_graph_window : public erhe::imgui::Imgui_window
 {
 public:
@@ -77,6 +91,14 @@ public:
     auto load_graph (const std::filesystem::path& path) -> bool;
     void clear_graph();
 
+    // Background evaluation (see the class comment). update_evaluation()
+    // is the once-per-frame driver; wait_for_idle_evaluation() blocks
+    // until the graph is fully evaluated, for callers that need
+    // synchronous semantics (the MCP get_geometry_graph query and graph
+    // file saves).
+    void update_evaluation();
+    void wait_for_idle_evaluation();
+
     // Non-undoable primitives used by the geometry graph operations
     // (and graph load); prefer the undoable edits above.
     void insert_node    (const std::shared_ptr<Geometry_graph_node>& node);
@@ -98,10 +120,29 @@ private:
     // stack at (0, 0). Reset by clear_graph().
     auto next_node_spawn_position() -> ImVec2;
 
+    // One background evaluation: the shadow graph the worker evaluates
+    // plus the completion handshake. Owned via shared_ptr so the worker
+    // keeps the shadow alive even if the window is destroyed mid-run.
+    class Evaluation_run
+    {
+    public:
+        Geometry_graph                                    shadow_graph;
+        std::vector<std::shared_ptr<Geometry_graph_node>> shadow_nodes;
+        std::vector<std::size_t>                          live_node_ids; // parallel to shadow_nodes
+        std::mutex                                        mutex;
+        std::condition_variable                           condition;
+        bool                                              done{false};   // guarded by mutex
+    };
+
+    void launch_evaluation();
+    void finish_evaluation(); // pre: m_evaluation_run && done
+    [[nodiscard]] auto is_evaluation_run_done() -> bool;
+
     App_context&                                      m_app_context;
     Geometry_graph                                    m_graph;
     std::unique_ptr<ax::NodeEditor::EditorContext>    m_node_editor;
     std::vector<std::shared_ptr<Geometry_graph_node>> m_nodes;
+    std::shared_ptr<Evaluation_run>                   m_evaluation_run; // non-null while a run is in flight
     std::string                                       m_graph_path{"res/editor/graphs/geometry_graph.json"};
     int                                               m_spawn_count{0};
 };

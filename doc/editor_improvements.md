@@ -32,11 +32,11 @@ Operations are queued without pre-validation. `Compound_operation` has no rollba
 
 `Post_processing_node` maintains 9+ parallel vectors that must stay synchronized. Replace with a single `struct Level { width, height, downsample, upsample, ... }` vector.
 
-### 6. Async geometry graph evaluation (Medium-Large effort, Medium impact)
-
-Geometry graph evaluation runs synchronously on the main thread; a heavy chain (subdivide x6 -> ~27 s Debug) freezes the UI and outlives the in-editor MCP server's per-request wait (the request still executes; clients must wait for the server to drain - see `scripts/geometry_nodes_smoke_test.py` mutate()). Move node evaluation to a worker (the `Mesh_operation` async pattern exists) or at least have the MCP server respond "accepted, evaluating" with a completion query, so long evaluations neither freeze the UI nor look like hangs. Found during the 2026-07-02 geometry nodes smoke sweep.
-
 ## Past work
+
+## Async geometry graph evaluation (Medium-Large effort, Medium impact)
+
+**DONE.** Geometry graph evaluation runs on a `tf::Executor` worker via snapshot isolation: `Geometry_graph_window::update_evaluation()` (once per frame from the editor main loop) clones the live graph into a shadow - factory-built nodes carrying the same parameters (via the `write_parameters()` / `read_parameters()` JSON round-trip), links, cached output payloads and dirty flags, so incremental evaluation is preserved - and the worker evaluates only the shadow. The live graph stays fully interactive (canvas, undo / redo, MCP mutations) during a run; results are copied back on the main thread when the worker finishes. `Geometry_output_node` is two-phase, following the async `Mesh_operation` pattern: `evaluate()` builds the render geometry / primitive / collision shape worker-side, `apply_evaluated_to_scene()` mutates the scene main-thread-side (scene Output nodes inside group assets are handled by pairing the shadow and live subgraphs). MCP mutations now return immediately ("accepted, evaluating"); `get_geometry_graph` waits for completion (the completion barrier) and `get_async_status` reports in-flight runs. Verified: a subdivide-x6 mutation returns in 0.13 s (previously blocked ~20 s Debug) with cheap MCP queries answered throughout the evaluation, and the 120-check smoke sweep passes.
 
 ## Batch element creation in remaining Geometry_operations (Medium effort, Medium impact)
 

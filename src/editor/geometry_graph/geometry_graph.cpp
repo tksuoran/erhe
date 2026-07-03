@@ -12,6 +12,13 @@ void Geometry_graph::mark_dirty()
     m_dirty = true;
 }
 
+auto Geometry_graph::consume_forced_full() -> bool
+{
+    const bool forced_full = m_dirty;
+    m_dirty = false;
+    return forced_full;
+}
+
 auto Geometry_graph::is_evaluation_needed() const -> bool
 {
     if (m_dirty) {
@@ -49,7 +56,7 @@ void Geometry_graph::evaluate()
         if (!geometry_graph_node->is_dirty()) {
             continue; // clean node keeps its cached output payloads
         }
-        log_graph_editor->trace("Geometry_graph: evaluating node '{}' {}", geometry_graph_node->get_name(), geometry_graph_node->get_id());
+        log_graph_editor->trace("Geometry_graph: evaluating node '{}' {}", geometry_graph_node->get_name(), geometry_graph_node->get_log_id());
         geometry_graph_node->evaluate(*this);
         geometry_graph_node->clear_dirty();
         // Nodes are visited in topological order, so marking link sinks

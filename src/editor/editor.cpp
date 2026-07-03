@@ -441,11 +441,16 @@ public:
 
         m_operation_stack->update();
 
+        // Geometry graph background evaluation: apply results of a
+        // completed run and launch a new one when the graph is dirty
+        // (after the operation stack so this frame's edits are seen).
+        m_geometry_graph_window->update_evaluation();
+
         // - Execute all fixes step updates
         // - Execute all once per frame updates
         //    - App_scenes (updates physics)
         //    - Fly_camera_tool
-        //    - Network_window 
+        //    - Network_window
         m_app_message_bus->update(); // Flushes queued messages
 
         // Apply physics updates

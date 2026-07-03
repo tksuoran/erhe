@@ -1,6 +1,7 @@
 #include "geometry_graph/nodes/group_nodes.hpp"
 
 #include "geometry_graph/geometry_graph_node_factory.hpp"
+#include "geometry_graph/nodes/geometry_output_node.hpp"
 #include "editor_log.hpp"
 
 #include "erhe_geometry/geometry.hpp"
@@ -230,6 +231,36 @@ void Group_node::evaluate(Geometry_graph&)
     set_output(0, (m_output_node != nullptr) ? m_output_node->get_input(0) : Geometry_payload{});
 
     --g_group_evaluation_depth;
+}
+
+void Group_node::adopt_subgraph_outputs(Group_node& shadow, const int depth)
+{
+    if (depth >= max_group_evaluation_depth) {
+        return;
+    }
+    if (shadow.m_subgraph_nodes.empty()) {
+        return; // shadow never evaluated (clean at snapshot) or failed to load
+    }
+    ensure_loaded();
+    if ((m_loaded_path != shadow.m_loaded_path) || (m_subgraph_nodes.size() != shadow.m_subgraph_nodes.size())) {
+        return; // asset changed between snapshot and finish; a re-evaluation is already pending
+    }
+    for (std::size_t i = 0, end = m_subgraph_nodes.size(); i < end; ++i) {
+        Geometry_graph_node* live_node   = m_subgraph_nodes[i].get();
+        Geometry_graph_node* shadow_node = shadow.m_subgraph_nodes[i].get();
+        Geometry_output_node* live_output   = dynamic_cast<Geometry_output_node*>(live_node);
+        Geometry_output_node* shadow_output = dynamic_cast<Geometry_output_node*>(shadow_node);
+        if ((live_output != nullptr) && (shadow_output != nullptr)) {
+            live_output->take_evaluated(*shadow_output);
+            live_output->apply_evaluated_to_scene();
+            continue;
+        }
+        Group_node* live_group   = dynamic_cast<Group_node*>(live_node);
+        Group_node* shadow_group = dynamic_cast<Group_node*>(shadow_node);
+        if ((live_group != nullptr) && (shadow_group != nullptr)) {
+            live_group->adopt_subgraph_outputs(*shadow_group, depth + 1);
+        }
+    }
 }
 
 void Group_node::imgui()

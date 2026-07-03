@@ -56,7 +56,6 @@ void Geometry_graph_node_insert_remove_operation::execute(App_context&)
     } else {
         remove();
     }
-    m_window.get_graph().evaluate_if_dirty();
 }
 
 void Geometry_graph_node_insert_remove_operation::undo(App_context&)
@@ -66,7 +65,6 @@ void Geometry_graph_node_insert_remove_operation::undo(App_context&)
     } else {
         insert();
     }
-    m_window.get_graph().evaluate_if_dirty();
 }
 
 void Geometry_graph_node_insert_remove_operation::insert()
@@ -158,7 +156,6 @@ void Geometry_graph_replace_operation::apply(const Geometry_graph_content& conte
     for (const Geometry_graph_link_record& record : content.links) {
         m_window.connect_pins(record.source_pin, record.sink_pin);
     }
-    m_window.get_graph().evaluate_if_dirty();
 }
 
 Geometry_graph_parameter_operation::Geometry_graph_parameter_operation(
@@ -184,13 +181,11 @@ void Geometry_graph_parameter_operation::execute(App_context&)
     } else {
         apply(m_after_parameters);
     }
-    m_window.get_graph().evaluate_if_dirty();
 }
 
 void Geometry_graph_parameter_operation::undo(App_context&)
 {
     apply(m_before_parameters);
-    m_window.get_graph().evaluate_if_dirty();
 }
 
 void Geometry_graph_parameter_operation::apply(const std::string& parameters)
@@ -228,7 +223,6 @@ void Geometry_graph_link_insert_remove_operation::execute(App_context&)
     } else {
         remove();
     }
-    m_window.get_graph().evaluate_if_dirty();
 }
 
 void Geometry_graph_link_insert_remove_operation::undo(App_context&)
@@ -238,7 +232,6 @@ void Geometry_graph_link_insert_remove_operation::undo(App_context&)
     } else {
         insert();
     }
-    m_window.get_graph().evaluate_if_dirty();
 }
 
 void Geometry_graph_link_insert_remove_operation::insert()

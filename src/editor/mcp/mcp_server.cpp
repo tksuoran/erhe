@@ -1734,7 +1734,7 @@ void Mcp_server::refresh_tool_list()
     }});
 
     // Geometry node graph (Geometry Graph window)
-    m_tool_infos.push_back({"get_geometry_graph", "List the geometry node graph: nodes with ids, type labels, input/output pins (slot, key, name, connection count), per-output payload summaries (geometry vertex/facet counts, point/instance counts, scalar values) and all links.", schema_no_args()});
+    m_tool_infos.push_back({"get_geometry_graph", "List the geometry node graph: nodes with ids, type labels, input/output pins (slot, key, name, connection count), per-output payload summaries (geometry vertex/facet counts, point/instance counts, scalar values) and all links. Waits for any background graph evaluation to finish, so the payloads reflect all previously issued mutations.", schema_no_args()});
     m_tool_infos.push_back({"geometry_graph_add_node", "Add a node to the geometry node graph. Returns the new node's id and pin layout.", {
         {"type", "object"},
         {"properties", {
@@ -1742,7 +1742,7 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"type"})}
     }});
-    m_tool_infos.push_back({"geometry_graph_connect", "Connect an output pin of one geometry graph node to an input pin of another (pins are addressed by node id + pin slot index; pin keys must match). Undoable; the graph re-evaluates immediately.", {
+    m_tool_infos.push_back({"geometry_graph_connect", "Connect an output pin of one geometry graph node to an input pin of another (pins are addressed by node id + pin slot index; pin keys must match). Undoable; the graph re-evaluates in the background (get_geometry_graph waits for completion, get_async_status reports progress).", {
         {"type", "object"},
         {"properties", {
             {"source_node_id", {{"type", "integer"}, {"description", "Id of the node providing the output"}}},
@@ -1769,7 +1769,7 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"node_id"})}
     }});
-    m_tool_infos.push_back({"geometry_graph_set_parameter", "Set parameters of a geometry graph node. Takes the same JSON object shape as the graph file's per-node 'parameters' (see get_geometry_graph); partial updates are allowed - omitted keys keep their current values. Undoable; the graph re-evaluates immediately.", {
+    m_tool_infos.push_back({"geometry_graph_set_parameter", "Set parameters of a geometry graph node. Takes the same JSON object shape as the graph file's per-node 'parameters' (see get_geometry_graph); partial updates are allowed - omitted keys keep their current values. Undoable; the graph re-evaluates in the background (get_geometry_graph waits for completion, get_async_status reports progress).", {
         {"type", "object"},
         {"properties", {
             {"node_id",    {{"type", "integer"}, {"description", "Id of the node"}}},
@@ -5596,6 +5596,11 @@ auto Mcp_server::query_geometry_graph(const json& args) -> std::string
         return make_error_content("Geometry graph window not available");
     }
 
+    // Evaluation runs in the background; block until the graph is fully
+    // evaluated so the reported payloads reflect every mutation issued
+    // before this query (mutation tools return without waiting).
+    window->wait_for_idle_evaluation();
+
     json nodes = json::array();
     for (const std::shared_ptr<Geometry_graph_node>& node : window->get_nodes()) {
         nodes.push_back(geometry_graph_node_json(*node.get()));
@@ -5743,6 +5748,10 @@ auto Mcp_server::action_geometry_graph_save(const json& args) -> std::string
     if (path.empty()) {
         return make_error_content("Missing 'path'");
     }
+    // Saved parameters must reflect every mutation issued before this
+    // call; parameters are only written on the main thread but waiting
+    // also keeps the save deterministic relative to pending evaluation.
+    window->wait_for_idle_evaluation();
     const bool ok = window->save_graph(std::filesystem::path{path});
     if (!ok) {
         return make_error_content("Save failed: " + path);

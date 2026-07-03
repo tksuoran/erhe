@@ -104,6 +104,13 @@ public:
     [[nodiscard]] auto get_committed_parameters() const -> const std::string&;
     void set_committed_parameters(const std::string& parameters);
 
+    // Shadow clones evaluated in the background log under the id of the
+    // live node they mirror, so trace logs stay correlated with the ids
+    // the UI and the MCP tools report. Unset (0) means "this node's own
+    // id" (the normal case for live nodes).
+    [[nodiscard]] auto get_log_id() const -> std::size_t;
+    void set_log_source_id(std::size_t id);
+
 protected:
     void show_pins(
         ax::NodeEditor::EditorContext&                        node_editor,
@@ -117,6 +124,7 @@ protected:
     std::vector<Geometry_payload> m_output_payloads;
     std::string                   m_type_name;
     std::string                   m_committed_parameters;
+    std::size_t                   m_log_source_id{0};
     bool                          m_dirty{true};
     bool                          m_parameter_edit_in_progress{false};
 };

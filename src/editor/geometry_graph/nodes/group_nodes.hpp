@@ -63,6 +63,17 @@ public:
     void write_parameters(nlohmann::json& out) const override;
     void read_parameters (const nlohmann::json& in) override;
 
+    // Background evaluation support: a scene Output node inside a group
+    // asset builds its evaluated products on the shadow clone's private
+    // subgraph. This pairs the shadow subgraph's Output (and nested
+    // Group) nodes with this live node's - both sides load the same
+    // asset file, so the node order matches - and moves the products
+    // over so apply happens on the live nodes that own the scene items.
+    // Skipped when the loaded assets differ (path changed mid-flight);
+    // the node is dirty again in that case and re-evaluates. Main thread
+    // only.
+    void adopt_subgraph_outputs(Group_node& shadow, int depth = 0);
+
 private:
     // Loads the group asset into the private subgraph when the path
     // changed since the last load (or after unload). Failure leaves the

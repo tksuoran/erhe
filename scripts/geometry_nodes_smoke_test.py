@@ -179,6 +179,11 @@ def undo_depth():
 
 
 def scene_nodes():
+    # Graph evaluation runs in the background (async-evaluation change);
+    # get_geometry_graph waits for it to finish and its results to be
+    # applied to the scene, so the scene query below sees the effects of
+    # every previously issued graph mutation.
+    get_graph()
     return call("get_scene_nodes", {"scene_name": "Default Scene"})
 
 

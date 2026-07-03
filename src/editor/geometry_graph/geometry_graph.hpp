@@ -26,8 +26,17 @@ public:
     // per-node dirty state.
     void mark_dirty();
 
-private:
+    // True when any node (or the whole graph) is marked dirty; drives
+    // the background evaluation launched by Geometry_graph_window.
     [[nodiscard]] auto is_evaluation_needed() const -> bool;
+
+    // Background evaluation support: the window moves the live graph's
+    // forced-full request onto the shadow graph it is about to evaluate.
+    // Returns whether a full re-evaluation was requested and clears the
+    // request.
+    [[nodiscard]] auto consume_forced_full() -> bool;
+
+private:
     void evaluate();
 
     bool m_dirty{true};

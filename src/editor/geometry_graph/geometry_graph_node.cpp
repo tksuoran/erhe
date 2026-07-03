@@ -220,6 +220,16 @@ auto Geometry_graph_node::get_committed_parameters() const -> const std::string&
     return m_committed_parameters;
 }
 
+auto Geometry_graph_node::get_log_id() const -> std::size_t
+{
+    return (m_log_source_id != 0) ? m_log_source_id : get_id();
+}
+
+void Geometry_graph_node::set_log_source_id(const std::size_t id)
+{
+    m_log_source_id = id;
+}
+
 void Geometry_graph_node::set_committed_parameters(const std::string& parameters)
 {
     m_committed_parameters = parameters;

@@ -90,45 +90,23 @@ void Geometry_output_node::remove_node_physics()
     m_node_physics.reset();
 }
 
-void Geometry_output_node::update_node_physics(const std::shared_ptr<erhe::geometry::Geometry>& render_geometry)
+void Geometry_output_node::update_node_physics()
 {
-    if (!m_physics_enabled || !m_node || !render_geometry) {
+    if (!m_physics_enabled || !m_node || !m_evaluated_collision_shape) {
         remove_node_physics();
         return;
     }
-
-    GEO::Mesh convex_hull{};
-    const bool convex_hull_ok = erhe::geometry::make_convex_hull(render_geometry->get_mesh(), convex_hull);
-    if (!convex_hull_ok) {
-        log_graph_editor->warn("Geometry_output_node: failed to build convex hull collision shape for '{}'", render_geometry->get_name());
-        remove_node_physics();
-        return;
-    }
-
-    std::vector<float> coordinates;
-    coordinates.resize(3 * convex_hull.vertices.nb());
-    for (GEO::index_t vertex : convex_hull.vertices) {
-        const GEO::vec3f p = erhe::geometry::get_pointf(convex_hull.vertices, vertex);
-        coordinates[(3 * vertex) + 0] = p.x;
-        coordinates[(3 * vertex) + 1] = p.y;
-        coordinates[(3 * vertex) + 2] = p.z;
-    }
-    const std::shared_ptr<erhe::physics::ICollision_shape> collision_shape = erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
-        coordinates.data(),
-        static_cast<int>(convex_hull.vertices.nb()),
-        static_cast<int>(3 * sizeof(float))
-    );
 
     if (!m_node_physics) {
         const erhe::physics::IRigid_body_create_info create_info{
-            .collision_shape = collision_shape,
+            .collision_shape = m_evaluated_collision_shape,
             .debug_label     = m_scene_node_name,
             .motion_mode     = m_physics_motion_mode
         };
         m_node_physics = std::make_shared<Node_physics>(create_info);
         m_node->attach(m_node_physics);
     } else {
-        m_node_physics->set_collision_shape(collision_shape);
+        m_node_physics->set_collision_shape(m_evaluated_collision_shape);
         m_node_physics->set_motion_mode(m_physics_motion_mode);
     }
 }
@@ -148,34 +126,19 @@ void Geometry_output_node::evaluate(Geometry_graph&)
     pull_inputs();
     const std::shared_ptr<erhe::geometry::Geometry> source = get_input(0).get_geometry();
 
-    if (!m_scene_root) {
-        m_scene_root = m_context.app_scenes->get_single_scene_root();
-    }
-    if (!m_scene_root) {
-        return;
-    }
+    m_evaluated_geometry.reset();
+    m_evaluated_primitive.reset();
+    m_evaluated_collision_shape.reset();
+    m_evaluated_valid = true;
 
     // A facet-less geometry (e.g. an out-of-range Conway operation index,
     // a boolean of empty inputs) has nothing to render; treat it like a
     // disconnected input rather than asking the primitive builder to
     // build zero-index buffers (which it refuses with a VERIFY abort).
+    // A valid-but-empty result makes apply_evaluated_to_scene() clear
+    // the scene mesh.
     if (!source || (source->get_mesh().facets.nb() == 0)) {
-        if (m_mesh) {
-            std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
-            m_mesh->clear_primitives();
-            remove_node_physics();
-        }
         return;
-    }
-
-    if (!m_material) {
-        const std::shared_ptr<Content_library> library = m_scene_root->get_content_library();
-        if (library && library->materials) {
-            const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials = library->materials->get_all<erhe::primitive::Material>();
-            if (!materials.empty()) {
-                m_material = materials.front();
-            }
-        }
     }
 
     // Copy before render processing; the input geometry is shared with
@@ -211,10 +174,83 @@ void Geometry_output_node::evaluate(Geometry_graph&)
     const bool renderable_ok = primitive->make_renderable_mesh(build_info, erhe::primitive::Normal_style::point_normals);
     if (!renderable_ok) {
         log_graph_editor->warn("Geometry_output_node: failed to build renderable mesh for '{}'", render_geometry->get_name());
+        // Leave the scene mesh as it is rather than clearing it.
+        m_evaluated_valid = false;
         return;
     }
     if (!primitive->make_raytrace()) {
         log_graph_editor->warn("Geometry_output_node: failed to build raytrace shape for '{}'", render_geometry->get_name());
+    }
+
+    m_evaluated_geometry  = render_geometry;
+    m_evaluated_primitive = primitive;
+
+    if (m_physics_enabled) {
+        GEO::Mesh convex_hull{};
+        const bool convex_hull_ok = erhe::geometry::make_convex_hull(render_geometry->get_mesh(), convex_hull);
+        if (!convex_hull_ok) {
+            log_graph_editor->warn("Geometry_output_node: failed to build convex hull collision shape for '{}'", render_geometry->get_name());
+        } else {
+            std::vector<float> coordinates;
+            coordinates.resize(3 * convex_hull.vertices.nb());
+            for (GEO::index_t vertex : convex_hull.vertices) {
+                const GEO::vec3f p = erhe::geometry::get_pointf(convex_hull.vertices, vertex);
+                coordinates[(3 * vertex) + 0] = p.x;
+                coordinates[(3 * vertex) + 1] = p.y;
+                coordinates[(3 * vertex) + 2] = p.z;
+            }
+            m_evaluated_collision_shape = erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
+                coordinates.data(),
+                static_cast<int>(convex_hull.vertices.nb()),
+                static_cast<int>(3 * sizeof(float))
+            );
+        }
+    }
+}
+
+void Geometry_output_node::take_evaluated(Geometry_output_node& from)
+{
+    m_evaluated_valid           = from.m_evaluated_valid;
+    m_evaluated_geometry        = std::move(from.m_evaluated_geometry);
+    m_evaluated_primitive       = std::move(from.m_evaluated_primitive);
+    m_evaluated_collision_shape = std::move(from.m_evaluated_collision_shape);
+    from.m_evaluated_valid = false;
+}
+
+void Geometry_output_node::apply_evaluated_to_scene()
+{
+    if (!m_evaluated_valid) {
+        return;
+    }
+    m_evaluated_valid = false;
+
+    if (!m_scene_root) {
+        m_scene_root = m_context.app_scenes->get_single_scene_root();
+    }
+    if (!m_scene_root) {
+        m_evaluated_geometry.reset();
+        m_evaluated_primitive.reset();
+        m_evaluated_collision_shape.reset();
+        return;
+    }
+
+    if (!m_evaluated_geometry) {
+        if (m_mesh) {
+            std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
+            m_mesh->clear_primitives();
+            remove_node_physics();
+        }
+        return;
+    }
+
+    if (!m_material) {
+        const std::shared_ptr<Content_library> library = m_scene_root->get_content_library();
+        if (library && library->materials) {
+            const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials = library->materials->get_all<erhe::primitive::Material>();
+            if (!materials.empty()) {
+                m_material = materials.front();
+            }
+        }
     }
 
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
@@ -228,8 +264,12 @@ void Geometry_output_node::evaluate(Geometry_graph&)
         m_node->set_parent(m_scene_root->get_scene().get_root_node());
     }
     m_mesh->clear_primitives();
-    m_mesh->add_primitive(primitive, m_material);
-    update_node_physics(render_geometry);
+    m_mesh->add_primitive(m_evaluated_primitive, m_material);
+    update_node_physics();
+
+    m_evaluated_geometry.reset();
+    m_evaluated_primitive.reset();
+    m_evaluated_collision_shape.reset();
 }
 
 void Geometry_output_node::imgui()
