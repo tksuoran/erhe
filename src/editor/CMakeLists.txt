@@ -404,6 +404,8 @@ erhe_target_sources_grouped(
     scene/viewport_scene_views.hpp
     texture_graph/graph_texture.cpp
     texture_graph/graph_texture.hpp
+    texture_graph/graph_texture_serialization.cpp
+    texture_graph/graph_texture_serialization.hpp
     texture_graph/texture_graph.cpp
     texture_graph/texture_graph.hpp
     texture_graph/texture_graph_compose.cpp
@@ -579,6 +581,7 @@ erhe_codegen_generate(
         "${_codegen_defs}/drive_mode_serial.py"
         "${_codegen_defs}/drive_type_serial.py"
         "${_codegen_defs}/gltf_source_reference.py"
+        "${_codegen_defs}/graph_texture_data.py"
         "${_codegen_defs}/joint_drive_data.py"
         "${_codegen_defs}/joint_limit_data.py"
         "${_codegen_defs}/layout_data.py"
@@ -590,6 +593,7 @@ erhe_codegen_generate(
         "${_codegen_defs}/node_joint_data.py"
         "${_codegen_defs}/node_physics_data.py"
         "${_codegen_defs}/physics_joint_data.py"
+        "${_codegen_defs}/material_texture_source_data.py"
         "${_codegen_defs}/physics_material_data.py"
         "${_codegen_defs}/projection_data.py"
         "${_codegen_defs}/scene_file.py"
@@ -621,6 +625,9 @@ set(_codegen_sources
     ${_codegen_out}/gltf_source_reference.hpp
     ${_codegen_out}/gltf_source_reference_serialization.hpp
     ${_codegen_out}/gltf_source_reference.cpp
+    ${_codegen_out}/graph_texture_data.hpp
+    ${_codegen_out}/graph_texture_data_serialization.hpp
+    ${_codegen_out}/graph_texture_data.cpp
     ${_codegen_out}/joint_drive_data.hpp
     ${_codegen_out}/joint_drive_data_serialization.hpp
     ${_codegen_out}/joint_drive_data.cpp
@@ -649,6 +656,9 @@ set(_codegen_sources
     ${_codegen_out}/mesh_reference.cpp
     ${_codegen_out}/mesh_source_type.hpp
     ${_codegen_out}/mesh_source_type.cpp
+    ${_codegen_out}/material_texture_source_data.hpp
+    ${_codegen_out}/material_texture_source_data_serialization.hpp
+    ${_codegen_out}/material_texture_source_data.cpp
     ${_codegen_out}/motion_mode_serial.hpp
     ${_codegen_out}/motion_mode_serial.cpp
     ${_codegen_out}/node_data_serial.hpp

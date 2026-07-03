@@ -2,6 +2,8 @@
 
 #include "app_context.hpp"
 #include "content_library/content_library.hpp"
+#include "texture_graph/graph_texture.hpp"
+#include "texture_graph/graph_texture_serialization.hpp"
 #include "editor_log.hpp"
 #include "parsers/gltf.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
@@ -23,6 +25,8 @@
 #include "erhe_gltf/image_transfer.hpp"
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_primitive/material.hpp"
+
+#include <nlohmann/json.hpp>
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/layout.hpp"
@@ -813,6 +817,41 @@ auto save_scene(
         }
     }
 
+    // Serialize Graph Texture assets (their node graph as a JSON string) and the
+    // material -> Graph Texture slot bindings, so procedural textures and the
+    // material back-references survive save / load (glTF cannot express them).
+    {
+        const std::shared_ptr<Content_library> content_library = scene_root.get_content_library();
+        if (content_library && content_library->graph_textures) {
+            for (const std::shared_ptr<Graph_texture>& graph_texture : content_library->graph_textures->get_all<Graph_texture>()) {
+                Graph_texture_data data;
+                data.name  = graph_texture->get_name();
+                data.graph = write_graph_texture_graph(*graph_texture).dump();
+                scene_file.graph_textures.push_back(std::move(data));
+            }
+        }
+        if (content_library && content_library->materials) {
+            const auto add_binding = [&scene_file](const erhe::primitive::Material& material, const char* slot, const erhe::primitive::Material_texture_sampler& sampler) {
+                const Graph_texture* graph_texture = dynamic_cast<const Graph_texture*>(sampler.texture_source.get());
+                if (graph_texture != nullptr) {
+                    Material_texture_source_data binding;
+                    binding.material_name      = material.get_name();
+                    binding.slot               = slot;
+                    binding.graph_texture_name = graph_texture->get_name();
+                    scene_file.material_texture_sources.push_back(std::move(binding));
+                }
+            };
+            for (const std::shared_ptr<erhe::primitive::Material>& material : content_library->materials->get_all<erhe::primitive::Material>()) {
+                const erhe::primitive::Material_texture_samplers& samplers = material->data.texture_samplers;
+                add_binding(*material, "base_color",         samplers.base_color);
+                add_binding(*material, "metallic_roughness", samplers.metallic_roughness);
+                add_binding(*material, "normal",             samplers.normal);
+                add_binding(*material, "occlusion",          samplers.occlusion);
+                add_binding(*material, "emissive",           samplers.emissive);
+            }
+        }
+    }
+
     // Serialize layouts and layout items
     for (const auto& node : flat_nodes) {
         const auto layout = erhe::scene::get_attachment<erhe::scene::Layout>(node.get());
@@ -1542,6 +1581,57 @@ auto load_scene(
         }
         auto node_joint = std::make_shared<Node_joint>(connected_node, settings, joint_data.enable_collision);
         node_it->second->attach(node_joint);
+    }
+
+    // Reconstruct Graph Texture assets and re-establish material -> Graph Texture
+    // bindings (scene file v6+). Needs App_context for the node factory; when it
+    // is absent (e.g. a pure data load) the assets and bindings are skipped.
+    if ((context != nullptr) && content_library && content_library->graph_textures) {
+        for (const Graph_texture_data& graph_texture_data : scene_file.graph_textures) {
+            const std::shared_ptr<Graph_texture> graph_texture = content_library->graph_textures->make<Graph_texture>(graph_texture_data.name);
+            const nlohmann::json graph_json = nlohmann::json::parse(graph_texture_data.graph, nullptr, false);
+            if (graph_json.is_discarded()) {
+                log_parsers->warn("load_scene: Graph Texture '{}' has invalid graph JSON", graph_texture_data.name);
+                continue;
+            }
+            if (!read_graph_texture_graph(*graph_texture, graph_json, *context)) {
+                log_parsers->warn("load_scene: Graph Texture '{}' graph failed to load", graph_texture_data.name);
+            }
+        }
+
+        if (content_library->materials) {
+            for (const Material_texture_source_data& binding : scene_file.material_texture_sources) {
+                std::shared_ptr<erhe::primitive::Material> material{};
+                for (const std::shared_ptr<erhe::primitive::Material>& candidate : content_library->materials->get_all<erhe::primitive::Material>()) {
+                    if (candidate->get_name() == binding.material_name) {
+                        material = candidate;
+                        break;
+                    }
+                }
+                std::shared_ptr<Graph_texture> graph_texture{};
+                for (const std::shared_ptr<Graph_texture>& candidate : content_library->graph_textures->get_all<Graph_texture>()) {
+                    if (candidate->get_name() == binding.graph_texture_name) {
+                        graph_texture = candidate;
+                        break;
+                    }
+                }
+                if (!material || !graph_texture) {
+                    log_parsers->warn("load_scene: texture source binding '{}'.{} -> '{}' not resolved", binding.material_name, binding.slot, binding.graph_texture_name);
+                    continue;
+                }
+                erhe::primitive::Material_texture_samplers& samplers = material->data.texture_samplers;
+                erhe::primitive::Material_texture_sampler*  sampler  = nullptr;
+                if      (binding.slot == "base_color")         sampler = &samplers.base_color;
+                else if (binding.slot == "metallic_roughness") sampler = &samplers.metallic_roughness;
+                else if (binding.slot == "normal")             sampler = &samplers.normal;
+                else if (binding.slot == "occlusion")          sampler = &samplers.occlusion;
+                else if (binding.slot == "emissive")           sampler = &samplers.emissive;
+                if (sampler != nullptr) {
+                    sampler->texture_source = graph_texture;
+                    sampler->texture.reset();
+                }
+            }
+        }
     }
 
     return scene_root;
