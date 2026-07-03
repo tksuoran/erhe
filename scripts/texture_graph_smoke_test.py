@@ -292,6 +292,8 @@ NODE_SPECS = {
     "swap_channels":       (["rgba"],                ["rgba"], {"out_r": 2, "out_g": 4, "out_b": 6, "out_a": 8}),
     "reroute":             (["rgba"],                ["rgba"], {}),
     "output":              (["f", "rgb", "rgba"],    [],       {"name": "Texture Graph", "size": 1024, "assign": False}),
+    "material_output":     (["rgba", "rgb", "f", "rgba", "f", "rgba", "rgb", "rgba", "f", "rgba", "rgb", "rgba"],
+                            [],       {"name": "Material", "size": 1024, "assign": True}),
 }
 
 
@@ -942,6 +944,127 @@ def section_new_filters():
           f"min={min(reds)} max={max(reds)} mean={sum(reds) / len(reds):.1f}")
 
 
+def section_material_output():
+    """PBR Material Output node (Phase 6): bake connected channels to textures,
+    pack occlusion/roughness/metallic into one glTF ORM texture, assemble an
+    erhe material, and export channels to PNG. Verifies the material actually
+    references the baked textures (get_material_details) and that the ORM packing
+    matches how standard.frag samples (R=occlusion, G=roughness, B=metallic)."""
+    S = "material-output"
+    TMP_DIR.mkdir(parents=True, exist_ok=True)
+
+    scenes = call("list_scenes")
+    scene_name = ""
+    if isinstance(scenes, dict) and scenes.get("scenes"):
+        scene_name = scenes["scenes"][0].get("name", "")
+    elif isinstance(scenes, list) and scenes:
+        scene_name = scenes[0].get("name", "")
+
+    mats = call("get_scene_materials", {"scene_name": scene_name})
+    mat_names = []
+    if isinstance(mats, dict):
+        mat_names = [m.get("name", "") for m in mats.get("materials", [])]
+    elif isinstance(mats, list):
+        mat_names = [m.get("name", "") for m in mats if isinstance(m, dict)]
+    check(S, "scene has at least one material to assign", len(mat_names) > 0, f"mats={mat_names}")
+    target_material = mat_names[0] if mat_names else ""
+
+    # --- Assembly + assignment: perlin->colorize->albedo, shape->roughness,
+    #     bricks->metallic, voronoi->occlusion, perlin->normal_map->normal.
+    clear_graph()
+    mat = add_node("material_output")["id"]
+    perlin = add_node("perlin")["id"]
+    colorize = add_node("colorize")["id"]
+    set_param(colorize, {"gradient": {"interpolation": 1, "stops": [
+        {"pos": 0.0, "color": [0.1, 0.1, 0.4, 1.0]},
+        {"pos": 1.0, "color": [0.9, 0.5, 0.1, 1.0]}]}})
+    connect(perlin, 0, colorize, 0)
+    connect(colorize, 0, mat, 0)          # albedo rgba pin (slot 0)
+    shape = add_node("shape")["id"]
+    connect(shape, 0, mat, 4)             # roughness f pin (slot 4)
+    bricks = add_node("bricks")["id"]
+    connect(bricks, 0, mat, 2)            # metallic f pin (slot 2)
+    voronoi = add_node("voronoi")["id"]
+    connect(voronoi, 0, mat, 8)           # occlusion f pin (slot 8)
+    perlin2 = add_node("perlin")["id"]
+    nmap = add_node("normal_map")["id"]
+    connect(perlin2, 0, nmap, 0)
+    connect(nmap, 0, mat, 6)              # normal rgb pin (slot 6)
+
+    set_param(mat, {"name": "Smoke PBR Mat", "size": 256, "assign": True, "material": target_material})
+    p = params_of(mat)
+    check(S, "material-output params round-trip",
+          p.get("name") == "Smoke PBR Mat" and p.get("size") == 256 and p.get("assign") is True and p.get("material") == target_material,
+          f"params={p}")
+
+    # render_products bakes + assigns on a frame tick; poll for base_color.
+    def texture_slots():
+        d = call("get_material_details", {"scene_name": scene_name, "material_name": target_material})
+        return d.get("texture_samplers", {}) if isinstance(d, dict) else {}
+    deadline = time.time() + 20
+    ts = {}
+    while time.time() < deadline:
+        ts = texture_slots()
+        if ts.get("base_color", {}).get("texture_id") is not None:
+            break
+        time.sleep(0.5)
+
+    def has_tex(name):
+        return ts.get(name, {}).get("texture_id") is not None
+    check(S, "albedo baked into base_color slot", has_tex("base_color"), f"base_color={ts.get('base_color')}")
+    check(S, "normal baked into normal slot", has_tex("normal"), f"normal={ts.get('normal')}")
+    check(S, "ORM baked into metallic_roughness slot", has_tex("metallic_roughness"), f"mr={ts.get('metallic_roughness')}")
+    check(S, "occlusion baked into occlusion slot", has_tex("occlusion"), f"occ={ts.get('occlusion')}")
+    check(S, "emissive slot stays empty (unconnected)", not has_tex("emissive"), f"emis={ts.get('emissive')}")
+    check(S, "occlusion + metallic_roughness share the packed ORM texture",
+          ts.get("metallic_roughness", {}).get("texture_id") == ts.get("occlusion", {}).get("texture_id"),
+          f"mr={ts.get('metallic_roughness', {}).get('texture_id')} occ={ts.get('occlusion', {}).get('texture_id')}")
+
+    md = call("get_material_details", {"scene_name": scene_name, "material_name": target_material})
+    check(S, "metallic scalar driven to 1.0 (texture .b drives)", approx(md.get("metallic"), 1.0), f"metallic={md.get('metallic')}")
+    check(S, "roughness scalar driven to 1.0 (texture .g drives)", approx_list(md.get("roughness"), [1.0, 1.0]), f"roughness={md.get('roughness')}")
+
+    textures = call("get_scene_textures", {"scene_name": scene_name})
+    tex_names = [t.get("name", "") for t in textures.get("textures", [])] if isinstance(textures, dict) else []
+    for suffix in ("Albedo", "Normal", "ORM"):
+        check(S, f"content library registers 'Smoke PBR Mat {suffix}'", f"Smoke PBR Mat {suffix}" in tex_names, f"names={tex_names}")
+
+    # --- Channel PNG export.
+    export = call("texture_graph_export_material", {"node_id": mat, "dir": str(TMP_DIR / "material"), "size": 16})
+    files = export.get("files", []) if isinstance(export, dict) else []
+    have = " ".join(files)
+    check(S, "export writes albedo + normal + metallic_roughness + occlusion PNGs",
+          all(s in have for s in ("_albedo.png", "_normal.png", "_metallic_roughness.png", "_occlusion.png")),
+          f"files={files}")
+    check(S, "export skips the unconnected emissive channel", "_emissive.png" not in have, f"files={files}")
+
+    # --- ORM packing pixel check: deterministic gray sources -> R=occ,G=rough,B=metal.
+    clear_graph()
+    mat2 = add_node("material_output")["id"]
+
+    def gray_uniform(v):
+        node_id = add_node("uniform")["id"]
+        set_param(node_id, {"color": [v, v, v, 1.0]})
+        return node_id
+    connect(gray_uniform(0.25), 0, mat2, 9)  # occlusion rgba pin -> luminance 0.25
+    connect(gray_uniform(0.50), 0, mat2, 5)  # roughness rgba pin -> luminance 0.50
+    connect(gray_uniform(0.75), 0, mat2, 3)  # metallic  rgba pin -> luminance 0.75
+    set_param(mat2, {"name": "ORM Pack", "size": 16, "assign": False})
+    export2 = call("texture_graph_export_material", {"node_id": mat2, "dir": str(TMP_DIR / "orm"), "size": 16})
+    files2 = export2.get("files", []) if isinstance(export2, dict) else []
+    orm_png = next((f for f in files2 if f.endswith("_metallic_roughness.png")), None)
+    check(S, "ORM export produced a metallic_roughness PNG", orm_png is not None, f"files={files2}")
+    if orm_png:
+        w, h, ch, buf = decode_png(pathlib.Path(orm_png))
+        cx = pixel(w, ch, buf, w // 2, h // 2)
+        expected = [round(0.25 * 255), round(0.5 * 255), round(0.75 * 255)]
+        match = all(abs(cx[i] - expected[i]) <= 4 for i in range(3))
+        check(S, "ORM packing R=occlusion G=roughness B=metallic", match, f"pixel={cx} expected~{expected}")
+
+    clear_graph()
+    check(S, "editor alive after material output section", len(get_graph()["nodes"]) == 0)
+
+
 def main():
     sections = [
         section_every_node_type,
@@ -955,6 +1078,7 @@ def main():
         section_multi_output_decompose,
         section_new_filters,
         section_output_node,
+        section_material_output,
     ]
     for section in sections:
         print(f"\n=== {section.__name__} ===")

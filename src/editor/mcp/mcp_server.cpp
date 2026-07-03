@@ -21,6 +21,7 @@
 #include "texture_graph/texture_payload.hpp"
 #include "texture_graph/texture_renderer.hpp"
 #include "texture_graph/nodes/texture_node_descriptors.hpp"
+#include "texture_graph/nodes/texture_material_output_node.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/item_parent_change_operation.hpp"
 #include "operations/material_change_operation.hpp"
@@ -1147,6 +1148,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "texture_graph_load")           result = action_texture_graph_load          (req->arguments);
         else if (req->tool_name == "texture_graph_clear")          result = action_texture_graph_clear         (req->arguments);
         else if (req->tool_name == "texture_graph_export_png")     result = action_texture_graph_export_png    (req->arguments);
+        else if (req->tool_name == "texture_graph_export_material") result = action_texture_graph_export_material(req->arguments);
         else                                              result = execute_command       (req->tool_name);
 
         } catch (const std::exception& e) {
@@ -1826,6 +1828,7 @@ void Mcp_server::refresh_tool_list()
         texture_node_type_enum.push_back(descriptor->name);
     }
     texture_node_type_enum.push_back("output");
+    texture_node_type_enum.push_back("material_output");
     m_tool_infos.push_back({"texture_graph_add_node", "Add a node to the texture node graph. Returns the new node's id, parameters and pin layout.", {
         {"type", "object"},
         {"properties", {
@@ -1893,6 +1896,15 @@ void Mcp_server::refresh_tool_list()
             {"path",        {{"type", "string"},  {"description", "PNG file path to write (parent directories are created)"}}}
         }},
         {"required", json::array({"node_id", "path"})}
+    }});
+    m_tool_infos.push_back({"texture_graph_export_material", "Compose and render each connected PBR channel of a Material Output node to a PNG file in 'dir': <base_name>_albedo.png, _normal.png, _emissive.png, _occlusion.png, and _metallic_roughness.png (glTF ORM packing: R=occlusion, G=roughness, B=metallic). Only connected channels are written. Returns the list of written file paths. Requires the graphics device (works in the headless Vulkan build).", {
+        {"type", "object"},
+        {"properties", {
+            {"node_id", {{"type", "integer"}, {"description", "Id of the Material Output node"}}},
+            {"dir",     {{"type", "string"},  {"description", "Output directory (created if missing); files are named <base_name>_<channel>.png"}}},
+            {"size",    {{"type", "integer"}, {"description", "Square edge length in pixels (default 256, clamped to [1, 4096])"}}}
+        }},
+        {"required", json::array({"node_id", "dir"})}
     }});
 
     // Editor commands
@@ -6269,6 +6281,67 @@ auto Mcp_server::action_texture_graph_export_png(const json& args) -> std::strin
 
     return make_json_content({
         {"path",   path},
+        {"width",  size},
+        {"height", size}
+    }).dump();
+}
+
+auto Mcp_server::action_texture_graph_export_material(const json& args) -> std::string
+{
+    Texture_graph_window* window = m_context.texture_graph_window;
+    if (window == nullptr) {
+        return make_error_content("Texture graph window not available");
+    }
+    if (m_context.graphics_device == nullptr) {
+        return make_error_content("Graphics device not available");
+    }
+    const std::size_t node_id = args.value("node_id", std::size_t{0});
+    const int         size    = std::clamp(args.value("size", 256), 1, 4096);
+    const std::string dir     = args.value("dir", "");
+    if (dir.empty()) {
+        return make_error_content("Missing 'dir'");
+    }
+    Texture_graph_node* node = find_texture_graph_node(window->get_nodes(), node_id);
+    if (node == nullptr) {
+        return make_error_content("Node not found");
+    }
+    Texture_material_output_node* material_node = dynamic_cast<Texture_material_output_node*>(node);
+    if (material_node == nullptr) {
+        return make_error_content("Node is not a Material Output node");
+    }
+
+    const std::vector<Material_channel_export> exports = material_node->build_channel_exports();
+    if (exports.empty()) {
+        return make_error_content("Material Output node has no connected channels to export");
+    }
+
+    Texture_renderer* renderer = window->get_renderer();
+    if (renderer == nullptr) {
+        return make_error_content("Texture renderer not available");
+    }
+
+    std::error_code ec;
+    std::filesystem::create_directories(std::filesystem::path{dir}, ec);
+
+    const std::string base_name = material_node->get_base_name();
+    json written = json::array();
+    for (const Material_channel_export& channel : exports) {
+        std::vector<std::uint8_t> pixels;
+        if (!renderer->render_and_read_rgba8(size, channel.fragment, channel.uniforms, pixels)) {
+            return make_error_content("Render / readback failed for channel '" + channel.suffix + "'");
+        }
+        const std::filesystem::path path = std::filesystem::path{dir} / (base_name + "_" + channel.suffix + ".png");
+        std::unique_ptr<erhe::graphics::Image_writer> writer = erhe::graphics::Image_writer::create();
+        const int                  row_stride = size * 4;
+        std::span<const std::byte> data{reinterpret_cast<const std::byte*>(pixels.data()), pixels.size()};
+        if (!writer->write_png(path, size, size, row_stride, Texture_renderer::color_format(), data)) {
+            return make_error_content("Failed to write PNG '" + path.string() + "'");
+        }
+        written.push_back(path.string());
+    }
+
+    return make_json_content({
+        {"files",  written},
         {"width",  size},
         {"height", size}
     }).dump();

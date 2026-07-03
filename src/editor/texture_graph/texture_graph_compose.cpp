@@ -5,6 +5,7 @@
 #include "erhe_texgen/compose_node.hpp"
 #include "erhe_texgen/node_descriptor.hpp"
 
+#include <algorithm>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -42,6 +43,32 @@ public:
 
     // Returns the Compose_node for node (creating it on first visit), or nullptr
     // when node has no descriptor or a cycle was hit.
+    // Creates a synthetic combiner Compose_node from descriptor (sharing this
+    // builder's id space) and wires each of its inputs to the corresponding
+    // channel root's source subtree. A null root leaves that input unconnected.
+    auto build_combiner(
+        const erhe::texgen::Node_descriptor& descriptor,
+        const std::vector<Texture_payload>&  channel_roots
+    ) -> erhe::texgen::Compose_node*
+    {
+        std::unique_ptr<erhe::texgen::Compose_node> owned = std::make_unique<erhe::texgen::Compose_node>(descriptor, m_next_id++);
+        erhe::texgen::Compose_node* combiner = owned.get();
+        m_dag.nodes.push_back(std::move(owned));
+
+        const std::size_t input_count = descriptor.inputs.size();
+        for (std::size_t i = 0, end = std::min(channel_roots.size(), input_count); i < end; ++i) {
+            const Texture_payload& root = channel_roots[i];
+            if (root.source_node == nullptr) {
+                continue; // unconnected - the combiner input's default expression is used
+            }
+            erhe::texgen::Compose_node* source = build(*root.source_node);
+            if (source != nullptr) {
+                combiner->set_input(i, source, root.output_index);
+            }
+        }
+        return combiner;
+    }
+
     auto build(Texture_graph_node& node) -> erhe::texgen::Compose_node*
     {
         const auto existing = m_by_node.find(&node);
@@ -99,6 +126,24 @@ auto build_texture_compose_dag(Texture_graph_node& sink_node, const std::size_t 
     }
     dag.sink              = sink;
     dag.sink_output_index = output_index;
+    dag.ok                = true;
+    return dag;
+}
+
+auto build_texture_combiner_dag(
+    const erhe::texgen::Node_descriptor& combiner_descriptor,
+    const std::vector<Texture_payload>&  channel_roots
+) -> Texture_compose_dag
+{
+    Texture_compose_dag dag{};
+    Dag_builder builder{dag};
+    erhe::texgen::Compose_node* combiner = builder.build_combiner(combiner_descriptor, channel_roots);
+    if (combiner == nullptr) {
+        dag.ok = false;
+        return dag;
+    }
+    dag.sink              = combiner;
+    dag.sink_output_index = 0;
     dag.ok                = true;
     return dag;
 }

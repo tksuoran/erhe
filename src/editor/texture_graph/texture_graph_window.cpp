@@ -342,8 +342,9 @@ void Texture_graph_window::build_palette()
         const std::string label = descriptor->label.empty() ? descriptor->name : descriptor->label;
         category.entries.push_back(Palette_entry{.type_name = descriptor->name, .label = label});
     }
-    // The output sink node has no descriptor; list it in its own category last.
-    find_or_add_category("Output").entries.push_back(Palette_entry{.type_name = "output", .label = "Output"});
+    // The sink nodes have no descriptor; list them in their own category last.
+    find_or_add_category("Output").entries.push_back(Palette_entry{.type_name = "output",          .label = "Output"});
+    find_or_add_category("Output").entries.push_back(Palette_entry{.type_name = "material_output", .label = "Material Output"});
 
     // Drop any seeded-but-empty categories.
     m_palette_categories.erase(

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "texture_graph/texture_payload.hpp"
+
 #include "erhe_texgen/composer.hpp"
 
 #include <cstddef>
@@ -8,6 +10,7 @@
 
 namespace erhe::texgen {
     class Compose_node;
+    class Node_descriptor;
 }
 
 namespace editor {
@@ -54,5 +57,23 @@ public:
 //
 // ok is false when the sink has no descriptor; nodes is then empty.
 [[nodiscard]] auto build_texture_compose_dag(Texture_graph_node& sink_node, std::size_t output_index) -> Texture_compose_dag;
+
+// Builds one compose DAG whose sink is a synthetic Compose_node created from
+// combiner_descriptor, with each combiner input i wired to the source subtree
+// named by channel_roots[i] (source editor node + output index; a null
+// source_node leaves that combiner input unconnected so its descriptor default
+// expression is used). All channel subtrees share one id space, so subtrees
+// reached through several channels are composed once and per-node names never
+// collide. Used by the PBR material output node to pack occlusion / roughness /
+// metallic into one glTF ORM texture (R = occlusion, G = roughness,
+// B = metallic) in a single fragment shader.
+//
+// combiner_descriptor must outlive any Composer::compose() call that reads the
+// returned DAG (the DAG owns the synthetic node but references the descriptor).
+// ok is false when the descriptor yields no node (never expected here).
+[[nodiscard]] auto build_texture_combiner_dag(
+    const erhe::texgen::Node_descriptor& combiner_descriptor,
+    const std::vector<Texture_payload>&  channel_roots
+) -> Texture_compose_dag;
 
 } // namespace editor

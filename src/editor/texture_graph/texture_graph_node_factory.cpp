@@ -3,6 +3,7 @@
 #include "texture_graph/nodes/texture_descriptor_node.hpp"
 #include "texture_graph/nodes/texture_node_descriptors.hpp"
 #include "texture_graph/nodes/texture_output_node.hpp"
+#include "texture_graph/nodes/texture_material_output_node.hpp"
 
 #include "erhe_texgen/node_descriptor.hpp"
 
@@ -10,10 +11,15 @@ namespace editor {
 
 auto make_texture_graph_node(App_context& context, const std::string& type_name) -> std::shared_ptr<Texture_graph_node>
 {
-    // The output node is a bespoke sink (no descriptor of its own); every other
-    // node type is a descriptor-driven Texture_descriptor_node.
+    // The output nodes are bespoke sinks (no descriptor of their own); every
+    // other node type is a descriptor-driven Texture_descriptor_node.
     if (type_name == "output") {
         std::shared_ptr<Texture_graph_node> node = std::make_shared<Texture_output_node>(context);
+        node->set_factory_type_name(type_name);
+        return node;
+    }
+    if (type_name == "material_output") {
+        std::shared_ptr<Texture_graph_node> node = std::make_shared<Texture_material_output_node>(context);
         node->set_factory_type_name(type_name);
         return node;
     }
