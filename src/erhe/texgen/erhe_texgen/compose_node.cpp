@@ -105,8 +105,17 @@ void Compose_node::set_enum_index(const std::string_view name, const std::size_t
     const std::size_t parameter_index = get_parameter_index(name);
     const Parameter_descriptor& parameter = m_descriptor->parameters[parameter_index];
     ERHE_VERIFY(parameter.kind == Parameter_kind::enum_parameter);
-    ERHE_VERIFY(index < parameter.enum_values.size());
-    m_parameters[parameter_index].enum_index = index;
+    // Material Maker exposes an enum as a discrete UI control whose choices are
+    // the available values; an out-of-range index cannot be selected. A
+    // programmatic caller (MCP set_parameter, a hand-edited graph file) can
+    // still supply one, so clamp to the last valid value rather than asserting -
+    // mirroring set_size_exponent() - so untrusted input degrades harmlessly
+    // instead of aborting the editor. (A value-less enum may only address 0.)
+    const std::size_t clamped =
+        parameter.enum_values.empty()               ? std::size_t{0} :
+        (index >= parameter.enum_values.size())     ? (parameter.enum_values.size() - 1) :
+        index;
+    m_parameters[parameter_index].enum_index = clamped;
 }
 
 void Compose_node::set_bool(const std::string_view name, const bool value)

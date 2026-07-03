@@ -143,6 +143,14 @@ TEST(Substitution, enum_parameter_substitutes_code_fragment)
         const Shader_code shader_code = composer.compose(node, 0);
         EXPECT_EQ(shader_code.get_code(), "float o1_0_0_f = (1.0 * 2.0);\n");
     }
+    // An out-of-range index (from MCP set_parameter or a hand-edited graph
+    // file) must clamp to the last valid value, not abort: it degrades to the
+    // highest enum choice and still composes a valid fragment.
+    node.set_enum_index("operation", 99);
+    {
+        const Shader_code shader_code = composer.compose(node, 0);
+        EXPECT_EQ(shader_code.get_code(), "float o1_0_0_f = (1.0 * 2.0);\n");
+    }
 }
 
 TEST(Substitution, enum_parameter_word_form_glues_as_function_name_prefix)
