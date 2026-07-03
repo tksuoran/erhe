@@ -29,3 +29,7 @@ target_link_libraries(${_target}
 )
 
 erhe_target_settings(${_target} "erhe")
+
+if (${ERHE_BUILD_TESTS} STREQUAL "ON")
+    add_subdirectory(test)
+endif ()
