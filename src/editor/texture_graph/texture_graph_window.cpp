@@ -428,11 +428,14 @@ void Texture_graph_window::node_palette()
     }
 }
 
-void Texture_graph_window::imgui()
+void Texture_graph_window::controls_imgui()
 {
     file_toolbar();
     node_palette();
+}
 
+void Texture_graph_window::imgui()
+{
     m_node_editor->Begin("Texture Graph", ImVec2{0.0f, 0.0f});
 
     for (erhe::graph::Node* node : m_graph.get_nodes()) {
@@ -524,6 +527,21 @@ void Texture_graph_window::handle_deletions()
         }
     }
     m_node_editor->EndDelete();
+}
+
+Texture_graph_palette_window::Texture_graph_palette_window(
+    erhe::imgui::Imgui_renderer& imgui_renderer,
+    erhe::imgui::Imgui_windows&  imgui_windows,
+    Texture_graph_window&        graph_window
+)
+    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Texture Graph Palette", "texture_graph_palette"}
+    , m_graph_window           {graph_window}
+{
+}
+
+void Texture_graph_palette_window::imgui()
+{
+    m_graph_window.controls_imgui();
 }
 
 } // namespace editor

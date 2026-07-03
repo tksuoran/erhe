@@ -463,7 +463,7 @@ void Geometry_graph_window::wait_for_idle_evaluation()
     }
 }
 
-void Geometry_graph_window::imgui()
+void Geometry_graph_window::controls_imgui()
 {
     file_toolbar();
     node_toolbar();
@@ -471,7 +471,10 @@ void Geometry_graph_window::imgui()
     if (m_evaluation_run) {
         ImGui::TextUnformatted("Evaluating graph in background...");
     }
+}
 
+void Geometry_graph_window::imgui()
+{
     m_node_editor->Begin("Geometry Graph", ImVec2{0.0f, 0.0f});
 
     for (erhe::graph::Node* node : m_graph.get_nodes()) {
@@ -563,6 +566,21 @@ void Geometry_graph_window::handle_deletions()
         }
     }
     m_node_editor->EndDelete();
+}
+
+Geometry_graph_palette_window::Geometry_graph_palette_window(
+    erhe::imgui::Imgui_renderer& imgui_renderer,
+    erhe::imgui::Imgui_windows&  imgui_windows,
+    Geometry_graph_window&       graph_window
+)
+    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Geometry Graph Palette", "geometry_graph_palette"}
+    , m_graph_window           {graph_window}
+{
+}
+
+void Geometry_graph_palette_window::imgui()
+{
+    m_graph_window.controls_imgui();
 }
 
 }

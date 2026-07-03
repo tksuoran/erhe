@@ -54,9 +54,17 @@ public:
     );
     ~Texture_graph_window() noexcept override;
 
-    // Implements Imgui_window
+    // Implements Imgui_window. Renders the ax::NodeEditor canvas only; the file
+    // toolbar and node palette live in the companion Texture_graph_palette_window
+    // (see controls_imgui()) so the two can be laid out independently.
     void imgui() override;
     auto flags() -> ImGuiWindowFlags override;
+
+    // Renders the file toolbar (Save / Load / Clear / Reseed all) and the
+    // searchable node palette. Called by the companion palette window, not from
+    // this window's imgui(). Kept here because it operates on this window's graph
+    // state and must stay outside the ax::NodeEditor canvas Begin/End.
+    void controls_imgui();
 
     // Runs the synchronous dirty-flag evaluation. Called once per frame from
     // the editor main loop (see editor.cpp) so the graph stays evaluated even
@@ -149,6 +157,25 @@ private:
     int                                              m_spawn_count{0};
     std::vector<Palette_category>                    m_palette_categories; // built lazily by build_palette()
     std::string                                      m_palette_filter;     // node-palette search text
+};
+
+// Companion window hosting the Texture Graph's file toolbar and node palette,
+// so the palette and the canvas can be docked / sized independently. It owns no
+// graph state; it forwards to Texture_graph_window::controls_imgui().
+class Texture_graph_palette_window : public erhe::imgui::Imgui_window
+{
+public:
+    Texture_graph_palette_window(
+        erhe::imgui::Imgui_renderer& imgui_renderer,
+        erhe::imgui::Imgui_windows&  imgui_windows,
+        Texture_graph_window&        graph_window
+    );
+
+    // Implements Imgui_window
+    void imgui() override;
+
+private:
+    Texture_graph_window& m_graph_window;
 };
 
 } // namespace editor

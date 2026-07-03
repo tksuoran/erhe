@@ -58,9 +58,16 @@ public:
     );
     ~Geometry_graph_window() noexcept override;
 
-    // Implements Imgui_window
+    // Implements Imgui_window. Renders the ax::NodeEditor canvas only; the file
+    // toolbar and node toolbar live in the companion Geometry_graph_palette_window
+    // (see controls_imgui()) so the two can be laid out independently.
     void imgui() override;
     auto flags() -> ImGuiWindowFlags override;
+
+    // Renders the file toolbar (Save / Load / Clear) and the node-creation
+    // toolbar, plus the background-evaluation status line. Called by the
+    // companion palette window, not from this window's imgui().
+    void controls_imgui();
 
     // Undoable edits: each creates an Operation and executes it through
     // the operation stack. Used by the toolbar / canvas gestures and the
@@ -145,6 +152,25 @@ private:
     std::shared_ptr<Evaluation_run>                   m_evaluation_run; // non-null while a run is in flight
     std::string                                       m_graph_path{"res/editor/graphs/geometry_graph.json"};
     int                                               m_spawn_count{0};
+};
+
+// Companion window hosting the Geometry Graph's file toolbar and node toolbar,
+// so the palette and the canvas can be docked / sized independently. It owns no
+// graph state; it forwards to Geometry_graph_window::controls_imgui().
+class Geometry_graph_palette_window : public erhe::imgui::Imgui_window
+{
+public:
+    Geometry_graph_palette_window(
+        erhe::imgui::Imgui_renderer& imgui_renderer,
+        erhe::imgui::Imgui_windows&  imgui_windows,
+        Geometry_graph_window&       graph_window
+    );
+
+    // Implements Imgui_window
+    void imgui() override;
+
+private:
+    Geometry_graph_window& m_graph_window;
 };
 
 }
