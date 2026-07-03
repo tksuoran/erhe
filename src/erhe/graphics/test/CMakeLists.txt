@@ -88,11 +88,13 @@ if (_gpu_tests_supported)
         test_texture_array.cpp
         test_texture_3d.cpp
         test_texture_cube.cpp
+        test_texgen_render.cpp
     )
 
     target_link_libraries(${_gpu_target}
         PRIVATE
             erhe::graphics
+            erhe::texgen
             erhe::window
             erhe::dataformat
             erhe::verify
