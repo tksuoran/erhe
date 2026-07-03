@@ -5,6 +5,7 @@
 #include "texture_graph/texture_graph_window.hpp"
 #include "texture_graph/texture_graph_node.hpp"
 #include "texture_graph/texture_graph_node_factory.hpp"
+#include "texture_graph/texture_renderer.hpp"
 #include "texture_graph/nodes/texture_node_descriptors.hpp"
 
 #include "app_context.hpp"
@@ -15,6 +16,7 @@
 #include "erhe_graph/pin.hpp"
 #include "erhe_imgui/imgui_node_editor.h"
 #include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 
 #include <imgui/imgui.h>
 
@@ -80,7 +82,33 @@ auto Texture_graph_window::flags() -> ImGuiWindowFlags
 
 void Texture_graph_window::update()
 {
+    // The graphics device does not exist during construction (the part ctor
+    // must not touch App_context), so create the render helper on first use.
+    if (!m_renderer && (m_app_context.graphics_device != nullptr)) {
+        m_renderer = std::make_unique<Texture_renderer>(*m_app_context.graphics_device);
+    }
+
     m_graph.evaluate_if_dirty();
+    render_dirty_products();
+}
+
+void Texture_graph_window::render_dirty_products()
+{
+    if (!m_renderer) {
+        return;
+    }
+    erhe::graphics::Command_buffer* command_buffer = m_app_context.current_command_buffer;
+    if ((command_buffer == nullptr) || !command_buffer->is_recording()) {
+        return; // window hidden / no swapchain image this frame
+    }
+
+    m_renderer->begin_frame();
+    for (const std::shared_ptr<Texture_graph_node>& node : m_nodes) {
+        if (node->preview_needs_render()) {
+            node->render_products(m_app_context, *m_renderer);
+            node->clear_preview_needs_render();
+        }
+    }
 }
 
 void Texture_graph_window::insert_node(const std::shared_ptr<Texture_graph_node>& node)
@@ -232,6 +260,9 @@ void Texture_graph_window::node_toolbar()
     ImGui::SameLine();                     if (ImGui::Button("Transform"))        { add_node_of_type("transform"); }
     ImGui::SameLine();                     if (ImGui::Button("Brightness/Cont.")) { add_node_of_type("brightness_contrast"); }
     ImGui::SameLine();                     if (ImGui::Button("Normal Map"))       { add_node_of_type("normal_map"); }
+
+    ImGui::TextUnformatted("Output    ");
+    ImGui::SameLine();                     if (ImGui::Button("Output"))           { add_node_of_type("output"); }
 }
 
 void Texture_graph_window::imgui()

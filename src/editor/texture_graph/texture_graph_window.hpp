@@ -1,6 +1,7 @@
 #pragma once
 
 #include "texture_graph/texture_graph.hpp"
+#include "texture_graph/texture_renderer.hpp"
 
 #include "erhe_imgui/imgui_window.hpp"
 
@@ -87,8 +88,14 @@ private:
     // with every add_node_of_type(), so new nodes do not all stack at (0, 0).
     auto next_node_spawn_position() -> ImVec2;
 
+    // Renders the products (preview thumbnails, output bakes) of nodes whose
+    // composition changed this frame. Main thread, records into the frame
+    // command buffer. Cheap in steady state (no dirty nodes -> no work).
+    void render_dirty_products();
+
     App_context&                                     m_app_context;
     Texture_graph                                    m_graph;
+    std::unique_ptr<Texture_renderer>                m_renderer;
     std::unique_ptr<ax::NodeEditor::EditorContext>   m_node_editor;
     std::vector<std::shared_ptr<Texture_graph_node>> m_nodes;
     int                                              m_spawn_count{0};

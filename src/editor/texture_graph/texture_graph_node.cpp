@@ -1,11 +1,19 @@
 #include "texture_graph/texture_graph_node.hpp"
+#include "texture_graph/texture_graph_compose.hpp"
+#include "texture_graph/texture_renderer.hpp"
 #include "app_context.hpp"
 #include "tools/selection_tool.hpp"
+
+#include "erhe_graphics/command_buffer.hpp"
+#include "erhe_texgen/compose_node.hpp"
+#include "erhe_texgen/shader_code.hpp"
 
 #include "erhe_defer/defer.hpp"
 #include "erhe_graph/link.hpp"
 #include "erhe_graph/pin.hpp"
 #include "erhe_imgui/imgui_node_editor.h"
+#include "erhe_imgui/imgui_renderer.hpp"
+#include "erhe_graphics/texture.hpp"
 #include "erhe_texgen/node_descriptor.hpp"
 
 #include <imgui/imgui.h>
@@ -123,12 +131,78 @@ auto Texture_graph_node::is_dirty() const -> bool
 
 void Texture_graph_node::mark_dirty()
 {
-    m_dirty = true;
+    m_dirty                = true;
+    m_preview_needs_render = true;
 }
 
 void Texture_graph_node::clear_dirty()
 {
     m_dirty = false;
+}
+
+auto Texture_graph_node::preview_needs_render() const -> bool
+{
+    return m_preview_needs_render;
+}
+
+void Texture_graph_node::clear_preview_needs_render()
+{
+    m_preview_needs_render = false;
+}
+
+auto Texture_graph_node::preview_output_index() const -> int
+{
+    return get_output_pins().empty() ? -1 : 0;
+}
+
+auto Texture_graph_node::get_preview_texture() const -> const std::shared_ptr<erhe::graphics::Texture>&
+{
+    return m_preview_texture;
+}
+
+auto Texture_graph_node::get_preview_texture_ref() -> std::shared_ptr<erhe::graphics::Texture>&
+{
+    return m_preview_texture;
+}
+
+auto Texture_graph_node::preview_display_size() const -> float
+{
+    return 96.0f;
+}
+
+auto Texture_graph_node::render_target_size() const -> int
+{
+    return 128;
+}
+
+void Texture_graph_node::render_products(App_context& context, Texture_renderer& renderer)
+{
+    const int output_index = preview_output_index();
+    if ((descriptor() == nullptr) || (output_index < 0)) {
+        return;
+    }
+    if (context.current_command_buffer == nullptr) {
+        return;
+    }
+    const Texture_compose_dag dag = build_texture_compose_dag(*this, static_cast<std::size_t>(output_index));
+    if (!dag.ok || (dag.sink == nullptr)) {
+        return;
+    }
+    const erhe::texgen::Composer   composer{texture_graph_compose_options()};
+    const erhe::texgen::Shader_code shader_code = composer.compose(*dag.sink, dag.sink_output_index);
+    const std::string               fragment    = composer.assemble_fragment(shader_code);
+    if (fragment.find("(error:") != std::string::npos) {
+        return; // composition failed (cycle / depth) - keep the previous texture
+    }
+    static_cast<void>(
+        renderer.render_into(
+            *context.current_command_buffer,
+            m_preview_texture,
+            render_target_size(),
+            fragment,
+            shader_code.get_uniforms()
+        )
+    );
 }
 
 void Texture_graph_node::evaluate(Texture_graph&)
@@ -198,6 +272,26 @@ void Texture_graph_node::set_committed_parameters(const std::string& parameters)
     m_committed_parameters = parameters;
 }
 
+void Texture_graph_node::draw_preview(App_context& app_context)
+{
+    if (!m_preview_texture || (app_context.imgui_renderer == nullptr)) {
+        return;
+    }
+    const float size = preview_display_size();
+    app_context.imgui_renderer->image(
+        erhe::imgui::Draw_texture_parameters{
+            .texture_reference = m_preview_texture,
+            .width             = static_cast<int>(size),
+            .height            = static_cast<int>(size),
+            .uv0               = app_context.imgui_renderer->get_rtt_uv0(),
+            .uv1               = app_context.imgui_renderer->get_rtt_uv1(),
+            .filter            = erhe::graphics::Filter::linear,
+            .mipmap_mode       = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
+            .debug_label       = "Texture_graph_node preview"
+        }
+    );
+}
+
 void Texture_graph_node::node_editor(App_context& app_context, ax::NodeEditor::EditorContext& node_editor)
 {
     ImGui::PushID(static_cast<int>(get_id()));
@@ -245,6 +339,7 @@ void Texture_graph_node::node_editor(App_context& app_context, ax::NodeEditor::E
     // Content
     ImGui::TableSetColumnIndex(1);
     imgui();
+    draw_preview(app_context);
 
     // Output pins on the right edge
     ImGui::TableSetColumnIndex(2);

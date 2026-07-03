@@ -13,6 +13,7 @@
 struct ImDrawList;
 
 namespace ax::NodeEditor { class EditorContext; }
+namespace erhe::graphics { class Texture; }
 namespace erhe::texgen {
     class Node_descriptor;
     class Compose_node;
@@ -22,6 +23,7 @@ namespace editor {
 
 class App_context;
 class Texture_graph;
+class Texture_renderer;
 
 // Left / right arrow buttons cycling index through [0, count).
 // ImGui popups (Combo, BeginPopup) cannot be used inside the
@@ -77,6 +79,39 @@ public:
     [[nodiscard]] auto is_dirty() const -> bool;
     void mark_dirty ();
     void clear_dirty();
+
+    // Preview / sink rendering (Phase 3 Step 3). The window drives a per-frame
+    // refresh: a node whose composition changed (mark_dirty() set the flag)
+    // recomposes and re-renders its preview / bakes its output once, then the
+    // result is cached. See Texture_graph_window::update().
+    [[nodiscard]] auto preview_needs_render() const -> bool;
+    void clear_preview_needs_render();
+
+    // Index of the output slot shown as this node's preview thumbnail, or a
+    // negative value when the node has no previewable output (e.g. the output
+    // node, which renders its own baked result instead). Default: output 0 when
+    // the node has any output pins.
+    [[nodiscard]] virtual auto preview_output_index() const -> int;
+
+    // The texture drawn as this node's thumbnail (preview or bake result). The
+    // window's render helper (re)creates it; the base draws it in node_editor().
+    [[nodiscard]] auto get_preview_texture() const -> const std::shared_ptr<erhe::graphics::Texture>&;
+    [[nodiscard]] auto get_preview_texture_ref() -> std::shared_ptr<erhe::graphics::Texture>&;
+
+    // Edge length of the preview thumbnail drawn in the node UI.
+    [[nodiscard]] virtual auto preview_display_size() const -> float;
+
+    // Resolution of the rendered preview / bake texture (square).
+    [[nodiscard]] virtual auto render_target_size() const -> int;
+
+    // Recomposes this node's subtree and (re)renders its products: the base
+    // renders the primary output into the preview thumbnail; sink nodes (the
+    // output node) override this to bake and assign a Content_library texture.
+    // Called by Texture_graph_window::update() for nodes whose composition
+    // changed. Uses context.current_command_buffer; a no-op when it is null or
+    // not recording, when the node has no descriptor, or when the composition
+    // contains an error marker (the previous good texture is kept).
+    virtual void render_products(App_context& context, Texture_renderer& renderer);
 
     void node_editor(App_context& context, ax::NodeEditor::EditorContext& node_editor);
 
@@ -136,11 +171,16 @@ protected:
         bool                                                            right_edge
     );
 
-    std::vector<Texture_payload> m_input_payloads;
-    std::vector<Texture_payload> m_output_payloads;
-    std::string                  m_type_name;
-    std::string                  m_committed_parameters;
-    bool                         m_dirty{true};
+    std::vector<Texture_payload>             m_input_payloads;
+    std::vector<Texture_payload>             m_output_payloads;
+    std::string                              m_type_name;
+    std::string                              m_committed_parameters;
+    std::shared_ptr<erhe::graphics::Texture> m_preview_texture;
+    bool                                     m_dirty{true};
+    bool                                     m_preview_needs_render{true};
+
+private:
+    void draw_preview(App_context& context);
 };
 
 } // namespace editor

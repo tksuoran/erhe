@@ -404,6 +404,8 @@ erhe_target_sources_grouped(
     scene/viewport_scene_views.hpp
     texture_graph/texture_graph.cpp
     texture_graph/texture_graph.hpp
+    texture_graph/texture_graph_compose.cpp
+    texture_graph/texture_graph_compose.hpp
     texture_graph/texture_graph_node.cpp
     texture_graph/texture_graph_node.hpp
     texture_graph/texture_graph_node_factory.cpp
@@ -412,10 +414,14 @@ erhe_target_sources_grouped(
     texture_graph/texture_graph_window.hpp
     texture_graph/texture_payload.cpp
     texture_graph/texture_payload.hpp
+    texture_graph/texture_renderer.cpp
+    texture_graph/texture_renderer.hpp
     texture_graph/nodes/texture_descriptor_node.cpp
     texture_graph/nodes/texture_descriptor_node.hpp
     texture_graph/nodes/texture_node_descriptors.cpp
     texture_graph/nodes/texture_node_descriptors.hpp
+    texture_graph/nodes/texture_output_node.cpp
+    texture_graph/nodes/texture_output_node.hpp
     time.cpp
     time.hpp
     tools/clipboard.cpp
