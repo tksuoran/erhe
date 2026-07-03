@@ -55,6 +55,7 @@ Content_library::Content_library()
     materials         = std::make_shared<Content_library_node>("Materials",         erhe::Item_type::material,               "Material"              );
     textures          = std::make_shared<Content_library_node>("Textures",          erhe::Item_type::texture,                "Texture"               );
     graph_textures    = std::make_shared<Content_library_node>("Graph Textures",    erhe::Item_type::graph_texture,          "Graph_texture"         );
+    graph_meshes      = std::make_shared<Content_library_node>("Graph Meshes",      erhe::Item_type::graph_mesh,             "Graph_mesh"            );
     physics_materials = std::make_shared<Content_library_node>("Physics Materials", erhe::Item_type::physics_material,       "Physics_material"      );
     collision_filters = std::make_shared<Content_library_node>("Collision Filters", erhe::Item_type::collision_filter,       "Collision_filter"      );
     physics_joints    = std::make_shared<Content_library_node>("Physics Joints",    erhe::Item_type::physics_joint_settings, "Physics_joint_settings");
@@ -65,6 +66,7 @@ Content_library::Content_library()
     materials        ->set_parent(root.get());
     textures         ->set_parent(root.get());
     graph_textures   ->set_parent(root.get());
+    graph_meshes     ->set_parent(root.get());
     physics_materials->set_parent(root.get());
     collision_filters->set_parent(root.get());
     physics_joints   ->set_parent(root.get());
