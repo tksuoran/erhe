@@ -8,6 +8,7 @@
 #include "brushes/brush_placement.hpp"
 #include "content_library/brdf_slice.hpp"
 #include "content_library/content_library.hpp"
+#include "texture_graph/graph_texture.hpp"
 #include "editor_log.hpp"
 #include "items.hpp"
 #include "operations/material_change_operation.hpp"
@@ -1724,6 +1725,22 @@ void Properties::material_properties()
                     });
                 };
                 add_entry("Base Color Texture", [&, this]() { textures.combo(m_context, "##", samplers.base_color.texture, true);});
+                // Source the base color from a Graph Texture asset instead of a
+                // plain texture (the material -> graph back-reference). When set,
+                // it is authoritative; the plain base color texture is cleared.
+                const std::shared_ptr<Content_library_node>& graph_textures_ = content_library->graph_textures;
+                if (graph_textures_) {
+                    Content_library_node& graph_textures = *graph_textures_.get();
+                    add_entry("Base Color Graph", [&, this]() {
+                        std::shared_ptr<Graph_texture> source = std::dynamic_pointer_cast<Graph_texture>(samplers.base_color.texture_source);
+                        if (graph_textures.combo<Graph_texture>(m_context, "##base_color_graph", source, true)) {
+                            samplers.base_color.texture_source = source;
+                            if (source) {
+                                samplers.base_color.texture.reset();
+                            }
+                        }
+                    });
+                }
                 if (samplers.base_color.texture) {
                     add_entry("Base Color Offset",   [&](){ ImGui::SliderFloat2("##", &samplers.base_color.offset.x, -10.0f, 10.0f); });
                     add_entry("Base Color Scale",    [&](){ ImGui::SliderFloat2("##", &samplers.base_color.scale.x,  -10.0f, 10.0f); });

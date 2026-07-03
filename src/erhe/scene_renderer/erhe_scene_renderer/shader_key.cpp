@@ -84,7 +84,10 @@ namespace {
 
 [[nodiscard]] auto sampler_is_bound(const erhe::primitive::Material_texture_sampler& s) -> bool
 {
-    return static_cast<bool>(s.texture);
+    // A texture_source (e.g. a Graph_texture) is authoritative when set and
+    // resolves to a texture the material buffer binds, so it selects the
+    // texture-using shader variant just like a directly-assigned texture.
+    return static_cast<bool>(s.texture) || static_cast<bool>(s.texture_source);
 }
 
 [[nodiscard]] auto any_sampler_uses_tex_coord(const erhe::primitive::Material& material, const uint32_t tex_coord) -> bool

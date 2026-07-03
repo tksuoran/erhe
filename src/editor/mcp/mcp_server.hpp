@@ -168,6 +168,7 @@ private:
     auto action_geometry_graph_load           (const nlohmann::json& args) -> std::string;
     auto action_geometry_graph_clear          (const nlohmann::json& args) -> std::string;
     auto action_create_graph_texture          (const nlohmann::json& args) -> std::string;
+    auto action_set_material_texture_source    (const nlohmann::json& args) -> std::string;
     auto query_graph_textures                 (const nlohmann::json& args) -> std::string;
     auto query_texture_graph                  (const nlohmann::json& args) -> std::string;
     auto action_texture_graph_add_node        (const nlohmann::json& args) -> std::string;

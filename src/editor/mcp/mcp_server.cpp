@@ -1140,6 +1140,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "geometry_graph_load")          result = action_geometry_graph_load         (req->arguments);
         else if (req->tool_name == "geometry_graph_clear")         result = action_geometry_graph_clear        (req->arguments);
         else if (req->tool_name == "create_graph_texture")         result = action_create_graph_texture        (req->arguments);
+        else if (req->tool_name == "set_material_texture_source")  result = action_set_material_texture_source (req->arguments);
         else if (req->tool_name == "get_graph_textures")           result = query_graph_textures               (req->arguments);
         else if (req->tool_name == "get_texture_graph")            result = query_texture_graph                (req->arguments);
         else if (req->tool_name == "texture_graph_add_node")       result = action_texture_graph_add_node      (req->arguments);
@@ -1830,6 +1831,16 @@ void Mcp_server::refresh_tool_list()
             {"scene_name", {{"type", "string"}, {"description", "Target scene (default: the single/first scene)"}}}
         }},
         {"required", json::array({"name"})}
+    }});
+    m_tool_infos.push_back({"set_material_texture_source", "Bind a Material texture slot to a Graph Texture asset so the material samples the graph's baked output (the material->graph back-reference; editing the graph updates the material live). Omit or empty 'graph_texture' to clear the binding (revert to the plain assigned texture). The source is authoritative and clears any directly-assigned texture on that slot.", {
+        {"type", "object"},
+        {"properties", {
+            {"material_name", {{"type", "string"}, {"description", "Name of the material in the scene's content library"}}},
+            {"slot",          {{"type", "string"}, {"description", "Texture slot: base_color (default), metallic_roughness, normal, occlusion, or emissive"}}},
+            {"graph_texture", {{"type", "string"}, {"description", "Name of the Graph Texture asset to source from; empty to clear the binding"}}},
+            {"scene_name",    {{"type", "string"}, {"description", "Target scene (default: the single/first scene)"}}}
+        }},
+        {"required", json::array({"material_name"})}
     }});
     m_tool_infos.push_back({"get_graph_textures", "List the Graph Texture assets in a scene's content library (or all scenes when scene_name is omitted): name, id, scene, node_count, and has_output (whether the graph currently bakes an output texture).", {
         {"type", "object"},
@@ -6103,6 +6114,64 @@ auto Mcp_server::action_create_graph_texture(const json& args) -> std::string
         {"created", true},
         {"name",    name},
         {"id",      item->get_id()}
+    }).dump();
+}
+
+auto Mcp_server::action_set_material_texture_source(const json& args) -> std::string
+{
+    const std::string scene_name         = args.value("scene_name", "");
+    const std::string material_name       = args.value("material_name", "");
+    const std::string slot_name           = args.value("slot", "base_color");
+    const std::string graph_texture_name  = args.value("graph_texture", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::shared_ptr<Content_library> library = sr->get_content_library();
+    if (!library) {
+        return make_error_content("Scene has no content library: " + scene_name);
+    }
+    const std::shared_ptr<erhe::primitive::Material> material =
+        find_library_item<erhe::primitive::Material>(library->materials, material_name);
+    if (!material) {
+        return make_error_content("Material not found: " + material_name);
+    }
+
+    erhe::primitive::Material_texture_samplers& samplers = material->data.texture_samplers;
+    erhe::primitive::Material_texture_sampler*  sampler  = nullptr;
+    if      (slot_name == "base_color")         sampler = &samplers.base_color;
+    else if (slot_name == "metallic_roughness") sampler = &samplers.metallic_roughness;
+    else if (slot_name == "normal")             sampler = &samplers.normal;
+    else if (slot_name == "occlusion")          sampler = &samplers.occlusion;
+    else if (slot_name == "emissive")           sampler = &samplers.emissive;
+    else {
+        return make_error_content("Unknown material slot: " + slot_name + " (base_color|metallic_roughness|normal|occlusion|emissive)");
+    }
+
+    if (graph_texture_name.empty()) {
+        sampler->texture_source.reset();
+        return make_json_content({
+            {"cleared",  true},
+            {"material", material_name},
+            {"slot",     slot_name}
+        }).dump();
+    }
+
+    const std::shared_ptr<Graph_texture> graph_texture =
+        find_library_item<Graph_texture>(library->graph_textures, graph_texture_name);
+    if (!graph_texture) {
+        return make_error_content("Graph texture not found: " + graph_texture_name);
+    }
+    // Graph_texture is-a erhe::graphics::Texture_reference; the shared_ptr upcasts.
+    // The source is authoritative, so clear any directly-assigned texture.
+    sampler->texture_source = graph_texture;
+    sampler->texture.reset();
+    return make_json_content({
+        {"bound",            true},
+        {"material",         material_name},
+        {"slot",             slot_name},
+        {"graph_texture",    graph_texture_name},
+        {"graph_texture_id", graph_texture->get_id()}
     }).dump();
 }
 
