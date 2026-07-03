@@ -8,6 +8,7 @@
 
 #include "app_context.hpp"
 #include "content_library/content_library.hpp"
+#include "texture_graph/graph_texture.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "scene/node_joint.hpp"
@@ -498,6 +499,32 @@ auto Scene_root::make_browser_window(
                                 }
                             );
                             context_ptr->operation_stack->queue(op);
+                        }
+                    );
+                    close = true;
+                }
+            }
+            if (is_folder && (content_node->type_code == erhe::Item_type::graph_texture)) {
+                auto         graph_textures = get_content_library()->graph_textures;
+                App_context* context_ptr    = &context;
+                if (ImGui::MenuItem("Create Graph Texture")) {
+                    deferred_operations.push_back(
+                        [context_ptr, graph_textures]() {
+                            auto new_graph_texture = std::make_shared<Graph_texture>("Graph Texture");
+                            auto new_node = std::make_shared<Content_library_node>(new_graph_texture);
+                            auto op = std::make_shared<Item_insert_remove_operation>(
+                                Item_insert_remove_operation::Parameters{
+                                    .context = *context_ptr,
+                                    .item    = new_node,
+                                    .parent  = graph_textures,
+                                    .mode    = Item_insert_remove_operation::Mode::insert
+                                }
+                            );
+                            context_ptr->operation_stack->queue(op);
+                            // Select the new asset so the Texture Graph window edits it.
+                            if (context_ptr->selection != nullptr) {
+                                context_ptr->selection->set_selection({new_graph_texture});
+                            }
                         }
                     );
                     close = true;

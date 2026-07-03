@@ -141,6 +141,10 @@ private:
     };
 
     auto make_node       (const std::string& type_name) -> std::shared_ptr<Texture_graph_node>;
+    // Creates a Graph_texture asset in the (single) scene's content library and
+    // selects it, so the window switches from the scratch graph to editing a
+    // real, saveable asset. Bound to the palette toolbar "New Graph Texture".
+    void create_and_select_graph_texture();
     void file_toolbar    ();
     // Searchable, categorized node palette (replaces the old fixed toolbar).
     // Built once from the descriptor registry + a category tag, so new node

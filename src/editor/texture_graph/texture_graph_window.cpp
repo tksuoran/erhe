@@ -16,6 +16,7 @@
 #include "editor_log.hpp"
 #include "items.hpp"
 #include "content_library/content_library.hpp"
+#include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
@@ -168,6 +169,7 @@ void Texture_graph_window::insert_node(Graph_texture& graph_texture, const std::
 {
     constexpr uint64_t flags = erhe::Item_flags::visible | erhe::Item_flags::content | erhe::Item_flags::show_in_ui;
     node->enable_flag_bits(flags);
+    node->set_owning_graph_texture(std::dynamic_pointer_cast<Graph_texture>(graph_texture.shared_from_this()));
     graph_texture.nodes().push_back(node);
     graph_texture.graph().register_node(node.get());
     node->mark_dirty();
@@ -356,8 +358,49 @@ auto Texture_graph_window::get_renderer() -> Texture_renderer*
     return m_renderer.get();
 }
 
+void Texture_graph_window::create_and_select_graph_texture()
+{
+    if (m_app_context.app_scenes == nullptr) {
+        return;
+    }
+    const std::shared_ptr<Scene_root> scene_root = m_app_context.app_scenes->get_single_scene_root();
+    if (!scene_root) {
+        return;
+    }
+    const std::shared_ptr<Content_library> library = scene_root->get_content_library();
+    if (!library || !library->graph_textures) {
+        return;
+    }
+    const std::shared_ptr<Graph_texture> graph_texture = std::make_shared<Graph_texture>("Graph Texture");
+    m_app_context.operation_stack->execute_now(
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context = m_app_context,
+                .item    = std::make_shared<Content_library_node>(graph_texture),
+                .parent  = library->graph_textures,
+                .mode    = Item_insert_remove_operation::Mode::insert
+            }
+        )
+    );
+    if (m_app_context.selection != nullptr) {
+        m_app_context.selection->set_selection({graph_texture});
+    }
+}
+
 void Texture_graph_window::file_toolbar()
 {
+    // Show which graph is being edited so the window-owned scratch graph (which
+    // is NOT a saveable content-library asset) is never mistaken for one.
+    refresh_current_graph_texture();
+    const bool is_scratch = (m_graph_texture == m_default_graph_texture);
+    if (is_scratch) {
+        ImGui::TextUnformatted("Editing: (scratch - not saved; create an asset to persist)");
+    } else {
+        ImGui::Text("Editing asset: %s", m_graph_texture->get_name().c_str());
+    }
+    if (ImGui::Button("New Graph Texture")) { create_and_select_graph_texture(); }
+    ImGui::Separator();
+
     ImGui::SetNextItemWidth(320.0f);
     ImGui::InputText("##graph_path", &m_graph_path);
     ImGui::SameLine(); if (ImGui::Button("Save"))  { save_graph(std::filesystem::path{m_graph_path}); }

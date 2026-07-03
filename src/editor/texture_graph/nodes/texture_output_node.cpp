@@ -1,4 +1,5 @@
 #include "texture_graph/nodes/texture_output_node.hpp"
+#include "texture_graph/graph_texture.hpp"
 #include "texture_graph/texture_graph_compose.hpp"
 #include "texture_graph/texture_payload.hpp"
 #include "texture_graph/texture_renderer.hpp"
@@ -55,6 +56,7 @@ void Texture_output_node::on_removed_from_graph()
     unregister_texture();
     if (m_assign_to_material && m_material) {
         m_material->data.texture_samplers.base_color.texture.reset();
+        m_material->data.texture_samplers.base_color.texture_source.reset();
         m_material->data.texture_samplers.base_color.sampler.reset();
     }
 }
@@ -178,8 +180,21 @@ void Texture_output_node::assign_to_material()
             }
         );
     }
-    m_material->data.texture_samplers.base_color.texture = texture;
-    m_material->data.texture_samplers.base_color.sampler = m_sampler;
+    erhe::primitive::Material_texture_sampler& base_color = m_material->data.texture_samplers.base_color;
+    base_color.sampler = m_sampler;
+    const std::shared_ptr<Graph_texture> owning = get_owning_graph_texture();
+    if (owning) {
+        // The graph is a content-library asset: bind the material to it as a live
+        // texture_source (the material samples the asset's baked output every
+        // frame, and the binding is persisted on save). Clear any pushed texture.
+        base_color.texture_source = owning;
+        base_color.texture.reset();
+    } else {
+        // Default scratch graph (not an asset): fall back to pushing the baked
+        // texture directly (nothing to reference, not persisted).
+        base_color.texture = texture;
+        base_color.texture_source.reset();
+    }
 }
 
 void Texture_output_node::imgui()

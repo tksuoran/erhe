@@ -126,8 +126,10 @@ auto read_graph_texture_graph(Graph_texture& graph_texture, const nlohmann::json
     live_nodes.clear();
 
     constexpr uint64_t flags = erhe::Item_flags::visible | erhe::Item_flags::content | erhe::Item_flags::show_in_ui;
+    const std::shared_ptr<Graph_texture> owning = std::dynamic_pointer_cast<Graph_texture>(graph_texture.shared_from_this());
     for (const std::shared_ptr<Texture_graph_node>& node : new_nodes) {
         node->enable_flag_bits(flags);
+        node->set_owning_graph_texture(owning);
         live_nodes.push_back(node);
         graph.register_node(node.get());
         node->mark_dirty();

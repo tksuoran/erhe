@@ -6,6 +6,7 @@
 
 #include <nlohmann/json_fwd.hpp>
 
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -22,6 +23,7 @@ namespace erhe::texgen {
 namespace editor {
 
 class App_context;
+class Graph_texture;
 class Texture_compose_dag;
 class Texture_graph;
 class Texture_renderer;
@@ -164,6 +166,14 @@ public:
     [[nodiscard]] auto get_committed_parameters() const -> const std::string&;
     void set_committed_parameters(const std::string& parameters);
 
+    // The Graph_texture asset this node belongs to (set when the node is added
+    // to a graph). A sink node uses it so an in-window "assign to material" binds
+    // the material to the owning asset (a live, persisted texture_source) rather
+    // than pushing a one-off baked texture. Null / expired for a node in the
+    // window's default scratch graph (which is not a content-library asset).
+    void set_owning_graph_texture(const std::weak_ptr<Graph_texture>& graph_texture);
+    [[nodiscard]] auto get_owning_graph_texture() const -> std::shared_ptr<Graph_texture>;
+
 protected:
     // Composes `dag` (its sink), binds every buffer texture the composition
     // samples (from dag.sampler_sources), and renders the result into `target`
@@ -195,6 +205,7 @@ protected:
 
     std::vector<Texture_payload>             m_input_payloads;
     std::vector<Texture_payload>             m_output_payloads;
+    std::weak_ptr<Graph_texture>             m_owning_graph_texture;
     std::string                              m_type_name;
     std::string                              m_committed_parameters;
     std::shared_ptr<erhe::graphics::Texture> m_preview_texture;

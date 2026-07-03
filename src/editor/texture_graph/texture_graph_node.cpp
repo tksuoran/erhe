@@ -265,6 +265,16 @@ void Texture_graph_node::on_removed_from_graph()
 {
 }
 
+void Texture_graph_node::set_owning_graph_texture(const std::weak_ptr<Graph_texture>& graph_texture)
+{
+    m_owning_graph_texture = graph_texture;
+}
+
+auto Texture_graph_node::get_owning_graph_texture() const -> std::shared_ptr<Graph_texture>
+{
+    return m_owning_graph_texture.lock();
+}
+
 auto Texture_graph_node::get_factory_type_name() const -> const std::string&
 {
     return m_type_name;
