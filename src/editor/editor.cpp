@@ -83,6 +83,7 @@
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_scene_views.hpp"
+#include "texture_graph/texture_graph_window.hpp"
 #include "tools/clipboard.hpp"
 #include "tools/mesh_component_selection.hpp"
 #include "tools/mesh_component_selection_tool.hpp"
@@ -445,6 +446,11 @@ public:
         // completed run and launch a new one when the graph is dirty
         // (after the operation stack so this frame's edits are seen).
         m_geometry_graph_window->update_evaluation();
+
+        // Texture graph: synchronous dirty-flag evaluation (cheap GLSL
+        // composition, no background engine), run once per frame so the graph
+        // stays current even when the window is hidden.
+        m_texture_graph_window->update();
 
         // - Execute all fixes step updates
         // - Execute all once per frame updates
@@ -1491,6 +1497,7 @@ public:
                 m_clipboard_window       = std::make_unique<Clipboard_window                >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_commands_window        = std::make_unique<Commands_window                 >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_geometry_graph_window  = std::make_unique<Geometry_graph_window           >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
+                m_texture_graph_window   = std::make_unique<Texture_graph_window            >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_graph_window           = std::make_unique<Graph_window                    >(*m_commands.get(),       *m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
                 m_node_properties_window = std::make_unique<Node_properties_window          >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_gradient_editor        = std::make_unique<Gradient_editor                 >(*m_imgui_renderer.get(), *m_imgui_windows.get());
@@ -2295,6 +2302,7 @@ public:
         m_app_context.app_windows              = m_app_windows           .get();
         m_app_context.fly_camera_tool          = m_fly_camera_tool       .get();
         m_app_context.geometry_graph_window    = m_geometry_graph_window .get();
+        m_app_context.texture_graph_window     = m_texture_graph_window  .get();
         m_app_context.navigation_gizmo_tool    = m_navigation_gizmo_tool .get();
         m_app_context.grid_tool                = m_grid_tool             .get();
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -2903,6 +2911,7 @@ public:
     std::unique_ptr<Clipboard_window                >        m_clipboard_window;
     std::unique_ptr<Commands_window                 >        m_commands_window;
     std::unique_ptr<Geometry_graph_window           >        m_geometry_graph_window;
+    std::unique_ptr<Texture_graph_window            >        m_texture_graph_window;
     std::unique_ptr<Graph_window                    >        m_graph_window;
     std::unique_ptr<Node_properties_window          >        m_node_properties_window;
     std::unique_ptr<Gradient_editor                 >        m_gradient_editor;

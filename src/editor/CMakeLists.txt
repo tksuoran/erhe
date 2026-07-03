@@ -402,6 +402,14 @@ erhe_target_sources_grouped(
     scene/viewport_scene_view.hpp
     scene/viewport_scene_views.cpp
     scene/viewport_scene_views.hpp
+    texture_graph/texture_graph.cpp
+    texture_graph/texture_graph.hpp
+    texture_graph/texture_graph_node.cpp
+    texture_graph/texture_graph_node.hpp
+    texture_graph/texture_graph_window.cpp
+    texture_graph/texture_graph_window.hpp
+    texture_graph/texture_payload.cpp
+    texture_graph/texture_payload.hpp
     time.cpp
     time.hpp
     tools/clipboard.cpp
@@ -937,6 +945,7 @@ target_link_libraries(
         erhe::rendergraph
         erhe::scene
         erhe::scene_renderer
+        erhe::texgen
         erhe::time
         erhe::ui
         erhe::verify

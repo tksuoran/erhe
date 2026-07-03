@@ -93,6 +93,7 @@ class Selection_tool;
 class Settings_window;
 class Sheet_window;
 class Sky_renderer;
+class Texture_graph_window;
 class Thumbnails;
 class Time;
 class Timeline_window;
@@ -199,6 +200,7 @@ public:
     Settings_window*                   settings_window      {nullptr};
     Sky_renderer*                      sky_renderer         {nullptr};
     Sheet_window*                      sheet_window         {nullptr};
+    Texture_graph_window*              texture_graph_window {nullptr};
     Thumbnails*                        thumbnails           {nullptr};
     Time*                              time                 {nullptr};
     Timeline_window*                   timeline_window      {nullptr};
