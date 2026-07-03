@@ -70,6 +70,16 @@ auto Geometry_graph_mesh::get_graph_mesh() const -> const std::shared_ptr<Graph_
     return m_graph_mesh;
 }
 
+auto Geometry_graph_mesh::get_controlled_mesh() const -> const std::shared_ptr<erhe::scene::Mesh>&
+{
+    return m_mesh;
+}
+
+auto Geometry_graph_mesh::get_controlled_node_physics() const -> const std::shared_ptr<Node_physics>&
+{
+    return m_node_physics;
+}
+
 void Geometry_graph_mesh::set_graph_mesh(const std::shared_ptr<Graph_mesh>& graph_mesh)
 {
     if (m_graph_mesh == graph_mesh) {

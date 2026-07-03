@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Scene_file",
-    version=6,
+    version=7,
     fields=[
         field("name",              String,                                     added_in=1, default='""'),
         field("enable_physics",    Bool,                                       added_in=1, default="true"),
@@ -9,6 +9,8 @@ struct("Scene_file",
         field("ambient_light",     Vec4,                                       added_in=5, default="0.0f, 0.0f, 0.0f, 0.0f", short_desc="Scene ambient light color"),
         field("graph_textures",         Vector(StructRef("Graph_texture_data")),          added_in=6, short_desc="Procedural Graph Texture assets in the content library"),
         field("material_texture_sources", Vector(StructRef("Material_texture_source_data")), added_in=6, short_desc="Material slot -> Graph Texture bindings"),
+        field("graph_meshes",           Vector(StructRef("Graph_mesh_data")),             added_in=7, short_desc="Procedural Graph Mesh assets in the content library"),
+        field("graph_mesh_bindings",    Vector(StructRef("Graph_mesh_binding_data")),     added_in=7, short_desc="Scene node -> Graph Mesh bindings (Geometry Graph Mesh attachments)"),
         field("nodes",             Vector(StructRef("Node_data_serial")),      added_in=1),
         field("cameras",           Vector(StructRef("Camera_data")),           added_in=1),
         field("lights",            Vector(StructRef("Light_data")),            added_in=1),

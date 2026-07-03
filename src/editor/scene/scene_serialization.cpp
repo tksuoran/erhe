@@ -2,6 +2,9 @@
 
 #include "app_context.hpp"
 #include "content_library/content_library.hpp"
+#include "geometry_graph/geometry_graph_mesh.hpp"
+#include "geometry_graph/graph_mesh.hpp"
+#include "geometry_graph/graph_mesh_serialization.hpp"
 #include "texture_graph/graph_texture.hpp"
 #include "texture_graph/graph_texture_serialization.hpp"
 #include "editor_log.hpp"
@@ -739,6 +742,13 @@ auto save_scene(
         if (!node_physics) {
             continue;
         }
+        // A Node_physics controlled by a Geometry Graph Mesh attachment is a
+        // baked artifact the graph rebuilds on load - persisting it would
+        // duplicate the rigid body on every save/load round-trip.
+        const auto graph_mesh_attachment = erhe::scene::get_attachment<Geometry_graph_mesh>(node.get());
+        if (graph_mesh_attachment && (graph_mesh_attachment->get_controlled_node_physics() == node_physics)) {
+            continue;
+        }
         const uint64_t node_id = node_id_map[node.get()];
         const auto* rigid_body = node_physics->get_rigid_body();
         const auto& collision_shape = node_physics->get_collision_shape();
@@ -852,6 +862,34 @@ auto save_scene(
         }
     }
 
+    // Serialize Graph Mesh assets (their node graph as a JSON string) and the
+    // node -> Graph Mesh bindings (Geometry Graph Mesh attachments), so
+    // procedural meshes and the scene-node back-references survive save/load.
+    // The baked products are not persisted - graphs load born-dirty and the
+    // first evaluation re-bakes and pushes to the re-attached bindings.
+    {
+        const std::shared_ptr<Content_library> content_library = scene_root.get_content_library();
+        if (content_library && content_library->graph_meshes) {
+            for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->graph_meshes->get_all<Graph_mesh>()) {
+                Graph_mesh_data data;
+                data.name  = graph_mesh->get_name();
+                data.graph = write_graph_mesh_graph(*graph_mesh).dump();
+                scene_file.graph_meshes.push_back(std::move(data));
+            }
+        }
+        if (content_library && content_library->graph_meshes) {
+            for (const auto& node : flat_nodes) {
+                const std::shared_ptr<Geometry_graph_mesh> attachment = erhe::scene::get_attachment<Geometry_graph_mesh>(node.get());
+                if (attachment && attachment->get_graph_mesh()) {
+                    Graph_mesh_binding_data binding;
+                    binding.node_id         = node_id_map[node.get()];
+                    binding.graph_mesh_name = attachment->get_graph_mesh()->get_name();
+                    scene_file.graph_mesh_bindings.push_back(std::move(binding));
+                }
+            }
+        }
+    }
+
     // Serialize layouts and layout items
     for (const auto& node : flat_nodes) {
         const auto layout = erhe::scene::get_attachment<erhe::scene::Layout>(node.get());
@@ -902,6 +940,15 @@ auto save_scene(
 
     for (const auto& mesh_layer : scene.get_mesh_layers()) {
         for (const auto& mesh : mesh_layer->meshes) {
+            // A Mesh controlled by a Geometry Graph Mesh attachment is a baked
+            // artifact the graph rebuilds on load - persisting it would
+            // duplicate the mesh on every save/load round-trip.
+            {
+                const auto graph_mesh_attachment = erhe::scene::get_attachment<Geometry_graph_mesh>(mesh->get_node());
+                if (graph_mesh_attachment && (graph_mesh_attachment->get_controlled_mesh() == mesh)) {
+                    continue;
+                }
+            }
             const uint64_t node_id = get_node_id(mesh->get_node(), node_id_map);
             const auto&    primitives = mesh->get_primitives();
             const bool     geom_normative = is_geometry_normative(*mesh);
@@ -1631,6 +1678,41 @@ auto load_scene(
                     sampler->texture.reset();
                 }
             }
+        }
+    }
+
+    // Reconstruct Graph Mesh assets and re-attach node bindings. The graphs
+    // load born-dirty, so the first background evaluation re-bakes and pushes
+    // the products to the attachments (scene meshes appear once it finishes;
+    // get_geometry_graph is the barrier).
+    if ((context != nullptr) && content_library && content_library->graph_meshes) {
+        for (const Graph_mesh_data& graph_mesh_data : scene_file.graph_meshes) {
+            const std::shared_ptr<Graph_mesh> graph_mesh = content_library->graph_meshes->make<Graph_mesh>(graph_mesh_data.name);
+            const nlohmann::json graph_json = nlohmann::json::parse(graph_mesh_data.graph, nullptr, false);
+            if (graph_json.is_discarded()) {
+                log_parsers->warn("load_scene: Graph Mesh '{}' has invalid graph JSON", graph_mesh_data.name);
+                continue;
+            }
+            if (!read_graph_mesh_graph(*graph_mesh, graph_json, *context)) {
+                log_parsers->warn("load_scene: Graph Mesh '{}' graph failed to load", graph_mesh_data.name);
+            }
+        }
+
+        for (const Graph_mesh_binding_data& binding : scene_file.graph_mesh_bindings) {
+            const auto node_it = node_map.find(binding.node_id);
+            std::shared_ptr<Graph_mesh> graph_mesh{};
+            for (const std::shared_ptr<Graph_mesh>& candidate : content_library->graph_meshes->get_all<Graph_mesh>()) {
+                if (candidate->get_name() == binding.graph_mesh_name) {
+                    graph_mesh = candidate;
+                    break;
+                }
+            }
+            if ((node_it == node_map.end()) || !graph_mesh) {
+                log_parsers->warn("load_scene: graph mesh binding node {} -> '{}' not resolved", binding.node_id, binding.graph_mesh_name);
+                continue;
+            }
+            const std::shared_ptr<Geometry_graph_mesh> attachment = std::make_shared<Geometry_graph_mesh>(graph_mesh);
+            node_it->second->attach(attachment);
         }
     }
 

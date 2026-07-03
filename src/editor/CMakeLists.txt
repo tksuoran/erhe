@@ -179,6 +179,8 @@ erhe_target_sources_grouped(
     geometry_graph/geometry_graph_mesh.hpp
     geometry_graph/graph_mesh.cpp
     geometry_graph/graph_mesh.hpp
+    geometry_graph/graph_mesh_serialization.cpp
+    geometry_graph/graph_mesh_serialization.hpp
     geometry_graph/geometry_graph_node.cpp
     geometry_graph/geometry_graph_node.hpp
     geometry_graph/geometry_graph_node_factory.cpp
@@ -585,6 +587,8 @@ erhe_codegen_generate(
         "${_codegen_defs}/drive_mode_serial.py"
         "${_codegen_defs}/drive_type_serial.py"
         "${_codegen_defs}/gltf_source_reference.py"
+        "${_codegen_defs}/graph_mesh_binding_data.py"
+        "${_codegen_defs}/graph_mesh_data.py"
         "${_codegen_defs}/graph_texture_data.py"
         "${_codegen_defs}/joint_drive_data.py"
         "${_codegen_defs}/joint_limit_data.py"
@@ -629,6 +633,12 @@ set(_codegen_sources
     ${_codegen_out}/gltf_source_reference.hpp
     ${_codegen_out}/gltf_source_reference_serialization.hpp
     ${_codegen_out}/gltf_source_reference.cpp
+    ${_codegen_out}/graph_mesh_binding_data.hpp
+    ${_codegen_out}/graph_mesh_binding_data_serialization.hpp
+    ${_codegen_out}/graph_mesh_binding_data.cpp
+    ${_codegen_out}/graph_mesh_data.hpp
+    ${_codegen_out}/graph_mesh_data_serialization.hpp
+    ${_codegen_out}/graph_mesh_data.cpp
     ${_codegen_out}/graph_texture_data.hpp
     ${_codegen_out}/graph_texture_data_serialization.hpp
     ${_codegen_out}/graph_texture_data.cpp

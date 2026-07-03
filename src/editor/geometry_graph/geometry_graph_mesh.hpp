@@ -24,9 +24,11 @@ class Node_physics;
 //
 // Updates are push-based: Geometry_graph_window's evaluation engine calls
 // apply_baked_products() on every attachment bound to a graph after that
-// graph's background evaluation finishes; bind paths (Properties, MCP,
-// scene load) call it once at bind time so a late binder picks up the
-// latest bake immediately. apply_baked_products() is main-thread only.
+// graph's background evaluation finishes; interactive bind paths
+// (Properties, MCP) call it once at bind time so a late binder picks up
+// the latest bake immediately. Scene load attaches without applying -
+// loaded graphs are born dirty, so the first evaluation pushes.
+// apply_baked_products() is main-thread only.
 //
 // Intentionally not_clonable for the MVP (like Frame_controller /
 // Brush_placement): cloning a node skips this attachment; re-bind the
@@ -75,6 +77,14 @@ public:
     // scene, the asset is unset / never baked, or the latest bake was
     // already applied (revision check). Main thread only.
     void apply_baked_products();
+
+    // The products this attachment currently controls on its node. Scene
+    // serialization uses these to EXCLUDE them from the ordinary mesh /
+    // node-physics passes - they are baked artifacts the graph rebuilds
+    // on load, not authored content (persisting them would duplicate the
+    // mesh and rigid body on every save/load round-trip).
+    [[nodiscard]] auto get_controlled_mesh() const -> const std::shared_ptr<erhe::scene::Mesh>&;
+    [[nodiscard]] auto get_controlled_node_physics() const -> const std::shared_ptr<Node_physics>&;
 
 private:
     // Detaches the controlled Mesh / Node_physics from the node that
