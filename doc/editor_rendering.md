@@ -7,8 +7,10 @@ uber-shader; feature differences (circular brushed metal, anisotropic
 BRDF, debug visualization modes, depth-only, ID rendering, brush
 preview, rendertarget) are variant axes on the `Shader_key`. See
 `doc/shader_variants.md` for the variant key, `doc/mesh_memory.md`
-for the `Render_bucket` / `bucket_primitives()` flow, and
-`doc/prewarm.md` for the init-time compile path.
+for the `Render_bucket` / `bucket_primitives()` flow,
+`doc/prewarm.md` for the init-time compile path, and
+`doc/post_processing.md` for the full bloom/tonemap pipeline (the
+"Post-processing" section below is only a summary).
 
 This document describes how the erhe editor uses erhe libraries to render a frame, covering the rendergraph, the composer, render pipelines, and stencil buffer usage.
 
@@ -95,20 +97,39 @@ A `Composition_pass` specifies:
 
 ### Composition pass order
 
-The editor creates these passes in `App_rendering::App_rendering()`:
+The editor creates these passes, in this order, in
+`App_rendering::App_rendering()` (names as they appear in code; several are
+conditional no-ops per frame, noted below):
 
-| # | Pass | Primitive mode | Filter | Pipeline |
-| :--- | :--- | :--- | :--- | :--- |
-| 1 | Opaque fill not selected | polygon_fill | visible, opaque, not selected (content, controller and rendertarget layers) | Standard opaque, cull back CCW |
-| 2 | Opaque fill selected | polygon_fill | visible, opaque, selected | Stencil-marking (bit 7) |
-| 3 | Edge lines not selected | edge_lines | visible, opaque, not selected | Edge line pipeline |
-| 4 | Edge lines selected | edge_lines | visible, opaque, selected | Edge line pipeline |
-| 5 | Selection/hover outline | polygon_fill | visible, opaque, selected or hovered | Outline (fat_triangle shader) |
-| 6 | Sky | polygon_fill | (none) | Fullscreen, depth==far, stencil==0 |
-| 7 | Grid | polygon_fill | (none) | Fullscreen, depth clamp |
-| 8 | Translucent fill | polygon_fill | visible, translucent | Premultiplied alpha |
-| 9 | Translucent edge lines | edge_lines | visible, translucent | Premultiplied alpha |
-| 10 | Brush | polygon_fill | visible, brush | Two pipelines in sequence: cull front then cull back, premultiplied alpha |
+| # | Pass | Primitive mode | Notes |
+| :--- | :--- | :--- | :--- |
+| 1 | Content fill opaque not selected | polygon_fill | content + controller layers, opaque buckets |
+| 2 | Content fill selected | polygon_fill | selected/hovered; also writes selection stencil bit 7 |
+| 3 | Content solid wireframe not selected | solid_wireframe | `SOLID_WIREFRAME` shader-variant overlay over the fill (same depth, no z-fight); pass exists only when `Device_info::use_solid_wireframe`; no-op unless the render style enables solid wireframe |
+| 4 | Content solid wireframe selected | solid_wireframe | as above, selected/hovered |
+| 5 | Content edge corner caps not selected | solid_wireframe | `EDGE_LINES_CORNER_CAP` variant filling corner gaps of the ID-buffer edge-line method; enabled only when that method is active |
+| 6 | Content edge corner caps selected | solid_wireframe | as above, selected/hovered |
+| 7 | Selection stencil mask (fill disabled) | polygon_fill | depth + stencil bit 7 only, color writes disabled (`VARIANT_DEPTH_ONLY`); active only when the selection polygon fill is OFF -- exactly one of this pass and pass 2 runs per frame |
+| 8 | Content edge lines not selected | edge_lines | wide-line edges via `Content_wide_line_renderer`; suppressed when solid wireframe or the ID-buffer edge method is active |
+| 9 | Content edge lines opaque selected | edge_lines | as above, selected |
+| 10 | Content corner points not selected | corner_points | `VARIANT_POINTS` variant; no-op unless the render style enables corner points |
+| 11 | Content corner points selected | corner_points | as above, selected |
+| 12 | Content polygon centroids not selected | polygon_centroids | `VARIANT_POINTS` variant; no-op unless the render style enables polygon centroids |
+| 13 | Content polygon centroids selected | polygon_centroids | as above, selected |
+| 14 | Content outline opaque selected | edge_lines | selection/hover outline (outline pipeline, constant colors) |
+| 15 | Sky | polygon_fill | fullscreen (3 vertices), depth==far, stencil==0; `Sky_composition_pass` subclass switches between the gradient/checker shader and the physically-based atmosphere (`doc/procedural_sky.md`) |
+| 16 | Grid | polygon_fill | fullscreen infinite plane (12 vertices), depth clamp |
+| 17 | Content fill translucent not selected | polygon_fill | translucent buckets of pass 1 |
+| 18 | Content fill translucent selected | polygon_fill | translucent buckets of pass 2 |
+| 19 | Brush | polygon_fill | brush layer, `VARIANT_BRUSH_PREVIEW` variant, two pipelines in sequence (cull back then cull front), premultiplied alpha |
+| 20 | Rendertarget | polygon_fill | rendertarget-mesh UI (hotbar quad); overlay pass that ignores camera exposure and runs after post-processing (issue #230) |
+
+Solid wireframe (passes 3-4) is a shader-variant axis
+(`Shader_bool::SOLID_WIREFRAME`): the expanded fill geometry is redrawn with
+real polygon edges blended over the lit fill, sharing the fill's exact depth.
+It replaces the wide-line edge path when enabled; the two never both draw. On
+devices where the variant cannot link (macOS OpenGL 4.1), the passes are
+disabled and the wide-line edge passes draw instead.
 
 ### Mirrored (negative-determinant) geometry
 

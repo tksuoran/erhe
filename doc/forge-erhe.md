@@ -174,15 +174,17 @@ view so a `samplerCube` lookup by direction reaches each face.
 | `SDL_DispatchGPUCompute(x,y,z)` | `Compute_command_encoder::dispatch_compute(x,y,z)` |
 | `SDL_PushGPUComputeUniformData` | ring-buffer range bound to the compute encoder |
 | `SDL_GPUStorageBufferReadWriteBinding` (SSBO) | `Compute_command_encoder::set_buffer(Buffer_target::storage, ...)` |
-| `SDL_GPUStorageTextureReadWriteBinding` (RW image) | `Compute_command_encoder::set_storage_image(binding, texture)` -- declare via `Binding_type::storage_image` + `Glsl_type::image_2d` + `image_format` in the `Bind_group_layout`; emits `layout(binding = N, <format>) uniform image2D` and binds `VK_DESCRIPTOR_TYPE_STORAGE_IMAGE` in `GENERAL` layout. **Vulkan only** (GL/Metal not wired). |
+| `SDL_GPUStorageTextureReadWriteBinding` (RW image) | `Compute_command_encoder::set_storage_image(binding, texture)` -- declare via `Binding_type::storage_image` + `Glsl_type::image_2d` + `image_format` in the `Bind_group_layout`; emits `layout(binding = N, <format>) uniform image2D` and binds `VK_DESCRIPTOR_TYPE_STORAGE_IMAGE` in `GENERAL` layout (Vulkan), `gl::bind_image_texture` (OpenGL 4.3+), or `MTL::ComputeCommandEncoder::setTexture` (Metal). |
 | HLSL `RWTexture2D` `imageStore` / `Texture2D.Sample` in compute | GLSL `imageStore` / `imageLoad` on the `image2D`; compute has no sampled-image binding, so read other storage images with `imageLoad` (+ manual bilinear) rather than a sampler |
 | compute storage-image needs `COMPUTE_STORAGE_WRITE` + `SAMPLER` | `Image_usage_flag_bit_mask::storage \| sampled` on the `Texture_create_info` |
 | compute->compute / compute->fragment image hazard (`SDL` synchronizes between passes) | `Command_buffer::transition_texture_layout(tex, Image_layout::general` then `::shader_read_only_optimal)` around the dispatches, plus `Command_buffer::memory_barrier(Memory_barrier_mask::shader_image_access_barrier_bit)` between two compute passes that share a `GENERAL`-layout image |
 | one-time LUT compute + `SDL_WaitForGPUIdle` before first frame | dispatch into the per-frame command buffer once (guard a `bool ready`), before the render pass begins; erhe's barriers serialize -- no explicit idle wait. Precedent: `editor::Sky_renderer::ensure_luts` |
 
-Storage-image compute is currently implemented only on the Vulkan backend (the
-generated GL wrappers do not expose `glBindImageTexture`; Metal is not wired). Features
-built on it should query a capability and fall back (the procedural-sky atmosphere uses
+Storage-image compute is implemented on Vulkan, OpenGL (GL 4.3+ for compute /
+image load-store; `gl_compute_command_encoder.cpp` uses `gl::bind_image_texture`),
+and Metal (`metal_compute_command_encoder.cpp` uses `setTexture`; assumes Tier-2
+read-write `RGBA16Float`, i.e. Apple Silicon). Features built on it should still
+query a capability and fall back (the procedural-sky atmosphere uses
 `Sky_renderer::is_atmosphere_supported()` and renders the gradient sky otherwise).
 Precedent for the whole compute-LUT pattern: `doc/procedural_sky.md`.
 

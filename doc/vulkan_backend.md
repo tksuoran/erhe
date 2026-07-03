@@ -62,6 +62,7 @@ the `VK_ENABLE_BETA_EXTENSIONS` private compile definition on the
 | `vulkan_sampler.cpp/.hpp` | `VkSampler` |
 | `vulkan_surface.cpp/.hpp` | `VkSurfaceKHR`, surface-format / present-mode scoring, swapchain create-info |
 | `vulkan_swapchain.cpp/.hpp` | `VkSwapchainKHR`, per-frame acquire/present semaphores, app-managed depth image, present history, recreation |
+| `vulkan_emulated_swapchain.cpp/.hpp` | Surfaceless offscreen "swapchain" for the headless configuration (`ERHE_WINDOW_LIBRARY=none`), backs `Device::capture_last_frame()` |
 | `vulkan_vertex_input_state.cpp/.hpp` | Vertex attribute / binding descriptions |
 | `vulkan_gpu_timer.cpp/.hpp` | Timestamp queries against the device query pool |
 | `vulkan_debug.cpp`, `vulkan_scoped_debug_group.cpp/.hpp` | Debug labels and scoped debug groups via `VK_EXT_debug_utils` |
@@ -515,6 +516,33 @@ present modes when available. Swapchain recreation on `VK_SUBOPTIMAL_KHR` /
 C++ `Swapchain` object alive, so cached `Swapchain*` pointers (in
 `Render_pass_impl`, ImGui hosts) stay valid. This is used on Android when a new
 `ANativeWindow` arrives on foreground and the previous surface was lost.
+
+### Headless / surfaceless: the emulated swapchain
+
+The headless Vulkan configuration (`ERHE_WINDOW_LIBRARY=none`, built via
+`scripts\configure_vs2026_vulkan_headless.bat`) has no `VkSurfaceKHR` and no
+presentation engine. `Emulated_swapchain_impl`
+(`vulkan_emulated_swapchain.cpp/.hpp`, owned by `Surface_impl`) stands in for
+the real WSI swapchain: it allocates a small ring of offscreen color images
+(plus optional depth) with `VK_IMAGE_USAGE_TRANSFER_SRC_BIT`, and the swapchain
+render pass leaves them in `TRANSFER_SRC_OPTIMAL`. There is no acquire/present:
+image reuse is made safe by single-queue submission order, the render pass
+EXTERNAL dependency and the CLEAR (discard) load op; frame pacing comes entirely
+from the device timeline semaphore (`Device_impl::wait_frame`), so no
+acquire/present semaphores exist. `Render_pass_impl` and
+`vulkan_command_buffer.cpp` branch to it wherever they would touch the real
+swapchain.
+
+`Emulated_swapchain_impl::read_back_last_frame()` copies the most recently
+composited color image back to host memory as RGBA8 (synchronous, drains the
+GPU) and is the sole implementation behind `Device_impl::capture_last_frame()`
+-- the `capture_screenshot` path used by the in-editor MCP server in the
+headless build. Real WSI-swapchain capture is not implemented; the windowed
+build returns "Frame capture not available".
+
+The class is a deliberately self-contained sibling of `Swapchain_impl` (some
+image-view / framebuffer / depth helper code is duplicated on purpose; the real
+WSI path is left untouched).
 
 ## Deferred resource destruction
 

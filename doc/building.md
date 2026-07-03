@@ -126,24 +126,34 @@ attempt and the launch must be retried.
 
 ## CMake Configuration Options
 
-| Option | Description | Recognized values |
-| :--- | :--- | :--- |
-| `ERHE_GRAPHICS_API` | Graphics backend (default `vulkan`) | `opengl`, `vulkan`, `metal` (macOS only), `none` (headless) |
-| `ERHE_WINDOW_LIBRARY` | Window library | `sdl`, `none` (headless) |
-| `ERHE_PHYSICS_LIBRARY` | Physics library | `jolt`, `none` |
-| `ERHE_RAYTRACE_LIBRARY` | Raytrace library | `bvh`, `tinybvh`, `embree`, `none` |
-| `ERHE_PROFILE_LIBRARY` | Profiler integration | `tracy`, `none` |
-| `ERHE_XR_LIBRARY` | XR library | `openxr`, `none` |
-| `ERHE_AUDIO_LIBRARY` | Audio library | `miniaudio`, `none` |
-| `ERHE_FONT_RASTERIZATION_LIBRARY` | Font rasterization | `freetype`, `none` |
-| `ERHE_GLTF_LIBRARY` | glTF library | `fastgltf`, `none` |
-| `ERHE_GUI_LIBRARY` | GUI library | `imgui`, `none` |
-| `ERHE_SVG_LIBRARY` | SVG loading | `plutosvg`, `none` |
-| `ERHE_TEXT_LAYOUT_LIBRARY` | Text layout | `harfbuzz`, `freetype`, `none` |
-| `ERHE_USE_ASAN` | AddressSanitizer | `ON`, `OFF` |
-| `ERHE_USE_PRECOMPILED_HEADERS` | Precompiled headers (faster builds) | `ON`, `OFF` |
+| Option | Description | Recognized values | Default |
+| :--- | :--- | :--- | :--- |
+| `ERHE_GRAPHICS_API` | Graphics backend | `opengl`, `vulkan`, `metal` (macOS only), `none` (headless) | `vulkan` |
+| `ERHE_WINDOW_LIBRARY` | Window library | `sdl`, `glfw` (deprecated), `none` (headless) | `sdl` |
+| `ERHE_PHYSICS_LIBRARY` | Physics library | `jolt`, `none` | `jolt` |
+| `ERHE_RAYTRACE_LIBRARY` | Raytrace library | `bvh`, `tinybvh`, `embree`, `none` | `bvh` |
+| `ERHE_NAVIGATION_LIBRARY` | Navigation mesh library | `recastnavigation`, `none` | `none` |
+| `ERHE_PROFILE_LIBRARY` | Profiler integration | `nvtx`, `superluminal`, `tracy`, `none` | `none` |
+| `ERHE_XR_LIBRARY` | XR library | `openxr`, `none` | `none` |
+| `ERHE_AUDIO_LIBRARY` | Audio library | `miniaudio`, `none` | `none` |
+| `ERHE_FONT_RASTERIZATION_LIBRARY` | Font rasterization | `freetype`, `none` | `freetype` |
+| `ERHE_GLTF_LIBRARY` | glTF library | `fastgltf`, `none` | `fastgltf` |
+| `ERHE_GUI_LIBRARY` | GUI library | `imgui`, `none` | `imgui` |
+| `ERHE_SVG_LIBRARY` | SVG loading | `plutosvg`, `none` | `plutosvg` |
+| `ERHE_TEXT_LAYOUT_LIBRARY` | Text layout | `harfbuzz`, `freetype`, `none` | `harfbuzz` |
+| `ERHE_TERMINAL_LIBRARY` | Terminal integration | `cpp-terminal`, `none` | `none` |
+| `ERHE_SPIRV` | Enable SPIR-V shader compilation | `ON`, `OFF` | `OFF` |
+| `ERHE_BUILD_TESTS` | Build the `erhe_<name>_tests` gtest targets | `ON`, `OFF` | `OFF` |
+| `ERHE_USE_ASAN` | AddressSanitizer | `ON`, `OFF` | `OFF` |
+| `ERHE_USE_MIMALLOC` | Use mimalloc allocator | `ON`, `OFF` | `OFF` |
+| `ERHE_USE_FPNG` | Build the fpng image writer (fast PNG save) | `ON`, `OFF` | `ON` |
+| `ERHE_USE_PRECOMPILED_HEADERS` | Precompiled headers (faster builds) | `ON`, `OFF` | `OFF` |
 
-These options allow faster build times by disabling unused features and selecting different backends.
+Defaults are the raw CMake cache defaults; the `scripts/` configure wrappers
+override several of them (they pass e.g. `-DERHE_PROFILE_LIBRARY=tracy`,
+`-DERHE_XR_LIBRARY=openxr`, `-DERHE_SPIRV=ON`,
+`-DERHE_USE_PRECOMPILED_HEADERS=ON`). These options allow faster build times by
+disabling unused features and selecting different backends.
 
 ### Notes on Specific Options
 
@@ -151,9 +161,9 @@ These options allow faster build times by disabling unused features and selectin
 
 **ERHE_RAYTRACE_LIBRARY** -- The main backend is `bvh`, used for mouse picking in 3D viewports. When set to `none`, mouse picking uses GPU ID buffer rendering instead.
 
-**ERHE_PROFILE_LIBRARY** -- The main profiler is Tracy. Superluminal support exists but is likely stale.
+**ERHE_PROFILE_LIBRARY** -- The main profiler is Tracy (the configure wrappers enable it). Superluminal and nvtx support exists but is likely stale.
 
-**ERHE_WINDOW_LIBRARY** -- Only `sdl` and `none` are supported.
+**ERHE_WINDOW_LIBRARY** -- Use `sdl` (or `none` for headless). `glfw` is still recognized but deprecated; SDL is the window library going forward.
 
 **ERHE_XR_LIBRARY** -- Disabling removes headset rendering from the editor.
 
@@ -171,6 +181,14 @@ From an x64 Native Tools Command Prompt:
 
 -   `scripts\configure_vs2026_vulkan.bat` -- Standard build on Windows using Visual Studio 2026 (Vulkan, the default backend)
 -   `scripts\configure_vs2026_vulkan_asan.bat` -- Vulkan with AddressSanitizer
+-   `scripts\configure_vs2026_vulkan_headless.bat` -- Headless Vulkan (`ERHE_WINDOW_LIBRARY=none`); runs without a display and supports in-editor MCP screenshots
 -   `scripts\configure_vs2026_opengl.bat` -- OpenGL backend
 -   `scripts\configure_vs2026_opengl_asan.bat` -- OpenGL with AddressSanitizer
 -   `scripts\configure_vs2026_opengl_no_tracy.bat` -- OpenGL without Tracy profiler
+
+For command-line builds without a Visual Studio solution, the Ninja wrappers
+locate VS 2026's bundled cmake/ninja and set up the MSVC environment
+themselves (see CLAUDE.md "Windows CLI builds"):
+
+-   `scripts\configure_ninja_win_vulkan.bat` / `scripts\build_ninja_win_vulkan.bat <target>` -- MSVC `cl`
+-   `scripts\configure_ninja_win_clang.bat` / `scripts\build_ninja_win_clang.bat <target>` -- clang-cl (also regenerates `compile_commands.json` for clangd)

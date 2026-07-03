@@ -26,25 +26,35 @@ All Metal-specific code lives in `src/erhe/graphics/erhe_graphics/metal/`:
 | File | Purpose |
 |------|---------|
 | `metal_device.cpp/hpp` | MTLDevice creation, format properties, device info |
+| `metal_command_buffer.cpp/hpp` | `Command_buffer_impl` owning a real `MTL::CommandBuffer` (begin/commit, completion handlers) |
 | `metal_buffer.cpp/hpp` | MTLBuffer with StorageModeShared (persistent mapping) |
 | `metal_texture.cpp/hpp` | MTLTexture creation, texture views for array slices |
 | `metal_sampler.cpp/hpp` | MTLSamplerState with argument buffer support |
 | `metal_render_pass.cpp/hpp` | MTLRenderPassDescriptor, encoder lifecycle, static binding map |
+| `metal_render_pipeline.cpp/hpp` | Up-front render pipeline objects (mirror of the Vulkan `Render_pipeline`) |
+| `metal_compute_pipeline.cpp/hpp` | Up-front compute pipeline objects (mirror of the Vulkan `Compute_pipeline`) |
 | `metal_render_command_encoder.cpp/hpp` | Pipeline state, depth/stencil, draw calls, multi-draw-indirect |
-| `metal_compute_command_encoder.cpp/hpp` | Compute dispatch for wide line rendering |
+| `metal_compute_command_encoder.cpp/hpp` | Compute dispatch (wide lines, storage-image LUT generation) |
 | `metal_blit_command_encoder.cpp/hpp` | Buffer-to-texture copies |
 | `metal_command_encoder.cpp/hpp` | UBO/SSBO buffer binding with identity index mapping |
-| `metal_shader_stages.hpp` | Binding map types (UBO/SSBO Metal index lookups) |
+| `metal_bind_group_layout.cpp/hpp` | Bind group layout (referenced by the binding-map machinery below) |
+| `metal_shader_stages.cpp/hpp` | Binding map types (UBO/SSBO Metal index lookups) |
 | `metal_shader_stages_prototype.cpp` | GLSL-to-SPIRV-to-MSL compilation, explicit resource bindings |
 | `metal_texture_heap.cpp/hpp` | Argument buffer for texture arrays (sampler heap) |
 | `metal_vertex_input_state.cpp/hpp` | Vertex descriptor setup |
-| `metal_helpers.cpp/hpp` | Pixel format and enum conversion utilities |
-| `metal_debug.cpp` | Scoped debug groups (pushDebugGroup/popDebugGroup) |
+| `metal_pixel_format_table.cpp/hpp` | Pixel format conversion table |
+| `metal_helpers.cpp/hpp` | Enum conversion utilities |
+| `metal_debug.cpp` | Debug labels |
+| `metal_scoped_debug_group.cpp/hpp` | Scoped debug groups (pushDebugGroup/popDebugGroup) |
 | `metal_gpu_timer.cpp/hpp` | GPU timing queries |
 | `metal_surface.hpp/mm` | CAMetalLayer integration with SDL |
 | `metal_swapchain.cpp/hpp` | Swapchain with app-managed depth texture |
 | `metal_implementation.mm` | metal-cpp implementation defines |
 | `metal_error_handler.mm` | Objective-C error handler registration |
+
+Note: the explicit `Command_buffer` API is fully implemented on Metal --
+`Command_buffer_impl` owns a real `MTL::CommandBuffer` (this supersedes the
+earlier migration note that described it as a stub).
 
 ### Shader Compilation Pipeline
 

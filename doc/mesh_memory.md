@@ -21,11 +21,15 @@ allocations come in; nothing is reserved up front.
 `Mesh_memory` implements both `erhe::primitive::Vertex_buffer_sink` and
 `erhe::primitive::Index_buffer_sink` directly. It holds:
 
-- Two public hardcoded vertex formats, `vertex_format_skinned` and
-  `vertex_format_not_skinned`. Both use three streams (binding 0 = position
-  family, binding 1 = normal/tangent/tex_coord/color, binding 2 = wireframe-bias
-  smooth normal plus three custom attributes). Only stream 0 differs: the
-  skinned form adds `joint_indices` and `joint_weights`.
+- Public hardcoded vertex formats. The two primary ones are
+  `vertex_format_skinned` and `vertex_format_not_skinned`; both use three
+  streams (binding 0 = position family, binding 1 =
+  normal/tangent/tex_coord/color, binding 2 = wireframe-bias smooth normal plus
+  three custom attributes), and only stream 0 differs: the skinned form adds
+  `joint_indices` and `joint_weights`. The solid-wireframe and edge-line work
+  added `vertex_format_not_skinned_wireframe` / `vertex_format_skinned_wireframe`
+  (expanded fill geometry) and `vertex_format_edge_line` /
+  `vertex_format_edge_line_joints` (wide-line edges).
 - `std::vector<Vertex_input_entry> m_vertex_input_entries` -- a cache of
   `(key, unique_ptr<Vertex_input_state>, Vertex_format)`. The constructor
   pre-warms it with one entry per built-in format; further entries are added

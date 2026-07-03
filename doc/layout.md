@@ -1,8 +1,10 @@
 # Layout Nodes
 
-Status as of 2026-06-03. Stack, Grid, and Flow are implemented, built, reviewed,
-and committed on `main`. Scene serialization and a few refinements are deferred
-(see "Deferred / TODO"). This document is the handoff for continuing the work.
+Status as of 2026-06-05. Stack, Grid, and Flow are implemented, built, reviewed,
+and committed on `main`. Scene serialization landed as a follow-up (see "Follow-up
+work landed" below); the remaining deferred items are Dock layout, the
+dirty/serial optimization, and type icons. This document is the handoff for
+continuing the work.
 
 ## Goal / task
 

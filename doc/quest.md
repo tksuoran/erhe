@@ -178,7 +178,8 @@ When both a phone and a Quest are attached at the same time, pass
 GPU-side errors on Quest are silent without validation layers loaded,
 so the editor hangs on the first bad command (descriptor mismatch,
 image layout violation, multiview misuse) with no log line and the
-device-error abort hook (`editor.cpp` line ~698) never fires. To make
+device-error abort hook (the `device_message` lambda in `editor.cpp`;
+search for `Message_severity::error`) never fires. To make
 those failures loud:
 
 **Bundling (build-time).** The Khronos `VK_LAYER_KHRONOS_validation`
@@ -215,8 +216,8 @@ the .so is in the APK). When enabled, expect noticeable per-frame
 CPU overhead from the layer.
 
 **Diagnostic flow.** Validation messages route through the existing
-`Device::device_message` callback (registered in
-`editor.cpp:698`), which copies the message to the clipboard and
+`Device::device_message` callback (the lambda registered in
+`editor.cpp`; search for `Message_severity::error`), which copies the message to the clipboard and
 calls `ERHE_FATAL` on `Message_severity::error`. So the first
 invalid Vulkan command becomes a loud abort with the offending
 message in `adb logcat` and on the host clipboard.
@@ -286,9 +287,10 @@ Optional CPM options to keep build size lean:
 
 ### 5.2 CMake flavor gate
 
-`CMakeLists.txt` lines 111-119 currently force `ERHE_XR_LIBRARY=none`
-on Android unconditionally. Phase 5 turns this into a per-flavor
-conditional:
+`CMakeLists.txt` used to force `ERHE_XR_LIBRARY=none` on Android
+unconditionally. Phase 5 turned this into a per-flavor conditional
+(now landed; see the `ERHE_ANDROID_FLAVOR` block in the root
+`CMakeLists.txt`):
 
 ```cmake
 if (ERHE_TARGET_OS_ANDROID)

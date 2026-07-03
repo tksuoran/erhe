@@ -10,6 +10,8 @@ The following issues from the original review have been addressed:
 - **#3 Frame number never incremented** - Fixed: `++m_frame_number;` runs in `Time::prepare_update()` at `src/editor/time.cpp:22`.
 - **#8 Missing EndDragDropTarget** - Fixed: added `EndDragDropTarget()` before early return in `Content_library_node::combo()`
 - **#10 Missing EndDragDropTarget in scene_root** - Fixed: removed unnecessary `DragDropWithinTarget` guard, verified all Begin/End pairs are balanced
+- **#2 Frame duration cap value was too large** - Fixed: `src/editor/time.cpp` now caps at `25'000'000` ns (25 ms).
+- **#11 Typo m_nagivation_gizmo** - Fixed: the member is now `m_navigation_gizmo` (`src/editor/scene/viewport_scene_view.hpp`).
 
 ## Open Findings
 
@@ -19,12 +21,6 @@ The following issues from the original review have been addressed:
 - **Severity**: bug
 - **Description**: When `drag_node_payload` is not null but `drag_item_payload` is null, `drag_node` (result of `dynamic_cast`) could be null. Dereferencing `drag_node->item.get()` would be a null pointer dereference.
 - **Suggested fix**: Add null check for `drag_node` before accessing `drag_node->item`.
-
-### 2. Frame duration cap value is too large
-
-- **File**: `src/editor/time.cpp`, line 41
-- **Severity**: bug
-- **Description**: The frame duration cap is `25'000'000'000` nanoseconds (25 seconds) instead of `25'000'000` (25 milliseconds).
 
 ### 4. Operation_stack::can_undo/can_redo not thread-safe
 
@@ -66,12 +62,6 @@ The following issues from the original review have been addressed:
 
 - **File**: `src/editor/content_library/content_library.hpp`, line 216
 - **Severity**: info
-
-### 11. Typo: m_nagivation_gizmo
-
-- **File**: `src/editor/windows/viewport_window.hpp`, line 79
-- **Severity**: info
-- **Description**: Should be `m_navigation_gizmo`.
 
 ### 12. Tracy observer O(n) zone matching
 

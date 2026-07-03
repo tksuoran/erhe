@@ -120,9 +120,13 @@ RenderDoc worked; it remains a viable headless alternative -- reach the texture
 via `m_context.app_rendering->get_all_shadow_nodes()` + a `get_point_cube_texture()`
 getter, and `Blit_command_encoder::copy_from_texture(tex -> buffer)` for readback.)
 
-The original-design sections below remain accurate except the
-`conventions`/`clip_space_y_flip` framing of the y-flip (the fix lives in the
-caster vertex shader, `gl_Position.y` negate, not in `conventions`).
+The original-design sections below remain accurate, including the
+`conventions`/`clip_space_y_flip` framing of the y-flip: the final fix is
+convention-driven (`cube_conventions.clip_space_y_flip` enabled iff
+`framebuffer_origin == top_left`, set in `shadow_renderer.cpp`; no shader-side
+`gl_Position.y` negate -- `standard.vert` documents this explicitly). An interim
+fix did negate `gl_Position.y` in the caster vertex shader, but it was
+superseded the same day by the convention-driven form.
 
 ## Overview
 

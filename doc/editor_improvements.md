@@ -9,13 +9,13 @@ Prioritized list of improvements identified from a review of `src/editor/` (~311
 Operations are queued without pre-validation. `Compound_operation` has no rollback on partial undo failure. Add validation and transaction semantics.
 ### 2. Split monolithic files (Medium effort, Medium impact)
 
-| File | Lines | Issue |
+| File | Lines (2026-07) | Issue |
 |------|-------|-------|
-| `editor.cpp` | 2,430 | Init + main loop + event handling |
-| `tools/debug_visualizations.cpp` | 1,760 | Handles every visualization type |
-| `windows/item_tree_window.cpp` | 1,419 | Selection state machine + drag-drop + UI |
+| `editor.cpp` | 3,108 | Init + main loop + event handling |
+| `tools/debug_visualizations.cpp` | 2,274 | Handles every visualization type |
+| `windows/item_tree_window.cpp` | 1,711 | Selection state machine + drag-drop + UI |
 | `transform/trs_tool.cpp` | 1,380 | Transform interaction + 3 subtools + UI |
-| `tools/fly_camera_tool.cpp` | 1,371 | Camera control + physics + settings |
+| `tools/fly_camera_tool.cpp` | 1,409 | Camera control + physics + settings |
 
 ### 3. Fix commented-out mutex / thread safety (Small effort, Medium impact)
 
@@ -112,7 +112,7 @@ App_context is centralized way - a directory - for subsystems to access other su
 
 ### Idea from Claude
 
-`editor.cpp` is 1,651 lines with 114 includes. The constructor builds ~30 subsystems and owns 100+ members. Extract subsystem creation into a builder/factory, grouping related subsystems into composite objects.
+`editor.cpp` is ~3,100 lines with 100+ includes. The constructor builds ~30 subsystems and owns 100+ members. Extract subsystem creation into a builder/factory, grouping related subsystems into composite objects.
 
 ### Why this is rejected for now
 

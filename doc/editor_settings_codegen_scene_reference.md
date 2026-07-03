@@ -186,8 +186,9 @@ same build pass. Build twice, or the binary is stale.
 
 ### Save / load
 
-- Schema: `Scene_file` (`src/editor/scene/definitions/scene_file.py`, `version=3`):
-  name, enable_physics, nodes, cameras, lights, mesh_references, node_physics,
+- Schema: `Scene_file` (`src/editor/scene/definitions/scene_file.py`, `version=5`):
+  name, enable_physics, scene_settings (added_in=4), ambient_light (added_in=5),
+  nodes, cameras, lights, mesh_references, node_physics,
   layouts+layout_items, physics_materials/collision_filters/physics_joints/
   node_joints.
 - Code: `src/editor/scene/scene_serialization.cpp` - `save_scene()` and
@@ -195,19 +196,24 @@ same build pass. Build twice, or the binary is stale.
 - On-disk set for one scene: `<name>.json` (this schema), `<name>.glb` (meshes +
   materials via glTF), `<name>_mesh_*.geogram` (geometry-normative meshes),
   `<name>_imgui.ini` (window layout).
-- There is currently NO per-scene settings container and no use of glTF
-  extras/extensions for scene-level metadata - `Scene_file` is the place to add
-  scene-level fields.
+- The per-scene settings container landed with #239: `Scene_settings`
+  (codegen struct, `Optional` per overridable group) is stored on `Scene_root`
+  and serialized as the `scene_settings` field (`Scene_file` v4+). Scene-level
+  metadata stays in `Scene_file` (no glTF extras/extensions are used for it);
+  it remains the place to add scene-level fields (precedent: `ambient_light`
+  in v5, issue #240).
 
 ---
 
-## 4. Issue #239 implementation shape (for continuity)
+## 4. Issue #239 implementation (landed 2026-07)
 
-Per-scene overrides are a new codegen struct `Scene_settings` in the scene unit,
-one `Optional(StructRef(...))` (or `Optional(scalar)`) per overridable setting;
-disengaged = use editor global. Stored on `Scene_root`, serialized as a new
-`scene_settings` field in `Scene_file` (bump to v4). Effective value resolved by
-editor helpers (`scene override if engaged else editor_settings->field`), consumers
-rewired from `editor_settings->field` to the resolver. UI reuses the reflection-
-driven settings editor with an "Override" checkbox per group. See the approved plan
-for the step list.
+Per-scene overrides are implemented as designed: the codegen struct
+`Scene_settings` in the scene unit holds one `Optional(StructRef(...))` (or
+`Optional(scalar)`) per overridable setting; disengaged = use editor global.
+Stored on `Scene_root`, serialized as the `scene_settings` field in `Scene_file`
+(v4). Effective values are resolved by editor helpers (`scene override if
+engaged else editor_settings->field`); the override UI lives in the Properties
+window for the selected Scene (issue #240 made the Scene row selectable and
+moved ambient light there). Still pending: a few consumers read their settings
+only at init time (viewport, post_processing) and need a per-scene refactor
+before their overrides take effect; `clear_color` is not yet wired.

@@ -15,11 +15,34 @@ whose elements are either bare strings (no args) or
 codegen-generated; the polymorphic top-level array is hand-rolled
 because codegen does not express a string-or-object union.
 
+Two command names are handled directly by `run_startup_script()` rather than
+through the command registry, because they are editor-level scene lifecycle
+rather than scene-building steps:
+
+- `scene.create` builds the (previously always-on) default scene: a
+  `Scene_root` with the given `args.name` (default "Default Scene"),
+  registered and given its content-library and browser windows, and handed to
+  `Scene_builder` so the `scene.add_*` commands can populate it. Put it FIRST
+  in `commands.json`, before the `add_*` steps. Omitting it (e.g. a load-only
+  script) leaves no default scene. The `scene.add_*` commands are guarded: if
+  no scene exists yet they are skipped with a warning ("needs a scene; run
+  scene.create first").
+- `scene.load_scene` loads a saved scene file (`args.path`) instead of
+  building one procedurally. It queues the same `Load_scene_file_message`
+  path as File > Open Scene; the message is delivered once the main loop
+  starts pumping the message bus.
+
 Default file:
 
 ```json
 {
     "commands": [
+        {
+            "name": "scene.create",
+            "args": {
+                "name": "Default Scene"
+            }
+        },
         {
             "name": "scene.add_cameras",
             "args": {
@@ -36,8 +59,8 @@ Default file:
                 "directional_light_intensity": 4,
                 "directional_light_radius": 4.5,
                 "directional_light_height": 10,
-                "directional_light_shadow_count": 4,
-                "directional_light_no_shadow_count": 4,
+                "directional_light_shadow_count": 7,
+                "directional_light_no_shadow_count": 0,
                 "spot_light_intensity": 500,
                 "spot_light_radius": 10,
                 "spot_light_height": 5,
@@ -65,7 +88,7 @@ Default file:
                 "instance_gap": 0.5,
                 "object_scale": 0.25,
                 "detail": 4,
-                "mass_scale": 8
+                "mass_scale": 0
             }
         }
     ]
@@ -104,11 +127,14 @@ Notes:
 
 ## Available commands
 
-All names live in the `scene.*` namespace and are zero-argument
-(`Command::try_call()`).
+All names live in the `scene.*` namespace. `Command::try_call()` itself is
+zero-argument; per-invocation args are pushed into the command beforehand via
+`apply_args(...)` (see "Execution model").
 
 | Name                          | Effect                                                                  | Undoable |
 |-------------------------------|-------------------------------------------------------------------------|----------|
+| `scene.create`                | Handled directly by `run_startup_script()` (not a registered command): creates and registers the default scene. Must run before the `scene.add_*` steps. | no       |
+| `scene.load_scene`            | Handled directly by `run_startup_script()`: queues loading the scene file at `args.path` (same path as File > Open Scene). | no       |
 | `scene.add_cameras`           | Builds default camera(s) from its `Add_cameras_args` (camera_distance, camera_elevation, camera_exposure, shadow_range) and -- on desktop builds with `imgui_window_scene_view` enabled -- the default `Viewport_scene_view` + `Viewport_window` bound to "Camera A". | partial (camera node insertion is undoable; the viewport / rendergraph plumbing is not) |
 | `scene.add_room`              | Builds a floor brush from its `Add_room_args` and queues an undoable insert of one floor instance (locked from viewport edit). `args.floor: false` makes it a no-op. | yes      |
 | `scene.add_lights`            | Adds the directional/spot/point lights described by its `Add_lights_args` (each light type split into shadow-casting and non-shadow-casting counts) and sets the light layer's ambient color. | yes (single undo restores ambient + removes all lights) |
@@ -130,12 +156,11 @@ before calling `try_call()`. Both code paths produce the same undoable
 
 ## Execution model
 
-1. `Editor()` constructor loads `Commands_config` alongside the other
-   per-editor configs in its member-init list.
-2. The constructor builds all subsystems (including `Scene_builder`,
-   `Scene_commands`, `Operation_stack`) via the parallel taskflow, then
-   `fill_app_context()` wires the raw pointers into `App_context`.
-3. The constructor body calls `run_startup_script()` near the end --
+1. The `Editor` constructor builds all subsystems (including
+   `Scene_builder`, `Scene_commands`, `Operation_stack`) via the parallel
+   taskflow, then `fill_app_context()` wires the raw pointers into
+   `App_context`.
+2. The constructor body calls `run_startup_script()` near the end --
    after every subsystem is wired into `App_context`, but BEFORE the
    init-time command buffer is closed (`m_app_context.current_command_buffer->end()`).
    This ordering matters: several scripted commands record GPU work
@@ -143,11 +168,20 @@ before calling `try_call()`. Both code paths produce the same undoable
    `Viewport_scene_view` and its `Shadow_render_node`; `scene.add_*`
    meshes invoke `Brush::make_instance`), and they need a valid
    `current_command_buffer` to do so.
-4. `run_startup_script()` builds a `Make_mesh_config` from the loaded
-   scalar fields, pushes it into all five `scene.add_*` mesh commands,
-   then iterates `m_commands_config.commands`, calling
-   `Commands::find_command(name)->try_call()` on each. Unknown names
-   produce a `log_startup` warning and are skipped.
+3. `run_startup_script()` reads `config/editor/commands.json` and parses
+   it directly with simdjson ondemand (there is no codegen config struct
+   for the polymorphic string-or-object array). For each entry it
+   resolves the name and optional `args` object, special-cases
+   `scene.create` / `scene.load_scene` (see "Config file"), skips
+   scene-requiring commands when no scene exists, and otherwise looks up
+   `Commands::find_command(name)`. Unknown names produce a `log_startup`
+   warning and are skipped.
+4. For commands that take args, the `args` sub-object is deserialized
+   into the codegen args struct (`Make_mesh_args` for the five mesh
+   commands, `Add_cameras_args`, `Add_lights_args`, `Add_room_args`) and
+   pushed into the command via `apply_args(...)` -- per invocation, not
+   globally -- before `try_call()`. An `args` block on a command that
+   takes none logs a warning and is ignored.
 5. Each `try_call()` queues a `Compound_operation` on
    `m_app_context.operation_stack`. The actual scene-graph mutations
    (`Item_insert_remove_operation::execute` and
@@ -240,12 +274,6 @@ If the new command takes per-invocation args:
 - **`Scene_builder::animate_lights` mutates transforms every frame** and
   is intentionally not undoable -- per-frame transform animation does
   not belong on the undo stack.
-- **No script arguments.** Each command is zero-arg; `add_torus_chain`'s
-  bool is exposed as the two distinct names `scene.add_chain` /
-  `scene.add_toruses`. If a future command genuinely needs arguments,
-  the script format would have to grow beyond a flat list of strings
-  (e.g. objects with `name` + `args`) and a small dispatch layer above
-  `Command::try_call()`.
 - **No manual re-run trigger.** The script fires exactly once at
   startup. If iterating on a script becomes a workflow, a Developer-menu
   "Run startup script" button on `Commands_window` would let users
@@ -254,10 +282,6 @@ If the new command takes per-invocation args:
   (e.g. one per saved scene preset) would require either multiple
   `commands_*.json` files chosen at runtime or a top-level map of named
   command lists in a single JSON. Not implemented.
-- **Scalar fields apply globally to mesh commands.** A future need for
-  per-command `Make_mesh_config` (e.g. small Platonic solids next to a
-  large torus) would require either pre-set commands with their own
-  config or args on the script lines (see "No script arguments" above).
 - **`commands.json` defaults are global, not per-scene.** Loading a
   saved scene does not re-run the script; the script is purely an
   initial-scene authoring tool.

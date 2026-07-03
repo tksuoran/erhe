@@ -209,6 +209,9 @@ The legacy stand-alone shaders are folded in as variant axes:
 - ID rendering, brush preview, and rendertarget paths are
   `VARIANT_ID_RENDER`, `VARIANT_BRUSH_PREVIEW`, and
   `VARIANT_RENDERTARGET` boolean axes.
+- Solid wireframe (real polygon edges blended over the lit fill,
+  see `doc/editor_rendering.md`) is the `SOLID_WIREFRAME` boolean
+  axis, gated on `Device_info::use_solid_wireframe`.
 
 ## Hot reload + invalidation
 

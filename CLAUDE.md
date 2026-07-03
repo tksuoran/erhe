@@ -112,14 +112,14 @@ Required packages: `libwayland-dev libxkbcommon-dev xorg-dev` (Ubuntu) or equiva
 | Option | Default | Notes |
 |--------|---------|-------|
 | `ERHE_GRAPHICS_API` | `vulkan` | `vulkan`, `opengl`, `metal` (macOS), or `none` (headless) |
-| `ERHE_NAVIGATION_LIBRARY` | `recastnavigation` | `recastnavigation` or `none` |
+| `ERHE_NAVIGATION_LIBRARY` | `none` | `recastnavigation` or `none` |
 | `ERHE_PHYSICS_LIBRARY` | `jolt` | `jolt` or `none` |
 | `ERHE_RAYTRACE_LIBRARY` | `bvh` | `bvh`, `tinybvh`, `embree`, or `none` (none uses GPU ID-buffer picking) |
-| `ERHE_PROFILE_LIBRARY` | `tracy` | `tracy`, `nvtx`, `superluminal`, or `none` |
-| `ERHE_WINDOW_LIBRARY` | `sdl` | `sdl`, `glfw`, or `none` (headless) |
-| `ERHE_XR_LIBRARY` | `openxr` | `openxr` or `none` |
+| `ERHE_PROFILE_LIBRARY` | `none` | `tracy`, `nvtx`, `superluminal`, or `none`; the configure wrappers pass `tracy` |
+| `ERHE_WINDOW_LIBRARY` | `sdl` | `sdl`, `glfw` (deprecated), or `none` (headless) |
+| `ERHE_XR_LIBRARY` | `none` | `openxr` or `none`; the configure wrappers pass `openxr` |
 | `ERHE_USE_ASAN` | `OFF` | AddressSanitizer |
-| `ERHE_USE_PRECOMPILED_HEADERS` | `OFF` | Speeds up builds |
+| `ERHE_USE_PRECOMPILED_HEADERS` | `OFF` | Speeds up builds; the configure wrappers pass `ON` |
 | `ERHE_BUILD_TESTS` | `OFF` | gtest unit test targets (see Testing below) |
 
 ## Testing

@@ -18,7 +18,7 @@ content-library assets; triangle-mesh colliders via Jolt MeshShape (static/kinem
 | 3 | `45e406d2` | Generic six-DOF constraint: `Six_dof_constraint_settings` (frames in body node space; axes 0..2 translation, 3..5 rotation) -> JPH::SixDOFConstraint with limits, translation soft limits, position/velocity motors | done |
 | 4 | `cd5bc619`, `13a1fdcb` | Editor: content-library folders (physics_materials, collision_filters, physics_joints); Node_physics accessors (material, filter, trigger, gravity factor, initial velocities, COM offset); new `Node_joint` attachment with Scene_root constraint retry; scene JSON serialization (Scene_file v3, Node_physics_data v2, Collision_shape_data v3 + new defs); properties UI for all of it | done |
 | 5 | `6fa07a4a` | glTF import: extension bits enabled, `erhe_gltf/gltf_physics.hpp` plain-data carrier, `parse_physics()`, editor mapping `parsers/gltf_physics_import.*` (body roots, compound folding, implicit-shape table, hull/mesh colliders, triggers, joints) | done |
-| 5.5 | - | fastgltf spec-compliance patch (`cmake/patches/fastgltf_khr_physics.patch` via CPM `PATCHES`): mesh-keyed collider geometry (current spec) for parse + write, spec inertia key names, missing member initializers (convexHull, combine modes, drive maxForce/targets), exporter JSON fixes (extension name, booleans, malformed motion arrays, missing rigid-body close brace, collisionFilters trailing commas, omit infinite maxForce). Editor side: mesh-keyed import via `build_shape_from_mesh()` (builds Geometry from Triangle_soup on demand) | done |
+| 5.5 | - | fastgltf spec-compliance fixes, carried in the fork `tksuoran/fastgltf` branch `khr_physics_rigid_bodies` (pinned by commit in the root `CMakeLists.txt` `CPMAddPackage`; CPM `PATCHES` is banned repo-wide, see CLAUDE.md): mesh-keyed collider geometry (current spec) for parse + write, spec inertia key names, missing member initializers (convexHull, combine modes, drive maxForce/targets), exporter JSON fixes (extension name, booleans, malformed motion arrays, missing rigid-body close brace, collisionFilters trailing commas, omit infinite maxForce). Editor side: mesh-keyed import via `build_shape_from_mesh()` (builds Geometry from Triangle_soup on demand) | done |
 | 6 | - | glTF export: `parsers/gltf_physics_export.*` `build_gltf_physics_data()` (shape introspection, wrapper unwrap, shared item dedup, synthesized child colliders) + `Gltf_exporter` physics pass + extensionsUsed | done |
 | 7 | - | Polish: trigger events surfaced in the Physics window (bounded per-scene log on Scene_root fed by the IWorld trigger callbacks; count also in MCP list_scenes), joint warnings identify settings + node (were empty Node_joint names), notes.md updates. Cone creation tool parity remains optional/not done | done |
 | 8 | - | In-editor creation (no import needed): Scene_commands::create_new_rigid_body / create_new_joint (undoable Node_attach_operation; commands scene.create_new_rigid_body / scene.create_new_joint, Create menu); item-tree context menu "Attach > Rigid Body / Joint" (joint auto-connects to another selected node); Create menu entries for Physics Material / Collision Filter / Joint Settings content-library items (operations_window); Node_physics::set_collision_shape; shared reapply/rebuild helpers in scene/physics_edits.{hpp,cpp}; MCP tools: get_physics_items, create/edit_physics_body, create/edit_physics_joint, create/edit_physics_material, create/edit_collision_filter, create/edit_physics_joint_settings, plus physics details in get_node_details | done |
@@ -71,15 +71,15 @@ available for Phase 6 round-trip verification.
 
 ## Known limitations (documented behavior)
 
-- The fastgltf pin (a31be255, the latest upstream commit) needs
-  `cmake/patches/fastgltf_khr_physics.patch` (applied by CPM at configure time) for current
-  spec compliance; see the Phase 5.5 table row. Drop the patch when upstream catches up.
-  When iterating on the patch note that the CPM cache key hashes the patch path, not its
-  content: delete `.cpm_cache/fastgltf/<new-hash>` after editing the patch file.
+- fastgltf is pinned to the fork `tksuoran/fastgltf` (branch
+  `khr_physics_rigid_bodies`, on top of upstream a31be25) which carries the
+  spec-compliance fixes; see the Phase 5.5 table row and the `CPMAddPackage`
+  comment in the root `CMakeLists.txt`. Drop the fork and move back to
+  spnda/fastgltf when upstream catches up with the spec.
 - glTF physics material / filter / joint names do not round-trip (the fastgltf types carry no
   name fields); the importer synthesizes "Physics material N" style names.
 - Plane shapes: not representable in fastgltf (Shape variant lacks plane; not added by the
-  patch).
+  fork either).
 - Export: compound children with convex hull / mesh shapes are skipped with a warning (the
   baked compound carries no source mesh reference); direct hull / mesh shapes reference the
   owning node's mesh.
