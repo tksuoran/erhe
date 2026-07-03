@@ -11,9 +11,9 @@ limitation, not a coverage gap to fill).
 
 ## Device / infrastructure
 
-- [x] Device creation and info query (`test_device.cpp`)
+- [x] Device creation and info query (`test_m1_device_up.cpp`)
 - [x] Device capability audit: depth/stencil format selection, format-properties vs probe agreement, Device_info self-consistency (`test_device_caps.cpp`)
-- [x] Color attachment clear (`test_clear.cpp`)
+- [x] Color attachment clear (`test_m2_clear_color.cpp`)
 
 ## Rasterization / draw
 
@@ -37,7 +37,7 @@ limitation, not a coverage gap to fill).
 ## Compute
 
 - [x] Compute writing an SSBO, 1D dispatch (`test_m4_compute_ssbo.cpp`)
-- [x] Compute reading a uniform buffer (`test_m4_compute_ubo.cpp`)
+- [x] Compute reading a uniform buffer (`test_compute_ubo.cpp`)
 - [x] Compute 2D dispatch, group counts > 1 per dim over non-multiple extents (`test_compute_2d.cpp`)
 - [x] User struct (`add_struct`) in a UBO interface block, `struct_types` wiring + std140 member offsets (`test_struct_types.cpp`)
 
@@ -64,3 +64,26 @@ limitation, not a coverage gap to fill).
 ## Known gaps (not yet covered)
 
 None remaining.
+
+## Future work: CI ctest job (deferred)
+
+The one unlanded piece of the original testing plan (the plan doc itself is
+retired; this sketch is its surviving implementation guide). Deferred by
+decision: it cannot be developed/verified from the (Windows) dev machine and
+needs new infrastructure.
+
+`.github/workflows/build.yml` currently only builds the editor and runs no
+ctest. Add a job that configures `-DERHE_BUILD_TESTS=ON
+-DERHE_GRAPHICS_API=vulkan -DERHE_WINDOW_LIBRARY=none`, installs a software
+Vulkan (Mesa lavapipe on Ubuntu runners; SwiftShader as alternative), points
+the loader at its ICD, verifies with `vulkaninfo`, then runs
+`ctest -R erhe_graphics_gpu_tests`. Keep a separate
+`ctest -R erhe_graphics_tests` (deviceless) job that needs no Vulkan.
+
+Software Vulkan does not support every format/feature; tests must probe and
+skip: `probe_image_format_support`, `get_format_properties`,
+`get_supported_depth_stencil_formats` / `choose_depth_stencil_format`, and
+`Device_info` flags. The Environment `SetUp` should `GTEST_SKIP()` (not fail)
+if no Vulkan device can be created. Keep targets tiny (16x16, N~1000).
+Optionally enable `VK_LAYER_KHRONOS_validation` in CI to keep the 0-VUID
+guarantee under software.

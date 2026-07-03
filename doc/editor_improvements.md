@@ -32,6 +32,37 @@ Operations are queued without pre-validation. `Compound_operation` has no rollba
 
 `Post_processing_node` maintains 9+ parallel vectors that must stay synchronized. Replace with a single `struct Level { width, height, downsample, upsample, ... }` vector.
 
+### 6. Priority system: stale sorting and update-binding order (Small effort, Low-Medium impact)
+
+Migrated from the retired tool-improvements plan (items 5c/5d, deferred because they
+require behavioral testing):
+
+- When a tool becomes the priority tool, `Tools::set_priority_tool()` calls
+  `set_priority_boost(100)` on the tool, then `commands->sort_bindings()`. But
+  `set_priority_boost()` also calls `handle_priority_update()` on the tool *before*
+  the sort happens; if `handle_priority_update()` interacts with commands that
+  depend on correct ordering, it sees stale state.
+- Update bindings (per-frame tick commands) are processed in registration order,
+  not priority order. If two tools both register update commands and one should
+  take precedence, there is no mechanism for that.
+
+### 7. Extract `Physics_selection_freezer` from `Scene_root` (Small effort, Low impact)
+
+Migrated from the retired Scene_root cleanup plan (deferred step 4): move
+`m_selection_subscription`, `m_physics_disabled_nodes`, the constructor closure that
+disables physics on selected nodes, and `Scene_root::imgui()`'s body into a new
+`src/editor/scene/physics_selection_freezer.{hpp,cpp}`. The closure uses
+`item->get_item_host() != this` to scope itself to one scene root, so the helper
+needs a `Scene_host*` filter parameter.
+
+### 8. Extract `Rendertarget_mesh_registry` from `Scene_root` (Small effort, Low impact)
+
+Migrated from the retired Scene_root cleanup plan (deferred step 5): move
+`m_rendertarget_meshes`, `m_rendertarget_meshes_mutex`, the `is<Rendertarget_mesh>`
+branches in `register_mesh` / `unregister_mesh`, and
+`update_pointer_for_rendertarget_meshes` to a new helper class. Kills one of
+Scene_root's two mutexes.
+
 ## Past work
 
 ## Async geometry graph evaluation (Medium-Large effort, Medium impact)
@@ -55,6 +86,17 @@ Operations are queued without pre-validation. `Compound_operation` has no rollba
 **DONE.** `Fly_camera_tool`, `Paint_tool`, `Hotbar`, `Hover_tool`, `Transform_tool`, `Grid_tool`, and `Create` inherited from both `Imgui_window` and `Tool`. Refactored to composition: each tool owns a `Tool_window` member that delegates `imgui()` (and optionally `flags()`/`on_begin()`/`on_end()`) back to the tool via callbacks. See `src/editor/tools/tool_window.hpp`.
 
 ## Future work to consider
+
+## Narrow Command dependencies away from App_context (Medium effort, Medium impact)
+
+Migrated from the retired tool-improvements plan: every Command subclass
+(`Transform_tool_drag_command`, `Toggle_menu_visibility_command`,
+`Hotbar_trackpad_command`, ...) stores `App_context& m_context` and reaches through
+it even when it only needs one subsystem (`Transform_tool`, `Clipboard`, ...), making
+every command implicitly dependent on all of `App_context` and inflating include
+fan-out. If the broader App_context split below is ever undertaken, commands should
+receive only the specific subsystem they operate on. Parked for the same reason that
+split is parked.
 
 ## Narrow `App_context` into focused interfaces (Large effort, High impact)
 

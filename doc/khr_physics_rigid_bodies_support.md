@@ -1,7 +1,7 @@
 # KHR_physics_rigid_bodies support - status and continuation notes
 
 Goal: full support for the glTF extensions KHR_physics_rigid_bodies and KHR_implicit_shapes
-(spec copy: [`doc/KHR_physics_regid_bodies.md`](KHR_physics_regid_bodies.md)): simulate via the
+(spec: https://github.com/eoineoineoin/glTF_Physics/tree/master/extensions/2.0/Khronos/KHR_physics_rigid_bodies): simulate via the
 Jolt wrapper, expose and edit in the editor UI, persist in editor scene serialization, and
 round-trip through glTF import/export.
 

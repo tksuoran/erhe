@@ -27,8 +27,7 @@ unscoped search or a macro lookup.
   starts, which reach `Ready` in seconds. During indexing, file-scoped ops
   (`outline` / `info` / `diagnostics` on an already-parsed file) answer immediately;
   project-wide `search` / `usages` / `hierarchy` need `Ready`. Watch progress with
-  `lsai_workspace_list` (`Indexing(n/total)` -> `Ready`). See `doc/hands-on.md` for
-  the full note.
+  `lsai_workspace_list` (`Indexing(n/total)` -> `Ready`).
 - `mjsf.json` contains **287 projects** built from the clangd compile-commands
   database. That index covers **everything in compile_commands.json**:
   - erhe's own code -- projects with ids like `c++:src/erhe/log/erhe_log`,

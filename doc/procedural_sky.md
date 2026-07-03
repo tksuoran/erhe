@@ -151,15 +151,40 @@ compute). That is the foundational, reusable part of this change.
   the atmosphere fragment compiles; the vertex uses `gl_VertexID` exactly like the
   existing `sky.vert`, which erhe's pipeline accepts).
 
-## Runtime status (IMPORTANT -- not yet verified)
+## Runtime status: verified on Vulkan and OpenGL; Metal pending
 
-The implementing session could not run the editor (launched from a detached shell it
-aborts before any sky code, in `choose_physical_device` -- no GPU session in that
-context; this reproduces independently of these changes). So the build + shader syntax
-are proven; visual behavior is not. `vulkan_validation_layers` must stay `false` on this
-machine (it breaks `vkCreateInstance` on the crowded layer stack).
+Atmosphere mode (`Sky_config::mode == 1`) renders a bright blue daytime sky,
+verified on Vulkan (2026-06-21) and wired + verified on OpenGL; Metal runtime /
+visual verification is still pending a build+run on an M-series Mac.
 
-## How to finish verifying
+### Resolution of the original "renders nothing visible" bug
+
+**Root cause (fixed):** `Sky_renderer::render_atmosphere` took the sun direction
+from the scene's directional light and **negated** it:
+
+```cpp
+const glm::vec3 light_direction = world_from_node * vec4(0,0,1,0);
+toward_sun = -glm::normalize(light_direction);   // BUG
+```
+
+erhe stores a directional light's direction as `world_from_node * +Z` and uses it
+**directly** as the toward-the-light vector when shading (`standard.frag`:
+`L = normalize(light.direction_and_outer_spot_cos.xyz); dot(N, L)`). So
+`light_direction` was already "toward the sun"; negating it pushed the sun ~66
+degrees below the horizon, and the physically-based atmosphere correctly
+integrated a near-black night sky. The fix was to drop the negation:
+`toward_sun = glm::normalize(light_direction)`.
+
+**How it was found + verified:** the RenderDoc fork MCP workflow in
+[`doc/renderdoc_fork.md`](renderdoc_fork.md) -- connect to the running editor,
+`trigger_capture`, and read the numbers back. That ruled out the leading
+hypothesis (LUTs all zero -- they were fine: transmittance mean 0.73) and showed
+the sky fragment ran, passed depth/stencil, and output `[0,0,0,1]` because
+`sun_direction.y == -0.91`. After the fix, the same captured pixel outputs
+`[2.20, 3.34, 4.22, 1]` (Rayleigh blue) and the viewport's exactly-zero pixel
+count dropped from 88,424 to 872.
+
+## How to verify (remaining: Metal, and after sky changes)
 
 1. Run `build_vs2026_vulkan/src/editor/Debug/editor.exe` interactively (real desktop GPU).
 2. In Settings -> Sky, set **Sky Mode = 1** (atmosphere). The first atmosphere frame

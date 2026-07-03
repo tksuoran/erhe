@@ -253,7 +253,8 @@ ran-but-wrote-black.
 ## Worked example: the black atmosphere sky
 
 The procedural-sky atmosphere mode (`Sky_config::mode == 1`, see
-[`doc/sky.md`](sky.md)) rendered only the clear colour. The handoff's leading
+[`doc/procedural_sky.md`](procedural_sky.md)) rendered only the clear colour. The
+then-current handoff's leading
 hypothesis was "the storage-image compute LUT writes aren't landing (LUTs are all
 zero)". This loop **disproved** that and found the real cause in minutes.
 
