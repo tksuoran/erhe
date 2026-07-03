@@ -105,6 +105,12 @@ auto Geometry_graph_window::get_current_graph_mesh() -> const std::shared_ptr<Gr
     return m_graph_mesh;
 }
 
+auto Geometry_graph_window::is_editing_scratch() -> bool
+{
+    refresh_current_graph_mesh();
+    return m_graph_mesh == m_scratch_graph_mesh;
+}
+
 auto Geometry_graph_window::graph() -> Geometry_graph&
 {
     return m_graph_mesh->graph();

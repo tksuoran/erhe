@@ -12,8 +12,10 @@
 #include "create/create_torus.hpp"
 #include "create/create_uv_sphere.hpp"
 #include "geometry_graph/geometry_graph.hpp"
+#include "geometry_graph/geometry_graph_mesh.hpp"
 #include "geometry_graph/geometry_graph_node.hpp"
 #include "geometry_graph/geometry_graph_window.hpp"
+#include "geometry_graph/graph_mesh.hpp"
 #include "texture_graph/graph_texture.hpp"
 #include "texture_graph/texture_graph.hpp"
 #include "texture_graph/texture_graph_compose.hpp"
@@ -1167,6 +1169,9 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "create_graph_texture")         result = action_create_graph_texture        (req->arguments);
         else if (req->tool_name == "set_material_texture_source")  result = action_set_material_texture_source (req->arguments);
         else if (req->tool_name == "get_graph_textures")           result = query_graph_textures               (req->arguments);
+        else if (req->tool_name == "create_graph_mesh")            result = action_create_graph_mesh           (req->arguments);
+        else if (req->tool_name == "set_node_graph_mesh")          result = action_set_node_graph_mesh         (req->arguments);
+        else if (req->tool_name == "get_graph_meshes")             result = query_graph_meshes                 (req->arguments);
         else if (req->tool_name == "get_texture_graph")            result = query_texture_graph                (req->arguments);
         else if (req->tool_name == "texture_graph_add_node")       result = action_texture_graph_add_node      (req->arguments);
         else if (req->tool_name == "texture_graph_remove_node")    result = action_texture_graph_remove_node   (req->arguments);
@@ -1874,6 +1879,29 @@ void Mcp_server::refresh_tool_list()
             {"scene_name", {{"type", "string"}, {"description", "Scene to list (default: all scenes)"}}}
         }}
     }});
+    m_tool_infos.push_back({"create_graph_mesh", "Create a Graph Mesh asset (a procedural mesh backed by a geometry node graph) in a scene's content library and select it. The selected Graph Mesh is what the Geometry Graph window edits and what the geometry_graph_* tools operate on. A scene Node can then source its mesh from it (set_node_graph_mesh). Returns the new asset's id and name.", {
+        {"type", "object"},
+        {"properties", {
+            {"name",       {{"type", "string"}, {"description", "Name of the new Graph Mesh asset (must be unique in the scene)"}}},
+            {"scene_name", {{"type", "string"}, {"description", "Target scene (default: the single/first scene)"}}}
+        }},
+        {"required", json::array({"name"})}
+    }});
+    m_tool_infos.push_back({"set_node_graph_mesh", "Bind a scene Node to a Graph Mesh asset via a Geometry Graph Mesh attachment: the node's renderable mesh (and optional physics) is sourced from the graph's baked output, and the attachment points back at the asset (the node->graph back-reference; editing the graph updates the node's mesh live). Creates the attachment when missing; omit or empty 'graph_mesh' to remove the attachment and its controlled mesh. Scene state reflects the bake after the next evaluation completes (get_geometry_graph is the barrier).", {
+        {"type", "object"},
+        {"properties", {
+            {"node_name",  {{"type", "string"}, {"description", "Name of the scene node to bind"}}},
+            {"graph_mesh", {{"type", "string"}, {"description", "Name of the Graph Mesh asset to source from; empty to remove the binding"}}},
+            {"scene_name", {{"type", "string"}, {"description", "Target scene (default: the single/first scene)"}}}
+        }},
+        {"required", json::array({"node_name"})}
+    }});
+    m_tool_infos.push_back({"get_graph_meshes", "List the Graph Mesh assets in a scene's content library (or all scenes when scene_name is omitted): name, id, scene, node_count, baked_revision and has_bake (whether the graph has published baked products).", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name", {{"type", "string"}, {"description", "Scene to list (default: all scenes)"}}}
+        }}
+    }});
     m_tool_infos.push_back({"get_texture_graph", "List the procedural texture node graph of the currently selected Graph Texture asset (or the window default when none is selected): the target asset name/id, nodes with ids, type labels, canvas positions, parameters, input pins (slot, value type, whether connected, source node id/slot) and output pins (slot, value type), plus a 'composable' flag per node, and all links. Texture graph evaluation is synchronous, so no wait is needed.", schema_no_args()});
     // Build the node-type enum from the descriptor registry (plus the bespoke
     // "output" sink) so it never drifts as node types are added.
@@ -2153,6 +2181,13 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
             att_json["materials"]     = mat_names;
             att_json["vertex_count"]  = total_vertices;
             att_json["facet_count"]   = total_facets;
+        }
+
+        auto geometry_graph_mesh = std::dynamic_pointer_cast<Geometry_graph_mesh>(att);
+        if (geometry_graph_mesh) {
+            const std::shared_ptr<Graph_mesh>& graph_mesh = geometry_graph_mesh->get_graph_mesh();
+            att_json["graph_mesh"]    = graph_mesh ? graph_mesh->get_name() : "";
+            att_json["graph_mesh_id"] = graph_mesh ? json(graph_mesh->get_id()) : json(nullptr);
         }
 
         auto camera = std::dynamic_pointer_cast<erhe::scene::Camera>(att);
@@ -2639,6 +2674,13 @@ auto Mcp_server::find_items_by_ids(Scene_root& sr, const std::set<std::size_t>& 
             for (const auto& graph_texture : library->graph_textures->get_all<Graph_texture>()) {
                 if (target_ids.contains(graph_texture->get_id())) {
                     result.push_back(graph_texture);
+                }
+            }
+        }
+        if (library->graph_meshes) {
+            for (const auto& graph_mesh : library->graph_meshes->get_all<Graph_mesh>()) {
+                if (target_ids.contains(graph_mesh->get_id())) {
+                    result.push_back(graph_mesh);
                 }
             }
         }
@@ -5816,6 +5858,12 @@ auto Mcp_server::query_geometry_graph(const json& args) -> std::string
     json result;
     result["nodes"] = nodes;
     result["links"] = links;
+    // Which graph the geometry_graph_* tools currently target (the
+    // selected Graph_mesh asset, or the window scratch).
+    const std::shared_ptr<Graph_mesh>& graph_mesh = window->get_current_graph_mesh();
+    result["graph_mesh_name"] = graph_mesh->get_name();
+    result["graph_mesh_id"]   = graph_mesh->get_id();
+    result["is_scratch"]      = window->is_editing_scratch();
     return make_json_content(result).dump();
 }
 
@@ -6255,6 +6303,147 @@ auto Mcp_server::query_graph_textures(const json& args) -> std::string
     }
     json result;
     result["graph_textures"] = graph_textures;
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_create_graph_mesh(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::shared_ptr<Content_library> library = sr->get_content_library();
+    if (!library) {
+        return make_error_content("Scene has no content library: " + scene_name);
+    }
+    const std::string name = args.value("name", "");
+    if (name.empty()) {
+        return make_error_content("name is required");
+    }
+    if (find_library_item<Graph_mesh>(library->graph_meshes, name)) {
+        return make_error_content("Graph mesh already exists: " + name);
+    }
+
+    const std::shared_ptr<Graph_mesh> item = std::make_shared<Graph_mesh>(name);
+    // execute_now so the asset is live this frame and selectable immediately.
+    m_context.operation_stack->execute_now(
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context = m_context,
+                .item    = std::make_shared<Content_library_node>(item),
+                .parent  = library->graph_meshes,
+                .mode    = Item_insert_remove_operation::Mode::insert
+            }
+        )
+    );
+    // Select it so the Geometry Graph window and the geometry_graph_* tools
+    // (which operate on the current selection) target this asset.
+    if (m_context.selection != nullptr) {
+        m_context.selection->set_selection({item});
+    }
+    return make_json_content({
+        {"created", true},
+        {"name",    name},
+        {"id",      item->get_id()}
+    }).dump();
+}
+
+auto Mcp_server::action_set_node_graph_mesh(const json& args) -> std::string
+{
+    const std::string scene_name      = args.value("scene_name", "");
+    const std::string node_name       = args.value("node_name", "");
+    const std::string graph_mesh_name = args.value("graph_mesh", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    std::shared_ptr<erhe::scene::Node> node;
+    for (const std::shared_ptr<erhe::scene::Node>& entry : sr->get_scene().get_flat_nodes()) {
+        if (entry->get_name() == node_name) {
+            node = entry;
+            break;
+        }
+    }
+    if (!node) {
+        return make_error_content("Node not found: " + node_name);
+    }
+
+    const std::shared_ptr<Geometry_graph_mesh> existing = erhe::scene::get_attachment<Geometry_graph_mesh>(node.get());
+
+    if (graph_mesh_name.empty()) {
+        if (existing) {
+            // set_graph_mesh(nullptr) releases the controlled mesh/physics;
+            // the shared_ptr keeps the attachment alive across detach.
+            existing->set_graph_mesh({});
+            node->detach(existing.get());
+        }
+        return make_json_content({
+            {"cleared", true},
+            {"node",    node_name}
+        }).dump();
+    }
+
+    const std::shared_ptr<Content_library> library = sr->get_content_library();
+    if (!library) {
+        return make_error_content("Scene has no content library: " + scene_name);
+    }
+    const std::shared_ptr<Graph_mesh> graph_mesh = find_library_item<Graph_mesh>(library->graph_meshes, graph_mesh_name);
+    if (!graph_mesh) {
+        return make_error_content("Graph mesh not found: " + graph_mesh_name);
+    }
+
+    std::shared_ptr<Geometry_graph_mesh> attachment = existing;
+    if (!attachment) {
+        attachment = std::make_shared<Geometry_graph_mesh>(graph_mesh);
+        node->attach(attachment);
+    } else {
+        attachment->set_graph_mesh(graph_mesh);
+    }
+    // Materialize the asset's latest bake immediately; a never-baked asset
+    // applies on its first evaluation push (get_geometry_graph barrier).
+    attachment->apply_baked_products();
+    return make_json_content({
+        {"bound",         true},
+        {"node",          node_name},
+        {"graph_mesh",    graph_mesh_name},
+        {"graph_mesh_id", graph_mesh->get_id()}
+    }).dump();
+}
+
+auto Mcp_server::query_graph_meshes(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    json graph_meshes = json::array();
+    const auto append_from = [&graph_meshes](Scene_root& scene_root) {
+        const std::shared_ptr<Content_library> library = scene_root.get_content_library();
+        if (!library || !library->graph_meshes) {
+            return;
+        }
+        for (const std::shared_ptr<Graph_mesh>& graph_mesh : library->graph_meshes->get_all<Graph_mesh>()) {
+            graph_meshes.push_back({
+                {"name",           graph_mesh->get_name()},
+                {"id",             graph_mesh->get_id()},
+                {"scene",          scene_root.get_name()},
+                {"node_count",     graph_mesh->nodes().size()},
+                {"baked_revision", graph_mesh->get_baked_revision()},
+                {"has_bake",       static_cast<bool>(graph_mesh->get_baked_products().primitive)}
+            });
+        }
+    };
+    if (!scene_name.empty()) {
+        Scene_root* sr = find_scene(scene_name);
+        if (sr == nullptr) {
+            return make_error_content("Scene not found: " + scene_name);
+        }
+        append_from(*sr);
+    } else if (m_context.app_scenes != nullptr) {
+        for (const std::shared_ptr<Scene_root>& sr : m_context.app_scenes->get_scene_roots()) {
+            append_from(*sr);
+        }
+    }
+    json result;
+    result["graph_meshes"] = graph_meshes;
     return make_json_content(result).dump();
 }
 

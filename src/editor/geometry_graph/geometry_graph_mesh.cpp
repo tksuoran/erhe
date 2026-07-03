@@ -76,12 +76,13 @@ void Geometry_graph_mesh::set_graph_mesh(const std::shared_ptr<Graph_mesh>& grap
         return;
     }
     m_graph_mesh = graph_mesh;
-    // Force the next apply to re-materialize, and clear immediately when
-    // unbinding so no stale mesh lingers on the node.
-    m_applied_revision = 0;
-    if (!m_graph_mesh) {
-        release_controlled_products();
-    }
+    // Release immediately on ANY change so no stale mesh lingers: a
+    // rebind target may never publish a bake (e.g. an asset without an
+    // output node), in which case apply_baked_products() would keep the
+    // previous asset's mesh forever. Both bind paths (Properties, MCP)
+    // call apply_baked_products() right after, so a baked target shows
+    // without a visible gap.
+    release_controlled_products();
 }
 
 void Geometry_graph_mesh::release_controlled_products()

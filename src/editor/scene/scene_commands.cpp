@@ -502,8 +502,12 @@ auto Scene_commands::create_new_empty_node(erhe::scene::Node* parent) -> std::sh
         return {};
     }
 
+    // visible: inert while the node is empty, but attachments added later
+    // (Mesh, Light, Geometry_graph_mesh, ...) sync their visibility from
+    // the node - without it anything attached to an "empty" node would be
+    // invisibly stuck.
     auto new_empty_node = std::make_shared<erhe::scene::Node>("new empty node");
-    new_empty_node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
+    new_empty_node->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
     m_context.operation_stack->queue(
         std::make_shared<Item_insert_remove_operation>(
             Item_insert_remove_operation::Parameters{

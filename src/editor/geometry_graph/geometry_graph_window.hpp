@@ -102,6 +102,9 @@ public:
     // mutation arriving before the frame's update still targets the
     // live selection.
     [[nodiscard]] auto get_current_graph_mesh() -> const std::shared_ptr<Graph_mesh>&;
+    // True when the current graph is the window-owned scratch (not a
+    // content-library asset). Refreshes like get_current_graph_mesh().
+    [[nodiscard]] auto is_editing_scratch() -> bool;
 
     // Both refresh the current graph from the live selection first, so
     // MCP reads and node resolution always agree with the graph a
