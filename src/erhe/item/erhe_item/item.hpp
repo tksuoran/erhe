@@ -134,7 +134,8 @@ public:
     static constexpr uint64_t index_collision_filter       = 39;
     static constexpr uint64_t index_physics_joint_settings = 40;
     static constexpr uint64_t index_asset_file_scene       = 41;
-    static constexpr uint64_t count                        = 42;
+    static constexpr uint64_t index_graph_texture          = 42;
+    static constexpr uint64_t count                        = 43;
 
     static constexpr uint64_t none                   =  uint64_t{0};
     static constexpr uint64_t animation              = (uint64_t{1} << index_animation             );
@@ -178,6 +179,7 @@ public:
     static constexpr uint64_t collision_filter       = (uint64_t{1} << index_collision_filter      );
     static constexpr uint64_t physics_joint_settings = (uint64_t{1} << index_physics_joint_settings);
     static constexpr uint64_t asset_file_scene       = (uint64_t{1} << index_asset_file_scene      );
+    static constexpr uint64_t graph_texture          = (uint64_t{1} << index_graph_texture         );
 
     // NOTE: The names here must match the C++ class names
     static constexpr const char* c_bit_labels[] = {
@@ -222,7 +224,8 @@ public:
         "Physics_material",
         "Collision_filter",
         "Physics_joint_settings",
-        "Asset_file_scene"
+        "Asset_file_scene",
+        "Graph_texture"
     };
 };
 

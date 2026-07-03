@@ -164,9 +164,15 @@ auto Material_buffer::update(
                 .rotation_scale = { m[0][0], m[0][1], m[1][0], m[1][1] }, // Packing order: c0r0, c0r1, c1r0, c1r1
                 .offset         = { data.offset.x, data.offset.y }
             };
-            if (data.texture) {
+            // A texture_source (e.g. an editor Graph_texture) is authoritative
+            // when set; it resolves to the current baked texture every frame.
+            // Otherwise the directly-assigned texture is used.
+            const erhe::graphics::Texture* texture =
+                data.texture_source ? data.texture_source->get_referenced_texture()
+                                    : data.texture.get();
+            if (texture != nullptr) {
                 const erhe::graphics::Sampler* sampler = data.sampler ? data.sampler.get() : &m_linear_sampler;
-                result.shader_handle = texture_heap.allocate(data.texture.get(), sampler);
+                result.shader_handle = texture_heap.allocate(texture, sampler);
                 ERHE_VERIFY(result.shader_handle != erhe::graphics::invalid_texture_handle);
             } else {
                 result.shader_handle = erhe::graphics::invalid_texture_handle;

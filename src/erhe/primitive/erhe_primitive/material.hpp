@@ -12,6 +12,7 @@
 namespace erhe::graphics {
     class Sampler;
     class Texture;
+    class Texture_reference;
 }
 
 namespace erhe::primitive {
@@ -19,7 +20,16 @@ namespace erhe::primitive {
 class Material_texture_sampler
 {
 public:
+    // Directly-assigned GPU texture (plain / glTF-imported). Used when
+    // texture_source is null.
     std::shared_ptr<erhe::graphics::Texture> texture;
+    // Optional indirection to a texture that is resolved to a live
+    // erhe::graphics::Texture every frame (e.g. an editor Graph_texture that
+    // bakes a node graph). When set it is authoritative and texture is ignored
+    // by the renderer (see erhe::scene_renderer::Material_buffer::update).
+    // Held by the graphics Texture_reference interface so erhe::primitive gains
+    // no dependency on the editor.
+    std::shared_ptr<erhe::graphics::Texture_reference> texture_source;
     std::shared_ptr<erhe::graphics::Sampler> sampler;
     uint32_t                                 tex_coord{0};
     float                                    rotation {0.0f};
