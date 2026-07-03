@@ -6,8 +6,7 @@
 > `Shadow_renderer::prewarm_pipelines`,
 > `Device::warmup_render_pipeline`) but most of the bodies are stubbed
 > out pending the wider variant / mesh-memory rework. The design intent
-> below is still the target; the work to finish wiring it is tracked as
-> item F in `doc/work.md`.
+> below is still the target; finishing the wiring waits on that rework.
 
 ## Why
 

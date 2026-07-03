@@ -19,8 +19,8 @@ class App_context;
 // run_startup_script() and the close+submit+wait_idle block.
 //
 // Currently disabled (the body is a stub). See doc/prewarm.md for the
-// design intent and doc/work.md item F for the work to bring this
-// back. init_message, when non-empty, is invoked once per Scene_root
+// design intent; re-enabling waits on the wider variant / mesh-memory
+// rework. init_message, when non-empty, is invoked once per Scene_root
 // with the scene name so Init_status_display can show per-scene
 // progress on the loading screen.
 void prewarm_all(

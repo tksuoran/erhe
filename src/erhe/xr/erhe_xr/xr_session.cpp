@@ -718,8 +718,7 @@ auto Xr_session::create_swapchains() -> bool
             // reads depth as a storage image; that did not enable occlusion and is not
             // what Meta's depth-submission docs describe. Removed while diagnosing why
             // the HUD quad is not occluded by the submitted scene depth even though the
-            // depth swapchain and ENABLE_DEPTH_TEST flag both reach the compositor. See
-            // doc/hud_hotbar_depth_test_plan.md.)
+            // depth swapchain and ENABLE_DEPTH_TEST flag both reach the compositor.)
             const uint64_t depth_usage_flags = XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
             const XrSwapchainCreateInfo depth_stencil_swapchain_create_info{
                 .type        = XR_TYPE_SWAPCHAIN_CREATE_INFO,
@@ -740,9 +739,10 @@ auto Xr_session::create_swapchains() -> bool
                 // Non-fatal: some runtimes/drivers (e.g. Vulkan over Meta Link)
                 // cannot provide the depth swapchain format/usage the runtime
                 // requires. Continue without composition-layer depth -- the quad
-                // depth test then self-disables (condition 1, see
-                // doc/hud_hotbar_depth_test_plan.md). Do NOT abort the session or
-                // destroy the color swapchain.
+                // depth test then self-disables (its gate needs a usable depth
+                // swapchain, both depth extensions enabled, and depth submitted
+                // this frame). Do NOT abort the session or destroy the color
+                // swapchain.
                 log_xr->warn("xrCreateSwapchain() (multiview depth) failed with error {}; continuing without composition-layer depth", c_str(depth_stencil_result));
                 depth_stencil_xr_swapchain = XR_NULL_HANDLE;
             }
@@ -778,8 +778,9 @@ auto Xr_session::create_swapchains() -> bool
         log_xr->info("OpenXR multiview swapchain created: {}x{}, {} views, sampleCount {}",
             view.recommendedImageRectWidth, view.recommendedImageRectHeight,
             view_count, view.recommendedSwapchainSampleCount);
-        // Depth swapchain usability (condition 1 of the quad depth-test gate, see
-        // doc/hud_hotbar_depth_test_plan.md). On Quest this should be usable; on
+        // Depth swapchain usability, the first condition of the quad depth-test gate
+        // (usable depth swapchain + both depth extensions enabled + depth submitted
+        // per frame). On Quest this should be usable; on
         // Vulkan/Meta-Link the runtime's required depth format/usage is typically
         // unavailable, so it is not created.
         log_xr->info("OpenXR multiview depth swapchain: requested={} native_depth_format={} usable={}",
@@ -2215,8 +2216,7 @@ auto Xr_session::end_frame(const bool rendered) -> bool
                         // depth test compares such that a nearer quad needs
                         // LESS_OR_EQUAL (GREATER_OR_EQUAL rejected the near HUD
                         // against the far/empty scene; ALWAYS confirmed the
-                        // mechanism is otherwise fine). See
-                        // doc/hud_hotbar_depth_test_plan.md.
+                        // mechanism is otherwise fine).
                         .compareOp = XR_COMPARE_OP_LESS_OR_EQUAL_FB
                     }
                 );

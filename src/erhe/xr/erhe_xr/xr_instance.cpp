@@ -374,7 +374,7 @@ auto Xr_instance::create_instance() -> bool
         extensions.VARJO_quad_views = true;
         enabled_extensions.push_back(XR_VARJO_QUAD_VIEWS_EXTENSION_NAME);
     }
-    // Depth-tested quad composition layers (see doc/hud_hotbar_depth_test_plan.md):
+    // Depth-tested quad composition layers:
     // enable the quad depth-test (FB) extension and its prerequisite projection
     // depth (KHR) when not force-disabled and the runtime advertises both. Whether
     // depth is actually submitted/tested each frame is further gated at runtime on
@@ -434,7 +434,7 @@ auto Xr_instance::create_instance() -> bool
         enabled_extensions.push_back(XR_FB_COLOR_SPACE_EXTENSION_NAME);
     }
 
-    // Composition-layer depth capabilities (see doc/hud_hotbar_depth_test_plan.md).
+    // Composition-layer depth capabilities.
     // Logged so the runtime gating for depth-tested quad layers can be confirmed
     // on-device: KHR submits the projection-layer depth, FB depth-tests the quad
     // layers against it. ('supported' = runtime advertises the extension;
