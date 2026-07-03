@@ -2375,6 +2375,16 @@ auto Mcp_server::query_material_details(const json& args) -> std::string
                     entry["texture_id"]   = nullptr;
                     entry["texture_name"] = nullptr;
                 }
+                // The graph-texture source, when the slot is bound to a
+                // Graph_texture asset (the material -> graph back-reference).
+                const Graph_texture* graph_texture = dynamic_cast<const Graph_texture*>(s.texture_source.get());
+                if (graph_texture != nullptr) {
+                    entry["graph_texture_id"]   = graph_texture->get_id();
+                    entry["graph_texture_name"] = graph_texture->get_name();
+                } else {
+                    entry["graph_texture_id"]   = nullptr;
+                    entry["graph_texture_name"] = nullptr;
+                }
                 return entry;
             };
             json result = {

@@ -1210,6 +1210,84 @@ def section_material_output():
     check(S, "editor alive after material output section", len(get_graph()["nodes"]) == 0)
 
 
+def section_graph_texture_asset():
+    """Graph Texture as a content-library asset: create + select, edit the
+    selected asset, bind a material slot to it, and round-trip both the asset and
+    the binding through save_scene / load_scene (scene file v6)."""
+    S = "graph-texture-asset"
+
+    scenes = call("list_scenes")["scenes"]
+    if not scenes:
+        check(S, "a scene exists", False)
+        return
+    scene_name = scenes[0]["name"]
+
+    created = mutate("create_graph_texture", {"name": "Smoke Asset", "scene_name": scene_name})
+    check(S, "create_graph_texture created + returned id", bool(created) and created.get("created") and created.get("id"),
+          detail=str(created))
+
+    selection = call("get_selection")["items"]
+    check(S, "new Graph Texture is selected", any(i.get("type") == "Graph_texture" and i.get("name") == "Smoke Asset" for i in selection),
+          detail=str(selection))
+
+    listed = call("get_graph_textures", {"scene_name": scene_name})["graph_textures"]
+    check(S, "get_graph_textures lists the asset", any(g["name"] == "Smoke Asset" for g in listed), detail=str(listed))
+
+    # Edit the SELECTED asset: nodes must land in it, not a global graph.
+    uniform = add_node("uniform")
+    set_param(uniform["id"], {"color": [0.2, 0.6, 0.9, 1.0]})
+    output = add_node("output")
+    connect(uniform["id"], 0, output["id"], 2)
+
+    graph = get_graph()
+    check(S, "get_texture_graph targets the selected asset", graph.get("graph_texture_name") == "Smoke Asset",
+          detail=str(graph.get("graph_texture_name")))
+    check(S, "nodes land in the selected asset", len(graph["nodes"]) == 2, detail=str(len(graph["nodes"])))
+
+    listed = call("get_graph_textures", {"scene_name": scene_name})["graph_textures"]
+    asset = next((g for g in listed if g["name"] == "Smoke Asset"), None)
+    check(S, "asset bakes an output after connect", bool(asset) and asset.get("has_output") is True, detail=str(asset))
+
+    # Bind a material's base_color to the asset (the material -> graph back-ref).
+    materials = call("get_scene_materials", {"scene_name": scene_name})["materials"]
+    if not materials:
+        check(S, "a material exists to bind", False)
+        return
+    material_name = materials[0]["name"]
+    bound = mutate("set_material_texture_source",
+                   {"material_name": material_name, "slot": "base_color", "graph_texture": "Smoke Asset", "scene_name": scene_name})
+    check(S, "set_material_texture_source bound", bool(bound) and bound.get("bound"), detail=str(bound))
+
+    details = call("get_material_details", {"scene_name": scene_name, "material_name": material_name})
+    src_name = details.get("texture_samplers", {}).get("base_color", {}).get("graph_texture_name")
+    check(S, "material base_color reports the graph source", src_name == "Smoke Asset", detail=str(src_name))
+
+    # Persist and inspect the on-disk scene.json (v6 fields), then reload.
+    TMP_DIR.mkdir(parents=True, exist_ok=True)
+    bundle = TMP_DIR / "asset_roundtrip.erhescene"
+    mutate("save_scene", {"scene_name": scene_name, "path": str(bundle)})
+    scene_json_path = bundle / "scene.json"
+    check(S, "save wrote scene.json", scene_json_path.is_file(), detail=str(scene_json_path))
+    if scene_json_path.is_file():
+        scene_doc = json.loads(scene_json_path.read_text(encoding="utf-8"))
+        gts = scene_doc.get("graph_textures", [])
+        saved_asset = next((g for g in gts if g.get("name") == "Smoke Asset"), None)
+        check(S, "scene.json persists the Graph Texture asset", bool(saved_asset) and bool(saved_asset.get("graph")),
+              detail=str(saved_asset)[:120])
+        bindings = scene_doc.get("material_texture_sources", [])
+        saved_binding = next((b for b in bindings if b.get("material_name") == material_name
+                              and b.get("slot") == "base_color" and b.get("graph_texture_name") == "Smoke Asset"), None)
+        check(S, "scene.json persists the material -> graph binding", bool(saved_binding), detail=str(bindings)[:160])
+
+    before = len([g for g in call("get_graph_textures")["graph_textures"] if g["name"] == "Smoke Asset"])
+    loaded = mutate("load_scene", {"path": str(bundle)})
+    check(S, "load_scene loaded the bundle", bool(loaded) and loaded.get("loaded"), detail=str(loaded))
+    after_list = call("get_graph_textures")["graph_textures"]
+    after = [g for g in after_list if g["name"] == "Smoke Asset"]
+    check(S, "reloaded scene reconstructs the asset", len(after) >= before + 1, detail=f"{before}->{len(after)}")
+    check(S, "reloaded asset bakes an output", all(g.get("has_output") for g in after) and len(after) >= 1, detail=str(after))
+
+
 def main():
     sections = [
         section_every_node_type,
@@ -1227,6 +1305,7 @@ def main():
         section_reseed,
         section_output_node,
         section_material_output,
+        section_graph_texture_asset,
     ]
     for section in sections:
         print(f"\n=== {section.__name__} ===")
