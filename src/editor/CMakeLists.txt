@@ -410,6 +410,9 @@ erhe_target_sources_grouped(
     texture_graph/texture_graph_node.hpp
     texture_graph/texture_graph_node_factory.cpp
     texture_graph/texture_graph_node_factory.hpp
+    texture_graph/texture_graph_operations.cpp
+    texture_graph/texture_graph_operations.hpp
+    texture_graph/texture_graph_serialization.cpp
     texture_graph/texture_graph_window.cpp
     texture_graph/texture_graph_window.hpp
     texture_graph/texture_payload.cpp

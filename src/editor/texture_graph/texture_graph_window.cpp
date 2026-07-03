@@ -5,11 +5,13 @@
 #include "texture_graph/texture_graph_window.hpp"
 #include "texture_graph/texture_graph_node.hpp"
 #include "texture_graph/texture_graph_node_factory.hpp"
+#include "texture_graph/texture_graph_operations.hpp"
 #include "texture_graph/texture_renderer.hpp"
 #include "texture_graph/nodes/texture_node_descriptors.hpp"
 
 #include "app_context.hpp"
 #include "editor_log.hpp"
+#include "operations/operation_stack.hpp"
 #include "tools/selection_tool.hpp"
 
 #include "erhe_graph/link.hpp"
@@ -19,8 +21,11 @@
 #include "erhe_graphics/command_buffer.hpp"
 
 #include <imgui/imgui.h>
+#include <imgui/misc/cpp/imgui_stdlib.h>
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <filesystem>
 
 namespace editor {
 
@@ -181,8 +186,11 @@ void Texture_graph_window::set_node_position(const Texture_graph_node& node, con
 
 void Texture_graph_window::remove_node(const std::shared_ptr<Texture_graph_node>& node)
 {
-    // A later step wraps this in an undoable operation.
-    erase_node(node);
+    m_app_context.operation_stack->execute_now(
+        std::make_shared<Texture_graph_node_insert_remove_operation>(
+            *this, node, Texture_graph_node_insert_remove_operation::Mode::remove
+        )
+    );
 }
 
 auto Texture_graph_window::connect(erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool
@@ -190,6 +198,8 @@ auto Texture_graph_window::connect(erhe::graph::Pin* source_pin, erhe::graph::Pi
     if ((source_pin == nullptr) || (sink_pin == nullptr) || (source_pin->get_key() != sink_pin->get_key())) {
         return false;
     }
+    // Validate before creating the operation: a refused link must not leave a
+    // no-op entry on the undo stack.
     if (m_graph.would_create_cycle(source_pin, sink_pin)) {
         log_graph_editor->warn(
             "Texture graph: connecting '{}' to '{}' would create a cycle - refusing",
@@ -198,14 +208,33 @@ auto Texture_graph_window::connect(erhe::graph::Pin* source_pin, erhe::graph::Pi
         );
         return false;
     }
-    // A later step wraps this in an undoable operation.
-    return connect_pins(source_pin, sink_pin);
+    m_app_context.operation_stack->execute_now(
+        std::make_shared<Texture_graph_link_insert_remove_operation>(
+            *this, source_pin, sink_pin, Texture_graph_link_insert_remove_operation::Mode::insert
+        )
+    );
+    return true;
 }
 
 void Texture_graph_window::disconnect(erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin)
 {
-    // A later step wraps this in an undoable operation.
-    disconnect_pins(source_pin, sink_pin);
+    m_app_context.operation_stack->execute_now(
+        std::make_shared<Texture_graph_link_insert_remove_operation>(
+            *this, source_pin, sink_pin, Texture_graph_link_insert_remove_operation::Mode::remove
+        )
+    );
+}
+
+void Texture_graph_window::set_node_parameters(const std::shared_ptr<Texture_graph_node>& node, const nlohmann::json& parameters)
+{
+    std::string before_parameters = node->dump_parameters();
+    node->read_parameters(parameters); // marks the node dirty
+    std::string after_parameters = node->dump_parameters();
+    m_app_context.operation_stack->execute_now(
+        std::make_shared<Texture_graph_parameter_operation>(
+            *this, node, std::move(before_parameters), std::move(after_parameters)
+        )
+    );
 }
 
 auto Texture_graph_window::make_node(const std::string& type_name) -> std::shared_ptr<Texture_graph_node>
@@ -230,7 +259,11 @@ auto Texture_graph_window::add_node_of_type(const std::string& type_name) -> Tex
     if (!node) {
         return nullptr;
     }
-    insert_node(node); // a later step wraps this in an undoable operation
+    m_app_context.operation_stack->execute_now(
+        std::make_shared<Texture_graph_node_insert_remove_operation>(
+            *this, node, Texture_graph_node_insert_remove_operation::Mode::insert
+        )
+    );
     set_node_position(*node.get(), next_node_spawn_position());
     return node.get();
 }
@@ -243,6 +276,15 @@ auto Texture_graph_window::get_graph() -> Texture_graph&
 auto Texture_graph_window::get_nodes() const -> const std::vector<std::shared_ptr<Texture_graph_node>>&
 {
     return m_nodes;
+}
+
+void Texture_graph_window::file_toolbar()
+{
+    ImGui::SetNextItemWidth(320.0f);
+    ImGui::InputText("##graph_path", &m_graph_path);
+    ImGui::SameLine(); if (ImGui::Button("Save"))  { save_graph(std::filesystem::path{m_graph_path}); }
+    ImGui::SameLine(); if (ImGui::Button("Load"))  { load_graph(std::filesystem::path{m_graph_path}); }
+    ImGui::SameLine(); if (ImGui::Button("Clear")) { clear_graph(); }
 }
 
 void Texture_graph_window::node_toolbar()
@@ -267,6 +309,7 @@ void Texture_graph_window::node_toolbar()
 
 void Texture_graph_window::imgui()
 {
+    file_toolbar();
     node_toolbar();
 
     m_node_editor->Begin("Texture Graph", ImVec2{0.0f, 0.0f});

@@ -150,9 +150,10 @@ public:
     virtual void write_parameters(nlohmann::json& out) const;
     virtual void read_parameters (const nlohmann::json& in);
 
-    // Parameter undo support (used once undo/redo is wired in a later step):
-    // the committed state is the write_parameters() JSON dump the next
-    // parameter operation uses as its "before" side.
+    // Parameter undo support. The committed state is the write_parameters()
+    // JSON dump the next Texture_graph_parameter_operation uses as its "before"
+    // side; node_editor() captures widget edit gestures against it (one
+    // operation per completed gesture, pushed on widget deactivation).
     [[nodiscard]] auto dump_parameters() const -> std::string;
     [[nodiscard]] auto get_committed_parameters() const -> const std::string&;
     void set_committed_parameters(const std::string& parameters);
@@ -178,6 +179,7 @@ protected:
     std::shared_ptr<erhe::graphics::Texture> m_preview_texture;
     bool                                     m_dirty{true};
     bool                                     m_preview_needs_render{true};
+    bool                                     m_parameter_edit_in_progress{false};
 
 private:
     void draw_preview(App_context& context);

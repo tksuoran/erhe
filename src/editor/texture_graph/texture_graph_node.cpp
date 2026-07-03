@@ -1,7 +1,10 @@
 #include "texture_graph/texture_graph_node.hpp"
 #include "texture_graph/texture_graph_compose.hpp"
+#include "texture_graph/texture_graph_operations.hpp"
+#include "texture_graph/texture_graph_window.hpp"
 #include "texture_graph/texture_renderer.hpp"
 #include "app_context.hpp"
+#include "operations/operation_stack.hpp"
 #include "tools/selection_tool.hpp"
 
 #include "erhe_graphics/command_buffer.hpp"
@@ -338,7 +341,14 @@ void Texture_graph_node::node_editor(App_context& app_context, ax::NodeEditor::E
 
     // Content
     ImGui::TableSetColumnIndex(1);
+    if (m_committed_parameters.empty()) {
+        m_committed_parameters = dump_parameters(); // baseline for parameter undo
+    }
+    const bool was_dirty_before_widgets = is_dirty();
     imgui();
+    if (!was_dirty_before_widgets && is_dirty()) {
+        m_parameter_edit_in_progress = true; // a widget changed a parameter this frame
+    }
     draw_preview(app_context);
 
     // Output pins on the right edge
@@ -354,7 +364,26 @@ void Texture_graph_node::node_editor(App_context& app_context, ax::NodeEditor::E
 
     node_editor.EndNode();
 
-    // Selection integration (parameter undo is added in a later step).
+    // Commit the parameter edit gesture once its widget deactivates (mouse
+    // released on a drag / stepper, text input defocused). One undoable
+    // operation per completed gesture.
+    if (m_parameter_edit_in_progress && !ImGui::IsAnyItemActive()) {
+        m_parameter_edit_in_progress = false;
+        std::string after_parameters = dump_parameters();
+        if (after_parameters != m_committed_parameters) {
+            std::string before_parameters = m_committed_parameters;
+            app_context.operation_stack->execute_now(
+                std::make_shared<Texture_graph_parameter_operation>(
+                    *app_context.texture_graph_window,
+                    std::dynamic_pointer_cast<Texture_graph_node>(node_from_this()),
+                    std::move(before_parameters),
+                    std::move(after_parameters)
+                )
+            );
+        }
+    }
+
+    // Selection integration.
     const bool item_selection   = is_selected();
     const bool editor_selection = node_editor.IsNodeSelected(get_id());
     if (item_selection != editor_selection) {
