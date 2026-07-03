@@ -119,6 +119,7 @@ class Node_descriptor
 public:
     std::string                       name      {}; // factory / type name
     std::string                       label     {}; // UI label
+    std::string                       category  {}; // UI palette grouping (editor-only; empty for library test descriptors)
     std::vector<Input_descriptor>     inputs    {};
     std::vector<Output_descriptor>    outputs   {};
     std::vector<Parameter_descriptor> parameters{};

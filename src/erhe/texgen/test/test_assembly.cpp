@@ -7,6 +7,9 @@
 
 #include <gtest/gtest.h>
 
+#include <fmt/format.h>
+
+#include <cstddef>
 #include <string>
 
 namespace erhe::texgen::test {
@@ -201,6 +204,38 @@ TEST(Assembly, changing_parameter_value_changes_uniform_value_not_source)
     EXPECT_EQ(before, after);
     EXPECT_FLOAT_EQ(before_code.get_uniforms()[0].value[0], 0.5f);
     EXPECT_FLOAT_EQ(after_code.get_uniforms()[0].value[0],  0.9f);
+}
+
+TEST(Assembly, decompose_style_multi_output_selects_channel_per_output_index)
+{
+    // A single rgba input decomposed into four grayscale outputs (like the
+    // editor's Decompose node): composing at output index i must select the
+    // matching channel expression. Exercises Composer's output_index selection
+    // for a >2-output descriptor.
+    Node_descriptor descriptor{};
+    descriptor.name = "decompose_like";
+    Input_descriptor input{};
+    input.name               = "i";
+    input.type               = Value_type::rgba;
+    input.default_expression = "vec4(0.1, 0.2, 0.3, 0.4)";
+    descriptor.inputs.push_back(input);
+    const char* const channels[4] = {".r", ".g", ".b", ".a"};
+    for (const char* channel : channels) {
+        Output_descriptor output{};
+        output.type       = Value_type::grayscale;
+        output.expression = std::string{"$i($uv)"} + channel;
+        descriptor.outputs.push_back(output);
+    }
+
+    const Composer composer{};
+    for (std::size_t output_index = 0; output_index < 4; ++output_index) {
+        const Compose_node node{descriptor, 1};
+        const std::string  fragment = composer.assemble_fragment(composer.compose(node, output_index));
+        const std::string  expected = fmt::format(
+            "float o1_{}_0_f = (vec4(0.1, 0.2, 0.3, 0.4)){};", output_index, channels[output_index]
+        );
+        EXPECT_NE(fragment.find(expected), std::string::npos) << "output_index " << output_index << "\n" << fragment;
+    }
 }
 
 } // namespace erhe::texgen::test
