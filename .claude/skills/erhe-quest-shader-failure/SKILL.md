@@ -5,7 +5,7 @@ description: Triage erhe editor aborts on Quest where vkCreateShaderModule fails
 
 # Quest shader failure triage
 
-When the validation layer rejects a SPIR-V module inside `vkCreateShaderModule`, the editor's device-error callback aborts via `ERHE_FATAL` (see `editor.cpp:702`). Identifying the failing shader is the first step before deciding whether the cause is in our shader source, in the SPIR-V cache, or in glslang itself.
+When the validation layer rejects a SPIR-V module inside `vkCreateShaderModule`, the editor's device-error callback aborts via `ERHE_FATAL` (the `device_message` lambda in `editor.cpp`; search for `Message_severity::error`). Identifying the failing shader is the first step before deciding whether the cause is in our shader source, in the SPIR-V cache, or in glslang itself.
 
 ## Step 1: pull logs and identify the failing shader
 
@@ -29,12 +29,12 @@ Failing shader: `visualize_depth fragment`. Failing instruction: `DebugGlobalVar
 
 ### `VUID-VkShaderModuleCreateInfo-pCode-08737` with `DebugGlobalVariable`
 
-Cause: glslang 16.x emits `DebugGlobalVariable` with `Variable` = `OpConstantComposite` / `OpSpecConstantComposite` for global const composites and the synthesised `gl_WorkGroupSize`. The CPM PATCHES file `cmake/patches/glslang-debugglobalvariable-noop-for-composites.patch` (wired in `CMakeLists.txt`'s `glslang` `CPMAddPackage`) substitutes `DebugInfoNone` and resolves this for every shader.
+Cause: glslang 16.x emits `DebugGlobalVariable` with `Variable` = `OpConstantComposite` / `OpSpecConstantComposite` for global const composites and the synthesised `gl_WorkGroupSize`. The fix lives in the `tksuoran/glslang` fork (branch `erhe`) pinned by `CMakeLists.txt`'s `glslang` `CPMAddPackage` (CPM PATCHES is banned repo-wide); it substitutes `DebugInfoNone` and resolves this for every shader.
 
 If a fresh shader you just added still fails:
 
 1. **Check it's not a stale cache**. The cache key includes `GLSLANG_VERSION_*`, but if you bypassed the version bump and only changed `SpvOptions`, bump the trailing `vN` tag in `Spirv_cache::make_settings_salt` and uninstall + install on device to wipe `/data/data/<pkg>/files/spirv_cache/`.
-2. **Check the patch is in the active build**. Inspect `.cpm_cache/glslang/<hash>/SPIRV/SpvBuilder.cpp` for `variableOperand`; if missing, delete the cache + the corresponding `_deps/glslang-*` dirs and rebuild so CPM re-clones and re-applies the patch.
+2. **Check the fork fix is in the active build**. Inspect `.cpm_cache/glslang/<hash>/SPIRV/SpvBuilder.cpp` for `variableOperand`; if missing, delete the cache + the corresponding `_deps/glslang-*` dirs and rebuild so CPM re-clones the pinned `tksuoran/glslang` commit.
 3. **Disassemble the SPIR-V** to identify `%679` (or whatever the validator points at):
    ```
    "C:/VulkanSDK/<sdk>/Bin/spirv-dis.exe" <cached.spv> | grep -B2 "%679 ="

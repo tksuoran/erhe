@@ -5,7 +5,7 @@ description: Enable VK_LAYER_KHRONOS_validation on the erhe Quest APK so silent 
 
 # Quest Vulkan validation layer
 
-Quest's Vulkan loader has no validation layer of its own. Without it, GPU-side errors (descriptor mismatches, image-layout violations, multiview misuse, sync hazards, command-buffer lifecycle bugs) silently hang the editor on the first bad frame. With validation on, the same errors hit the device-error callback registered in `editor.cpp:702` (`Message_severity::error` -> `ERHE_FATAL`), so the process aborts with the offending VUID copied to the clipboard and dumped to logcat.
+Quest's Vulkan loader has no validation layer of its own. Without it, GPU-side errors (descriptor mismatches, image-layout violations, multiview misuse, sync hazards, command-buffer lifecycle bugs) silently hang the editor on the first bad frame. With validation on, the same errors hit the device-error callback registered in `editor.cpp` (the `device_message` lambda; search for `Message_severity::error` -> `ERHE_FATAL`), so the process aborts with the offending VUID copied to the clipboard and dumped to logcat.
 
 ## Bundling (build-time)
 
@@ -34,7 +34,7 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
    ```
    debug_utils_messenger_callback (vulkan_device_debug.cpp)
      -> Device::device_message
-     -> editor.cpp:698 lambda
+     -> editor.cpp device_message lambda
      -> ERHE_FATAL on Message_severity::error
    ```
 
@@ -64,7 +64,7 @@ Flip `vulkan_validation_layers` back to `false` in `config/editor/erhe_graphics.
 | VUID | Cause | Status |
 |---|---|---|
 | `VUID-VkDeviceCreateInfo-pNext-02829` | `VkPhysicalDeviceVulkan11Features` chained alongside `VkPhysicalDevice16BitStorageFeatures` / `VkPhysicalDeviceMultiviewFeatures` (subsumed by 1.1 features struct) | Fixed in commit `524888f8` |
-| `VUID-VkShaderModuleCreateInfo-pCode-08737` (`DebugGlobalVariable: expected operand Variable must be ...`) | glslang emits `DebugGlobalVariable` with `Variable` operand referencing `OpConstantComposite` for global const composite arrays + the synthesised `gl_WorkGroupSize` | Patched locally via CPM PATCHES in commit `f354e22a`. See `doc/glslang_bug_report_debugglobalvariable.md` and the `erhe-quest-shader-failure` skill |
+| `VUID-VkShaderModuleCreateInfo-pCode-08737` (`DebugGlobalVariable: expected operand Variable must be ...`) | glslang emits `DebugGlobalVariable` with `Variable` operand referencing `OpConstantComposite` for global const composite arrays + the synthesised `gl_WorkGroupSize` | Fixed in the `tksuoran/glslang` fork pinned by the root `CMakeLists.txt` `CPMAddPackage` (CPM PATCHES is banned repo-wide). See `doc/glslang_bug_report_debugglobalvariable.md` and the `erhe-quest-shader-failure` skill |
 | `SYNC-HAZARD-READ-AFTER-WRITE` (vertex stage reads SSBO after compute dispatch) | `Memory_barrier_mask::vertex_attrib_array_barrier_bit` alone is insufficient when the consuming vertex shader reads via SSBO instead of the input assembler | Use `vertex_attrib_array_barrier_bit \| shader_storage_barrier_bit` between the compute encoder and the render encoder |
 | `VUID-vkFreeCommandBuffers-pCommandBuffers-00047` (cb in pending state when freed) | Editor frees a command buffer the GPU has not finished with -- a frame-fence/lifecycle bug surfaced now that validation is on | Open as of 2026-05-02 |
 
