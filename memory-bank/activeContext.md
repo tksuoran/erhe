@@ -9,6 +9,7 @@
 >done::2026-07-03{smoke-coverage-extension:65→120-checks{bdc71123}+2-real-bugs-fixed{cycle/self-link-acceptance→Graph::would_create_cycle-b553559b,facet-less-geometry-output-crash-4491835f};sweep-120/120✓}✓
 ?queued::doc-audit{future_prompt_2.txt}|6c-fields-implementation{awaits-design-review}
 >done::geogram-growth-bug{fork-fix+pin-daf9e192{commit-88376b78}+upstream-issue-371;per-element-create-amortized-O(1)-again;batching-remaining-ops=constant-factor-only-now}
+>done::2026-07-03{editor-improvements-geometry-graph-items:8-pin-colors{d753e5d5}+7-pipeline-tail-breadcrumbs{de8a5740,Scoped_phase_timer-sets-breadcrumb}+9-resolved-by-geogram-fork-pin{doc-only-b262c367}+6-ASYNC-EVAL{2e8a2225+8f179479};sweep-120/120✓;set_param-x6-0.13s{was-20s-block}}✓
 
 [STATE]
 code::src/editor/geometry_graph/{payload+node-base+graph+window+node-factory+operations+serialization+nodes/}
@@ -18,6 +19,7 @@ verify::headless-vulkan+MCP{scripts/geometry_nodes_smoke_test.py=120-check-sweep
 perf-harness::scripts/configure_tests.bat→build_tests{VS-multi-config,¬ASAN¬profiler,Debug+Release-one-tree}+TimingHarness-DISABLED-gtests{--gtest_also_run_disabled_tests}+Operation_timing/Scoped_phase_timer{thread-local,inert-uninstalled}
 !default-box::26-verts/24-facets{make_box-div-1=2-segments-per-axis,NOT-8/6}
 verify-trick::logging.json-editor.graph_editor=trace{temporary,revert-before-commit}→"evaluating node"-lines-prove-incremental
+!async-eval::graph-evaluates-on-tf::Executor-worker{snapshot-isolation:shadow-clone{factory+param-JSON+links+cached-payloads+dirty-flags,logs-under-live-ids-via-set_log_source_id};live-graph-never-touched-by-worker→UI/undo/MCP-stay-interactive;output-node-2-phase{evaluate=worker-builds-geometry/primitive/hull,apply_evaluated_to_scene=main};group-internal-outputs-via-adopt_subgraph_outputs;MCP-mutations-return-immediately,get_geometry_graph=completion-barrier{waits},get_async_status-reports-runs;!scene-queries-after-graph-mutation-need-get_geometry_graph-barrier-first{smoke-test-scene_nodes()-does-this};!fresh-Geometry_graph-born-forced-full→shadow-must-consume_forced_full-before-copying-live-flag{else-incremental-eval-silently-lost}}
 
 [BUGS-FIXED-BY-SWEEP]
 csg-single-precision::4c28f849{geogram-mesh_boolean_operation-asserts-!single_precision;fix=run_mesh_boolean_operation-double-copies;test_csg.cpp-regression}

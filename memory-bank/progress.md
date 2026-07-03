@@ -1,5 +1,17 @@
 §MBEL:5.0
 
+[TASK::editor-improvements-geometry-graph-2026-07-03]
+@status::✓DONE{doc/editor_improvements.md-geometry-graph-items-8/7/9/6-all-closed→moved-to-Past-work}
+>commits::d753e5d5..8f179479
+d753e5d5::item8-pin-colors{pin_key_color()-per-Geometry_pin_key-fill-in-show_pins;geometry-teal|float-grey|int-green|bool-pink|vec3-indigo|vec4-yellow|mat4-steel-blue|material-orange|points-cyan|instances-spring-green;verified-headless-screenshot{enlarge-Geometry-Graph-window-via-imgui-ini-patch-pre-launch}}
+de8a5740::item7-breadcrumbs{Scoped_phase_timer-ctor-sets-set_breadcrumb(phase)→covers-all-cc-phases+interpolate/sanitize/process;Geometry::process-adds-facet_centroids/facet_texcoords/tangents;copy_with_transform;Primitive_raytrace-buffer-mesh-build{with-counts}+both-BVH-commit-sites;84/84-gtests}
+b262c367::item9-resolved-at-root{geogram-fork-pin-daf9e192-fixed-create_sub_elements-growth→per-element-create-amortized-O(1);conway-batching=constant-factor-only=diminishing-returns;doc-records-resolution,no-code-churn}
+2e8a2225::item6-ASYNC-EVAL{snapshot-isolation:update_evaluation()-per-frame-from-editor-tick{after-operation_stack->update}→shadow-clone{factory+write/read_parameters-JSON+links+cached-payloads+dirty-flags}→tf::Executor-silent_async-evaluates-shadow-only→finish-copies-payloads-back-by-live-id+applies-output-scene-products;output-node-2-phase{evaluate=worker:copy+process+primitive+raytrace+convex-hull;apply_evaluated_to_scene=main:scene-node/mesh/physics};Group_node::adopt_subgraph_outputs{shadow/live-subgraph-pairing-by-index,path+count-guard,depth-limit};shadow-logs-live-ids{set_log_source_id}→smoke-incremental-id-matching-works;ops-drop-inline-evaluate_if_dirty;MCP:mutations-return-immediately+get_geometry_graph/save=wait_for_idle_evaluation-barrier+get_async_status-reports-via-shared-counters;smoke-test-scene_nodes()-calls-get_graph()-barrier-first}
+8f179479::shadow-list-parallelism{factory-failure-pushes-null-placeholder,¬index-shift-mis-wiring}
+VERIFY::sweep-120/120✓×2+async-proof{set_param-x6-returns-0.13s{was~20s-block},19-cheap-queries-answered-during-eval,get_async_status-running>0,final-counts-98306/98304✓,screenshot-rendered-x6-box}
+!bug-found-during-verify::fresh-Geometry_graph-born-forced-full{m_dirty{true}}→shadow-graph-must-consume_forced_full-before-forwarding-live-flag,else-every-run-full-eval{incremental-silently-lost;caught-by-smoke-incremental-section}
+!semantics::scene-state-lags-graph-mutations-until-run-finishes→scene-queries-need-get_geometry_graph-barrier{eventual-consistency-is-the-new-MCP-contract}
+
 [TASK::smoke-coverage-extension-2026-07-03]
 @status::✓DONE{future_prompt_1.txt-handoff-executed;65→120-checks;2-real-defects-found+fixed}
 >commits::b553559b..bdc71123
