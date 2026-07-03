@@ -13,11 +13,27 @@
 struct ImDrawList;
 
 namespace ax::NodeEditor { class EditorContext; }
+namespace erhe::texgen {
+    class Node_descriptor;
+    class Compose_node;
+}
 
 namespace editor {
 
 class App_context;
 class Texture_graph;
+
+// Left / right arrow buttons cycling index through [0, count).
+// ImGui popups (Combo, BeginPopup) cannot be used inside the
+// ax::NodeEditor canvas, so node content uses these steppers instead.
+// (Duplicated from the geometry graph on purpose - the texture graph does
+// not depend on geometry_graph; a shared-widgets extraction is deferred, see
+// doc/texture-graph-plan.md decision 5. Distinct names avoid an ODR clash with
+// the geometry graph's identically-shaped helpers.)
+auto texture_index_stepper(const char* id, int& index, int count) -> bool;
+
+// Index stepper followed by the current entry name.
+auto texture_enum_stepper(const char* id, int& index, const char* const* names, int count) -> bool;
 
 // Base class for all texture graph nodes.
 //
@@ -67,6 +83,24 @@ public:
     virtual void evaluate(Texture_graph& graph);
     virtual void imgui   ();
 
+    // Node <-> texgen bridge (doc/texture-graph-plan.md, Phase 3 Step 2).
+    //
+    // descriptor() returns this node's immutable texgen Node_descriptor (the
+    // GLSL snippet table shared by every instance of the type), or nullptr for
+    // a sink node that has no descriptor of its own (e.g. the output node
+    // arriving in Step 3). configure() pushes this node's live parameter values
+    // into a Compose_node built from that descriptor (set_float / set_color /
+    // set_enum_index / set_bool / set_size_exponent / set_seed).
+    //
+    // The editor node's pins are built FROM the descriptor
+    // (build_pins_from_descriptor), so the pin count / order / types can never
+    // drift from the descriptor's inputs and outputs. Step 3 walks the graph to
+    // assemble a Compose_node DAG mirroring the editor graph and composes one
+    // fragment shader; this step only establishes the descriptor, the
+    // parameter values and the pins.
+    [[nodiscard]] virtual auto descriptor() const -> const erhe::texgen::Node_descriptor*;
+    virtual void configure(erhe::texgen::Compose_node& compose_node) const;
+
     // Called when the node leaves the graph (deletion, undo of add, graph
     // clear / load). Side effects outside the graph (e.g. a sink node's
     // preview / output textures) must be released here rather than in the
@@ -89,6 +123,11 @@ public:
     void set_committed_parameters(const std::string& parameters);
 
 protected:
+    // Creates one input pin per descriptor input and one output pin per
+    // descriptor output, keyed by each endpoint's Value_type. Keeps the editor
+    // node's pins in lockstep with the descriptor.
+    void build_pins_from_descriptor(const erhe::texgen::Node_descriptor& descriptor);
+
     void show_pins(
         ax::NodeEditor::EditorContext&                                  node_editor,
         ImDrawList&                                                     draw_list,

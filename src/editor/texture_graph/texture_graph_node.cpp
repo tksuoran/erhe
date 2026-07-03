@@ -6,11 +6,37 @@
 #include "erhe_graph/link.hpp"
 #include "erhe_graph/pin.hpp"
 #include "erhe_imgui/imgui_node_editor.h"
+#include "erhe_texgen/node_descriptor.hpp"
 
 #include <imgui/imgui.h>
 #include <nlohmann/json.hpp>
 
 namespace editor {
+
+auto texture_index_stepper(const char* id, int& index, const int count) -> bool
+{
+    bool changed = false;
+    ImGui::PushID(id);
+    if (ImGui::ArrowButton("##prev", ImGuiDir_Left) && (count > 0)) {
+        index = ((index + count) - 1) % count;
+        changed = true;
+    }
+    ImGui::SameLine();
+    if (ImGui::ArrowButton("##next", ImGuiDir_Right) && (count > 0)) {
+        index = (index + 1) % count;
+        changed = true;
+    }
+    ImGui::PopID();
+    return changed;
+}
+
+auto texture_enum_stepper(const char* id, int& index, const char* const* names, const int count) -> bool
+{
+    const bool changed = texture_index_stepper(id, index, count);
+    ImGui::SameLine();
+    ImGui::TextUnformatted(((index >= 0) && (index < count)) ? names[index] : "?");
+    return changed;
+}
 
 namespace {
 
@@ -112,6 +138,25 @@ void Texture_graph_node::evaluate(Texture_graph&)
 
 void Texture_graph_node::imgui()
 {
+}
+
+auto Texture_graph_node::descriptor() const -> const erhe::texgen::Node_descriptor*
+{
+    return nullptr;
+}
+
+void Texture_graph_node::configure(erhe::texgen::Compose_node&) const
+{
+}
+
+void Texture_graph_node::build_pins_from_descriptor(const erhe::texgen::Node_descriptor& descriptor)
+{
+    for (const erhe::texgen::Input_descriptor& input : descriptor.inputs) {
+        make_input_pin(value_type_to_pin_key(input.type), input.name);
+    }
+    for (const erhe::texgen::Output_descriptor& output : descriptor.outputs) {
+        make_output_pin(value_type_to_pin_key(output.type), erhe::texgen::value_type_name(output.type));
+    }
 }
 
 void Texture_graph_node::on_removed_from_graph()

@@ -4,6 +4,8 @@
 
 #include "texture_graph/texture_graph_window.hpp"
 #include "texture_graph/texture_graph_node.hpp"
+#include "texture_graph/texture_graph_node_factory.hpp"
+#include "texture_graph/nodes/texture_node_descriptors.hpp"
 
 #include "app_context.hpp"
 #include "editor_log.hpp"
@@ -51,6 +53,20 @@ Texture_graph_window::Texture_graph_window(
     ax::NodeEditor::Style& style = m_node_editor->GetStyle();
     style.PinArrowSize  = 14.0f;
     style.PinArrowWidth = 14.0f;
+
+    // Self-consistency check for the ported node descriptors: the editor has no
+    // gtest target, so compose every MVP descriptor standalone once at startup
+    // and log any that fail to assemble (see doc/texture-graph-plan.md Phase 3
+    // Step 2 verification). Pin <-> descriptor consistency is already
+    // guaranteed by construction (build_pins_from_descriptor).
+    const std::vector<std::string> descriptor_failures = check_texture_node_descriptors();
+    if (descriptor_failures.empty()) {
+        log_graph_editor->info("Texture graph: all {} node descriptors compose cleanly", all_texture_node_descriptors().size());
+    } else {
+        for (const std::string& failure : descriptor_failures) {
+            log_graph_editor->error("Texture graph: descriptor compose error - {}", failure);
+        }
+    }
 }
 
 Texture_graph_window::~Texture_graph_window() noexcept
@@ -164,11 +180,9 @@ void Texture_graph_window::disconnect(erhe::graph::Pin* source_pin, erhe::graph:
     disconnect_pins(source_pin, sink_pin);
 }
 
-auto Texture_graph_window::make_node(const std::string& /*type_name*/) -> std::shared_ptr<Texture_graph_node>
+auto Texture_graph_window::make_node(const std::string& type_name) -> std::shared_ptr<Texture_graph_node>
 {
-    // The node factory arrives with the MVP node set in a later step; until
-    // then there are no node types to create.
-    return {};
+    return make_texture_graph_node(m_app_context, type_name);
 }
 
 auto Texture_graph_window::next_node_spawn_position() -> ImVec2
@@ -205,9 +219,19 @@ auto Texture_graph_window::get_nodes() const -> const std::vector<std::shared_pt
 
 void Texture_graph_window::node_toolbar()
 {
-    // The MVP node buttons (uniform, perlin, voronoi, blend, colorize,
-    // output, ...) are added with the node factory in a later step.
-    ImGui::TextUnformatted("No node types yet");
+    ImGui::TextUnformatted("Generators");
+    ImGui::SameLine();                     if (ImGui::Button("Uniform"))  { add_node_of_type("uniform"); }
+    ImGui::SameLine();                     if (ImGui::Button("Perlin"))   { add_node_of_type("perlin"); }
+    ImGui::SameLine();                     if (ImGui::Button("Voronoi"))  { add_node_of_type("voronoi"); }
+    ImGui::SameLine();                     if (ImGui::Button("Bricks"))   { add_node_of_type("bricks"); }
+    ImGui::SameLine();                     if (ImGui::Button("Shape"))    { add_node_of_type("shape"); }
+
+    ImGui::TextUnformatted("Filters   ");
+    ImGui::SameLine();                     if (ImGui::Button("Blend"))            { add_node_of_type("blend"); }
+    ImGui::SameLine();                     if (ImGui::Button("Colorize"))         { add_node_of_type("colorize"); }
+    ImGui::SameLine();                     if (ImGui::Button("Transform"))        { add_node_of_type("transform"); }
+    ImGui::SameLine();                     if (ImGui::Button("Brightness/Cont.")) { add_node_of_type("brightness_contrast"); }
+    ImGui::SameLine();                     if (ImGui::Button("Normal Map"))       { add_node_of_type("normal_map"); }
 }
 
 void Texture_graph_window::imgui()
