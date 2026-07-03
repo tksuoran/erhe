@@ -13,6 +13,7 @@ add_executable(${_target}
     main.cpp
     test_descriptors.hpp
     test_assembly.cpp
+    test_gradient_curve.cpp
     test_inputs.cpp
     test_substitution.cpp
     test_value_type.cpp

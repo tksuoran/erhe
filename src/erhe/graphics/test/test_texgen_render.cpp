@@ -245,6 +245,37 @@ constexpr const char* c_fragment_varying = "layout(location = 0) in vec2 v_uv;\n
     return descriptor;
 }
 
+// Gradient (Phase 4): a gradient parameter maps a grayscale input through a
+// baked "vec4 <fn>(float x)" ladder. Here the input defaults to $uv.x and the
+// gradient is black@0 -> white@1 linear, so the composed shader is a horizontal
+// black->white ramp. The control points are baked as GLSL constants (no
+// uniforms), so it renders under Vulkan without a UBO.
+[[nodiscard]] auto make_gradient_colorize_descriptor() -> erhe::texgen::Node_descriptor
+{
+    erhe::texgen::Node_descriptor descriptor{};
+    descriptor.name  = "gradient_colorize";
+    descriptor.label = "Gradient Colorize";
+    erhe::texgen::Input_descriptor input{};
+    input.name               = "input";
+    input.type               = erhe::texgen::Value_type::grayscale;
+    input.default_expression = "$uv.x";
+    descriptor.inputs.push_back(input);
+    erhe::texgen::Parameter_descriptor gradient{};
+    gradient.name = "gradient";
+    gradient.kind = erhe::texgen::Parameter_kind::gradient_parameter;
+    gradient.default_gradient_stops = {
+        erhe::texgen::Gradient_stop{.position = 0.0f, .color = {0.0f, 0.0f, 0.0f, 1.0f}},
+        erhe::texgen::Gradient_stop{.position = 1.0f, .color = {1.0f, 1.0f, 1.0f, 1.0f}}
+    };
+    gradient.default_gradient_interpolation = erhe::texgen::Gradient_interpolation::linear;
+    descriptor.parameters.push_back(gradient);
+    erhe::texgen::Output_descriptor output{};
+    output.type       = erhe::texgen::Value_type::rgba;
+    output.expression = "$gradient(clamp($input($uv), 0.0, 1.0))";
+    descriptor.outputs.push_back(output);
+    return descriptor;
+}
+
 } // anonymous namespace
 
 // Renders a complete texgen-assembled fragment body over a fullscreen triangle
@@ -467,6 +498,31 @@ TEST_F(Texgen_render_test, uv_gradient)
     // Blue is always 0.
     EXPECT_LT(top_left[2],  4);
     EXPECT_LT(bottom_right[2], 4);
+}
+
+// Gradient parameter (Phase 4): a black@0 -> white@1 linear gradient applied to
+// $uv.x compiles under glslang and yields a horizontal ramp - the left column
+// is dark and the right column is bright, proving the emitted gradient function
+// evaluates correctly on the GPU.
+TEST_F(Texgen_render_test, gradient_ramp)
+{
+    const erhe::texgen::Node_descriptor descriptor = make_gradient_colorize_descriptor();
+    const erhe::texgen::Compose_node    node{descriptor, 1};
+    const std::string fragment = assemble(node);
+
+    constexpr int size = 8;
+    const std::vector<uint8_t> pixels = render_fragment(fragment, size, size);
+    ASSERT_EQ(pixels.size(), static_cast<std::size_t>(size) * static_cast<std::size_t>(size) * 4u);
+
+    const std::array<int, 4> left  = pixel_at(pixels, size, 0,        3);
+    const std::array<int, 4> right = pixel_at(pixels, size, size - 1, 3);
+    // Left (uv.x ~ 0) -> near black, right (uv.x ~ 1) -> near white; grayscale so
+    // all three channels track together.
+    EXPECT_LT(left[0],  40);
+    EXPECT_GT(right[0], 200);
+    EXPECT_LT(left[2],  40);
+    EXPECT_GT(right[2], 200);
+    EXPECT_GT(right[0], left[0]);
 }
 
 // blend(multiply) of two inline constants -> component-wise product.

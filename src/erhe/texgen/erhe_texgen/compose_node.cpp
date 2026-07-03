@@ -2,6 +2,8 @@
 
 #include "erhe_verify/verify.hpp"
 
+#include <algorithm>
+
 namespace erhe::texgen {
 
 Compose_node::Compose_node(const Node_descriptor& descriptor, const int id)
@@ -20,11 +22,14 @@ Compose_node::Compose_node(const Node_descriptor& descriptor, const int id)
             );
         }
         Parameter_value value{};
-        value.float_value   = parameter.default_float;
-        value.color_value   = parameter.default_color;
-        value.enum_index    = parameter.default_enum_index;
-        value.bool_value    = parameter.default_bool;
-        value.size_exponent = parameter.default_size_exponent;
+        value.float_value            = parameter.default_float;
+        value.color_value            = parameter.default_color;
+        value.enum_index             = parameter.default_enum_index;
+        value.bool_value             = parameter.default_bool;
+        value.size_exponent          = parameter.default_size_exponent;
+        value.gradient_stops         = parameter.default_gradient_stops;
+        value.gradient_interpolation = parameter.default_gradient_interpolation;
+        value.curve_points           = parameter.default_curve_points;
         m_parameters.push_back(value);
     }
     m_inputs.resize(descriptor.inputs.size());
@@ -138,6 +143,49 @@ void Compose_node::set_size_exponent(const std::string_view name, const int expo
         (exponent > parameter.max_size_exponent) ? parameter.max_size_exponent :
         exponent;
     m_parameters[parameter_index].size_exponent = clamped;
+}
+
+void Compose_node::set_gradient(const std::string_view name, const std::vector<Gradient_stop>& stops, const Gradient_interpolation interpolation)
+{
+    Parameter_value& value = get_checked_parameter(name, Parameter_kind::gradient_parameter);
+    value.gradient_interpolation = interpolation;
+    if (stops.empty()) {
+        // A gradient needs at least one stop; degrade to opaque black rather
+        // than emitting a stop-less function.
+        value.gradient_stops = { Gradient_stop{} };
+        return;
+    }
+    std::vector<Gradient_stop> sorted = stops;
+    std::sort(
+        sorted.begin(), sorted.end(),
+        [](const Gradient_stop& a, const Gradient_stop& b) { return a.position < b.position; }
+    );
+    // Nudge equal-or-descending positions strictly increasing (Material Maker's
+    // MMGradient.sort) so the emitted ladder's (pos[i+1]-pos[i]) is never zero.
+    for (std::size_t i = 0; (i + 1) < sorted.size(); ++i) {
+        if ((sorted[i].position + 0.0000005f) >= sorted[i + 1].position) {
+            sorted[i + 1].position = sorted[i].position + 0.000001f;
+        }
+    }
+    value.gradient_stops = std::move(sorted);
+}
+
+void Compose_node::set_curve(const std::string_view name, const std::vector<Curve_point>& points)
+{
+    Parameter_value& value = get_checked_parameter(name, Parameter_kind::curve_parameter);
+    std::vector<Curve_point> sorted = points;
+    std::sort(
+        sorted.begin(), sorted.end(),
+        [](const Curve_point& a, const Curve_point& b) { return a.x < b.x; }
+    );
+    // Nudge equal-or-descending x strictly increasing so the emitted Hermite
+    // segments never divide by a zero span.
+    for (std::size_t i = 0; (i + 1) < sorted.size(); ++i) {
+        if ((sorted[i].x + 0.0000005f) >= sorted[i + 1].x) {
+            sorted[i + 1].x = sorted[i].x + 0.000001f;
+        }
+    }
+    value.curve_points = std::move(sorted);
 }
 
 auto Compose_node::get_parameter_value(const std::size_t parameter_index) const -> const Parameter_value&

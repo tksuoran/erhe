@@ -31,11 +31,42 @@ public:
 };
 
 enum class Parameter_kind : unsigned int {
-    float_parameter = 0, // becomes a float uniform - live editable
-    color_parameter = 1, // becomes a vec4 uniform - live editable
-    enum_parameter  = 2, // substitutes its code fragment - edit recompiles
-    bool_parameter  = 3, // substitutes "true"/"false" literal - edit recompiles
-    size_parameter  = 4  // power-of-two exponent, substitutes the float literal pow(2, e) - edit recompiles
+    float_parameter    = 0, // becomes a float uniform - live editable
+    color_parameter    = 1, // becomes a vec4 uniform - live editable
+    enum_parameter     = 2, // substitutes its code fragment - edit recompiles
+    bool_parameter     = 3, // substitutes "true"/"false" literal - edit recompiles
+    size_parameter     = 4, // power-of-two exponent, substitutes the float literal pow(2, e) - edit recompiles
+    gradient_parameter = 5, // emits a per-node "vec4 <name>(float x)" gradient function; $name resolves to it
+    curve_parameter    = 6  // emits a per-node "float <name>(float x)" curve function; $name resolves to it
+};
+
+// Interpolation between adjacent gradient stops. Ported from Material Maker's
+// MMGradient.Interpolation (types/gradient.gd, MIT license).
+enum class Gradient_interpolation : unsigned int {
+    constant   = 0,
+    linear     = 1,
+    smoothstep = 2,
+    cubic      = 3
+};
+
+// One gradient control point: a position on [0, 1] and its rgba color.
+class Gradient_stop
+{
+public:
+    float                position{0.0f};
+    std::array<float, 4> color   {0.0f, 0.0f, 0.0f, 1.0f};
+};
+
+// One tone-curve control point: an (x, y) knot plus left / right tangent
+// slopes (Hermite handles). Ported from Material Maker's MMCurve.Point
+// (types/curve.gd, MIT license).
+class Curve_point
+{
+public:
+    float x          {0.0f};
+    float y          {0.0f};
+    float left_slope {0.0f};
+    float right_slope{0.0f};
 };
 
 class Enum_value
@@ -72,6 +103,15 @@ public:
     int min_size_exponent    {4};
     int max_size_exponent    {12};
     int default_size_exponent{8};
+
+    // gradient_parameter (default control points + interpolation). Defaults to
+    // a black@0 -> white@1 linear ramp when left empty (see Compose_node ctor).
+    std::vector<Gradient_stop> default_gradient_stops        {};
+    Gradient_interpolation     default_gradient_interpolation{Gradient_interpolation::linear};
+
+    // curve_parameter (default control points). Defaults to the identity
+    // 0,0 -> 1,1 curve when left empty (see Compose_node ctor).
+    std::vector<Curve_point> default_curve_points{};
 };
 
 class Node_descriptor

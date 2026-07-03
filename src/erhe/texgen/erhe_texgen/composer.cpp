@@ -141,6 +141,177 @@ namespace {
     return 17 * static_cast<int>(descriptor.parameters.size() + 1 + descriptor.outputs.size() + input_index);
 }
 
+// ---------------------------------------------------------------------------
+// Gradient / curve parameter codegen.
+//
+// A gradient/curve parameter emits a per-node GLSL helper function whose name
+// the "$param" substitution resolves to, so an output expression such as
+// colorize's "$gradient($input($uv))" becomes "o5_gradient_gradient(<input>)".
+//
+// DECISION (Phase 4, doc/texture-graph-plan.md): the control points are baked
+// into the function body as GLSL constants rather than uploaded through uniform
+// arrays. Any value edit therefore recomposes the source and recompiles - but
+// the SPIR-V cache de-duplicates unchanged sources, and this keeps the codegen
+// pure string logic (no std140 array-uniform layout, no per-frame upload path).
+// The uniform-array live-update path (value edits that skip recompile) is a
+// future optimization; see erhe_texgen notes.md.
+//
+// GLSL ported from Material Maker's MMGradient.get_shader / MMCurve.get_shader
+// (types/gradient.gd, types/curve.gd, MIT license), with pv()/pc()/p_*_x baked
+// to literals instead of uniform-array element accesses.
+// ---------------------------------------------------------------------------
+
+[[nodiscard]] auto gradient_float_literal(const float value) -> std::string
+{
+    return fmt::format("{:.9f}", value);
+}
+
+[[nodiscard]] auto gradient_color_literal(const std::array<float, 4>& c) -> std::string
+{
+    return fmt::format("vec4({:.9f}, {:.9f}, {:.9f}, {:.9f})", c[0], c[1], c[2], c[3]);
+}
+
+[[nodiscard]] auto emit_gradient_function(
+    const std::string&                function_name,
+    const std::vector<Gradient_stop>& stops,
+    const Gradient_interpolation      interpolation
+) -> std::string
+{
+    std::string shader = fmt::format("vec4 {}(float x) {{\n", function_name);
+    if (stops.empty()) {
+        shader += "    return vec4(0.0, 0.0, 0.0, 1.0);\n}\n";
+        return shader;
+    }
+    // Compose_node::set_gradient guarantees stops are sorted with strictly
+    // increasing positions, so (pos[i+1]-pos[i]) is never zero below.
+    const std::size_t s  = stops.size() - 1;
+    const auto        pv = [&](const std::size_t i) { return gradient_float_literal(stops[i].position); };
+    const auto        pc = [&](const std::size_t i) { return gradient_color_literal(stops[i].color); };
+
+    switch (interpolation) {
+        case Gradient_interpolation::constant: {
+            if (stops.size() == 1) {
+                shader += fmt::format("    return {};\n", pc(0));
+                break;
+            }
+            shader += fmt::format("    if (x < {}) {{\n", pv(1));
+            shader += fmt::format("        return {};\n", pc(0));
+            for (std::size_t i = 1; i < s; ++i) {
+                shader += fmt::format("    }} else if (x < {}) {{\n", pv(i + 1));
+                shader += fmt::format("        return {};\n", pc(i));
+            }
+            shader += "    }\n";
+            shader += fmt::format("    return {};\n", pc(s));
+            break;
+        }
+        case Gradient_interpolation::linear:
+        case Gradient_interpolation::smoothstep: {
+            // Material Maker's "function" prefix opens a parenthesis that the
+            // mix() call closes; linear leaves the interpolant raw, smoothstep
+            // wraps it in 0.5-0.5*cos(PI*t).
+            const char* fn = (interpolation == Gradient_interpolation::linear)
+                ? "("
+                : "0.5-0.5*cos(3.14159265359*";
+            shader += fmt::format("    if (x < {}) {{\n", pv(0));
+            shader += fmt::format("        return {};\n", pc(0));
+            for (std::size_t i = 0; i < s; ++i) {
+                shader += fmt::format("    }} else if (x < {}) {{\n", pv(i + 1));
+                shader += fmt::format(
+                    "        return mix({}, {}, {}(x-{})/({}-{})));\n",
+                    pc(i), pc(i + 1), fn, pv(i), pv(i + 1), pv(i)
+                );
+            }
+            shader += "    }\n";
+            shader += fmt::format("    return {};\n", pc(s));
+            break;
+        }
+        case Gradient_interpolation::cubic: {
+            shader += fmt::format("    if (x < {}) {{\n", pv(0));
+            shader += fmt::format("        return {};\n", pc(0));
+            for (std::size_t i = 0; i < s; ++i) {
+                shader += fmt::format("    }} else if (x < {}) {{\n", pv(i + 1));
+                const std::string dx = fmt::format("(x-{})/({}-{})", pv(i), pv(i + 1), pv(i));
+                const std::string b  = fmt::format("mix({}, {}, {})", pc(i), pc(i + 1), dx);
+                if (i > 0) {
+                    const std::string a =
+                        fmt::format("mix({}, {}, (x-{})/({}-{}))", pc(i - 1), pc(i), pv(i - 1), pv(i), pv(i - 1));
+                    if (i < (s - 1)) {
+                        const std::string c =
+                            fmt::format("mix({}, {}, (x-{})/({}-{}))", pc(i + 1), pc(i + 2), pv(i + 1), pv(i + 2), pv(i + 1));
+                        const std::string ac = fmt::format("mix({}, {}, 0.5-0.5*cos(3.14159265359*{}))", a, c, dx);
+                        shader += fmt::format("        return 0.5*({} + {});\n", b, ac);
+                    } else {
+                        shader += fmt::format("        return mix({}, {}, 0.5+0.5*{});\n", a, b, dx);
+                    }
+                } else if (i < (s - 1)) {
+                    const std::string c =
+                        fmt::format("mix({}, {}, (x-{})/({}-{}))", pc(i + 1), pc(i + 2), pv(i + 1), pv(i + 2), pv(i + 1));
+                    shader += fmt::format("        return mix({}, {}, 1.0-0.5*{});\n", c, b, dx);
+                } else {
+                    shader += fmt::format("        return {};\n", b);
+                }
+            }
+            shader += "    }\n";
+            shader += fmt::format("    return {};\n", pc(s));
+            break;
+        }
+        default: {
+            shader += "    return vec4(0.0, 0.0, 0.0, 1.0);\n";
+            break;
+        }
+    }
+    shader += "}\n";
+    return shader;
+}
+
+[[nodiscard]] auto emit_curve_function(
+    const std::string&              function_name,
+    const std::vector<Curve_point>& points
+) -> std::string
+{
+    std::string shader = fmt::format("float {}(float x) {{\n", function_name);
+    if (points.empty()) {
+        shader += "    return x;\n}\n"; // no control points: pass the input through
+        return shader;
+    }
+    if (points.size() == 1) {
+        shader += fmt::format("    return {};\n}}\n", gradient_float_literal(points[0].y));
+        return shader;
+    }
+    // Compose_node::set_curve guarantees strictly increasing x, so no segment
+    // divides by a zero span. Ported from MMCurve.get_shader: consecutive
+    // guarded blocks, each returning a Hermite segment; the last (i == size-2)
+    // block is unguarded and acts as the fall-through.
+    const std::size_t size = points.size();
+    const auto px = [&](const std::size_t i) { return gradient_float_literal(points[i].x); };
+    const auto py = [&](const std::size_t i) { return gradient_float_literal(points[i].y); };
+    const auto pls = [&](const std::size_t i) { return gradient_float_literal(points[i].left_slope); };
+    const auto prs = [&](const std::size_t i) { return gradient_float_literal(points[i].right_slope); };
+    for (std::size_t i = 0; (i + 1) < size; ++i) {
+        if (i < (size - 2)) {
+            shader += fmt::format("    if (x <= {}) ", px(i + 1));
+        }
+        shader += "{\n";
+        shader += fmt::format("        float dx = x - {};\n", px(i));
+        shader += fmt::format("        float d = {} - {};\n", px(i + 1), px(i));
+        shader += "        float t = dx/d;\n";
+        shader += "        float omt = (1.0 - t);\n";
+        shader += "        float omt2 = omt * omt;\n";
+        shader += "        float omt3 = omt2 * omt;\n";
+        shader += "        float t2 = t * t;\n";
+        shader += "        float t3 = t2 * t;\n";
+        shader += "        d /= 3.0;\n";
+        shader += fmt::format("        float y1 = {};\n", py(i));
+        shader += fmt::format("        float yac = {} + d*{};\n", py(i), prs(i));
+        shader += fmt::format("        float ybc = {} - d*{};\n", py(i + 1), pls(i + 1));
+        shader += fmt::format("        float y2 = {};\n", py(i + 1));
+        shader += "        return y1*omt3 + yac*omt2*t*3.0 + ybc*omt*t2*3.0 + y2*t3;\n";
+        shader += "    }\n";
+    }
+    shader += "}\n";
+    return shader;
+}
+
 // True when the whole string is one parenthesized group ("(...)").
 [[nodiscard]] auto is_fully_parenthesized(const std::string& text) -> bool
 {
@@ -605,6 +776,24 @@ auto Compose_engine::compose_node(
             case Parameter_kind::size_parameter: {
                 scope.variables[parameter.name] =
                     fmt::format("{:.1f}", std::pow(2.0, static_cast<double>(value.size_exponent)));
+                break;
+            }
+            case Parameter_kind::gradient_parameter: {
+                // $param resolves to the per-node gradient function name; the
+                // function (with baked control points) is emitted once.
+                const std::string function_name = fmt::format("{}_{}_gradient", genname, parameter.name);
+                scope.variables[parameter.name] = function_name;
+                if (generate_declarations) {
+                    rv.add_global(emit_gradient_function(function_name, value.gradient_stops, value.gradient_interpolation));
+                }
+                break;
+            }
+            case Parameter_kind::curve_parameter: {
+                const std::string function_name = fmt::format("{}_{}_curve", genname, parameter.name);
+                scope.variables[parameter.name] = function_name;
+                if (generate_declarations) {
+                    rv.add_global(emit_curve_function(function_name, value.curve_points));
+                }
                 break;
             }
             default: {

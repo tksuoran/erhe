@@ -47,7 +47,36 @@ no graphics dependency; GPU validation lives in `src/erhe/graphics/test/`
 - `$param` / `$(param)` -- float/color parameters become uniform references
   `p_o{id}_{param}` (prefixed with `Compose_options::uniform_accessor_prefix`,
   default empty); enum parameters substitute their code fragment; bool ->
-  `true`/`false`; size -> the `pow(2, exponent)` float literal (`"{:.1f}"`).
+  `true`/`false`; size -> the `pow(2, exponent)` float literal (`"{:.1f}"`);
+  gradient/curve parameters substitute the NAME of a per-node helper function
+  (`o{id}_{param}_gradient` returning `vec4`, `o{id}_{param}_curve` returning
+  `float`) emitted once into globals, so `$gradient($input($uv))` becomes
+  `o5_gradient_gradient(<input>)`.
+
+### Gradient / curve parameter codegen (Phase 4)
+`Parameter_kind::gradient_parameter` / `curve_parameter` carry control-point
+data on `Parameter_descriptor` (defaults) and `Parameter_value` (live values:
+`gradient_stops` + `gradient_interpolation`, `curve_points`).
+`Compose_node::set_gradient` / `set_curve` sort and strictly-increasing-nudge
+the control points (mirrors Material Maker's `MMGradient.sort`) so the emitted
+ladders never divide by a zero span; an empty gradient degrades to one black
+stop. The composer emits `vec4 <fn>(float x)` (gradient: CONSTANT / LINEAR /
+SMOOTHSTEP / CUBIC if/else ladder) and `float <fn>(float x)` (curve: piecewise
+Hermite) into globals, ported faithfully from Material Maker's
+`MMGradient.get_shader` / `MMCurve.get_shader` (types/gradient.gd,
+types/curve.gd, MIT).
+
+**DECISION - control points are baked as GLSL constants, not uniforms.** Where
+Material Maker uploads the stops/points into `p_<name>_pos[]` / `p_<name>_col[]`
+/ `p_<name>_<i>_x` uniform arrays (so a value edit updates uniforms without a
+recompile), erhe bakes the literals into the function body. Any value edit
+therefore recomposes the source and recompiles - but the on-disk SPIR-V cache
+de-duplicates unchanged sources, and this keeps the codegen pure string logic
+with no std140 array-uniform layout or per-frame array upload. **Future
+optimization:** emit the control points as std140 uniform-array members (like
+the float/color uniforms already do) so gradient/curve value edits skip the
+recompile; structural edits (add/remove stop) would still recompile. Not done
+in this chunk - constant-baked is correct and much simpler.
 - Built-ins: `$uv` (current coordinate expression), `$seed` (per-node float
   uniform `p_o{id}_seed`), `$name` -> `o{id}`, `$name_uv` -> variant-unique
   `o{id}_{variant}` (only defined inside nodes with a `code` stanza),

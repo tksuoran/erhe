@@ -21,6 +21,14 @@ public:
     std::size_t          enum_index   {0};
     bool                 bool_value   {false};
     int                  size_exponent{8};
+
+    // gradient_parameter: control-point data (live-editable). The editor node
+    // reuses this same storage for its live gradient widget.
+    std::vector<Gradient_stop> gradient_stops        {};
+    Gradient_interpolation     gradient_interpolation{Gradient_interpolation::linear};
+
+    // curve_parameter: control-point data (live-editable).
+    std::vector<Curve_point>   curve_points{};
 };
 
 // Binding of one input to an upstream node output.
@@ -57,6 +65,18 @@ public:
     void set_enum_index   (std::string_view name, std::size_t index);
     void set_bool         (std::string_view name, bool value);
     void set_size_exponent(std::string_view name, int exponent);
+
+    // Sets a gradient parameter's control points and interpolation. Stops are
+    // copied and sorted by position; positions equal-or-out-of-order are nudged
+    // strictly increasing (mirrors Material Maker's MMGradient.sort) so the
+    // emitted ladder never divides by zero. An empty stop list degrades to a
+    // single opaque-black stop rather than emitting a stop-less function.
+    void set_gradient(std::string_view name, const std::vector<Gradient_stop>& stops, Gradient_interpolation interpolation);
+
+    // Sets a curve parameter's control points. Points are copied and sorted by
+    // x; an empty / single-point list is accepted (the emitted function then
+    // returns a constant). Mirrors set_size_exponent's tolerant validation.
+    void set_curve(std::string_view name, const std::vector<Curve_point>& points);
     [[nodiscard]] auto get_parameter_value(std::size_t parameter_index) const -> const Parameter_value&;
     [[nodiscard]] auto get_parameter_index(std::string_view name) const -> std::size_t;
 
