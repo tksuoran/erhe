@@ -36,7 +36,7 @@ carry an attribution comment).
 | Phase 3 step 6: headless smoke test script (124 checks)      | DONE    | 40c86afb |
 | Phase 4a: gradient + curve widgets, real Colorize, Curve    | DONE    | a0c5e873, af08c98f |
 | Phase 4b: node library expansion + searchable palette       | DONE    | b54e0060, e20f2a0c |
-| Phase 5: buffer nodes, async compile, seeds/variations      | planned | -      |
+| Phase 5: buffer nodes, blur, reseed (async compile deferred) | DONE    | dac3a31a, 94668795 |
 | Phase 6: PBR material output, multi-channel bake, PNG export| DONE    | ac4d8045 |
 
 ---
