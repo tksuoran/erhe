@@ -28,9 +28,12 @@ carry an attribution comment).
 | Phase 0: `erhe::graph` unit tests (foundation hardening)    | DONE    | 29ff3f31, aa59158a |
 | Phase 1: `erhe::texgen` codegen core + unit tests           | DONE    | e00df7a2 |
 | Phase 2: GPU validation (compile + render composed shaders) | DONE    | fddf2c08 |
-| Phase 3: editor MVP (window, payload, ~12 nodes, output)    | planned | -      |
-| Phase 3 (cont.): serialization, undo/redo, MCP tools        | planned | -      |
-| Phase 3 (cont.): headless smoke test script                 | planned | -      |
+| Phase 3 step 1: editor window skeleton + wiring             | DONE    | e1402846 |
+| Phase 3 step 2: MVP node set (10 nodes) + factory/toolbar    | DONE    | 0b063f14 |
+| Phase 3 step 3: compose DAG, render path, previews, output  | DONE    | 003e4709 |
+| Phase 3 step 4: serialization + undo/redo                   | planned | -      |
+| Phase 3 step 5: MCP tools (get/add/connect/.../export_png)   | planned | -      |
+| Phase 3 step 6: headless smoke test script                  | planned | -      |
 | Phase 4: node library expansion + gradient/curve widgets    | planned | -      |
 | Phase 5: buffer nodes, async compile, seeds/variations      | planned | -      |
 | Phase 6: PBR material output, multi-channel bake, PNG export| planned | -      |
