@@ -35,6 +35,29 @@ Compose_node::Compose_node(const Node_descriptor& descriptor, const int id)
     m_inputs.resize(descriptor.inputs.size());
 }
 
+Compose_node::Compose_node(const int id, const int sampler_binding, const Value_type type)
+    : m_id                {id}
+    , m_is_sampler_source {true}
+    , m_sampler_binding   {sampler_binding}
+    , m_sampler_type      {type}
+{
+}
+
+auto Compose_node::is_sampler_source() const -> bool
+{
+    return m_is_sampler_source;
+}
+
+auto Compose_node::get_sampler_binding() const -> int
+{
+    return m_sampler_binding;
+}
+
+auto Compose_node::get_sampler_type() const -> Value_type
+{
+    return m_sampler_type;
+}
+
 auto Compose_node::get_descriptor() const -> const Node_descriptor&
 {
     return *m_descriptor;
@@ -48,7 +71,12 @@ auto Compose_node::get_id() const -> int
 void Compose_node::set_input(const std::size_t input_index, const Compose_node* source, const std::size_t output_index)
 {
     ERHE_VERIFY(input_index < m_inputs.size());
-    ERHE_VERIFY((source == nullptr) || (output_index < source->get_descriptor().outputs.size()));
+    // A sampler-source node has no descriptor and exposes a single output at
+    // index 0; any other node is validated against its descriptor's outputs.
+    ERHE_VERIFY(
+        (source == nullptr) ||
+        (source->is_sampler_source() ? (output_index == 0) : (output_index < source->get_descriptor().outputs.size()))
+    );
     m_inputs[input_index].source       = source;
     m_inputs[input_index].output_index = output_index;
 }

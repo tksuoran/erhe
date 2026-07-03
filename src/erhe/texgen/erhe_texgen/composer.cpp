@@ -610,6 +610,7 @@ auto Compose_engine::replace_input(
     const Shader_code source_code = compose_node(*binding.source, binding.output_index, parameters, context);
     rv.add_uniforms(source_code);
     rv.add_globals(source_code);
+    rv.add_samplers(source_code);
     rv.append_defs(source_code.get_defs());
     rv.append_code(source_code.get_code());
     return convert(source_code.get_output_expression(), source_code.get_output_type(), input_def.type);
@@ -635,6 +636,7 @@ void Compose_engine::generate_input_function(
     const Shader_code source_code = compose_node(*binding.source, binding.output_index, "uv", local_context);
     rv.add_uniforms(source_code);
     rv.add_globals(source_code);
+    rv.add_samplers(source_code);
     rv.append_defs(source_code.get_defs());
     const std::string return_expression = convert(
         source_code.get_output_expression(),
@@ -660,6 +662,37 @@ auto Compose_engine::compose_node(
     Variant_context&    context
 ) -> Shader_code
 {
+    // Sampler-source node (Phase 5 buffer cut point): contribute one sampler2D
+    // binding and emit "texture(tex_<binding>, (uv))" converted to the buffer's
+    // value type. No descriptor, no upstream recursion, so it needs neither the
+    // cycle guard nor the parameter/input machinery below.
+    if (node.is_sampler_source()) {
+        Shader_code rv{};
+        const bool        generate_declarations = !context.has_variant(&node);
+        const std::string sampler_name          = fmt::format("tex_{}", node.get_sampler_binding());
+        if (generate_declarations) {
+            rv.add_sampler(Sampler_binding{.name = sampler_name, .binding = node.get_sampler_binding()});
+        }
+        // One sampled local per (node, uv) variant; repeated samplings at the
+        // same coordinate reuse it.
+        const Value_type      type            = node.get_sampler_type();
+        const std::string     variant_string  = fmt::format("{},sampler", uv);
+        const Variant_lookup  variant          = context.get_variant(&node, variant_string);
+        const std::string     output_variable = fmt::format(
+            "s{}_{}_{}", node.get_id(), variant.index, value_type_name(type)
+        );
+        if (variant.is_new) {
+            // The buffer texture stores the input assembled to rgba8, so sample
+            // vec4 and convert back to the buffer's declared value type.
+            const std::string sampled = convert(
+                fmt::format("texture({}, ({}))", sampler_name, uv), Value_type::rgba, type
+            );
+            rv.append_code(fmt::format("{} {} = {};\n", glsl_type_name(type), output_variable, sampled));
+        }
+        rv.set_output(output_variable, type);
+        return rv;
+    }
+
     const Node_descriptor& descriptor = node.get_descriptor();
     ERHE_VERIFY(output_index < descriptor.outputs.size());
 
@@ -882,6 +915,12 @@ auto Composer::assemble_fragment(const Shader_code& shader_code) const -> std::s
         }
     }
     if (m_options.uniform_declaration_mode == Uniform_declaration_mode::plain_uniforms) {
+        // Sampler declarations. In none mode the caller (the editor's
+        // Texture_renderer) declares them from its bind group layout instead,
+        // exactly as it does for the UBO block, so they are omitted here.
+        for (const Sampler_binding& sampler : shader_code.get_samplers()) {
+            body += fmt::format("uniform sampler2D {};\n", sampler.name);
+        }
         for (const Uniform& uniform : shader_code.get_uniforms()) {
             switch (uniform.kind) {
                 case Uniform_kind::float_uniform: {

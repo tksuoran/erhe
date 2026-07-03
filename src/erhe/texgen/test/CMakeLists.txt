@@ -15,6 +15,7 @@ add_executable(${_target}
     test_assembly.cpp
     test_gradient_curve.cpp
     test_inputs.cpp
+    test_sampler_source.cpp
     test_substitution.cpp
     test_value_type.cpp
     test_variants.cpp

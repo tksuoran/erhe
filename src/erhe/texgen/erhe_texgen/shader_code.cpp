@@ -43,6 +43,28 @@ void Shader_code::add_uniforms(const Shader_code& other)
     }
 }
 
+void Shader_code::add_sampler(const Sampler_binding& sampler)
+{
+    for (const Sampler_binding& existing_sampler : m_samplers) {
+        if (existing_sampler.name == sampler.name) {
+            // A same-named sampler must be the same binding (re-registration
+            // from another sampling of the node). A binding-index mismatch
+            // means two different sampler sources collided on one name - e.g.
+            // duplicate node ids - which must not be hidden.
+            ERHE_VERIFY(existing_sampler.binding == sampler.binding);
+            return;
+        }
+    }
+    m_samplers.push_back(sampler);
+}
+
+void Shader_code::add_samplers(const Shader_code& other)
+{
+    for (const Sampler_binding& sampler : other.m_samplers) {
+        add_sampler(sampler);
+    }
+}
+
 void Shader_code::append_defs(const std::string_view text)
 {
     m_defs.append(text);
@@ -67,6 +89,11 @@ auto Shader_code::get_globals() const -> const std::vector<std::string>&
 auto Shader_code::get_uniforms() const -> const std::vector<Uniform>&
 {
     return m_uniforms;
+}
+
+auto Shader_code::get_samplers() const -> const std::vector<Sampler_binding>&
+{
+    return m_samplers;
 }
 
 auto Shader_code::get_defs() const -> const std::string&

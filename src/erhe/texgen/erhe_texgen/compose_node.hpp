@@ -50,6 +50,20 @@ class Compose_node
 public:
     Compose_node(const Node_descriptor& descriptor, int id);
 
+    // Sampler-source constructor (Phase 5 buffer cut point): this node has no
+    // descriptor; composing it contributes a sampler2D binding named
+    // "tex_<binding>" and its output is "texture(tex_<binding>, uv)" converted
+    // to `type`. Used when the compose DAG walk reaches a buffer node - instead
+    // of recursing into the buffer's input subtree, the composer samples the
+    // buffer's already-rendered texture (which the caller binds at <binding>).
+    Compose_node(int id, int sampler_binding, Value_type type);
+
+    // True for a sampler-source node (no descriptor; get_descriptor() must not
+    // be called).
+    [[nodiscard]] auto is_sampler_source () const -> bool;
+    [[nodiscard]] auto get_sampler_binding() const -> int;
+    [[nodiscard]] auto get_sampler_type   () const -> Value_type;
+
     [[nodiscard]] auto get_descriptor() const -> const Node_descriptor&;
     [[nodiscard]] auto get_id        () const -> int;
 
@@ -92,6 +106,11 @@ private:
     float                        m_seed      {0.0f};
     std::vector<Parameter_value> m_parameters; // parallel to descriptor parameters
     std::vector<Input_binding>   m_inputs;     // parallel to descriptor inputs
+
+    // Sampler-source state (m_descriptor is nullptr when this is set).
+    bool       m_is_sampler_source{false};
+    int        m_sampler_binding  {0};
+    Value_type m_sampler_type     {Value_type::rgba};
 };
 
 } // namespace erhe::texgen
