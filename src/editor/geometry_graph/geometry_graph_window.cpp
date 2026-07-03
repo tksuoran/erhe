@@ -51,6 +51,14 @@ Geometry_graph_window::Geometry_graph_window(
     , m_app_context            {app_context}
 {
     m_node_editor = std::make_unique<ax::NodeEditor::EditorContext>(nullptr);
+
+    // Input pins are drawn with PivotAlignment {-0.75, 0.5}, which leaves a
+    // gap between the link end and the pin for an arrowhead. The default
+    // style has PinArrowSize/Width = 0 (no arrowhead), so match the Graph
+    // window's arrow settings or the gap renders empty.
+    ax::NodeEditor::Style& style = m_node_editor->GetStyle();
+    style.PinArrowSize  = 14.0f;
+    style.PinArrowWidth = 14.0f;
 }
 
 Geometry_graph_window::~Geometry_graph_window() noexcept
