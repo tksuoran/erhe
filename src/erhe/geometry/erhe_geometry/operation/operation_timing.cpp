@@ -1,5 +1,7 @@
 #include "erhe_geometry/operation/operation_timing.hpp"
 
+#include "erhe_log/log.hpp"
+
 namespace erhe::geometry::operation {
 
 namespace {
@@ -50,6 +52,11 @@ Scoped_phase_timer::Scoped_phase_timer(const char* phase)
     : m_phase    {phase}
     , m_collector{Operation_timing::active()}
 {
+    // Phase scopes double as watchdog breadcrumbs: a stall inside a phase is
+    // then attributed to that phase instead of whatever set a breadcrumb
+    // last. Phases are per-operation coarse, so the mutex lock in
+    // set_breadcrumb() is negligible.
+    erhe::log::set_breadcrumb(m_phase);
     if (m_collector != nullptr) {
         m_start = std::chrono::steady_clock::now();
     }

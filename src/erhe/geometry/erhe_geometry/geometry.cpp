@@ -1159,6 +1159,10 @@ void transform(const Geometry& source, Geometry& destination, const GEO::mat4f& 
 
 void Geometry::copy_with_transform(const Geometry& source, const GEO::mat4f& transform_)
 {
+    // Breadcrumb: a stall in the element-wise copy (or in the connectivity
+    // copy below) must not be misattributed to the previous pipeline phase.
+    erhe::log::set_breadcrumb("geometry: copy_with_transform");
+
     // TODO add m_mesh.clear(false, false) ?
     transform(source, *this, transform_);
 
@@ -1367,9 +1371,11 @@ void Geometry::process(const Geometry_process_parameters& parameters)
         compute_mesh_vertex_normal_smooth(m_mesh, m_attributes);
     }
     if (flags & process_flag_compute_facet_centroids) {
+        erhe::log::set_breadcrumb("geometry: compute_facet_centroids");
         compute_facet_centroids(m_mesh, m_attributes);
     }
     if (flags & process_flag_generate_facet_texture_coordinates) {
+        erhe::log::set_breadcrumb("geometry: generate_facet_texture_coordinates");
         generate_mesh_facet_texture_coordinates(parameters.facet_texcoord_usage_index);
     }
     if (flags & process_flag_generate_atlas_texture_coordinates) {
@@ -1388,9 +1394,11 @@ void Geometry::process(const Geometry_process_parameters& parameters)
         );
     }
     if (flags & process_flag_generate_tangents_ortho) {
+        erhe::log::set_breadcrumb("geometry: compute_mesh_tangents (ortho)");
         compute_mesh_tangents(m_mesh, {.orthonormalize = true, .make_facets_flat = false, .texcoord_usage_index = parameters.tangent_texcoord_usage_index});
     } else
     if (flags & process_flag_generate_tangents) {
+        erhe::log::set_breadcrumb("geometry: compute_mesh_tangents");
         compute_mesh_tangents(m_mesh, {.orthonormalize = false, .make_facets_flat = false, .texcoord_usage_index = parameters.tangent_texcoord_usage_index});
     }
     if (flags & process_flag_debug_trace) {

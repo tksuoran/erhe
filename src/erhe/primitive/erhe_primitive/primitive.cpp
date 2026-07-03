@@ -4,6 +4,7 @@
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_primitive/triangle_soup.hpp"
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_log/log.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_buffer/ibuffer.hpp"
 #include "erhe_raytrace/igeometry.hpp"
@@ -113,14 +114,23 @@ Primitive_raytrace::Primitive_raytrace(const GEO::Mesh& mesh, Element_mappings* 
 
     Element_mappings dummy_mappings;
 
+    // Breadcrumb with mesh counts: the raytrace buffer-mesh build walks the
+    // whole mesh and a watchdog dump should attribute a stall here (and
+    // reveal an absurdly sized mesh) rather than to the previous phase.
+    erhe::log::set_breadcrumb(
+        fmt::format(
+            "raytrace: build_buffer_mesh facets={} verts={}",
+            mesh.facets.nb(), mesh.vertices.nb()
+        )
+    );
     build_buffer_mesh(
         m_rt_mesh,
-        mesh, 
-        build_info, 
-        (element_mappings != nullptr) ? *element_mappings : dummy_mappings, 
+        mesh,
+        build_info,
+        (element_mappings != nullptr) ? *element_mappings : dummy_mappings,
         Normal_style::none
     );
-    
+
     make_raytrace_geometry();
     m_rt_geometry->set_user_data(nullptr);
 }
@@ -181,6 +191,7 @@ void Primitive_raytrace::make_raytrace_geometry()
 
     {
         ERHE_PROFILE_SCOPE("geometry commit");
+        erhe::log::set_breadcrumb("raytrace: BVH commit");
         m_rt_geometry->commit();
     }
 }
@@ -256,6 +267,7 @@ Primitive_raytrace::Primitive_raytrace(Triangle_soup& triangle_soup)
 
     {
         ERHE_PROFILE_SCOPE("geometry commit");
+        erhe::log::set_breadcrumb("raytrace: BVH commit");
         m_rt_geometry->commit();
     }
 }

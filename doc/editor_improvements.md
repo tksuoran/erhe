@@ -36,15 +36,15 @@ Operations are queued without pre-validation. `Compound_operation` has no rollba
 
 Geometry graph evaluation runs synchronously on the main thread; a heavy chain (subdivide x6 -> ~27 s Debug) freezes the UI and outlives the in-editor MCP server's per-request wait (the request still executes; clients must wait for the server to drain - see `scripts/geometry_nodes_smoke_test.py` mutate()). Move node evaluation to a worker (the `Mesh_operation` async pattern exists) or at least have the MCP server respond "accepted, evaluating" with a completion query, so long evaluations neither freeze the UI nor look like hangs. Found during the 2026-07-02 geometry nodes smoke sweep.
 
-### 7. Breadcrumbs in the geometry -> primitive pipeline tail (Small effort, Medium debugging impact)
-
-The `editor.watchdog` breadcrumb ring localized the 2026-07-02 CC hang only approximately: `Geometry::process()` sets breadcrumbs per step, but `compute_mesh_tangents`, `Primitive_builder`, `make_raytrace` (BVH build) and `copy_with_transform` set none, so a stall after the last breadcrumb is misattributed to it. Add `erhe::log::set_breadcrumb()` to those phases (and per Catmull-Clark phase) so the next hang self-localizes.
-
 ### 9. Batch element creation in remaining Geometry_operations (Medium effort, Medium impact)
 
 Geogram's `MeshSubElementsStore::create_sub_elements()` computes capacity growth from store SIZE, not capacity (reported upstream: https://github.com/BrunoLevy/geogram/issues/371), so per-element `create_vertices(1)` / `create_polygon()` is O(n) each and any operation using the one-at-a-time `make_new_dst_*` helpers is O(n^2) on large meshes. Catmull-Clark was converted to batch creation (8e52a1b9, `map_dst_*` helpers); the conway operations (ambo, kis, gyro, meta, truncate, chamfer, dual, subdivide) and others still create per element. Convert them via the same pattern; alternatively pick up the upstream fix once the issue is resolved, or fix the growth policy in a geogram fork meanwhile (needs a user-provided fork repo per CLAUDE.md).
 
 ## Past work
+
+## Breadcrumbs in the geometry -> primitive pipeline tail (Small effort, Medium debugging impact)
+
+**DONE.** The previously uncovered phases now set `erhe::log::set_breadcrumb()`: `Scoped_phase_timer` sets its phase name as a breadcrumb on construction (covering every Catmull-Clark build phase plus interpolate / sanitize / process), `Geometry::process()` covers facet centroids, facet texture coordinates and tangent generation, `Geometry::copy_with_transform()` marks itself, and `Primitive_raytrace` marks the raytrace buffer-mesh build (with mesh counts) and the BVH commit. A stall anywhere in the geometry -> primitive pipeline tail now self-localizes in the watchdog dump.
 
 ## Color geometry graph pins by payload type (Small effort, Low impact)
 

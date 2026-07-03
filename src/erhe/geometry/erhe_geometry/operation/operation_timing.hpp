@@ -35,8 +35,10 @@ private:
 };
 
 // RAII phase scope. When no collector is installed on this thread the
-// constructor and destructor are a single branch each; the phase name must
-// be a string literal (stored as pointer, not copied).
+// constructor and destructor are a single branch each plus one
+// erhe::log::set_breadcrumb() call (so a watchdog attributes a stall to the
+// phase it happened in); the phase name must be a string literal (stored as
+// pointer, not copied).
 class Scoped_phase_timer
 {
 public:
