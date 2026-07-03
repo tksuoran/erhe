@@ -8,6 +8,7 @@
 
 #include "app_context.hpp"
 #include "content_library/content_library.hpp"
+#include "geometry_graph/graph_mesh.hpp"
 #include "texture_graph/graph_texture.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
@@ -524,6 +525,32 @@ auto Scene_root::make_browser_window(
                             // Select the new asset so the Texture Graph window edits it.
                             if (context_ptr->selection != nullptr) {
                                 context_ptr->selection->set_selection({new_graph_texture});
+                            }
+                        }
+                    );
+                    close = true;
+                }
+            }
+            if (is_folder && (content_node->type_code == erhe::Item_type::graph_mesh)) {
+                auto         graph_meshes = get_content_library()->graph_meshes;
+                App_context* context_ptr  = &context;
+                if (ImGui::MenuItem("Create Graph Mesh")) {
+                    deferred_operations.push_back(
+                        [context_ptr, graph_meshes]() {
+                            auto new_graph_mesh = std::make_shared<Graph_mesh>("Graph Mesh");
+                            auto new_node = std::make_shared<Content_library_node>(new_graph_mesh);
+                            auto op = std::make_shared<Item_insert_remove_operation>(
+                                Item_insert_remove_operation::Parameters{
+                                    .context = *context_ptr,
+                                    .item    = new_node,
+                                    .parent  = graph_meshes,
+                                    .mode    = Item_insert_remove_operation::Mode::insert
+                                }
+                            );
+                            context_ptr->operation_stack->queue(op);
+                            // Select the new asset so the Geometry Graph window edits it.
+                            if (context_ptr->selection != nullptr) {
+                                context_ptr->selection->set_selection({new_graph_mesh});
                             }
                         }
                     );

@@ -14,6 +14,7 @@ namespace editor {
 
 class Geometry_graph_node;
 class Geometry_graph_window;
+class Graph_mesh;
 
 // A link endpoint pair, with owning-node shared pointers keeping the
 // Pin objects alive while the record sits in the undo / redo stacks.
@@ -47,6 +48,7 @@ public:
 
     Geometry_graph_node_insert_remove_operation(
         Geometry_graph_window&                      window,
+        const std::shared_ptr<Graph_mesh>&          graph_mesh,
         const std::shared_ptr<Geometry_graph_node>& node,
         Mode                                        mode
     );
@@ -60,6 +62,7 @@ private:
     void remove();
 
     Geometry_graph_window&                  m_window;
+    std::shared_ptr<Graph_mesh>             m_graph_mesh;
     std::shared_ptr<Geometry_graph_node>    m_node;
     Mode                                    m_mode;
     std::vector<Geometry_graph_link_record> m_links;
@@ -84,9 +87,10 @@ class Geometry_graph_replace_operation : public Operation
 {
 public:
     Geometry_graph_replace_operation(
-        Geometry_graph_window&    window,
-        Geometry_graph_content&&  new_content,
-        const char*               description
+        Geometry_graph_window&             window,
+        const std::shared_ptr<Graph_mesh>& graph_mesh,
+        Geometry_graph_content&&           new_content,
+        const char*                        description
     );
 
     // Implements Operation
@@ -97,7 +101,8 @@ private:
     void apply(const Geometry_graph_content& content);
     [[nodiscard]] auto capture() -> Geometry_graph_content;
 
-    Geometry_graph_window& m_window;
+    Geometry_graph_window&      m_window;
+    std::shared_ptr<Graph_mesh> m_graph_mesh;
     Geometry_graph_content m_new_content;
     Geometry_graph_content m_old_content;
     bool                   m_old_captured{false};
@@ -143,10 +148,11 @@ public:
     };
 
     Geometry_graph_link_insert_remove_operation(
-        Geometry_graph_window& window,
-        erhe::graph::Pin*      source_pin,
-        erhe::graph::Pin*      sink_pin,
-        Mode                   mode
+        Geometry_graph_window&             window,
+        const std::shared_ptr<Graph_mesh>& graph_mesh,
+        erhe::graph::Pin*                  source_pin,
+        erhe::graph::Pin*                  sink_pin,
+        Mode                               mode
     );
 
     // Implements Operation
@@ -158,6 +164,7 @@ private:
     void remove();
 
     Geometry_graph_window&      m_window;
+    std::shared_ptr<Graph_mesh> m_graph_mesh;
     Geometry_graph_link_record  m_link;
     Mode                        m_mode;
 };

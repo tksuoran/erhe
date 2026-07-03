@@ -14,6 +14,7 @@
 #include "geometry_graph/geometry_graph.hpp"
 #include "geometry_graph/geometry_graph_node.hpp"
 #include "geometry_graph/geometry_graph_operations.hpp"
+#include "geometry_graph/graph_mesh.hpp"
 
 #include "app_context.hpp"
 #include "editor_log.hpp"
@@ -83,11 +84,13 @@ namespace {
 
 auto Geometry_graph_window::save_graph(const std::filesystem::path& path) -> bool
 {
+    const std::shared_ptr<Graph_mesh> graph_mesh = get_current_graph_mesh();
+
     nlohmann::json root;
     root["version"] = 1;
 
     nlohmann::json nodes_json = nlohmann::json::array();
-    for (const std::shared_ptr<Geometry_graph_node>& node : m_nodes) {
+    for (const std::shared_ptr<Geometry_graph_node>& node : graph_mesh->nodes()) {
         nlohmann::json node_json;
         node_json["type"] = node->get_factory_type_name();
         const ImVec2 position = get_node_position(*node.get());
@@ -102,9 +105,9 @@ auto Geometry_graph_window::save_graph(const std::filesystem::path& path) -> boo
     root["nodes"] = nodes_json;
 
     nlohmann::json links_json = nlohmann::json::array();
-    for (const std::unique_ptr<erhe::graph::Link>& link : m_graph.get_links()) {
-        const int source_node = node_index_of(m_nodes, link->get_source()->get_owner_node());
-        const int sink_node   = node_index_of(m_nodes, link->get_sink  ()->get_owner_node());
+    for (const std::unique_ptr<erhe::graph::Link>& link : graph_mesh->graph().get_links()) {
+        const int source_node = node_index_of(graph_mesh->nodes(), link->get_source()->get_owner_node());
+        const int sink_node   = node_index_of(graph_mesh->nodes(), link->get_sink  ()->get_owner_node());
         if ((source_node < 0) || (sink_node < 0)) {
             continue;
         }
@@ -129,7 +132,10 @@ auto Geometry_graph_window::save_graph(const std::filesystem::path& path) -> boo
     stream << root.dump(4);
     const bool ok = stream.good();
     if (ok) {
-        log_graph_editor->info("Geometry graph saved to '{}' ({} nodes, {} links)", path.string(), m_nodes.size(), m_graph.get_links().size());
+        log_graph_editor->info(
+            "Geometry graph saved to '{}' ({} nodes, {} links)",
+            path.string(), graph_mesh->nodes().size(), graph_mesh->graph().get_links().size()
+        );
     }
     return ok;
 }
@@ -211,7 +217,7 @@ auto Geometry_graph_window::load_graph(const std::filesystem::path& path) -> boo
 
     const std::size_t link_count = content.links.size();
     m_app_context.operation_stack->execute_now(
-        std::make_shared<Geometry_graph_replace_operation>(*this, std::move(content), "Geometry graph load")
+        std::make_shared<Geometry_graph_replace_operation>(*this, get_current_graph_mesh(), std::move(content), "Geometry graph load")
     );
     log_graph_editor->info("Geometry graph loaded from '{}' ({} nodes, {} links)", path.string(), node_count, link_count);
     return true;
@@ -220,7 +226,7 @@ auto Geometry_graph_window::load_graph(const std::filesystem::path& path) -> boo
 void Geometry_graph_window::clear_graph()
 {
     m_app_context.operation_stack->execute_now(
-        std::make_shared<Geometry_graph_replace_operation>(*this, Geometry_graph_content{}, "Geometry graph clear")
+        std::make_shared<Geometry_graph_replace_operation>(*this, get_current_graph_mesh(), Geometry_graph_content{}, "Geometry graph clear")
     );
     m_spawn_count = 0; // new nodes start from the canvas origin again
 }

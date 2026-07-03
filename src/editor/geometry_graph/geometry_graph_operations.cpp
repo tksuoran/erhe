@@ -2,6 +2,7 @@
 #include "geometry_graph/geometry_graph.hpp"
 #include "geometry_graph/geometry_graph_node.hpp"
 #include "geometry_graph/geometry_graph_window.hpp"
+#include "geometry_graph/graph_mesh.hpp"
 
 #include "erhe_graph/link.hpp"
 #include "erhe_graph/pin.hpp"
@@ -33,12 +34,14 @@ auto make_link_record(erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) 
 
 Geometry_graph_node_insert_remove_operation::Geometry_graph_node_insert_remove_operation(
     Geometry_graph_window&                      window,
+    const std::shared_ptr<Graph_mesh>&          graph_mesh,
     const std::shared_ptr<Geometry_graph_node>& node,
     const Mode                                  mode
 )
-    : m_window{window}
-    , m_node  {node}
-    , m_mode  {mode}
+    : m_window    {window}
+    , m_graph_mesh{graph_mesh}
+    , m_node      {node}
+    , m_mode      {mode}
 {
     set_description(
         fmt::format(
@@ -69,12 +72,12 @@ void Geometry_graph_node_insert_remove_operation::undo(App_context&)
 
 void Geometry_graph_node_insert_remove_operation::insert()
 {
-    m_window.insert_node(m_node);
+    m_window.insert_node(*m_graph_mesh, m_node);
     if (m_has_position) {
         m_window.set_node_position(*m_node.get(), m_position);
     }
     for (const Geometry_graph_link_record& record : m_links) {
-        m_window.connect_pins(record.source_pin, record.sink_pin);
+        m_window.connect_pins(*m_graph_mesh, record.source_pin, record.sink_pin);
     }
     m_links.clear();
 }
@@ -96,15 +99,17 @@ void Geometry_graph_node_insert_remove_operation::remove()
     }
     m_position     = m_window.get_node_position(*m_node.get());
     m_has_position = true;
-    m_window.erase_node(m_node);
+    m_window.erase_node(*m_graph_mesh, m_node);
 }
 
 Geometry_graph_replace_operation::Geometry_graph_replace_operation(
-    Geometry_graph_window&   window,
-    Geometry_graph_content&& new_content,
-    const char*              description
+    Geometry_graph_window&             window,
+    const std::shared_ptr<Graph_mesh>& graph_mesh,
+    Geometry_graph_content&&           new_content,
+    const char*                        description
 )
     : m_window     {window}
+    , m_graph_mesh {graph_mesh}
     , m_new_content{std::move(new_content)}
 {
     set_description(std::string{description});
@@ -127,11 +132,11 @@ void Geometry_graph_replace_operation::undo(App_context&)
 auto Geometry_graph_replace_operation::capture() -> Geometry_graph_content
 {
     Geometry_graph_content content;
-    content.nodes = m_window.get_nodes();
+    content.nodes = m_graph_mesh->nodes();
     for (const std::shared_ptr<Geometry_graph_node>& node : content.nodes) {
         content.positions.push_back(m_window.get_node_position(*node.get()));
     }
-    for (const std::unique_ptr<erhe::graph::Link>& link : m_window.get_graph().get_links()) {
+    for (const std::unique_ptr<erhe::graph::Link>& link : m_graph_mesh->graph().get_links()) {
         content.links.push_back(make_link_record(link->get_source(), link->get_sink()));
     }
     return content;
@@ -139,13 +144,13 @@ auto Geometry_graph_replace_operation::capture() -> Geometry_graph_content
 
 void Geometry_graph_replace_operation::apply(const Geometry_graph_content& content)
 {
-    const std::vector<std::shared_ptr<Geometry_graph_node>> current_nodes = m_window.get_nodes(); // copy - erase_node mutates
+    const std::vector<std::shared_ptr<Geometry_graph_node>> current_nodes = m_graph_mesh->nodes(); // copy - erase_node mutates
     for (const std::shared_ptr<Geometry_graph_node>& node : current_nodes) {
-        m_window.erase_node(node);
+        m_window.erase_node(*m_graph_mesh, node);
     }
     for (std::size_t i = 0, end = content.nodes.size(); i < end; ++i) {
         const std::shared_ptr<Geometry_graph_node>& node = content.nodes[i];
-        m_window.insert_node(node);
+        m_window.insert_node(*m_graph_mesh, node);
         if (i < content.positions.size()) {
             const ImVec2 position = content.positions[i];
             if (is_valid_node_position(position)) {
@@ -154,7 +159,7 @@ void Geometry_graph_replace_operation::apply(const Geometry_graph_content& conte
         }
     }
     for (const Geometry_graph_link_record& record : content.links) {
-        m_window.connect_pins(record.source_pin, record.sink_pin);
+        m_window.connect_pins(*m_graph_mesh, record.source_pin, record.sink_pin);
     }
 }
 
@@ -197,14 +202,16 @@ void Geometry_graph_parameter_operation::apply(const std::string& parameters)
 }
 
 Geometry_graph_link_insert_remove_operation::Geometry_graph_link_insert_remove_operation(
-    Geometry_graph_window& window,
-    erhe::graph::Pin*      source_pin,
-    erhe::graph::Pin*      sink_pin,
-    const Mode             mode
+    Geometry_graph_window&             window,
+    const std::shared_ptr<Graph_mesh>& graph_mesh,
+    erhe::graph::Pin*                  source_pin,
+    erhe::graph::Pin*                  sink_pin,
+    const Mode                         mode
 )
-    : m_window{window}
-    , m_link  {make_link_record(source_pin, sink_pin)}
-    , m_mode  {mode}
+    : m_window    {window}
+    , m_graph_mesh{graph_mesh}
+    , m_link      {make_link_record(source_pin, sink_pin)}
+    , m_mode      {mode}
 {
     set_description(
         fmt::format(
@@ -236,12 +243,12 @@ void Geometry_graph_link_insert_remove_operation::undo(App_context&)
 
 void Geometry_graph_link_insert_remove_operation::insert()
 {
-    m_window.connect_pins(m_link.source_pin, m_link.sink_pin);
+    m_window.connect_pins(*m_graph_mesh, m_link.source_pin, m_link.sink_pin);
 }
 
 void Geometry_graph_link_insert_remove_operation::remove()
 {
-    m_window.disconnect_pins(m_link.source_pin, m_link.sink_pin);
+    m_window.disconnect_pins(*m_graph_mesh, m_link.source_pin, m_link.sink_pin);
 }
 
 }

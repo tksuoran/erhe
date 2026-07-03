@@ -6,12 +6,18 @@
 #include "geometry_graph/geometry_graph_node.hpp"
 #include "geometry_graph/geometry_graph_node_factory.hpp"
 #include "geometry_graph/geometry_graph_operations.hpp"
+#include "geometry_graph/graph_mesh.hpp"
 #include "geometry_graph/nodes/geometry_output_node.hpp"
 #include "geometry_graph/nodes/group_nodes.hpp"
 
 #include "app_context.hpp"
+#include "app_scenes.hpp"
 #include "editor_log.hpp"
+#include "items.hpp"
+#include "content_library/content_library.hpp"
+#include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
+#include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 
 #include "erhe_graph/link.hpp"
@@ -50,6 +56,12 @@ Geometry_graph_window::Geometry_graph_window(
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Geometry Graph", "geometry_graph"}
     , m_app_context            {app_context}
 {
+    // The scratch graph the window edits when no Graph_mesh asset is
+    // selected. Graph_mesh construction does not touch App_context, so
+    // this is safe in the part constructor.
+    m_scratch_graph_mesh = std::make_shared<Graph_mesh>("Geometry Graph Scratch");
+    m_graph_mesh         = m_scratch_graph_mesh;
+
     m_node_editor = std::make_unique<ax::NodeEditor::EditorContext>(nullptr);
 
     // Input pins are drawn with PivotAlignment {-0.75, 0.5}, which leaves a
@@ -70,22 +82,69 @@ auto Geometry_graph_window::flags() -> ImGuiWindowFlags
     return ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
 }
 
-void Geometry_graph_window::insert_node(const std::shared_ptr<Geometry_graph_node>& node)
+void Geometry_graph_window::refresh_current_graph_mesh()
+{
+    std::shared_ptr<Graph_mesh> selected;
+    if (m_app_context.selection != nullptr) {
+        // Content-library assets are selected wrapped in a Content_library_node;
+        // get<>() unwraps that (the pattern Properties uses for the selected
+        // Material), unlike Selection::get_last_selected<>().
+        selected = get<Graph_mesh>(m_app_context.selection->get_selected_items());
+    }
+    m_graph_mesh = selected ? selected : m_scratch_graph_mesh;
+}
+
+auto Geometry_graph_window::get_current_graph_mesh() -> const std::shared_ptr<Graph_mesh>&
+{
+    // Keep m_graph_mesh consistent with the live selection regardless of call
+    // ordering (an MCP mutation may arrive before the frame's update).
+    refresh_current_graph_mesh();
+    return m_graph_mesh;
+}
+
+auto Geometry_graph_window::graph() -> Geometry_graph&
+{
+    return m_graph_mesh->graph();
+}
+
+auto Geometry_graph_window::mutable_nodes() -> std::vector<std::shared_ptr<Geometry_graph_node>>&
+{
+    return m_graph_mesh->nodes();
+}
+
+auto Geometry_graph_window::get_graph() -> Geometry_graph&
+{
+    // Refresh so an MCP read arriving after a selection change (possibly in
+    // the same request batch, before any frame ran) sees the current graph.
+    refresh_current_graph_mesh();
+    return m_graph_mesh->graph();
+}
+
+auto Geometry_graph_window::get_nodes() -> const std::vector<std::shared_ptr<Geometry_graph_node>>&
+{
+    // See get_graph(): the MCP handlers resolve nodes through this before
+    // mutating, so it must agree with the graph the mutation will target.
+    refresh_current_graph_mesh();
+    return m_graph_mesh->nodes();
+}
+
+void Geometry_graph_window::insert_node(Graph_mesh& graph_mesh, const std::shared_ptr<Geometry_graph_node>& node)
 {
     constexpr uint64_t flags = erhe::Item_flags::visible | erhe::Item_flags::content | erhe::Item_flags::show_in_ui;
     node->enable_flag_bits(flags);
-    m_nodes.push_back(node);
-    m_graph.register_node(node.get());
+    graph_mesh.nodes().push_back(node);
+    graph_mesh.graph().register_node(node.get());
     // A node entering the graph must re-evaluate even when it was clean
     // on removal (undo restore): the output node has to recreate its
     // scene mesh, released in on_removed_from_graph().
     node->mark_dirty();
 }
 
-void Geometry_graph_window::erase_node(const std::shared_ptr<Geometry_graph_node>& node)
+void Geometry_graph_window::erase_node(Graph_mesh& graph_mesh, const std::shared_ptr<Geometry_graph_node>& node)
 {
-    auto i = std::find(m_nodes.begin(), m_nodes.end(), node);
-    if (i == m_nodes.end()) {
+    std::vector<std::shared_ptr<Geometry_graph_node>>& nodes = graph_mesh.nodes();
+    auto i = std::find(nodes.begin(), nodes.end(), node);
+    if (i == nodes.end()) {
         return;
     }
     if (node->is_selected()) {
@@ -98,14 +157,14 @@ void Geometry_graph_window::erase_node(const std::shared_ptr<Geometry_graph_node
             mark_sink_node_dirty(link->get_sink());
         }
     }
-    m_graph.unregister_node(node.get());
-    m_nodes.erase(i);
+    graph_mesh.graph().unregister_node(node.get());
+    nodes.erase(i);
     node->on_removed_from_graph();
 }
 
-auto Geometry_graph_window::connect_pins(erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool
+auto Geometry_graph_window::connect_pins(Graph_mesh& graph_mesh, erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool
 {
-    erhe::graph::Link* link = m_graph.connect(source_pin, sink_pin);
+    erhe::graph::Link* link = graph_mesh.graph().connect(source_pin, sink_pin);
     if (link == nullptr) {
         return false;
     }
@@ -113,9 +172,9 @@ auto Geometry_graph_window::connect_pins(erhe::graph::Pin* source_pin, erhe::gra
     return true;
 }
 
-auto Geometry_graph_window::disconnect_pins(erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool
+auto Geometry_graph_window::disconnect_pins(Graph_mesh& graph_mesh, erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool
 {
-    std::vector<std::unique_ptr<erhe::graph::Link>>& links = m_graph.get_links();
+    std::vector<std::unique_ptr<erhe::graph::Link>>& links = graph_mesh.graph().get_links();
     auto i = std::find_if(
         links.begin(),
         links.end(),
@@ -126,7 +185,7 @@ auto Geometry_graph_window::disconnect_pins(erhe::graph::Pin* source_pin, erhe::
     if (i == links.end()) {
         return false;
     }
-    m_graph.disconnect(i->get());
+    graph_mesh.graph().disconnect(i->get());
     mark_sink_node_dirty(sink_pin);
     return true;
 }
@@ -145,7 +204,7 @@ void Geometry_graph_window::remove_node(const std::shared_ptr<Geometry_graph_nod
 {
     m_app_context.operation_stack->execute_now(
         std::make_shared<Geometry_graph_node_insert_remove_operation>(
-            *this, node, Geometry_graph_node_insert_remove_operation::Mode::remove
+            *this, get_current_graph_mesh(), node, Geometry_graph_node_insert_remove_operation::Mode::remove
         )
     );
 }
@@ -155,9 +214,12 @@ auto Geometry_graph_window::connect(erhe::graph::Pin* source_pin, erhe::graph::P
     if ((source_pin == nullptr) || (sink_pin == nullptr) || (source_pin->get_key() != sink_pin->get_key())) {
         return false;
     }
+    // By value: get_current_graph_mesh() returns a reference to m_graph_mesh,
+    // which a nested refresh would reassign under a reference binding.
+    const std::shared_ptr<Graph_mesh> graph_mesh = get_current_graph_mesh();
     // Validate before creating the operation: a refused link must not
     // leave a no-op entry on the undo stack.
-    if (m_graph.would_create_cycle(source_pin, sink_pin)) {
+    if (graph_mesh->graph().would_create_cycle(source_pin, sink_pin)) {
         log_graph_editor->warn(
             "Geometry graph: connecting '{}' to '{}' would create a cycle - refusing",
             source_pin->get_owner_node()->get_name(),
@@ -167,7 +229,7 @@ auto Geometry_graph_window::connect(erhe::graph::Pin* source_pin, erhe::graph::P
     }
     m_app_context.operation_stack->execute_now(
         std::make_shared<Geometry_graph_link_insert_remove_operation>(
-            *this, source_pin, sink_pin, Geometry_graph_link_insert_remove_operation::Mode::insert
+            *this, graph_mesh, source_pin, sink_pin, Geometry_graph_link_insert_remove_operation::Mode::insert
         )
     );
     return true;
@@ -177,7 +239,7 @@ void Geometry_graph_window::disconnect(erhe::graph::Pin* source_pin, erhe::graph
 {
     m_app_context.operation_stack->execute_now(
         std::make_shared<Geometry_graph_link_insert_remove_operation>(
-            *this, source_pin, sink_pin, Geometry_graph_link_insert_remove_operation::Mode::remove
+            *this, get_current_graph_mesh(), source_pin, sink_pin, Geometry_graph_link_insert_remove_operation::Mode::remove
         )
     );
 }
@@ -218,25 +280,57 @@ auto Geometry_graph_window::add_node_of_type(const std::string& type_name) -> Ge
     }
     m_app_context.operation_stack->execute_now(
         std::make_shared<Geometry_graph_node_insert_remove_operation>(
-            *this, node, Geometry_graph_node_insert_remove_operation::Mode::insert
+            *this, get_current_graph_mesh(), node, Geometry_graph_node_insert_remove_operation::Mode::insert
         )
     );
     set_node_position(*node.get(), next_node_spawn_position());
     return node.get();
 }
 
-auto Geometry_graph_window::get_graph() -> Geometry_graph&
+void Geometry_graph_window::create_and_select_graph_mesh()
 {
-    return m_graph;
-}
-
-auto Geometry_graph_window::get_nodes() const -> const std::vector<std::shared_ptr<Geometry_graph_node>>&
-{
-    return m_nodes;
+    if (m_app_context.app_scenes == nullptr) {
+        return;
+    }
+    const std::shared_ptr<Scene_root> scene_root = m_app_context.app_scenes->get_single_scene_root();
+    if (!scene_root) {
+        return;
+    }
+    const std::shared_ptr<Content_library> library = scene_root->get_content_library();
+    if (!library || !library->graph_meshes) {
+        return;
+    }
+    const std::shared_ptr<Graph_mesh> graph_mesh = std::make_shared<Graph_mesh>("Graph Mesh");
+    m_app_context.operation_stack->execute_now(
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context = m_app_context,
+                .item    = std::make_shared<Content_library_node>(graph_mesh),
+                .parent  = library->graph_meshes,
+                .mode    = Item_insert_remove_operation::Mode::insert
+            }
+        )
+    );
+    if (m_app_context.selection != nullptr) {
+        m_app_context.selection->set_selection({graph_mesh});
+    }
 }
 
 void Geometry_graph_window::file_toolbar()
 {
+    // Show which graph is being edited so the window-owned scratch graph
+    // (which is NOT a saveable content-library asset) is never mistaken
+    // for one.
+    refresh_current_graph_mesh();
+    const bool is_scratch = (m_graph_mesh == m_scratch_graph_mesh);
+    if (is_scratch) {
+        ImGui::TextUnformatted("Editing: (scratch - not saved; create an asset to persist)");
+    } else {
+        ImGui::Text("Editing asset: %s", m_graph_mesh->get_name().c_str());
+    }
+    if (ImGui::Button("New Graph Mesh")) { create_and_select_graph_mesh(); }
+    ImGui::Separator();
+
     ImGui::SetNextItemWidth(320.0f);
     ImGui::InputText("##graph_path", &m_graph_path);
     ImGui::SameLine(); if (ImGui::Button("Save"))  { save_graph(std::filesystem::path{m_graph_path}); }
@@ -283,22 +377,54 @@ auto Geometry_graph_window::is_evaluation_run_done() -> bool
     return m_evaluation_run->done;
 }
 
-void Geometry_graph_window::launch_evaluation()
+auto Geometry_graph_window::next_graph_needing_evaluation() -> std::shared_ptr<Graph_mesh>
+{
+    if (m_scratch_graph_mesh->graph().is_evaluation_needed()) {
+        return m_scratch_graph_mesh;
+    }
+    // The currently edited graph may be an orphan (asset removed from its
+    // library by undo/delete while still selected); it is not reachable
+    // through the content libraries below, but edits to it must still
+    // evaluate or the get_geometry_graph barrier returns stale payloads.
+    if (m_graph_mesh && m_graph_mesh->graph().is_evaluation_needed()) {
+        return m_graph_mesh;
+    }
+    if (m_app_context.app_scenes != nullptr) {
+        for (const std::shared_ptr<Scene_root>& scene_root : m_app_context.app_scenes->get_scene_roots()) {
+            const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
+            if (!content_library || !content_library->graph_meshes) {
+                continue;
+            }
+            for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->graph_meshes->get_all<Graph_mesh>()) {
+                if (graph_mesh->graph().is_evaluation_needed()) {
+                    return graph_mesh;
+                }
+            }
+        }
+    }
+    return {};
+}
+
+void Geometry_graph_window::launch_evaluation(const std::shared_ptr<Graph_mesh>& graph_mesh)
 {
     // Snapshot the live graph into a shadow clone the worker owns:
     // factory-built nodes carrying the same parameters, cached payloads
     // and dirty flags, plus the same links. Only the shadow is touched
     // off the main thread, so the live graph stays free for the UI and
     // for structural edits while the run is in flight.
+    const std::vector<std::shared_ptr<Geometry_graph_node>>& live_nodes = graph_mesh->nodes();
+    Geometry_graph&                                          live_graph = graph_mesh->graph();
+
     std::shared_ptr<Evaluation_run> run = std::make_shared<Evaluation_run>();
-    run->shadow_nodes.reserve(m_nodes.size());
-    run->live_node_ids.reserve(m_nodes.size());
-    for (const std::shared_ptr<Geometry_graph_node>& node : m_nodes) {
+    run->target = graph_mesh;
+    run->shadow_nodes.reserve(live_nodes.size());
+    run->live_node_ids.reserve(live_nodes.size());
+    for (const std::shared_ptr<Geometry_graph_node>& node : live_nodes) {
         const std::shared_ptr<Geometry_graph_node> shadow = make_geometry_graph_node(m_app_context, node->get_factory_type_name());
         if (!shadow) {
             // Should not happen (every insertable type has a factory
-            // entry); keep shadow_nodes parallel to m_nodes so the link
-            // recreation below cannot mis-wire, and skip this node.
+            // entry); keep shadow_nodes parallel to live_nodes so the
+            // link recreation below cannot mis-wire, and skip this node.
             log_graph_editor->warn("Geometry graph evaluation: no factory for node type '{}'", node->get_factory_type_name());
             run->shadow_nodes.push_back({});
             run->live_node_ids.push_back(node->get_id());
@@ -326,12 +452,12 @@ void Geometry_graph_window::launch_evaluation()
         run->shadow_nodes.push_back(shadow);
         run->live_node_ids.push_back(node->get_id());
     }
-    for (const std::unique_ptr<erhe::graph::Link>& link : m_graph.get_links()) {
-        std::size_t source_index = m_nodes.size();
-        std::size_t sink_index   = m_nodes.size();
-        for (std::size_t i = 0, end = m_nodes.size(); i < end; ++i) {
-            if (m_nodes[i].get() == link->get_source()->get_owner_node()) { source_index = i; }
-            if (m_nodes[i].get() == link->get_sink  ()->get_owner_node()) { sink_index   = i; }
+    for (const std::unique_ptr<erhe::graph::Link>& link : live_graph.get_links()) {
+        std::size_t source_index = live_nodes.size();
+        std::size_t sink_index   = live_nodes.size();
+        for (std::size_t i = 0, end = live_nodes.size(); i < end; ++i) {
+            if (live_nodes[i].get() == link->get_source()->get_owner_node()) { source_index = i; }
+            if (live_nodes[i].get() == link->get_sink  ()->get_owner_node()) { sink_index   = i; }
         }
         if ((source_index >= run->shadow_nodes.size()) || (sink_index >= run->shadow_nodes.size())) {
             continue;
@@ -351,12 +477,12 @@ void Geometry_graph_window::launch_evaluation()
     // already carry the live state, so discard the shadow's birth flag
     // and forward only an explicit live forced-full request.
     static_cast<void>(run->shadow_graph.consume_forced_full());
-    if (m_graph.consume_forced_full()) {
+    if (live_graph.consume_forced_full()) {
         run->shadow_graph.mark_dirty();
     }
     // The snapshot now owns the dirty state; edits made while the run is
     // in flight re-mark nodes dirty and trigger the next run.
-    for (const std::shared_ptr<Geometry_graph_node>& node : m_nodes) {
+    for (const std::shared_ptr<Geometry_graph_node>& node : live_nodes) {
         node->clear_dirty();
     }
 
@@ -392,14 +518,15 @@ void Geometry_graph_window::launch_evaluation()
 void Geometry_graph_window::finish_evaluation()
 {
     // pre: m_evaluation_run && done. Copy the shadow results back to the
-    // live nodes (matched by id; nodes removed while the run was in
-    // flight are skipped) and apply the output nodes' evaluated scene
-    // products. Main thread.
+    // target graph's live nodes (matched by id; nodes removed while the
+    // run was in flight are skipped) and apply the output nodes'
+    // evaluated scene products. Main thread.
     const std::shared_ptr<Evaluation_run> run = std::move(m_evaluation_run);
+    const std::vector<std::shared_ptr<Geometry_graph_node>>& live_nodes = run->target->nodes();
     for (std::size_t i = 0, end = run->shadow_nodes.size(); i < end; ++i) {
         const std::size_t live_id = run->live_node_ids[i];
         Geometry_graph_node* live_node = nullptr;
-        for (const std::shared_ptr<Geometry_graph_node>& node : m_nodes) {
+        for (const std::shared_ptr<Geometry_graph_node>& node : live_nodes) {
             if (node->get_id() == live_id) {
                 live_node = node.get();
                 break;
@@ -433,21 +560,28 @@ void Geometry_graph_window::finish_evaluation()
 
 void Geometry_graph_window::update_evaluation()
 {
+    // Once-per-frame refresh (the template's Texture_graph_window::update()
+    // parity): keeps m_graph_mesh tracking the selection even when the
+    // window is closed, so MCP reads never see a stale graph.
+    refresh_current_graph_mesh();
+
     if (m_evaluation_run) {
         if (!is_evaluation_run_done()) {
             return;
         }
         finish_evaluation();
     }
-    if (m_graph.is_evaluation_needed()) {
-        launch_evaluation();
+    const std::shared_ptr<Graph_mesh> next = next_graph_needing_evaluation();
+    if (next) {
+        launch_evaluation(next);
     }
 }
 
 void Geometry_graph_window::wait_for_idle_evaluation()
 {
-    // Multi-round: finishing a run can leave the graph dirty again
-    // (edits made while it ran), which needs another run.
+    // Multi-round: finishing a run can leave a graph dirty again (edits
+    // made while it ran), and other graphs may be waiting their turn
+    // behind the single in-flight run.
     for (;;) {
         if (m_evaluation_run) {
             {
@@ -456,10 +590,11 @@ void Geometry_graph_window::wait_for_idle_evaluation()
             }
             finish_evaluation();
         }
-        if (!m_graph.is_evaluation_needed()) {
+        const std::shared_ptr<Graph_mesh> next = next_graph_needing_evaluation();
+        if (!next) {
             return;
         }
-        launch_evaluation();
+        launch_evaluation(next);
     }
 }
 
@@ -475,16 +610,19 @@ void Geometry_graph_window::controls_imgui()
 
 void Geometry_graph_window::imgui()
 {
+    // The canvas draws the currently edited graph (selection-driven).
+    refresh_current_graph_mesh();
+
     m_node_editor->Begin("Geometry Graph", ImVec2{0.0f, 0.0f});
 
-    for (erhe::graph::Node* node : m_graph.get_nodes()) {
+    for (erhe::graph::Node* node : graph().get_nodes()) {
         Geometry_graph_node* geometry_graph_node = dynamic_cast<Geometry_graph_node*>(node);
         if (geometry_graph_node != nullptr) {
             geometry_graph_node->node_editor(m_app_context, *m_node_editor.get());
         }
     }
 
-    for (const std::unique_ptr<erhe::graph::Link>& link : m_graph.get_links()) {
+    for (const std::unique_ptr<erhe::graph::Link>& link : graph().get_links()) {
         m_node_editor->Link(
             ax::NodeEditor::LinkId{link.get()},
             ax::NodeEditor::PinId{link->get_source()},
@@ -518,7 +656,7 @@ void Geometry_graph_window::handle_link_create()
                     (source_pin != sink_pin) &&
                     (source_node != sink_node) &&
                     (source_pin->get_key() == sink_pin->get_key()) &&
-                    !m_graph.would_create_cycle(source_pin, sink_pin)
+                    !graph().would_create_cycle(source_pin, sink_pin)
                 ) {
                     acceptable = true;
                     if (m_node_editor->AcceptNewItem()) { // mouse released?
@@ -540,12 +678,13 @@ void Geometry_graph_window::handle_deletions()
         ax::NodeEditor::NodeId node_handle = 0;
         while (m_node_editor->QueryDeletedNode(&node_handle)){
             if (m_node_editor->AcceptDeletedItem()) {
-                auto i = std::find_if(m_nodes.begin(), m_nodes.end(), [node_handle](const std::shared_ptr<Geometry_graph_node>& entry){
+                std::vector<std::shared_ptr<Geometry_graph_node>>& nodes = mutable_nodes();
+                auto i = std::find_if(nodes.begin(), nodes.end(), [node_handle](const std::shared_ptr<Geometry_graph_node>& entry){
                     ax::NodeEditor::NodeId entry_node_id = ax::NodeEditor::NodeId{entry->get_id()};
                     return entry_node_id == node_handle;
                 });
-                if (i != m_nodes.end()) {
-                    const std::shared_ptr<Geometry_graph_node> geometry_graph_node = *i; // copy - remove_node() erases from m_nodes
+                if (i != nodes.end()) {
+                    const std::shared_ptr<Geometry_graph_node> geometry_graph_node = *i; // copy - remove_node() erases from the node vector
                     remove_node(geometry_graph_node);
                 }
             }
@@ -554,7 +693,7 @@ void Geometry_graph_window::handle_deletions()
         ax::NodeEditor::LinkId link_handle;
         while (m_node_editor->QueryDeletedLink(&link_handle)) {
             if (m_node_editor->AcceptDeletedItem()) {
-                std::vector<std::unique_ptr<erhe::graph::Link>>& links = m_graph.get_links();
+                std::vector<std::unique_ptr<erhe::graph::Link>>& links = graph().get_links();
                 auto i = std::find_if(links.begin(), links.end(), [link_handle](const std::unique_ptr<erhe::graph::Link>& entry){
                     ax::NodeEditor::LinkId entry_link_id = ax::NodeEditor::LinkId{entry.get()};
                     return entry_link_id == link_handle;
