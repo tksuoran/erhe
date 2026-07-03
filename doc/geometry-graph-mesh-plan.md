@@ -35,8 +35,16 @@ serialization format and MCP surface carry over in substance - what changes is
 | B2: Re-home graph state window -> asset; per-asset async engine; create UI | DONE | e1d1904b |
 | B3: `Geometry_graph_mesh` attachment; output node publishes to asset | DONE   | 64957814 |
 | B4: MCP tools (create/list/bind); per-asset graph tools               | DONE   | 47c6a83d |
-| B5: Scene serialization of asset + binding (scene_file v7)            | TODO   |        |
-| B6: Smoke coverage + full live headless verification                  | TODO   |        |
+| B5: Scene serialization of asset + binding (scene_file v7)            | DONE   | 5e14ce65 |
+| B6: Smoke coverage + full live headless verification                  | DONE   | (this commit) |
+
+Phase B is functionally complete and headless-verified (create asset ->
+edit graph -> bind scene node -> mesh renders -> graph edit re-renders all
+bound nodes -> physics travels with the bake -> unbind cleans up -> scene
+v7 save/reload round-trips asset + binding without duplicating baked
+products). Geometry sweep 144/144 (24 new asset/attachment checks),
+texture sweep 283/283. Awaiting USER live sign-off before the Phase C
+handoff replaces prompt_queue.txt.
 
 Notes accumulated during implementation:
 

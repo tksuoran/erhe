@@ -8,11 +8,15 @@ churn with deep undo/redo, serialization round-trip, output node edge
 cases, multi-link partial disconnects, invalid connect rejection
 (type mismatch, self links, cycles), error-path serialization (malformed
 files, bad group assets), out-of-range parameter abuse, output physics
-edge cases, and stress chains. Prints a structured PASS/FAIL report.
+edge cases, the Graph Mesh asset + Geometry Graph Mesh attachment
+(create/select/bind/re-bake/shared-bake/physics/unbind + scene v7
+save/load round-trip), and stress chains. Prints a structured PASS/FAIL
+report.
 """
 
 import json
 import pathlib
+import shutil
 import sys
 import time
 import urllib.request
@@ -1229,6 +1233,142 @@ def section_stress():
     call("capture_screenshot", {"path": "logs/smoke_stress.png"})
 
 
+def node_attachments(scene_name, node_name):
+    details = call("get_node_details", {"scene_name": scene_name, "node_name": node_name})
+    return details.get("attachments", []) if isinstance(details, dict) else []
+
+
+def wait_for_scene_node(scene_name, node_name, tries=50):
+    # create_node queues the insert operation; it lands on a later frame's
+    # request batch, so poll rather than assuming same-batch visibility.
+    for _ in range(tries):
+        data = call("get_scene_nodes", {"scene_name": scene_name})
+        names = []
+        def walk(entries):
+            for entry in entries:
+                names.append(entry.get("name", ""))
+                walk(entry.get("children", []))
+        if isinstance(data, dict):
+            walk(data.get("nodes", []))
+        if node_name in names:
+            return True
+        time.sleep(0.1)
+    return False
+
+
+def section_graph_mesh_asset():
+    """Graph Mesh as a content-library asset + Geometry Graph Mesh node
+    attachment: create + select, edit the selected asset, bind scene nodes,
+    live re-bake propagation, shared bake, physics-through-bake, unbind, and
+    scene save/load round-trip (scene file v7) without duplicating the baked
+    products."""
+    S = "graph-mesh-asset"
+    clear_graph()  # leave the scratch clean before selecting the asset
+
+    scenes = call("list_scenes")["scenes"]
+    if not scenes:
+        check(S, "a scene exists", False)
+        return
+    scene_name = scenes[0]["name"]
+
+    created = mutate("create_graph_mesh", {"name": "Smoke GM", "scene_name": scene_name})
+    check(S, "create_graph_mesh creates the asset", bool(created) and created.get("created"), detail=str(created))
+    asset_id = created.get("id") if created else None
+    graph = get_graph()
+    check(S, "geometry_graph tools target the created asset",
+          (graph.get("graph_mesh_name") == "Smoke GM") and not graph.get("is_scratch"))
+
+    box = add_node("box")
+    out = add_node("output")
+    connect(box["id"], 0, out["id"], 0)
+    get_graph()  # evaluation barrier
+    entries = [e for e in call("get_graph_meshes", {"scene_name": scene_name})["graph_meshes"] if e["name"] == "Smoke GM"]
+    check(S, "asset publishes a bake after evaluation", len(entries) == 1 and entries[0].get("has_bake"), detail=str(entries))
+
+    mutate("create_node", {"name": "Smoke GM Node", "scene_name": scene_name})
+    check(S, "bound scene node created", wait_for_scene_node(scene_name, "Smoke GM Node"))
+    bound = mutate("set_node_graph_mesh", {"node_name": "Smoke GM Node", "graph_mesh": "Smoke GM", "scene_name": scene_name})
+    check(S, "set_node_graph_mesh binds", bool(bound) and bound.get("bound"), detail=str(bound))
+    get_graph()
+    atts = node_attachments(scene_name, "Smoke GM Node")
+    gm_atts   = [a for a in atts if a.get("type") == "Geometry_graph_mesh"]
+    mesh_atts = [a for a in atts if a.get("type") == "Mesh"]
+    check(S, "attachment back-references the asset", len(gm_atts) == 1 and gm_atts[0].get("graph_mesh") == "Smoke GM", detail=str(gm_atts))
+    check(S, "controlled mesh carries the box geometry", len(mesh_atts) == 1 and mesh_atts[0].get("facet_count") == 24, detail=str(mesh_atts))
+
+    # Live link: a graph edit re-bakes and re-renders every bound node.
+    sub = add_node("subdivide")
+    disconnect(box["id"], 0, out["id"], 0)
+    connect(box["id"], 0, sub["id"], 0)
+    connect(sub["id"], 0, out["id"], 0)
+    get_graph()
+    mesh_atts = [a for a in node_attachments(scene_name, "Smoke GM Node") if a.get("type") == "Mesh"]
+    check(S, "graph edit re-bakes the bound node's mesh", len(mesh_atts) == 1 and mesh_atts[0].get("facet_count") == 96, detail=str(mesh_atts))
+
+    # A second node bound to the same asset picks up the existing bake at
+    # bind time (no re-evaluation) and shares the GPU primitive.
+    mutate("create_node", {"name": "Smoke GM Node 2", "scene_name": scene_name})
+    check(S, "second scene node created", wait_for_scene_node(scene_name, "Smoke GM Node 2"))
+    mutate("set_node_graph_mesh", {"node_name": "Smoke GM Node 2", "graph_mesh": "Smoke GM", "scene_name": scene_name})
+    mesh_atts = [a for a in node_attachments(scene_name, "Smoke GM Node 2") if a.get("type") == "Mesh"]
+    check(S, "second node shares the existing bake at bind time", len(mesh_atts) == 1 and mesh_atts[0].get("facet_count") == 96, detail=str(mesh_atts))
+
+    # Selection drives which graph the tools edit.
+    mutate("select_items", {"scene_name": scene_name, "ids": []})
+    check(S, "no selection -> tools target the scratch", get_graph().get("is_scratch") is True)
+    call("select_items", {"scene_name": scene_name, "ids": [asset_id]})
+    check(S, "asset re-selectable by id", get_graph().get("graph_mesh_name") == "Smoke GM")
+
+    # Physics travels with the bake to every bound node.
+    set_param(out["id"], {"physics": True})
+    get_graph()
+    types = [a.get("type") for a in node_attachments(scene_name, "Smoke GM Node 2")]
+    check(S, "physics enable materializes Node_physics on bound nodes", "Node_physics" in types, detail=str(types))
+    set_param(out["id"], {"physics": False})
+    get_graph()
+    types = [a.get("type") for a in node_attachments(scene_name, "Smoke GM Node 2")]
+    check(S, "physics disable removes Node_physics from bound nodes", "Node_physics" not in types, detail=str(types))
+
+    # Unbind removes the attachment and its controlled products.
+    mutate("set_node_graph_mesh", {"node_name": "Smoke GM Node 2", "graph_mesh": "", "scene_name": scene_name})
+    types = [a.get("type") for a in node_attachments(scene_name, "Smoke GM Node 2")]
+    check(S, "unbind removes attachment and controlled mesh", ("Geometry_graph_mesh" not in types) and ("Mesh" not in types), detail=str(types))
+
+    # Scene save/load round-trip (scene file v7). The baked products must
+    # NOT be double-persisted as ordinary mesh/physics records.
+    bundle = pathlib.Path("res/editor/scenes/smoke_graph_mesh.erhescene")
+    mutate("save_scene", {"scene_name": scene_name, "path": "res/editor/scenes/smoke_graph_mesh"})
+    scene_json_path = bundle / "scene.json"
+    check(S, "save wrote scene.json", scene_json_path.is_file(), detail=str(scene_json_path))
+    binding_node_id = None
+    if scene_json_path.is_file():
+        doc = json.loads(scene_json_path.read_text(encoding="utf-8"))
+        saved_assets = [g for g in doc.get("graph_meshes", []) if g.get("name") == "Smoke GM" and g.get("graph")]
+        check(S, "scene.json persists the Graph Mesh asset", len(saved_assets) == 1, detail=str(saved_assets)[:120])
+        bindings = doc.get("graph_mesh_bindings", [])
+        check(S, "scene.json persists the node binding", len(bindings) == 1 and bindings[0].get("graph_mesh_name") == "Smoke GM", detail=str(bindings))
+        if len(bindings) == 1:
+            binding_node_id = bindings[0].get("node_id")
+            mesh_refs    = [m for m in doc.get("mesh_references", []) if m.get("node_id") == binding_node_id]
+            physics_refs = [p for p in doc.get("node_physics", [])    if p.get("node_id") == binding_node_id]
+            check(S, "controlled mesh is not double-persisted", len(mesh_refs) == 0, detail=str(mesh_refs)[:120])
+            check(S, "controlled physics is not double-persisted", len(physics_refs) == 0, detail=str(physics_refs)[:120])
+
+    before = len([g for g in call("get_graph_meshes")["graph_meshes"] if g["name"] == "Smoke GM"])
+    loaded = mutate("load_scene", {"path": "res/editor/scenes/smoke_graph_mesh.erhescene"})
+    check(S, "load_scene loaded the bundle", bool(loaded) and loaded.get("loaded"), detail=str(loaded))
+    get_graph()  # barrier: the loaded graph evaluates and pushes to its binding
+    after = [g for g in call("get_graph_meshes")["graph_meshes"] if g["name"] == "Smoke GM"]
+    check(S, "reloaded scene reconstructs the asset", len(after) >= before + 1, detail=f"{before}->{len(after)}")
+    check(S, "reloaded asset re-bakes", len(after) >= 1 and all(g.get("has_bake") for g in after), detail=str(after))
+
+    # Cleanup: unbind the remaining node, drop the bundle, return to scratch.
+    mutate("set_node_graph_mesh", {"node_name": "Smoke GM Node", "graph_mesh": "", "scene_name": scene_name})
+    mutate("select_items", {"scene_name": scene_name, "ids": []})
+    shutil.rmtree(bundle, ignore_errors=True)
+    check(S, "back on the scratch after cleanup", get_graph().get("is_scratch") is True)
+
+
 def main():
     sections = [
         section_every_node_type,
@@ -1242,6 +1382,7 @@ def main():
         section_serialization_errors,
         section_parameter_abuse,
         section_output_physics_edges,
+        section_graph_mesh_asset,
         section_stress,
     ]
     for section in sections:
