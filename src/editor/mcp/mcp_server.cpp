@@ -14,6 +14,12 @@
 #include "geometry_graph/geometry_graph.hpp"
 #include "geometry_graph/geometry_graph_node.hpp"
 #include "geometry_graph/geometry_graph_window.hpp"
+#include "texture_graph/texture_graph.hpp"
+#include "texture_graph/texture_graph_compose.hpp"
+#include "texture_graph/texture_graph_node.hpp"
+#include "texture_graph/texture_graph_window.hpp"
+#include "texture_graph/texture_payload.hpp"
+#include "texture_graph/texture_renderer.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/item_parent_change_operation.hpp"
 #include "operations/material_change_operation.hpp"
@@ -44,10 +50,15 @@
 
 #include "erhe_imgui/imgui_windows.hpp"
 
+#include <imgui/imgui.h>
+
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_graph/link.hpp"
 #include "erhe_graph/pin.hpp"
 #include "erhe_primitive/primitive.hpp"
+#include "erhe_texgen/composer.hpp"
+#include "erhe_texgen/shader_code.hpp"
+#include "erhe_texgen/value_type.hpp"
 
 #include "erhe_scene_renderer/mesh_memory.hpp"
 
@@ -79,12 +90,14 @@
 #include <cerrno>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <optional>
 #include <set>
+#include <span>
 #include <sstream>
 #include <string_view>
 #include <system_error>
@@ -1122,6 +1135,16 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "geometry_graph_save")          result = action_geometry_graph_save         (req->arguments);
         else if (req->tool_name == "geometry_graph_load")          result = action_geometry_graph_load         (req->arguments);
         else if (req->tool_name == "geometry_graph_clear")         result = action_geometry_graph_clear        (req->arguments);
+        else if (req->tool_name == "get_texture_graph")            result = query_texture_graph                (req->arguments);
+        else if (req->tool_name == "texture_graph_add_node")       result = action_texture_graph_add_node      (req->arguments);
+        else if (req->tool_name == "texture_graph_remove_node")    result = action_texture_graph_remove_node   (req->arguments);
+        else if (req->tool_name == "texture_graph_set_parameter")  result = action_texture_graph_set_parameter (req->arguments);
+        else if (req->tool_name == "texture_graph_connect")        result = action_texture_graph_connect       (req->arguments);
+        else if (req->tool_name == "texture_graph_disconnect")     result = action_texture_graph_disconnect    (req->arguments);
+        else if (req->tool_name == "texture_graph_save")           result = action_texture_graph_save          (req->arguments);
+        else if (req->tool_name == "texture_graph_load")           result = action_texture_graph_load          (req->arguments);
+        else if (req->tool_name == "texture_graph_clear")          result = action_texture_graph_clear         (req->arguments);
+        else if (req->tool_name == "texture_graph_export_png")     result = action_texture_graph_export_png    (req->arguments);
         else                                              result = execute_command       (req->tool_name);
 
         } catch (const std::exception& e) {
@@ -1792,6 +1815,76 @@ void Mcp_server::refresh_tool_list()
         {"required", json::array({"path"})}
     }});
     m_tool_infos.push_back({"geometry_graph_clear", "Remove all nodes and links from the geometry node graph. Undoable (single operation).", schema_no_args()});
+
+    m_tool_infos.push_back({"get_texture_graph", "List the procedural texture node graph: nodes with ids, type labels, canvas positions, parameters, input pins (slot, value type, whether connected, source node id/slot) and output pins (slot, value type), plus a 'composable' flag per node, and all links. Texture graph evaluation is synchronous, so no wait is needed.", schema_no_args()});
+    m_tool_infos.push_back({"texture_graph_add_node", "Add a node to the texture node graph. Returns the new node's id, parameters and pin layout.", {
+        {"type", "object"},
+        {"properties", {
+            {"type", {{"type", "string"}, {"enum", json::array({"uniform", "perlin", "voronoi", "bricks", "shape", "blend", "colorize", "transform", "brightness_contrast", "normal_map", "output"})}, {"description", "Node type to create"}}},
+            {"position", {{"type", "array"}, {"items", {{"type", "number"}}}, {"description", "Optional [x, y] canvas position; defaults to the next spawn-grid slot"}}}
+        }},
+        {"required", json::array({"type"})}
+    }});
+    m_tool_infos.push_back({"texture_graph_connect", "Connect an output pin of one texture graph node to an input pin of another (pins are addressed by node id + pin slot index; pin keys / value types must match). Undoable. Returns an error result when the pin keys differ or the link would create a cycle.", {
+        {"type", "object"},
+        {"properties", {
+            {"source_node_id", {{"type", "integer"}, {"description", "Id of the node providing the output"}}},
+            {"source_slot",    {{"type", "integer"}, {"description", "Output pin slot index on the source node (default 0)"}}},
+            {"sink_node_id",   {{"type", "integer"}, {"description", "Id of the node receiving the input"}}},
+            {"sink_slot",      {{"type", "integer"}, {"description", "Input pin slot index on the sink node (default 0)"}}}
+        }},
+        {"required", json::array({"source_node_id", "sink_node_id"})}
+    }});
+    m_tool_infos.push_back({"texture_graph_disconnect", "Disconnect a texture graph link (addressed like texture_graph_connect). Undoable.", {
+        {"type", "object"},
+        {"properties", {
+            {"source_node_id", {{"type", "integer"}, {"description", "Id of the node providing the output"}}},
+            {"source_slot",    {{"type", "integer"}, {"description", "Output pin slot index on the source node (default 0)"}}},
+            {"sink_node_id",   {{"type", "integer"}, {"description", "Id of the node receiving the input"}}},
+            {"sink_slot",      {{"type", "integer"}, {"description", "Input pin slot index on the sink node (default 0)"}}}
+        }},
+        {"required", json::array({"source_node_id", "sink_node_id"})}
+    }});
+    m_tool_infos.push_back({"texture_graph_remove_node", "Remove a texture graph node (its links are removed too). Undoable.", {
+        {"type", "object"},
+        {"properties", {
+            {"node_id", {{"type", "integer"}, {"description", "Id of the node to remove"}}}
+        }},
+        {"required", json::array({"node_id"})}
+    }});
+    m_tool_infos.push_back({"texture_graph_set_parameter", "Set parameters of a texture graph node. Takes the same JSON object shape as the graph file's per-node 'parameters' (see get_texture_graph); partial updates are allowed - omitted keys keep their current values. Undoable.", {
+        {"type", "object"},
+        {"properties", {
+            {"node_id",    {{"type", "integer"}, {"description", "Id of the node"}}},
+            {"parameters", {{"type", "object"},  {"description", "Parameter key/values to set"}}}
+        }},
+        {"required", json::array({"node_id", "parameters"})}
+    }});
+    m_tool_infos.push_back({"texture_graph_save", "Save the texture node graph to a JSON file (node types, parameters, canvas positions, links).", {
+        {"type", "object"},
+        {"properties", {
+            {"path", {{"type", "string"}, {"description", "File path to save to (parent directories are created)"}}}
+        }},
+        {"required", json::array({"path"})}
+    }});
+    m_tool_infos.push_back({"texture_graph_load", "Load the texture node graph from a JSON file, replacing the current graph content. Undoable (single operation).", {
+        {"type", "object"},
+        {"properties", {
+            {"path", {{"type", "string"}, {"description", "File path to load from"}}}
+        }},
+        {"required", json::array({"path"})}
+    }});
+    m_tool_infos.push_back({"texture_graph_clear", "Remove all nodes and links from the texture node graph. Undoable (single operation).", schema_no_args()});
+    m_tool_infos.push_back({"texture_graph_export_png", "Compose and render a texture graph node's output to a PNG file. For a generator/filter node the given output slot is rendered; for the Output node (no output pins) the connected input's subtree is rendered. Returns the written path and its width/height. Requires the graphics device (works in the headless Vulkan build).", {
+        {"type", "object"},
+        {"properties", {
+            {"node_id",     {{"type", "integer"}, {"description", "Id of the node whose output to render"}}},
+            {"output_slot", {{"type", "integer"}, {"description", "Output pin slot index to render (default 0; ignored for the Output node)"}}},
+            {"size",        {{"type", "integer"}, {"description", "Square edge length in pixels (default 256, clamped to [1, 4096])"}}},
+            {"path",        {{"type", "string"},  {"description", "PNG file path to write (parent directories are created)"}}}
+        }},
+        {"required", json::array({"node_id", "path"})}
+    }});
 
     // Editor commands
     const auto& registered_commands = m_commands.get_commands();
@@ -5793,6 +5886,383 @@ auto Mcp_server::action_geometry_graph_clear(const json& args) -> std::string
     json result;
     result["cleared"] = true;
     return make_json_content(result).dump();
+}
+
+namespace {
+
+[[nodiscard]] auto texture_pin_value_type_name(const std::size_t key) -> const char*
+{
+    switch (key) {
+        case Texture_pin_key::grayscale: return "f";
+        case Texture_pin_key::rgb:       return "rgb";
+        case Texture_pin_key::rgba:      return "rgba";
+        default:                         return "unknown";
+    }
+}
+
+[[nodiscard]] auto find_texture_graph_node(
+    const std::vector<std::shared_ptr<Texture_graph_node>>& nodes,
+    const std::size_t                                       id
+) -> Texture_graph_node*
+{
+    for (const std::shared_ptr<Texture_graph_node>& node : nodes) {
+        if (node->get_id() == id) {
+            return node.get();
+        }
+    }
+    return nullptr;
+}
+
+[[nodiscard]] auto texture_input_pin_json(const erhe::graph::Pin& pin) -> json
+{
+    json j{
+        {"slot",       pin.get_slot()},
+        {"key",        pin.get_key()},
+        {"value_type", texture_pin_value_type_name(pin.get_key())},
+        {"name",       std::string{pin.get_name()}},
+        {"connected",  !pin.get_links().empty()}
+    };
+    const std::vector<erhe::graph::Link*>& links = pin.get_links();
+    if (!links.empty()) {
+        // MVP inputs take a single link; report the last connected source.
+        erhe::graph::Pin* source_pin = links.back()->get_source();
+        j["source_node_id"] = source_pin->get_owner_node()->get_id();
+        j["source_slot"]    = source_pin->get_slot();
+    }
+    return j;
+}
+
+[[nodiscard]] auto texture_output_pin_json(const erhe::graph::Pin& pin) -> json
+{
+    return json{
+        {"slot",       pin.get_slot()},
+        {"key",        pin.get_key()},
+        {"value_type", texture_pin_value_type_name(pin.get_key())},
+        {"name",       std::string{pin.get_name()}},
+        {"link_count", pin.get_links().size()}
+    };
+}
+
+// Builds the compose DAG for exporting a node's output. A descriptor-driven node
+// composes its own output slot; a sink node without a descriptor (the Output
+// node) composes the highest-channel connected input's source subtree, matching
+// how the Output node bakes its result.
+[[nodiscard]] auto build_texture_export_dag(Texture_graph_node& node, const std::size_t output_slot) -> Texture_compose_dag
+{
+    if (node.descriptor() != nullptr) {
+        return build_texture_compose_dag(node, output_slot);
+    }
+    const std::size_t input_count = node.get_input_pins().size();
+    for (std::size_t i = input_count; i-- > 0; ) {
+        const Texture_payload source = node.input_from_links(i);
+        if (source.source_node != nullptr) {
+            return build_texture_compose_dag(*source.source_node, source.output_index);
+        }
+    }
+    return Texture_compose_dag{};
+}
+
+[[nodiscard]] auto texture_graph_node_json(Texture_graph_window& window, Texture_graph_node& node) -> json
+{
+    json inputs = json::array();
+    for (const erhe::graph::Pin& pin : node.get_input_pins()) {
+        inputs.push_back(texture_input_pin_json(pin));
+    }
+    json outputs = json::array();
+    for (const erhe::graph::Pin& pin : node.get_output_pins()) {
+        outputs.push_back(texture_output_pin_json(pin));
+    }
+    json parameters = json::object();
+    node.write_parameters(parameters);
+
+    // 'composable' reflects whether the node's primary output currently
+    // assembles to a fragment shader without an error marker. Pure string
+    // composition (no GPU), so it is cheap enough to compute per query.
+    bool composable = false;
+    const Texture_compose_dag dag = build_texture_export_dag(node, 0);
+    if (dag.ok && (dag.sink != nullptr)) {
+        const erhe::texgen::Composer    composer{texture_graph_compose_options()};
+        const erhe::texgen::Shader_code shader_code = composer.compose(*dag.sink, dag.sink_output_index);
+        const std::string               fragment    = composer.assemble_fragment(shader_code);
+        composable = (fragment.find("(error:") == std::string::npos);
+    }
+
+    const ImVec2 position = window.get_node_position(node);
+    return json{
+        {"id",         node.get_id()},
+        {"name",       node.get_name()},
+        {"type",       node.get_factory_type_name()},
+        {"position",   {position.x, position.y}},
+        {"parameters", parameters},
+        {"inputs",     inputs},
+        {"outputs",    outputs},
+        {"composable", composable}
+    };
+}
+
+} // anonymous namespace
+
+auto Mcp_server::query_texture_graph(const json& args) -> std::string
+{
+    static_cast<void>(args);
+    Texture_graph_window* window = m_context.texture_graph_window;
+    if (window == nullptr) {
+        return make_error_content("Texture graph window not available");
+    }
+
+    // Texture graph evaluation is synchronous (decision 8), so no wait is needed.
+    json nodes = json::array();
+    for (const std::shared_ptr<Texture_graph_node>& node : window->get_nodes()) {
+        nodes.push_back(texture_graph_node_json(*window, *node.get()));
+    }
+
+    json links = json::array();
+    for (const std::unique_ptr<erhe::graph::Link>& link : window->get_graph().get_links()) {
+        links.push_back({
+            {"source_node_id", link->get_source()->get_owner_node()->get_id()},
+            {"source_slot",    link->get_source()->get_slot()},
+            {"sink_node_id",   link->get_sink()->get_owner_node()->get_id()},
+            {"sink_slot",      link->get_sink()->get_slot()}
+        });
+    }
+
+    json result;
+    result["nodes"] = nodes;
+    result["links"] = links;
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_texture_graph_add_node(const json& args) -> std::string
+{
+    Texture_graph_window* window = m_context.texture_graph_window;
+    if (window == nullptr) {
+        return make_error_content("Texture graph window not available");
+    }
+    const std::string type_name = args.value("type", "");
+    Texture_graph_node* node = window->add_node_of_type(type_name);
+    if (node == nullptr) {
+        return make_error_content("Unknown texture graph node type: " + type_name);
+    }
+    if (args.contains("position") && args["position"].is_array() && (args["position"].size() == 2)) {
+        const float x = args["position"][0].get<float>();
+        const float y = args["position"][1].get<float>();
+        window->set_node_position(*node, ImVec2{x, y});
+    }
+    return make_json_content(texture_graph_node_json(*window, *node)).dump();
+}
+
+auto Mcp_server::action_texture_graph_remove_node(const json& args) -> std::string
+{
+    Texture_graph_window* window = m_context.texture_graph_window;
+    if (window == nullptr) {
+        return make_error_content("Texture graph window not available");
+    }
+    const std::size_t node_id = args.value("node_id", std::size_t{0});
+    Texture_graph_node* node = find_texture_graph_node(window->get_nodes(), node_id);
+    if (node == nullptr) {
+        return make_error_content("Node not found");
+    }
+    window->remove_node(std::dynamic_pointer_cast<Texture_graph_node>(node->node_from_this()));
+
+    json result;
+    result["removed"] = true;
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_texture_graph_set_parameter(const json& args) -> std::string
+{
+    Texture_graph_window* window = m_context.texture_graph_window;
+    if (window == nullptr) {
+        return make_error_content("Texture graph window not available");
+    }
+    const std::size_t node_id = args.value("node_id", std::size_t{0});
+    Texture_graph_node* node = find_texture_graph_node(window->get_nodes(), node_id);
+    if (node == nullptr) {
+        return make_error_content("Node not found");
+    }
+    if (!args.contains("parameters") || !args["parameters"].is_object()) {
+        return make_error_content("Missing 'parameters' object");
+    }
+    window->set_node_parameters(
+        std::dynamic_pointer_cast<Texture_graph_node>(node->node_from_this()),
+        args["parameters"]
+    );
+    return make_json_content(texture_graph_node_json(*window, *node)).dump();
+}
+
+auto Mcp_server::action_texture_graph_connect(const json& args) -> std::string
+{
+    Texture_graph_window* window = m_context.texture_graph_window;
+    if (window == nullptr) {
+        return make_error_content("Texture graph window not available");
+    }
+    const std::size_t source_node_id = args.value("source_node_id", std::size_t{0});
+    const std::size_t source_slot    = args.value("source_slot",    std::size_t{0});
+    const std::size_t sink_node_id   = args.value("sink_node_id",   std::size_t{0});
+    const std::size_t sink_slot      = args.value("sink_slot",      std::size_t{0});
+
+    Texture_graph_node* source_node = find_texture_graph_node(window->get_nodes(), source_node_id);
+    Texture_graph_node* sink_node   = find_texture_graph_node(window->get_nodes(), sink_node_id);
+    if (source_node == nullptr) {
+        return make_error_content("Source node not found");
+    }
+    if (sink_node == nullptr) {
+        return make_error_content("Sink node not found");
+    }
+    if (source_slot >= source_node->get_output_pins().size()) {
+        return make_error_content("Source slot out of range");
+    }
+    if (sink_slot >= sink_node->get_input_pins().size()) {
+        return make_error_content("Sink slot out of range");
+    }
+    erhe::graph::Pin* source_pin = &source_node->get_output_pins().at(source_slot);
+    erhe::graph::Pin* sink_pin   = &sink_node->get_input_pins().at(sink_slot);
+    const bool connected = window->connect(source_pin, sink_pin);
+    if (!connected) {
+        return make_error_content("Connect failed (pin key mismatch, or the link would create a cycle)");
+    }
+
+    json result;
+    result["connected"] = true;
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_texture_graph_disconnect(const json& args) -> std::string
+{
+    Texture_graph_window* window = m_context.texture_graph_window;
+    if (window == nullptr) {
+        return make_error_content("Texture graph window not available");
+    }
+    const std::size_t source_node_id = args.value("source_node_id", std::size_t{0});
+    const std::size_t source_slot    = args.value("source_slot",    std::size_t{0});
+    const std::size_t sink_node_id   = args.value("sink_node_id",   std::size_t{0});
+    const std::size_t sink_slot      = args.value("sink_slot",      std::size_t{0});
+
+    Texture_graph_node* source_node = find_texture_graph_node(window->get_nodes(), source_node_id);
+    Texture_graph_node* sink_node   = find_texture_graph_node(window->get_nodes(), sink_node_id);
+    if ((source_node == nullptr) || (sink_node == nullptr)) {
+        return make_error_content("Node not found");
+    }
+    if ((source_slot >= source_node->get_output_pins().size()) || (sink_slot >= sink_node->get_input_pins().size())) {
+        return make_error_content("Pin slot out of range");
+    }
+    window->disconnect(&source_node->get_output_pins().at(source_slot), &sink_node->get_input_pins().at(sink_slot));
+
+    json result;
+    result["disconnected"] = true;
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_texture_graph_save(const json& args) -> std::string
+{
+    Texture_graph_window* window = m_context.texture_graph_window;
+    if (window == nullptr) {
+        return make_error_content("Texture graph window not available");
+    }
+    const std::string path = args.value("path", "");
+    if (path.empty()) {
+        return make_error_content("Missing 'path'");
+    }
+    const bool ok = window->save_graph(std::filesystem::path{path});
+    if (!ok) {
+        return make_error_content("Save failed: " + path);
+    }
+    json result;
+    result["saved"] = true;
+    result["path"]  = path;
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_texture_graph_load(const json& args) -> std::string
+{
+    Texture_graph_window* window = m_context.texture_graph_window;
+    if (window == nullptr) {
+        return make_error_content("Texture graph window not available");
+    }
+    const std::string path = args.value("path", "");
+    if (path.empty()) {
+        return make_error_content("Missing 'path'");
+    }
+    const bool ok = window->load_graph(std::filesystem::path{path});
+    if (!ok) {
+        return make_error_content("Load failed: " + path);
+    }
+    json result;
+    result["loaded"] = true;
+    result["path"]   = path;
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_texture_graph_clear(const json& args) -> std::string
+{
+    static_cast<void>(args);
+    Texture_graph_window* window = m_context.texture_graph_window;
+    if (window == nullptr) {
+        return make_error_content("Texture graph window not available");
+    }
+    window->clear_graph();
+    json result;
+    result["cleared"] = true;
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_texture_graph_export_png(const json& args) -> std::string
+{
+    Texture_graph_window* window = m_context.texture_graph_window;
+    if (window == nullptr) {
+        return make_error_content("Texture graph window not available");
+    }
+    if (m_context.graphics_device == nullptr) {
+        return make_error_content("Graphics device not available");
+    }
+    const std::size_t node_id     = args.value("node_id",     std::size_t{0});
+    const std::size_t output_slot = args.value("output_slot", std::size_t{0});
+    const int         size        = std::clamp(args.value("size", 256), 1, 4096);
+    const std::string path        = args.value("path", "");
+    if (path.empty()) {
+        return make_error_content("Missing 'path'");
+    }
+    Texture_graph_node* node = find_texture_graph_node(window->get_nodes(), node_id);
+    if (node == nullptr) {
+        return make_error_content("Node not found");
+    }
+
+    // Compose the node's output subtree into a fragment shader (pure string
+    // logic - see decision 1). A sink node (Output) with no descriptor composes
+    // its connected input's source instead.
+    const Texture_compose_dag dag = build_texture_export_dag(*node, output_slot);
+    if (!dag.ok || (dag.sink == nullptr)) {
+        return make_error_content("Node has no composable output (unconnected sink or no descriptor)");
+    }
+    const erhe::texgen::Composer    composer{texture_graph_compose_options()};
+    const erhe::texgen::Shader_code shader_code = composer.compose(*dag.sink, dag.sink_output_index);
+    const std::string               fragment    = composer.assemble_fragment(shader_code);
+    if (fragment.find("(error:") != std::string::npos) {
+        return make_error_content("Composition failed (cycle / depth / error marker)");
+    }
+
+    Texture_renderer* renderer = window->get_renderer();
+    if (renderer == nullptr) {
+        return make_error_content("Texture renderer not available");
+    }
+
+    std::vector<std::uint8_t> pixels;
+    if (!renderer->render_and_read_rgba8(size, fragment, shader_code.get_uniforms(), pixels)) {
+        return make_error_content("Render / readback failed (shader compile error?)");
+    }
+
+    std::unique_ptr<erhe::graphics::Image_writer> writer = erhe::graphics::Image_writer::create();
+    const int                  row_stride = size * 4;
+    std::span<const std::byte> data{reinterpret_cast<const std::byte*>(pixels.data()), pixels.size()};
+    if (!writer->write_png(std::filesystem::path{path}, size, size, row_stride, Texture_renderer::color_format(), data)) {
+        return make_error_content("Failed to write PNG '" + path + "' (image writer backend may be disabled)");
+    }
+
+    return make_json_content({
+        {"path",   path},
+        {"width",  size},
+        {"height", size}
+    }).dump();
 }
 
 } // namespace editor

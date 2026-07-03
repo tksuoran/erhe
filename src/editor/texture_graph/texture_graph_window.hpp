@@ -79,6 +79,12 @@ public:
     [[nodiscard]] auto get_graph() -> Texture_graph&;
     [[nodiscard]] auto get_nodes() const -> const std::vector<std::shared_ptr<Texture_graph_node>>&;
 
+    // The shared render-to-texture helper. Created lazily on first use (the part
+    // ctor must not touch App_context, so the graphics device is not available
+    // during construction). Returns nullptr only when no graphics device exists.
+    // Used by the in-editor MCP server's texture_graph_export_png tool.
+    [[nodiscard]] auto get_renderer() -> Texture_renderer*;
+
     // Graph serialization (JSON: node types + parameters + canvas positions,
     // links by node index + pin slot). Load and clear are undoable (single
     // Texture_graph_replace_operation).

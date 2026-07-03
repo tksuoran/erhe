@@ -4,6 +4,7 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -71,6 +72,22 @@ public:
         int                                               size,
         const std::string&                                fragment_body,
         const std::vector<erhe::texgen::Uniform>&         uniforms
+    ) -> bool;
+
+    // Renders the assembled fragment into a size x size texture and reads it
+    // back to host memory as tightly packed 8-bit RGBA (color_format()), using
+    // a self-contained command buffer that is submitted and waited on before
+    // returning. Unlike render_into(), this does NOT record into a frame command
+    // buffer: it owns its own submit + wait_idle, so it must be called on the
+    // main thread while NOT inside an open render pass (e.g. from the MCP
+    // dispatch, which runs mid-frame with the frame cb merely recording). Intended
+    // for infrequent diagnostic export (texture_graph_export_png), not the hot
+    // path. Returns true on success; false on shader compile failure.
+    [[nodiscard]] auto render_and_read_rgba8(
+        int                                       size,
+        const std::string&                        fragment_body,
+        const std::vector<erhe::texgen::Uniform>& uniforms,
+        std::vector<std::uint8_t>&                out_pixels
     ) -> bool;
 
     // Color format of textures produced by this helper (linear rgba8).

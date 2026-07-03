@@ -278,6 +278,16 @@ auto Texture_graph_window::get_nodes() const -> const std::vector<std::shared_pt
     return m_nodes;
 }
 
+auto Texture_graph_window::get_renderer() -> Texture_renderer*
+{
+    // Mirror update()'s lazy creation so an MCP export issued before the first
+    // frame's update() still has a renderer.
+    if (!m_renderer && (m_app_context.graphics_device != nullptr)) {
+        m_renderer = std::make_unique<Texture_renderer>(*m_app_context.graphics_device);
+    }
+    return m_renderer.get();
+}
+
 void Texture_graph_window::file_toolbar()
 {
     ImGui::SetNextItemWidth(320.0f);

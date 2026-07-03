@@ -2,6 +2,7 @@
 #include "editor_log.hpp"
 
 #include "erhe_graphics/bind_group_layout.hpp"
+#include "erhe_graphics/blit_command_encoder.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
@@ -17,6 +18,8 @@
 #include "erhe_graphics/texture.hpp"
 
 #include "erhe_texgen/shader_code.hpp"
+
+#include <glm/glm.hpp>
 
 #include <algorithm>
 #include <array>
@@ -295,6 +298,82 @@ auto Texture_renderer::render_into(
         encoder.set_buffer(erhe::graphics::Buffer_target::uniform, ubo.get(), 0, compiled->ubo_bytes, 0);
     }
     encoder.draw_primitives(erhe::graphics::Primitive_type::triangle, 0, 3);
+    return true;
+}
+
+auto Texture_renderer::render_and_read_rgba8(
+    const int                                 size,
+    const std::string&                        fragment_body,
+    const std::vector<erhe::texgen::Uniform>& uniforms,
+    std::vector<std::uint8_t>&                out_pixels
+) -> bool
+{
+    const int         clamped       = std::max(1, size);
+    const std::size_t bytes_per_row = static_cast<std::size_t>(clamped) * 4u;
+    const std::size_t byte_count    = bytes_per_row * static_cast<std::size_t>(clamped);
+
+    // Host-visible readback buffer for the texture->buffer blit.
+    std::shared_ptr<erhe::graphics::Buffer> readback = std::make_shared<erhe::graphics::Buffer>(
+        m_device,
+        erhe::graphics::Buffer_create_info{
+            .capacity_byte_count                    = byte_count,
+            .memory_allocation_create_flag_bit_mask = erhe::graphics::Memory_allocation_create_flag_bit_mask::mapped,
+            .usage                                  = erhe::graphics::Buffer_usage::transfer_dst | erhe::graphics::Buffer_usage::storage,
+            .required_memory_property_bit_mask      =
+                erhe::graphics::Memory_property_flag_bit_mask::host_read |
+                erhe::graphics::Memory_property_flag_bit_mask::host_write,
+            .preferred_memory_property_bit_mask     =
+                erhe::graphics::Memory_property_flag_bit_mask::host_coherent |
+                erhe::graphics::Memory_property_flag_bit_mask::host_persistent,
+            .debug_label = erhe::utility::Debug_label{"texture graph export readback"}
+        }
+    );
+
+    // Recycle the UBO ring slot for this standalone "mini-frame" so render_into
+    // can push its uniform buffer (kept alive until this slot is recycled again).
+    begin_frame();
+
+    // A dedicated thread slot (not the editor frame's slot 0) so this
+    // self-contained submit does not disturb the frame command buffer that is
+    // still open on slot 0 while the MCP dispatch runs.
+    constexpr unsigned int export_thread_slot = 7;
+    erhe::graphics::Command_buffer& command_buffer = m_device.get_command_buffer(export_thread_slot);
+    command_buffer.begin();
+
+    // Passing a null target makes render_into create a fresh texture (with
+    // transfer_src usage) and transition it out of UNDEFINED.
+    std::shared_ptr<erhe::graphics::Texture> target;
+    const bool rendered = render_into(command_buffer, target, clamped, fragment_body, uniforms);
+    if (!rendered || !target) {
+        command_buffer.end();
+        return false; // compile failure - nothing rendered
+    }
+
+    // render_into leaves the target in shader_read_only_optimal; move it to
+    // transfer_src_optimal for the blit readback.
+    command_buffer.transition_texture_layout(*target, erhe::graphics::Image_layout::transfer_src_optimal);
+    erhe::graphics::Blit_command_encoder blit = m_device.make_blit_command_encoder(command_buffer);
+    blit.copy_from_texture(
+        target.get(),
+        0,                                    // source_slice
+        0,                                    // source_level
+        glm::ivec3{0, 0, 0},                  // source_origin
+        glm::ivec3{clamped, clamped, 1},      // source_size
+        readback.get(),                       // destination_buffer
+        0,                                    // destination_offset
+        static_cast<std::uintptr_t>(bytes_per_row),
+        static_cast<std::uintptr_t>(byte_count)
+    );
+    command_buffer.end();
+
+    erhe::graphics::Command_buffer* command_buffers[] = { &command_buffer };
+    m_device.submit_command_buffers(std::span<erhe::graphics::Command_buffer* const>{command_buffers});
+    m_device.wait_idle();
+
+    const std::span<std::byte> mapped = readback->map_bytes(0, byte_count);
+    out_pixels.resize(byte_count);
+    std::memcpy(out_pixels.data(), mapped.data(), byte_count);
+    readback->unmap();
     return true;
 }
 
