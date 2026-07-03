@@ -29,13 +29,19 @@ serialization, undo operations and MCP surface unchanged in substance - only
 
 | Work item                                                        | Status  | Commit |
 |------------------------------------------------------------------|---------|--------|
-| A1: `Item_type::graph_texture` + `Material` texture-source seam   | TODO    |        |
-| A2: `Graph_texture` asset class + `Content_library` folder        | TODO    |        |
-| A3: Re-home graph state window -> asset; retarget edit/undo/save   | TODO    |        |
-| A4: MCP tools target a named/selected `Graph_texture`; create tool | TODO    |        |
-| A5: Material -> `Graph_texture` binding (Properties UI + MCP)      | TODO    |        |
+| A1: `Item_type::graph_texture` + `Material` texture-source seam   | DONE    | 993358cd |
+| A2: `Graph_texture` asset class + `Content_library` folder        | DONE    | 60223a97 |
+| A3: Re-home graph state window -> asset; retarget edit/undo/save   | DONE    | c5827bbf |
+| A4: MCP tools target a named/selected `Graph_texture`; create tool | DONE    | 70b095bd |
+| A5: Material -> `Graph_texture` binding (Properties UI + MCP)      | DONE    | ef667f19 |
 | A6: Scene serialization of asset + binding (scene_file v6)         | TODO    |        |
 | A7: Adapt smoke test to per-asset graphs; live headless verify     | TODO    |        |
+
+Note (A5): the texture-source seam needed one more site than A1 covered - the
+shader-variant key. `erhe::scene_renderer::shader_key.cpp sampler_is_bound()`
+must treat a set `texture_source` as bound, else the material selects the
+texture-less shader variant and the bound handle is ignored (the graph output
+uploads but never samples). Found + fixed during A5 live verification.
 
 ---
 
