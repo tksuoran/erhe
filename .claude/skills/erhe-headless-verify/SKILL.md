@@ -21,21 +21,34 @@ only the headless build supports `capture_screenshot`.)
 
 ## Step 2 -- launch and wait for the MCP server (NEVER blind-sleep)
 
-Launch from the **repo root** (config/, res/, logs/ are cwd-relative), then
-poll `logs/log.txt` for the listening line -- startup takes a variable few
-seconds and the port can fall back within [8080, 8100):
+FIRST kill any editor left over from a previous run. A stale editor.exe keeps
+port 8080 and SILENTLY eats every MCP call, so you drive an OLD binary and see
+impossible results (a fix that "does nothing", node counts that grow across
+runs) -- this wastes a lot of time. Then launch from the **repo root** (config/,
+res/, logs/ are cwd-relative) and poll `logs/log.txt` for the listening line
+(startup takes a variable few seconds; the port can fall back within [8080, 8100)):
 
 ```powershell
-if (Test-Path logs\log.txt) { Remove-Item logs\log.txt -Force }
+Get-Process editor -ErrorAction SilentlyContinue | Stop-Process -Force   # no stale server on 8080
+Start-Sleep -Milliseconds 800
+if (Test-Path logs\log.txt) { Clear-Content logs\log.txt }
 $p = Start-Process -FilePath "build_vs2026_vulkan_headless\src\editor\Debug\editor.exe" -WorkingDirectory (Get-Location) -PassThru -WindowStyle Hidden
 for ($i = 0; $i -lt 60; $i++) {
     Start-Sleep -Milliseconds 1000
     if ((Test-Path logs\log.txt) -and (Select-String -Path logs\log.txt -Pattern "MCP server: listening" -Quiet)) { break }
 }
-Select-String -Path logs\log.txt -Pattern "MCP server: listening"   # note the port
+Select-String -Path logs\log.txt -Pattern "MCP server: listening"   # "... on 127.0.0.1:8080 (pid <pid>, built <ts>)"
 ```
 
-Remember `$p.Id` for cleanup.
+Then CONFIRM you are talking to the process you just launched (not a stale one):
+
+```bash
+py -3 scripts/mcp_call.py get_server_info    # { name, version, pid, build, port }
+```
+
+Assert the reported `pid` == `$p.Id` and `build` is your just-built binary; a
+mismatch, or a fallback port (8081+) in the listening line, means another
+editor.exe owns 8080 -- kill it and relaunch. Remember `$p.Id` for cleanup.
 
 ## Step 3 -- drive it with scripts/mcp_call.py
 
@@ -89,6 +102,8 @@ git status --short    # confirm nothing else got dirtied (never commit the ini)
 - The windowed editor needs a live, awake display; headless does not.
 - The scripted startup scene comes from `config/editor/commands.json` --
   adjust it when a test needs a reproducible scene before init completes.
-- One editor instance at a time: a second instance binds the next port in
-  [8080, 8100); if a call errors "cannot reach MCP server", check for a stale
-  editor.exe and the actual port in `logs/log.txt`.
+- One editor instance at a time. A second instance binds the next port in
+  [8080, 8100), so your `mcp_call.py` (which defaults to 8080) keeps hitting the
+  FIRST, stale one. Always kill all editors before launching (Step 2) and verify
+  `get_server_info` reports the pid/build you expect. `get_server_info` + the
+  `(pid ..., built ...)` suffix on the listening line exist precisely for this.
