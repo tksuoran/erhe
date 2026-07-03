@@ -106,6 +106,12 @@
 #include <string_view>
 #include <system_error>
 
+#if defined(_WIN32)
+#   include <process.h> // _getpid
+#else
+#   include <unistd.h>  // getpid
+#endif
+
 #if !defined(_WIN32)
 #  include <sys/stat.h>
 #  include <unistd.h>
@@ -116,6 +122,22 @@ namespace editor {
 using json = nlohmann::json;
 
 namespace {
+
+// Compile timestamp of this translation unit and the running process id. Both are
+// surfaced in the startup log, the initialize response and get_server_info so a
+// stale editor.exe holding the MCP port (a second process launched earlier that
+// still owns 127.0.0.1:8080) is easy to detect: compare the reported pid/build
+// against the editor you just launched.
+constexpr const char* c_mcp_build_timestamp = __DATE__ " " __TIME__;
+
+[[nodiscard]] auto get_process_id() -> long
+{
+#if defined(_WIN32)
+    return static_cast<long>(_getpid());
+#else
+    return static_cast<long>(::getpid());
+#endif
+}
 
 auto make_jsonrpc_response(const std::string& id, const json& result) -> std::string
 {
@@ -856,7 +878,7 @@ void Mcp_server::server_thread_main()
 {
     // m_http_server is already bound to m_port by start(); enter the blocking
     // accept loop. stop() unblocks this via m_http_server->stop().
-    log_mcp->info("MCP server: listening on 127.0.0.1:{}", m_port);
+    log_mcp->info("MCP server: listening on 127.0.0.1:{} (pid {}, built {})", m_port, get_process_id(), c_mcp_build_timestamp);
 
     if (!m_http_server->listen_after_bind()) {
         if (m_running.load()) {
@@ -947,7 +969,9 @@ auto Mcp_server::handle_initialize(const std::string& id) -> std::string
         }},
         {"serverInfo", {
             {"name",    "erhe-editor"},
-            {"version", "0.2.0"}
+            {"version", "0.2.0"},
+            {"pid",     get_process_id()},
+            {"build",   c_mcp_build_timestamp}
         }}
     };
     return make_jsonrpc_response(id, result);
@@ -1071,6 +1095,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "get_scene_textures") result = query_scene_textures  (req->arguments);
         else if (req->tool_name == "get_scene_brushes")  result = query_scene_brushes  (req->arguments);
         else if (req->tool_name == "get_material_details")result = query_material_details(req->arguments);
+        else if (req->tool_name == "get_server_info")     result = query_server_info     (req->arguments);
         else if (req->tool_name == "get_selection")       result = query_selection       (req->arguments);
         else if (req->tool_name == "get_undo_redo_stack") result = query_undo_redo_stack (req->arguments);
         else if (req->tool_name == "get_async_status")   result = query_async_status    (req->arguments);
@@ -1186,6 +1211,7 @@ void Mcp_server::refresh_tool_list()
     m_tool_infos.push_back({"get_material_details","Get detailed material properties",                       schema_scene_and_item("material_name", "Name of the material")});
     m_tool_infos.push_back({"get_scene_textures", "List all textures in a scene's content library",         schema_scene_name()});
     m_tool_infos.push_back({"get_scene_brushes",  "List all brushes in a scene's content library",         schema_scene_name()});
+    m_tool_infos.push_back({"get_server_info",      "Get this editor MCP server's identity: name, version, process id (pid), build timestamp (compile time of the server), and bound port. Use it to detect a STALE editor: if the pid/build does not match the editor you just launched, another editor.exe is holding the port and your calls are hitting the wrong process.", schema_no_args()});
     m_tool_infos.push_back({"get_selection",        "Get currently selected items",                          schema_no_args()});
     m_tool_infos.push_back({"get_undo_redo_stack", "Get undo/redo operation stacks",                       schema_no_args()});
     m_tool_infos.push_back({"get_async_status",   "Get pending/running async operation counts",          schema_no_args()});
@@ -2337,6 +2363,18 @@ auto Mcp_server::query_scene_materials(const json& args) -> std::string
     }
 
     return make_json_content({{"materials", materials}}).dump();
+}
+
+auto Mcp_server::query_server_info(const json& args) -> std::string
+{
+    static_cast<void>(args);
+    return make_json_content({
+        {"name",    "erhe-editor"},
+        {"version", "0.2.0"},
+        {"pid",     get_process_id()},
+        {"build",   c_mcp_build_timestamp},
+        {"port",    m_port}
+    }).dump();
 }
 
 auto Mcp_server::query_material_details(const json& args) -> std::string
