@@ -7,7 +7,8 @@
 >done::2026-07-02{output-physics+6d-instances+6e-groups+6c-design+SMOKE-SWEEP-65/65✓+2-real-bugs-fixed}✓
 >done::2026-07-02{cc-performance-pass:harness+items-11-12-1-3-2;doc/catmull_clark.md-"Implemented-optimizations"-section;editor-x6-25.1s→17.8s-Debug{x5-5.5→4.4s};Release-harness-chain-689→570ms;stopped-at-diminishing-returns;items-4/5/6=future{re-rank-by-Release-numbers},9/10-need-user-sign-off}✓
 >done::2026-07-03{smoke-coverage-extension:65→120-checks{bdc71123}+2-real-bugs-fixed{cycle/self-link-acceptance→Graph::would_create_cycle-b553559b,facet-less-geometry-output-crash-4491835f};sweep-120/120✓}✓
-?queued::doc-audit{future_prompt_2.txt}|6c-fields-implementation{awaits-design-review}
+?queued::6c-fields-implementation{awaits-design-review}
+>done::2026-07-03{doc-audit:52-files-reviewed{7-parallel-agents}→16-deleted{completed-plans+relics+spec-copy+LSAI-dupes}+2-recovered-from-92c14dc5{glslang_bug_report+debug_renderer_multiview}+4-dangling-refs-fixed{hud_hotbar+work.md-comments-reworded}+~16-docs-refreshed{stale-claims}+CLAUDE.md-option-defaults+2-quest-skills-line-refs;doc/-52→38-files;commits-6106f4d0..5b1cc01c}✓
 >done::geogram-growth-bug{fork-fix+pin-daf9e192{commit-88376b78}+upstream-issue-371;per-element-create-amortized-O(1)-again;batching-remaining-ops=constant-factor-only-now}
 >done::2026-07-03{editor-improvements-geometry-graph-items:8-pin-colors{d753e5d5}+7-pipeline-tail-breadcrumbs{de8a5740,Scoped_phase_timer-sets-breadcrumb}+9-resolved-by-geogram-fork-pin{doc-only-b262c367}+6-ASYNC-EVAL{2e8a2225+8f179479};sweep-120/120✓;set_param-x6-0.13s{was-20s-block}}✓
 

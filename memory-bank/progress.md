@@ -1,5 +1,16 @@
 §MBEL:5.0
 
+[TASK::doc-audit-2026-07-03]
+@status::✓DONE{future_prompt_2.txt-handoff-executed+deleted;52-doc-files-reviewed-via-7-parallel-read-only-agents{per-topic-groups};doc/-52→38}
+>commits::6106f4d0..5b1cc01c
+6106f4d0::dangling-refs{recover-glslang_bug_report_debugglobalvariable+debug_renderer_multiview-from-92c14dc5{never-merged-branch,content-matches-current-code,in-flight-banner→settled};hud_hotbar_depth_test_plan+work.md-never-committed→xr_session/xr_instance-comments-self-describing{quad-depth-test-gate-spelled-inline}+prewarm.hpp/md-drop-item-F-pointer;editor-builds-clean}
+bd90adec::relic-deletions{imgui.md+editor_classes.drawio-0-bytes|bindings.drawio-2022|msys2_clang.md-unsupported-mingw|notes.md→occlusion-culling-idea-moved-to-todo.md}
+10a8bab0::completed-plan-deletions{vulkan_openxr|command_buffer_update{false-Metal-stub-claim}|sky{root-cause→procedural_sky.md}|content_wide_line-fallback-plan{shipped-differently}|KHR_physics_regid_bodies-spec-copy{support-doc→upstream-URL}|circular_ring_buffer-extraction|scene_root_cleanup{deferred-steps-4/5→editor_improvements-items-7/8}|tool_improvements{5c/5d+narrow-Command-deps→editor_improvements}|graphics_compute_testing_plan{M6-CI-sketch→graphics_test_coverage.md}|hands-on+build_without_visual_studio_and_lsai{LSAI-cluster→keep-setup+playbook-pair}}
+fbf62304::stale-claim-refresh{vulkan_backend+emulated-swapchain-section|metal_backend+6-file-pairs+real-Command_buffer|point_light_shadows-y-flip-note|forge-erhe-storage-image-GL/Metal-wired|building.md-option-table+ninja/headless-pointers|CLAUDE.md-defaults{NAVIGATION/PROFILE/XR=none}|quest.md-symbol-anchored-refs|editor_rendering-20-pass-table+SOLID_WIREFRAME|shader_variants|mesh_memory-6-formats|layout-header|khr-physics-fork-pin-wording|claude_review-#2/#11→fixed|settings-reference-#239-landed+Scene_file-v5|command_script-scene.create/load_scene+real-execution-model}
+5b1cc01c::skills{quest-validation+shader-failure:editor.cpp-698/702→device_message-lambda-search-anchor;glslang-PATCHES-wording→fork-pin}
+!verdict-guide::completed-plan-fully-in-code/history=DELETE;code/skill/CLAUDE-referenced=KEEP+UPDATE;overlap→MERGE-into-canonical
+KEPT-AS-IS::shadows|shadow_improve{2-steps-open}|android|intermittent_main_loop_hang{~20-code-refs}|renderdoc_fork|opengl41_compatibility|multiview|post_processing|init_status_display_phase_ii{parallel-init-still-off}|profiling-2026-05-01{unactioned-findings,delete-once-mip/sampler-fix-lands}|todo|catmull_clark|mesh_component_selection|geometry-nodes-plan{active}
+
 [TASK::editor-improvements-geometry-graph-2026-07-03]
 @status::✓DONE{doc/editor_improvements.md-geometry-graph-items-8/7/9/6-all-closed→moved-to-Past-work}
 >commits::d753e5d5..8f179479
