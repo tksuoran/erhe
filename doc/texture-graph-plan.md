@@ -25,7 +25,7 @@ carry an attribution comment).
 
 | Work item                                                   | Status  | Commit |
 |-------------------------------------------------------------|---------|--------|
-| Phase 0: `erhe::graph` unit tests (foundation hardening)    | planned | -      |
+| Phase 0: `erhe::graph` unit tests (foundation hardening)    | DONE    | 29ff3f31, aa59158a |
 | Phase 1: `erhe::texgen` codegen core + unit tests           | planned | -      |
 | Phase 2: GPU validation (compile + render composed shaders) | planned | -      |
 | Phase 3: editor MVP (window, payload, ~12 nodes, output)    | planned | -      |
