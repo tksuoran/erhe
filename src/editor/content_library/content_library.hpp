@@ -135,6 +135,7 @@ public:
     std::shared_ptr<Content_library_node> skins;
     std::shared_ptr<Content_library_node> materials;
     std::shared_ptr<Content_library_node> textures;
+    std::shared_ptr<Content_library_node> graph_textures;
     std::shared_ptr<Content_library_node> physics_materials;
     std::shared_ptr<Content_library_node> collision_filters;
     std::shared_ptr<Content_library_node> physics_joints;

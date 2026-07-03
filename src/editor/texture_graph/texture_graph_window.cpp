@@ -3,6 +3,7 @@
 #endif
 
 #include "texture_graph/texture_graph_window.hpp"
+#include "texture_graph/graph_texture.hpp"
 #include "texture_graph/texture_graph_node.hpp"
 #include "texture_graph/texture_graph_node_factory.hpp"
 #include "texture_graph/texture_graph_operations.hpp"
@@ -55,6 +56,8 @@ Texture_graph_window::Texture_graph_window(
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Texture Graph", "texture_graph"}
     , m_app_context            {app_context}
 {
+    // Until Step A3 wires selection, the window edits a single default asset.
+    m_graph_texture = std::make_shared<Graph_texture>("Texture Graph");
     m_node_editor = std::make_unique<ax::NodeEditor::EditorContext>(nullptr);
 
     // Match the arrowhead settings used for the input pin pivot (the pins are
@@ -97,7 +100,7 @@ void Texture_graph_window::update()
         m_renderer = std::make_unique<Texture_renderer>(*m_app_context.graphics_device);
     }
 
-    m_graph.evaluate_if_dirty();
+    graph().evaluate_if_dirty();
     render_dirty_products();
 }
 
@@ -115,7 +118,7 @@ void Texture_graph_window::render_dirty_products()
     // Render in topological order (the graph is sorted by evaluate_if_dirty()),
     // so a buffer node renders its texture before any downstream consumer that
     // samples it - including a buffer feeding another buffer.
-    for (erhe::graph::Node* graph_node : m_graph.get_nodes()) {
+    for (erhe::graph::Node* graph_node : graph().get_nodes()) {
         Texture_graph_node* node = dynamic_cast<Texture_graph_node*>(graph_node);
         if ((node != nullptr) && node->preview_needs_render()) {
             node->render_products(m_app_context, *m_renderer);
@@ -128,15 +131,15 @@ void Texture_graph_window::insert_node(const std::shared_ptr<Texture_graph_node>
 {
     constexpr uint64_t flags = erhe::Item_flags::visible | erhe::Item_flags::content | erhe::Item_flags::show_in_ui;
     node->enable_flag_bits(flags);
-    m_nodes.push_back(node);
-    m_graph.register_node(node.get());
+    mutable_nodes().push_back(node);
+    graph().register_node(node.get());
     node->mark_dirty();
 }
 
 void Texture_graph_window::erase_node(const std::shared_ptr<Texture_graph_node>& node)
 {
-    auto i = std::find(m_nodes.begin(), m_nodes.end(), node);
-    if (i == m_nodes.end()) {
+    auto i = std::find(mutable_nodes().begin(), mutable_nodes().end(), node);
+    if (i == mutable_nodes().end()) {
         return;
     }
     if (node->is_selected()) {
@@ -149,14 +152,14 @@ void Texture_graph_window::erase_node(const std::shared_ptr<Texture_graph_node>&
             mark_sink_node_dirty(link->get_sink());
         }
     }
-    m_graph.unregister_node(node.get());
-    m_nodes.erase(i);
+    graph().unregister_node(node.get());
+    mutable_nodes().erase(i);
     node->on_removed_from_graph();
 }
 
 auto Texture_graph_window::connect_pins(erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool
 {
-    erhe::graph::Link* link = m_graph.connect(source_pin, sink_pin);
+    erhe::graph::Link* link = graph().connect(source_pin, sink_pin);
     if (link == nullptr) {
         return false;
     }
@@ -166,7 +169,7 @@ auto Texture_graph_window::connect_pins(erhe::graph::Pin* source_pin, erhe::grap
 
 auto Texture_graph_window::disconnect_pins(erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool
 {
-    std::vector<std::unique_ptr<erhe::graph::Link>>& links = m_graph.get_links();
+    std::vector<std::unique_ptr<erhe::graph::Link>>& links = graph().get_links();
     auto i = std::find_if(
         links.begin(),
         links.end(),
@@ -177,7 +180,7 @@ auto Texture_graph_window::disconnect_pins(erhe::graph::Pin* source_pin, erhe::g
     if (i == links.end()) {
         return false;
     }
-    m_graph.disconnect(i->get());
+    graph().disconnect(i->get());
     mark_sink_node_dirty(sink_pin);
     return true;
 }
@@ -208,7 +211,7 @@ auto Texture_graph_window::connect(erhe::graph::Pin* source_pin, erhe::graph::Pi
     }
     // Validate before creating the operation: a refused link must not leave a
     // no-op entry on the undo stack.
-    if (m_graph.would_create_cycle(source_pin, sink_pin)) {
+    if (graph().would_create_cycle(source_pin, sink_pin)) {
         log_graph_editor->warn(
             "Texture graph: connecting '{}' to '{}' would create a cycle - refusing",
             source_pin->get_owner_node()->get_name(),
@@ -276,14 +279,24 @@ auto Texture_graph_window::add_node_of_type(const std::string& type_name) -> Tex
     return node.get();
 }
 
+auto Texture_graph_window::graph() -> Texture_graph&
+{
+    return m_graph_texture->graph();
+}
+
+auto Texture_graph_window::mutable_nodes() -> std::vector<std::shared_ptr<Texture_graph_node>>&
+{
+    return m_graph_texture->nodes();
+}
+
 auto Texture_graph_window::get_graph() -> Texture_graph&
 {
-    return m_graph;
+    return m_graph_texture->graph();
 }
 
 auto Texture_graph_window::get_nodes() const -> const std::vector<std::shared_ptr<Texture_graph_node>>&
 {
-    return m_nodes;
+    return m_graph_texture->nodes();
 }
 
 auto Texture_graph_window::get_renderer() -> Texture_renderer*
@@ -310,7 +323,7 @@ void Texture_graph_window::reseed_all()
 {
     // Give every seeded node a fresh pattern. Each node's reseed is an
     // individually undoable parameter change (partial {"seed": value} update).
-    for (const std::shared_ptr<Texture_graph_node>& node : m_nodes) {
+    for (const std::shared_ptr<Texture_graph_node>& node : mutable_nodes()) {
         Texture_descriptor_node* descriptor_node = dynamic_cast<Texture_descriptor_node*>(node.get());
         if ((descriptor_node != nullptr) && descriptor_node->is_seeded()) {
             nlohmann::json parameters = nlohmann::json::object();
@@ -438,14 +451,14 @@ void Texture_graph_window::imgui()
 {
     m_node_editor->Begin("Texture Graph", ImVec2{0.0f, 0.0f});
 
-    for (erhe::graph::Node* node : m_graph.get_nodes()) {
+    for (erhe::graph::Node* node : graph().get_nodes()) {
         Texture_graph_node* texture_graph_node = dynamic_cast<Texture_graph_node*>(node);
         if (texture_graph_node != nullptr) {
             texture_graph_node->node_editor(m_app_context, *m_node_editor.get());
         }
     }
 
-    for (const std::unique_ptr<erhe::graph::Link>& link : m_graph.get_links()) {
+    for (const std::unique_ptr<erhe::graph::Link>& link : graph().get_links()) {
         m_node_editor->Link(
             ax::NodeEditor::LinkId{link.get()},
             ax::NodeEditor::PinId{link->get_source()},
@@ -479,7 +492,7 @@ void Texture_graph_window::handle_link_create()
                     (source_pin != sink_pin) &&
                     (source_node != sink_node) &&
                     (source_pin->get_key() == sink_pin->get_key()) &&
-                    !m_graph.would_create_cycle(source_pin, sink_pin)
+                    !graph().would_create_cycle(source_pin, sink_pin)
                 ) {
                     acceptable = true;
                     if (m_node_editor->AcceptNewItem()) { // mouse released?
@@ -501,12 +514,12 @@ void Texture_graph_window::handle_deletions()
         ax::NodeEditor::NodeId node_handle = 0;
         while (m_node_editor->QueryDeletedNode(&node_handle)) {
             if (m_node_editor->AcceptDeletedItem()) {
-                auto i = std::find_if(m_nodes.begin(), m_nodes.end(), [node_handle](const std::shared_ptr<Texture_graph_node>& entry){
+                auto i = std::find_if(mutable_nodes().begin(), mutable_nodes().end(), [node_handle](const std::shared_ptr<Texture_graph_node>& entry){
                     ax::NodeEditor::NodeId entry_node_id = ax::NodeEditor::NodeId{entry->get_id()};
                     return entry_node_id == node_handle;
                 });
-                if (i != m_nodes.end()) {
-                    const std::shared_ptr<Texture_graph_node> texture_graph_node = *i; // copy - remove_node() erases from m_nodes
+                if (i != mutable_nodes().end()) {
+                    const std::shared_ptr<Texture_graph_node> texture_graph_node = *i; // copy - remove_node() erases from mutable_nodes()
                     remove_node(texture_graph_node);
                 }
             }
@@ -515,7 +528,7 @@ void Texture_graph_window::handle_deletions()
         ax::NodeEditor::LinkId link_handle;
         while (m_node_editor->QueryDeletedLink(&link_handle)) {
             if (m_node_editor->AcceptDeletedItem()) {
-                std::vector<std::unique_ptr<erhe::graph::Link>>& links = m_graph.get_links();
+                std::vector<std::unique_ptr<erhe::graph::Link>>& links = graph().get_links();
                 auto i = std::find_if(links.begin(), links.end(), [link_handle](const std::unique_ptr<erhe::graph::Link>& entry){
                     ax::NodeEditor::LinkId entry_link_id = ax::NodeEditor::LinkId{entry.get()};
                     return entry_link_id == link_handle;

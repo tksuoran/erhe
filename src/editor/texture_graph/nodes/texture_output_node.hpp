@@ -5,7 +5,7 @@
 #include <memory>
 #include <string>
 
-namespace erhe::graphics  { class Sampler; }
+namespace erhe::graphics  { class Sampler; class Texture; }
 namespace erhe::primitive { class Material; }
 
 namespace editor {
@@ -44,6 +44,11 @@ public:
     void read_parameters  (const nlohmann::json& in) override;
     [[nodiscard]] auto preview_display_size() const -> float override;
     [[nodiscard]] auto render_target_size  () const -> int   override;
+
+    // The most recently baked output texture (what is registered in the content
+    // library), or nullptr when nothing has been baked yet. Used by the owning
+    // Graph_texture asset to expose the graph's output as a Texture_reference.
+    [[nodiscard]] auto get_baked_texture() const -> const erhe::graphics::Texture*;
 
 private:
     // Index (0..3) of the connected input pin to bake, preferring the highest

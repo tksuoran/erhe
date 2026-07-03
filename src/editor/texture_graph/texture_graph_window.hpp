@@ -28,6 +28,7 @@ namespace ax::NodeEditor {
 namespace editor {
 
 class App_context;
+class Graph_texture;
 class Texture_graph_node;
 
 // ImGui window hosting the texture node graph editor.
@@ -148,11 +149,16 @@ private:
     // command buffer. Cheap in steady state (no dirty nodes -> no work).
     void render_dirty_products();
 
+    // Accessors to the currently-edited graph's state. Today the window owns a
+    // single default Graph_texture (m_graph_texture); Step A3 switches these to
+    // return the selected content-library Graph_texture asset.
+    [[nodiscard]] auto graph() -> Texture_graph&;
+    [[nodiscard]] auto mutable_nodes() -> std::vector<std::shared_ptr<Texture_graph_node>>&;
+
     App_context&                                     m_app_context;
-    Texture_graph                                    m_graph;
+    std::shared_ptr<Graph_texture>                   m_graph_texture;
     std::unique_ptr<Texture_renderer>                m_renderer;
     std::unique_ptr<ax::NodeEditor::EditorContext>   m_node_editor;
-    std::vector<std::shared_ptr<Texture_graph_node>> m_nodes;
     std::string                                      m_graph_path{"res/editor/graphs/texture_graph.json"};
     int                                              m_spawn_count{0};
     std::vector<Palette_category>                    m_palette_categories; // built lazily by build_palette()

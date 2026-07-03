@@ -402,6 +402,8 @@ erhe_target_sources_grouped(
     scene/viewport_scene_view.hpp
     scene/viewport_scene_views.cpp
     scene/viewport_scene_views.hpp
+    texture_graph/graph_texture.cpp
+    texture_graph/graph_texture.hpp
     texture_graph/texture_graph.cpp
     texture_graph/texture_graph.hpp
     texture_graph/texture_graph_compose.cpp

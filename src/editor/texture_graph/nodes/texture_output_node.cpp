@@ -70,6 +70,11 @@ auto Texture_output_node::render_target_size() const -> int
     return c_size_values[index];
 }
 
+auto Texture_output_node::get_baked_texture() const -> const erhe::graphics::Texture*
+{
+    return m_registered_texture.get();
+}
+
 auto Texture_output_node::connected_input_index() const -> int
 {
     // Prefer the highest channel count when several inputs are connected.

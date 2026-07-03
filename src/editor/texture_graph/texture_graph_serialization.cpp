@@ -88,7 +88,7 @@ auto Texture_graph_window::save_graph(const std::filesystem::path& path) -> bool
     root["version"] = 1;
 
     nlohmann::json nodes_json = nlohmann::json::array();
-    for (const std::shared_ptr<Texture_graph_node>& node : m_nodes) {
+    for (const std::shared_ptr<Texture_graph_node>& node : get_nodes()) {
         nlohmann::json node_json;
         node_json["type"] = node->get_factory_type_name();
         const ImVec2 position = get_node_position(*node.get());
@@ -103,9 +103,9 @@ auto Texture_graph_window::save_graph(const std::filesystem::path& path) -> bool
     root["nodes"] = nodes_json;
 
     nlohmann::json links_json = nlohmann::json::array();
-    for (const std::unique_ptr<erhe::graph::Link>& link : m_graph.get_links()) {
-        const int source_node = node_index_of(m_nodes, link->get_source()->get_owner_node());
-        const int sink_node   = node_index_of(m_nodes, link->get_sink  ()->get_owner_node());
+    for (const std::unique_ptr<erhe::graph::Link>& link : get_graph().get_links()) {
+        const int source_node = node_index_of(get_nodes(), link->get_source()->get_owner_node());
+        const int sink_node   = node_index_of(get_nodes(), link->get_sink  ()->get_owner_node());
         if ((source_node < 0) || (sink_node < 0)) {
             continue;
         }
@@ -130,7 +130,7 @@ auto Texture_graph_window::save_graph(const std::filesystem::path& path) -> bool
     stream << root.dump(4);
     const bool ok = stream.good();
     if (ok) {
-        log_graph_editor->info("Texture graph saved to '{}' ({} nodes, {} links)", path.string(), m_nodes.size(), m_graph.get_links().size());
+        log_graph_editor->info("Texture graph saved to '{}' ({} nodes, {} links)", path.string(), get_nodes().size(), get_graph().get_links().size());
     }
     return ok;
 }
