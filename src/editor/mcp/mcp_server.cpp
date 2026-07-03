@@ -1820,7 +1820,7 @@ void Mcp_server::refresh_tool_list()
     m_tool_infos.push_back({"texture_graph_add_node", "Add a node to the texture node graph. Returns the new node's id, parameters and pin layout.", {
         {"type", "object"},
         {"properties", {
-            {"type", {{"type", "string"}, {"enum", json::array({"uniform", "perlin", "voronoi", "bricks", "shape", "blend", "colorize", "transform", "brightness_contrast", "normal_map", "output"})}, {"description", "Node type to create"}}},
+            {"type", {{"type", "string"}, {"enum", json::array({"uniform", "perlin", "voronoi", "bricks", "shape", "blend", "colorize", "curve", "transform", "brightness_contrast", "normal_map", "output"})}, {"description", "Node type to create"}}},
             {"position", {{"type", "array"}, {"items", {{"type", "number"}}}, {"description", "Optional [x, y] canvas position; defaults to the next spawn-grid slot"}}}
         }},
         {"required", json::array({"type"})}

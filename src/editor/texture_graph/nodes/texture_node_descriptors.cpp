@@ -19,6 +19,9 @@ using erhe::texgen::Parameter_descriptor;
 using erhe::texgen::Parameter_kind;
 using erhe::texgen::Enum_value;
 using erhe::texgen::Value_type;
+using erhe::texgen::Gradient_stop;
+using erhe::texgen::Curve_point;
+using erhe::texgen::Gradient_interpolation;
 
 namespace {
 
@@ -98,6 +101,38 @@ void add_size(Node_descriptor& descriptor, const char* name, const char* label, 
     parameter.min_size_exponent    = min_exponent;
     parameter.max_size_exponent    = max_exponent;
     parameter.default_size_exponent = default_exponent;
+    descriptor.parameters.push_back(parameter);
+}
+
+void add_gradient(
+    Node_descriptor&                            descriptor,
+    const char*                                 name,
+    const char*                                 label,
+    std::vector<erhe::texgen::Gradient_stop>    stops,
+    erhe::texgen::Gradient_interpolation        interpolation
+)
+{
+    Parameter_descriptor parameter{};
+    parameter.name                           = name;
+    parameter.label                          = label;
+    parameter.kind                           = Parameter_kind::gradient_parameter;
+    parameter.default_gradient_stops         = std::move(stops);
+    parameter.default_gradient_interpolation = interpolation;
+    descriptor.parameters.push_back(parameter);
+}
+
+void add_curve(
+    Node_descriptor&                           descriptor,
+    const char*                                name,
+    const char*                                label,
+    std::vector<erhe::texgen::Curve_point>     points
+)
+{
+    Parameter_descriptor parameter{};
+    parameter.name                 = name;
+    parameter.label                = label;
+    parameter.kind                 = Parameter_kind::curve_parameter;
+    parameter.default_curve_points = std::move(points);
     descriptor.parameters.push_back(parameter);
 }
 
@@ -503,17 +538,51 @@ auto build_blend() -> Node_descriptor
 }
 
 // Colorize - Material Maker colorize.mmg remaps a grayscale input through a
-// gradient widget. The gradient widget arrives in Phase 4; this MVP version
-// uses a fixed two-stop gradient (low / high color) interpolated by the input.
+// gradient widget (types/gradient.gd, MIT). The gradient parameter emits a
+// per-node "vec4 <fn>(float x)" and the output applies it to the grayscale
+// input, exactly like Material Maker's "$gradient($input($uv))". The default
+// gradient is a black@0 -> white@1 linear ramp, matching colorize.mmg.
 auto build_colorize() -> Node_descriptor
 {
     Node_descriptor d{};
     d.name  = "colorize";
     d.label = "Colorize";
     add_input(d, "input", Value_type::grayscale, "$uv.x");
-    add_color(d, "color_lo", "Low",  0.0f, 0.0f, 0.0f, 1.0f);
-    add_color(d, "color_hi", "High", 1.0f, 1.0f, 1.0f, 1.0f);
-    add_output(d, Value_type::rgba, "mix($color_lo, $color_hi, clamp($input($uv), 0.0, 1.0))");
+    add_gradient(
+        d, "gradient", "Gradient",
+        {
+            Gradient_stop{.position = 0.0f, .color = {0.0f, 0.0f, 0.0f, 1.0f}},
+            Gradient_stop{.position = 1.0f, .color = {1.0f, 1.0f, 1.0f, 1.0f}}
+        },
+        Gradient_interpolation::linear
+    );
+    add_output(d, Value_type::rgba, "$gradient(clamp($input($uv), 0.0, 1.0))");
+    return d;
+}
+
+// Curve - a tone / levels node applying an editable Hermite curve (from
+// Material Maker's curve widget, types/curve.gd, MIT) to each color channel of
+// an rgba input; alpha passes through. The default curve is the identity
+// 0,0 -> 1,1, so an unedited node is a no-op. The single sampled input local is
+// reused across the four channel references (variant context dedups it).
+auto build_curve() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name  = "curve";
+    d.label = "Curve";
+    add_input(d, "in", Value_type::rgba, "vec4(vec3($uv.x), 1.0)");
+    add_curve(
+        d, "curve", "Curve",
+        {
+            Curve_point{.x = 0.0f, .y = 0.0f, .left_slope = 1.0f, .right_slope = 1.0f},
+            Curve_point{.x = 1.0f, .y = 1.0f, .left_slope = 1.0f, .right_slope = 1.0f}
+        }
+    );
+    d.code = "vec4 $(name_uv)_c = $in($uv);\n";
+    add_output(
+        d, Value_type::rgba,
+        "vec4($curve($(name_uv)_c.r), $curve($(name_uv)_c.g), $curve($(name_uv)_c.b), $(name_uv)_c.a)"
+    );
     return d;
 }
 
@@ -601,21 +670,22 @@ auto build_normal_map() -> Node_descriptor
 // keeps toolbar order and drives the compose self-check.
 struct Descriptor_registry
 {
-    std::array<Node_descriptor, 10> descriptors;
+    std::array<Node_descriptor, 11> descriptors;
     std::vector<const Node_descriptor*> ordered;
 
     Descriptor_registry()
     {
-        descriptors[0] = build_uniform();
-        descriptors[1] = build_perlin();
-        descriptors[2] = build_voronoi();
-        descriptors[3] = build_bricks();
-        descriptors[4] = build_shape();
-        descriptors[5] = build_blend();
-        descriptors[6] = build_colorize();
-        descriptors[7] = build_transform();
-        descriptors[8] = build_brightness_contrast();
-        descriptors[9] = build_normal_map();
+        descriptors[0]  = build_uniform();
+        descriptors[1]  = build_perlin();
+        descriptors[2]  = build_voronoi();
+        descriptors[3]  = build_bricks();
+        descriptors[4]  = build_shape();
+        descriptors[5]  = build_blend();
+        descriptors[6]  = build_colorize();
+        descriptors[7]  = build_curve();
+        descriptors[8]  = build_transform();
+        descriptors[9]  = build_brightness_contrast();
+        descriptors[10] = build_normal_map();
         for (const Node_descriptor& descriptor : descriptors) {
             ordered.push_back(&descriptor);
         }

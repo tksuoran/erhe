@@ -271,7 +271,8 @@ NODE_SPECS = {
     "bricks":              ([],                      ["f"],    {"pattern": 0, "rows": 6.0, "columns": 3.0}),
     "shape":               ([],                      ["f"],    {"shape": 0, "sides": 6.0, "radius": 0.85}),
     "blend":               (["rgba", "rgba"],        ["rgba"], {"blend_type": 2, "amount": 0.5}),
-    "colorize":            (["f"],                   ["rgba"], {"color_lo": [0.0, 0.0, 0.0, 1.0], "color_hi": [1.0, 1.0, 1.0, 1.0]}),
+    "colorize":            (["f"],                   ["rgba"], {"gradient": "GRADIENT"}),
+    "curve":               (["rgba"],                ["rgba"], {"curve": "CURVE"}),
     "transform":           (["rgba"],                ["rgba"], {"scale_x": 1.0, "scale_y": 1.0, "repeat": False}),
     "brightness_contrast": (["rgba"],                ["rgba"], {"brightness": 0.0, "contrast": 1.0}),
     "normal_map":          (["f"],                   ["rgb"],  {"amount": 0.5, "size": 9}),
@@ -292,7 +293,7 @@ def section_every_node_type():
         check(S, f"{type_name} add returns an id", node_id is not None, f"result={result}")
 
     graph = get_graph()
-    check(S, "all 11 node types present in graph", len(graph["nodes"]) == len(NODE_SPECS),
+    check(S, f"all {len(NODE_SPECS)} node types present in graph", len(graph["nodes"]) == len(NODE_SPECS),
           f"count={len(graph['nodes'])}")
 
     for type_name, (in_types, out_types, defaults) in NODE_SPECS.items():
@@ -312,7 +313,11 @@ def section_every_node_type():
         ok = True
         for key, expected in defaults.items():
             actual = params.get(key)
-            if isinstance(expected, list):
+            if expected == "GRADIENT":
+                good = isinstance(actual, dict) and isinstance(actual.get("stops"), list) and (len(actual["stops"]) >= 1)
+            elif expected == "CURVE":
+                good = isinstance(actual, list) and (len(actual) >= 2)
+            elif isinstance(expected, list):
                 good = approx_list(actual, expected)
             elif isinstance(expected, bool):
                 good = (actual == expected)
@@ -376,9 +381,44 @@ def section_parameter_sweeps():
     blend = add_node("blend")["id"]
     sweep(blend, {"blend_type": 0, "amount": 0.25}, {"blend_type": 5, "amount": 0.75}, "blend type/amount")
 
+    # Gradient (colorize) and curve control-point data do not fit the scalar
+    # sweep() helper; round-trip them with dedicated structural checks.
     colorize = add_node("colorize")["id"]
-    sweep(colorize, {"color_lo": [0.0, 0.0, 0.0, 1.0], "color_hi": [1.0, 0.0, 0.0, 1.0]},
-                    {"color_lo": [0.0, 0.0, 1.0, 1.0], "color_hi": [0.0, 1.0, 0.0, 1.0]}, "colorize colors")
+    grad_a = {"interpolation": 1, "stops": [
+        {"pos": 0.0, "color": [0.0, 0.0, 0.0, 1.0]},
+        {"pos": 1.0, "color": [1.0, 0.0, 0.0, 1.0]}]}
+    grad_b = {"interpolation": 2, "stops": [
+        {"pos": 0.0, "color": [0.0, 0.0, 1.0, 1.0]},
+        {"pos": 0.5, "color": [0.0, 1.0, 0.0, 1.0]},
+        {"pos": 1.0, "color": [1.0, 1.0, 0.0, 1.0]}]}
+    set_param(colorize, {"gradient": grad_a})
+    ga = params_of(colorize)["gradient"]
+    set_param(colorize, {"gradient": grad_b})
+    gb = params_of(colorize)["gradient"]
+    applied = (len(gb["stops"]) == 3) and (gb["interpolation"] == 2) and approx_list(gb["stops"][1]["color"], [0.0, 1.0, 0.0, 1.0])
+    undo(1)
+    g_undo = params_of(colorize)["gradient"]
+    redo(1)
+    g_redo = params_of(colorize)["gradient"]
+    round_trip = (len(g_undo["stops"]) == 2) and (g_undo["interpolation"] == 1) and (len(g_redo["stops"]) == 3)
+    check(S, "colorize gradient set+undo/redo", applied and round_trip,
+          f"a={ga} b={gb} undo={g_undo} redo={g_redo}")
+
+    curve = add_node("curve")["id"]
+    curve_a = [{"x": 0.0, "y": 0.0, "l": 0.0, "r": 0.0}, {"x": 1.0, "y": 1.0, "l": 0.0, "r": 0.0}]
+    curve_b = [{"x": 0.0, "y": 1.0, "l": 0.0, "r": 0.0}, {"x": 0.5, "y": 0.2, "l": 0.0, "r": 0.0}, {"x": 1.0, "y": 0.0, "l": 0.0, "r": 0.0}]
+    set_param(curve, {"curve": curve_a})
+    ca = params_of(curve)["curve"]
+    set_param(curve, {"curve": curve_b})
+    cb = params_of(curve)["curve"]
+    applied = (len(cb) == 3) and approx(cb[0]["y"], 1.0) and approx(cb[2]["y"], 0.0)
+    undo(1)
+    c_undo = params_of(curve)["curve"]
+    redo(1)
+    c_redo = params_of(curve)["curve"]
+    round_trip = (len(c_undo) == 2) and (len(c_redo) == 3)
+    check(S, "curve points set+undo/redo", applied and round_trip,
+          f"a={ca} b={cb} undo={c_undo} redo={c_redo}")
 
     tr = add_node("transform")["id"]
     sweep(tr, {"translate_x": 0.0, "rotate": 0.0, "scale_x": 1.0, "repeat": False},
@@ -662,7 +702,9 @@ def section_render_export():
     perlin = add_node("perlin")["id"]
     colorize = add_node("colorize")["id"]
     output = add_node("output")["id"]
-    set_param(colorize, {"color_lo": [0.0, 0.0, 0.2, 1.0], "color_hi": [1.0, 0.4, 0.0, 1.0]})
+    set_param(colorize, {"gradient": {"interpolation": 1, "stops": [
+        {"pos": 0.0, "color": [0.0, 0.0, 0.2, 1.0]},
+        {"pos": 1.0, "color": [1.0, 0.4, 0.0, 1.0]}]}})
     connect(perlin, 0, colorize, 0)
     connect(colorize, 0, output, 2)
     out_png = TMP_DIR / "output_baked.png"
@@ -682,6 +724,51 @@ def section_render_export():
     err = call_expect_error("texture_graph_export_png",
                             {"node_id": lonely, "path": str(TMP_DIR / "lonely.png"), "size": 8})
     check(S, "export of unconnected output errors cleanly", err is not None, f"err={err}")
+
+
+def section_gradient_curve():
+    """Gradient (colorize) and curve nodes render their control-point functions:
+    the colorize maps its default $uv.x ramp through a blue->red gradient, and
+    the curve node inverts a grayscale ramp - both proven by exported pixels."""
+    S = "gradient-curve"
+    TMP_DIR.mkdir(parents=True, exist_ok=True)
+    clear_graph()
+
+    # Colorize with default $uv.x input -> blue@0 -> red@1 horizontal ramp.
+    colorize = add_node("colorize")["id"]
+    set_param(colorize, {"gradient": {"interpolation": 1, "stops": [
+        {"pos": 0.0, "color": [0.0, 0.0, 1.0, 1.0]},
+        {"pos": 1.0, "color": [1.0, 0.0, 0.0, 1.0]}]}})
+    grad_png = TMP_DIR / "gradient_colorize.png"
+    result = export_png(colorize, grad_png, size=32)
+    check(S, "gradient colorize export returns dims",
+          isinstance(result, dict) and result.get("width") == 32, f"result={result}")
+    w, h, ch, buf = decode_png(grad_png)
+    left  = pixel(w, ch, buf, 1,     h // 2)
+    right = pixel(w, ch, buf, w - 2, h // 2)
+    check(S, "gradient left edge is bluish", left[2] > left[0] + 20, f"left={left}")
+    check(S, "gradient right edge is reddish", right[0] > right[2] + 20, f"right={right}")
+    reds = [buf[(i * ch)] for i in range(w * h)]
+    check(S, "gradient output varies across the ramp", (max(reds) - min(reds)) > 40,
+          f"min={min(reds)} max={max(reds)}")
+    g = params_of(colorize)["gradient"]
+    check(S, "gradient round-trips 2 stops + interpolation", isinstance(g, dict) and len(g["stops"]) == 2 and g["interpolation"] == 1, f"g={g}")
+
+    # Curve node inverting its default grayscale $uv.x ramp -> left bright, right dark.
+    clear_graph()
+    curve = add_node("curve")["id"]
+    set_param(curve, {"curve": [
+        {"x": 0.0, "y": 1.0, "l": 0.0, "r": 0.0},
+        {"x": 1.0, "y": 0.0, "l": 0.0, "r": 0.0}]})
+    curve_png = TMP_DIR / "curve_invert.png"
+    export_png(curve, curve_png, size=32)
+    w, h, ch, buf = decode_png(curve_png)
+    left  = pixel(w, ch, buf, 1,     h // 2)
+    right = pixel(w, ch, buf, w - 2, h // 2)
+    check(S, "inverting curve makes left brighter than right", left[0] > right[0] + 40,
+          f"left={left} right={right}")
+    c = params_of(curve)["curve"]
+    check(S, "curve round-trips 2 points", isinstance(c, list) and len(c) == 2, f"c={c}")
 
 
 def section_output_node():
@@ -747,6 +834,7 @@ def main():
         section_undo_redo,
         section_serialization,
         section_render_export,
+        section_gradient_curve,
         section_output_node,
     ]
     for section in sections:

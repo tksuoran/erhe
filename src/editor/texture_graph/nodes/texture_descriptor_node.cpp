@@ -1,5 +1,6 @@
 #include "texture_graph/nodes/texture_descriptor_node.hpp"
 #include "texture_graph/texture_payload.hpp"
+#include "texture_graph/texture_graph_widgets.hpp"
 
 #include "erhe_texgen/node_descriptor.hpp"
 
@@ -29,6 +30,15 @@ Texture_descriptor_node::Texture_descriptor_node(const erhe::texgen::Node_descri
             case erhe::texgen::Parameter_kind::enum_parameter:  value.enum_index    = parameter.default_enum_index;    break;
             case erhe::texgen::Parameter_kind::bool_parameter:  value.bool_value    = parameter.default_bool;          break;
             case erhe::texgen::Parameter_kind::size_parameter:  value.size_exponent = parameter.default_size_exponent; break;
+            case erhe::texgen::Parameter_kind::gradient_parameter: {
+                value.gradient_stops         = parameter.default_gradient_stops;
+                value.gradient_interpolation = parameter.default_gradient_interpolation;
+                break;
+            }
+            case erhe::texgen::Parameter_kind::curve_parameter: {
+                value.curve_points = parameter.default_curve_points;
+                break;
+            }
             default: break;
         }
     }
@@ -109,6 +119,20 @@ void Texture_descriptor_node::imgui()
                 ImGui::Text("= %d", 1 << value.size_exponent);
                 break;
             }
+            case erhe::texgen::Parameter_kind::gradient_parameter: {
+                ImGui::TextUnformatted(label);
+                if (texture_gradient_editor("##gradient", value.gradient_stops, value.gradient_interpolation)) {
+                    mark_dirty();
+                }
+                break;
+            }
+            case erhe::texgen::Parameter_kind::curve_parameter: {
+                ImGui::TextUnformatted(label);
+                if (texture_curve_editor("##curve", value.curve_points)) {
+                    mark_dirty();
+                }
+                break;
+            }
             default: break;
         }
         ImGui::PopID();
@@ -139,6 +163,8 @@ void Texture_descriptor_node::configure(erhe::texgen::Compose_node& compose_node
             case erhe::texgen::Parameter_kind::enum_parameter:  compose_node.set_enum_index   (parameter.name, value.enum_index);    break;
             case erhe::texgen::Parameter_kind::bool_parameter:  compose_node.set_bool         (parameter.name, value.bool_value);    break;
             case erhe::texgen::Parameter_kind::size_parameter:  compose_node.set_size_exponent(parameter.name, value.size_exponent); break;
+            case erhe::texgen::Parameter_kind::gradient_parameter: compose_node.set_gradient(parameter.name, value.gradient_stops, value.gradient_interpolation); break;
+            case erhe::texgen::Parameter_kind::curve_parameter:    compose_node.set_curve   (parameter.name, value.curve_points); break;
             default: break;
         }
     }
@@ -159,6 +185,33 @@ void Texture_descriptor_node::write_parameters(nlohmann::json& out) const
             case erhe::texgen::Parameter_kind::enum_parameter:  out[name] = static_cast<int>(value.enum_index); break;
             case erhe::texgen::Parameter_kind::bool_parameter:  out[name] = value.bool_value; break;
             case erhe::texgen::Parameter_kind::size_parameter:  out[name] = value.size_exponent; break;
+            case erhe::texgen::Parameter_kind::gradient_parameter: {
+                // Object: { "interpolation": int, "stops": [ { "pos": f, "color": [r,g,b,a] }, ... ] }
+                nlohmann::json gradient  = nlohmann::json::object();
+                gradient["interpolation"] = static_cast<int>(value.gradient_interpolation);
+                nlohmann::json stops = nlohmann::json::array();
+                for (const erhe::texgen::Gradient_stop& stop : value.gradient_stops) {
+                    stops.push_back({
+                        {"pos",   stop.position},
+                        {"color", { stop.color[0], stop.color[1], stop.color[2], stop.color[3] }}
+                    });
+                }
+                gradient["stops"] = stops;
+                out[name] = gradient;
+                break;
+            }
+            case erhe::texgen::Parameter_kind::curve_parameter: {
+                // Array: [ { "x": f, "y": f, "l": f, "r": f }, ... ]
+                nlohmann::json curve = nlohmann::json::array();
+                for (const erhe::texgen::Curve_point& point : value.curve_points) {
+                    curve.push_back({
+                        {"x", point.x}, {"y", point.y},
+                        {"l", point.left_slope}, {"r", point.right_slope}
+                    });
+                }
+                out[name] = curve;
+                break;
+            }
             default: break;
         }
     }
@@ -173,6 +226,29 @@ void Texture_descriptor_node::read_parameters(const nlohmann::json& in)
         const erhe::texgen::Parameter_descriptor& parameter = m_descriptor.parameters[i];
         erhe::texgen::Parameter_value&            value     = m_parameter_values[i];
         const std::string&                        name      = parameter.name;
+
+        // Gradient migration: a saved colorize graph from before the gradient
+        // widget (MVP fixed two-stop version) stored "color_lo" / "color_hi"
+        // rather than a "gradient" object. When the gradient key is absent but
+        // those two are present, synthesize a two-stop linear gradient from
+        // them so old files still load with the intended look.
+        if (
+            (parameter.kind == erhe::texgen::Parameter_kind::gradient_parameter) &&
+            !in.contains(name) &&
+            in.contains("color_lo") && in["color_lo"].is_array() && (in["color_lo"].size() == 4) &&
+            in.contains("color_hi") && in["color_hi"].is_array() && (in["color_hi"].size() == 4)
+        ) {
+            erhe::texgen::Gradient_stop lo{.position = 0.0f, .color = {0.0f, 0.0f, 0.0f, 1.0f}};
+            erhe::texgen::Gradient_stop hi{.position = 1.0f, .color = {1.0f, 1.0f, 1.0f, 1.0f}};
+            for (std::size_t c = 0; c < 4; ++c) {
+                lo.color[c] = in["color_lo"][c].get<float>();
+                hi.color[c] = in["color_hi"][c].get<float>();
+            }
+            value.gradient_stops         = {lo, hi};
+            value.gradient_interpolation = erhe::texgen::Gradient_interpolation::linear;
+            continue;
+        }
+
         if (!in.contains(name)) {
             continue;
         }
@@ -200,6 +276,44 @@ void Texture_descriptor_node::read_parameters(const nlohmann::json& in)
             }
             case erhe::texgen::Parameter_kind::size_parameter: {
                 value.size_exponent = entry.get<int>();
+                break;
+            }
+            case erhe::texgen::Parameter_kind::gradient_parameter: {
+                if (entry.is_object() && entry.contains("stops") && entry["stops"].is_array()) {
+                    std::vector<erhe::texgen::Gradient_stop> stops;
+                    for (const nlohmann::json& stop_json : entry["stops"]) {
+                        erhe::texgen::Gradient_stop stop{};
+                        stop.position = stop_json.value("pos", 0.0f);
+                        if (stop_json.contains("color") && stop_json["color"].is_array() && (stop_json["color"].size() == 4)) {
+                            for (std::size_t c = 0; c < 4; ++c) {
+                                stop.color[c] = stop_json["color"][c].get<float>();
+                            }
+                        }
+                        stops.push_back(stop);
+                    }
+                    if (!stops.empty()) {
+                        value.gradient_stops = std::move(stops);
+                    }
+                    value.gradient_interpolation =
+                        static_cast<erhe::texgen::Gradient_interpolation>(entry.value("interpolation", 1));
+                }
+                break;
+            }
+            case erhe::texgen::Parameter_kind::curve_parameter: {
+                if (entry.is_array()) {
+                    std::vector<erhe::texgen::Curve_point> points;
+                    for (const nlohmann::json& point_json : entry) {
+                        erhe::texgen::Curve_point point{};
+                        point.x           = point_json.value("x", 0.0f);
+                        point.y           = point_json.value("y", 0.0f);
+                        point.left_slope  = point_json.value("l", 0.0f);
+                        point.right_slope = point_json.value("r", 0.0f);
+                        points.push_back(point);
+                    }
+                    if (!points.empty()) {
+                        value.curve_points = std::move(points);
+                    }
+                }
                 break;
             }
             default: break;

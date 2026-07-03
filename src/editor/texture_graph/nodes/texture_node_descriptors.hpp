@@ -20,8 +20,8 @@ namespace editor {
 // instance of the type.
 
 // Returns the descriptor for the given factory type name (uniform, perlin,
-// voronoi, bricks, shape, blend, colorize, transform, brightness_contrast,
-// normal_map), or nullptr for an unknown name.
+// voronoi, bricks, shape, blend, colorize, curve, transform,
+// brightness_contrast, normal_map), or nullptr for an unknown name.
 [[nodiscard]] auto get_texture_node_descriptor(std::string_view type_name) -> const erhe::texgen::Node_descriptor*;
 
 // All MVP descriptors, in toolbar order. Used by the factory and by the

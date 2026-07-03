@@ -309,6 +309,7 @@ void Texture_graph_window::node_toolbar()
     ImGui::TextUnformatted("Filters   ");
     ImGui::SameLine();                     if (ImGui::Button("Blend"))            { add_node_of_type("blend"); }
     ImGui::SameLine();                     if (ImGui::Button("Colorize"))         { add_node_of_type("colorize"); }
+    ImGui::SameLine();                     if (ImGui::Button("Curve"))            { add_node_of_type("curve"); }
     ImGui::SameLine();                     if (ImGui::Button("Transform"))        { add_node_of_type("transform"); }
     ImGui::SameLine();                     if (ImGui::Button("Brightness/Cont.")) { add_node_of_type("brightness_contrast"); }
     ImGui::SameLine();                     if (ImGui::Button("Normal Map"))       { add_node_of_type("normal_map"); }
