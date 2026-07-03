@@ -56,4 +56,16 @@ auto Graph_mesh::get_baked_revision() const -> uint64_t
     return m_baked_revision;
 }
 
+void Graph_mesh::request_attachment_push()
+{
+    m_attachment_push_requested = true;
+}
+
+auto Graph_mesh::consume_attachment_push_request() -> bool
+{
+    const bool requested = m_attachment_push_requested;
+    m_attachment_push_requested = false;
+    return requested;
+}
+
 } // namespace editor

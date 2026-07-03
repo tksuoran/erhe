@@ -5,6 +5,7 @@
 #include "geometry_graph/geometry_graph_window.hpp"
 #include "geometry_graph/geometry_graph_node.hpp"
 #include "geometry_graph/geometry_graph_node_factory.hpp"
+#include "geometry_graph/geometry_graph_mesh.hpp"
 #include "geometry_graph/geometry_graph_operations.hpp"
 #include "geometry_graph/graph_mesh.hpp"
 #include "geometry_graph/nodes/geometry_output_node.hpp"
@@ -24,6 +25,8 @@
 #include "erhe_graph/pin.hpp"
 #include "erhe_imgui/imgui_node_editor.h"
 #include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_scene/node.hpp"
+#include "erhe_scene/scene.hpp"
 
 #include <imgui/imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
@@ -132,6 +135,15 @@ void Geometry_graph_window::insert_node(Graph_mesh& graph_mesh, const std::share
 {
     constexpr uint64_t flags = erhe::Item_flags::visible | erhe::Item_flags::content | erhe::Item_flags::show_in_ui;
     node->enable_flag_bits(flags);
+    // Only ASSET graphs own their nodes: the output node of an asset graph
+    // publishes to the asset (consumed by Geometry_graph_mesh attachments),
+    // while the scratch graph's output keeps the legacy self-owned scene
+    // node so the window is usable without creating an asset.
+    if (&graph_mesh != m_scratch_graph_mesh.get()) {
+        node->set_owning_graph_mesh(std::dynamic_pointer_cast<Graph_mesh>(graph_mesh.shared_from_this()));
+    } else {
+        node->set_owning_graph_mesh({});
+    }
     graph_mesh.nodes().push_back(node);
     graph_mesh.graph().register_node(node.get());
     // A node entering the graph must re-evaluate even when it was clean
@@ -556,6 +568,25 @@ void Geometry_graph_window::finish_evaluation()
             live_group->adopt_subgraph_outputs(*shadow_group);
         }
     }
+    // An asset-owned output node just published fresh baked products to
+    // the target asset; push them to every bound attachment. Evaluation
+    // finishes are rare, so the scene sweep costs nothing per frame.
+    apply_baked_products_to_attachments(run->target);
+}
+
+void Geometry_graph_window::apply_baked_products_to_attachments(const std::shared_ptr<Graph_mesh>& graph_mesh)
+{
+    if (m_app_context.app_scenes == nullptr) {
+        return;
+    }
+    for (const std::shared_ptr<Scene_root>& scene_root : m_app_context.app_scenes->get_scene_roots()) {
+        for (const std::shared_ptr<erhe::scene::Node>& node : scene_root->get_scene().get_flat_nodes()) {
+            const std::shared_ptr<Geometry_graph_mesh> attachment = erhe::scene::get_attachment<Geometry_graph_mesh>(node.get());
+            if (attachment && (attachment->get_graph_mesh() == graph_mesh)) {
+                attachment->apply_baked_products();
+            }
+        }
+    }
 }
 
 void Geometry_graph_window::update_evaluation()
@@ -564,6 +595,8 @@ void Geometry_graph_window::update_evaluation()
     // parity): keeps m_graph_mesh tracking the selection even when the
     // window is closed, so MCP reads never see a stale graph.
     refresh_current_graph_mesh();
+
+    process_attachment_push_requests();
 
     if (m_evaluation_run) {
         if (!is_evaluation_run_done()) {
@@ -574,6 +607,32 @@ void Geometry_graph_window::update_evaluation()
     const std::shared_ptr<Graph_mesh> next = next_graph_needing_evaluation();
     if (next) {
         launch_evaluation(next);
+    }
+}
+
+void Geometry_graph_window::process_attachment_push_requests()
+{
+    // Out-of-band pushes (no evaluation involved): a bound node re-entered
+    // a scene after missing a push, or an output node left an asset graph
+    // publishing an empty bake. Steady-state cost is one bool per graph.
+    if (m_scratch_graph_mesh->consume_attachment_push_request()) {
+        apply_baked_products_to_attachments(m_scratch_graph_mesh);
+    }
+    if (m_graph_mesh && (m_graph_mesh != m_scratch_graph_mesh) && m_graph_mesh->consume_attachment_push_request()) {
+        apply_baked_products_to_attachments(m_graph_mesh);
+    }
+    if (m_app_context.app_scenes != nullptr) {
+        for (const std::shared_ptr<Scene_root>& scene_root : m_app_context.app_scenes->get_scene_roots()) {
+            const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
+            if (!content_library || !content_library->graph_meshes) {
+                continue;
+            }
+            for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->graph_meshes->get_all<Graph_mesh>()) {
+                if (graph_mesh->consume_attachment_push_request()) {
+                    apply_baked_products_to_attachments(graph_mesh);
+                }
+            }
+        }
     }
 }
 

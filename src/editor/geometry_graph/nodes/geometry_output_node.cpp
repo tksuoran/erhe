@@ -4,6 +4,7 @@
 #include "app_scenes.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
+#include "geometry_graph/graph_mesh.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 
@@ -70,6 +71,14 @@ Geometry_output_node::~Geometry_output_node() noexcept
 void Geometry_output_node::on_removed_from_graph()
 {
     remove_scene_node();
+    // An asset-owned output leaving the graph must not strand its last
+    // bake on bound attachments: publish an empty bake (attachments
+    // clear their mesh on the next push).
+    const std::shared_ptr<Graph_mesh> owning_graph_mesh = get_owning_graph_mesh();
+    if (owning_graph_mesh) {
+        owning_graph_mesh->set_baked_products(Graph_mesh_baked_products{});
+        owning_graph_mesh->request_attachment_push();
+    }
 }
 
 void Geometry_output_node::remove_scene_node()
@@ -223,6 +232,33 @@ void Geometry_output_node::apply_evaluated_to_scene()
         return;
     }
     m_evaluated_valid = false;
+
+    // Asset-owned graph: publish the products to the owning Graph_mesh
+    // (bound Geometry_graph_mesh attachments consume them; the evaluation
+    // engine pushes right after this) instead of owning a scene node. An
+    // asset with no bound node renders nothing - exactly like a
+    // Graph_texture no material samples. A null geometry publish tells
+    // attachments to clear their mesh. Publishing needs no scene root
+    // (attachments resolve a material fallback from their own scene);
+    // m_material stays whatever the node's parameter selected, if any.
+    const std::shared_ptr<Graph_mesh> owning_graph_mesh = get_owning_graph_mesh();
+    if (owning_graph_mesh) {
+        // Drop any legacy self-owned scene node (scratch -> asset
+        // transition, e.g. a node restored from the undo stack).
+        remove_scene_node();
+        Graph_mesh_baked_products products;
+        products.geometry            = std::move(m_evaluated_geometry);
+        products.primitive           = std::move(m_evaluated_primitive);
+        products.material            = m_material;
+        products.collision_shape     = std::move(m_evaluated_collision_shape);
+        products.physics_enabled     = m_physics_enabled;
+        products.physics_motion_mode = m_physics_motion_mode;
+        owning_graph_mesh->set_baked_products(products);
+        m_evaluated_geometry.reset();
+        m_evaluated_primitive.reset();
+        m_evaluated_collision_shape.reset();
+        return;
+    }
 
     if (!m_scene_root) {
         m_scene_root = m_context.app_scenes->get_single_scene_root();

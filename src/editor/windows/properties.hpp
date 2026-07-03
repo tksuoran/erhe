@@ -46,6 +46,7 @@ namespace editor {
 class Brush;
 class Brush_placement;
 class App_context;
+class Geometry_graph_mesh;
 class Node_joint;
 class Node_physics;
 class Rendertarget_mesh;
@@ -79,6 +80,7 @@ private:
     void rendertarget_properties      (Rendertarget_mesh& rendertarget);
     void brush_properties             (const std::shared_ptr<Brush>& brush);
     void brush_placement_properties   (Brush_placement& brush_placement);
+    void geometry_graph_mesh_properties(Geometry_graph_mesh& geometry_graph_mesh);
     void node_physics_properties      (Node_physics& node_physics);
     void node_joint_properties        (Node_joint& node_joint);
     void physics_material_properties  (const std::shared_ptr<erhe::physics::Physics_material>& physics_material);

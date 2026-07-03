@@ -6,6 +6,8 @@
 #include "app_message_bus.hpp"
 #include "brushes/brush.hpp"
 #include "brushes/brush_placement.hpp"
+#include "geometry_graph/geometry_graph_mesh.hpp"
+#include "geometry_graph/graph_mesh.hpp"
 #include "content_library/brdf_slice.hpp"
 #include "content_library/content_library.hpp"
 #include "texture_graph/graph_texture.hpp"
@@ -792,6 +794,31 @@ void Properties::on_end()
     ImGui::PopStyleVar();
 }
 
+void Properties::geometry_graph_mesh_properties(Geometry_graph_mesh& geometry_graph_mesh)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    // The referenced Graph_mesh asset; rebinding applies the new asset's
+    // latest bake immediately (main thread).
+    erhe::scene::Node* node = geometry_graph_mesh.get_node();
+    Scene_root* scene_root = (node != nullptr) ? static_cast<Scene_root*>(node->get_item_host()) : nullptr;
+    const std::shared_ptr<Content_library> content_library = (scene_root != nullptr) ? scene_root->get_content_library() : std::shared_ptr<Content_library>{};
+    if (content_library && content_library->graph_meshes) {
+        add_entry("Graph Mesh", [this, &geometry_graph_mesh, content_library]() {
+            std::shared_ptr<Graph_mesh> graph_mesh = geometry_graph_mesh.get_graph_mesh();
+            if (content_library->graph_meshes->combo(m_context, "##", graph_mesh, true)) {
+                geometry_graph_mesh.set_graph_mesh(graph_mesh);
+                geometry_graph_mesh.apply_baked_products();
+            }
+        });
+    } else {
+        add_entry("Graph Mesh", [&geometry_graph_mesh]() {
+            const std::shared_ptr<Graph_mesh>& graph_mesh = geometry_graph_mesh.get_graph_mesh();
+            ImGui::TextUnformatted(graph_mesh ? graph_mesh->get_name().c_str() : "(none)");
+        });
+    }
+}
+
 void Properties::node_physics_properties(Node_physics& node_physics)
 {
     ERHE_PROFILE_FUNCTION();
@@ -1360,6 +1387,7 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
     const auto& node            = std::dynamic_pointer_cast<erhe::scene::Node      >(item);
     const auto& brush           = std::dynamic_pointer_cast<Brush                  >(item);
     const auto& brush_placement = std::dynamic_pointer_cast<Brush_placement        >(item);
+    const auto& geometry_graph_mesh = std::dynamic_pointer_cast<Geometry_graph_mesh>(item);
     const auto& texture         = std::dynamic_pointer_cast<erhe::graphics::Texture>(item);
     const auto& physics_material  = std::dynamic_pointer_cast<erhe::physics::Physics_material      >(item);
     const auto& collision_filter  = std::dynamic_pointer_cast<erhe::physics::Collision_filter      >(item);
@@ -1535,6 +1563,10 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
 
     if (brush_placement) {
         brush_placement_properties(*brush_placement);
+    }
+
+    if (geometry_graph_mesh) {
+        geometry_graph_mesh_properties(*geometry_graph_mesh);
     }
 
     if (texture) {

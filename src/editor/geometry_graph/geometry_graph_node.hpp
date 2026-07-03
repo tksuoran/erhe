@@ -6,6 +6,7 @@
 
 #include <nlohmann/json_fwd.hpp>
 
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -18,6 +19,7 @@ namespace editor {
 
 class App_context;
 class Geometry_graph;
+class Graph_mesh;
 
 // Applies the Geometry::process() flags every generator / operation node
 // needs on its output geometry, so downstream operation nodes find
@@ -111,6 +113,14 @@ public:
     [[nodiscard]] auto get_log_id() const -> std::size_t;
     void set_log_source_id(std::size_t id);
 
+    // The Graph_mesh ASSET this node belongs to; null for nodes of the
+    // window's scratch graph (set by Geometry_graph_window::insert_node
+    // for asset graphs only) and for shadow clones / group subgraph
+    // nodes. The output node uses it to publish its evaluated products
+    // to the asset instead of creating a self-owned scene node.
+    [[nodiscard]] auto get_owning_graph_mesh() const -> std::shared_ptr<Graph_mesh>;
+    void set_owning_graph_mesh(const std::shared_ptr<Graph_mesh>& graph_mesh);
+
 protected:
     void show_pins(
         ax::NodeEditor::EditorContext&                        node_editor,
@@ -122,6 +132,7 @@ protected:
 
     std::vector<Geometry_payload> m_input_payloads;
     std::vector<Geometry_payload> m_output_payloads;
+    std::weak_ptr<Graph_mesh>     m_owning_graph_mesh;
     std::string                   m_type_name;
     std::string                   m_committed_parameters;
     std::size_t                   m_log_source_id{0};

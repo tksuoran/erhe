@@ -76,11 +76,19 @@ public:
     [[nodiscard]] auto get_baked_products() const -> const Graph_mesh_baked_products&;
     [[nodiscard]] auto get_baked_revision() const -> uint64_t;
 
+    // Out-of-band request to re-push the current baked products to bound
+    // attachments (set when a bound node re-enters a scene after missing
+    // a push, or when the output node leaves the graph). Consumed by
+    // Geometry_graph_window::update_evaluation() each frame.
+    void request_attachment_push();
+    [[nodiscard]] auto consume_attachment_push_request() -> bool;
+
 private:
     Geometry_graph                                    m_graph;
     std::vector<std::shared_ptr<Geometry_graph_node>> m_nodes;
     Graph_mesh_baked_products                         m_baked_products;
     uint64_t                                          m_baked_revision{0};
+    bool                                              m_attachment_push_requested{false};
 };
 
 } // namespace editor

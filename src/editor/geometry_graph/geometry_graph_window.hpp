@@ -191,6 +191,16 @@ private:
     void finish_evaluation(); // pre: m_evaluation_run && done
     [[nodiscard]] auto is_evaluation_run_done() -> bool;
 
+    // Pushes the graph's freshly published baked products to every
+    // Geometry_graph_mesh attachment bound to it, in every scene. Called
+    // at the end of finish_evaluation(); main thread.
+    void apply_baked_products_to_attachments(const std::shared_ptr<Graph_mesh>& graph_mesh);
+
+    // Honors Graph_mesh::request_attachment_push() flags once per frame
+    // (pushes that need no evaluation - node re-entered a scene, output
+    // node removed).
+    void process_attachment_push_requests();
+
     App_context&                                      m_app_context;
     // The window's own fallback graph, edited when no Graph_mesh asset is
     // selected. A benign scratch surface (mirrors Texture_graph_window's

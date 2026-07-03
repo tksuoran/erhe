@@ -175,6 +175,8 @@ erhe_target_sources_grouped(
     init_status_display.hpp
     geometry_graph/geometry_graph.cpp
     geometry_graph/geometry_graph.hpp
+    geometry_graph/geometry_graph_mesh.cpp
+    geometry_graph/geometry_graph_mesh.hpp
     geometry_graph/graph_mesh.cpp
     geometry_graph/graph_mesh.hpp
     geometry_graph/geometry_graph_node.cpp

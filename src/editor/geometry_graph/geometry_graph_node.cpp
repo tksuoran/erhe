@@ -230,6 +230,16 @@ void Geometry_graph_node::set_log_source_id(const std::size_t id)
     m_log_source_id = id;
 }
 
+auto Geometry_graph_node::get_owning_graph_mesh() const -> std::shared_ptr<Graph_mesh>
+{
+    return m_owning_graph_mesh.lock();
+}
+
+void Geometry_graph_node::set_owning_graph_mesh(const std::shared_ptr<Graph_mesh>& graph_mesh)
+{
+    m_owning_graph_mesh = graph_mesh;
+}
+
 void Geometry_graph_node::set_committed_parameters(const std::string& parameters)
 {
     m_committed_parameters = parameters;
