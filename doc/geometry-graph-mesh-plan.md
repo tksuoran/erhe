@@ -31,12 +31,31 @@ serialization format and MCP surface carry over in substance - what changes is
 
 | Work item                                                           | Status | Commit |
 |---------------------------------------------------------------------|--------|--------|
-| B1: Item types + `Graph_mesh` asset class + Content-library folder   | TODO   |        |
-| B2: Re-home graph state window -> asset; per-asset async engine; create UI | TODO |  |
-| B3: `Geometry_graph_mesh` attachment; output node publishes to asset | TODO   |        |
-| B4: MCP tools (create/list/bind); per-asset graph tools               | TODO   |        |
+| B1: Item types + `Graph_mesh` asset class + Content-library folder   | DONE   | 2a2d07c2 |
+| B2: Re-home graph state window -> asset; per-asset async engine; create UI | DONE | e1d1904b |
+| B3: `Geometry_graph_mesh` attachment; output node publishes to asset | DONE   | 64957814 |
+| B4: MCP tools (create/list/bind); per-asset graph tools               | DONE   | 47c6a83d |
 | B5: Scene serialization of asset + binding (scene_file v7)            | TODO   |        |
 | B6: Smoke coverage + full live headless verification                  | TODO   |        |
+
+Notes accumulated during implementation:
+
+- B3 lifecycle: an attempt to fire `handle_node_update` on detach from
+  `Node_attachment::set_node` was REVERTED (use-after-free when
+  `handle_remove_attachment` drops the last reference; detach-time flag
+  propagation perturbs Mesh's raytrace enable path). The attachment instead
+  remembers its controlled node (`m_controlled_node` weak_ptr) and releases
+  via `handle_item_host_update` (detach from in-scene node), move handling in
+  `handle_node_update`, reclaim-in-apply, and release-on-any-rebind.
+- B4 fixes: `create_new_empty_node` now sets `Item_flags::visible` (attachments
+  sync visibility from the node on attach; anything attached to an invisible
+  empty node was invisibly stuck). Adjacent observation (NOT chased):
+  `create_new_camera` / `create_new_light` also omit `visible` on their nodes.
+- Known gaps (deliberate, consistent with Phase A): Properties/MCP bind of an
+  attachment is not undoable (mirrors `set_material_texture_source`); undoing
+  `create_graph_mesh` while a node is bound leaves the attachment holding the
+  orphan asset (keeps rendering; scratch-analogous); `find_scene("")` does not
+  default to the single scene, so MCP calls pass `scene_name` explicitly.
 
 ---
 
