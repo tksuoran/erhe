@@ -39,4 +39,4 @@ CommitVerifiedWork¬askFirst
 
 [GOTCHAS]
 src/rendering_test::rotten{¬maintain,slated-rewrite,acceptable-broken}
-next_prompt.txt::session-handoff{read-first,delete-when-done}
+prompt_queue.txt::session-handoff{read-first,queue-of-sequential-handoffs,remove-item-when-done,delete-when-empty}

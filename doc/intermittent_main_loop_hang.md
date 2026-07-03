@@ -640,7 +640,7 @@ use is confirmed. Because Geogram is not thread-safe, guarding it is the
 
 - **Next direction (2026-06-02):** build a minimal, head-less ARM repro to
   separate editor-misuse-of-Geogram from a bug in Geogram itself; see
-  `next_prompt.txt` for the plan handoff. Cheapest decisive test: set
+  `prompt_queue.txt` for the plan handoff. Cheapest decisive test: set
   `threading.thread_count` to 1 (sequential `make_brushes()`) and soak -- if the
   hang vanishes, it is a concurrency issue.
 - The watchdog + breadcrumbs are diagnostics only; they do not fix the hang.

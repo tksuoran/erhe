@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **erhe** is a C++ graphics library and editor for Vulkan, OpenGL and Metal (Vulkan is the default backend). It features a render graph system, full 3D scene graph, physics (Jolt), geometry manipulation (Catmull-Clark, Conway operators via Geogram), and an ImGui-based editor application.
 
-## Session handoff: `next_prompt.txt`
+## Session handoff: `prompt_queue.txt`
 
-When an untracked `next_prompt.txt` exists in the repo root, it is a handoff written by an older Claude Code session so that work can continue with fresh context: read it first and continue the work it describes. Once it has been read and the work is done, simply delete the file - do not update it or keep it around. Notes about the work done must already be in the commit messages for that work, so no information is lost by deleting it. (Writing a new `next_prompt.txt` is only warranted when handing off still-unfinished work to a future session.)
+When an untracked `prompt_queue.txt` exists in the repo root, it is a handoff written by an older Claude Code session so that work can continue with fresh context: read it first and continue the work it describes. It may hold a queue of sequential handoffs (do the first item, and only write the next when the current one is done and verified). Once an item has been read and its work is done, remove that item; when the file holds nothing outstanding, delete it - do not keep a stale file around. Notes about the work done must already be in the commit messages for that work, so no information is lost by deleting it. (Writing a new `prompt_queue.txt` is only warranted when handing off still-unfinished work to a future session.)
 
 ## `src/rendering_test/` is rotten
 
