@@ -34,8 +34,19 @@ serialization, undo operations and MCP surface unchanged in substance - only
 | A3: Re-home graph state window -> asset; retarget edit/undo/save   | DONE    | c5827bbf |
 | A4: MCP tools target a named/selected `Graph_texture`; create tool | DONE    | 70b095bd |
 | A5: Material -> `Graph_texture` binding (Properties UI + MCP)      | DONE    | ef667f19 |
-| A6: Scene serialization of asset + binding (scene_file v6)         | TODO    |        |
-| A7: Adapt smoke test to per-asset graphs; live headless verify     | TODO    |        |
+| A6: Scene serialization of asset + binding (scene_file v6)         | DONE    | d93f8f17 |
+| A7: Smoke coverage for the asset + binding; live headless verify   | DONE    | 477b07f0 |
+
+Phase A is functionally complete and headless-verified (create -> edit -> bind
+material -> mesh renders the graph output -> graph edit re-renders live ->
+save/reload round-trips the asset and the binding). Full smoke sweep 283/283.
+
+Note (A3/A7 deviation): the window keeps a default (window-owned) Graph_texture
+edited when no asset is selected, rather than dropping it as A7 originally
+proposed. It is a benign scratch surface - the SELECTED content-library asset
+always takes precedence, and the default is never referenced by a material.
+Dropping it would require guarding every window/MCP edit path for a null current
+graph with no functional gain, so it is kept intentionally.
 
 Note (A5): the texture-source seam needed one more site than A1 covered - the
 shader-variant key. `erhe::scene_renderer::shader_key.cpp sampler_is_bound()`
