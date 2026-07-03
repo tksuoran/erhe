@@ -1,0 +1,775 @@
+#!/usr/bin/env python3
+"""Comprehensive procedural texture graph smoke test.
+
+Drives the in-editor MCP server (headless Vulkan build) through the whole
+texture graph feature: every node type constructs with the expected pins and
+default parameters, parameter sweeps round-trip with undo/redo, out-of-range
+parameter abuse never crashes, connect/disconnect obey the pin-key rules and
+reject type mismatches / self links / cycles, undo/redo of add + connect +
+parameter edits, JSON save/load round-trip plus malformed-file error paths,
+and - the core "it actually renders" proof - export_png of a uniform node whose
+center pixel must match the set color, a perlin node whose output must vary,
+and the Output node's baked subtree. Prints a structured PASS/FAIL report and
+exits non-zero on any failure.
+
+Assumes the headless editor is already running with the MCP server reachable on
+127.0.0.1:8080 (exactly like scripts/geometry_nodes_smoke_test.py). Texture
+graph evaluation is synchronous (doc/texture-graph-plan.md decision 8), so a
+get_texture_graph after a mutation reads settled state with no async barrier.
+"""
+
+import json
+import pathlib
+import struct
+import sys
+import time
+import urllib.request
+import zlib
+
+PORT = 8080
+LOG_PATH = pathlib.Path("logs/log.txt")
+TMP_DIR = pathlib.Path("logs/texgraph_smoke")
+RESULTS = []
+
+
+# ------------------------------------------------------------------ transport
+
+def rpc(method, params, timeout=180):
+    body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode("utf-8")
+    request = urllib.request.Request(
+        f"http://127.0.0.1:{PORT}/mcp", data=body, headers={"Content-Type": "application/json"}
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def call_once(tool, args=None, timeout=180):
+    payload = rpc("tools/call", {"name": tool, "arguments": args or {}}, timeout=timeout)
+    if "error" in payload:
+        raise RuntimeError(f"{tool}: {payload['error']}")
+    result = payload.get("result", {})
+    content = result.get("content")
+    text = content[0]["text"] if (isinstance(content, list) and content and "text" in content[0]) else ""
+    if result.get("isError", False):
+        raise RuntimeError(f"{tool}: {text}")
+    try:
+        return json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        return text
+
+
+def is_busy_error(error):
+    text = str(error)
+    return ("Request timed out" in text) or ("Server busy" in text)
+
+
+# Texture graph evaluation is cheap (string composition) and synchronous, but
+# export_png submits a GPU mini-frame and waits idle; keep the geometry test's
+# busy-tolerant wrappers so a slow frame never turns into a spurious failure.
+def call(tool, args=None, timeout=180, deadline_s=300):
+    deadline = time.time() + deadline_s
+    while True:
+        try:
+            return call_once(tool, args, timeout=timeout)
+        except RuntimeError as error:
+            if not is_busy_error(error) or (time.time() > deadline):
+                raise
+            time.sleep(2.0)
+
+
+def mutate(tool, args=None, deadline_s=300):
+    try:
+        return call_once(tool, args)
+    except RuntimeError as error:
+        if not is_busy_error(error):
+            raise
+        print(f"  (server busy on {tool}; waiting)")
+        deadline = time.time() + deadline_s
+        while True:
+            try:
+                call_once("get_undo_redo_stack")
+                return None
+            except RuntimeError as poll_error:
+                if not is_busy_error(poll_error) or (time.time() > deadline):
+                    raise
+                time.sleep(2.0)
+
+
+def call_expect_error(tool, args=None):
+    """Return the error text of an expected rejection, or None on success."""
+    try:
+        call(tool, args)
+        return None
+    except RuntimeError as error:
+        return str(error)
+
+
+# ------------------------------------------------------------------ reporting
+
+def check(section, name, condition, detail=""):
+    RESULTS.append((section, name, bool(condition), detail))
+    status = "PASS" if condition else "FAIL"
+    print(f"[{status}] {section}: {name}" + (f" -- {detail}" if detail and not condition else ""))
+    return bool(condition)
+
+
+def approx(a, b, tol=1e-3):
+    try:
+        return abs(float(a) - float(b)) <= tol
+    except (TypeError, ValueError):
+        return False
+
+
+def approx_list(a, b, tol=1e-3):
+    if not isinstance(a, list) or not isinstance(b, list) or (len(a) != len(b)):
+        return False
+    return all(approx(x, y, tol) for x, y in zip(a, b))
+
+
+# ---------------------------------------------------------------- graph helpers
+
+def add_node(type_name):
+    return call("texture_graph_add_node", {"type": type_name})
+
+
+def connect(src, sslot, dst, dslot):
+    return mutate("texture_graph_connect", {
+        "source_node_id": src, "source_slot": sslot, "sink_node_id": dst, "sink_slot": dslot})
+
+
+def connect_expect_error(src, sslot, dst, dslot):
+    return call_expect_error("texture_graph_connect", {
+        "source_node_id": src, "source_slot": sslot, "sink_node_id": dst, "sink_slot": dslot})
+
+
+def disconnect(src, sslot, dst, dslot):
+    return mutate("texture_graph_disconnect", {
+        "source_node_id": src, "source_slot": sslot, "sink_node_id": dst, "sink_slot": dslot})
+
+
+def set_param(node_id, parameters):
+    return mutate("texture_graph_set_parameter", {"node_id": node_id, "parameters": parameters})
+
+
+def get_graph():
+    return call("get_texture_graph")
+
+
+def clear_graph():
+    mutate("texture_graph_clear")
+
+
+def node_by_id(graph, node_id):
+    for node in graph["nodes"]:
+        if node["id"] == node_id:
+            return node
+    return None
+
+
+def params_of(node_id):
+    node = node_by_id(get_graph(), node_id)
+    return node["parameters"] if node else None
+
+
+def value_types(pins):
+    return [pin["value_type"] for pin in pins]
+
+
+def undo(n=1):
+    for _ in range(n):
+        mutate("undo")
+
+
+def redo(n=1):
+    for _ in range(n):
+        mutate("redo")
+
+
+def undo_depth():
+    stack = call("get_undo_redo_stack")
+    return len(stack.get("undo", []))
+
+
+# ------------------------------------------------------------------ PNG decode
+
+def decode_png(path):
+    """Minimal pure-Python PNG decoder (8-bit, color types 2/RGB and 6/RGBA);
+    returns (width, height, channels, bytearray of raw pixels row-major)."""
+    data = pathlib.Path(path).read_bytes()
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError("not a PNG file")
+    pos = 8
+    width = height = bit_depth = color_type = None
+    idat = bytearray()
+    while pos + 8 <= len(data):
+        length = struct.unpack(">I", data[pos:pos + 4])[0]
+        ctype = data[pos + 4:pos + 8]
+        chunk = data[pos + 8:pos + 8 + length]
+        pos += 12 + length  # 4 length + 4 type + data + 4 crc
+        if ctype == b"IHDR":
+            width, height, bit_depth, color_type = struct.unpack(">IIBB", chunk[:10])
+        elif ctype == b"IDAT":
+            idat += chunk
+        elif ctype == b"IEND":
+            break
+    if bit_depth != 8:
+        raise ValueError(f"unsupported bit depth {bit_depth}")
+    channels = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}[color_type]
+    raw = zlib.decompress(bytes(idat))
+    stride = width * channels
+    out = bytearray(height * stride)
+    prev = bytearray(stride)
+    p = 0
+    for y in range(height):
+        filter_type = raw[p]
+        p += 1
+        line = bytearray(raw[p:p + stride])
+        p += stride
+        if filter_type == 1:  # Sub
+            for i in range(stride):
+                a = line[i - channels] if i >= channels else 0
+                line[i] = (line[i] + a) & 0xFF
+        elif filter_type == 2:  # Up
+            for i in range(stride):
+                line[i] = (line[i] + prev[i]) & 0xFF
+        elif filter_type == 3:  # Average
+            for i in range(stride):
+                a = line[i - channels] if i >= channels else 0
+                line[i] = (line[i] + ((a + prev[i]) >> 1)) & 0xFF
+        elif filter_type == 4:  # Paeth
+            for i in range(stride):
+                a = line[i - channels] if i >= channels else 0
+                b = prev[i]
+                c = prev[i - channels] if i >= channels else 0
+                pa, pb, pc = abs(b - c), abs(a - c), abs(a + b - 2 * c)
+                pr = a if (pa <= pb and pa <= pc) else (b if pb <= pc else c)
+                line[i] = (line[i] + pr) & 0xFF
+        elif filter_type != 0:
+            raise ValueError(f"unsupported filter type {filter_type}")
+        out[y * stride:(y + 1) * stride] = line
+        prev = line
+    return width, height, channels, out
+
+
+def pixel(width, channels, buf, x, y):
+    base = (y * width + x) * channels
+    return [buf[base + c] for c in range(channels)]
+
+
+def export_png(node_id, path, size=16, output_slot=0):
+    return call("texture_graph_export_png",
+                {"node_id": node_id, "path": str(path), "size": size, "output_slot": output_slot})
+
+
+# ------------------------------------------------------------------ node specs
+
+# name -> (input value_types, output value_types, expected default params subset)
+NODE_SPECS = {
+    "uniform":             ([],                      ["rgba"], {"color": [0.8, 0.8, 0.8, 1.0]}),
+    "perlin":              ([],                      ["f"],    {"scale_x": 4.0, "scale_y": 4.0, "iterations": 3.0, "persistence": 0.5}),
+    "voronoi":             ([],                      ["f", "f", "rgb"], {"scale_x": 4.0, "randomness": 1.0}),
+    "bricks":              ([],                      ["f"],    {"pattern": 0, "rows": 6.0, "columns": 3.0}),
+    "shape":               ([],                      ["f"],    {"shape": 0, "sides": 6.0, "radius": 0.85}),
+    "blend":               (["rgba", "rgba"],        ["rgba"], {"blend_type": 2, "amount": 0.5}),
+    "colorize":            (["f"],                   ["rgba"], {"color_lo": [0.0, 0.0, 0.0, 1.0], "color_hi": [1.0, 1.0, 1.0, 1.0]}),
+    "transform":           (["rgba"],                ["rgba"], {"scale_x": 1.0, "scale_y": 1.0, "repeat": False}),
+    "brightness_contrast": (["rgba"],                ["rgba"], {"brightness": 0.0, "contrast": 1.0}),
+    "normal_map":          (["f"],                   ["rgb"],  {"amount": 0.5, "size": 9}),
+    "output":              (["f", "rgb", "rgba"],    [],       {"name": "Texture Graph", "size": 1024, "assign": False}),
+}
+
+
+# ---------------------------------------------------------------- sections
+
+def section_every_node_type():
+    S = "node-types"
+    clear_graph()
+    ids = {}
+    for type_name, (in_types, out_types, defaults) in NODE_SPECS.items():
+        result = add_node(type_name)
+        node_id = result.get("id") if isinstance(result, dict) else None
+        ids[type_name] = node_id
+        check(S, f"{type_name} add returns an id", node_id is not None, f"result={result}")
+
+    graph = get_graph()
+    check(S, "all 11 node types present in graph", len(graph["nodes"]) == len(NODE_SPECS),
+          f"count={len(graph['nodes'])}")
+
+    for type_name, (in_types, out_types, defaults) in NODE_SPECS.items():
+        node_id = ids[type_name]
+        if node_id is None:
+            continue
+        node = node_by_id(graph, node_id)
+        if node is None:
+            check(S, f"{type_name} appears in graph", False)
+            continue
+        check(S, f"{type_name} factory type label", node["type"] == type_name, f"type={node['type']}")
+        check(S, f"{type_name} input pin value types", value_types(node["inputs"]) == in_types,
+              f"got={value_types(node['inputs'])} expected={in_types}")
+        check(S, f"{type_name} output pin value types", value_types(node["outputs"]) == out_types,
+              f"got={value_types(node['outputs'])} expected={out_types}")
+        params = node["parameters"]
+        ok = True
+        for key, expected in defaults.items():
+            actual = params.get(key)
+            if isinstance(expected, list):
+                good = approx_list(actual, expected)
+            elif isinstance(expected, bool):
+                good = (actual == expected)
+            elif isinstance(expected, (int, float)):
+                good = approx(actual, expected)
+            else:
+                good = (actual == expected)
+            ok = ok and good
+        check(S, f"{type_name} default parameters", ok, f"params={params} expected~{defaults}")
+
+    clear_graph()
+    check(S, "clear empties graph", len(get_graph()["nodes"]) == 0)
+
+
+def section_parameter_sweeps():
+    """Set parameters, read them back via get_texture_graph, and exercise
+    undo/redo of each gesture (mirrors the geometry sweep)."""
+    S = "param-sweep"
+
+    def sweep(node_id, params_a, params_b, label):
+        set_param(node_id, params_a)
+        state_a = params_of(node_id)
+        set_param(node_id, params_b)
+        state_b = params_of(node_id)
+        # b applied?
+        applied = True
+        for key, value in params_b.items():
+            got = state_b.get(key)
+            if isinstance(value, list):
+                applied = applied and approx_list(got, value)
+            elif isinstance(value, bool):
+                applied = applied and (got == value)
+            else:
+                applied = applied and approx(got, value)
+        undo(1)
+        state_after_undo = params_of(node_id)
+        redo(1)
+        state_after_redo = params_of(node_id)
+        # undo returns to a-state, redo back to b-state (compare full dicts)
+        round_trip = (state_after_undo == state_a) and (state_after_redo == state_b)
+        check(S, f"{label} set+undo/redo", applied and round_trip,
+              f"a={state_a} b={state_b} undo={state_after_undo} redo={state_after_redo}")
+
+    clear_graph()
+    uni = add_node("uniform")["id"]
+    sweep(uni, {"color": [0.1, 0.2, 0.3, 1.0]}, {"color": [0.9, 0.5, 0.25, 1.0]}, "uniform color")
+
+    perlin = add_node("perlin")["id"]
+    sweep(perlin, {"scale_x": 2.0, "scale_y": 2.0, "iterations": 1.0},
+                  {"scale_x": 8.0, "scale_y": 6.0, "iterations": 5.0}, "perlin scale/iterations")
+
+    vor = add_node("voronoi")["id"]
+    sweep(vor, {"scale_x": 3.0, "randomness": 0.2}, {"scale_x": 10.0, "randomness": 0.9}, "voronoi scale/randomness")
+
+    bricks = add_node("bricks")["id"]
+    sweep(bricks, {"columns": 2.0, "rows": 3.0}, {"columns": 8.0, "rows": 12.0}, "bricks columns/rows")
+
+    shape = add_node("shape")["id"]
+    sweep(shape, {"shape": 0, "sides": 3.0}, {"shape": 2, "sides": 8.0}, "shape enum/sides")
+
+    blend = add_node("blend")["id"]
+    sweep(blend, {"blend_type": 0, "amount": 0.25}, {"blend_type": 5, "amount": 0.75}, "blend type/amount")
+
+    colorize = add_node("colorize")["id"]
+    sweep(colorize, {"color_lo": [0.0, 0.0, 0.0, 1.0], "color_hi": [1.0, 0.0, 0.0, 1.0]},
+                    {"color_lo": [0.0, 0.0, 1.0, 1.0], "color_hi": [0.0, 1.0, 0.0, 1.0]}, "colorize colors")
+
+    tr = add_node("transform")["id"]
+    sweep(tr, {"translate_x": 0.0, "rotate": 0.0, "scale_x": 1.0, "repeat": False},
+              {"translate_x": 0.3, "rotate": 90.0, "scale_x": 2.0, "repeat": True}, "transform trs")
+
+    bc = add_node("brightness_contrast")["id"]
+    sweep(bc, {"brightness": -0.5, "contrast": 0.5}, {"brightness": 0.5, "contrast": 1.8}, "brightness/contrast")
+
+    nm = add_node("normal_map")["id"]
+    sweep(nm, {"amount": 0.2, "size": 6}, {"amount": 1.5, "size": 10}, "normal_map amount/size")
+
+
+def section_parameter_abuse():
+    """Out-of-range / degenerate values must not crash the editor; the graph
+    stays queryable and the value round-trips (set_parameter does not clamp -
+    the descriptor min/max only constrain the widget)."""
+    S = "param-abuse"
+    clear_graph()
+
+    perlin = add_node("perlin")["id"]
+    set_param(perlin, {"scale_x": -4.0, "iterations": 0.0})
+    p = params_of(perlin)
+    check(S, "perlin negative scale accepted, no crash", approx(p.get("scale_x"), -4.0), f"params={p}")
+
+    bricks = add_node("bricks")["id"]
+    set_param(bricks, {"pattern": 99})  # enum index beyond range
+    p = params_of(bricks)
+    check(S, "bricks enum index 99 accepted, no crash", p.get("pattern") == 99, f"params={p}")
+
+    shape = add_node("shape")["id"]
+    set_param(shape, {"shape": 42, "sides": 0.0})
+    p = params_of(shape)
+    check(S, "shape enum 42 + sides 0 accepted, no crash", p.get("shape") == 42, f"params={p}")
+
+    uni = add_node("uniform")["id"]
+    set_param(uni, {"color": [-1.0, 5.0, 0.5, 1.0]})  # out of [0,1]
+    p = params_of(uni)
+    check(S, "uniform out-of-range color accepted", approx_list(p.get("color"), [-1.0, 5.0, 0.5, 1.0]), f"params={p}")
+
+    nm = add_node("normal_map")["id"]
+    set_param(nm, {"size": 0})  # size exponent 0 -> 1px kernel
+    p = params_of(nm)
+    check(S, "normal_map size exponent 0 accepted", p.get("size") == 0, f"params={p}")
+
+    out = add_node("output")["id"]
+    set_param(out, {"size": 0})  # not one of 256/512/1024/2048 -> keeps previous
+    p = params_of(out)
+    check(S, "output size 0 handled (keeps a valid size)", p.get("size") in (256, 512, 1024, 2048), f"params={p}")
+
+    check(S, "editor alive + graph queryable after abuse", len(get_graph()["nodes"]) == 6)
+
+
+def section_connect_rules():
+    """Pin-key rules: valid chain connects, disconnect removes, and
+    type-mismatch / self / 2-node / 3-node cycles are all rejected with no
+    link created and no undo entry."""
+    S = "connect"
+    clear_graph()
+    perlin = add_node("perlin")["id"]        # out f (key grayscale)
+    colorize = add_node("colorize")["id"]     # in f, out rgba
+    output = add_node("output")["id"]         # in f/rgb/rgba (slots 0/1/2)
+
+    # Valid chain: perlin.f -> colorize.f ; colorize.rgba -> output.rgba (slot 2)
+    connect(perlin, 0, colorize, 0)
+    connect(colorize, 0, output, 2)
+    links = get_graph()["links"]
+    check(S, "valid chain creates two links", len(links) == 2, f"links={links}")
+    has_pc = any(l["source_node_id"] == perlin and l["sink_node_id"] == colorize for l in links)
+    has_co = any(l["source_node_id"] == colorize and l["sink_node_id"] == output and l["sink_slot"] == 2 for l in links)
+    check(S, "perlin->colorize link present", has_pc)
+    check(S, "colorize->output(rgba slot) link present", has_co)
+
+    # Disconnect one link.
+    disconnect(perlin, 0, colorize, 0)
+    links = get_graph()["links"]
+    check(S, "disconnect removes exactly one link", len(links) == 1, f"links={links}")
+
+    # Fan out: one perlin feeds colorize.f AND normal_map.f (both grayscale).
+    clear_graph()
+    perlin = add_node("perlin")["id"]
+    colorize = add_node("colorize")["id"]
+    nm = add_node("normal_map")["id"]
+    connect(perlin, 0, colorize, 0)
+    connect(perlin, 0, nm, 0)
+    links = get_graph()["links"]
+    fan = sum(1 for l in links if l["source_node_id"] == perlin)
+    check(S, "generator fans out to two filters", fan == 2, f"links={links}")
+
+    # Rejections.
+    clear_graph()
+    uni = add_node("uniform")["id"]           # out rgba (key rgba)
+    colorize = add_node("colorize")["id"]     # in f (key grayscale)
+    tr_a = add_node("transform")["id"]        # in rgba, out rgba
+    tr_b = add_node("transform")["id"]
+    tr_c = add_node("transform")["id"]
+    connect(tr_a, 0, tr_b, 0)                 # valid A->B
+    connect(tr_b, 0, tr_c, 0)                 # valid B->C
+    links_before = len(get_graph()["links"])
+    depth_before = undo_depth()
+
+    err = connect_expect_error(uni, 0, colorize, 0)  # rgba -> f (key mismatch)
+    check(S, "type mismatch (rgba->f) rejected", err is not None, f"err={err}")
+    err = connect_expect_error(tr_a, 0, tr_a, 0)     # self link
+    check(S, "self connect rejected", err is not None, f"err={err}")
+    err = connect_expect_error(tr_b, 0, tr_a, 0)     # 2-node cycle B->A
+    check(S, "two-node cycle rejected", err is not None, f"err={err}")
+    err = connect_expect_error(tr_c, 0, tr_a, 0)     # 3-node cycle C->A
+    check(S, "three-node cycle rejected", err is not None, f"err={err}")
+
+    links_after = len(get_graph()["links"])
+    check(S, "rejected connects create no links", links_after == links_before,
+          f"before={links_before} after={links_after}")
+    check(S, "rejected connects add no undo entries", undo_depth() == depth_before,
+          f"before={depth_before} after={undo_depth()}")
+
+
+def section_undo_redo():
+    S = "undo-redo"
+    clear_graph()
+    depth0 = undo_depth()
+
+    # Add a node.
+    perlin = add_node("perlin")["id"]
+    check(S, "add grows undo stack", undo_depth() == depth0 + 1, f"depth={undo_depth()}")
+    undo(1)
+    check(S, "undo removes the added node", len(get_graph()["nodes"]) == 0)
+    redo(1)
+    check(S, "redo restores the added node", len(get_graph()["nodes"]) == 1)
+
+    # Connect.
+    colorize = add_node("colorize")["id"]
+    connect(perlin, 0, colorize, 0)
+    check(S, "connect present", len(get_graph()["links"]) == 1)
+    undo(1)
+    check(S, "undo removes the link", len(get_graph()["links"]) == 0)
+    redo(1)
+    check(S, "redo restores the link", len(get_graph()["links"]) == 1)
+
+    # Parameter change.
+    set_param(perlin, {"scale_x": 16.0})
+    check(S, "param applied", approx(params_of(perlin).get("scale_x"), 16.0))
+    undo(1)
+    check(S, "undo reverts the parameter", approx(params_of(perlin).get("scale_x"), 4.0),
+          f"scale_x={params_of(perlin).get('scale_x')}")
+    redo(1)
+    check(S, "redo reapplies the parameter", approx(params_of(perlin).get("scale_x"), 16.0))
+
+
+def section_serialization():
+    S = "serialization"
+    TMP_DIR.mkdir(parents=True, exist_ok=True)
+    clear_graph()
+    # Build a graph with several node types, a couple of links and a set param.
+    perlin = add_node("perlin")["id"]
+    colorize = add_node("colorize")["id"]
+    tr = add_node("transform")["id"]
+    output = add_node("output")["id"]
+    connect(perlin, 0, colorize, 0)
+    connect(colorize, 0, tr, 0)
+    connect(tr, 0, output, 2)
+    set_param(perlin, {"scale_x": 7.0, "iterations": 4.0})
+    set_param(output, {"name": "Serialized Tex"})
+
+    before = get_graph()
+    nodes_before = len(before["nodes"])
+    links_before = len(before["links"])
+    types_before = sorted(n["type"] for n in before["nodes"])
+
+    save_path = TMP_DIR / "roundtrip.json"
+    call("texture_graph_save", {"path": str(save_path)})
+    check(S, "save wrote a file", save_path.is_file() and save_path.stat().st_size > 0)
+
+    clear_graph()
+    check(S, "clear empties graph before load", len(get_graph()["nodes"]) == 0)
+
+    call("texture_graph_load", {"path": str(save_path)})
+    after = get_graph()
+    check(S, "load restores node count", len(after["nodes"]) == nodes_before,
+          f"{len(after['nodes'])}/{nodes_before}")
+    check(S, "load restores link count", len(after["links"]) == links_before,
+          f"{len(after['links'])}/{links_before}")
+    check(S, "load restores node types", sorted(n["type"] for n in after["nodes"]) == types_before)
+
+    def find_type(nodes, type_name):
+        for n in nodes:
+            if n["type"] == type_name:
+                return n
+        return None
+    perlin_after = find_type(after["nodes"], "perlin")
+    output_after = find_type(after["nodes"], "output")
+    check(S, "load restores a float parameter",
+          perlin_after and approx(perlin_after["parameters"].get("scale_x"), 7.0),
+          f"perlin={perlin_after['parameters'] if perlin_after else None}")
+    check(S, "load restores the output name",
+          output_after and output_after["parameters"].get("name") == "Serialized Tex",
+          f"output={output_after['parameters'] if output_after else None}")
+
+    # Malformed files: MCP error, graph unchanged, no crash, no undo entry.
+    nodes_now = len(get_graph()["nodes"])
+    depth_before = undo_depth()
+
+    def expect_load_error(name, filename, content):
+        (TMP_DIR / filename).write_text(content, encoding="utf-8")
+        err = call_expect_error("texture_graph_load", {"path": str(TMP_DIR / filename)})
+        unchanged = len(get_graph()["nodes"]) == nodes_now
+        check(S, name, (err is not None) and unchanged, f"err={err} nodes={len(get_graph()['nodes'])}")
+
+    err = call_expect_error("texture_graph_load", {"path": str(TMP_DIR / "does_not_exist.json")})
+    check(S, "load nonexistent path fails, graph unchanged",
+          (err is not None) and (len(get_graph()["nodes"]) == nodes_now), f"err={err}")
+    expect_load_error("load non-JSON fails", "bad_json.json", "not json {{{")
+    expect_load_error("load unsupported version fails", "bad_version.json",
+                      json.dumps({"version": 99, "nodes": [], "links": []}))
+    expect_load_error("load unknown node type fails", "bad_type.json",
+                      json.dumps({"version": 1, "nodes": [{"type": "warp_core", "parameters": {}}], "links": []}))
+    expect_load_error("load out-of-range link node index fails", "bad_link_index.json",
+                      json.dumps({"version": 1, "nodes": [{"type": "perlin", "parameters": {}}],
+                                  "links": [{"source_node": 0, "source_slot": 0, "sink_node": 5, "sink_slot": 0}]}))
+    expect_load_error("load out-of-range pin slot fails", "bad_link_slot.json",
+                      json.dumps({"version": 1,
+                                  "nodes": [{"type": "perlin", "parameters": {}}, {"type": "colorize", "parameters": {}}],
+                                  "links": [{"source_node": 0, "source_slot": 7, "sink_node": 1, "sink_slot": 0}]}))
+    expect_load_error("load pin key mismatch fails", "bad_link_key.json",
+                      json.dumps({"version": 1,
+                                  "nodes": [{"type": "uniform", "parameters": {}}, {"type": "colorize", "parameters": {}}],
+                                  "links": [{"source_node": 0, "source_slot": 0, "sink_node": 1, "sink_slot": 0}]}))
+    expect_load_error("load cycle-forming links fails", "bad_cycle.json",
+                      json.dumps({"version": 1,
+                                  "nodes": [{"type": "transform", "parameters": {}}, {"type": "transform", "parameters": {}}],
+                                  "links": [{"source_node": 0, "source_slot": 0, "sink_node": 1, "sink_slot": 0},
+                                            {"source_node": 1, "source_slot": 0, "sink_node": 0, "sink_slot": 0}]}))
+
+    err = call_expect_error("texture_graph_save", {"path": str(TMP_DIR)})
+    check(S, "save to a directory path fails", err is not None, f"err={err}")
+    check(S, "no undo entries from failed loads/saves", undo_depth() == depth_before,
+          f"before={depth_before} after={undo_depth()}")
+
+
+def section_render_export():
+    """Core proof: composed shaders actually render to pixels."""
+    S = "render"
+    TMP_DIR.mkdir(parents=True, exist_ok=True)
+    clear_graph()
+
+    # Uniform color -> exact center pixel (linear UNORM RGBA8, no sRGB).
+    uni = add_node("uniform")["id"]
+    color = [0.2, 0.6, 0.9, 1.0]
+    set_param(uni, {"color": color})
+    uni_png = TMP_DIR / "uniform.png"
+    result = export_png(uni, uni_png, size=16)
+    check(S, "uniform export returns path+dims",
+          isinstance(result, dict) and result.get("width") == 16 and result.get("height") == 16,
+          f"result={result}")
+    check(S, "uniform PNG file exists and is non-empty", uni_png.is_file() and uni_png.stat().st_size > 0)
+    w, h, ch, buf = decode_png(uni_png)
+    check(S, "uniform PNG decodes to 16x16 RGBA", (w, h, ch) == (16, 16, 4), f"got=({w},{h},{ch})")
+    cx = pixel(w, ch, buf, 8, 8)
+    expected = [round(c * 255) for c in color]
+    match = all(abs(cx[i] - expected[i]) <= 3 for i in range(4))
+    check(S, "uniform center pixel matches set color (+/-3)", match, f"pixel={cx} expected={expected}")
+    # Flatness: min == max per channel across the image.
+    flat = True
+    for c in range(3):
+        vals = [buf[(i * ch) + c] for i in range(w * h)]
+        if max(vals) - min(vals) > 3:
+            flat = False
+    check(S, "uniform image is a flat color", flat)
+
+    # Perlin -> output must VARY (min != max across samples).
+    perlin = add_node("perlin")["id"]
+    set_param(perlin, {"scale_x": 6.0, "scale_y": 6.0, "iterations": 4.0})
+    perlin_png = TMP_DIR / "perlin.png"
+    export_png(perlin, perlin_png, size=64)
+    w, h, ch, buf = decode_png(perlin_png)
+    reds = [buf[(i * ch)] for i in range(w * h)]
+    varies = (max(reds) - min(reds)) > 16
+    check(S, "perlin output varies (not flat)", varies, f"min={min(reds)} max={max(reds)}")
+
+    # Output node bakes the connected subtree: perlin -> colorize -> output.
+    clear_graph()
+    perlin = add_node("perlin")["id"]
+    colorize = add_node("colorize")["id"]
+    output = add_node("output")["id"]
+    set_param(colorize, {"color_lo": [0.0, 0.0, 0.2, 1.0], "color_hi": [1.0, 0.4, 0.0, 1.0]})
+    connect(perlin, 0, colorize, 0)
+    connect(colorize, 0, output, 2)
+    out_png = TMP_DIR / "output_baked.png"
+    result = export_png(output, out_png, size=64)
+    check(S, "output-node export returns dims",
+          isinstance(result, dict) and result.get("width") == 64, f"result={result}")
+    check(S, "output baked PNG exists", out_png.is_file() and out_png.stat().st_size > 0)
+    w, h, ch, buf = decode_png(out_png)
+    # colorize output varies and is colored (R channel != B channel somewhere).
+    reds = [buf[(i * ch)] for i in range(w * h)]
+    varies = (max(reds) - min(reds)) > 8
+    check(S, "output baked result varies (colorized noise)", varies, f"min={min(reds)} max={max(reds)}")
+
+    # Export of an unconnected Output node must error (nothing composable).
+    clear_graph()
+    lonely = add_node("output")["id"]
+    err = call_expect_error("texture_graph_export_png",
+                            {"node_id": lonely, "path": str(TMP_DIR / "lonely.png"), "size": 8})
+    check(S, "export of unconnected output errors cleanly", err is not None, f"err={err}")
+
+
+def section_output_node():
+    """Output node: name/size params, generator connect, assign-to-material
+    path (no crash / no visual assert headlessly)."""
+    S = "output-node"
+    clear_graph()
+    uni = add_node("uniform")["id"]
+    output = add_node("output")["id"]
+    set_param(uni, {"color": [0.3, 0.7, 0.2, 1.0]})
+    set_param(output, {"name": "Base Color Tex", "size": 512})
+    connect(uni, 0, output, 2)
+    p = params_of(output)
+    check(S, "output name + size round-trip", p.get("name") == "Base Color Tex" and p.get("size") == 512, f"params={p}")
+
+    # Force a bake so the texture registers in the content library.
+    export_png(output, TMP_DIR / "out_named.png", size=64)
+
+    # The scene queries are addressed by scene name; use the first scene.
+    scenes = call("list_scenes")
+    scene_name = ""
+    if isinstance(scenes, dict) and scenes.get("scenes"):
+        scene_name = scenes["scenes"][0].get("name", "")
+    elif isinstance(scenes, list) and scenes:
+        scene_name = scenes[0].get("name", "")
+
+    # The registered texture should surface in get_scene_textures by name.
+    textures = call("get_scene_textures", {"scene_name": scene_name})
+    tex_names = []
+    if isinstance(textures, dict):
+        for entry in textures.get("textures", []):
+            tex_names.append(entry.get("name", ""))
+    elif isinstance(textures, list):
+        tex_names = [t.get("name", "") for t in textures if isinstance(t, dict)]
+    # Registration happens during a rendered frame (render_products); it may lag
+    # a headless MCP-only export. Treat presence as a bonus, absence as non-fatal.
+    print(f"  (scene textures: {tex_names})")
+
+    # Exercise the assign-to-material path: turn it on and set a material by
+    # name if any exist; assert the tool calls succeed and the flag round-trips.
+    mats = call("get_scene_materials", {"scene_name": scene_name})
+    mat_names = []
+    if isinstance(mats, dict):
+        mat_names = [m.get("name", "") for m in mats.get("materials", [])]
+    elif isinstance(mats, list):
+        mat_names = [m.get("name", "") for m in mats if isinstance(m, dict)]
+    args = {"assign": True}
+    if mat_names:
+        args["material"] = mat_names[0]
+    set_param(output, args)
+    p = params_of(output)
+    check(S, "assign-to-material flag set without crash", p.get("assign") is True, f"params={p}")
+    export_png(output, TMP_DIR / "out_assigned.png", size=32)
+    check(S, "editor alive after assign path", len(get_graph()["nodes"]) == 2)
+
+
+def main():
+    sections = [
+        section_every_node_type,
+        section_parameter_sweeps,
+        section_parameter_abuse,
+        section_connect_rules,
+        section_undo_redo,
+        section_serialization,
+        section_render_export,
+        section_output_node,
+    ]
+    for section in sections:
+        print(f"\n=== {section.__name__} ===")
+        try:
+            section()
+        except Exception as error:  # keep sweeping; report the wreck
+            check(section.__name__, "section completed without exception", False, repr(error))
+
+    try:
+        clear_graph()
+        get_graph()
+        call("capture_screenshot", {"path": "logs/texgraph_smoke_final.png"})
+    except RuntimeError as error:
+        print(f"  (final screenshot skipped: {error})")
+
+    print("\n===== SUMMARY =====")
+    failed = [r for r in RESULTS if not r[2]]
+    print(f"total={len(RESULTS)} pass={len(RESULTS) - len(failed)} fail={len(failed)}")
+    for section, name, _, detail in failed:
+        print(f"  FAIL {section}: {name} -- {detail}")
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
