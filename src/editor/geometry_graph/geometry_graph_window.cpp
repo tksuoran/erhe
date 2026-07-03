@@ -288,7 +288,12 @@ void Geometry_graph_window::launch_evaluation()
     for (const std::shared_ptr<Geometry_graph_node>& node : m_nodes) {
         const std::shared_ptr<Geometry_graph_node> shadow = make_geometry_graph_node(m_app_context, node->get_factory_type_name());
         if (!shadow) {
+            // Should not happen (every insertable type has a factory
+            // entry); keep shadow_nodes parallel to m_nodes so the link
+            // recreation below cannot mis-wire, and skip this node.
             log_graph_editor->warn("Geometry graph evaluation: no factory for node type '{}'", node->get_factory_type_name());
+            run->shadow_nodes.push_back({});
+            run->live_node_ids.push_back(node->get_id());
             continue;
         }
         nlohmann::json parameters = nlohmann::json::object();
@@ -325,6 +330,9 @@ void Geometry_graph_window::launch_evaluation()
         }
         Geometry_graph_node* shadow_source = run->shadow_nodes[source_index].get();
         Geometry_graph_node* shadow_sink   = run->shadow_nodes[sink_index].get();
+        if ((shadow_source == nullptr) || (shadow_sink == nullptr)) {
+            continue;
+        }
         run->shadow_graph.connect(
             &shadow_source->get_output_pins().at(link->get_source()->get_slot()),
             &shadow_sink  ->get_input_pins ().at(link->get_sink  ()->get_slot())
@@ -389,10 +397,10 @@ void Geometry_graph_window::finish_evaluation()
                 break;
             }
         }
-        if (live_node == nullptr) {
+        Geometry_graph_node* shadow_node = run->shadow_nodes[i].get();
+        if ((live_node == nullptr) || (shadow_node == nullptr)) {
             continue;
         }
-        Geometry_graph_node* shadow_node = run->shadow_nodes[i].get();
         const std::size_t input_count  = std::min(live_node->get_input_pins ().size(), shadow_node->get_input_pins ().size());
         const std::size_t output_count = std::min(live_node->get_output_pins().size(), shadow_node->get_output_pins().size());
         for (std::size_t slot = 0; slot < input_count; ++slot) {
