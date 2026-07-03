@@ -270,12 +270,27 @@ NODE_SPECS = {
     "voronoi":             ([],                      ["f", "f", "rgb"], {"scale_x": 4.0, "randomness": 1.0}),
     "bricks":              ([],                      ["f"],    {"pattern": 0, "rows": 6.0, "columns": 3.0}),
     "shape":               ([],                      ["f"],    {"shape": 0, "sides": 6.0, "radius": 0.85}),
+    "fbm":                 ([],                      ["f"],    {"noise": 1, "scale_x": 4.0, "iterations": 5.0, "persistence": 0.5}),
+    "noise":               ([],                      ["f"],    {"size": 4, "density": 0.5}),
+    "color_noise":         ([],                      ["rgb"],  {"size": 4}),
+    "sine_wave":           ([],                      ["f"],    {"amplitude": 0.5, "frequency": 1.0, "phase": 0.0}),
+    "truchet":             ([],                      ["f"],    {"shape": 0, "size": 4.0}),
+    "weave":               ([],                      ["f"],    {"columns": 4.0, "rows": 4.0, "width": 0.8}),
     "blend":               (["rgba", "rgba"],        ["rgba"], {"blend_type": 2, "amount": 0.5}),
     "colorize":            (["f"],                   ["rgba"], {"gradient": "GRADIENT"}),
     "curve":               (["rgba"],                ["rgba"], {"curve": "CURVE"}),
     "transform":           (["rgba"],                ["rgba"], {"scale_x": 1.0, "scale_y": 1.0, "repeat": False}),
     "brightness_contrast": (["rgba"],                ["rgba"], {"brightness": 0.0, "contrast": 1.0}),
     "normal_map":          (["f"],                   ["rgb"],  {"amount": 0.5, "size": 9}),
+    "math":                (["f", "f"],              ["f"],    {"op": 0, "default_in1": 0.0, "default_in2": 0.0, "clamp": False}),
+    "invert":              (["rgba"],                ["rgba"], {}),
+    "quantize":            (["rgba"],                ["rgba"], {"steps": 4.0}),
+    "adjust_hsv":          (["rgba"],                ["rgba"], {"hue": 0.0, "saturation": 1.0, "value": 1.0}),
+    "remap":               (["f"],                   ["f"],    {"min": 0.0, "max": 1.0, "step": 0.0}),
+    "combine":             (["f", "f", "f", "f"],    ["rgba"], {}),
+    "decompose":           (["rgba"],                ["f", "f", "f", "f"], {}),
+    "swap_channels":       (["rgba"],                ["rgba"], {"out_r": 2, "out_g": 4, "out_b": 6, "out_a": 8}),
+    "reroute":             (["rgba"],                ["rgba"], {}),
     "output":              (["f", "rgb", "rgba"],    [],       {"name": "Texture Graph", "size": 1024, "assign": False}),
 }
 
@@ -825,6 +840,108 @@ def section_output_node():
     check(S, "editor alive after assign path", len(get_graph()["nodes"]) == 2)
 
 
+def section_multi_output_decompose():
+    """Decompose is the editor's first multi-output filter node. Feed it a
+    uniform whose channels differ, assert it exposes 4 grayscale outputs, and
+    export each output slot to prove the composer selects the matching channel;
+    then route one output onward through the Output node."""
+    S = "multi-output"
+    TMP_DIR.mkdir(parents=True, exist_ok=True)
+    clear_graph()
+
+    color = [0.2, 0.4, 0.6, 1.0]
+    uni = add_node("uniform")["id"]
+    set_param(uni, {"color": color})
+    dec = add_node("decompose")["id"]
+    connect(uni, 0, dec, 0)  # uniform.rgba -> decompose.i
+
+    graph = get_graph()
+    node = node_by_id(graph, dec)
+    check(S, "decompose exposes 4 grayscale outputs",
+          node is not None and value_types(node["outputs"]) == ["f", "f", "f", "f"],
+          f"outputs={value_types(node['outputs']) if node else None}")
+    check(S, "decompose composable once fed", node is not None and node.get("composable") is True,
+          f"composable={node.get('composable') if node else None}")
+
+    # Each output slot must isolate a channel of the uniform color.
+    for slot, channel_value, chan_name in ((0, color[0], "R"), (1, color[1], "G"),
+                                           (2, color[2], "B"), (3, color[3], "A")):
+        png = TMP_DIR / f"decompose_{chan_name}.png"
+        export_png(dec, png, size=8, output_slot=slot)
+        w, h, ch, buf = decode_png(png)
+        cx = pixel(w, ch, buf, w // 2, h // 2)
+        expected = round(channel_value * 255)
+        # grayscale output is broadcast to RGB; compare the red channel.
+        check(S, f"decompose slot {slot} ({chan_name}) center ~= channel value",
+              abs(cx[0] - expected) <= 4, f"pixel={cx} expected~{expected}")
+
+    # Route the Blue channel onward: decompose.B (slot 2) -> output.f (slot 0).
+    output = add_node("output")["id"]
+    connect(dec, 2, output, 0)
+    out_png = TMP_DIR / "decompose_routed.png"
+    result = export_png(output, out_png, size=16)
+    check(S, "routed decompose output exports", isinstance(result, dict) and result.get("width") == 16,
+          f"result={result}")
+    w, h, ch, buf = decode_png(out_png)
+    cx = pixel(w, ch, buf, w // 2, h // 2)
+    check(S, "routed Blue channel bakes ~0.6 gray", abs(cx[0] - round(color[2] * 255)) <= 6,
+          f"pixel={cx}")
+
+
+def section_new_filters():
+    """A few Phase 4b filters proven end-to-end: invert flips a color, the math
+    op enum switches behavior (A*0 -> flat black), and remap collapses a varying
+    input to a constant. Each exercises a distinct substitution path (rgba
+    expression, enum-as-code-fragment, inline code + float uniforms)."""
+    S = "new-filters"
+    TMP_DIR.mkdir(parents=True, exist_ok=True)
+
+    # invert: uniform color -> invert -> center pixel is 1 - color (RGB).
+    clear_graph()
+    color = [0.2, 0.6, 0.9, 1.0]
+    uni = add_node("uniform")["id"]
+    set_param(uni, {"color": color})
+    inv = add_node("invert")["id"]
+    connect(uni, 0, inv, 0)
+    inv_png = TMP_DIR / "invert.png"
+    export_png(inv, inv_png, size=16)
+    w, h, ch, buf = decode_png(inv_png)
+    cx = pixel(w, ch, buf, 8, 8)
+    expected = [round((1.0 - color[i]) * 255) for i in range(3)] + [round(color[3] * 255)]
+    match = all(abs(cx[i] - expected[i]) <= 4 for i in range(4))
+    check(S, "invert flips RGB and keeps A", match, f"pixel={cx} expected={expected}")
+
+    # math: perlin -> math.in1 with op A*B and default B = 0 -> flat black.
+    clear_graph()
+    perlin = add_node("perlin")["id"]
+    set_param(perlin, {"scale_x": 6.0, "scale_y": 6.0, "iterations": 4.0})
+    math = add_node("math")["id"]
+    connect(perlin, 0, math, 0)
+    set_param(math, {"op": 2, "default_in2": 0.0})  # op index 2 == A*B
+    math_png = TMP_DIR / "math_mul0.png"
+    export_png(math, math_png, size=32)
+    w, h, ch, buf = decode_png(math_png)
+    reds = [buf[(i * ch)] for i in range(w * h)]
+    check(S, "math A*0 renders flat black", max(reds) <= 4, f"min={min(reds)} max={max(reds)}")
+
+    # remap: perlin -> remap with min==max collapses the varying input to a
+    # constant (min + in*(max-min) - mod(...) == min when max==min).
+    clear_graph()
+    perlin = add_node("perlin")["id"]
+    set_param(perlin, {"scale_x": 6.0, "scale_y": 6.0, "iterations": 4.0})
+    remap = add_node("remap")["id"]
+    connect(perlin, 0, remap, 0)
+    set_param(remap, {"min": 0.3, "max": 0.3, "step": 0.0})
+    remap_png = TMP_DIR / "remap_const.png"
+    export_png(remap, remap_png, size=32)
+    w, h, ch, buf = decode_png(remap_png)
+    reds = [buf[(i * ch)] for i in range(w * h)]
+    flat = (max(reds) - min(reds)) <= 4
+    near = abs((sum(reds) / len(reds)) - round(0.3 * 255)) <= 8
+    check(S, "remap min==max collapses to constant ~0.3", flat and near,
+          f"min={min(reds)} max={max(reds)} mean={sum(reds) / len(reds):.1f}")
+
+
 def main():
     sections = [
         section_every_node_type,
@@ -835,6 +952,8 @@ def main():
         section_serialization,
         section_render_export,
         section_gradient_curve,
+        section_multi_output_decompose,
+        section_new_filters,
         section_output_node,
     ]
     for section in sections:

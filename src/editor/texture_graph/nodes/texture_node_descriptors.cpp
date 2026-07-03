@@ -146,6 +146,7 @@ auto build_uniform() -> Node_descriptor
     Node_descriptor d{};
     d.name  = "uniform";
     d.label = "Uniform Color";
+    d.category = "Generators";
     add_color(d, "color", "Color", 0.8f, 0.8f, 0.8f, 1.0f);
     add_output(d, Value_type::rgba, "$color");
     return d;
@@ -158,6 +159,7 @@ auto build_perlin() -> Node_descriptor
     Node_descriptor d{};
     d.name   = "perlin";
     d.label  = "Perlin";
+    d.category = "Generators";
     d.global =
         "float perlin(vec2 uv, vec2 size, int iterations, float persistence, float seed) {\n"
         "    vec2 seed2 = rand2(vec2(seed, 1.0-seed));\n"
@@ -196,6 +198,7 @@ auto build_voronoi() -> Node_descriptor
     Node_descriptor d{};
     d.name   = "voronoi";
     d.label  = "Voronoi";
+    d.category = "Generators";
     d.global =
         "// Based on https://www.shadertoy.com/view/ldl3W8 (MIT), Inigo Quilez\n"
         "vec3 iq_voronoi(vec2 x, vec2 size, vec2 stretch, float randomness, vec2 seed) {\n"
@@ -258,6 +261,7 @@ auto build_bricks() -> Node_descriptor
     Node_descriptor d{};
     d.name   = "bricks";
     d.label  = "Bricks";
+    d.category = "Generators";
     d.global =
         "vec4 oldbrick(vec2 uv, vec2 bmin, vec2 bmax, float mortar, float round_radius, float bevel) {\n"
         "    float color;\n"
@@ -380,6 +384,7 @@ auto build_shape() -> Node_descriptor
     Node_descriptor d{};
     d.name   = "shape";
     d.label  = "Shape";
+    d.category = "Generators";
     d.global =
         "float shape_circle(vec2 uv, float sides, float size, float edge) {\n"
         "    uv = 2.0*uv-1.0;\n"
@@ -431,6 +436,7 @@ auto build_blend() -> Node_descriptor
     Node_descriptor d{};
     d.name   = "blend";
     d.label  = "Blend";
+    d.category = "Filters";
     d.global =
         "vec3 blend_normal(vec2 uv, vec3 c1, vec3 c2, float opacity) {\n"
         "    return opacity*c1 + (1.0-opacity)*c2;\n"
@@ -547,6 +553,7 @@ auto build_colorize() -> Node_descriptor
     Node_descriptor d{};
     d.name  = "colorize";
     d.label = "Colorize";
+    d.category = "Filters";
     add_input(d, "input", Value_type::grayscale, "$uv.x");
     add_gradient(
         d, "gradient", "Gradient",
@@ -570,6 +577,7 @@ auto build_curve() -> Node_descriptor
     Node_descriptor d{};
     d.name  = "curve";
     d.label = "Curve";
+    d.category = "Filters";
     add_input(d, "in", Value_type::rgba, "vec4(vec3($uv.x), 1.0)");
     add_curve(
         d, "curve", "Curve",
@@ -594,6 +602,7 @@ auto build_transform() -> Node_descriptor
     Node_descriptor d{};
     d.name   = "transform";
     d.label  = "Transform";
+    d.category = "Filters";
     d.global =
         "vec2 mm_transform(vec2 uv, vec2 translate, float rotate, vec2 scale, bool repeat) {\n"
         "    vec2 rv;\n"
@@ -625,6 +634,7 @@ auto build_brightness_contrast() -> Node_descriptor
     Node_descriptor d{};
     d.name  = "brightness_contrast";
     d.label = "Brightness/Contrast";
+    d.category = "Filters";
     add_input(d, "in", Value_type::rgba, "vec4(0.5, 0.5, 0.5, 1.0)");
     add_float(d, "brightness", "Brightness", 0.0f, -1.0f, 1.0f, 0.01f);
     add_float(d, "contrast",   "Contrast",   1.0f,  0.0f, 2.0f, 0.01f);
@@ -645,6 +655,7 @@ auto build_normal_map() -> Node_descriptor
     Node_descriptor d{};
     d.name   = "normal_map";
     d.label  = "Normal Map";
+    d.category = "Filters";
     d.global =
         "vec3 process_normal_default(vec3 v, float multiplier) {\n"
         "    return 0.5*normalize(v.xyz*multiplier+vec3(0.0, 0.0, -1.0))+vec3(0.5);\n"
@@ -666,26 +677,488 @@ auto build_normal_map() -> Node_descriptor
     return d;
 }
 
+// ---------------------------------------------------------------------------
+// Phase 4b generators / noise
+// ---------------------------------------------------------------------------
+
+// FBM (Fractal Brownian Motion) - globals + octave loop ported from Material
+// Maker fbm.mmg (MIT). Material Maker emits the octave accumulator as a
+// per-instance helper function; here it is inlined into the code stanza (the
+// descriptor model has no per-instance-function slot, only a deduplicated
+// global and inline code), which is behaviorally identical. The "noise" enum
+// selects the basis function (value / perlin / cellular variants).
+auto build_fbm() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "fbm";
+    d.label    = "FBM";
+    d.category = "Generators";
+    d.global =
+        "float oldfbm_value(vec2 coord, vec2 size, float seed) {\n"
+        "    vec2 o = floor(coord)+rand2(vec2(seed, 1.0-seed))+size;\n"
+        "    vec2 f = fract(coord);\n"
+        "    float p00 = rand(mod(o, size));\n"
+        "    float p01 = rand(mod(o + vec2(0.0, 1.0), size));\n"
+        "    float p10 = rand(mod(o + vec2(1.0, 0.0), size));\n"
+        "    float p11 = rand(mod(o + vec2(1.0, 1.0), size));\n"
+        "    vec2 t = f * f * (3.0 - 2.0 * f);\n"
+        "    return mix(mix(p00, p10, t.x), mix(p01, p11, t.x), t.y);\n"
+        "}\n"
+        "\n"
+        "float oldfbm_perlin(vec2 coord, vec2 size, float seed) {\n"
+        "    vec2 o = floor(coord)+rand2(vec2(seed, 1.0-seed))+size;\n"
+        "    vec2 f = fract(coord);\n"
+        "    float a00 = rand(mod(o, size)) * 6.28318530718;\n"
+        "    float a01 = rand(mod(o + vec2(0.0, 1.0), size)) * 6.28318530718;\n"
+        "    float a10 = rand(mod(o + vec2(1.0, 0.0), size)) * 6.28318530718;\n"
+        "    float a11 = rand(mod(o + vec2(1.0, 1.0), size)) * 6.28318530718;\n"
+        "    vec2 v00 = vec2(cos(a00), sin(a00));\n"
+        "    vec2 v01 = vec2(cos(a01), sin(a01));\n"
+        "    vec2 v10 = vec2(cos(a10), sin(a10));\n"
+        "    vec2 v11 = vec2(cos(a11), sin(a11));\n"
+        "    float p00 = dot(v00, f);\n"
+        "    float p01 = dot(v01, f - vec2(0.0, 1.0));\n"
+        "    float p10 = dot(v10, f - vec2(1.0, 0.0));\n"
+        "    float p11 = dot(v11, f - vec2(1.0, 1.0));\n"
+        "    vec2 t = f * f * (3.0 - 2.0 * f);\n"
+        "    return 0.5 + mix(mix(p00, p10, t.x), mix(p01, p11, t.x), t.y);\n"
+        "}\n"
+        "\n"
+        "float oldfbm_cellular(vec2 coord, vec2 size, float seed) {\n"
+        "    vec2 o = floor(coord)+rand2(vec2(seed, 1.0-seed))+size;\n"
+        "    vec2 f = fract(coord);\n"
+        "    float min_dist = 2.0;\n"
+        "    for (float x = -1.0; x <= 1.0; x++) {\n"
+        "        for (float y = -1.0; y <= 1.0; y++) {\n"
+        "            vec2 node = rand2(mod(o + vec2(x, y), size)) + vec2(x, y);\n"
+        "            float dist = sqrt((f - node).x * (f - node).x + (f - node).y * (f - node).y);\n"
+        "            min_dist = min(min_dist, dist);\n"
+        "        }\n"
+        "    }\n"
+        "    return min_dist;\n"
+        "}\n"
+        "\n"
+        "float oldfbm_cellular2(vec2 coord, vec2 size, float seed) {\n"
+        "    vec2 o = floor(coord)+rand2(vec2(seed, 1.0-seed))+size;\n"
+        "    vec2 f = fract(coord);\n"
+        "    float min_dist1 = 2.0;\n"
+        "    float min_dist2 = 2.0;\n"
+        "    for (float x = -1.0; x <= 1.0; x++) {\n"
+        "        for (float y = -1.0; y <= 1.0; y++) {\n"
+        "            vec2 node = rand2(mod(o + vec2(x, y), size)) + vec2(x, y);\n"
+        "            float dist = sqrt((f - node).x * (f - node).x + (f - node).y * (f - node).y);\n"
+        "            if (min_dist1 > dist) { min_dist2 = min_dist1; min_dist1 = dist; }\n"
+        "            else if (min_dist2 > dist) { min_dist2 = dist; }\n"
+        "        }\n"
+        "    }\n"
+        "    return min_dist2-min_dist1;\n"
+        "}\n";
+    add_enum(
+        d, "noise", "Noise",
+        {
+            Enum_value{"Value",      "value"},
+            Enum_value{"Perlin",     "perlin"},
+            Enum_value{"Cellular",   "cellular"},
+            Enum_value{"Cellular 2", "cellular2"}
+        },
+        1 // Perlin
+    );
+    add_float(d, "scale_x",     "Scale X",     4.0f, 1.0f, 32.0f, 1.0f);
+    add_float(d, "scale_y",     "Scale Y",     4.0f, 1.0f, 32.0f, 1.0f);
+    add_float(d, "folds",       "Folds",       0.0f, 0.0f,  5.0f, 1.0f);
+    add_float(d, "iterations",  "Octaves",     5.0f, 1.0f, 10.0f, 1.0f);
+    add_float(d, "persistence", "Persistence", 0.5f, 0.0f,  1.0f, 0.01f);
+    d.code =
+        "vec2  $(name_uv)_size = vec2($scale_x, $scale_y);\n"
+        "float $(name_uv)_nf   = 0.0;\n"
+        "float $(name_uv)_val  = 0.0;\n"
+        "float $(name_uv)_sc   = 1.0;\n"
+        "for (int $(name_uv)_i = 0; $(name_uv)_i < int($iterations); ++$(name_uv)_i) {\n"
+        "    float $(name_uv)_n = oldfbm_$noise($uv*$(name_uv)_size, $(name_uv)_size, $seed);\n"
+        "    for (int $(name_uv)_f = 0; $(name_uv)_f < int($folds); ++$(name_uv)_f) {\n"
+        "        $(name_uv)_n = abs(2.0*$(name_uv)_n-1.0);\n"
+        "    }\n"
+        "    $(name_uv)_val += $(name_uv)_n * $(name_uv)_sc;\n"
+        "    $(name_uv)_nf  += $(name_uv)_sc;\n"
+        "    $(name_uv)_size *= 2.0;\n"
+        "    $(name_uv)_sc  *= $persistence;\n"
+        "}\n";
+    add_output(d, Value_type::grayscale, "$(name_uv)_val / $(name_uv)_nf");
+    return d;
+}
+
+// Noise (sparse black/white grid) - ported from Material Maker noise.mmg (MIT).
+// The optional density map input is dropped; density comes from the parameter.
+auto build_noise() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "noise";
+    d.label    = "Noise";
+    d.category = "Generators";
+    d.code     = "vec2 $(name_uv)_uv = floor($uv*$size)/$size;\n";
+    add_size (d, "size",    "Grid Size", 2, 12, 4);
+    add_float(d, "density", "Density",   0.5f, 0.0f, 1.0f, 0.01f);
+    add_output(d, Value_type::grayscale, "step(rand($(name_uv)_uv+vec2($seed)), $density)");
+    return d;
+}
+
+// Color noise (random per-cell colors) - ported from Material Maker
+// color_noise.mmg (MIT).
+auto build_color_noise() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "color_noise";
+    d.label    = "Color Noise";
+    d.category = "Generators";
+    d.global =
+        "vec3 color_dots(vec2 uv, float size, float seed) {\n"
+        "    vec2 seed2 = rand2(vec2(seed, 1.0-seed));\n"
+        "    uv /= size;\n"
+        "    vec2 point_pos = floor(uv)+vec2(0.5);\n"
+        "    return rand3(seed2+point_pos);\n"
+        "}\n";
+    add_size(d, "size", "Grid Size", 2, 12, 4);
+    add_output(d, Value_type::rgb, "color_dots($uv, 1.0/$size, $seed)");
+    return d;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4b patterns
+// ---------------------------------------------------------------------------
+
+// Sine wave - ported from Material Maker sine_wave.mmg (MIT).
+auto build_sine_wave() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "sine_wave";
+    d.label    = "Sine Wave";
+    d.category = "Patterns";
+    add_float(d, "amplitude", "Amplitude", 0.5f, 0.0f,  1.0f, 0.01f);
+    add_float(d, "frequency", "Frequency", 1.0f, 0.0f, 16.0f, 1.0f);
+    add_float(d, "phase",     "Phase",     0.0f, 0.0f,  1.0f, 0.01f);
+    add_output(
+        d, Value_type::grayscale,
+        "1.0-abs(2.0*($uv.y-0.5)-$amplitude*sin(($frequency*$uv.x+$phase)*6.28318530718))"
+    );
+    return d;
+}
+
+// Truchet - globals ported from Material Maker truchet.mmg (MIT). The "shape"
+// enum picks the tile primitive (line / circle).
+auto build_truchet() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "truchet";
+    d.label    = "Truchet";
+    d.category = "Patterns";
+    d.global =
+        "float truchet1(vec2 uv, vec2 seed) {\n"
+        "    vec2 i = floor(uv);\n"
+        "    vec2 f = fract(uv)-vec2(0.5);\n"
+        "    return 1.0-abs(abs((2.0*step(rand(i+seed), 0.5)-1.0)*f.x+f.y)-0.5);\n"
+        "}\n"
+        "\n"
+        "float truchet2(vec2 uv, vec2 seed) {\n"
+        "    vec2 i = floor(uv);\n"
+        "    vec2 f = fract(uv);\n"
+        "    float random = step(rand(i+seed), 0.5);\n"
+        "    f.x *= 2.0*random-1.0;\n"
+        "    f.x += 1.0-random;\n"
+        "    return 1.0-min(abs(length(f)-0.5), abs(length(1.0-f)-0.5));\n"
+        "}\n";
+    add_enum(
+        d, "shape", "Shape",
+        {
+            Enum_value{"Line",   "1"},
+            Enum_value{"Circle", "2"}
+        },
+        0
+    );
+    add_float(d, "size", "Size", 4.0f, 2.0f, 64.0f, 1.0f);
+    add_output(d, Value_type::grayscale, "truchet$shape($uv*$size, vec2(float($seed)))");
+    return d;
+}
+
+// Weave - global ported from Material Maker weave.mmg (MIT). The optional width
+// map input is dropped; the width comes from the parameter only.
+auto build_weave() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "weave";
+    d.label    = "Weave";
+    d.category = "Patterns";
+    d.global =
+        "float oldweave(vec2 uv, vec2 count, float width) {\n"
+        "    uv *= count;\n"
+        "    float c = (sin(3.1415926*(uv.x+floor(uv.y)))*0.5+0.5)*step(abs(fract(uv.y)-0.5), width*0.5);\n"
+        "    c = max(c, (sin(3.1415926*(1.0+uv.y+floor(uv.x)))*0.5+0.5)*step(abs(fract(uv.x)-0.5), width*0.5));\n"
+        "    return c;\n"
+        "}\n";
+    add_float(d, "columns", "Size X", 4.0f, 2.0f, 32.0f, 1.0f);
+    add_float(d, "rows",    "Size Y", 4.0f, 2.0f, 32.0f, 1.0f);
+    add_float(d, "width",   "Width",  0.8f, 0.0f,  1.0f, 0.05f);
+    add_output(d, Value_type::grayscale, "oldweave($uv, vec2($columns, $rows), $width)");
+    return d;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4b filters / math
+// ---------------------------------------------------------------------------
+
+// Math - the two-operand math node ported from Material Maker math.mmg (MIT).
+// The "op" enum substitutes a full GLSL expression fragment (which itself
+// samples the two inputs); the "clamp" boolean picks between the raw and the
+// clamped result local, exactly like Material Maker.
+auto build_math() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "math";
+    d.label    = "Math";
+    d.category = "Filters";
+    d.global =
+        "float pingpong(float a, float b) {\n"
+        "    return (b != 0.0) ? abs(fract((a - b) / (b * 2.0)) * b * 2.0 - b) : 0.0;\n"
+        "}\n";
+    add_input(d, "in1", Value_type::grayscale, "$default_in1");
+    add_input(d, "in2", Value_type::grayscale, "$default_in2");
+    add_enum(
+        d, "op", "Operation",
+        {
+            Enum_value{"A+B",               "$in1($uv)+$in2($uv)"},
+            Enum_value{"A-B",               "$in1($uv)-$in2($uv)"},
+            Enum_value{"A*B",               "$in1($uv)*$in2($uv)"},
+            Enum_value{"A/B",               "$in1($uv)/$in2($uv)"},
+            Enum_value{"pow(A, B)",         "pow($in1($uv),$in2($uv))"},
+            Enum_value{"log(A)",            "log($in1($uv))"},
+            Enum_value{"abs(A)",            "abs($in1($uv))"},
+            Enum_value{"floor(A)",          "floor($in1($uv))"},
+            Enum_value{"fract(A)",          "fract($in1($uv))"},
+            Enum_value{"min(A, B)",         "min($in1($uv),$in2($uv))"},
+            Enum_value{"max(A, B)",         "max($in1($uv),$in2($uv))"},
+            Enum_value{"A<B",               "(1.0-step($in2($uv),$in1($uv)))"},
+            Enum_value{"sin(A*B)",          "sin($in1($uv)*$in2($uv))"},
+            Enum_value{"cos(A*B)",          "cos($in1($uv)*$in2($uv))"},
+            Enum_value{"smoothstep(0,1,A)", "smoothstep(0.0, 1.0, $in1($uv))"},
+            Enum_value{"ping-pong(A, B)",   "pingpong($in1($uv),$in2($uv))"},
+            Enum_value{"mod(A, B)",         "mod($in1($uv), $in2($uv))"},
+            Enum_value{"sqrt(A)",           "sqrt($in1($uv))"}
+        },
+        0
+    );
+    add_float(d, "default_in1", "Default A", 0.0f, 0.0f, 1.0f, 0.01f);
+    add_float(d, "default_in2", "Default B", 0.0f, 0.0f, 1.0f, 0.01f);
+    add_bool (d, "clamp",       "Clamp",     false);
+    d.code =
+        "float $(name_uv)_clamp_false = $op;\n"
+        "float $(name_uv)_clamp_true = clamp($(name_uv)_clamp_false, 0.0, 1.0);\n";
+    add_output(d, Value_type::grayscale, "$(name_uv)_clamp_$clamp");
+    return d;
+}
+
+// Invert - ported from Material Maker invert.mmg (MIT). Inverts RGB, keeps A.
+auto build_invert() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "invert";
+    d.label    = "Invert";
+    d.category = "Filters";
+    add_input(d, "in", Value_type::rgba, "vec4(1.0, 1.0, 1.0, 1.0)");
+    add_output(d, Value_type::rgba, "vec4(vec3(1.0)-$in($uv).rgb, $in($uv).a)");
+    return d;
+}
+
+// Quantize / posterize - ported from Material Maker quantize.mmg (MIT).
+auto build_quantize() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "quantize";
+    d.label    = "Quantize";
+    d.category = "Filters";
+    add_input(d, "in", Value_type::rgba, "vec4(2.0*vec3(length($uv-vec2(0.5))), 1.0)");
+    add_float(d, "steps", "Steps", 4.0f, 2.0f, 32.0f, 1.0f);
+    add_output(d, Value_type::rgba, "vec4(floor($in($uv).rgb*$steps)/$steps, $in($uv).a)");
+    return d;
+}
+
+// Adjust HSV - globals + code ported from Material Maker adjust_hsv.mmg (MIT).
+auto build_adjust_hsv() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "adjust_hsv";
+    d.label    = "Adjust HSV";
+    d.category = "Filters";
+    d.global =
+        "vec3 rgb_to_hsv(vec3 c) {\n"
+        "    vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);\n"
+        "    vec4 p = c.g < c.b ? vec4(c.bg, K.wz) : vec4(c.gb, K.xy);\n"
+        "    vec4 q = c.r < p.x ? vec4(p.xyw, c.r) : vec4(c.r, p.yzx);\n"
+        "    float d = q.x - min(q.w, q.y);\n"
+        "    float e = 1.0e-10;\n"
+        "    return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);\n"
+        "}\n"
+        "\n"
+        "vec3 hsv_to_rgb(vec3 c) {\n"
+        "    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);\n"
+        "    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);\n"
+        "    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);\n"
+        "}\n";
+    add_input(d, "in", Value_type::rgba, "vec4($uv.x, $uv.y, 0.0, 1.0)");
+    add_float(d, "hue",        "Hue",        0.0f, -0.5f, 0.5f, 0.01f);
+    add_float(d, "saturation", "Saturation", 1.0f,  0.0f, 2.0f, 0.01f);
+    add_float(d, "value",      "Value",      1.0f,  0.0f, 2.0f, 0.01f);
+    d.code =
+        "vec4 $(name_uv)_rgba = $in($uv);\n"
+        "vec3 $(name_uv)_hsv = rgb_to_hsv($(name_uv)_rgba.rgb);\n"
+        "$(name_uv)_hsv.x += $hue;\n"
+        "$(name_uv)_hsv.y = clamp($(name_uv)_hsv.y*$saturation, 0.0, 1.0);\n"
+        "$(name_uv)_hsv.z = clamp($(name_uv)_hsv.z*$value, 0.0, 1.0);\n";
+    add_output(d, Value_type::rgba, "vec4(hsv_to_rgb($(name_uv)_hsv), $(name_uv)_rgba.a)");
+    return d;
+}
+
+// Remap / levels - ported from Material Maker remap.mmg (MIT). Rescales a
+// grayscale input to [min, max] with optional stepping.
+auto build_remap() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "remap";
+    d.label    = "Remap";
+    d.category = "Filters";
+    add_input(d, "in", Value_type::grayscale, "$uv.x");
+    add_float(d, "min",  "Min",  0.0f, -10.0f, 10.0f, 0.01f);
+    add_float(d, "max",  "Max",  1.0f, -10.0f, 10.0f, 0.01f);
+    add_float(d, "step", "Step", 0.0f,   0.0f,  1.0f, 0.01f);
+    d.code = "float $(name_uv)_x = $in($uv)*($max-$min);\n";
+    add_output(d, Value_type::grayscale, "$min+$(name_uv)_x-mod($(name_uv)_x, max($step, 0.00000001))");
+    return d;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4b channel ops
+// ---------------------------------------------------------------------------
+
+// Combine - ported from Material Maker combine.mmg (MIT). Packs four grayscale
+// inputs into one RGBA image.
+auto build_combine() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "combine";
+    d.label    = "Combine";
+    d.category = "Channels";
+    add_input(d, "r", Value_type::grayscale, "0.0");
+    add_input(d, "g", Value_type::grayscale, "0.0");
+    add_input(d, "b", Value_type::grayscale, "0.0");
+    add_input(d, "a", Value_type::grayscale, "1.0");
+    add_output(d, Value_type::rgba, "vec4($r($uv), $g($uv), $b($uv), $a($uv))");
+    return d;
+}
+
+// Decompose - ported from Material Maker decompose.mmg (MIT). Splits one RGBA
+// input into four grayscale outputs (R, G, B, A). This is the editor's first
+// multi-output filter node, exercising erhe::texgen's per-output-index
+// composition end to end (each output slot selects a distinct expression).
+auto build_decompose() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "decompose";
+    d.label    = "Decompose";
+    d.category = "Channels";
+    add_input(d, "i", Value_type::rgba, "vec4(1.0)");
+    add_output(d, Value_type::grayscale, "$i($uv).r");
+    add_output(d, Value_type::grayscale, "$i($uv).g");
+    add_output(d, Value_type::grayscale, "$i($uv).b");
+    add_output(d, Value_type::grayscale, "$i($uv).a");
+    return d;
+}
+
+// Swap channels - ported from Material Maker swap_channels.mmg (MIT). Each of
+// the four output channels selects (via an enum code fragment) a source channel
+// or a constant.
+auto build_swap_channels() -> Node_descriptor
+{
+    // The 10 selectable sources are identical for each output channel.
+    const std::vector<Enum_value> channel_values{
+        Enum_value{"0",  "0.0"},
+        Enum_value{"1",  "1.0"},
+        Enum_value{"R",  "$in($uv).r"},
+        Enum_value{"-R", "1.0-$in($uv).r"},
+        Enum_value{"G",  "$in($uv).g"},
+        Enum_value{"-G", "1.0-$in($uv).g"},
+        Enum_value{"B",  "$in($uv).b"},
+        Enum_value{"-B", "1.0-$in($uv).b"},
+        Enum_value{"A",  "$in($uv).a"},
+        Enum_value{"-A", "1.0-$in($uv).a"}
+    };
+    Node_descriptor d{};
+    d.name     = "swap_channels";
+    d.label    = "Swap Channels";
+    d.category = "Channels";
+    add_input(d, "in", Value_type::rgba, "vec4(1.0)");
+    add_enum(d, "out_r", "R", channel_values, 2); // R
+    add_enum(d, "out_g", "G", channel_values, 4); // G
+    add_enum(d, "out_b", "B", channel_values, 6); // B
+    add_enum(d, "out_a", "A", channel_values, 8); // A
+    add_output(d, Value_type::rgba, "vec4($out_r, $out_g, $out_b, $out_a)");
+    return d;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4b utility
+// ---------------------------------------------------------------------------
+
+// Reroute - a pass-through node (one rgba input, one rgba output) for tidying
+// graph wiring. Mirrors Material Maker's reroute node concept; the identity
+// output lets the composer share the source expression (no extra work).
+auto build_reroute() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "reroute";
+    d.label    = "Reroute";
+    d.category = "Utility";
+    add_input(d, "in", Value_type::rgba, "vec4($uv, 0.0, 1.0)");
+    add_output(d, Value_type::rgba, "$in($uv)");
+    return d;
+}
+
 // Registry: name -> descriptor, built once. The vector<const Node_descriptor*>
-// keeps toolbar order and drives the compose self-check.
+// keeps palette order and drives the compose self-check. Descriptors live in a
+// vector that is fully populated before any pointer into it is taken, so the
+// ordered pointer list stays valid (no reallocation after the collect pass).
 struct Descriptor_registry
 {
-    std::array<Node_descriptor, 11> descriptors;
+    std::vector<Node_descriptor>        descriptors;
     std::vector<const Node_descriptor*> ordered;
 
     Descriptor_registry()
     {
-        descriptors[0]  = build_uniform();
-        descriptors[1]  = build_perlin();
-        descriptors[2]  = build_voronoi();
-        descriptors[3]  = build_bricks();
-        descriptors[4]  = build_shape();
-        descriptors[5]  = build_blend();
-        descriptors[6]  = build_colorize();
-        descriptors[7]  = build_curve();
-        descriptors[8]  = build_transform();
-        descriptors[9]  = build_brightness_contrast();
-        descriptors[10] = build_normal_map();
+        descriptors.reserve(32);
+        descriptors.push_back(build_uniform());
+        descriptors.push_back(build_perlin());
+        descriptors.push_back(build_voronoi());
+        descriptors.push_back(build_bricks());
+        descriptors.push_back(build_shape());
+        descriptors.push_back(build_fbm());
+        descriptors.push_back(build_noise());
+        descriptors.push_back(build_color_noise());
+        descriptors.push_back(build_sine_wave());
+        descriptors.push_back(build_truchet());
+        descriptors.push_back(build_weave());
+        descriptors.push_back(build_blend());
+        descriptors.push_back(build_colorize());
+        descriptors.push_back(build_curve());
+        descriptors.push_back(build_transform());
+        descriptors.push_back(build_brightness_contrast());
+        descriptors.push_back(build_normal_map());
+        descriptors.push_back(build_math());
+        descriptors.push_back(build_invert());
+        descriptors.push_back(build_quantize());
+        descriptors.push_back(build_adjust_hsv());
+        descriptors.push_back(build_remap());
+        descriptors.push_back(build_combine());
+        descriptors.push_back(build_decompose());
+        descriptors.push_back(build_swap_channels());
+        descriptors.push_back(build_reroute());
+        ordered.reserve(descriptors.size());
         for (const Node_descriptor& descriptor : descriptors) {
             ordered.push_back(&descriptor);
         }

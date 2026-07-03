@@ -20,6 +20,7 @@
 #include "texture_graph/texture_graph_window.hpp"
 #include "texture_graph/texture_payload.hpp"
 #include "texture_graph/texture_renderer.hpp"
+#include "texture_graph/nodes/texture_node_descriptors.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/item_parent_change_operation.hpp"
 #include "operations/material_change_operation.hpp"
@@ -57,6 +58,7 @@
 #include "erhe_graph/pin.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_texgen/composer.hpp"
+#include "erhe_texgen/node_descriptor.hpp"
 #include "erhe_texgen/shader_code.hpp"
 #include "erhe_texgen/value_type.hpp"
 
@@ -1817,10 +1819,17 @@ void Mcp_server::refresh_tool_list()
     m_tool_infos.push_back({"geometry_graph_clear", "Remove all nodes and links from the geometry node graph. Undoable (single operation).", schema_no_args()});
 
     m_tool_infos.push_back({"get_texture_graph", "List the procedural texture node graph: nodes with ids, type labels, canvas positions, parameters, input pins (slot, value type, whether connected, source node id/slot) and output pins (slot, value type), plus a 'composable' flag per node, and all links. Texture graph evaluation is synchronous, so no wait is needed.", schema_no_args()});
+    // Build the node-type enum from the descriptor registry (plus the bespoke
+    // "output" sink) so it never drifts as node types are added.
+    json texture_node_type_enum = json::array();
+    for (const erhe::texgen::Node_descriptor* descriptor : all_texture_node_descriptors()) {
+        texture_node_type_enum.push_back(descriptor->name);
+    }
+    texture_node_type_enum.push_back("output");
     m_tool_infos.push_back({"texture_graph_add_node", "Add a node to the texture node graph. Returns the new node's id, parameters and pin layout.", {
         {"type", "object"},
         {"properties", {
-            {"type", {{"type", "string"}, {"enum", json::array({"uniform", "perlin", "voronoi", "bricks", "shape", "blend", "colorize", "curve", "transform", "brightness_contrast", "normal_map", "output"})}, {"description", "Node type to create"}}},
+            {"type", {{"type", "string"}, {"enum", texture_node_type_enum}, {"description", "Node type to create"}}},
             {"position", {{"type", "array"}, {"items", {{"type", "number"}}}, {"description", "Optional [x, y] canvas position; defaults to the next spawn-grid slot"}}}
         }},
         {"required", json::array({"type"})}

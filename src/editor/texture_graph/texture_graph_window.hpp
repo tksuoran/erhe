@@ -101,9 +101,29 @@ public:
     void set_node_position(const Texture_graph_node& node, const ImVec2& position);
 
 private:
+    // One selectable palette entry (a spawnable node type).
+    class Palette_entry
+    {
+    public:
+        std::string type_name;
+        std::string label;
+    };
+    // One palette category (e.g. "Generators") and its entries, in registry order.
+    class Palette_category
+    {
+    public:
+        std::string                name;
+        std::vector<Palette_entry> entries;
+    };
+
     auto make_node       (const std::string& type_name) -> std::shared_ptr<Texture_graph_node>;
     void file_toolbar    ();
-    void node_toolbar    ();
+    // Searchable, categorized node palette (replaces the old fixed toolbar).
+    // Built once from the descriptor registry + a category tag, so new node
+    // types appear automatically. Plain ImGui, kept outside the ax::NodeEditor
+    // canvas so popups / collapsing headers are allowed.
+    void build_palette   ();
+    void node_palette    ();
     void handle_link_create();
     void handle_deletions();
 
@@ -123,6 +143,8 @@ private:
     std::vector<std::shared_ptr<Texture_graph_node>> m_nodes;
     std::string                                      m_graph_path{"res/editor/graphs/texture_graph.json"};
     int                                              m_spawn_count{0};
+    std::vector<Palette_category>                    m_palette_categories; // built lazily by build_palette()
+    std::string                                      m_palette_filter;     // node-palette search text
 };
 
 } // namespace editor

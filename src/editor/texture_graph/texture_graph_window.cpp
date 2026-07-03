@@ -19,13 +19,16 @@
 #include "erhe_imgui/imgui_node_editor.h"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_graphics/command_buffer.hpp"
+#include "erhe_texgen/node_descriptor.hpp"
 
 #include <imgui/imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <filesystem>
+#include <string>
 
 namespace editor {
 
@@ -297,31 +300,114 @@ void Texture_graph_window::file_toolbar()
     ImGui::SameLine(); if (ImGui::Button("Clear")) { clear_graph(); }
 }
 
-void Texture_graph_window::node_toolbar()
+namespace {
+
+[[nodiscard]] auto to_lower_ascii(std::string text) -> std::string
 {
-    ImGui::TextUnformatted("Generators");
-    ImGui::SameLine();                     if (ImGui::Button("Uniform"))  { add_node_of_type("uniform"); }
-    ImGui::SameLine();                     if (ImGui::Button("Perlin"))   { add_node_of_type("perlin"); }
-    ImGui::SameLine();                     if (ImGui::Button("Voronoi"))  { add_node_of_type("voronoi"); }
-    ImGui::SameLine();                     if (ImGui::Button("Bricks"))   { add_node_of_type("bricks"); }
-    ImGui::SameLine();                     if (ImGui::Button("Shape"))    { add_node_of_type("shape"); }
+    for (char& c : text) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    return text;
+}
 
-    ImGui::TextUnformatted("Filters   ");
-    ImGui::SameLine();                     if (ImGui::Button("Blend"))            { add_node_of_type("blend"); }
-    ImGui::SameLine();                     if (ImGui::Button("Colorize"))         { add_node_of_type("colorize"); }
-    ImGui::SameLine();                     if (ImGui::Button("Curve"))            { add_node_of_type("curve"); }
-    ImGui::SameLine();                     if (ImGui::Button("Transform"))        { add_node_of_type("transform"); }
-    ImGui::SameLine();                     if (ImGui::Button("Brightness/Cont.")) { add_node_of_type("brightness_contrast"); }
-    ImGui::SameLine();                     if (ImGui::Button("Normal Map"))       { add_node_of_type("normal_map"); }
+} // namespace
 
-    ImGui::TextUnformatted("Output    ");
-    ImGui::SameLine();                     if (ImGui::Button("Output"))           { add_node_of_type("output"); }
+void Texture_graph_window::build_palette()
+{
+    if (!m_palette_categories.empty()) {
+        return; // built once - the descriptor registry is immutable
+    }
+    // Fixed display order; any descriptor whose category is not in this list is
+    // appended under its own header (or "Other" when the category is empty), so
+    // a newly registered node type always appears without touching this code.
+    const char* const category_order[] = { "Generators", "Patterns", "Filters", "Channels", "Utility" };
+
+    const auto find_or_add_category = [this](const std::string& name) -> Palette_category& {
+        for (Palette_category& category : m_palette_categories) {
+            if (category.name == name) {
+                return category;
+            }
+        }
+        m_palette_categories.push_back(Palette_category{.name = name, .entries = {}});
+        return m_palette_categories.back();
+    };
+
+    // Seed the fixed categories in order (kept only if non-empty, dropped below).
+    for (const char* name : category_order) {
+        find_or_add_category(name);
+    }
+    for (const erhe::texgen::Node_descriptor* descriptor : all_texture_node_descriptors()) {
+        const std::string category_name = descriptor->category.empty() ? std::string{"Other"} : descriptor->category;
+        Palette_category& category = find_or_add_category(category_name);
+        const std::string label = descriptor->label.empty() ? descriptor->name : descriptor->label;
+        category.entries.push_back(Palette_entry{.type_name = descriptor->name, .label = label});
+    }
+    // The output sink node has no descriptor; list it in its own category last.
+    find_or_add_category("Output").entries.push_back(Palette_entry{.type_name = "output", .label = "Output"});
+
+    // Drop any seeded-but-empty categories.
+    m_palette_categories.erase(
+        std::remove_if(
+            m_palette_categories.begin(),
+            m_palette_categories.end(),
+            [](const Palette_category& category) { return category.entries.empty(); }
+        ),
+        m_palette_categories.end()
+    );
+}
+
+void Texture_graph_window::node_palette()
+{
+    build_palette();
+
+    ImGui::SetNextItemWidth(240.0f);
+    ImGui::InputTextWithHint("##palette_filter", "Filter nodes...", &m_palette_filter);
+    ImGui::SameLine();
+    if (ImGui::SmallButton("Clear")) {
+        m_palette_filter.clear();
+    }
+
+    const std::string filter    = to_lower_ascii(m_palette_filter);
+    const bool        filtering = !filter.empty();
+
+    const auto entry_matches = [&filter](const Palette_entry& entry) -> bool {
+        return (to_lower_ascii(entry.label).find(filter) != std::string::npos) ||
+               (to_lower_ascii(entry.type_name).find(filter) != std::string::npos);
+    };
+
+    for (const Palette_category& category : m_palette_categories) {
+        bool any_match = !filtering;
+        if (filtering) {
+            for (const Palette_entry& entry : category.entries) {
+                if (entry_matches(entry)) {
+                    any_match = true;
+                    break;
+                }
+            }
+            if (!any_match) {
+                continue; // hide categories with no matching entry while filtering
+            }
+        }
+        const ImGuiTreeNodeFlags flags = filtering ? ImGuiTreeNodeFlags_DefaultOpen : ImGuiTreeNodeFlags_None;
+        if (ImGui::CollapsingHeader(category.name.c_str(), flags)) {
+            for (const Palette_entry& entry : category.entries) {
+                if (filtering && !entry_matches(entry)) {
+                    continue;
+                }
+                ImGui::PushID(entry.type_name.c_str());
+                if (ImGui::Selectable(entry.label.c_str())) {
+                    add_node_of_type(entry.type_name);
+                }
+                ImGui::PopID();
+            }
+        }
+    }
 }
 
 void Texture_graph_window::imgui()
 {
     file_toolbar();
-    node_toolbar();
+    node_palette();
 
     m_node_editor->Begin("Texture Graph", ImVec2{0.0f, 0.0f});
 
