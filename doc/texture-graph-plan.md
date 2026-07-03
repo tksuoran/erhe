@@ -27,7 +27,7 @@ carry an attribution comment).
 |-------------------------------------------------------------|---------|--------|
 | Phase 0: `erhe::graph` unit tests (foundation hardening)    | DONE    | 29ff3f31, aa59158a |
 | Phase 1: `erhe::texgen` codegen core + unit tests           | DONE    | e00df7a2 |
-| Phase 2: GPU validation (compile + render composed shaders) | planned | -      |
+| Phase 2: GPU validation (compile + render composed shaders) | DONE    | fddf2c08 |
 | Phase 3: editor MVP (window, payload, ~12 nodes, output)    | planned | -      |
 | Phase 3 (cont.): serialization, undo/redo, MCP tools        | planned | -      |
 | Phase 3 (cont.): headless smoke test script                 | planned | -      |
