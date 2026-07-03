@@ -16,6 +16,30 @@
 
 namespace editor {
 
+namespace {
+
+// Pin fill color per Geometry_pin_key payload type. Pins only accept links
+// from pins with the same key, so matching colors show which connections
+// are legal before a drag gets rejected.
+[[nodiscard]] auto pin_key_color(const std::size_t key) -> ImU32
+{
+    switch (key) {
+        case Geometry_pin_key::geometry:    return IM_COL32( 54, 192, 154, 255); // teal
+        case Geometry_pin_key::float_value: return IM_COL32(160, 160, 160, 255); // grey
+        case Geometry_pin_key::int_value:   return IM_COL32( 89, 140,  92, 255); // muted green
+        case Geometry_pin_key::bool_value:  return IM_COL32(204, 166, 214, 255); // pink
+        case Geometry_pin_key::vec3_value:  return IM_COL32( 99,  99, 199, 255); // indigo
+        case Geometry_pin_key::vec4_value:  return IM_COL32(199, 199,  41, 255); // yellow
+        case Geometry_pin_key::mat4_value:  return IM_COL32( 70, 120, 190, 255); // steel blue
+        case Geometry_pin_key::material:    return IM_COL32(235, 122,  82, 255); // orange
+        case Geometry_pin_key::points:      return IM_COL32(110, 205, 230, 255); // light cyan
+        case Geometry_pin_key::instances:   return IM_COL32(130, 215, 120, 255); // spring green
+        default:                            return IM_COL32( 68,  68,  68, 255);
+    }
+}
+
+}
+
 void process_for_graph(erhe::geometry::Geometry& geometry)
 {
     geometry.process(
@@ -328,7 +352,7 @@ void Geometry_graph_node::show_pins(
         node_editor.PinRect(min, max);
         node_editor.EndPin();
 
-        draw_list.AddRectFilled(min, max, 0xff444444, 4.0f, ImDrawFlags_RoundCornersAll);
+        draw_list.AddRectFilled(min, max, pin_key_color(pin.get_key()), 4.0f, ImDrawFlags_RoundCornersAll);
         draw_list.AddRect      (min, max, 0xffcccccc, 4.0f, ImDrawFlags_RoundCornersAll, 2.0f);
     }
 }

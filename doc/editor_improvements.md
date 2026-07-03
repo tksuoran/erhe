@@ -40,15 +40,15 @@ Geometry graph evaluation runs synchronously on the main thread; a heavy chain (
 
 The `editor.watchdog` breadcrumb ring localized the 2026-07-02 CC hang only approximately: `Geometry::process()` sets breadcrumbs per step, but `compute_mesh_tangents`, `Primitive_builder`, `make_raytrace` (BVH build) and `copy_with_transform` set none, so a stall after the last breadcrumb is misattributed to it. Add `erhe::log::set_breadcrumb()` to those phases (and per Catmull-Clark phase) so the next hang self-localizes.
 
-### 8. Color geometry graph pins by payload type (Small effort, Low impact)
-
-`Geometry_graph_node::show_pins()` draws every pin identically; with 10 payload pin keys (geometry, floats, points, instances, ...) type-safe connection rules are invisible until a drag is rejected. Give each `Geometry_pin_key` a color.
-
 ### 9. Batch element creation in remaining Geometry_operations (Medium effort, Medium impact)
 
 Geogram's `MeshSubElementsStore::create_sub_elements()` computes capacity growth from store SIZE, not capacity (reported upstream: https://github.com/BrunoLevy/geogram/issues/371), so per-element `create_vertices(1)` / `create_polygon()` is O(n) each and any operation using the one-at-a-time `make_new_dst_*` helpers is O(n^2) on large meshes. Catmull-Clark was converted to batch creation (8e52a1b9, `map_dst_*` helpers); the conway operations (ambo, kis, gyro, meta, truncate, chamfer, dual, subdivide) and others still create per element. Convert them via the same pattern; alternatively pick up the upstream fix once the issue is resolved, or fix the growth policy in a geogram fork meanwhile (needs a user-provided fork repo per CLAUDE.md).
 
 ## Past work
+
+## Color geometry graph pins by payload type (Small effort, Low impact)
+
+**DONE.** `Geometry_graph_node::show_pins()` fills each pin with a color derived from its `Geometry_pin_key` (`pin_key_color()` in `geometry_graph_node.cpp`), so the type-safe connection rules are visible before a drag is rejected: geometry teal, float grey, int muted green, bool pink, vec3 indigo, vec4 yellow, mat4 steel blue, material orange, points light cyan, instances spring green.
 
 ## Replace multi-inheritance with composition for Tool+Window (Medium effort, Medium impact)
 
