@@ -212,7 +212,7 @@ auto Texture_graph_window::load_graph(const std::filesystem::path& path) -> bool
 
     const std::size_t link_count = content.links.size();
     m_app_context.operation_stack->execute_now(
-        std::make_shared<Texture_graph_replace_operation>(*this, std::move(content), "Texture graph load")
+        std::make_shared<Texture_graph_replace_operation>(*this, get_current_graph_texture(), std::move(content), "Texture graph load")
     );
     log_graph_editor->info("Texture graph loaded from '{}' ({} nodes, {} links)", path.string(), node_count, link_count);
     return true;
@@ -221,7 +221,7 @@ auto Texture_graph_window::load_graph(const std::filesystem::path& path) -> bool
 void Texture_graph_window::clear_graph()
 {
     m_app_context.operation_stack->execute_now(
-        std::make_shared<Texture_graph_replace_operation>(*this, Texture_graph_content{}, "Texture graph clear")
+        std::make_shared<Texture_graph_replace_operation>(*this, get_current_graph_texture(), Texture_graph_content{}, "Texture graph clear")
     );
     m_spawn_count = 0; // new nodes start from the canvas origin again
 }

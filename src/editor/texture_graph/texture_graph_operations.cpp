@@ -1,4 +1,5 @@
 #include "texture_graph/texture_graph_operations.hpp"
+#include "texture_graph/graph_texture.hpp"
 #include "texture_graph/texture_graph.hpp"
 #include "texture_graph/texture_graph_node.hpp"
 #include "texture_graph/texture_graph_window.hpp"
@@ -33,12 +34,14 @@ auto make_texture_link_record(erhe::graph::Pin* source_pin, erhe::graph::Pin* si
 
 Texture_graph_node_insert_remove_operation::Texture_graph_node_insert_remove_operation(
     Texture_graph_window&                      window,
+    const std::shared_ptr<Graph_texture>&      graph_texture,
     const std::shared_ptr<Texture_graph_node>& node,
     const Mode                                 mode
 )
-    : m_window{window}
-    , m_node  {node}
-    , m_mode  {mode}
+    : m_window       {window}
+    , m_graph_texture{graph_texture}
+    , m_node         {node}
+    , m_mode         {mode}
 {
     set_description(
         fmt::format(
@@ -69,12 +72,12 @@ void Texture_graph_node_insert_remove_operation::undo(App_context&)
 
 void Texture_graph_node_insert_remove_operation::insert()
 {
-    m_window.insert_node(m_node);
+    m_window.insert_node(*m_graph_texture, m_node);
     if (m_has_position) {
         m_window.set_node_position(*m_node.get(), m_position);
     }
     for (const Texture_graph_link_record& record : m_links) {
-        m_window.connect_pins(record.source_pin, record.sink_pin);
+        m_window.connect_pins(*m_graph_texture, record.source_pin, record.sink_pin);
     }
     m_links.clear();
 }
@@ -96,16 +99,18 @@ void Texture_graph_node_insert_remove_operation::remove()
     }
     m_position     = m_window.get_node_position(*m_node.get());
     m_has_position = true;
-    m_window.erase_node(m_node);
+    m_window.erase_node(*m_graph_texture, m_node);
 }
 
 Texture_graph_replace_operation::Texture_graph_replace_operation(
-    Texture_graph_window&   window,
-    Texture_graph_content&& new_content,
-    const char*             description
+    Texture_graph_window&                 window,
+    const std::shared_ptr<Graph_texture>& graph_texture,
+    Texture_graph_content&&               new_content,
+    const char*                           description
 )
-    : m_window     {window}
-    , m_new_content{std::move(new_content)}
+    : m_window      {window}
+    , m_graph_texture{graph_texture}
+    , m_new_content {std::move(new_content)}
 {
     set_description(std::string{description});
 }
@@ -127,11 +132,11 @@ void Texture_graph_replace_operation::undo(App_context&)
 auto Texture_graph_replace_operation::capture() -> Texture_graph_content
 {
     Texture_graph_content content;
-    content.nodes = m_window.get_nodes();
+    content.nodes = m_graph_texture->nodes();
     for (const std::shared_ptr<Texture_graph_node>& node : content.nodes) {
         content.positions.push_back(m_window.get_node_position(*node.get()));
     }
-    for (const std::unique_ptr<erhe::graph::Link>& link : m_window.get_graph().get_links()) {
+    for (const std::unique_ptr<erhe::graph::Link>& link : m_graph_texture->graph().get_links()) {
         content.links.push_back(make_texture_link_record(link->get_source(), link->get_sink()));
     }
     return content;
@@ -139,13 +144,13 @@ auto Texture_graph_replace_operation::capture() -> Texture_graph_content
 
 void Texture_graph_replace_operation::apply(const Texture_graph_content& content)
 {
-    const std::vector<std::shared_ptr<Texture_graph_node>> current_nodes = m_window.get_nodes(); // copy - erase_node mutates
+    const std::vector<std::shared_ptr<Texture_graph_node>> current_nodes = m_graph_texture->nodes(); // copy - erase_node mutates
     for (const std::shared_ptr<Texture_graph_node>& node : current_nodes) {
-        m_window.erase_node(node);
+        m_window.erase_node(*m_graph_texture, node);
     }
     for (std::size_t i = 0, end = content.nodes.size(); i < end; ++i) {
         const std::shared_ptr<Texture_graph_node>& node = content.nodes[i];
-        m_window.insert_node(node);
+        m_window.insert_node(*m_graph_texture, node);
         if (i < content.positions.size()) {
             const ImVec2 position = content.positions[i];
             if (is_valid_texture_node_position(position)) {
@@ -154,7 +159,7 @@ void Texture_graph_replace_operation::apply(const Texture_graph_content& content
         }
     }
     for (const Texture_graph_link_record& record : content.links) {
-        m_window.connect_pins(record.source_pin, record.sink_pin);
+        m_window.connect_pins(*m_graph_texture, record.source_pin, record.sink_pin);
     }
 }
 
@@ -197,14 +202,16 @@ void Texture_graph_parameter_operation::apply(const std::string& parameters)
 }
 
 Texture_graph_link_insert_remove_operation::Texture_graph_link_insert_remove_operation(
-    Texture_graph_window& window,
-    erhe::graph::Pin*     source_pin,
-    erhe::graph::Pin*     sink_pin,
-    const Mode            mode
+    Texture_graph_window&                 window,
+    const std::shared_ptr<Graph_texture>& graph_texture,
+    erhe::graph::Pin*                     source_pin,
+    erhe::graph::Pin*                     sink_pin,
+    const Mode                            mode
 )
-    : m_window{window}
-    , m_link  {make_texture_link_record(source_pin, sink_pin)}
-    , m_mode  {mode}
+    : m_window       {window}
+    , m_graph_texture{graph_texture}
+    , m_link         {make_texture_link_record(source_pin, sink_pin)}
+    , m_mode         {mode}
 {
     set_description(
         fmt::format(
@@ -236,12 +243,12 @@ void Texture_graph_link_insert_remove_operation::undo(App_context&)
 
 void Texture_graph_link_insert_remove_operation::insert()
 {
-    m_window.connect_pins(m_link.source_pin, m_link.sink_pin);
+    m_window.connect_pins(*m_graph_texture, m_link.source_pin, m_link.sink_pin);
 }
 
 void Texture_graph_link_insert_remove_operation::remove()
 {
-    m_window.disconnect_pins(m_link.source_pin, m_link.sink_pin);
+    m_window.disconnect_pins(*m_graph_texture, m_link.source_pin, m_link.sink_pin);
 }
 
 } // namespace editor

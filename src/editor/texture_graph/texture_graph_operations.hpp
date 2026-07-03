@@ -12,6 +12,7 @@ namespace erhe::graph { class Pin; }
 
 namespace editor {
 
+class Graph_texture;
 class Texture_graph_node;
 class Texture_graph_window;
 
@@ -52,6 +53,7 @@ public:
 
     Texture_graph_node_insert_remove_operation(
         Texture_graph_window&                      window,
+        const std::shared_ptr<Graph_texture>&      graph_texture,
         const std::shared_ptr<Texture_graph_node>& node,
         Mode                                       mode
     );
@@ -65,6 +67,7 @@ private:
     void remove();
 
     Texture_graph_window&                  m_window;
+    std::shared_ptr<Graph_texture>         m_graph_texture;
     std::shared_ptr<Texture_graph_node>    m_node;
     Mode                                   m_mode;
     std::vector<Texture_graph_link_record> m_links;
@@ -89,9 +92,10 @@ class Texture_graph_replace_operation : public Operation
 {
 public:
     Texture_graph_replace_operation(
-        Texture_graph_window&    window,
-        Texture_graph_content&&  new_content,
-        const char*              description
+        Texture_graph_window&                 window,
+        const std::shared_ptr<Graph_texture>& graph_texture,
+        Texture_graph_content&&               new_content,
+        const char*                           description
     );
 
     // Implements Operation
@@ -102,7 +106,8 @@ private:
     void apply(const Texture_graph_content& content);
     [[nodiscard]] auto capture() -> Texture_graph_content;
 
-    Texture_graph_window& m_window;
+    Texture_graph_window&          m_window;
+    std::shared_ptr<Graph_texture> m_graph_texture;
     Texture_graph_content m_new_content;
     Texture_graph_content m_old_content;
     bool                  m_old_captured{false};
@@ -148,10 +153,11 @@ public:
     };
 
     Texture_graph_link_insert_remove_operation(
-        Texture_graph_window& window,
-        erhe::graph::Pin*     source_pin,
-        erhe::graph::Pin*     sink_pin,
-        Mode                  mode
+        Texture_graph_window&                 window,
+        const std::shared_ptr<Graph_texture>& graph_texture,
+        erhe::graph::Pin*                     source_pin,
+        erhe::graph::Pin*                     sink_pin,
+        Mode                                  mode
     );
 
     // Implements Operation
@@ -162,7 +168,8 @@ private:
     void insert();
     void remove();
 
-    Texture_graph_window&     m_window;
+    Texture_graph_window&          m_window;
+    std::shared_ptr<Graph_texture> m_graph_texture;
     Texture_graph_link_record m_link;
     Mode                      m_mode;
 };

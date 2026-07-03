@@ -85,6 +85,12 @@ public:
     // Texture_graph_parameter_operation.
     void set_node_parameters(const std::shared_ptr<Texture_graph_node>& node, const nlohmann::json& parameters);
 
+    // The graph currently being edited: the selected content-library
+    // Graph_texture asset, or the window's default graph when nothing is
+    // selected. Refreshed once per frame (update() / imgui()). MCP and the
+    // canvas gestures operate on this one.
+    [[nodiscard]] auto get_current_graph_texture() -> const std::shared_ptr<Graph_texture>&;
+
     [[nodiscard]] auto get_graph() -> Texture_graph&;
     [[nodiscard]] auto get_nodes() const -> const std::vector<std::shared_ptr<Texture_graph_node>>&;
 
@@ -105,11 +111,16 @@ public:
     // undoable parameter change). Bound to the toolbar "Reseed all" button.
     void reseed_all();
 
-    // Non-undoable primitives (also used by future graph operations / load).
-    void insert_node    (const std::shared_ptr<Texture_graph_node>& node);
-    void erase_node     (const std::shared_ptr<Texture_graph_node>& node);
-    auto connect_pins   (erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool;
-    auto disconnect_pins(erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool;
+    // Non-undoable primitives, targeting a specific Graph_texture so undo/redo
+    // stays correct even if the selection changes between an edit and its undo
+    // (the operations bind the graph they were created for). Called by the
+    // graph operations and by load.
+    void insert_node    (Graph_texture& graph_texture, const std::shared_ptr<Texture_graph_node>& node);
+    void erase_node     (Graph_texture& graph_texture, const std::shared_ptr<Texture_graph_node>& node);
+    auto connect_pins   (Graph_texture& graph_texture, erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool;
+    auto disconnect_pins(Graph_texture& graph_texture, erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool;
+    // Canvas node positions live in the ax::NodeEditor context keyed by node id,
+    // so they are graph-independent (no Graph_texture argument needed).
     [[nodiscard]] auto get_node_position(const Texture_graph_node& node) -> ImVec2;
     void set_node_position(const Texture_graph_node& node, const ImVec2& position);
 
@@ -144,18 +155,29 @@ private:
     // with every add_node_of_type(), so new nodes do not all stack at (0, 0).
     auto next_node_spawn_position() -> ImVec2;
 
-    // Renders the products (preview thumbnails, output bakes) of nodes whose
-    // composition changed this frame. Main thread, records into the frame
-    // command buffer. Cheap in steady state (no dirty nodes -> no work).
-    void render_dirty_products();
+    // Evaluates a graph texture's dirty subtrees and renders the products
+    // (preview thumbnails, output bakes) of nodes whose composition changed this
+    // frame. Main thread, records into the frame command buffer. Cheap in steady
+    // state (no dirty nodes -> no work). update() runs this for the current graph
+    // and every Graph_texture in every scene's content library, so a graph a
+    // material samples stays baked even when it is not the selected one.
+    void evaluate_and_render(Graph_texture& graph_texture);
 
-    // Accessors to the currently-edited graph's state. Today the window owns a
-    // single default Graph_texture (m_graph_texture); Step A3 switches these to
-    // return the selected content-library Graph_texture asset.
+    // Points m_graph_texture at the selected content-library Graph_texture, or
+    // the window's default graph when nothing (of that type) is selected.
+    void refresh_current_graph_texture();
+
+    // Accessors to the currently-edited graph's state (the selected asset or the
+    // default). Used by the canvas iteration and the serialization/MCP surface.
     [[nodiscard]] auto graph() -> Texture_graph&;
     [[nodiscard]] auto mutable_nodes() -> std::vector<std::shared_ptr<Texture_graph_node>>&;
 
     App_context&                                     m_app_context;
+    // The window's own fallback graph, edited when no Graph_texture asset is
+    // selected. Transitional: Step A7 drops it once the smoke test / UI always
+    // create + select a content-library asset.
+    std::shared_ptr<Graph_texture>                   m_default_graph_texture;
+    // The graph currently being edited (selected asset or the default above).
     std::shared_ptr<Graph_texture>                   m_graph_texture;
     std::unique_ptr<Texture_renderer>                m_renderer;
     std::unique_ptr<ax::NodeEditor::EditorContext>   m_node_editor;

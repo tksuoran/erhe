@@ -12,8 +12,11 @@
 #include "texture_graph/nodes/texture_node_descriptors.hpp"
 
 #include "app_context.hpp"
+#include "app_scenes.hpp"
 #include "editor_log.hpp"
+#include "content_library/content_library.hpp"
 #include "operations/operation_stack.hpp"
+#include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 
 #include "erhe_graph/link.hpp"
@@ -56,8 +59,10 @@ Texture_graph_window::Texture_graph_window(
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Texture Graph", "texture_graph"}
     , m_app_context            {app_context}
 {
-    // Until Step A3 wires selection, the window edits a single default asset.
-    m_graph_texture = std::make_shared<Graph_texture>("Texture Graph");
+    // The window edits the selected content-library Graph_texture, falling back
+    // to this default when nothing is selected (see refresh_current_graph_texture).
+    m_default_graph_texture = std::make_shared<Graph_texture>("Texture Graph");
+    m_graph_texture         = m_default_graph_texture;
     m_node_editor = std::make_unique<ax::NodeEditor::EditorContext>(nullptr);
 
     // Match the arrowhead settings used for the input pin pivot (the pins are
@@ -92,6 +97,15 @@ auto Texture_graph_window::flags() -> ImGuiWindowFlags
     return ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
 }
 
+void Texture_graph_window::refresh_current_graph_texture()
+{
+    std::shared_ptr<Graph_texture> selected;
+    if (m_app_context.selection != nullptr) {
+        selected = m_app_context.selection->get_last_selected<Graph_texture>();
+    }
+    m_graph_texture = selected ? selected : m_default_graph_texture;
+}
+
 void Texture_graph_window::update()
 {
     // The graphics device does not exist during construction (the part ctor
@@ -100,12 +114,31 @@ void Texture_graph_window::update()
         m_renderer = std::make_unique<Texture_renderer>(*m_app_context.graphics_device);
     }
 
-    graph().evaluate_if_dirty();
-    render_dirty_products();
+    refresh_current_graph_texture();
+
+    // Evaluate + bake the default graph and every Graph_texture asset in every
+    // scene, so a material sampling a non-selected graph still sees a baked
+    // texture (notably right after a scene load).
+    if (m_default_graph_texture) {
+        evaluate_and_render(*m_default_graph_texture);
+    }
+    if (m_app_context.app_scenes != nullptr) {
+        for (const std::shared_ptr<Scene_root>& scene_root : m_app_context.app_scenes->get_scene_roots()) {
+            const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
+            if (!content_library) {
+                continue;
+            }
+            for (const std::shared_ptr<Graph_texture>& graph_texture : content_library->graph_textures->get_all<Graph_texture>()) {
+                evaluate_and_render(*graph_texture);
+            }
+        }
+    }
 }
 
-void Texture_graph_window::render_dirty_products()
+void Texture_graph_window::evaluate_and_render(Graph_texture& graph_texture)
 {
+    graph_texture.graph().evaluate_if_dirty();
+
     if (!m_renderer) {
         return;
     }
@@ -118,7 +151,7 @@ void Texture_graph_window::render_dirty_products()
     // Render in topological order (the graph is sorted by evaluate_if_dirty()),
     // so a buffer node renders its texture before any downstream consumer that
     // samples it - including a buffer feeding another buffer.
-    for (erhe::graph::Node* graph_node : graph().get_nodes()) {
+    for (erhe::graph::Node* graph_node : graph_texture.graph().get_nodes()) {
         Texture_graph_node* node = dynamic_cast<Texture_graph_node*>(graph_node);
         if ((node != nullptr) && node->preview_needs_render()) {
             node->render_products(m_app_context, *m_renderer);
@@ -127,19 +160,20 @@ void Texture_graph_window::render_dirty_products()
     }
 }
 
-void Texture_graph_window::insert_node(const std::shared_ptr<Texture_graph_node>& node)
+void Texture_graph_window::insert_node(Graph_texture& graph_texture, const std::shared_ptr<Texture_graph_node>& node)
 {
     constexpr uint64_t flags = erhe::Item_flags::visible | erhe::Item_flags::content | erhe::Item_flags::show_in_ui;
     node->enable_flag_bits(flags);
-    mutable_nodes().push_back(node);
-    graph().register_node(node.get());
+    graph_texture.nodes().push_back(node);
+    graph_texture.graph().register_node(node.get());
     node->mark_dirty();
 }
 
-void Texture_graph_window::erase_node(const std::shared_ptr<Texture_graph_node>& node)
+void Texture_graph_window::erase_node(Graph_texture& graph_texture, const std::shared_ptr<Texture_graph_node>& node)
 {
-    auto i = std::find(mutable_nodes().begin(), mutable_nodes().end(), node);
-    if (i == mutable_nodes().end()) {
+    std::vector<std::shared_ptr<Texture_graph_node>>& nodes = graph_texture.nodes();
+    auto i = std::find(nodes.begin(), nodes.end(), node);
+    if (i == nodes.end()) {
         return;
     }
     if (node->is_selected()) {
@@ -152,14 +186,14 @@ void Texture_graph_window::erase_node(const std::shared_ptr<Texture_graph_node>&
             mark_sink_node_dirty(link->get_sink());
         }
     }
-    graph().unregister_node(node.get());
-    mutable_nodes().erase(i);
+    graph_texture.graph().unregister_node(node.get());
+    nodes.erase(i);
     node->on_removed_from_graph();
 }
 
-auto Texture_graph_window::connect_pins(erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool
+auto Texture_graph_window::connect_pins(Graph_texture& graph_texture, erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool
 {
-    erhe::graph::Link* link = graph().connect(source_pin, sink_pin);
+    erhe::graph::Link* link = graph_texture.graph().connect(source_pin, sink_pin);
     if (link == nullptr) {
         return false;
     }
@@ -167,9 +201,9 @@ auto Texture_graph_window::connect_pins(erhe::graph::Pin* source_pin, erhe::grap
     return true;
 }
 
-auto Texture_graph_window::disconnect_pins(erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool
+auto Texture_graph_window::disconnect_pins(Graph_texture& graph_texture, erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool
 {
-    std::vector<std::unique_ptr<erhe::graph::Link>>& links = graph().get_links();
+    std::vector<std::unique_ptr<erhe::graph::Link>>& links = graph_texture.graph().get_links();
     auto i = std::find_if(
         links.begin(),
         links.end(),
@@ -180,7 +214,7 @@ auto Texture_graph_window::disconnect_pins(erhe::graph::Pin* source_pin, erhe::g
     if (i == links.end()) {
         return false;
     }
-    graph().disconnect(i->get());
+    graph_texture.graph().disconnect(i->get());
     mark_sink_node_dirty(sink_pin);
     return true;
 }
@@ -199,7 +233,7 @@ void Texture_graph_window::remove_node(const std::shared_ptr<Texture_graph_node>
 {
     m_app_context.operation_stack->execute_now(
         std::make_shared<Texture_graph_node_insert_remove_operation>(
-            *this, node, Texture_graph_node_insert_remove_operation::Mode::remove
+            *this, get_current_graph_texture(), node, Texture_graph_node_insert_remove_operation::Mode::remove
         )
     );
 }
@@ -209,9 +243,10 @@ auto Texture_graph_window::connect(erhe::graph::Pin* source_pin, erhe::graph::Pi
     if ((source_pin == nullptr) || (sink_pin == nullptr) || (source_pin->get_key() != sink_pin->get_key())) {
         return false;
     }
+    const std::shared_ptr<Graph_texture>& graph_texture = get_current_graph_texture();
     // Validate before creating the operation: a refused link must not leave a
     // no-op entry on the undo stack.
-    if (graph().would_create_cycle(source_pin, sink_pin)) {
+    if (graph_texture->graph().would_create_cycle(source_pin, sink_pin)) {
         log_graph_editor->warn(
             "Texture graph: connecting '{}' to '{}' would create a cycle - refusing",
             source_pin->get_owner_node()->get_name(),
@@ -221,7 +256,7 @@ auto Texture_graph_window::connect(erhe::graph::Pin* source_pin, erhe::graph::Pi
     }
     m_app_context.operation_stack->execute_now(
         std::make_shared<Texture_graph_link_insert_remove_operation>(
-            *this, source_pin, sink_pin, Texture_graph_link_insert_remove_operation::Mode::insert
+            *this, graph_texture, source_pin, sink_pin, Texture_graph_link_insert_remove_operation::Mode::insert
         )
     );
     return true;
@@ -231,7 +266,7 @@ void Texture_graph_window::disconnect(erhe::graph::Pin* source_pin, erhe::graph:
 {
     m_app_context.operation_stack->execute_now(
         std::make_shared<Texture_graph_link_insert_remove_operation>(
-            *this, source_pin, sink_pin, Texture_graph_link_insert_remove_operation::Mode::remove
+            *this, get_current_graph_texture(), source_pin, sink_pin, Texture_graph_link_insert_remove_operation::Mode::remove
         )
     );
 }
@@ -272,11 +307,19 @@ auto Texture_graph_window::add_node_of_type(const std::string& type_name) -> Tex
     }
     m_app_context.operation_stack->execute_now(
         std::make_shared<Texture_graph_node_insert_remove_operation>(
-            *this, node, Texture_graph_node_insert_remove_operation::Mode::insert
+            *this, get_current_graph_texture(), node, Texture_graph_node_insert_remove_operation::Mode::insert
         )
     );
     set_node_position(*node.get(), next_node_spawn_position());
     return node.get();
+}
+
+auto Texture_graph_window::get_current_graph_texture() -> const std::shared_ptr<Graph_texture>&
+{
+    // Keep m_graph_texture consistent with the live selection regardless of call
+    // ordering (an MCP mutation may arrive before the frame's update()).
+    refresh_current_graph_texture();
+    return m_graph_texture;
 }
 
 auto Texture_graph_window::graph() -> Texture_graph&
@@ -449,6 +492,10 @@ void Texture_graph_window::controls_imgui()
 
 void Texture_graph_window::imgui()
 {
+    // Draw whatever graph is currently selected (or the default). update() also
+    // refreshes this, but imgui() may run in a frame where it has not yet.
+    refresh_current_graph_texture();
+
     m_node_editor->Begin("Texture Graph", ImVec2{0.0f, 0.0f});
 
     for (erhe::graph::Node* node : graph().get_nodes()) {
