@@ -31,9 +31,9 @@ carry an attribution comment).
 | Phase 3 step 1: editor window skeleton + wiring             | DONE    | e1402846 |
 | Phase 3 step 2: MVP node set (10 nodes) + factory/toolbar    | DONE    | 0b063f14 |
 | Phase 3 step 3: compose DAG, render path, previews, output  | DONE    | 003e4709 |
-| Phase 3 step 4: serialization + undo/redo                   | planned | -      |
-| Phase 3 step 5: MCP tools (get/add/connect/.../export_png)   | planned | -      |
-| Phase 3 step 6: headless smoke test script                  | planned | -      |
+| Phase 3 step 4: serialization + undo/redo                   | DONE    | bfae3ae5 |
+| Phase 3 step 5: MCP tools (get/add/connect/.../export_png)   | DONE    | bcb5520a |
+| Phase 3 step 6: headless smoke test script (124 checks)      | DONE    | 40c86afb |
 | Phase 4: node library expansion + gradient/curve widgets    | planned | -      |
 | Phase 5: buffer nodes, async compile, seeds/variations      | planned | -      |
 | Phase 6: PBR material output, multi-channel bake, PNG export| planned | -      |
