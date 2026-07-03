@@ -36,11 +36,11 @@ Operations are queued without pre-validation. `Compound_operation` has no rollba
 
 Geometry graph evaluation runs synchronously on the main thread; a heavy chain (subdivide x6 -> ~27 s Debug) freezes the UI and outlives the in-editor MCP server's per-request wait (the request still executes; clients must wait for the server to drain - see `scripts/geometry_nodes_smoke_test.py` mutate()). Move node evaluation to a worker (the `Mesh_operation` async pattern exists) or at least have the MCP server respond "accepted, evaluating" with a completion query, so long evaluations neither freeze the UI nor look like hangs. Found during the 2026-07-02 geometry nodes smoke sweep.
 
-### 9. Batch element creation in remaining Geometry_operations (Medium effort, Medium impact)
-
-Geogram's `MeshSubElementsStore::create_sub_elements()` computes capacity growth from store SIZE, not capacity (reported upstream: https://github.com/BrunoLevy/geogram/issues/371), so per-element `create_vertices(1)` / `create_polygon()` is O(n) each and any operation using the one-at-a-time `make_new_dst_*` helpers is O(n^2) on large meshes. Catmull-Clark was converted to batch creation (8e52a1b9, `map_dst_*` helpers); the conway operations (ambo, kis, gyro, meta, truncate, chamfer, dual, subdivide) and others still create per element. Convert them via the same pattern; alternatively pick up the upstream fix once the issue is resolved, or fix the growth policy in a geogram fork meanwhile (needs a user-provided fork repo per CLAUDE.md).
-
 ## Past work
+
+## Batch element creation in remaining Geometry_operations (Medium effort, Medium impact)
+
+**RESOLVED at the root cause instead.** The motivation was Geogram's `MeshSubElementsStore::create_sub_elements()` computing capacity growth from store SIZE, not capacity (https://github.com/BrunoLevy/geogram/issues/371), which made per-element `create_vertices(1)` / `create_polygon()` O(n) each and the one-at-a-time `make_new_dst_*` helpers O(n^2) on large meshes. The geogram pin now points at the `tksuoran/geogram` fork commit `daf9e192` which fixes the growth policy (capacity-based doubling), so per-element creation is amortized O(1) again and the conway operations (ambo, kis, gyro, meta, truncate, chamfer, dual, subdivide) no longer need conversion; batching them would only buy a constant factor (fewer create calls), which the 2026-07-02 Catmull-Clark performance pass classified as diminishing returns. Catmull-Clark itself keeps its batch creation (8e52a1b9, `map_dst_*` helpers) - it predates the fork fix and remains valid. Drop the fork pin once an upstream geogram release includes the fix.
 
 ## Breadcrumbs in the geometry -> primitive pipeline tail (Small effort, Medium debugging impact)
 
