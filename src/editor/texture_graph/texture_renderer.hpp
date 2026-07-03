@@ -2,6 +2,8 @@
 
 #include "erhe_dataformat/dataformat.hpp"
 
+#include "erhe_texgen/shader_code.hpp"
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -21,11 +23,19 @@ namespace erhe::graphics {
     class Shader_stages;
     class Texture;
 }
-namespace erhe::texgen {
-    class Uniform;
-}
-
 namespace editor {
+
+// One sampler2D input to bind for a render: the GLSL binding index / identifier
+// (from the composition's Shader_code::get_samplers()) plus the texture to bind
+// there (a buffer node's rendered texture). Used by the Phase 5 buffer cut
+// point - a graph that samples buffers passes one of these per buffer.
+class Texture_sample_binding
+{
+public:
+    int                            binding{0};        // sampler namespace index, matches "tex_<binding>"
+    std::string                    name   {};         // GLSL identifier "tex_<binding>"
+    const erhe::graphics::Texture* texture{nullptr};  // bound at draw time
+};
 
 // Shared render-to-texture helper for the texture graph.
 //
@@ -71,7 +81,9 @@ public:
         std::shared_ptr<erhe::graphics::Texture>&         target,
         int                                               size,
         const std::string&                                fragment_body,
-        const std::vector<erhe::texgen::Uniform>&         uniforms
+        const std::vector<erhe::texgen::Uniform>&         uniforms,
+        const std::vector<erhe::texgen::Sampler_binding>& sampler_decls = {},
+        const std::vector<Texture_sample_binding>&        sampler_bindings = {}
     ) -> bool;
 
     // Renders the assembled fragment into a size x size texture and reads it
@@ -84,10 +96,12 @@ public:
     // for infrequent diagnostic export (texture_graph_export_png), not the hot
     // path. Returns true on success; false on shader compile failure.
     [[nodiscard]] auto render_and_read_rgba8(
-        int                                       size,
-        const std::string&                        fragment_body,
-        const std::vector<erhe::texgen::Uniform>& uniforms,
-        std::vector<std::uint8_t>&                out_pixels
+        int                                               size,
+        const std::string&                                fragment_body,
+        const std::vector<erhe::texgen::Uniform>&         uniforms,
+        std::vector<std::uint8_t>&                        out_pixels,
+        const std::vector<erhe::texgen::Sampler_binding>& sampler_decls = {},
+        const std::vector<Texture_sample_binding>&        sampler_bindings = {}
     ) -> bool;
 
     // Color format of textures produced by this helper (linear rgba8).
@@ -100,15 +114,26 @@ private:
     class Compiled
     {
     public:
-        std::unique_ptr<erhe::graphics::Shader_stages>   shader_stages;
-        std::unique_ptr<erhe::graphics::Render_pipeline> pipeline;
-        std::vector<std::size_t>                         member_offsets; // parallel to the uniform list
-        std::size_t                                      ubo_bytes{0};
-        bool                                             has_ubo  {false};
-        bool                                             valid    {false};
+        std::unique_ptr<erhe::graphics::Shader_stages>    shader_stages;
+        std::unique_ptr<erhe::graphics::Render_pipeline>  pipeline;
+        // Per-composition layout, built only when the composition samples
+        // buffers (UBO at binding 0 + one combined_image_sampler per buffer).
+        // Null when the composition has no samplers - the shared m_ubo_layout /
+        // m_empty_layout is used instead.
+        std::unique_ptr<erhe::graphics::Bind_group_layout> sampler_layout;
+        std::vector<std::size_t>                          member_offsets; // parallel to the uniform list
+        std::vector<int>                                  sampler_binding_points; // parallel to sampler_decls
+        std::size_t                                       ubo_bytes{0};
+        bool                                              has_ubo     {false};
+        bool                                              has_samplers{false};
+        bool                                              valid       {false};
     };
 
-    [[nodiscard]] auto get_compiled(const std::string& fragment_body, const std::vector<erhe::texgen::Uniform>& uniforms) -> const Compiled*;
+    [[nodiscard]] auto get_compiled(
+        const std::string&                                fragment_body,
+        const std::vector<erhe::texgen::Uniform>&         uniforms,
+        const std::vector<erhe::texgen::Sampler_binding>& sampler_decls
+    ) -> const Compiled*;
     [[nodiscard]] auto make_target (int size) -> std::shared_ptr<erhe::graphics::Texture>;
 
     static constexpr std::size_t s_frame_ring = 4; // safely more than frames in flight

@@ -7,6 +7,7 @@
 #include "texture_graph/texture_graph_node_factory.hpp"
 #include "texture_graph/texture_graph_operations.hpp"
 #include "texture_graph/texture_renderer.hpp"
+#include "texture_graph/nodes/texture_descriptor_node.hpp"
 #include "texture_graph/nodes/texture_node_descriptors.hpp"
 
 #include "app_context.hpp"
@@ -111,8 +112,12 @@ void Texture_graph_window::render_dirty_products()
     }
 
     m_renderer->begin_frame();
-    for (const std::shared_ptr<Texture_graph_node>& node : m_nodes) {
-        if (node->preview_needs_render()) {
+    // Render in topological order (the graph is sorted by evaluate_if_dirty()),
+    // so a buffer node renders its texture before any downstream consumer that
+    // samples it - including a buffer feeding another buffer.
+    for (erhe::graph::Node* graph_node : m_graph.get_nodes()) {
+        Texture_graph_node* node = dynamic_cast<Texture_graph_node*>(graph_node);
+        if ((node != nullptr) && node->preview_needs_render()) {
             node->render_products(m_app_context, *m_renderer);
             node->clear_preview_needs_render();
         }
@@ -298,6 +303,21 @@ void Texture_graph_window::file_toolbar()
     ImGui::SameLine(); if (ImGui::Button("Save"))  { save_graph(std::filesystem::path{m_graph_path}); }
     ImGui::SameLine(); if (ImGui::Button("Load"))  { load_graph(std::filesystem::path{m_graph_path}); }
     ImGui::SameLine(); if (ImGui::Button("Clear")) { clear_graph(); }
+    ImGui::SameLine(); if (ImGui::Button("Reseed all")) { reseed_all(); }
+}
+
+void Texture_graph_window::reseed_all()
+{
+    // Give every seeded node a fresh pattern. Each node's reseed is an
+    // individually undoable parameter change (partial {"seed": value} update).
+    for (const std::shared_ptr<Texture_graph_node>& node : m_nodes) {
+        Texture_descriptor_node* descriptor_node = dynamic_cast<Texture_descriptor_node*>(node.get());
+        if ((descriptor_node != nullptr) && descriptor_node->is_seeded()) {
+            nlohmann::json parameters = nlohmann::json::object();
+            parameters["seed"] = texture_graph_next_reseed_value(node->get_id());
+            set_node_parameters(node, parameters);
+        }
+    }
 }
 
 namespace {
@@ -342,6 +362,9 @@ void Texture_graph_window::build_palette()
         const std::string label = descriptor->label.empty() ? descriptor->name : descriptor->label;
         category.entries.push_back(Palette_entry{.type_name = descriptor->name, .label = label});
     }
+    // The buffer node is a descriptor-less render-to-texture cut point.
+    find_or_add_category("Utility").entries.push_back(Palette_entry{.type_name = "buffer", .label = "Buffer"});
+
     // The sink nodes have no descriptor; list them in their own category last.
     find_or_add_category("Output").entries.push_back(Palette_entry{.type_name = "output",          .label = "Output"});
     find_or_add_category("Output").entries.push_back(Palette_entry{.type_name = "material_output", .label = "Material Output"});

@@ -282,6 +282,7 @@ NODE_SPECS = {
     "transform":           (["rgba"],                ["rgba"], {"scale_x": 1.0, "scale_y": 1.0, "repeat": False}),
     "brightness_contrast": (["rgba"],                ["rgba"], {"brightness": 0.0, "contrast": 1.0}),
     "normal_map":          (["f"],                   ["rgb"],  {"amount": 0.5, "size": 9}),
+    "blur":                (["rgba"],                ["rgba"], {"radius": 0.05}),
     "math":                (["f", "f"],              ["f"],    {"op": 0, "default_in1": 0.0, "default_in2": 0.0, "clamp": False}),
     "invert":              (["rgba"],                ["rgba"], {}),
     "quantize":            (["rgba"],                ["rgba"], {"steps": 4.0}),
@@ -291,6 +292,7 @@ NODE_SPECS = {
     "decompose":           (["rgba"],                ["f", "f", "f", "f"], {}),
     "swap_channels":       (["rgba"],                ["rgba"], {"out_r": 2, "out_g": 4, "out_b": 6, "out_a": 8}),
     "reroute":             (["rgba"],                ["rgba"], {}),
+    "buffer":              (["f", "rgb", "rgba"],    ["f", "rgb", "rgba"], {"size": 512, "pause": False}),
     "output":              (["f", "rgb", "rgba"],    [],       {"name": "Texture Graph", "size": 1024, "assign": False}),
     "material_output":     (["rgba", "rgb", "f", "rgba", "f", "rgba", "rgb", "rgba", "f", "rgba", "rgb", "rgba"],
                             [],       {"name": "Material", "size": 1024, "assign": True}),
@@ -944,6 +946,149 @@ def section_new_filters():
           f"min={min(reds)} max={max(reds)} mean={sum(reds) / len(reds):.1f}")
 
 
+def export_png_retry(node_id, path, size=16, output_slot=0, tries=25, delay=0.3):
+    """Export, retrying while a sampled buffer has not produced its texture yet.
+
+    A buffer renders its texture during the editor frame; the first export right
+    after wiring can race that first render. The renderer reports this as a
+    non-busy error, so retry it for a few seconds rather than failing."""
+    last = None
+    for _ in range(tries):
+        try:
+            return export_png(node_id, path, size=size, output_slot=output_slot)
+        except RuntimeError as error:
+            last = error
+            time.sleep(delay)
+    raise last
+
+
+def local_row_variation(w, h, ch, buf, channel=0):
+    """Sum of absolute horizontal neighbor differences on one channel - a proxy
+    for local high-frequency content (blur lowers it)."""
+    total = 0
+    for y in range(h):
+        row = y * w
+        for x in range(w - 1):
+            a = buf[(row + x) * ch + channel]
+            b = buf[(row + x + 1) * ch + channel]
+            total += abs(a - b)
+    return total
+
+
+def section_buffer():
+    """Phase 5 buffer node: an explicit render-to-texture cut point. A buffer
+    renders its input subtree once into a real texture; downstream nodes sample
+    that texture instead of re-inlining the subtree. Proven by (a) a buffer
+    faithfully reproducing a flat input color when sampled through a reroute, and
+    (b) one buffer feeding two consumers that both read the same result."""
+    S = "buffer"
+    TMP_DIR.mkdir(parents=True, exist_ok=True)
+    clear_graph()
+
+    # uniform -> buffer -> reroute : the reroute samples the buffer's texture
+    # (the compose DAG cuts at the buffer), so its export must match the uniform.
+    uni = add_node("uniform")["id"]
+    buf = add_node("buffer")["id"]
+    rer = add_node("reroute")["id"]
+    color = [0.3, 0.55, 0.8, 1.0]
+    set_param(uni, {"color": color})
+    check(S, "uniform -> buffer connects", connect(uni, 0, buf, 2))       # rgba -> rgba input
+    check(S, "buffer -> reroute connects", connect(buf, 2, rer, 0))       # rgba output -> reroute
+    get_graph()
+
+    rer_png = TMP_DIR / "buffer_reroute.png"
+    result = export_png_retry(rer, rer_png, size=16)
+    check(S, "reroute-over-buffer export returns dims",
+          isinstance(result, dict) and result.get("width") == 16, f"result={result}")
+    w, h, ch, rbuf = decode_png(rer_png)
+    rc = pixel(w, ch, rbuf, 8, 8)
+    expected = [round(c * 255) for c in color]
+    match = all(abs(rc[i] - expected[i]) <= 5 for i in range(4))
+    check(S, "buffer faithfully reproduces its input color (sampled downstream)", match,
+          f"pixel={rc} expected={expected}")
+
+    # One buffer feeding two consumers: both reroutes must read the same texture.
+    rer2 = add_node("reroute")["id"]
+    check(S, "buffer -> second reroute connects", connect(buf, 2, rer2, 0))
+    get_graph()
+    rer2_png = TMP_DIR / "buffer_reroute2.png"
+    export_png_retry(rer2, rer2_png, size=16)
+    _, _, _, rbuf2 = decode_png(rer2_png)
+    c2 = pixel(w, ch, rbuf2, 8, 8)
+    same = all(abs(c2[i] - rc[i]) <= 2 for i in range(4))
+    check(S, "buffer feeding two consumers yields the same result", same, f"a={rc} b={c2}")
+
+    # A buffer whose input is disconnected must not crash export (no texture yet).
+    clear_graph()
+    lonely_buf = add_node("buffer")["id"]
+    lonely_rer = add_node("reroute")["id"]
+    connect(lonely_buf, 2, lonely_rer, 0)
+    get_graph()
+    err = call_expect_error("texture_graph_export_png",
+                            {"node_id": lonely_rer, "path": str(TMP_DIR / "buffer_lonely.png"), "size": 8})
+    check(S, "export of reroute over an unfed buffer errors cleanly (no crash)", err is not None, f"err={err}")
+
+
+def section_blur():
+    """Phase 5 buffer-dependent filter: a Gaussian blur multiply-samples its
+    input. Fed through a buffer it becomes cheap texture taps. Proven by the
+    blurred noise having markedly less local (neighbor) variation than the
+    unblurred noise at the same resolution."""
+    S = "blur"
+    TMP_DIR.mkdir(parents=True, exist_ok=True)
+    clear_graph()
+
+    # perlin -> buffer -> blur ; also export the raw perlin for comparison.
+    perlin = add_node("perlin")["id"]
+    buf    = add_node("buffer")["id"]
+    blur   = add_node("blur")["id"]
+    set_param(perlin, {"scale_x": 8.0, "scale_y": 8.0, "iterations": 4.0})
+    set_param(blur,   {"radius": 0.15})
+    check(S, "perlin -> buffer connects", connect(perlin, 0, buf, 0))     # f -> f input
+    check(S, "buffer -> blur connects",   connect(buf, 2, blur, 0))       # rgba output -> blur rgba input
+    get_graph()
+
+    size = 64
+    blur_png  = TMP_DIR / "blur_blurred.png"
+    noise_png = TMP_DIR / "blur_noise.png"
+    result = export_png_retry(blur, blur_png, size=size)
+    check(S, "blur export returns dims", isinstance(result, dict) and result.get("width") == size, f"result={result}")
+    export_png(perlin, noise_png, size=size)
+
+    wb, hb, chb, bbuf = decode_png(blur_png)
+    wn, hn, chn, nbuf = decode_png(noise_png)
+    blurred_var = local_row_variation(wb, hb, chb, bbuf)
+    noise_var   = local_row_variation(wn, hn, chn, nbuf)
+    check(S, "blurred result varies less locally than the unblurred noise",
+          blurred_var < (noise_var * 0.6),
+          f"blurred_var={blurred_var} noise_var={noise_var}")
+    # The blur output is not a flat constant (it still contains the low frequencies).
+    reds = [bbuf[(i * chb)] for i in range(wb * hb)]
+    check(S, "blurred result is not flat", (max(reds) - min(reds)) > 4, f"min={min(reds)} max={max(reds)}")
+
+
+def section_reseed():
+    """Reseed: changing a seeded generator's seed uniform changes its output
+    pattern (the mechanism behind the per-node Reseed button and 'Reseed all')."""
+    S = "reseed"
+    TMP_DIR.mkdir(parents=True, exist_ok=True)
+    clear_graph()
+
+    perlin = add_node("perlin")["id"]
+    set_param(perlin, {"scale_x": 6.0, "scale_y": 6.0, "seed": 0.0})
+    a_png = TMP_DIR / "reseed_a.png"
+    export_png(perlin, a_png, size=48)
+    set_param(perlin, {"seed": 137.5})
+    b_png = TMP_DIR / "reseed_b.png"
+    export_png(perlin, b_png, size=48)
+
+    wa, ha, cha, abuf = decode_png(a_png)
+    wb, hb, chb, bbuf = decode_png(b_png)
+    changed = sum(1 for i in range(wa * ha) if abs(abuf[i * cha] - bbuf[i * chb]) > 8)
+    check(S, "reseed changes the seeded generator's output pixels", changed > (wa * ha) // 10,
+          f"changed={changed} of {wa * ha}")
+
+
 def section_material_output():
     """PBR Material Output node (Phase 6): bake connected channels to textures,
     pack occlusion/roughness/metallic into one glTF ORM texture, assemble an
@@ -1077,6 +1222,9 @@ def main():
         section_gradient_curve,
         section_multi_output_decompose,
         section_new_filters,
+        section_buffer,
+        section_blur,
+        section_reseed,
         section_output_node,
         section_material_output,
     ]

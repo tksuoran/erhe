@@ -24,6 +24,17 @@ namespace editor {
 
 class Texture_graph_node;
 
+// One buffer cut point discovered while building the DAG: a buffer node whose
+// already-rendered texture is bound at `binding` and sampled (as "tex_<binding>")
+// by the composed shader instead of the buffer's input subtree being inlined.
+// The caller resolves buffer_node's rendered texture at render time.
+class Texture_sampler_source
+{
+public:
+    int                 binding    {0};
+    Texture_graph_node* buffer_node{nullptr};
+};
+
 // Result of assembling an editor texture graph subtree into an
 // erhe::texgen::Compose_node DAG. Owns every Compose_node created for the
 // composition; the whole result must outlive any Composer::compose() call that
@@ -41,6 +52,10 @@ public:
     std::vector<std::unique_ptr<erhe::texgen::Compose_node>> nodes;   // owns all compose nodes
     erhe::texgen::Compose_node*                              sink{nullptr};
     std::size_t                                             sink_output_index{0};
+    // Buffer nodes reached during the walk (one entry per buffer, deduplicated);
+    // each contributes a sampler2D binding the renderer must fill with the
+    // buffer's rendered texture.
+    std::vector<Texture_sampler_source>                     sampler_sources;
     bool                                                   ok{false};
 };
 

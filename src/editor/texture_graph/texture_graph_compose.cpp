@@ -6,8 +6,10 @@
 #include "erhe_texgen/node_descriptor.hpp"
 
 #include <algorithm>
+#include <map>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 
 namespace editor {
 
@@ -41,8 +43,6 @@ public:
     {
     }
 
-    // Returns the Compose_node for node (creating it on first visit), or nullptr
-    // when node has no descriptor or a cycle was hit.
     // Creates a synthetic combiner Compose_node from descriptor (sharing this
     // builder's id space) and wires each of its inputs to the corresponding
     // channel root's source subtree. A null root leaves that input unconnected.
@@ -61,14 +61,61 @@ public:
             if (root.source_node == nullptr) {
                 continue; // unconnected - the combiner input's default expression is used
             }
-            erhe::texgen::Compose_node* source = build(*root.source_node);
-            if (source != nullptr) {
-                combiner->set_input(i, source, root.output_index);
-            }
+            bind_input(*combiner, i, root);
         }
         return combiner;
     }
 
+    // Wires the sink's input `input_index` to the source described by `source`.
+    // A buffer source becomes a sampler-source leaf (its texture is sampled, its
+    // input subtree is not inlined); any other source is composed recursively.
+    void bind_input(erhe::texgen::Compose_node& sink, std::size_t input_index, const Texture_payload& source)
+    {
+        if (source.source_node->is_buffer()) {
+            erhe::texgen::Compose_node* sampler_source =
+                get_sampler_source(*source.source_node, source.output_index, source.value_type);
+            sink.set_input(input_index, sampler_source, 0);
+            return;
+        }
+        erhe::texgen::Compose_node* source_compose = build(*source.source_node);
+        if (source_compose != nullptr) {
+            sink.set_input(input_index, source_compose, source.output_index);
+        }
+    }
+
+    // Sampler-source leaf for a buffer node: one sampler binding per buffer
+    // (shared across the buffer's output slots), one Compose_node per
+    // (buffer, output slot) so each slot samples with its own value type.
+    auto get_sampler_source(
+        Texture_graph_node&      buffer,
+        std::size_t              output_index,
+        erhe::texgen::Value_type type
+    ) -> erhe::texgen::Compose_node*
+    {
+        int binding;
+        const auto binding_it = m_buffer_binding.find(&buffer);
+        if (binding_it == m_buffer_binding.end()) {
+            binding = m_next_binding++;
+            m_buffer_binding.emplace(&buffer, binding);
+            m_dag.sampler_sources.push_back(Texture_sampler_source{.binding = binding, .buffer_node = &buffer});
+        } else {
+            binding = binding_it->second;
+        }
+        const std::pair<Texture_graph_node*, std::size_t> key{&buffer, output_index};
+        const auto slot_it = m_sampler_by_slot.find(key);
+        if (slot_it != m_sampler_by_slot.end()) {
+            return slot_it->second;
+        }
+        std::unique_ptr<erhe::texgen::Compose_node> owned =
+            std::make_unique<erhe::texgen::Compose_node>(m_next_id++, binding, type);
+        erhe::texgen::Compose_node* sampler_source = owned.get();
+        m_dag.nodes.push_back(std::move(owned));
+        m_sampler_by_slot.emplace(key, sampler_source);
+        return sampler_source;
+    }
+
+    // Returns the Compose_node for a (non-buffer) node, creating it on first
+    // visit, or nullptr when node has no descriptor or a cycle was hit.
     auto build(Texture_graph_node& node) -> erhe::texgen::Compose_node*
     {
         const auto existing = m_by_node.find(&node);
@@ -96,10 +143,7 @@ public:
             if (source.source_node == nullptr) {
                 continue; // unconnected - descriptor default expression is used
             }
-            erhe::texgen::Compose_node* source_compose = build(*source.source_node);
-            if (source_compose != nullptr) {
-                compose_node->set_input(input_index, source_compose, source.output_index);
-            }
+            bind_input(*compose_node, input_index, source);
         }
 
         m_visiting.erase(&node);
@@ -107,10 +151,13 @@ public:
     }
 
 private:
-    Texture_compose_dag&                                             m_dag;
+    Texture_compose_dag&                                                m_dag;
     std::unordered_map<Texture_graph_node*, erhe::texgen::Compose_node*> m_by_node;
-    std::unordered_set<Texture_graph_node*>                          m_visiting;
-    int                                                              m_next_id{1};
+    std::unordered_set<Texture_graph_node*>                             m_visiting;
+    std::unordered_map<Texture_graph_node*, int>                       m_buffer_binding;   // buffer node -> sampler binding
+    std::map<std::pair<Texture_graph_node*, std::size_t>, erhe::texgen::Compose_node*> m_sampler_by_slot;
+    int                                                                m_next_id{1};
+    int                                                                m_next_binding{0};
 };
 
 } // namespace
@@ -119,13 +166,21 @@ auto build_texture_compose_dag(Texture_graph_node& sink_node, const std::size_t 
 {
     Texture_compose_dag dag{};
     Dag_builder builder{dag};
-    erhe::texgen::Compose_node* sink = builder.build(sink_node);
+    erhe::texgen::Compose_node* sink = nullptr;
+    if (sink_node.is_buffer()) {
+        // Rendering / exporting a buffer node itself: sample its own texture
+        // rather than re-inlining its input subtree. The buffer's own texture
+        // is produced by its render_products() each dirty pass.
+        sink = builder.get_sampler_source(sink_node, output_index, sink_node.get_output(output_index).value_type);
+    } else {
+        sink = builder.build(sink_node);
+    }
     if (sink == nullptr) {
         dag.ok = false;
         return dag;
     }
     dag.sink              = sink;
-    dag.sink_output_index = output_index;
+    dag.sink_output_index = (sink->is_sampler_source() ? 0 : output_index);
     dag.ok                = true;
     return dag;
 }

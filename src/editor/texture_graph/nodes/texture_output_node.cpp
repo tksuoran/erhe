@@ -103,25 +103,9 @@ void Texture_output_node::render_products(App_context& context, Texture_renderer
     }
 
     const Texture_compose_dag dag = build_texture_compose_dag(*source.source_node, source.output_index);
-    if (!dag.ok || (dag.sink == nullptr)) {
-        return;
-    }
-    const erhe::texgen::Composer   composer{texture_graph_compose_options()};
-    const erhe::texgen::Shader_code shader_code = composer.compose(*dag.sink, dag.sink_output_index);
-    const std::string               fragment    = composer.assemble_fragment(shader_code);
-    if (fragment.find("(error:") != std::string::npos) {
-        return; // keep the previous texture
-    }
-
-    const bool ok = renderer.render_into(
-        *context.current_command_buffer,
-        get_preview_texture_ref(),
-        render_target_size(),
-        fragment,
-        shader_code.get_uniforms()
-    );
+    const bool ok = render_dag(context, renderer, dag, get_preview_texture_ref(), render_target_size());
     if (!ok) {
-        return;
+        return; // compose error / buffer texture not ready - keep the previous texture
     }
 
     register_texture();

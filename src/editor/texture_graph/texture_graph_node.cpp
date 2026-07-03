@@ -178,34 +178,59 @@ auto Texture_graph_node::render_target_size() const -> int
     return 128;
 }
 
+auto Texture_graph_node::render_dag(
+    App_context&                              context,
+    Texture_renderer&                         renderer,
+    const Texture_compose_dag&                dag,
+    std::shared_ptr<erhe::graphics::Texture>& target,
+    const int                                 size
+) -> bool
+{
+    if (!dag.ok || (dag.sink == nullptr) || (context.current_command_buffer == nullptr)) {
+        return false;
+    }
+    const erhe::texgen::Composer    composer{texture_graph_compose_options()};
+    const erhe::texgen::Shader_code shader_code = composer.compose(*dag.sink, dag.sink_output_index);
+    const std::string               fragment    = composer.assemble_fragment(shader_code);
+    if (fragment.find("(error:") != std::string::npos) {
+        return false; // composition failed (cycle / depth) - keep the previous texture
+    }
+    // Resolve each buffer cut point to its rendered texture. This only allocates
+    // when the composition samples buffers (not steady state, and only on dirty
+    // nodes), so it stays off the hot path.
+    std::vector<Texture_sample_binding> sampler_bindings;
+    sampler_bindings.reserve(dag.sampler_sources.size());
+    for (const Texture_sampler_source& sampler_source : dag.sampler_sources) {
+        Texture_sample_binding binding{};
+        binding.binding = sampler_source.binding;
+        binding.name    = std::string{"tex_"} + std::to_string(sampler_source.binding);
+        binding.texture = sampler_source.buffer_node->get_preview_texture().get();
+        sampler_bindings.push_back(binding);
+    }
+    return renderer.render_into(
+        *context.current_command_buffer,
+        target,
+        size,
+        fragment,
+        shader_code.get_uniforms(),
+        shader_code.get_samplers(),
+        sampler_bindings
+    );
+}
+
 void Texture_graph_node::render_products(App_context& context, Texture_renderer& renderer)
 {
     const int output_index = preview_output_index();
     if ((descriptor() == nullptr) || (output_index < 0)) {
         return;
     }
-    if (context.current_command_buffer == nullptr) {
-        return;
-    }
     const Texture_compose_dag dag = build_texture_compose_dag(*this, static_cast<std::size_t>(output_index));
-    if (!dag.ok || (dag.sink == nullptr)) {
-        return;
-    }
-    const erhe::texgen::Composer   composer{texture_graph_compose_options()};
-    const erhe::texgen::Shader_code shader_code = composer.compose(*dag.sink, dag.sink_output_index);
-    const std::string               fragment    = composer.assemble_fragment(shader_code);
-    if (fragment.find("(error:") != std::string::npos) {
-        return; // composition failed (cycle / depth) - keep the previous texture
-    }
-    static_cast<void>(
-        renderer.render_into(
-            *context.current_command_buffer,
-            m_preview_texture,
-            render_target_size(),
-            fragment,
-            shader_code.get_uniforms()
-        )
-    );
+    static_cast<void>(render_dag(context, renderer, dag, m_preview_texture, render_target_size()));
+}
+
+auto Texture_graph_node::is_buffer() const -> bool
+{
+    return false;
 }
 
 void Texture_graph_node::evaluate(Texture_graph&)

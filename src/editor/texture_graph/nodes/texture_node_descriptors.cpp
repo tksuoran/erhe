@@ -1106,6 +1106,45 @@ auto build_swap_channels() -> Node_descriptor
 // Phase 4b utility
 // ---------------------------------------------------------------------------
 
+// Gaussian Blur - a buffer-dependent filter (doc/texture-graph-plan.md Phase 5),
+// concept ported from Material Maker gaussian_blur_x.mmg (MIT). Material Maker's
+// node is a separable X/Y pair wrapped around buffers; this is a self-contained
+// single-node 2D Gaussian: the rgba input is a FUNCTION-form input (function =
+// true), sampled at a (2R+1)x(2R+1) kernel of texel offsets weighted by a
+// Gaussian. Because it samples its input dozens of times, feeding it through a
+// Buffer node makes each tap a cheap texture fetch instead of re-inlining the
+// whole upstream subtree per tap; without a buffer it still composes and renders
+// correctly, just expensively. The loop bound is the (clamped) integer radius,
+// so a live radius edit only updates the uniform where the count is unchanged.
+auto build_blur() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "blur";
+    d.label    = "Gaussian Blur";
+    d.category = "Filters";
+    add_input(d, "in", Value_type::rgba, "vec4($uv, 0.0, 1.0)", true);
+    add_float(d, "radius", "Radius", 0.05f, 0.0f, 0.5f, 0.005f); // blur radius in uv (image fraction)
+    // Fixed (2K+1)x(2K+1) tap grid spanning [-radius, radius] in uv, Gaussian
+    // weighted (sigma = radius/2). K is a compile-time constant so the loops
+    // unroll and a live radius edit only re-uploads the uniform (no recompile).
+    d.code =
+        "const int $(name_uv)_K = 6;\n"
+        "float $(name_uv)_step  = $radius / float($(name_uv)_K);\n"
+        "float $(name_uv)_sigma = max(1.0e-4, $radius * 0.5);\n"
+        "vec4  $(name_uv)_sum   = vec4(0.0);\n"
+        "float $(name_uv)_wsum  = 0.0;\n"
+        "for (int $(name_uv)_y = -$(name_uv)_K; $(name_uv)_y <= $(name_uv)_K; ++$(name_uv)_y) {\n"
+        "    for (int $(name_uv)_x = -$(name_uv)_K; $(name_uv)_x <= $(name_uv)_K; ++$(name_uv)_x) {\n"
+        "        vec2  $(name_uv)_o = vec2(float($(name_uv)_x), float($(name_uv)_y)) * $(name_uv)_step;\n"
+        "        float $(name_uv)_c = exp(-0.5*dot($(name_uv)_o, $(name_uv)_o)/($(name_uv)_sigma*$(name_uv)_sigma));\n"
+        "        $(name_uv)_sum  += $in($uv + $(name_uv)_o) * $(name_uv)_c;\n"
+        "        $(name_uv)_wsum += $(name_uv)_c;\n"
+        "    }\n"
+        "}\n";
+    add_output(d, Value_type::rgba, "$(name_uv)_sum / max($(name_uv)_wsum, 1.0e-4)");
+    return d;
+}
+
 // Reroute - a pass-through node (one rgba input, one rgba output) for tidying
 // graph wiring. Mirrors Material Maker's reroute node concept; the identity
 // output lets the composer share the source expression (no extra work).
@@ -1149,6 +1188,7 @@ struct Descriptor_registry
         descriptors.push_back(build_transform());
         descriptors.push_back(build_brightness_contrast());
         descriptors.push_back(build_normal_map());
+        descriptors.push_back(build_blur());
         descriptors.push_back(build_math());
         descriptors.push_back(build_invert());
         descriptors.push_back(build_quantize());

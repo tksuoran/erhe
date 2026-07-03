@@ -92,6 +92,10 @@ public:
     auto load_graph (const std::filesystem::path& path) -> bool;
     void clear_graph();
 
+    // Assigns every seeded node a fresh deterministic seed (each an individually
+    // undoable parameter change). Bound to the toolbar "Reseed all" button.
+    void reseed_all();
+
     // Non-undoable primitives (also used by future graph operations / load).
     void insert_node    (const std::shared_ptr<Texture_graph_node>& node);
     void erase_node     (const std::shared_ptr<Texture_graph_node>& node);

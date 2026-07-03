@@ -5983,6 +5983,22 @@ namespace {
     return Texture_compose_dag{};
 }
 
+// Resolves each buffer cut point in the DAG to its already-rendered texture, so
+// an export that samples buffers binds the same textures the editor produced.
+[[nodiscard]] auto gather_texture_sample_bindings(const Texture_compose_dag& dag) -> std::vector<Texture_sample_binding>
+{
+    std::vector<Texture_sample_binding> bindings;
+    bindings.reserve(dag.sampler_sources.size());
+    for (const Texture_sampler_source& sampler_source : dag.sampler_sources) {
+        Texture_sample_binding binding{};
+        binding.binding = sampler_source.binding;
+        binding.name    = std::string{"tex_"} + std::to_string(sampler_source.binding);
+        binding.texture = sampler_source.buffer_node->get_preview_texture().get();
+        bindings.push_back(binding);
+    }
+    return bindings;
+}
+
 [[nodiscard]] auto texture_graph_node_json(Texture_graph_window& window, Texture_graph_node& node) -> json
 {
     json inputs = json::array();
@@ -6267,9 +6283,10 @@ auto Mcp_server::action_texture_graph_export_png(const json& args) -> std::strin
         return make_error_content("Texture renderer not available");
     }
 
+    const std::vector<Texture_sample_binding> sampler_bindings = gather_texture_sample_bindings(dag);
     std::vector<std::uint8_t> pixels;
-    if (!renderer->render_and_read_rgba8(size, fragment, shader_code.get_uniforms(), pixels)) {
-        return make_error_content("Render / readback failed (shader compile error?)");
+    if (!renderer->render_and_read_rgba8(size, fragment, shader_code.get_uniforms(), pixels, shader_code.get_samplers(), sampler_bindings)) {
+        return make_error_content("Render / readback failed (shader compile error, or a sampled buffer has not rendered yet)");
     }
 
     std::unique_ptr<erhe::graphics::Image_writer> writer = erhe::graphics::Image_writer::create();

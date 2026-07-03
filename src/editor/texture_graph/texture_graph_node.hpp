@@ -22,6 +22,7 @@ namespace erhe::texgen {
 namespace editor {
 
 class App_context;
+class Texture_compose_dag;
 class Texture_graph;
 class Texture_renderer;
 
@@ -136,6 +137,11 @@ public:
     [[nodiscard]] virtual auto descriptor() const -> const erhe::texgen::Node_descriptor*;
     virtual void configure(erhe::texgen::Compose_node& compose_node) const;
 
+    // True for a Phase 5 buffer node - an explicit render-to-texture cut point.
+    // The compose DAG walk stops at a buffer (it is sampled, not inlined); the
+    // buffer renders its own input subtree into its texture each dirty pass.
+    [[nodiscard]] virtual auto is_buffer() const -> bool;
+
     // Called when the node leaves the graph (deletion, undo of add, graph
     // clear / load). Side effects outside the graph (e.g. a sink node's
     // preview / output textures) must be released here rather than in the
@@ -159,6 +165,21 @@ public:
     void set_committed_parameters(const std::string& parameters);
 
 protected:
+    // Composes `dag` (its sink), binds every buffer texture the composition
+    // samples (from dag.sampler_sources), and renders the result into `target`
+    // at `size`. Returns render_into's success. Shared by the base preview, the
+    // output/material bake, and the buffer node's own render, so buffer sampler
+    // binding is wired in exactly one place. A no-op (returns false, keeping the
+    // previous texture) when the DAG is empty, the composition errors, or a
+    // sampled buffer has not produced its texture yet.
+    [[nodiscard]] auto render_dag(
+        App_context&                              context,
+        Texture_renderer&                         renderer,
+        const Texture_compose_dag&                dag,
+        std::shared_ptr<erhe::graphics::Texture>& target,
+        int                                       size
+    ) -> bool;
+
     // Creates one input pin per descriptor input and one output pin per
     // descriptor output, keyed by each endpoint's Value_type. Keeps the editor
     // node's pins in lockstep with the descriptor.

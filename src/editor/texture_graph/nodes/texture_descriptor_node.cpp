@@ -7,9 +7,24 @@
 #include <imgui/imgui.h>
 #include <nlohmann/json.hpp>
 
+#include <cstdint>
 #include <vector>
 
 namespace editor {
+
+// Deterministic reseed source: a monotonic counter mixed with the node id gives
+// a fresh, visibly different pattern on each click without touching the C++ RNG
+// (per the environment's determinism rule). The result lands in [0, 1000).
+auto texture_graph_next_reseed_value(const std::size_t node_id) -> float
+{
+    static std::uint32_t s_counter = 0; // UI runs single-threaded, so no atomics
+    ++s_counter;
+    std::uint32_t h = (s_counter * 2654435761u) ^ (static_cast<std::uint32_t>(node_id) * 40503u);
+    h ^= h >> 15;
+    h *= 0x2c1b3c6du;
+    h ^= h >> 12;
+    return static_cast<float>(h % 100000u) * 0.01f;
+}
 
 Texture_descriptor_node::Texture_descriptor_node(const erhe::texgen::Node_descriptor& descriptor)
     : Texture_graph_node{descriptor.label.c_str()}
@@ -144,12 +159,24 @@ void Texture_descriptor_node::imgui()
         if (ImGui::DragFloat("##seed", &m_seed, 1.0f)) {
             mark_dirty();
         }
+        ImGui::SameLine();
+        if (ImGui::Button("Reseed")) {
+            // A new pseudo-random seed; the parameter-edit gesture in
+            // node_editor() turns this dirty flag into an undoable operation.
+            m_seed = texture_graph_next_reseed_value(get_id());
+            mark_dirty();
+        }
     }
 }
 
 auto Texture_descriptor_node::descriptor() const -> const erhe::texgen::Node_descriptor*
 {
     return &m_descriptor;
+}
+
+auto Texture_descriptor_node::is_seeded() const -> bool
+{
+    return m_descriptor.uses_seed();
 }
 
 void Texture_descriptor_node::configure(erhe::texgen::Compose_node& compose_node) const

@@ -12,6 +12,11 @@ namespace erhe::texgen {
 
 namespace editor {
 
+// Deterministic reseed value for a node id (monotonic counter mixed with the
+// id; no C++ RNG, per the environment's determinism rule). Shared by the
+// per-node Reseed button and the window's graph-level "Reseed all".
+[[nodiscard]] auto texture_graph_next_reseed_value(std::size_t node_id) -> float;
+
 // Generic texture graph node driven entirely by an erhe::texgen::Node_descriptor.
 //
 // Decision 4 in doc/texture-graph-plan.md: "Nodes are data - one generic node
@@ -42,6 +47,10 @@ public:
     void configure(erhe::texgen::Compose_node& compose_node) const override;
     void write_parameters(nlohmann::json& out) const override;
     void read_parameters (const nlohmann::json& in) override;
+
+    // True when this node's descriptor uses a per-node seed (a Reseed button is
+    // shown and the graph-level "Reseed all" targets it).
+    [[nodiscard]] auto is_seeded() const -> bool;
 
 private:
     const erhe::texgen::Node_descriptor&         m_descriptor;

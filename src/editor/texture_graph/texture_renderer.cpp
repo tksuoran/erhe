@@ -126,8 +126,9 @@ auto Texture_renderer::make_target(const int size) -> std::shared_ptr<erhe::grap
 }
 
 auto Texture_renderer::get_compiled(
-    const std::string&                        fragment_body,
-    const std::vector<erhe::texgen::Uniform>& uniforms
+    const std::string&                                fragment_body,
+    const std::vector<erhe::texgen::Uniform>&         uniforms,
+    const std::vector<erhe::texgen::Sampler_binding>& sampler_decls
 ) -> const Compiled*
 {
     const std::size_t hash = std::hash<std::string>{}(fragment_body);
@@ -137,10 +138,54 @@ auto Texture_renderer::get_compiled(
     }
 
     Compiled compiled{};
-    compiled.has_ubo = !uniforms.empty();
+    compiled.has_ubo      = !uniforms.empty();
+    compiled.has_samplers = !sampler_decls.empty();
 
     const std::string full_fragment_source = std::string{c_fragment_varying} + fragment_body;
-    const erhe::graphics::Bind_group_layout& layout = compiled.has_ubo ? *m_ubo_layout : *m_empty_layout;
+
+    // Pick / build the bind group layout. When the composition samples buffers,
+    // build a dedicated layout (UBO at binding 0, if any, plus one
+    // combined_image_sampler per buffer); otherwise reuse the shared UBO / empty
+    // layout. The sampler declarations (layout(binding=...) uniform sampler2D
+    // tex_N;) are synthesized by erhe from these bindings, so the fragment body
+    // must only reference tex_N, never declare it (see composer none mode).
+    if (compiled.has_samplers) {
+        std::vector<erhe::graphics::Bind_group_layout_binding> bindings;
+        if (compiled.has_ubo) {
+            bindings.push_back(
+                erhe::graphics::Bind_group_layout_binding{
+                    .binding_point = 0u,
+                    .type          = erhe::graphics::Binding_type::uniform_buffer,
+                    .stage_flags   = erhe::graphics::Shader_stage_flags::fragment
+                }
+            );
+        }
+        for (const erhe::texgen::Sampler_binding& sampler : sampler_decls) {
+            compiled.sampler_binding_points.push_back(sampler.binding);
+            bindings.push_back(
+                erhe::graphics::Bind_group_layout_binding{
+                    .binding_point   = static_cast<uint32_t>(sampler.binding),
+                    .type            = erhe::graphics::Binding_type::combined_image_sampler,
+                    .sampler_aspect  = erhe::graphics::Sampler_aspect::color,
+                    .name            = std::string_view{sampler.name},
+                    .glsl_type       = erhe::graphics::Glsl_type::sampler_2d,
+                    .is_texture_heap = false,
+                    .stage_flags     = erhe::graphics::Shader_stage_flags::fragment
+                }
+            );
+        }
+        compiled.sampler_layout = std::make_unique<erhe::graphics::Bind_group_layout>(
+            m_device,
+            erhe::graphics::Bind_group_layout_create_info{
+                .bindings          = std::move(bindings),
+                .debug_label       = erhe::utility::Debug_label{"texture graph ubo+sampler layout"},
+                .uses_texture_heap = false
+            }
+        );
+    }
+    const erhe::graphics::Bind_group_layout& layout =
+        compiled.has_samplers ? *compiled.sampler_layout
+                              : (compiled.has_ubo ? *m_ubo_layout : *m_empty_layout);
 
     // Build the std140 UBO block "params" from the ordered uniform list (only
     // when the composition actually has uniforms).
@@ -217,20 +262,41 @@ auto Texture_renderer::get_compiled(
 }
 
 auto Texture_renderer::render_into(
-    erhe::graphics::Command_buffer&           command_buffer,
-    std::shared_ptr<erhe::graphics::Texture>& target,
-    const int                                 size,
-    const std::string&                        fragment_body,
-    const std::vector<erhe::texgen::Uniform>& uniforms
+    erhe::graphics::Command_buffer&                   command_buffer,
+    std::shared_ptr<erhe::graphics::Texture>&         target,
+    const int                                         size,
+    const std::string&                                fragment_body,
+    const std::vector<erhe::texgen::Uniform>&         uniforms,
+    const std::vector<erhe::texgen::Sampler_binding>& sampler_decls,
+    const std::vector<Texture_sample_binding>&        sampler_bindings
 ) -> bool
 {
     if (!command_buffer.is_recording()) {
         return false; // window hidden / no swapchain image this frame
     }
 
-    const Compiled* compiled = get_compiled(fragment_body, uniforms);
+    const Compiled* compiled = get_compiled(fragment_body, uniforms, sampler_decls);
     if ((compiled == nullptr) || !compiled->valid) {
         return false; // compile failure - keep previous texture
+    }
+
+    // Resolve every declared sampler to a texture before opening the render
+    // pass. A buffer that has not produced its texture yet (first frame after a
+    // structural edit) makes the whole draw a no-op, keeping the previous good
+    // target rather than binding an incomplete descriptor set.
+    if (compiled->has_samplers) {
+        for (const int binding_point : compiled->sampler_binding_points) {
+            bool found = false;
+            for (const Texture_sample_binding& sampler_binding : sampler_bindings) {
+                if ((sampler_binding.binding == binding_point) && (sampler_binding.texture != nullptr)) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                return false;
+            }
+        }
     }
 
     const int clamped = std::max(1, size);
@@ -241,7 +307,9 @@ auto Texture_renderer::render_into(
         command_buffer.transition_texture_layout(*target, erhe::graphics::Image_layout::shader_read_only_optimal);
     }
 
-    const erhe::graphics::Bind_group_layout& layout = compiled->has_ubo ? *m_ubo_layout : *m_empty_layout;
+    const erhe::graphics::Bind_group_layout& layout =
+        compiled->has_samplers ? *compiled->sampler_layout
+                               : (compiled->has_ubo ? *m_ubo_layout : *m_empty_layout);
 
     // Upload the live uniform values into a fresh per-render UBO buffer, kept
     // alive until this frame-in-flight slot is recycled.
@@ -297,15 +365,31 @@ auto Texture_renderer::render_into(
     if (ubo) {
         encoder.set_buffer(erhe::graphics::Buffer_target::uniform, ubo.get(), 0, compiled->ubo_bytes, 0);
     }
+    // Bind each buffer texture at the sampler binding the composition assigned
+    // it. set_sampled_image's binding_point is the same user-facing index in
+    // the layout, in the sampler namespace (independent of the UBO at 0). Every
+    // binding is guaranteed resolvable (checked before the render pass opened).
+    if (compiled->has_samplers) {
+        for (const int binding_point : compiled->sampler_binding_points) {
+            for (const Texture_sample_binding& sampler_binding : sampler_bindings) {
+                if (sampler_binding.binding == binding_point) {
+                    encoder.set_sampled_image(static_cast<uint32_t>(binding_point), *sampler_binding.texture, *m_sampler);
+                    break;
+                }
+            }
+        }
+    }
     encoder.draw_primitives(erhe::graphics::Primitive_type::triangle, 0, 3);
     return true;
 }
 
 auto Texture_renderer::render_and_read_rgba8(
-    const int                                 size,
-    const std::string&                        fragment_body,
-    const std::vector<erhe::texgen::Uniform>& uniforms,
-    std::vector<std::uint8_t>&                out_pixels
+    const int                                         size,
+    const std::string&                                fragment_body,
+    const std::vector<erhe::texgen::Uniform>&         uniforms,
+    std::vector<std::uint8_t>&                        out_pixels,
+    const std::vector<erhe::texgen::Sampler_binding>& sampler_decls,
+    const std::vector<Texture_sample_binding>&        sampler_bindings
 ) -> bool
 {
     const int         clamped       = std::max(1, size);
@@ -343,7 +427,7 @@ auto Texture_renderer::render_and_read_rgba8(
     // Passing a null target makes render_into create a fresh texture (with
     // transfer_src usage) and transition it out of UNDEFINED.
     std::shared_ptr<erhe::graphics::Texture> target;
-    const bool rendered = render_into(command_buffer, target, clamped, fragment_body, uniforms);
+    const bool rendered = render_into(command_buffer, target, clamped, fragment_body, uniforms, sampler_decls, sampler_bindings);
     if (!rendered || !target) {
         command_buffer.end();
         return false; // compile failure - nothing rendered
