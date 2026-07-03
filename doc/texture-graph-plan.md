@@ -34,7 +34,8 @@ carry an attribution comment).
 | Phase 3 step 4: serialization + undo/redo                   | DONE    | bfae3ae5 |
 | Phase 3 step 5: MCP tools (get/add/connect/.../export_png)   | DONE    | bcb5520a |
 | Phase 3 step 6: headless smoke test script (124 checks)      | DONE    | 40c86afb |
-| Phase 4: node library expansion + gradient/curve widgets    | planned | -      |
+| Phase 4a: gradient + curve widgets, real Colorize, Curve    | DONE    | a0c5e873, af08c98f |
+| Phase 4b: node library expansion + searchable palette       | planned | -      |
 | Phase 5: buffer nodes, async compile, seeds/variations      | planned | -      |
 | Phase 6: PBR material output, multi-channel bake, PNG export| planned | -      |
 
