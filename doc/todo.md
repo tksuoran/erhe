@@ -136,3 +136,26 @@ Fix sketch:
   backend migrates to dynamic rendering.
 
 See `doc/vulkan_backend.md` ("Features enabled but not used by the backend").
+
+## Raster occlusion culling (idea)
+
+Depth-buffer-based occlusion culling sketch (moved here from the former
+`doc/notes.md` scratch file):
+
+1. Render the list of visible objects.
+2. Rasterize the bounding volumes for all objects against the depth buffer
+   generated in step 1.
+3. In the fragment shader, add `layout(early_fragment_tests) in;` to ensure
+   early-z happens (crucial).
+4. In the fragment shader, write a bit to an SSBO to indicate that the current
+   object is visible (that way, if any fragment of the bounding volume is
+   visible, the whole object is marked visible). For objects that were
+   previously not visible and just turned visible, mark another bit to
+   indicate that they should be rendered this frame.
+5. Render objects that just became visible (to avoid 1 frame of occlusion
+   lag). Optional if minor pop-in is acceptable.
+6. Repeat the process for frame N+1 (note that it consumes the visibility
+   generated from this frame!).
+7. Use MDI to read the list of visible objects and generate corresponding
+   draws. That is crucial; otherwise this is just a worse form of hardware
+   occlusion queries.
