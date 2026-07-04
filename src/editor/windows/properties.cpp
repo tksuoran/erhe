@@ -20,6 +20,7 @@
 #include "app_scenes.hpp"
 #include "preview/material_preview.hpp"
 #include "rendertarget_mesh.hpp"
+#include "scene/attachment_types.hpp"
 #include "scene/frame_controller.hpp"
 #include "scene/node_joint.hpp"
 #include "scene/node_physics.hpp"
@@ -1579,30 +1580,38 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
 
     if (node) {
         //push_group("Attachments", ImGuiTreeNodeFlags_DefaultOpen, m_indent);
-        for (auto& attachment : node->get_attachments()) {
+        for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : node->get_attachments()) {
             item_properties(attachment);
+            // Undoable remove (pure detach) for this attachment. Queuing to the
+            // operation stack runs on the next frame, so node->get_attachments()
+            // is not mutated during this iteration.
+            add_entry("Remove", [this, attachment]() {
+                std::string button_label = fmt::format("X##remove_attachment_{}", attachment->get_id());
+                if (ImGui::Button(button_label.c_str())) {
+                    m_context.scene_commands->remove_attachment(attachment);
+                }
+            }, "Remove this attachment (undoable)");
         }
         //pop_group();
 
-        // A child of a layout node without per-child layout parameters:
-        // offer creating the Layout_item attachment (undoable).
-        const std::shared_ptr<erhe::scene::Node> parent_node = node->get_parent_node();
-        const bool parent_is_layout =
-            parent_node &&
-            static_cast<bool>(erhe::scene::get_attachment<erhe::scene::Layout>(parent_node.get()));
-        const bool has_layout_item =
-            static_cast<bool>(erhe::scene::get_attachment<erhe::scene::Layout_item>(node.get()));
-        if (parent_is_layout && !has_layout_item) {
-            add_entry("Layout Item", [this, node]() {
-                if (ImGui::Button("Add Layout Item")) {
-                    std::shared_ptr<erhe::scene::Layout_item> new_layout_item = std::make_shared<erhe::scene::Layout_item>("layout item");
-                    new_layout_item->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
-                    m_context.operation_stack->queue(
-                        std::make_shared<Node_attach_operation>(new_layout_item, node)
-                    );
+        // "Add Attachment": popup listing the attachment catalog, entries
+        // disabled when the node cannot take that kind (duplicate / precondition).
+        // Subsumes the former one-off "Add Layout Item" button (same gate as the
+        // catalog's layout_item entry).
+        add_entry("Add Attachment", [this, node]() {
+            if (ImGui::Button("Add Attachment")) {
+                ImGui::OpenPopup("add_attachment_popup");
+            }
+            if (ImGui::BeginPopup("add_attachment_popup")) {
+                for (const Attachment_type_info& type_info : get_attachment_types()) {
+                    const bool can_add = type_info.can_add(*node);
+                    if (ImGui::MenuItem(std::string{type_info.display_name}.c_str(), nullptr, false, can_add)) {
+                        type_info.make(*m_context.scene_commands, *node);
+                    }
                 }
-            });
-        }
+                ImGui::EndPopup();
+            }
+        });
     }
 
     pop_group();

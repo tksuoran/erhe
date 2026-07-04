@@ -12,6 +12,7 @@
 #include "texture_graph/graph_texture.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
+#include "scene/attachment_types.hpp"
 #include "scene/node_joint.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_commands.hpp"
@@ -28,6 +29,7 @@
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_scene/node_attachment.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/skin.hpp"
 #include "erhe_profile/profile.hpp"
@@ -429,33 +431,59 @@ auto Scene_root::make_browser_window(
                 }
                 ImGui::EndMenu();
             }
-            if (ImGui::BeginMenu("Attach")) {
-                const bool has_rigid_body = static_cast<bool>(erhe::scene::get_attachment<Node_physics>(node.get()));
-                if (ImGui::MenuItem("Rigid Body", nullptr, false, !has_rigid_body)) {
-                    deferred_operations.push_back(
-                        [&context, node]() {
-                            context.scene_commands->create_new_rigid_body(node.get());
-                        }
-                    );
-                    close = true;
-                }
-                if (ImGui::MenuItem("Joint")) {
-                    deferred_operations.push_back(
-                        [&context, node]() {
-                            // Connect to the first selected node other than
-                            // the menu node, when there is one in this scene.
-                            std::shared_ptr<erhe::scene::Node> connected{};
-                            for (const std::shared_ptr<erhe::Item_base>& selected_item : context.selection->get_selected_items()) {
-                                const std::shared_ptr<erhe::scene::Node> other = std::dynamic_pointer_cast<erhe::scene::Node>(selected_item);
-                                if (other && (other != node) && (other->get_item_host() == node->get_item_host())) {
-                                    connected = other;
-                                    break;
+            // "Add Attachment": the full attachment catalog (issue #249), each
+            // entry disabled when the node cannot take that kind. Joint keeps its
+            // richer connect-to-selection behaviour instead of the catalog make.
+            if (ImGui::BeginMenu("Add Attachment")) {
+                for (const Attachment_type_info& type_info : get_attachment_types()) {
+                    const bool can_add = type_info.can_add(*node);
+                    if (type_info.key == "joint") {
+                        if (ImGui::MenuItem("Joint", nullptr, false, can_add)) {
+                            deferred_operations.push_back(
+                                [&context, node]() {
+                                    // Connect to the first selected node other than
+                                    // the menu node, when there is one in this scene.
+                                    std::shared_ptr<erhe::scene::Node> connected{};
+                                    for (const std::shared_ptr<erhe::Item_base>& selected_item : context.selection->get_selected_items()) {
+                                        const std::shared_ptr<erhe::scene::Node> other = std::dynamic_pointer_cast<erhe::scene::Node>(selected_item);
+                                        if (other && (other != node) && (other->get_item_host() == node->get_item_host())) {
+                                            connected = other;
+                                            break;
+                                        }
+                                    }
+                                    context.scene_commands->create_new_joint(node.get(), connected);
                                 }
-                            }
-                            context.scene_commands->create_new_joint(node.get(), connected);
+                            );
+                            close = true;
                         }
-                    );
-                    close = true;
+                        continue;
+                    }
+                    if (ImGui::MenuItem(std::string{type_info.display_name}.c_str(), nullptr, false, can_add)) {
+                        deferred_operations.push_back(
+                            [&context, node, make = type_info.make]() {
+                                make(*context.scene_commands, *node);
+                            }
+                        );
+                        close = true;
+                    }
+                }
+                ImGui::EndMenu();
+            }
+
+            // "Remove Attachment": one undoable pure-detach entry per existing
+            // attachment (only shown when the node has any).
+            const std::vector<std::shared_ptr<erhe::scene::Node_attachment>>& attachments = node->get_attachments();
+            if (!attachments.empty() && ImGui::BeginMenu("Remove Attachment")) {
+                for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : attachments) {
+                    std::string label = fmt::format("{} '{}'", attachment->get_type_name(), attachment->get_name());
+                    if (ImGui::MenuItem(label.c_str())) {
+                        deferred_operations.push_back(
+                            [&context, attachment]() {
+                                context.scene_commands->remove_attachment(attachment);
+                            }
+                        );
+                        close = true;
+                    }
                 }
                 ImGui::EndMenu();
             }
