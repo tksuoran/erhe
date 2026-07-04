@@ -6,6 +6,7 @@
 #include "app_message.hpp"
 #include "erhe_message_bus/message_bus.hpp"
 
+#include <filesystem>
 #include <functional>
 #include <memory>
 #include <unordered_map>
@@ -185,7 +186,11 @@ public:
     void export_callback(const char* const* filelist, int filter);
 
     void save_scene();
-    void save_scene_callback(const char* const* filelist, int filter);
+    // Renders pending modal confirmation dialogs (the File > Save Scene
+    // overwrite prompt). Called once per frame from App_windows::viewport_menu
+    // -- the imgui-host begin callback -- so the modal shows regardless of the
+    // Operations window's own visibility.
+    void imgui_modal_dialogs();
     void load_scene();
     void load_scene_callback(const char* const* filelist, int filter);
 
@@ -196,6 +201,11 @@ public:
     void create_joint_settings();
 
 private:
+    // Saves the scene into the bundle directory and persists the current
+    // window-docking layout next to it (shared by save_scene and the
+    // overwrite-confirmation modal).
+    void save_scene_to_bundle(Scene_root& scene_root, const std::filesystem::path& bundle);
+
     void async_for_selected_nodes_with_mesh(std::function<void(Mesh_operation_parameters&&)> op, bool selection_aware = false);
 
     // Snapshot the live operation-parameter slider values into an Operation_params,
@@ -348,6 +358,15 @@ private:
 
     Scene_view*                    m_hover_scene_view     {nullptr};
     Scene_view*                    m_last_hover_scene_view{nullptr};
+
+    // Pending File > Save Scene overwrite confirmation (imgui_modal_dialogs):
+    // set by save_scene() when the target bundle already exists; the scene_root
+    // being non-null is what marks the confirmation as pending. The ImGui
+    // context pointer pins the modal to the imgui host that opened it, since
+    // viewport_menu (and thus imgui_modal_dialogs) can run for several hosts.
+    std::shared_ptr<Scene_root>    m_save_confirm_scene_root{};
+    std::filesystem::path          m_save_confirm_bundle{};
+    ImGuiContext*                  m_save_confirm_imgui_context{nullptr};
 
     Make_mesh_config m_make_mesh_config{};
     Property_editor  m_property_editor{};

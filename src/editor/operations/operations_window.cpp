@@ -2293,11 +2293,6 @@ static void s_export_callback(void* userdata, const char* const* filelist, int f
     Operations* operations = static_cast<Operations*>(userdata);
     operations->export_callback(filelist, filter);
 }
-static void s_save_scene_callback(void* userdata, const char* const* filelist, int filter)
-{
-    Operations* operations = static_cast<Operations*>(userdata);
-    operations->save_scene_callback(filelist, filter);
-}
 static void s_load_scene_callback(void* userdata, const char* const* filelist, int filter)
 {
     Operations* operations = static_cast<Operations*>(userdata);
@@ -2393,81 +2388,75 @@ void Operations::export_gltf()
 
 void Operations::save_scene()
 {
-    // Scenes are saved as directory bundles (#241), but a folder picker can only
-    // SELECT an existing folder -- it cannot name a NEW bundle (typing a name that
-    // does not exist yet fails with "Path does not exist"). So Save uses a native
-    // Save-file dialog: the user types the bundle name (pre-filled with the scene
-    // name + .erhescene), and save_scene_callback() treats the chosen path as the
-    // bundle directory (creating it, normalizing the .erhescene extension). Load,
-    // which opens an existing bundle, uses a folder picker. The SDL3 dialog is async
-    // (callback-based); the native Windows fallback (select_file_for_write) is used
-    // for non-SDL Windows builds.
-    std::string default_name = "scene.erhescene";
-    const std::shared_ptr<Scene_root> target_scene_root = get_target_scene_root();
-    if (target_scene_root) {
-        default_name = target_scene_root->get_name() + ".erhescene";
+    // Scenes are saved as directory bundles (#241). The bundle name is derived
+    // from the scene name -- <scene name>.erhescene under res/editor/scenes --
+    // instead of asking with a file dialog. When the bundle already exists, an
+    // Overwrite / Cancel confirmation modal is shown (imgui_modal_dialogs).
+    const std::shared_ptr<Scene_root> scene_root = get_target_scene_root();
+    if (!scene_root) {
+        log_operations->warn("save_scene: no scene to save");
+        return;
     }
-#if defined(ERHE_WINDOW_LIBRARY_SDL)
-    const std::string default_location = erhe::file::to_string(default_scene_bundle_dir() / default_name);
-    SDL_DialogFileFilter filters[2];
-    filters[0].name    = "erhe scene bundle";
-    filters[0].pattern = "erhescene";
-    filters[1].name    = "All files";
-    filters[1].pattern = "*";
-    SDL_Window* window = static_cast<SDL_Window*>(m_context.context_window->get_sdl_window());
-    SDL_ShowSaveFileDialog(s_save_scene_callback, this, window, filters, 2, default_location.c_str());
-#elif defined(ERHE_OS_WINDOWS)
-    try {
-        std::optional<std::filesystem::path> path_opt = erhe::file::select_file_for_write();
-        if (path_opt.has_value()) {
-            std::string path = path_opt.value().string();
-            const char* const filelist[2] = {
-                path.data(),
-                nullptr
-            };
-            save_scene_callback(filelist, 0);
-        }
-    } catch (...) {
-        log_operations->error("exception: file dialog / save scene");
+    const std::filesystem::path bundle = default_scene_bundle_dir() / (scene_root->get_name() + ".erhescene");
+    std::error_code ec;
+    const bool bundle_exists = std::filesystem::exists(bundle, ec);
+    if (bundle_exists) {
+        m_save_confirm_scene_root    = scene_root;
+        m_save_confirm_bundle        = bundle;
+        m_save_confirm_imgui_context = nullptr;
+        return;
     }
-#else
-    log_operations->warn("save_scene: no native file dialog available on this platform");
-#endif
+    save_scene_to_bundle(*scene_root, bundle);
 }
 
-void Operations::save_scene_callback(const char* const* filelist, int filter)
+void Operations::save_scene_to_bundle(Scene_root& scene_root, const std::filesystem::path& bundle)
 {
-    static_cast<void>(filter);
-    if (filelist == nullptr) {
-        // error
-        return;
-    }
-    const char* const file = *filelist;
-    if (file == nullptr) {
-        // nothing chosen / canceled
-        return;
-    }
-
-    std::shared_ptr<Scene_root> scene_root = get_target_scene_root();
-    if (!scene_root) {
-        return;
-    }
-
     try {
-        // The selected folder IS the scene bundle (#241). Normalize its name to
-        // carry the .erhescene extension so the asset browser recognizes it and the
-        // user does not have to type the extension.
-        std::filesystem::path bundle{file};
-        if (bundle.extension() != std::filesystem::path{".erhescene"}) {
-            bundle = std::filesystem::path{bundle.string() + ".erhescene"};
-        }
-        if (editor::save_scene(*scene_root, bundle) && (m_context.imgui_windows != nullptr)) {
+        if (editor::save_scene(scene_root, bundle) && (m_context.imgui_windows != nullptr)) {
             // Persist the current window-docking layout inside the bundle so a later
             // load can restore how the windows were docked at save time.
             m_context.imgui_windows->save_imgui_ini(editor::scene_imgui_ini_path(bundle).string());
         }
+        log_operations->info("Scene '{}' saved to '{}'", scene_root.get_name(), erhe::file::to_string(bundle));
     } catch (...) {
         log_operations->error("exception: save scene");
+    }
+}
+
+void Operations::imgui_modal_dialogs()
+{
+    if (!m_save_confirm_scene_root) {
+        return;
+    }
+    // Pin the modal to the imgui host (context) that first renders it; other
+    // hosts calling this in the same frame must not touch the popup state.
+    if (m_save_confirm_imgui_context == nullptr) {
+        m_save_confirm_imgui_context = ImGui::GetCurrentContext();
+        ImGui::OpenPopup("Scene already exists");
+    } else if (ImGui::GetCurrentContext() != m_save_confirm_imgui_context) {
+        return;
+    }
+    ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2{0.5f, 0.5f});
+    if (ImGui::BeginPopupModal("Scene already exists", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("'%s' already exists.", erhe::file::to_string(m_save_confirm_bundle).c_str());
+        ImGui::Separator();
+        if (ImGui::Button("Overwrite")) {
+            save_scene_to_bundle(*m_save_confirm_scene_root, m_save_confirm_bundle);
+            m_save_confirm_scene_root.reset();
+            m_save_confirm_imgui_context = nullptr;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel")) {
+            m_save_confirm_scene_root.reset();
+            m_save_confirm_imgui_context = nullptr;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    } else {
+        // The modal was dismissed without choosing (e.g. Esc): treat as Cancel.
+        m_save_confirm_scene_root.reset();
+        m_save_confirm_imgui_context = nullptr;
     }
 }
 

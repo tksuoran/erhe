@@ -1,6 +1,7 @@
 #include "app_windows.hpp"
 #include "app_context.hpp"
 #include "app_rendering.hpp"
+#include "operations/operations_window.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
 #endif
@@ -162,6 +163,11 @@ void App_windows::viewport_menu(erhe::imgui::Imgui_host& imgui_host)
     }
 
     ImGui::PopStyleVar(2);
+
+    // Pending modal confirmation dialogs (e.g. File > Save Scene overwrite),
+    // rendered from this per-frame host begin callback so they show regardless
+    // of any editor window's visibility.
+    m_context.operations->imgui_modal_dialogs();
 
     if (m_imgui_builtin_windows.demo) {
         ImGui::ShowDemoWindow(&m_imgui_builtin_windows.demo);
