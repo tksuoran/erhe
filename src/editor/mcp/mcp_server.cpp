@@ -400,6 +400,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "get_mesh_attribute_values")      result = query_mesh_attribute_values(req->arguments);
         else if (req->tool_name == "clear_mesh_component_selection") result = action_clear_mesh_component_selection(req->arguments);
         else if (req->tool_name == "set_edge_sharpness")             result = action_set_edge_sharpness(req->arguments);
+        else if (req->tool_name == "catmull_clark")                  result = action_catmull_clark(req->arguments);
         else if (req->tool_name == "align_components")              result = action_align_components(req->arguments);
         else if (req->tool_name == "add_joint")                    result = action_add_joint(req->arguments);
         else if (req->tool_name == "flip_joint")                   result = action_flip_joint(req->arguments);

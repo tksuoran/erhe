@@ -669,6 +669,15 @@ auto Mcp_server::action_merge_faces(const json& /*args*/) -> std::string
     return make_json_content({{"queued", true}}).dump();
 }
 
+auto Mcp_server::action_catmull_clark(const json& /*args*/) -> std::string
+{
+    if (m_context.operations == nullptr) {
+        return make_error_content("Operations not available");
+    }
+    m_context.operations->catmull_clark();
+    return make_json_content({{"queued", true}}).dump();
+}
+
 auto Mcp_server::action_generate_texture_coordinates(const json& args) -> std::string
 {
     if (m_context.operations == nullptr) {

@@ -936,6 +936,7 @@ void copy_attributes(const Mesh_attributes& s, Mesh_attributes& d)
     copy_attribute<GEO::vec4f>(s.corner_color_0,         d.corner_color_0        );
     copy_attribute<GEO::vec4f>(s.corner_color_1,         d.corner_color_1        );
     copy_attribute<GEO::vec2f>(s.corner_aniso_control,   d.corner_aniso_control  );
+    copy_attribute<float>     (s.edge_sharpness,         d.edge_sharpness        );
 }
 
 void merge_attributes(GEO::AttributesManager& dst, GEO::AttributesManager& src, GEO::index_t dst_base_element)
@@ -1033,6 +1034,7 @@ void transform_mesh(
         transform_attribute<GEO::vec4f>(s.corner_color_0,         d.corner_color_0        , transform);
         transform_attribute<GEO::vec4f>(s.corner_color_1,         d.corner_color_1        , transform);
         transform_attribute<GEO::vec2f>(s.corner_aniso_control,   d.corner_aniso_control  , transform);
+        copy_attribute<float>          (s.edge_sharpness,         d.edge_sharpness        ); // transform-invariant
     }
 
     const float transform_determinant = GEO::det(transform);

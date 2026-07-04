@@ -589,6 +589,7 @@ void Mcp_server::refresh_tool_list()
             {"bevel_ratio", {{"type", "number"}, {"description", "How much each face shrinks toward its centroid, [0,1] (default 0.25)"}}}
         }}
     }});
+    m_tool_infos.push_back({"catmull_clark", "Apply one level of Catmull-Clark subdivision to the selected mesh node(s) (select_items first). Honors the per-edge edge_sharpness crease attribute (see set_edge_sharpness): sharp rules for sharpness levels, fractional blend, child edges carry decremented sharpness. Queued and undoable.", schema_no_args()});
     m_tool_infos.push_back({"merge_faces", "Merge (dissolve) the selected facets of the mesh node(s) into one polygon per edge-connected group: facets connected through a shared EDGE (not merely a shared vertex) become a single polygon spanning their boundary loop, dropping the now-interior edges and vertices. Requires an active FACE-mode mesh-component selection (set_mesh_component_mode face + select_mesh_components). A group whose boundary is not a single simple loop (encloses a hole / pinches) is left unchanged. Queued; the rest of the mesh stays watertight.", schema_no_args()});
     m_tool_infos.push_back({"generate_texture_coordinates", "Generate texture coordinates for the selected mesh node(s) via Geogram mesh_make_atlas (queued). Writes UVs into the given corner texcoord channel. Acts on the current object selection.", {
         {"type", "object"},

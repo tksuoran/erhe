@@ -5,10 +5,18 @@
 // process() runs must not lose or corrupt crease data.
 
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_geometry/operation/bake_transform.hpp"
+#include "erhe_geometry/operation/normalize.hpp"
+#include "erhe_geometry/operation/reverse.hpp"
 #include "erhe_geometry/shapes/regular_polyhedron.hpp"
+
+#include <geogram/basic/command_line.h>
+#include <geogram/basic/command_line_args.h>
+#include <geogram/mesh/mesh_io.h>
 
 #include <gtest/gtest.h>
 
+#include <filesystem>
 #include <limits>
 #include <memory>
 
@@ -93,4 +101,81 @@ TEST(Edge_sharpness, survives_build_edges_rebuild)
             EXPECT_FALSE(attributes.edge_sharpness.has(edge));
         }
     }
+}
+
+// Topology-preserving operations carry crease values without dedicated code:
+// reverse / normalize copy the whole Geogram mesh including edge attributes,
+// bake_transform goes through copy_with_transform (raw edge-attribute merge),
+// and the post-processing build_edges() preserves values across the rebuild.
+TEST(Edge_sharpness, survives_topology_preserving_operations)
+{
+    std::unique_ptr<Geometry> source = make_processed_cube();
+    const GEO::Mesh& src_mesh = source->get_mesh();
+    const GEO::index_t v0 = src_mesh.edges.vertex(0, 0);
+    const GEO::index_t v1 = src_mesh.edges.vertex(0, 1);
+    source->set_edge_sharpness(v0, v1, 3.5f);
+
+    {
+        Geometry reversed{"reversed"};
+        erhe::geometry::operation::reverse(*source, reversed);
+        EXPECT_EQ(reversed.get_edge_sharpness(v0, v1), 3.5f);
+    }
+    {
+        Geometry normalized{"normalized"};
+        erhe::geometry::operation::normalize(*source, normalized);
+        EXPECT_EQ(normalized.get_edge_sharpness(v0, v1), 3.5f);
+    }
+    {
+        Geometry baked{"baked"};
+        GEO::mat4f transform;
+        transform.load_identity();
+        transform(0, 3) = 2.0f; // translate x
+        erhe::geometry::operation::bake_transform(*source, baked, transform);
+        baked.process({.flags = process_flags});
+        EXPECT_EQ(baked.get_edge_sharpness(v0, v1), 3.5f);
+    }
+}
+
+// The .geogram round-trip used by scene serialization: mesh_save with
+// MESH_ALL_ATTRIBUTES + MESH_ALL_ELEMENTS persists the edge store and its
+// sharpness attribute; the load path re-runs process() (build_edges), which
+// must preserve the loaded values across the rebuild.
+TEST(Edge_sharpness, survives_geogram_save_load)
+{
+    std::unique_ptr<Geometry> source = make_processed_cube();
+    const GEO::Mesh& src_mesh = source->get_mesh();
+    const GEO::index_t v0 = src_mesh.edges.vertex(0, 0);
+    const GEO::index_t v1 = src_mesh.edges.vertex(0, 1);
+    source->set_edge_sharpness(v0, v1, 2.25f);
+
+    // mesh_save's GeoFile writer reads sys:compression_level from the geogram
+    // command-line environment; import it once (the editor does the same at
+    // startup via import_arg_group).
+    static bool geogram_io_args_imported = false;
+    if (!geogram_io_args_imported) {
+        GEO::CmdLine::import_arg_group("sys");
+        geogram_io_args_imported = true;
+    }
+
+    const std::filesystem::path path = std::filesystem::temp_directory_path() / "erhe_edge_sharpness_test.geogram";
+    GEO::MeshIOFlags ioflags;
+    ioflags.set_dimension(3);
+    ioflags.set_attributes(GEO::MeshAttributesFlags::MESH_ALL_ATTRIBUTES);
+    ioflags.set_elements(GEO::MeshElementsFlags::MESH_ALL_ELEMENTS);
+    ASSERT_TRUE(GEO::mesh_save(source->get_mesh(), path.string(), ioflags));
+
+    // Mirror the scene_serialization load pattern: unbind erhe attributes
+    // before mesh_load (it binds same-named attributes itself), rebind after,
+    // then process() as load_scene does.
+    Geometry loaded{"loaded"};
+    loaded.get_attributes().unbind();
+    GEO::Mesh& loaded_mesh = loaded.get_mesh();
+    loaded_mesh.clear(false, false);
+    ASSERT_TRUE(GEO::mesh_load(path.string(), loaded_mesh, ioflags));
+    loaded.get_attributes().bind();
+    loaded_mesh.vertices.set_single_precision();
+    loaded.process({.flags = process_flags});
+
+    EXPECT_EQ(loaded.get_edge_sharpness(v0, v1), 2.25f);
+    std::filesystem::remove(path);
 }
