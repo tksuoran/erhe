@@ -268,6 +268,15 @@ erhe_target_sources_grouped(
     main.cpp
     mcp/mcp_server.cpp
     mcp/mcp_server.hpp
+    mcp/mcp_server_file_io.cpp
+    mcp/mcp_server_graphs.cpp
+    mcp/mcp_server_material.cpp
+    mcp/mcp_server_mesh_components.cpp
+    mcp/mcp_server_physics.cpp
+    mcp/mcp_server_scene_action.cpp
+    mcp/mcp_server_scene_query.cpp
+    mcp/mcp_server_shared.hpp
+    mcp/mcp_server_tool_list.cpp
     operations/ambient_light_operation.cpp
     operations/ambient_light_operation.hpp
     operations/async_raytrace_kickoff_operation.cpp
