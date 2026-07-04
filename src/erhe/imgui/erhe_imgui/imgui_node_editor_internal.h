@@ -1440,6 +1440,30 @@ public:
         m_NavigateAction.NavigateTo(m_Style, bounds, zoomMode, duration);
     }
 
+    // Set the view scale (zoom) immediately, centered on the graph content.
+    // Here 'zoom' is the view scale used by CanvasView: zoom > 1 zooms in
+    // (content drawn larger), zoom < 1 zooms out. No navigation animation and
+    // no mouse input are involved, so this is a deterministic, greenfield knob
+    // for programmatic / headless zoom-quality verification (issue #251).
+    void SetZoom(float zoom)
+    {
+        if (zoom <= 0.0f)
+            return;
+        ImRect content = GetContentBounds();
+        const ImVec2 center = ImRect_IsEmpty(content)
+            ? m_NavigateAction.GetViewRect().GetCenter()
+            : content.GetCenter();
+        const ImVec2 widgetSize = m_Canvas.Rect().GetSize();
+        m_NavigateAction.StopNavigation();
+        m_NavigateAction.m_Zoom   = zoom;
+        // Origin maps the content center to the widget center:
+        //   origin = widgetSize * 0.5 - center * zoom ; scroll = -origin.
+        m_NavigateAction.m_Scroll = ImVec2(
+            center.x * zoom - widgetSize.x * 0.5f,
+            center.y * zoom - widgetSize.y * 0.5f
+        );
+    }
+
     void RegisterAnimation(Animation* animation);
     void UnregisterAnimation(Animation* animation);
 

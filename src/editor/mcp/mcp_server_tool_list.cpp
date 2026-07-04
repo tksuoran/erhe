@@ -687,6 +687,13 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"node_id", "parameters"})}
     }});
+    m_tool_infos.push_back({"geometry_graph_set_view", "Show the Geometry Graph window and set its node-editor zoom (view scale) immediately, centered on the graph content. zoom > 1 zooms in (content drawn larger), zoom < 1 zooms out. Deterministic (no animation / no mouse input) - intended for headless zoom-quality verification (capture_screenshot on the next frame). Requires a Graph Mesh to be selected for the window to render nodes.", {
+        {"type", "object"},
+        {"properties", {
+            {"zoom", {{"type", "number"}, {"description", "View scale (> 0). 1.0 = native, 2.0 = 2x zoom in, 0.5 = 2x zoom out."}}}
+        }},
+        {"required", json::array({"zoom"})}
+    }});
     m_tool_infos.push_back({"create_graph_texture", "Create a Graph Texture asset (a procedural texture backed by a node graph) in a scene's content library and select it. The selected Graph Texture is what the Texture Graph window edits and what the texture_graph_* tools operate on. A Material slot can then source from it (set_material_texture_source). Returns the new asset's id and name.", {
         {"type", "object"},
         {"properties", {

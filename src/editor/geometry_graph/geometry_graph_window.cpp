@@ -763,6 +763,14 @@ void Geometry_graph_window::imgui()
     m_node_editor->End();
 }
 
+void Geometry_graph_window::set_node_editor_zoom(float zoom)
+{
+    show_window(); // ensure the window is visible so it renders for a capture
+    if (m_node_editor) {
+        m_node_editor->SetZoom(zoom);
+    }
+}
+
 void Geometry_graph_window::handle_link_create()
 {
     if (m_node_editor->BeginCreate()) {

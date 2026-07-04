@@ -170,6 +170,7 @@ private:
     auto action_geometry_graph_set_parameter  (const nlohmann::json& args) -> std::string;
     auto action_geometry_graph_connect        (const nlohmann::json& args) -> std::string;
     auto action_geometry_graph_disconnect     (const nlohmann::json& args) -> std::string;
+    auto action_geometry_graph_set_view       (const nlohmann::json& args) -> std::string;
     auto action_create_graph_texture          (const nlohmann::json& args) -> std::string;
     auto action_set_material_texture_source    (const nlohmann::json& args) -> std::string;
     auto query_graph_textures                 (const nlohmann::json& args) -> std::string;

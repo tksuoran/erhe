@@ -264,6 +264,25 @@ auto Mcp_server::action_geometry_graph_disconnect(const json& args) -> std::stri
     return make_json_content(result).dump();
 }
 
+auto Mcp_server::action_geometry_graph_set_view(const json& args) -> std::string
+{
+    Geometry_graph_window* window = m_context.geometry_graph_window;
+    if (window == nullptr) {
+        return make_error_content("Geometry graph window not available");
+    }
+    const float zoom = args.value("zoom", 1.0f);
+    if (!(zoom > 0.0f)) {
+        return make_error_content("'zoom' must be > 0");
+    }
+    // Shows the window and sets the node editor zoom immediately. The new zoom
+    // takes effect on the next rendered frame; capture a screenshot afterwards.
+    window->set_node_editor_zoom(zoom);
+
+    json result;
+    result["zoom"] = zoom;
+    return make_json_content(result).dump();
+}
+
 namespace {
 
 [[nodiscard]] auto texture_pin_value_type_name(const std::size_t key) -> const char*

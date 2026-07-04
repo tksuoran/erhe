@@ -421,6 +421,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "geometry_graph_set_parameter") result = action_geometry_graph_set_parameter(req->arguments);
         else if (req->tool_name == "geometry_graph_connect")       result = action_geometry_graph_connect      (req->arguments);
         else if (req->tool_name == "geometry_graph_disconnect")    result = action_geometry_graph_disconnect   (req->arguments);
+        else if (req->tool_name == "geometry_graph_set_view")      result = action_geometry_graph_set_view     (req->arguments);
         else if (req->tool_name == "create_graph_texture")         result = action_create_graph_texture        (req->arguments);
         else if (req->tool_name == "set_material_texture_source")  result = action_set_material_texture_source (req->arguments);
         else if (req->tool_name == "get_graph_textures")           result = query_graph_textures               (req->arguments);

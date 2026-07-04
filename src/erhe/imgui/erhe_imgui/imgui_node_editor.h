@@ -410,6 +410,11 @@ public:
 
     float GetCurrentZoom();
 
+    // Set the view scale (zoom) immediately, centered on graph content.
+    // zoom > 1 zooms in, zoom < 1 zooms out. Deterministic (no animation, no
+    // mouse input) - used to drive headless zoom-quality verification (#251).
+    void SetZoom(float zoom);
+
     NodeId GetHoveredNode();
     PinId GetHoveredPin();
     LinkId GetHoveredLink();

@@ -630,6 +630,11 @@ float EditorContext::GetCurrentZoom()
     return m_impl->GetView().InvScale;
 }
 
+void EditorContext::SetZoom(float zoom)
+{
+    m_impl->SetZoom(zoom);
+}
+
 NodeId EditorContext::GetHoveredNode()
 {
     return m_impl->GetHoveredNode();

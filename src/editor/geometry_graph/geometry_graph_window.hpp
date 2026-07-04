@@ -96,6 +96,11 @@ public:
     // geometry_graph_set_parameter tool.
     void set_node_parameters(const std::shared_ptr<Geometry_graph_node>& node, const nlohmann::json& parameters);
 
+    // Show the window (so it renders for a screenshot) and set the node
+    // editor's zoom immediately (view scale; > 1 zooms in). Deterministic
+    // headless zoom-quality knob used by the #251 verification harness.
+    void set_node_editor_zoom(float zoom);
+
     // The graph currently being edited: the selected content-library
     // Graph_mesh asset, or null when nothing (of that type) is selected -
     // the window then shows an empty state and edits refuse. Refreshed on
