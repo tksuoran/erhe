@@ -213,12 +213,6 @@ private:
 
     void UpdateViewTransformPosition();
 
-    void SaveInputState();
-    void RestoreInputState();
-
-    void SaveViewportState();
-    void RestoreViewportState();
-
     void EnterLocalSpace();
     void LeaveLocalSpace();
 
@@ -236,10 +230,6 @@ private:
     Range* m_CurrentRange = nullptr;
 # endif
 
-    int m_DrawListFirstCommandIndex = 0;
-    int m_DrawListCommadBufferSize = 0;
-    int m_DrawListStartVertexIndex = 0;
-
     CanvasView  m_View;
     ImRect      m_ViewRect;
 
@@ -247,25 +237,10 @@ private:
 
     int m_SuspendCounter = 0;
 
-    float m_LastFringeScale = 1.0f;
-
-    ImVec2 m_MousePosBackup;
-    ImVec2 m_MousePosPrevBackup;
-    ImVec2 m_MouseClickedPosBackup[IM_ARRAYSIZE(ImGuiIO::MouseClickedPos)];
+    // Restored in End() to keep the canvas content from growing the window's
+    // content size (which would spawn scrollbars). #251: the input / viewport /
+    // fringe backups the old faked local space needed are gone.
     ImVec2 m_WindowCursorMaxBackup;
-
-# if defined(IMGUI_HAS_VIEWPORT)
-    ImVec2 m_WindowPosBackup;
-    ImVec2 m_ViewportPosBackup;
-    ImVec2 m_ViewportSizeBackup;
-# if IMGUI_VERSION_NUM > 18002
-    ImVec2 m_ViewportWorkPosBackup;
-    ImVec2 m_ViewportWorkSizeBackup;
-# else
-    ImVec2 m_ViewportWorkOffsetMinBackup;
-    ImVec2 m_ViewportWorkOffsetMaxBackup;
-# endif
-# endif
 };
 
 } // namespace ImGuiEx

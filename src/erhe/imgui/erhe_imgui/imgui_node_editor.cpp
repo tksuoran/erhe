@@ -526,7 +526,6 @@ void ed::Pin::Draw(ImDrawList* drawList, DrawFlags flags)
 
         if (m_BorderWidth > 0.0f)
         {
-            FringeScaleScope fringe(1.0f);
             drawList->AddRect(Editor->DrawPos(m_Bounds.Min), Editor->DrawPos(m_Bounds.Max),
                 m_BorderColor, Editor->DrawLen(m_Rounding), m_Corners, Editor->DrawLen(m_BorderWidth));
         }
@@ -624,8 +623,6 @@ void ed::Node::Draw(ImDrawList* drawList, DrawFlags flags)
 
             if (m_GroupBorderWidth > 0.0f)
             {
-                FringeScaleScope fringe(1.0f);
-
                 drawList->AddRect(
                     Editor->DrawPos(m_GroupBounds.Min),
                     Editor->DrawPos(m_GroupBounds.Max),
@@ -1481,29 +1478,6 @@ void ed::EditorContext::End()
         ImDrawList_ChannelsGrow(drawList, userChannel + channelsToCopy);
         for (int i = 0; i < channelsToCopy; ++i)
             ImDrawList_SwapChannels(drawList, userChannel + i, c_UserLayerChannelStart + i);
-    }
-# endif
-
-# if 0
-    {
-        auto preOffset  = ImVec2(0, 0);
-        auto postOffset = m_OldCanvas.WindowScreenPos + m_OldCanvas.ClientOrigin;
-        auto scale      = m_OldCanvas.Zoom;
-
-        ImDrawList_TransformChannels(drawList,                        0,                            1, preOffset, scale, postOffset);
-        ImDrawList_TransformChannels(drawList, c_BackgroundChannelStart, drawList->_ChannelsCount - 1, preOffset, scale, postOffset);
-
-        auto clipTranslation = m_OldCanvas.WindowScreenPos - m_OldCanvas.FromScreen(m_OldCanvas.WindowScreenPos);
-        ImGui::PushClipRect(m_OldCanvas.WindowScreenPos + ImVec2(1, 1), m_OldCanvas.WindowScreenPos + m_OldCanvas.WindowScreenSize - ImVec2(1, 1), false);
-        ImDrawList_TranslateAndClampClipRects(drawList,                        0,                            1, clipTranslation);
-        ImDrawList_TranslateAndClampClipRects(drawList, c_BackgroundChannelStart, drawList->_ChannelsCount - 1, clipTranslation);
-        ImGui::PopClipRect();
-
-        // #debug: Static grid in local space
-        //for (float x = 0; x < Canvas.WindowScreenSize.x; x += 100)
-        //    drawList->AddLine(ImVec2(x, 0.0f) + Canvas.WindowScreenPos, ImVec2(x, Canvas.WindowScreenSize.y) + Canvas.WindowScreenPos, IM_COL32(255, 0, 0, 128));
-        //for (float y = 0; y < Canvas.WindowScreenSize.y; y += 100)
-        //    drawList->AddLine(ImVec2(0.0f, y) + Canvas.WindowScreenPos, ImVec2(Canvas.WindowScreenSize.x, y) + Canvas.WindowScreenPos, IM_COL32(255, 0, 0, 128));
     }
 # endif
 

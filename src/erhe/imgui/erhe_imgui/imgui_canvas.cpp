@@ -2,93 +2,11 @@
 #     define IMGUI_DEFINE_MATH_OPERATORS
 # endif
 # include "erhe_imgui/imgui_canvas.h"
-# include <type_traits>
 
-// https://stackoverflow.com/a/36079786
-# define DECLARE_HAS_MEMBER(__trait_name__, __member_name__)                         \
-                                                                                     \
-    template <typename __boost_has_member_T__>                                       \
-    class __trait_name__                                                             \
-    {                                                                                \
-        using check_type = ::std::remove_const_t<__boost_has_member_T__>;            \
-        struct no_type {char x[2];};                                                 \
-        using  yes_type = char;                                                      \
-                                                                                     \
-        struct  base { void __member_name__() {}};                                   \
-        struct mixin : public base, public check_type {};                            \
-                                                                                     \
-        template <void (base::*)()> struct aux {};                                   \
-                                                                                     \
-        template <typename U> static no_type  test(aux<&U::__member_name__>*);       \
-        template <typename U> static yes_type test(...);                             \
-                                                                                     \
-        public:                                                                      \
-                                                                                     \
-        static constexpr bool value = (sizeof(yes_type) == sizeof(test<mixin>(0)));  \
-    }
-
-// Special sentinel value. This needs to be unique, so allow it to be overridden in the user's ImGui config
-# ifndef ImDrawCallback_ImCanvas
-#     define ImDrawCallback_ImCanvas        (ImDrawCallback)(-2)
-# endif
-
-namespace ImCanvasDetails {
-
-DECLARE_HAS_MEMBER(HasFringeScale, _FringeScale);
-
-struct FringeScaleRef
-{
-    // Overload is present when ImDrawList does have _FringeScale member variable.
-    template <typename T>
-    static float& Get(typename std::enable_if<HasFringeScale<T>::value, T>::type* drawList)
-    {
-        return drawList->_FringeScale;
-    }
-
-    // Overload is present when ImDrawList does not have _FringeScale member variable.
-    template <typename T>
-    static float& Get(typename std::enable_if<!HasFringeScale<T>::value, T>::type*)
-    {
-        static float placeholder = 1.0f;
-        return placeholder;
-    }
-};
-
-DECLARE_HAS_MEMBER(HasVtxCurrentOffset, _VtxCurrentOffset);
-
-struct VtxCurrentOffsetRef
-{
-    // Overload is present when ImDrawList does have _FringeScale member variable.
-    template <typename T>
-    static unsigned int& Get(typename std::enable_if<HasVtxCurrentOffset<T>::value, T>::type* drawList)
-    {
-        return drawList->_VtxCurrentOffset;
-    }
-
-    // Overload is present when ImDrawList does not have _FringeScale member variable.
-    template <typename T>
-    static unsigned int& Get(typename std::enable_if<!HasVtxCurrentOffset<T>::value, T>::type* drawList)
-    {
-        return drawList->_CmdHeader.VtxOffset;
-    }
-};
-
-} // namespace ImCanvasDetails
-
-// Returns a reference to _FringeScale extension to ImDrawList
-//
-// If ImDrawList does not have _FringeScale a placeholder is returned.
-static inline float& ImFringeScaleRef(ImDrawList* drawList)
-{
-    using namespace ImCanvasDetails;
-    return FringeScaleRef::Get<ImDrawList>(drawList);
-}
-
-static inline unsigned int& ImVtxOffsetRef(ImDrawList* drawList)
-{
-    using namespace ImCanvasDetails;
-    return VtxCurrentOffsetRef::Get<ImDrawList>(drawList);
-}
+// Issue #251: the node editor now renders at native resolution, so the canvas
+// no longer post-transforms the vertex buffer, scales _FringeScale, or fakes
+// input / viewport. The _FringeScale / _VtxCurrentOffset reflection helpers and
+// the ImDrawCallback_ImCanvas sentinel that supported that transform are gone.
 
 static inline ImVec2 ImSelectPositive(const ImVec2& lhs, const ImVec2& rhs) { return ImVec2(lhs.x > 0.0f ? lhs.x : rhs.x, lhs.y > 0.0f ? lhs.y : rhs.y); }
 
@@ -129,9 +47,6 @@ bool ImGuiEx::Canvas::Begin(ImGuiID id, const ImVec2& size)
 # if IMGUI_EX_CANVAS_DEFERED()
     m_Ranges.resize(0);
 # endif
-
-    SaveInputState();
-    SaveViewportState();
 
     // Record cursor max to prevent scrollbars from appearing.
     m_WindowCursorMaxBackup = ImGui::GetCurrentWindow()->DC.CursorMaxPos;
@@ -350,62 +265,6 @@ void ImGuiEx::Canvas::UpdateViewTransformPosition()
     m_ViewTransformPosition = m_View.Origin + m_WidgetPosition;
 }
 
-void ImGuiEx::Canvas::SaveInputState()
-{
-    auto& io = ImGui::GetIO();
-    m_MousePosBackup = io.MousePos;
-    m_MousePosPrevBackup = io.MousePosPrev;
-    for (auto i = 0; i < IM_ARRAYSIZE(m_MouseClickedPosBackup); ++i)
-        m_MouseClickedPosBackup[i] = io.MouseClickedPos[i];
-}
-
-void ImGuiEx::Canvas::RestoreInputState()
-{
-    auto& io = ImGui::GetIO();
-    io.MousePos = m_MousePosBackup;
-    io.MousePosPrev = m_MousePosPrevBackup;
-    for (auto i = 0; i < IM_ARRAYSIZE(m_MouseClickedPosBackup); ++i)
-        io.MouseClickedPos[i] = m_MouseClickedPosBackup[i];
-}
-
-void ImGuiEx::Canvas::SaveViewportState()
-{
-# if defined(IMGUI_HAS_VIEWPORT)
-    auto window = ImGui::GetCurrentWindow();
-    auto viewport = ImGui::GetWindowViewport();
-
-    m_WindowPosBackup = window->Pos;
-    m_ViewportPosBackup = viewport->Pos;
-    m_ViewportSizeBackup = viewport->Size;
-# if IMGUI_VERSION_NUM > 18002
-    m_ViewportWorkPosBackup = viewport->WorkPos;
-    m_ViewportWorkSizeBackup = viewport->WorkSize;
-# else
-    m_ViewportWorkOffsetMinBackup = viewport->WorkOffsetMin;
-    m_ViewportWorkOffsetMaxBackup = viewport->WorkOffsetMax;
-# endif
-# endif
-}
-
-void ImGuiEx::Canvas::RestoreViewportState()
-{
-# if defined(IMGUI_HAS_VIEWPORT)
-    auto window = ImGui::GetCurrentWindow();
-    auto viewport = ImGui::GetWindowViewport();
-
-    window->Pos = m_WindowPosBackup;
-    viewport->Pos = m_ViewportPosBackup;
-    viewport->Size = m_ViewportSizeBackup;
-# if IMGUI_VERSION_NUM > 18002
-    viewport->WorkPos = m_ViewportWorkPosBackup;
-    viewport->WorkSize = m_ViewportWorkSizeBackup;
-# else
-    viewport->WorkOffsetMin = m_ViewportWorkOffsetMinBackup;
-    viewport->WorkOffsetMax = m_ViewportWorkOffsetMaxBackup;
-# endif
-# endif
-}
-
 void ImGuiEx::Canvas::EnterLocalSpace()
 {
     // Issue #251: native-resolution rendering. The canvas no longer fakes a
@@ -429,11 +288,8 @@ void ImGuiEx::Canvas::LeaveLocalSpace()
     IM_ASSERT(m_DrawList->_Splitter._Current == m_ExpectedChannel);
 
     // Issue #251: content is authored directly in screen space, so there is no
-    // vertex / clip-rect post-transform, no _FringeScale restore and no
-    // ImDrawCallback_ImCanvas sentinel to strip. Just balance the clip push and
-    // restore the (unchanged) input / viewport backups.
+    // vertex / clip-rect post-transform, no _FringeScale restore, no
+    // ImDrawCallback_ImCanvas sentinel to strip and no faked input / viewport to
+    // restore. Just balance the clip push from EnterLocalSpace.
     ImGui::PopClipRect();
-
-    RestoreInputState();
-    RestoreViewportState();
 }
