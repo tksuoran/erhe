@@ -5,7 +5,6 @@
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "geometry_graph/graph_mesh.hpp"
-#include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe_geometry/geometry.hpp"
@@ -13,10 +12,6 @@
 #include "erhe_primitive/material.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_primitive/primitive_builder.hpp"
-#include "erhe_profile/profile.hpp"
-#include "erhe_scene/mesh.hpp"
-#include "erhe_scene/node.hpp"
-#include "erhe_scene/scene.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 
 #include <geogram/mesh/mesh.h>
@@ -26,7 +21,6 @@
 #include <nlohmann/json.hpp>
 
 #include <cfloat>
-#include <mutex>
 
 namespace editor {
 
@@ -65,68 +59,17 @@ Geometry_output_node::Geometry_output_node(App_context& context)
 
 Geometry_output_node::~Geometry_output_node() noexcept
 {
-    remove_scene_node();
 }
 
 void Geometry_output_node::on_removed_from_graph()
 {
-    remove_scene_node();
-    // An asset-owned output leaving the graph must not strand its last
-    // bake on bound attachments: publish an empty bake (attachments
-    // clear their mesh on the next push).
+    // An output leaving the graph must not strand its last bake on bound
+    // attachments: publish an empty bake (attachments clear their mesh on
+    // the next push).
     const std::shared_ptr<Graph_mesh> owning_graph_mesh = get_owning_graph_mesh();
     if (owning_graph_mesh) {
         owning_graph_mesh->set_baked_products(Graph_mesh_baked_products{});
         owning_graph_mesh->request_attachment_push();
-    }
-}
-
-void Geometry_output_node::remove_scene_node()
-{
-    remove_node_physics();
-    if (m_node) {
-        m_node->set_parent({});
-    }
-    m_node.reset();
-    m_mesh.reset();
-}
-
-void Geometry_output_node::remove_node_physics()
-{
-    if (m_node_physics && m_node) {
-        m_node->detach(m_node_physics.get());
-    }
-    m_node_physics.reset();
-}
-
-void Geometry_output_node::update_node_physics()
-{
-    if (!m_physics_enabled || !m_node || !m_evaluated_collision_shape) {
-        remove_node_physics();
-        return;
-    }
-
-    if (!m_node_physics) {
-        const erhe::physics::IRigid_body_create_info create_info{
-            .collision_shape = m_evaluated_collision_shape,
-            .debug_label     = m_scene_node_name,
-            .motion_mode     = m_physics_motion_mode
-        };
-        m_node_physics = std::make_shared<Node_physics>(create_info);
-        m_node->attach(m_node_physics);
-    } else {
-        m_node_physics->set_collision_shape(m_evaluated_collision_shape);
-        m_node_physics->set_motion_mode(m_physics_motion_mode);
-    }
-}
-
-void Geometry_output_node::apply_scene_node_name()
-{
-    if (m_node) {
-        m_node->set_name(m_scene_node_name);
-    }
-    if (m_mesh) {
-        m_mesh->set_name(m_scene_node_name + " Mesh");
     }
 }
 
@@ -233,19 +176,18 @@ void Geometry_output_node::apply_evaluated_to_scene()
     }
     m_evaluated_valid = false;
 
-    // Asset-owned graph: publish the products to the owning Graph_mesh
-    // (bound Geometry_graph_mesh attachments consume them; the evaluation
-    // engine pushes right after this) instead of owning a scene node. An
-    // asset with no bound node renders nothing - exactly like a
-    // Graph_texture no material samples. A null geometry publish tells
+    // Publish the products to the owning Graph_mesh asset (bound
+    // Geometry_graph_mesh attachments consume them; the evaluation engine
+    // pushes right after this). The node never creates scene content
+    // itself: an asset with no bound node renders nothing - exactly like
+    // a Graph_texture no material samples. A null geometry publish tells
     // attachments to clear their mesh. Publishing needs no scene root
     // (attachments resolve a material fallback from their own scene);
     // m_material stays whatever the node's parameter selected, if any.
+    // Graphs only live in the content library, so the owner is always
+    // set for a node in a graph.
     const std::shared_ptr<Graph_mesh> owning_graph_mesh = get_owning_graph_mesh();
     if (owning_graph_mesh) {
-        // Drop any legacy self-owned scene node (scratch -> asset
-        // transition, e.g. a node restored from the undo stack).
-        remove_scene_node();
         Graph_mesh_baked_products products;
         products.geometry            = std::move(m_evaluated_geometry);
         products.primitive           = std::move(m_evaluated_primitive);
@@ -254,55 +196,7 @@ void Geometry_output_node::apply_evaluated_to_scene()
         products.physics_enabled     = m_physics_enabled;
         products.physics_motion_mode = m_physics_motion_mode;
         owning_graph_mesh->set_baked_products(products);
-        m_evaluated_geometry.reset();
-        m_evaluated_primitive.reset();
-        m_evaluated_collision_shape.reset();
-        return;
     }
-
-    if (!m_scene_root) {
-        m_scene_root = m_context.app_scenes->get_single_scene_root();
-    }
-    if (!m_scene_root) {
-        m_evaluated_geometry.reset();
-        m_evaluated_primitive.reset();
-        m_evaluated_collision_shape.reset();
-        return;
-    }
-
-    if (!m_evaluated_geometry) {
-        if (m_mesh) {
-            std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
-            m_mesh->clear_primitives();
-            remove_node_physics();
-        }
-        return;
-    }
-
-    if (!m_material) {
-        const std::shared_ptr<Content_library> library = m_scene_root->get_content_library();
-        if (library && library->materials) {
-            const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials = library->materials->get_all<erhe::primitive::Material>();
-            if (!materials.empty()) {
-                m_material = materials.front();
-            }
-        }
-    }
-
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
-    if (!m_node) {
-        m_node = std::make_shared<erhe::scene::Node>(m_scene_node_name);
-        m_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::show_in_ui);
-        m_mesh = std::make_shared<erhe::scene::Mesh>(m_scene_node_name + " Mesh");
-        m_mesh->layer_id = m_scene_root->layers().content()->id;
-        m_mesh->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::shadow_cast);
-        m_node->attach(m_mesh);
-        m_node->set_parent(m_scene_root->get_scene().get_root_node());
-    }
-    m_mesh->clear_primitives();
-    m_mesh->add_primitive(m_evaluated_primitive, m_material);
-    update_node_physics();
-
     m_evaluated_geometry.reset();
     m_evaluated_primitive.reset();
     m_evaluated_collision_shape.reset();
@@ -310,38 +204,19 @@ void Geometry_output_node::apply_evaluated_to_scene()
 
 void Geometry_output_node::imgui()
 {
-    // Scene node name; committed (and made undoable via the parameter
-    // edit gesture) when the input defocuses, not on every keystroke.
+    // Product name; committed (and made undoable via the parameter edit
+    // gesture) when the input defocuses, not on every keystroke.
     ImGui::SetNextItemWidth(-FLT_MIN);
-    ImGui::InputText("##scene_node_name", &m_scene_node_name);
+    ImGui::InputText("##output_name", &m_name);
     if (ImGui::IsItemDeactivatedAfterEdit()) {
-        apply_scene_node_name();
         mark_dirty();
     }
 
-    // Scene selection
-    const std::vector<std::shared_ptr<Scene_root>>& scene_roots = m_context.app_scenes->get_scene_roots();
-    if (scene_roots.size() > 1) {
-        int scene_index = 0;
-        for (std::size_t i = 0, end = scene_roots.size(); i < end; ++i) {
-            if (scene_roots[i] == m_scene_root) {
-                scene_index = static_cast<int>(i);
-                break;
-            }
-        }
-        if (imgui_index_stepper("scene", scene_index, static_cast<int>(scene_roots.size()))) {
-            remove_scene_node();
-            m_scene_root = scene_roots.at(static_cast<std::size_t>(scene_index));
-            m_material.reset();
-            mark_dirty();
-        }
-        ImGui::SameLine();
-    }
-    ImGui::TextUnformatted(m_scene_root ? m_scene_root->get_name().c_str() : "(no scene)");
-
-    // Material selection
-    if (m_scene_root) {
-        const std::shared_ptr<Content_library> library = m_scene_root->get_content_library();
+    // Material selection, from the owning asset's scene content library
+    // (falls back to the single scene root when the asset cannot say).
+    const std::shared_ptr<Scene_root> scene_root = m_context.app_scenes->get_single_scene_root();
+    if (scene_root) {
+        const std::shared_ptr<Content_library> library = scene_root->get_content_library();
         if (library && library->materials) {
             const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials = library->materials->get_all<erhe::primitive::Material>();
             if (!materials.empty()) {
@@ -391,10 +266,7 @@ void Geometry_output_node::imgui()
 
 void Geometry_output_node::write_parameters(nlohmann::json& out) const
 {
-    out["name"] = m_scene_node_name;
-    if (m_scene_root) {
-        out["scene"] = m_scene_root->get_name();
-    }
+    out["name"] = m_name;
     if (m_material) {
         out["material"] = m_material->get_name();
     }
@@ -404,29 +276,14 @@ void Geometry_output_node::write_parameters(nlohmann::json& out) const
 
 void Geometry_output_node::read_parameters(const nlohmann::json& in)
 {
-    const std::string scene_node_name = in.value("name", m_scene_node_name);
-    if (scene_node_name != m_scene_node_name) {
-        m_scene_node_name = scene_node_name;
-        apply_scene_node_name();
-    }
-    const std::string scene_name = in.value("scene", "");
-    if (!scene_name.empty()) {
-        for (const std::shared_ptr<Scene_root>& scene_root : m_context.app_scenes->get_scene_roots()) {
-            if (scene_root->get_name() == scene_name) {
-                if (m_scene_root != scene_root) {
-                    // Release the scene node from the previous scene; the
-                    // next evaluate() recreates it in the new one.
-                    remove_scene_node();
-                    m_material.reset();
-                    m_scene_root = scene_root;
-                }
-                break;
-            }
-        }
-    }
+    // Legacy files may carry a "scene" key (the removed direct-to-scene
+    // output path targeted a scene); it is ignored - the consuming
+    // Geometry_graph_mesh attachment decides where the bake lands.
+    m_name = in.value("name", m_name);
     const std::string material_name = in.value("material", "");
-    if (!material_name.empty() && m_scene_root) {
-        const std::shared_ptr<Content_library> library = m_scene_root->get_content_library();
+    if (!material_name.empty()) {
+        const std::shared_ptr<Scene_root> scene_root = m_context.app_scenes->get_single_scene_root();
+        const std::shared_ptr<Content_library> library = scene_root ? scene_root->get_content_library() : std::shared_ptr<Content_library>{};
         if (library && library->materials) {
             const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials = library->materials->get_all<erhe::primitive::Material>();
             for (const std::shared_ptr<erhe::primitive::Material>& material : materials) {

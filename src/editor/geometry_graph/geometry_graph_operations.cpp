@@ -10,17 +10,7 @@
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
 
-#include <cfloat>
-#include <cmath>
-
 namespace editor {
-
-auto is_valid_node_position(const ImVec2& position) -> bool
-{
-    return
-        std::isfinite(position.x) && (position.x != FLT_MAX) &&
-        std::isfinite(position.y) && (position.y != FLT_MAX);
-}
 
 auto make_link_record(erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> Geometry_graph_link_record
 {
@@ -100,67 +90,6 @@ void Geometry_graph_node_insert_remove_operation::remove()
     m_position     = m_window.get_node_position(*m_node.get());
     m_has_position = true;
     m_window.erase_node(*m_graph_mesh, m_node);
-}
-
-Geometry_graph_replace_operation::Geometry_graph_replace_operation(
-    Geometry_graph_window&             window,
-    const std::shared_ptr<Graph_mesh>& graph_mesh,
-    Geometry_graph_content&&           new_content,
-    const char*                        description
-)
-    : m_window     {window}
-    , m_graph_mesh {graph_mesh}
-    , m_new_content{std::move(new_content)}
-{
-    set_description(std::string{description});
-}
-
-void Geometry_graph_replace_operation::execute(App_context&)
-{
-    if (!m_old_captured) {
-        m_old_content  = capture();
-        m_old_captured = true;
-    }
-    apply(m_new_content);
-}
-
-void Geometry_graph_replace_operation::undo(App_context&)
-{
-    apply(m_old_content);
-}
-
-auto Geometry_graph_replace_operation::capture() -> Geometry_graph_content
-{
-    Geometry_graph_content content;
-    content.nodes = m_graph_mesh->nodes();
-    for (const std::shared_ptr<Geometry_graph_node>& node : content.nodes) {
-        content.positions.push_back(m_window.get_node_position(*node.get()));
-    }
-    for (const std::unique_ptr<erhe::graph::Link>& link : m_graph_mesh->graph().get_links()) {
-        content.links.push_back(make_link_record(link->get_source(), link->get_sink()));
-    }
-    return content;
-}
-
-void Geometry_graph_replace_operation::apply(const Geometry_graph_content& content)
-{
-    const std::vector<std::shared_ptr<Geometry_graph_node>> current_nodes = m_graph_mesh->nodes(); // copy - erase_node mutates
-    for (const std::shared_ptr<Geometry_graph_node>& node : current_nodes) {
-        m_window.erase_node(*m_graph_mesh, node);
-    }
-    for (std::size_t i = 0, end = content.nodes.size(); i < end; ++i) {
-        const std::shared_ptr<Geometry_graph_node>& node = content.nodes[i];
-        m_window.insert_node(*m_graph_mesh, node);
-        if (i < content.positions.size()) {
-            const ImVec2 position = content.positions[i];
-            if (is_valid_node_position(position)) {
-                m_window.set_node_position(*node.get(), position);
-            }
-        }
-    }
-    for (const Geometry_graph_link_record& record : content.links) {
-        m_window.connect_pins(*m_graph_mesh, record.source_pin, record.sink_pin);
-    }
 }
 
 Geometry_graph_parameter_operation::Geometry_graph_parameter_operation(

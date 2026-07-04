@@ -7,7 +7,6 @@
 #include <nlohmann/json_fwd.hpp>
 
 #include <condition_variable>
-#include <filesystem>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -38,15 +37,15 @@ class Graph_mesh;
 // nodes, ax::NodeEditor canvas rendering all nodes, link creation and
 // node / link deletion handling, selection integration.
 //
-// The window does not own THE graph: geometry graphs live in Graph_mesh
-// content-library assets (plus one window-owned scratch fallback), and
-// the window edits whichever Graph_mesh is currently selected - the
+// The window does not own THE graph: geometry graphs only live in
+// Graph_mesh content-library assets, and the window edits whichever
+// Graph_mesh is currently selected (empty state when none is) - the
 // same selected-asset model as Texture_graph_window / Graph_texture.
 //
 // Evaluation runs in the background so a heavy chain does not freeze the
 // UI: update_evaluation() (called once per frame from the editor main
 // loop, window visible or not) picks one graph that needs evaluation
-// (the scratch or any Graph_mesh asset in any scene), snapshots it into
+// (any Graph_mesh asset in any scene), snapshots it into
 // a shadow clone - factory-built nodes with the same parameters, links,
 // cached output payloads and dirty flags - and evaluates the shadow on a
 // tf::Executor worker. The worker never touches live nodes, so the
@@ -65,15 +64,16 @@ public:
     );
     ~Geometry_graph_window() noexcept override;
 
-    // Implements Imgui_window. Renders the ax::NodeEditor canvas only; the file
-    // toolbar and node toolbar live in the companion Geometry_graph_palette_window
+    // Implements Imgui_window. Renders the ax::NodeEditor canvas only; the
+    // node palette lives in the companion Geometry_graph_palette_window
     // (see controls_imgui()) so the two can be laid out independently.
     void imgui() override;
     auto flags() -> ImGuiWindowFlags override;
 
-    // Renders the file toolbar (Save / Load / Clear) and the node-creation
-    // toolbar, plus the background-evaluation status line. Called by the
-    // companion palette window, not from this window's imgui().
+    // Renders the edited-asset header ("Editing: <name>" / empty-state hint)
+    // and the node-creation palette, plus the background-evaluation status
+    // line. Called by the companion palette window, not from this window's
+    // imgui().
     void controls_imgui();
 
     // Undoable edits: each creates an Operation and executes it through
@@ -97,39 +97,26 @@ public:
     void set_node_parameters(const std::shared_ptr<Geometry_graph_node>& node, const nlohmann::json& parameters);
 
     // The graph currently being edited: the selected content-library
-    // Graph_mesh asset, or the window's scratch graph when nothing (of
-    // that type) is selected. Refreshed on every access so an MCP
-    // mutation arriving before the frame's update still targets the
-    // live selection.
+    // Graph_mesh asset, or null when nothing (of that type) is selected -
+    // the window then shows an empty state and edits refuse. Refreshed on
+    // every access so an MCP mutation arriving before the frame's update
+    // still targets the live selection.
     [[nodiscard]] auto get_current_graph_mesh() -> const std::shared_ptr<Graph_mesh>&;
-    // True when the current graph is the window-owned scratch (not a
-    // content-library asset). Refreshes like get_current_graph_mesh().
-    [[nodiscard]] auto is_editing_scratch() -> bool;
 
-    // Both refresh the current graph from the live selection first, so
-    // MCP reads and node resolution always agree with the graph a
-    // subsequent mutation targets.
-    [[nodiscard]] auto get_graph() -> Geometry_graph&;
+    // Refreshes the current graph from the live selection first, so MCP
+    // reads and node resolution always agree with the graph a subsequent
+    // mutation targets. Empty when no Graph_mesh asset is selected.
     [[nodiscard]] auto get_nodes() -> const std::vector<std::shared_ptr<Geometry_graph_node>>&;
-
-    // Graph serialization (JSON: node types + parameters + canvas
-    // positions, links by node index + pin slot). Load and clear are
-    // undoable (single Geometry_graph_replace_operation). All target
-    // the current graph.
-    auto save_graph (const std::filesystem::path& path) -> bool;
-    auto load_graph (const std::filesystem::path& path) -> bool;
-    void clear_graph();
 
     // Background evaluation (see the class comment). update_evaluation()
     // is the once-per-frame driver; wait_for_idle_evaluation() blocks
-    // until EVERY graph (scratch + all Graph_mesh assets) is fully
-    // evaluated, for callers that need synchronous semantics (the MCP
-    // get_geometry_graph query and graph file saves).
+    // until EVERY Graph_mesh asset is fully evaluated, for callers that
+    // need synchronous semantics (the MCP get_geometry_graph query).
     void update_evaluation();
     void wait_for_idle_evaluation();
 
     // Non-undoable primitives used by the geometry graph operations
-    // (and graph load); prefer the undoable edits above. They target a
+    // (and scene load); prefer the undoable edits above. They target a
     // specific Graph_mesh so undo/redo stays correct even if the
     // selection changes between an edit and its undo (the operations
     // bind the graph they were created for).
@@ -144,28 +131,22 @@ public:
 
 private:
     auto make_node       (const std::string& type_name) -> std::shared_ptr<Geometry_graph_node>;
-    // Creates a Graph_mesh asset in the (single) scene's content library and
-    // selects it, so the window switches from the scratch graph to editing a
-    // real, saveable asset. Bound to the toolbar "New Graph Mesh" button.
-    void create_and_select_graph_mesh();
-    void file_toolbar    ();
     void node_toolbar    ();
     void handle_link_create();
     void handle_deletions();
 
     // Points m_graph_mesh at the selected content-library Graph_mesh, or
-    // the window's scratch graph when nothing (of that type) is selected.
+    // null when nothing (of that type) is selected.
     void refresh_current_graph_mesh();
 
-    // Accessors to the currently-edited graph's state (the selected
-    // asset or the scratch). Used by the canvas iteration and the
-    // serialization surface.
+    // Accessors to the currently-edited asset's state. Callers must have
+    // checked get_current_graph_mesh() for null (empty state) first.
     [[nodiscard]] auto graph() -> Geometry_graph&;
     [[nodiscard]] auto mutable_nodes() -> std::vector<std::shared_ptr<Geometry_graph_node>>&;
 
     // Canvas position for the next newly created node: a grid that
     // advances with every add_node_of_type(), so new nodes do not all
-    // stack at (0, 0). Reset by clear_graph().
+    // stack at (0, 0). Reset when the edited asset changes.
     auto next_node_spawn_position() -> ImVec2;
 
     // One background evaluation: the target graph, the shadow graph the
@@ -185,9 +166,9 @@ private:
         bool                                              done{false};   // guarded by mutex
     };
 
-    // The next graph that needs evaluation: the scratch first, then the
-    // Graph_mesh assets of every scene's content library. Null when all
-    // are idle.
+    // The next graph that needs evaluation: the currently edited graph
+    // first (it may be a library orphan), then the Graph_mesh assets of
+    // every scene's content library. Null when all are idle.
     [[nodiscard]] auto next_graph_needing_evaluation() -> std::shared_ptr<Graph_mesh>;
 
     void launch_evaluation(const std::shared_ptr<Graph_mesh>& graph_mesh);
@@ -205,22 +186,17 @@ private:
     void process_attachment_push_requests();
 
     App_context&                                      m_app_context;
-    // The window's own fallback graph, edited when no Graph_mesh asset is
-    // selected. A benign scratch surface (mirrors Texture_graph_window's
-    // default Graph_texture): the selected asset always takes precedence,
-    // and the scratch is never referenced by a scene node attachment.
-    std::shared_ptr<Graph_mesh>                       m_scratch_graph_mesh;
-    // The graph currently being edited (selected asset or the scratch).
+    // The graph currently being edited: the selected content-library asset,
+    // or null when nothing is selected (empty state).
     std::shared_ptr<Graph_mesh>                       m_graph_mesh;
     std::unique_ptr<ax::NodeEditor::EditorContext>    m_node_editor;
     std::shared_ptr<Evaluation_run>                   m_evaluation_run; // non-null while a run is in flight
-    std::string                                       m_graph_path{"res/editor/graphs/geometry_graph.json"};
     int                                               m_spawn_count{0};
 };
 
-// Companion window hosting the Geometry Graph's file toolbar and node toolbar,
-// so the palette and the canvas can be docked / sized independently. It owns no
-// graph state; it forwards to Geometry_graph_window::controls_imgui().
+// Companion window hosting the Geometry Graph's node palette, so the palette
+// and the canvas can be docked / sized independently. It owns no graph state;
+// it forwards to Geometry_graph_window::controls_imgui().
 class Geometry_graph_palette_window : public erhe::imgui::Imgui_window
 {
 public:

@@ -1163,9 +1163,6 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "geometry_graph_set_parameter") result = action_geometry_graph_set_parameter(req->arguments);
         else if (req->tool_name == "geometry_graph_connect")       result = action_geometry_graph_connect      (req->arguments);
         else if (req->tool_name == "geometry_graph_disconnect")    result = action_geometry_graph_disconnect   (req->arguments);
-        else if (req->tool_name == "geometry_graph_save")          result = action_geometry_graph_save         (req->arguments);
-        else if (req->tool_name == "geometry_graph_load")          result = action_geometry_graph_load         (req->arguments);
-        else if (req->tool_name == "geometry_graph_clear")         result = action_geometry_graph_clear        (req->arguments);
         else if (req->tool_name == "create_graph_texture")         result = action_create_graph_texture        (req->arguments);
         else if (req->tool_name == "set_material_texture_source")  result = action_set_material_texture_source (req->arguments);
         else if (req->tool_name == "get_graph_textures")           result = query_graph_textures               (req->arguments);
@@ -1836,22 +1833,6 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"node_id", "parameters"})}
     }});
-    m_tool_infos.push_back({"geometry_graph_save", "Save the geometry node graph to a JSON file (node types, parameters, canvas positions, links).", {
-        {"type", "object"},
-        {"properties", {
-            {"path", {{"type", "string"}, {"description", "File path to save to (parent directories are created)"}}}
-        }},
-        {"required", json::array({"path"})}
-    }});
-    m_tool_infos.push_back({"geometry_graph_load", "Load the geometry node graph from a JSON file, replacing the current graph content. Undoable (single operation).", {
-        {"type", "object"},
-        {"properties", {
-            {"path", {{"type", "string"}, {"description", "File path to load from"}}}
-        }},
-        {"required", json::array({"path"})}
-    }});
-    m_tool_infos.push_back({"geometry_graph_clear", "Remove all nodes and links from the geometry node graph. Undoable (single operation).", schema_no_args()});
-
     m_tool_infos.push_back({"create_graph_texture", "Create a Graph Texture asset (a procedural texture backed by a node graph) in a scene's content library and select it. The selected Graph Texture is what the Texture Graph window edits and what the texture_graph_* tools operate on. A Material slot can then source from it (set_material_texture_source). Returns the new asset's id and name.", {
         {"type", "object"},
         {"properties", {
@@ -5817,10 +5798,21 @@ auto Mcp_server::query_geometry_graph(const json& args) -> std::string
         return make_error_content("Geometry graph window not available");
     }
 
-    // Evaluation runs in the background; block until the graph is fully
+    // Evaluation runs in the background; block until every graph is fully
     // evaluated so the reported payloads reflect every mutation issued
     // before this query (mutation tools return without waiting).
     window->wait_for_idle_evaluation();
+
+    // Which graph the geometry_graph_* tools currently target (the
+    // selected Graph_mesh asset; none selected = empty state).
+    const std::shared_ptr<Graph_mesh>& graph_mesh = window->get_current_graph_mesh();
+    if (!graph_mesh) {
+        json result;
+        result["selected"] = false;
+        result["nodes"]    = json::array();
+        result["links"]    = json::array();
+        return make_json_content(result).dump();
+    }
 
     json nodes = json::array();
     for (const std::shared_ptr<Geometry_graph_node>& node : window->get_nodes()) {
@@ -5828,7 +5820,7 @@ auto Mcp_server::query_geometry_graph(const json& args) -> std::string
     }
 
     json links = json::array();
-    for (const std::unique_ptr<erhe::graph::Link>& link : window->get_graph().get_links()) {
+    for (const std::unique_ptr<erhe::graph::Link>& link : graph_mesh->graph().get_links()) {
         links.push_back({
             {"source_node_id", link->get_source()->get_owner_node()->get_id()},
             {"source_slot",    link->get_source()->get_slot()},
@@ -5838,14 +5830,11 @@ auto Mcp_server::query_geometry_graph(const json& args) -> std::string
     }
 
     json result;
-    result["nodes"] = nodes;
-    result["links"] = links;
-    // Which graph the geometry_graph_* tools currently target (the
-    // selected Graph_mesh asset, or the window scratch).
-    const std::shared_ptr<Graph_mesh>& graph_mesh = window->get_current_graph_mesh();
+    result["selected"]        = true;
+    result["nodes"]           = nodes;
+    result["links"]           = links;
     result["graph_mesh_name"] = graph_mesh->get_name();
     result["graph_mesh_id"]   = graph_mesh->get_id();
-    result["is_scratch"]      = window->is_editing_scratch();
     return make_json_content(result).dump();
 }
 
@@ -5854,6 +5843,9 @@ auto Mcp_server::action_geometry_graph_add_node(const json& args) -> std::string
     Geometry_graph_window* window = m_context.geometry_graph_window;
     if (window == nullptr) {
         return make_error_content("Geometry graph window not available");
+    }
+    if (!window->get_current_graph_mesh()) {
+        return make_error_content("No Graph Mesh selected - create one (create_graph_mesh) or select one first");
     }
     const std::string type_name = args.value("type", "");
     Geometry_graph_node* node = window->add_node_of_type(type_name);
@@ -5962,63 +5954,6 @@ auto Mcp_server::action_geometry_graph_disconnect(const json& args) -> std::stri
 
     json result;
     result["disconnected"] = true;
-    return make_json_content(result).dump();
-}
-
-auto Mcp_server::action_geometry_graph_save(const json& args) -> std::string
-{
-    Geometry_graph_window* window = m_context.geometry_graph_window;
-    if (window == nullptr) {
-        return make_error_content("Geometry graph window not available");
-    }
-    const std::string path = args.value("path", "");
-    if (path.empty()) {
-        return make_error_content("Missing 'path'");
-    }
-    // Saved parameters must reflect every mutation issued before this
-    // call; parameters are only written on the main thread but waiting
-    // also keeps the save deterministic relative to pending evaluation.
-    window->wait_for_idle_evaluation();
-    const bool ok = window->save_graph(std::filesystem::path{path});
-    if (!ok) {
-        return make_error_content("Save failed: " + path);
-    }
-    json result;
-    result["saved"] = true;
-    result["path"]  = path;
-    return make_json_content(result).dump();
-}
-
-auto Mcp_server::action_geometry_graph_load(const json& args) -> std::string
-{
-    Geometry_graph_window* window = m_context.geometry_graph_window;
-    if (window == nullptr) {
-        return make_error_content("Geometry graph window not available");
-    }
-    const std::string path = args.value("path", "");
-    if (path.empty()) {
-        return make_error_content("Missing 'path'");
-    }
-    const bool ok = window->load_graph(std::filesystem::path{path});
-    if (!ok) {
-        return make_error_content("Load failed: " + path);
-    }
-    json result;
-    result["loaded"] = true;
-    result["path"]   = path;
-    return make_json_content(result).dump();
-}
-
-auto Mcp_server::action_geometry_graph_clear(const json& args) -> std::string
-{
-    static_cast<void>(args);
-    Geometry_graph_window* window = m_context.geometry_graph_window;
-    if (window == nullptr) {
-        return make_error_content("Geometry graph window not available");
-    }
-    window->clear_graph();
-    json result;
-    result["cleared"] = true;
     return make_json_content(result).dump();
 }
 

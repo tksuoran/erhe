@@ -16,7 +16,6 @@
 #include "editor_log.hpp"
 #include "items.hpp"
 #include "content_library/content_library.hpp"
-#include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
@@ -59,12 +58,8 @@ Geometry_graph_window::Geometry_graph_window(
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Geometry Graph", "geometry_graph"}
     , m_app_context            {app_context}
 {
-    // The scratch graph the window edits when no Graph_mesh asset is
-    // selected. Graph_mesh construction does not touch App_context, so
-    // this is safe in the part constructor.
-    m_scratch_graph_mesh = std::make_shared<Graph_mesh>("Geometry Graph Scratch");
-    m_graph_mesh         = m_scratch_graph_mesh;
-
+    // The window edits the selected content-library Graph_mesh; when none
+    // is selected it shows an empty state (see refresh_current_graph_mesh).
     m_node_editor = std::make_unique<ax::NodeEditor::EditorContext>(nullptr);
 
     // Input pins are drawn with PivotAlignment {-0.75, 0.5}, which leaves a
@@ -94,7 +89,12 @@ void Geometry_graph_window::refresh_current_graph_mesh()
         // Material), unlike Selection::get_last_selected<>().
         selected = get<Graph_mesh>(m_app_context.selection->get_selected_items());
     }
-    m_graph_mesh = selected ? selected : m_scratch_graph_mesh;
+    if (m_graph_mesh != selected) {
+        m_graph_mesh = selected;
+        // Restart the spawn grid for the newly edited graph so new nodes do
+        // not continue from another graph's high-water mark.
+        m_spawn_count = 0;
+    }
 }
 
 auto Geometry_graph_window::get_current_graph_mesh() -> const std::shared_ptr<Graph_mesh>&
@@ -103,12 +103,6 @@ auto Geometry_graph_window::get_current_graph_mesh() -> const std::shared_ptr<Gr
     // ordering (an MCP mutation may arrive before the frame's update).
     refresh_current_graph_mesh();
     return m_graph_mesh;
-}
-
-auto Geometry_graph_window::is_editing_scratch() -> bool
-{
-    refresh_current_graph_mesh();
-    return m_graph_mesh == m_scratch_graph_mesh;
 }
 
 auto Geometry_graph_window::graph() -> Geometry_graph&
@@ -121,19 +115,15 @@ auto Geometry_graph_window::mutable_nodes() -> std::vector<std::shared_ptr<Geome
     return m_graph_mesh->nodes();
 }
 
-auto Geometry_graph_window::get_graph() -> Geometry_graph&
-{
-    // Refresh so an MCP read arriving after a selection change (possibly in
-    // the same request batch, before any frame ran) sees the current graph.
-    refresh_current_graph_mesh();
-    return m_graph_mesh->graph();
-}
-
 auto Geometry_graph_window::get_nodes() -> const std::vector<std::shared_ptr<Geometry_graph_node>>&
 {
-    // See get_graph(): the MCP handlers resolve nodes through this before
-    // mutating, so it must agree with the graph the mutation will target.
+    // The MCP handlers resolve nodes through this before mutating, so it
+    // must agree with the graph the mutation will target (refresh first).
     refresh_current_graph_mesh();
+    if (!m_graph_mesh) {
+        static const std::vector<std::shared_ptr<Geometry_graph_node>> s_empty{};
+        return s_empty; // empty state - no asset selected
+    }
     return m_graph_mesh->nodes();
 }
 
@@ -141,15 +131,10 @@ void Geometry_graph_window::insert_node(Graph_mesh& graph_mesh, const std::share
 {
     constexpr uint64_t flags = erhe::Item_flags::visible | erhe::Item_flags::content | erhe::Item_flags::show_in_ui;
     node->enable_flag_bits(flags);
-    // Only ASSET graphs own their nodes: the output node of an asset graph
-    // publishes to the asset (consumed by Geometry_graph_mesh attachments),
-    // while the scratch graph's output keeps the legacy self-owned scene
-    // node so the window is usable without creating an asset.
-    if (&graph_mesh != m_scratch_graph_mesh.get()) {
-        node->set_owning_graph_mesh(std::dynamic_pointer_cast<Graph_mesh>(graph_mesh.shared_from_this()));
-    } else {
-        node->set_owning_graph_mesh({});
-    }
+    // The output node of a graph publishes to the owning asset (consumed
+    // by Geometry_graph_mesh attachments); graphs only live in the content
+    // library, so every node has an owning asset.
+    node->set_owning_graph_mesh(std::dynamic_pointer_cast<Graph_mesh>(graph_mesh.shared_from_this()));
     graph_mesh.nodes().push_back(node);
     graph_mesh.graph().register_node(node.get());
     // A node entering the graph must re-evaluate even when it was clean
@@ -220,9 +205,15 @@ void Geometry_graph_window::set_node_position(const Geometry_graph_node& node, c
 
 void Geometry_graph_window::remove_node(const std::shared_ptr<Geometry_graph_node>& node)
 {
+    // By value: get_current_graph_mesh() returns a reference to m_graph_mesh,
+    // which a nested refresh would reassign under a reference binding.
+    const std::shared_ptr<Graph_mesh> graph_mesh = get_current_graph_mesh();
+    if (!graph_mesh) {
+        return; // empty state - no asset selected
+    }
     m_app_context.operation_stack->execute_now(
         std::make_shared<Geometry_graph_node_insert_remove_operation>(
-            *this, get_current_graph_mesh(), node, Geometry_graph_node_insert_remove_operation::Mode::remove
+            *this, graph_mesh, node, Geometry_graph_node_insert_remove_operation::Mode::remove
         )
     );
 }
@@ -235,6 +226,9 @@ auto Geometry_graph_window::connect(erhe::graph::Pin* source_pin, erhe::graph::P
     // By value: get_current_graph_mesh() returns a reference to m_graph_mesh,
     // which a nested refresh would reassign under a reference binding.
     const std::shared_ptr<Graph_mesh> graph_mesh = get_current_graph_mesh();
+    if (!graph_mesh) {
+        return false; // empty state - no asset selected
+    }
     // Validate before creating the operation: a refused link must not
     // leave a no-op entry on the undo stack.
     if (graph_mesh->graph().would_create_cycle(source_pin, sink_pin)) {
@@ -255,15 +249,22 @@ auto Geometry_graph_window::connect(erhe::graph::Pin* source_pin, erhe::graph::P
 
 void Geometry_graph_window::disconnect(erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin)
 {
+    const std::shared_ptr<Graph_mesh> graph_mesh = get_current_graph_mesh();
+    if (!graph_mesh) {
+        return; // empty state - no asset selected
+    }
     m_app_context.operation_stack->execute_now(
         std::make_shared<Geometry_graph_link_insert_remove_operation>(
-            *this, get_current_graph_mesh(), source_pin, sink_pin, Geometry_graph_link_insert_remove_operation::Mode::remove
+            *this, graph_mesh, source_pin, sink_pin, Geometry_graph_link_insert_remove_operation::Mode::remove
         )
     );
 }
 
 void Geometry_graph_window::set_node_parameters(const std::shared_ptr<Geometry_graph_node>& node, const nlohmann::json& parameters)
 {
+    if (!node) {
+        return;
+    }
     std::string before_parameters = node->dump_parameters();
     node->read_parameters(parameters); // marks the node dirty
     std::string after_parameters = node->dump_parameters();
@@ -292,68 +293,21 @@ auto Geometry_graph_window::next_node_spawn_position() -> ImVec2
 
 auto Geometry_graph_window::add_node_of_type(const std::string& type_name) -> Geometry_graph_node*
 {
+    const std::shared_ptr<Graph_mesh> graph_mesh = get_current_graph_mesh();
+    if (!graph_mesh) {
+        return nullptr; // empty state - no asset selected
+    }
     const std::shared_ptr<Geometry_graph_node> node = make_node(type_name);
     if (!node) {
         return nullptr;
     }
     m_app_context.operation_stack->execute_now(
         std::make_shared<Geometry_graph_node_insert_remove_operation>(
-            *this, get_current_graph_mesh(), node, Geometry_graph_node_insert_remove_operation::Mode::insert
+            *this, graph_mesh, node, Geometry_graph_node_insert_remove_operation::Mode::insert
         )
     );
     set_node_position(*node.get(), next_node_spawn_position());
     return node.get();
-}
-
-void Geometry_graph_window::create_and_select_graph_mesh()
-{
-    if (m_app_context.app_scenes == nullptr) {
-        return;
-    }
-    const std::shared_ptr<Scene_root> scene_root = m_app_context.app_scenes->get_single_scene_root();
-    if (!scene_root) {
-        return;
-    }
-    const std::shared_ptr<Content_library> library = scene_root->get_content_library();
-    if (!library || !library->graph_meshes) {
-        return;
-    }
-    const std::shared_ptr<Graph_mesh> graph_mesh = std::make_shared<Graph_mesh>("Graph Mesh");
-    m_app_context.operation_stack->execute_now(
-        std::make_shared<Item_insert_remove_operation>(
-            Item_insert_remove_operation::Parameters{
-                .context = m_app_context,
-                .item    = std::make_shared<Content_library_node>(graph_mesh),
-                .parent  = library->graph_meshes,
-                .mode    = Item_insert_remove_operation::Mode::insert
-            }
-        )
-    );
-    if (m_app_context.selection != nullptr) {
-        m_app_context.selection->set_selection({graph_mesh});
-    }
-}
-
-void Geometry_graph_window::file_toolbar()
-{
-    // Show which graph is being edited so the window-owned scratch graph
-    // (which is NOT a saveable content-library asset) is never mistaken
-    // for one.
-    refresh_current_graph_mesh();
-    const bool is_scratch = (m_graph_mesh == m_scratch_graph_mesh);
-    if (is_scratch) {
-        ImGui::TextUnformatted("Editing: (scratch - not saved; create an asset to persist)");
-    } else {
-        ImGui::Text("Editing asset: %s", m_graph_mesh->get_name().c_str());
-    }
-    if (ImGui::Button("New Graph Mesh")) { create_and_select_graph_mesh(); }
-    ImGui::Separator();
-
-    ImGui::SetNextItemWidth(320.0f);
-    ImGui::InputText("##graph_path", &m_graph_path);
-    ImGui::SameLine(); if (ImGui::Button("Save"))  { save_graph(std::filesystem::path{m_graph_path}); }
-    ImGui::SameLine(); if (ImGui::Button("Load"))  { load_graph(std::filesystem::path{m_graph_path}); }
-    ImGui::SameLine(); if (ImGui::Button("Clear")) { clear_graph(); }
 }
 
 void Geometry_graph_window::node_toolbar()
@@ -397,9 +351,6 @@ auto Geometry_graph_window::is_evaluation_run_done() -> bool
 
 auto Geometry_graph_window::next_graph_needing_evaluation() -> std::shared_ptr<Graph_mesh>
 {
-    if (m_scratch_graph_mesh->graph().is_evaluation_needed()) {
-        return m_scratch_graph_mesh;
-    }
     // The currently edited graph may be an orphan (asset removed from its
     // library by undo/delete while still selected); it is not reachable
     // through the content libraries below, but edits to it must still
@@ -621,10 +572,9 @@ void Geometry_graph_window::process_attachment_push_requests()
     // Out-of-band pushes (no evaluation involved): a bound node re-entered
     // a scene after missing a push, or an output node left an asset graph
     // publishing an empty bake. Steady-state cost is one bool per graph.
-    if (m_scratch_graph_mesh->consume_attachment_push_request()) {
-        apply_baked_products_to_attachments(m_scratch_graph_mesh);
-    }
-    if (m_graph_mesh && (m_graph_mesh != m_scratch_graph_mesh) && m_graph_mesh->consume_attachment_push_request()) {
+    // The currently edited graph is checked directly because it may be a
+    // library orphan (asset removed by undo/delete while still selected).
+    if (m_graph_mesh && m_graph_mesh->consume_attachment_push_request()) {
         apply_baked_products_to_attachments(m_graph_mesh);
     }
     if (m_app_context.app_scenes != nullptr) {
@@ -665,7 +615,14 @@ void Geometry_graph_window::wait_for_idle_evaluation()
 
 void Geometry_graph_window::controls_imgui()
 {
-    file_toolbar();
+    refresh_current_graph_mesh();
+    if (!m_graph_mesh) {
+        ImGui::TextUnformatted("No Graph Mesh selected.");
+        ImGui::TextUnformatted("Create one in the Content Library (right-click the Graph Meshes folder) and select it.");
+        return;
+    }
+    ImGui::Text("Editing: %s", m_graph_mesh->get_name().c_str());
+    ImGui::Separator();
     node_toolbar();
 
     if (m_evaluation_run) {
@@ -677,6 +634,11 @@ void Geometry_graph_window::imgui()
 {
     // The canvas draws the currently edited graph (selection-driven).
     refresh_current_graph_mesh();
+    if (!m_graph_mesh) {
+        ImGui::TextUnformatted("No Graph Mesh selected.");
+        ImGui::TextUnformatted("Create one in the Content Library (right-click the Graph Meshes folder) and select it.");
+        return;
+    }
 
     m_node_editor->Begin("Geometry Graph", ImVec2{0.0f, 0.0f});
 
