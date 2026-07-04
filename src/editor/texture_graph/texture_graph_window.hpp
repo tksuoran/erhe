@@ -7,7 +7,6 @@
 
 #include <nlohmann/json_fwd.hpp>
 
-#include <filesystem>
 #include <memory>
 #include <string>
 #include <vector>
@@ -55,16 +54,17 @@ public:
     );
     ~Texture_graph_window() noexcept override;
 
-    // Implements Imgui_window. Renders the ax::NodeEditor canvas only; the file
-    // toolbar and node palette live in the companion Texture_graph_palette_window
+    // Implements Imgui_window. Renders the ax::NodeEditor canvas only; the
+    // node palette lives in the companion Texture_graph_palette_window
     // (see controls_imgui()) so the two can be laid out independently.
     void imgui() override;
     auto flags() -> ImGuiWindowFlags override;
 
-    // Renders the file toolbar (Save / Load / Clear / Reseed all) and the
-    // searchable node palette. Called by the companion palette window, not from
-    // this window's imgui(). Kept here because it operates on this window's graph
-    // state and must stay outside the ax::NodeEditor canvas Begin/End.
+    // Renders the edited-asset header ("Editing: <name>" / empty-state hint,
+    // Reseed all) and the searchable node palette. Called by the companion
+    // palette window, not from this window's imgui(). Kept here because it
+    // operates on this window's graph state and must stay outside the
+    // ax::NodeEditor canvas Begin/End.
     void controls_imgui();
 
     // Runs the synchronous dirty-flag evaluation. Called once per frame from
@@ -86,12 +86,13 @@ public:
     void set_node_parameters(const std::shared_ptr<Texture_graph_node>& node, const nlohmann::json& parameters);
 
     // The graph currently being edited: the selected content-library
-    // Graph_texture asset, or the window's default graph when nothing is
-    // selected. Refreshed once per frame (update() / imgui()). MCP and the
-    // canvas gestures operate on this one.
+    // Graph_texture asset, or null when nothing (of that type) is selected -
+    // the window then shows an empty state and edits refuse. Refreshed once
+    // per frame (update() / imgui()). MCP and the canvas gestures operate on
+    // this one.
     [[nodiscard]] auto get_current_graph_texture() -> const std::shared_ptr<Graph_texture>&;
 
-    [[nodiscard]] auto get_graph() -> Texture_graph&;
+    // Empty when no Graph_texture asset is selected.
     [[nodiscard]] auto get_nodes() const -> const std::vector<std::shared_ptr<Texture_graph_node>>&;
 
     // The shared render-to-texture helper. Created lazily on first use (the part
@@ -100,21 +101,14 @@ public:
     // Used by the in-editor MCP server's texture_graph_export_png tool.
     [[nodiscard]] auto get_renderer() -> Texture_renderer*;
 
-    // Graph serialization (JSON: node types + parameters + canvas positions,
-    // links by node index + pin slot). Load and clear are undoable (single
-    // Texture_graph_replace_operation).
-    auto save_graph (const std::filesystem::path& path) -> bool;
-    auto load_graph (const std::filesystem::path& path) -> bool;
-    void clear_graph();
-
     // Assigns every seeded node a fresh deterministic seed (each an individually
-    // undoable parameter change). Bound to the toolbar "Reseed all" button.
+    // undoable parameter change). Bound to the palette "Reseed all" button.
     void reseed_all();
 
     // Non-undoable primitives, targeting a specific Graph_texture so undo/redo
     // stays correct even if the selection changes between an edit and its undo
     // (the operations bind the graph they were created for). Called by the
-    // graph operations and by load.
+    // graph operations and by scene load.
     void insert_node    (Graph_texture& graph_texture, const std::shared_ptr<Texture_graph_node>& node);
     void erase_node     (Graph_texture& graph_texture, const std::shared_ptr<Texture_graph_node>& node);
     auto connect_pins   (Graph_texture& graph_texture, erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool;
@@ -141,11 +135,6 @@ private:
     };
 
     auto make_node       (const std::string& type_name) -> std::shared_ptr<Texture_graph_node>;
-    // Creates a Graph_texture asset in the (single) scene's content library and
-    // selects it, so the window switches from the scratch graph to editing a
-    // real, saveable asset. Bound to the palette toolbar "New Graph Texture".
-    void create_and_select_graph_texture();
-    void file_toolbar    ();
     // Searchable, categorized node palette (replaces the old fixed toolbar).
     // Built once from the descriptor registry + a category tag, so new node
     // types appear automatically. Plain ImGui, kept outside the ax::NodeEditor
@@ -168,32 +157,28 @@ private:
     void evaluate_and_render(Graph_texture& graph_texture);
 
     // Points m_graph_texture at the selected content-library Graph_texture, or
-    // the window's default graph when nothing (of that type) is selected.
+    // null when nothing (of that type) is selected.
     void refresh_current_graph_texture();
 
-    // Accessors to the currently-edited graph's state (the selected asset or the
-    // default). Used by the canvas iteration and the serialization/MCP surface.
+    // Accessors to the currently-edited asset's state. Callers must have
+    // checked get_current_graph_texture() for null (empty state) first.
     [[nodiscard]] auto graph() -> Texture_graph&;
     [[nodiscard]] auto mutable_nodes() -> std::vector<std::shared_ptr<Texture_graph_node>>&;
 
     App_context&                                     m_app_context;
-    // The window's own fallback graph, edited when no Graph_texture asset is
-    // selected. Transitional: Step A7 drops it once the smoke test / UI always
-    // create + select a content-library asset.
-    std::shared_ptr<Graph_texture>                   m_default_graph_texture;
-    // The graph currently being edited (selected asset or the default above).
+    // The graph currently being edited: the selected content-library asset,
+    // or null when nothing is selected (empty state).
     std::shared_ptr<Graph_texture>                   m_graph_texture;
     std::unique_ptr<Texture_renderer>                m_renderer;
     std::unique_ptr<ax::NodeEditor::EditorContext>   m_node_editor;
-    std::string                                      m_graph_path{"res/editor/graphs/texture_graph.json"};
     int                                              m_spawn_count{0};
     std::vector<Palette_category>                    m_palette_categories; // built lazily by build_palette()
     std::string                                      m_palette_filter;     // node-palette search text
 };
 
-// Companion window hosting the Texture Graph's file toolbar and node palette,
-// so the palette and the canvas can be docked / sized independently. It owns no
-// graph state; it forwards to Texture_graph_window::controls_imgui().
+// Companion window hosting the Texture Graph's node palette, so the palette
+// and the canvas can be docked / sized independently. It owns no graph state;
+// it forwards to Texture_graph_window::controls_imgui().
 class Texture_graph_palette_window : public erhe::imgui::Imgui_window
 {
 public:

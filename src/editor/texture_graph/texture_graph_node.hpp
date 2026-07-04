@@ -169,8 +169,8 @@ public:
     // The Graph_texture asset this node belongs to (set when the node is added
     // to a graph). A sink node uses it so an in-window "assign to material" binds
     // the material to the owning asset (a live, persisted texture_source) rather
-    // than pushing a one-off baked texture. Null / expired for a node in the
-    // window's default scratch graph (which is not a content-library asset).
+    // than pushing a one-off baked texture. Graphs only live in the content
+    // library, so this is always set for a node in a graph.
     void set_owning_graph_texture(const std::weak_ptr<Graph_texture>& graph_texture);
     [[nodiscard]] auto get_owning_graph_texture() const -> std::shared_ptr<Graph_texture>;
 

@@ -10,17 +10,7 @@
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
 
-#include <cfloat>
-#include <cmath>
-
 namespace editor {
-
-auto is_valid_texture_node_position(const ImVec2& position) -> bool
-{
-    return
-        std::isfinite(position.x) && (position.x != FLT_MAX) &&
-        std::isfinite(position.y) && (position.y != FLT_MAX);
-}
 
 auto make_texture_link_record(erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> Texture_graph_link_record
 {
@@ -100,67 +90,6 @@ void Texture_graph_node_insert_remove_operation::remove()
     m_position     = m_window.get_node_position(*m_node.get());
     m_has_position = true;
     m_window.erase_node(*m_graph_texture, m_node);
-}
-
-Texture_graph_replace_operation::Texture_graph_replace_operation(
-    Texture_graph_window&                 window,
-    const std::shared_ptr<Graph_texture>& graph_texture,
-    Texture_graph_content&&               new_content,
-    const char*                           description
-)
-    : m_window      {window}
-    , m_graph_texture{graph_texture}
-    , m_new_content {std::move(new_content)}
-{
-    set_description(std::string{description});
-}
-
-void Texture_graph_replace_operation::execute(App_context&)
-{
-    if (!m_old_captured) {
-        m_old_content  = capture();
-        m_old_captured = true;
-    }
-    apply(m_new_content);
-}
-
-void Texture_graph_replace_operation::undo(App_context&)
-{
-    apply(m_old_content);
-}
-
-auto Texture_graph_replace_operation::capture() -> Texture_graph_content
-{
-    Texture_graph_content content;
-    content.nodes = m_graph_texture->nodes();
-    for (const std::shared_ptr<Texture_graph_node>& node : content.nodes) {
-        content.positions.push_back(m_window.get_node_position(*node.get()));
-    }
-    for (const std::unique_ptr<erhe::graph::Link>& link : m_graph_texture->graph().get_links()) {
-        content.links.push_back(make_texture_link_record(link->get_source(), link->get_sink()));
-    }
-    return content;
-}
-
-void Texture_graph_replace_operation::apply(const Texture_graph_content& content)
-{
-    const std::vector<std::shared_ptr<Texture_graph_node>> current_nodes = m_graph_texture->nodes(); // copy - erase_node mutates
-    for (const std::shared_ptr<Texture_graph_node>& node : current_nodes) {
-        m_window.erase_node(*m_graph_texture, node);
-    }
-    for (std::size_t i = 0, end = content.nodes.size(); i < end; ++i) {
-        const std::shared_ptr<Texture_graph_node>& node = content.nodes[i];
-        m_window.insert_node(*m_graph_texture, node);
-        if (i < content.positions.size()) {
-            const ImVec2 position = content.positions[i];
-            if (is_valid_texture_node_position(position)) {
-                m_window.set_node_position(*node.get(), position);
-            }
-        }
-    }
-    for (const Texture_graph_link_record& record : content.links) {
-        m_window.connect_pins(*m_graph_texture, record.source_pin, record.sink_pin);
-    }
 }
 
 Texture_graph_parameter_operation::Texture_graph_parameter_operation(

@@ -16,7 +16,6 @@
 #include "editor_log.hpp"
 #include "items.hpp"
 #include "content_library/content_library.hpp"
-#include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
@@ -34,7 +33,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <filesystem>
 #include <string>
 
 namespace editor {
@@ -61,10 +59,8 @@ Texture_graph_window::Texture_graph_window(
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Texture Graph", "texture_graph"}
     , m_app_context            {app_context}
 {
-    // The window edits the selected content-library Graph_texture, falling back
-    // to this default when nothing is selected (see refresh_current_graph_texture).
-    m_default_graph_texture = std::make_shared<Graph_texture>("Texture Graph");
-    m_graph_texture         = m_default_graph_texture;
+    // The window edits the selected content-library Graph_texture; when none
+    // is selected it shows an empty state (see refresh_current_graph_texture).
     m_node_editor = std::make_unique<ax::NodeEditor::EditorContext>(nullptr);
 
     // Match the arrowhead settings used for the input pin pivot (the pins are
@@ -108,7 +104,12 @@ void Texture_graph_window::refresh_current_graph_texture()
         // Material), unlike Selection::get_last_selected<>().
         selected = get<Graph_texture>(m_app_context.selection->get_selected_items());
     }
-    m_graph_texture = selected ? selected : m_default_graph_texture;
+    if (m_graph_texture != selected) {
+        m_graph_texture = selected;
+        // Restart the spawn grid for the newly edited graph so new nodes do
+        // not continue from another graph's high-water mark.
+        m_spawn_count = 0;
+    }
 }
 
 void Texture_graph_window::update()
@@ -121,12 +122,9 @@ void Texture_graph_window::update()
 
     refresh_current_graph_texture();
 
-    // Evaluate + bake the default graph and every Graph_texture asset in every
-    // scene, so a material sampling a non-selected graph still sees a baked
-    // texture (notably right after a scene load).
-    if (m_default_graph_texture) {
-        evaluate_and_render(*m_default_graph_texture);
-    }
+    // Evaluate + bake every Graph_texture asset in every scene, so a material
+    // sampling a non-selected graph still sees a baked texture (notably right
+    // after a scene load).
     if (m_app_context.app_scenes != nullptr) {
         for (const std::shared_ptr<Scene_root>& scene_root : m_app_context.app_scenes->get_scene_roots()) {
             const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
@@ -237,9 +235,13 @@ void Texture_graph_window::set_node_position(const Texture_graph_node& node, con
 
 void Texture_graph_window::remove_node(const std::shared_ptr<Texture_graph_node>& node)
 {
+    const std::shared_ptr<Graph_texture>& graph_texture = get_current_graph_texture();
+    if (!graph_texture) {
+        return; // empty state - no asset selected
+    }
     m_app_context.operation_stack->execute_now(
         std::make_shared<Texture_graph_node_insert_remove_operation>(
-            *this, get_current_graph_texture(), node, Texture_graph_node_insert_remove_operation::Mode::remove
+            *this, graph_texture, node, Texture_graph_node_insert_remove_operation::Mode::remove
         )
     );
 }
@@ -250,6 +252,9 @@ auto Texture_graph_window::connect(erhe::graph::Pin* source_pin, erhe::graph::Pi
         return false;
     }
     const std::shared_ptr<Graph_texture>& graph_texture = get_current_graph_texture();
+    if (!graph_texture) {
+        return false; // empty state - no asset selected
+    }
     // Validate before creating the operation: a refused link must not leave a
     // no-op entry on the undo stack.
     if (graph_texture->graph().would_create_cycle(source_pin, sink_pin)) {
@@ -270,15 +275,22 @@ auto Texture_graph_window::connect(erhe::graph::Pin* source_pin, erhe::graph::Pi
 
 void Texture_graph_window::disconnect(erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin)
 {
+    const std::shared_ptr<Graph_texture>& graph_texture = get_current_graph_texture();
+    if (!graph_texture) {
+        return; // empty state - no asset selected
+    }
     m_app_context.operation_stack->execute_now(
         std::make_shared<Texture_graph_link_insert_remove_operation>(
-            *this, get_current_graph_texture(), source_pin, sink_pin, Texture_graph_link_insert_remove_operation::Mode::remove
+            *this, graph_texture, source_pin, sink_pin, Texture_graph_link_insert_remove_operation::Mode::remove
         )
     );
 }
 
 void Texture_graph_window::set_node_parameters(const std::shared_ptr<Texture_graph_node>& node, const nlohmann::json& parameters)
 {
+    if (!node) {
+        return;
+    }
     std::string before_parameters = node->dump_parameters();
     node->read_parameters(parameters); // marks the node dirty
     std::string after_parameters = node->dump_parameters();
@@ -307,13 +319,17 @@ auto Texture_graph_window::next_node_spawn_position() -> ImVec2
 
 auto Texture_graph_window::add_node_of_type(const std::string& type_name) -> Texture_graph_node*
 {
+    const std::shared_ptr<Graph_texture>& graph_texture = get_current_graph_texture();
+    if (!graph_texture) {
+        return nullptr; // empty state - no asset selected
+    }
     const std::shared_ptr<Texture_graph_node> node = make_node(type_name);
     if (!node) {
         return nullptr;
     }
     m_app_context.operation_stack->execute_now(
         std::make_shared<Texture_graph_node_insert_remove_operation>(
-            *this, get_current_graph_texture(), node, Texture_graph_node_insert_remove_operation::Mode::insert
+            *this, graph_texture, node, Texture_graph_node_insert_remove_operation::Mode::insert
         )
     );
     set_node_position(*node.get(), next_node_spawn_position());
@@ -338,13 +354,12 @@ auto Texture_graph_window::mutable_nodes() -> std::vector<std::shared_ptr<Textur
     return m_graph_texture->nodes();
 }
 
-auto Texture_graph_window::get_graph() -> Texture_graph&
-{
-    return m_graph_texture->graph();
-}
-
 auto Texture_graph_window::get_nodes() const -> const std::vector<std::shared_ptr<Texture_graph_node>>&
 {
+    if (!m_graph_texture) {
+        static const std::vector<std::shared_ptr<Texture_graph_node>> s_empty{};
+        return s_empty; // empty state - no asset selected
+    }
     return m_graph_texture->nodes();
 }
 
@@ -358,59 +373,11 @@ auto Texture_graph_window::get_renderer() -> Texture_renderer*
     return m_renderer.get();
 }
 
-void Texture_graph_window::create_and_select_graph_texture()
-{
-    if (m_app_context.app_scenes == nullptr) {
-        return;
-    }
-    const std::shared_ptr<Scene_root> scene_root = m_app_context.app_scenes->get_single_scene_root();
-    if (!scene_root) {
-        return;
-    }
-    const std::shared_ptr<Content_library> library = scene_root->get_content_library();
-    if (!library || !library->graph_textures) {
-        return;
-    }
-    const std::shared_ptr<Graph_texture> graph_texture = std::make_shared<Graph_texture>("Graph Texture");
-    m_app_context.operation_stack->execute_now(
-        std::make_shared<Item_insert_remove_operation>(
-            Item_insert_remove_operation::Parameters{
-                .context = m_app_context,
-                .item    = std::make_shared<Content_library_node>(graph_texture),
-                .parent  = library->graph_textures,
-                .mode    = Item_insert_remove_operation::Mode::insert
-            }
-        )
-    );
-    if (m_app_context.selection != nullptr) {
-        m_app_context.selection->set_selection({graph_texture});
-    }
-}
-
-void Texture_graph_window::file_toolbar()
-{
-    // Show which graph is being edited so the window-owned scratch graph (which
-    // is NOT a saveable content-library asset) is never mistaken for one.
-    refresh_current_graph_texture();
-    const bool is_scratch = (m_graph_texture == m_default_graph_texture);
-    if (is_scratch) {
-        ImGui::TextUnformatted("Editing: (scratch - not saved; create an asset to persist)");
-    } else {
-        ImGui::Text("Editing asset: %s", m_graph_texture->get_name().c_str());
-    }
-    if (ImGui::Button("New Graph Texture")) { create_and_select_graph_texture(); }
-    ImGui::Separator();
-
-    ImGui::SetNextItemWidth(320.0f);
-    ImGui::InputText("##graph_path", &m_graph_path);
-    ImGui::SameLine(); if (ImGui::Button("Save"))  { save_graph(std::filesystem::path{m_graph_path}); }
-    ImGui::SameLine(); if (ImGui::Button("Load"))  { load_graph(std::filesystem::path{m_graph_path}); }
-    ImGui::SameLine(); if (ImGui::Button("Clear")) { clear_graph(); }
-    ImGui::SameLine(); if (ImGui::Button("Reseed all")) { reseed_all(); }
-}
-
 void Texture_graph_window::reseed_all()
 {
+    if (!get_current_graph_texture()) {
+        return; // empty state - no asset selected
+    }
     // Give every seeded node a fresh pattern. Each node's reseed is an
     // individually undoable parameter change (partial {"seed": value} update).
     for (const std::shared_ptr<Texture_graph_node>& node : mutable_nodes()) {
@@ -533,15 +500,30 @@ void Texture_graph_window::node_palette()
 
 void Texture_graph_window::controls_imgui()
 {
-    file_toolbar();
+    refresh_current_graph_texture();
+    if (!m_graph_texture) {
+        ImGui::TextUnformatted("No Graph Texture selected.");
+        ImGui::TextUnformatted("Create one in the Content Library (right-click the Graph Textures folder) and select it.");
+        return;
+    }
+    ImGui::Text("Editing: %s", m_graph_texture->get_name().c_str());
+    if (ImGui::Button("Reseed all")) {
+        reseed_all();
+    }
+    ImGui::Separator();
     node_palette();
 }
 
 void Texture_graph_window::imgui()
 {
-    // Draw whatever graph is currently selected (or the default). update() also
-    // refreshes this, but imgui() may run in a frame where it has not yet.
+    // Draw whatever graph is currently selected. update() also refreshes
+    // this, but imgui() may run in a frame where it has not yet.
     refresh_current_graph_texture();
+    if (!m_graph_texture) {
+        ImGui::TextUnformatted("No Graph Texture selected.");
+        ImGui::TextUnformatted("Create one in the Content Library (right-click the Graph Textures folder) and select it.");
+        return;
+    }
 
     m_node_editor->Begin("Texture Graph", ImVec2{0.0f, 0.0f});
 

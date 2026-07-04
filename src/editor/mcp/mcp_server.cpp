@@ -1178,9 +1178,6 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "texture_graph_set_parameter")  result = action_texture_graph_set_parameter (req->arguments);
         else if (req->tool_name == "texture_graph_connect")        result = action_texture_graph_connect       (req->arguments);
         else if (req->tool_name == "texture_graph_disconnect")     result = action_texture_graph_disconnect    (req->arguments);
-        else if (req->tool_name == "texture_graph_save")           result = action_texture_graph_save          (req->arguments);
-        else if (req->tool_name == "texture_graph_load")           result = action_texture_graph_load          (req->arguments);
-        else if (req->tool_name == "texture_graph_clear")          result = action_texture_graph_clear         (req->arguments);
         else if (req->tool_name == "texture_graph_export_png")     result = action_texture_graph_export_png    (req->arguments);
         else if (req->tool_name == "texture_graph_export_material") result = action_texture_graph_export_material(req->arguments);
         else                                              result = execute_command       (req->tool_name);
@@ -1954,21 +1951,6 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"node_id", "parameters"})}
     }});
-    m_tool_infos.push_back({"texture_graph_save", "Save the texture node graph to a JSON file (node types, parameters, canvas positions, links).", {
-        {"type", "object"},
-        {"properties", {
-            {"path", {{"type", "string"}, {"description", "File path to save to (parent directories are created)"}}}
-        }},
-        {"required", json::array({"path"})}
-    }});
-    m_tool_infos.push_back({"texture_graph_load", "Load the texture node graph from a JSON file, replacing the current graph content. Undoable (single operation).", {
-        {"type", "object"},
-        {"properties", {
-            {"path", {{"type", "string"}, {"description", "File path to load from"}}}
-        }},
-        {"required", json::array({"path"})}
-    }});
-    m_tool_infos.push_back({"texture_graph_clear", "Remove all nodes and links from the texture node graph. Undoable (single operation).", schema_no_args()});
     m_tool_infos.push_back({"texture_graph_export_png", "Compose and render a texture graph node's output to a PNG file. For a generator/filter node the given output slot is rendered; for the Output node (no output pins) the connected input's subtree is rendered. Returns the written path and its width/height. Requires the graphics device (works in the headless Vulkan build).", {
         {"type", "object"},
         {"properties", {
@@ -6455,6 +6437,15 @@ auto Mcp_server::query_texture_graph(const json& args) -> std::string
         return make_error_content("Texture graph window not available");
     }
 
+    const std::shared_ptr<Graph_texture>& current = window->get_current_graph_texture();
+    if (!current) {
+        json result;
+        result["selected"] = false;
+        result["nodes"]    = json::array();
+        result["links"]    = json::array();
+        return make_json_content(result).dump();
+    }
+
     // Texture graph evaluation is synchronous (decision 8), so no wait is needed.
     json nodes = json::array();
     for (const std::shared_ptr<Texture_graph_node>& node : window->get_nodes()) {
@@ -6462,7 +6453,7 @@ auto Mcp_server::query_texture_graph(const json& args) -> std::string
     }
 
     json links = json::array();
-    for (const std::unique_ptr<erhe::graph::Link>& link : window->get_graph().get_links()) {
+    for (const std::unique_ptr<erhe::graph::Link>& link : current->graph().get_links()) {
         links.push_back({
             {"source_node_id", link->get_source()->get_owner_node()->get_id()},
             {"source_slot",    link->get_source()->get_slot()},
@@ -6472,7 +6463,7 @@ auto Mcp_server::query_texture_graph(const json& args) -> std::string
     }
 
     json result;
-    const std::shared_ptr<Graph_texture>& current = window->get_current_graph_texture();
+    result["selected"]           = true;
     result["graph_texture_name"] = current->get_name();
     result["graph_texture_id"]   = current->get_id();
     result["nodes"] = nodes;
@@ -6485,6 +6476,9 @@ auto Mcp_server::action_texture_graph_add_node(const json& args) -> std::string
     Texture_graph_window* window = m_context.texture_graph_window;
     if (window == nullptr) {
         return make_error_content("Texture graph window not available");
+    }
+    if (!window->get_current_graph_texture()) {
+        return make_error_content("No Graph Texture selected - create one (create_graph_texture) or select one first");
     }
     const std::string type_name = args.value("type", "");
     Texture_graph_node* node = window->add_node_of_type(type_name);
@@ -6598,59 +6592,6 @@ auto Mcp_server::action_texture_graph_disconnect(const json& args) -> std::strin
 
     json result;
     result["disconnected"] = true;
-    return make_json_content(result).dump();
-}
-
-auto Mcp_server::action_texture_graph_save(const json& args) -> std::string
-{
-    Texture_graph_window* window = m_context.texture_graph_window;
-    if (window == nullptr) {
-        return make_error_content("Texture graph window not available");
-    }
-    const std::string path = args.value("path", "");
-    if (path.empty()) {
-        return make_error_content("Missing 'path'");
-    }
-    const bool ok = window->save_graph(std::filesystem::path{path});
-    if (!ok) {
-        return make_error_content("Save failed: " + path);
-    }
-    json result;
-    result["saved"] = true;
-    result["path"]  = path;
-    return make_json_content(result).dump();
-}
-
-auto Mcp_server::action_texture_graph_load(const json& args) -> std::string
-{
-    Texture_graph_window* window = m_context.texture_graph_window;
-    if (window == nullptr) {
-        return make_error_content("Texture graph window not available");
-    }
-    const std::string path = args.value("path", "");
-    if (path.empty()) {
-        return make_error_content("Missing 'path'");
-    }
-    const bool ok = window->load_graph(std::filesystem::path{path});
-    if (!ok) {
-        return make_error_content("Load failed: " + path);
-    }
-    json result;
-    result["loaded"] = true;
-    result["path"]   = path;
-    return make_json_content(result).dump();
-}
-
-auto Mcp_server::action_texture_graph_clear(const json& args) -> std::string
-{
-    static_cast<void>(args);
-    Texture_graph_window* window = m_context.texture_graph_window;
-    if (window == nullptr) {
-        return make_error_content("Texture graph window not available");
-    }
-    window->clear_graph();
-    json result;
-    result["cleared"] = true;
     return make_json_content(result).dump();
 }
 

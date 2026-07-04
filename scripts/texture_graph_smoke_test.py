@@ -6,11 +6,13 @@ texture graph feature: every node type constructs with the expected pins and
 default parameters, parameter sweeps round-trip with undo/redo, out-of-range
 parameter abuse never crashes, connect/disconnect obey the pin-key rules and
 reject type mismatches / self links / cycles, undo/redo of add + connect +
-parameter edits, JSON save/load round-trip plus malformed-file error paths,
-and - the core "it actually renders" proof - export_png of a uniform node whose
-center pixel must match the set color, a perlin node whose output must vary,
-and the Output node's baked subtree. Prints a structured PASS/FAIL report and
-exits non-zero on any failure.
+parameter edits, and - the core "it actually renders" proof - export_png of a
+uniform node whose center pixel must match the set color, a perlin node whose
+output must vary, and the Output node's baked subtree. Graphs only live in the
+content library (no window scratch, no graph files): every block starts by
+creating + selecting a fresh Graph_texture asset (fresh_graph()); persistence
+is scene save/load, covered by section_graph_texture_asset. Prints a
+structured PASS/FAIL report and exits non-zero on any failure.
 
 Assumes the headless editor is already running with the MCP server reachable on
 127.0.0.1:8080 (exactly like scripts/geometry_nodes_smoke_test.py). Texture
@@ -155,8 +157,25 @@ def get_graph():
     return call("get_texture_graph")
 
 
-def clear_graph():
-    mutate("texture_graph_clear")
+_scene_name_cache = None
+_fresh_count = 0
+
+
+def _get_scene_name():
+    global _scene_name_cache
+    if _scene_name_cache is None:
+        _scene_name_cache = call("list_scenes")["scenes"][0]["name"]
+    return _scene_name_cache
+
+
+def fresh_graph():
+    """Start the next block on a new, empty Graph_texture asset (created in
+    the content library and auto-selected; the window and the texture_graph_*
+    tools target the selected asset). Graphs only live in the content library
+    - there is no window scratch graph and no clear/load tool."""
+    global _fresh_count
+    _fresh_count += 1
+    mutate("create_graph_texture", {"name": f"Smoke {_fresh_count}", "scene_name": _get_scene_name()})
 
 
 def node_by_id(graph, node_id):
@@ -303,7 +322,7 @@ NODE_SPECS = {
 
 def section_every_node_type():
     S = "node-types"
-    clear_graph()
+    fresh_graph()
     ids = {}
     for type_name, (in_types, out_types, defaults) in NODE_SPECS.items():
         result = add_node(type_name)
@@ -347,8 +366,8 @@ def section_every_node_type():
             ok = ok and good
         check(S, f"{type_name} default parameters", ok, f"params={params} expected~{defaults}")
 
-    clear_graph()
-    check(S, "clear empties graph", len(get_graph()["nodes"]) == 0)
+    fresh_graph()
+    check(S, "fresh asset starts empty", len(get_graph()["nodes"]) == 0)
 
 
 def section_parameter_sweeps():
@@ -380,7 +399,7 @@ def section_parameter_sweeps():
         check(S, f"{label} set+undo/redo", applied and round_trip,
               f"a={state_a} b={state_b} undo={state_after_undo} redo={state_after_redo}")
 
-    clear_graph()
+    fresh_graph()
     uni = add_node("uniform")["id"]
     sweep(uni, {"color": [0.1, 0.2, 0.3, 1.0]}, {"color": [0.9, 0.5, 0.25, 1.0]}, "uniform color")
 
@@ -455,7 +474,7 @@ def section_parameter_abuse():
     stays queryable and the value round-trips (set_parameter does not clamp -
     the descriptor min/max only constrain the widget)."""
     S = "param-abuse"
-    clear_graph()
+    fresh_graph()
 
     perlin = add_node("perlin")["id"]
     set_param(perlin, {"scale_x": -4.0, "iterations": 0.0})
@@ -495,7 +514,7 @@ def section_connect_rules():
     type-mismatch / self / 2-node / 3-node cycles are all rejected with no
     link created and no undo entry."""
     S = "connect"
-    clear_graph()
+    fresh_graph()
     perlin = add_node("perlin")["id"]        # out f (key grayscale)
     colorize = add_node("colorize")["id"]     # in f, out rgba
     output = add_node("output")["id"]         # in f/rgb/rgba (slots 0/1/2)
@@ -516,7 +535,7 @@ def section_connect_rules():
     check(S, "disconnect removes exactly one link", len(links) == 1, f"links={links}")
 
     # Fan out: one perlin feeds colorize.f AND normal_map.f (both grayscale).
-    clear_graph()
+    fresh_graph()
     perlin = add_node("perlin")["id"]
     colorize = add_node("colorize")["id"]
     nm = add_node("normal_map")["id"]
@@ -527,7 +546,7 @@ def section_connect_rules():
     check(S, "generator fans out to two filters", fan == 2, f"links={links}")
 
     # Rejections.
-    clear_graph()
+    fresh_graph()
     uni = add_node("uniform")["id"]           # out rgba (key rgba)
     colorize = add_node("colorize")["id"]     # in f (key grayscale)
     tr_a = add_node("transform")["id"]        # in rgba, out rgba
@@ -556,7 +575,7 @@ def section_connect_rules():
 
 def section_undo_redo():
     S = "undo-redo"
-    clear_graph()
+    fresh_graph()
     depth0 = undo_depth()
 
     # Add a node.
@@ -586,101 +605,11 @@ def section_undo_redo():
     check(S, "redo reapplies the parameter", approx(params_of(perlin).get("scale_x"), 16.0))
 
 
-def section_serialization():
-    S = "serialization"
-    TMP_DIR.mkdir(parents=True, exist_ok=True)
-    clear_graph()
-    # Build a graph with several node types, a couple of links and a set param.
-    perlin = add_node("perlin")["id"]
-    colorize = add_node("colorize")["id"]
-    tr = add_node("transform")["id"]
-    output = add_node("output")["id"]
-    connect(perlin, 0, colorize, 0)
-    connect(colorize, 0, tr, 0)
-    connect(tr, 0, output, 2)
-    set_param(perlin, {"scale_x": 7.0, "iterations": 4.0})
-    set_param(output, {"name": "Serialized Tex"})
-
-    before = get_graph()
-    nodes_before = len(before["nodes"])
-    links_before = len(before["links"])
-    types_before = sorted(n["type"] for n in before["nodes"])
-
-    save_path = TMP_DIR / "roundtrip.json"
-    call("texture_graph_save", {"path": str(save_path)})
-    check(S, "save wrote a file", save_path.is_file() and save_path.stat().st_size > 0)
-
-    clear_graph()
-    check(S, "clear empties graph before load", len(get_graph()["nodes"]) == 0)
-
-    call("texture_graph_load", {"path": str(save_path)})
-    after = get_graph()
-    check(S, "load restores node count", len(after["nodes"]) == nodes_before,
-          f"{len(after['nodes'])}/{nodes_before}")
-    check(S, "load restores link count", len(after["links"]) == links_before,
-          f"{len(after['links'])}/{links_before}")
-    check(S, "load restores node types", sorted(n["type"] for n in after["nodes"]) == types_before)
-
-    def find_type(nodes, type_name):
-        for n in nodes:
-            if n["type"] == type_name:
-                return n
-        return None
-    perlin_after = find_type(after["nodes"], "perlin")
-    output_after = find_type(after["nodes"], "output")
-    check(S, "load restores a float parameter",
-          perlin_after and approx(perlin_after["parameters"].get("scale_x"), 7.0),
-          f"perlin={perlin_after['parameters'] if perlin_after else None}")
-    check(S, "load restores the output name",
-          output_after and output_after["parameters"].get("name") == "Serialized Tex",
-          f"output={output_after['parameters'] if output_after else None}")
-
-    # Malformed files: MCP error, graph unchanged, no crash, no undo entry.
-    nodes_now = len(get_graph()["nodes"])
-    depth_before = undo_depth()
-
-    def expect_load_error(name, filename, content):
-        (TMP_DIR / filename).write_text(content, encoding="utf-8")
-        err = call_expect_error("texture_graph_load", {"path": str(TMP_DIR / filename)})
-        unchanged = len(get_graph()["nodes"]) == nodes_now
-        check(S, name, (err is not None) and unchanged, f"err={err} nodes={len(get_graph()['nodes'])}")
-
-    err = call_expect_error("texture_graph_load", {"path": str(TMP_DIR / "does_not_exist.json")})
-    check(S, "load nonexistent path fails, graph unchanged",
-          (err is not None) and (len(get_graph()["nodes"]) == nodes_now), f"err={err}")
-    expect_load_error("load non-JSON fails", "bad_json.json", "not json {{{")
-    expect_load_error("load unsupported version fails", "bad_version.json",
-                      json.dumps({"version": 99, "nodes": [], "links": []}))
-    expect_load_error("load unknown node type fails", "bad_type.json",
-                      json.dumps({"version": 1, "nodes": [{"type": "warp_core", "parameters": {}}], "links": []}))
-    expect_load_error("load out-of-range link node index fails", "bad_link_index.json",
-                      json.dumps({"version": 1, "nodes": [{"type": "perlin", "parameters": {}}],
-                                  "links": [{"source_node": 0, "source_slot": 0, "sink_node": 5, "sink_slot": 0}]}))
-    expect_load_error("load out-of-range pin slot fails", "bad_link_slot.json",
-                      json.dumps({"version": 1,
-                                  "nodes": [{"type": "perlin", "parameters": {}}, {"type": "colorize", "parameters": {}}],
-                                  "links": [{"source_node": 0, "source_slot": 7, "sink_node": 1, "sink_slot": 0}]}))
-    expect_load_error("load pin key mismatch fails", "bad_link_key.json",
-                      json.dumps({"version": 1,
-                                  "nodes": [{"type": "uniform", "parameters": {}}, {"type": "colorize", "parameters": {}}],
-                                  "links": [{"source_node": 0, "source_slot": 0, "sink_node": 1, "sink_slot": 0}]}))
-    expect_load_error("load cycle-forming links fails", "bad_cycle.json",
-                      json.dumps({"version": 1,
-                                  "nodes": [{"type": "transform", "parameters": {}}, {"type": "transform", "parameters": {}}],
-                                  "links": [{"source_node": 0, "source_slot": 0, "sink_node": 1, "sink_slot": 0},
-                                            {"source_node": 1, "source_slot": 0, "sink_node": 0, "sink_slot": 0}]}))
-
-    err = call_expect_error("texture_graph_save", {"path": str(TMP_DIR)})
-    check(S, "save to a directory path fails", err is not None, f"err={err}")
-    check(S, "no undo entries from failed loads/saves", undo_depth() == depth_before,
-          f"before={depth_before} after={undo_depth()}")
-
-
 def section_render_export():
     """Core proof: composed shaders actually render to pixels."""
     S = "render"
     TMP_DIR.mkdir(parents=True, exist_ok=True)
-    clear_graph()
+    fresh_graph()
 
     # Uniform color -> exact center pixel (linear UNORM RGBA8, no sRGB).
     uni = add_node("uniform")["id"]
@@ -717,7 +646,7 @@ def section_render_export():
     check(S, "perlin output varies (not flat)", varies, f"min={min(reds)} max={max(reds)}")
 
     # Output node bakes the connected subtree: perlin -> colorize -> output.
-    clear_graph()
+    fresh_graph()
     perlin = add_node("perlin")["id"]
     colorize = add_node("colorize")["id"]
     output = add_node("output")["id"]
@@ -738,7 +667,7 @@ def section_render_export():
     check(S, "output baked result varies (colorized noise)", varies, f"min={min(reds)} max={max(reds)}")
 
     # Export of an unconnected Output node must error (nothing composable).
-    clear_graph()
+    fresh_graph()
     lonely = add_node("output")["id"]
     err = call_expect_error("texture_graph_export_png",
                             {"node_id": lonely, "path": str(TMP_DIR / "lonely.png"), "size": 8})
@@ -751,7 +680,7 @@ def section_gradient_curve():
     the curve node inverts a grayscale ramp - both proven by exported pixels."""
     S = "gradient-curve"
     TMP_DIR.mkdir(parents=True, exist_ok=True)
-    clear_graph()
+    fresh_graph()
 
     # Colorize with default $uv.x input -> blue@0 -> red@1 horizontal ramp.
     colorize = add_node("colorize")["id"]
@@ -774,7 +703,7 @@ def section_gradient_curve():
     check(S, "gradient round-trips 2 stops + interpolation", isinstance(g, dict) and len(g["stops"]) == 2 and g["interpolation"] == 1, f"g={g}")
 
     # Curve node inverting its default grayscale $uv.x ramp -> left bright, right dark.
-    clear_graph()
+    fresh_graph()
     curve = add_node("curve")["id"]
     set_param(curve, {"curve": [
         {"x": 0.0, "y": 1.0, "l": 0.0, "r": 0.0},
@@ -794,7 +723,7 @@ def section_output_node():
     """Output node: name/size params, generator connect, assign-to-material
     path (no crash / no visual assert headlessly)."""
     S = "output-node"
-    clear_graph()
+    fresh_graph()
     uni = add_node("uniform")["id"]
     output = add_node("output")["id"]
     set_param(uni, {"color": [0.3, 0.7, 0.2, 1.0]})
@@ -851,7 +780,7 @@ def section_multi_output_decompose():
     then route one output onward through the Output node."""
     S = "multi-output"
     TMP_DIR.mkdir(parents=True, exist_ok=True)
-    clear_graph()
+    fresh_graph()
 
     color = [0.2, 0.4, 0.6, 1.0]
     uni = add_node("uniform")["id"]
@@ -901,7 +830,7 @@ def section_new_filters():
     TMP_DIR.mkdir(parents=True, exist_ok=True)
 
     # invert: uniform color -> invert -> center pixel is 1 - color (RGB).
-    clear_graph()
+    fresh_graph()
     color = [0.2, 0.6, 0.9, 1.0]
     uni = add_node("uniform")["id"]
     set_param(uni, {"color": color})
@@ -916,7 +845,7 @@ def section_new_filters():
     check(S, "invert flips RGB and keeps A", match, f"pixel={cx} expected={expected}")
 
     # math: perlin -> math.in1 with op A*B and default B = 0 -> flat black.
-    clear_graph()
+    fresh_graph()
     perlin = add_node("perlin")["id"]
     set_param(perlin, {"scale_x": 6.0, "scale_y": 6.0, "iterations": 4.0})
     math = add_node("math")["id"]
@@ -930,7 +859,7 @@ def section_new_filters():
 
     # remap: perlin -> remap with min==max collapses the varying input to a
     # constant (min + in*(max-min) - mod(...) == min when max==min).
-    clear_graph()
+    fresh_graph()
     perlin = add_node("perlin")["id"]
     set_param(perlin, {"scale_x": 6.0, "scale_y": 6.0, "iterations": 4.0})
     remap = add_node("remap")["id"]
@@ -983,7 +912,7 @@ def section_buffer():
     (b) one buffer feeding two consumers that both read the same result."""
     S = "buffer"
     TMP_DIR.mkdir(parents=True, exist_ok=True)
-    clear_graph()
+    fresh_graph()
 
     # uniform -> buffer -> reroute : the reroute samples the buffer's texture
     # (the compose DAG cuts at the buffer), so its export must match the uniform.
@@ -1019,7 +948,7 @@ def section_buffer():
     check(S, "buffer feeding two consumers yields the same result", same, f"a={rc} b={c2}")
 
     # A buffer whose input is disconnected must not crash export (no texture yet).
-    clear_graph()
+    fresh_graph()
     lonely_buf = add_node("buffer")["id"]
     lonely_rer = add_node("reroute")["id"]
     connect(lonely_buf, 2, lonely_rer, 0)
@@ -1036,7 +965,7 @@ def section_blur():
     unblurred noise at the same resolution."""
     S = "blur"
     TMP_DIR.mkdir(parents=True, exist_ok=True)
-    clear_graph()
+    fresh_graph()
 
     # perlin -> buffer -> blur ; also export the raw perlin for comparison.
     perlin = add_node("perlin")["id"]
@@ -1072,7 +1001,7 @@ def section_reseed():
     pattern (the mechanism behind the per-node Reseed button and 'Reseed all')."""
     S = "reseed"
     TMP_DIR.mkdir(parents=True, exist_ok=True)
-    clear_graph()
+    fresh_graph()
 
     perlin = add_node("perlin")["id"]
     set_param(perlin, {"scale_x": 6.0, "scale_y": 6.0, "seed": 0.0})
@@ -1116,7 +1045,7 @@ def section_material_output():
 
     # --- Assembly + assignment: perlin->colorize->albedo, shape->roughness,
     #     bricks->metallic, voronoi->occlusion, perlin->normal_map->normal.
-    clear_graph()
+    fresh_graph()
     mat = add_node("material_output")["id"]
     perlin = add_node("perlin")["id"]
     colorize = add_node("colorize")["id"]
@@ -1184,7 +1113,7 @@ def section_material_output():
     check(S, "export skips the unconnected emissive channel", "_emissive.png" not in have, f"files={files}")
 
     # --- ORM packing pixel check: deterministic gray sources -> R=occ,G=rough,B=metal.
-    clear_graph()
+    fresh_graph()
     mat2 = add_node("material_output")["id"]
 
     def gray_uniform(v):
@@ -1206,7 +1135,7 @@ def section_material_output():
         match = all(abs(cx[i] - expected[i]) <= 4 for i in range(3))
         check(S, "ORM packing R=occlusion G=roughness B=metallic", match, f"pixel={cx} expected~{expected}")
 
-    clear_graph()
+    fresh_graph()
     check(S, "editor alive after material output section", len(get_graph()["nodes"]) == 0)
 
 
@@ -1295,7 +1224,6 @@ def main():
         section_parameter_abuse,
         section_connect_rules,
         section_undo_redo,
-        section_serialization,
         section_render_export,
         section_gradient_curve,
         section_multi_output_decompose,
@@ -1315,7 +1243,7 @@ def main():
             check(section.__name__, "section completed without exception", False, repr(error))
 
     try:
-        clear_graph()
+        fresh_graph()
         get_graph()
         call("capture_screenshot", {"path": "logs/texgraph_smoke_final.png"})
     except RuntimeError as error:
