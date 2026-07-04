@@ -40,6 +40,7 @@ build_vs2026_opengl_asan
 build_vs2026_vulkan
 build_vs2026_vulkan_asan
 build_vs2026_vulkan_headless
+build_vs2026_vulkan_headless_asan
 build_test_geometry
 build_android_soak
 build_test_raytrace_bvh
