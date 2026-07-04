@@ -4,6 +4,8 @@
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <cmath>
+
 namespace erhe::geometry::operation {
 
 class Catmull_clark_subdivision : public Geometry_operation
@@ -36,6 +38,77 @@ Catmull_clark_subdivision::Catmull_clark_subdivision(const Geometry& source, Geo
 void Catmull_clark_subdivision::build(const Post_processing post_processing_level)
 {
     const GEO::index_t vertex_count = source_mesh.vertices.nb();
+    const GEO::index_t edge_count   = source_mesh.edges.nb();
+
+    // Semi-sharp crease context (doc/subdivision_crease_edges.md, DeRose/Kass/
+    // Truong 1998). Per-edge sharpness s drives the crease rules below; the
+    // whole path is skipped (has_creases == false) when the source carries no
+    // edge_sharpness values, keeping the smooth output bit-identical to the
+    // pre-crease implementation.
+    bool               has_creases = false;
+    std::vector<float> edge_sharpness;  // per source edge; 0 = smooth, +inf = infinitely sharp
+    std::vector<float> child_sharpness; // per (source edge, end vertex): [2 * edge + end]
+    {
+        Scoped_phase_timer phase_timer{"cc_crease_classify"};
+        const Mesh_attributes& src_attributes = source.get_attributes();
+        for (GEO::index_t src_edge = 0; src_edge < edge_count; ++src_edge) {
+            if (src_attributes.edge_sharpness.try_get(src_edge).value_or(0.0f) > 0.0f) {
+                has_creases = true;
+                break;
+            }
+        }
+        if (has_creases) {
+            edge_sharpness.resize(edge_count);
+            for (GEO::index_t src_edge = 0; src_edge < edge_count; ++src_edge) {
+                edge_sharpness[src_edge] = std::max(src_attributes.edge_sharpness.try_get(src_edge).value_or(0.0f), 0.0f);
+            }
+        }
+    }
+
+    // Sharpness of the child sub-edge of src_edge incident to the given end
+    // vertex, one subdivision level down. Chaikin rule per DKT Appendix B /
+    // OpenSubdiv Crease::SubdivideEdgeSharpnessAtVertex: with 2+ semi-sharp
+    // edges (0 < s < inf) at the end vertex, blend 3/4 own + 1/4 average of
+    // the other semi-sharp edges, then decrement by 1 for the finer level and
+    // clamp at 0. Smooth stays smooth, infinitely sharp stays infinitely sharp.
+    const auto subdivided_sharpness_at_vertex = [&](const GEO::index_t src_edge, const GEO::index_t end_vertex) -> float {
+        const float sharpness = edge_sharpness[src_edge];
+        if (sharpness <= 0.0f) {
+            return 0.0f;
+        }
+        if (std::isinf(sharpness)) {
+            return sharpness;
+        }
+        float result = sharpness;
+        const std::vector<GEO::index_t>& incident_edges = source.get_vertex_edges(end_vertex);
+        if (incident_edges.size() >= 2) {
+            float semi_sharp_sum   = 0.0f;
+            int   semi_sharp_count = 0;
+            for (GEO::index_t incident_edge : incident_edges) {
+                const float incident_sharpness = edge_sharpness[incident_edge];
+                if ((incident_sharpness > 0.0f) && !std::isinf(incident_sharpness)) {
+                    semi_sharp_sum += incident_sharpness;
+                    ++semi_sharp_count;
+                }
+            }
+            if (semi_sharp_count > 1) {
+                const float other_average = (semi_sharp_sum - sharpness) / static_cast<float>(semi_sharp_count - 1);
+                result = (0.75f * sharpness) + (0.25f * other_average);
+            }
+        }
+        result -= 1.0f;
+        return (result > 0.0f) ? result : 0.0f;
+    };
+    if (has_creases) {
+        child_sharpness.assign(2 * static_cast<std::size_t>(edge_count), 0.0f);
+        for (GEO::index_t src_edge = 0; src_edge < edge_count; ++src_edge) {
+            if (edge_sharpness[src_edge] <= 0.0f) {
+                continue;
+            }
+            child_sharpness[(2 * src_edge) + 0] = subdivided_sharpness_at_vertex(src_edge, source_mesh.edges.vertex(src_edge, 0));
+            child_sharpness[(2 * src_edge) + 1] = subdivided_sharpness_at_vertex(src_edge, source_mesh.edges.vertex(src_edge, 1));
+        }
+    }
 
     // Pre-size the source-vertex lookup so map_dst_vertex_from_src_vertex()
     // never grows it; the Source_tables are pre-sized after each batch
@@ -157,6 +230,49 @@ void Catmull_clark_subdivision::build(const Post_processing post_processing_leve
             const std::pair<GEO::index_t, GEO::index_t> src_edge_key = std::make_pair(src_vertex_a, src_vertex_b);
             const GEO::index_t new_dst_vertex = next_dst_vertex++;
             m_src_edge_to_dst_vertex[src_edge_key].push_back(new_dst_vertex);
+
+            // Semi-sharp crease edge point (paper eq. 11): blend the smooth
+            // edge point with the plain midpoint by t = min(sharpness, 1).
+            // Interface edges are already plain midpoints, so t only applies
+            // to interior edges. t == 0 takes the pre-crease code path below,
+            // keeping smooth output bit-identical.
+            const float crease_t = (has_creases && interior_edge) ? std::min(edge_sharpness[src_edge], 1.0f) : 0.0f;
+            if (crease_t > 0.0f) {
+                // Normalized masks: smooth endpoint weight is 1/(2+nf), sharp
+                // is 1/2 (nf = adjacent facet count contributing a centroid).
+                // Emitted weights are the blend scaled by (2+nf) so the t=0
+                // limit reproduces the smooth path's integer weights exactly:
+                //   endpoint: (1-t) + t*(2+nf)/2,  facet total: (1-t).
+                GEO::index_t adjacent_facet_count = 0;
+                for (GEO::index_t src_facet : src_edge_facets) {
+                    if (source_mesh.facets.nb_corners(src_facet) > 0) {
+                        ++adjacent_facet_count;
+                    }
+                }
+                const float endpoint_weight = (1.0f - crease_t) + (crease_t * 0.5f * (2.0f + static_cast<float>(adjacent_facet_count)));
+                add_vertex_source(new_dst_vertex, endpoint_weight, src_vertex_a);
+                add_vertex_source(new_dst_vertex, endpoint_weight, src_vertex_b);
+                for (GEO::index_t src_facet : src_edge_facets) {
+                    const GEO::index_t src_facet_corner_count = source_mesh.facets.nb_corners(src_facet);
+                    if (src_facet_corner_count == 0) {
+                        continue;
+                    }
+                    if (crease_t < 1.0f) {
+                        const float facet_weight = (1.0f - crease_t) / static_cast<float>(src_facet_corner_count);
+                        add_facet_centroid(new_dst_vertex, facet_weight, src_facet);
+                    }
+                    // Corner sources: the centroid contribution above supplies
+                    // them scaled by (1-t); blend in the endpoints' corners
+                    // scaled by t (the interface-edge pattern) so a fully
+                    // sharp midpoint still inherits texcoords / colors.
+                    const GEO::index_t local_a  = source_mesh.facets.find_vertex(src_facet, src_vertex_a);
+                    const GEO::index_t local_b  = source_mesh.facets.find_vertex(src_facet, src_vertex_b);
+                    const GEO::index_t corner_a = source_mesh.facets.corner(src_facet, local_a);
+                    const GEO::index_t corner_b = source_mesh.facets.corner(src_facet, local_b);
+                    add_vertex_corner_source(new_dst_vertex, crease_t, corner_a);
+                    add_vertex_corner_source(new_dst_vertex, crease_t, corner_b);
+                }
+            } else {
             add_vertex_source(new_dst_vertex, 1.0f, src_vertex_a);
             add_vertex_source(new_dst_vertex, 1.0f, src_vertex_b);
 
@@ -186,6 +302,7 @@ void Catmull_clark_subdivision::build(const Post_processing post_processing_leve
                     add_vertex_corner_source(new_dst_vertex, 1.0f, corner_b);
                 }
             }
+            } // crease_t == 0 (pre-crease code path)
 
             // R contribution to the interior-selected endpoints only.
             if (interior_selected(src_vertex_a)) {
@@ -317,6 +434,124 @@ void Catmull_clark_subdivision::build(const Post_processing post_processing_leve
         ERHE_VERIFY(next_dst_facet == (first_dst_facet + quad_count));
     }
 
+    // Crease vertex-point masks. The three phases above assembled the smooth
+    // vertex mask incrementally; for vertices with 2+ incident sharp edges,
+    // rewrite the accumulated Source_table entry into the blend of the parent
+    // and child rule masks (OpenSubdiv Scheme::ComputeVertexVertexMask
+    // semantics resolving DKT Appendix B): parent rule from the incident
+    // sharp-edge count (2 = crease, 3+ = corner), child rule from the
+    // subdivided sharpnesses at this vertex, fractional weight = clamped
+    // average of the sharpness values that decayed to zero across the step.
+    // Masks: crease = 1/8 far_j + 6/8 self + 1/8 far_k (paper eq. 9), corner
+    // = self (eq. 10). All mask components are scaled by the smooth entry's
+    // weight sum so the differing implicit normalizations combine correctly.
+    // Selection-pinned and low-valence vertices keep their pinned mask
+    // (pinning wins; both crease-ish rules are compatible with a pin).
+    if (has_creases) {
+        Scoped_phase_timer phase_timer{"cc_crease_vertex_masks"};
+        for (GEO::index_t src_vertex : source_mesh.vertices) {
+            if (!interior_selected(src_vertex)) {
+                continue;
+            }
+            if (source.get_vertex_corners(src_vertex).size() < 3) {
+                continue; // pinned by the initial-points phase
+            }
+            const std::vector<GEO::index_t>& incident_edges = source.get_vertex_edges(src_vertex);
+
+            int          parent_sharp_count    = 0;
+            GEO::index_t parent_sharp_edges[2] = { GEO::NO_EDGE, GEO::NO_EDGE };
+            for (GEO::index_t incident_edge : incident_edges) {
+                if (edge_sharpness[incident_edge] > 0.0f) {
+                    if (parent_sharp_count < 2) {
+                        parent_sharp_edges[parent_sharp_count] = incident_edge;
+                    }
+                    ++parent_sharp_count;
+                }
+            }
+            if (parent_sharp_count < 2) {
+                continue; // smooth or dart: the smooth mask stands
+            }
+
+            const auto child_end_sharpness = [&](const GEO::index_t incident_edge) -> float {
+                const GEO::index_t end = (source_mesh.edges.vertex(incident_edge, 0) == src_vertex) ? 0 : 1;
+                return child_sharpness[(2 * incident_edge) + end];
+            };
+            int          child_sharp_count    = 0;
+            GEO::index_t child_sharp_edges[2] = { GEO::NO_EDGE, GEO::NO_EDGE };
+            for (GEO::index_t incident_edge : incident_edges) {
+                if (child_end_sharpness(incident_edge) > 0.0f) {
+                    if (child_sharp_count < 2) {
+                        child_sharp_edges[child_sharp_count] = incident_edge;
+                    }
+                    ++child_sharp_count;
+                }
+            }
+
+            enum class Rule : int { smooth = 0, crease = 1, corner = 2 };
+            const Rule parent_rule = (parent_sharp_count == 2) ? Rule::crease : Rule::corner;
+            const Rule child_rule  = (child_sharp_count  <  2) ? Rule::smooth : ((child_sharp_count == 2) ? Rule::crease : Rule::corner);
+
+            float parent_weight = 1.0f;
+            if (child_rule != parent_rule) {
+                float transition_sum   = 0.0f;
+                int   transition_count = 0;
+                for (GEO::index_t incident_edge : incident_edges) {
+                    const float s = edge_sharpness[incident_edge];
+                    if ((s > 0.0f) && !std::isinf(s) && (child_end_sharpness(incident_edge) <= 0.0f)) {
+                        transition_sum += s;
+                        ++transition_count;
+                    }
+                }
+                parent_weight = (transition_count > 0) ? std::min(transition_sum / static_cast<float>(transition_count), 1.0f) : 0.0f;
+            }
+
+            float w_smooth = 0.0f;
+            float w_crease = 0.0f;
+            float w_corner = 0.0f;
+            const auto add_rule_weight = [&](const Rule rule, const float weight) {
+                switch (rule) {
+                    case Rule::smooth: w_smooth += weight; break;
+                    case Rule::crease: w_crease += weight; break;
+                    case Rule::corner: w_corner += weight; break;
+                }
+            };
+            add_rule_weight(parent_rule, parent_weight);
+            if (child_rule != parent_rule) {
+                add_rule_weight(child_rule, 1.0f - parent_weight);
+            }
+
+            const GEO::index_t dst_vertex = m_vertex_src_to_dst[src_vertex];
+            std::vector<std::pair<float, GEO::index_t>>& sources = m_dst_vertex_sources.data()[dst_vertex];
+            float smooth_sum = 0.0f;
+            for (const std::pair<float, GEO::index_t>& entry : sources) {
+                smooth_sum += entry.first;
+            }
+            ERHE_VERIFY(smooth_sum > 0.0f);
+            if (w_smooth <= 0.0f) {
+                sources.clear();
+            } else if (w_smooth < 1.0f) {
+                for (std::pair<float, GEO::index_t>& entry : sources) {
+                    entry.first *= w_smooth;
+                }
+            }
+            if (w_crease > 0.0f) {
+                // Far endpoints come from whichever rule is the crease; when
+                // the rules differ at most one of them is a crease.
+                const GEO::index_t* crease_edges = (parent_rule == Rule::crease) ? parent_sharp_edges : child_sharp_edges;
+                const auto far_vertex = [&](const GEO::index_t crease_edge) -> GEO::index_t {
+                    const GEO::index_t a = source_mesh.edges.vertex(crease_edge, 0);
+                    return (a == src_vertex) ? source_mesh.edges.vertex(crease_edge, 1) : a;
+                };
+                add_vertex_source(dst_vertex, 0.75f  * smooth_sum * w_crease, src_vertex);
+                add_vertex_source(dst_vertex, 0.125f * smooth_sum * w_crease, far_vertex(crease_edges[0]));
+                add_vertex_source(dst_vertex, 0.125f * smooth_sum * w_crease, far_vertex(crease_edges[1]));
+            }
+            if (w_corner > 0.0f) {
+                add_vertex_source(dst_vertex, smooth_sum * w_corner, src_vertex);
+            }
+        }
+    }
+
     // Re-emit the unselected facets, splicing interface-edge midpoints into the
     // ones that border the selection so the seam is welded (no T-junctions).
     emit_unselected_facets_with_boundary_splice();
@@ -343,6 +578,41 @@ void Catmull_clark_subdivision::build(const Post_processing post_processing_leve
     // channels throwaway - the chain's final full post-processing re-derives
     // them from positions - so their interpolation is skipped as well.
     post_processing(post_process_flags(post_processing_level), default_post_process_flags);
+
+    // Propagate child sharpness onto the destination edges. This must run
+    // after post_processing(): the destination edge store only exists once
+    // process() has run build_edges() (both post-processing levels include
+    // it). m_vertex_src_to_dst stays valid across sanitize(): it only ever
+    // deletes degenerate facets, which the quad construction above does not
+    // produce. Zero child values are not written, keeping the destination
+    // attribute sparse.
+    if (has_creases) {
+        Scoped_phase_timer phase_timer{"cc_crease_propagate"};
+        for (GEO::index_t src_edge = 0; src_edge < edge_count; ++src_edge) {
+            if (edge_sharpness[src_edge] <= 0.0f) {
+                continue;
+            }
+            const GEO::index_t src_vertex_a = source_mesh.edges.vertex(src_edge, 0);
+            const GEO::index_t src_vertex_b = source_mesh.edges.vertex(src_edge, 1);
+            const GEO::index_t dst_vertex_a = m_vertex_src_to_dst[src_vertex_a];
+            const GEO::index_t dst_vertex_b = m_vertex_src_to_dst[src_vertex_b];
+            const GEO::index_t midpoint     = get_src_edge_new_vertex(src_vertex_a, src_vertex_b, 0);
+            if (midpoint == GEO::NO_VERTEX) {
+                // Edge untouched by the selection: the facets around it were
+                // re-emitted unsplit, so the sharpness carries unchanged.
+                destination.set_edge_sharpness(dst_vertex_a, dst_vertex_b, edge_sharpness[src_edge]);
+                continue;
+            }
+            const float child_a = child_sharpness[(2 * src_edge) + 0];
+            const float child_b = child_sharpness[(2 * src_edge) + 1];
+            if (child_a > 0.0f) {
+                destination.set_edge_sharpness(dst_vertex_a, midpoint, child_a);
+            }
+            if (child_b > 0.0f) {
+                destination.set_edge_sharpness(midpoint, dst_vertex_b, child_b);
+            }
+        }
+    }
 }
 
 void catmull_clark_subdivision(const Geometry& source, Geometry& destination, const std::set<GEO::index_t>* selected_facets, Component_remap* remap, const Post_processing post_processing_level)
