@@ -1021,7 +1021,13 @@ auto Hotbar::toggle_mesh_visibility() -> bool
 
 void Hotbar::set_mesh_visibility(const bool value)
 {
-    m_window.set_window_visibility(value);
+    // The hotbar window renders into the rendertarget imgui host owned by the
+    // quad view, which is only built once a scene exists (attach_to_scene ->
+    // init_hotbar). Until then there is no host and a visible window would be
+    // drawn into the main desktop window instead (seen with --no-scene), so
+    // keep the window hidden while no quad exists; init_hotbar() re-applies
+    // m_show once the quad is built.
+    m_window.set_window_visibility(value && (m_quad_view != nullptr));
 
     if (m_quad_view) {
         m_quad_view->set_visible(value);
