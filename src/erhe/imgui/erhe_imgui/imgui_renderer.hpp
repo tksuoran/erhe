@@ -235,6 +235,13 @@ private:
     std::vector<std::shared_ptr<erhe::graphics::Texture>> m_imgui_textures;
     std::vector<std::shared_ptr<erhe::graphics::Texture_reference>> m_draw_texture_references;
     std::vector<std::shared_ptr<erhe::graphics::Texture_reference>> m_retained_texture_references;
+    // Texture references displaced from m_retained_texture_references during
+    // render_draw_data(); released in next_frame(). render_draw_data() runs
+    // inside Rendergraph::execute() (under the rendergraph mutex), and dropping
+    // the last reference there can destroy a Rendergraph_node (e.g. a viewport
+    // overlay node of a closed scene), whose destructor re-locks the
+    // rendergraph mutex to unregister itself.
+    std::vector<std::shared_ptr<erhe::graphics::Texture_reference>> m_expired_texture_references;
 
     Imgui_host* m_ime_host{nullptr};
 };

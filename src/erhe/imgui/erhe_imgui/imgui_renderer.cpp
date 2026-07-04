@@ -604,6 +604,12 @@ void Imgui_renderer::next_frame()
         operation();
     }
     m_at_end_of_frame.clear();
+
+    // Release texture references displaced during render_draw_data(). Done
+    // here, outside Rendergraph::execute(), because the last reference can
+    // destroy a Rendergraph_node whose destructor unregisters itself from the
+    // rendergraph (locking the rendergraph mutex).
+    m_expired_texture_references.clear();
 }
 
 static constexpr std::string_view c_imgui_render{"ImGui_ImplErhe_RenderDrawData()"};
@@ -1156,9 +1162,18 @@ void Imgui_renderer::render_draw_data(
     // Move texture references to the retained set instead of clearing them.
     // Multiple ImGui hosts share m_draw_texture_references but render_draw_data()
     // is called per-host. The retained set keeps references alive until the next
-    // frame's first render_draw_data() replaces them.
+    // frame's first render_draw_data() replaces them. The displaced references
+    // are parked in m_expired_texture_references and released in next_frame():
+    // this code runs inside Rendergraph::execute() (under the rendergraph
+    // mutex), and dropping the last reference here can destroy a
+    // Rendergraph_node whose destructor re-locks that mutex to unregister.
     ERHE_DEFER(
         if (!m_draw_texture_references.empty()) {
+            m_expired_texture_references.insert(
+                m_expired_texture_references.end(),
+                std::make_move_iterator(m_retained_texture_references.begin()),
+                std::make_move_iterator(m_retained_texture_references.end())
+            );
             m_retained_texture_references = std::move(m_draw_texture_references);
         }
     );
