@@ -159,7 +159,37 @@ marker, and the selection rect. The canvas outer border (drawn after
 pixel-identical (0 px diff in the node-editor crop, apples-to-apples control vs
 test) and geometry smoke sweep 129/129 (with `editor.graph_editor=trace`).
 
-### Phase 2 remaining work (mouse/hit-test routing was deferred here)
+### Phase 2+3 (done, commit "editor: #251 Phase 2+3 ...")
+
+Flipped to native-resolution rendering in one commit:
+- Helper bodies flipped to the real mapping (DrawPos=ToScreen, DrawVec=FromLocalV,
+  DrawLen=len*ViewScale, DrawRect={ToScreen,ToScreen}, HitMouse=ToCanvas(mouse),
+  + ToCanvasVec for screen->canvas vectors).
+- Canvas EnterLocalSpace/LeaveLocalSpace gutted: no vertex/clip post-transform,
+  no io.MousePos/viewport/window faking, no _FringeScale hack; Enter just clips
+  to the widget rect (screen) + publishes m_ViewRect; Begin's dummy widget is
+  screen-space. End()'s ToCanvas clip pre-transform removed.
+- Mouse/hit-test sites routed: BuildControl mousePos=HitMouse + screen-space
+  interactive-area buttons (DrawPos/DrawVec) + IsMouseHoveringRect(Rect()),
+  SetUserContext real mouse, HandleZoom/FindNodeAt/GetRegion/selection-rect/
+  cursorPin via HitMouse, SelectAction start via ToCanvas. Pan delta drops
+  *m_Zoom (delta is real screen px now). DRAG deltas (DragAction move,
+  SizeAction resize) map via ToCanvasVec - THESE ARE EASY TO MISS: any
+  GetMouseDragDelta applied to canvas-space bounds needs ToCanvasVec.
+- Node content (NodeBuilder::Begin/End): cursor to ToScreen(node_pos), PushFont
+  (nullptr, FontSizeBase*zoom) + 6 zoom-scaled style vars (FramePadding/
+  ItemSpacing/ItemInnerSpacing/IndentSpacing/FrameRounding/GrabMinSize),
+  NodePadding*zoom; EndNode measures the screen group and stores ceil(size/zoom)
+  canvas units (ceil for cross-zoom stability). EndPin/Group map the measured
+  screen rect back to canvas via ToCanvas.
+- Harness: Geometry_graph_window gained a one-shot focus request so the docked
+  window comes to the front of its tab for the capture.
+
+VERIFIED: text crisp at 2x (baseline was blurry; READ logs/crop_*_2.png),
+geometry sweep 129/129 + texture sweep 266/266 (both green), no crashes. Live
+interactive drag/box-select/zoom-under-cursor NOT yet user-verified (Phase 6).
+
+### Phase 2 remaining work (mouse/hit-test routing) - DONE, kept for reference
 
 Phase 1 routed DRAWING only (screenshot-verifiable). The FLIP (Phase 2) must,
 in one commit:

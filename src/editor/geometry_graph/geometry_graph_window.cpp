@@ -732,6 +732,13 @@ void Geometry_graph_window::controls_imgui()
 
 void Geometry_graph_window::imgui()
 {
+    // One-shot focus request (set by set_node_editor_zoom): bring this window
+    // to the front of its dock tab so headless zoom captures show the graph.
+    if (m_focus_requested) {
+        ImGui::SetWindowFocus();
+        m_focus_requested = false;
+    }
+
     // The canvas draws the currently edited graph (selection-driven).
     refresh_current_graph_mesh();
     if (!m_graph_mesh) {
@@ -765,7 +772,8 @@ void Geometry_graph_window::imgui()
 
 void Geometry_graph_window::set_node_editor_zoom(float zoom)
 {
-    show_window(); // ensure the window is visible so it renders for a capture
+    show_window();            // ensure the window is visible so it renders for a capture
+    m_focus_requested = true; // and bring it to the front of its dock tab
     if (m_node_editor) {
         m_node_editor->SetZoom(zoom);
     }

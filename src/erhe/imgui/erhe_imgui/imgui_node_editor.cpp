@@ -1508,23 +1508,10 @@ void ed::EditorContext::End()
 # endif
 
 # if 1
-    // Move user and hint channels to top
+    // Move user and hint channels to top. Issue #251: their clip rects are
+    // already in screen space (there is no canvas post-transform to "bring them
+    // back"), so the former ToCanvas pre-transform is gone - just reorder them.
     {
-        // Clip plane is transformed to global space.
-        // These channels already have clip planes in global space, so
-        // we move them to clip plane. Batch transformation in canvas
-        // will bring them back to global space.
-        auto preTransformClipRect = [this](int channelIndex)
-        {
-            ImDrawChannel& channel = m_DrawList->_Splitter._Channels[channelIndex];
-            for (ImDrawCmd& cmd : channel._CmdBuffer)
-            {
-                auto a = ToCanvas(ImVec2(cmd.ClipRect.x, cmd.ClipRect.y));
-                auto b = ToCanvas(ImVec2(cmd.ClipRect.z, cmd.ClipRect.w));
-                cmd.ClipRect = ImVec4(a.x, a.y, b.x, b.y);
-            }
-        };
-
         m_DrawList->ChannelsSetCurrent(0);
 
         auto channelCount = m_DrawList->_Splitter._Count;
@@ -1532,10 +1519,6 @@ void ed::EditorContext::End()
         ImDrawList_SwapChannels(m_DrawList, c_UserChannel_HintsBackground, channelCount + 0);
         ImDrawList_SwapChannels(m_DrawList, c_UserChannel_Hints,           channelCount + 1);
         ImDrawList_SwapChannels(m_DrawList, c_UserChannel_Content,         channelCount + 2);
-
-        preTransformClipRect(channelCount + 0);
-        preTransformClipRect(channelCount + 1);
-        preTransformClipRect(channelCount + 2);
     }
 # endif
 
@@ -2265,16 +2248,12 @@ void ed::EditorContext::Flow(Link* link, FlowDirection direction)
 
 void ed::EditorContext::SetUserContext(bool globalSpace)
 {
-    const auto mousePos = ImGui::GetMousePos();
+    IM_UNUSED(globalSpace);
 
-    // Move drawing cursor to mouse location and prepare layer for
-    // content added by user.
-    if (globalSpace)
-        ImGui::SetCursorScreenPos(m_Canvas.FromLocal(mousePos));
-    else
-        ImGui::SetCursorScreenPos(m_Canvas.FromLocal(mousePos));
-        //ImGui::SetCursorScreenPos(ImFloor(mousePos));
-        //ImGui::SetCursorScreenPos(ImVec2(floorf(mousePos.x), floorf(mousePos.y)));
+    // Move drawing cursor to mouse location and prepare layer for content added
+    // by user. Issue #251: io.MousePos is real screen space now, so place the
+    // cursor there directly (no canvas->screen mapping).
+    ImGui::SetCursorScreenPos(ImGui::GetMousePos());
 
     if (!IsSuspended())
     {
@@ -2301,12 +2280,15 @@ ed::Control ed::EditorContext::BuildControl(bool allowOffscreen)
     m_IsHoveredWithoutOverlapp = false;
 
     const auto windowHovered = ImGui::IsWindowHovered();
-    const auto widgetHovered = ImGui::IsMouseHoveringRect(m_Canvas.ViewRect().Min, m_Canvas.ViewRect().Max, true);
+    // Issue #251: the canvas widget rect is in real screen space now.
+    const auto widgetHovered = ImGui::IsMouseHoveringRect(m_Canvas.Rect().Min, m_Canvas.Rect().Max, true);
 
     if (!allowOffscreen && !windowHovered && !widgetHovered)
         return Control();
 
-    const auto mousePos = ImGui::GetMousePos();
+    // Mouse in canvas units (HitMouse == the value the old input-fake produced),
+    // so all the canvas-space hit tests below are unchanged.
+    const auto mousePos = HitMouse();
 
     // Expand clip rectangle to always contain cursor
     auto editorRect = m_Canvas.ViewRect();
@@ -2317,7 +2299,8 @@ ed::Control ed::EditorContext::BuildControl(bool allowOffscreen)
         editorRect.Add(ImFloor(mousePos));
         editorRect.Add(ImVec2(ImCeil(mousePos.x), ImCeil(mousePos.y)));
 
-        ImGui::PushClipRect(editorRect.Min, editorRect.Max, false);
+        // editorRect is in canvas units; the clip rect must be in screen space.
+        ImGui::PushClipRect(DrawPos(editorRect.Min), DrawPos(editorRect.Max), false);
     }
 
     ImGuiID activeId            = 0;
@@ -2357,17 +2340,20 @@ ed::Control ed::EditorContext::BuildControl(bool allowOffscreen)
         return pressed ? buttonIndex : -1;
     };
 
-    // Emits invisible button and returns true if it is clicked.
-    auto emitInteractiveAreaEx = [&activeId](ObjectId id, const ImRect& rect, ImGuiButtonFlags extraFlags) -> int
+    // Emits invisible button and returns true if it is clicked. Issue #251:
+    // 'rect' is in canvas units but io.MousePos is real screen space now, so the
+    // button's item rect must be placed and sized in screen space (DrawPos /
+    // DrawVec) for ButtonBehavior's hit test to line up with the mouse.
+    auto emitInteractiveAreaEx = [this, &activeId](ObjectId id, const ImRect& rect, ImGuiButtonFlags extraFlags) -> int
     {
         char idString[33] = { 0 }; // itoa can output 33 bytes maximum
         snprintf(idString, 32, "%p", id.AsPointer());
-        ImGui::SetCursorScreenPos(rect.Min);
+        ImGui::SetCursorScreenPos(DrawPos(rect.Min));
 
         // debug
         //if (id < 0) return ImGui::Button(idString, to_imvec(rect.size));
 
-        auto buttonIndex = invisibleButtonEx(idString, rect.GetSize(), extraFlags);
+        auto buttonIndex = invisibleButtonEx(idString, DrawVec(rect.GetSize()), extraFlags);
 
         // #debug
         //ImGui::GetWindowDrawList()->AddRectFilled(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), IM_COL32(0, 255, 0, 64));
@@ -3301,7 +3287,7 @@ ed::EditorAction::AcceptResult ed::NavigateAction::Accept(const Control& control
         m_IsActive    = true;
         m_ScrollStart = m_Scroll;
         m_ScrollDelta = ImGui::GetMouseDragDelta(Editor->GetConfig().NavigateButtonIndex);
-        m_Scroll      = m_ScrollStart - m_ScrollDelta * m_Zoom;
+        m_Scroll      = m_ScrollStart - m_ScrollDelta; // #251: drag delta is real screen px now
     }
 
     auto& io = ImGui::GetIO();
@@ -3321,7 +3307,7 @@ ed::EditorAction::AcceptResult ed::NavigateAction::Accept(const Control& control
             }
             else if (control.BackgroundHot)
             {
-                auto node = Editor->FindNodeAt(io.MousePos);
+                auto node = Editor->FindNodeAt(Editor->HitMouse());
                 if (IsGroup(node))
                     return node;
             }
@@ -3385,7 +3371,7 @@ bool ed::NavigateAction::Process(const Control& control)
     if (ImGui::IsMouseDragging(Editor->GetConfig().NavigateButtonIndex, 0.0f))
     {
         m_ScrollDelta = ImGui::GetMouseDragDelta(Editor->GetConfig().NavigateButtonIndex);
-        m_Scroll      = m_ScrollStart - m_ScrollDelta * m_Zoom;
+        m_Scroll      = m_ScrollStart - m_ScrollDelta; // #251: drag delta is real screen px now
         m_VisibleRect = GetViewRect();
 //         if (IsActive && Animation.IsPlaying())
 //             Animation.Target = Animation.Target - ScrollDelta * Animation.TargetZoom;
@@ -3421,7 +3407,7 @@ bool ed::NavigateAction::HandleZoom(const Control& control)
 
     m_Animation.Finish();
 
-    auto mousePos = io.MousePos;
+    auto mousePos = Editor->HitMouse(); // #251: canvas coord under cursor (was faked io.MousePos)
     auto newZoom  = GetNextZoom(io.MouseWheel);
 
     auto oldView   = GetView();
@@ -3750,7 +3736,8 @@ bool ed::SizeAction::Process(const Control& control)
 
     if (control.ActiveNode == m_SizedNode)
     {
-        const auto dragOffset = (control.ActiveNode == m_SizedNode) ? ImGui::GetMouseDragDelta(0, 0.0f) : m_LastDragOffset;
+        // #251: drag delta is real screen pixels now; node bounds are canvas units.
+        const auto dragOffset = (control.ActiveNode == m_SizedNode) ? Editor->ToCanvasVec(ImGui::GetMouseDragDelta(0, 0.0f)) : m_LastDragOffset;
         m_LastDragOffset = dragOffset;
 
         if (m_MinimumSize.x == 0.0f && m_LastSize.x != m_SizedNode->m_Bounds.GetWidth())
@@ -3822,7 +3809,7 @@ void ed::SizeAction::ShowMetrics()
 
 ed::NodeRegion ed::SizeAction::GetRegion(Node* node)
 {
-    return node->GetRegion(ImGui::GetMousePos());
+    return node->GetRegion(Editor->HitMouse());
 }
 
 ImGuiMouseCursor ed::SizeAction::ChooseCursor(NodeRegion region)
@@ -3912,7 +3899,7 @@ ed::EditorAction::AcceptResult ed::DragAction::Accept(const Control& control)
 
         m_IsActive = true;
     }
-    else if (control.HotNode && IsGroup(control.HotNode) && control.HotNode->GetRegion(ImGui::GetMousePos()) == NodeRegion::Header)
+    else if (control.HotNode && IsGroup(control.HotNode) && control.HotNode->GetRegion(Editor->HitMouse()) == NodeRegion::Header)
     {
         return Possible;
     }
@@ -3942,7 +3929,9 @@ bool ed::DragAction::Process(const Control& control)
 
     if (control.ActiveObject == m_DraggedObject)
     {
-        auto dragOffset = ImGui::GetMouseDragDelta(Editor->GetConfig().DragButtonIndex, 0.0f);
+        // #251: drag delta is real screen pixels now; node bounds are canvas
+        // units, so map the delta into canvas space.
+        auto dragOffset = Editor->ToCanvasVec(ImGui::GetMouseDragDelta(Editor->GetConfig().DragButtonIndex, 0.0f));
 
         auto draggedOrigin  = m_DraggedObject->DragStartLocation();
         auto alignPivot     = ImVec2(0, 0);
@@ -4052,7 +4041,10 @@ ed::EditorAction::AcceptResult ed::SelectAction::Accept(const Control& control)
     if (Editor->CanAcceptUserInput() && control.BackgroundHot && ImGui::IsMouseDragging(Editor->GetConfig().SelectButtonIndex, 1))
     {
         m_IsActive = true;
-        m_StartPoint = ImGui_GetMouseClickPos(Editor->GetConfig().SelectButtonIndex);
+        // #251: selection rect is stored in canvas units (drawn via DrawPos,
+        // hit-tested against canvas-space object bounds); the click position is
+        // real screen space now, so map it back to canvas.
+        m_StartPoint = Editor->ToCanvas(ImGui_GetMouseClickPos(Editor->GetConfig().SelectButtonIndex));
         m_EndPoint   = m_StartPoint;
 
         // Links and nodes cannot be selected together
@@ -4115,7 +4107,7 @@ bool ed::SelectAction::Process(const Control& control)
 
     if (ImGui::IsMouseDragging(Editor->GetConfig().SelectButtonIndex, 0))
     {
-        m_EndPoint = ImGui::GetMousePos();
+        m_EndPoint = Editor->HitMouse();
 
         auto topLeft     = ImVec2(std::min(m_StartPoint.x, m_EndPoint.x), std::min(m_StartPoint.y, m_EndPoint.y));
         auto bottomRight = ImVec2(ImMax(m_StartPoint.x, m_EndPoint.x), ImMax(m_StartPoint.y, m_EndPoint.y));
@@ -4612,7 +4604,7 @@ bool ed::CreateItemAction::Process(const Control& control)
         const auto draggingFromSource = (m_DraggedPin->m_Kind == PinKind::Output);
 
         ed::Pin cursorPin(Editor, 0, draggingFromSource ? PinKind::Input : PinKind::Output);
-        cursorPin.m_Pivot    = ImRect(ImGui::GetMousePos(), ImGui::GetMousePos());
+        cursorPin.m_Pivot    = ImRect(Editor->HitMouse(), Editor->HitMouse()); // #251: canvas coord
         cursorPin.m_Dir      = -m_DraggedPin->m_Dir;
         cursorPin.m_Strength =  m_DraggedPin->m_Strength;
 
@@ -5212,8 +5204,11 @@ void ed::NodeBuilder::Begin(NodeId nodeId)
         m_CurrentNode->m_CenterOnScreen = false;
     }
 
-    // Position node on screen
-    ImGui::SetCursorScreenPos(m_CurrentNode->m_Bounds.Min);
+    // Position node on screen. Issue #251: node content is authored in real
+    // screen space at the zoomed size (native resolution) - place the cursor at
+    // the node's screen position (not its canvas position in a faked space).
+    const float zoom = Editor->GetView().Scale;
+    ImGui::SetCursorScreenPos(Editor->ToScreen(m_CurrentNode->m_Bounds.Min));
 
     auto& editorStyle = Editor->GetStyle();
 
@@ -5244,13 +5239,36 @@ void ed::NodeBuilder::Begin(NodeId nodeId)
         ImDrawList_SwapSplitter(drawList, m_Splitter);
     }
 
+    // Issue #251: render node content at native resolution - push the font at
+    // the zoomed size (ImGui 1.92 dynamic fonts bake crisp glyphs at any size)
+    // and scale the layout-relevant style metrics by zoom, so the widgets lay
+    // out to match the zoomed node frame. Balanced in End(). Read the base
+    // values off the style reference first (before any push modifies them);
+    // avoid copying the whole ImGuiStyle every node.
+    const ImGuiStyle& style   = ImGui::GetStyle();
+    const float       fontBase        = style.FontSizeBase;
+    const ImVec2      framePadding    = style.FramePadding;
+    const ImVec2      itemSpacing     = style.ItemSpacing;
+    const ImVec2      itemInnerSpacing = style.ItemInnerSpacing;
+    const float       indentSpacing   = style.IndentSpacing;
+    const float       frameRounding   = style.FrameRounding;
+    const float       grabMinSize     = style.GrabMinSize;
+    ImGui::PushFont(nullptr, fontBase * zoom);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,     ImVec2(framePadding.x      * zoom, framePadding.y      * zoom));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,      ImVec2(itemSpacing.x       * zoom, itemSpacing.y       * zoom));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2(itemInnerSpacing.x  * zoom, itemInnerSpacing.y  * zoom));
+    ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing,    indentSpacing * zoom);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding,    frameRounding * zoom);
+    ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize,      grabMinSize   * zoom);
+
     // Begin outer group
     ImGui::BeginGroup();
 
-    // Apply frame padding. Begin inner group if necessary.
+    // Apply frame padding. Begin inner group if necessary. Padding is in canvas
+    // units, so scale it to screen space by zoom.
     if (editorStyle.NodePadding.x != 0 || editorStyle.NodePadding.y != 0 || editorStyle.NodePadding.z != 0 || editorStyle.NodePadding.w != 0)
     {
-        ImGui::SetCursorPos(ImGui::GetCursorPos() + ImVec2(editorStyle.NodePadding.x, editorStyle.NodePadding.y));
+        ImGui::SetCursorPos(ImGui::GetCursorPos() + ImVec2(editorStyle.NodePadding.x * zoom, editorStyle.NodePadding.y * zoom));
         ImGui::BeginGroup();
     }
 }
@@ -5265,28 +5283,35 @@ void ed::NodeBuilder::End()
         ImDrawList_SwapSplitter(drawList, m_Splitter);
     }
 
+    // Issue #251: node content was rendered in screen space at the zoomed size.
+    const float zoom = Editor->GetView().Scale;
+
     // Apply frame padding. This must be done in this convoluted way if outer group
-    // size must contain inner group padding.
+    // size must contain inner group padding. Padding is in canvas units -> * zoom.
     auto& editorStyle = Editor->GetStyle();
     if (editorStyle.NodePadding.x != 0 || editorStyle.NodePadding.y != 0 || editorStyle.NodePadding.z != 0 || editorStyle.NodePadding.w != 0)
     {
         ImGui::EndGroup();
-        ImGui::SameLine(0, editorStyle.NodePadding.z);
+        ImGui::SameLine(0, editorStyle.NodePadding.z * zoom);
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
         ImGui::Dummy(ImVec2(0, 0)); // bump cursor at the end of the line and move to next one
-        ImGui::Dummy(ImVec2(0, editorStyle.NodePadding.w)); // apply padding
+        ImGui::Dummy(ImVec2(0, editorStyle.NodePadding.w * zoom)); // apply padding
         ImGui::PopStyleVar();
     }
 
     // End outer group.
     ImGui::EndGroup();
 
+    // The measured group is in SCREEN pixels; node geometry is stored in canvas
+    // units, so divide the size by zoom. Ceil to whole canvas units so the
+    // stored size (and therefore the drawn frame) does not jitter across zoom
+    // levels where non-linear font metrics change the pixel size slightly.
     m_NodeRect = ImGui_GetItemRect();
-    //m_NodeRect.Floor();
+    const ImVec2 canvasSize = ImVec2(ImCeil(m_NodeRect.GetWidth() / zoom), ImCeil(m_NodeRect.GetHeight() / zoom));
 
-    if (m_CurrentNode->m_Bounds.GetSize() != m_NodeRect.GetSize())
+    if (m_CurrentNode->m_Bounds.GetSize() != canvasSize)
     {
-        m_CurrentNode->m_Bounds.Max = m_CurrentNode->m_Bounds.Min + m_NodeRect.GetSize();
+        m_CurrentNode->m_Bounds.Max = m_CurrentNode->m_Bounds.Min + canvasSize;
         Editor->MakeDirty(SaveReasonFlags::Size, m_CurrentNode);
     }
 
@@ -5302,6 +5327,10 @@ void ed::NodeBuilder::End()
     }
     else
         m_CurrentNode->m_Type        = NodeType::Node;
+
+    // Balance the zoom-scaled font + style pushed in Begin().
+    ImGui::PopStyleVar(6);
+    ImGui::PopFont();
 
     m_CurrentNode = nullptr;
 }
@@ -5360,8 +5389,14 @@ void ed::NodeBuilder::EndPin()
 
     ImGui::EndGroup();
 
+    // Issue #251: the pin group is measured in SCREEN space; pin bounds / pivot
+    // are stored in canvas units (drawn via DrawPos, hit-tested and used as link
+    // endpoints in canvas space), so map the measured rect back to canvas.
     if (m_ResolvePinRect)
-        m_CurrentPin->m_Bounds = ImGui_GetItemRect();
+    {
+        const ImRect screenRect = ImGui_GetItemRect();
+        m_CurrentPin->m_Bounds = ImRect(Editor->ToCanvas(screenRect.Min), Editor->ToCanvas(screenRect.Max));
+    }
 
     if (m_ResolvePivot)
     {
@@ -5434,13 +5469,21 @@ void ed::NodeBuilder::Group(const ImVec2& size)
 
     m_IsGroup = true;
 
+    // Issue #251: group size is in canvas units but content is authored in
+    // screen space, so reserve zoom * size and map the measured screen rect back
+    // to canvas units for storage.
+    const float zoom = Editor->GetView().Scale;
     if (IsGroup(m_CurrentNode))
-        ImGui::Dummy(m_CurrentNode->m_GroupBounds.GetSize());
+        ImGui::Dummy(ImVec2(m_CurrentNode->m_GroupBounds.GetWidth() * zoom, m_CurrentNode->m_GroupBounds.GetHeight() * zoom));
     else
-        ImGui::Dummy(size);
+        ImGui::Dummy(ImVec2(size.x * zoom, size.y * zoom));
 
-    m_GroupBounds = ImGui_GetItemRect();
-    //m_GroupBounds.Floor();
+    // Store canvas-unit bounds; ceil the size (matching NodeBuilder::End) so the
+    // group frame does not sub-pixel-wobble across zoom levels.
+    const ImRect screenRect = ImGui_GetItemRect();
+    const ImVec2 canvasMin  = Editor->ToCanvas(screenRect.Min);
+    const ImVec2 canvasSize = ImVec2(ImCeil(screenRect.GetWidth() / zoom), ImCeil(screenRect.GetHeight() / zoom));
+    m_GroupBounds = ImRect(canvasMin, canvasMin + canvasSize);
 }
 
 ImDrawList* ed::NodeBuilder::GetUserBackgroundDrawList() const

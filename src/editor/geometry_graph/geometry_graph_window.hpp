@@ -215,6 +215,7 @@ private:
     // or null when nothing is selected (empty state).
     std::shared_ptr<Graph_mesh>                       m_graph_mesh;
     std::unique_ptr<ax::NodeEditor::EditorContext>    m_node_editor;
+    bool                                              m_focus_requested{false};
     std::shared_ptr<Evaluation_run>                   m_evaluation_run; // non-null while a run is in flight
     int                                               m_spawn_count{0};
     std::vector<Palette_category>                     m_palette_categories; // built lazily by build_palette()

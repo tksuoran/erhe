@@ -142,11 +142,13 @@ bool ImGuiEx::Canvas::Begin(ImGuiID id, const ImVec2& size)
     ImGui::SetNextItemAllowOverlap();
 # endif
 
-    // Emit dummy widget matching bounds of the canvas.
-    ImGui::SetCursorScreenPos(m_ViewRect.Min);
-    ImGui::Dummy(m_ViewRect.GetSize());
+    // Emit dummy widget matching bounds of the canvas. Issue #251: content is
+    // now authored in screen space, so reserve the real widget rect (in screen
+    // coordinates) rather than the canvas-unit visible region.
+    ImGui::SetCursorScreenPos(m_WidgetPosition);
+    ImGui::Dummy(m_WidgetSize);
 
-    ImGui::SetCursorScreenPos(ImVec2(0.0f, 0.0f));
+    ImGui::SetCursorScreenPos(m_WidgetPosition);
 
     m_InBeginEnd = true;
 
@@ -406,167 +408,30 @@ void ImGuiEx::Canvas::RestoreViewportState()
 
 void ImGuiEx::Canvas::EnterLocalSpace()
 {
-    // Prepare ImDrawList for drawing in local coordinate system:
-    //   - determine visible part of the canvas
-    //   - start unique draw command
-    //   - add clip rect matching canvas size
-    //   - record current command index
-    //   - record current vertex write index
-
-    // Determine visible part of the canvas. Make it before
-    // adding new command, to avoid round rip where command
-    // is removed in PopClipRect() and added again next PushClipRect().
+    // Issue #251: native-resolution rendering. The canvas no longer fakes a
+    // scaled-down local coordinate space; the node editor authors every
+    // primitive and every node-content widget directly in screen space at the
+    // zoomed size (points mapped through canvas->screen, sizes / fonts scaled by
+    // the view scale at submission time). So this used to (a) fake io.MousePos /
+    // viewport / window->Pos into local space, (b) scale _FringeScale, and (c)
+    // record vertex ranges for LeaveLocalSpace to post-multiply - none of which
+    // is needed now. All that remains is:
+    //   - clip canvas content to the widget rect (in real screen space), and
+    //   - publish m_ViewRect (the visible region of the plane, in canvas units),
+    //     which the editor uses for the grid, hit-region and navigation math.
     ImGui::PushClipRect(m_WidgetPosition, m_WidgetPosition + m_WidgetSize, true);
-    auto clipped_clip_rect = m_DrawList->_ClipRectStack.back();
-    ImGui::PopClipRect();
 
-# if IMGUI_EX_CANVAS_DEFERED()
-    m_Ranges.resize(m_Ranges.Size + 1);
-    m_CurrentRange = &m_Ranges.back();
-    m_CurrentRange->BeginComandIndex = ImMax(m_DrawList->CmdBuffer.Size, 0);
-    m_CurrentRange->BeginVertexIndex = m_DrawList->_VtxCurrentIdx + ImVtxOffsetRef(m_DrawList);
-# endif
-    m_DrawListCommadBufferSize       = ImMax(m_DrawList->CmdBuffer.Size, 0);
-    m_DrawListStartVertexIndex       = m_DrawList->_VtxCurrentIdx + ImVtxOffsetRef(m_DrawList);
-
-    // Make sure we do not share draw command with anyone. We don't want to mess
-    // with someones clip rectangle.
-
-    // #FIXME:
-    //     This condition is not enough to avoid when user choose
-    //     to use channel splitter.
-    //
-    //     To deal with Suspend()/Resume() calls empty draw command
-    //     is always added then splitter is active. Otherwise
-    //     channel merger will collapse our draw command one with
-    //     different clip rectangle.
-    //
-    //     More investigation is needed. To get to the bottom of this.
-    if ((!m_DrawList->CmdBuffer.empty() && m_DrawList->CmdBuffer.back().ElemCount > 0) || m_DrawList->_Splitter._Count > 1)
-        m_DrawList->AddCallback(ImDrawCallback_ImCanvas, nullptr);
-
-    m_DrawListFirstCommandIndex = ImMax(m_DrawList->CmdBuffer.Size - 1, 0);
-
-# if defined(IMGUI_HAS_VIEWPORT)
-    auto window = ImGui::GetCurrentWindow();
-    window->Pos = ImVec2(0.0f, 0.0f);
-
-    auto viewport_min = m_ViewportPosBackup;
-    auto viewport_max = m_ViewportPosBackup + m_ViewportSizeBackup;
-
-    viewport_min.x = (viewport_min.x - m_ViewTransformPosition.x) * m_View.InvScale;
-    viewport_min.y = (viewport_min.y - m_ViewTransformPosition.y) * m_View.InvScale;
-    viewport_max.x = (viewport_max.x - m_ViewTransformPosition.x) * m_View.InvScale;
-    viewport_max.y = (viewport_max.y - m_ViewTransformPosition.y) * m_View.InvScale;
-
-    auto viewport = ImGui::GetWindowViewport();
-    viewport->Pos  = viewport_min;
-    viewport->Size = viewport_max - viewport_min;
-
-# if IMGUI_VERSION_NUM > 18002
-    viewport->WorkPos  = m_ViewportWorkPosBackup  * m_View.InvScale;
-    viewport->WorkSize = m_ViewportWorkSizeBackup * m_View.InvScale;
-# else
-    viewport->WorkOffsetMin = m_ViewportWorkOffsetMinBackup * m_View.InvScale;
-    viewport->WorkOffsetMax = m_ViewportWorkOffsetMaxBackup * m_View.InvScale;
-# endif
-# endif
-
-    // Clip rectangle in parent canvas space and move it to local space.
-    clipped_clip_rect.x = (clipped_clip_rect.x - m_ViewTransformPosition.x) * m_View.InvScale;
-    clipped_clip_rect.y = (clipped_clip_rect.y - m_ViewTransformPosition.y) * m_View.InvScale;
-    clipped_clip_rect.z = (clipped_clip_rect.z - m_ViewTransformPosition.x) * m_View.InvScale;
-    clipped_clip_rect.w = (clipped_clip_rect.w - m_ViewTransformPosition.y) * m_View.InvScale;
-    ImGui::PushClipRect(ImVec2(clipped_clip_rect.x, clipped_clip_rect.y), ImVec2(clipped_clip_rect.z, clipped_clip_rect.w), false);
-
-    // Transform mouse position to local space.
-    auto& io = ImGui::GetIO();
-    io.MousePos     = (m_MousePosBackup - m_ViewTransformPosition) * m_View.InvScale;
-    io.MousePosPrev = (m_MousePosPrevBackup - m_ViewTransformPosition) * m_View.InvScale;
-    for (auto i = 0; i < IM_ARRAYSIZE(m_MouseClickedPosBackup); ++i)
-        io.MouseClickedPos[i] = (m_MouseClickedPosBackup[i] - m_ViewTransformPosition) * m_View.InvScale;
-
-    m_ViewRect = CalcViewRect(m_View);;
-
-    auto& fringeScale = ImFringeScaleRef(m_DrawList);
-    m_LastFringeScale = fringeScale;
-    fringeScale *= m_View.InvScale;
+    m_ViewRect = CalcViewRect(m_View);
 }
 
 void ImGuiEx::Canvas::LeaveLocalSpace()
 {
     IM_ASSERT(m_DrawList->_Splitter._Current == m_ExpectedChannel);
 
-# if IMGUI_EX_CANVAS_DEFERED()
-    IM_ASSERT(m_CurrentRange != nullptr);
-
-    m_CurrentRange->EndVertexIndex  = m_DrawList->_VtxCurrentIdx + ImVtxOffsetRef(m_DrawList);
-    m_CurrentRange->EndCommandIndex = m_DrawList->CmdBuffer.size();
-    if (m_CurrentRange->BeginVertexIndex == m_CurrentRange->EndVertexIndex)
-    {
-        // Drop empty range
-        m_Ranges.resize(m_Ranges.Size - 1);
-    }
-    m_CurrentRange = nullptr;
-# endif
-
-    // Move vertices to screen space.
-    auto vertex    = m_DrawList->VtxBuffer.Data + m_DrawListStartVertexIndex;
-    auto vertexEnd = m_DrawList->VtxBuffer.Data + m_DrawList->_VtxCurrentIdx + ImVtxOffsetRef(m_DrawList);
-
-    // If canvas view is not scaled take a faster path.
-    if (m_View.Scale != 1.0f)
-    {
-        while (vertex < vertexEnd)
-        {
-            vertex->pos.x = vertex->pos.x * m_View.Scale + m_ViewTransformPosition.x;
-            vertex->pos.y = vertex->pos.y * m_View.Scale + m_ViewTransformPosition.y;
-            ++vertex;
-        }
-
-        // Move clip rectangles to screen space.
-        for (int i = m_DrawListFirstCommandIndex; i < m_DrawList->CmdBuffer.size(); ++i)
-        {
-            auto& command = m_DrawList->CmdBuffer[i];
-            command.ClipRect.x = command.ClipRect.x * m_View.Scale + m_ViewTransformPosition.x;
-            command.ClipRect.y = command.ClipRect.y * m_View.Scale + m_ViewTransformPosition.y;
-            command.ClipRect.z = command.ClipRect.z * m_View.Scale + m_ViewTransformPosition.x;
-            command.ClipRect.w = command.ClipRect.w * m_View.Scale + m_ViewTransformPosition.y;
-        }
-    }
-    else
-    {
-        while (vertex < vertexEnd)
-        {
-            vertex->pos.x = vertex->pos.x + m_ViewTransformPosition.x;
-            vertex->pos.y = vertex->pos.y + m_ViewTransformPosition.y;
-            ++vertex;
-        }
-
-        // Move clip rectangles to screen space.
-        for (int i = m_DrawListFirstCommandIndex; i < m_DrawList->CmdBuffer.size(); ++i)
-        {
-            auto& command = m_DrawList->CmdBuffer[i];
-            command.ClipRect.x = command.ClipRect.x + m_ViewTransformPosition.x;
-            command.ClipRect.y = command.ClipRect.y + m_ViewTransformPosition.y;
-            command.ClipRect.z = command.ClipRect.z + m_ViewTransformPosition.x;
-            command.ClipRect.w = command.ClipRect.w + m_ViewTransformPosition.y;
-        }
-    }
-
-    // Remove sentinel draw command if present
-    if (m_DrawListCommadBufferSize > 0)
-    {
-        if (m_DrawList->CmdBuffer.size() > m_DrawListCommadBufferSize && m_DrawList->CmdBuffer[m_DrawListCommadBufferSize].UserCallback == ImDrawCallback_ImCanvas)
-            m_DrawList->CmdBuffer.erase(m_DrawList->CmdBuffer.Data + m_DrawListCommadBufferSize);
-        else if (m_DrawList->CmdBuffer.size() >= m_DrawListCommadBufferSize && m_DrawList->CmdBuffer[m_DrawListCommadBufferSize - 1].UserCallback == ImDrawCallback_ImCanvas)
-            m_DrawList->CmdBuffer.erase(m_DrawList->CmdBuffer.Data + m_DrawListCommadBufferSize - 1);
-    }
-
-    auto& fringeScale = ImFringeScaleRef(m_DrawList);
-    fringeScale = m_LastFringeScale;
-
-    // And pop \o/
+    // Issue #251: content is authored directly in screen space, so there is no
+    // vertex / clip-rect post-transform, no _FringeScale restore and no
+    // ImDrawCallback_ImCanvas sentinel to strip. Just balance the clip push and
+    // restore the (unchanged) input / viewport backups.
     ImGui::PopClipRect();
 
     RestoreInputState();

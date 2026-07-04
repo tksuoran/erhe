@@ -1362,25 +1362,25 @@ public:
 
     ImVec2 ToCanvas(const ImVec2& point) const { return m_Canvas.ToLocal(point); }
     ImVec2 ToScreen(const ImVec2& point) const { return m_Canvas.FromLocal(point); }
+    // Screen-space vector (e.g. a mouse drag delta, which is real screen pixels
+    // now) -> canvas units. Inverse of DrawVec. #251.
+    ImVec2 ToCanvasVec(const ImVec2& screenVector) const { return m_Canvas.ToLocalV(screenVector); }
 
-    // ---- issue #251 strangler: transform for the editor's OWN primitive
-    // drawing and hit-testing. In THIS phase the canvas still post-transforms
-    // every emitted vertex/clip in Canvas::LeaveLocalSpace, so primitives are
-    // authored in canvas/local space and these are the IDENTITY - routing draw
-    // sites through them must leave screenshots pixel-identical. Phase 2 changes
-    // ONLY these bodies to the real canvas->screen mapping (point * scale +
-    // origin, size * scale) and disables the canvas post-transform, so the flip
-    // is a localized diff here plus imgui_canvas.cpp.
-    ImVec2 DrawPos (const ImVec2& canvasPos)    const { return canvasPos; }    // point  -> screen
-    ImVec2 DrawVec (const ImVec2& canvasVector) const { return canvasVector; } // vector (no translation)
-    float  DrawLen (float         canvasLength) const { return canvasLength; } // thickness / rounding / radius
-    ImRect DrawRect(const ImRect& canvasRect)   const { return canvasRect; }
-    // Mouse position in the space the editor authors primitives / hit-tests in
-    // (canvas/local space). While the canvas fakes io.MousePos to local space
-    // this is exactly that faked value; Phase 2 returns ToCanvas(real screen
-    // mouse). The pre-Begin true-screen consumers (NavigateAction::MoveOverEdge)
-    // must keep reading io.MousePos directly and must NOT route through this.
-    ImVec2 HitMouse() const { return ImGui::GetMousePos(); }
+    // ---- issue #251: transform for the editor's OWN primitive drawing and
+    // hit-testing. These author primitives directly in SCREEN space at the
+    // zoomed size (native resolution): the canvas no longer post-transforms the
+    // vertex buffer, so points map through canvas->screen and sizes scale by the
+    // view scale here, at submission time. Node CONTENT is likewise emitted in
+    // screen space at a zoomed font (see NodeBuilder). HitMouse maps the real
+    // mouse back to canvas space, giving exactly the value the old fake
+    // produced, so the editor's canvas-space hit-tests are unchanged. The
+    // pre-Begin true-screen consumers (NavigateAction::MoveOverEdge) read
+    // io.MousePos directly and must NOT route through HitMouse.
+    ImVec2 DrawPos (const ImVec2& canvasPos)    const { return ToScreen(canvasPos); }               // point  -> screen
+    ImVec2 DrawVec (const ImVec2& canvasVector) const { return m_Canvas.FromLocalV(canvasVector); } // vector (no translation)
+    float  DrawLen (float         canvasLength) const { return canvasLength * m_Canvas.ViewScale(); } // thickness / rounding / radius
+    ImRect DrawRect(const ImRect& canvasRect)   const { return ImRect(ToScreen(canvasRect.Min), ToScreen(canvasRect.Max)); }
+    ImVec2 HitMouse() const { return ToCanvas(ImGui::GetMousePos()); }
 
     void NotifyLinkDeleted(Link* link);
 
