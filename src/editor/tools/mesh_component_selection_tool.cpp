@@ -6,6 +6,7 @@
 #include "app_message_bus.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/viewport_config.hpp"
+#include "graphics/gradients.hpp"
 #include "input_state.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/operation_stack.hpp"
@@ -780,6 +781,57 @@ void Mesh_component_selection_tool::tool_render(const Render_context& context)
             triangle_renderer.add_triangles(world_from_node, style.face_color, m_scratch_positions, m_scratch_indices);
         }
 
+        // Crease sharpness overlay (doc/subdivision_crease_edges.md): every
+        // edge carrying an edge_sharpness value is drawn colored by a viridis
+        // gradient mapped over the min..max of the present finite values
+        // (values are unclamped floats; infinity renders at the top of the
+        // range). Drawn before the selected edges so selection stays on top.
+        {
+            const erhe::geometry::Mesh_attributes& attributes = geometry->get_attributes();
+            float crease_min = std::numeric_limits<float>::max();
+            float crease_max = std::numeric_limits<float>::lowest();
+            bool  any_crease = false;
+            for (GEO::index_t edge = 0, end = geo_mesh.edges.nb(); edge < end; ++edge) {
+                const std::optional<float> sharpness = attributes.edge_sharpness.try_get(edge);
+                if (!sharpness.has_value()) {
+                    continue;
+                }
+                any_crease = true;
+                if (!std::isinf(sharpness.value())) {
+                    crease_min = std::min(crease_min, sharpness.value());
+                    crease_max = std::max(crease_max, sharpness.value());
+                }
+            }
+            if (any_crease) {
+                const bool  has_range = crease_max > crease_min;
+                line_renderer.set_thickness(style.edge_thickness);
+                for (GEO::index_t edge = 0, end = geo_mesh.edges.nb(); edge < end; ++edge) {
+                    const std::optional<float> sharpness = attributes.edge_sharpness.try_get(edge);
+                    if (!sharpness.has_value()) {
+                        continue;
+                    }
+                    const float t = std::isinf(sharpness.value())
+                        ? 1.0f
+                        : (has_range ? std::clamp((sharpness.value() - crease_min) / (crease_max - crease_min), 0.0f, 1.0f) : 1.0f);
+                    const glm::vec4 color{gradient::viridis.get(t), 1.0f};
+                    const GEO::index_t v0 = geo_mesh.edges.vertex(edge, 0);
+                    const GEO::index_t v1 = geo_mesh.edges.vertex(edge, 1);
+                    const erhe::renderer::Line line{
+                        to_glm_vec3(get_pointf(geo_mesh.vertices, v0)),
+                        to_glm_vec3(get_pointf(geo_mesh.vertices, v1))
+                    };
+                    const Edge_surface_frame frame = compute_edge_surface_frame(*geometry, world_from_node, normal_matrix, v0, v1);
+                    line_renderer.add_surface_lines(
+                        world_from_node, color,
+                        std::span<const erhe::renderer::Line>{&line, 1},
+                        std::span<const glm::vec3>{&frame.normal_a, 1},
+                        std::span<const glm::vec3>{&frame.normal_b, 1},
+                        std::span<const float>{&frame.sign_a, 1}
+                    );
+                }
+            }
+        }
+
         // Edges. Each carries its two adjacent face normals (plus an interior-
         // tangent sign) so the compute line shader makes each side of the
         // wide-line ribbon coplanar with its face (the two-face "tent"),
@@ -988,6 +1040,44 @@ void Mesh_component_selection_tool::viewport_toolbar()
         }
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("Remove crease sharpness from the selected edges");
+        }
+
+        // Crease value range over the live entries' geometries; matches the
+        // min..max mapping the viridis edge overlay uses (infinite values are
+        // counted separately and render at the top of the range).
+        std::size_t crease_count   = 0;
+        std::size_t infinite_count = 0;
+        float       crease_min     = std::numeric_limits<float>::max();
+        float       crease_max     = std::numeric_limits<float>::lowest();
+        for (const Mesh_component_entry& entry : selection.get_entries()) {
+            if (!selection.is_live(entry)) {
+                continue;
+            }
+            const std::shared_ptr<erhe::geometry::Geometry> geometry = entry.geometry.lock();
+            if (!geometry) {
+                continue;
+            }
+            const erhe::geometry::Mesh_attributes& attributes = geometry->get_attributes();
+            for (GEO::index_t edge = 0, end = geometry->get_mesh().edges.nb(); edge < end; ++edge) {
+                const std::optional<float> sharpness = attributes.edge_sharpness.try_get(edge);
+                if (!sharpness.has_value()) {
+                    continue;
+                }
+                ++crease_count;
+                if (std::isinf(sharpness.value())) {
+                    ++infinite_count;
+                } else {
+                    crease_min = std::min(crease_min, sharpness.value());
+                    crease_max = std::max(crease_max, sharpness.value());
+                }
+            }
+        }
+        if (crease_count > 0) {
+            if (crease_count > infinite_count) {
+                ImGui::Text("Crease %.2f .. %.2f (%zu edges, %zu inf)", crease_min, crease_max, crease_count, infinite_count);
+            } else {
+                ImGui::Text("Crease (%zu inf edges)", infinite_count);
+            }
         }
     }
 
