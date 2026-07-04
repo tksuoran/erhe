@@ -668,6 +668,99 @@ auto Mcp_server::action_create_light(const json& args) -> std::string
     }).dump();
 }
 
+auto Mcp_server::action_add_node_attachment(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (!node) {
+        return make_error_content("Node not found (give node_id or node_name)");
+    }
+    const std::string type_key = args.value("type", "");
+    if (type_key.empty()) {
+        return make_error_content("Missing 'type' (attachment catalog key)");
+    }
+    const Attachment_type_info* info = find_attachment_type(type_key);
+    if (info == nullptr) {
+        return make_error_content("Unknown attachment type: " + type_key);
+    }
+    if (!info->can_add(*node)) {
+        return make_error_content(
+            "Cannot add attachment '" + type_key + "' to node '" + node->get_name() +
+            "' (duplicate, or precondition not met)"
+        );
+    }
+    info->make(*m_context.scene_commands, *node);
+    return make_json_content({
+        {"added",   true},
+        {"queued",  true}, // the attach operation executes on the next editor frame
+        {"node",    node->get_name()},
+        {"node_id", node->get_id()},
+        {"type",    type_key}
+    }).dump();
+}
+
+auto Mcp_server::action_remove_node_attachment(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (!node) {
+        return make_error_content("Node not found (give node_id or node_name)");
+    }
+    const std::size_t attachment_id = args.value("attachment_id", std::size_t{0});
+    const std::string type_key      = args.value("type", "");
+    if ((attachment_id == 0) && type_key.empty()) {
+        return make_error_content("Give attachment_id or type to identify the attachment to remove");
+    }
+
+    // Match by attachment_id, or by attachment type name (as reported by
+    // get_node_details, e.g. "Camera", "Node_physics"), case-insensitively.
+    auto iequals = [](std::string_view a, std::string_view b) -> bool {
+        if (a.size() != b.size()) {
+            return false;
+        }
+        for (std::size_t i = 0; i < a.size(); ++i) {
+            if (std::tolower(static_cast<unsigned char>(a[i])) != std::tolower(static_cast<unsigned char>(b[i]))) {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    std::shared_ptr<erhe::scene::Node_attachment> target;
+    for (const std::shared_ptr<erhe::scene::Node_attachment>& att : node->get_attachments()) {
+        const bool match = (attachment_id != 0)
+            ? (att->get_id() == attachment_id)
+            : iequals(type_key, att->get_type_name());
+        if (match) {
+            target = att;
+            break;
+        }
+    }
+    if (!target) {
+        return make_error_content("No matching attachment on node '" + node->get_name() + "'");
+    }
+
+    const std::string removed_type = std::string{target->get_type_name()};
+    const std::size_t removed_id   = target->get_id();
+    m_context.scene_commands->remove_attachment(target);
+    return make_json_content({
+        {"removed",       true},
+        {"queued",        true}, // the detach operation executes on the next editor frame
+        {"node",          node->get_name()},
+        {"node_id",       node->get_id()},
+        {"attachment_id", removed_id},
+        {"type",          removed_type}
+    }).dump();
+}
+
 auto Mcp_server::action_edit_light(const json& args) -> std::string
 {
     const std::string scene_name = args.value("scene_name", "");

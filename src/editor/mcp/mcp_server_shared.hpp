@@ -44,6 +44,7 @@
 #include "erhe_graphics/image_writer.hpp"
 #include "editor_log.hpp"
 #include "rendergraph/shadow_render_node.hpp"
+#include "scene/attachment_types.hpp"
 #include "scene/collision_shape_from_mesh.hpp"
 #include "scene/node_joint.hpp"
 #include "scene/node_physics.hpp"

@@ -364,6 +364,8 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "edit_light")         result = action_edit_light     (req->arguments);
         else if (req->tool_name == "edit_camera")        result = action_edit_camera    (req->arguments);
         else if (req->tool_name == "toggle_physics")     result = action_toggle_physics (req->arguments);
+        else if (req->tool_name == "add_node_attachment")    result = action_add_node_attachment(req->arguments);
+        else if (req->tool_name == "remove_node_attachment") result = action_remove_node_attachment(req->arguments);
         else if (req->tool_name == "reparent_node")      result = action_reparent_node  (req->arguments);
         else if (req->tool_name == "lock_items")         result = action_lock_items     (req->arguments);
         else if (req->tool_name == "unlock_items")       result = action_unlock_items   (req->arguments);

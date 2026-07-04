@@ -133,7 +133,8 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
     for (const auto& att : found_node->get_attachments()) {
         json att_json = {
             {"type", std::string{att->get_type_name()}},
-            {"name", att->get_name()}
+            {"name", att->get_name()},
+            {"id",   att->get_id()}
         };
 
         auto mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(att);

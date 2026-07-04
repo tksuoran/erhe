@@ -148,6 +148,27 @@ void Mcp_server::refresh_tool_list()
         {"required", json::array({"scene_name"})}
     }});
     m_tool_infos.push_back({"toggle_physics",     "Toggle dynamic physics simulation on/off",              schema_no_args()});
+    m_tool_infos.push_back({"add_node_attachment", "Add a new attachment to a scene node (undoable, executes on the next frame). 'type' is a catalog key: camera, light, mesh, rigid_body, joint, layout, layout_item, grid, frame_controller. All kinds except joint are single-instance (refused if the node already has one). layout_item requires the node's parent to have a layout. Verify with get_node_details.", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name", {{"type", "string"},  {"description", "Name of the scene"}}},
+            {"node_id",    {{"type", "integer"}, {"description", "Target node ID"}}},
+            {"node_name",  {{"type", "string"},  {"description", "Target node name (alternative to node_id)"}}},
+            {"type",       {{"type", "string"},  {"enum", json::array({"camera", "light", "mesh", "rigid_body", "joint", "layout", "layout_item", "grid", "frame_controller"})}, {"description", "Attachment catalog key"}}}
+        }},
+        {"required", json::array({"scene_name", "type"})}
+    }});
+    m_tool_infos.push_back({"remove_node_attachment", "Remove an attachment from a scene node (undoable pure detach, executes on the next frame). Identify the attachment by attachment_id, or by 'type' = its attachment type name as reported by get_node_details (e.g. Camera, Light, Mesh, Node_physics, Grid, Layout), case-insensitive. Any attachment is removable, including ones not in the add catalog.", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name",    {{"type", "string"},  {"description", "Name of the scene"}}},
+            {"node_id",       {{"type", "integer"}, {"description", "Target node ID"}}},
+            {"node_name",     {{"type", "string"},  {"description", "Target node name (alternative to node_id)"}}},
+            {"attachment_id", {{"type", "integer"}, {"description", "ID of the attachment to remove (from get_node_details)"}}},
+            {"type",          {{"type", "string"},  {"description", "Attachment type name to remove (alternative to attachment_id)"}}}
+        }},
+        {"required", json::array({"scene_name"})}
+    }});
     m_tool_infos.push_back({"reparent_node",     "Set a node's parent (by node IDs)",                    {
         {"type", "object"},
         {"properties", {
