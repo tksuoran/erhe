@@ -189,6 +189,41 @@ VERIFIED: text crisp at 2x (baseline was blurry; READ logs/crop_*_2.png),
 geometry sweep 129/129 + texture sweep 266/266 (both green), no crashes. Live
 interactive drag/box-select/zoom-under-cursor NOT yet user-verified (Phase 6).
 
+### Phase 4 (done, commit "editor: #251 Phase 4 ...")
+
+Removed the now-inert machinery: canvas _FringeScale/_VtxCurrentOffset reflection
+helpers + ImDrawCallback_ImCanvas sentinel + input/viewport Save/Restore (+ their
+members), FringeScaleScope guards, and the m_OldCanvas #if 0 block. Suspend/Resume
+kept as balanced clip push/pop. Sweeps green, text still crisp.
+
+### Phase 5 (done, commit "editor: #251 Phase 5 ...")
+
+Combo/popup pilot - proves the fake space is really gone:
+- Conway op stepper -> real ImGui::BeginCombo (conway_node.cpp). Renders + hit-tests
+  correctly inside a node now.
+- Canvas background "Add node" context menu (geometry_graph_window.cpp) via the ax
+  ShowBackgroundContextMenu gesture bracketed by Suspend()/Resume() (which swap the
+  node channel splitter out for the popup) - non-conflicting with right-drag nav.
+- IMPORTANT BUG the pilot exposed: a combo preview must bounds-check its index.
+  `operation_names[m_operation]` overreads (0xc0000005) when the graph-file /
+  MCP set_parameter abuse path drives the enum out of range - the stepper clamped,
+  a raw combo does not. This was NOT a channel-splitter problem (in-node combos
+  render fine); it was a plain OOB read, found via the VS debugger.
+- Verified headlessly: combo renders ("Dual" + dropdown), geometry sweep 129/129
+  (incl. the out-of-range param_abuse section that crashed the unchecked combo),
+  no crash, normal rendering intact. The interactive OPEN of the combo/context
+  menu (needs a mouse click) is deferred to Phase 6 live user verification.
+- Broad stepper->combo conversion deferred to Phase C (noted in editor_improvements.md).
+
+### Phase 6 (remaining) - live user verification
+
+Needs a display + mouse (headless can't drive it): open the combo and context
+menu by clicking; drag nodes; box-select; link create/delete by dragging;
+zoom-under-cursor anchoring keeps the point under the cursor fixed; no node-size
+jitter while zooming. Plus: re-run the zoom matrix and READ 2x/4x PNGs, open+
+screenshot the shader graph + rendergraph windows once, check font atlas growth
+across zoom levels. Restore config/editor/*.{ini,json} after runs.
+
 ### Phase 2 remaining work (mouse/hit-test routing) - DONE, kept for reference
 
 Phase 1 routed DRAWING only (screenshot-verifiable). The FLIP (Phase 2) must,

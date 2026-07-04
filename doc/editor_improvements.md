@@ -118,3 +118,25 @@ App_context is centralized way - a directory - for subsystems to access other su
 
 Editor constructs subsystems in controlled manner. It handles all subsystem dependencies. Distributing the subsystem
 constructions would make managing dependencies harder.
+
+## Convert node-editor enum steppers to real combos (Small-Medium effort, Medium impact)
+
+### Idea from Claude
+
+The per-node widgets in the graph editors (`src/editor/*_graph/nodes/`) use the
+`imgui_enum_stepper` / `imgui_index_stepper` workaround instead of a real
+`ImGui::BeginCombo`, because the old vendored `ax::NodeEditor` faked a scaled-down
+coordinate space that opened nested popups in the wrong place. Issue #251 removed
+that fake space (node content is authored in real screen space now), so combos
+and context menus work inside nodes again - the Conway operation selector is
+converted as a pilot (`geometry_graph/nodes/conway_node.cpp`) and a canvas
+"Add node" background context menu was added to `geometry_graph_window.cpp`.
+
+The broad conversion of the remaining steppers across the three graph editors
+(geometry / texture / shader) belongs to the graph-editor de-duplication work
+("Phase C" in `prompt_queue.txt`): those conversions should land in the shared
+canvas-safe widget layer Phase C creates, not as a fourth per-window copy.
+Gotcha to carry over: a combo preview must bounds-check its index
+(`operation_names[m_operation]` overreads when a malformed graph file or the MCP
+set_parameter abuse path drives the enum out of range - the stepper clamped
+internally, a raw combo does not).

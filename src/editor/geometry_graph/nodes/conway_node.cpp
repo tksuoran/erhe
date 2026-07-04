@@ -53,10 +53,24 @@ void Conway_node::evaluate(Geometry_graph&)
 void Conway_node::imgui()
 {
     const char* operation_names[] = { "Ambo", "Dual", "Join", "Kis", "Meta", "Subdivide", "Truncate", "Chamfer", "Gyro" };
-    int operation = static_cast<int>(m_operation);
-    if (imgui_enum_stepper("operation", operation, operation_names, IM_ARRAYSIZE(operation_names))) {
-        m_operation = static_cast<Conway_operation>(operation);
-        mark_dirty();
+    const int operation = static_cast<int>(m_operation);
+    // m_operation can be out of range (e.g. a malformed graph file or the MCP
+    // set_parameter abuse path), so guard the preview index - operation_names[N]
+    // for N out of bounds is an overread.
+    const char* preview = (operation >= 0 && operation < IM_ARRAYSIZE(operation_names)) ? operation_names[operation] : "?";
+    ImGui::SetNextItemWidth(140.0f);
+    if (ImGui::BeginCombo("operation", preview)) {
+        for (int i = 0; i < IM_ARRAYSIZE(operation_names); ++i) {
+            const bool is_selected = (operation == i);
+            if (ImGui::Selectable(operation_names[i], is_selected)) {
+                m_operation = static_cast<Conway_operation>(i);
+                mark_dirty();
+            }
+            if (is_selected) {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::EndCombo();
     }
 
     switch (m_operation) {
