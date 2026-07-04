@@ -521,14 +521,14 @@ void ed::Pin::Draw(ImDrawList* drawList, DrawFlags flags)
     {
         drawList->ChannelsSetCurrent(m_Node->m_Channel + c_NodePinChannel);
 
-        drawList->AddRectFilled(m_Bounds.Min, m_Bounds.Max,
-            m_Color, m_Rounding, m_Corners);
+        drawList->AddRectFilled(Editor->DrawPos(m_Bounds.Min), Editor->DrawPos(m_Bounds.Max),
+            m_Color, Editor->DrawLen(m_Rounding), m_Corners);
 
         if (m_BorderWidth > 0.0f)
         {
             FringeScaleScope fringe(1.0f);
-            drawList->AddRect(m_Bounds.Min, m_Bounds.Max,
-                m_BorderColor, m_Rounding, m_Corners, m_BorderWidth);
+            drawList->AddRect(Editor->DrawPos(m_Bounds.Min), Editor->DrawPos(m_Bounds.Max),
+                m_BorderColor, Editor->DrawLen(m_Rounding), m_Corners, Editor->DrawLen(m_BorderWidth));
         }
 
         if (!Editor->IsSelected(m_Node))
@@ -611,25 +611,25 @@ void ed::Node::Draw(ImDrawList* drawList, DrawFlags flags)
         drawList->ChannelsSetCurrent(m_Channel + c_NodeBackgroundChannel);
 
         drawList->AddRectFilled(
-            m_Bounds.Min,
-            m_Bounds.Max,
-            m_Color, m_Rounding);
+            Editor->DrawPos(m_Bounds.Min),
+            Editor->DrawPos(m_Bounds.Max),
+            m_Color, Editor->DrawLen(m_Rounding));
 
         if (IsGroup(this))
         {
             drawList->AddRectFilled(
-                m_GroupBounds.Min,
-                m_GroupBounds.Max,
-                m_GroupColor, m_GroupRounding);
+                Editor->DrawPos(m_GroupBounds.Min),
+                Editor->DrawPos(m_GroupBounds.Max),
+                m_GroupColor, Editor->DrawLen(m_GroupRounding));
 
             if (m_GroupBorderWidth > 0.0f)
             {
                 FringeScaleScope fringe(1.0f);
 
                 drawList->AddRect(
-                    m_GroupBounds.Min,
-                    m_GroupBounds.Max,
-                    m_GroupBorderColor, m_GroupRounding, c_AllRoundCornersFlags, m_GroupBorderWidth);
+                    Editor->DrawPos(m_GroupBounds.Min),
+                    Editor->DrawPos(m_GroupBounds.Max),
+                    m_GroupBorderColor, Editor->DrawLen(m_GroupRounding), c_AllRoundCornersFlags, Editor->DrawLen(m_GroupBorderWidth));
             }
         }
 
@@ -681,8 +681,8 @@ void ed::Node::DrawBorder(ImDrawList* drawList, ImU32 color, float thickness, fl
     {
         const ImVec2 extraOffset = ImVec2(offset, offset);
 
-        drawList->AddRect(m_Bounds.Min - extraOffset, m_Bounds.Max + extraOffset,
-            color, ImMax(0.0f, m_Rounding + offset), c_AllRoundCornersFlags, thickness);
+        drawList->AddRect(Editor->DrawPos(m_Bounds.Min - extraOffset), Editor->DrawPos(m_Bounds.Max + extraOffset),
+            color, Editor->DrawLen(ImMax(0.0f, m_Rounding + offset)), c_AllRoundCornersFlags, Editor->DrawLen(thickness));
     }
 }
 
@@ -878,12 +878,20 @@ void ed::Link::Draw(ImDrawList* drawList, ImU32 color, float extraThickness) con
 
     const auto curve = GetCurve();
 
-    ImDrawList_AddBezierWithArrows(drawList, curve, m_Thickness + extraThickness,
-        m_StartPin && m_StartPin->m_ArrowSize  > 0.0f ? m_StartPin->m_ArrowSize  + extraThickness : 0.0f,
-        m_StartPin && m_StartPin->m_ArrowWidth > 0.0f ? m_StartPin->m_ArrowWidth + extraThickness : 0.0f,
-          m_EndPin &&   m_EndPin->m_ArrowSize  > 0.0f ?   m_EndPin->m_ArrowSize  + extraThickness : 0.0f,
-          m_EndPin &&   m_EndPin->m_ArrowWidth > 0.0f ?   m_EndPin->m_ArrowWidth + extraThickness : 0.0f,
-        true, color, 1.0f,
+    // Author the bezier in screen space (points transformed, thicknesses /
+    // arrow sizes scaled); the arrow-geometry math inside is affine so it is
+    // correct in either space. Phase 1: DrawPos/DrawLen are the identity.
+    const ImCubicBezierPoints screenCurve{
+        Editor->DrawPos(curve.P0), Editor->DrawPos(curve.P1),
+        Editor->DrawPos(curve.P2), Editor->DrawPos(curve.P3)
+    };
+
+    ImDrawList_AddBezierWithArrows(drawList, screenCurve, Editor->DrawLen(m_Thickness + extraThickness),
+        m_StartPin && m_StartPin->m_ArrowSize  > 0.0f ? Editor->DrawLen(m_StartPin->m_ArrowSize  + extraThickness) : 0.0f,
+        m_StartPin && m_StartPin->m_ArrowWidth > 0.0f ? Editor->DrawLen(m_StartPin->m_ArrowWidth + extraThickness) : 0.0f,
+          m_EndPin &&   m_EndPin->m_ArrowSize  > 0.0f ? Editor->DrawLen(  m_EndPin->m_ArrowSize  + extraThickness) : 0.0f,
+          m_EndPin &&   m_EndPin->m_ArrowWidth > 0.0f ? Editor->DrawLen(  m_EndPin->m_ArrowWidth + extraThickness) : 0.0f,
+        true, color, Editor->DrawLen(1.0f),
         m_StartPin && m_StartPin->m_SnapLinkToDir ? &m_StartPin->m_Dir : nullptr,
         m_EndPin   &&   m_EndPin->m_SnapLinkToDir ?   &m_EndPin->m_Dir : nullptr);
 }
@@ -1455,12 +1463,14 @@ void ed::EditorContext::End()
         ImVec2 VIEW_POS  = m_Canvas.ViewRect().Min;
         ImVec2 VIEW_SIZE = m_Canvas.ViewRect().GetSize();
 
-        m_DrawList->AddRectFilled(VIEW_POS, VIEW_POS + VIEW_SIZE, GetColor(StyleColor_Bg));
+        m_DrawList->AddRectFilled(DrawPos(VIEW_POS), DrawPos(VIEW_POS + VIEW_SIZE), GetColor(StyleColor_Bg));
 
+        // Grid spacing stays in canvas units (so the grid scales with zoom);
+        // only the line endpoints are mapped. Phase 1: DrawPos is the identity.
         for (float x = fmodf(offset.x, GRID_SX); x < VIEW_SIZE.x; x += GRID_SX)
-            m_DrawList->AddLine(ImVec2(x, 0.0f) + VIEW_POS, ImVec2(x, VIEW_SIZE.y) + VIEW_POS, GRID_COLOR);
+            m_DrawList->AddLine(DrawPos(ImVec2(x, 0.0f) + VIEW_POS), DrawPos(ImVec2(x, VIEW_SIZE.y) + VIEW_POS), GRID_COLOR);
         for (float y = fmodf(offset.y, GRID_SY); y < VIEW_SIZE.y; y += GRID_SY)
-            m_DrawList->AddLine(ImVec2(0.0f, y) + VIEW_POS, ImVec2(VIEW_SIZE.x, y) + VIEW_POS, GRID_COLOR);
+            m_DrawList->AddLine(DrawPos(ImVec2(0.0f, y) + VIEW_POS), DrawPos(ImVec2(VIEW_SIZE.x, y) + VIEW_POS), GRID_COLOR);
     }
 # endif
 
@@ -3096,7 +3106,7 @@ void ed::FlowAnimation::Draw(ImDrawList* drawList)
         const auto markerColor  = Editor->GetColor(StyleColor_FlowMarker, markerAlpha);
 
         for (float d = m_Offset; d < m_PathLength; d += m_MarkerDistance)
-            drawList->AddCircleFilled(SamplePath(d), markerRadius, markerColor);
+            drawList->AddCircleFilled(Editor->DrawPos(SamplePath(d)), Editor->DrawLen(markerRadius), markerColor);
     }
 }
 
@@ -4181,8 +4191,8 @@ void ed::SelectAction::Draw(ImDrawList* drawList)
     auto min  = ImVec2(std::min(m_StartPoint.x, m_EndPoint.x), std::min(m_StartPoint.y, m_EndPoint.y));
     auto max  = ImVec2(ImMax(m_StartPoint.x, m_EndPoint.x), ImMax(m_StartPoint.y, m_EndPoint.y));
 
-    drawList->AddRectFilled(min, max, fillColor);
-    drawList->AddRect(min, max, outlineColor);
+    drawList->AddRectFilled(Editor->DrawPos(min), Editor->DrawPos(max), fillColor);
+    drawList->AddRect(Editor->DrawPos(min), Editor->DrawPos(max), outlineColor);
 }
 
 

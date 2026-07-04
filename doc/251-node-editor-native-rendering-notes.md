@@ -128,3 +128,59 @@ zoom/view API - **the zoom/view control path is greenfield**.
 
 Per-node widgets currently use `imgui_enum_stepper` instead of combos precisely
 because popups break in the fake space (Phase 5 pilot proves this is fixed).
+
+## As-built status
+
+### Phase 0 (done, commit "editor: #251 Phase 0 ...")
+
+Inventory above; `EditorContext::SetZoom` + MCP `geometry_graph_set_view` +
+`scripts/geometry_graph_zoom_harness.py`. Baseline captured locally.
+
+Harness gotcha: `capture_screenshot` grabs the WHOLE frame, and the default
+startup scene has a physics-animated 3D viewport that settles to
+wall-clock-dependent positions across launches - so full-frame pixel diffs are
+NOT a valid identity oracle. Verify by cropping to the Geometry Graph window
+region (left of the viewport, e.g. box (60,60,650,175) at 1920x1080) OR by an
+apples-to-apples same-ini-state control-vs-test build comparison. The
+node-editor crop is deterministic to 0 px across launches once the ini layout
+is fixed. Restore `config/editor/*.{ini,json}` before each capture so both runs
+start from the same window layout (an editor run rewrites them on exit).
+
+### Phase 1 (done, commit "editor: #251 Phase 1 ...")
+
+Added the strangler helpers `DrawPos/DrawVec/DrawLen/DrawRect` (identity now)
+and `HitMouse()` on `Detail::EditorContext` (internal.h, next to ToCanvas/
+ToScreen). Routed every editor-OWN primitive draw site through them:
+`Pin::Draw`, `Node::Draw` + `DrawBorder`, `Link::Draw` (builds a screen-space
+`screenCurve` and scales thickness/arrow sizes; the bezier helper is affine so
+it is correct in either space), the grid/background in `End()`, the flow
+marker, and the selection rect. The canvas outer border (drawn after
+`Canvas.End()`, already screen space) is intentionally left raw. Verified
+pixel-identical (0 px diff in the node-editor crop, apples-to-apples control vs
+test) and geometry smoke sweep 129/129 (with `editor.graph_editor=trace`).
+
+### Phase 2 remaining work (mouse/hit-test routing was deferred here)
+
+Phase 1 routed DRAWING only (screenshot-verifiable). The FLIP (Phase 2) must,
+in one commit:
+1. Change ONLY the helper bodies: `DrawPos(p) -> ToScreen(p)`,
+   `DrawVec(v) -> m_Canvas.FromLocalV(v)`, `DrawLen(l) -> l * m_Canvas.ViewScale()`,
+   `DrawRect(r) -> ImRect(ToScreen(r.Min), ToScreen(r.Max))`,
+   `HitMouse() -> ToCanvas(ImGui::GetMousePos())`.
+2. Disable the canvas vertex/clip post-transform + fringe hack in
+   `imgui_canvas.cpp` LeaveLocalSpace/EnterLocalSpace (but KEEP the input/
+   viewport handling until Phase 3 flips node content, or flip both together).
+3. Route the LOCAL-space mouse/geometry sites through `HitMouse()` (they read
+   the currently-faked io.MousePos): the sites catalogued as category 2 in the
+   inventory EXCEPT the true-screen `MoveOverEdge` ones (imgui_node_editor.cpp
+   ~1141-1146, ~3519-3536) and the pre-Begin `MoveOverEdge` cursor. Known sites:
+   `SetUserContext` mousePos (~2258, ~2263 SetCursorScreenPos), `BuildControl`
+   (~2299), zoom-to-F `FindNodeAt(io.MousePos)` (~3314), `HandleZoom` mousePos
+   (~3414), `GetRegion(GetMousePos())` (~3815, ~3905), selection-rect endpoint
+   (~4108), and the link-create `cursorPin.m_Pivot = ImRect(GetMousePos(), ...)`
+   (~4615). Each is authored in canvas space today via the fake; after the flip
+   they must use `HitMouse()` = `ToCanvas(real mouse)`.
+Because the canvas still fakes input while Phase 2 primitives go native, node
+CONTENT (ImGui widgets) will render at base size at the transformed origin
+(wrong scale at zoom != 1) until Phase 3. Prefer committing Phase 2+3 together
+(the plan sanctions this) unless the intermediate is verifiable.

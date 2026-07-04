@@ -1363,6 +1363,25 @@ public:
     ImVec2 ToCanvas(const ImVec2& point) const { return m_Canvas.ToLocal(point); }
     ImVec2 ToScreen(const ImVec2& point) const { return m_Canvas.FromLocal(point); }
 
+    // ---- issue #251 strangler: transform for the editor's OWN primitive
+    // drawing and hit-testing. In THIS phase the canvas still post-transforms
+    // every emitted vertex/clip in Canvas::LeaveLocalSpace, so primitives are
+    // authored in canvas/local space and these are the IDENTITY - routing draw
+    // sites through them must leave screenshots pixel-identical. Phase 2 changes
+    // ONLY these bodies to the real canvas->screen mapping (point * scale +
+    // origin, size * scale) and disables the canvas post-transform, so the flip
+    // is a localized diff here plus imgui_canvas.cpp.
+    ImVec2 DrawPos (const ImVec2& canvasPos)    const { return canvasPos; }    // point  -> screen
+    ImVec2 DrawVec (const ImVec2& canvasVector) const { return canvasVector; } // vector (no translation)
+    float  DrawLen (float         canvasLength) const { return canvasLength; } // thickness / rounding / radius
+    ImRect DrawRect(const ImRect& canvasRect)   const { return canvasRect; }
+    // Mouse position in the space the editor authors primitives / hit-tests in
+    // (canvas/local space). While the canvas fakes io.MousePos to local space
+    // this is exactly that faked value; Phase 2 returns ToCanvas(real screen
+    // mouse). The pre-Begin true-screen consumers (NavigateAction::MoveOverEdge)
+    // must keep reading io.MousePos directly and must NOT route through this.
+    ImVec2 HitMouse() const { return ImGui::GetMousePos(); }
+
     void NotifyLinkDeleted(Link* link);
 
     void Suspend(SuspendFlags flags = SuspendFlags::None);
