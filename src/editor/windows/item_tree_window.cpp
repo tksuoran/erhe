@@ -10,6 +10,8 @@
 #include "brushes/brush.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
+#include "geometry_graph/geometry_graph_mesh.hpp"
+#include "geometry_graph/graph_mesh.hpp"
 #include "graphics/icon_set.hpp"
 #include "graphics/thumbnails.hpp"
 #include "operations/compound_operation.hpp"
@@ -533,6 +535,7 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
     const bool payload_is_node = payload_peek->IsDataType("Node");
     std::shared_ptr<erhe::primitive::Material> material{};
     std::shared_ptr<Brush>                     brush{};
+    std::shared_ptr<Graph_mesh>                graph_mesh{};
 
     if (!payload_is_node && payload_peek->IsDataType("Content_library_node")){
         erhe::Item_base* payload_item_base = *(static_cast<erhe::Item_base**>(payload_peek->Data));
@@ -541,8 +544,9 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
             shared_item_base
         );
         if (content_library_node) {
-            material = std::dynamic_pointer_cast<erhe::primitive::Material>(content_library_node->item);
-            brush    = std::dynamic_pointer_cast<Brush>(content_library_node->item);
+            material   = std::dynamic_pointer_cast<erhe::primitive::Material>(content_library_node->item);
+            brush      = std::dynamic_pointer_cast<Brush>(content_library_node->item);
+            graph_mesh = std::dynamic_pointer_cast<Graph_mesh>(content_library_node->item);
         }
     }
     if (!payload_is_node && payload_peek->IsDataType(c_inventory_slot_payload_type)) {
@@ -564,6 +568,45 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
         }
         return payload;
     };
+
+    // Graph Mesh asset drop onto a scene node: source the node's mesh from
+    // the graph by creating (or retargeting) a Geometry_graph_mesh
+    // attachment - same bind logic as Properties and MCP set_node_graph_mesh.
+    // Only assets from the node's own scene content library are accepted;
+    // the scene file resolves the binding by name in that library on load,
+    // so a cross-scene bind would not survive a save/load round-trip.
+    if (graph_mesh) {
+        Scene_root* scene_root = static_cast<Scene_root*>(node->get_item_host());
+        const std::shared_ptr<Content_library> library = (scene_root != nullptr) ? scene_root->get_content_library() : std::shared_ptr<Content_library>{};
+        bool asset_in_library = false;
+        if (library && library->graph_meshes) {
+            const std::vector<std::shared_ptr<Graph_mesh>>& library_graph_meshes = library->graph_meshes->get_all<Graph_mesh>();
+            asset_in_library = std::find(library_graph_meshes.begin(), library_graph_meshes.end(), graph_mesh) != library_graph_meshes.end();
+        }
+        if (!asset_in_library) {
+            return false;
+        }
+        const ImRect rect{rect_min, rect_max};
+        if (ImGui::BeginDragDropTargetCustom(rect, imgui_id_center)) {
+            drag_and_drop_rectangle_preview(rect);
+            const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Content_library_node", ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
+            if (payload != nullptr) {
+                std::shared_ptr<Geometry_graph_mesh> attachment = erhe::scene::get_attachment<Geometry_graph_mesh>(node.get());
+                if (!attachment) {
+                    attachment = std::make_shared<Geometry_graph_mesh>(graph_mesh);
+                    node->attach(attachment);
+                } else {
+                    attachment->set_graph_mesh(graph_mesh);
+                }
+                // Materialize the asset's latest bake immediately; a
+                // never-baked asset applies on its first evaluation push.
+                attachment->apply_baked_products();
+            }
+            ImGui::EndDragDropTarget();
+            return true;
+        }
+        return false;
+    }
 
     // When an inventory slot defines both brush and material, the brush wins:
     // a new node is created and the slot material is applied to its mesh.
