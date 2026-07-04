@@ -404,3 +404,23 @@ then `interpolate`. Items 11/12 (reprocess tail) first, then 1/3/2
 (interpolation + Source_table), remains the right order. Debug's container
 overhead inflates the absolute numbers ~10x but does not reorder the phases
 on this workload.
+
+## Semi-sharp creases (2026-07-04, issue #244)
+
+The CC operation honors the per-edge `edge_sharpness` attribute
+(`doc/subdivision_crease_edges.md` is the full design + as-built record;
+DeRose/Kass/Truong 1998 rules with OpenSubdiv Sdc rule/blend semantics):
+
+- Edge points blend the smooth mask with the plain midpoint by
+  `t = min(sharpness, 1)`; vertex points with 2+ incident sharp edges get a
+  fix-up pass that rewrites the accumulated smooth `Source_table` entry into
+  the parent/child rule blend (crease mask `1/8 + 6/8 + 1/8`, corner mask =
+  pinned). Child sub-edges receive Chaikin-subdivided sharpness after
+  `post_processing()` (the destination edge store exists only then).
+- Performance: the whole path is gated on a per-edge presence scan
+  (`cc_crease_classify` phase); with no sharpness values present the emitted
+  weights are bit-identical to the pre-crease implementation, and the Release
+  timing-harness chain shows no measurable delta (baseline 671-691 ms vs
+  660-678 ms with the crease code, same machine/run).
+- New phase markers: `cc_crease_classify`, `cc_crease_vertex_masks`,
+  `cc_crease_propagate`.

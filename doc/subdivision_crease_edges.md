@@ -1,6 +1,8 @@
 # Subdivision crease edges (issue #244) - implementation plan
 
-Status: PLANNED, not yet implemented.
+Status: IMPLEMENTED 2026-07-04 (all six phases). The plan below is kept as
+the design record; see "As built (2026-07-04)" at the end for deviations and
+verification results.
 
 Issue: https://github.com/tksuoran/erhe/issues/244
 
@@ -356,3 +358,63 @@ editor phases).
   should not offer Apply for a `Geometry_graph_mesh`-owned geometry (or
   should warn). A future "Set crease" graph node (select edges by angle /
   tag) is the graph-native answer - out of scope here.
+
+## As built (2026-07-04)
+
+Implemented in six commits on top of the plan commit, one per phase. All
+phases landed as designed; deviations and findings:
+
+- **Appendix B ambiguity resolved via OpenSubdiv** (D:\OpenSubdiv reference
+  clone, `opensubdiv/sdc/crease.{h,cpp}`, `scheme.h`): the fractional vertex
+  blend is between the PARENT rule mask and the CHILD rule mask (parent rule
+  from the incident sharp-edge count: 2 = crease, 3+ = corner; child rule
+  from the subdivided sharpnesses), weighted by the clamped average of the
+  parent sharpness values that decay to zero across the step
+  (`ComputeFractionalWeightAtVertex`). Chaikin child sharpness follows
+  `SubdivideEdgeSharpnessAtVertex`: with 2+ semi-sharp (0 < s < inf) edges
+  at the end vertex, `0.75*own + 0.25*avg(others) - 1`, clamped at 0;
+  otherwise uniform `s - 1`. Infinity is a plain float +inf (survives the
+  decrement unmodified). Edge points follow paper eq. 11 directly
+  (blend by `t = clamp(s, 0, 1)`).
+- **Vertex crease masks are a fix-up pass**, not inline scaling: the three
+  build phases assemble the smooth mask incrementally with different implicit
+  normalizations, so the fix-up computes the accumulated entry's weight sum
+  and scales/appends mask components against it. A fully sharp edge point
+  takes its corner sources from the endpoints (the interface-edge pattern) so
+  texcoords/colors survive; fractional midpoints blend endpoint and centroid
+  corner sources by t.
+- **build_edges() preserves edge attributes** by snapshotting present values
+  keyed by canonical vertex pair before `edges.clear()` (Geogram keeps
+  bindings, wipes values) and reapplying after the rebuild. This also makes
+  scene load work: load_scene re-runs process() on the loaded mesh.
+- **Real bug found by the phase 5 tests**: `transform_mesh`'s non-identity
+  path copies the mesh without attributes and transforms a hardcoded channel
+  list; `edge_sharpness` was missing, so `bake_transform` (and the graph
+  transform node) silently dropped creases. Fixed in both that list and
+  `copy_attributes()`. reverse/normalize already carried creases through
+  their whole-mesh copies.
+- **Visualization simplifications vs the plan**: the overlay reuses the
+  existing `Mesh_component_style` edge thickness and a fixed viridis palette
+  (no new config knobs; palette choice can be a follow-up); out-of-range t is
+  clamped rather than using the palette's red/magenta sentinels. The range
+  readout lives in the viewport toolbar ("Crease min .. max (n edges, k
+  inf)").
+- **MCP surface**: `set_edge_sharpness` (explicit `[v0,v1]` pairs or the
+  current edge component selection; number or "infinity"; `clear: true`
+  removes; undoable), `get_mesh_attribute_values` domain=edge now reports
+  `edge_sharpness`, and a new `catmull_clark` tool applies the editor CC
+  operation to the selected node(s) for end-to-end scripting.
+- **Verification**: 94 geometry gtests (plain + ASAN; analytic sharp /
+  crease / corner / fractional positions, 3.6 decay chain through
+  structural_only intermediates, infinity persistence, bit-exact zero-crease
+  regression, topology-preserving-op and .geogram save/load round-trips);
+  headless MCP end-to-end (set -> query -> undo x2 -> redo x2, selection-
+  targeted set, clear, editor CC on a creased cube -> 12 child edges at
+  ~2.6, scene save/load); screenshot-verified viridis overlay; geometry
+  nodes regression sweep 129/129; Release timing harness unchanged
+  (671-691 ms baseline vs 660-678 ms, same machine).
+- **Still open** (unchanged from the plan): no per-vertex sharpness
+  attribute (3+ sharp edges = hard corner), sqrt3 ignores the attribute,
+  boolean/remesh/decimate/conway/triangulate drop it, glTF cannot carry it,
+  and painting only makes sense on geometry-normative meshes (a "Set crease"
+  graph node would be the graph-native answer - future work).
