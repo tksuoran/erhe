@@ -108,6 +108,11 @@ public:
     );
     void destroy_viewport_window(const std::shared_ptr<Viewport_window>& viewport_window);
 
+    // Destroys every Viewport_window and Viewport_scene_view (with its
+    // post-processing node) that shows the given scene. Used when a scene is
+    // closed; must run outside ImGui iteration (destroys ImGui windows).
+    void destroy_views_for_scene(const std::shared_ptr<Scene_root>& scene_root);
+
     void erase(Viewport_scene_view* viewport_scene_view);
 
     auto open_new_viewport_scene_view(

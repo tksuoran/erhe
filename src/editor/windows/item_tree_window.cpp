@@ -917,7 +917,11 @@ void Item_tree::item_update_selection(const std::shared_ptr<erhe::Item_base>& it
 void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
 {
     const auto& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
-    if (!hierarchy) {
+    // Scene rows (the Hierarchy window header item, #240) are not Hierarchy
+    // items but get a popup too; only the context menu callbacks apply to them
+    // (e.g. the scene "Close" entry), not the clipboard entries below.
+    const bool is_scene = static_cast<bool>(std::dynamic_pointer_cast<erhe::scene::Scene>(item));
+    if (!hierarchy && !is_scene) {
         return;
     }
 
@@ -951,9 +955,12 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
             for (const Context_menu_callback& cb : m_item_context_menu_callbacks) {
                 cb(item, m_operations, close);
             }
-            ImGui::Separator();
+            if (hierarchy) {
+                ImGui::Separator();
+            }
         }
 
+        if (hierarchy) {
         // In the content library, only Materials are copyable for now.
         const auto& content_node = std::dynamic_pointer_cast<Content_library_node>(item);
         const bool is_content_library_non_copyable = content_node && (
@@ -1060,6 +1067,7 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
         if (!selected_or_hierarchy) {
             ImGui::EndDisabled();
         }
+        } // if (hierarchy)
 
         ImGui::EndPopup();
         if (close) {

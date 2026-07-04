@@ -129,6 +129,13 @@ void Operation_stack::undo()
     m_undone.push_back(operation);
 }
 
+void Operation_stack::clear_history()
+{
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+    m_executed.clear();
+    m_undone.clear();
+}
+
 void Operation_stack::redo()
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};

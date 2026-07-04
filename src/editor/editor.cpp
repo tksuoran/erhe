@@ -156,6 +156,7 @@
 #include "erhe_renderer/text_renderer.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_rendergraph/rendergraph_log.hpp"
+#include "erhe_scene/scene.hpp"
 #include "erhe_scene/scene_log.hpp"
 #include "erhe_scene_renderer/forward_renderer.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
@@ -2112,6 +2113,14 @@ public:
                 on_scene_created(message);
             }
         );
+        // Scene "Close" (Hierarchy window context menu). Queue-only: the
+        // teardown destroys ImGui windows, so it runs from the message bus
+        // pump in tick(), outside ImGui iteration.
+        m_close_scene_subscription = m_app_message_bus->close_scene.subscribe(
+            [this](Close_scene_message& message) {
+                on_close_scene(message);
+            }
+        );
 
         // Run the startup command script while the init-time command
         // buffer is still open. Several scripted commands (e.g.
@@ -2448,6 +2457,7 @@ public:
             return;
         }
         m_tools_attached_to_scene = true;
+        m_tools_scene_root = message.scene_root;
         if (m_hud) {
             m_hud->attach_to_scene(message.scene_root);
         }
@@ -2459,6 +2469,88 @@ public:
             m_headset_view->attach_to_scene(message.scene_root, *m_mesh_memory.get());
         }
 #endif
+    }
+
+    // Close a scene (Hierarchy window Scene row "Close" context menu entry).
+    // Runs from the message bus pump, outside ImGui iteration, because it
+    // destroys ImGui windows (the scene's viewports and browser window).
+    void on_close_scene(Close_scene_message& message)
+    {
+        const std::shared_ptr<Scene_root>& scene_root = message.scene_root;
+        if (!scene_root) {
+            return;
+        }
+
+        const bool is_tools_scene = m_tools_attached_to_scene && (m_tools_scene_root.lock() == scene_root);
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+        if (is_tools_scene && m_app_context.OpenXR) {
+            // Headset_view scene content has no detach path yet; refuse rather
+            // than leave the headset rendering a dead scene.
+            log_scene->warn("Cannot close scene '{}': the OpenXR headset view is homed in it", scene_root->get_name());
+            return;
+        }
+#endif
+
+        // Drop selected items hosted by this scene (including the Scene item
+        // itself) so the selection does not keep dead-scene items alive or
+        // feed them to tools.
+        {
+            const std::vector<std::shared_ptr<erhe::Item_base>> selected_items = m_selection->get_selected_items();
+            for (const std::shared_ptr<erhe::Item_base>& selected_item : selected_items) {
+                if (
+                    (selected_item->get_item_host() == scene_root.get()) ||
+                    (selected_item == scene_root->get_scene_item())
+                ) {
+                    m_selection->remove_from_selection(selected_item);
+                }
+            }
+        }
+
+        // Detach the global tools when they are homed in this scene; they
+        // re-home to another scene below (or to the next created scene).
+        if (is_tools_scene) {
+            if (m_hud) {
+                m_hud->detach_from_scene();
+            }
+            if (m_hotbar) {
+                m_hotbar->detach_from_scene();
+            }
+            m_tools_attached_to_scene = false;
+            m_tools_scene_root.reset();
+        }
+
+        // Recorded undo/redo operations hold shared_ptrs to scene content and
+        // viewport resources (e.g. Scene_builder_viewport_resources_operation
+        // owns the startup viewport): they would keep the closed scene's
+        // objects alive and its viewport rendergraph nodes registered -- and
+        // executing against the torn-down scene every frame. Drop the history.
+        m_operation_stack->clear_history();
+
+        m_viewport_scene_views->destroy_views_for_scene(scene_root);
+        scene_root->remove_browser_window();
+        scene_root->unregister_from_editor_scenes(*m_app_scenes);
+
+        if (m_default_scene == scene_root) {
+            m_default_scene_browser.reset();
+            m_default_scene.reset();
+        }
+        // Scene_builder targets this scene for the scene.add_* commands; drop
+        // the reference so they do not build into a closed scene (same state
+        // as a --no-scene start before any scene.create).
+        if (m_scene_builder && (m_scene_builder->get_scene_root() == scene_root)) {
+            m_scene_builder->set_scene_root(std::shared_ptr<Scene_root>{});
+        }
+
+        // Re-home the tools to the first remaining scene, when one exists;
+        // otherwise the next Scene_created_message re-attaches them.
+        if (is_tools_scene) {
+            const std::vector<std::shared_ptr<Scene_root>>& remaining = m_app_scenes->get_scene_roots();
+            if (!remaining.empty()) {
+                m_app_message_bus->scene_created.send_message(Scene_created_message{remaining.front()});
+            }
+        }
+
+        log_scene->info("Closed scene '{}'", scene_root->get_name());
     }
 
     void run_startup_script()
@@ -2857,7 +2949,11 @@ public:
     // scene exists at init; this subscription attaches them to the first scene that
     // is created or loaded. m_tools_attached_to_scene makes that happen exactly once.
     erhe::message_bus::Subscription<Scene_created_message> m_scene_created_subscription;
+    erhe::message_bus::Subscription<Close_scene_message>   m_close_scene_subscription;
     bool                                    m_tools_attached_to_scene{false};
+    // The scene the global tools are currently homed in (set by
+    // on_scene_created, cleared when that scene is closed).
+    std::weak_ptr<Scene_root>               m_tools_scene_root{};
 
     // No dependencies (constructors)
     std::unique_ptr<erhe::commands::Commands      > m_commands;

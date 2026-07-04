@@ -12,6 +12,7 @@ void App_message_bus::update()
     graphics_settings.update();
     load_scene_file.update();
     create_scene.update();
+    close_scene.update();
 }
 
 }

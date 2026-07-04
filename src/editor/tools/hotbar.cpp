@@ -356,6 +356,26 @@ void Hotbar::attach_to_scene(const std::shared_ptr<Scene_root>& scene_root)
     init_hotbar();
 }
 
+void Hotbar::detach_from_scene()
+{
+    // Hide the window and drop its rendertarget host before the host is
+    // destroyed with the quad view below.
+    m_window.set_imgui_host(nullptr);
+    set_mesh_visibility(false);
+    // The Quad_view owns the rendertarget mesh nodes and the imgui host; their
+    // destructors detach from the scene and unregister from the rendergraph
+    // (disconnecting the edge tracked by m_connected_consumer_node).
+    m_quad_view.reset();
+    m_connected_consumer_node = nullptr;
+    if (m_radial_menu_node) {
+        m_radial_menu_node->set_parent(std::shared_ptr<erhe::scene::Node>{});
+    }
+    m_radial_menu_node.reset();
+    m_radial_menu_background_mesh.reset();
+    m_radial_menu_icons.clear();
+    m_scene_root.reset();
+}
+
 void Hotbar::init_hotbar()
 {
     if (m_slots.empty()) {

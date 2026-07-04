@@ -195,6 +195,12 @@ void Scene_views::destroy_viewport_scene_view(
     if (vsv != m_viewport_scene_views.end()) {
         m_viewport_scene_views.erase(vsv);
     }
+
+    // Tools cache raw Scene_view* from hover / render messages (Tool's hover
+    // scene view, Handle_visualizations' render scene view); broadcast null
+    // messages so no tool keeps a pointer to the viewport being destroyed.
+    m_app_context.app_message_bus->hover_scene_view.send_message(Hover_scene_view_message{.scene_view = nullptr});
+    m_app_context.app_message_bus->render_scene_view.send_message(Render_scene_view_message{.scene_view = nullptr});
 }
 
 void Scene_views::destroy_viewport_window(const std::shared_ptr<Viewport_window>& viewport_window)
@@ -207,6 +213,62 @@ void Scene_views::destroy_viewport_window(const std::shared_ptr<Viewport_window>
     const auto i = std::find(m_viewport_windows.begin(), m_viewport_windows.end(), viewport_window);
     if (i != m_viewport_windows.end()) {
         m_viewport_windows.erase(i);
+    }
+}
+
+void Scene_views::destroy_views_for_scene(const std::shared_ptr<Scene_root>& scene_root)
+{
+    if (!scene_root) {
+        return;
+    }
+
+    // Collect strong references first: destroy_viewport_window() and
+    // destroy_viewport_scene_view() lock m_mutex and mutate the vectors.
+    std::vector<std::shared_ptr<Viewport_window>>     windows_to_destroy;
+    std::vector<std::shared_ptr<Viewport_scene_view>> views_to_destroy;
+    {
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+        for (const std::shared_ptr<Viewport_window>& viewport_window : m_viewport_windows) {
+            const std::shared_ptr<Viewport_scene_view> scene_view = viewport_window->viewport_scene_view();
+            if (scene_view && (scene_view->get_scene_root() == scene_root)) {
+                windows_to_destroy.push_back(viewport_window);
+            }
+        }
+        for (const std::shared_ptr<Viewport_scene_view>& scene_view : m_viewport_scene_views) {
+            if (scene_view->get_scene_root() == scene_root) {
+                views_to_destroy.push_back(scene_view);
+            }
+        }
+    }
+
+    for (const std::shared_ptr<Viewport_window>& viewport_window : windows_to_destroy) {
+        destroy_viewport_window(viewport_window);
+    }
+    for (const std::shared_ptr<Viewport_scene_view>& scene_view : views_to_destroy) {
+        // Destroy the viewport's shadow render node: App_rendering holds a
+        // shared_ptr to it, so it would otherwise stay registered in the
+        // rendergraph and keep executing with a dangling Scene_view reference
+        // after the viewport is destroyed below.
+        const std::shared_ptr<Shadow_render_node> shadow_node = m_app_context.app_rendering->get_shadow_node_for_view(*scene_view.get());
+        if (shadow_node) {
+            m_app_context.app_rendering->destroy_shadow_node(shadow_node);
+        }
+        // Find the post-processing node fed by this viewport (when
+        // post-processing is enabled) via its rendergraph input.
+        std::shared_ptr<Post_processing_node> post_processing_node{};
+        {
+            std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+            for (const std::shared_ptr<Post_processing_node>& candidate : m_post_processing_nodes) {
+                if (
+                    candidate &&
+                    (candidate->get_producer_output_node(erhe::rendergraph::Rendergraph_node_key::viewport_texture) == scene_view.get())
+                ) {
+                    post_processing_node = candidate;
+                    break;
+                }
+            }
+        }
+        destroy_viewport_scene_view(scene_view, post_processing_node);
     }
 }
 

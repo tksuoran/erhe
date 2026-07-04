@@ -559,6 +559,28 @@ auto Scene_root::make_browser_window(
             }
         }
     );
+    // Scene row context menu (#240): "Close" tears down this scene. The actual
+    // close is queued to the message bus because it destroys ImGui windows
+    // (viewports, this browser), which must not happen inside ImGui iteration.
+    m_node_tree_window->add_item_context_menu_callback(
+        [this, &context](
+            const std::shared_ptr<erhe::Item_base>& item,
+            std::vector<std::function<void()>>&,
+            bool&                                   close
+        ) {
+            if (item.get() != get_scene_item().get()) {
+                return;
+            }
+            if (ImGui::MenuItem("Close")) {
+                context.app_message_bus->close_scene.queue_message(
+                    Close_scene_message{
+                        .scene_root = std::dynamic_pointer_cast<Scene_root>(shared_from_this())
+                    }
+                );
+                close = true;
+            }
+        }
+    );
     return m_node_tree_window;
 }
 

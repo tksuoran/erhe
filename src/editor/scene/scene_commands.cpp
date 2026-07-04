@@ -48,6 +48,8 @@
 
 #include <fmt/format.h>
 
+#include <algorithm>
+
 
 namespace editor {
 
@@ -494,8 +496,23 @@ auto Scene_commands::get_scene_root(erhe::primitive::Material* material) const -
 auto Scene_commands::create_new_scene() -> std::shared_ptr<Scene_root>
 {
     // Name new scenes uniquely so they stay distinguishable in the Hierarchy
-    // window and to the name-based MCP tools.
-    const std::string scene_name = fmt::format("Scene {}", m_context.app_scenes->get_scene_roots().size() + 1);
+    // window and to the name-based MCP tools. Scenes can be closed in any
+    // order, so probe for the lowest unused number instead of using the count.
+    std::string scene_name;
+    const std::vector<std::shared_ptr<Scene_root>>& scene_roots = m_context.app_scenes->get_scene_roots();
+    for (std::size_t number = 1; ; ++number) {
+        scene_name = fmt::format("Scene {}", number);
+        const bool name_in_use = std::any_of(
+            scene_roots.begin(),
+            scene_roots.end(),
+            [&scene_name](const std::shared_ptr<Scene_root>& entry) {
+                return entry->get_name() == scene_name;
+            }
+        );
+        if (!name_in_use) {
+            break;
+        }
+    }
 
     // Like a loaded scene (and unlike the scene.create default scene, whose
     // library is populated by the scene.add_* startup commands), the new scene

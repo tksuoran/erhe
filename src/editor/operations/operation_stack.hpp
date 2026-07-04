@@ -69,6 +69,13 @@ public:
     void undo();
     void redo();
 
+    // Drops the undo and redo histories (queued operations are kept). Used
+    // when a scene is closed: recorded operations hold shared_ptrs to scene
+    // content and viewport resources, which would keep a closed scene's
+    // objects alive -- and its viewport rendergraph nodes registered and
+    // executing -- indefinitely.
+    void clear_history();
+
     void update();
 
     // Implements Window

@@ -247,6 +247,13 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"path"})}
     }});
+    m_tool_infos.push_back({"close_scene",        "Close a scene: destroys its viewport and browser windows and unregisters it from the editor (same as the Scene row's Close context menu entry). The close is queued and completes on a following frame.", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name", {{"type", "string"}, {"description", "Name of the scene to close"}}}
+        }},
+        {"required", json::array({"scene_name"})}
+    }});
     m_tool_infos.push_back({"export_gltf",        "Export a scene to a glTF file, without a file dialog", {
         {"type", "object"},
         {"properties", {

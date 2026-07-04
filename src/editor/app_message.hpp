@@ -100,6 +100,14 @@ struct Create_scene_message
 {
 };
 
+// Queued by the Scene row's "Close" context menu entry; handled by Editor.
+// Queue-only so the teardown (which destroys the scene's viewport and browser
+// ImGui windows) runs from the message bus pump, outside ImGui iteration.
+struct Close_scene_message
+{
+    std::shared_ptr<Scene_root> scene_root{};
+};
+
 struct Tool_select_message
 {
 };

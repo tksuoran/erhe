@@ -3,6 +3,8 @@
 
 #include "mcp/mcp_server_shared.hpp"
 
+#include "app_message_bus.hpp"
+
 namespace editor {
 
 using namespace mcp_server_detail;
@@ -43,6 +45,29 @@ auto Mcp_server::action_save_scene(const json& args) -> std::string
     return make_json_content({
         {"saved", true},
         {"path",  bundle.string()}
+    }).dump();
+}
+
+auto Mcp_server::action_close_scene(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+    // Queue the close (same path as the Scene row's Close context menu entry):
+    // the teardown destroys ImGui windows, so it runs from the message bus pump
+    // on a following frame, outside ImGui iteration.
+    m_context.app_message_bus->close_scene.queue_message(
+        Close_scene_message{
+            .scene_root = std::dynamic_pointer_cast<Scene_root>(sr->shared_from_this())
+        }
+    );
+    return make_json_content({
+        {"queued",     true},
+        {"scene_name", sr->get_name()}
     }).dump();
 }
 

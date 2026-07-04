@@ -9,6 +9,8 @@
 #include "quad_view.hpp"
 #include "rendertarget_mesh.hpp"
 #include "rendertarget_imgui_host.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_imgui/window_imgui_host.hpp"
 
 #include "erhe_commands/commands.hpp"
 #include "config/generated/hud_config.hpp"
@@ -235,6 +237,27 @@ void Hud::attach_to_scene(const std::shared_ptr<Scene_root>& scene_root)
     );
 
     set_mesh_visibility(true);
+}
+
+void Hud::detach_from_scene()
+{
+    if (!m_quad_view) {
+        return;
+    }
+    // Windows the user moved into the Hud's rendertarget host must not keep a
+    // pointer to the destroyed host; move them back to the main window host.
+    Rendertarget_imgui_host* host = m_quad_view->get_imgui_host();
+    if ((host != nullptr) && (m_context.imgui_windows != nullptr)) {
+        erhe::imgui::Imgui_host* window_host = m_context.imgui_windows->get_window_imgui_host().get();
+        for (erhe::imgui::Imgui_window* window : m_context.imgui_windows->get_windows()) {
+            if (window->get_imgui_host() == host) {
+                window->set_imgui_host(window_host);
+            }
+        }
+    }
+    // The Quad_view owns the rendertarget mesh nodes and the imgui host; their
+    // destructors detach from the scene and unregister from the rendergraph.
+    m_quad_view.reset();
 }
 
 Hud::~Hud() noexcept = default;

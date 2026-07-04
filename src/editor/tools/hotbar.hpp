@@ -135,6 +135,12 @@ public:
     // becomes available rather than at construction.
     void attach_to_scene       (const std::shared_ptr<Scene_root>& scene_root);
 
+    // Releases the scene-dependent content built by attach_to_scene() (the
+    // hotbar quad and the radial menu nodes), so the scene the hotbar was
+    // homed in can be closed. attach_to_scene() may be called again later
+    // (re-homing to another scene).
+    void detach_from_scene     ();
+
     void get_all_tools();
     void set_slots             (const std::vector<Slot_entry>& slots);
     void rebuild_if_needed     ();

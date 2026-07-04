@@ -85,6 +85,12 @@ public:
     // called once a scene becomes available rather than at construction.
     void attach_to_scene(const std::shared_ptr<Scene_root>& scene_root);
 
+    // Releases the scene-dependent Quad_view built by attach_to_scene(), so the
+    // scene the Hud was homed in can be closed. Windows shown in the Hud's
+    // rendertarget imgui host are moved back to the main window host first.
+    // attach_to_scene() may be called again later (re-homing to another scene).
+    void detach_from_scene();
+
     // Public APi
     [[nodiscard]] auto get_rendertarget_imgui_viewport() const -> std::shared_ptr<Rendertarget_imgui_host>;
     auto toggle_mesh_visibility() -> bool;
