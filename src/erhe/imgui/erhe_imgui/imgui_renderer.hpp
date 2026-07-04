@@ -158,6 +158,7 @@ public:
     auto icon_font           () const -> ImFont*;
 
     void make_current         (const Imgui_host* imgui_host);
+    [[nodiscard]] auto get_current_host() const -> const Imgui_host*;
     void register_imgui_host  (Imgui_host* viewport);
     void unregister_imgui_host(Imgui_host* viewport);
     [[nodiscard]] auto get_imgui_hosts   () const -> const std::vector<Imgui_host*>&;

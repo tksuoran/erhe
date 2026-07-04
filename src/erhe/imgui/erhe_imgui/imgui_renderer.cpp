@@ -496,6 +496,11 @@ void Imgui_renderer::make_current(const Imgui_host* imgui_host)
     }
 }
 
+auto Imgui_renderer::get_current_host() const -> const Imgui_host*
+{
+    return m_current_host;
+}
+
 void Imgui_renderer::register_imgui_host(Imgui_host* imgui_host)
 {
     //ERHE_VERIFY(!m_iterating);

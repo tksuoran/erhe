@@ -15,7 +15,11 @@ public:
     ~Scoped_imgui_context() noexcept;
 
 private:
-    Imgui_renderer& m_imgui_renderer;
+    Imgui_renderer&   m_imgui_renderer;
+    // Restored on scope exit so that scopes nest correctly (e.g.
+    // Imgui_host::save_imgui_ini called from code running inside an imgui
+    // frame); top-level scopes restore the nullptr that was current before.
+    const Imgui_host* m_previous_host{nullptr};
 };
 
 } // namespace erhe::imgui

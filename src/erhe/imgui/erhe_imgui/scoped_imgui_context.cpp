@@ -8,12 +8,13 @@ Scoped_imgui_context::Scoped_imgui_context(Imgui_host& imgui_host)
     : m_imgui_renderer{imgui_host.get_imgui_renderer()}
 {
     m_imgui_renderer.lock_mutex();
+    m_previous_host = m_imgui_renderer.get_current_host();
     m_imgui_renderer.make_current(&imgui_host);
 }
 
 Scoped_imgui_context::~Scoped_imgui_context() noexcept
 {
-    m_imgui_renderer.make_current(nullptr);
+    m_imgui_renderer.make_current(m_previous_host);
     m_imgui_renderer.unlock_mutex();
 }
 
