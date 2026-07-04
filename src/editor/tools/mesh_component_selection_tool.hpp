@@ -13,6 +13,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace erhe::commands { class Commands; }
@@ -327,6 +328,13 @@ private:
     // the last dab would be re-applied every frame (which, among other things,
     // undid the Clear button).
     uint64_t               m_paint_commit_request_frame{0};
+
+    // Crease sharpness editing (edge mode, doc/subdivision_crease_edges.md):
+    // toolbar value applied to the selected edges via the undoable
+    // Set_edge_sharpness_operation. nullopt clears (back to smooth).
+    void apply_crease_sharpness(const std::optional<float>& value);
+    float                  m_crease_sharpness   {1.0f};
+    bool                   m_crease_infinite    {false};
 
     // Debug region-select state (MCP-driven, viewport coordinates directly).
     bool                   m_debug_pending      {false};

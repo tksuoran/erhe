@@ -148,6 +148,7 @@ private:
     auto query_mesh_geometry_info             (const nlohmann::json& args) -> std::string;
     auto query_mesh_attribute_values          (const nlohmann::json& args) -> std::string;
     auto action_clear_mesh_component_selection(const nlohmann::json& args) -> std::string;
+    auto action_set_edge_sharpness            (const nlohmann::json& args) -> std::string;
     auto action_align_components              (const nlohmann::json& args) -> std::string;
     auto action_add_joint                     (const nlohmann::json& args) -> std::string;
     auto action_flip_joint                    (const nlohmann::json& args) -> std::string;

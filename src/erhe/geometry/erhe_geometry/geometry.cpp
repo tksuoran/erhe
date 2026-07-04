@@ -1261,6 +1261,15 @@ void Geometry::set_edge_sharpness(const GEO::index_t v0, const GEO::index_t v1, 
     m_attributes.edge_sharpness.set(edge, sharpness);
 }
 
+void Geometry::clear_edge_sharpness(const GEO::index_t v0, const GEO::index_t v1)
+{
+    const GEO::index_t edge = get_edge(v0, v1);
+    if (edge == GEO::NO_EDGE) {
+        return;
+    }
+    m_attributes.edge_sharpness.unset(edge);
+}
+
 void Geometry::build_edges()
 {
     // Geogram's edges.clear() keeps attribute bindings but wipes the values,

@@ -318,6 +318,8 @@ erhe_target_sources_grouped(
     operations/operations_window.hpp
     operations/operation_stack.cpp
     operations/operation_stack.hpp
+    operations/set_edge_sharpness_operation.cpp
+    operations/set_edge_sharpness_operation.hpp
     parsers/geogram.cpp
     parsers/geogram.hpp
     parsers/gltf.cpp

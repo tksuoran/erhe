@@ -396,7 +396,12 @@ auto Mcp_server::query_mesh_attribute_values(const json& args) -> std::string
                 facets.push_back(facet);
             }
             elem["facets"] = facets;
-            // Edge attributes are not stored (see interpolate_mesh_attributes TODO).
+            if (wanted(erhe::geometry::c_edge_sharpness)) {
+                const std::optional<float> sharpness = attributes.edge_sharpness.try_get(idx);
+                if (sharpness.has_value()) {
+                    attrs[erhe::geometry::c_edge_sharpness] = std::isinf(sharpness.value()) ? json("infinity") : json(sharpness.value());
+                }
+            }
         }
         elem["attributes"] = attrs;
         elements.push_back(elem);
@@ -409,6 +414,111 @@ auto Mcp_server::query_mesh_attribute_values(const json& args) -> std::string
         {"domain",          domain},
         {"elements",        elements}
     }).dump();
+}
+
+auto Mcp_server::action_set_edge_sharpness(const json& args) -> std::string
+{
+    if (m_context.operation_stack == nullptr) {
+        return make_error_content("Operation stack not available");
+    }
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (!node) {
+        return make_error_content("Node not found (give node_id or node_name)");
+    }
+    const std::size_t primitive_index = args.value("primitive_index", std::size_t{0});
+    std::shared_ptr<erhe::scene::Mesh>        mesh;
+    std::shared_ptr<erhe::geometry::Geometry> geometry;
+    if (!resolve_mesh_geometry(node, primitive_index, mesh, geometry)) {
+        return make_error_content("Node has no mesh geometry at primitive_index " + std::to_string(primitive_index) + ": " + node->get_name());
+    }
+
+    // Target value: "sharpness" number (or the string "infinity"), or
+    // "clear": true to remove the values (back to smooth).
+    std::optional<float> after;
+    const bool clear = args.value("clear", false);
+    if (!clear) {
+        if (!args.contains("sharpness")) {
+            return make_error_content("sharpness is required (number or \"infinity\"), or pass \"clear\": true");
+        }
+        if (args["sharpness"].is_string()) {
+            if (args["sharpness"].get<std::string>() != "infinity") {
+                return make_error_content("sharpness string value must be \"infinity\"");
+            }
+            after = std::numeric_limits<float>::infinity();
+        } else {
+            const float value = args["sharpness"].get<float>();
+            if (value < 0.0f) {
+                return make_error_content("sharpness must be >= 0");
+            }
+            after = value;
+        }
+    }
+
+    // Target edges: explicit [v0, v1] pairs, or the current edge component
+    // selection on this geometry when "edges" is omitted.
+    Set_edge_sharpness_operation::Parameters parameters{};
+    parameters.geometry = geometry;
+    parameters.after    = after;
+    const erhe::geometry::Mesh_attributes& attributes   = geometry->get_attributes();
+    const GEO::index_t                     vertex_count = geometry->get_mesh().vertices.nb();
+    const auto add_edge = [&](const GEO::index_t v0, const GEO::index_t v1) -> bool {
+        const GEO::index_t edge = geometry->get_edge(v0, v1);
+        if (edge == GEO::NO_EDGE) {
+            return false;
+        }
+        parameters.edges .emplace_back(std::min(v0, v1), std::max(v0, v1));
+        parameters.before.push_back(attributes.edge_sharpness.try_get(edge));
+        return true;
+    };
+    if (args.contains("edges") && args["edges"].is_array()) {
+        for (const auto& e : args["edges"]) {
+            if (!e.is_array() || (e.size() != 2)) {
+                return make_error_content("Each edge must be a [v0, v1] vertex-index pair");
+            }
+            const GEO::index_t v0 = e[0].get<GEO::index_t>();
+            const GEO::index_t v1 = e[1].get<GEO::index_t>();
+            if ((v0 >= vertex_count) || (v1 >= vertex_count)) {
+                return make_error_content("Edge vertex index out of range (vertex_count " + std::to_string(vertex_count) + ")");
+            }
+            if (!add_edge(v0, v1)) {
+                return make_error_content("No such edge: [" + std::to_string(v0) + ", " + std::to_string(v1) + "]");
+            }
+        }
+    } else {
+        Mesh_component_selection* selection = m_context.mesh_component_selection;
+        if (selection != nullptr) {
+            Mesh_component_entry* entry = selection->find_entry(mesh, primitive_index, geometry);
+            if (entry != nullptr) {
+                for (const Mesh_edge_key& key : entry->edges) {
+                    add_edge(key.first, key.second); // stale selection keys are skipped
+                }
+            }
+        }
+        if (parameters.edges.empty()) {
+            return make_error_content("No edges given and no edge component selection on this geometry");
+        }
+    }
+
+    const std::size_t edge_count = parameters.edges.size();
+    m_context.operation_stack->queue(std::make_shared<Set_edge_sharpness_operation>(std::move(parameters)));
+
+    json result = {
+        {"node",            node->get_name()},
+        {"node_id",         node->get_id()},
+        {"primitive_index", primitive_index},
+        {"edges",           edge_count}
+    };
+    if (clear) {
+        result["cleared"] = true;
+    } else {
+        result["sharpness"] = std::isinf(after.value()) ? json("infinity") : json(after.value());
+    }
+    return make_json_content(result).dump();
 }
 
 auto Mcp_server::action_align_components(const json& args) -> std::string

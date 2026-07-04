@@ -504,7 +504,7 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"scene_name"})}
     }});
-    m_tool_infos.push_back({"get_mesh_attribute_values", "Read attribute presence and values for specific mesh elements of a node's render geometry. Pick a domain (vertex / corner / facet / edge) and pass the element indices; each element reports its per-attribute {present, value}. vertex elements also report position; corner elements report their vertex + facet; facet elements report their corner + vertex lists; edge elements report endpoint vertices + adjacent facets (edges carry no stored attributes). Optionally restrict to named attributes; default returns all attributes of the domain.", {
+    m_tool_infos.push_back({"get_mesh_attribute_values", "Read attribute presence and values for specific mesh elements of a node's render geometry. Pick a domain (vertex / corner / facet / edge) and pass the element indices; each element reports its per-attribute {present, value}. vertex elements also report position; corner elements report their vertex + facet; facet elements report their corner + vertex lists; edge elements report endpoint vertices + adjacent facets plus edge_sharpness when present (see set_edge_sharpness). Optionally restrict to named attributes; default returns all attributes of the domain.", {
         {"type", "object"},
         {"properties", {
             {"scene_name",      {{"type", "string"},  {"description", "Name of the scene"}}},
@@ -518,6 +518,19 @@ void Mcp_server::refresh_tool_list()
         {"required", json::array({"scene_name", "domain", "indices"})}
     }});
     m_tool_infos.push_back({"clear_mesh_component_selection", "Clear the entire mesh-component selection", schema_no_args()});
+    m_tool_infos.push_back({"set_edge_sharpness", "Set (or clear) the semi-sharp crease sharpness (edge_sharpness attribute) of mesh edges; Catmull-Clark subdivision then applies the sharp rules for sharpness levels (fractional part blends, decays by ~1 per level, \"infinity\" never smooths). Targets explicit [v0, v1] edge pairs, or the current edge component selection on the geometry when edges is omitted. Undoable; queued (barrier: any query). Read values back with get_mesh_attribute_values domain=edge.", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name",      {{"type", "string"},  {"description", "Name of the scene"}}},
+            {"node_id",         {{"type", "integer"}, {"description", "Node ID (preferred over node_name when both given)"}}},
+            {"node_name",       {{"type", "string"},  {"description", "Node name (used when node_id is absent)"}}},
+            {"primitive_index", {{"type", "integer"}, {"description", "Mesh primitive index (default 0)"}}},
+            {"edges",           {{"type", "array"},   {"items", {{"type", "array"}, {"items", {{"type", "integer"}}}, {"minItems", 2}, {"maxItems", 2}}}, {"description", "Edges as [v0, v1] vertex-index pairs; omit to use the current edge component selection"}}},
+            {"sharpness",       {{"description", "Sharpness value >= 0 (number), or the string \"infinity\" for an infinitely sharp crease"}}},
+            {"clear",           {{"type", "boolean"}, {"description", "Remove the sharpness values (back to smooth) instead of setting one (default false)"}}}
+        }},
+        {"required", json::array({"scene_name"})}
+    }});
     m_tool_infos.push_back({"align_components", "Align the two selected mesh components (of the active vertex/edge/face mode) on two distinct nodes: colocate vertices, align edges, or glue faces. apply_scale also matches scale (edge/face only). Requires exactly two components selected on two distinct nodes. Undoable.", {
         {"type", "object"},
         {"properties", {

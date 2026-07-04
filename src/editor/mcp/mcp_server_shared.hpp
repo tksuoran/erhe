@@ -36,6 +36,7 @@
 #include "operations/operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/operations_window.hpp"
+#include "operations/set_edge_sharpness_operation.hpp"
 #include "parsers/gltf.hpp"
 #include "parsers/gltf_physics_export.hpp"
 #include "erhe_math/math_util.hpp"

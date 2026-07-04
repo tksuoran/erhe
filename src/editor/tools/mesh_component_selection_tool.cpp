@@ -7,6 +7,9 @@
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/viewport_config.hpp"
 #include "input_state.hpp"
+#include "operations/compound_operation.hpp"
+#include "operations/operation_stack.hpp"
+#include "operations/set_edge_sharpness_operation.hpp"
 #include "renderers/id_renderer.hpp"
 #include "renderers/render_context.hpp"
 #include "scene/scene_view.hpp"
@@ -957,12 +960,88 @@ void Mesh_component_selection_tool::viewport_toolbar()
         ImGui::SetTooltip("Clear mesh component selection");
     }
 
+    // Crease sharpness painting (edge mode): apply / clear the semi-sharp
+    // crease sharpness of the selected edges (doc/subdivision_crease_edges.md).
+    // Undoable via Set_edge_sharpness_operation; the value only affects the
+    // crease overlay and future Catmull-Clark subdivisions, so no rebuild.
+    if (selection.get_mode() == Mesh_component_mode::edge) {
+        ImGui::SetNextItemWidth(110.0f);
+        ImGui::BeginDisabled(m_crease_infinite);
+        ImGui::DragFloat("##crease_sharpness", &m_crease_sharpness, 0.05f, 0.0f, 100.0f, "Crease %.2f");
+        ImGui::EndDisabled();
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Crease sharpness: number of Catmull-Clark levels subdivided with the sharp rules (fractional part blends)");
+        }
+        ImGui::Checkbox("Inf##crease_infinite", &m_crease_infinite);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Infinitely sharp crease");
+        }
+        if (ImGui::Button("Set Crease")) {
+            const float value = m_crease_infinite ? std::numeric_limits<float>::infinity() : m_crease_sharpness;
+            apply_crease_sharpness(value);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Set crease sharpness on the selected edges");
+        }
+        if (ImGui::Button("Clear Crease")) {
+            apply_crease_sharpness(std::optional<float>{});
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Remove crease sharpness from the selected edges");
+        }
+    }
+
     ImGui::PopID();
 
     // Visual style (colors, edge thickness, vertex size, edge depth bias) is
     // edited in the Settings window; it is stored editor-global in
     // Editor_settings_config::mesh_component_style so codegen serialization /
     // autosave cover it.
+}
+
+void Mesh_component_selection_tool::apply_crease_sharpness(const std::optional<float>& value)
+{
+    Mesh_component_selection& selection = m_mesh_component_selection;
+
+    std::vector<std::shared_ptr<Operation>> operations;
+    for (Mesh_component_entry& entry : selection.get_entries()) {
+        if (!selection.is_live(entry) || entry.edges.empty()) {
+            continue;
+        }
+        std::shared_ptr<erhe::geometry::Geometry> geometry = entry.geometry.lock();
+        if (!geometry) {
+            continue;
+        }
+        Set_edge_sharpness_operation::Parameters parameters{};
+        parameters.geometry = geometry;
+        parameters.after    = value;
+        const erhe::geometry::Mesh_attributes& attributes = geometry->get_attributes();
+        for (const Mesh_edge_key& key : entry.edges) {
+            const GEO::index_t edge = geometry->get_edge(key.first, key.second);
+            if (edge == GEO::NO_EDGE) {
+                continue;
+            }
+            parameters.edges .push_back(key);
+            parameters.before.push_back(attributes.edge_sharpness.try_get(edge));
+        }
+        if (parameters.edges.empty()) {
+            continue;
+        }
+        operations.push_back(std::make_shared<Set_edge_sharpness_operation>(std::move(parameters)));
+    }
+
+    if (operations.empty()) {
+        return;
+    }
+    if (operations.size() == 1) {
+        m_context.operation_stack->queue(operations.front());
+    } else {
+        m_context.operation_stack->queue(
+            std::make_shared<Compound_operation>(
+                Compound_operation::Parameters{.operations = std::move(operations)}
+            )
+        );
+    }
 }
 
 namespace {

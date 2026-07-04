@@ -218,6 +218,12 @@ public:
         attribute[key] = value;
         present[key] = true;
     }
+    void unset(GEO::index_t key)
+    {
+        if (key < present.size()) {
+            present[key] = false;
+        }
+    }
     [[nodiscard]] auto has(GEO::index_t key) const
     {
         if ((key >= present.size()) || (key >= attribute.size())) {
@@ -815,8 +821,9 @@ public:
     // Both resolve the edge from the canonical vertex pair; get returns 0.0f
     // (smooth) for absent values or nonexistent edges, set is a no-op for a
     // nonexistent edge. Requires build_edges() to have run.
-    [[nodiscard]] auto get_edge_sharpness(GEO::index_t v0, GEO::index_t v1) const -> float;
-    void               set_edge_sharpness(GEO::index_t v0, GEO::index_t v1, float sharpness);
+    [[nodiscard]] auto get_edge_sharpness  (GEO::index_t v0, GEO::index_t v1) const -> float;
+    void               set_edge_sharpness  (GEO::index_t v0, GEO::index_t v1, float sharpness);
+    void               clear_edge_sharpness(GEO::index_t v0, GEO::index_t v1); // back to absent (smooth)
     [[nodiscard]] auto get_attributes    () -> Mesh_attributes&;
     [[nodiscard]] auto get_attributes    () const -> const Mesh_attributes&;
     [[nodiscard]] auto get_aabb          (const glm::mat4& transform) const -> erhe::math::Aabb;
