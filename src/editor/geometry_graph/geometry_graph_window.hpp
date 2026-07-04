@@ -130,8 +130,28 @@ public:
     void set_node_position(const Geometry_graph_node& node, const ImVec2& position);
 
 private:
+    // One selectable palette entry (a spawnable node type).
+    class Palette_entry
+    {
+    public:
+        std::string type_name;
+        std::string label;
+    };
+    // One palette category (e.g. "Primitives") and its entries.
+    class Palette_category
+    {
+    public:
+        std::string                name;
+        std::vector<Palette_entry> entries;
+    };
+
     auto make_node       (const std::string& type_name) -> std::shared_ptr<Geometry_graph_node>;
-    void node_toolbar    ();
+    // Searchable, categorized node palette (same vertical
+    // filter + CollapsingHeader + Selectable structure as the texture
+    // graph palette). Plain ImGui, kept outside the ax::NodeEditor canvas
+    // so collapsing headers are allowed.
+    void build_palette   ();
+    void node_palette    ();
     void handle_link_create();
     void handle_deletions();
 
@@ -192,6 +212,8 @@ private:
     std::unique_ptr<ax::NodeEditor::EditorContext>    m_node_editor;
     std::shared_ptr<Evaluation_run>                   m_evaluation_run; // non-null while a run is in flight
     int                                               m_spawn_count{0};
+    std::vector<Palette_category>                     m_palette_categories; // built lazily by build_palette()
+    std::string                                       m_palette_filter;     // node-palette search text
 };
 
 // Companion window hosting the Geometry Graph's node palette, so the palette

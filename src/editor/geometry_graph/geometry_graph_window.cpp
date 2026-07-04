@@ -33,6 +33,7 @@
 #include <taskflow/taskflow.hpp>
 
 #include <algorithm>
+#include <cctype>
 
 namespace editor {
 
@@ -310,36 +311,135 @@ auto Geometry_graph_window::add_node_of_type(const std::string& type_name) -> Ge
     return node.get();
 }
 
-void Geometry_graph_window::node_toolbar()
+namespace {
+
+[[nodiscard]] auto to_lower_ascii(std::string text) -> std::string
 {
-                       if (ImGui::Button("Box"))    { add_node_of_type("box"); }
-    ImGui::SameLine(); if (ImGui::Button("Sphere")) { add_node_of_type("sphere"); }
-    ImGui::SameLine(); if (ImGui::Button("Torus"))  { add_node_of_type("torus"); }
-    ImGui::SameLine(); if (ImGui::Button("Cone"))   { add_node_of_type("cone"); }
-    ImGui::SameLine(); if (ImGui::Button("Disc"))   { add_node_of_type("disc"); }
+    for (char& c : text) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    return text;
+}
 
-                       if (ImGui::Button("Subdivide"))   { add_node_of_type("subdivide"); }
-    ImGui::SameLine(); if (ImGui::Button("Conway"))      { add_node_of_type("conway"); }
-    ImGui::SameLine(); if (ImGui::Button("Transform"))   { add_node_of_type("transform"); }
-    ImGui::SameLine(); if (ImGui::Button("Triangulate")) { add_node_of_type("triangulate"); }
-    ImGui::SameLine(); if (ImGui::Button("Normalize"))   { add_node_of_type("normalize"); }
-    ImGui::SameLine(); if (ImGui::Button("Reverse"))     { add_node_of_type("reverse"); }
-    ImGui::SameLine(); if (ImGui::Button("Repair"))      { add_node_of_type("repair"); }
+}
 
-                       if (ImGui::Button("Distribute")) { add_node_of_type("distribute"); }
-    ImGui::SameLine(); if (ImGui::Button("Instance"))   { add_node_of_type("instance"); }
-    ImGui::SameLine(); if (ImGui::Button("Realize"))    { add_node_of_type("realize"); }
+void Geometry_graph_window::build_palette()
+{
+    if (!m_palette_categories.empty()) {
+        return; // built once - the node set is fixed at compile time
+    }
+    // Mirrors the texture graph palette structure (filter + collapsing
+    // headers + selectables); the categories follow the old toolbar rows.
+    m_palette_categories = {
+        Palette_category{
+            .name    = "Primitives",
+            .entries = {
+                Palette_entry{.type_name = "box",    .label = "Box"},
+                Palette_entry{.type_name = "sphere", .label = "Sphere"},
+                Palette_entry{.type_name = "torus",  .label = "Torus"},
+                Palette_entry{.type_name = "cone",   .label = "Cone"},
+                Palette_entry{.type_name = "disc",   .label = "Disc"}
+            }
+        },
+        Palette_category{
+            .name    = "Operations",
+            .entries = {
+                Palette_entry{.type_name = "subdivide",   .label = "Subdivide"},
+                Palette_entry{.type_name = "conway",      .label = "Conway"},
+                Palette_entry{.type_name = "transform",   .label = "Transform"},
+                Palette_entry{.type_name = "triangulate", .label = "Triangulate"},
+                Palette_entry{.type_name = "normalize",   .label = "Normalize"},
+                Palette_entry{.type_name = "reverse",     .label = "Reverse"},
+                Palette_entry{.type_name = "repair",      .label = "Repair"}
+            }
+        },
+        Palette_category{
+            .name    = "Points",
+            .entries = {
+                Palette_entry{.type_name = "distribute", .label = "Distribute Points"},
+                Palette_entry{.type_name = "instance",   .label = "Instance on Points"},
+                Palette_entry{.type_name = "realize",    .label = "Realize Instances"}
+            }
+        },
+        Palette_category{
+            .name    = "Combine",
+            .entries = {
+                Palette_entry{.type_name = "join",    .label = "Join"},
+                Palette_entry{.type_name = "boolean", .label = "Boolean"}
+            }
+        },
+        Palette_category{
+            .name    = "Values",
+            .entries = {
+                Palette_entry{.type_name = "float",   .label = "Float"},
+                Palette_entry{.type_name = "integer", .label = "Integer"},
+                Palette_entry{.type_name = "vector",  .label = "Vector"},
+                Palette_entry{.type_name = "math",    .label = "Math"}
+            }
+        },
+        Palette_category{
+            .name    = "Groups",
+            .entries = {
+                Palette_entry{.type_name = "group_input",  .label = "Group Input"},
+                Palette_entry{.type_name = "group_output", .label = "Group Output"},
+                Palette_entry{.type_name = "group",        .label = "Group"}
+            }
+        },
+        Palette_category{
+            .name    = "Output",
+            .entries = {
+                Palette_entry{.type_name = "output", .label = "Output"}
+            }
+        }
+    };
+}
 
-                       if (ImGui::Button("Join"))    { add_node_of_type("join"); }
-    ImGui::SameLine(); if (ImGui::Button("Boolean")) { add_node_of_type("boolean"); }
-    ImGui::SameLine(); if (ImGui::Button("Float"))   { add_node_of_type("float"); }
-    ImGui::SameLine(); if (ImGui::Button("Integer")) { add_node_of_type("integer"); }
-    ImGui::SameLine(); if (ImGui::Button("Vector"))  { add_node_of_type("vector"); }
-    ImGui::SameLine(); if (ImGui::Button("Math"))    { add_node_of_type("math"); }
-    ImGui::SameLine(); if (ImGui::Button("Output"))  { add_node_of_type("output"); }
-    ImGui::SameLine(); if (ImGui::Button("Group In"))  { add_node_of_type("group_input"); }
-    ImGui::SameLine(); if (ImGui::Button("Group Out")) { add_node_of_type("group_output"); }
-    ImGui::SameLine(); if (ImGui::Button("Group"))     { add_node_of_type("group"); }
+void Geometry_graph_window::node_palette()
+{
+    build_palette();
+
+    ImGui::SetNextItemWidth(240.0f);
+    ImGui::InputTextWithHint("##palette_filter", "Filter nodes...", &m_palette_filter);
+    ImGui::SameLine();
+    if (ImGui::SmallButton("Clear")) {
+        m_palette_filter.clear();
+    }
+
+    const std::string filter    = to_lower_ascii(m_palette_filter);
+    const bool        filtering = !filter.empty();
+
+    const auto entry_matches = [&filter](const Palette_entry& entry) -> bool {
+        return (to_lower_ascii(entry.label).find(filter) != std::string::npos) ||
+               (to_lower_ascii(entry.type_name).find(filter) != std::string::npos);
+    };
+
+    for (const Palette_category& category : m_palette_categories) {
+        bool any_match = !filtering;
+        if (filtering) {
+            for (const Palette_entry& entry : category.entries) {
+                if (entry_matches(entry)) {
+                    any_match = true;
+                    break;
+                }
+            }
+            if (!any_match) {
+                continue; // hide categories with no matching entry while filtering
+            }
+        }
+        const ImGuiTreeNodeFlags flags = filtering ? ImGuiTreeNodeFlags_DefaultOpen : ImGuiTreeNodeFlags_None;
+        if (ImGui::CollapsingHeader(category.name.c_str(), flags)) {
+            for (const Palette_entry& entry : category.entries) {
+                if (filtering && !entry_matches(entry)) {
+                    continue;
+                }
+                ImGui::PushID(entry.type_name.c_str());
+                if (ImGui::Selectable(entry.label.c_str())) {
+                    add_node_of_type(entry.type_name);
+                }
+                ImGui::PopID();
+            }
+        }
+    }
 }
 
 auto Geometry_graph_window::is_evaluation_run_done() -> bool
@@ -623,7 +723,7 @@ void Geometry_graph_window::controls_imgui()
     }
     ImGui::Text("Editing: %s", m_graph_mesh->get_name().c_str());
     ImGui::Separator();
-    node_toolbar();
+    node_palette();
 
     if (m_evaluation_run) {
         ImGui::TextUnformatted("Evaluating graph in background...");
