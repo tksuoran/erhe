@@ -1113,11 +1113,16 @@ void Transform_tool::update_for_view(Scene_view* scene_view)
         }
     }
 
-    update_visibility();
+    // Refresh the visualizations' scene view FIRST: update_visibility() below
+    // runs update_transforms(), which dereferences the visualizations' cached
+    // scene view. Refreshing afterwards (as this used to) made that a stale
+    // pointer from the previous message -- a use-after-free when the previous
+    // viewport had been destroyed (scene closed).
     Handle_visualizations* visualizations = shared.get_visualizations();
     if (visualizations != nullptr) {
         visualizations->update_for_view(scene_view);
     }
+    update_visibility();
     update_transforms();
 }
 
