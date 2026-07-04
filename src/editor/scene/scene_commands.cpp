@@ -63,7 +63,11 @@ Create_new_scene_command::Create_new_scene_command(erhe::commands::Commands& com
 
 auto Create_new_scene_command::try_call() -> bool
 {
-    return m_context.scene_commands->create_new_scene().operator bool();
+    // Menu commands run inside ImGui window iteration, where the new scene's
+    // ImGui windows (browser, viewport) must not be registered. Queue the
+    // creation; the message bus pump dispatches it outside ImGui iteration.
+    m_context.app_message_bus->create_scene.queue_message(Create_scene_message{});
+    return true;
 }
 
 Create_new_camera_command::Create_new_camera_command(erhe::commands::Commands& commands, App_context& context)
@@ -334,7 +338,7 @@ void Add_toruses_command::apply_args(const Make_mesh_args& args)
 }
 #pragma endregion Command
 
-Scene_commands::Scene_commands(erhe::commands::Commands& commands, App_context& context)
+Scene_commands::Scene_commands(erhe::commands::Commands& commands, App_context& context, App_message_bus& app_message_bus)
     : m_context                        {context}
     , m_create_new_scene_command       {commands, context}
     , m_create_new_camera_command      {commands, context}
@@ -382,6 +386,12 @@ Scene_commands::Scene_commands(erhe::commands::Commands& commands, App_context& 
     commands.bind_command_to_menu(&m_create_new_rendertarget_command, "Create.Rendertarget");
     commands.bind_command_to_menu(&m_create_new_rigid_body_command,   "Create.Rigid Body");
     commands.bind_command_to_menu(&m_create_new_joint_command,        "Create.Joint");
+
+    m_create_scene_subscription = app_message_bus.create_scene.subscribe(
+        [this](Create_scene_message&) {
+            create_new_scene();
+        }
+    );
 }
 
 auto Scene_commands::get_add_cameras_command() -> Add_cameras_command&

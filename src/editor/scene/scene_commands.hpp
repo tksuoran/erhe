@@ -5,7 +5,10 @@
 #include "config/generated/add_room_args.hpp"
 #include "scene/make_mesh_config.hpp"
 
+#include "app_message.hpp"
+
 #include "erhe_commands/command.hpp"
+#include "erhe_message_bus/message_bus.hpp"
 
 #include <memory>
 #include <string_view>
@@ -43,6 +46,7 @@ namespace erhe::scene {
 namespace editor {
 
 class App_context;
+class App_message_bus;
 class Headset_view;
 class Mesh_rendertarget_view;
 class Node_joint;
@@ -239,7 +243,7 @@ private:
 class Scene_commands
 {
 public:
-    Scene_commands(erhe::commands::Commands& commands, App_context& context);
+    Scene_commands(erhe::commands::Commands& commands, App_context& context, App_message_bus& app_message_bus);
 
     // Public API
 
@@ -248,6 +252,11 @@ public:
     // The scene is registered to the editor scene list, given its browser
     // window and a viewport window looking through the camera, and announced
     // via Scene_created_message. Not undoable (like loading a scene).
+    //
+    // Registers ImGui windows, so this must NOT be called from inside ImGui
+    // window iteration (e.g. from a menu); the scene.create_new_scene command
+    // queues Create_scene_message and the actual creation runs from the
+    // message bus pump.
     auto create_new_scene       () -> std::shared_ptr<Scene_root>;
     auto create_new_camera      (erhe::scene::Node* parent = nullptr) -> std::shared_ptr<erhe::scene::Camera>;
     auto create_new_empty_node  (erhe::scene::Node* parent = nullptr) -> std::shared_ptr<erhe::scene::Node>;
@@ -291,6 +300,8 @@ public:
 
 private:
     App_context& m_context;
+
+    erhe::message_bus::Subscription<Create_scene_message> m_create_scene_subscription;
 
     Create_new_scene_command        m_create_new_scene_command;
     Create_new_camera_command       m_create_new_camera_command;

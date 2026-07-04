@@ -988,7 +988,7 @@ public:
             m_viewport_scene_views = std::make_unique<Scene_views   >(m_editor_settings.viewport, commands, m_app_context, app_message_bus);
             m_selection            = std::make_unique<Selection     >(commands, m_app_context, app_message_bus);
             m_mesh_component_selection = std::make_unique<Mesh_component_selection>(app_message_bus);
-            m_scene_commands       = std::make_unique<Scene_commands>(commands, m_app_context);
+            m_scene_commands       = std::make_unique<Scene_commands>(commands, m_app_context, app_message_bus);
             m_debug_draw           = std::make_unique<Debug_draw    >(m_app_context);
             // Drive view_count from the OpenXR session's multiview
             // capability. The session was created above (line ~789).

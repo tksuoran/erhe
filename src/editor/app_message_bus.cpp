@@ -11,6 +11,7 @@ void App_message_bus::update()
     hover_tree_node.update();
     graphics_settings.update();
     load_scene_file.update();
+    create_scene.update();
 }
 
 }

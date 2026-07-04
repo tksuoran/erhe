@@ -91,6 +91,15 @@ struct Load_scene_file_message
     std::filesystem::path path{};
 };
 
+// Queued by the scene.create_new_scene command; handled by Scene_commands.
+// Queue-only so the scene (and its ImGui windows) is created by the message
+// bus pump, outside ImGui window iteration -- the command fires from a menu,
+// which runs inside Imgui_windows::begin_frame() where registering new
+// windows is forbidden.
+struct Create_scene_message
+{
+};
+
 struct Tool_select_message
 {
 };
