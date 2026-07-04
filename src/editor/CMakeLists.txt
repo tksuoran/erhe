@@ -382,6 +382,8 @@ erhe_target_sources_grouped(
     rendertarget_mesh.hpp
     rendertarget_view.hpp
     robin_hood.h
+    scene/attachment_types.cpp
+    scene/attachment_types.hpp
     scene/collision_shape_from_mesh.cpp
     scene/collision_shape_from_mesh.hpp
     scene/debug_draw.cpp

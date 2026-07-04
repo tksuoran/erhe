@@ -38,15 +38,19 @@ namespace erhe::rendergraph {
 namespace erhe::scene {
     class Camera;
     class Layout;
+    class Layout_item;
     class Light;
     class Mesh;
     class Node;
+    class Node_attachment;
 }
 
 namespace editor {
 
 class App_context;
 class App_message_bus;
+class Frame_controller;
+class Grid;
 class Headset_view;
 class Mesh_rendertarget_view;
 class Node_joint;
@@ -285,6 +289,26 @@ public:
         const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings         = {},
         bool                                                          enable_collision = false
     ) -> std::shared_ptr<Node_joint>;
+
+    // Node attachment management (issue #249). Each of these attaches a new
+    // attachment to an EXISTING in-scene node via a bare (undoable)
+    // Node_attach_operation -- no node creation, no Compound_operation. They
+    // gate single-instance kinds via get_attachment<T> and return empty when
+    // the node already carries that attachment (Scene_root is resolved from the
+    // node's item host). See scene/attachment_types.{hpp,cpp} for the user
+    // catalog that drives them; Rigid Body / Joint reuse create_new_rigid_body
+    // / create_new_joint above.
+    auto attach_new_camera          (erhe::scene::Node& node) -> std::shared_ptr<erhe::scene::Camera>;
+    auto attach_new_light           (erhe::scene::Node& node) -> std::shared_ptr<erhe::scene::Light>;
+    auto attach_new_empty_mesh      (erhe::scene::Node& node) -> std::shared_ptr<erhe::scene::Mesh>;
+    auto attach_new_layout          (erhe::scene::Node& node) -> std::shared_ptr<erhe::scene::Layout>;
+    auto attach_new_layout_item     (erhe::scene::Node& node) -> std::shared_ptr<erhe::scene::Layout_item>;
+    auto attach_new_grid            (erhe::scene::Node& node) -> std::shared_ptr<Grid>;
+    auto attach_new_frame_controller(erhe::scene::Node& node) -> std::shared_ptr<Frame_controller>;
+
+    // Queues an undoable pure detach of the attachment from its current node
+    // (Node_attach_operation with an empty host node). No-op on a null pointer.
+    void remove_attachment(const std::shared_ptr<erhe::scene::Node_attachment>& attachment);
 
     auto get_scene_root         (erhe::scene::Node* parent) const -> Scene_root*;
     auto get_scene_root         (erhe::primitive::Material* material) const -> Scene_root*;
