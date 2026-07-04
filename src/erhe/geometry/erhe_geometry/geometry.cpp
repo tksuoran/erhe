@@ -181,6 +181,7 @@ void Attribute_descriptors::init()
     insert(s_normal_smooth     );
     insert(s_centroid          );
     insert(s_aniso_control     );
+    insert(s_edge_sharpness    );
 }
 
 auto Attribute_descriptors::get(int usage_index, const char* name) -> const Attribute_descriptor*
@@ -225,6 +226,7 @@ Mesh_attributes::Mesh_attributes(const GEO::Mesh& mesh)
     , corner_color_0           {mesh.facet_corners.attributes(), Attribute_descriptors::s_color_0           }
     , corner_color_1           {mesh.facet_corners.attributes(), Attribute_descriptors::s_color_1           }
     , corner_aniso_control     {mesh.facet_corners.attributes(), Attribute_descriptors::s_aniso_control     }
+    , edge_sharpness           {mesh.edges        .attributes(), Attribute_descriptors::s_edge_sharpness    }
 {
 }
 
@@ -260,6 +262,7 @@ void Mesh_attributes::unbind()
     corner_color_0           .unbind();
     corner_color_1           .unbind();
     corner_aniso_control     .unbind();
+    edge_sharpness           .unbind();
 }
 
 void Mesh_attributes::bind()
@@ -294,6 +297,7 @@ void Mesh_attributes::bind()
     corner_color_0           .bind(m_mesh.facet_corners.attributes());
     corner_color_1           .bind(m_mesh.facet_corners.attributes());
     corner_aniso_control     .bind(m_mesh.facet_corners.attributes());
+    edge_sharpness           .bind(m_mesh.edges        .attributes());
 }
 
 Mesh_attributes::~Mesh_attributes() noexcept
@@ -1239,8 +1243,42 @@ void Geometry::set_name(std::string_view name)
     m_name = std::string{name};
 }
 
+auto Geometry::get_edge_sharpness(const GEO::index_t v0, const GEO::index_t v1) const -> float
+{
+    const GEO::index_t edge = get_edge(v0, v1);
+    if (edge == GEO::NO_EDGE) {
+        return 0.0f;
+    }
+    return m_attributes.edge_sharpness.try_get(edge).value_or(0.0f);
+}
+
+void Geometry::set_edge_sharpness(const GEO::index_t v0, const GEO::index_t v1, const float sharpness)
+{
+    const GEO::index_t edge = get_edge(v0, v1);
+    if (edge == GEO::NO_EDGE) {
+        return;
+    }
+    m_attributes.edge_sharpness.set(edge, sharpness);
+}
+
 void Geometry::build_edges()
 {
+    // Geogram's edges.clear() keeps attribute bindings but wipes the values,
+    // and the rebuild below may enumerate edges in a different order. Edge
+    // identity is the canonical vertex pair (vertex indices are not touched
+    // here), so snapshot present sharpness values by vertex pair and reapply
+    // after the rebuild. Member scratch: no steady-state allocation once the
+    // high-water capacity is reached.
+    m_edge_sharpness_scratch.clear();
+    for (GEO::index_t edge : m_mesh.edges) {
+        const std::optional<float> sharpness = m_attributes.edge_sharpness.try_get(edge);
+        if (sharpness.has_value()) {
+            const GEO::index_t a = m_mesh.edges.vertex(edge, 0);
+            const GEO::index_t b = m_mesh.edges.vertex(edge, 1);
+            m_edge_sharpness_scratch.emplace_back(std::min(a, b), std::max(a, b), sharpness.value());
+        }
+    }
+
     m_mesh.edges.clear();
 
     GEO::index_t facet_edge_count = 0;
@@ -1335,6 +1373,16 @@ void Geometry::build_edges()
             m_edge_to_facets[edge].push_back(facet);
             //m_vertex_to_edges[lo].push_back(edge);
             //m_vertex_to_edges[hi].push_back(edge);
+        }
+    }
+
+    // Reapply snapshotted edge sharpness values (see snapshot at the top).
+    // An edge whose vertex pair no longer exists (facet changes between
+    // build_edges() calls) silently drops its value.
+    for (const std::tuple<GEO::index_t, GEO::index_t, float>& entry : m_edge_sharpness_scratch) {
+        const auto i = m_vertex_pair_to_edge.find({std::get<0>(entry), std::get<1>(entry)});
+        if (i != m_vertex_pair_to_edge.end()) {
+            m_attributes.edge_sharpness.set(i->second, std::get<2>(entry));
         }
     }
 }

@@ -11,6 +11,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <tuple>
 
 namespace spdlog {
     class logger;
@@ -132,6 +133,7 @@ static constexpr const char* c_id                 = "id"                ; // uni
 static constexpr const char* c_normal_smooth      = "normal_smooth"     ; // vertex normal always averaged from facets
 static constexpr const char* c_centroid           = "centroid"          ; // centroid position for facet
 static constexpr const char* c_aniso_control      = "aniso_control"     ; // controls anisotropy amount
+static constexpr const char* c_edge_sharpness     = "edge_sharpness"    ; // semi-sharp crease sharpness (per edge); absent or 0 = smooth, +inf = infinitely sharp
 
 // Anisotropy control:
 // X is used to modulate anisotropy level:
@@ -161,6 +163,7 @@ public:
     static inline const Attribute_descriptor s_normal_smooth     { 0, c_normal_smooth     , Transform_mode::normalize_normal_mat_mul_vec3_zero, Interpolation_mode::normalized };
     static inline const Attribute_descriptor s_centroid          { 0, c_centroid          , Transform_mode::mat_mul_vec3_one,                   Interpolation_mode::linear };
     static inline const Attribute_descriptor s_aniso_control     { 0, c_aniso_control     , Transform_mode::none,                               Interpolation_mode::linear };
+    static inline const Attribute_descriptor s_edge_sharpness    { 0, c_edge_sharpness    , Transform_mode::none,                               Interpolation_mode::none };
 
     static void init  ();
     static void insert(const Attribute_descriptor& descriptor);
@@ -281,6 +284,7 @@ public:
     Attribute_present<GEO::vec4f> corner_color_0           ;
     Attribute_present<GEO::vec4f> corner_color_1           ;
     Attribute_present<GEO::vec2f> corner_aniso_control     ;
+    Attribute_present<float>      edge_sharpness           ; // first (and so far only) edge-domain attribute
     inline auto facet_color         (size_t i) -> Attribute_present<GEO::vec4f>& { return (i == 0) ? facet_color_0          : facet_color_1         ; }
     inline auto vertex_texcoord     (size_t i) -> Attribute_present<GEO::vec2f>& { return (i == 0) ? vertex_texcoord_0      : vertex_texcoord_1     ; }
     inline auto vertex_color        (size_t i) -> Attribute_present<GEO::vec4f>& { return (i == 0) ? vertex_color_0         : vertex_color_1        ; }
@@ -806,6 +810,13 @@ public:
     [[nodiscard]] auto get_corner_facet  (GEO::index_t corner) const -> GEO::index_t;
     [[nodiscard]] auto get_edge_facets   (GEO::index_t edge) const -> const std::vector<GEO::index_t>&;
     [[nodiscard]] auto get_edge          (GEO::index_t v0, GEO::index_t v1) const -> GEO::index_t;
+
+    // Semi-sharp crease sharpness accessors (see doc/subdivision_crease_edges.md).
+    // Both resolve the edge from the canonical vertex pair; get returns 0.0f
+    // (smooth) for absent values or nonexistent edges, set is a no-op for a
+    // nonexistent edge. Requires build_edges() to have run.
+    [[nodiscard]] auto get_edge_sharpness(GEO::index_t v0, GEO::index_t v1) const -> float;
+    void               set_edge_sharpness(GEO::index_t v0, GEO::index_t v1, float sharpness);
     [[nodiscard]] auto get_attributes    () -> Mesh_attributes&;
     [[nodiscard]] auto get_attributes    () const -> const Mesh_attributes&;
     [[nodiscard]] auto get_aabb          (const glm::mat4& transform) const -> erhe::math::Aabb;
@@ -907,6 +918,11 @@ private:
     };
 
     std::unordered_map<std::pair<GEO::index_t, GEO::index_t>, GEO::index_t, Edge_hash> m_vertex_pair_to_edge;
+
+    // build_edges() scratch preserving edge sharpness values across the edge
+    // store rebuild: (lo vertex, hi vertex, sharpness). Cleared (capacity
+    // kept) at the start of every build_edges() call.
+    std::vector<std::tuple<GEO::index_t, GEO::index_t, float>> m_edge_sharpness_scratch;
 
     mutable std::vector<Debug_text> m_debug_texts;
     mutable std::vector<Debug_line> m_debug_lines;
