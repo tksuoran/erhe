@@ -18,9 +18,11 @@ class Node_physics;
 // attachment gets its renderable Mesh from the referenced Graph_mesh's
 // baked products, and the attachment points back at the graph asset that
 // produced the geometry. The attachment CONTROLS a sibling Mesh attachment
-// (created on first apply, primitives swapped on every re-bake, detached
-// when this attachment leaves the node) and keeps an optional Node_physics
-// in sync with the graph's baked collision shape.
+// (a pre-existing Mesh on the node is ADOPTED - a node has exactly one
+// attachment of each type - else one is created on first apply; primitives
+// swapped on every re-bake, detached when this attachment leaves the node)
+// and keeps an optional Node_physics in sync with the graph's baked
+// collision shape (likewise adopting a pre-existing one).
 //
 // Updates are push-based: Geometry_graph_window's evaluation engine calls
 // apply_baked_products() on every attachment bound to a graph after that

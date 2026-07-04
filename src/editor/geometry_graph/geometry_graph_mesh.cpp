@@ -137,6 +137,22 @@ void Geometry_graph_mesh::apply_baked_products()
 
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{item_host->item_host_mutex};
 
+    // The node may already carry Mesh / Node_physics attachments (e.g.
+    // the Graph_mesh was dropped onto an existing mesh node). A node has
+    // exactly one attachment of each type, so adopt them as the
+    // controlled products - the bake replaces the mesh's primitives and
+    // dictates the physics state from here on - instead of attaching
+    // duplicates.
+    if (!m_mesh) {
+        m_mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node);
+    }
+    if (!m_node_physics) {
+        m_node_physics = erhe::scene::get_attachment<Node_physics>(node);
+    }
+    if ((m_mesh || m_node_physics) && m_controlled_node.expired()) {
+        m_controlled_node = node->shared_node_from_this();
+    }
+
     if (!products.primitive) {
         // The graph evaluated to empty / disconnected: keep the node but
         // show nothing (mirrors the output node's empty handling).

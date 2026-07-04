@@ -1202,6 +1202,23 @@ def section_graph_mesh_asset():
     mesh_atts = [a for a in node_attachments(scene_name, "Smoke GM Node 2") if a.get("type") == "Mesh"]
     check(S, "second node shares the existing bake at bind time", len(mesh_atts) == 1 and mesh_atts[0].get("facet_count") == 96, detail=str(mesh_atts))
 
+    # Binding a node that ALREADY has a Mesh (and Node_physics, from brush
+    # placement) must ADOPT them - a node has exactly one attachment of
+    # each type - not attach duplicates. The graph's bake replaces the
+    # adopted mesh's primitives; with graph physics off, the adopted
+    # physics is removed (the bake dictates the physics state).
+    mutate("create_shape", {"shape": "box", "name": "Smoke GM Shape", "scene_name": scene_name})
+    check(S, "shape node created", wait_for_scene_node(scene_name, "Smoke GM Shape"))
+    mutate("set_node_graph_mesh", {"node_name": "Smoke GM Shape", "graph_mesh": "Smoke GM", "scene_name": scene_name})
+    get_graph()
+    atts = node_attachments(scene_name, "Smoke GM Shape")
+    mesh_atts = [a for a in atts if a.get("type") == "Mesh"]
+    phys_atts = [a for a in atts if a.get("type") == "Node_physics"]
+    check(S, "binding adopts the existing mesh (exactly one Mesh attachment, re-baked)",
+          len(mesh_atts) == 1 and mesh_atts[0].get("facet_count") == 96, detail=str(atts))
+    check(S, "graph without physics removes the adopted physics", len(phys_atts) == 0, detail=str(phys_atts))
+    mutate("set_node_graph_mesh", {"node_name": "Smoke GM Shape", "graph_mesh": "", "scene_name": scene_name})
+
     # Selection drives which graph the tools edit.
     mutate("select_items", {"scene_name": scene_name, "ids": []})
     check(S, "no selection -> tools report the empty state", get_graph().get("selected") is False)
