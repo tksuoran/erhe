@@ -55,6 +55,16 @@ class Scene_root;
 class Selection_tool;
 class Scene_views;
 
+class Create_new_scene_command : public erhe::commands::Command
+{
+public:
+    Create_new_scene_command(erhe::commands::Commands& commands, App_context& context);
+    auto try_call() -> bool override;
+
+private:
+    App_context& m_context;
+};
+
 class Create_new_camera_command : public erhe::commands::Command
 {
 public:
@@ -232,6 +242,13 @@ public:
     Scene_commands(erhe::commands::Commands& commands, App_context& context);
 
     // Public API
+
+    // Creates a new empty scene: a fresh Scene_root with its own (empty)
+    // content library, holding just a default camera -- no lights, no meshes.
+    // The scene is registered to the editor scene list, given its browser
+    // window and a viewport window looking through the camera, and announced
+    // via Scene_created_message. Not undoable (like loading a scene).
+    auto create_new_scene       () -> std::shared_ptr<Scene_root>;
     auto create_new_camera      (erhe::scene::Node* parent = nullptr) -> std::shared_ptr<erhe::scene::Camera>;
     auto create_new_empty_node  (erhe::scene::Node* parent = nullptr) -> std::shared_ptr<erhe::scene::Node>;
     auto create_new_light       (erhe::scene::Node* parent = nullptr) -> std::shared_ptr<erhe::scene::Light>;
@@ -275,6 +292,7 @@ public:
 private:
     App_context& m_context;
 
+    Create_new_scene_command        m_create_new_scene_command;
     Create_new_camera_command       m_create_new_camera_command;
     Create_new_empty_node_command   m_create_new_empty_node_command;
     Create_new_light_command        m_create_new_light_command;
