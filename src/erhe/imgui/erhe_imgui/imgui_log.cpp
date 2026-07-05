@@ -8,6 +8,7 @@ std::shared_ptr<spdlog::logger> log_performance;
 std::shared_ptr<spdlog::logger> log_windows;
 std::shared_ptr<spdlog::logger> log_frame;
 std::shared_ptr<spdlog::logger> log_input_events;
+std::shared_ptr<spdlog::logger> log_node_editor;
 
 void initialize_logging()
 {
@@ -17,6 +18,7 @@ void initialize_logging()
     log_windows      = make_logger      ("erhe.imgui.windows"     );
     log_frame        = make_frame_logger("erhe.imgui.frame"       );
     log_input_events = make_logger      ("erhe.imgui.input_events");
+    log_node_editor  = make_logger      ("erhe.imgui.node_editor" );
 }
 
 } // namespace erhe::imgui

@@ -627,7 +627,12 @@ void EditorContext::EndShortcut()
 
 float EditorContext::GetCurrentZoom()
 {
-    return m_impl->GetView().InvScale;
+    // Issue #251: the view scale is the factor node content is drawn larger by
+    // (zoom > 1 => content bigger). Node-content layout multiplies its
+    // canvas-unit pixel metrics (table column widths, widget widths, pin sizes)
+    // by this to author directly in screen space at the zoomed size. This used
+    // to return InvScale (1 / Scale), which was the reciprocal and unused.
+    return m_impl->GetView().Scale;
 }
 
 void EditorContext::SetZoom(float zoom)

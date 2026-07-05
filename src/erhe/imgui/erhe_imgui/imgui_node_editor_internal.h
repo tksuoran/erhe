@@ -27,6 +27,7 @@
 # include "erhe_imgui/imgui_extra_math.h"
 # include "erhe_imgui/imgui_bezier_math.h"
 # include "erhe_imgui/imgui_canvas.h"
+# include "erhe_imgui/imgui_log.hpp" // erhe logging for the node editor (issue #251)
 
 # include "erhe_imgui/crude_json.h"
 
@@ -1403,6 +1404,7 @@ public:
     {
         if (zoom <= 0.0f)
             return;
+        erhe::imgui::log_node_editor->info("SetZoom {:.3f} -> {:.3f}", m_NavigateAction.m_Zoom, zoom);
         ImRect content = GetContentBounds();
         const ImVec2 center = ImRect_IsEmpty(content)
             ? m_NavigateAction.GetViewRect().GetCenter()

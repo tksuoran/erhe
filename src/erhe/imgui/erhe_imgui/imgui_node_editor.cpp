@@ -10,6 +10,7 @@
 //   Written by Michal Cichon
 //------------------------------------------------------------------------------
 # include "erhe_imgui/imgui_node_editor_internal.h"
+# include "erhe_imgui/imgui_log.hpp" // erhe logging for the node editor (issue #251)
 
 # include <cstdio> // snprintf
 # include <string>
@@ -3383,6 +3384,10 @@ bool ed::NavigateAction::HandleZoom(const Control& control)
 
     auto mousePos = Editor->HitMouse(); // #251: canvas coord under cursor (was faked io.MousePos)
     auto newZoom  = GetNextZoom(io.MouseWheel);
+
+    if (newZoom != m_Zoom) {
+        erhe::imgui::log_node_editor->trace("mouse-wheel zoom {:.3f} -> {:.3f} (anchored at canvas {:.1f},{:.1f})", m_Zoom, newZoom, mousePos.x, mousePos.y);
+    }
 
     auto oldView   = GetView();
     m_Zoom = newZoom;
