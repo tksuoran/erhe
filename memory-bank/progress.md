@@ -1,7 +1,7 @@
 §MBEL:5.0
 
 [TASK::PhaseC-graph-editor-dedup-2026-07-05]
-@status::✓CORE-DONE{7-extractions-C1..C7,branch-crease;doc/graph-editor-shared-plan.md-Implementation-Status-table}
+@status::✓CORE-DONE{7-extractions-C1..C7,branch-crease;as-built-ref-doc/graph_editor.md{plan-doc/graph-editor-shared-plan.md-removed→git-history}}
 @goal::de-dup-3-erhe::graph-consumers{shader-graph|geometry-graph+Graph_mesh|texture-graph+Graph_texture}→shared-src/editor/graph_editor/
 >commits::5a211b01..f85e3f56
 5a211b01::C1-shared-canvas-steppers{graph_editor_widgets.*;removed-ODR-rename-hack:texture_index/enum_stepper-were-renamed-copies-of-imgui_*;13-call-sites-repointed}
