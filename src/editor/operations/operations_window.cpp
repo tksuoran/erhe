@@ -870,6 +870,17 @@ Operations::Operations(
 
     m_hover_scene_view_subscription = app_message_bus.hover_scene_view.subscribe(
         [&](Hover_scene_view_message& message) {
+            // A closed viewport's Scene_view is being destroyed: drop any cached
+            // pointer to it so get_target_scene_root() (used by Save Scene) does
+            // not dereference a dead Scene_view (#256).
+            if (message.destroyed_scene_view != nullptr) {
+                if (m_hover_scene_view == message.destroyed_scene_view) {
+                    m_hover_scene_view = nullptr;
+                }
+                if (m_last_hover_scene_view == message.destroyed_scene_view) {
+                    m_last_hover_scene_view = nullptr;
+                }
+            }
             m_hover_scene_view = message.scene_view;
             if (message.scene_view != nullptr) {
                 m_last_hover_scene_view = message.scene_view;

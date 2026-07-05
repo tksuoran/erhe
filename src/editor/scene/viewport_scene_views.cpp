@@ -199,8 +199,13 @@ void Scene_views::destroy_viewport_scene_view(
 
     // Tools cache raw Scene_view* from hover / render messages (Tool's hover
     // scene view, Handle_visualizations' render scene view); broadcast null
-    // messages so no tool keeps a pointer to the viewport being destroyed.
-    m_app_context.app_message_bus->hover_scene_view.send_message(Hover_scene_view_message{.scene_view = nullptr});
+    // messages so no tool keeps a pointer to the viewport being destroyed. The
+    // hover message also carries destroyed_scene_view so handlers that keep a
+    // persistent "last hovered" Scene_view* (Tool, Operations, Clipboard) drop
+    // it -- a plain null hover intentionally leaves that cache intact (#256).
+    m_app_context.app_message_bus->hover_scene_view.send_message(
+        Hover_scene_view_message{.scene_view = nullptr, .destroyed_scene_view = viewport_scene_view.get()}
+    );
     m_app_context.app_message_bus->render_scene_view.send_message(Render_scene_view_message{.scene_view = nullptr});
 }
 

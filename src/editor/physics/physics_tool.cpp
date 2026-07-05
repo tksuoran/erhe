@@ -144,6 +144,7 @@ Physics_tool::~Physics_tool() noexcept
 
 void Physics_tool::on_message(Hover_scene_view_message& message)
 {
+    clear_destroyed_scene_view(message);
     if (get_hover_scene_view() != message.scene_view) {
         set_hover_scene_view(message.scene_view);
 

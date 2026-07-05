@@ -24,7 +24,19 @@ public:
 
 struct Hover_scene_view_message
 {
+    // The scene view now under the pointer (nullptr when the pointer left all
+    // viewports).
     Scene_view* scene_view{nullptr};
+
+    // When non-null, this specific Scene_view is being destroyed (its viewport
+    // was closed). Handlers that keep a persistent "last hovered" Scene_view*
+    // must drop that cache if it matches, because a plain scene_view == nullptr
+    // (pointer merely left all viewports) deliberately does NOT clear the
+    // last-hover cache -- that cache is what lets File > Save Scene still find
+    // the target scene while the pointer is over the menu. Without this, the
+    // cache dangles and dereferencing it (get_target_scene_root / get_scene_root)
+    // is a use-after-free (#256).
+    Scene_view* destroyed_scene_view{nullptr};
 };
 
 struct Hover_mesh_message

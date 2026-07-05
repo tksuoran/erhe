@@ -27,7 +27,21 @@ Tool::Tool(App_context& app_context, Tools& tools, const uint64_t flags)
 
 void Tool::on_message(Hover_scene_view_message& message)
 {
+    clear_destroyed_scene_view(message);
     set_hover_scene_view(message.scene_view);
+}
+
+void Tool::clear_destroyed_scene_view(const Hover_scene_view_message& message)
+{
+    if (message.destroyed_scene_view == nullptr) {
+        return;
+    }
+    if (m_hover_scene_view == message.destroyed_scene_view) {
+        m_hover_scene_view = nullptr;
+    }
+    if (m_last_hover_scene_view == message.destroyed_scene_view) {
+        m_last_hover_scene_view = nullptr;
+    }
 }
 
 auto Tool::get_priority() const -> int

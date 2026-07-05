@@ -88,6 +88,13 @@ protected:
     [[nodiscard]] auto get_material       () const -> std::shared_ptr<erhe::primitive::Material>;
 
     void on_message          (Hover_scene_view_message& message);
+
+    // Drop the cached hover / last-hover Scene_view* when the viewport they
+    // point at is being destroyed (message.destroyed_scene_view), so a later
+    // get_scene_root() does not dereference a dead Scene_view (#256). Safe to
+    // call for any hover message; a no-op unless destroyed_scene_view matches.
+    void clear_destroyed_scene_view(const Hover_scene_view_message& message);
+
     void set_base_priority   (int base_priority);
     void set_flags           (uint64_t flags);
     void register_tool       (Tools& tools);
