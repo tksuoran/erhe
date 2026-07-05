@@ -315,7 +315,11 @@ void Texture_graph_node::draw_preview(App_context& app_context)
     if (!m_preview_texture || (app_context.imgui_renderer == nullptr)) {
         return;
     }
-    const float size = preview_display_size();
+    // Issue #251: the preview thumbnail is display geometry (an ImGui image
+    // widget) laid out in the zoomed node content, so its on-screen size scales
+    // with the view. The render-target resolution (render_target_size) is a GPU
+    // texture size and deliberately does NOT scale.
+    const float size = preview_display_size() * m_content_scale;
     app_context.imgui_renderer->image(
         erhe::imgui::Draw_texture_parameters{
             .texture_reference = m_preview_texture,
@@ -338,19 +342,27 @@ void Texture_graph_node::node_editor(App_context& app_context, ax::NodeEditor::E
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2{0.0f, 0.0f});
     ERHE_DEFER( ImGui::PopStyleVar(1); );
 
+    // Issue #251: node content is authored in screen space at the zoomed size,
+    // so canvas-unit pixel metrics must be multiplied by the view scale.
+    m_content_scale = node_editor.GetCurrentZoom();
+
     ax::NodeEditor::NodeId node_id{get_id()};
     node_editor.BeginNode(node_id);
 
-    const float  pin_label_width = 70.0f;
-    const float  center_width    = 150.0f;
+    const float  pin_label_width = 70.0f  * m_content_scale;
+    const float  center_width    = 150.0f * m_content_scale;
     const ImVec2 node_table_size{center_width + (2.0f * pin_label_width), 0.0f};
 
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
+    // The node's frame is drawn from its canvas-space bounds mapped to screen;
+    // pins snap to that frame, so compute the edges in screen space too (pin
+    // cell centers below are already screen-space ImGui item rects). This keeps
+    // pin X in sync with pin Y and with the node border.
     const ImVec2 node_position = node_editor.GetNodePosition(node_id);
     const ImVec2 node_size     = node_editor.GetNodeSize(node_id);
-    const float  left_edge     = node_position.x;
-    const float  right_edge    = node_position.x + node_size.x;
+    const float  left_edge     = node_editor.CanvasToScreen(node_position).x;
+    const float  right_edge    = node_editor.CanvasToScreen(ImVec2{node_position.x + node_size.x, node_position.y}).x;
 
     ImGui::BeginTable("##NodeTable", 3, ImGuiTableFlags_None, node_table_size);
     ImGui::TableSetupColumn("lhs",    ImGuiTableColumnFlags_WidthFixed, pin_label_width);
@@ -438,7 +450,13 @@ void Texture_graph_node::show_pins(
     const bool                                                      right_edge
 )
 {
-    const float half_extent = 10.0f;
+    // Issue #251: pins draw and hit-test in screen space at the zoomed size.
+    // edge_x is the node border in screen coordinates, cell_center_y is a
+    // screen-space ImGui item rect, and the half extent scales with the view.
+    // The visible square draws to the screen-space draw list; PinRect stores
+    // the editor's pin bounds in CANVAS units (mapped back with ScreenToCanvas)
+    // which the editor draws via its own screen mapping and hit-tests in canvas.
+    const float half_extent = 10.0f * m_content_scale;
     for (const erhe::graph::Pin& pin : pins) {
         if (right_edge) {
             const float column_width = ImGui::GetColumnWidth();
@@ -456,11 +474,11 @@ void Texture_graph_node::show_pins(
         const ImVec2 max{pin_center.x + half_extent, pin_center.y + half_extent};
 
         node_editor.BeginPin(ax::NodeEditor::PinId{&pin}, pin.is_source() ? ax::NodeEditor::PinKind::Output : ax::NodeEditor::PinKind::Input);
-        node_editor.PinRect(min, max);
+        node_editor.PinRect(node_editor.ScreenToCanvas(min), node_editor.ScreenToCanvas(max));
         node_editor.EndPin();
 
-        draw_list.AddRectFilled(min, max, pin_key_color(pin.get_key()), 4.0f, ImDrawFlags_RoundCornersAll);
-        draw_list.AddRect      (min, max, 0xffcccccc, 4.0f, ImDrawFlags_RoundCornersAll, 2.0f);
+        draw_list.AddRectFilled(min, max, pin_key_color(pin.get_key()), 4.0f * m_content_scale, ImDrawFlags_RoundCornersAll);
+        draw_list.AddRect      (min, max, 0xffcccccc, 4.0f * m_content_scale, ImDrawFlags_RoundCornersAll, 2.0f * m_content_scale);
     }
 }
 

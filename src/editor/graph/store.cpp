@@ -28,9 +28,9 @@ void Store::evaluate(Shader_graph& graph)
 void Store::imgui()
 {
     ImGui::Text("%d", m_payload.int_value[0]); // TODO Handle format
-    ImGui::SetNextItemWidth(100.0f);
+    ImGui::SetNextItemWidth(100.0f * content_scale());
     ImGui::InputInt("Row##", &m_row);
-    ImGui::SetNextItemWidth(100.0f);
+    ImGui::SetNextItemWidth(100.0f * content_scale());
     ImGui::InputInt("Col##", &m_col);
 }
 

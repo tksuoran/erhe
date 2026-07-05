@@ -85,7 +85,7 @@ void Texture_descriptor_node::imgui()
         switch (parameter.kind) {
             case erhe::texgen::Parameter_kind::float_parameter: {
                 ImGui::TextUnformatted(label);
-                ImGui::SetNextItemWidth(140.0f);
+                ImGui::SetNextItemWidth(140.0f * content_scale());
                 if (ImGui::DragFloat("##float", &value.float_value, parameter.step, parameter.min_value, parameter.max_value)) {
                     mark_dirty();
                 }
@@ -99,7 +99,7 @@ void Texture_descriptor_node::imgui()
                 const ImVec4 preview{value.color_value[0], value.color_value[1], value.color_value[2], value.color_value[3]};
                 ImGui::ColorButton("##swatch", preview, ImGuiColorEditFlags_NoTooltip);
                 ImGui::SameLine();
-                ImGui::SetNextItemWidth(140.0f);
+                ImGui::SetNextItemWidth(140.0f * content_scale());
                 if (ImGui::DragFloat4("##color", value.color_value.data(), 0.005f, 0.0f, 1.0f)) {
                     mark_dirty();
                 }
@@ -126,7 +126,7 @@ void Texture_descriptor_node::imgui()
             }
             case erhe::texgen::Parameter_kind::size_parameter: {
                 ImGui::TextUnformatted(label);
-                ImGui::SetNextItemWidth(140.0f);
+                ImGui::SetNextItemWidth(140.0f * content_scale());
                 if (ImGui::DragInt("##size", &value.size_exponent, 0.1f, parameter.min_size_exponent, parameter.max_size_exponent)) {
                     mark_dirty();
                 }
@@ -155,7 +155,7 @@ void Texture_descriptor_node::imgui()
 
     if (m_descriptor.uses_seed()) {
         ImGui::TextUnformatted("Seed");
-        ImGui::SetNextItemWidth(140.0f);
+        ImGui::SetNextItemWidth(140.0f * content_scale());
         if (ImGui::DragFloat("##seed", &m_seed, 1.0f)) {
             mark_dirty();
         }

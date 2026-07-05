@@ -98,14 +98,18 @@ void Shader_graph_node::node_editor(App_context& app_context, ax::NodeEditor::Ed
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2{0.0f, 0.0f});
     ERHE_DEFER( ImGui::PopStyleVar(1); );
 
+    // Issue #251: node content is authored in screen space at the zoomed size,
+    // so canvas-unit pixel metrics must be multiplied by the view scale.
+    m_content_scale = node_editor.GetCurrentZoom();
+
     ax::NodeEditor::NodeId node_id{get_id()};
     node_editor.BeginNode(node_id);
     Node_context context {
         .context              = app_context,
         .node_editor          = node_editor,
         .pin_width            =   0.0f,
-        .pin_label_width      =  70.0f,
-        .center_width         = 150.0f,
+        .pin_label_width      =  70.0f  * m_content_scale,
+        .center_width         = 150.0f * m_content_scale,
         .material_design_font = app_context.imgui_renderer->material_design_font()
     };
     context.side_width      = context.pin_width + context.pin_label_width;
@@ -115,12 +119,13 @@ void Shader_graph_node::node_editor(App_context& app_context, ax::NodeEditor::Ed
     context.draw_list       = ImGui::GetWindowDrawList();
     //context.draw_list       = node_editor.GetHintBackgroundDrawList();
 
+    // Pins snap to the node frame, which is drawn from canvas-space bounds
+    // mapped to screen; compute the edges in screen space so pin X stays in
+    // sync with the (screen-space) pin cell centers and the node border.
     const ImVec2 node_position = node_editor.GetNodePosition(node_id);
     const ImVec2 node_size     = node_editor.GetNodeSize(node_id);
-    const ImVec2 top_left      = node_position;
-    const ImVec2 bottom_right  = top_left + node_size;
-    const float  left_edge     = top_left.x;
-    const float  right_edge    = bottom_right.x;
+    const float  left_edge     = node_editor.CanvasToScreen(node_position).x;
+    const float  right_edge    = node_editor.CanvasToScreen(ImVec2{node_position.x + node_size.x, node_position.y}).x;
 
     ImGui::BeginTable("##NodeTable", 3, ImGuiTableFlags_None, context.node_table_size);
     ImGui::TableSetupColumn("lhs",    ImGuiTableColumnFlags_WidthFixed, context.side_width);
@@ -220,7 +225,12 @@ void Shader_graph_node::text_unformatted_edge(int edge, const char* text)
 
 void Shader_graph_node::show_pins(Node_context& context, etl::vector<erhe::graph::Pin, erhe::graph::max_pin_count>& pins)
 {
-    float half_extent = 10.0f;
+    // Issue #251: pins draw and hit-test in screen space at the zoomed size.
+    // context.edge_x is the node border in screen coordinates, cell_center_y is
+    // a screen-space ImGui item rect, and the half extent scales with the view.
+    // The visible square draws to the screen-space draw list; PinRect stores the
+    // editor's pin bounds in CANVAS units (mapped back with ScreenToCanvas).
+    float half_extent = 10.0f * m_content_scale;
     for (const erhe::graph::Pin& pin : pins) {
         text_unformatted_edge(context.pin_edge, pin.get_name().data());
 
@@ -232,11 +242,11 @@ void Shader_graph_node::show_pins(Node_context& context, etl::vector<erhe::graph
         const ImVec2 max{pin_center.x + half_extent, pin_center.y + half_extent};
 
         context.node_editor.BeginPin(ax::NodeEditor::PinId{&pin}, pin.is_source() ? ax::NodeEditor::PinKind::Output : ax::NodeEditor::PinKind::Input);
-        context.node_editor.PinRect(min, max);
+        context.node_editor.PinRect(context.node_editor.ScreenToCanvas(min), context.node_editor.ScreenToCanvas(max));
         context.node_editor.EndPin();
 
-        context.draw_list->AddRectFilled(min, max, 0xff444444, 4.0f, ImDrawFlags_RoundCornersAll);
-        context.draw_list->AddRect      (min, max, 0xffcccccc, 4.0f, ImDrawFlags_RoundCornersAll, 2.0f);
+        context.draw_list->AddRectFilled(min, max, 0xff444444, 4.0f * m_content_scale, ImDrawFlags_RoundCornersAll);
+        context.draw_list->AddRect      (min, max, 0xffcccccc, 4.0f * m_content_scale, ImDrawFlags_RoundCornersAll, 2.0f * m_content_scale);
     }
 }
 

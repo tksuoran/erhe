@@ -25,7 +25,7 @@ void Constant::evaluate(Shader_graph&)
 
 void Constant::imgui()
 {
-    ImGui::SetNextItemWidth(80.0f);
+    ImGui::SetNextItemWidth(80.0f * content_scale());
     ImGui::InputInt("##Constant::imgui()", &m_payload.int_value[0]);
 }
 

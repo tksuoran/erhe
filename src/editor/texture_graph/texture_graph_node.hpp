@@ -203,12 +203,18 @@ protected:
         bool                                                            right_edge
     );
 
+    // Issue #251: view scale used to author node content (table columns,
+    // per-widget widths, pin sizes, preview thumbnail) in screen space at the
+    // zoomed size. Set from EditorContext::GetCurrentZoom() in node_editor().
+    [[nodiscard]] auto content_scale() const -> float { return m_content_scale; }
+
     std::vector<Texture_payload>             m_input_payloads;
     std::vector<Texture_payload>             m_output_payloads;
     std::weak_ptr<Graph_texture>             m_owning_graph_texture;
     std::string                              m_type_name;
     std::string                              m_committed_parameters;
     std::shared_ptr<erhe::graphics::Texture> m_preview_texture;
+    float                                    m_content_scale{1.0f};
     bool                                     m_dirty{true};
     bool                                     m_preview_needs_render{true};
     bool                                     m_parameter_edit_in_progress{false};

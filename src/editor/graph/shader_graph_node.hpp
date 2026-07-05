@@ -67,10 +67,16 @@ protected:
 
     void text_unformatted_edge(int edge, const char* text);
 
+    // Issue #251: view scale used to author node content (table columns,
+    // per-widget widths, pin sizes) in screen space at the zoomed size. Set
+    // from EditorContext::GetCurrentZoom() in node_editor().
+    [[nodiscard]] auto content_scale() const -> float { return m_content_scale; }
+
     static constexpr std::size_t pin_key_todo = 1;
 
     std::vector<Payload> m_input_payloads;
     std::vector<Payload> m_output_payloads;
+    float                m_content_scale  {1.0f};
     int                  m_input_pin_edge {Node_edge::left};
     int                  m_output_pin_edge{Node_edge::right};
 };
