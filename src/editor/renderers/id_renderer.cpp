@@ -113,6 +113,20 @@ Id_renderer::Id_renderer(
     , m_scan_result_buffer {graphics_device, erhe::graphics::Buffer_target::transfer_dst, "Id_renderer::m_scan_result_buffer" }
 {
     enabled = id_renderer_config.enabled;
+
+#if defined(ERHE_RAYTRACE_LIBRARY_NONE)
+    // With no raytrace backend the hybrid picker has no BVH to pick static
+    // meshes with; the ID renderer is the only remaining picker. Force it to
+    // cover all meshes (Skinning_filter::all) regardless of the config knob so
+    // hover / picking keeps working, and warn if the config had left it off.
+    if (!enabled) {
+        log_id_render->warn(
+            "ERHE_RAYTRACE_LIBRARY=none: forcing ID renderer to cover all meshes for picking "
+            "(no raytrace backend). Set id_renderer.enabled = true in config to silence this warning."
+        );
+    }
+    enabled = true;
+#endif
 }
 
 void Id_renderer::request_scan(const Scan_request& request)
