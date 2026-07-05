@@ -1,4 +1,7 @@
 #include "texture_graph/nodes/texture_output_node.hpp"
+
+#include "graph_editor/graph_editor_widgets.hpp"
+
 #include "texture_graph/graph_texture.hpp"
 #include "texture_graph/texture_graph_compose.hpp"
 #include "texture_graph/texture_payload.hpp"
@@ -204,7 +207,7 @@ void Texture_output_node::imgui()
     }
 
     // Output size (power-of-two stepper).
-    if (texture_enum_stepper("size", m_size_index, c_size_names, 4)) {
+    if (imgui_enum_stepper("size", m_size_index, c_size_names, 4)) {
         mark_dirty();
     }
 
@@ -218,7 +221,7 @@ void Texture_output_node::imgui()
                 break;
             }
         }
-        if (texture_index_stepper("scene", scene_index, static_cast<int>(scene_roots.size()))) {
+        if (imgui_index_stepper("scene", scene_index, static_cast<int>(scene_roots.size()))) {
             unregister_texture();
             m_scene_root = scene_roots.at(static_cast<std::size_t>(scene_index));
             m_material.reset();
@@ -242,7 +245,7 @@ void Texture_output_node::imgui()
                         break;
                     }
                 }
-                if (texture_index_stepper("material", material_index, static_cast<int>(materials.size()))) {
+                if (imgui_index_stepper("material", material_index, static_cast<int>(materials.size()))) {
                     m_material = materials.at(static_cast<std::size_t>(material_index));
                     mark_dirty();
                 }

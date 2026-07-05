@@ -1,5 +1,7 @@
 #include "geometry_graph/nodes/math_node.hpp"
 
+#include "graph_editor/graph_editor_widgets.hpp"
+
 #include <imgui/imgui.h>
 #include <nlohmann/json.hpp>
 

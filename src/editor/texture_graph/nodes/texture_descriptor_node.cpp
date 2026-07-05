@@ -2,6 +2,8 @@
 #include "texture_graph/texture_payload.hpp"
 #include "texture_graph/texture_graph_widgets.hpp"
 
+#include "graph_editor/graph_editor_widgets.hpp"
+
 #include "erhe_texgen/node_descriptor.hpp"
 
 #include <imgui/imgui.h>
@@ -112,7 +114,7 @@ void Texture_descriptor_node::imgui()
                     names.push_back(enum_value.label.c_str());
                 }
                 int index = static_cast<int>(value.enum_index);
-                if (texture_enum_stepper(label, index, names.data(), static_cast<int>(names.size()))) {
+                if (imgui_enum_stepper(label, index, names.data(), static_cast<int>(names.size()))) {
                     value.enum_index = static_cast<std::size_t>(index);
                     mark_dirty();
                 }

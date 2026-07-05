@@ -1,5 +1,7 @@
 #include "geometry_graph/nodes/geometry_output_node.hpp"
 
+#include "graph_editor/graph_editor_widgets.hpp"
+
 #include "app_context.hpp"
 #include "app_scenes.hpp"
 #include "content_library/content_library.hpp"

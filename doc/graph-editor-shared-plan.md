@@ -44,7 +44,7 @@ the two smoke sweeps verify after every step.
 
 | Work item                                                                    | Status | Commit |
 |------------------------------------------------------------------------------|--------|--------|
-| C1: Shared canvas widgets (steppers + gradient/curve) - removes ODR rename    | TODO   | -      |
+| C1: Shared canvas steppers - removes the ODR rename hack                       | DONE   | (this commit) |
 | C2: Shared palette window + `Graph_editor_window_base` (controls_imgui seam)  | TODO   | -      |
 | C3: Shared asset base `Graph_asset<Self, Graph, Node>`                        | TODO   | -      |
 | C4: Shared graph-JSON serializer template                                     | TODO   | -      |
@@ -248,24 +248,26 @@ Each step: build clean (`scripts\build_ninja_win_vulkan.bat editor` AND
 headless-verify both smoke sweeps green, independent review of the diff, commit.
 Restore `config/editor/*.{ini,json}` after every editor run.
 
-### C1 - Shared canvas widgets (lowest risk; removes the ODR rename)
+### C1 - Shared canvas steppers (lowest risk; removes the ODR rename)
 
-New `graph_editor/graph_editor_widgets.{hpp,cpp}`:
-- ONE `imgui_index_stepper` / `imgui_enum_stepper` pair (the geometry names,
-  which are the more general `imgui_` prefix), ImGui-only.
-- Relocate the texture-unique `texture_gradient_editor` / `texture_curve_editor`
-  (+ their anon-namespace helpers) here so the file is the single canvas-widget
-  home. These carry an `erhe_texgen` include (acceptable - the whole editor links
-  `erhe::texgen`).
+New `graph_editor/graph_editor_widgets.{hpp,cpp}` holding ONE
+`imgui_index_stepper` / `imgui_enum_stepper` pair (the geometry names, the more
+general `imgui_` prefix), ImGui-only (no `erhe_texgen` include - the steppers are
+fully generic).
 
 Delete the stepper defs/decls from `geometry_graph_node.{hpp,cpp}` and
-`texture_graph_node.{hpp,cpp}`; delete `texture_graph_widgets.{hpp,cpp}` (its
-content moves here) or repoint it. Repoint the 5 geometry + 8 texture stepper
-call sites and the 2 gradient/curve call sites (`texture_descriptor_node.cpp`) to
-the shared header. Redirect `texture_graph_widgets.cpp`'s
-`texture_graph_node.hpp` include (it was pulled in only for the stepper) to the
-shared header. Remove the `texture_graph/texture_graph_widgets.*` CMake entries,
-add the new `graph_editor/*`.
+`texture_graph_node.{hpp,cpp}`. Repoint the 5 geometry `imgui_*` + 8 texture
+`texture_*` stepper call sites to the shared header. Redirect
+`texture_graph_widgets.cpp`'s `texture_graph_node.hpp` include (pulled in only for
+the stepper at line 230) to the shared widgets header. Add the new
+`graph_editor/graph_editor_widgets.*` CMake entries.
+
+The texture-unique `texture_gradient_editor` / `texture_curve_editor` stay in
+`texture_graph_widgets.{hpp,cpp}` for now: they are NOT duplicated (one copy, one
+consumer) so relocating them yields no dedup value and would drag an `erhe_texgen`
+dependency into the otherwise-generic shared widgets header. Relocating them into
+the shared canvas-widget home is deferred (a trivial move if a second consumer
+ever appears).
 
 ### C2 - Shared palette window + `Graph_editor_window_base` seam
 
@@ -351,10 +353,15 @@ body is short); explicitly optional.
 
 ## Verification Strategy
 
-- **Regression net:** `scripts/geometry_nodes_smoke_test.py` (126 checks) +
+- **Regression net:** `scripts/geometry_nodes_smoke_test.py` (129 checks) +
   `scripts/texture_graph_smoke_test.py` (266 checks), green after every step,
   against the headless Vulkan build. Both must pass - each step is validated by
-  BOTH consumers.
+  BOTH consumers. **Run each sweep in a FRESH editor process** (kill + relaunch
+  between sweeps): running the texture sweep in the same process right after the
+  geometry sweep hits a known "texture-bake pollution" (the geometry sweep's
+  heavy GPU work leaves the texture bake returning `has_output:false` for ~11
+  checks). Confirmed baseline on `crease` before Phase C: geometry 129/129,
+  texture 266/266, each in its own editor.
 - **Builds:** `scripts\build_ninja_win_vulkan.bat editor` +
   `cmake --build build_vs2026_vulkan_headless --target editor --config Debug`
   after every step. (`rendering_test` breakage, if any, is acceptable per

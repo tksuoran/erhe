@@ -24,31 +24,6 @@
 
 namespace editor {
 
-auto texture_index_stepper(const char* id, int& index, const int count) -> bool
-{
-    bool changed = false;
-    ImGui::PushID(id);
-    if (ImGui::ArrowButton("##prev", ImGuiDir_Left) && (count > 0)) {
-        index = ((index + count) - 1) % count;
-        changed = true;
-    }
-    ImGui::SameLine();
-    if (ImGui::ArrowButton("##next", ImGuiDir_Right) && (count > 0)) {
-        index = (index + 1) % count;
-        changed = true;
-    }
-    ImGui::PopID();
-    return changed;
-}
-
-auto texture_enum_stepper(const char* id, int& index, const char* const* names, const int count) -> bool
-{
-    const bool changed = texture_index_stepper(id, index, count);
-    ImGui::SameLine();
-    ImGui::TextUnformatted(((index >= 0) && (index < count)) ? names[index] : "?");
-    return changed;
-}
-
 namespace {
 
 // Pin fill color per Texture_pin_key value type. Pins only accept links from

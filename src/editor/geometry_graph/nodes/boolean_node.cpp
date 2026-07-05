@@ -1,5 +1,7 @@
 #include "geometry_graph/nodes/boolean_node.hpp"
 
+#include "graph_editor/graph_editor_widgets.hpp"
+
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/operation/csg/difference.hpp"
 #include "erhe_geometry/operation/csg/intersection.hpp"

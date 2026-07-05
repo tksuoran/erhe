@@ -3,7 +3,8 @@
 #endif
 
 #include "texture_graph/texture_graph_widgets.hpp"
-#include "texture_graph/texture_graph_node.hpp" // texture_enum_stepper
+
+#include "graph_editor/graph_editor_widgets.hpp" // imgui_enum_stepper
 
 #include <imgui/imgui.h>
 
@@ -227,7 +228,7 @@ auto texture_gradient_editor(
     // Interpolation stepper.
     static const char* const interpolation_names[] = {"Constant", "Linear", "Smoothstep", "Cubic"};
     int interpolation_index = static_cast<int>(interpolation);
-    if (texture_enum_stepper("Interp", interpolation_index, interpolation_names, 4)) {
+    if (imgui_enum_stepper("Interp", interpolation_index, interpolation_names, 4)) {
         interpolation = static_cast<Gradient_interpolation>(interpolation_index);
         changed = true;
     }

@@ -1,5 +1,7 @@
 #include "geometry_graph/nodes/subdivide_node.hpp"
 
+#include "graph_editor/graph_editor_widgets.hpp"
+
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/operation/subdivision/catmull_clark_subdivision.hpp"
 #include "erhe_geometry/operation/subdivision/sqrt3_subdivision.hpp"

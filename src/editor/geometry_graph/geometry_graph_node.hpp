@@ -28,14 +28,6 @@ class Graph_mesh;
 // node.
 void process_for_graph(erhe::geometry::Geometry& geometry);
 
-// Left / right arrow buttons cycling index through [0, count).
-// ImGui popups (Combo, BeginPopup) cannot be used inside the
-// ax::NodeEditor canvas, so node content uses these steppers instead.
-auto imgui_index_stepper(const char* id, int& index, int count) -> bool;
-
-// Index stepper followed by the current entry name.
-auto imgui_enum_stepper(const char* id, int& index, const char* const* names, int count) -> bool;
-
 // JSON helpers for node parameter (de)serialization.
 void write_vec3 (nlohmann::json& out, const char* key, const glm::vec3& value);
 void write_ivec3(nlohmann::json& out, const char* key, const glm::ivec3& value);

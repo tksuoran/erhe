@@ -1,4 +1,7 @@
 #include "texture_graph/nodes/texture_buffer_node.hpp"
+
+#include "graph_editor/graph_editor_widgets.hpp"
+
 #include "texture_graph/texture_graph_compose.hpp"
 #include "texture_graph/texture_payload.hpp"
 #include "texture_graph/texture_renderer.hpp"
@@ -118,7 +121,7 @@ void Texture_buffer_node::render_products(App_context& context, Texture_renderer
 void Texture_buffer_node::imgui()
 {
     ImGui::TextUnformatted("Resolution");
-    if (texture_enum_stepper("size", m_size_index, c_size_names, c_size_count)) {
+    if (imgui_enum_stepper("size", m_size_index, c_size_names, c_size_count)) {
         mark_dirty();
     }
     if (ImGui::Checkbox("Pause", &m_pause)) {

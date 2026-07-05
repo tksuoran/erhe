@@ -28,18 +28,6 @@ class Texture_compose_dag;
 class Texture_graph;
 class Texture_renderer;
 
-// Left / right arrow buttons cycling index through [0, count).
-// ImGui popups (Combo, BeginPopup) cannot be used inside the
-// ax::NodeEditor canvas, so node content uses these steppers instead.
-// (Duplicated from the geometry graph on purpose - the texture graph does
-// not depend on geometry_graph; a shared-widgets extraction is deferred, see
-// doc/texture-graph-plan.md decision 5. Distinct names avoid an ODR clash with
-// the geometry graph's identically-shaped helpers.)
-auto texture_index_stepper(const char* id, int& index, int count) -> bool;
-
-// Index stepper followed by the current entry name.
-auto texture_enum_stepper(const char* id, int& index, const char* const* names, int count) -> bool;
-
 // Base class for all texture graph nodes.
 //
 // Mirrors Geometry_graph_node: payload storage per pin slot, input pulling

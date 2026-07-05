@@ -249,6 +249,8 @@ erhe_target_sources_grouped(
     graph/store.hpp
     graph/subtract.cpp
     graph/subtract.hpp
+    graph_editor/graph_editor_widgets.cpp
+    graph_editor/graph_editor_widgets.hpp
     graphics/gradients.cpp
     graphics/gradients.hpp
     graphics/icon_set.cpp
