@@ -1,5 +1,17 @@
 §MBEL:5.0
 
+[TASK::#252-independent-target-2026-07-05]
+@status::✓DONE{5-phases,branch-crease;doc/252.md-Implementation-Status-section}
+>commits::7d80b0e8..3df49974
+7d80b0e8::phase1{graph-windows-explicit-weak_ptr-target{set_target/get_target,resolve_target-replaces-selection-scan}+target-selector-row{item_reference_imgui}+node<->global-selection-sync-REMOVED{geometry_graph_node+texture_graph_node,NOT-shader}+create-menu+create_graph_*-MCP→set_target+set_geometry/texture_graph_target-MCP-tools;smoke-migrated}
+16cd28c5::phase2{Properties-weak_ptr<Item_base>-target+Pin-selector-row+effective_items()→{target}-when-pinned-else-selection-fallback}
+177c913f::phase3{Editor_windows-part{src/editor/windows/editor_windows.*}-owns-extra-instances{unique-title,empty-ini_label,queue()-deferred-creation,prune-closed-per-frame};window-ctors-gained-title/ini_label;open_*_window-MCP-tools}
+3df49974::phase4{OpenEditor{graph-assets+scenes}/OpenProperties{any-item}-context-menu+double-click→Editor_windows::open_editor_for_item/open_properties_for_item;Scene_views::open_new_viewport_scene_view_node(scene_root);reuse-primary-if-untargeted-else-new}
+VERIFY::geometry-129/129{graph_editor-trace}+texture-266/266{fresh-editors,back-to-back-1-editor=texture-bake-pollution}+core-acceptance{selection-empty-after-building-graph,remove_node-keeps-asset-1→1,nodes-2→1}+2-geometry-windows-on-2-assets+Properties-pinned-A-while-selection-B-screenshot
+!deviation::shader-graph-shader_graph_node.cpp-sync-LEFT-INTACT{feeds-Node_properties_window-which-reads-selection,shader-nodes-not-content-library-assets→no-asset-delete-bug;removing-would-regress-no-fix}
+!behavior-change::selecting-graph-asset-in-hierarchy-no-longer-repoints-editor{use-OpenEditor/selector/set_*_graph_target};node-params-no-longer-in-Properties-for-geom/tex-graphs{edited-in-node-on-canvas}
+!verify-limit::mouse-triggers{menu,double-click}+literal-canvas-Delete=UI-inspection-verified{reuse-MCP-verified-open-machinery};fix-verified-at-mechanism-level
+
 [TASK::doc-audit-2026-07-03]
 @status::✓DONE{future_prompt_2.txt-handoff-executed+deleted;52-doc-files-reviewed-via-7-parallel-read-only-agents{per-topic-groups};doc/-52→38}
 >commits::6106f4d0..5b1cc01c

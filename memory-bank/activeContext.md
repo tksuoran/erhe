@@ -1,7 +1,9 @@
 §MBEL:5.0
 
 [FOCUS]
-@task::geometry-nodes{doc/geometry-nodes-plan.md}
+@task::#252-independent-target{doc/252.md}✓DONE-2026-07-05{branch-crease}
+>done::#252{5-phases:7d80b0e8-graph-windows-explicit-weak_ptr-target+decouple-node-selection|16cd28c5-Properties-pinnable-target+selection-fallback|177c913f-Editor_windows-multi-instance-manager|3df49974-OpenEditor/OpenProperties-context-menu+double-click;set_*_graph_target+open_*_window-MCP-tools;shader-graph-LEFT-INTACT{feeds-Node_properties_window,no-asset-delete-bug};verify:geometry-129/129+texture-266/266+core-acceptance{nodes-NOT-in-selection,remove_node-keeps-asset}+multi-window+pinned-Properties-screenshots}✓
+>prior::geometry-nodes{doc/geometry-nodes-plan.md}
 @branch::geometry_nodes{unmerged,ahead-main}
 >done::2026-07-02{phases1-5+MCP+undo-redo+serialization+6a-incremental+6b-CoW+param-undo}✓
 >done::2026-07-02{output-physics+6d-instances+6e-groups+6c-design+SMOKE-SWEEP-65/65✓+2-real-bugs-fixed}✓
