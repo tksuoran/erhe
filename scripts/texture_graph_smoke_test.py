@@ -1155,9 +1155,11 @@ def section_graph_texture_asset():
     check(S, "create_graph_texture created + returned id", bool(created) and created.get("created") and created.get("id"),
           detail=str(created))
 
-    selection = call("get_selection")["items"]
-    check(S, "new Graph Texture is selected", any(i.get("type") == "Graph_texture" and i.get("name") == "Smoke Asset" for i in selection),
-          detail=str(selection))
+    # Issue #252: create_graph_texture points the Texture Graph window at the
+    # new asset (its target), no longer via the global selection.
+    graph = get_graph()
+    check(S, "new Graph Texture is the window target", graph.get("graph_texture_name") == "Smoke Asset",
+          detail=str(graph.get("graph_texture_name")))
 
     listed = call("get_graph_textures", {"scene_name": scene_name})["graph_textures"]
     check(S, "get_graph_textures lists the asset", any(g["name"] == "Smoke Asset" for g in listed), detail=str(listed))

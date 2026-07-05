@@ -165,6 +165,7 @@ private:
     auto action_set_transform_mode            (const nlohmann::json& args) -> std::string;
     auto query_transform_state                (const nlohmann::json& args) -> std::string;
     auto query_geometry_graph                 (const nlohmann::json& args) -> std::string;
+    auto action_set_geometry_graph_target     (const nlohmann::json& args) -> std::string;
     auto action_geometry_graph_add_node       (const nlohmann::json& args) -> std::string;
     auto action_geometry_graph_remove_node    (const nlohmann::json& args) -> std::string;
     auto action_geometry_graph_set_parameter  (const nlohmann::json& args) -> std::string;
@@ -178,6 +179,7 @@ private:
     auto action_set_node_graph_mesh           (const nlohmann::json& args) -> std::string;
     auto query_graph_meshes                   (const nlohmann::json& args) -> std::string;
     auto query_texture_graph                  (const nlohmann::json& args) -> std::string;
+    auto action_set_texture_graph_target      (const nlohmann::json& args) -> std::string;
     auto action_texture_graph_add_node        (const nlohmann::json& args) -> std::string;
     auto action_texture_graph_remove_node     (const nlohmann::json& args) -> std::string;
     auto action_texture_graph_set_parameter   (const nlohmann::json& args) -> std::string;

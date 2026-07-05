@@ -14,6 +14,9 @@
 
 struct ImVec2;
 
+namespace erhe {
+    class Item_base;
+}
 namespace erhe::graph {
     class Pin;
 }
@@ -38,9 +41,13 @@ class Graph_mesh;
 // node / link deletion handling, selection integration.
 //
 // The window does not own THE graph: geometry graphs only live in
-// Graph_mesh content-library assets, and the window edits whichever
-// Graph_mesh is currently selected (empty state when none is) - the
-// same selected-asset model as Texture_graph_window / Graph_texture.
+// Graph_mesh content-library assets, and the window edits an explicit
+// target Graph_mesh (issue #252) set via set_target() - by "Open Editor"
+// on the asset, by the target selector at the top of the window, or by
+// the MCP graph-create tools. When the target is unset (or the asset was
+// deleted - the target is a weak_ptr, so it clears itself) the window
+// shows an empty state. The window no longer tracks the global selection,
+// so selecting a canvas node does not risk deleting the whole asset.
 //
 // Evaluation runs in the background so a heavy chain does not freeze the
 // UI: update_evaluation() (called once per frame from the editor main
@@ -101,16 +108,22 @@ public:
     // headless zoom-quality knob used by the #251 verification harness.
     void set_node_editor_zoom(float zoom);
 
-    // The graph currently being edited: the selected content-library
-    // Graph_mesh asset, or null when nothing (of that type) is selected -
-    // the window then shows an empty state and edits refuse. Refreshed on
-    // every access so an MCP mutation arriving before the frame's update
-    // still targets the live selection.
+    // Sets / clears the explicit target Graph_mesh this window edits
+    // (issue #252). Stored as a weak_ptr so a deleted asset clears the
+    // target automatically. Passing null clears the target (empty state).
+    void set_target(const std::shared_ptr<Graph_mesh>& graph_mesh);
+    [[nodiscard]] auto get_target() -> std::shared_ptr<Graph_mesh>;
+
+    // The graph currently being edited: the resolved target Graph_mesh
+    // asset, or null when the target is unset / expired - the window then
+    // shows an empty state and edits refuse. Resolved from the weak_ptr
+    // target on every access so an MCP mutation arriving before the
+    // frame's update still targets the live asset.
     [[nodiscard]] auto get_current_graph_mesh() -> const std::shared_ptr<Graph_mesh>&;
 
-    // Refreshes the current graph from the live selection first, so MCP
-    // reads and node resolution always agree with the graph a subsequent
-    // mutation targets. Empty when no Graph_mesh asset is selected.
+    // Resolves the target first, so MCP reads and node resolution always
+    // agree with the graph a subsequent mutation targets. Empty when the
+    // target is unset / expired.
     [[nodiscard]] auto get_nodes() -> const std::vector<std::shared_ptr<Geometry_graph_node>>&;
 
     // Background evaluation (see the class comment). update_evaluation()
@@ -157,12 +170,17 @@ private:
     // so collapsing headers are allowed.
     void build_palette   ();
     void node_palette    ();
+    // Issue #252: the target-item selector row drawn at the top of the
+    // window. Drag-drop a Graph_mesh asset onto it, pick from the popup, or
+    // clear it. Bound to m_target.
+    void target_selector_imgui();
     void handle_link_create();
     void handle_deletions();
 
-    // Points m_graph_mesh at the selected content-library Graph_mesh, or
-    // null when nothing (of that type) is selected.
-    void refresh_current_graph_mesh();
+    // Resolves the weak_ptr target into m_graph_mesh (locks it, or null
+    // when unset / expired). Resets the spawn grid when the resolved
+    // target changes. Replaces the old selection-scanning refresh.
+    void resolve_target();
 
     // Accessors to the currently-edited asset's state. Callers must have
     // checked get_current_graph_mesh() for null (empty state) first.
@@ -211,8 +229,12 @@ private:
     void process_attachment_push_requests();
 
     App_context&                                      m_app_context;
-    // The graph currently being edited: the selected content-library asset,
-    // or null when nothing is selected (empty state).
+    // The explicit target this window edits (issue #252). weak_ptr so a
+    // deleted asset clears the target automatically. Bound to the target
+    // selector widget and set via set_target().
+    std::weak_ptr<Graph_mesh>                         m_target;
+    // The resolved target: m_target.lock(), refreshed by resolve_target()
+    // on every access. Null when the target is unset / expired (empty state).
     std::shared_ptr<Graph_mesh>                       m_graph_mesh;
     std::unique_ptr<ax::NodeEditor::EditorContext>    m_node_editor;
     bool                                              m_focus_requested{false};
@@ -220,6 +242,8 @@ private:
     int                                               m_spawn_count{0};
     std::vector<Palette_category>                     m_palette_categories; // built lazily by build_palette()
     std::string                                       m_palette_filter;     // node-palette search text
+    // Reused scratch for the target selector's picker (cleared + refilled each frame).
+    std::vector<std::shared_ptr<erhe::Item_base>>     m_target_candidates;
 };
 
 // Companion window hosting the Geometry Graph's node palette, so the palette

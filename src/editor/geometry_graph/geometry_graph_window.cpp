@@ -19,6 +19,7 @@
 #include "operations/operation_stack.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
+#include "windows/item_reference.hpp"
 
 #include "erhe_graph/link.hpp"
 #include "erhe_graph/pin.hpp"
@@ -59,8 +60,8 @@ Geometry_graph_window::Geometry_graph_window(
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Geometry Graph", "geometry_graph"}
     , m_app_context            {app_context}
 {
-    // The window edits the selected content-library Graph_mesh; when none
-    // is selected it shows an empty state (see refresh_current_graph_mesh).
+    // The window edits an explicit target Graph_mesh (issue #252); when the
+    // target is unset it shows an empty state (see resolve_target).
     m_node_editor = std::make_unique<ax::NodeEditor::EditorContext>(nullptr);
 
     // Input pins are drawn with PivotAlignment {-0.75, 0.5}, which leaves a
@@ -81,28 +82,36 @@ auto Geometry_graph_window::flags() -> ImGuiWindowFlags
     return ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
 }
 
-void Geometry_graph_window::refresh_current_graph_mesh()
+void Geometry_graph_window::resolve_target()
 {
-    std::shared_ptr<Graph_mesh> selected;
-    if (m_app_context.selection != nullptr) {
-        // Content-library assets are selected wrapped in a Content_library_node;
-        // get<>() unwraps that (the pattern Properties uses for the selected
-        // Material), unlike Selection::get_last_selected<>().
-        selected = get<Graph_mesh>(m_app_context.selection->get_selected_items());
-    }
-    if (m_graph_mesh != selected) {
-        m_graph_mesh = selected;
+    // Issue #252: the window edits an explicit target, not the global
+    // selection. Lock the weak_ptr; a deleted asset resolves to null.
+    std::shared_ptr<Graph_mesh> target = m_target.lock();
+    if (m_graph_mesh != target) {
+        m_graph_mesh = target;
         // Restart the spawn grid for the newly edited graph so new nodes do
         // not continue from another graph's high-water mark.
         m_spawn_count = 0;
     }
 }
 
+void Geometry_graph_window::set_target(const std::shared_ptr<Graph_mesh>& graph_mesh)
+{
+    m_target = graph_mesh;
+    resolve_target();
+}
+
+auto Geometry_graph_window::get_target() -> std::shared_ptr<Graph_mesh>
+{
+    resolve_target();
+    return m_graph_mesh;
+}
+
 auto Geometry_graph_window::get_current_graph_mesh() -> const std::shared_ptr<Graph_mesh>&
 {
-    // Keep m_graph_mesh consistent with the live selection regardless of call
+    // Keep m_graph_mesh consistent with the live target regardless of call
     // ordering (an MCP mutation may arrive before the frame's update).
-    refresh_current_graph_mesh();
+    resolve_target();
     return m_graph_mesh;
 }
 
@@ -119,11 +128,11 @@ auto Geometry_graph_window::mutable_nodes() -> std::vector<std::shared_ptr<Geome
 auto Geometry_graph_window::get_nodes() -> const std::vector<std::shared_ptr<Geometry_graph_node>>&
 {
     // The MCP handlers resolve nodes through this before mutating, so it
-    // must agree with the graph the mutation will target (refresh first).
-    refresh_current_graph_mesh();
+    // must agree with the graph the mutation will target (resolve first).
+    resolve_target();
     if (!m_graph_mesh) {
         static const std::vector<std::shared_ptr<Geometry_graph_node>> s_empty{};
-        return s_empty; // empty state - no asset selected
+        return s_empty; // empty state - no target
     }
     return m_graph_mesh->nodes();
 }
@@ -151,9 +160,8 @@ void Geometry_graph_window::erase_node(Graph_mesh& graph_mesh, const std::shared
     if (i == nodes.end()) {
         return;
     }
-    if (node->is_selected()) {
-        m_app_context.selection->remove_from_selection(node);
-    }
+    // Issue #252: canvas nodes are no longer pushed into the global
+    // selection, so there is nothing to remove from it here.
     // Downstream nodes lose an input; capture them before
     // unregister_node() disconnects the links.
     for (erhe::graph::Pin& pin : node->get_output_pins()) {
@@ -651,7 +659,7 @@ void Geometry_graph_window::update_evaluation()
     // Once-per-frame refresh (the template's Texture_graph_window::update()
     // parity): keeps m_graph_mesh tracking the selection even when the
     // window is closed, so MCP reads never see a stale graph.
-    refresh_current_graph_mesh();
+    resolve_target();
 
     process_attachment_push_requests();
 
@@ -713,12 +721,41 @@ void Geometry_graph_window::wait_for_idle_evaluation()
     }
 }
 
+void Geometry_graph_window::target_selector_imgui()
+{
+    // Rebuild the picker candidate list: every Graph_mesh asset in every
+    // scene's content library. Scratch member reused across frames.
+    m_target_candidates.clear();
+    if (m_app_context.app_scenes != nullptr) {
+        for (const std::shared_ptr<Scene_root>& scene_root : m_app_context.app_scenes->get_scene_roots()) {
+            const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
+            if (!content_library || !content_library->graph_meshes) {
+                continue;
+            }
+            for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->graph_meshes->get_all<Graph_mesh>()) {
+                m_target_candidates.push_back(graph_mesh);
+            }
+        }
+    }
+    ImGui::TextUnformatted("Target");
+    ImGui::SameLine();
+    Item_reference_options options;
+    options.candidates                  = m_target_candidates;
+    options.accept_content_library_node = true;
+    options.none_text                   = "(no target)";
+    options.show_select_button          = false; // keep target decoupled from the global selection
+    if (item_reference_imgui<Graph_mesh>(m_app_context, "geometry_graph_target", m_target, Graph_mesh::get_static_type(), options)) {
+        // Target changed via the selector; resolve now so the canvas reflects it this frame.
+        resolve_target();
+    }
+}
+
 void Geometry_graph_window::controls_imgui()
 {
-    refresh_current_graph_mesh();
+    resolve_target();
     if (!m_graph_mesh) {
-        ImGui::TextUnformatted("No Graph Mesh selected.");
-        ImGui::TextUnformatted("Create one in the Content Library (right-click the Graph Meshes folder) and select it.");
+        ImGui::TextUnformatted("No target Graph Mesh.");
+        ImGui::TextUnformatted("Pick one in the Geometry Graph window's Target selector, or 'Open Editor' on a Graph Mesh in the Content Library.");
         return;
     }
     ImGui::Text("Editing: %s", m_graph_mesh->get_name().c_str());
@@ -739,11 +776,14 @@ void Geometry_graph_window::imgui()
         m_focus_requested = false;
     }
 
-    // The canvas draws the currently edited graph (selection-driven).
-    refresh_current_graph_mesh();
+    // Issue #252: the target-item selector at the top of the window. Drawn
+    // before resolve_target() so a pick / clear takes effect this frame.
+    target_selector_imgui();
+
+    // The canvas draws the explicit target graph (issue #252).
+    resolve_target();
     if (!m_graph_mesh) {
-        ImGui::TextUnformatted("No Graph Mesh selected.");
-        ImGui::TextUnformatted("Create one in the Content Library (right-click the Graph Meshes folder) and select it.");
+        ImGui::TextUnformatted("No target Graph Mesh. Pick one above, or 'Open Editor' on a Graph Mesh in the Content Library.");
         return;
     }
 

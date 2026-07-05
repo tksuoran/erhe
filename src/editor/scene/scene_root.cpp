@@ -9,7 +9,9 @@
 #include "app_context.hpp"
 #include "content_library/content_library.hpp"
 #include "geometry_graph/graph_mesh.hpp"
+#include "geometry_graph/geometry_graph_window.hpp"
 #include "texture_graph/graph_texture.hpp"
+#include "texture_graph/texture_graph_window.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "scene/attachment_types.hpp"
@@ -550,9 +552,10 @@ auto Scene_root::make_browser_window(
                                 }
                             );
                             context_ptr->operation_stack->queue(op);
-                            // Select the new asset so the Texture Graph window edits it.
-                            if (context_ptr->selection != nullptr) {
-                                context_ptr->selection->set_selection({new_graph_texture});
+                            // Issue #252: point the Texture Graph window at the new
+                            // asset explicitly (no longer via the global selection).
+                            if (context_ptr->texture_graph_window != nullptr) {
+                                context_ptr->texture_graph_window->set_target(new_graph_texture);
                             }
                         }
                     );
@@ -576,9 +579,10 @@ auto Scene_root::make_browser_window(
                                 }
                             );
                             context_ptr->operation_stack->queue(op);
-                            // Select the new asset so the Geometry Graph window edits it.
-                            if (context_ptr->selection != nullptr) {
-                                context_ptr->selection->set_selection({new_graph_mesh});
+                            // Issue #252: point the Geometry Graph window at the new
+                            // asset explicitly (no longer via the global selection).
+                            if (context_ptr->geometry_graph_window != nullptr) {
+                                context_ptr->geometry_graph_window->set_target(new_graph_mesh);
                             }
                         }
                     );

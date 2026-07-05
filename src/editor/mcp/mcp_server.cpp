@@ -416,6 +416,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "set_transform_mode")           result = action_set_transform_mode          (req->arguments);
         else if (req->tool_name == "get_transform_state")          result = query_transform_state              (req->arguments);
         else if (req->tool_name == "get_geometry_graph")           result = query_geometry_graph               (req->arguments);
+        else if (req->tool_name == "set_geometry_graph_target")    result = action_set_geometry_graph_target   (req->arguments);
         else if (req->tool_name == "geometry_graph_add_node")      result = action_geometry_graph_add_node     (req->arguments);
         else if (req->tool_name == "geometry_graph_remove_node")   result = action_geometry_graph_remove_node  (req->arguments);
         else if (req->tool_name == "geometry_graph_set_parameter") result = action_geometry_graph_set_parameter(req->arguments);
@@ -429,6 +430,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "set_node_graph_mesh")          result = action_set_node_graph_mesh         (req->arguments);
         else if (req->tool_name == "get_graph_meshes")             result = query_graph_meshes                 (req->arguments);
         else if (req->tool_name == "get_texture_graph")            result = query_texture_graph                (req->arguments);
+        else if (req->tool_name == "set_texture_graph_target")     result = action_set_texture_graph_target    (req->arguments);
         else if (req->tool_name == "texture_graph_add_node")       result = action_texture_graph_add_node      (req->arguments);
         else if (req->tool_name == "texture_graph_remove_node")    result = action_texture_graph_remove_node   (req->arguments);
         else if (req->tool_name == "texture_graph_set_parameter")  result = action_texture_graph_set_parameter (req->arguments);

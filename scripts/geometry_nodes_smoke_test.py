@@ -185,8 +185,9 @@ def scene_name_of_test():
 
 def fresh_graph():
     """Start the next block on a new, empty Graph_mesh asset (created in
-    the content library and auto-selected; the window and the
-    geometry_graph_* tools target the selected asset). Graphs only live in
+    the content library; create_graph_mesh points the Geometry Graph window
+    at it, so the window and the geometry_graph_* tools target the new asset
+    - issue #252, no longer via the global selection). Graphs only live in
     the content library - there is no window scratch graph and no
     clear/load tool."""
     global _fresh_count, _current_graph_name
@@ -1219,11 +1220,12 @@ def section_graph_mesh_asset():
     check(S, "graph without physics removes the adopted physics", len(phys_atts) == 0, detail=str(phys_atts))
     mutate("set_node_graph_mesh", {"node_name": "Smoke GM Shape", "graph_mesh": "", "scene_name": scene_name})
 
-    # Selection drives which graph the tools edit.
-    mutate("select_items", {"scene_name": scene_name, "ids": []})
-    check(S, "no selection -> tools report the empty state", get_graph().get("selected") is False)
-    call("select_items", {"scene_name": scene_name, "ids": [asset_id]})
-    check(S, "asset re-selectable by id", get_graph().get("graph_mesh_name") == "Smoke GM")
+    # Issue #252: the window TARGET (not the global selection) drives which
+    # graph the tools edit. Clearing / setting the target is explicit now.
+    mutate("set_geometry_graph_target", {"graph_mesh": ""})
+    check(S, "cleared target -> tools report the empty state", get_graph().get("selected") is False)
+    mutate("set_geometry_graph_target", {"graph_mesh": "Smoke GM", "scene_name": scene_name})
+    check(S, "asset re-targetable by name", get_graph().get("graph_mesh_name") == "Smoke GM")
 
     # Physics travels with the bake to every bound node.
     set_param(out["id"], {"physics": True})
@@ -1268,9 +1270,9 @@ def section_graph_mesh_asset():
     check(S, "reloaded scene reconstructs the asset", len(after) >= before + 1, detail=f"{before}->{len(after)}")
     check(S, "reloaded asset re-bakes", len(after) >= 1 and all(g.get("has_bake") for g in after), detail=str(after))
 
-    # Cleanup: unbind the remaining node, drop the bundle, deselect.
+    # Cleanup: unbind the remaining node, drop the bundle, clear the target.
     mutate("set_node_graph_mesh", {"node_name": "Smoke GM Node", "graph_mesh": "", "scene_name": scene_name})
-    mutate("select_items", {"scene_name": scene_name, "ids": []})
+    mutate("set_geometry_graph_target", {"graph_mesh": ""})
     shutil.rmtree(bundle, ignore_errors=True)
     check(S, "empty state after cleanup", get_graph().get("selected") is False)
 

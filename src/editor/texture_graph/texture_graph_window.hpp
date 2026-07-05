@@ -13,6 +13,9 @@
 
 struct ImVec2;
 
+namespace erhe {
+    class Item_base;
+}
 namespace erhe::graph {
     class Pin;
 }
@@ -85,14 +88,20 @@ public:
     // Texture_graph_parameter_operation.
     void set_node_parameters(const std::shared_ptr<Texture_graph_node>& node, const nlohmann::json& parameters);
 
-    // The graph currently being edited: the selected content-library
-    // Graph_texture asset, or null when nothing (of that type) is selected -
-    // the window then shows an empty state and edits refuse. Refreshed once
-    // per frame (update() / imgui()). MCP and the canvas gestures operate on
-    // this one.
+    // Sets / clears the explicit target Graph_texture this window edits
+    // (issue #252). Stored as a weak_ptr so a deleted asset clears the
+    // target automatically. Passing null clears the target (empty state).
+    void set_target(const std::shared_ptr<Graph_texture>& graph_texture);
+    [[nodiscard]] auto get_target() -> std::shared_ptr<Graph_texture>;
+
+    // The graph currently being edited: the resolved target Graph_texture
+    // asset, or null when the target is unset / expired - the window then
+    // shows an empty state and edits refuse. Resolved from the weak_ptr
+    // target on every access (update() / imgui() / MCP). MCP and the canvas
+    // gestures operate on this one.
     [[nodiscard]] auto get_current_graph_texture() -> const std::shared_ptr<Graph_texture>&;
 
-    // Empty when no Graph_texture asset is selected.
+    // Empty when the target is unset / expired.
     [[nodiscard]] auto get_nodes() const -> const std::vector<std::shared_ptr<Texture_graph_node>>&;
 
     // The shared render-to-texture helper. Created lazily on first use (the part
@@ -141,6 +150,10 @@ private:
     // canvas so popups / collapsing headers are allowed.
     void build_palette   ();
     void node_palette    ();
+    // Issue #252: the target-item selector row drawn at the top of the
+    // window. Drag-drop a Graph_texture asset onto it, pick from the popup,
+    // or clear it. Bound to m_target.
+    void target_selector_imgui();
     void handle_link_create();
     void handle_deletions();
 
@@ -156,9 +169,10 @@ private:
     // material samples stays baked even when it is not the selected one.
     void evaluate_and_render(Graph_texture& graph_texture);
 
-    // Points m_graph_texture at the selected content-library Graph_texture, or
-    // null when nothing (of that type) is selected.
-    void refresh_current_graph_texture();
+    // Resolves the weak_ptr target into m_graph_texture (locks it, or null
+    // when unset / expired). Resets the spawn grid when the resolved target
+    // changes. Replaces the old selection-scanning refresh.
+    void resolve_target();
 
     // Accessors to the currently-edited asset's state. Callers must have
     // checked get_current_graph_texture() for null (empty state) first.
@@ -166,14 +180,20 @@ private:
     [[nodiscard]] auto mutable_nodes() -> std::vector<std::shared_ptr<Texture_graph_node>>&;
 
     App_context&                                     m_app_context;
-    // The graph currently being edited: the selected content-library asset,
-    // or null when nothing is selected (empty state).
+    // The explicit target this window edits (issue #252). weak_ptr so a
+    // deleted asset clears the target automatically. Bound to the target
+    // selector widget and set via set_target().
+    std::weak_ptr<Graph_texture>                     m_target;
+    // The resolved target: m_target.lock(), refreshed by resolve_target()
+    // on every access. Null when the target is unset / expired (empty state).
     std::shared_ptr<Graph_texture>                   m_graph_texture;
     std::unique_ptr<Texture_renderer>                m_renderer;
     std::unique_ptr<ax::NodeEditor::EditorContext>   m_node_editor;
     int                                              m_spawn_count{0};
     std::vector<Palette_category>                    m_palette_categories; // built lazily by build_palette()
     std::string                                      m_palette_filter;     // node-palette search text
+    // Reused scratch for the target selector's picker (cleared + refilled each frame).
+    std::vector<std::shared_ptr<erhe::Item_base>>    m_target_candidates;
 };
 
 // Companion window hosting the Texture Graph's node palette, so the palette

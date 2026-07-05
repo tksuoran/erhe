@@ -19,6 +19,7 @@
 #include "operations/operation_stack.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
+#include "windows/item_reference.hpp"
 
 #include "erhe_graph/link.hpp"
 #include "erhe_graph/pin.hpp"
@@ -59,8 +60,8 @@ Texture_graph_window::Texture_graph_window(
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Texture Graph", "texture_graph"}
     , m_app_context            {app_context}
 {
-    // The window edits the selected content-library Graph_texture; when none
-    // is selected it shows an empty state (see refresh_current_graph_texture).
+    // The window edits an explicit target Graph_texture (issue #252); when the
+    // target is unset it shows an empty state (see resolve_target).
     m_node_editor = std::make_unique<ax::NodeEditor::EditorContext>(nullptr);
 
     // Match the arrowhead settings used for the input pin pivot (the pins are
@@ -95,21 +96,29 @@ auto Texture_graph_window::flags() -> ImGuiWindowFlags
     return ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
 }
 
-void Texture_graph_window::refresh_current_graph_texture()
+void Texture_graph_window::resolve_target()
 {
-    std::shared_ptr<Graph_texture> selected;
-    if (m_app_context.selection != nullptr) {
-        // Content-library assets are selected wrapped in a Content_library_node;
-        // get<>() unwraps that (the pattern Properties uses for the selected
-        // Material), unlike Selection::get_last_selected<>().
-        selected = get<Graph_texture>(m_app_context.selection->get_selected_items());
-    }
-    if (m_graph_texture != selected) {
-        m_graph_texture = selected;
+    // Issue #252: the window edits an explicit target, not the global
+    // selection. Lock the weak_ptr; a deleted asset resolves to null.
+    std::shared_ptr<Graph_texture> target = m_target.lock();
+    if (m_graph_texture != target) {
+        m_graph_texture = target;
         // Restart the spawn grid for the newly edited graph so new nodes do
         // not continue from another graph's high-water mark.
         m_spawn_count = 0;
     }
+}
+
+void Texture_graph_window::set_target(const std::shared_ptr<Graph_texture>& graph_texture)
+{
+    m_target = graph_texture;
+    resolve_target();
+}
+
+auto Texture_graph_window::get_target() -> std::shared_ptr<Graph_texture>
+{
+    resolve_target();
+    return m_graph_texture;
 }
 
 void Texture_graph_window::update()
@@ -120,7 +129,7 @@ void Texture_graph_window::update()
         m_renderer = std::make_unique<Texture_renderer>(*m_app_context.graphics_device);
     }
 
-    refresh_current_graph_texture();
+    resolve_target();
 
     // Evaluate + bake every Graph_texture asset in every scene, so a material
     // sampling a non-selected graph still sees a baked texture (notably right
@@ -180,9 +189,8 @@ void Texture_graph_window::erase_node(Graph_texture& graph_texture, const std::s
     if (i == nodes.end()) {
         return;
     }
-    if (node->is_selected()) {
-        m_app_context.selection->remove_from_selection(node);
-    }
+    // Issue #252: canvas nodes are no longer pushed into the global
+    // selection, so there is nothing to remove from it here.
     // Downstream nodes lose an input; capture them before unregister_node()
     // disconnects the links.
     for (erhe::graph::Pin& pin : node->get_output_pins()) {
@@ -338,9 +346,9 @@ auto Texture_graph_window::add_node_of_type(const std::string& type_name) -> Tex
 
 auto Texture_graph_window::get_current_graph_texture() -> const std::shared_ptr<Graph_texture>&
 {
-    // Keep m_graph_texture consistent with the live selection regardless of call
+    // Keep m_graph_texture consistent with the live target regardless of call
     // ordering (an MCP mutation may arrive before the frame's update()).
-    refresh_current_graph_texture();
+    resolve_target();
     return m_graph_texture;
 }
 
@@ -358,7 +366,7 @@ auto Texture_graph_window::get_nodes() const -> const std::vector<std::shared_pt
 {
     if (!m_graph_texture) {
         static const std::vector<std::shared_ptr<Texture_graph_node>> s_empty{};
-        return s_empty; // empty state - no asset selected
+        return s_empty; // empty state - no target
     }
     return m_graph_texture->nodes();
 }
@@ -498,12 +506,41 @@ void Texture_graph_window::node_palette()
     }
 }
 
+void Texture_graph_window::target_selector_imgui()
+{
+    // Rebuild the picker candidate list: every Graph_texture asset in every
+    // scene's content library. Scratch member reused across frames.
+    m_target_candidates.clear();
+    if (m_app_context.app_scenes != nullptr) {
+        for (const std::shared_ptr<Scene_root>& scene_root : m_app_context.app_scenes->get_scene_roots()) {
+            const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
+            if (!content_library || !content_library->graph_textures) {
+                continue;
+            }
+            for (const std::shared_ptr<Graph_texture>& graph_texture : content_library->graph_textures->get_all<Graph_texture>()) {
+                m_target_candidates.push_back(graph_texture);
+            }
+        }
+    }
+    ImGui::TextUnformatted("Target");
+    ImGui::SameLine();
+    Item_reference_options options;
+    options.candidates                  = m_target_candidates;
+    options.accept_content_library_node = true;
+    options.none_text                   = "(no target)";
+    options.show_select_button          = false; // keep target decoupled from the global selection
+    if (item_reference_imgui<Graph_texture>(m_app_context, "texture_graph_target", m_target, Graph_texture::get_static_type(), options)) {
+        // Target changed via the selector; resolve now so the canvas reflects it this frame.
+        resolve_target();
+    }
+}
+
 void Texture_graph_window::controls_imgui()
 {
-    refresh_current_graph_texture();
+    resolve_target();
     if (!m_graph_texture) {
-        ImGui::TextUnformatted("No Graph Texture selected.");
-        ImGui::TextUnformatted("Create one in the Content Library (right-click the Graph Textures folder) and select it.");
+        ImGui::TextUnformatted("No target Graph Texture.");
+        ImGui::TextUnformatted("Pick one in the Texture Graph window's Target selector, or 'Open Editor' on a Graph Texture in the Content Library.");
         return;
     }
     ImGui::Text("Editing: %s", m_graph_texture->get_name().c_str());
@@ -516,12 +553,15 @@ void Texture_graph_window::controls_imgui()
 
 void Texture_graph_window::imgui()
 {
-    // Draw whatever graph is currently selected. update() also refreshes
+    // Issue #252: the target-item selector at the top of the window. Drawn
+    // before resolve_target() so a pick / clear takes effect this frame.
+    target_selector_imgui();
+
+    // Draw the explicit target graph (issue #252). update() also resolves
     // this, but imgui() may run in a frame where it has not yet.
-    refresh_current_graph_texture();
+    resolve_target();
     if (!m_graph_texture) {
-        ImGui::TextUnformatted("No Graph Texture selected.");
-        ImGui::TextUnformatted("Create one in the Content Library (right-click the Graph Textures folder) and select it.");
+        ImGui::TextUnformatted("No target Graph Texture. Pick one above, or 'Open Editor' on a Graph Texture in the Content Library.");
         return;
     }
 

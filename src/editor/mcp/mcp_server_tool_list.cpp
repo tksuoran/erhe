@@ -644,7 +644,14 @@ void Mcp_server::refresh_tool_list()
     }});
 
     // Geometry node graph (Geometry Graph window)
-    m_tool_infos.push_back({"get_geometry_graph", "List the geometry node graph: nodes with ids, type labels, input/output pins (slot, key, name, connection count), per-output payload summaries (geometry vertex/facet counts, point/instance counts, scalar values) and all links. Waits for any background graph evaluation to finish, so the payloads reflect all previously issued mutations.", schema_no_args()});
+    m_tool_infos.push_back({"get_geometry_graph", "List the geometry node graph the Geometry Graph window currently targets: nodes with ids, type labels, input/output pins (slot, key, name, connection count), per-output payload summaries (geometry vertex/facet counts, point/instance counts, scalar values) and all links. 'selected' is true when the window has a target (a Graph Mesh asset). Waits for any background graph evaluation to finish, so the payloads reflect all previously issued mutations.", schema_no_args()});
+    m_tool_infos.push_back({"set_geometry_graph_target", "Point the Geometry Graph window (and the geometry_graph_* tools) at a Graph Mesh asset by name, or clear the target with an empty/omitted name. This replaces the old 'select the asset to edit it' behaviour - the window no longer follows the global selection (issue #252).", {
+        {"type", "object"},
+        {"properties", {
+            {"graph_mesh", {{"type", "string"}, {"description", "Name of the Graph Mesh asset to target; empty or omitted clears the target"}}},
+            {"scene_name", {{"type", "string"}, {"description", "Scene to search (default: all scenes)"}}}
+        }}
+    }});
     m_tool_infos.push_back({"geometry_graph_add_node", "Add a node to the geometry node graph. Returns the new node's id and pin layout.", {
         {"type", "object"},
         {"properties", {
@@ -687,14 +694,14 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"node_id", "parameters"})}
     }});
-    m_tool_infos.push_back({"geometry_graph_set_view", "Show the Geometry Graph window and set its node-editor zoom (view scale) immediately, centered on the graph content. zoom > 1 zooms in (content drawn larger), zoom < 1 zooms out. Deterministic (no animation / no mouse input) - intended for headless zoom-quality verification (capture_screenshot on the next frame). Requires a Graph Mesh to be selected for the window to render nodes.", {
+    m_tool_infos.push_back({"geometry_graph_set_view", "Show the Geometry Graph window and set its node-editor zoom (view scale) immediately, centered on the graph content. zoom > 1 zooms in (content drawn larger), zoom < 1 zooms out. Deterministic (no animation / no mouse input) - intended for headless zoom-quality verification (capture_screenshot on the next frame). Requires the window to have a target Graph Mesh (create_graph_mesh / set_geometry_graph_target) for it to render nodes.", {
         {"type", "object"},
         {"properties", {
             {"zoom", {{"type", "number"}, {"description", "View scale (> 0). 1.0 = native, 2.0 = 2x zoom in, 0.5 = 2x zoom out."}}}
         }},
         {"required", json::array({"zoom"})}
     }});
-    m_tool_infos.push_back({"create_graph_texture", "Create a Graph Texture asset (a procedural texture backed by a node graph) in a scene's content library and select it. The selected Graph Texture is what the Texture Graph window edits and what the texture_graph_* tools operate on. A Material slot can then source from it (set_material_texture_source). Returns the new asset's id and name.", {
+    m_tool_infos.push_back({"create_graph_texture", "Create a Graph Texture asset (a procedural texture backed by a node graph) in a scene's content library and point the Texture Graph window at it (its new target). The window's target Graph Texture is what the texture_graph_* tools operate on (retarget later with set_texture_graph_target). A Material slot can then source from it (set_material_texture_source). Returns the new asset's id and name.", {
         {"type", "object"},
         {"properties", {
             {"name",       {{"type", "string"}, {"description", "Name of the new Graph Texture asset (must be unique in the scene)"}}},
@@ -718,7 +725,7 @@ void Mcp_server::refresh_tool_list()
             {"scene_name", {{"type", "string"}, {"description", "Scene to list (default: all scenes)"}}}
         }}
     }});
-    m_tool_infos.push_back({"create_graph_mesh", "Create a Graph Mesh asset (a procedural mesh backed by a geometry node graph) in a scene's content library and select it. The selected Graph Mesh is what the Geometry Graph window edits and what the geometry_graph_* tools operate on. A scene Node can then source its mesh from it (set_node_graph_mesh). Returns the new asset's id and name.", {
+    m_tool_infos.push_back({"create_graph_mesh", "Create a Graph Mesh asset (a procedural mesh backed by a geometry node graph) in a scene's content library and point the Geometry Graph window at it (its new target). The window's target Graph Mesh is what the geometry_graph_* tools operate on (retarget later with set_geometry_graph_target). A scene Node can then source its mesh from it (set_node_graph_mesh). Returns the new asset's id and name.", {
         {"type", "object"},
         {"properties", {
             {"name",       {{"type", "string"}, {"description", "Name of the new Graph Mesh asset (must be unique in the scene)"}}},
@@ -741,7 +748,14 @@ void Mcp_server::refresh_tool_list()
             {"scene_name", {{"type", "string"}, {"description", "Scene to list (default: all scenes)"}}}
         }}
     }});
-    m_tool_infos.push_back({"get_texture_graph", "List the procedural texture node graph of the currently selected Graph Texture asset (or the window default when none is selected): the target asset name/id, nodes with ids, type labels, canvas positions, parameters, input pins (slot, value type, whether connected, source node id/slot) and output pins (slot, value type), plus a 'composable' flag per node, and all links. Texture graph evaluation is synchronous, so no wait is needed.", schema_no_args()});
+    m_tool_infos.push_back({"get_texture_graph", "List the procedural texture node graph the Texture Graph window currently targets: the target asset name/id, nodes with ids, type labels, canvas positions, parameters, input pins (slot, value type, whether connected, source node id/slot) and output pins (slot, value type), plus a 'composable' flag per node, and all links. 'selected' is true when the window has a target. Texture graph evaluation is synchronous, so no wait is needed.", schema_no_args()});
+    m_tool_infos.push_back({"set_texture_graph_target", "Point the Texture Graph window (and the texture_graph_* tools) at a Graph Texture asset by name, or clear the target with an empty/omitted name. Replaces the old selection-driven targeting - the window no longer follows the global selection (issue #252).", {
+        {"type", "object"},
+        {"properties", {
+            {"graph_texture", {{"type", "string"}, {"description", "Name of the Graph Texture asset to target; empty or omitted clears the target"}}},
+            {"scene_name",    {{"type", "string"}, {"description", "Scene to search (default: all scenes)"}}}
+        }}
+    }});
     // Build the node-type enum from the descriptor registry (plus the bespoke
     // "output" sink) so it never drifts as node types are added.
     json texture_node_type_enum = json::array();

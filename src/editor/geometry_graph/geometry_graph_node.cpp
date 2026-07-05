@@ -340,15 +340,12 @@ void Geometry_graph_node::node_editor(App_context& app_context, ax::NodeEditor::
         }
     }
 
-    const bool item_selection   = is_selected();
-    const bool editor_selection = node_editor.IsNodeSelected(get_id());
-    if (item_selection != editor_selection) {
-        if (editor_selection) {
-            app_context.selection->add_to_selection(shared_from_this());
-        } else {
-            app_context.selection->remove_from_selection(shared_from_this());
-        }
-    }
+    // Issue #252: node selection lives purely in the ax::NodeEditor canvas.
+    // The node is deliberately NOT synced into the global selection - doing
+    // so put the containing Graph_mesh asset and the node in the selection
+    // together, so a single Delete deleted both the node (canvas
+    // handle_deletions) and the whole graph asset (Selection::delete_selection).
+    // Canvas Delete is now the only path that removes a node here.
 }
 
 void Geometry_graph_node::show_pins(

@@ -145,6 +145,50 @@ auto Mcp_server::query_geometry_graph(const json& args) -> std::string
     return make_json_content(result).dump();
 }
 
+auto Mcp_server::action_set_geometry_graph_target(const json& args) -> std::string
+{
+    // Issue #252: point the Geometry Graph window at a named Graph_mesh asset
+    // (or clear its target with an empty / omitted name). This is the explicit
+    // replacement for the old "select the asset to edit it" idiom - the window
+    // no longer follows the global selection.
+    Geometry_graph_window* window = m_context.geometry_graph_window;
+    if (window == nullptr) {
+        return make_error_content("Geometry graph window not available");
+    }
+    const std::string name = args.value("graph_mesh", "");
+    if (name.empty()) {
+        window->set_target(std::shared_ptr<Graph_mesh>{});
+        return make_json_content({{"target_cleared", true}}).dump();
+    }
+    const std::string scene_name = args.value("scene_name", "");
+    std::shared_ptr<Graph_mesh> found;
+    const auto search = [&found, &name](Scene_root& scene_root) {
+        if (found) {
+            return;
+        }
+        const std::shared_ptr<Content_library> library = scene_root.get_content_library();
+        if (library) {
+            found = find_library_item<Graph_mesh>(library->graph_meshes, name);
+        }
+    };
+    if (!scene_name.empty()) {
+        Scene_root* sr = find_scene(scene_name);
+        if (sr == nullptr) {
+            return make_error_content("Scene not found: " + scene_name);
+        }
+        search(*sr);
+    } else if (m_context.app_scenes != nullptr) {
+        for (const std::shared_ptr<Scene_root>& sr : m_context.app_scenes->get_scene_roots()) {
+            search(*sr);
+        }
+    }
+    if (!found) {
+        return make_error_content("Graph mesh not found: " + name);
+    }
+    window->set_target(found);
+    return make_json_content({{"target", name}, {"id", found->get_id()}}).dump();
+}
+
 auto Mcp_server::action_geometry_graph_add_node(const json& args) -> std::string
 {
     Geometry_graph_window* window = m_context.geometry_graph_window;
@@ -152,7 +196,7 @@ auto Mcp_server::action_geometry_graph_add_node(const json& args) -> std::string
         return make_error_content("Geometry graph window not available");
     }
     if (!window->get_current_graph_mesh()) {
-        return make_error_content("No Graph Mesh selected - create one (create_graph_mesh) or select one first");
+        return make_error_content("No target Graph Mesh - create one (create_graph_mesh) or set the target (set_geometry_graph_target) first");
     }
     const std::string type_name = args.value("type", "");
     Geometry_graph_node* node = window->add_node_of_type(type_name);
@@ -444,10 +488,11 @@ auto Mcp_server::action_create_graph_texture(const json& args) -> std::string
             }
         )
     );
-    // Select it so the Texture Graph window and the texture_graph_* tools (which
-    // operate on the current selection) target this asset.
-    if (m_context.selection != nullptr) {
-        m_context.selection->set_selection({item});
+    // Issue #252: point the Texture Graph window at the new asset explicitly,
+    // so the texture_graph_* tools (which operate on the window's target) act
+    // on it - no longer via the global selection.
+    if (m_context.texture_graph_window != nullptr) {
+        m_context.texture_graph_window->set_target(item);
     }
     return make_json_content({
         {"created", true},
@@ -580,10 +625,11 @@ auto Mcp_server::action_create_graph_mesh(const json& args) -> std::string
             }
         )
     );
-    // Select it so the Geometry Graph window and the geometry_graph_* tools
-    // (which operate on the current selection) target this asset.
-    if (m_context.selection != nullptr) {
-        m_context.selection->set_selection({item});
+    // Issue #252: point the Geometry Graph window at the new asset explicitly,
+    // so the geometry_graph_* tools (which operate on the window's target) act
+    // on it - no longer via the global selection.
+    if (m_context.geometry_graph_window != nullptr) {
+        m_context.geometry_graph_window->set_target(item);
     }
     return make_json_content({
         {"created", true},
@@ -732,6 +778,49 @@ auto Mcp_server::query_texture_graph(const json& args) -> std::string
     return make_json_content(result).dump();
 }
 
+auto Mcp_server::action_set_texture_graph_target(const json& args) -> std::string
+{
+    // Issue #252: point the Texture Graph window at a named Graph_texture asset
+    // (or clear its target with an empty / omitted name). Explicit replacement
+    // for the old selection-driven targeting.
+    Texture_graph_window* window = m_context.texture_graph_window;
+    if (window == nullptr) {
+        return make_error_content("Texture graph window not available");
+    }
+    const std::string name = args.value("graph_texture", "");
+    if (name.empty()) {
+        window->set_target(std::shared_ptr<Graph_texture>{});
+        return make_json_content({{"target_cleared", true}}).dump();
+    }
+    const std::string scene_name = args.value("scene_name", "");
+    std::shared_ptr<Graph_texture> found;
+    const auto search = [&found, &name](Scene_root& scene_root) {
+        if (found) {
+            return;
+        }
+        const std::shared_ptr<Content_library> library = scene_root.get_content_library();
+        if (library) {
+            found = find_library_item<Graph_texture>(library->graph_textures, name);
+        }
+    };
+    if (!scene_name.empty()) {
+        Scene_root* sr = find_scene(scene_name);
+        if (sr == nullptr) {
+            return make_error_content("Scene not found: " + scene_name);
+        }
+        search(*sr);
+    } else if (m_context.app_scenes != nullptr) {
+        for (const std::shared_ptr<Scene_root>& sr : m_context.app_scenes->get_scene_roots()) {
+            search(*sr);
+        }
+    }
+    if (!found) {
+        return make_error_content("Graph texture not found: " + name);
+    }
+    window->set_target(found);
+    return make_json_content({{"target", name}, {"id", found->get_id()}}).dump();
+}
+
 auto Mcp_server::action_texture_graph_add_node(const json& args) -> std::string
 {
     Texture_graph_window* window = m_context.texture_graph_window;
@@ -739,7 +828,7 @@ auto Mcp_server::action_texture_graph_add_node(const json& args) -> std::string
         return make_error_content("Texture graph window not available");
     }
     if (!window->get_current_graph_texture()) {
-        return make_error_content("No Graph Texture selected - create one (create_graph_texture) or select one first");
+        return make_error_content("No target Graph Texture - create one (create_graph_texture) or set the target (set_texture_graph_target) first");
     }
     const std::string type_name = args.value("type", "");
     Texture_graph_node* node = window->add_node_of_type(type_name);
