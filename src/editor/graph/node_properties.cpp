@@ -83,11 +83,16 @@ void Node_properties_window::item_properties(const std::shared_ptr<erhe::Item_ba
         return;
     }
 
-    fmt::format_to(std::back_inserter(m_item_properties_buffers.group), "{} {}", item->get_type_name().data(), item->get_name());
-    m_property_editor.push_group(m_item_properties_buffers.group.data(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed, 0.0f);
+    // Property_editor::push_group / add_entry take std::string&& (each stores a
+    // std::string), so build the labels as std::string directly. The previous
+    // fmt::memory_buffer members were never null-terminated - passing .data() to
+    // the std::string&& parameters ran strlen off the end of the buffer
+    // (heap-buffer-overflow) - and were never cleared, so they accumulated text
+    // every frame and across every selected item. Passing the string_views to
+    // fmt (not their .data()) also avoids a strlen on a non-terminated view.
+    m_property_editor.push_group(fmt::format("{} {}", item->get_type_name(), item->get_name()), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed, 0.0f);
     {
-        fmt::format_to(std::back_inserter(m_item_properties_buffers.name), "{} Name", item->get_type_name());
-        m_property_editor.add_entry(m_item_properties_buffers.name.data(), [item]() {
+        m_property_editor.add_entry(fmt::format("{} Name", item->get_type_name()), [item]() {
             std::string name = item->get_name();
             const bool enter_pressed = ImGui::InputText("##Node_properties_window::item_properties()", &name, ImGuiInputTextFlags_EnterReturnsTrue);
             if (enter_pressed || ImGui::IsItemDeactivatedAfterEdit()) { // TODO

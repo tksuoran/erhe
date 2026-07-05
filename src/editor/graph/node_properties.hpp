@@ -4,8 +4,6 @@
 
 #include "erhe_imgui/imgui_window.hpp"
 
-#include <fmt/format.h>
-
 #include <memory>
 
 namespace erhe        { class Item_base; }
@@ -37,13 +35,6 @@ private:
 
     App_context&       m_context;
     Property_editor    m_property_editor;
-
-    struct Item_properities_buffers
-    {
-        fmt::memory_buffer group;
-        fmt::memory_buffer name;
-    };
-    Item_properities_buffers m_item_properties_buffers;
 };
 
 }
