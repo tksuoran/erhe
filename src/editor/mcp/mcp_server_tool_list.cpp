@@ -281,6 +281,7 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"scene_name"})}
     }});
+    m_tool_infos.push_back({"create_scene",       "Create a new, empty scene with its own camera, viewport and content library (same as the Create > Scene menu command). The new scene's content library is populated with the standard brushes shared from the default scene. The creation is queued and completes on a following frame; discover the new scene name (\"Scene N\") via list_scenes.", schema_no_args()});
     m_tool_infos.push_back({"export_gltf",        "Export a scene to a glTF file, without a file dialog", {
         {"type", "object"},
         {"properties", {

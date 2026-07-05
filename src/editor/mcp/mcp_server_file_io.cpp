@@ -71,6 +71,19 @@ auto Mcp_server::action_close_scene(const json& args) -> std::string
     }).dump();
 }
 
+auto Mcp_server::action_create_scene(const json& args) -> std::string
+{
+    static_cast<void>(args);
+    // Same path as the Create > Scene menu command: queue the request so the
+    // scene (and its ImGui windows) is built from the message-bus pump on a
+    // following frame, outside ImGui window iteration. The new scene name
+    // ("Scene N") is assigned there; callers can discover it via list_scenes.
+    m_context.app_message_bus->create_scene.queue_message(Create_scene_message{});
+    return make_json_content({
+        {"queued", true}
+    }).dump();
+}
+
 auto Mcp_server::action_load_scene(const json& args) -> std::string
 {
     const std::string path_str = args.value("path", "");
