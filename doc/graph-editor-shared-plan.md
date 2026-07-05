@@ -48,8 +48,8 @@ the two smoke sweeps verify after every step.
 | C2: Shared palette window + `Graph_editor_window_base` (controls_imgui seam)  | DONE   | 47ea0763 |
 | C3: Shared asset base `Graph_asset<Self, Graph, Node>`                        | DONE   | f8c7b5a1 |
 | C4: Shared graph-JSON serializer template                                     | DONE   | 1cf42f39 |
-| C5: Shared undo-operations template                                           | DONE   | (this commit) |
-| C6: Shared node base `Graph_node<Traits>` (concrete names preserved as alias) | TODO   | -      |
+| C5: Shared undo-operations template                                           | DONE   | c985c352 |
+| C6: Shared node base `Graph_editor_node` (payload-agnostic, 3 hooks)          | DONE   | (this commit) |
 | C7: Shared window base - payload-blind canvas/link/palette/target machinery   | TODO   | -      |
 | C8 (optional): MCP + create-UI + scene save/load helper dedup                 | TODO   | -      |
 

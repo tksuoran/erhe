@@ -1,8 +1,7 @@
 #pragma once
 
 #include "texture_graph/texture_payload.hpp"
-
-#include "erhe_graph/node.hpp"
+#include "graph_editor/graph_editor_node.hpp"
 
 #include <nlohmann/json_fwd.hpp>
 
@@ -45,7 +44,7 @@ class Texture_renderer;
 // Evaluation is synchronous (composition is cheap - decision 8 in
 // doc/texture-graph-plan.md), so unlike the geometry graph there is no async
 // shadow-clone machinery here.
-class Texture_graph_node : public erhe::graph::Node
+class Texture_graph_node : public Graph_editor_node
 {
 public:
     explicit Texture_graph_node(const char* label);
@@ -67,9 +66,8 @@ public:
     void make_input_pin (std::size_t key, std::string_view name);
     void make_output_pin(std::size_t key, std::string_view name);
 
-    [[nodiscard]] auto is_dirty() const -> bool;
-    void mark_dirty ();
-    void clear_dirty();
+    // Implements Graph_editor_node - also invalidates this node's preview cache.
+    void mark_dirty() override;
 
     // Preview / sink rendering (Phase 3 Step 3). The window drives a per-frame
     // refresh: a node whose composition changed (mark_dirty() set the flag)
@@ -104,10 +102,7 @@ public:
     // contains an error marker (the previous good texture is kept).
     virtual void render_products(App_context& context, Texture_renderer& renderer);
 
-    void node_editor(App_context& context, ax::NodeEditor::EditorContext& node_editor);
-
     virtual void evaluate(Texture_graph& graph);
-    virtual void imgui   ();
 
     // Node <-> texgen bridge (doc/texture-graph-plan.md, Phase 3 Step 2).
     //
@@ -138,22 +133,6 @@ public:
     // destructor, since the node object may stay alive in the undo stack.
     virtual void on_removed_from_graph();
 
-    // Graph serialization: the factory type name recreates this node on load
-    // (set by the factory); parameters are the node's editable values. (Named
-    // to avoid clashing with erhe::Item::get_type_name().)
-    [[nodiscard]] auto get_factory_type_name() const -> const std::string&;
-    void set_factory_type_name(const std::string& type_name);
-    virtual void write_parameters(nlohmann::json& out) const;
-    virtual void read_parameters (const nlohmann::json& in);
-
-    // Parameter undo support. The committed state is the write_parameters()
-    // JSON dump the next Texture_graph_parameter_operation uses as its "before"
-    // side; node_editor() captures widget edit gestures against it (one
-    // operation per completed gesture, pushed on widget deactivation).
-    [[nodiscard]] auto dump_parameters() const -> std::string;
-    [[nodiscard]] auto get_committed_parameters() const -> const std::string&;
-    void set_committed_parameters(const std::string& parameters);
-
     // The Graph_texture asset this node belongs to (set when the node is added
     // to a graph). A sink node uses it so an in-window "assign to material" binds
     // the material to the owning asset (a live, persisted texture_source) rather
@@ -183,29 +162,17 @@ protected:
     // node's pins in lockstep with the descriptor.
     void build_pins_from_descriptor(const erhe::texgen::Node_descriptor& descriptor);
 
-    void show_pins(
-        ax::NodeEditor::EditorContext&                                  node_editor,
-        ImDrawList&                                                     draw_list,
-        const etl::vector<erhe::graph::Pin, erhe::graph::max_pin_count>& pins,
-        float                                                           edge_x,
-        bool                                                            right_edge
-    );
-
-    // Issue #251: view scale used to author node content (table columns,
-    // per-widget widths, pin sizes, preview thumbnail) in screen space at the
-    // zoomed size. Set from EditorContext::GetCurrentZoom() in node_editor().
-    [[nodiscard]] auto content_scale() const -> float { return m_content_scale; }
+    // Implements Graph_editor_node
+    [[nodiscard]] auto pin_key_color(std::size_t key) const -> ImU32 override;
+    void commit_parameter_operation(App_context& context, std::string&& before_parameters, std::string&& after_parameters) override;
+    // Draws the node's preview thumbnail after its content widgets.
+    void after_node_content(App_context& context) override;
 
     std::vector<Texture_payload>             m_input_payloads;
     std::vector<Texture_payload>             m_output_payloads;
     std::weak_ptr<Graph_texture>             m_owning_graph_texture;
-    std::string                              m_type_name;
-    std::string                              m_committed_parameters;
     std::shared_ptr<erhe::graphics::Texture> m_preview_texture;
-    float                                    m_content_scale{1.0f};
-    bool                                     m_dirty{true};
     bool                                     m_preview_needs_render{true};
-    bool                                     m_parameter_edit_in_progress{false};
 
 private:
     void draw_preview(App_context& context);
