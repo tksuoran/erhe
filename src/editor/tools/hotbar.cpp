@@ -1031,6 +1031,14 @@ void Hotbar::slot_button(const uint32_t id, Slot_entry& entry)
         if (pressed && (m_context.operations != nullptr)) {
             m_context.operations->run_operation(entry.command, entry.operation_params);
         }
+    } else {
+        // Empty slot: render a placeholder box so the hotbar keeps a fixed width and
+        // the number-key -> slot mapping stays positionally stable (a filled slot
+        // never shifts when an earlier slot is empty). Like the other branches this
+        // must advance the layout with SameLine or the following slots wrap.
+        const ImVec2 button_size{icon_size, icon_size};
+        ImGui::Button("##empty", button_size);
+        ImGui::SameLine();
     }
 
     ImGui::PopID();

@@ -469,14 +469,12 @@ void Inventory_window::apply_hotbar()
     if (m_context.hotbar == nullptr) {
         return;
     }
-    std::vector<Slot_entry> filtered;
-    filtered.reserve(m_hotbar_slots.size());
-    for (const Slot_entry& entry : m_hotbar_slots) {
-        if ((entry.tool != nullptr) || entry.brush || entry.material || (entry.command != nullptr)) {
-            filtered.push_back(entry);
-        }
-    }
-    m_context.hotbar->set_slots(filtered);
+    // Pass all hotbar slots verbatim, including empty ones, so the hotbar renders a
+    // fixed-width row (Minecraft-style) and the number-key -> slot mapping stays
+    // positionally stable: key N always activates the N-th slot, whether or not the
+    // slots before it are filled. Empty slots render as placeholder boxes in the
+    // hotbar (see Hotbar::slot_button).
+    m_context.hotbar->set_slots(m_hotbar_slots);
 }
 
 void Inventory_window::write_config(Inventory_config& config) const
