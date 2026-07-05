@@ -107,6 +107,8 @@ public:
     [[nodiscard]] auto get_corner_count_to_facets() -> const std::map<GEO::index_t, std::vector<GEO::index_t>>&;
     [[nodiscard]] auto get_max_corner_count      () const -> GEO::index_t;
     [[nodiscard]] auto get_material              () const -> const std::shared_ptr<erhe::primitive::Material>&;
+    [[nodiscard]] auto get_density               () const -> float;
+    [[nodiscard]] auto get_normal_style          () const -> erhe::primitive::Normal_style;
     void               set_material              (const std::shared_ptr<erhe::primitive::Material>& material);
     [[nodiscard]] auto make_with_material        (const std::shared_ptr<erhe::primitive::Material>& material) const -> std::shared_ptr<Brush>;
 

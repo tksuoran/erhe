@@ -1,6 +1,8 @@
 #include "scene/scene_serialization.hpp"
 
 #include "app_context.hpp"
+#include "app_settings.hpp"
+#include "brushes/brush.hpp"
 #include "content_library/content_library.hpp"
 #include "geometry_graph/geometry_graph_mesh.hpp"
 #include "geometry_graph/graph_mesh.hpp"
@@ -890,6 +892,51 @@ auto save_scene(
         }
     }
 
+    // Serialize brush assets in the content library (#247). A brush is an
+    // editor-only concept (not expressible in glTF), so it is persisted here:
+    // each brush's geometry is written to a companion .geogram file (like
+    // geometry-normative meshes) and the brush metadata (name, referenced
+    // material name, density, normal style) goes into scene.json. The
+    // collision shape is intentionally not serialized - Brush::late_initialize
+    // rebuilds a convex hull from the geometry at load, matching how brushes
+    // are created at runtime.
+    {
+        const std::shared_ptr<Content_library> content_library = scene_root.get_content_library();
+        if (content_library && content_library->brushes) {
+            GEO::MeshIOFlags brush_ioflags;
+            brush_ioflags.set_dimension(3);
+            brush_ioflags.set_attributes(GEO::MeshAttributesFlags::MESH_ALL_ATTRIBUTES);
+            brush_ioflags.set_elements(GEO::MeshElementsFlags::MESH_ALL_ELEMENTS);
+            int brush_index = 0;
+            for (const std::shared_ptr<Brush>& brush : content_library->brushes->get_all<Brush>()) {
+                const std::shared_ptr<erhe::geometry::Geometry> geometry = brush->get_geometry();
+                if (!geometry) {
+                    ++brush_index;
+                    continue;
+                }
+                const std::string           geometry_base = fmt::format("brush_{}", brush_index);
+                const std::string           filename      = fmt::format("{}.geogram", geometry_base);
+                const std::filesystem::path full_path     = scene_dir / filename;
+                GEO::OutputGeoFile geofile{full_path.string(), 3};
+                if (!GEO::mesh_save(geometry->get_mesh(), geofile, brush_ioflags)) {
+                    log_parsers->error("save_scene: failed to save brush geometry: {}", full_path.string());
+                }
+
+                Brush_data_serial brush_data;
+                brush_data.name          = brush->get_name();
+                brush_data.geometry_path = geometry_base;
+                brush_data.density       = brush->get_density();
+                brush_data.normal_style  = static_cast<int>(brush->get_normal_style());
+                const std::shared_ptr<erhe::primitive::Material>& material = brush->get_material();
+                if (material) {
+                    brush_data.material_name = material->get_name();
+                }
+                scene_file.brushes.push_back(std::move(brush_data));
+                ++brush_index;
+            }
+        }
+    }
+
     // Serialize layouts and layout items
     for (const auto& node : flat_nodes) {
         const auto layout = erhe::scene::get_attachment<erhe::scene::Layout>(node.get());
@@ -1713,6 +1760,86 @@ auto load_scene(
             }
             const std::shared_ptr<Geometry_graph_mesh> attachment = std::make_shared<Geometry_graph_mesh>(graph_mesh);
             node_it->second->attach(attachment);
+        }
+    }
+
+    // Reconstruct brush assets into the content library (#247). Each brush's
+    // geometry is loaded from its companion .geogram file, its referenced
+    // material (if any) is resolved by name, and the collision shape is rebuilt
+    // from the geometry the first time the brush is instantiated
+    // (Brush::late_initialize). Needs App_context for build_info / app_settings;
+    // skipped on pure data loads (context == nullptr).
+    if ((context != nullptr) && content_library && content_library->brushes && !scene_file.brushes.empty()) {
+        const erhe::primitive::Build_info brush_build_info{
+            .primitive_types = {
+                .fill_triangles          = true,
+                .fill_triangles_expanded = true,
+                .edge_lines              = true,
+                .corner_points           = true,
+                .centroid_points         = true,
+            },
+            .buffer_info = context->mesh_memory->make_primitive_buffer_info()
+        };
+        constexpr uint64_t brush_process_flags =
+            erhe::geometry::Geometry::process_flag_connect                       |
+            erhe::geometry::Geometry::process_flag_build_edges                   |
+            erhe::geometry::Geometry::process_flag_compute_facet_centroids       |
+            erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
+            erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
+
+        for (const Brush_data_serial& brush_data : scene_file.brushes) {
+            const std::string           filename  = fmt::format("{}.geogram", brush_data.geometry_path);
+            const std::filesystem::path geom_path = scene_dir / filename;
+            if (!std::filesystem::exists(geom_path)) {
+                log_parsers->warn("load_scene: brush geometry file not found: {}", geom_path.string());
+                continue;
+            }
+
+            auto geometry = std::make_shared<erhe::geometry::Geometry>(brush_data.name);
+            // Unbind erhe Mesh_attributes before loading, because mesh_load will
+            // try to bind attributes with the same names and assert.
+            geometry->get_attributes().unbind();
+            GEO::Mesh& geo_mesh = geometry->get_mesh();
+            geo_mesh.clear(false, false);
+            GEO::MeshIOFlags ioflags;
+            ioflags.set_dimension(3);
+            ioflags.set_attributes(GEO::MeshAttributesFlags::MESH_ALL_ATTRIBUTES);
+            ioflags.set_elements(GEO::MeshElementsFlags::MESH_ALL_ELEMENTS);
+            if (!GEO::mesh_load(geom_path.string().c_str(), geo_mesh, ioflags)) {
+                log_parsers->error("load_scene: failed to load brush geometry: {}", geom_path.string());
+                continue;
+            }
+            geometry->get_attributes().bind();
+            if (geo_mesh.vertices.nb() == 0 || geo_mesh.facets.nb() == 0) {
+                log_parsers->warn("load_scene: empty brush geometry: {}", geom_path.string());
+                continue;
+            }
+            geo_mesh.vertices.set_single_precision();
+            geometry->process({.flags = brush_process_flags});
+
+            // Resolve the referenced material by name from the content library.
+            std::shared_ptr<erhe::primitive::Material> material{};
+            if (!brush_data.material_name.empty() && content_library->materials) {
+                for (const std::shared_ptr<erhe::primitive::Material>& candidate : content_library->materials->get_all<erhe::primitive::Material>()) {
+                    if (candidate->get_name() == brush_data.material_name) {
+                        material = candidate;
+                        break;
+                    }
+                }
+            }
+
+            Brush_data create_info{
+                .context      = *context,
+                .app_settings = *context->app_settings,
+                .build_info   = brush_build_info,
+                .normal_style = static_cast<erhe::primitive::Normal_style>(brush_data.normal_style),
+                .geometry     = geometry,
+                .density      = brush_data.density,
+            };
+            const std::shared_ptr<Brush> brush = content_library->brushes->make<Brush>(create_info);
+            if (material) {
+                brush->set_material(material);
+            }
         }
     }
 

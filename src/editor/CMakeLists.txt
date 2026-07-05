@@ -600,6 +600,7 @@ erhe_codegen_generate(
         "${_scene_renderer_defs}:erhe_scene_renderer/generated/"
         "${_xr_config_defs}:erhe_xr/generated/"
     DEFINITIONS
+        "${_codegen_defs}/brush_data_serial.py"
         "${_codegen_defs}/camera_data.py"
         "${_codegen_defs}/collision_filter_data.py"
         "${_codegen_defs}/collision_shape_data.py"
@@ -632,6 +633,9 @@ erhe_codegen_generate(
 )
 
 set(_codegen_sources
+    ${_codegen_out}/brush_data_serial.hpp
+    ${_codegen_out}/brush_data_serial_serialization.hpp
+    ${_codegen_out}/brush_data_serial.cpp
     ${_codegen_out}/camera_data.hpp
     ${_codegen_out}/camera_data_serialization.hpp
     ${_codegen_out}/camera_data.cpp

@@ -53,6 +53,16 @@ auto Brush::get_material() const -> const std::shared_ptr<erhe::primitive::Mater
     return m_material;
 }
 
+auto Brush::get_density() const -> float
+{
+    return m_data.density;
+}
+
+auto Brush::get_normal_style() const -> erhe::primitive::Normal_style
+{
+    return m_data.normal_style;
+}
+
 void Brush::set_material(const std::shared_ptr<erhe::primitive::Material>& material)
 {
     m_material = material;
