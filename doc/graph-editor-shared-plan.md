@@ -45,8 +45,8 @@ the two smoke sweeps verify after every step.
 | Work item                                                                    | Status | Commit |
 |------------------------------------------------------------------------------|--------|--------|
 | C1: Shared canvas steppers - removes the ODR rename hack                       | DONE   | 5a211b01 |
-| C2: Shared palette window + `Graph_editor_window_base` (controls_imgui seam)  | DONE   | (this commit) |
-| C3: Shared asset base `Graph_asset<Self, Graph, Node>`                        | TODO   | -      |
+| C2: Shared palette window + `Graph_editor_window_base` (controls_imgui seam)  | DONE   | 47ea0763 |
+| C3: Shared asset base `Graph_asset<Self, Graph, Node>`                        | DONE   | (this commit) |
 | C4: Shared graph-JSON serializer template                                     | TODO   | -      |
 | C5: Shared undo-operations template                                           | TODO   | -      |
 | C6: Shared node base `Graph_node<Traits>` (concrete names preserved as alias) | TODO   | -      |

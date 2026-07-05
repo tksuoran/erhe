@@ -1,6 +1,7 @@
 #pragma once
 
 #include "geometry_graph/geometry_graph.hpp"
+#include "graph_editor/graph_asset.hpp"
 
 #include "erhe_item/item.hpp"
 #include "erhe_physics/irigid_body.hpp"
@@ -52,7 +53,7 @@ public:
 // not_clonable (like Graph_texture) - a deep copy would need the node
 // factory's App_context; graph duplication goes through serialization.
 class Graph_mesh
-    : public erhe::Item<erhe::Item_base, erhe::Item_base, Graph_mesh, erhe::Item_kind::not_clonable>
+    : public Graph_asset<Graph_mesh, Geometry_graph, Geometry_graph_node>
 {
 public:
     Graph_mesh();
@@ -62,11 +63,6 @@ public:
     // Implements erhe::Item_base
     static constexpr std::string_view static_type_name{"Graph_mesh"};
     [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::graph_mesh; }
-
-    [[nodiscard]] auto graph()       -> Geometry_graph&;
-    [[nodiscard]] auto graph() const -> const Geometry_graph&;
-    [[nodiscard]] auto nodes()       -> std::vector<std::shared_ptr<Geometry_graph_node>>&;
-    [[nodiscard]] auto nodes() const -> const std::vector<std::shared_ptr<Geometry_graph_node>>&;
 
     // Published by the asset-owned Geometry_output_node from
     // apply_evaluated_to_scene() (main thread); consumed by bound
@@ -84,8 +80,6 @@ public:
     [[nodiscard]] auto consume_attachment_push_request() -> bool;
 
 private:
-    Geometry_graph                                    m_graph;
-    std::vector<std::shared_ptr<Geometry_graph_node>> m_nodes;
     Graph_mesh_baked_products                         m_baked_products;
     uint64_t                                          m_baked_revision{0};
     bool                                              m_attachment_push_requested{false};

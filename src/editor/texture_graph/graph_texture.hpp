@@ -1,13 +1,12 @@
 #pragma once
 
 #include "texture_graph/texture_graph.hpp"
+#include "graph_editor/graph_asset.hpp"
 
 #include "erhe_item/item.hpp"
 #include "erhe_graphics/texture.hpp"
 
-#include <memory>
 #include <string_view>
-#include <vector>
 
 namespace editor {
 
@@ -29,7 +28,7 @@ class Texture_graph_node;
 // factory's App_context, and the content-library duplication path does not
 // require it for the MVP; graph duplication is done via serialization instead.
 class Graph_texture
-    : public erhe::Item<erhe::Item_base, erhe::Item_base, Graph_texture, erhe::Item_kind::not_clonable>
+    : public Graph_asset<Graph_texture, Texture_graph, Texture_graph_node>
     , public erhe::graphics::Texture_reference
 {
 public:
@@ -45,15 +44,6 @@ public:
     // texture of this graph's output node, or nullptr when the graph has no
     // usable output (an unbound slot then renders as white).
     [[nodiscard]] auto get_referenced_texture() const -> const erhe::graphics::Texture* override;
-
-    [[nodiscard]] auto graph()       -> Texture_graph&;
-    [[nodiscard]] auto graph() const -> const Texture_graph&;
-    [[nodiscard]] auto nodes()       -> std::vector<std::shared_ptr<Texture_graph_node>>&;
-    [[nodiscard]] auto nodes() const -> const std::vector<std::shared_ptr<Texture_graph_node>>&;
-
-private:
-    Texture_graph                                    m_graph;
-    std::vector<std::shared_ptr<Texture_graph_node>> m_nodes;
 };
 
 } // namespace editor

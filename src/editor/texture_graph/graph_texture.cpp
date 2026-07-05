@@ -8,15 +8,13 @@
 namespace editor {
 
 Graph_texture::Graph_texture()
-    : Item{"Graph Texture"}
+    : Graph_asset{"Graph Texture"}
 {
-    enable_flag_bits(erhe::Item_flags::show_in_ui | erhe::Item_flags::content);
 }
 
 Graph_texture::Graph_texture(const std::string_view name)
-    : Item{name}
+    : Graph_asset{name}
 {
-    enable_flag_bits(erhe::Item_flags::show_in_ui | erhe::Item_flags::content);
 }
 
 Graph_texture::~Graph_texture() noexcept = default;
@@ -35,26 +33,6 @@ auto Graph_texture::get_referenced_texture() const -> const erhe::graphics::Text
         }
     }
     return nullptr;
-}
-
-auto Graph_texture::graph() -> Texture_graph&
-{
-    return m_graph;
-}
-
-auto Graph_texture::graph() const -> const Texture_graph&
-{
-    return m_graph;
-}
-
-auto Graph_texture::nodes() -> std::vector<std::shared_ptr<Texture_graph_node>>&
-{
-    return m_nodes;
-}
-
-auto Graph_texture::nodes() const -> const std::vector<std::shared_ptr<Texture_graph_node>>&
-{
-    return m_nodes;
 }
 
 } // namespace editor
