@@ -21,6 +21,7 @@
 #include "scene/node_raytrace.hpp"
 #include "scene/node_raytrace_mask.hpp"
 #include "tools/selection_tool.hpp"
+#include "windows/editor_windows.hpp"
 #include "windows/item_tree_window.hpp"
 
 #include "erhe_physics/iworld.hpp"
@@ -608,6 +609,36 @@ auto Scene_root::make_browser_window(
                     Close_scene_message{
                         .scene_root = std::dynamic_pointer_cast<Scene_root>(shared_from_this())
                     }
+                );
+                close = true;
+            }
+        }
+    );
+    // Issue #252: "Open Editor" (graph assets -> their graph editor; a scene ->
+    // a new viewport) and "Open Properties" (any item -> a new pinned
+    // Properties window), each targeting the item explicitly, decoupled from
+    // the global selection. Window creation is deferred (Editor_windows queues
+    // it) so it is safe from inside the popup.
+    m_node_tree_window->add_item_context_menu_callback(
+        [&context](
+            const std::shared_ptr<erhe::Item_base>& item,
+            std::vector<std::function<void()>>&     deferred_operations,
+            bool&                                   close
+        ) {
+            if (context.editor_windows == nullptr) {
+                return;
+            }
+            if (Editor_windows::item_has_editor(item)) {
+                if (ImGui::MenuItem("Open Editor")) {
+                    deferred_operations.push_back(
+                        [&context, item]() { context.editor_windows->open_editor_for_item(item); }
+                    );
+                    close = true;
+                }
+            }
+            if (ImGui::MenuItem("Open Properties")) {
+                deferred_operations.push_back(
+                    [&context, item]() { context.editor_windows->open_properties_for_item(item); }
                 );
                 close = true;
             }

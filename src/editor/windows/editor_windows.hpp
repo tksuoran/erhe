@@ -18,6 +18,7 @@ class Geometry_graph_window;
 class Graph_mesh;
 class Graph_texture;
 class Properties;
+class Scene_root;
 class Texture_graph_window;
 
 // Owns the dynamically-created *extra* instances of the Properties / Geometry
@@ -52,15 +53,39 @@ public:
     void open_properties_window(const std::shared_ptr<erhe::Item_base>& target);
 
     // Open a new Geometry / Texture Graph window on the given target asset
-    // (may be null for an empty editor).
+    // (may be null for an empty editor). Always a fresh instance.
     void open_geometry_graph_window(const std::shared_ptr<Graph_mesh>&    target);
     void open_texture_graph_window (const std::shared_ptr<Graph_texture>& target);
+
+    // "Open Editor" / "Open Properties" dispatch used by the item context
+    // menu and item double-click (issue #252). These accept the raw tree item
+    // (a scene Node, a Scene, or a Content_library_node-wrapped asset) and
+    // unwrap as needed.
+
+    // True when the item has an editor: a Graph Mesh, a Graph Texture, or a
+    // Scene. Drives whether the "Open Editor" menu entry / double-click acts.
+    [[nodiscard]] static auto item_has_editor(const std::shared_ptr<erhe::Item_base>& item) -> bool;
+    // Open the matching editor for the item: reuse the primary graph window
+    // when it has no target, else a new instance; a Scene opens a new
+    // viewport. No-op when the item has no editor.
+    void open_editor_for_item(const std::shared_ptr<erhe::Item_base>& item);
+    // Open a new Properties window pinned to the item (unwrapping a
+    // Content_library_node to its inner asset).
+    void open_properties_for_item(const std::shared_ptr<erhe::Item_base>& item);
+    // Open a new viewport window bound to the given scene (deferred out of
+    // ImGui iteration).
+    void open_scene_viewport(const std::shared_ptr<Scene_root>& scene_root);
 
     // Destroys extra instances whose window was closed (X). Called once per
     // frame from the editor tick (outside ImGui iteration).
     void update_once_per_frame();
 
 private:
+    // "Open Editor" for a graph asset: retarget the primary window when it
+    // has no target, else open a fresh instance (keeps the window count sane).
+    void open_or_reuse_geometry_graph_window(const std::shared_ptr<Graph_mesh>&    target);
+    void open_or_reuse_texture_graph_window (const std::shared_ptr<Graph_texture>& target);
+
     erhe::imgui::Imgui_renderer& m_imgui_renderer;
     erhe::imgui::Imgui_windows&  m_imgui_windows;
     App_context&                 m_app_context;

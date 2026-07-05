@@ -498,6 +498,28 @@ void Scene_views::open_new_viewport_scene_view_node()
     );
 }
 
+void Scene_views::open_new_viewport_scene_view_node(const std::shared_ptr<Scene_root>& scene_root)
+{
+    // Issue #252: like open_new_viewport_scene_view_node(), but binds the new
+    // viewport to the given scene (open_new_viewport_scene_view picks a camera
+    // from the selection or the scene's cameras) instead of cloning the last
+    // hovered / single scene view.
+    std::shared_ptr<erhe::rendergraph::Rendergraph_node> rendergraph_output_node{};
+    std::shared_ptr<Viewport_scene_view> viewport_scene_view = open_new_viewport_scene_view(
+        rendergraph_output_node,
+        scene_root
+    );
+    create_viewport_window(
+        *m_app_context.imgui_renderer,
+        *m_app_context.imgui_windows,
+        *m_app_context.app_message_bus,
+        viewport_scene_view,
+        rendergraph_output_node,
+        "scene view",
+        ""
+    );
+}
+
 void Scene_views::debug_imgui()
 {
     if (m_hover_scene_view) {

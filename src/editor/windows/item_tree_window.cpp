@@ -24,6 +24,7 @@
 #include "tools/clipboard.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tool.hpp"
+#include "windows/editor_windows.hpp"
 
 #include "erhe_defer/defer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
@@ -881,6 +882,17 @@ void Item_tree::item_update_selection(const std::shared_ptr<erhe::Item_base>& it
                 set_item_selection(item, true);
                 set_item_selection_terminator(item);
             }
+        }
+    }
+
+    // Issue #252: double-click opens the item's editor (a Graph Mesh / Graph
+    // Texture -> its graph editor, a Scene -> a new viewport). Runs alongside
+    // the single-click selection above, which is fine - select-then-open is
+    // the natural result. Editor_windows self-defers the actual window
+    // creation, so this is safe from inside ImGui iteration.
+    if (hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+        if ((m_context.editor_windows != nullptr) && Editor_windows::item_has_editor(item)) {
+            m_context.editor_windows->open_editor_for_item(item);
         }
     }
 

@@ -93,6 +93,9 @@ public:
     ) -> std::shared_ptr<Viewport_window>;
 
     void open_new_viewport_scene_view_node();
+    // Issue #252: open a new viewport window bound to a specific scene (the
+    // scene "Open Editor" entry), instead of cloning the current view.
+    void open_new_viewport_scene_view_node(const std::shared_ptr<Scene_root>& scene_root);
 
     // Tear-down API for Scene_builder_viewport_resources_operation::undo.
     // Removes the viewport (and its matching post_processing_node, if
