@@ -215,14 +215,58 @@ Combo/popup pilot - proves the fake space is really gone:
   menu (needs a mouse click) is deferred to Phase 6 live user verification.
 - Broad stepper->combo conversion deferred to Phase C (noted in editor_improvements.md).
 
-### Phase 6 (remaining) - live user verification
+### Phase 6 (rendering bugs found + fixed; live interaction still open)
 
-Needs a display + mouse (headless can't drive it): open the combo and context
-menu by clicking; drag nodes; box-select; link create/delete by dragging;
-zoom-under-cursor anchoring keeps the point under the cursor fixed; no node-size
-jitter while zooming. Plus: re-run the zoom matrix and READ 2x/4x PNGs, open+
-screenshot the shader graph + rendergraph windows once, check font atlas growth
-across zoom levels. Restore config/editor/*.{ini,json} after runs.
+Initial user testing (report a-g in the old prompt_queue handoff) showed the
+Phase 2+3 flip changed the coordinate model but the CONSUMER node-content layout
+code was never updated for it. Root causes found and fixed:
+
+- **Node width did not scale, per-widget widths did not scale, text clipped
+  (bugs d/e).** The three graph node consumers (geometry / texture / shader)
+  laid node content out with fixed pixel constants (table columns 70/150,
+  `SetNextItemWidth(140)`, pin `half_extent` 10, texture preview 96) authored
+  for zoom == 1. After the flip node content is authored in SCREEN space at the
+  zoomed size, so every canvas-unit pixel metric must be multiplied by the view
+  scale. Fix: a `content_scale()` accessor on each node base, set from
+  `EditorContext::GetCurrentZoom()`, applied to all those constants. Commits
+  ab69475e (geometry), 46cd4341 (texture + shader).
+- **Sockets in sync in Y, out of sync in X; un-hittable (bugs f/g).** `show_pins`
+  built the pin rect from `edge_x = GetNodePosition().x` (CANVAS) but
+  `cell_center_y` from `GetItemRect` (SCREEN), then drew it directly and passed
+  the same mixed rect to `PinRect`. Fix: compute the edge in screen space
+  (`CanvasToScreen(node border).x`), build the visible square in screen space,
+  and pass `ScreenToCanvas(rect)` to `PinRect` (which stores canvas units the
+  editor draws/hit-tests in canvas space). Same three commits.
+- **Node background / border missing at certain zoom levels and while dragging
+  (bugs a/b).** `Detail::Object::IsVisible()` - which gates whether a node's
+  background+border is drawn - passed CANVAS bounds to `ImGui::IsRectVisible()`,
+  a SCREEN-space clip test. Pre-flip the window was faked into canvas space so it
+  matched; post-flip a node whose canvas coords fell outside the widget's screen
+  clip-rect numeric range was culled even when visible on screen, dropping its
+  background/border while the (separately submitted) content stayed. Fix: map
+  bounds through `Editor->ToScreen` before the test; moved out of line because
+  `Object` precedes `EditorContext`. Commit 8d32ff6e. Reproduced headless with a
+  before/after by positioning the graph window far from the screen origin so the
+  divergence triggers (`logs/zoom_buggy_1.png` vs `logs/zoom_farwin_1.png`).
+- **`EditorContext::GetCurrentZoom()` returned `InvScale`** (a latent reciprocal
+  bug, its only reference commented out). Fixed to return the view `Scale` -
+  node content needs the actual multiplier. Commit 53ae6eb5.
+- **erhe logging + zoom display (bugs c/a).** Added an `erhe.imgui.node_editor`
+  log category; zoom changes log through it (programmatic SetZoom at info,
+  mouse-wheel at trace). Each graph window shows the current canvas zoom in the
+  corner. Commit 53ae6eb5 + the per-window commits.
+
+Verified headless at zoom 0.5/1/2/4: node frames, widgets and pins scale
+together, text stays crisp, backgrounds render; geometry sweep 129/129, texture
+sweep 266/266. The pin coordinate fix was independently reviewed as correct.
+
+STILL OPEN (needs a display + mouse - headless cannot drive it): open the combo
+and context menu by clicking; drag nodes; box-select; create/delete a link by
+dragging (the PinRect fix should make sockets hittable now); mouse-wheel
+zoom-under-cursor keeps the point under the cursor fixed; no node-size jitter
+while zooming. Optional extras: open+screenshot the shader graph + rendergraph
+windows; font atlas growth check; live texture/shader zoom (no set-view MCP tool
+for those windows yet). Restore config/editor/*.{ini,json} after runs.
 
 ### Phase 2 remaining work (mouse/hit-test routing) - DONE, kept for reference
 
