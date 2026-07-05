@@ -91,6 +91,16 @@ struct Load_scene_file_message
     std::filesystem::path path{};
 };
 
+// Published after a scene bundle (#241) has been written to disk, by both the
+// File > Save Scene path (Operations::save_scene_to_bundle) and the MCP
+// save_scene tool. The Asset_browser subscribes and rescans so the freshly
+// saved bundle appears without a manual Scan (#256). The path is the saved
+// bundle directory.
+struct Scene_saved_message
+{
+    std::filesystem::path path{};
+};
+
 // Queued by the scene.create_new_scene command; handled by Scene_commands.
 // Queue-only so the scene (and its ImGui windows) is created by the message
 // bus pump, outside ImGui window iteration -- the command fires from a menu,

@@ -42,6 +42,9 @@ auto Mcp_server::action_save_scene(const json& args) -> std::string
     if (m_context.imgui_windows != nullptr) {
         m_context.imgui_windows->save_imgui_ini(editor::scene_imgui_ini_path(bundle).string());
     }
+    // Rescan the asset browser so the freshly saved bundle appears without a
+    // manual Scan (#256).
+    m_context.app_message_bus->scene_saved.send_message(Scene_saved_message{.path = bundle});
     return make_json_content({
         {"saved", true},
         {"path",  bundle.string()}

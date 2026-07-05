@@ -2412,10 +2412,15 @@ void Operations::save_scene()
 void Operations::save_scene_to_bundle(Scene_root& scene_root, const std::filesystem::path& bundle)
 {
     try {
-        if (editor::save_scene(scene_root, bundle) && (m_context.imgui_windows != nullptr)) {
-            // Persist the current window-docking layout inside the bundle so a later
-            // load can restore how the windows were docked at save time.
-            m_context.imgui_windows->save_imgui_ini(editor::scene_imgui_ini_path(bundle).string());
+        if (editor::save_scene(scene_root, bundle)) {
+            if (m_context.imgui_windows != nullptr) {
+                // Persist the current window-docking layout inside the bundle so a later
+                // load can restore how the windows were docked at save time.
+                m_context.imgui_windows->save_imgui_ini(editor::scene_imgui_ini_path(bundle).string());
+            }
+            // Rescan the asset browser so the freshly saved bundle appears without
+            // a manual Scan (#256).
+            m_context.app_message_bus->scene_saved.send_message(Scene_saved_message{.path = bundle});
         }
         log_operations->info("Scene '{}' saved to '{}'", scene_root.get_name(), erhe::file::to_string(bundle));
     } catch (...) {

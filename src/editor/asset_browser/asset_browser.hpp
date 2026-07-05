@@ -1,8 +1,11 @@
 #pragma once
 
+#include "app_message.hpp"
+
 #include "windows/item_tree_window.hpp"
 
 #include "erhe_item/hierarchy.hpp"
+#include "erhe_message_bus/message_bus.hpp"
 
 #include <glm/glm.hpp>
 
@@ -14,6 +17,7 @@ namespace erhe::imgui { class Imgui_windows; }
 namespace editor {
 
 class App_context;
+class App_message_bus;
 
 class Asset_node
     : public erhe::Item<erhe::Item_base, erhe::Hierarchy, Asset_node>
@@ -132,7 +136,8 @@ public:
     Asset_browser(
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
-        App_context&                 context
+        App_context&                 context,
+        App_message_bus&             app_message_bus
     );
 
     void scan();
@@ -159,6 +164,8 @@ private:
 
     std::shared_ptr<Asset_node>           m_root;
     std::shared_ptr<Asset_browser_window> m_node_tree_window;
+
+    erhe::message_bus::Subscription<Scene_saved_message> m_scene_saved_subscription;
 };
 
 }

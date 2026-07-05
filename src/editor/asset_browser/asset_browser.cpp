@@ -207,10 +207,23 @@ void Asset_browser_window::imgui()
     Item_tree_window::imgui();
 }
 
-Asset_browser::Asset_browser(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, App_context& context)
+Asset_browser::Asset_browser(
+    erhe::imgui::Imgui_renderer& imgui_renderer,
+    erhe::imgui::Imgui_windows&  imgui_windows,
+    App_context&                 context,
+    App_message_bus&             app_message_bus
+)
     : m_context{context}
 {
     ERHE_PROFILE_FUNCTION();
+
+    // A freshly saved scene bundle (#256) must appear in the browser without a
+    // manual Scan; rescan whenever a scene is saved to disk.
+    m_scene_saved_subscription = app_message_bus.scene_saved.subscribe(
+        [this](Scene_saved_message&) {
+            scan();
+        }
+    );
 
     m_node_tree_window = std::make_shared<Asset_browser_window>(
         *this,
