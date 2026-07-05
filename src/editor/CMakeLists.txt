@@ -185,7 +185,6 @@ erhe_target_sources_grouped(
     geometry_graph/geometry_graph_node.hpp
     geometry_graph/geometry_graph_node_factory.cpp
     geometry_graph/geometry_graph_node_factory.hpp
-    geometry_graph/geometry_graph_operations.cpp
     geometry_graph/geometry_graph_operations.hpp
     geometry_graph/geometry_graph_window.cpp
     geometry_graph/geometry_graph_window.hpp
@@ -255,6 +254,7 @@ erhe_target_sources_grouped(
     graph_editor/graph_editor_widgets.cpp
     graph_editor/graph_editor_widgets.hpp
     graph_editor/graph_editor_window_base.hpp
+    graph_editor/graph_operations.hpp
     graph_editor/graph_serialization.hpp
     graphics/gradients.cpp
     graphics/gradients.hpp
@@ -439,7 +439,6 @@ erhe_target_sources_grouped(
     texture_graph/texture_graph_node.hpp
     texture_graph/texture_graph_node_factory.cpp
     texture_graph/texture_graph_node_factory.hpp
-    texture_graph/texture_graph_operations.cpp
     texture_graph/texture_graph_operations.hpp
     texture_graph/texture_graph_widgets.cpp
     texture_graph/texture_graph_widgets.hpp

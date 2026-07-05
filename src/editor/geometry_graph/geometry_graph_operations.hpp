@@ -1,14 +1,6 @@
 #pragma once
 
-#include "operations/operation.hpp"
-
-#include <imgui/imgui.h>
-
-#include <memory>
-#include <string>
-#include <vector>
-
-namespace erhe::graph { class Pin; }
+#include "graph_editor/graph_operations.hpp"
 
 namespace editor {
 
@@ -16,113 +8,22 @@ class Geometry_graph_node;
 class Geometry_graph_window;
 class Graph_mesh;
 
-// A link endpoint pair, with owning-node shared pointers keeping the
-// Pin objects alive while the record sits in the undo / redo stacks.
-class Geometry_graph_link_record
+// Binds the shared graph undo / redo operations to the geometry graph. The
+// operation bodies live in graph_editor/graph_operations.hpp; distinct Traits
+// give distinct instantiations, so the geometry and texture graphs no longer
+// need identically-shaped copies kept apart by renaming.
+class Geometry_graph_op_traits
 {
 public:
-    std::shared_ptr<Geometry_graph_node> source_node;
-    std::shared_ptr<Geometry_graph_node> sink_node;
-    erhe::graph::Pin*                    source_pin{nullptr};
-    erhe::graph::Pin*                    sink_pin  {nullptr};
+    using Window = Geometry_graph_window;
+    using Asset  = Graph_mesh;
+    using Node   = Geometry_graph_node;
+    static constexpr const char* label = "Geometry graph";
 };
 
-[[nodiscard]] auto make_link_record(erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> Geometry_graph_link_record;
+using Geometry_graph_link_record                  = Graph_link_record<Geometry_graph_node>;
+using Geometry_graph_node_insert_remove_operation = Graph_node_insert_remove_operation<Geometry_graph_op_traits>;
+using Geometry_graph_parameter_operation          = Graph_parameter_operation<Geometry_graph_op_traits>;
+using Geometry_graph_link_insert_remove_operation = Graph_link_insert_remove_operation<Geometry_graph_op_traits>;
 
-// Undoable add / delete of one geometry graph node. Removing a node
-// also removes its links; they are recorded and restored on undo,
-// together with the node's position on the editor canvas.
-class Geometry_graph_node_insert_remove_operation : public Operation
-{
-public:
-    enum class Mode : unsigned int {
-        insert = 0,
-        remove
-    };
-
-    Geometry_graph_node_insert_remove_operation(
-        Geometry_graph_window&                      window,
-        const std::shared_ptr<Graph_mesh>&          graph_mesh,
-        const std::shared_ptr<Geometry_graph_node>& node,
-        Mode                                        mode
-    );
-
-    // Implements Operation
-    void execute(App_context& context) override;
-    void undo   (App_context& context) override;
-
-private:
-    void insert();
-    void remove();
-
-    Geometry_graph_window&                  m_window;
-    std::shared_ptr<Graph_mesh>             m_graph_mesh;
-    std::shared_ptr<Geometry_graph_node>    m_node;
-    Mode                                    m_mode;
-    std::vector<Geometry_graph_link_record> m_links;
-    ImVec2                                  m_position    {0.0f, 0.0f};
-    bool                                    m_has_position{false};
-};
-
-// Undoable change of one node's parameters. Holds before / after
-// parameter state as write_parameters() JSON dumps, applied through
-// read_parameters(). The new values are already live when the operation
-// is pushed (widget edit gestures commit on completion, and
-// Geometry_graph_window::set_node_parameters() applies before pushing),
-// so the first execute() skips the apply; redo applies normally.
-class Geometry_graph_parameter_operation : public Operation
-{
-public:
-    Geometry_graph_parameter_operation(
-        Geometry_graph_window&                      window,
-        const std::shared_ptr<Geometry_graph_node>& node,
-        std::string&&                               before_parameters,
-        std::string&&                               after_parameters
-    );
-
-    // Implements Operation
-    void execute(App_context& context) override;
-    void undo   (App_context& context) override;
-
-private:
-    void apply(const std::string& parameters);
-
-    Geometry_graph_window&               m_window;
-    std::shared_ptr<Geometry_graph_node> m_node;
-    std::string                          m_before_parameters;
-    std::string                          m_after_parameters;
-    bool                                 m_first_execute{true};
-};
-
-// Undoable connect / disconnect of one geometry graph link.
-class Geometry_graph_link_insert_remove_operation : public Operation
-{
-public:
-    enum class Mode : unsigned int {
-        insert = 0,
-        remove
-    };
-
-    Geometry_graph_link_insert_remove_operation(
-        Geometry_graph_window&             window,
-        const std::shared_ptr<Graph_mesh>& graph_mesh,
-        erhe::graph::Pin*                  source_pin,
-        erhe::graph::Pin*                  sink_pin,
-        Mode                               mode
-    );
-
-    // Implements Operation
-    void execute(App_context& context) override;
-    void undo   (App_context& context) override;
-
-private:
-    void insert();
-    void remove();
-
-    Geometry_graph_window&      m_window;
-    std::shared_ptr<Graph_mesh> m_graph_mesh;
-    Geometry_graph_link_record  m_link;
-    Mode                        m_mode;
-};
-
-}
+} // namespace editor
