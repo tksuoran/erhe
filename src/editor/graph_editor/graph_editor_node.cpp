@@ -185,6 +185,20 @@ void Graph_editor_node::show_pins(
     // editor maps them back to screen and hit-tests in canvas space), so the
     // screen rect is mapped back with ScreenToCanvas.
     const float half_extent = 10.0f * m_content_scale;
+
+    // Pin labels use a slightly smaller font than the node body so they read as
+    // secondary text and leave more clearance from the socket squares. The node
+    // content pushed its own font at (base * zoom), so scale that pushed base.
+    ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 0.85f);
+    ERHE_DEFER( ImGui::PopFont(); );
+
+    // Straddle the node border so 1/4 of the socket sits inside the node and
+    // 3/4 outside (the square is 2 * half_extent wide, so the center shifts
+    // half_extent * 0.5 toward the outside). The socket then intrudes only
+    // half_extent * 0.5 (= 5 * scale) past the border - clear of the pin label,
+    // which starts one NodePadding (8 * scale) inside - so the two no longer
+    // overlap. "Outside" is left for the input edge, right for the output edge.
+    const float pin_offset = 0.5f * half_extent;
     for (const erhe::graph::Pin& pin : pins) {
         if (right_edge) {
             const float column_width = ImGui::GetColumnWidth();
@@ -197,7 +211,8 @@ void Graph_editor_node::show_pins(
         const ImVec2 cell_min      = ImGui::GetItemRectMin();
         const ImVec2 cell_max      = ImGui::GetItemRectMax();
         const float  cell_center_y = 0.5f * (cell_min.y + cell_max.y);
-        const ImVec2 pin_center{edge_x, cell_center_y};
+        const float  pin_center_x  = right_edge ? (edge_x + pin_offset) : (edge_x - pin_offset);
+        const ImVec2 pin_center{pin_center_x, cell_center_y};
         const ImVec2 min{pin_center.x - half_extent, pin_center.y - half_extent};
         const ImVec2 max{pin_center.x + half_extent, pin_center.y + half_extent};
 
