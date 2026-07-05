@@ -59,8 +59,8 @@ Geometry_graph_window::Geometry_graph_window(
     std::string_view             title,
     std::string_view             ini_label
 )
-    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, title, ini_label}
-    , m_app_context            {app_context}
+    : Graph_editor_window_base{imgui_renderer, imgui_windows, title, ini_label}
+    , m_app_context           {app_context}
 {
     // The window edits an explicit target Graph_mesh (issue #252); when the
     // target is unset it shows an empty state (see resolve_target).
@@ -932,21 +932,6 @@ void Geometry_graph_window::handle_deletions()
         }
     }
     m_node_editor->EndDelete();
-}
-
-Geometry_graph_palette_window::Geometry_graph_palette_window(
-    erhe::imgui::Imgui_renderer& imgui_renderer,
-    erhe::imgui::Imgui_windows&  imgui_windows,
-    Geometry_graph_window&       graph_window
-)
-    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Geometry Graph Palette", "geometry_graph_palette"}
-    , m_graph_window           {graph_window}
-{
-}
-
-void Geometry_graph_palette_window::imgui()
-{
-    m_graph_window.controls_imgui();
 }
 
 }

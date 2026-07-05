@@ -59,8 +59,8 @@ Texture_graph_window::Texture_graph_window(
     std::string_view             title,
     std::string_view             ini_label
 )
-    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, title, ini_label}
-    , m_app_context            {app_context}
+    : Graph_editor_window_base{imgui_renderer, imgui_windows, title, ini_label}
+    , m_app_context           {app_context}
 {
     // The window edits an explicit target Graph_texture (issue #252); when the
     // target is unset it shows an empty state (see resolve_target).
@@ -674,21 +674,6 @@ void Texture_graph_window::handle_deletions()
         }
     }
     m_node_editor->EndDelete();
-}
-
-Texture_graph_palette_window::Texture_graph_palette_window(
-    erhe::imgui::Imgui_renderer& imgui_renderer,
-    erhe::imgui::Imgui_windows&  imgui_windows,
-    Texture_graph_window&        graph_window
-)
-    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Texture Graph Palette", "texture_graph_palette"}
-    , m_graph_window           {graph_window}
-{
-}
-
-void Texture_graph_palette_window::imgui()
-{
-    m_graph_window.controls_imgui();
 }
 
 } // namespace editor

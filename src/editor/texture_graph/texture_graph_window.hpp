@@ -2,6 +2,7 @@
 
 #include "texture_graph/texture_graph.hpp"
 #include "texture_graph/texture_renderer.hpp"
+#include "graph_editor/graph_editor_window_base.hpp"
 
 #include "erhe_imgui/imgui_window.hpp"
 
@@ -48,7 +49,7 @@ class Texture_graph_node;
 // preview / output rendering, serialization, undo/redo and the MCP surface are
 // added in later steps; the edit methods below are structured so those bolt on
 // the way they do for the geometry graph.
-class Texture_graph_window : public erhe::imgui::Imgui_window
+class Texture_graph_window : public Graph_editor_window_base
 {
 public:
     // title / ini_label default to the primary singleton's values; the
@@ -64,7 +65,7 @@ public:
     ~Texture_graph_window() noexcept override;
 
     // Implements Imgui_window. Renders the ax::NodeEditor canvas only; the
-    // node palette lives in the companion Texture_graph_palette_window
+    // node palette lives in the companion Graph_editor_palette_window
     // (see controls_imgui()) so the two can be laid out independently.
     void imgui() override;
     auto flags() -> ImGuiWindowFlags override;
@@ -74,7 +75,7 @@ public:
     // palette window, not from this window's imgui(). Kept here because it
     // operates on this window's graph state and must stay outside the
     // ax::NodeEditor canvas Begin/End.
-    void controls_imgui();
+    void controls_imgui() override;
 
     // Runs the synchronous dirty-flag evaluation. Called once per frame from
     // the editor main loop (see editor.cpp) so the graph stays evaluated even
@@ -200,25 +201,6 @@ private:
     std::string                                      m_palette_filter;     // node-palette search text
     // Reused scratch for the target selector's picker (cleared + refilled each frame).
     std::vector<std::shared_ptr<erhe::Item_base>>    m_target_candidates;
-};
-
-// Companion window hosting the Texture Graph's node palette, so the palette
-// and the canvas can be docked / sized independently. It owns no graph state;
-// it forwards to Texture_graph_window::controls_imgui().
-class Texture_graph_palette_window : public erhe::imgui::Imgui_window
-{
-public:
-    Texture_graph_palette_window(
-        erhe::imgui::Imgui_renderer& imgui_renderer,
-        erhe::imgui::Imgui_windows&  imgui_windows,
-        Texture_graph_window&        graph_window
-    );
-
-    // Implements Imgui_window
-    void imgui() override;
-
-private:
-    Texture_graph_window& m_graph_window;
 };
 
 } // namespace editor

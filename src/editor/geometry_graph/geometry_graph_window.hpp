@@ -1,6 +1,7 @@
 #pragma once
 
 #include "geometry_graph/geometry_graph.hpp"
+#include "graph_editor/graph_editor_window_base.hpp"
 
 #include "erhe_imgui/imgui_window.hpp"
 
@@ -62,7 +63,7 @@ class Graph_mesh;
 // output nodes' evaluated scene products) are copied back on the main
 // thread. At most one run is in flight at a time; edits made while a
 // run is in flight simply re-mark nodes dirty and trigger the next run.
-class Geometry_graph_window : public erhe::imgui::Imgui_window
+class Geometry_graph_window : public Graph_editor_window_base
 {
 public:
     // title / ini_label default to the primary singleton's values; the
@@ -78,7 +79,7 @@ public:
     ~Geometry_graph_window() noexcept override;
 
     // Implements Imgui_window. Renders the ax::NodeEditor canvas only; the
-    // node palette lives in the companion Geometry_graph_palette_window
+    // node palette lives in the companion Graph_editor_palette_window
     // (see controls_imgui()) so the two can be laid out independently.
     void imgui() override;
     auto flags() -> ImGuiWindowFlags override;
@@ -87,7 +88,7 @@ public:
     // and the node-creation palette, plus the background-evaluation status
     // line. Called by the companion palette window, not from this window's
     // imgui().
-    void controls_imgui();
+    void controls_imgui() override;
 
     // Undoable edits: each creates an Operation and executes it through
     // the operation stack. Used by the toolbar / canvas gestures and the
@@ -250,25 +251,6 @@ private:
     std::string                                       m_palette_filter;     // node-palette search text
     // Reused scratch for the target selector's picker (cleared + refilled each frame).
     std::vector<std::shared_ptr<erhe::Item_base>>     m_target_candidates;
-};
-
-// Companion window hosting the Geometry Graph's node palette, so the palette
-// and the canvas can be docked / sized independently. It owns no graph state;
-// it forwards to Geometry_graph_window::controls_imgui().
-class Geometry_graph_palette_window : public erhe::imgui::Imgui_window
-{
-public:
-    Geometry_graph_palette_window(
-        erhe::imgui::Imgui_renderer& imgui_renderer,
-        erhe::imgui::Imgui_windows&  imgui_windows,
-        Geometry_graph_window&       graph_window
-    );
-
-    // Implements Imgui_window
-    void imgui() override;
-
-private:
-    Geometry_graph_window& m_graph_window;
 };
 
 }

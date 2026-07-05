@@ -63,6 +63,7 @@
 #include "experiments/sheet_window.hpp"
 #include "geometry_graph/geometry_graph_window.hpp"
 #include "graph/graph_window.hpp"
+#include "graph_editor/graph_editor_palette_window.hpp"
 #include "graph/node_properties.hpp"
 #include "graphics/icon_set.hpp"
 #include "graphics/thumbnails.hpp"
@@ -1504,9 +1505,9 @@ public:
                 m_clipboard_window       = std::make_unique<Clipboard_window                >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_commands_window        = std::make_unique<Commands_window                 >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_geometry_graph_window  = std::make_unique<Geometry_graph_window           >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
-                m_geometry_graph_palette_window = std::make_unique<Geometry_graph_palette_window>(*m_imgui_renderer.get(), *m_imgui_windows.get(), *m_geometry_graph_window.get());
+                m_geometry_graph_palette_window = std::make_unique<Graph_editor_palette_window>(*m_imgui_renderer.get(), *m_imgui_windows.get(), *m_geometry_graph_window.get(), "Geometry Graph Palette", "geometry_graph_palette");
                 m_texture_graph_window   = std::make_unique<Texture_graph_window            >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
-                m_texture_graph_palette_window  = std::make_unique<Texture_graph_palette_window >(*m_imgui_renderer.get(), *m_imgui_windows.get(), *m_texture_graph_window.get());
+                m_texture_graph_palette_window  = std::make_unique<Graph_editor_palette_window>(*m_imgui_renderer.get(), *m_imgui_windows.get(), *m_texture_graph_window.get(), "Texture Graph Palette", "texture_graph_palette");
                 m_graph_window           = std::make_unique<Graph_window                    >(*m_commands.get(),       *m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
                 m_node_properties_window = std::make_unique<Node_properties_window          >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_gradient_editor        = std::make_unique<Gradient_editor                 >(*m_imgui_renderer.get(), *m_imgui_windows.get());
@@ -3017,9 +3018,9 @@ public:
     std::unique_ptr<Clipboard_window                >        m_clipboard_window;
     std::unique_ptr<Commands_window                 >        m_commands_window;
     std::unique_ptr<Geometry_graph_window           >        m_geometry_graph_window;
-    std::unique_ptr<Geometry_graph_palette_window   >        m_geometry_graph_palette_window;
+    std::unique_ptr<Graph_editor_palette_window     >        m_geometry_graph_palette_window;
     std::unique_ptr<Texture_graph_window            >        m_texture_graph_window;
-    std::unique_ptr<Texture_graph_palette_window    >        m_texture_graph_palette_window;
+    std::unique_ptr<Graph_editor_palette_window     >        m_texture_graph_palette_window;
     std::unique_ptr<Graph_window                    >        m_graph_window;
     std::unique_ptr<Node_properties_window          >        m_node_properties_window;
     std::unique_ptr<Gradient_editor                 >        m_gradient_editor;
