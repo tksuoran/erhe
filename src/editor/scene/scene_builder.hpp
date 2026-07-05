@@ -92,6 +92,11 @@ public:
     // Public API
     [[nodiscard]] auto get_scene_root() const -> std::shared_ptr<Scene_root>;
 
+    // The content library the standard brushes are built into at editor init.
+    // Shared with the default scene; used as the brush source when a new scene
+    // is created (Scene_commands::create_new_scene, #259).
+    [[nodiscard]] auto get_content_library() const -> std::shared_ptr<Content_library>;
+
     // The Scene_root is created later (by the scene.create startup command,
     // not at editor init), so Scene_builder is constructed with only the
     // content library (brushes are built into it eagerly) and the scene_root

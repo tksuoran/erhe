@@ -9,6 +9,7 @@
 #include "app_settings.hpp"
 #include "app_windows.hpp"
 #include "content_library/content_library.hpp"
+#include "content_library/material_library.hpp"
 #include "editor_log.hpp"
 #include "grid/grid.hpp"
 #include "scene/frame_controller.hpp"
@@ -499,6 +500,37 @@ auto Scene_commands::get_scene_root(erhe::primitive::Material* material) const -
     return scene_root;
 }
 
+namespace {
+
+// Recursively mirror a content-library subtree into another library, creating
+// fresh Content_library_node wrappers that share the same underlying items.
+// Folders (item == nullptr) are recreated; leaf entries (e.g. Brush) are shared
+// by reference. Sharing is safe because the brushes are read-only, procedurally
+// generated library primitives with no per-scene state -- each scene gets its
+// own tree structure while the (expensive to build) Brush objects and their GPU
+// buffers are reused rather than rebuilt. See Scene_commands::create_new_scene.
+void share_content_library_folder(const Content_library_node& src_folder, Content_library_node& dst_folder)
+{
+    for (const std::shared_ptr<erhe::Hierarchy>& child_hierarchy : src_folder.get_children()) {
+        const std::shared_ptr<Content_library_node> src_child = std::dynamic_pointer_cast<Content_library_node>(child_hierarchy);
+        if (!src_child) {
+            continue;
+        }
+        if (src_child->item) {
+            std::shared_ptr<Content_library_node> dst_child = std::make_shared<Content_library_node>(src_child->item);
+            dst_child->gltf_source = src_child->gltf_source;
+            dst_child->set_parent(&dst_folder);
+            // Leaves have no children in practice, but recurse for generality.
+            share_content_library_folder(*src_child, *dst_child);
+        } else {
+            std::shared_ptr<Content_library_node> dst_child = dst_folder.make_folder(src_child->get_name());
+            share_content_library_folder(*src_child, *dst_child);
+        }
+    }
+}
+
+} // anonymous namespace
+
 auto Scene_commands::create_new_scene() -> std::shared_ptr<Scene_root>
 {
     // Name new scenes uniquely so they stay distinguishable in the Hierarchy
@@ -520,10 +552,28 @@ auto Scene_commands::create_new_scene() -> std::shared_ptr<Scene_root>
         }
     }
 
-    // Like a loaded scene (and unlike the scene.create default scene, whose
-    // library is populated by the scene.add_* startup commands), the new scene
-    // gets its own, empty content library.
+    // The new scene gets its own content library. It starts empty, but is then
+    // populated with the standard brushes shared from the default content
+    // library (where Scene_builder builds them at editor init) so the scene can
+    // immediately be used to place content. Without this the Content Library
+    // under the new scene has no brushes (#259). The brushes are shared by
+    // reference rather than rebuilt -- see share_content_library_folder.
     std::shared_ptr<Content_library> content_library = std::make_shared<Content_library>();
+    if (m_context.scene_builder != nullptr) {
+        const std::shared_ptr<Content_library> brush_source = m_context.scene_builder->get_content_library();
+        if (brush_source && brush_source->brushes && content_library->brushes) {
+            std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{brush_source->mutex};
+            share_content_library_folder(*brush_source->brushes, *content_library->brushes);
+        }
+    }
+    // The default scene starts with a set of default materials (added at editor
+    // init alongside the brushes). A brush cannot be placed without a material
+    // in the scene's own content library -- the interactive Brush_tool and the
+    // MCP place_brush both pick a material from it -- so give the new scene the
+    // same default materials. These are fresh per-scene objects (unlike the
+    // shared, read-only brushes) so material edits stay scene-local.
+    add_default_materials(*content_library);
+    add_default_physics_materials(*content_library);
     const bool enable_physics = m_context.editor_settings->physics.static_enable;
     std::shared_ptr<Scene_root> scene_root = std::make_shared<Scene_root>(
         m_context.app_message_bus,

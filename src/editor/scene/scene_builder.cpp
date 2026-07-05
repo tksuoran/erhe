@@ -118,6 +118,11 @@ Scene_builder::~Scene_builder() noexcept
 {
 }
 
+auto Scene_builder::get_content_library() const -> std::shared_ptr<Content_library>
+{
+    return m_content_library;
+}
+
 auto Scene_builder::make_camera(std::string_view name, vec3 position, vec3 look_at, float z_near, float z_far, float exposure, float shadow_range) -> std::shared_ptr<erhe::scene::Node>
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
