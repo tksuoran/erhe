@@ -214,6 +214,19 @@ auto Hotbar_rotate_tool_command::try_call() -> bool
     return true;
 }
 
+Hotbar_activate_slot_command::Hotbar_activate_slot_command(erhe::commands::Commands& commands, App_context& context, std::size_t slot_index)
+    : Command    {commands, "Hotbar.activate_slot"}
+    , m_context  {context}
+    , m_slot_index{slot_index}
+{
+}
+
+auto Hotbar_activate_slot_command::try_call() -> bool
+{
+    m_context.hotbar->activate_slot(m_slot_index);
+    return true;
+}
+
 #pragma endregion Commands
 
 Hotbar::Hotbar(
@@ -282,6 +295,20 @@ Hotbar::Hotbar(
     m_toggle_visibility_command.set_host(this);
     m_prev_tool_command        .set_host(this);
     m_next_tool_command        .set_host(this);
+
+    // Minecraft-style number-key slot activation: keys 1..9 select slots 1..9 and
+    // key 0 selects slot 10 (indices 0..9). The number keys are consecutive
+    // keycodes (Key_1..Key_9), with Key_0 handled separately at the end.
+    for (std::size_t slot_index = 0; slot_index < key_slot_count; ++slot_index) {
+        std::unique_ptr<Hotbar_activate_slot_command>& command =
+            m_activate_slot_commands.emplace_back(std::make_unique<Hotbar_activate_slot_command>(commands, app_context, slot_index));
+        const erhe::window::Keycode key = (slot_index < 9)
+            ? static_cast<erhe::window::Keycode>(erhe::window::Key_1 + slot_index)
+            : erhe::window::Key_0;
+        commands.register_command   (command.get());
+        commands.bind_command_to_key(command.get(), key, true);
+        command->set_host(this);
+    }
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     commands.register_command(&m_trackpad_command);
@@ -853,6 +880,20 @@ void Hotbar::rotate_tool(int direction)
     if (m_slot != old_slot) {
         handle_slot_update();
     }
+}
+
+void Hotbar::activate_slot(const std::size_t index)
+{
+    if (!m_enabled) {
+        return;
+    }
+    // The hotbar shows one slot per registered entry; number keys beyond the
+    // current slot count simply do nothing (e.g. key 0 with fewer than 10 slots).
+    if ((index < m_slot_first) || (index > m_slot_last) || (index >= m_slots.size())) {
+        return;
+    }
+    m_slot = index;
+    handle_slot_update();
 }
 
 auto Hotbar::get_color(const int color) -> glm::vec4&

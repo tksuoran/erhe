@@ -97,6 +97,18 @@ private:
     int m_rotate_direction;
 };
 
+// Activates a fixed hotbar slot (Minecraft-style number keys 1..0 -> slots 1..10).
+class Hotbar_activate_slot_command : public erhe::commands::Command
+{
+public:
+    Hotbar_activate_slot_command(erhe::commands::Commands& commands, App_context& context, std::size_t slot_index);
+    auto try_call() -> bool override;
+
+private:
+    App_context& m_context;
+    std::size_t  m_slot_index;
+};
+
 class Hotbar_thumbstick_command : public erhe::commands::Command
 {
 public:
@@ -145,9 +157,13 @@ public:
     void set_slots             (const std::vector<Slot_entry>& slots);
     void rebuild_if_needed     ();
 
+    // Number of number-key hotbar slots (Minecraft-style: keys 1..9,0 -> slots 1..10).
+    static constexpr std::size_t key_slot_count = 10;
+
     // Public API
     auto try_trackpad          (erhe::commands::Input_arguments& input) -> bool;
     void rotate_tool           (int direction);
+    void activate_slot         (std::size_t index); // select slot by index (0-based); no-op if out of range
     auto get_color             (int color) -> glm::vec4&;
     auto toggle_mesh_visibility() -> bool;
     void set_mesh_visibility   (bool value);
@@ -185,6 +201,9 @@ private:
     Toggle_menu_visibility_command            m_toggle_visibility_command;
     Hotbar_rotate_tool_command                m_prev_tool_command;
     Hotbar_rotate_tool_command                m_next_tool_command;
+    // One command per number-key slot (keys 1..9,0 -> slots 1..10). unique_ptr so
+    // the non-movable Command objects can live in a vector built in the ctor body.
+    std::vector<std::unique_ptr<Hotbar_activate_slot_command>> m_activate_slot_commands;
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     Hotbar_trackpad_command                   m_trackpad_command;
     erhe::commands::Xr_vector2f_click_command m_trackpad_click_command;
