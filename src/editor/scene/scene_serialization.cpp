@@ -1565,6 +1565,16 @@ auto load_scene(
         // hull shapes are rebuilt from the source node's mesh geometry
         // (absent source_node_id = the owning node).
         std::shared_ptr<erhe::physics::ICollision_shape> collision_shape{};
+        // Convex-hull / triangle-mesh shapes are rebuilt from a node's mesh
+        // geometry rather than from serialized base dimensions. That mesh is
+        // saved at its final, already-scaled size (Brush::create_scaled bakes a
+        // non-unit placement scale into a copied geometry, and save_scene writes
+        // that scaled geometry), so the rebuilt shape is already at world size
+        // and the serialized scale must NOT be applied on top of it - doing so
+        // scales it a second time (#246). Parameterized shapes (box, sphere,
+        // ...) instead serialize scale-independent base dimensions, so for them
+        // the scale wrapper is applied below.
+        bool shape_rebuilt_from_mesh = false;
         if ((shape_data.type == Collision_shape_type_serial::e_convex_hull) || (shape_data.type == Collision_shape_type_serial::e_mesh)) {
             const erhe::scene::Node* source_node = node.get();
             if (shape_data.source_node_id.has_value()) {
@@ -1577,6 +1587,7 @@ auto load_scene(
             }
             const bool convex_hull = (shape_data.type == Collision_shape_type_serial::e_convex_hull);
             collision_shape = build_shape_from_node_mesh(source_node, convex_hull);
+            shape_rebuilt_from_mesh = true;
             if (!collision_shape) {
                 log_parsers->warn("load_scene: could not rebuild {} shape for node '{}'", convex_hull ? "convex hull" : "mesh", node->get_name());
             }
@@ -1588,6 +1599,7 @@ auto load_scene(
         // mesh geometry attached to this node
         if (!collision_shape) {
             collision_shape = build_shape_from_node_mesh(node.get(), true);
+            shape_rebuilt_from_mesh = true;
         }
 
         if (!collision_shape) {
@@ -1596,8 +1608,9 @@ auto load_scene(
 
         // Re-apply wrapper shapes serialized as flat fields: scale first
         // (closest to the base shape), then the center of mass offset (the
-        // order Node_physics::set_center_of_mass_offset() maintains).
-        if (shape_data.scale.has_value()) {
+        // order Node_physics::set_center_of_mass_offset() maintains). The scale
+        // is skipped for mesh-rebuilt shapes (already at scaled size, see above).
+        if (shape_data.scale.has_value() && !shape_rebuilt_from_mesh) {
             const glm::vec3 scale = shape_data.scale.value();
             if ((scale.x == scale.y) && (scale.y == scale.z)) {
                 collision_shape = erhe::physics::ICollision_shape::create_uniform_scaling_shape_shared(collision_shape, scale.x);
