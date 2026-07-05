@@ -1,5 +1,21 @@
 §MBEL:5.0
 
+[TASK::PhaseC-graph-editor-dedup-2026-07-05]
+@status::✓CORE-DONE{7-extractions-C1..C7,branch-crease;doc/graph-editor-shared-plan.md-Implementation-Status-table}
+@goal::de-dup-3-erhe::graph-consumers{shader-graph|geometry-graph+Graph_mesh|texture-graph+Graph_texture}→shared-src/editor/graph_editor/
+>commits::5a211b01..f85e3f56
+5a211b01::C1-shared-canvas-steppers{graph_editor_widgets.*;removed-ODR-rename-hack:texture_index/enum_stepper-were-renamed-copies-of-imgui_*;13-call-sites-repointed}
+47ea0763::C2-Graph_editor_window_base{Imgui_window-subclass,pure-virtual-controls_imgui}+one-Graph_editor_palette_window{replaced-2-byte-identical-palette-windows}
+f8c7b5a1::C3-Graph_asset<Self,GraphT,NodeT>-CRTP-base{over-erhe::Item<...,not_clonable>;m_graph+m_nodes+ctors+accessors;Graph_texture-keeps-Texture_reference-pull,Graph_mesh-keeps-baked-products-push}
+1cf42f39::C4-graph_serialization.hpp-templates{write/read_graph_asset_json;read<Asset,GraphT,Node,make-fn,set-owning-lambda>;GraphT-needed-bc-mark_dirty-on-derived-not-erhe::graph::Graph;wrappers-thin}
+c985c352::C5-graph_operations.hpp-undo-op-templates{over-Traits{Window,Asset,Node,label};per-editor-headers=traits+using-aliases;deleted-geometry+texture-operations.cpp}
+ebf69fc6::C6-Graph_editor_node-payload-agnostic-node-base{NON-template;owns-node_editor/show_pins/dirty/factory-name/param-plumbing;3-hooks:pin_key_color+commit_parameter_operation+after_node_content{tex=draw_preview};mark_dirty-virtual{tex-also-sets-m_preview_needs_render};concrete-node-names-unchanged→~34-node-files-untouched}
+f85e3f56::C7-shared-node-palette-in-Graph_editor_window_base{Palette_entry/Category+filter/categories+node_palette();hooks-build_palette()+add_node_from_palette()}
+!shader-graph-src/editor/graph/-LEFT-AS-IS{degenerate-predecessor:no-dirty/params/undo/factory/asset,fixed-struct-payload,global-selection-sync}
+DEFERRED-optional{doc-recorded}::C7-remainder{window-canvas-render-loop+link-create/delete+node-positions+m_node_editor→base;C6-made-node-iteration-payload-blind-via-Graph_editor_node-cast;hooks-needed=graph()->Graph*+connect/disconnect/remove_node;HIGHER-RISK-interactive-per-frame-path-next-to-async-engine+#252-target-model}|C8{~9-twin-MCP-tool-bodies-mcp_server_graphs.cpp+2-scene_root-Create-branches+parallel-scene-save/load-blocks}
+VERIFY::each-step-ninja-vulkan+headless-build+BOTH-sweeps{geom-129/129+tex-266/266,FRESH-editor-per-sweep}+C7-palette-screenshot-read{Texture-Graph-Palette-renders:filter-box+Clear+category-header}
+!verify-gotcha::run-each-sweep-in-FRESH-editor{same-process-geom-then-tex=texture-bake-pollution-~11-has_output:false}|get_server_info-"build"-timestamp-lags{__DATE__-TU-compile-time-not-link-time→trust-pid}
+
 [TASK::#252-independent-target-2026-07-05]
 @status::✓DONE{5-phases,branch-crease;doc/252.md-Implementation-Status-section}
 >commits::7d80b0e8..3df49974

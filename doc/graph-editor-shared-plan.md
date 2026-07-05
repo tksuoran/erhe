@@ -50,7 +50,7 @@ the two smoke sweeps verify after every step.
 | C4: Shared graph-JSON serializer template                                     | DONE   | 1cf42f39 |
 | C5: Shared undo-operations template                                           | DONE   | c985c352 |
 | C6: Shared node base `Graph_editor_node` (payload-agnostic, 3 hooks)          | DONE   | ebf69fc6 |
-| C7: Shared node palette in `Graph_editor_window_base` (canvas/link deferred)  | DONE   | (this commit) |
+| C7: Shared node palette in `Graph_editor_window_base` (canvas/link deferred)  | DONE   | f85e3f56 |
 | C7-remainder: canvas render loop + link create/delete + node positions        | DEFERRED | -    |
 | C8 (optional): MCP + create-UI + scene save/load helper dedup                 | DEFERRED | -    |
 
