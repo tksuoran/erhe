@@ -255,6 +255,7 @@ erhe_target_sources_grouped(
     graph_editor/graph_editor_widgets.cpp
     graph_editor/graph_editor_widgets.hpp
     graph_editor/graph_editor_window_base.hpp
+    graph_editor/graph_serialization.hpp
     graphics/gradients.cpp
     graphics/gradients.hpp
     graphics/icon_set.cpp
