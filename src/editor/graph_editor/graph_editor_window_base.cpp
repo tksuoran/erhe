@@ -1,5 +1,7 @@
 #include "graph_editor/graph_editor_window_base.hpp"
 
+#include "erhe_imgui/imgui_node_editor.h"
+
 #include <imgui/imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
 
@@ -66,6 +68,35 @@ void Graph_editor_window_base::node_palette()
             }
         }
     }
+}
+
+void Graph_editor_window_base::node_background_context_menu(ax::NodeEditor::EditorContext& node_editor)
+{
+    // Suspend()/Resume() bracket the popup out of the node-editor's channel
+    // splitter; ShowBackgroundContextMenu() reports a right-click on the canvas
+    // background (using the editor's own gesture, so it does not conflict with
+    // right-drag navigation). The str_id is hashed against the host window's ID
+    // stack, so each graph window (incl. the issue-#252 extra instances) gets a
+    // distinct popup.
+    node_editor.Suspend();
+    if (node_editor.ShowBackgroundContextMenu()) {
+        ImGui::OpenPopup("graph_editor_background_menu");
+    }
+    if (ImGui::BeginPopup("graph_editor_background_menu")) {
+        build_palette();
+        for (const Palette_category& category : m_palette_categories) {
+            if (ImGui::BeginMenu(category.name.c_str())) {
+                for (const Palette_entry& entry : category.entries) {
+                    if (ImGui::MenuItem(entry.label.c_str())) {
+                        add_node_from_palette(entry.type_name);
+                    }
+                }
+                ImGui::EndMenu();
+            }
+        }
+        ImGui::EndPopup();
+    }
+    node_editor.Resume();
 }
 
 } // namespace editor

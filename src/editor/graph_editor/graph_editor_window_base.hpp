@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+namespace ax::NodeEditor { class EditorContext; }
+
 namespace editor {
 
 // Common base for the node-graph editor windows (the geometry graph and the
@@ -44,6 +46,12 @@ protected:
     // reads m_palette_categories (filled lazily by build_palette()) and spawns
     // via add_node_from_palette().
     void node_palette();
+
+    // Right-click "Add node" menu on the canvas background: a submenu per
+    // palette category whose items spawn a node. Call inside the ax::NodeEditor
+    // Begin/End, bracketed by the editor's own Suspend/Resume. The editor
+    // context is still owned by the concrete window (passed in here).
+    void node_background_context_menu(ax::NodeEditor::EditorContext& node_editor);
 
     // Fills m_palette_categories once (the node set is fixed per editor).
     virtual void build_palette() = 0;

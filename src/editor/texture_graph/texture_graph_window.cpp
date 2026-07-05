@@ -536,6 +536,10 @@ void Texture_graph_window::imgui()
     handle_link_create();
     handle_deletions();
 
+    // Right-click "Add node" menu on the canvas background (shared with the
+    // geometry graph via Graph_editor_window_base).
+    node_background_context_menu(*m_node_editor.get());
+
     m_node_editor->End();
 
     // Issue #251 (bug a): show the current canvas zoom in the corner so

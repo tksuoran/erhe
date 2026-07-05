@@ -758,31 +758,9 @@ void Geometry_graph_window::imgui()
     handle_link_create();
     handle_deletions();
 
-    // Issue #251 pilot: a canvas-background context menu ("Add node"). This
-    // proves a popup opens on the canvas background now that the faked
-    // coordinate space is gone. Suspend()/Resume() bracket the popup out of the
-    // node-editor's channel splitter; ShowBackgroundContextMenu() reports a
-    // right-click on the background (using the editor's own gesture, so it does
-    // not conflict with right-drag navigation).
-    m_node_editor->Suspend();
-    if (m_node_editor->ShowBackgroundContextMenu()) {
-        ImGui::OpenPopup("geometry_graph_background_menu");
-    }
-    if (ImGui::BeginPopup("geometry_graph_background_menu")) {
-        build_palette();
-        for (const Palette_category& category : m_palette_categories) {
-            if (ImGui::BeginMenu(category.name.c_str())) {
-                for (const Palette_entry& entry : category.entries) {
-                    if (ImGui::MenuItem(entry.label.c_str())) {
-                        add_node_of_type(entry.type_name);
-                    }
-                }
-                ImGui::EndMenu();
-            }
-        }
-        ImGui::EndPopup();
-    }
-    m_node_editor->Resume();
+    // Right-click "Add node" menu on the canvas background (shared with the
+    // texture graph via Graph_editor_window_base).
+    node_background_context_menu(*m_node_editor.get());
 
     m_node_editor->End();
 
