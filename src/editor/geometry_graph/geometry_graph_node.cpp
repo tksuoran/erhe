@@ -253,19 +253,27 @@ void Geometry_graph_node::node_editor(App_context& app_context, ax::NodeEditor::
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2{0.0f, 0.0f});
     ERHE_DEFER( ImGui::PopStyleVar(1); );
 
+    // Issue #251: node content is authored in screen space at the zoomed size,
+    // so canvas-unit pixel metrics must be multiplied by the view scale.
+    m_content_scale = node_editor.GetCurrentZoom();
+
     ax::NodeEditor::NodeId node_id{get_id()};
     node_editor.BeginNode(node_id);
 
-    const float  pin_label_width = 70.0f;
-    const float  center_width    = 150.0f;
+    const float  pin_label_width = 70.0f  * m_content_scale;
+    const float  center_width    = 150.0f * m_content_scale;
     const ImVec2 node_table_size{center_width + (2.0f * pin_label_width), 0.0f};
 
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
-    const ImVec2 node_position = node_editor.GetNodePosition(node_id);
-    const ImVec2 node_size     = node_editor.GetNodeSize(node_id);
-    const float  left_edge     = node_position.x;
-    const float  right_edge    = node_position.x + node_size.x;
+    // The node's frame is drawn from its canvas-space bounds mapped to screen;
+    // pins snap to that frame, so compute the edges in screen space too. The
+    // pin cell centers (below) are already screen space (ImGui item rects), so
+    // this keeps pin X in sync with pin Y and with the node border.
+    const ImVec2 node_position   = node_editor.GetNodePosition(node_id);
+    const ImVec2 node_size       = node_editor.GetNodeSize(node_id);
+    const float  left_edge       = node_editor.CanvasToScreen(node_position).x;
+    const float  right_edge      = node_editor.CanvasToScreen(ImVec2{node_position.x + node_size.x, node_position.y}).x;
 
     ImGui::BeginTable("##NodeTable", 3, ImGuiTableFlags_None, node_table_size);
     ImGui::TableSetupColumn("lhs",    ImGuiTableColumnFlags_WidthFixed, pin_label_width);
@@ -351,7 +359,14 @@ void Geometry_graph_node::show_pins(
     const bool                                                       right_edge
 )
 {
-    const float half_extent = 10.0f;
+    // Issue #251: pins are drawn and hit-tested in screen space at the zoomed
+    // size. edge_x is the node border in screen coordinates, cell_center_y comes
+    // from the (screen-space) ImGui item rect, and the half extent scales with
+    // the view. The visible square is drawn directly to the screen-space draw
+    // list; PinRect stores the node editor's pin bounds in CANVAS units (the
+    // editor maps them back to screen and hit-tests in canvas space), so the
+    // screen rect is mapped back with ScreenToCanvas.
+    const float half_extent = 10.0f * m_content_scale;
     for (const erhe::graph::Pin& pin : pins) {
         if (right_edge) {
             const float column_width = ImGui::GetColumnWidth();
@@ -369,11 +384,11 @@ void Geometry_graph_node::show_pins(
         const ImVec2 max{pin_center.x + half_extent, pin_center.y + half_extent};
 
         node_editor.BeginPin(ax::NodeEditor::PinId{&pin}, pin.is_source() ? ax::NodeEditor::PinKind::Output : ax::NodeEditor::PinKind::Input);
-        node_editor.PinRect(min, max);
+        node_editor.PinRect(node_editor.ScreenToCanvas(min), node_editor.ScreenToCanvas(max));
         node_editor.EndPin();
 
-        draw_list.AddRectFilled(min, max, pin_key_color(pin.get_key()), 4.0f, ImDrawFlags_RoundCornersAll);
-        draw_list.AddRect      (min, max, 0xffcccccc, 4.0f, ImDrawFlags_RoundCornersAll, 2.0f);
+        draw_list.AddRectFilled(min, max, pin_key_color(pin.get_key()), 4.0f * m_content_scale, ImDrawFlags_RoundCornersAll);
+        draw_list.AddRect      (min, max, 0xffcccccc, 4.0f * m_content_scale, ImDrawFlags_RoundCornersAll, 2.0f * m_content_scale);
     }
 }
 

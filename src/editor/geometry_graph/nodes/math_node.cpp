@@ -47,10 +47,10 @@ void Math_node::imgui()
         mark_dirty();
     }
     ImGui::TextUnformatted("A");
-    ImGui::SetNextItemWidth(140.0f);
+    ImGui::SetNextItemWidth(140.0f * content_scale());
     if (ImGui::DragFloat("##a", &m_a, 0.01f)) { mark_dirty(); }
     ImGui::TextUnformatted("B");
-    ImGui::SetNextItemWidth(140.0f);
+    ImGui::SetNextItemWidth(140.0f * content_scale());
     if (ImGui::DragFloat("##b", &m_b, 0.01f)) { mark_dirty(); }
     ImGui::Text("= %f", static_cast<double>(get_output(0).get_float()));
 }

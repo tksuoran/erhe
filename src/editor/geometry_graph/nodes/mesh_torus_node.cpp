@@ -37,14 +37,14 @@ void Mesh_torus_node::evaluate(Geometry_graph&)
 void Mesh_torus_node::imgui()
 {
     ImGui::TextUnformatted("Major / minor radius");
-    ImGui::SetNextItemWidth(140.0f);
+    ImGui::SetNextItemWidth(140.0f * content_scale());
     if (ImGui::DragFloat("##major_radius", &m_major_radius, 0.01f, 0.01f, 100.0f)) { mark_dirty(); }
-    ImGui::SetNextItemWidth(140.0f);
+    ImGui::SetNextItemWidth(140.0f * content_scale());
     if (ImGui::DragFloat("##minor_radius", &m_minor_radius, 0.01f, 0.01f, 100.0f)) { mark_dirty(); }
     ImGui::TextUnformatted("Major / minor steps");
-    ImGui::SetNextItemWidth(140.0f);
+    ImGui::SetNextItemWidth(140.0f * content_scale());
     if (ImGui::DragInt("##major_steps", &m_major_steps, 0.1f, 3, 128)) { mark_dirty(); }
-    ImGui::SetNextItemWidth(140.0f);
+    ImGui::SetNextItemWidth(140.0f * content_scale());
     if (ImGui::DragInt("##minor_steps", &m_minor_steps, 0.1f, 3, 128)) { mark_dirty(); }
 
     const std::shared_ptr<erhe::geometry::Geometry> geometry = get_output(0).get_geometry();

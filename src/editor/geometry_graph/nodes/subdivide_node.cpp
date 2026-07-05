@@ -64,7 +64,7 @@ void Subdivide_node::imgui()
         mark_dirty();
     }
     ImGui::TextUnformatted("Iterations");
-    ImGui::SetNextItemWidth(140.0f);
+    ImGui::SetNextItemWidth(140.0f * content_scale());
     if (ImGui::DragInt("##iterations", &m_iterations, 0.1f, 0, 6)) { mark_dirty(); }
 
     const std::shared_ptr<erhe::geometry::Geometry> geometry = get_output(0).get_geometry();

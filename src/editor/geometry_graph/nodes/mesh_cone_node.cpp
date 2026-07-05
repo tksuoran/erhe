@@ -36,17 +36,17 @@ void Mesh_cone_node::evaluate(Geometry_graph&)
 void Mesh_cone_node::imgui()
 {
     ImGui::TextUnformatted("Height");
-    ImGui::SetNextItemWidth(140.0f);
+    ImGui::SetNextItemWidth(140.0f * content_scale());
     if (ImGui::DragFloat("##height", &m_height, 0.01f, 0.01f, 100.0f)) { mark_dirty(); }
     ImGui::TextUnformatted("Radius");
-    ImGui::SetNextItemWidth(140.0f);
+    ImGui::SetNextItemWidth(140.0f * content_scale());
     if (ImGui::DragFloat("##radius", &m_bottom_radius, 0.01f, 0.01f, 100.0f)) { mark_dirty(); }
     if (ImGui::Checkbox("Bottom", &m_use_bottom)) { mark_dirty(); }
     ImGui::TextUnformatted("Slices");
-    ImGui::SetNextItemWidth(140.0f);
+    ImGui::SetNextItemWidth(140.0f * content_scale());
     if (ImGui::DragInt("##slices", &m_slice_count, 0.1f, 3, 128)) { mark_dirty(); }
     ImGui::TextUnformatted("Stacks");
-    ImGui::SetNextItemWidth(140.0f);
+    ImGui::SetNextItemWidth(140.0f * content_scale());
     if (ImGui::DragInt("##stacks", &m_stack_division, 0.1f, 1, 128)) { mark_dirty(); }
 
     const std::shared_ptr<erhe::geometry::Geometry> geometry = get_output(0).get_geometry();

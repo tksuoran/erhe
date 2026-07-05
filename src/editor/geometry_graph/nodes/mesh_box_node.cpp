@@ -38,13 +38,13 @@ void Mesh_box_node::evaluate(Geometry_graph&)
 void Mesh_box_node::imgui()
 {
     ImGui::TextUnformatted("Size");
-    ImGui::SetNextItemWidth(140.0f);
+    ImGui::SetNextItemWidth(140.0f * content_scale());
     if (ImGui::DragFloat3("##size", &m_size.x, 0.01f, 0.01f, 100.0f)) { mark_dirty(); }
     ImGui::TextUnformatted("Steps");
-    ImGui::SetNextItemWidth(140.0f);
+    ImGui::SetNextItemWidth(140.0f * content_scale());
     if (ImGui::DragInt3("##steps", &m_steps.x, 0.1f, 1, 16)) { mark_dirty(); }
     ImGui::TextUnformatted("Power");
-    ImGui::SetNextItemWidth(140.0f);
+    ImGui::SetNextItemWidth(140.0f * content_scale());
     if (ImGui::DragFloat("##power", &m_power, 0.01f, 0.1f, 10.0f)) { mark_dirty(); }
 
     const std::shared_ptr<erhe::geometry::Geometry> geometry = get_output(0).get_geometry();

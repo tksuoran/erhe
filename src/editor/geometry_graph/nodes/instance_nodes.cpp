@@ -100,10 +100,10 @@ void Distribute_points_node::evaluate(Geometry_graph&)
 void Distribute_points_node::imgui()
 {
     ImGui::TextUnformatted("Count");
-    ImGui::SetNextItemWidth(140.0f);
+    ImGui::SetNextItemWidth(140.0f * content_scale());
     if (ImGui::DragInt("##count", &m_count, 1.0f, 0, 100000)) { mark_dirty(); }
     ImGui::TextUnformatted("Seed");
-    ImGui::SetNextItemWidth(140.0f);
+    ImGui::SetNextItemWidth(140.0f * content_scale());
     if (ImGui::DragInt("##seed", &m_seed, 0.1f)) { mark_dirty(); }
 
     const std::shared_ptr<Point_cloud> points = get_output(0).get_points();
@@ -180,7 +180,7 @@ void Instance_on_points_node::evaluate(Geometry_graph&)
 void Instance_on_points_node::imgui()
 {
     ImGui::TextUnformatted("Scale");
-    ImGui::SetNextItemWidth(140.0f);
+    ImGui::SetNextItemWidth(140.0f * content_scale());
     if (ImGui::DragFloat("##scale", &m_scale, 0.01f, 0.0f, 100.0f)) { mark_dirty(); }
     if (ImGui::Checkbox("Align to normal", &m_align_to_normal)) { mark_dirty(); }
 

@@ -55,13 +55,13 @@ void Transform_node::evaluate(Geometry_graph&)
 void Transform_node::imgui()
 {
     ImGui::TextUnformatted("Translation");
-    ImGui::SetNextItemWidth(140.0f);
+    ImGui::SetNextItemWidth(140.0f * content_scale());
     if (ImGui::DragFloat3("##translation", &m_translation.x, 0.01f)) { mark_dirty(); }
     ImGui::TextUnformatted("Rotation (deg)");
-    ImGui::SetNextItemWidth(140.0f);
+    ImGui::SetNextItemWidth(140.0f * content_scale());
     if (ImGui::DragFloat3("##rotation", &m_rotation_degrees.x, 0.1f)) { mark_dirty(); }
     ImGui::TextUnformatted("Scale");
-    ImGui::SetNextItemWidth(140.0f);
+    ImGui::SetNextItemWidth(140.0f * content_scale());
     if (ImGui::DragFloat3("##scale", &m_scale.x, 0.01f)) { mark_dirty(); }
 }
 

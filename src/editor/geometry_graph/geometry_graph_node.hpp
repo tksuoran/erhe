@@ -122,6 +122,14 @@ public:
     void set_owning_graph_mesh(const std::shared_ptr<Graph_mesh>& graph_mesh);
 
 protected:
+    // Issue #251: node content is authored directly in screen space at the
+    // zoomed size (the node editor pushes a zoom-scaled font + style around
+    // node content). Canvas-unit pixel metrics baked into node content - table
+    // column widths, per-widget widths, pin sizes - must be multiplied by this
+    // view scale so the content lays out to match the zoomed node frame. Set
+    // from EditorContext::GetCurrentZoom() at the top of node_editor().
+    [[nodiscard]] auto content_scale() const -> float { return m_content_scale; }
+
     void show_pins(
         ax::NodeEditor::EditorContext&                        node_editor,
         ImDrawList&                                           draw_list,
@@ -136,6 +144,7 @@ protected:
     std::string                   m_type_name;
     std::string                   m_committed_parameters;
     std::size_t                   m_log_source_id{0};
+    float                         m_content_scale{1.0f};
     bool                          m_dirty{true};
     bool                          m_parameter_edit_in_progress{false};
 };

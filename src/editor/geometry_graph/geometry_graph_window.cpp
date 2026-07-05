@@ -747,6 +747,10 @@ void Geometry_graph_window::imgui()
         return;
     }
 
+    // Issue #251 (bug a): remember where the canvas starts so the zoom-level
+    // overlay can be drawn over its top-left corner after End().
+    const ImVec2 canvas_screen_pos = ImGui::GetCursorScreenPos();
+
     m_node_editor->Begin("Geometry Graph", ImVec2{0.0f, 0.0f});
 
     for (erhe::graph::Node* node : graph().get_nodes()) {
@@ -794,6 +798,18 @@ void Geometry_graph_window::imgui()
     m_node_editor->Resume();
 
     m_node_editor->End();
+
+    // Issue #251 (bug a): show the current canvas zoom in the corner so
+    // rendering issues that appear only at certain zoom levels are diagnosable
+    // at a glance (and correlate with the erhe.imgui.node_editor log traces).
+    const float zoom = m_node_editor->GetCurrentZoom();
+    char zoom_text[32];
+    snprintf(zoom_text, sizeof(zoom_text), "Zoom: %.2f", zoom);
+    ImGui::GetWindowDrawList()->AddText(
+        ImVec2{canvas_screen_pos.x + 8.0f, canvas_screen_pos.y + 8.0f},
+        IM_COL32(220, 220, 220, 220),
+        zoom_text
+    );
 }
 
 void Geometry_graph_window::set_node_editor_zoom(float zoom)

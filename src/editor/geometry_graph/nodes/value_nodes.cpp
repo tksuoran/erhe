@@ -18,7 +18,7 @@ void Float_value_node::evaluate(Geometry_graph&)
 
 void Float_value_node::imgui()
 {
-    ImGui::SetNextItemWidth(140.0f);
+    ImGui::SetNextItemWidth(140.0f * content_scale());
     if (ImGui::DragFloat("##value", &m_value, 0.01f)) { mark_dirty(); }
 }
 
@@ -46,7 +46,7 @@ void Integer_value_node::evaluate(Geometry_graph&)
 
 void Integer_value_node::imgui()
 {
-    ImGui::SetNextItemWidth(140.0f);
+    ImGui::SetNextItemWidth(140.0f * content_scale());
     if (ImGui::DragInt("##value", &m_value, 0.1f)) { mark_dirty(); }
 }
 
@@ -74,7 +74,7 @@ void Vector_value_node::evaluate(Geometry_graph&)
 
 void Vector_value_node::imgui()
 {
-    ImGui::SetNextItemWidth(140.0f);
+    ImGui::SetNextItemWidth(140.0f * content_scale());
     if (ImGui::DragFloat3("##value", &m_value.x, 0.01f)) { mark_dirty(); }
 }
 

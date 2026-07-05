@@ -58,7 +58,7 @@ void Conway_node::imgui()
     // set_parameter abuse path), so guard the preview index - operation_names[N]
     // for N out of bounds is an overread.
     const char* preview = (operation >= 0 && operation < IM_ARRAYSIZE(operation_names)) ? operation_names[operation] : "?";
-    ImGui::SetNextItemWidth(140.0f);
+    ImGui::SetNextItemWidth(140.0f * content_scale());
     if (ImGui::BeginCombo("operation", preview)) {
         for (int i = 0; i < IM_ARRAYSIZE(operation_names); ++i) {
             const bool is_selected = (operation == i);
@@ -76,25 +76,25 @@ void Conway_node::imgui()
     switch (m_operation) {
         case Conway_operation::kis: {
             ImGui::TextUnformatted("Height");
-            ImGui::SetNextItemWidth(140.0f);
+            ImGui::SetNextItemWidth(140.0f * content_scale());
             if (ImGui::DragFloat("##height", &m_kis_height, 0.01f, -10.0f, 10.0f)) { mark_dirty(); }
             break;
         }
         case Conway_operation::truncate: {
             ImGui::TextUnformatted("Ratio");
-            ImGui::SetNextItemWidth(140.0f);
+            ImGui::SetNextItemWidth(140.0f * content_scale());
             if (ImGui::DragFloat("##ratio", &m_truncate_ratio, 0.005f, 0.0f, 0.5f)) { mark_dirty(); }
             break;
         }
         case Conway_operation::chamfer: {
             ImGui::TextUnformatted("Bevel ratio");
-            ImGui::SetNextItemWidth(140.0f);
+            ImGui::SetNextItemWidth(140.0f * content_scale());
             if (ImGui::DragFloat("##bevel_ratio", &m_chamfer_ratio, 0.005f, 0.0f, 1.0f)) { mark_dirty(); }
             break;
         }
         case Conway_operation::gyro: {
             ImGui::TextUnformatted("Ratio");
-            ImGui::SetNextItemWidth(140.0f);
+            ImGui::SetNextItemWidth(140.0f * content_scale());
             if (ImGui::DragFloat("##ratio", &m_gyro_ratio, 0.005f, 0.0f, 1.0f)) { mark_dirty(); }
             break;
         }
