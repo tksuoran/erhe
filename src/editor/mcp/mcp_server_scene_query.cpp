@@ -503,10 +503,24 @@ auto Mcp_server::query_scene_textures(const json& args) -> std::string
 
 auto Mcp_server::query_scene_brushes(const json& args) -> std::string
 {
-    const std::string scene_name = args.value("scene_name", "");
-    auto* sr = find_scene(scene_name);
+    // Resolve the scene by name, or by id when scene_id is given (lets callers
+    // disambiguate two scenes that share a name, e.g. an original and a loaded
+    // copy).
+    Scene_root* sr = nullptr;
+    if (args.contains("scene_id") && m_context.app_scenes) {
+        const uint64_t scene_id = args.value("scene_id", uint64_t{0});
+        for (const std::shared_ptr<Scene_root>& candidate : m_context.app_scenes->get_scene_roots()) {
+            if (candidate->get_scene().get_id() == scene_id) {
+                sr = candidate.get();
+                break;
+            }
+        }
+    } else {
+        const std::string scene_name = args.value("scene_name", "");
+        sr = find_scene(scene_name);
+    }
     if (!sr) {
-        json r = make_text_content("Scene not found: " + scene_name);
+        json r = make_text_content("Scene not found");
         r["isError"] = true;
         return r.dump();
     }
@@ -516,19 +530,38 @@ auto Mcp_server::query_scene_brushes(const json& args) -> std::string
         return make_json_content({{"brushes", json::array()}}).dump();
     }
 
+    // Walk the brush subtree depth-first so the content-library folder
+    // hierarchy is reported per brush; get_all<Brush>() would flatten it.
     json brushes = json::array();
-    const auto& brush_list = library->brushes->get_all<Brush>();
-    for (const auto& brush : brush_list) {
-        auto geometry = brush->get_geometry();
-        const GEO::index_t vertex_count = geometry ? geometry->get_mesh().vertices.nb() : 0;
-        const GEO::index_t facet_count  = geometry ? geometry->get_mesh().facets.nb()   : 0;
-        brushes.push_back({
-            {"name",         brush->get_name()},
-            {"id",           brush->get_id()},
-            {"vertex_count", vertex_count},
-            {"facet_count",  facet_count}
-        });
-    }
+    const std::function<void(const Content_library_node&, const std::string&)> visit =
+        [&](const Content_library_node& folder_node, const std::string& folder_path) -> void
+        {
+            for (const std::shared_ptr<erhe::Hierarchy>& child_hierarchy : folder_node.get_children()) {
+                const std::shared_ptr<Content_library_node> child = std::dynamic_pointer_cast<Content_library_node>(child_hierarchy);
+                if (!child) {
+                    continue;
+                }
+                const std::shared_ptr<Brush> brush = std::dynamic_pointer_cast<Brush>(child->item);
+                if (!brush) {
+                    const std::string child_path = folder_path.empty()
+                        ? child->get_name()
+                        : fmt::format("{}/{}", folder_path, child->get_name());
+                    visit(*child, child_path);
+                    continue;
+                }
+                const std::shared_ptr<erhe::geometry::Geometry> geometry = brush->get_geometry();
+                const GEO::index_t vertex_count = geometry ? geometry->get_mesh().vertices.nb() : 0;
+                const GEO::index_t facet_count  = geometry ? geometry->get_mesh().facets.nb()   : 0;
+                brushes.push_back({
+                    {"name",         brush->get_name()},
+                    {"id",           brush->get_id()},
+                    {"folder_path",  folder_path},
+                    {"vertex_count", vertex_count},
+                    {"facet_count",  facet_count}
+                });
+            }
+        };
+    visit(*library->brushes, std::string{});
 
     return make_json_content({{"brushes", brushes}}).dump();
 }

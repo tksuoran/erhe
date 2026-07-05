@@ -51,6 +51,7 @@
 #include <geogram/mesh/mesh_io.h>
 
 #include <cmath>
+#include <functional>
 #include <limits>
 #include <unordered_map>
 
@@ -908,32 +909,55 @@ auto save_scene(
             brush_ioflags.set_attributes(GEO::MeshAttributesFlags::MESH_ALL_ATTRIBUTES);
             brush_ioflags.set_elements(GEO::MeshElementsFlags::MESH_ALL_ELEMENTS);
             int brush_index = 0;
-            for (const std::shared_ptr<Brush>& brush : content_library->brushes->get_all<Brush>()) {
-                const std::shared_ptr<erhe::geometry::Geometry> geometry = brush->get_geometry();
-                if (!geometry) {
-                    ++brush_index;
-                    continue;
-                }
-                const std::string           geometry_base = fmt::format("brush_{}", brush_index);
-                const std::string           filename      = fmt::format("{}.geogram", geometry_base);
-                const std::filesystem::path full_path     = scene_dir / filename;
-                GEO::OutputGeoFile geofile{full_path.string(), 3};
-                if (!GEO::mesh_save(geometry->get_mesh(), geofile, brush_ioflags)) {
-                    log_parsers->error("save_scene: failed to save brush geometry: {}", full_path.string());
-                }
+            // Walk the brush subtree depth-first so the content-library folder
+            // hierarchy (make_folder, e.g. "Platonic Solids") is preserved.
+            // get_all<Brush>() would flatten it, so record each brush's folder
+            // path (slash-separated folder names relative to the Brushes root).
+            const std::function<void(const Content_library_node&, const std::string&)> serialize_brush_folder =
+                [&](const Content_library_node& folder_node, const std::string& folder_path) -> void
+                {
+                    for (const std::shared_ptr<erhe::Hierarchy>& child_hierarchy : folder_node.get_children()) {
+                        const std::shared_ptr<Content_library_node> child = std::dynamic_pointer_cast<Content_library_node>(child_hierarchy);
+                        if (!child) {
+                            continue;
+                        }
+                        const std::shared_ptr<Brush> brush = std::dynamic_pointer_cast<Brush>(child->item);
+                        if (!brush) {
+                            // A folder node (item == nullptr): recurse, extending the path.
+                            const std::string child_path = folder_path.empty()
+                                ? child->get_name()
+                                : fmt::format("{}/{}", folder_path, child->get_name());
+                            serialize_brush_folder(*child, child_path);
+                            continue;
+                        }
+                        const std::shared_ptr<erhe::geometry::Geometry> geometry = brush->get_geometry();
+                        if (!geometry) {
+                            ++brush_index;
+                            continue;
+                        }
+                        const std::string           geometry_base = fmt::format("brush_{}", brush_index);
+                        const std::string           filename      = fmt::format("{}.geogram", geometry_base);
+                        const std::filesystem::path full_path     = scene_dir / filename;
+                        GEO::OutputGeoFile geofile{full_path.string(), 3};
+                        if (!GEO::mesh_save(geometry->get_mesh(), geofile, brush_ioflags)) {
+                            log_parsers->error("save_scene: failed to save brush geometry: {}", full_path.string());
+                        }
 
-                Brush_data_serial brush_data;
-                brush_data.name          = brush->get_name();
-                brush_data.geometry_path = geometry_base;
-                brush_data.density       = brush->get_density();
-                brush_data.normal_style  = static_cast<int>(brush->get_normal_style());
-                const std::shared_ptr<erhe::primitive::Material>& material = brush->get_material();
-                if (material) {
-                    brush_data.material_name = material->get_name();
-                }
-                scene_file.brushes.push_back(std::move(brush_data));
-                ++brush_index;
-            }
+                        Brush_data_serial brush_data;
+                        brush_data.name          = brush->get_name();
+                        brush_data.geometry_path = geometry_base;
+                        brush_data.folder_path   = folder_path;
+                        brush_data.density       = brush->get_density();
+                        brush_data.normal_style  = static_cast<int>(brush->get_normal_style());
+                        const std::shared_ptr<erhe::primitive::Material>& material = brush->get_material();
+                        if (material) {
+                            brush_data.material_name = material->get_name();
+                        }
+                        scene_file.brushes.push_back(std::move(brush_data));
+                        ++brush_index;
+                    }
+                };
+            serialize_brush_folder(*content_library->brushes, std::string{});
         }
     }
 
@@ -1800,6 +1824,40 @@ auto load_scene(
             erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
             erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
 
+        // Resolve (creating as needed) the Content_library_node folder for a
+        // slash-separated path relative to the Brushes root, so the saved
+        // folder hierarchy (#247) is reconstructed instead of flattened.
+        const auto resolve_brush_folder =
+            [&](const std::string& folder_path) -> Content_library_node&
+            {
+                Content_library_node* current = content_library->brushes.get();
+                std::size_t start = 0;
+                while (start < folder_path.size()) {
+                    const std::size_t slash = folder_path.find('/', start);
+                    const std::string name  = (slash == std::string::npos)
+                        ? folder_path.substr(start)
+                        : folder_path.substr(start, slash - start);
+                    start = (slash == std::string::npos) ? folder_path.size() : slash + 1;
+                    if (name.empty()) {
+                        continue;
+                    }
+                    Content_library_node* found = nullptr;
+                    for (const std::shared_ptr<erhe::Hierarchy>& child_hierarchy : current->get_children()) {
+                        const std::shared_ptr<Content_library_node> child = std::dynamic_pointer_cast<Content_library_node>(child_hierarchy);
+                        // A folder node has no item; match by name.
+                        if (child && !child->item && (child->get_name() == name)) {
+                            found = child.get();
+                            break;
+                        }
+                    }
+                    if (found == nullptr) {
+                        found = current->make_folder(name).get();
+                    }
+                    current = found;
+                }
+                return *current;
+            };
+
         for (const Brush_data_serial& brush_data : scene_file.brushes) {
             const std::string           filename  = fmt::format("{}.geogram", brush_data.geometry_path);
             const std::filesystem::path geom_path = scene_dir / filename;
@@ -1849,7 +1907,8 @@ auto load_scene(
                 .geometry     = geometry,
                 .density      = brush_data.density,
             };
-            const std::shared_ptr<Brush> brush = content_library->brushes->make<Brush>(create_info);
+            Content_library_node& folder = resolve_brush_folder(brush_data.folder_path);
+            const std::shared_ptr<Brush> brush = folder.make<Brush>(create_info);
             if (material) {
                 brush->set_material(material);
             }

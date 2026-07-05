@@ -21,7 +21,13 @@ void Mcp_server::refresh_tool_list()
     m_tool_infos.push_back({"get_scene_materials", "List all materials in a scene's content library",        schema_scene_name()});
     m_tool_infos.push_back({"get_material_details","Get detailed material properties",                       schema_scene_and_item("material_name", "Name of the material")});
     m_tool_infos.push_back({"get_scene_textures", "List all textures in a scene's content library",         schema_scene_name()});
-    m_tool_infos.push_back({"get_scene_brushes",  "List all brushes in a scene's content library",         schema_scene_name()});
+    m_tool_infos.push_back({"get_scene_brushes",  "List all brushes in a scene's content library, each with its folder_path (slash-separated content-library folder hierarchy, '' = directly under the Brushes root)", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name", {{"type", "string"},  {"description", "Name of the scene"}}},
+            {"scene_id",   {{"type", "integer"}, {"description", "Scene id (from list_scenes); use to disambiguate two scenes that share a name. Takes precedence over scene_name."}}}
+        }}
+    }});
     m_tool_infos.push_back({"get_server_info",      "Get this editor MCP server's identity: name, version, process id (pid), build timestamp (compile time of the server), and bound port. Use it to detect a STALE editor: if the pid/build does not match the editor you just launched, another editor.exe is holding the port and your calls are hitting the wrong process.", schema_no_args()});
     m_tool_infos.push_back({"get_selection",        "Get currently selected items",                          schema_no_args()});
     m_tool_infos.push_back({"get_undo_redo_stack", "Get undo/redo operation stacks",                       schema_no_args()});
