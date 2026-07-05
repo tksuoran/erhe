@@ -30,6 +30,7 @@
 #include "scene/viewport_scene_views.hpp"
 #include "tools/selection_tool.hpp"
 #include "windows/viewport_window.hpp"
+#include "windows/window_placement.hpp"
 
 #include "erhe_commands/commands.hpp"
 #include "erhe_graphics/command_buffer.hpp"
@@ -587,7 +588,7 @@ auto Scene_commands::create_new_scene() -> std::shared_ptr<Scene_root>
         m_context.app_settings->graphics.current_graphics_preset.msaa_sample_count,
         rendergraph_output_node
     );
-    m_context.scene_views->create_viewport_window(
+    std::shared_ptr<Viewport_window> viewport_window = m_context.scene_views->create_viewport_window(
         *m_context.imgui_renderer,
         *m_context.imgui_windows,
         *m_context.app_message_bus,
@@ -596,6 +597,9 @@ auto Scene_commands::create_new_scene() -> std::shared_ptr<Scene_root>
         scene_name,
         ""
     );
+    // Dock (tab) the new scene's viewport with the existing viewport instead of
+    // leaving it floating at ImGui's default cascade position (#258).
+    apply_editor_window_placement(*m_context.imgui_windows, *viewport_window);
 
     // Attach the global tools (Hud / Hotbar / OpenXR Headset_view) to this
     // scene if none existed yet (e.g. a --no-scene startup). on_scene_created()

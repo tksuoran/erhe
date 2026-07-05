@@ -280,6 +280,23 @@ Any editor run rewrites `config/editor/desktop_window_imgui_host_imgui.ini`
 `git checkout -- config/editor/desktop_window_imgui_host_imgui.ini` and never
 commit changes to it (or to other erhe_imgui window/ini state files).
 
+## Once the user starts testing, stop headless testing yourself
+
+For any task or bug that has a user-interaction aspect: once you consider the
+change complete and the user has started testing it, STOP running the headless
+verify loop (build + launch + MCP + screenshot) yourself unless the user
+explicitly asks for it. At that stage the useful signal is the user's
+verification in a real interactive session, and continuing to headless-test in
+parallel only slows the work down (and re-dirties `logs/` and the ini state).
+Headless verification is valuable earlier -- while you are still iterating on
+your own before handing off -- but it is not a substitute for user
+verification, and it routinely cannot exercise the menu- and mouse-driven entry
+points that only a live windowed run reaches (precedent: the #258 headless run
+docked the MCP-created viewport correctly, but the menu-driven "Create Scene"
+viewport was still floating -- the user found that interactively). So: build,
+hand off, and let the user drive; re-engage headless testing only when they ask
+or when you resume iterating on a fresh change.
+
 ## In-editor MCP server (live scene scripting + headless screenshots)
 
 **Skill:** invoke **`erhe-headless-verify`** for the standard verification
