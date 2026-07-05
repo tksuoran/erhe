@@ -73,6 +73,17 @@ public:
 
     // Public API
     void sanity_check          () const;
+    // Detaches all scene content from the host and its owned resources.
+    // Called by the owning Scene_host (Scene_root) from its destructor,
+    // because the Scene and/or its content may be co-owned elsewhere
+    // (selection, undo stack, clipboard, ...) and thus outlive the host.
+    // recursive_remove() runs the normal orphan path so meshes leave the
+    // raytrace scene and rigid bodies leave the physics world while those are
+    // still alive; the host back-pointers (Scene::m_host, node_data.host) are
+    // then cleared. Without this, a Scene / Mesh / Node_physics torn down after
+    // its host dereferences the freed Scene_host, raytrace scene, or physics
+    // world (see node_sanity_check, Mesh::detach_rt_from_scene).
+    void sever_host            ();
     void sort_transform_nodes  ();
     void update_node_transforms();
 

@@ -255,6 +255,20 @@ Scene_root::~Scene_root() noexcept
     if (m_is_registered) {
         unregister_from_editor_scenes(*m_app_scenes);
     }
+
+    // The Scene and its content (nodes, meshes, node_physics) hold non-owning
+    // back-pointers into this Scene_root and the resources it owns (the raytrace
+    // scene m_raytrace_scene and physics world m_physics_world). The Scene may be
+    // co-owned elsewhere (selection, undo stack, clipboard, ...) and outlive this
+    // host: closing a still-selected scene destroys the Scene_root while the
+    // Selection keeps a shared_ptr to the Scene, whose deferred ~Scene then runs
+    // after this host and its resources are gone. Detach all content now, while
+    // m_raytrace_scene and m_physics_world are still alive, so the later teardown
+    // does not dereference freed state (see node_sanity_check,
+    // Mesh::detach_rt_from_scene, Node_physics world removal).
+    if (m_scene) {
+        m_scene->sever_host();
+    }
 }
 
 auto custom_isprint(const char c) -> bool

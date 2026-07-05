@@ -234,6 +234,22 @@ void Scene::sanity_check() const
 #endif
 }
 
+void Scene::sever_host()
+{
+    // Detach all scene content from the host's resources -- host registration,
+    // raytrace scene, physics world -- THROUGH THE NORMAL ORPHAN PATH, while
+    // those resources are still alive. recursive_remove() reparents every child
+    // to null, which fires Node/Mesh/Node_physics::handle_item_host_update(host,
+    // nullptr): meshes detach from the raytrace scene and rigid bodies leave the
+    // physics world. Ordering: remove the children first (they read the still-set
+    // root-node host as their old host), then clear the root node and scene host.
+    if (m_root_node) {
+        m_root_node->remove_all_children_recursively();
+        m_root_node->node_data.host = nullptr;
+    }
+    m_host = nullptr;
+}
+
 void Scene::sort_transform_nodes()
 {
     // log->trace("sorting {} nodes", m_flat_node_vector.size());
