@@ -1633,14 +1633,14 @@ void Properties::end_material_inspect()
     m_material_state = Editor_state::clean;
 }
 
-void Properties::material_properties()
+void Properties::material_properties(const std::vector<std::shared_ptr<erhe::Item_base>>& items)
 {
     ERHE_PROFILE_FUNCTION();
 
-    Selection& selection = *m_context.selection;
-    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = selection.get_selected_items();
-
-    const std::shared_ptr<erhe::primitive::Material> selected_material_shared = get<erhe::primitive::Material>(selected_items);
+    // Issue #252: the material to inspect comes from the effective item list
+    // (the pinned target when set, else the global selection), passed in by
+    // imgui() - not read from the selection directly anymore.
+    const std::shared_ptr<erhe::primitive::Material> selected_material_shared = get<erhe::primitive::Material>(items);
     if (m_inspected_material != selected_material_shared) {
         log_operations->info("m_inspected_material != selected_material_shared");
         if (m_inspected_material) {
@@ -1819,36 +1819,80 @@ void Properties::material_properties()
     }
 }
 
+auto Properties::effective_items() -> const std::vector<std::shared_ptr<erhe::Item_base>>&
+{
+    // Issue #252: when pinned, show only the target; else fall back to the
+    // global selection (the original behavior).
+    const std::shared_ptr<erhe::Item_base> target = m_target.lock();
+    if (target) {
+        m_target_items.clear();
+        m_target_items.push_back(target);
+        return m_target_items;
+    }
+    return m_context.selection->get_selected_items();
+}
+
+void Properties::set_target(const std::shared_ptr<erhe::Item_base>& item)
+{
+    m_target = item;
+}
+
+void Properties::target_selector_imgui()
+{
+    // Row: "Pin" label + the reference field (drag-drop / picker / clear).
+    // Clearing the field reverts the window to selection mode. A "(pinned)"
+    // note makes the pinned state obvious.
+    ImGui::TextUnformatted("Pin");
+    ImGui::SameLine();
+    const bool was_pinned = !m_target.expired();
+    std::shared_ptr<erhe::Item_base> value = m_target.lock();
+    Item_reference_options options;
+    options.accept_content_library_node = true;
+    options.none_text                   = "(selection)";
+    options.show_select_button          = false;
+    // Any item type: the widget iterates the type bits, so an all-ones mask
+    // accepts every leaf payload (plus content-library assets, unwrapped).
+    if (item_reference_imgui(m_context, "properties_target", value, ~uint64_t{0}, options)) {
+        m_target = value;
+    }
+    if (was_pinned) {
+        ImGui::SameLine();
+        ImGui::TextDisabled("(pinned)");
+    }
+    ImGui::Separator();
+}
+
 void Properties::imgui()
 {
     ERHE_PROFILE_FUNCTION();
 
     reset();
 
-    Selection& selection = *m_context.selection;
-    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = selection.get_selected_items();
+    target_selector_imgui();
+
+    const std::vector<std::shared_ptr<erhe::Item_base>>& items = effective_items();
 
     int id = 0;
-    for (const auto& item : selected_items) {
+    for (const auto& item : items) {
         ImGui::PushID(id++);
         ERHE_DEFER( ImGui::PopID(); );
         ERHE_VERIFY(item);
         item_properties(item);
     }
 
-    const auto selected_animation = get<erhe::scene::Animation>(selected_items);
+    const auto selected_animation = get<erhe::scene::Animation>(items);
     if (selected_animation) {
         animation_properties(*selected_animation.get());
     }
 
-    const auto selected_skin = get<erhe::scene::Skin>(selected_items);
+    const auto selected_skin = get<erhe::scene::Skin>(items);
     if (selected_skin) {
         skin_properties(*selected_skin.get());
     }
 
     show_entries();
 
-    material_properties();
+    material_properties(items);
 
 }
 

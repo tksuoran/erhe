@@ -6,6 +6,7 @@
 #include "erhe_imgui/imgui_window.hpp"
 
 #include <memory>
+#include <vector>
 
 namespace GEO {
     class Mesh;
@@ -61,7 +62,22 @@ public:
     void on_begin() override;
     void on_end  () override;
 
+    // Issue #252: pin this Properties window to an explicit target item. When
+    // set, the window shows only the target; when unset (or the target was
+    // deleted - stored as a weak_ptr) it falls back to the global selection
+    // (the original behavior). Used by the "Open Properties" context menu and
+    // the target selector row at the top of the window.
+    void set_target(const std::shared_ptr<erhe::Item_base>& item);
+
 private:
+
+    // The items whose properties to show: { target } when pinned, else the
+    // global selection. Reuses m_target_items scratch for the pinned case.
+    [[nodiscard]] auto effective_items() -> const std::vector<std::shared_ptr<erhe::Item_base>>&;
+    // Draws the target-item selector row (item_reference_imgui, any type) plus
+    // a "pinned" indicator. Bound to m_target.
+    void target_selector_imgui();
+
 
     void animation_properties         (erhe::scene::Animation& animation);
     void scene_properties             (erhe::scene::Scene& scene);
@@ -76,7 +92,7 @@ private:
     void shape_properties             (const char* label, erhe::primitive::Primitive_shape* shape);
     void mesh_properties              (erhe::scene::Mesh& mesh);
     void skin_properties              (erhe::scene::Skin& skin);
-    void material_properties          ();
+    void material_properties          (const std::vector<std::shared_ptr<erhe::Item_base>>& items);
     void rendertarget_properties      (Rendertarget_mesh& rendertarget);
     void brush_properties             (const std::shared_ptr<Brush>& brush);
     void brush_placement_properties   (Brush_placement& brush_placement);
@@ -92,6 +108,12 @@ private:
     void end_material_inspect();
 
     App_context& m_context;
+
+    // Issue #252: the explicit pinned target (weak_ptr so a deleted item
+    // reverts the window to selection mode), and the reused single-element
+    // list handed to the property renderers when pinned.
+    std::weak_ptr<erhe::Item_base>                m_target;
+    std::vector<std::shared_ptr<erhe::Item_base>> m_target_items;
 
     Editor_state                               m_material_state{Editor_state::clean};
     std::shared_ptr<erhe::primitive::Material> m_inspected_material;
