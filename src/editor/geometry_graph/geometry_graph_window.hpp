@@ -155,28 +155,11 @@ public:
     void set_node_position(const Geometry_graph_node& node, const ImVec2& position);
 
 private:
-    // One selectable palette entry (a spawnable node type).
-    class Palette_entry
-    {
-    public:
-        std::string type_name;
-        std::string label;
-    };
-    // One palette category (e.g. "Primitives") and its entries.
-    class Palette_category
-    {
-    public:
-        std::string                name;
-        std::vector<Palette_entry> entries;
-    };
-
     auto make_node       (const std::string& type_name) -> std::shared_ptr<Geometry_graph_node>;
-    // Searchable, categorized node palette (same vertical
-    // filter + CollapsingHeader + Selectable structure as the texture
-    // graph palette). Plain ImGui, kept outside the ax::NodeEditor canvas
-    // so collapsing headers are allowed.
-    void build_palette   ();
-    void node_palette    ();
+    // Implements Graph_editor_window_base: fills the palette with the geometry
+    // node set, and spawns a chosen type through the factory + undoable insert.
+    void build_palette   () override;
+    void add_node_from_palette(const std::string& type_name) override;
     // Issue #252: the target-item selector row drawn at the top of the
     // window. Drag-drop a Graph_mesh asset onto it, pick from the popup, or
     // clear it. Bound to m_target.
@@ -247,8 +230,6 @@ private:
     bool                                              m_focus_requested{false};
     std::shared_ptr<Evaluation_run>                   m_evaluation_run; // non-null while a run is in flight
     int                                               m_spawn_count{0};
-    std::vector<Palette_category>                     m_palette_categories; // built lazily by build_palette()
-    std::string                                       m_palette_filter;     // node-palette search text
     // Reused scratch for the target selector's picker (cleared + refilled each frame).
     std::vector<std::shared_ptr<erhe::Item_base>>     m_target_candidates;
 };

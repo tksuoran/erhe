@@ -49,9 +49,10 @@ the two smoke sweeps verify after every step.
 | C3: Shared asset base `Graph_asset<Self, Graph, Node>`                        | DONE   | f8c7b5a1 |
 | C4: Shared graph-JSON serializer template                                     | DONE   | 1cf42f39 |
 | C5: Shared undo-operations template                                           | DONE   | c985c352 |
-| C6: Shared node base `Graph_editor_node` (payload-agnostic, 3 hooks)          | DONE   | (this commit) |
-| C7: Shared window base - payload-blind canvas/link/palette/target machinery   | TODO   | -      |
-| C8 (optional): MCP + create-UI + scene save/load helper dedup                 | TODO   | -      |
+| C6: Shared node base `Graph_editor_node` (payload-agnostic, 3 hooks)          | DONE   | ebf69fc6 |
+| C7: Shared node palette in `Graph_editor_window_base` (canvas/link deferred)  | DONE   | (this commit) |
+| C7-remainder: canvas render loop + link create/delete + node positions        | DEFERRED | -    |
+| C8 (optional): MCP + create-UI + scene save/load helper dedup                 | DEFERRED | -    |
 
 Steps land smallest/safest first, each its own commit, both smoke sweeps green
 after each. C7 is the capstone and the riskiest; C6/C7 may be split further or
@@ -318,7 +319,32 @@ texture last-wins). `Geometry_graph_node` / `Texture_graph_node` become `using`
 aliases (decision 3) so the ~34 concrete node files are untouched. This is the
 largest node-side change; land it only once C1-C5 are green.
 
-### C7 - Shared window base (capstone)
+### C7 - Shared window base (capstone; palette landed, rest deferred)
+
+**Done:** the payload-blind node **palette** moved into
+`Graph_editor_window_base` - the `Palette_entry` / `Palette_category` types, the
+`m_palette_filter` / `m_palette_categories` state, and the `node_palette()`
+render loop (filter box + collapsing headers + selectables). Two hooks vary per
+editor: `build_palette()` (fills the categories - the geometry graph's static
+list vs the texture graph's descriptor-registry scan) and
+`add_node_from_palette()` (spawns via the concrete factory + undoable insert).
+
+**Deferred (C7-remainder):** the canvas render loop (`imgui()` Begin/End + node
+iteration + link drawing + zoom overlay), link create/delete
+(`handle_link_create` / `handle_deletions`), and the node-position helpers
+(`get_node_position` / `set_node_position` / `next_node_spawn_position`). C6 made
+the node iteration payload-blind (it can cast to the shared `Graph_editor_node`),
+so these are extractable through `Graph_editor_window_base` given a small set of
+hooks (`graph()` -> `erhe::graph::Graph*` with an empty-state null, `connect` /
+`disconnect` / `remove_node`), moving `m_node_editor` (the ax::NodeEditor
+context) into the base. This touches the interactive-critical per-frame render
+path and sits next to the geometry graph's async shadow-clone engine and the
+Issue-#252 target model; per this plan's "stop at diminishing returns" rule it is
+left as a well-scoped follow-up rather than rushed at the tail of the pass. The
+target model, evaluation strategy (async vs synchronous render), and the ~15
+MCP-facing methods stay per-editor regardless.
+
+Original C7 sketch (for the remainder):
 
 `Graph_editor_window_base` (from C2) grows the payload-blind machinery, working
 through `erhe::graph::Graph&` + `erhe::graph::Node*` + hooks:
