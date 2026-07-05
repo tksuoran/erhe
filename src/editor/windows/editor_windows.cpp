@@ -10,6 +10,7 @@
 #include "texture_graph/graph_texture.hpp"
 #include "texture_graph/texture_graph_window.hpp"
 #include "windows/properties.hpp"
+#include "windows/window_placement.hpp"
 
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_item/item.hpp"
@@ -68,6 +69,7 @@ void Editor_windows::open_properties_window(const std::shared_ptr<erhe::Item_bas
             );
             window->set_target(target);
             window->show_window();
+            apply_properties_window_placement(m_imgui_windows, *window);
             m_properties_windows.push_back(window);
         }
     );
@@ -83,6 +85,7 @@ void Editor_windows::open_geometry_graph_window(const std::shared_ptr<Graph_mesh
             );
             window->set_target(target);
             window->show_window();
+            apply_editor_window_placement(m_imgui_windows, *window);
             m_geometry_graph_windows.push_back(window);
         }
     );
@@ -98,6 +101,7 @@ void Editor_windows::open_texture_graph_window(const std::shared_ptr<Graph_textu
             );
             window->set_target(target);
             window->show_window();
+            apply_editor_window_placement(m_imgui_windows, *window);
             m_texture_graph_windows.push_back(window);
         }
     );

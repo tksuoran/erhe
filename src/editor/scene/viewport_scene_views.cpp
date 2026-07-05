@@ -18,6 +18,7 @@
 #include "tools/tools.hpp"
 #include "windows/viewport_config_window.hpp"
 #include "windows/viewport_window.hpp"
+#include "windows/window_placement.hpp"
 
 #include "erhe_utility/bit_helpers.hpp"
 #include "erhe_commands/commands.hpp"
@@ -487,7 +488,7 @@ void Scene_views::open_new_viewport_scene_view_node()
         msaa_sample_count,
         rendergraph_output_node
     );
-    create_viewport_window(
+    std::shared_ptr<Viewport_window> viewport_window = create_viewport_window(
         *m_app_context.imgui_renderer,
         *m_app_context.imgui_windows,
         *m_app_context.app_message_bus,
@@ -496,6 +497,7 @@ void Scene_views::open_new_viewport_scene_view_node()
         "scene view",
         ""
     );
+    apply_editor_window_placement(*m_app_context.imgui_windows, *viewport_window);
 }
 
 void Scene_views::open_new_viewport_scene_view_node(const std::shared_ptr<Scene_root>& scene_root)
@@ -509,7 +511,7 @@ void Scene_views::open_new_viewport_scene_view_node(const std::shared_ptr<Scene_
         rendergraph_output_node,
         scene_root
     );
-    create_viewport_window(
+    std::shared_ptr<Viewport_window> viewport_window = create_viewport_window(
         *m_app_context.imgui_renderer,
         *m_app_context.imgui_windows,
         *m_app_context.app_message_bus,
@@ -518,6 +520,7 @@ void Scene_views::open_new_viewport_scene_view_node(const std::shared_ptr<Scene_
         "scene view",
         ""
     );
+    apply_editor_window_placement(*m_app_context.imgui_windows, *viewport_window);
 }
 
 void Scene_views::debug_imgui()

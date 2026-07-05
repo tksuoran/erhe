@@ -39,6 +39,18 @@ public:
     void set_developer           ();
     void set_min_size            (float min_width, float min_height);
     void set_max_size            (float max_width, float max_height);
+
+    // Request an initial placement, applied once on this window's next begin()
+    // and then cleared. If dock_target_title names a window that is currently
+    // docked, this window is docked (tabbed) into that window's dock node.
+    // Otherwise the window is shown floating, centered on the main ImGui
+    // viewport, sized to the given fraction of the viewport size. Intended for
+    // dynamically created windows that have no persisted ini position.
+    void set_initial_placement(
+        std::string_view dock_target_title,
+        float            fallback_width_ratio,
+        float            fallback_height_ratio
+    );
     void set_show_in_menu        (bool show);
     auto begin                   () -> bool;
     void end                     ();
@@ -80,8 +92,16 @@ protected:
     float           m_max_size[2]{99999.0f, 99999.0f};
 
 private:
+    void apply_initial_placement();
+
     bool            m_is_hovered  {false};
     bool            m_is_visible  {true};
+
+    // One-shot initial placement request (see set_initial_placement()).
+    bool            m_has_initial_placement    {false};
+    std::string     m_initial_dock_target_title{};
+    float           m_initial_width_ratio      {0.0f};
+    float           m_initial_height_ratio     {0.0f};
 };
 
 } // namespace erhe::imgui

@@ -7,6 +7,7 @@
 #include "erhe_imgui/imgui_windows.hpp"
 
 #include <imgui/imgui.h>
+#include <imgui/imgui_internal.h>
 
 namespace erhe::imgui {
 
@@ -135,11 +136,56 @@ void Imgui_window::set_show_in_menu(const bool show)
     m_show_in_menu = show;
 }
 
+void Imgui_window::set_initial_placement(
+    const std::string_view dock_target_title,
+    const float            fallback_width_ratio,
+    const float            fallback_height_ratio
+)
+{
+    m_has_initial_placement     = true;
+    m_initial_dock_target_title = dock_target_title;
+    m_initial_width_ratio       = fallback_width_ratio;
+    m_initial_height_ratio      = fallback_height_ratio;
+}
+
+void Imgui_window::apply_initial_placement()
+{
+    if (!m_has_initial_placement) {
+        return;
+    }
+    m_has_initial_placement = false;
+
+    // Prefer docking (tabbing) into the target window's dock node, if it is
+    // currently docked.
+    if (!m_initial_dock_target_title.empty()) {
+        const ImGuiWindow* target_window = ImGui::FindWindowByName(m_initial_dock_target_title.c_str());
+        if ((target_window != nullptr) && (target_window->DockId != 0)) {
+            ImGui::SetNextWindowDockID(target_window->DockId, ImGuiCond_Always);
+            return;
+        }
+    }
+
+    // Floating fallback: center on the main viewport at the requested fraction
+    // of its size.
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    const ImVec2 size{
+        viewport->Size.x * m_initial_width_ratio,
+        viewport->Size.y * m_initial_height_ratio
+    };
+    const ImVec2 pos{
+        viewport->Pos.x + ((viewport->Size.x - size.x) * 0.5f),
+        viewport->Pos.y + ((viewport->Size.y - size.y) * 0.5f)
+    };
+    ImGui::SetNextWindowPos (pos,  ImGuiCond_Always);
+    ImGui::SetNextWindowSize(size, ImGuiCond_Always);
+}
+
 auto Imgui_window::begin() -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
     on_begin();
+    apply_initial_placement();
     bool keep_visible{true};
     ImGui::SetNextWindowSizeConstraints(
         ImVec2{m_min_size[0], m_min_size[1]},
