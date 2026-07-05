@@ -604,6 +604,22 @@ bool ed::Node::EndDrag()
     return m_Bounds.Min != m_DragStart;
 }
 
+bool ed::Object::IsVisible() const
+{
+    if (!m_IsLive)
+        return false;
+
+    // Issue #251: GetBounds() is in canvas units; ImGui::IsRectVisible tests
+    // against the current clip rect in screen space, so map the bounds to
+    // screen first. Without this, nodes at canvas coordinates outside the
+    // widget-rect numeric range were culled even when visible on screen, so
+    // their background/border disappeared (content stayed, being submitted
+    // through a separate path) - most visibly at non-unity zoom and while a
+    // node was dragged across the divergence boundary.
+    const ImRect bounds = GetBounds();
+    return ImGui::IsRectVisible(Editor->ToScreen(bounds.Min), Editor->ToScreen(bounds.Max));
+}
+
 void ed::Node::Draw(ImDrawList* drawList, DrawFlags flags)
 {
     if (flags == Detail::Object::None)

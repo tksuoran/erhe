@@ -170,15 +170,16 @@ struct Object
 
     virtual ObjectId ID() = 0;
 
-    bool IsVisible() const
-    {
-        if (!m_IsLive)
-            return false;
-
-        const auto bounds = GetBounds();
-
-        return ImGui::IsRectVisible(bounds.Min, bounds.Max);
-    }
+    // Issue #251: object bounds are stored in CANVAS units, but this visibility
+    // test runs against ImGui's current clip rect, which is real SCREEN space
+    // after the native-resolution flip (it used to be faked into canvas space).
+    // Feeding canvas bounds to a screen-space clip test silently culled objects
+    // whose canvas bounds fell outside the screen clip while their on-screen
+    // position was inside it - dropping node backgrounds / borders at non-unity
+    // zoom and while dragging (the node content is submitted separately and
+    // stayed visible). Defined out of line because it maps through the (here
+    // still incomplete) EditorContext.
+    bool IsVisible() const;
 
     virtual void Reset() { m_IsLive = false; }
 
