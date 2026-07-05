@@ -510,6 +510,8 @@ erhe_target_sources_grouped(
     windows/IconsMaterialDesignIcons.h
     windows/config_ui.cpp
     windows/config_ui.hpp
+    windows/editor_windows.cpp
+    windows/editor_windows.hpp
     windows/inventory_slot_payload.hpp
     windows/inventory_window.cpp
     windows/inventory_window.hpp

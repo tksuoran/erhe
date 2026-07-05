@@ -827,6 +827,32 @@ void Mcp_server::refresh_tool_list()
         {"required", json::array({"node_id", "dir"})}
     }});
 
+    // Extra editor window instances (issue #252). Open additional Geometry
+    // Graph / Texture Graph / Properties windows, each with its own target,
+    // so several assets can be edited / inspected side by side. The user
+    // closes them with the window X button.
+    m_tool_infos.push_back({"open_geometry_graph_window", "Open a new Geometry Graph window (in addition to the primary one), optionally targeting a named Graph Mesh asset. Multiple windows can target different assets at once (issue #252).", {
+        {"type", "object"},
+        {"properties", {
+            {"graph_mesh", {{"type", "string"}, {"description", "Name of the Graph Mesh asset to target; empty/omitted opens an empty editor"}}},
+            {"scene_name", {{"type", "string"}, {"description", "Scene to search (default: all scenes)"}}}
+        }}
+    }});
+    m_tool_infos.push_back({"open_texture_graph_window", "Open a new Texture Graph window (in addition to the primary one), optionally targeting a named Graph Texture asset. Multiple windows can target different assets at once (issue #252).", {
+        {"type", "object"},
+        {"properties", {
+            {"graph_texture", {{"type", "string"}, {"description", "Name of the Graph Texture asset to target; empty/omitted opens an empty editor"}}},
+            {"scene_name",    {{"type", "string"}, {"description", "Scene to search (default: all scenes)"}}}
+        }}
+    }});
+    m_tool_infos.push_back({"open_properties_window", "Open a new Properties window pinned to a named material (issue #252). A pinned Properties window shows only its target, independent of the global selection; omit 'material' to open one that follows the selection like the primary Properties window.", {
+        {"type", "object"},
+        {"properties", {
+            {"material",   {{"type", "string"}, {"description", "Name of the material to pin the window to; empty/omitted follows the global selection"}}},
+            {"scene_name", {{"type", "string"}, {"description", "Scene to search (default: all scenes)"}}}
+        }}
+    }});
+
     // Editor commands
     const auto& registered_commands = m_commands.get_commands();
     for (const auto* command : registered_commands) {

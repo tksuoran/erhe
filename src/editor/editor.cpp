@@ -92,6 +92,7 @@
 #include "transform/move_tool.hpp"
 #include "transform/rotate_tool.hpp"
 #include "transform/scale_tool.hpp"
+#include "windows/editor_windows.hpp"
 #include "windows/inventory_window.hpp"
 #include "windows/properties.hpp"
 #include "windows/settings_window.hpp"
@@ -452,6 +453,11 @@ public:
         // composition, no background engine), run once per frame so the graph
         // stays current even when the window is hidden.
         m_texture_graph_window->update();
+
+        // Issue #252: destroy any extra Properties / graph windows the user
+        // closed this frame (outside ImGui iteration; the primary instances
+        // are not managed here).
+        m_editor_windows->update_once_per_frame();
 
         // - Execute all fixes step updates
         // - Execute all once per frame updates
@@ -1513,6 +1519,7 @@ public:
                 m_physics_window         = std::make_unique<Physics_window                  >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_post_processing_window = std::make_unique<Post_processing_window          >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_properties             = std::make_unique<Properties                      >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
+                m_editor_windows         = std::make_unique<Editor_windows                  >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_rendergraph_window     = std::make_unique<Rendergraph_window              >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_tool_properties_window = std::make_unique<Tool_properties_window          >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_logs                   = std::make_unique<erhe::imgui::Logs               >(*m_commands.get(),       *m_imgui_renderer.get(), "config/editor/logging.json");
@@ -2311,6 +2318,7 @@ public:
         m_app_context.window_config            = &m_window_config;
         m_app_context.editor_settings          = &m_editor_settings;
         m_app_context.app_windows              = m_app_windows           .get();
+        m_app_context.editor_windows           = m_editor_windows        .get();
         m_app_context.fly_camera_tool          = m_fly_camera_tool       .get();
         m_app_context.geometry_graph_window    = m_geometry_graph_window .get();
         m_app_context.texture_graph_window     = m_texture_graph_window  .get();
@@ -3024,6 +3032,7 @@ public:
     std::unique_ptr<Physics_window                  >        m_physics_window;
     std::unique_ptr<Post_processing_window          >        m_post_processing_window;
     std::unique_ptr<Properties                      >        m_properties;
+    std::unique_ptr<Editor_windows                  >        m_editor_windows;
     std::unique_ptr<Rendergraph_window              >        m_rendergraph_window;
     std::unique_ptr<Timeline_window                 >        m_timeline_window;
     std::unique_ptr<Tool_properties_window          >        m_tool_properties_window;

@@ -187,6 +187,9 @@ private:
     auto action_texture_graph_disconnect      (const nlohmann::json& args) -> std::string;
     auto action_texture_graph_export_png      (const nlohmann::json& args) -> std::string;
     auto action_texture_graph_export_material (const nlohmann::json& args) -> std::string;
+    auto action_open_geometry_graph_window    (const nlohmann::json& args) -> std::string;
+    auto action_open_texture_graph_window     (const nlohmann::json& args) -> std::string;
+    auto action_open_properties_window        (const nlohmann::json& args) -> std::string;
     auto execute_command        (const std::string& tool_name) -> std::string;
 
     erhe::commands::Commands& m_commands;

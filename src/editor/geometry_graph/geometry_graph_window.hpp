@@ -10,6 +10,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <vector>
 
 struct ImVec2;
@@ -64,10 +65,15 @@ class Graph_mesh;
 class Geometry_graph_window : public erhe::imgui::Imgui_window
 {
 public:
+    // title / ini_label default to the primary singleton's values; the
+    // Editor_windows manager passes a unique title + empty ini_label for the
+    // extra "Open Editor" instances (issue #252).
     Geometry_graph_window(
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
-        App_context&                 app_context
+        App_context&                 app_context,
+        std::string_view             title     = "Geometry Graph",
+        std::string_view             ini_label = "geometry_graph"
     );
     ~Geometry_graph_window() noexcept override;
 

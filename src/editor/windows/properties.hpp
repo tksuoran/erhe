@@ -6,6 +6,7 @@
 #include "erhe_imgui/imgui_window.hpp"
 
 #include <memory>
+#include <string_view>
 #include <vector>
 
 namespace GEO {
@@ -55,7 +56,16 @@ class Rendertarget_mesh;
 class Properties : public erhe::imgui::Imgui_window, public Property_editor
 {
 public:
-    Properties(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, App_context& app_context);
+    // title / ini_label default to the primary singleton's values; the
+    // Editor_windows manager passes a unique title + empty ini_label for the
+    // extra "Open Properties" instances (issue #252).
+    Properties(
+        erhe::imgui::Imgui_renderer& imgui_renderer,
+        erhe::imgui::Imgui_windows&  imgui_windows,
+        App_context&                 app_context,
+        std::string_view             title     = "Properties",
+        std::string_view             ini_label = "properties"
+    );
 
     // Implements Imgui_window
     void imgui   () override;

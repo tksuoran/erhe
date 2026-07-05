@@ -438,6 +438,9 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "texture_graph_disconnect")     result = action_texture_graph_disconnect    (req->arguments);
         else if (req->tool_name == "texture_graph_export_png")     result = action_texture_graph_export_png    (req->arguments);
         else if (req->tool_name == "texture_graph_export_material") result = action_texture_graph_export_material(req->arguments);
+        else if (req->tool_name == "open_geometry_graph_window")   result = action_open_geometry_graph_window  (req->arguments);
+        else if (req->tool_name == "open_texture_graph_window")    result = action_open_texture_graph_window   (req->arguments);
+        else if (req->tool_name == "open_properties_window")       result = action_open_properties_window      (req->arguments);
         else                                              result = execute_command       (req->tool_name);
 
         } catch (const std::exception& e) {

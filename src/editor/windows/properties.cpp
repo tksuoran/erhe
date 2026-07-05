@@ -91,8 +91,14 @@
 
 namespace editor {
 
-Properties::Properties(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, App_context& app_context)
-    : Imgui_window{imgui_renderer, imgui_windows, "Properties", "properties"}
+Properties::Properties(
+    erhe::imgui::Imgui_renderer& imgui_renderer,
+    erhe::imgui::Imgui_windows&  imgui_windows,
+    App_context&                 app_context,
+    std::string_view             title,
+    std::string_view             ini_label
+)
+    : Imgui_window{imgui_renderer, imgui_windows, title, ini_label}
     , m_context   {app_context}
 {
 }

@@ -455,6 +455,35 @@ namespace {
     };
 }
 
+// Find a content-library asset by name across scenes (or one scene when
+// scene_name is non-empty). folder_member selects the folder (graph_meshes,
+// graph_textures, materials). Returns null when name is empty or no match.
+template <typename T>
+[[nodiscard]] auto find_content_library_asset(
+    App_context&                                        context,
+    const std::string&                                  scene_name,
+    std::shared_ptr<Content_library_node> Content_library::* folder_member,
+    const std::string&                                  name
+) -> std::shared_ptr<T>
+{
+    if ((context.app_scenes == nullptr) || name.empty()) {
+        return {};
+    }
+    for (const std::shared_ptr<Scene_root>& scene_root : context.app_scenes->get_scene_roots()) {
+        if (!scene_name.empty() && (scene_root->get_name() != scene_name)) {
+            continue;
+        }
+        const std::shared_ptr<Content_library> library = scene_root->get_content_library();
+        if (library) {
+            std::shared_ptr<T> found = find_library_item<T>(library.get()->*folder_member, name);
+            if (found) {
+                return found;
+            }
+        }
+    }
+    return {};
+}
+
 } // anonymous namespace
 
 auto Mcp_server::action_create_graph_texture(const json& args) -> std::string
@@ -819,6 +848,64 @@ auto Mcp_server::action_set_texture_graph_target(const json& args) -> std::strin
     }
     window->set_target(found);
     return make_json_content({{"target", name}, {"id", found->get_id()}}).dump();
+}
+
+auto Mcp_server::action_open_geometry_graph_window(const json& args) -> std::string
+{
+    // Issue #252: open a NEW Geometry Graph window, optionally targeting a
+    // named Graph Mesh asset (empty name -> empty editor). Complements the
+    // primary window; closed by the user via its X button.
+    if (m_context.editor_windows == nullptr) {
+        return make_error_content("Editor windows manager not available");
+    }
+    const std::string name       = args.value("graph_mesh", "");
+    const std::string scene_name = args.value("scene_name", "");
+    std::shared_ptr<Graph_mesh> target = find_content_library_asset<Graph_mesh>(
+        m_context, scene_name, &Content_library::graph_meshes, name
+    );
+    if (!name.empty() && !target) {
+        return make_error_content("Graph mesh not found: " + name);
+    }
+    m_context.editor_windows->open_geometry_graph_window(target);
+    return make_json_content({{"opened", true}, {"target", name}}).dump();
+}
+
+auto Mcp_server::action_open_texture_graph_window(const json& args) -> std::string
+{
+    // Issue #252: open a NEW Texture Graph window, optionally targeting a
+    // named Graph Texture asset (empty name -> empty editor).
+    if (m_context.editor_windows == nullptr) {
+        return make_error_content("Editor windows manager not available");
+    }
+    const std::string name       = args.value("graph_texture", "");
+    const std::string scene_name = args.value("scene_name", "");
+    std::shared_ptr<Graph_texture> target = find_content_library_asset<Graph_texture>(
+        m_context, scene_name, &Content_library::graph_textures, name
+    );
+    if (!name.empty() && !target) {
+        return make_error_content("Graph texture not found: " + name);
+    }
+    m_context.editor_windows->open_texture_graph_window(target);
+    return make_json_content({{"opened", true}, {"target", name}}).dump();
+}
+
+auto Mcp_server::action_open_properties_window(const json& args) -> std::string
+{
+    // Issue #252: open a NEW Properties window pinned to a named material
+    // (empty -> pinned to nothing, i.e. it follows the global selection).
+    if (m_context.editor_windows == nullptr) {
+        return make_error_content("Editor windows manager not available");
+    }
+    const std::string name       = args.value("material", "");
+    const std::string scene_name = args.value("scene_name", "");
+    std::shared_ptr<erhe::primitive::Material> target = find_content_library_asset<erhe::primitive::Material>(
+        m_context, scene_name, &Content_library::materials, name
+    );
+    if (!name.empty() && !target) {
+        return make_error_content("Material not found: " + name);
+    }
+    m_context.editor_windows->open_properties_window(target);
+    return make_json_content({{"opened", true}, {"target", name}}).dump();
 }
 
 auto Mcp_server::action_texture_graph_add_node(const json& args) -> std::string

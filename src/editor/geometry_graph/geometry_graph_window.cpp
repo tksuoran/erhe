@@ -55,9 +55,11 @@ void mark_sink_node_dirty(erhe::graph::Pin* sink_pin)
 Geometry_graph_window::Geometry_graph_window(
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
-    App_context&                 app_context
+    App_context&                 app_context,
+    std::string_view             title,
+    std::string_view             ini_label
 )
-    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Geometry Graph", "geometry_graph"}
+    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, title, ini_label}
     , m_app_context            {app_context}
 {
     // The window edits an explicit target Graph_mesh (issue #252); when the

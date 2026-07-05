@@ -57,6 +57,7 @@ class App_rendering;
 class App_scenes;
 class App_settings;
 class App_windows;
+class Editor_windows;
 class Fly_camera_tool;
 class Geometry_graph_window;
 class Grid_tool;
@@ -164,6 +165,7 @@ public:
     App_scenes*                        app_scenes           {nullptr};
     App_settings*                      app_settings         {nullptr};
     App_windows*                       app_windows          {nullptr};
+    Editor_windows*                    editor_windows       {nullptr};
     Fly_camera_tool*                   fly_camera_tool      {nullptr};
     Geometry_graph_window*             geometry_graph_window{nullptr};
     Grid_tool*                         grid_tool            {nullptr};

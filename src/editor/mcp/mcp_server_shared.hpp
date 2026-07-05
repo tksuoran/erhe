@@ -30,6 +30,7 @@
 #include "texture_graph/texture_renderer.hpp"
 #include "texture_graph/nodes/texture_node_descriptors.hpp"
 #include "texture_graph/nodes/texture_material_output_node.hpp"
+#include "windows/editor_windows.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/item_parent_change_operation.hpp"
 #include "operations/material_change_operation.hpp"
