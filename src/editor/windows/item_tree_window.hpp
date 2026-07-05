@@ -203,11 +203,21 @@ public:
         std::string_view             ini_label
     );
 
+    // Marks this tree window as a scene-hierarchy browser (as opposed to the
+    // generic content-library / tools tree windows built from the same class).
+    // Used by window placement (#258) to dock a new Hierarchy window with an
+    // existing one.
+    void set_scene_hierarchy(bool value);
+    [[nodiscard]] auto is_scene_hierarchy() const -> bool;
+
     // Implements Imgui_window
     void imgui   () override;
     void on_begin() override;
     void on_end  () override;
     void hidden  () override;
+
+private:
+    bool m_is_scene_hierarchy{false};
 };
 
 }

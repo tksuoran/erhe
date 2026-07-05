@@ -1748,6 +1748,16 @@ void Item_tree_window::on_end()
     ImGui::PopStyleVar(2);
 }
 
+void Item_tree_window::set_scene_hierarchy(const bool value)
+{
+    m_is_scene_hierarchy = value;
+}
+
+auto Item_tree_window::is_scene_hierarchy() const -> bool
+{
+    return m_is_scene_hierarchy;
+}
+
 void Item_tree_window::hidden()
 {
     // Drop cached rows so a hidden tree does not keep deleted items alive

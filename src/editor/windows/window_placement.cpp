@@ -2,6 +2,7 @@
 
 #include "geometry_graph/geometry_graph_window.hpp"
 #include "texture_graph/texture_graph_window.hpp"
+#include "windows/item_tree_window.hpp"
 #include "windows/properties.hpp"
 #include "windows/viewport_window.hpp"
 
@@ -20,6 +21,8 @@ namespace {
 constexpr float c_editor_window_ratio     = 0.66f;
 constexpr float c_properties_width_ratio  = 0.33f;
 constexpr float c_properties_height_ratio = 0.66f;
+constexpr float c_hierarchy_width_ratio   = 0.25f;
+constexpr float c_hierarchy_height_ratio  = 0.50f;
 
 auto is_editor_window(const erhe::imgui::Imgui_window* window) -> bool
 {
@@ -87,6 +90,23 @@ void apply_properties_window_placement(erhe::imgui::Imgui_windows& imgui_windows
         }
     }
     new_window.set_initial_placement(target, c_properties_width_ratio, c_properties_height_ratio);
+}
+
+void apply_hierarchy_window_placement(erhe::imgui::Imgui_windows& imgui_windows, erhe::imgui::Imgui_window& new_window)
+{
+    std::string target;
+    const std::vector<erhe::imgui::Imgui_window*>& windows = imgui_windows.get_windows();
+    for (const erhe::imgui::Imgui_window* window : windows) {
+        if ((window == &new_window) || !window->is_window_visible()) {
+            continue;
+        }
+        const Item_tree_window* tree_window = dynamic_cast<const Item_tree_window*>(window);
+        if ((tree_window != nullptr) && tree_window->is_scene_hierarchy()) {
+            target = window->get_title();
+            break;
+        }
+    }
+    new_window.set_initial_placement(target, c_hierarchy_width_ratio, c_hierarchy_height_ratio);
 }
 
 } // namespace editor

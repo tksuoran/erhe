@@ -21,9 +21,14 @@ namespace editor {
 //    none is currently docked, show it floating, centered, at 33% width x 66%
 //    height of the viewport.
 //
+//  - Hierarchy windows: dock (tab) with an existing scene-hierarchy window. If
+//    none is currently docked, show it floating, centered, at 25% width x 50%
+//    height of the viewport.
+//
 // new_window must already be registered in imgui_windows.
 
 void apply_editor_window_placement    (erhe::imgui::Imgui_windows& imgui_windows, erhe::imgui::Imgui_window& new_window);
 void apply_properties_window_placement(erhe::imgui::Imgui_windows& imgui_windows, erhe::imgui::Imgui_window& new_window);
+void apply_hierarchy_window_placement (erhe::imgui::Imgui_windows& imgui_windows, erhe::imgui::Imgui_window& new_window);
 
 } // namespace editor

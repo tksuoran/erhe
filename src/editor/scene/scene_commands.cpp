@@ -568,6 +568,9 @@ auto Scene_commands::create_new_scene() -> std::shared_ptr<Scene_root>
         *m_context.app_settings
     );
     browser_window->show_window();
+    // Dock (tab) the new scene's Hierarchy window with the existing one instead
+    // of leaving it floating at ImGui's default cascade position (#258).
+    apply_hierarchy_window_placement(*m_context.imgui_windows, *browser_window);
 
     // A viewport window looking through the new camera. create_viewport_scene_view
     // is called directly (rather than open_new_viewport_scene_view) so the new

@@ -301,6 +301,7 @@ auto Scene_root::make_browser_window(
         fmt::format("Scene Hierarchy [{}]", ++s_browser_window_count),
         ""
     );
+    m_node_tree_window->set_scene_hierarchy(true);
     m_node_tree_window->set_root(m_scene->get_root_node());
     // Show a selectable Scene item at the top of the Hierarchy window, with the
     // Content Library nested under it (issue #240). The scene root node's child
