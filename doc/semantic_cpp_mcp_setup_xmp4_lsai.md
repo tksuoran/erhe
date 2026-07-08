@@ -128,8 +128,14 @@ Then a `.clangd` in the repo root pointing at that build dir (so clangd finds
 the DB even if the dir name is non-standard):
 
 ```yaml
-CompilationDatabase: <build_dir>
+CompileFlags:
+    CompilationDatabase: <build_dir>
 ```
+
+GOTCHA: `CompilationDatabase` must be nested under `CompileFlags:`. At top
+level clangd rejects it ("Unknown Config key 'CompilationDatabase'") and
+silently falls back to a flag-less generic compile command -- every include
+fails and the file shows phantom errors even though the database is fine.
 
 ### 2.5 THE critical Windows requirement: launch from the MSVC environment
 
