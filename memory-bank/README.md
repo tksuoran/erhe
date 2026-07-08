@@ -235,12 +235,31 @@ Structure :: PredictableParsing
 Evolution :: §Versioning→Improvements
 AINative :: MachineFirst¬HumanComfort
 
+## Machine-Scope Rule
+
+MemoryBank::git-committed+public-repo→MachineNeutralOnly!
+@rationale::SharedSingleSourceOfTruth{per-machine-facts=wrong-on-other-machines+go-stale+information-exposure}
+
+[Forbidden-in-committed-files]
+- usernames|account-names|user-home-paths{C:\Users\<name>,/home/<name>}
+- hostnames|machine-nicknames|"<person>-machine"-attribution
+- per-machine-install-state{what-is-installed-where,PATH-contents,VS-edition-of-a-machine}
+- per-machine-decisions{phrase-as-project-policy-instead}
+- secrets|tokens|keys{never,¬even-mention-of-location}
+
+[Instead]
+- Capabilities¬Inventory::"needs clangd >= 22"¬"clangd 22 installed on X"
+- Paths::%USERPROFILE%|$HOME|<you>{placeholders}
+- Attribution::©PublicIdentitiesOnly{GitHub-handles-ok}
+- PerMachineFacts→memory-bank/local/*.md{gitignored,¬committed,read-if-present-after-core-files}
+
 ## Additional Context
 
 @flexible::CreateMore{path:"memory-bank/*"}
 - features/*.md :: ComplexFeatures
 - api/*.md :: APISpecs  
 - decisions/*.md :: ArchitectureRecords
+- local/*.md :: PerMachineState{gitignored,see-Machine-Scope-Rule}
 
 ## Protocol Success
 

@@ -521,3 +521,4 @@ The Memory Bank is the project's memory and the single source of truth for proje
 @memory-bank/techContext.md
 @memory-bank/activeContext.md
 @memory-bank/progress.md
+@memory-bank/local/context.md

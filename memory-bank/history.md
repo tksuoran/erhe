@@ -8,7 +8,7 @@
 >installed::lsai-MCP+clangd{winget LLVM}+LLVM-user-PATH-persistent✓
 >forked::tksuoran/erhe→LadislavSopko/erhe-PUBLIC✓
 >committed::doc+ninja-vulkan-scripts→fork{acfac4bc,pushed}✓
->untracked::.mcp.json{secret-CLAUDE_CHAT_API_KEY,gitignored,never-committed-with-secret}✓
+>verified::.mcp.json-gitignored{machine-local,never-committed}✓
 >wrote::doc/semantic_cpp_mcp_setup_xmp4_lsai.md{xmp4+lsai-setup-for-tksuoran}✓
 >proved::clangd-VS-env-requirement{26→0-errors,INCLUDE}✓
 >fieldtest::lsai-on-erhe{outline/info/source✓,project-wide✗-index-warmup}✓
@@ -40,3 +40,24 @@
 ✓geometry-nodes::phases1-5+MCP-tools+undo-redo+serialization{branch:geometry_nodes,713eb22d..d812547c,live-verified-headless-MCP,plan-doc-updated,phase6→prompt_queue.txt}
 ✓#240-selectable-scene::archived{done-2026-07-01,see-git}
 ✓session-tooling::mcp_call.py+erhe-headless-verify-skill+CLAUDE.md{cli-builds+testing+gotchas}+renderdoc-skill-verify-wording+.mcp.json-recreated
+✓geometry-nodes-phase6::6a-incremental+6b-CoW+param-undo+MCP-set_parameter+spawn-grid+output-name{a11abd21..0881e107}
+✓geometry-nodes-phase6-completion::output-physics+6d-instances+6e-groups+6c-design+CSG-fix+CC-quadratic-fix+smoke-sweep-65/65{ff414965..a2a36dd5}
+✓catmull-clark-performance::harness+items-11-12-1-3-2{0171c8c4..650dc354,editor-x6-25.1→17.8s-Debug,Release-chain-689→570ms,doc/catmull_clark.md}
+
+[2026-07-03]
+✓smoke-coverage-extension::65→120-checks+2-real-fixes{cycle-acceptance-b553559b,empty-geometry-output-crash-4491835f,script-bdc71123}
+✓doc-audit::52-files-reviewed→16-deleted+~16-refreshed{6106f4d0..5b1cc01c,doc-52→38}
+✓editor-improvements-geometry-graph::pin-colors+pipeline-breadcrumbs+geogram-fork-resolution+ASYNC-EVAL-snapshot-isolation{d753e5d5..8f179479,sweep-120/120}
+
+[2026-07-05]
+✓PhaseC-graph-editor-dedup::C1..C7→src/editor/graph_editor/{5a211b01..f85e3f56,as-built-doc/graph_editor.md,shader-graph-left-as-is,C7-remainder+C8-deferred}
+✓#252-independent-target::5-phases{7d80b0e8..3df49974,doc/252.md,explicit-weak_ptr-targets+pinned-Properties+Editor_windows-multi-instance+OpenEditor/OpenProperties}
+
+[2026-07-07]
+✓agent-tooling-setup::local-prereqs{dotnet10-runtime+LLVM-clangd-22}+compile-db{build_ninja_win_clang}+.clangd{CompileFlags-nesting-fix}+clangd--check-0-errors
+✓ninja-wrappers-locate-VS-via-vswhere{was-hardcoded-Community-path}+setup-doc-.clangd-fix
+✗LSAI+xmp4::now-opt-in-per-machine¬default{installer-reviewed-not-run;default-code-nav=Grep+VS-MCP+clangd--check,deps→.cpm_cache}
+✓memory-bank-trim::progress.md-completed-tasks→history{20.7KB→747B}+activeContext/techContext-refresh{stale-branch-claims:geometry_nodes-actually-merged,no-crease-branch;stale-MCP-entries-superseded}
+
+[2026-07-08]
+✓machine-scope-rule::README.md{committed-files-machine-neutral:¬usernames/¬hostnames/¬user-paths/¬install-state/¬secrets;capabilities¬inventory;©public-identities-only}+memory-bank/local/{gitignored-per-machine-state}+scrub{activeContext/techContext/history-person-machine-attributions}

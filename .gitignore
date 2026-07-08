@@ -87,3 +87,6 @@ android-project/app/.cxx/
 # Validation layer .so fetched by `-Pvulkan_validation=1` build (see app/build.gradle).
 android-project/app/libs/
 android-project/local.properties
+
+# Per-machine memory bank state (see memory-bank/README.md Machine-Scope Rule)
+memory-bank/local/

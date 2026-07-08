@@ -9,15 +9,15 @@ Deps#27{geogram+joltphysics+glm+fmt+spdlog+imgui+fastgltf+simdjson+nlohmann_json
 Python::"py -3"!{¬python/python3→MS-StoreStub-fails}
 
 [BUILD_WIN]
-VS2026::"C:\Program Files\Microsoft Visual Studio\18\Community"{folder18¬2026}
+VS2026::{folder-"18"¬"2026";edition+install-path-vary-per-machine→ninja-wrappers-locate-via-vswhere{%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe,-latest -requires VC.Tools.x86.x64}}
 Official::scripts\configure_vs2026_vulkan.bat→build_vs2026_vulkan/{VS-solution,open+build-editor}
-@NEW>Ninja{no-VS-solution}©vulcan:
+Ninja{no-VS-solution}:
   configure_ninja_win_clang.bat→build_ninja_win_clang/{clang-cl+CMAKE_EXPORT_COMPILE_COMMANDS+VORPALINE_PLATFORM=Win-vs-generic}
   configure_ninja_win_vulkan.bat→build_ninja_win_vulkan/{MSVC cl}
   build_ninja_win_<clang|vulkan>.bat <target>
   Bundled@VS18{cmake+ninja+VsDevCmd}
-!NinjaNeedsMSVC-env::launch-from-x64-NativeTools-prompt{cl+INCLUDE}
-clang-cl-build::editor.exe-builds-clean✓{2026-06-29}>was::editor-link-fails
+!NinjaNeedsMSVC-env::wrappers-call-VsDevCmd-themselves{work-from-any-shell}
+clang-cl-build::editor.exe-builds-clean✓{2026-06-29}
   tracy-pin{VERSION-0.13.1→GIT_TAG-master-4cd6c389}::ALL-builds-3-consequences:
     +want::=nullptr→(nullptr){clang-cl-rejects-deleted-atomic-copy-ctor<C++17}
     +must::OPTIONS+"TRACY_ENABLE ON"{master-flipped-default-ON→OFF;else-no-profiling+TracyClient-stops-defining-TRACY_ENABLE→editor.cpp-unused-name-/W4/WX-cl.exe}
@@ -27,21 +27,22 @@ clang-cl-build::editor.exe-builds-clean✓{2026-06-29}>was::editor-link-fails
     Clang.cmake{-g3-GNU-frontend-only,clang-cl-rejects→Jolt-Werror-fatal}
     Jolt{set(ENABLE_ALL_WARNINGS-OFF)@clang-cl::/Wall=-Weverything+/WX→-Wpadded-fatal}
     Clang.cmake{global-avx2-baseline@clang-cl::Jolt-PUBLIC-avx2-vs-shared-erhe_pch-feature-mismatch{clang-PCH-check-symmetric}}
-  also::compile_commands@configure{lsai/clangd,still-works}
-  verified✓::editor.exe-links×8{clang-cl-ninja|cl.exe-ninja-vulkan|VS:vulkan+opengl+vulkan_asan+opengl_asan+headless(null-backend)+vulkan_headless;all-0-error}{2nd-compiler+OpenGL-backend-each-exposed-a-tracy-pin-regression;asan/headless-needed-no-new-fix}
+  also::compile_commands@configure{clangd,still-works}
+  verified✓::editor.exe-links×8{clang-cl-ninja|cl.exe-ninja-vulkan|VS:vulkan+opengl+vulkan_asan+opengl_asan+headless(null-backend)+vulkan_headless;all-0-error}
 
 [CLANGD_SEMANTIC]
-.clangd→CompilationDatabase::build_ninja_win_clang
-compile_commands.json::clang-cl-native#1731
-clang-cl22+clangd22::sameLLVM{"C:\Program Files\LLVM\bin"@user-PATH-persistent}
+.clangd→CompileFlags::CompilationDatabase::build_ninja_win_clang
+!.clangd-gotcha::CompilationDatabase-must-nest-under-CompileFlags{top-level="Unknown Config key"→silent-flag-less-fallback→phantom-errors;doc-fixed-3b70f492}
+compile_commands.json::clang-cl-native{~1800-TU;regenerate-via-configure_ninja_win_clang.bat}
+clangd::needs-LLVM>=22{winget install LLVM.LLVM;installer-does-NOT-add-"C:\Program Files\LLVM\bin"-to-PATH→add-to-user-PATH}
 !clangd-needs-INCLUDE{VS-env}→else-phantom-VS8/9/10-paths→headers-fail{std::mutex-not-found}
-proof::clangd--check{noEnv:26errors→VS-env:0-real-errors}
+proof::clangd--check{noEnv:26errors→VS-env:0-errors;re-proven-2026-07-07{verify.cpp-10→0-after-CompileFlags-fix}}
 
 [MCP_SERVERS]
-lsai::stdio{C:/Users/ladis/.lsai/run.cmd --stdio}{clangd-broker,local-cpp,@v1.0.180}
-xmp4::http{https://mcp.example4.ai/mcp}{SCIP,third-party-libs,no-auth/no-key,900+OSS}
-claude-chat::stdio{bunx cc-chat-mcp,NPM_CONFIG_REGISTRY=nexus.0ics.ai,room:lsai,name:vulcan}
-config::.mcp.json{project,¬commit-secret}||~/.claude/mcp.json{user,xmp4+lsai}
+!policy::lsai+xmp4=opt-in-per-machine¬default{2026-07-07;whether-installed→memory-bank/local/}
+default-code-nav::Grep/Glob{erhe-naming-consistent}+VS-MCP{goto_definition/find_references-from-open-docs}+clangd--check{per-file-diagnostics}
+third-party-deps::read-.cpm_cache-sources-directly{CPM-fetches-all-dep-sources-at-configure}
+doc::doc/semantic_cpp_mcp_setup_xmp4_lsai.md+doc/lsai_usage_playbook.md{kept,machine-neutral,for-machines-that-opt-in}
 !MCP-loads-at-session-start→restart-to-pick-up-changes
 
 [RUNTIME]
@@ -53,4 +54,4 @@ editor-run::repo-root-cwd{config/+res/+logs/}
 →fix::git -C <cache> submodule update --init --force <paths>+RE-configure{sources-needed-pre-configure}
 
 [VS_MCP]
-visualstudio-MCP::roslyn-based→¬cpp-support{WorkspaceNeedsRestore/no-solution}→use-lsai-for-cpp
+symbol_workspace::¬cpp-index{C#-oriented,0-matches}→goto_definition/find_references-from-open-documents+Grep{CLAUDE.md-VS-MCP-section=canonical-debug/build-flow}
