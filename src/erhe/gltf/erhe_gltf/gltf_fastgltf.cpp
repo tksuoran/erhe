@@ -1297,7 +1297,7 @@ private:
         {
             const fastgltf::Texture& texture = m_asset->textures[gltf_texture_info.textureIndex];
             if (texture.imageIndex.has_value()) {
-                erhe_texture_sampler.texture = get_image(texture.imageIndex.value(), linear);
+                erhe_texture_sampler.texture_reference = get_image(texture.imageIndex.value(), linear);
             }
             if (texture.samplerIndex.has_value()) {
                 erhe_texture_sampler.sampler = m_data_out.samplers[texture.samplerIndex.value()];

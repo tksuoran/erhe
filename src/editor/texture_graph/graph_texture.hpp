@@ -17,7 +17,7 @@ class Texture_graph_node;
 // Graph_texture is the content-library home of a texture node graph: it owns the
 // Texture_graph (its links + evaluation state) and the node objects, and exposes
 // the graph's baked output as an erhe::graphics::Texture_reference so a Material
-// slot (Material_texture_sampler::texture_source) can sample it. Because the
+// slot (Material_texture_sampler::texture_reference) can sample it. Because the
 // renderer resolves the reference every frame and get_referenced_texture()
 // returns the current baked output, editing the graph updates every material
 // that sources it with no push logic.

@@ -17,13 +17,12 @@ Material::Material(const Material_create_info& create_info)
 [[nodiscard]] auto operator==(const Material_texture_sampler& lhs, const Material_texture_sampler& rhs)
 {
     return
-        (lhs.texture        == rhs.texture       ) &&
-        (lhs.texture_source == rhs.texture_source) &&
-        (lhs.sampler        == rhs.sampler        ) &&
-        (lhs.tex_coord      == rhs.tex_coord      ) &&
-        (lhs.rotation       == rhs.rotation       ) &&
-        (lhs.offset         == rhs.offset         ) &&
-        (lhs.scale          == rhs.scale          );
+        (lhs.texture_reference == rhs.texture_reference) &&
+        (lhs.sampler           == rhs.sampler          ) &&
+        (lhs.tex_coord         == rhs.tex_coord        ) &&
+        (lhs.rotation          == rhs.rotation         ) &&
+        (lhs.offset            == rhs.offset           ) &&
+        (lhs.scale             == rhs.scale            );
 
 }
 [[nodiscard]] auto operator!=(const Material_texture_sampler& lhs, const Material_texture_sampler& rhs)

@@ -58,8 +58,7 @@ void Texture_output_node::on_removed_from_graph()
 {
     unregister_texture();
     if (m_assign_to_material && m_material) {
-        m_material->data.texture_samplers.base_color.texture.reset();
-        m_material->data.texture_samplers.base_color.texture_source.reset();
+        m_material->data.texture_samplers.base_color.texture_reference.reset();
         m_material->data.texture_samplers.base_color.sampler.reset();
     }
 }
@@ -186,15 +185,14 @@ void Texture_output_node::assign_to_material()
     erhe::primitive::Material_texture_sampler& base_color = m_material->data.texture_samplers.base_color;
     base_color.sampler = m_sampler;
     // Bind the material to the owning content-library asset as a live
-    // texture_source (the material samples the asset's baked output every
-    // frame, and the binding is persisted on save). Clear any pushed texture.
+    // texture reference (the material samples the asset's baked output every
+    // frame, and the binding is persisted on save).
     // Every node belongs to an asset - graphs only live in the content library.
     const std::shared_ptr<Graph_texture> owning = get_owning_graph_texture();
     if (!owning) {
         return;
     }
-    base_color.texture_source = owning;
-    base_color.texture.reset();
+    base_color.texture_reference = owning;
 }
 
 void Texture_output_node::imgui()

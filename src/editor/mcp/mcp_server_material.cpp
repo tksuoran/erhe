@@ -235,7 +235,10 @@ public:
 
 void apply_slot_edit(const Slot_edit& edit, erhe::primitive::Material_texture_sampler& target)
 {
-    if (edit.has_texture)         target.texture   = edit.texture;
+    // Assigning (or nulling) a plain texture replaces any previous binding on
+    // the slot, including a Graph_texture reference - the slot is a single
+    // texture_reference.
+    if (edit.has_texture)         target.texture_reference = edit.texture;
     if (edit.tex_coord.has_value()) target.tex_coord = edit.tex_coord.value();
     if (edit.rotation.has_value()) target.rotation  = edit.rotation.value();
     if (edit.offset.has_value())   target.offset    = edit.offset.value();

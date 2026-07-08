@@ -130,7 +130,7 @@ void Rendertarget_mesh::resize_rendertarget(
             }
         }
     );
-    m_material->data.texture_samplers.base_color.texture = m_texture;
+    m_material->data.texture_samplers.base_color.texture_reference = m_texture;
     m_material->data.texture_samplers.base_color.sampler = m_sampler;
     m_material->disable_flag_bits(erhe::Item_flags::show_in_ui);
 

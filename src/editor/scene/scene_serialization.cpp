@@ -845,7 +845,7 @@ auto save_scene(
         }
         if (content_library && content_library->materials) {
             const auto add_binding = [&scene_file](const erhe::primitive::Material& material, const char* slot, const erhe::primitive::Material_texture_sampler& sampler) {
-                const Graph_texture* graph_texture = dynamic_cast<const Graph_texture*>(sampler.texture_source.get());
+                const Graph_texture* graph_texture = dynamic_cast<const Graph_texture*>(sampler.texture_reference.get());
                 if (graph_texture != nullptr) {
                     Material_texture_source_data binding;
                     binding.material_name      = material.get_name();
@@ -1758,8 +1758,7 @@ auto load_scene(
                 else if (binding.slot == "occlusion")          sampler = &samplers.occlusion;
                 else if (binding.slot == "emissive")           sampler = &samplers.emissive;
                 if (sampler != nullptr) {
-                    sampler->texture_source = graph_texture;
-                    sampler->texture.reset();
+                    sampler->texture_reference = graph_texture;
                 }
             }
         }

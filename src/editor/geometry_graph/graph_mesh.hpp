@@ -46,7 +46,7 @@ public:
 // evaluation. Scene nodes consume the asset through the Geometry_graph_mesh
 // Node_attachment, which points back here and swaps its controlled Mesh's
 // primitives whenever the baked revision advances - the scene-side analogue
-// of Graph_texture + Material::texture_source.
+// of Graph_texture + Material::texture_reference.
 //
 // The graph is EDITED by Geometry_graph_window (the window follows the
 // selected Graph_mesh); this class only owns the state. It is intentionally

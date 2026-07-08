@@ -562,7 +562,7 @@ auto Mcp_server::action_set_material_texture_source(const json& args) -> std::st
     }
 
     if (graph_texture_name.empty()) {
-        sampler->texture_source.reset();
+        sampler->texture_reference.reset();
         return make_json_content({
             {"cleared",  true},
             {"material", material_name},
@@ -576,9 +576,8 @@ auto Mcp_server::action_set_material_texture_source(const json& args) -> std::st
         return make_error_content("Graph texture not found: " + graph_texture_name);
     }
     // Graph_texture is-a erhe::graphics::Texture_reference; the shared_ptr upcasts.
-    // The source is authoritative, so clear any directly-assigned texture.
-    sampler->texture_source = graph_texture;
-    sampler->texture.reset();
+    // The slot has a single reference, so this replaces any previous binding.
+    sampler->texture_reference = graph_texture;
     return make_json_content({
         {"bound",            true},
         {"material",         material_name},

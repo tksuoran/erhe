@@ -246,7 +246,7 @@ void Mcp_server::refresh_tool_list()
             {"use_aniso_control",          {{"type", "boolean"}, {"description", "Enable anisotropic shading control"}}},
             {"texture_samplers",           {
                 {"type", "object"},
-                {"description", "Per-slot texture assignments. Textures must come from the scene's content library (use get_scene_textures to list)."},
+                {"description", "Per-slot texture assignments. Textures must come from the scene's content library (use get_scene_textures to list). Each slot holds a single texture reference, so assigning or clearing a texture also replaces/clears any Graph Texture binding on that slot."},
                 {"properties", {
                     {"base_color",         texture_slot_schema},
                     {"metallic_roughness", texture_slot_schema},
@@ -716,7 +716,7 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"name"})}
     }});
-    m_tool_infos.push_back({"set_material_texture_source", "Bind a Material texture slot to a Graph Texture asset so the material samples the graph's baked output (the material->graph back-reference; editing the graph updates the material live). Omit or empty 'graph_texture' to clear the binding (revert to the plain assigned texture). The source is authoritative and clears any directly-assigned texture on that slot.", {
+    m_tool_infos.push_back({"set_material_texture_source", "Bind a Material texture slot to a Graph Texture asset so the material samples the graph's baked output (the material->graph back-reference; editing the graph updates the material live). Each slot holds a single texture reference, so binding replaces any previously assigned texture. Omit or empty 'graph_texture' to clear the slot entirely.", {
         {"type", "object"},
         {"properties", {
             {"material_name", {{"type", "string"}, {"description", "Name of the material in the scene's content library"}}},

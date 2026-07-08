@@ -416,16 +416,19 @@ auto Mcp_server::query_material_details(const json& args) -> std::string
                     {"offset",    {s.offset.x, s.offset.y}},
                     {"scale",     {s.scale.x,  s.scale.y}}
                 };
-                if (s.texture) {
-                    entry["texture_id"]   = s.texture->get_id();
-                    entry["texture_name"] = s.texture->get_name();
+                // The slot holds a single texture_reference; report it as
+                // texture_id/name when it is a plain Texture and as
+                // graph_texture_id/name when it is a Graph_texture asset
+                // (the material -> graph back-reference).
+                const erhe::graphics::Texture* texture       = dynamic_cast<const erhe::graphics::Texture*>(s.texture_reference.get());
+                const Graph_texture*           graph_texture = dynamic_cast<const Graph_texture*>          (s.texture_reference.get());
+                if (texture != nullptr) {
+                    entry["texture_id"]   = texture->get_id();
+                    entry["texture_name"] = texture->get_name();
                 } else {
                     entry["texture_id"]   = nullptr;
                     entry["texture_name"] = nullptr;
                 }
-                // The graph-texture source, when the slot is bound to a
-                // Graph_texture asset (the material -> graph back-reference).
-                const Graph_texture* graph_texture = dynamic_cast<const Graph_texture*>(s.texture_source.get());
                 if (graph_texture != nullptr) {
                     entry["graph_texture_id"]   = graph_texture->get_id();
                     entry["graph_texture_name"] = graph_texture->get_name();

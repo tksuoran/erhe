@@ -14,7 +14,7 @@ class Node_physics;
 // Node attachment sourcing the node's mesh from a Graph_mesh asset.
 //
 // The scene-side back-link of the geometry graph feature (the analogue of
-// Material::texture_source -> Graph_texture): a scene Node carrying this
+// Material::texture_reference -> Graph_texture): a scene Node carrying this
 // attachment gets its renderable Mesh from the referenced Graph_mesh's
 // baked products, and the attachment points back at the graph asset that
 // produced the geometry. The attachment CONTROLS a sibling Mesh attachment

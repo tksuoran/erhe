@@ -1760,58 +1760,35 @@ void Properties::material_properties(const std::vector<std::shared_ptr<erhe::Ite
     if (scene_root != nullptr) {
         const std::shared_ptr<Content_library>& content_library = scene_root->get_content_library();
         if (content_library) {
-            const std::shared_ptr<Content_library_node>& textures_ = content_library->textures;
-            if (textures_) {
-                Content_library_node& textures = *textures_.get();
-                auto add_tex_coord_entry = [this](const char* label, erhe::primitive::Material_texture_sampler* sampler) {
-                    add_entry(label, [sampler]() {
+            // Each slot holds a single texture_reference which can be a plain
+            // texture or a Graph Texture asset; one combo lists both. The
+            // transform rows are shown whenever the slot is bound - the shader
+            // applies them regardless of which source provided the texture.
+            Content_library* library = content_library.get();
+            auto add_texture_slot_entries = [this, library](const std::string& label, const char* combo_id, erhe::primitive::Material_texture_sampler* sampler) {
+                add_entry(label + " Texture", [this, library, combo_id, sampler]() {
+                    library->texture_reference_combo(m_context, combo_id, sampler->texture_reference, true);
+                });
+                if (sampler->texture_reference) {
+                    add_entry(label + " Offset",   [sampler](){ ImGui::SliderFloat2("##", &sampler->offset.x, -10.0f, 10.0f); });
+                    add_entry(label + " Scale",    [sampler](){ ImGui::SliderFloat2("##", &sampler->scale.x,  -10.0f, 10.0f); });
+                    add_entry(label + " Rotation", [sampler](){ ImGui::SliderFloat ("##", &sampler->rotation, -10.0f, 10.0f); });
+                    add_entry(label + " TexCoord", [sampler]() {
                         int tex_coord = static_cast<int>(sampler->tex_coord);
                         if (ImGui::SliderInt("##", &tex_coord, 0, 1)) {
                             sampler->tex_coord = static_cast<uint32_t>(tex_coord);
                         }
                     });
-                };
-                add_entry("Base Color Texture", [&, this]() { textures.combo(m_context, "##", samplers.base_color.texture, true);});
-                // Source the base color from a Graph Texture asset instead of a
-                // plain texture (the material -> graph back-reference). When set,
-                // it is authoritative; the plain base color texture is cleared.
-                const std::shared_ptr<Content_library_node>& graph_textures_ = content_library->graph_textures;
-                if (graph_textures_) {
-                    Content_library_node& graph_textures = *graph_textures_.get();
-                    add_entry("Base Color Graph", [&, this]() {
-                        std::shared_ptr<Graph_texture> source = std::dynamic_pointer_cast<Graph_texture>(samplers.base_color.texture_source);
-                        if (graph_textures.combo<Graph_texture>(m_context, "##base_color_graph", source, true)) {
-                            samplers.base_color.texture_source = source;
-                            if (source) {
-                                samplers.base_color.texture.reset();
-                            }
-                        }
-                    });
                 }
-                if (samplers.base_color.texture) {
-                    add_entry("Base Color Offset",   [&](){ ImGui::SliderFloat2("##", &samplers.base_color.offset.x, -10.0f, 10.0f); });
-                    add_entry("Base Color Scale",    [&](){ ImGui::SliderFloat2("##", &samplers.base_color.scale.x,  -10.0f, 10.0f); });
-                    add_entry("Base Color Rotation", [&](){ ImGui::SliderFloat ("##", &samplers.base_color.rotation, -10.0f, 10.0f); });
-                    add_tex_coord_entry("Base Color TexCoord", &samplers.base_color);
-                }
-                add_entry("Metallic Roughness Texture",[&]() { textures.combo(m_context, "##", samplers.metallic_roughness.texture, true); });
-                if (samplers.metallic_roughness.texture) {
-                    add_tex_coord_entry("Metallic Roughness TexCoord", &samplers.metallic_roughness);
-                }
-                add_entry("Normal Texture",            [&]() { textures.combo(m_context, "##", samplers.normal.texture, true); } );
-                if (samplers.normal.texture) {
-                    add_entry("Normal Map Scale", [&](){ ImGui::SliderFloat("##", &data.normal_texture_scale, 0.0f, 1.0f); });
-                    add_tex_coord_entry("Normal TexCoord", &samplers.normal);
-                }
-                add_entry("Occlusion Texture", [&, this]() { textures.combo(m_context, "##", samplers.occlusion.texture, true); });
-                if (samplers.occlusion.texture) {
-                    add_tex_coord_entry("Occlusion TexCoord", &samplers.occlusion);
-                }
-                add_entry("Emissive Texture",  [&, this]() { textures.combo(m_context, "##", samplers.emissive.texture, true); });
-                if (samplers.emissive.texture) {
-                    add_tex_coord_entry("Emissive TexCoord", &samplers.emissive);
-                }
+            };
+            add_texture_slot_entries("Base Color",         "##base_color_texture",         &samplers.base_color);
+            add_texture_slot_entries("Metallic Roughness", "##metallic_roughness_texture", &samplers.metallic_roughness);
+            add_texture_slot_entries("Normal",             "##normal_texture",             &samplers.normal);
+            if (samplers.normal.texture_reference) {
+                add_entry("Normal Map Scale", [&](){ ImGui::SliderFloat("##", &data.normal_texture_scale, 0.0f, 1.0f); });
             }
+            add_texture_slot_entries("Occlusion",          "##occlusion_texture",          &samplers.occlusion);
+            add_texture_slot_entries("Emissive",           "##emissive_texture",           &samplers.emissive);
         }
     }
 
