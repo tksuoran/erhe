@@ -443,6 +443,10 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "open_geometry_graph_window")   result = action_open_geometry_graph_window  (req->arguments);
         else if (req->tool_name == "open_texture_graph_window")    result = action_open_texture_graph_window   (req->arguments);
         else if (req->tool_name == "open_properties_window")       result = action_open_properties_window      (req->arguments);
+        else if (req->tool_name == "get_scene_animations")         result = query_scene_animations             (req->arguments);
+        else if (req->tool_name == "set_animation_target")         result = action_set_animation_target        (req->arguments);
+        else if (req->tool_name == "animation_playback")           result = action_animation_playback          (req->arguments);
+        else if (req->tool_name == "animation_edit_keyframe")      result = action_animation_edit_keyframe     (req->arguments);
         else                                              result = execute_command       (req->tool_name);
 
         } catch (const std::exception& e) {

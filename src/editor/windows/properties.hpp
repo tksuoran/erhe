@@ -89,7 +89,7 @@ private:
     void target_selector_imgui();
 
 
-    void animation_properties         (erhe::scene::Animation& animation);
+    void animation_properties         (const std::shared_ptr<erhe::scene::Animation>& animation);
     void scene_properties             (erhe::scene::Scene& scene);
     void camera_properties            (erhe::scene::Camera& camera);
     void light_properties             (erhe::scene::Light& light);

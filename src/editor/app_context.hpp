@@ -45,6 +45,8 @@ struct Window_config;
 
 namespace editor {
 
+class Animation_player;
+class Animation_window;
 class Brdf_slice;
 class Brush_preview;
 class Brush_tool;
@@ -97,7 +99,6 @@ class Sky_renderer;
 class Texture_graph_window;
 class Thumbnails;
 class Time;
-class Timeline_window;
 class Tools;
 class Transform_tool;
 class Scene_views;
@@ -155,6 +156,8 @@ public:
     erhe::scene_renderer::Shader_variant_cache*       shader_variant_cache      {nullptr};
 
     erhe::window::Context_window*      context_window       {nullptr};
+    Animation_player*                  animation_player     {nullptr};
+    Animation_window*                  animation_window     {nullptr};
     Brdf_slice*                        brdf_slice           {nullptr};
     Brush_tool*                        brush_tool           {nullptr};
     Clipboard*                         clipboard            {nullptr};
@@ -205,7 +208,6 @@ public:
     Texture_graph_window*              texture_graph_window {nullptr};
     Thumbnails*                        thumbnails           {nullptr};
     Time*                              time                 {nullptr};
-    Timeline_window*                   timeline_window      {nullptr};
     Tools*                             tools                {nullptr};
     Transform_tool*                    transform_tool       {nullptr};
     Scene_views*                       scene_views          {nullptr};

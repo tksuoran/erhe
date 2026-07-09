@@ -1,5 +1,6 @@
 {
     "windows": {
+        "animation": true,
         "asset_browser": true,
         "clipboard": false,
         "commands": false,
@@ -37,7 +38,6 @@
         "tail_log": false,
         "texture_graph": false,
         "texture_graph_palette": false,
-        "timeline": true,
         "tool_properties": false,
         "tools_content_library": false,
         "transform": true

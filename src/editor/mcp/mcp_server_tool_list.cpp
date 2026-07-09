@@ -869,6 +869,45 @@ void Mcp_server::refresh_tool_list()
         }}
     }});
 
+    // Animation timeline / curve editor tools (issue #243). The Animation
+    // window and Animation_player share one target animation;
+    // set_animation_target points both at a named animation from a scene's
+    // content library (glTF import fills it).
+    m_tool_infos.push_back({"get_scene_animations", "List animations in scene content libraries (glTF imports land there): per animation the time range and every channel (target node, path, interpolation, keyframe count, sampler index).", schema_scene_name()});
+    m_tool_infos.push_back({"set_animation_target", "Point the Animation window (curve editor) and the animation player at a named animation and show the window. Optionally restrict which channels' curves are visible (deterministic view for screenshots). Empty/omitted 'animation' clears the target.", {
+        {"type", "object"},
+        {"properties", {
+            {"animation",        {{"type", "string"}, {"description", "Animation name; empty/omitted clears the target"}}},
+            {"scene_name",       {{"type", "string"}, {"description", "Scene to search (default: all scenes)"}}},
+            {"visible_channels", {{"type", "array"}, {"items", {{"type", "integer"}}}, {"description", "Channel indices whose curves are visible (all components); other channels are hidden. Omit to keep defaults. Also re-frames the view."}}}
+        }}
+    }});
+    m_tool_infos.push_back({"animation_playback", "Control animation playback (Animation_player): play / pause / stop, seek to a time, set speed and looping. Applies the sampled pose to the target nodes immediately, so a capture_screenshot on the next frame shows it. Optionally retargets to a named animation first.", {
+        {"type", "object"},
+        {"properties", {
+            {"animation",  {{"type", "string"},  {"description", "Animation name to target first (optional; default: current target)"}}},
+            {"scene_name", {{"type", "string"},  {"description", "Scene to search when 'animation' is given (default: all scenes)"}}},
+            {"action",     {{"type", "string"},  {"description", "play, pause or stop (optional)"}}},
+            {"time",       {{"type", "number"},  {"description", "Seek to this absolute animation time in seconds (optional)"}}},
+            {"speed",      {{"type", "number"},  {"description", "Playback speed factor; negative plays backwards (optional)"}}},
+            {"looping",    {{"type", "boolean"}, {"description", "Loop at the end of the range (optional)"}}}
+        }}
+    }});
+    m_tool_infos.push_back({"animation_edit_keyframe", "Edit animation keyframes (undoable through the operation stack, same code path as the Animation window). edit=move changes a key's time (clamped between neighbor keys) and/or one component's value; edit=insert adds a key at a time, evaluating the curve so the shape is preserved; edit=delete removes a key (all components). Times/values apply to the channel's sampler, so channels sharing a sampler are affected together.", {
+        {"type", "object"},
+        {"properties", {
+            {"animation",     {{"type", "string"},  {"description", "Animation name (optional; default: the Animation window's target)"}}},
+            {"scene_name",    {{"type", "string"},  {"description", "Scene to search when 'animation' is given (default: all scenes)"}}},
+            {"edit",          {{"type", "string"},  {"description", "move, insert or delete"}}},
+            {"channel_index", {{"type", "integer"}, {"description", "Channel index (from get_scene_animations)"}}},
+            {"key_index",     {{"type", "integer"}, {"description", "Keyframe index (move / delete)"}}},
+            {"time",          {{"type", "number"},  {"description", "move: new time for the key; insert: time of the new key"}}},
+            {"value",         {{"type", "number"},  {"description", "move: new value for one component (requires 'component')"}}},
+            {"component",     {{"type", "integer"}, {"description", "Component index (0=X, 1=Y, 2=Z, 3=W) for 'value'"}}}
+        }},
+        {"required", json::array({"edit", "channel_index"})}
+    }});
+
     // Editor commands
     const auto& registered_commands = m_commands.get_commands();
     for (const auto* command : registered_commands) {

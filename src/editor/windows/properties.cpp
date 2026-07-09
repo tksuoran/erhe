@@ -1,7 +1,6 @@
 #include "windows/properties.hpp"
 
-#include "animation/animation_curve.hpp"
-#include "animation/timeline_window.hpp"
+#include "animation/animation_window.hpp"
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
 #include "brushes/brush.hpp"
@@ -103,64 +102,25 @@ Properties::Properties(
 {
 }
 
-void Properties::animation_properties(erhe::scene::Animation& animation)
+void Properties::animation_properties(const std::shared_ptr<erhe::scene::Animation>& animation)
 {
     ERHE_PROFILE_FUNCTION();
 
-    float start_time = animation.get_first_time();
-    float end_time   = animation.get_last_time();
+    const float start_time = animation->get_first_time();
+    const float end_time   = animation->get_last_time();
 
     add_entry("Start Time", [=](){ ImGui::Text("%.4f", start_time); });
     add_entry("End Time",   [=](){ ImGui::Text("%.4f", end_time); });
-    add_entry("Samplers", [&animation](){ ImGui::Text("%d", static_cast<int>(animation.samplers.size())); });
-    add_entry("Channels", [&animation](){ ImGui::Text("%d", static_cast<int>(animation.channels.size())); });
-    //ImGui::BulletText("Samplers");
-    //{
-    //    for (auto& sampler : animation.samplers) {
-    //        std::string text = fmt::format("Sampler {}", erhe::scene::c_str(sampler.interpolation_mode));
-    //        ImGui::BulletText("%s", text.c_str());
-    //    }
-    //}
-    //
-    //ImGui::BulletText("Channels");
-    //ImGui::Indent(10.0f);
-    //{
-    //    for (auto& channel : animation->channels) {
-    //        std::string text = fmt::format(
-    //            "{} {}",
-    //            //channel.target->get_name(),
-    //            channel.target->describe(),
-    //            erhe::scene::c_str(channel.path)
-    //        );
-    //        ImGui::BulletText("%s", text.c_str());
-    //    }
-    //}
-    //ImGui::Unindent(10.0f);
+    add_entry("Samplers", [animation](){ ImGui::Text("%d", static_cast<int>(animation->samplers.size())); });
+    add_entry("Channels", [animation](){ ImGui::Text("%d", static_cast<int>(animation->channels.size())); });
 
-    add_entry("Curve", [&animation](){ animation_curve(animation); });
-
-    //if (start_time > end_time) {
-    //    std::swap(start_time, end_time);
-    //}
-    const float timeline_length = end_time - start_time;
-    m_context.timeline_window->set_timeline_length(timeline_length);
-    const float time_in_timeline = m_context.timeline_window->get_play_position();
-    animation.apply(start_time + time_in_timeline);
-
-    m_context.app_message_bus->animation_update.send_message(
-        Animation_update_message{}
-    );
-
-    // TODO assert all animation channels targets point to same scene?
-    std::shared_ptr<erhe::scene::Node> target = animation.channels.front().target;
-    if (!target) {
-        return;
-    }
-    erhe::scene::Scene* scene = animation.channels.front().target->get_scene();
-    if (scene == nullptr) {
-        return;
-    }
-    scene->update_node_transforms();
+    // Playback and curve editing live in the Animation window (issue #243).
+    add_entry("Edit", [this, animation]() {
+        if (ImGui::Button("Open in Animation Window")) {
+            m_context.animation_window->set_animation(animation);
+            m_context.animation_window->show_window();
+        }
+    });
 }
 
 void Properties::scene_properties(erhe::scene::Scene& scene)
@@ -1865,7 +1825,7 @@ void Properties::imgui()
 
     const auto selected_animation = get<erhe::scene::Animation>(items);
     if (selected_animation) {
-        animation_properties(*selected_animation.get());
+        animation_properties(selected_animation);
     }
 
     const auto selected_skin = get<erhe::scene::Skin>(items);

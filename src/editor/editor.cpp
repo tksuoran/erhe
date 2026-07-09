@@ -44,7 +44,8 @@
 #include "input_state.hpp"
 #include "time.hpp"
 
-#include "animation/timeline_window.hpp"
+#include "animation/animation_player.hpp"
+#include "animation/animation_window.hpp"
 #include "asset_browser/asset_browser.hpp"
 #include "brushes/brush.hpp"
 #include "content_library/brdf_slice.hpp"
@@ -351,6 +352,7 @@ public:
 
         m_time->prepare_update(m_frame_activity != Frame_activity::hidden);
         m_time->update_transform_animations(*m_app_message_bus.get());
+        m_animation_player->update(static_cast<float>(m_time->get_host_system_last_frame_duration_ns()) * 1.0e-9f);
         m_fly_camera_tool->on_frame_begin();
 
         // Updating pointer is probably sufficient to be done once per frame
@@ -991,6 +993,7 @@ public:
 #endif
 
             m_clipboard            = std::make_unique<Clipboard     >(commands, m_app_context, app_message_bus);
+            m_animation_player     = std::make_unique<Animation_player>(m_app_context);
             m_app_scenes           = std::make_unique<App_scenes    >(m_app_context);
             m_app_windows          = std::make_unique<App_windows   >(m_app_context, commands);
             m_viewport_scene_views = std::make_unique<Scene_views   >(m_editor_settings.viewport, commands, m_app_context, app_message_bus);
@@ -1513,7 +1516,7 @@ public:
                 m_gradient_editor        = std::make_unique<Gradient_editor                 >(*m_imgui_renderer.get(), *m_imgui_windows.get());
                 m_icon_browser           = std::make_unique<Icon_browser                    >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_sheet_window           = std::make_unique<Sheet_window                    >(*m_commands.get(),       *m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
-                m_timeline_window        = std::make_unique<Timeline_window                 >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
+                m_animation_window       = std::make_unique<Animation_window                >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_layers_window          = std::make_unique<Layers_window                   >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_network_window         = std::make_unique<Network_window                  >(m_editor_settings.network, *m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_operations             = std::make_unique<Operations                      >(m_editor_settings.scene, *m_commands.get(),       *m_imgui_renderer.get(), *m_imgui_windows.get(), m_app_context, *m_app_message_bus.get());
@@ -2360,7 +2363,8 @@ public:
         m_app_context.sheet_window             = m_sheet_window          .get();
         m_app_context.thumbnails               = m_thumbnails            .get();
         m_app_context.time                     = m_time                  .get();
-        m_app_context.timeline_window          = m_timeline_window       .get();
+        m_app_context.animation_player         = m_animation_player      .get();
+        m_app_context.animation_window         = m_animation_window      .get();
         m_app_context.tools                    = m_tools                 .get();
         m_app_context.transform_tool           = m_transform_tool        .get();
         m_app_context.scene_views              = m_viewport_scene_views  .get();
@@ -3035,7 +3039,8 @@ public:
     std::unique_ptr<Properties                      >        m_properties;
     std::unique_ptr<Editor_windows                  >        m_editor_windows;
     std::unique_ptr<Rendergraph_window              >        m_rendergraph_window;
-    std::unique_ptr<Timeline_window                 >        m_timeline_window;
+    std::unique_ptr<Animation_player                >        m_animation_player;
+    std::unique_ptr<Animation_window                >        m_animation_window;
     std::unique_ptr<Tool_properties_window          >        m_tool_properties_window;
     std::unique_ptr<erhe::imgui::Logs               >        m_logs;
     std::unique_ptr<erhe::imgui::Log_settings_window>        m_log_settings_window;

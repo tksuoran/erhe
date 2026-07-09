@@ -113,7 +113,7 @@ void install_default_layout(
                 // sizing the windows to their content. DockSpace() will create the
                 // root node below if it doesn't exist yet.
                 spec.center_window_title = find_primary_viewport_title(context);
-                spec.bottom_window_title = "Timeline";
+                spec.bottom_window_title = "Animation";
                 state = Layout_state::Measuring;
                 return;
             }

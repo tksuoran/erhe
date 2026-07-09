@@ -125,7 +125,7 @@ Per-library configuration structs are loaded from individual JSON files in `conf
 - `xr/` -- OpenXR headset view, hand tracking, controller visualization
 - `grid/` -- Grid display and snapping
 - `preview/` -- Material and brush preview renderers
-- `animation/` -- Timeline window
+- `animation/` -- Animation timeline / curve graph editor (Animation_window), playback (Animation_player), keyframe edit helpers
 - `developer/` -- Developer-only windows (clipboard, commands, composer, rendergraph, etc.)
 - `experiments/` -- Experimental features (gradient editor, network, sheet)
 

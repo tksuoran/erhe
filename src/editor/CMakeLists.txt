@@ -83,12 +83,12 @@ erhe_target_sources_grouped(
 
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-    animation/animation_curve.cpp
-    animation/animation_curve.hpp
+    animation/animation_edit.cpp
+    animation/animation_edit.hpp
+    animation/animation_player.cpp
+    animation/animation_player.hpp
     animation/animation_window.cpp
     animation/animation_window.hpp
-    animation/timeline_window.cpp
-    animation/timeline_window.hpp
     app_context.cpp
     app_context.hpp
     crash_handler.cpp
@@ -278,6 +278,7 @@ erhe_target_sources_grouped(
     main.cpp
     mcp/mcp_server.cpp
     mcp/mcp_server.hpp
+    mcp/mcp_server_animation.cpp
     mcp/mcp_server_file_io.cpp
     mcp/mcp_server_graphs.cpp
     mcp/mcp_server_material.cpp
@@ -289,6 +290,8 @@ erhe_target_sources_grouped(
     mcp/mcp_server_tool_list.cpp
     operations/ambient_light_operation.cpp
     operations/ambient_light_operation.hpp
+    operations/animation_edit_operation.cpp
+    operations/animation_edit_operation.hpp
     operations/async_raytrace_kickoff_operation.cpp
     operations/async_raytrace_kickoff_operation.hpp
     operations/compound_operation.cpp

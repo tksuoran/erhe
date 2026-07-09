@@ -1,5 +1,6 @@
 {
     "windows": {
+        "animation": false,
         "asset_browser": false,
         "clipboard": false,
         "commands": false,
@@ -36,7 +37,6 @@
         "settings": false,
         "sheet": false,
         "tail_log": false,
-        "timeline": false,
         "tool_properties": false,
         "tools_content_library": false,
         "transform": false,
