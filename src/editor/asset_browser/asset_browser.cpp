@@ -14,6 +14,8 @@
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/viewport_scene_view.hpp"
+#include "scene/viewport_scene_views.hpp"
 #include "windows/item_tree_window.hpp"
 
 #include "erhe_file/file.hpp"
@@ -351,10 +353,23 @@ void Asset_browser::scan()
     m_node_tree_window->set_root(m_root);
 }
 
+auto Asset_browser::get_target_scene_root() -> std::shared_ptr<Scene_root>
+{
+    const std::shared_ptr<Viewport_scene_view> scene_view = m_context.scene_views->last_scene_view();
+    if (scene_view) {
+        std::shared_ptr<Scene_root> scene_root = scene_view->get_scene_root();
+        if (scene_root) {
+            return scene_root;
+        }
+    }
+    return m_context.app_scenes->get_single_scene_root();
+}
+
 auto Asset_browser::try_import(const std::shared_ptr<Asset_file_gltf>& gltf) -> bool
 {
+    const std::shared_ptr<Scene_root> scene_root = get_target_scene_root();
     std::string import_label = fmt::format("Import '{}'", erhe::file::to_string(*gltf->get_source_path()));
-    if (ImGui::MenuItem(import_label.c_str())) {
+    if (ImGui::MenuItem(import_label.c_str(), nullptr, false, static_cast<bool>(scene_root))) {
         import_gltf(
             m_context,
             erhe::primitive::Build_info{
@@ -367,7 +382,7 @@ auto Asset_browser::try_import(const std::shared_ptr<Asset_file_gltf>& gltf) -> 
                 },
                 .buffer_info = m_context.mesh_memory->make_primitive_buffer_info()
             },
-            m_context.scene_builder->get_scene_root(),
+            scene_root,
             *gltf->get_source_path()
         );
         return true;
@@ -377,8 +392,9 @@ auto Asset_browser::try_import(const std::shared_ptr<Asset_file_gltf>& gltf) -> 
 
 auto Asset_browser::try_import(const std::shared_ptr<Asset_file_geogram>& geogram) -> bool
 {
+    const std::shared_ptr<Scene_root> scene_root = get_target_scene_root();
     std::string import_label = fmt::format("Import '{}'", erhe::file::to_string(*geogram->get_source_path()));
-    if (ImGui::MenuItem(import_label.c_str())) {
+    if (ImGui::MenuItem(import_label.c_str(), nullptr, false, static_cast<bool>(scene_root))) {
         import_geogram(
             erhe::primitive::Build_info{
                 .primitive_types = {
@@ -390,7 +406,7 @@ auto Asset_browser::try_import(const std::shared_ptr<Asset_file_geogram>& geogra
                 },
                 .buffer_info = m_context.mesh_memory->make_primitive_buffer_info()
             },
-            *m_context.scene_builder->get_scene_root().get(),
+            *scene_root.get(),
             *geogram->get_source_path()
         );
         return true;

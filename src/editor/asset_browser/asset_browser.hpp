@@ -18,6 +18,7 @@ namespace editor {
 
 class App_context;
 class App_message_bus;
+class Scene_root;
 
 class Asset_node
     : public erhe::Item<erhe::Item_base, erhe::Hierarchy, Asset_node>
@@ -147,6 +148,10 @@ private:
 
     auto make_node    (const std::filesystem::path& path, Asset_node* parent) -> std::shared_ptr<Asset_node>;
     auto item_callback(const std::shared_ptr<erhe::Item_base>& item) -> bool;
+
+    // Scene that imports go into: the last hovered viewport's scene, falling
+    // back to the only open scene. Null when no scene is open.
+    [[nodiscard]] auto get_target_scene_root() -> std::shared_ptr<Scene_root>;
 
     auto try_import(const std::shared_ptr<Asset_file_gltf>& gltf) -> bool;
     auto try_open  (const std::shared_ptr<Asset_file_gltf>& gltf) -> bool;
