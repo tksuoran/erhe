@@ -30,6 +30,7 @@
 #include <fmt/format.h>
 
 #include <imgui/imgui.h>
+#include <imgui/imgui_internal.h> // ImGuiItemFlags_MixedValue (tri-state channel checkbox)
 
 #include <algorithm>
 #include <cmath>
@@ -411,10 +412,24 @@ void Animation_window::channel_row(const std::size_t channel_index)
 
     ImGui::PushID(static_cast<int>(channel_index));
 
-    const uint32_t full_mask = (1u << component_count) - 1u;
-    bool all_visible = (m_channel_visibility[channel_index] & full_mask) == full_mask;
-    if (ImGui::Checkbox("##visible", &all_visible)) {
-        m_channel_visibility[channel_index] = all_visible ? 0xffffffffu : 0u;
+    // Tri-state channel checkbox: checked = all components visible,
+    // unchecked = none, mixed (dash) = some. Clicking a mixed checkbox
+    // turns all components on.
+    const uint32_t full_mask   = (1u << component_count) - 1u;
+    const uint32_t masked      = m_channel_visibility[channel_index] & full_mask;
+    const bool     any_visible = masked != 0u;
+    const bool     all_visible = masked == full_mask;
+    const bool     mixed       = any_visible && !all_visible;
+    bool checked = any_visible;
+    if (mixed) {
+        ImGui::PushItemFlag(ImGuiItemFlags_MixedValue, true);
+    }
+    const bool checkbox_changed = ImGui::Checkbox("##visible", &checked);
+    if (mixed) {
+        ImGui::PopItemFlag();
+    }
+    if (checkbox_changed) {
+        m_channel_visibility[channel_index] = (mixed || checked) ? 0xffffffffu : 0u;
     }
     ImGui::SameLine();
 
