@@ -72,3 +72,4 @@
   local-prereqs{dotnet10+LLVM-clangd-22}✓;compile_commands+.clangd✓
   ninja-wrappers-vswhere-fix✓;clangd--check-0-errors✓
   policy::LSAI+xmp4-opt-in-per-machine;memory-bank-trimmed+Machine-Scope-Rule-added
+>user-verified::uniform-scale-gizmo-drag-feel{2026-07-09,windowed}✓→task-fully-DONE{no-tuning-needed}

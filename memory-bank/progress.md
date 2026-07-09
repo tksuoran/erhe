@@ -1,8 +1,5 @@
 §MBEL:5.0
 
-[TASK::uniform-scale-gizmo]{impl✓c162eb69,awaiting-user-verify}
-?drag-feel::windowed-interactive-only{headless-cannot-drive-pointer-drags};s=2^(drive/gizmo_radius)→tune-in-Scale_tool::update_uniform
-
 [TASK::#239-per-scene-settings]{parked}
 ?PENDING::viewport+post_processing{init-consumed¬applied→needs-per-scene-refactor}+clear_color{editor-global-never-read→decide-wire||drop}+sky/grid-override-visual-verify{needs-runtime-override-setter-MCP-tool}
 
