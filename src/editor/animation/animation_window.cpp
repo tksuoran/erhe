@@ -441,6 +441,16 @@ void Animation_window::channel_row(const std::size_t channel_index)
         if (ImGui::MenuItem("Select Target Node", nullptr, false, can_select)) {
             m_context.selection->set_selection({channel.target});
         }
+        if (ImGui::MenuItem("Add Target Node to Selection", nullptr, false, can_select)) {
+            m_context.selection->add_to_selection(channel.target);
+        }
+        ImGui::Separator();
+        if (ImGui::MenuItem("Show", nullptr, false, !all_visible)) {
+            m_channel_visibility[channel_index] = 0xffffffffu;
+        }
+        if (ImGui::MenuItem("Hide", nullptr, false, any_visible)) {
+            m_channel_visibility[channel_index] = 0u;
+        }
         ImGui::EndPopup();
     } else if (hovered) {
         const erhe::scene::Animation_sampler& sampler = animation.samplers.at(channel.sampler_index);
