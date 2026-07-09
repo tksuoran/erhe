@@ -408,6 +408,23 @@ void Animation_window::channel_list_pane()
     if (ImGui::SmallButton("None")) {
         std::fill(m_channel_visibility.begin(), m_channel_visibility.end(), 0u);
     }
+    ImGui::SameLine();
+    if (ImGui::SmallButton("Animated")) {
+        for (std::size_t channel_index = 0; channel_index < animation.channels.size(); ++channel_index) {
+            const std::size_t component_count = erhe::scene::get_component_count(animation.channels[channel_index].path);
+            uint32_t mask = 0u;
+            for (std::size_t component = 0; component < component_count; ++component) {
+                if (is_component_animated(animation, channel_index, component)) {
+                    mask |= (1u << component);
+                }
+            }
+            m_channel_visibility[channel_index] = mask;
+        }
+        m_frame_all_queued = true;
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Show only curves that actually change over time; constant curves are hidden");
+    }
     ImGui::Separator();
 
     for (std::size_t channel_index = 0; channel_index < animation.channels.size(); ++channel_index) {

@@ -216,4 +216,59 @@ void reset_channel_seek_state(erhe::scene::Animation& animation)
     }
 }
 
+auto is_component_animated(
+    const erhe::scene::Animation& animation,
+    const std::size_t             channel_index,
+    const std::size_t             component
+) -> bool
+{
+    constexpr float epsilon = 1.0e-6f;
+
+    const erhe::scene::Animation_channel& channel = animation.channels.at(channel_index);
+    const erhe::scene::Animation_sampler& sampler = animation.samplers.at(channel.sampler_index);
+    const std::size_t key_count = sampler.timestamps.size();
+    if (key_count == 0) {
+        return false;
+    }
+
+    const float first_value = get_keyframe_value(animation, channel_index, 0, component);
+    for (std::size_t key = 1; key < key_count; ++key) {
+        if (std::abs(get_keyframe_value(animation, channel_index, key, component) - first_value) > epsilon) {
+            return true;
+        }
+    }
+
+    // Equal key values can still wiggle between keys through non-zero
+    // CUBICSPLINE tangents (a single-key sampler always evaluates to the key
+    // value, so tangents only matter with at least one segment).
+    if ((key_count >= 2) && (sampler.interpolation_mode == erhe::scene::Animation_interpolation_mode::CUBICSPLINE)) {
+        const std::size_t component_count = erhe::scene::get_component_count(channel.path);
+        const std::size_t stride          = component_count * get_key_value_count(sampler.interpolation_mode);
+        for (std::size_t key = 0; key < key_count; ++key) {
+            const float in_tangent  = sampler.data.at((key * stride) + component);
+            const float out_tangent = sampler.data.at((key * stride) + (2 * component_count) + component);
+            if ((std::abs(in_tangent) > epsilon) || (std::abs(out_tangent) > epsilon)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+auto is_channel_animated(
+    const erhe::scene::Animation& animation,
+    const std::size_t             channel_index
+) -> bool
+{
+    const erhe::scene::Animation_channel& channel = animation.channels.at(channel_index);
+    const std::size_t component_count = erhe::scene::get_component_count(channel.path);
+    for (std::size_t component = 0; component < component_count; ++component) {
+        if (is_component_animated(animation, channel_index, component)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 }

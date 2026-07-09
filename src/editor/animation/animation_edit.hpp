@@ -89,4 +89,20 @@ auto delete_keyframe(
 // edit that changes key count or ordering.
 void reset_channel_seek_state(erhe::scene::Animation& animation);
 
+// True when the (channel, component) curve actually changes over time:
+// any key value differs from the first key's value, or (CUBICSPLINE with
+// more than one key) any tangent is non-zero. Constant curves - common in
+// glTF exports that key every node - return false.
+[[nodiscard]] auto is_component_animated(
+    const erhe::scene::Animation& animation,
+    std::size_t                   channel_index,
+    std::size_t                   component
+) -> bool;
+
+// True when any component of the channel is animated.
+[[nodiscard]] auto is_channel_animated(
+    const erhe::scene::Animation& animation,
+    std::size_t                   channel_index
+) -> bool;
+
 }

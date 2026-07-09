@@ -79,7 +79,8 @@ auto Mcp_server::query_scene_animations(const json& args) -> std::string
                     {"components",    erhe::scene::get_component_count(channel.path)},
                     {"interpolation", erhe::scene::c_str(sampler.interpolation_mode)},
                     {"sampler_index", channel.sampler_index},
-                    {"keyframes",     sampler.timestamps.size()}
+                    {"keyframes",     sampler.timestamps.size()},
+                    {"animated",      is_channel_animated(*animation.get(), channel_index)}
                 });
             }
             animations.push_back({
