@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace erhe::imgui { class Imgui_windows; }
@@ -78,7 +79,11 @@ private:
     void animation_combo    ();
     void transport_toolbar  ();
     void channel_list_pane  ();
+    void channel_row        (std::size_t channel_index);
     void curve_canvas       ();
+
+    [[nodiscard]] auto channel_label        (std::size_t channel_index) const -> std::string;
+    [[nodiscard]] auto channel_passes_filter(std::size_t channel_index) const -> bool;
 
     void ensure_visibility_size ();
     void prune_stale_selection  ();
@@ -110,6 +115,10 @@ private:
 
     // Per-channel component visibility bitmask (bit i == component i).
     std::vector<uint32_t> m_channel_visibility;
+
+    // Name filter for the "Channels" list; All / None / Animated apply only
+    // to channels passing it.
+    ImGuiTextFilter m_channel_filter;
 
     // View rectangle in curve space.
     float m_view_time_min  {0.0f};

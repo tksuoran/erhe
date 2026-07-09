@@ -7,6 +7,7 @@
 #include "operations/animation_edit_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "scene/scene_root.hpp"
+#include "tools/selection_tool.hpp"
 
 // From IconsMaterialDesignIcons.h - that header also defines the (non-inline)
 // icon name/code arrays for the icon browser, so it must only be included in
@@ -392,6 +393,78 @@ void Animation_window::transport_toolbar()
     }
 }
 
+auto Animation_window::channel_label(const std::size_t channel_index) const -> std::string
+{
+    const erhe::scene::Animation_channel& channel = m_animation->channels.at(channel_index);
+    return fmt::format(
+        "{} {}",
+        channel.target ? channel.target->get_name() : "(no target)",
+        erhe::scene::c_str(channel.path)
+    );
+}
+
+void Animation_window::channel_row(const std::size_t channel_index)
+{
+    erhe::scene::Animation& animation = *m_animation.get();
+    const erhe::scene::Animation_channel& channel = animation.channels[channel_index];
+    const std::size_t component_count = erhe::scene::get_component_count(channel.path);
+
+    ImGui::PushID(static_cast<int>(channel_index));
+
+    const uint32_t full_mask = (1u << component_count) - 1u;
+    bool all_visible = (m_channel_visibility[channel_index] & full_mask) == full_mask;
+    if (ImGui::Checkbox("##visible", &all_visible)) {
+        m_channel_visibility[channel_index] = all_visible ? 0xffffffffu : 0u;
+    }
+    ImGui::SameLine();
+
+    const std::string label = channel_label(channel_index);
+    const bool open    = ImGui::TreeNodeEx(label.c_str(), ImGuiTreeNodeFlags_SpanAvailWidth);
+    const bool hovered = ImGui::IsItemHovered();
+    if (ImGui::BeginPopupContextItem("channel_context")) {
+        const bool can_select = channel.target && (m_context.selection != nullptr);
+        if (ImGui::MenuItem("Select Target Node", nullptr, false, can_select)) {
+            m_context.selection->set_selection({channel.target});
+        }
+        ImGui::EndPopup();
+    } else if (hovered) {
+        const erhe::scene::Animation_sampler& sampler = animation.samplers.at(channel.sampler_index);
+        ImGui::SetTooltip(
+            "%s interpolation, %d keys",
+            erhe::scene::c_str(sampler.interpolation_mode),
+            static_cast<int>(sampler.timestamps.size())
+        );
+    }
+    if (open) {
+        for (std::size_t component = 0; component < component_count; ++component) {
+            ImGui::PushID(static_cast<int>(component));
+            bool visible = is_component_visible(channel_index, component);
+            if (ImGui::Checkbox("##component_visible", &visible)) {
+                if (visible) {
+                    m_channel_visibility[channel_index] |= (1u << component);
+                } else {
+                    m_channel_visibility[channel_index] &= ~(1u << component);
+                }
+            }
+            ImGui::SameLine();
+            const ImU32  color = get_component_color(component);
+            const ImVec4 color_v = ImGui::ColorConvertU32ToFloat4(color);
+            ImGui::TextColored(color_v, "%s", c_component_names[component]);
+            ImGui::PopID();
+        }
+        ImGui::TreePop();
+    }
+    ImGui::PopID();
+}
+
+auto Animation_window::channel_passes_filter(const std::size_t channel_index) const -> bool
+{
+    if (!m_channel_filter.IsActive()) {
+        return true;
+    }
+    return m_channel_filter.PassFilter(channel_label(channel_index).c_str());
+}
+
 void Animation_window::channel_list_pane()
 {
     if (!m_animation) {
@@ -400,83 +473,87 @@ void Animation_window::channel_list_pane()
     }
     erhe::scene::Animation& animation = *m_animation.get();
 
-    if (ImGui::SmallButton("All")) {
-        std::fill(m_channel_visibility.begin(), m_channel_visibility.end(), 0xffffffffu);
-        m_frame_all_queued = true;
-    }
-    ImGui::SameLine();
-    if (ImGui::SmallButton("None")) {
-        std::fill(m_channel_visibility.begin(), m_channel_visibility.end(), 0u);
-    }
-    ImGui::SameLine();
-    if (ImGui::SmallButton("Animated")) {
-        for (std::size_t channel_index = 0; channel_index < animation.channels.size(); ++channel_index) {
-            const std::size_t component_count = erhe::scene::get_component_count(animation.channels[channel_index].path);
-            uint32_t mask = 0u;
-            for (std::size_t component = 0; component < component_count; ++component) {
-                if (is_component_animated(animation, channel_index, component)) {
-                    mask |= (1u << component);
+    ImGui::PushID("all_channels");
+    if (ImGui::TreeNodeEx("Channels", ImGuiTreeNodeFlags_DefaultOpen)) {
+        m_channel_filter.Draw("##channel_filter", -FLT_MIN);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Filter channels by name (e.g. 'arm', 'Rotation'); All / None / Animated apply to the filtered channels");
+        }
+
+        // All / None / Animated operate on the channels that pass the filter.
+        if (ImGui::SmallButton("All")) {
+            for (std::size_t channel_index = 0; channel_index < animation.channels.size(); ++channel_index) {
+                if (channel_passes_filter(channel_index)) {
+                    m_channel_visibility[channel_index] = 0xffffffffu;
                 }
             }
-            m_channel_visibility[channel_index] = mask;
-        }
-        m_frame_all_queued = true;
-    }
-    if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("Show only curves that actually change over time; constant curves are hidden");
-    }
-    ImGui::Separator();
-
-    for (std::size_t channel_index = 0; channel_index < animation.channels.size(); ++channel_index) {
-        const erhe::scene::Animation_channel& channel = animation.channels[channel_index];
-        const std::size_t component_count = erhe::scene::get_component_count(channel.path);
-        if (component_count == 0) {
-            continue; // WEIGHTS - not shown (no curve support yet)
-        }
-        ImGui::PushID(static_cast<int>(channel_index));
-
-        const uint32_t full_mask = (1u << component_count) - 1u;
-        bool all_visible = (m_channel_visibility[channel_index] & full_mask) == full_mask;
-        if (ImGui::Checkbox("##visible", &all_visible)) {
-            m_channel_visibility[channel_index] = all_visible ? 0xffffffffu : 0u;
+            m_frame_all_queued = true;
         }
         ImGui::SameLine();
-
-        const std::string label = fmt::format(
-            "{} {}",
-            channel.target ? channel.target->get_name() : "(no target)",
-            erhe::scene::c_str(channel.path)
-        );
-        const bool open = ImGui::TreeNodeEx(label.c_str(), ImGuiTreeNodeFlags_SpanAvailWidth);
-        if (ImGui::IsItemHovered()) {
-            const erhe::scene::Animation_sampler& sampler = animation.samplers.at(channel.sampler_index);
-            ImGui::SetTooltip(
-                "%s interpolation, %d keys",
-                erhe::scene::c_str(sampler.interpolation_mode),
-                static_cast<int>(sampler.timestamps.size())
-            );
+        if (ImGui::SmallButton("None")) {
+            for (std::size_t channel_index = 0; channel_index < animation.channels.size(); ++channel_index) {
+                if (channel_passes_filter(channel_index)) {
+                    m_channel_visibility[channel_index] = 0u;
+                }
+            }
         }
-        if (open) {
-            for (std::size_t component = 0; component < component_count; ++component) {
-                ImGui::PushID(static_cast<int>(component));
-                bool visible = is_component_visible(channel_index, component);
-                if (ImGui::Checkbox("##component_visible", &visible)) {
-                    if (visible) {
-                        m_channel_visibility[channel_index] |= (1u << component);
-                    } else {
-                        m_channel_visibility[channel_index] &= ~(1u << component);
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Animated")) {
+            for (std::size_t channel_index = 0; channel_index < animation.channels.size(); ++channel_index) {
+                if (!channel_passes_filter(channel_index)) {
+                    continue;
+                }
+                const std::size_t component_count = erhe::scene::get_component_count(animation.channels[channel_index].path);
+                uint32_t mask = 0u;
+                for (std::size_t component = 0; component < component_count; ++component) {
+                    if (is_component_animated(animation, channel_index, component)) {
+                        mask |= (1u << component);
                     }
                 }
-                ImGui::SameLine();
-                const ImU32  color = get_component_color(component);
-                const ImVec4 color_v = ImGui::ColorConvertU32ToFloat4(color);
-                ImGui::TextColored(color_v, "%s", c_component_names[component]);
-                ImGui::PopID();
+                m_channel_visibility[channel_index] = mask;
             }
-            ImGui::TreePop();
+            m_frame_all_queued = true;
         }
-        ImGui::PopID();
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Show only curves that actually change over time; constant curves are hidden");
+        }
+
+        for (std::size_t channel_index = 0; channel_index < animation.channels.size(); ++channel_index) {
+            if (erhe::scene::get_component_count(animation.channels[channel_index].path) == 0) {
+                continue; // WEIGHTS - not shown (no curve support yet)
+            }
+            if (!channel_passes_filter(channel_index)) {
+                continue;
+            }
+            channel_row(channel_index);
+        }
+        ImGui::TreePop();
     }
+    ImGui::PopID();
+
+    ImGui::Separator();
+
+    ImGui::PushID("shown_channels");
+    if (ImGui::TreeNodeEx("Shown Channels", ImGuiTreeNodeFlags_DefaultOpen)) {
+        bool any_shown = false;
+        for (std::size_t channel_index = 0; channel_index < animation.channels.size(); ++channel_index) {
+            const std::size_t component_count = erhe::scene::get_component_count(animation.channels[channel_index].path);
+            if (component_count == 0) {
+                continue;
+            }
+            const uint32_t full_mask = (1u << component_count) - 1u;
+            if ((m_channel_visibility[channel_index] & full_mask) == 0u) {
+                continue;
+            }
+            any_shown = true;
+            channel_row(channel_index);
+        }
+        if (!any_shown) {
+            ImGui::TextDisabled("(no channels shown)");
+        }
+        ImGui::TreePop();
+    }
+    ImGui::PopID();
 }
 
 void Animation_window::apply_key_drag(const float time_delta, const float value_delta)
