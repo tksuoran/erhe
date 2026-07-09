@@ -59,6 +59,13 @@ namespace {
     constexpr float box_scale_cone_radius_render         = 0.2f;
     constexpr float box_scale_cone_half_length_collision = box_scale_cone_half_length_render * 1.5f;
     constexpr float box_scale_cone_radius_collision      = box_scale_cone_radius_render * 2.0f;
+
+    // Uniform-scale center cube. Kept well inside the plane-scale thin boxes (which span
+    // +/- box_length through the origin) so their outer regions stay pickable: rays through
+    // the central +/- center_cube_half_length_collision area pick the cube, rays farther
+    // out still reach the plane handles.
+    constexpr float center_cube_half_length_render    = 0.25f;
+    constexpr float center_cube_half_length_collision = center_cube_half_length_render * 1.3f;
 }
 
 auto Handle_visualizations::c_str(const Mode mode) -> const char*
@@ -111,6 +118,10 @@ Handle_visualizations::Handle_visualizations(
     m_neg_y_active_material = make_material(tools, "Y- active", glm::vec3{0.20f, 0.40f, 0.0f}, Mode::Active);
     m_neg_z_active_material = make_material(tools, "Z- active", glm::vec3{0.00f, 0.20f, 0.4f}, Mode::Active);
 
+    m_xyz_material          = make_material(tools, "XYZ",        glm::vec3{0.70f, 0.70f, 0.7f}, Mode::Normal);
+    m_xyz_hover_material    = make_material(tools, "XYZ hover",  glm::vec3{1.60f, 1.60f, 1.6f}, Mode::Hover);
+    m_xyz_active_material   = make_material(tools, "XYZ active", glm::vec3{1.00f, 1.00f, 1.0f}, Mode::Active);
+
 #if 0
     m_pos_x_material->disable_flag_bits(erhe::Item_flags::show_in_ui);
     m_pos_y_material->disable_flag_bits(erhe::Item_flags::show_in_ui);
@@ -132,6 +143,7 @@ Handle_visualizations::Handle_visualizations(
     const auto arrow_cone     = make_arrow_cone    (mesh_memory);
     const auto thin_box       = make_box           (mesh_memory, false);
     ////const auto uniform_box    = make_box           (mesh_memory, true);
+    const auto center_cube    = make_center_cube   (mesh_memory);
     const auto rotate_ring    = make_rotate_ring   (mesh_memory);
     const auto box_scale_cone = make_box_scale_cone(mesh_memory);
 
@@ -162,6 +174,7 @@ Handle_visualizations::Handle_visualizations(
     m_xy_scale_box_mesh          = make_mesh(tools, "XY scale box",      m_pos_z_material, thin_box      );
     m_xz_scale_box_mesh          = make_mesh(tools, "XZ scale box",      m_pos_y_material, thin_box      );
     m_yz_scale_box_mesh          = make_mesh(tools, "YZ scale box",      m_pos_x_material, thin_box      );
+    m_xyz_scale_mesh             = make_mesh(tools, "XYZ scale cube",    m_xyz_material,   center_cube   );
     m_box_scale_pos_x_mesh       = make_mesh(tools, "+X box scale cone", m_pos_x_material, box_scale_cone);
     m_box_scale_neg_x_mesh       = make_mesh(tools, "-X box scale cone", m_neg_x_material, box_scale_cone);
     m_box_scale_pos_y_mesh       = make_mesh(tools, "+Y box scale cone", m_pos_y_material, box_scale_cone);
@@ -212,6 +225,7 @@ Handle_visualizations::Handle_visualizations(
     m_handles[m_xy_scale_box_mesh        .get()] = Handle::e_handle_scale_xy;
     m_handles[m_xz_scale_box_mesh        .get()] = Handle::e_handle_scale_xz;
     m_handles[m_yz_scale_box_mesh        .get()] = Handle::e_handle_scale_yz;
+    m_handles[m_xyz_scale_mesh           .get()] = Handle::e_handle_scale_xyz;
 
     using erhe::scene::Transform;
     using namespace erhe::math;
@@ -258,6 +272,8 @@ Handle_visualizations::Handle_visualizations(
     m_xz_scale_box_mesh        ->get_node()->set_parent_from_node(rotate_x_pos_90);
     m_yz_scale_box_mesh        ->get_node()->set_parent_from_node(rotate_y_neg_90);
 
+    m_xyz_scale_mesh           ->get_node()->set_parent_from_node(glm::mat4{1.0f});
+
     //// TODO update_visibility();
 }
 
@@ -297,6 +313,11 @@ void Handle_visualizations::update_for_view(Scene_view* scene_view)
         log_trs_tool->error("!isfinite()");
     }
 
+}
+
+auto Handle_visualizations::get_gizmo_radius() const -> float
+{
+    return rotate_ring_major_radius * m_view_scale;
 }
 
 auto Handle_visualizations::get_handle_visibility(const Handle handle) const -> bool
@@ -395,6 +416,9 @@ void Handle_visualizations::update_visibility(Transform_tool_settings& settings)
     update_mesh_visibility(scale_axis, m_xy_scale_box_mesh    );
     update_mesh_visibility(scale_axis, m_xz_scale_box_mesh    );
     update_mesh_visibility(scale_axis, m_yz_scale_box_mesh    );
+    // The uniform-scale cube is shown in both scale gizmo modes: the bounding-box mode's
+    // face cones only offer per-axis scaling, so it needs the uniform handle too.
+    update_mesh_visibility(scale,      m_xyz_scale_mesh       );
     update_mesh_visibility(scale_box,  m_box_scale_pos_x_mesh );
     update_mesh_visibility(scale_box,  m_box_scale_neg_x_mesh );
     update_mesh_visibility(scale_box,  m_box_scale_pos_y_mesh );
@@ -436,6 +460,7 @@ auto Handle_visualizations::get_handle_material(const Handle handle, const Mode 
         case Handle::e_handle_scale_x        : return get_mode_material(mode, m_pos_x_active_material, m_pos_x_hover_material, m_pos_x_material);
         case Handle::e_handle_scale_y        : return get_mode_material(mode, m_pos_y_active_material, m_pos_y_hover_material, m_pos_y_material);
         case Handle::e_handle_scale_z        : return get_mode_material(mode, m_pos_z_active_material, m_pos_z_hover_material, m_pos_z_material);
+        case Handle::e_handle_scale_xyz      : return get_mode_material(mode, m_xyz_active_material,   m_xyz_hover_material,   m_xyz_material);
         case Handle::e_handle_box_scale_pos_x: return get_mode_material(mode, m_pos_x_active_material, m_pos_x_hover_material, m_pos_x_material);
         case Handle::e_handle_box_scale_neg_x: return get_mode_material(mode, m_neg_x_active_material, m_neg_x_hover_material, m_neg_x_material);
         case Handle::e_handle_box_scale_pos_y: return get_mode_material(mode, m_pos_y_active_material, m_pos_y_hover_material, m_pos_y_material);
@@ -578,6 +603,33 @@ auto Handle_visualizations::make_box(erhe::scene_renderer::Mesh_memory& mesh_mem
     return Part{mesh_memory, render_geometry, raytrace_geometry};
 }
 
+auto Handle_visualizations::make_center_cube(erhe::scene_renderer::Mesh_memory& mesh_memory) -> Part
+{
+    ERHE_PROFILE_FUNCTION();
+
+    auto render_geometry   = std::make_shared<erhe::geometry::Geometry>();
+    auto raytrace_geometry = std::make_shared<erhe::geometry::Geometry>();
+    erhe::geometry::shapes::make_box(
+        render_geometry->get_mesh(),
+        -center_cube_half_length_render,
+         center_cube_half_length_render,
+        -center_cube_half_length_render,
+         center_cube_half_length_render,
+        -center_cube_half_length_render,
+         center_cube_half_length_render
+    );
+    erhe::geometry::shapes::make_box(
+        raytrace_geometry->get_mesh(),
+        -center_cube_half_length_collision,
+         center_cube_half_length_collision,
+        -center_cube_half_length_collision,
+         center_cube_half_length_collision,
+        -center_cube_half_length_collision,
+         center_cube_half_length_collision
+    );
+    return Part{mesh_memory, render_geometry, raytrace_geometry};
+}
+
 auto Handle_visualizations::make_box_scale_cone(erhe::scene_renderer::Mesh_memory& mesh_memory) -> Part
 {
     ERHE_PROFILE_FUNCTION();
@@ -694,6 +746,7 @@ void Handle_visualizations::update_transforms() //const uint64_t serial)
     if (!isfinite(scalar_scale)) {
         log_trs_tool->error("!isfinite()");
     }
+    m_view_scale = scalar_scale;
     const glm::mat4 scale             = erhe::math::create_scale<float>(scalar_scale);
     // The gizmo follows only the anchor's position and orientation, never its
     // scale or skew (a scaled/skewed selection must not distort the handles).

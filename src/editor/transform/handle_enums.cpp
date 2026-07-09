@@ -230,7 +230,7 @@ auto c_str(const Handle handle) -> const char*
         case Handle::e_handle_scale_y        : return "Scale Y";
         case Handle::e_handle_scale_z        : return "Scale Z";
         case Handle::e_handle_scale_xy       : return "Scale XY";
-        case Handle::e_handle_scale_xz       : return "Scale YZ";
+        case Handle::e_handle_scale_xz       : return "Scale XZ";
         case Handle::e_handle_scale_yz       : return "Scale YZ";
         case Handle::e_handle_scale_xyz      : return "Scale XYZ";
         case Handle::e_handle_box_scale_pos_x: return "Box Scale +X";

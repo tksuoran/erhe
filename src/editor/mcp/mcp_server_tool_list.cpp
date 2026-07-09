@@ -649,6 +649,15 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"mode"})}
     }});
+    m_tool_infos.push_back({"set_gizmo_visibility", "Show or hide the transform gizmo handle sets (translate arrows, rotate rings, scale handles) and choose the scale gizmo style (basic axis/plane/uniform handles, or bounding_box face cones). This is the scriptable equivalent of activating the Move/Rotate/Scale tool from the hotbar or toggling the viewport-toolbar gizmo buttons, which are otherwise mouse-only. Omitted flags keep their current value; returns the resulting state.", {
+        {"type", "object"},
+        {"properties", {
+            {"translate",        {{"type", "boolean"}, {"description", "Show the translate handles"}}},
+            {"rotate",           {{"type", "boolean"}, {"description", "Show the rotate rings"}}},
+            {"scale",            {{"type", "boolean"}, {"description", "Show the scale handles"}}},
+            {"scale_gizmo_mode", {{"type", "string"}, {"enum", json::array({"basic", "bounding_box"})}, {"description", "Scale gizmo style"}}}
+        }}
+    }});
 
     // Geometry node graph (Geometry Graph window)
     m_tool_infos.push_back({"get_geometry_graph", "List the geometry node graph the Geometry Graph window currently targets: nodes with ids, type labels, input/output pins (slot, key, name, connection count), per-output payload summaries (geometry vertex/facet counts, point/instance counts, scalar values) and all links. 'selected' is true when the window has a target (a Graph Mesh asset). Waits for any background graph evaluation to finish, so the payloads reflect all previously issued mutations.", schema_no_args()});

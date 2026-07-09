@@ -415,6 +415,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "generate_texture_coordinates") result = action_generate_texture_coordinates(req->arguments);
         else if (req->tool_name == "set_transform_reference_mode") result = action_set_transform_reference_mode(req->arguments);
         else if (req->tool_name == "set_transform_mode")           result = action_set_transform_mode          (req->arguments);
+        else if (req->tool_name == "set_gizmo_visibility")         result = action_set_gizmo_visibility        (req->arguments);
         else if (req->tool_name == "get_transform_state")          result = query_transform_state              (req->arguments);
         else if (req->tool_name == "get_geometry_graph")           result = query_geometry_graph               (req->arguments);
         else if (req->tool_name == "set_geometry_graph_target")    result = action_set_geometry_graph_target   (req->arguments);

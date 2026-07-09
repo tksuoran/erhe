@@ -164,6 +164,7 @@ private:
     auto action_generate_texture_coordinates  (const nlohmann::json& args) -> std::string;
     auto action_set_transform_reference_mode  (const nlohmann::json& args) -> std::string;
     auto action_set_transform_mode            (const nlohmann::json& args) -> std::string;
+    auto action_set_gizmo_visibility          (const nlohmann::json& args) -> std::string;
     auto query_transform_state                (const nlohmann::json& args) -> std::string;
     auto query_geometry_graph                 (const nlohmann::json& args) -> std::string;
     auto action_set_geometry_graph_target     (const nlohmann::json& args) -> std::string;

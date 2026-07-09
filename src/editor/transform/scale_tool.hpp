@@ -35,6 +35,7 @@ public:
 
 private:
     void update              (glm::vec3 drag_position);
+    auto update_uniform      (Scene_view* scene_view) -> bool;
     auto update_box          (Scene_view* scene_view) -> bool;
     auto box_axis_projection (Scene_view* scene_view) const -> std::optional<float>;
     auto is_selection_singular() const -> bool;
@@ -47,6 +48,8 @@ private:
     bool             m_box_positive         {true};
     float            m_box_initial_proj     {0.0f};
     bool             m_box_need_initial_proj{false};
+    glm::vec3        m_uniform_initial_point{0.0f};
+    bool             m_uniform_need_initial_point{false};
 };
 
 }

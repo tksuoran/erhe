@@ -10,6 +10,7 @@
 
 #include "erhe_math/math_util.hpp"
 #include "erhe_primitive/primitive.hpp"
+#include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 
@@ -89,6 +90,7 @@ auto Scale_tool::begin(const unsigned int axis_mask, Scene_view* scene_view) -> 
     m_axis_mask = axis_mask;
     m_active    = true;
     m_box_mode  = false;
+    m_uniform_need_initial_point = true;
 
     const Handle active_handle = m_context.transform_tool->get_active_handle();
     switch (active_handle) {
@@ -159,6 +161,10 @@ auto Scale_tool::update(Scene_view* scene_view) -> bool
             return false;
         }
 
+        case 3: {
+            return update_uniform(scene_view);
+        }
+
         default: {
             return false;
         }
@@ -189,6 +195,61 @@ void Scale_tool::update(const vec3 drag_position_in_world)
     }();
 
     m_context.transform_tool->adjust_scale(center_of_scale, scale);
+}
+
+auto Scale_tool::update_uniform(Scene_view* scene_view) -> bool
+{
+    // Uniform scale is driven by the pointer displacement along the screen's up-right
+    // diagonal (drag up/right to grow, down/left to shrink), mapped exponentially so the
+    // factor is always positive and the gesture is symmetric: one gizmo radius of
+    // displacement doubles (or halves) the scale. The distance-from-center ratio used by
+    // the axis and plane handles is not usable here: the grab point is on the center
+    // handle, so its distance from the center is ~0 - the ratio would be hypersensitive
+    // and shrinking would have almost no input range.
+    const Transform_tool_shared& shared = get_shared();
+
+    const Handle_visualizations* visualizations = shared.get_visualizations();
+    if (visualizations == nullptr) {
+        return false;
+    }
+    const float gizmo_radius = visualizations->get_gizmo_radius();
+    if (!std::isfinite(gizmo_radius) || (gizmo_radius <= 0.0f)) {
+        return false;
+    }
+
+    const std::shared_ptr<erhe::scene::Camera> camera = scene_view->get_camera();
+    if (!camera) {
+        return false;
+    }
+    const erhe::scene::Node* camera_node = camera->get_node();
+    if (camera_node == nullptr) {
+        return false;
+    }
+    const glm::mat4 world_from_camera = camera_node->world_from_node();
+    const vec3      camera_right      = glm::normalize(vec3{world_from_camera[0]});
+    const vec3      camera_up         = glm::normalize(vec3{world_from_camera[1]});
+    const vec3      camera_back       = glm::normalize(vec3{world_from_camera[2]});
+    const vec3      drag_direction    = glm::normalize(camera_right + camera_up);
+
+    // Track the pointer on the view-facing plane through the center of scale.
+    const vec3                center_of_scale = shared.world_from_anchor_initial_state.get_translation();
+    const std::optional<vec3> closest_point   = scene_view->get_closest_point_on_plane(camera_back, center_of_scale);
+    if (!closest_point.has_value()) {
+        return false;
+    }
+
+    if (m_uniform_need_initial_point) {
+        // First live drag frame: establish the baseline from the exact same projection
+        // subsequent frames use, making the first frame a guaranteed no-op (same deferred
+        // baseline rationale as box mode above).
+        m_uniform_initial_point      = closest_point.value();
+        m_uniform_need_initial_point = false;
+    }
+
+    const float drive = glm::dot(closest_point.value() - m_uniform_initial_point, drag_direction);
+    const float s     = std::exp2(drive / gizmo_radius);
+    m_context.transform_tool->adjust_scale(center_of_scale, vec3{s, s, s});
+    return true;
 }
 
 auto Scale_tool::box_axis_projection(Scene_view* scene_view) const -> std::optional<float>

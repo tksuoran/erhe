@@ -68,6 +68,11 @@ public:
     [[nodiscard]] auto get_box_frame() const -> const glm::mat4& { return m_box_frame; }
     [[nodiscard]] auto get_box_aabb () const -> const erhe::math::Aabb& { return m_box_aabb; }
 
+    // World-space length corresponding to the gizmo's overall radius (the rotate ring),
+    // using the view-dependent scale applied to the handle meshes. Scale_tool uses this
+    // to normalize the uniform-scale drag displacement.
+    [[nodiscard]] auto get_gizmo_radius() const -> float;
+
     void viewport_toolbar ();
     void update_visibility(Transform_tool_settings& settings);
     void update_for_view  (Scene_view* scene_view);
@@ -81,6 +86,7 @@ private:
     [[nodiscard]] auto make_arrow_cylinder(erhe::scene_renderer::Mesh_memory& mesh_memory) -> Part;
     [[nodiscard]] auto make_arrow_cone    (erhe::scene_renderer::Mesh_memory& mesh_memory) -> Part;
     [[nodiscard]] auto make_box           (erhe::scene_renderer::Mesh_memory& mesh_memory, bool uniform) -> Part;
+    [[nodiscard]] auto make_center_cube   (erhe::scene_renderer::Mesh_memory& mesh_memory) -> Part;
     [[nodiscard]] auto make_box_scale_cone(erhe::scene_renderer::Mesh_memory& mesh_memory) -> Part;
     [[nodiscard]] auto make_rotate_ring   (erhe::scene_renderer::Mesh_memory& mesh_memory) -> Part;
 
@@ -116,6 +122,7 @@ private:
     erhe::scene::Trs_transform                       m_world_from_anchor;
     std::shared_ptr<erhe::scene::Node>               m_tool_node;
     float                                            m_view_distance{1.0f};
+    float                                            m_view_scale   {1.0f}; // world units per handle-mesh unit, from update_transforms()
     std::shared_ptr<erhe::primitive::Material>       m_pos_x_material;
     std::shared_ptr<erhe::primitive::Material>       m_neg_x_material;
     std::shared_ptr<erhe::primitive::Material>       m_pos_y_material;
@@ -134,6 +141,9 @@ private:
     std::shared_ptr<erhe::primitive::Material>       m_neg_y_active_material;
     std::shared_ptr<erhe::primitive::Material>       m_pos_z_active_material;
     std::shared_ptr<erhe::primitive::Material>       m_neg_z_active_material;
+    std::shared_ptr<erhe::primitive::Material>       m_xyz_material;
+    std::shared_ptr<erhe::primitive::Material>       m_xyz_hover_material;
+    std::shared_ptr<erhe::primitive::Material>       m_xyz_active_material;
     std::shared_ptr<erhe::scene::Mesh>               m_x_arrow_pos_cylinder_mesh;
     std::shared_ptr<erhe::scene::Mesh>               m_x_arrow_neg_cylinder_mesh;
     std::shared_ptr<erhe::scene::Mesh>               m_x_arrow_pos_cone_mesh;
@@ -161,6 +171,7 @@ private:
     std::shared_ptr<erhe::scene::Mesh>               m_xy_scale_box_mesh;
     std::shared_ptr<erhe::scene::Mesh>               m_xz_scale_box_mesh;
     std::shared_ptr<erhe::scene::Mesh>               m_yz_scale_box_mesh;
+    std::shared_ptr<erhe::scene::Mesh>               m_xyz_scale_mesh;
     std::shared_ptr<erhe::scene::Node>               m_box_node;
     std::shared_ptr<erhe::scene::Mesh>               m_box_scale_pos_x_mesh;
     std::shared_ptr<erhe::scene::Mesh>               m_box_scale_neg_x_mesh;

@@ -764,6 +764,42 @@ auto Mcp_server::action_set_transform_mode(const json& args) -> std::string
     return make_json_content(json{{"mode", std::string{::to_string(mode)}}}).dump();
 }
 
+auto Mcp_server::action_set_gizmo_visibility(const json& args) -> std::string
+{
+    // Headless-scriptable equivalent of activating the Move/Rotate/Scale tool (or clicking
+    // the viewport-toolbar gizmo toggles): tool activation is otherwise reachable only
+    // through the hotbar / mouse UI.
+    if (m_context.transform_tool == nullptr) {
+        return make_error_content("Transform tool not available");
+    }
+    Transform_tool_settings& settings = m_context.transform_tool->shared.settings;
+    if (args.contains("translate")) {
+        settings.show_translate = args.value("translate", settings.show_translate);
+    }
+    if (args.contains("rotate")) {
+        settings.show_rotate = args.value("rotate", settings.show_rotate);
+    }
+    if (args.contains("scale")) {
+        settings.show_scale = args.value("scale", settings.show_scale);
+    }
+    const std::string scale_gizmo_mode_str = args.value("scale_gizmo_mode", "");
+    if (scale_gizmo_mode_str == "basic") {
+        settings.scale_gizmo_mode = Scale_gizmo_mode::basic;
+    } else if (scale_gizmo_mode_str == "bounding_box") {
+        settings.scale_gizmo_mode = Scale_gizmo_mode::bounding_box;
+    } else if (!scale_gizmo_mode_str.empty()) {
+        return make_error_content("Invalid scale_gizmo_mode: " + scale_gizmo_mode_str + " (basic, bounding_box)");
+    }
+    m_context.transform_tool->update_visibility();
+
+    json result;
+    result["translate"]        = settings.show_translate;
+    result["rotate"]           = settings.show_rotate;
+    result["scale"]            = settings.show_scale;
+    result["scale_gizmo_mode"] = (settings.scale_gizmo_mode == Scale_gizmo_mode::bounding_box) ? "bounding_box" : "basic";
+    return make_json_content(result).dump();
+}
+
 auto Mcp_server::query_transform_state(const json& args) -> std::string
 {
     static_cast<void>(args);
