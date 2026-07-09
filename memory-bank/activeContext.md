@@ -1,17 +1,18 @@
 §MBEL:5.0
 
 [FOCUS]
-@task::agent-tooling-setup{2026-07-07}✓DONE
->satisfied::local-prereqs{dotnet10-runtime+LLVM-clangd-22;per-machine-details→memory-bank/local/}✓
->generated::build_ninja_win_clang/compile_commands.json+.clangd✓
->fixed::ninja-wrappers-locate-VS-via-vswhere{was-hardcoded-Community-path;edition/install-path-independent}+setup-doc-.clangd-snippet{CompileFlags-nesting}✓
->verified::clangd--check-verify.cpp{VS-env,0-errors}✓
-!policy::LSAI+xmp4=opt-in-per-machine¬default{2026-07-07;default-code-nav=Grep+VS-MCP+clangd--check;third-party-deps→read-.cpm_cache-sources}
->trimmed::memory-bank{progress-20.7KB→747B,completed→history}✓
->added::Machine-Scope-Rule{2026-07-08,README.md;machine-neutral-committed-files,per-machine→memory-bank/local/-gitignored}✓
+@task::uniform-scale-gizmo-handle{2026-07-09}✓impl+committed{c162eb69}
+>root-cause::e_handle_scale_xyz-enum-plumbing-existed-dormant{no-handle-mesh+no-popcount-3-drag-path+no-material-mapping}
+>added::center-cube-handle{gray,half-extent-0.25<plane-box-0.6→plane-handle-picking-preserved;visible-in-BOTH-scale-gizmo-modes{basic+bounding_box}}
+>added::Scale_tool::update_uniform{drive=pointer-displacement-along-screen-up-right-diagonal-on-view-plane-through-anchor→s=2^(drive/gizmo_radius);deferred-first-frame-baseline→frame-1-no-op{box-mode-precedent}}
+!design::distance-from-center-ratio-unusable-for-center-handle{grab-dist~0→hypersensitive+shrink-has-no-input-range}→signed-diagonal+exponential
+>added::MCP-tool-set_gizmo_visibility{show_translate/rotate/scale+scale_gizmo_mode;tool-activation-otherwise-mouse-only{hotbar/viewport-toolbar}→headless-verify-needs-it}
+>fixed::c_str(e_handle_scale_xz)-typo{"Scale YZ"→"Scale XZ"}
+>verified::headless-screenshots{center-cube-renders,basic+bounding_box}✓+builds{ninja-win-vulkan+vs-headless}✓
+?user-verify::drag-feel{windowed-run;tune-knob=drive/gizmo_radius@Scale_tool::update_uniform{one-gizmo-radius=2x||0.5x}}
 
 [STATE]
-@branch::main{geometry_nodes-MERGED-into-main,no-crease-branch-in-this-clone;all-cited-commits-verified-on-main}
+@branch::main
 x-skills::.claude/commands-in-tree{usable-sans-LSAI:mcp__lsai__*-unregistered→grep-fallback-immediate;cpp-project.md-@code-nav-lsai/xmp4-lines-stale}
 
 [OPEN]

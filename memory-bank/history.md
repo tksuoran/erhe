@@ -61,3 +61,14 @@
 
 [2026-07-08]
 ✓machine-scope-rule::README.md{committed-files-machine-neutral:¬usernames/¬hostnames/¬user-paths/¬install-state/¬secrets;capabilities¬inventory;©public-identities-only}+memory-bank/local/{gitignored-per-machine-state}+scrub{activeContext/techContext/history-person-machine-attributions}
+
+[2026-07-09]
+>completed::uniform-scale-gizmo-handle{c162eb69}
+  dormant-e_handle_scale_xyz→center-cube-mesh+materials+visibility{both-scale-modes}
+  Scale_tool::update_uniform{screen-up-right-diagonal,s=2^(drive/gizmo_radius),deferred-baseline}
+  +MCP-set_gizmo_visibility{headless-gizmo-activation}+c_str-scale_xz-typo-fix
+  verified::headless-screenshots-both-modes✓;?user-drag-feel-verify-pending
+>archived::agent-tooling-setup{2026-07-07}✓DONE{from-activeContext}
+  local-prereqs{dotnet10+LLVM-clangd-22}✓;compile_commands+.clangd✓
+  ninja-wrappers-vswhere-fix✓;clangd--check-0-errors✓
+  policy::LSAI+xmp4-opt-in-per-machine;memory-bank-trimmed+Machine-Scope-Rule-added
