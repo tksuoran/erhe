@@ -86,6 +86,7 @@ class Operations;
 class Paint_tool;
 class Physics_tool;
 class Post_processing;
+class Prefab_library;
 class Programs;
 class Rotate_tool;
 class Scale_tool;
@@ -195,6 +196,7 @@ public:
     Paint_tool*                        paint_tool           {nullptr};
     Physics_tool*                      physics_tool         {nullptr};
     Post_processing*                   post_processing      {nullptr};
+    Prefab_library*                    prefab_library       {nullptr};
     Programs*                          programs             {nullptr};
     Rotate_tool*                       rotate_tool          {nullptr};
     Scale_tool*                        scale_tool           {nullptr};

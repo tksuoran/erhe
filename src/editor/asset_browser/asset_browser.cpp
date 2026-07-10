@@ -11,6 +11,7 @@
 #include "operations/operation_stack.hpp"
 #include "parsers/geogram.hpp"
 #include "parsers/gltf.hpp"
+#include "prefabs/prefab_library.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
@@ -82,21 +83,7 @@ void Scene_open_operation::execute(App_context& context)
     browser_window->show_window();
 
     if (first_time) {
-        import_gltf(
-            context,
-            erhe::primitive::Build_info{
-                .primitive_types = {
-                    .fill_triangles  = true,
-                    .fill_triangles_expanded = true,
-                    .edge_lines      = true,
-                    .corner_points   = true,
-                    .centroid_points = true
-                },
-                .buffer_info = context.mesh_memory->make_primitive_buffer_info()
-            },
-            m_scene_root,
-            m_path
-        );
+        import_gltf(context, make_import_build_info(context), m_scene_root, m_path);
     }
 
     context.app_message_bus->open_scene.send_message(
@@ -269,7 +256,7 @@ Asset_browser::Asset_browser(
             }
             const std::shared_ptr<Asset_file_gltf> gltf = std::dynamic_pointer_cast<Asset_file_gltf>(item);
             if (gltf) {
-                if (try_import(gltf) || try_open(gltf)) {
+                if (try_import(gltf) || try_instantiate(gltf) || try_open(gltf)) {
                     close = true;
                 }
             }
@@ -370,21 +357,7 @@ auto Asset_browser::try_import(const std::shared_ptr<Asset_file_gltf>& gltf) -> 
     const std::shared_ptr<Scene_root> scene_root = get_target_scene_root();
     std::string import_label = fmt::format("Import '{}'", erhe::file::to_string(*gltf->get_source_path()));
     if (ImGui::MenuItem(import_label.c_str(), nullptr, false, static_cast<bool>(scene_root))) {
-        import_gltf(
-            m_context,
-            erhe::primitive::Build_info{
-                .primitive_types = {
-                    .fill_triangles  = true,
-                    .fill_triangles_expanded = true,
-                    .edge_lines      = true,
-                    .corner_points   = true,
-                    .centroid_points = true
-                },
-                .buffer_info = m_context.mesh_memory->make_primitive_buffer_info()
-            },
-            scene_root,
-            *gltf->get_source_path()
-        );
+        import_gltf(m_context, make_import_build_info(m_context), scene_root, *gltf->get_source_path());
         return true;
     }
     return false;
@@ -409,6 +382,20 @@ auto Asset_browser::try_import(const std::shared_ptr<Asset_file_geogram>& geogra
             *scene_root.get(),
             *geogram->get_source_path()
         );
+        return true;
+    }
+    return false;
+}
+
+auto Asset_browser::try_instantiate(const std::shared_ptr<Asset_file_gltf>& gltf) -> bool
+{
+    const std::shared_ptr<Scene_root> scene_root = get_target_scene_root();
+    std::string instantiate_label = fmt::format("Instantiate as prefab '{}'", erhe::file::to_string(*gltf->get_source_path()));
+    if (ImGui::MenuItem(instantiate_label.c_str(), nullptr, false, static_cast<bool>(scene_root))) {
+        const std::shared_ptr<Prefab> prefab = m_context.prefab_library->get_or_load(*gltf->get_source_path());
+        if (prefab) {
+            instantiate_prefab(m_context, prefab, *scene_root, glm::mat4{1.0f});
+        }
         return true;
     }
     return false;

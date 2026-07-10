@@ -347,6 +347,10 @@ erhe_target_sources_grouped(
     parsers/json_polyhedron.hpp
     parsers/wavefront_obj.cpp
     parsers/wavefront_obj.hpp
+    prefabs/prefab_instance.cpp
+    prefabs/prefab_instance.hpp
+    prefabs/prefab_library.cpp
+    prefabs/prefab_library.hpp
     physics/collision_generator.hpp
     physics/physics_tool.cpp
     physics/physics_tool.hpp

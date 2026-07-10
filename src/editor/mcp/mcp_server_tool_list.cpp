@@ -299,6 +299,16 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"scene_name", "path"})}
     }});
+    m_tool_infos.push_back({"instantiate_prefab", "Instantiate a glTF file as a prefab into a scene: the file is parsed once (cached app-wide) and inserted as a clone that stays a reference to the source file. Instances share GPU buffers; insertion is undoable.", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name", {{"type", "string"}, {"description", "Name of the destination scene"}}},
+            {"path",       {{"type", "string"}, {"description", "Source .gltf/.glb file path"}}},
+            {"position",   {{"type", "array"},  {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "World position [x, y, z] of the instance root (default origin)"}}}
+        }},
+        {"required", json::array({"scene_name", "path"})}
+    }});
+    m_tool_infos.push_back({"get_prefabs",        "List the glTF prefabs currently loaded in the app-wide prefab library (source path, name, content counts)", schema_no_args()});
     m_tool_infos.push_back({"capture_screenshot",  "Capture the current rendered frame to a PNG file and return its path. Currently supported only in the headless Vulkan configuration (emulated swapchain).", {
         {"type", "object"},
         {"properties", {

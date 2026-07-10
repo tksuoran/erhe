@@ -4,6 +4,7 @@
 #include "mcp/mcp_server_shared.hpp"
 
 #include "app_message_bus.hpp"
+#include "prefabs/prefab_library.hpp"
 
 namespace editor {
 
@@ -188,25 +189,79 @@ auto Mcp_server::action_import_gltf(const json& args) -> std::string
         return r.dump();
     }
 
-    editor::import_gltf(
-        m_context,
-        erhe::primitive::Build_info{
-            .primitive_types = {
-                .fill_triangles          = true,
-                .fill_triangles_expanded = true,
-                .edge_lines              = true,
-                .corner_points           = true,
-                .centroid_points         = true
-            },
-            .buffer_info = m_context.mesh_memory->make_primitive_buffer_info()
-        },
-        scene_root,
-        path
-    );
+    editor::import_gltf(m_context, make_import_build_info(m_context), scene_root, path);
     return make_json_content({
         {"imported", true},
         {"path",     path_str}
     }).dump();
+}
+
+auto Mcp_server::action_instantiate_prefab(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    const std::string path_str   = args.value("path", "");
+    if (path_str.empty()) {
+        return make_error_content("Missing required argument: path");
+    }
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    if (m_context.prefab_library == nullptr) {
+        return make_error_content("Prefab library not available");
+    }
+
+    const std::filesystem::path path{path_str};
+    const std::shared_ptr<Prefab> prefab = m_context.prefab_library->get_or_load(path);
+    if (!prefab) {
+        return make_error_content("Failed to load prefab (missing file, no nodes, or reference cycle - see log): " + path_str);
+    }
+
+    const glm::vec3 position        = get_vec3(args, "position", glm::vec3{0.0f});
+    const glm::mat4 world_from_node = erhe::math::create_translation<float>(position);
+
+    const std::shared_ptr<erhe::scene::Node> node = instantiate_prefab(m_context, prefab, *sr, world_from_node);
+    if (!node) {
+        return make_error_content("Failed to instantiate prefab: " + path_str);
+    }
+    // The insertion is queued as an undoable operation; the node enters the
+    // scene when the operation executes (same frame, after this call).
+    return make_json_content({
+        {"instantiated", true},
+        {"queued",       true},
+        {"path",         prefab->source_path.generic_string()},
+        {"node_id",      node->get_id()},
+        {"node_name",    node->get_name()}
+    }).dump();
+}
+
+auto Mcp_server::query_prefabs(const json& args) -> std::string
+{
+    static_cast<void>(args);
+    if (m_context.prefab_library == nullptr) {
+        return make_error_content("Prefab library not available");
+    }
+    json prefabs = json::array();
+    for (const auto& [path, prefab] : m_context.prefab_library->get_prefabs()) {
+        std::size_t node_count = 0;
+        for (const std::shared_ptr<erhe::scene::Node>& node : prefab->gltf_data.nodes) {
+            if (node) {
+                ++node_count;
+            }
+        }
+        prefabs.push_back({
+            {"path",            path.generic_string()},
+            {"name",            prefab->name},
+            {"nodes",           node_count},
+            {"meshes",          prefab->gltf_data.meshes.size()},
+            {"materials",       prefab->gltf_data.materials.size()},
+            {"textures",        prefab->gltf_data.images.size()},
+            {"skins",           prefab->gltf_data.skins.size()},
+            {"animations",      prefab->gltf_data.animations.size()},
+            {"external_assets", prefab->gltf_data.external_assets.size()}
+        });
+    }
+    return make_json_content({{"prefabs", prefabs}}).dump();
 }
 
 auto Mcp_server::action_capture_screenshot(const json& args) -> std::string

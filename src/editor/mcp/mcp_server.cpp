@@ -378,6 +378,8 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "create_scene")       result = action_create_scene   (req->arguments);
         else if (req->tool_name == "export_gltf")        result = action_export_gltf    (req->arguments);
         else if (req->tool_name == "import_gltf")        result = action_import_gltf    (req->arguments);
+        else if (req->tool_name == "instantiate_prefab") result = action_instantiate_prefab(req->arguments);
+        else if (req->tool_name == "get_prefabs")        result = query_prefabs         (req->arguments);
         else if (req->tool_name == "capture_screenshot") result = action_capture_screenshot(req->arguments);
         else if (req->tool_name == "wake_physics_bodies") result = action_wake_physics_bodies(req->arguments);
         else if (req->tool_name == "get_physics_items")  result = query_physics_items   (req->arguments);

@@ -81,6 +81,7 @@
 #include "rendergraph/post_processing.hpp"
 #include "rendertarget_imgui_host.hpp"
 #include "scene/debug_draw.hpp"
+#include "prefabs/prefab_library.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
@@ -993,6 +994,7 @@ public:
 #endif
 
             m_clipboard            = std::make_unique<Clipboard     >(commands, m_app_context, app_message_bus);
+            m_prefab_library       = std::make_unique<Prefab_library>(m_app_context);
             m_animation_player     = std::make_unique<Animation_player>(m_app_context);
             m_app_scenes           = std::make_unique<App_scenes    >(m_app_context);
             m_app_windows          = std::make_unique<App_windows   >(m_app_context, commands);
@@ -2351,6 +2353,7 @@ public:
         m_app_context.paint_tool               = m_paint_tool            .get();
         m_app_context.physics_tool             = m_physics_tool          .get();
         m_app_context.post_processing          = m_post_processing       .get();
+        m_app_context.prefab_library           = m_prefab_library        .get();
         m_app_context.sky_renderer             = m_sky_renderer          .get();
         m_app_context.programs                 = m_programs              .get();
         m_app_context.rotate_tool              = m_rotate_tool           .get();
@@ -3051,6 +3054,7 @@ public:
 
     std::unique_ptr<Tools            >                       m_tools;
     std::unique_ptr<Scene_builder    >                       m_scene_builder;
+    std::unique_ptr<Prefab_library   >                       m_prefab_library;
     std::unique_ptr<Fly_camera_tool  >                       m_fly_camera_tool;
     std::unique_ptr<Navigation_gizmo_tool>                   m_navigation_gizmo_tool;
     std::unique_ptr<Headset_view     >                       m_headset_view;

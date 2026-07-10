@@ -153,8 +153,12 @@ private:
     // back to the only open scene. Null when no scene is open.
     [[nodiscard]] auto get_target_scene_root() -> std::shared_ptr<Scene_root>;
 
-    auto try_import(const std::shared_ptr<Asset_file_gltf>& gltf) -> bool;
-    auto try_open  (const std::shared_ptr<Asset_file_gltf>& gltf) -> bool;
+    auto try_import     (const std::shared_ptr<Asset_file_gltf>& gltf) -> bool;
+    // Instantiate the glTF as a prefab: parsed once via Prefab_library, the
+    // inserted subtree is a clone referencing the source file (import copies
+    // the content in instead).
+    auto try_instantiate(const std::shared_ptr<Asset_file_gltf>& gltf) -> bool;
+    auto try_open       (const std::shared_ptr<Asset_file_gltf>& gltf) -> bool;
 
     auto try_import(const std::shared_ptr<Asset_file_geogram>& geogram) -> bool;
 
