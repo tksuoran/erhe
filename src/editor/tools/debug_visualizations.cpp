@@ -230,7 +230,21 @@ void Debug_visualizations::skin_visualization(const Render_context& render_conte
 {
     ERHE_PROFILE_FUNCTION();
 
-    erhe::renderer::Primitive_renderer line_renderer = render_context.get({erhe::graphics::Primitive_type::line, 2, true, true});
+    const Debug_visualizations_style& style = render_context.app_context.editor_settings->debug_visualizations_style;
+
+    // Bones typically sit inside the skinned mesh, so without x-ray the whole
+    // visualization renders with the dim hidden-line blend. The x-ray bucket
+    // draws occluded parts at full strength; the bone colors' alpha remains
+    // the user-facing visibility control.
+    erhe::renderer::Primitive_renderer line_renderer = render_context.get(
+        erhe::renderer::Debug_renderer_config{
+            .primitive_type    = erhe::graphics::Primitive_type::line,
+            .stencil_reference = 2,
+            .draw_visible      = true,
+            .draw_hidden       = true,
+            .xray              = style.skin_bone_xray
+        }
+    );
 
     const auto* camera_node = render_context.get_camera_node();
     if (camera_node == nullptr) {
@@ -246,11 +260,7 @@ void Debug_visualizations::skin_visualization(const Render_context& render_conte
         ? used_camera_node->world_from_node_transform()
         : Trs_transform{};
 
-    //constexpr vec4 red  { 1.0f, 0.0f, 0.0f, 1.0f};
-    //constexpr vec4 green{ 0.0f, 1.0f, 0.0f, 1.0f};
-    //constexpr vec4 blue { 0.0f, 0.0f, 1.0f, 1.0f};
-    //constexpr vec4 cyan { 0.0f, 1.0f, 1.0f, 1.0f};
-    line_renderer.set_thickness(2.0f);
+    line_renderer.set_thickness(style.skin_bone_width);
 
     for (std::size_t i = 0, end_i = skin.skin_data.joints.size(); i < end_i; ++i) {
         const auto& joint = skin.skin_data.joints[i];
@@ -259,8 +269,7 @@ void Debug_visualizations::skin_visualization(const Render_context& render_conte
         }
         const mat4 world_from_joint = joint->world_from_node();
 
-        //// line_renderer.set_line_color(joint->get_wireframe_color());
-        line_renderer.set_line_color(glm::vec4{0.0f, 1.0f, 1.0f, 1.0});
+        line_renderer.set_line_color(((joint->get_depth() % 2) == 0) ? style.skin_bone_color_a : style.skin_bone_color_b);
         vec3 a = joint->position_in_world();
         vec3 b = a + vec3{0.2f, 0.0f, 0.0f};
 
@@ -2104,6 +2113,23 @@ void Debug_visualizations::style_imgui(Property_editor& p, Debug_visualizations_
     p.add_entry("Camera Line Color", [&style](){ ImGui::ColorEdit4 ("##", &style.camera_line_color.x,  ImGuiColorEditFlags_Float); });
     p.add_entry("Layout Line Width", [&style](){ ImGui::SliderFloat("##", &style.layout_line_width,    0.1f, 100.0f); });
     p.add_entry("Layout Line Color", [&style](){ ImGui::ColorEdit4 ("##", &style.layout_line_color.x,  ImGuiColorEditFlags_Float); });
+    // Skin bone visualization: colors alternate by joint hierarchy depth (A = even, B = odd) + line width.
+    p.add_entry("Skin Bones", [&style]() {
+        ImGui::ColorEdit4("##a", &style.skin_bone_color_a.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
+        ImGui::SameLine();
+        ImGui::ColorEdit4("##b", &style.skin_bone_color_b.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(80.0f);
+        ImGui::DragFloat("##w", &style.skin_bone_width, 0.1f, -100.0f, 100.0f, "%.1f");
+        ImGui::SameLine();
+        ImGui::Checkbox("X-Ray##skin_xray", &style.skin_bone_xray);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "Draw bones occluded by geometry at full strength instead of the dim hidden-line look.\n"
+                "Bone visibility is then controlled by the bone colors' alpha."
+            );
+        }
+    });
 
     p.push_group("Annotations", ImGuiTreeNodeFlags_None);
     p.add_entry("Vertex Label Text Color",  [&style](){ ImGui::ColorEdit4 ("##", &style.vertex_label_text_color.x, ImGuiColorEditFlags_Float); });

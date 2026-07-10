@@ -31,6 +31,11 @@ public:
     bool                           draw_visible     {true};
     bool                           draw_hidden      {false};
     bool                           thin_lines       {false};
+    // X-ray mode: the hidden (occluded) pass blends at full strength, same as
+    // the visible pass, instead of the shared dim hidden-pass constant, so the
+    // primitives show through geometry undimmed (e.g. skin bones inside a
+    // mesh). Per-fragment strength is still the vertex color's alpha.
+    bool                           xray             {false};
 };
 
 auto operator==(const Debug_renderer_config& lhs, const Debug_renderer_config& rhs) -> bool;

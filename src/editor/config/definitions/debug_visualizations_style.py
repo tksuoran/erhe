@@ -60,6 +60,11 @@ struct("Debug_visualizations_style",
         field("layout_line_width",                 Float, added_in=1, default="2.0f",   short_desc="Layout Line Width"),
         field("layout_line_color",                 Vec4,  added_in=1, default="0.2f, 0.8f, 1.0f, 1.0f", short_desc="Layout Line Color"),
 
+        field("skin_bone_color_a",                 Vec4,  added_in=1, default="0.0f, 1.0f, 1.0f, 1.0f", short_desc="Skin Bone Color A", long_desc="Color for joints at even hierarchy depth; alternates with Skin Bone Color B"),
+        field("skin_bone_color_b",                 Vec4,  added_in=1, default="1.0f, 0.0f, 1.0f, 1.0f", short_desc="Skin Bone Color B", long_desc="Color for joints at odd hierarchy depth; alternates with Skin Bone Color A"),
+        field("skin_bone_width",                   Float, added_in=1, default="2.0f",   short_desc="Skin Bone Width"),
+        field("skin_bone_xray",                    Bool,  added_in=1, default="true",   short_desc="Skin Bone X-Ray", long_desc="Draw bones occluded by geometry at full strength instead of the dim hidden-line look; bone visibility is then the bone colors' alpha"),
+
         field("vertex_label_text_color",           Vec4,  added_in=1, default="0.3f, 1.0f, 0.3f, 1.0f", short_desc="Vertex Label Text Color"),
         field("vertex_label_line_color",           Vec4,  added_in=1, default="0.0f, 0.8f, 0.0f, 1.0f", short_desc="Vertex Label Line Color"),
         field("vertex_label_line_width",           Float, added_in=1, default="1.0f",   short_desc="Vertex Label Line Width"),

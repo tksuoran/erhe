@@ -28,7 +28,8 @@ bool operator==(const Debug_renderer_config& lhs, const Debug_renderer_config& r
         (lhs.stencil_reference == rhs.stencil_reference) &&
         (lhs.draw_visible      == rhs.draw_visible     ) &&
         (lhs.draw_hidden       == rhs.draw_hidden      ) &&
-        (lhs.thin_lines        == rhs.thin_lines       );
+        (lhs.thin_lines        == rhs.thin_lines       ) &&
+        (lhs.xray              == rhs.xray             );
 }
 
 auto Debug_renderer_shader_key::derive(
@@ -486,7 +487,7 @@ void Debug_renderer_bucket::render(
                     .viewport_depth_range = pipeline.data.viewport_depth_range,
                     .rasterization        = pipeline.data.rasterization,
                     .depth_stencil        = pipeline.data.depth_stencil,
-                    .color_blend          = visible ? pi.color_blend_visible : pi.color_blend_xray
+                    .color_blend          = (visible || m_config.xray) ? pi.color_blend_visible : pi.color_blend_hidden
                 }
             };
 
@@ -558,7 +559,7 @@ void Debug_renderer_bucket::render(
                     : pi.line_shader_stages.get();
             erhe::graphics::Render_pipeline* p = pipeline.get_pipeline_for(
                 render_pass.get_descriptor(),
-                visible ? &pi.color_blend_visible : &pi.color_blend_xray,
+                (visible || m_config.xray) ? &pi.color_blend_visible : &pi.color_blend_hidden,
                 line_shader_stages,
                 m_debug_renderer.get_line_vertex_input(),
                 &pi.line_vertex_format

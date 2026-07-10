@@ -96,7 +96,9 @@ public:
     std::unique_ptr<erhe::graphics::Shader_stages>   line_shader_stages;
 
     erhe::graphics::Color_blend_state                color_blend_visible;
-    erhe::graphics::Color_blend_state                color_blend_xray;
+    // Dim constant-factor blend for the hidden (occluded) pass; buckets with
+    // Debug_renderer_config::xray use color_blend_visible for that pass instead.
+    erhe::graphics::Color_blend_state                color_blend_hidden;
 
     // View UBO. Layout:
     //   ViewCamera cameras[view_count];   // per-eye camera

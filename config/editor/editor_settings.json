@@ -54,6 +54,10 @@
         "camera_line_color": [1,1,1,1],
         "layout_line_width": 2,
         "layout_line_color": [0.2,0.8,1,1],
+        "skin_bone_color_a": [0,1,1,1],
+        "skin_bone_color_b": [1,0,1,1],
+        "skin_bone_width": 7.1,
+        "skin_bone_xray": true,
         "vertex_label_text_color": [0.3,1,0.3,1],
         "vertex_label_line_color": [0,0.8,0,1],
         "vertex_label_line_width": 1,
@@ -212,7 +216,7 @@
                 "lights": "off",
                 "cameras": "off",
                 "layouts": "selected",
-                "skins": "off",
+                "skins": "all",
                 "node_axises": "off",
                 "physics": "off",
                 "raytrace": "off",
@@ -279,7 +283,7 @@
                 "selection_bounding_sphere": false
             },
             "scene_and_camera": {
-                "scene_name": "Default Scene",
+                "scene_name": "Prefab test",
                 "camera_name": "Camera A",
                 "shadow_fit_override_camera_name": "",
                 "shader_debug": 0,
@@ -449,6 +453,170 @@
                 "shader_debug": 6,
                 "renderer_choice": 0
             }
+        },
+        {
+            "_version": 2,
+            "name": "Scene 1",
+            "debug_visualizations": {
+                "_version": 8,
+                "lights": "off",
+                "cameras": "off",
+                "layouts": "off",
+                "skins": "off",
+                "node_axises": "off",
+                "physics": "off",
+                "raytrace": "off",
+                "vertex_labels": "off",
+                "facet_labels": "off",
+                "edge_labels": "off",
+                "corner_labels": "off",
+                "world_axes": false,
+                "shadow_debug": false,
+                "shadow_fit_debug": false,
+                "shadow_fit_casters": false,
+                "shadow_fit_caster_hull": false,
+                "shadow_fit_view_frustum": false,
+                "shadow_fit_receivers": false,
+                "shadow_fit_receiver_hull": false,
+                "shadow_fit_receiver_hull_unclipped": false,
+                "shadow_fit_volume_planes": false,
+                "shadow_fit_far_plane_hull": false,
+                "shadow_fit_points": false,
+                "shadow_fit_light_plane_hull": false,
+                "shadow_fit_box_fit": false,
+                "shadow_fit_box_frustum": false,
+                "shadow_fit_box_cap": false,
+                "shadow_fit_box_final": false,
+                "selection": true,
+                "selection_bounding_points": false,
+                "selection_box": false,
+                "selection_sphere": false,
+                "selection_parts": false,
+                "selection_convex_hull": false,
+                "selection_convex_hull_projected": false,
+                "debug_convex_hull": false,
+                "convex_hull_edge": 0,
+                "gap": 0.003,
+                "tool_hide": false,
+                "frustum_box": false,
+                "frustum_planes": false,
+                "camera_cull_test": false,
+                "max_labels": 400,
+                "vertex_positions": false
+            },
+            "viewport_config": {
+                "render_style_not_selected": {
+                    "_version": 2,
+                    "polygon_fill": true,
+                    "edge_lines": true,
+                    "solid_wireframe": false,
+                    "polygon_centroids": false,
+                    "corner_points": false
+                },
+                "render_style_selected": {
+                    "_version": 2,
+                    "polygon_fill": true,
+                    "edge_lines": true,
+                    "solid_wireframe": false,
+                    "polygon_centroids": false,
+                    "corner_points": false
+                },
+                "debug_visualizations": {
+                    "light": "selected",
+                    "camera": "selected"
+                },
+                "selection_bounding_box": false,
+                "selection_bounding_sphere": false
+            },
+            "scene_and_camera": {
+                "scene_name": "Scene 1",
+                "camera_name": "Camera",
+                "shadow_fit_override_camera_name": "",
+                "shader_debug": 0,
+                "renderer_choice": 0
+            }
+        },
+        {
+            "_version": 2,
+            "name": "Viewport_scene_view 0",
+            "debug_visualizations": {
+                "_version": 8,
+                "lights": "off",
+                "cameras": "off",
+                "layouts": "off",
+                "skins": "off",
+                "node_axises": "off",
+                "physics": "off",
+                "raytrace": "off",
+                "vertex_labels": "off",
+                "facet_labels": "off",
+                "edge_labels": "off",
+                "corner_labels": "off",
+                "world_axes": false,
+                "shadow_debug": false,
+                "shadow_fit_debug": false,
+                "shadow_fit_casters": false,
+                "shadow_fit_caster_hull": false,
+                "shadow_fit_view_frustum": false,
+                "shadow_fit_receivers": false,
+                "shadow_fit_receiver_hull": false,
+                "shadow_fit_receiver_hull_unclipped": false,
+                "shadow_fit_volume_planes": false,
+                "shadow_fit_far_plane_hull": false,
+                "shadow_fit_points": false,
+                "shadow_fit_light_plane_hull": false,
+                "shadow_fit_box_fit": false,
+                "shadow_fit_box_frustum": false,
+                "shadow_fit_box_cap": false,
+                "shadow_fit_box_final": false,
+                "selection": true,
+                "selection_bounding_points": false,
+                "selection_box": false,
+                "selection_sphere": false,
+                "selection_parts": false,
+                "selection_convex_hull": false,
+                "selection_convex_hull_projected": false,
+                "debug_convex_hull": false,
+                "convex_hull_edge": 0,
+                "gap": 0.003,
+                "tool_hide": false,
+                "frustum_box": false,
+                "frustum_planes": false,
+                "camera_cull_test": false,
+                "max_labels": 400,
+                "vertex_positions": false
+            },
+            "viewport_config": {
+                "render_style_not_selected": {
+                    "_version": 2,
+                    "polygon_fill": true,
+                    "edge_lines": true,
+                    "solid_wireframe": false,
+                    "polygon_centroids": false,
+                    "corner_points": false
+                },
+                "render_style_selected": {
+                    "_version": 2,
+                    "polygon_fill": true,
+                    "edge_lines": true,
+                    "solid_wireframe": false,
+                    "polygon_centroids": false,
+                    "corner_points": false
+                },
+                "debug_visualizations": {
+                    "light": "selected",
+                    "camera": "selected"
+                },
+                "selection_bounding_box": false,
+                "selection_bounding_sphere": false
+            },
+            "scene_and_camera": {
+                "scene_name": "Prefab test",
+                "camera_name": "Camera A",
+                "shadow_fit_override_camera_name": "",
+                "shader_debug": 0,
+                "renderer_choice": 0
+            }
         }
     ],
     "developer": { "enable": true },
@@ -589,6 +757,7 @@
                 "_version": 2,
                 "tool_name": "Selection Tool"
             },
+            { "_version": 2 },
             { "_version": 2 }
         ]
     },
@@ -600,7 +769,7 @@
     },
     "physics": {
         "static_enable": true,
-        "dynamic_enable": true,
+        "dynamic_enable": false,
         "debug_draw": false
     },
     "scene": {
