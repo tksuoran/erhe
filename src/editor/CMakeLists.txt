@@ -85,6 +85,8 @@ erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     animation/animation_edit.cpp
     animation/animation_edit.hpp
+    animation/animation_keying.cpp
+    animation/animation_keying.hpp
     animation/animation_player.cpp
     animation/animation_player.hpp
     animation/animation_window.cpp

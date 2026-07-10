@@ -1,11 +1,15 @@
 #pragma once
 
+#include "erhe_scene/animation.hpp"
+
+#include <glm/glm.hpp>
+
 #include <cstddef>
+#include <memory>
 #include <vector>
 
 namespace erhe::scene {
-    class Animation;
-    class Animation_sampler;
+    class Node;
 }
 
 namespace editor {
@@ -103,6 +107,62 @@ void reset_channel_seek_state(erhe::scene::Animation& animation);
 [[nodiscard]] auto is_channel_animated(
     const erhe::scene::Animation& animation,
     std::size_t                   channel_index
+) -> bool;
+
+// Full structural snapshot of an animation's keyframe storage (all samplers
+// and channels). Used for undo of edits that change the shape of the
+// samplers / channels arrays (channel creation, keying multiple samplers at
+// once), which the per-sampler Animation_sampler_state cannot represent.
+class Animation_state
+{
+public:
+    std::vector<erhe::scene::Animation_sampler> samplers;
+    std::vector<erhe::scene::Animation_channel> channels;
+};
+
+[[nodiscard]] auto capture_animation_state(const erhe::scene::Animation& animation) -> Animation_state;
+void restore_animation_state(erhe::scene::Animation& animation, const Animation_state& state);
+
+// The node's current local (parent-from-node) value for an animation path,
+// in glTF component order: translation / scale in xyz, rotation quaternion
+// in xyzw.
+[[nodiscard]] auto get_node_path_value(const erhe::scene::Node& node, erhe::scene::Animation_path path) -> glm::vec4;
+
+// Finds the channel animating (target, path); returns false when there is
+// none.
+[[nodiscard]] auto find_channel(
+    const erhe::scene::Animation& animation,
+    const erhe::scene::Node*      target,
+    erhe::scene::Animation_path   path,
+    std::size_t&                  out_channel_index
+) -> bool;
+
+// Returns the channel animating (target, path), creating it if needed: a
+// new LINEAR sampler seeded with a single key at `time` holding the node's
+// current value, plus the channel referencing it.
+auto ensure_channel(
+    erhe::scene::Animation&                   animation,
+    const std::shared_ptr<erhe::scene::Node>& target,
+    erhe::scene::Animation_path               path,
+    float                                     time
+) -> std::size_t;
+
+// Writes the node's current value for the channel's path as a key at `time`
+// (inserting a new key, or overwriting the values of a key already at that
+// time). Returns the key index.
+auto set_key_from_node(
+    erhe::scene::Animation& animation,
+    std::size_t             channel_index,
+    float                   time
+) -> std::size_t;
+
+// Deletes the key at (approximately) `time` from the channel's sampler.
+// Returns false when there is no key at that time or it is the sampler's
+// last remaining key.
+auto delete_key_at_time(
+    erhe::scene::Animation& animation,
+    std::size_t             channel_index,
+    float                   time
 ) -> bool;
 
 }

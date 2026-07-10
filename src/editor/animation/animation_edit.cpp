@@ -1,6 +1,7 @@
 #include "animation/animation_edit.hpp"
 
 #include "erhe_scene/animation.hpp"
+#include "erhe_scene/node.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <algorithm>
@@ -269,6 +270,140 @@ auto is_channel_animated(
         }
     }
     return false;
+}
+
+auto capture_animation_state(const erhe::scene::Animation& animation) -> Animation_state
+{
+    return Animation_state{
+        .samplers = animation.samplers,
+        .channels = animation.channels
+    };
+}
+
+void restore_animation_state(erhe::scene::Animation& animation, const Animation_state& state)
+{
+    animation.samplers = state.samplers;
+    animation.channels = state.channels;
+    reset_channel_seek_state(animation);
+}
+
+auto get_node_path_value(const erhe::scene::Node& node, const erhe::scene::Animation_path path) -> glm::vec4
+{
+    const erhe::scene::Trs_transform& transform = node.node_data.transforms.parent_from_node;
+    switch (path) {
+        case erhe::scene::Animation_path::TRANSLATION: {
+            return glm::vec4{transform.get_translation(), 0.0f};
+        }
+        case erhe::scene::Animation_path::ROTATION: {
+            const glm::quat rotation = transform.get_rotation();
+            return glm::vec4{rotation.x, rotation.y, rotation.z, rotation.w};
+        }
+        case erhe::scene::Animation_path::SCALE: {
+            return glm::vec4{transform.get_scale(), 0.0f};
+        }
+        default: {
+            return glm::vec4{0.0f};
+        }
+    }
+}
+
+auto find_channel(
+    const erhe::scene::Animation&     animation,
+    const erhe::scene::Node* const    target,
+    const erhe::scene::Animation_path path,
+    std::size_t&                      out_channel_index
+) -> bool
+{
+    for (std::size_t channel_index = 0; channel_index < animation.channels.size(); ++channel_index) {
+        const erhe::scene::Animation_channel& channel = animation.channels[channel_index];
+        if ((channel.target.get() == target) && (channel.path == path)) {
+            out_channel_index = channel_index;
+            return true;
+        }
+    }
+    return false;
+}
+
+auto ensure_channel(
+    erhe::scene::Animation&                   animation,
+    const std::shared_ptr<erhe::scene::Node>& target,
+    const erhe::scene::Animation_path         path,
+    const float                               time
+) -> std::size_t
+{
+    std::size_t channel_index = 0;
+    if (find_channel(animation, target.get(), path, channel_index)) {
+        return channel_index;
+    }
+
+    const std::size_t component_count = erhe::scene::get_component_count(path);
+    ERHE_VERIFY(component_count > 0);
+    const glm::vec4 value = get_node_path_value(*target.get(), path);
+
+    erhe::scene::Animation_sampler sampler{erhe::scene::Animation_interpolation_mode::LINEAR};
+    sampler.timestamps.push_back(time);
+    for (std::size_t component = 0; component < component_count; ++component) {
+        sampler.data.push_back(value[static_cast<glm::vec4::length_type>(component)]);
+    }
+    animation.samplers.push_back(std::move(sampler));
+
+    animation.channels.push_back(
+        erhe::scene::Animation_channel{
+            .path           = path,
+            .sampler_index  = animation.samplers.size() - 1,
+            .target         = target,
+            .start_position = 0,
+            .value_offset   = 0
+        }
+    );
+    return animation.channels.size() - 1;
+}
+
+auto set_key_from_node(
+    erhe::scene::Animation& animation,
+    const std::size_t       channel_index,
+    const float             time
+) -> std::size_t
+{
+    const erhe::scene::Animation_channel& channel = animation.channels.at(channel_index);
+    ERHE_VERIFY(channel.target);
+    const std::size_t component_count = erhe::scene::get_component_count(channel.path);
+    const glm::vec4   value           = get_node_path_value(*channel.target.get(), channel.path);
+
+    // insert_keyframe() seeds the new key with the curve's evaluated value
+    // (and estimated tangents for CUBICSPLINE); the value components are then
+    // overwritten with the node's current state.
+    const std::size_t key_index = insert_keyframe(animation, channel.sampler_index, time);
+    for (std::size_t component = 0; component < component_count; ++component) {
+        set_keyframe_value(animation, channel_index, key_index, component, value[static_cast<glm::vec4::length_type>(component)]);
+    }
+    return key_index;
+}
+
+auto delete_key_at_time(
+    erhe::scene::Animation& animation,
+    const std::size_t       channel_index,
+    const float             time
+) -> bool
+{
+    constexpr float epsilon = 1.0e-3f;
+
+    const erhe::scene::Animation_channel& channel = animation.channels.at(channel_index);
+    const erhe::scene::Animation_sampler& sampler = animation.samplers.at(channel.sampler_index);
+
+    float       best_distance = epsilon;
+    std::size_t best_key      = sampler.timestamps.size();
+    for (std::size_t key = 0; key < sampler.timestamps.size(); ++key) {
+        const float distance = std::abs(sampler.timestamps[key] - time);
+        if (distance <= best_distance) {
+            best_distance = distance;
+            best_key      = key;
+        }
+    }
+    if (best_key == sampler.timestamps.size()) {
+        return false;
+    }
+    return delete_keyframe(animation, channel.sampler_index, best_key);
 }
 
 }

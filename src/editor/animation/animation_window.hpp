@@ -12,7 +12,10 @@
 #include <vector>
 
 namespace erhe::imgui { class Imgui_windows; }
-namespace erhe::scene { class Animation; }
+namespace erhe::scene {
+    class Animation;
+    class Node;
+}
 
 namespace editor {
 
@@ -76,11 +79,25 @@ private:
         move_keys
     };
 
+    // What the timeline strip's key markers show.
+    enum class Key_marker_source : int {
+        selected_objects = 0, // keys of channels whose target node is selected
+        active_animation = 1, // keys of every channel of the animation
+        shown_channels   = 2  // keys of the channels visible in the curve editor
+    };
+
     void animation_combo    ();
     void transport_toolbar  ();
+    void keying_toolbar     ();
+    void timeline_strip     ();
     void channel_list_pane  ();
     void channel_row        (std::size_t channel_index);
     void curve_canvas       ();
+
+    void create_key_for_selection();
+    void delete_key_for_selection();
+    void collect_key_marker_times();
+    void collect_selected_nodes  (std::vector<std::shared_ptr<erhe::scene::Node>>& out_nodes) const;
 
     [[nodiscard]] auto channel_label        (std::size_t channel_index) const -> std::string;
     [[nodiscard]] auto channel_passes_filter(std::size_t channel_index) const -> bool;
@@ -119,6 +136,17 @@ private:
     // Name filter for the "Channels" list; All / None / Animated apply only
     // to channels passing it.
     ImGuiTextFilter m_channel_filter;
+
+    // Manual Create Key path toggles (LightWave Create Motion Key dialog's
+    // Position / Rotation / Scale toggles).
+    bool m_key_translation{true};
+    bool m_key_rotation   {true};
+    bool m_key_scale      {true};
+
+    // Timeline strip state
+    Key_marker_source  m_key_marker_source{Key_marker_source::selected_objects};
+    bool               m_strip_scrubbing{false};
+    std::vector<float> m_marker_times; // scratch, rebuilt each frame
 
     // View rectangle in curve space.
     float m_view_time_min  {0.0f};

@@ -882,7 +882,7 @@ void Mcp_server::refresh_tool_list()
             {"visible_channels", {{"type", "array"}, {"items", {{"type", "integer"}}}, {"description", "Channel indices whose curves are visible (all components); other channels are hidden. Omit to keep defaults. Also re-frames the view."}}}
         }}
     }});
-    m_tool_infos.push_back({"animation_playback", "Control animation playback (Animation_player): play / pause / stop, seek to a time, set speed and looping. Applies the sampled pose to the target nodes immediately, so a capture_screenshot on the next frame shows it. Optionally retargets to a named animation first.", {
+    m_tool_infos.push_back({"animation_playback", "Control animation playback (Animation_player): play / pause / stop, seek to a time, set speed, looping and the autokey mode. Applies the sampled pose to the target nodes immediately, so a capture_screenshot on the next frame shows it. Optionally retargets to a named animation first.", {
         {"type", "object"},
         {"properties", {
             {"animation",  {{"type", "string"},  {"description", "Animation name to target first (optional; default: current target)"}}},
@@ -890,7 +890,23 @@ void Mcp_server::refresh_tool_list()
             {"action",     {{"type", "string"},  {"description", "play, pause or stop (optional)"}}},
             {"time",       {{"type", "number"},  {"description", "Seek to this absolute animation time in seconds (optional)"}}},
             {"speed",      {{"type", "number"},  {"description", "Playback speed factor; negative plays backwards (optional)"}}},
-            {"looping",    {{"type", "boolean"}, {"description", "Loop at the end of the range (optional)"}}}
+            {"looping",    {{"type", "boolean"}, {"description", "Loop at the end of the range (optional)"}}},
+            {"autokey",    {{"type", "string"},  {"description", "Autokey mode: off, modified (key only edited paths) or all (key T+R+S on any edit). Applies to finished Transform tool edits, including transform_selection (optional)"}}}
+        }}
+    }});
+    m_tool_infos.push_back({"animation_create_key", "Create keys (LightWave 'Create Key') on the targeted animation at a time: writes the nodes' current translation / rotation / scale values, creating missing channels (LINEAR) on demand. Nodes default to the current selection. Undoable.", {
+        {"type", "object"},
+        {"properties", {
+            {"nodes", {{"type", "array"}, {"items", {{"type", "string"}}}, {"description", "Node names to key (default: current selection)"}}},
+            {"paths", {{"type", "array"}, {"items", {{"type", "string"}}}, {"description", "Paths to key: translation, rotation, scale (default: all three)"}}},
+            {"time",  {{"type", "number"}, {"description", "Key time in seconds (default: current play position)"}}}
+        }}
+    }});
+    m_tool_infos.push_back({"animation_delete_key", "Delete keys (LightWave 'Delete Key') from the targeted animation: removes the keys at (approximately) a time from every channel targeting the given nodes. Nodes default to the current selection. Undoable.", {
+        {"type", "object"},
+        {"properties", {
+            {"nodes", {{"type", "array"}, {"items", {{"type", "string"}}}, {"description", "Node names (default: current selection)"}}},
+            {"time",  {{"type", "number"}, {"description", "Key time in seconds (default: current play position)"}}}
         }}
     }});
     m_tool_infos.push_back({"animation_edit_keyframe", "Edit animation keyframes (undoable through the operation stack, same code path as the Animation window). edit=move changes a key's time (clamped between neighbor keys) and/or one component's value; edit=insert adds a key at a time, evaluating the curve so the shape is preserved; edit=delete removes a key (all components). Times/values apply to the channel's sampler, so channels sharing a sampler are affected together.", {

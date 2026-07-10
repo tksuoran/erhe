@@ -447,6 +447,8 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "set_animation_target")         result = action_set_animation_target        (req->arguments);
         else if (req->tool_name == "animation_playback")           result = action_animation_playback          (req->arguments);
         else if (req->tool_name == "animation_edit_keyframe")      result = action_animation_edit_keyframe     (req->arguments);
+        else if (req->tool_name == "animation_create_key")         result = action_animation_create_key        (req->arguments);
+        else if (req->tool_name == "animation_delete_key")         result = action_animation_delete_key        (req->arguments);
         else                                              result = execute_command       (req->tool_name);
 
         } catch (const std::exception& e) {

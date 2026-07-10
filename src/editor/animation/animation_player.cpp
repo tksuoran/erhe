@@ -144,6 +144,16 @@ auto Animation_player::get_end_time() const -> float
     return m_end_time;
 }
 
+void Animation_player::set_autokey_mode(const Autokey_mode mode)
+{
+    m_autokey_mode = mode;
+}
+
+auto Animation_player::get_autokey_mode() const -> Autokey_mode
+{
+    return m_autokey_mode;
+}
+
 void Animation_player::on_animation_edited(const std::shared_ptr<erhe::scene::Animation>& animation)
 {
     if (!m_animation || (m_animation != animation)) {

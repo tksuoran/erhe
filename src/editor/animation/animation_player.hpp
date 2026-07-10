@@ -1,5 +1,7 @@
 #pragma once
 
+#include "animation/animation_keying.hpp"
+
 #include <memory>
 
 namespace erhe::scene { class Animation; }
@@ -50,6 +52,12 @@ public:
     // position in range and re-applies the current pose.
     void on_animation_edited(const std::shared_ptr<erhe::scene::Animation>& animation);
 
+    // Autokey (LightWave-style): when not off, finished transform edits key
+    // the edited nodes into the active animation at the current time (see
+    // Transform_tool::record_transform_operation).
+    void set_autokey_mode(Autokey_mode mode);
+    [[nodiscard]] auto get_autokey_mode() const -> Autokey_mode;
+
 private:
     void refresh_time_range();
     void apply();
@@ -57,6 +65,8 @@ private:
     App_context& m_context;
 
     std::shared_ptr<erhe::scene::Animation> m_animation;
+
+    Autokey_mode m_autokey_mode{Autokey_mode::off};
 
     bool  m_playing        {false};
     bool  m_looping        {true};

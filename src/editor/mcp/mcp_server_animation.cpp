@@ -5,6 +5,7 @@
 #include "mcp/mcp_server_shared.hpp"
 
 #include "animation/animation_edit.hpp"
+#include "animation/animation_keying.hpp"
 #include "animation/animation_player.hpp"
 #include "animation/animation_window.hpp"
 #include "operations/animation_edit_operation.hpp"
@@ -42,6 +43,16 @@ namespace {
     return {};
 }
 
+[[nodiscard]] auto autokey_mode_lc(const Autokey_mode mode) -> const char*
+{
+    switch (mode) {
+        case Autokey_mode::off:            return "off";
+        case Autokey_mode::modified_paths: return "modified";
+        case Autokey_mode::all_paths:      return "all";
+        default:                           return "?";
+    }
+}
+
 [[nodiscard]] auto playback_state_json(const Animation_player& player) -> json
 {
     const std::shared_ptr<erhe::scene::Animation>& animation = player.get_animation();
@@ -52,8 +63,58 @@ namespace {
         {"speed",      player.get_speed()},
         {"time",       player.get_time()},
         {"start_time", player.get_start_time()},
-        {"end_time",   player.get_end_time()}
+        {"end_time",   player.get_end_time()},
+        {"autokey",    autokey_mode_lc(player.get_autokey_mode())}
     };
+}
+
+// Collects the target nodes for the keying tools: named nodes when 'nodes'
+// is given, the current selection otherwise.
+[[nodiscard]] auto collect_keying_nodes(
+    App_context&       context,
+    const json&        args,
+    std::string&       out_error
+) -> std::vector<std::shared_ptr<erhe::scene::Node>>
+{
+    std::vector<std::shared_ptr<erhe::scene::Node>> nodes;
+    if (args.contains("nodes") && args["nodes"].is_array()) {
+        for (const auto& element : args["nodes"]) {
+            if (!element.is_string()) {
+                continue;
+            }
+            const std::string node_name = element.get<std::string>();
+            std::shared_ptr<erhe::scene::Node> found;
+            if (context.app_scenes != nullptr) {
+                for (const std::shared_ptr<Scene_root>& scene_root : context.app_scenes->get_scene_roots()) {
+                    for (const std::shared_ptr<erhe::scene::Node>& node : scene_root->get_scene().get_flat_nodes()) {
+                        if (node && (node->get_name() == node_name)) {
+                            found = node;
+                            break;
+                        }
+                    }
+                    if (found) {
+                        break;
+                    }
+                }
+            }
+            if (!found) {
+                out_error = "Node not found: " + node_name;
+                return {};
+            }
+            nodes.push_back(std::move(found));
+        }
+    } else if (context.selection != nullptr) {
+        for (const std::shared_ptr<erhe::Item_base>& item : context.selection->get_selected_items()) {
+            std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+            if (node) {
+                nodes.push_back(std::move(node));
+            }
+        }
+    }
+    if (nodes.empty()) {
+        out_error = "No target nodes: pass 'nodes' or select nodes first";
+    }
+    return nodes;
 }
 
 } // anonymous namespace
@@ -174,6 +235,18 @@ auto Mcp_server::action_animation_playback(const json& args) -> std::string
         return make_error_content("No animation targeted; pass 'animation' or call set_animation_target first");
     }
 
+    if (args.contains("autokey") && args["autokey"].is_string()) {
+        const std::string autokey = args["autokey"].get<std::string>();
+        if (autokey == "off") {
+            player->set_autokey_mode(Autokey_mode::off);
+        } else if (autokey == "modified") {
+            player->set_autokey_mode(Autokey_mode::modified_paths);
+        } else if (autokey == "all") {
+            player->set_autokey_mode(Autokey_mode::all_paths);
+        } else {
+            return make_error_content("Unknown autokey mode: " + autokey + " (use off, modified or all)");
+        }
+    }
     if (args.contains("speed") && args["speed"].is_number()) {
         player->set_speed(args["speed"].get<float>());
     }
@@ -199,6 +272,111 @@ auto Mcp_server::action_animation_playback(const json& args) -> std::string
     player->update(0.0f);
 
     return make_json_content(playback_state_json(*player)).dump();
+}
+
+auto Mcp_server::action_animation_create_key(const json& args) -> std::string
+{
+    Animation_window* window = m_context.animation_window;
+    Animation_player* player = m_context.animation_player;
+    if ((window == nullptr) || (player == nullptr) || (m_context.operation_stack == nullptr)) {
+        return make_error_content("Animation window / player not available");
+    }
+
+    std::string error;
+    const std::vector<std::shared_ptr<erhe::scene::Node>> nodes = collect_keying_nodes(m_context, args, error);
+    if (nodes.empty()) {
+        return make_error_content(error);
+    }
+
+    const std::shared_ptr<erhe::scene::Animation> animation = window->get_animation();
+    if (!animation) {
+        return make_error_content("No animation targeted; call set_animation_target first");
+    }
+
+    bool key_translation = true;
+    bool key_rotation    = true;
+    bool key_scale       = true;
+    if (args.contains("paths") && args["paths"].is_array()) {
+        key_translation = false;
+        key_rotation    = false;
+        key_scale       = false;
+        for (const auto& element : args["paths"]) {
+            if (!element.is_string()) {
+                continue;
+            }
+            const std::string path = element.get<std::string>();
+            if      (path == "translation") key_translation = true;
+            else if (path == "rotation")    key_rotation    = true;
+            else if (path == "scale")       key_scale       = true;
+            else {
+                return make_error_content("Unknown path: " + path + " (use translation, rotation or scale)");
+            }
+        }
+    }
+
+    const float time = args.contains("time") && args["time"].is_number()
+        ? args["time"].get<float>()
+        : player->get_time();
+
+    std::vector<Keying_request> requests;
+    requests.reserve(nodes.size());
+    for (const std::shared_ptr<erhe::scene::Node>& node : nodes) {
+        requests.push_back(
+            Keying_request{
+                .node            = node,
+                .key_translation = key_translation,
+                .key_rotation    = key_rotation,
+                .key_scale       = key_scale
+            }
+        );
+    }
+
+    const std::size_t channels_before = animation->channels.size();
+    std::shared_ptr<Operation> operation = key_nodes(animation, requests, time);
+    if (!operation) {
+        return make_error_content("Nothing to key");
+    }
+    m_context.operation_stack->execute_now(std::move(operation));
+    player->on_animation_edited(animation);
+
+    return make_json_content({
+        {"keyed_nodes",      nodes.size()},
+        {"time",             time},
+        {"channels_created", animation->channels.size() - channels_before},
+        {"channels",         animation->channels.size()}
+    }).dump();
+}
+
+auto Mcp_server::action_animation_delete_key(const json& args) -> std::string
+{
+    Animation_window* window = m_context.animation_window;
+    Animation_player* player = m_context.animation_player;
+    if ((window == nullptr) || (player == nullptr) || (m_context.operation_stack == nullptr)) {
+        return make_error_content("Animation window / player not available");
+    }
+    const std::shared_ptr<erhe::scene::Animation> animation = window->get_animation();
+    if (!animation) {
+        return make_error_content("No animation targeted; call set_animation_target first");
+    }
+
+    std::string error;
+    const std::vector<std::shared_ptr<erhe::scene::Node>> nodes = collect_keying_nodes(m_context, args, error);
+    if (nodes.empty()) {
+        return make_error_content(error);
+    }
+
+    const float time = args.contains("time") && args["time"].is_number()
+        ? args["time"].get<float>()
+        : player->get_time();
+
+    std::shared_ptr<Operation> operation = delete_keys(animation, nodes, time);
+    if (!operation) {
+        return make_error_content("No keys at the given time for the given nodes");
+    }
+    m_context.operation_stack->execute_now(std::move(operation));
+    player->on_animation_edited(animation);
+
+    return make_json_content({{"deleted", true}, {"time", time}}).dump();
 }
 
 auto Mcp_server::action_animation_edit_keyframe(const json& args) -> std::string

@@ -1,10 +1,13 @@
 #include "animation/animation_window.hpp"
 
+#include "animation/animation_keying.hpp"
 #include "animation/animation_player.hpp"
 #include "app_context.hpp"
 #include "app_scenes.hpp"
 #include "content_library/content_library.hpp"
 #include "operations/animation_edit_operation.hpp"
+#include "operations/compound_operation.hpp"
+#include "operations/content_library_attach_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
@@ -26,6 +29,7 @@
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_scene/animation.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_scene/scene.hpp"
 
 #include <fmt/format.h>
 
@@ -392,6 +396,336 @@ void Animation_window::transport_toolbar()
     if (icon_button(ICON_MDI_FIT_TO_PAGE_OUTLINE, "Frame visible curves (Home)")) {
         m_frame_all_queued = true;
     }
+}
+
+void Animation_window::keying_toolbar()
+{
+    Animation_player* player = m_context.animation_player;
+    if (player == nullptr) {
+        return;
+    }
+
+    // Autokey mode (3ds-Max-style red tint while armed)
+    ImGui::TextUnformatted("Autokey");
+    ImGui::SameLine();
+    {
+        const Autokey_mode mode = player->get_autokey_mode();
+        const bool armed = mode != Autokey_mode::off;
+        if (armed) {
+            ImGui::PushStyleColor(ImGuiCol_FrameBg,        ImVec4{0.55f, 0.15f, 0.15f, 1.0f});
+            ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4{0.65f, 0.20f, 0.20f, 1.0f});
+        }
+        ImGui::SetNextItemWidth(100.0f);
+        if (ImGui::BeginCombo("##autokey", c_str(mode))) {
+            const Autokey_mode modes[3] = {Autokey_mode::off, Autokey_mode::modified_paths, Autokey_mode::all_paths};
+            for (const Autokey_mode candidate : modes) {
+                if (ImGui::Selectable(c_str(candidate), candidate == mode)) {
+                    player->set_autokey_mode(candidate);
+                }
+            }
+            ImGui::EndCombo();
+        }
+        if (armed) {
+            ImGui::PopStyleColor(2);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "Autokey: key edited nodes at the current time when a transform edit ends.\n"
+                "Modified keys only the changed paths (move -> translation); All keys T, R and S.\n"
+                "Requires a targeted animation."
+            );
+        }
+    }
+
+    // Manual Create / Delete Key with LightWave-dialog-style path toggles
+    ImGui::SameLine(0.0f, 12.0f);
+    ImGui::Checkbox("T##key_t", &m_key_translation);
+    ImGui::SameLine();
+    ImGui::Checkbox("R##key_r", &m_key_rotation);
+    ImGui::SameLine();
+    ImGui::Checkbox("S##key_s", &m_key_scale);
+    ImGui::SameLine();
+    if (ImGui::SmallButton("+ Key")) {
+        create_key_for_selection();
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip(
+            "Create keys for the selected objects at the current time on the checked paths (T / R / S).\n"
+            "Missing channels are created; with no animation targeted, a new animation is created."
+        );
+    }
+    ImGui::SameLine();
+    if (ImGui::SmallButton("- Key")) {
+        delete_key_for_selection();
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Delete the selected objects' keys at the current time");
+    }
+
+    // Key marker source for the timeline strip
+    ImGui::SameLine(0.0f, 12.0f);
+    ImGui::TextUnformatted("Marks");
+    ImGui::SameLine();
+    {
+        const char* source_names[3] = {"Selected Objects", "Active Animation", "Shown Channels"};
+        int source = static_cast<int>(m_key_marker_source);
+        ImGui::SetNextItemWidth(150.0f);
+        if (ImGui::Combo("##marker_source", &source, source_names, 3)) {
+            m_key_marker_source = static_cast<Key_marker_source>(source);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Which keys the timeline strip marks");
+        }
+    }
+}
+
+void Animation_window::collect_key_marker_times()
+{
+    m_marker_times.clear();
+    if (!m_animation) {
+        return;
+    }
+    const erhe::scene::Animation& animation = *m_animation.get();
+
+    // Scratch for the selected-objects source
+    static thread_local std::vector<const erhe::scene::Node*> selected_nodes;
+    selected_nodes.clear();
+    if ((m_key_marker_source == Key_marker_source::selected_objects) && (m_context.selection != nullptr)) {
+        for (const std::shared_ptr<erhe::Item_base>& item : m_context.selection->get_selected_items()) {
+            const erhe::scene::Node* node = dynamic_cast<const erhe::scene::Node*>(item.get());
+            if (node != nullptr) {
+                selected_nodes.push_back(node);
+            }
+        }
+    }
+
+    for (std::size_t channel_index = 0; channel_index < animation.channels.size(); ++channel_index) {
+        const erhe::scene::Animation_channel& channel = animation.channels[channel_index];
+        const std::size_t component_count = erhe::scene::get_component_count(channel.path);
+        bool include = false;
+        switch (m_key_marker_source) {
+            case Key_marker_source::selected_objects: {
+                include = std::find(selected_nodes.begin(), selected_nodes.end(), channel.target.get()) != selected_nodes.end();
+                break;
+            }
+            case Key_marker_source::active_animation: {
+                include = true;
+                break;
+            }
+            case Key_marker_source::shown_channels: {
+                const uint32_t full_mask = (component_count > 0) ? ((1u << component_count) - 1u) : 0u;
+                include = (channel_index < m_channel_visibility.size()) && ((m_channel_visibility[channel_index] & full_mask) != 0u);
+                break;
+            }
+            default: {
+                break;
+            }
+        }
+        if (!include) {
+            continue;
+        }
+        const erhe::scene::Animation_sampler& sampler = animation.samplers.at(channel.sampler_index);
+        m_marker_times.insert(m_marker_times.end(), sampler.timestamps.begin(), sampler.timestamps.end());
+    }
+    std::sort(m_marker_times.begin(), m_marker_times.end());
+}
+
+void Animation_window::timeline_strip()
+{
+    Animation_player* player = m_context.animation_player;
+    if (player == nullptr) {
+        return;
+    }
+
+    const ImGuiIO&    io        = ImGui::GetIO();
+    ImDrawList* const draw_list = ImGui::GetWindowDrawList();
+
+    const float  height = ImGui::GetFrameHeight() * 1.4f;
+    const ImVec2 pos    = ImGui::GetCursorScreenPos();
+    ImVec2       size   = ImGui::GetContentRegionAvail();
+    size.x = std::max(size.x, 50.0f);
+    size.y = height;
+    const ImVec2 max{pos.x + size.x, pos.y + size.y};
+
+    float range_min = player->get_start_time();
+    float range_max = player->get_end_time();
+    if (!(range_max > range_min)) {
+        range_max = range_min + 1.0f;
+    }
+    const float margin = (range_max - range_min) * 0.02f;
+    range_min -= margin;
+    range_max += margin;
+
+    const auto strip_time_to_x = [&](const float time) -> float {
+        return pos.x + ((time - range_min) / (range_max - range_min)) * size.x;
+    };
+    const auto strip_x_to_time = [&](const float x) -> float {
+        return range_min + ((x - pos.x) / std::max(size.x, 1.0f)) * (range_max - range_min);
+    };
+
+    ImGui::InvisibleButton("timeline_strip", size, ImGuiButtonFlags_MouseButtonLeft);
+    const bool active = ImGui::IsItemActive();
+
+    // Moving the timeline: click / drag anywhere on the strip scrubs.
+    if (active && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+        player->seek(strip_x_to_time(io.MousePos.x));
+        m_strip_scrubbing = true;
+    } else {
+        m_strip_scrubbing = false;
+    }
+
+    draw_list->PushClipRect(pos, max, true);
+
+    const ImGuiStyle& style = ImGui::GetStyle();
+    draw_list->AddRectFilled(pos, max, ImGui::GetColorU32(ImGuiCol_FrameBg), style.FrameRounding);
+
+    // Time ticks + labels
+    {
+        const ImU32 grid_color  = ImGui::GetColorU32(ImGuiCol_Separator, 0.6f);
+        const ImU32 label_color = ImGui::GetColorU32(ImGuiCol_TextDisabled);
+        const float step        = nice_step((range_max - range_min) * 80.0f / size.x);
+        const float first_tick  = std::ceil(range_min / step) * step;
+        for (float t = first_tick; t <= range_max; t += step) {
+            const float x = strip_time_to_x(t);
+            draw_list->AddLine(ImVec2{x, pos.y}, ImVec2{x, max.y}, grid_color);
+            char label[32];
+            snprintf(label, sizeof(label), "%g", static_cast<double>(t));
+            draw_list->AddText(ImVec2{x + 3.0f, pos.y + 1.0f}, label_color, label);
+        }
+    }
+
+    // Key markers (LightWave frame-slider style pale yellow lines)
+    collect_key_marker_times();
+    {
+        const ImU32 marker_color = IM_COL32(235, 220, 120, 210);
+        const float marker_top   = pos.y + (size.y * 0.35f);
+        for (const float time : m_marker_times) {
+            const float x = strip_time_to_x(time);
+            draw_list->AddLine(ImVec2{x, marker_top}, ImVec2{x, max.y - 1.0f}, marker_color, 1.5f);
+        }
+    }
+
+    // Playhead
+    if (m_animation && (player->get_animation() == m_animation)) {
+        const float time = player->get_time();
+        const float x    = strip_time_to_x(time);
+        const ImU32 playhead_color = IM_COL32(90, 200, 220, 255);
+        draw_list->AddLine(ImVec2{x, pos.y}, ImVec2{x, max.y}, playhead_color, 2.0f);
+        draw_list->AddTriangleFilled(
+            ImVec2{x - 5.0f, pos.y},
+            ImVec2{x + 5.0f, pos.y},
+            ImVec2{x, pos.y + 7.0f},
+            playhead_color
+        );
+    }
+
+    draw_list->PopClipRect();
+
+    if (ImGui::IsItemHovered() || m_strip_scrubbing) {
+        ImGui::SetTooltip("t = %.3f", static_cast<double>(strip_x_to_time(io.MousePos.x)));
+    }
+}
+
+void Animation_window::collect_selected_nodes(std::vector<std::shared_ptr<erhe::scene::Node>>& out_nodes) const
+{
+    out_nodes.clear();
+    if (m_context.selection == nullptr) {
+        return;
+    }
+    for (const std::shared_ptr<erhe::Item_base>& item : m_context.selection->get_selected_items()) {
+        std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+        if (node) {
+            out_nodes.push_back(std::move(node));
+        }
+    }
+}
+
+void Animation_window::create_key_for_selection()
+{
+    Animation_player* player = m_context.animation_player;
+    if ((player == nullptr) || (m_context.operation_stack == nullptr)) {
+        return;
+    }
+    std::vector<std::shared_ptr<erhe::scene::Node>> nodes;
+    collect_selected_nodes(nodes);
+    if (nodes.empty()) {
+        return;
+    }
+
+    Compound_operation::Parameters compound_parameters;
+
+    // No animation targeted yet: create one in the scene's content library
+    // (Unity-record-button style), undoably, and target it.
+    std::shared_ptr<erhe::scene::Animation> animation = m_animation;
+    if (!animation) {
+        erhe::scene::Scene* scene = nodes.front()->get_scene();
+        Scene_root* scene_root = (scene != nullptr) ? static_cast<Scene_root*>(scene->get_item_host()) : nullptr;
+        const std::shared_ptr<Content_library> library = (scene_root != nullptr) ? scene_root->get_content_library() : std::shared_ptr<Content_library>{};
+        if (!library || !library->animations) {
+            return;
+        }
+        animation = std::make_shared<erhe::scene::Animation>("Animation");
+        animation->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+        compound_parameters.operations.push_back(
+            std::make_shared<Content_library_attach_operation<erhe::scene::Animation>>(
+                library,
+                library->animations,
+                animation,
+                Gltf_source_reference{
+                    .item_name = animation->get_name(),
+                    .item_type = "animation"
+                }
+            )
+        );
+    }
+
+    std::vector<Keying_request> requests;
+    requests.reserve(nodes.size());
+    for (const std::shared_ptr<erhe::scene::Node>& node : nodes) {
+        requests.push_back(
+            Keying_request{
+                .node            = node,
+                .key_translation = m_key_translation,
+                .key_rotation    = m_key_rotation,
+                .key_scale       = m_key_scale
+            }
+        );
+    }
+    std::shared_ptr<Operation> keying_operation = key_nodes(animation, requests, player->get_time());
+    if (!keying_operation) {
+        return;
+    }
+    compound_parameters.operations.push_back(std::move(keying_operation));
+
+    if (compound_parameters.operations.size() == 1) {
+        m_context.operation_stack->queue(compound_parameters.operations.front());
+    } else {
+        m_context.operation_stack->queue(std::make_shared<Compound_operation>(std::move(compound_parameters)));
+    }
+
+    if (animation != m_animation) {
+        set_animation(animation);
+    }
+    player->on_animation_edited(animation);
+}
+
+void Animation_window::delete_key_for_selection()
+{
+    Animation_player* player = m_context.animation_player;
+    if ((player == nullptr) || (m_context.operation_stack == nullptr) || !m_animation) {
+        return;
+    }
+    std::vector<std::shared_ptr<erhe::scene::Node>> nodes;
+    collect_selected_nodes(nodes);
+    if (nodes.empty()) {
+        return;
+    }
+    std::shared_ptr<Operation> operation = delete_keys(m_animation, nodes, player->get_time());
+    if (!operation) {
+        return;
+    }
+    m_context.operation_stack->queue(std::move(operation));
+    player->on_animation_edited(m_animation);
 }
 
 auto Animation_window::channel_label(const std::size_t channel_index) const -> std::string
@@ -1238,6 +1572,8 @@ void Animation_window::imgui()
 
     animation_combo();
     transport_toolbar();
+    keying_toolbar();
+    timeline_strip();
     ImGui::Separator();
 
     if (ImGui::BeginChild("channel_pane", ImVec2{m_channel_pane_width, 0.0f}, ImGuiChildFlags_ResizeX)) {

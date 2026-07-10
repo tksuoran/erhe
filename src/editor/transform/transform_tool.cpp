@@ -3,6 +3,8 @@
 #include "transform/rotate_tool.hpp"
 #include "transform/scale_tool.hpp"
 
+#include "animation/animation_keying.hpp"
+#include "animation/animation_player.hpp"
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
 #include "editor_log.hpp"
@@ -1195,6 +1197,47 @@ void Transform_tool::record_transform_operation()
         );
         compompound_parameters.operations.push_back(node_operation);
     }
+
+    // Autokey (LightWave-style): when enabled and an animation is targeted,
+    // key the edited nodes at the current play position. The keying operation
+    // joins the same compound, so a single undo reverts both the transform
+    // and the keys it created.
+    Animation_player* player = m_context.animation_player;
+    if ((player != nullptr) && (player->get_autokey_mode() != Autokey_mode::off)) {
+        const std::shared_ptr<erhe::scene::Animation>& animation = player->get_animation();
+        if (animation) {
+            constexpr float epsilon = 1.0e-6f;
+            const bool key_all = player->get_autokey_mode() == Autokey_mode::all_paths;
+            std::vector<Keying_request> requests;
+            requests.reserve(shared.entries.size());
+            for (auto& entry : shared.entries) {
+                const erhe::scene::Trs_transform& before = entry.parent_from_node_before;
+                const erhe::scene::Trs_transform& after  = entry.node->parent_from_node_transform();
+                const bool translation_changed = glm::any(glm::greaterThan(glm::abs(after.get_translation() - before.get_translation()), glm::vec3{epsilon}));
+                const bool scale_changed       = glm::any(glm::greaterThan(glm::abs(after.get_scale()       - before.get_scale()),       glm::vec3{epsilon}));
+                const glm::quat rotation_delta = after.get_rotation() - before.get_rotation();
+                const bool rotation_changed =
+                    (std::abs(rotation_delta.x) > epsilon) ||
+                    (std::abs(rotation_delta.y) > epsilon) ||
+                    (std::abs(rotation_delta.z) > epsilon) ||
+                    (std::abs(rotation_delta.w) > epsilon);
+                requests.push_back(
+                    Keying_request{
+                        .node            = entry.node,
+                        .key_translation = key_all || translation_changed,
+                        .key_rotation    = key_all || rotation_changed,
+                        .key_scale       = key_all || scale_changed
+                    }
+                );
+            }
+            std::shared_ptr<Operation> keying_operation = key_nodes(animation, requests, player->get_time());
+            if (keying_operation) {
+                compompound_parameters.operations.push_back(std::move(keying_operation));
+                player->on_animation_edited(animation);
+            }
+        }
+    }
+
     m_context.operation_stack->queue(
         std::make_shared<Compound_operation>(
             std::move(compompound_parameters)
