@@ -474,6 +474,13 @@ auto scan_gltf(const std::filesystem::path& path) -> std::vector<std::string>
     if (!scan.spot_lights       .empty()) out.push_back(fmt::format("{} spot lights",        scan.spot_lights       .size()));
     if (!scan.images            .empty()) out.push_back(fmt::format("{} images",             scan.images            .size()));
     if (!scan.samplers          .empty()) out.push_back(fmt::format("{} samplers",           scan.samplers          .size()));
+    if (!scan.files             .empty()) out.push_back(fmt::format("{} files",              scan.files             .size()));
+    if (!scan.external_assets.empty()) {
+        out.push_back(fmt::format("{} external assets:", scan.external_assets.size()));
+        for (const std::string& external_asset : scan.external_assets) {
+            out.push_back(" - " + external_asset);
+        }
+    }
     if (!scan.extensions_used.empty()) {
         out.push_back("Extensions used:");
         for (const std::string& extension : scan.extensions_used) {

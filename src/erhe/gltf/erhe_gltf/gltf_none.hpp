@@ -4,6 +4,8 @@
 
 #include <memory>
 #include <filesystem>
+#include <optional>
+#include <string>
 #include <vector>
 
 namespace erhe::geometry {
@@ -37,6 +39,24 @@ namespace erhe::gltf {
 
 class Image_transfer;
 
+// See gltf_fastgltf.hpp for documentation; this header mirrors the API for
+// the ERHE_GLTF_LIBRARY=none configuration.
+class Gltf_file_reference
+{
+public:
+    std::string           name;
+    std::string           mime_type;
+    std::filesystem::path resolved_path;
+    bool                  embedded{false};
+};
+
+class Gltf_external_asset
+{
+public:
+    std::string name;
+    std::size_t file_index{0};
+};
+
 class Gltf_data
 {
 public:
@@ -51,6 +71,10 @@ public:
     std::vector<std::shared_ptr<erhe::graphics::Sampler>>   samplers;
     std::vector<std::string>                                extensions;
     Gltf_physics_data                                       physics;
+
+    std::vector<Gltf_file_reference>        files;
+    std::vector<Gltf_external_asset>        external_assets;
+    std::vector<std::optional<std::size_t>> node_external_assets;
 };
 
 class Gltf_scan
@@ -68,6 +92,8 @@ public:
     std::vector<std::string> images;
     std::vector<std::string> samplers;
     std::vector<std::string> scenes;
+    std::vector<std::string> files;
+    std::vector<std::string> external_assets;
     std::vector<std::string> extensions_used;
     std::vector<std::string> extensions_required;
     std::vector<std::string> errors;

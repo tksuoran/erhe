@@ -4,6 +4,8 @@
 
 #include <memory>
 #include <filesystem>
+#include <optional>
+#include <string>
 #include <vector>
 
 namespace erhe::geometry {
@@ -37,6 +39,31 @@ namespace erhe::gltf {
 
 class Image_transfer;
 
+// glTF 2.1 top-level "files" array entry (unified file references,
+// KhronosGroup/glTF#2590). URI entries are resolved against the glTF
+// directory into resolved_path; entries carried inside the asset (data
+// URIs / GLB-packed payloads) have an empty resolved_path and embedded set.
+class Gltf_file_reference
+{
+public:
+    std::string           name;
+    std::string           mime_type;
+    std::filesystem::path resolved_path;
+    bool                  embedded{false};
+};
+
+// glTF 2.1 top-level "externalAssets" array entry (external assets,
+// KhronosGroup/glTF#2586): a glTF asset referenced through the "files"
+// array which nodes can instantiate. Neither fastgltf nor erhe::gltf
+// parses the referenced asset or detects cross-file cycles; the caller
+// (the editor's prefab layer) does.
+class Gltf_external_asset
+{
+public:
+    std::string name;
+    std::size_t file_index{0};
+};
+
 class Gltf_data
 {
 public:
@@ -51,6 +78,15 @@ public:
     std::vector<std::shared_ptr<erhe::graphics::Sampler>>   samplers;
     std::vector<std::string>                                extensions;
     Gltf_physics_data                                       physics;
+
+    // glTF 2.1 (see Gltf_file_reference / Gltf_external_asset above).
+    // node_external_assets parallels nodes: entry i holds the index into
+    // external_assets instantiated by node i, or nullopt. The carrier node
+    // itself is parsed as an ordinary (empty) node with its transform;
+    // instantiating the referenced asset under it is the caller's job.
+    std::vector<Gltf_file_reference>        files;
+    std::vector<Gltf_external_asset>        external_assets;
+    std::vector<std::optional<std::size_t>> node_external_assets;
 };
 
 class Gltf_scan
@@ -68,6 +104,8 @@ public:
     std::vector<std::string> images;
     std::vector<std::string> samplers;
     std::vector<std::string> scenes;
+    std::vector<std::string> files;
+    std::vector<std::string> external_assets;
     std::vector<std::string> extensions_used;
     std::vector<std::string> extensions_required;
     std::vector<std::string> errors;

@@ -700,6 +700,27 @@ void copyFromAccessorWithOutStride(const fastgltf::Asset& asset, const fastgltf:
     }
 }
 
+namespace {
+
+// fastgltf's loadGltf() rejects an empty base directory with
+// fastgltf::Error::InvalidPath ("The glTF directory passed to load*GLTF is
+// invalid"). A relative path with no directory component -- e.g. "scene.glb"
+// resolved against the process cwd, which is how load_scene hands a companion
+// .glb whose scene file lives in the working directory -- has an empty
+// parent_path(). Its correct resolution base for external glTF resources is the
+// current directory, so substitute "." rather than letting the whole parse fail
+// (which silently drops every material and texture, leaving meshes unlit).
+[[nodiscard]] auto gltf_base_directory(const std::filesystem::path& path) -> std::filesystem::path
+{
+    std::filesystem::path directory = path.parent_path();
+    if (directory.empty()) {
+        return std::filesystem::path{"."};
+    }
+    return directory;
+}
+
+} // namespace
+
 class Gltf_parser
 {
 private:
@@ -740,6 +761,9 @@ public:
             log_gltf->error("No data loaded to parse glTF");
             return;
         }
+
+        log_gltf->trace("parsing files and external assets");
+        parse_files_and_external_assets();
 
         /// log_gltf->trace("parsing images");
         m_data_out.images.resize(m_asset->images.size());
@@ -797,6 +821,7 @@ public:
 
         log_gltf->trace("parsing nodes");
         m_data_out.nodes.resize(m_asset->nodes.size());
+        m_data_out.node_external_assets.resize(m_asset->nodes.size());
         m_data_out.skins.resize(m_asset->skins.size()); // Skins are parsed just in time during node parsing
         if (!m_asset->scenes.empty()) {
             // TODO For now, only one scene per glTF is supported.
@@ -842,6 +867,43 @@ public:
     }
 
 private:
+    // glTF 2.1: top-level "files" and "externalAssets" arrays. File entries
+    // with a URI are resolved against the glTF directory; entries whose bytes
+    // travel inside the asset (data URIs, GLB-packed payloads) are marked
+    // embedded. The referenced assets themselves are not parsed here -- that
+    // (plus cross-file cycle detection) is the caller's responsibility.
+    void parse_files_and_external_assets()
+    {
+        const std::filesystem::path base_directory = gltf_base_directory(m_arguments.path);
+
+        m_data_out.files.resize(m_asset->files.size());
+        for (std::size_t i = 0, end = m_asset->files.size(); i < end; ++i) {
+            const fastgltf::File& file     = m_asset->files[i];
+            Gltf_file_reference&  out_file = m_data_out.files[i];
+            out_file.name      = safe_resource_name(file.name, "file", i);
+            out_file.mime_type = std::string{file.mimeType};
+            if (const fastgltf::sources::URI* uri = std::get_if<fastgltf::sources::URI>(&file.data)) {
+                const std::filesystem::path uri_path = uri->uri.fspath();
+                out_file.resolved_path = uri_path.is_absolute() ? uri_path : (base_directory / uri_path);
+            } else if (!std::holds_alternative<std::monostate>(file.data)) {
+                out_file.embedded = true;
+            }
+            log_gltf->trace(
+                "File: index = {}, name = {}, mimeType = {}, path = {}, embedded = {}",
+                i, out_file.name, out_file.mime_type, out_file.resolved_path.string(), out_file.embedded
+            );
+        }
+
+        m_data_out.external_assets.resize(m_asset->externalAssets.size());
+        for (std::size_t i = 0, end = m_asset->externalAssets.size(); i < end; ++i) {
+            const fastgltf::ExternalAsset& external_asset = m_asset->externalAssets[i];
+            Gltf_external_asset&           out_external_asset = m_data_out.external_assets[i];
+            out_external_asset.name       = safe_resource_name(external_asset.name, "externalAsset", i);
+            out_external_asset.file_index = external_asset.fileIndex;
+            log_gltf->trace("External asset: index = {}, name = {}, file = {}", i, out_external_asset.name, out_external_asset.file_index);
+        }
+    }
+
     void trace_info() const
     {
         if (m_asset->assetInfo.has_value()) {
@@ -1204,8 +1266,13 @@ private:
                     erhe_texture = load_image_buffer(buffer_view_source.bufferViewIndex, image_index, linear, image_name);
                 },
                 [&](const fastgltf::sources::URI& uri){
+                    // Resolve on a copy: replace_filename() mutates in place,
+                    // and m_arguments.path must keep naming the glTF file
+                    // (source paths of nodes parsed later, resource names).
                     std::filesystem::path relative_path = uri.uri.fspath();
-                    erhe_texture = load_image_file(m_arguments.path.replace_filename(relative_path), linear, image_name);
+                    std::filesystem::path image_path    = m_arguments.path;
+                    image_path.replace_filename(relative_path);
+                    erhe_texture = load_image_file(image_path, linear, image_name);
                 }
             },
             image.data
@@ -1920,6 +1987,13 @@ private:
             const std::size_t light_index = node.lightIndex.value();
             erhe_node->attach(m_data_out.lights[light_index]);
         }
+        if (node.externalAssetIndex.has_value()) {
+            // glTF 2.1: this node instantiates an external asset. Only the
+            // association is recorded here; instantiating the referenced
+            // asset under this (otherwise empty) carrier node is the
+            // caller's job (see Gltf_data::node_external_assets).
+            m_data_out.node_external_assets[node_index] = node.externalAssetIndex.value();
+        }
         if (node.meshIndex.has_value()) {
             const std::size_t mesh_index = node.meshIndex.value();
             const erhe::scene::Mesh& template_mesh = *m_data_out.meshes[mesh_index].get();
@@ -2232,27 +2306,6 @@ private:
     }
 }
 
-namespace {
-
-// fastgltf's loadGltf() rejects an empty base directory with
-// fastgltf::Error::InvalidPath ("The glTF directory passed to load*GLTF is
-// invalid"). A relative path with no directory component -- e.g. "scene.glb"
-// resolved against the process cwd, which is how load_scene hands a companion
-// .glb whose scene file lives in the working directory -- has an empty
-// parent_path(). Its correct resolution base for external glTF resources is the
-// current directory, so substitute "." rather than letting the whole parse fail
-// (which silently drops every material and texture, leaving meshes unlit).
-[[nodiscard]] auto gltf_base_directory(const std::filesystem::path& path) -> std::filesystem::path
-{
-    std::filesystem::path directory = path.parent_path();
-    if (directory.empty()) {
-        return std::filesystem::path{"."};
-    }
-    return directory;
-}
-
-} // namespace
-
 auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
 {
     ERHE_PROFILE_FUNCTION();
@@ -2559,6 +2612,16 @@ auto scan_gltf(std::filesystem::path path) -> Gltf_scan
     result.scenes.resize(asset->scenes.size());
     for (std::size_t i = 0, end = asset->scenes.size(); i < end; ++i) {
         result.scenes[i] = resource_name(asset->scenes[i].name, "scene", i);
+    }
+
+    result.files.resize(asset->files.size());
+    for (std::size_t i = 0, end = asset->files.size(); i < end; ++i) {
+        result.files[i] = resource_name(asset->files[i].name, "file", i);
+    }
+
+    result.external_assets.resize(asset->externalAssets.size());
+    for (std::size_t i = 0, end = asset->externalAssets.size(); i < end; ++i) {
+        result.external_assets[i] = resource_name(asset->externalAssets[i].name, "externalAsset", i);
     }
 
     timer.end();
