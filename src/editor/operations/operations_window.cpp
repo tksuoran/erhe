@@ -1445,29 +1445,23 @@ auto Operations::operation_button(const char* label, erhe::commands::Command* co
 
 void Operations::merge()
 {
-    /// tf::Executor& executor = m_context.operation_stack->get_executor();
-    /// executor.silent_async(
-    ///     [this]()
-    ///     {
-            m_context.operation_stack->queue(
-                std::make_shared<Merge_operation>(
-                    Merge_operation::Parameters{
-                        .context = m_context,
-                        .build_info{
-                            .primitive_types{
-                                .fill_triangles  = true,
-                                .fill_triangles_expanded = true,
-                                .edge_lines      = true,
-                                .corner_points   = true,
-                                .centroid_points = true
-                            },
-                            .buffer_info = m_context.mesh_memory->make_primitive_buffer_info()
-                        }
-                    }
-                )
-            );
-    ///     }
-    /// );
+    m_context.operation_stack->queue(
+        std::make_shared<Merge_operation>(
+            Merge_operation::Parameters{
+                .context = m_context,
+                .build_info{
+                    .primitive_types{
+                        .fill_triangles  = true,
+                        .fill_triangles_expanded = true,
+                        .edge_lines      = true,
+                        .corner_points   = true,
+                        .centroid_points = true
+                    },
+                    .buffer_info = m_context.mesh_memory->make_primitive_buffer_info()
+                }
+            }
+        )
+    );
 }
 
 auto Operations::can_align() const -> bool
@@ -1856,88 +1850,76 @@ void Operations::normalize()
 
 void Operations::bake_transform()
 {
-    /// tf::Executor& executor = m_context.operation_stack->get_executor();
-    /// executor.silent_async(
-    ///     [this]()
-    ///     {
-            Compound_operation::Parameters compound_operation_parameters;
-            // First: Transform geometries using node transforms
-            compound_operation_parameters.operations.push_back(
-                std::make_shared<Bake_transform_operation>(mesh_context())
-            );
-            // Second: Reset transform in all nodes
-            const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = m_context.selection->get_selected_items();
-            const std::vector<std::shared_ptr<erhe::scene::Node>>& nodes = get_all<erhe::scene::Node>(selected_items);
-            for (const std::shared_ptr<erhe::scene::Node>& node : nodes) {
-                compound_operation_parameters.operations.push_back(
-                    std::make_shared<Node_transform_operation>(
-                        Node_transform_operation::Parameters{
-                            .node = node,
-                            .parent_from_node_before = node->parent_from_node_transform(),
-                            .parent_from_node_after = {}
-                        }
-                    )
-                );
-            }
-            m_context.operation_stack->queue(
-                std::make_shared<Compound_operation>(std::move(compound_operation_parameters))
-            );
-    ///    }
-    /// );
+    Compound_operation::Parameters compound_operation_parameters;
+    // First: Transform geometries using node transforms
+    compound_operation_parameters.operations.push_back(
+        std::make_shared<Bake_transform_operation>(mesh_context())
+    );
+    // Second: Reset transform in all nodes
+    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = m_context.selection->get_selected_items();
+    const std::vector<std::shared_ptr<erhe::scene::Node>>& nodes = get_all<erhe::scene::Node>(selected_items);
+    for (const std::shared_ptr<erhe::scene::Node>& node : nodes) {
+        compound_operation_parameters.operations.push_back(
+            std::make_shared<Node_transform_operation>(
+                Node_transform_operation::Parameters{
+                    .node = node,
+                    .parent_from_node_before = node->parent_from_node_transform(),
+                    .parent_from_node_after = {}
+                }
+            )
+        );
+    }
+    m_context.operation_stack->queue(
+        std::make_shared<Compound_operation>(std::move(compound_operation_parameters))
+    );
 }
 
 void Operations::center_transform()
 {
-    /// tf::Executor& executor = m_context.operation_stack->get_executor();
-    /// executor.silent_async(
-    ///     [this]()
-    ///     {
-            Compound_operation::Parameters compound_operation_parameters;
+    Compound_operation::Parameters compound_operation_parameters;
 
-            // First: Transform geometries using node transforms
-            Mesh_operation_parameters parameters = mesh_context();
-            //std::unordered_map<uint64_t, glm::mat4> mesh_transform;
-            parameters.make_entry_node_callback = [](erhe::scene::Node* node, Mesh_operation_parameters& parameters) {
-                const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node);
-                if (!mesh) {
-                    return;
-                }
-                const erhe::math::Aabb aabb_world  = mesh->get_aabb_world();
-                const glm::vec3        aabb_center = aabb_world.center();
-                parameters.transform = erhe::math::create_translation<float>(-aabb_center);
-            };
-            compound_operation_parameters.operations.push_back(
-                std::make_shared<Bake_transform_operation>(std::move(parameters))
-            );
-            // Second: Reset transform in all nodes
-            const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = m_context.selection->get_selected_items();
-            const std::vector<std::shared_ptr<erhe::scene::Node>>& nodes = get_all<erhe::scene::Node>(selected_items);
-            for (const std::shared_ptr<erhe::scene::Node>& node : nodes) {
-                const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
-                if (!mesh) {
-                    return;
-                }
-                const erhe::math::Aabb aabb_world       = mesh->get_aabb_world();
-                const glm::vec3        aabb_center      = aabb_world.center();
-                const glm::mat4        offset_transform = erhe::math::create_translation<float>(aabb_center);
+    // First: Transform geometries using node transforms
+    Mesh_operation_parameters parameters = mesh_context();
+    //std::unordered_map<uint64_t, glm::mat4> mesh_transform;
+    parameters.make_entry_node_callback = [](erhe::scene::Node* node, Mesh_operation_parameters& parameters) {
+        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node);
+        if (!mesh) {
+            return;
+        }
+        const erhe::math::Aabb aabb_world  = mesh->get_aabb_world();
+        const glm::vec3        aabb_center = aabb_world.center();
+        parameters.transform = erhe::math::create_translation<float>(-aabb_center);
+    };
+    compound_operation_parameters.operations.push_back(
+        std::make_shared<Bake_transform_operation>(std::move(parameters))
+    );
+    // Second: Reset transform in all nodes
+    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = m_context.selection->get_selected_items();
+    const std::vector<std::shared_ptr<erhe::scene::Node>>& nodes = get_all<erhe::scene::Node>(selected_items);
+    for (const std::shared_ptr<erhe::scene::Node>& node : nodes) {
+        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+        if (!mesh) {
+            return;
+        }
+        const erhe::math::Aabb aabb_world       = mesh->get_aabb_world();
+        const glm::vec3        aabb_center      = aabb_world.center();
+        const glm::mat4        offset_transform = erhe::math::create_translation<float>(aabb_center);
 
-                const glm::mat4 world_from_node_before = node->world_from_node();
-                const glm::mat4 world_from_node_after  = offset_transform * node->world_from_node();
-                compound_operation_parameters.operations.push_back(
-                    std::make_shared<Node_transform_operation>(
-                        Node_transform_operation::Parameters{
-                            .node                    = node,
-                            .parent_from_node_before = node->parent_from_node_transform(),
-                            .parent_from_node_after  = erhe::scene::Transform{node->parent_from_world() * world_from_node_after}
-                        }
-                    )
-                );
-            }
-            m_context.operation_stack->queue(
-                std::make_shared<Compound_operation>(std::move(compound_operation_parameters))
-            );
-    ///    }
-    /// );
+        const glm::mat4 world_from_node_before = node->world_from_node();
+        const glm::mat4 world_from_node_after  = offset_transform * node->world_from_node();
+        compound_operation_parameters.operations.push_back(
+            std::make_shared<Node_transform_operation>(
+                Node_transform_operation::Parameters{
+                    .node                    = node,
+                    .parent_from_node_before = node->parent_from_node_transform(),
+                    .parent_from_node_after  = erhe::scene::Transform{node->parent_from_world() * world_from_node_after}
+                }
+            )
+        );
+    }
+    m_context.operation_stack->queue(
+        std::make_shared<Compound_operation>(std::move(compound_operation_parameters))
+    );
 }
 
 void Operations::reverse()

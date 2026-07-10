@@ -151,14 +151,9 @@ Transform_tool::Transform_tool(
     settings.show_translate = transform_tool_config.show_translate;
     settings.show_rotate    = transform_tool_config.show_rotate;
 
-    //executor.silent_async(
-    //    [this, &editor_context, &mesh_memory, &tools](){
-    // TODO
     static_cast<void>(executor);
     shared.visualizations = std::make_unique<Handle_visualizations>(app_context, mesh_memory, tools);
     shared.visualizations_ready.store(true);
-    //    }
-    //);
 
     set_base_priority(c_priority);
     set_description  ("Transform");

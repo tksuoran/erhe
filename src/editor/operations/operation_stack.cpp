@@ -6,10 +6,11 @@
 #include "erhe_commands/commands.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <imgui/imgui.h>
 
-#include <taskflow/taskflow.hpp>
+#include <thread>
 
 namespace editor {
 
@@ -52,7 +53,6 @@ auto Redo_command::try_call() -> bool
 #pragma endregion Commands
 
 Operation_stack::Operation_stack(
-    tf::Executor&                executor,
     erhe::commands::Commands&    commands,
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
@@ -60,7 +60,6 @@ Operation_stack::Operation_stack(
 )
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Operation Stack", "operation_stack", true}
     , m_context     {context}
-    , m_executor    {executor}
     , m_undo_command{commands, context}
     , m_redo_command{commands, context}
 {
@@ -77,23 +76,28 @@ Operation_stack::Operation_stack(
 
 Operation_stack::~Operation_stack() noexcept = default;
 
-auto Operation_stack::get_executor() -> tf::Executor&
+void Operation_stack::verify_main_thread() const
 {
-    return m_executor;
+    ERHE_VERIFY(std::this_thread::get_id() == m_context.main_thread_id);
 }
 
 void Operation_stack::queue(const std::shared_ptr<Operation>& operation)
 {
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+    verify_main_thread();
 
+    // Legal also while an operation is executing (m_executing); the queued
+    // operation runs later in the same update() pass.
     m_queued.push_back(operation);
 }
 
 void Operation_stack::execute_now(const std::shared_ptr<Operation>& operation)
 {
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+    verify_main_thread();
+    ERHE_VERIFY(!m_executing);
 
+    m_executing = true;
     operation->execute(m_context);
+    m_executing = false;
     m_executed.push_back(operation);
     m_undone.clear();
 }
@@ -102,15 +106,21 @@ void Operation_stack::update()
 {
     ERHE_PROFILE_FUNCTION();
 
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+    verify_main_thread();
+    ERHE_VERIFY(!m_executing);
 
     if (m_queued.empty()) {
         return;
     }
 
-    for (const auto& operation : m_queued) {
+    // Index loop with a per-iteration copy: an executing operation may
+    // queue() follow-up operations, growing (and reallocating) m_queued.
+    for (std::size_t i = 0; i < m_queued.size(); ++i) {
+        std::shared_ptr<Operation> operation = m_queued[i];
+        m_executing = true;
         operation->execute(m_context);
-        m_executed.push_back(operation);
+        m_executing = false;
+        m_executed.push_back(std::move(operation));
     }
     m_queued.clear();
     m_undone.clear();
@@ -118,47 +128,55 @@ void Operation_stack::update()
 
 void Operation_stack::undo()
 {
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+    verify_main_thread();
+    ERHE_VERIFY(!m_executing);
 
     if (m_executed.empty()) {
         return;
     }
     auto operation = m_executed.back(); // intentionally not a reference, otherwise pop_back() below will invalidate
     m_executed.pop_back();
+    m_executing = true;
     operation->undo(m_context);
+    m_executing = false;
     m_undone.push_back(operation);
 }
 
 void Operation_stack::clear_history()
 {
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+    verify_main_thread();
+    ERHE_VERIFY(!m_executing);
+
     m_executed.clear();
     m_undone.clear();
 }
 
 void Operation_stack::redo()
 {
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+    verify_main_thread();
+    ERHE_VERIFY(!m_executing);
 
     if (m_undone.empty()) {
         return;
     }
     auto operation = m_undone.back(); // intentionally not a reference, otherwise pop_back() below will invalidate
     m_undone.pop_back();
+    m_executing = true;
     operation->execute(m_context);
+    m_executing = false;
     m_executed.push_back(operation);
 }
 
 auto Operation_stack::can_undo() const -> bool
 {
-    // TODO ? std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+    verify_main_thread();
 
     return !m_executed.empty();
 }
 
 auto Operation_stack::can_redo() const -> bool
 {
-    // TODO ? std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+    verify_main_thread();
 
     return !m_undone.empty();
 }

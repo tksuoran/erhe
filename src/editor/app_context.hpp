@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <thread>
 
 namespace erhe::graphics {
     class Command_buffer;
@@ -133,6 +134,11 @@ public:
     tf::Executor*                           executor              {nullptr};
     std::atomic_int                         pending_async_ops     {};
     std::atomic_int                         running_async_ops     {};
+
+    // Set at the top of Editor construction, before parts construction.
+    // Main-thread-only parts (e.g. Operation_stack) verify their callers
+    // against this instead of pretending to be thread-safe with a lock.
+    std::thread::id                         main_thread_id        {};
 
     erhe::commands::Commands*               commands              {nullptr};
     // Set by Editor::tick() to the cb being recorded for the current frame.

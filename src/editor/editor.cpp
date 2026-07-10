@@ -810,6 +810,11 @@ public:
         if (m_graphics_config.renderdoc_capture_support) {
             m_app_context.renderdoc = true;
         }
+
+        // Editor is constructed on the main thread; parts constructed on init
+        // taskflow workers must not capture their own thread id as the owner.
+        m_app_context.main_thread_id = std::this_thread::get_id();
+
         const int thread_count = m_editor_settings.threading.thread_count;
 
         // Note: m_executor is also used at runtime, so it cannot be
@@ -1502,7 +1507,7 @@ public:
 
             ERHE_TASK_HEADER(some_windows_task)
             {
-                m_operation_stack        = std::make_unique<Operation_stack                 >(*m_executor.get(),       *m_commands.get(),       *m_imgui_renderer.get(), *m_imgui_windows.get(), m_app_context);
+                m_operation_stack        = std::make_unique<Operation_stack                 >(*m_commands.get(),       *m_imgui_renderer.get(), *m_imgui_windows.get(), m_app_context);
                 m_asset_browser          = std::make_unique<Asset_browser                   >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
                 m_composer_window        = std::make_unique<Composer_window                 >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_selection_window       = std::make_unique<Selection_window                >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);

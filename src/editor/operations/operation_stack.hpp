@@ -2,15 +2,12 @@
 
 #include "erhe_commands/command.hpp"
 #include "erhe_imgui/imgui_window.hpp"
-#include "erhe_profile/profile.hpp"
 
 #include <memory>
-#include <mutex>
 #include <vector>
 
 namespace erhe::commands { class Commands; }
 namespace erhe::imgui    { class Imgui_windows; }
-namespace tf             { class Executor; }
 
 namespace editor {
 
@@ -41,13 +38,22 @@ private:
     App_context& m_context;
 };
 
+// Main-thread-only: every entry point verifies the caller is on the main
+// thread (App_context::main_thread_id) instead of locking. All operation
+// sources (ImGui windows/tools, commands, MCP handlers dispatched via
+// Mcp_server::process_queued_requests(), startup script, message-bus
+// callbacks) run on the main thread; worker threads must hand results to
+// the main thread rather than call into this class.
+//
+// Re-entrancy contract: while an operation is executing (or being undone),
+// the only legal Operation_stack call is queue(). Operations queued during
+// execution run later in the same update() pass, in append order.
 class Operation_stack
     : public erhe::imgui::Imgui_window
     , public erhe::commands::Command_host
 {
 public:
     Operation_stack(
-        tf::Executor&                executor,
         erhe::commands::Commands&    commands,
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
@@ -81,8 +87,6 @@ public:
     // Implements Window
     void imgui() override;
 
-    [[nodiscard]] auto get_executor() -> tf::Executor&;
-
 private:
     friend class Mcp_server;
 
@@ -91,12 +95,13 @@ private:
 
     void imgui(const char* stack_label, const std::vector<std::shared_ptr<Operation>>& operations);
 
+    void verify_main_thread() const;
+
     App_context&  m_context;
-    tf::Executor& m_executor;
     Undo_command  m_undo_command;
     Redo_command  m_redo_command;
 
-    ERHE_PROFILE_MUTEX(std::mutex,          m_mutex);
+    bool                                    m_executing{false};
     std::vector<std::shared_ptr<Operation>> m_executed;
     std::vector<std::shared_ptr<Operation>> m_undone;
     std::vector<std::shared_ptr<Operation>> m_queued;
