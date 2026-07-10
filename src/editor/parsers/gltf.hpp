@@ -1,7 +1,10 @@
 #pragma once
 
+#include "erhe_math/aabb.hpp"
+
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -44,6 +47,17 @@ void finalize_imported_meshes(
     std::vector<std::shared_ptr<erhe::Item_base>>* out_mesh_node_items
 );
 
-[[nodiscard]] auto scan_gltf(const std::filesystem::path& path) -> std::vector<std::string>;
+// Lightweight glTF file summary for the asset browser: human-readable
+// content lines (tooltip) plus the combined default-scene AABB computed
+// from accessor bounds in the JSON (no buffer data read) - used for the
+// viewport drag-and-drop preview and bottom-snap placement.
+class Gltf_scan_summary
+{
+public:
+    std::vector<std::string>        contents;
+    std::optional<erhe::math::Aabb> bounding_box;
+};
+
+[[nodiscard]] auto scan_gltf(const std::filesystem::path& path) -> Gltf_scan_summary;
 
 }

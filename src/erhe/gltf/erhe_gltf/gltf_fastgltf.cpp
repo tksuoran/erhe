@@ -2624,6 +2624,62 @@ auto scan_gltf(std::filesystem::path path) -> Gltf_scan
         result.external_assets[i] = resource_name(asset->externalAssets[i].name, "externalAsset", i);
     }
 
+    // Combined scene-space AABB from POSITION accessor min/max (required by
+    // the glTF spec) transformed through the node hierarchy. Reads only the
+    // JSON - buffer data is never touched, so this stays cheap for large
+    // files. See the Gltf_scan::bounding_box declaration for limitations.
+    {
+        const auto bounds_component = [](const fastgltf::AccessorBoundsArray& bounds, const std::size_t i) -> float {
+            return (bounds.type() == fastgltf::AccessorBoundsArray::BoundsType::float64)
+                ? static_cast<float>(bounds.data<double>()[i])
+                : static_cast<float>(bounds.data<std::int64_t>()[i]);
+        };
+        erhe::math::Aabb aabb{};
+        const auto include_scene = [&](const std::size_t scene_index) {
+            fastgltf::iterateSceneNodes(
+                *asset,
+                scene_index,
+                fastgltf::math::fmat4x4{},
+                [&](const fastgltf::Node& node, const fastgltf::math::fmat4x4& matrix) {
+                    if (!node.meshIndex.has_value() || (node.meshIndex.value() >= asset->meshes.size())) {
+                        return;
+                    }
+                    const fastgltf::Mesh& mesh = asset->meshes[node.meshIndex.value()];
+                    for (const fastgltf::Primitive& primitive : mesh.primitives) {
+                        const auto* position_attribute = primitive.findAttribute("POSITION");
+                        if (position_attribute == primitive.attributes.cend()) {
+                            continue;
+                        }
+                        const fastgltf::Accessor& accessor = asset->accessors[position_attribute->accessorIndex];
+                        if (!accessor.min || !accessor.max || (accessor.min->size() < 3) || (accessor.max->size() < 3)) {
+                            continue;
+                        }
+                        const erhe::math::Aabb local_aabb{
+                            .min = glm::vec3{bounds_component(*accessor.min, 0), bounds_component(*accessor.min, 1), bounds_component(*accessor.min, 2)},
+                            .max = glm::vec3{bounds_component(*accessor.max, 0), bounds_component(*accessor.max, 1), bounds_component(*accessor.max, 2)}
+                        };
+                        glm::mat4 world_from_node{1.0f};
+                        static_assert(sizeof(world_from_node) == sizeof(matrix));
+                        std::memcpy(&world_from_node, &matrix, sizeof(world_from_node)); // both column-major float 4x4
+                        aabb.include(local_aabb.transformed_by(world_from_node));
+                    }
+                }
+            );
+        };
+        if (!asset->scenes.empty()) {
+            if (asset->defaultScene.has_value() && (asset->defaultScene.value() < asset->scenes.size())) {
+                include_scene(asset->defaultScene.value());
+            } else {
+                for (std::size_t i = 0, end = asset->scenes.size(); i < end; ++i) {
+                    include_scene(i);
+                }
+            }
+        }
+        if (aabb.is_valid()) {
+            result.bounding_box = aabb;
+        }
+    }
+
     timer.end();
     if (timer.duration().has_value()) {
         log_gltf->info("glTF scanned {} in {}", path.string(), format_duration(timer.duration().value()));

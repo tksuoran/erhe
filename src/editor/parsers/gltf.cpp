@@ -488,10 +488,12 @@ void import_gltf(
     context.operation_stack->queue(compound);
 }
 
-auto scan_gltf(const std::filesystem::path& path) -> std::vector<std::string>
+auto scan_gltf(const std::filesystem::path& path) -> Gltf_scan_summary
 {
-    std::vector<std::string> out;
+    Gltf_scan_summary summary;
+    std::vector<std::string>& out = summary.contents;
     erhe::gltf::Gltf_scan scan = erhe::gltf::scan_gltf(path);
+    summary.bounding_box = scan.bounding_box;
 
     if (!scan.errors.empty()) {
         out.push_back("Errors:");
@@ -531,7 +533,11 @@ auto scan_gltf(const std::filesystem::path& path) -> std::vector<std::string>
             out.push_back(" - " + extension);
         }
     }
-    return out;
+    if (scan.bounding_box.has_value() && scan.bounding_box->is_valid()) {
+        const glm::vec3 size = scan.bounding_box->diagonal();
+        out.push_back(fmt::format("size: {:.2f} x {:.2f} x {:.2f}", size.x, size.y, size.z));
+    }
+    return summary;
 }
 
 }

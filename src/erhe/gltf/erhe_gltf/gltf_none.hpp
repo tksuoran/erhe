@@ -2,6 +2,8 @@
 
 #include "gltf_physics.hpp"
 
+#include "erhe_math/aabb.hpp"
+
 #include <map>
 #include <memory>
 #include <filesystem>
@@ -98,6 +100,8 @@ public:
     std::vector<std::string> extensions_used;
     std::vector<std::string> extensions_required;
     std::vector<std::string> errors;
+
+    std::optional<erhe::math::Aabb> bounding_box;
 };
 
 struct Gltf_parse_arguments

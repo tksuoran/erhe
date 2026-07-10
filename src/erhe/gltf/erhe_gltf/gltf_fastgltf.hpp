@@ -2,6 +2,8 @@
 
 #include "gltf_physics.hpp"
 
+#include "erhe_math/aabb.hpp"
+
 #include <map>
 #include <memory>
 #include <filesystem>
@@ -110,6 +112,14 @@ public:
     std::vector<std::string> extensions_used;
     std::vector<std::string> extensions_required;
     std::vector<std::string> errors;
+
+    // Combined default-scene AABB computed from POSITION accessor min/max
+    // (required by the glTF spec) transformed through the node hierarchy;
+    // no buffer data is read. Bind-pose bounds: skinning, morph targets and
+    // GPU instancing are not applied, and quantized (KHR_mesh_quantization)
+    // positions are read as stored. nullopt when the file declares no
+    // usable position bounds.
+    std::optional<erhe::math::Aabb> bounding_box;
 };
 
 struct Gltf_parse_arguments

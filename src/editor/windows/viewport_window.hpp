@@ -7,7 +7,6 @@
 
 #include <glm/glm.hpp>
 
-#include <filesystem>
 #include <memory>
 
 namespace erhe::imgui {
@@ -23,6 +22,7 @@ namespace editor {
 
 class App_context;
 class App_message_bus;
+class Asset_file_gltf;
 class Post_processing_node;
 class Viewport_scene_view;
 
@@ -65,9 +65,12 @@ private:
     void imgui_viewport            ();
     void drag_and_drop_target      (float min_x, float min_y, float max_x, float max_y);
     void cancel_brush_drag_and_drop();
-    // Instantiate a glTF file dropped from the Asset browser as a prefab at
-    // the current hover position (content hit or grid, camera-front fallback).
-    void drop_gltf_as_prefab       (const std::filesystem::path& source_path);
+    // glTF dragged from the Asset browser: while hovering (preview) draw the
+    // asset's cached AABB as a wireframe box at the drop position; on drop
+    // (delivery) instantiate the file as a prefab there. The position is the
+    // hovered surface point (content hit or grid, camera-front fallback),
+    // with the AABB bottom-center snapped onto it when bounds are known.
+    void gltf_drag_preview_and_drop(Asset_file_gltf& gltf, bool preview, bool delivery);
 
     erhe::message_bus::Subscription<Open_scene_message> m_open_scene_subscription;
     App_context&                                       m_app_context;

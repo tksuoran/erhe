@@ -5,11 +5,13 @@
 #include "windows/item_tree_window.hpp"
 
 #include "erhe_item/hierarchy.hpp"
+#include "erhe_math/aabb.hpp"
 #include "erhe_message_bus/message_bus.hpp"
 
 #include <glm/glm.hpp>
 
 #include <filesystem>
+#include <optional>
 #include <vector>
 
 namespace erhe::imgui { class Imgui_windows; }
@@ -60,9 +62,17 @@ public:
     static constexpr std::string_view static_type_name{"Asset_file_gltf"};
     [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::asset_file_gltf; }
 
-    bool                     is_scanned{false};
-    std::vector<std::string> contents;
+    bool                            is_scanned{false};
+    std::vector<std::string>        contents;
+    // Combined default-scene AABB from the file's accessor bounds (JSON
+    // only, no buffer data); filled by ensure_scanned(). Used for the
+    // viewport drag-and-drop preview box and bottom-snap placement.
+    std::optional<erhe::math::Aabb> bounding_box;
 };
+
+// Lazily populate contents + bounding_box (scan_gltf); no-op when already
+// scanned. Shared by the asset browser tooltip and the viewport drop target.
+void ensure_scanned(Asset_file_gltf& gltf);
 
 class Asset_file_geogram : public erhe::Item<erhe::Item_base, Asset_node, Asset_file_geogram>
 {

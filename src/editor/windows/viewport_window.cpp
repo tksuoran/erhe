@@ -25,6 +25,7 @@
 #include "erhe_defer/defer.hpp"
 #include "erhe_imgui/imgui_host.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_primitive/material.hpp"
@@ -143,36 +144,127 @@ void Viewport_window::cancel_brush_drag_and_drop()
     m_app_context.brush_tool->preview_drag_and_drop({});
 }
 
-void Viewport_window::drop_gltf_as_prefab(const std::filesystem::path& source_path)
+namespace {
+
+// Draw a world-space AABB as a wireframe box into the current ImGui window
+// draw list, projecting through the viewport camera. Edges with an endpoint
+// outside the depth range (behind the camera) are skipped.
+void draw_world_aabb_overlay(const Viewport_scene_view& viewport_scene_view, const erhe::math::Aabb& aabb, const bool bottom_left_origin)
+{
+    const erhe::math::Viewport& window_viewport     = viewport_scene_view.get_window_viewport();
+    const erhe::math::Viewport& projection_viewport = viewport_scene_view.get_projection_viewport();
+    if ((projection_viewport.width < 1) || (projection_viewport.height < 1)) {
+        return;
+    }
+    const float scale_x = static_cast<float>(window_viewport.width)  / static_cast<float>(projection_viewport.width);
+    const float scale_y = static_cast<float>(window_viewport.height) / static_cast<float>(projection_viewport.height);
+
+    const glm::vec3 corners[8] = {
+        { aabb.min.x, aabb.min.y, aabb.min.z },
+        { aabb.max.x, aabb.min.y, aabb.min.z },
+        { aabb.max.x, aabb.max.y, aabb.min.z },
+        { aabb.min.x, aabb.max.y, aabb.min.z },
+        { aabb.min.x, aabb.min.y, aabb.max.z },
+        { aabb.max.x, aabb.min.y, aabb.max.z },
+        { aabb.max.x, aabb.max.y, aabb.max.z },
+        { aabb.min.x, aabb.max.y, aabb.max.z }
+    };
+    ImVec2 screen_points[8];
+    bool   point_ok[8];
+    for (int i = 0; i < 8; ++i) {
+        const std::optional<glm::vec3> projected = viewport_scene_view.project_to_viewport(corners[i]);
+        point_ok[i] = projected.has_value() && (projected->z >= 0.0f) && (projected->z <= 1.0f);
+        if (!point_ok[i]) {
+            continue;
+        }
+        // Inverse of Viewport_scene_view::get_viewport_from_window: viewport
+        // coordinates back to ImGui screen coordinates, flipping Y for
+        // bottom-left-origin (OpenGL) framebuffers.
+        const float viewport_x = (projected->x - static_cast<float>(projection_viewport.x)) * scale_x;
+        const float viewport_y = (projected->y - static_cast<float>(projection_viewport.y)) * scale_y;
+        const float content_y  = bottom_left_origin ? (static_cast<float>(window_viewport.height) - viewport_y) : viewport_y;
+        screen_points[i] = ImVec2{
+            static_cast<float>(window_viewport.x) + viewport_x,
+            static_cast<float>(window_viewport.y) + content_y
+        };
+    }
+
+    constexpr int edges[12][2] = {
+        {0, 1}, {1, 2}, {2, 3}, {3, 0}, // near face
+        {4, 5}, {5, 6}, {6, 7}, {7, 4}, // far face
+        {0, 4}, {1, 5}, {2, 6}, {3, 7}  // connecting edges
+    };
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    constexpr ImU32 edge_color = IM_COL32(255, 210, 80, 255);
+    for (const auto& edge : edges) {
+        if (point_ok[edge[0]] && point_ok[edge[1]]) {
+            draw_list->AddLine(screen_points[edge[0]], screen_points[edge[1]], edge_color, 2.0f);
+        }
+    }
+}
+
+} // namespace
+
+void Viewport_window::gltf_drag_preview_and_drop(Asset_file_gltf& gltf, const bool preview, const bool delivery)
 {
     const std::shared_ptr<Viewport_scene_view> viewport_scene_view = m_viewport_scene_view.lock();
     if (!viewport_scene_view) {
         return;
     }
-    const std::shared_ptr<Scene_root> scene_root = viewport_scene_view->get_scene_root();
-    if (!scene_root) {
-        return;
-    }
-    const std::shared_ptr<Prefab> prefab = m_app_context.prefab_library->get_or_load(source_path);
-    if (!prefab) {
-        log_scene->warn("Dropped glTF could not be loaded as a prefab: {}", source_path.string());
+    const std::filesystem::path* source_path = gltf.get_source_path();
+    if ((source_path == nullptr) || (m_app_context.prefab_library == nullptr)) {
         return;
     }
 
-    // Place at the hovered surface point (scene content or grid); when the
-    // drop misses both, fall back to a point in front of the camera.
-    glm::vec3 position{0.0f};
+    // JSON-level scan (cheap, cached on the asset node) providing the AABB
+    // for the preview box and bottom-snap placement.
+    ensure_scanned(gltf);
+
+    // Anchor at the hovered surface point (scene content or grid); when the
+    // cursor misses both, fall back to a point in front of the camera.
+    glm::vec3 anchor{0.0f};
     const Hover_entry* hover = viewport_scene_view->get_nearest_hover(Hover_entry::content_bit | Hover_entry::grid_bit);
     if ((hover != nullptr) && hover->valid && hover->position.has_value()) {
-        position = hover->position.value();
+        anchor = hover->position.value();
     } else {
         const std::optional<glm::vec3> in_front = viewport_scene_view->get_control_position_in_world_at_distance(5.0f);
-        if (in_front.has_value()) {
-            position = in_front.value();
+        if (!in_front.has_value()) {
+            return;
         }
+        anchor = in_front.value();
     }
 
-    instantiate_prefab(m_app_context, prefab, *scene_root, erhe::math::create_translation<float>(position));
+    // Snap the asset so its AABB rests bottom-centered on the anchor.
+    glm::vec3 translation = anchor;
+    const bool has_bounds = gltf.bounding_box.has_value() && gltf.bounding_box->is_valid();
+    if (has_bounds) {
+        const erhe::math::Aabb& aabb  = gltf.bounding_box.value();
+        const glm::vec3         center = aabb.center();
+        translation = anchor - glm::vec3{center.x, aabb.min.y, center.z};
+    }
+
+    if (preview && has_bounds) {
+        const erhe::math::Aabb world_aabb{
+            .min = gltf.bounding_box->min + translation,
+            .max = gltf.bounding_box->max + translation
+        };
+        const bool bottom_left_origin =
+            m_app_context.graphics_device->get_info().coordinate_conventions.framebuffer_origin == erhe::math::Framebuffer_origin::bottom_left;
+        draw_world_aabb_overlay(*viewport_scene_view, world_aabb, bottom_left_origin);
+    }
+
+    if (delivery) {
+        const std::shared_ptr<Prefab> prefab = m_app_context.prefab_library->get_or_load(*source_path);
+        if (!prefab) {
+            log_scene->warn("Dropped glTF could not be loaded as a prefab: {}", source_path->string());
+            return;
+        }
+        const std::shared_ptr<Scene_root> scene_root = viewport_scene_view->get_scene_root();
+        if (!scene_root) {
+            return;
+        }
+        instantiate_prefab(m_app_context, prefab, *scene_root, erhe::math::create_translation<float>(translation));
+    }
 }
 
 void Viewport_window::drag_and_drop_target(float min_x, float min_y, float max_x, float max_y)
@@ -184,15 +276,17 @@ void Viewport_window::drag_and_drop_target(float min_x, float min_y, float max_x
 
         const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Content_library_node", ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
         if (payload == nullptr) {
-            // glTF assets dragged from the Asset browser instantiate as
-            // prefabs at the drop location (delivery only, no preview).
-            const ImGuiPayload* gltf_payload = ImGui::AcceptDragDropPayload(Asset_file_gltf::static_type_name.data());
+            // glTF assets dragged from the Asset browser: AABB wireframe
+            // preview while hovering, instantiate as a prefab on drop.
+            const ImGuiPayload* gltf_payload = ImGui::AcceptDragDropPayload(
+                Asset_file_gltf::static_type_name.data(),
+                ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect
+            );
             if (gltf_payload != nullptr) {
-                const erhe::Item_base* item_base = *(static_cast<erhe::Item_base**>(gltf_payload->Data));
-                const Asset_file_gltf* gltf = dynamic_cast<const Asset_file_gltf*>(item_base);
-                const std::filesystem::path* source_path = (gltf != nullptr) ? gltf->get_source_path() : nullptr;
-                if ((source_path != nullptr) && (m_app_context.prefab_library != nullptr)) {
-                    drop_gltf_as_prefab(*source_path);
+                erhe::Item_base* item_base = *(static_cast<erhe::Item_base**>(gltf_payload->Data));
+                Asset_file_gltf* gltf = dynamic_cast<Asset_file_gltf*>(item_base);
+                if (gltf != nullptr) {
+                    gltf_drag_preview_and_drop(*gltf, gltf_payload->Preview, gltf_payload->Delivery);
                 }
             }
             cancel_brush_drag_and_drop();

@@ -28,6 +28,9 @@ else ()
 endif ()
 
 target_link_libraries(${_target}
+    PUBLIC
+        # erhe::math types appear in the public API (Gltf_scan::bounding_box)
+        erhe::math
     PRIVATE
         fmt::fmt
         simdjson::simdjson

@@ -340,6 +340,21 @@ void Asset_browser::scan()
     m_node_tree_window->set_root(m_root);
 }
 
+void ensure_scanned(Asset_file_gltf& gltf)
+{
+    if (gltf.is_scanned) {
+        return;
+    }
+    const std::filesystem::path* source_path = gltf.get_source_path();
+    if (source_path == nullptr) {
+        return;
+    }
+    Gltf_scan_summary summary = scan_gltf(*source_path);
+    gltf.contents     = std::move(summary.contents);
+    gltf.bounding_box = summary.bounding_box;
+    gltf.is_scanned   = true;
+}
+
 auto Asset_browser::get_target_scene_root() -> std::shared_ptr<Scene_root>
 {
     const std::shared_ptr<Viewport_scene_view> scene_view = m_context.scene_views->last_scene_view();
@@ -461,10 +476,7 @@ auto Asset_browser::item_callback(const std::shared_ptr<erhe::Item_base>& item) 
     if (!gltf) {
         return false;
     }
-    if (!gltf->is_scanned) {
-        gltf->contents   = scan_gltf(*gltf->get_source_path());
-        gltf->is_scanned = true;
-    }
+    ensure_scanned(*gltf);
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup)) {
         ImGui::BeginTooltip();
         for (const std::string& line : gltf->contents) {
