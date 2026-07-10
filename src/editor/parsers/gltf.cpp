@@ -165,12 +165,12 @@ void finalize_imported_meshes(
     }
 }
 
-void import_gltf(
+auto make_import_gltf_operation(
     App_context&                       context,
     erhe::primitive::Build_info        build_info,
     const std::shared_ptr<Scene_root>& scene_root,
     const std::filesystem::path&       path
-)
+) -> std::shared_ptr<Operation>
 {
     ERHE_VERIFY(scene_root);
     erhe::graphics::Device& graphics_device = *context.graphics_device;
@@ -485,7 +485,19 @@ void import_gltf(
     compound->set_description(
         fmt::format("[{}] Import glTF {}", compound->get_serial(), erhe::file::to_string(path.filename()))
     );
-    context.operation_stack->queue(compound);
+    return compound;
+}
+
+void import_gltf(
+    App_context&                       context,
+    erhe::primitive::Build_info        build_info,
+    const std::shared_ptr<Scene_root>& scene_root,
+    const std::filesystem::path&       path
+)
+{
+    context.operation_stack->queue(
+        make_import_gltf_operation(context, std::move(build_info), scene_root, path)
+    );
 }
 
 auto scan_gltf(const std::filesystem::path& path) -> Gltf_scan_summary

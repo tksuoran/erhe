@@ -20,8 +20,25 @@ namespace editor {
 
 class App_context;
 class Materials;
+class Operation;
 class Scene_root;
 
+// Builds (but does not run) the undoable compound operation that imports
+// the glTF at `path` into `scene_root`: content-library attaches (textures,
+// materials, skins, animations), physics items, the node-tree insert,
+// default camera/lights when the file has none, and the raytrace kickoff.
+// Callers decide how to run it: import_gltf() queues it on the
+// Operation_stack; Scene_open_operation executes it inline as part of its
+// own execute() so "Open scene" stays a single undo entry (an executing
+// operation must not call back into the Operation_stack except to queue()).
+[[nodiscard]] auto make_import_gltf_operation(
+    App_context&                       context,
+    erhe::primitive::Build_info        build_info,
+    const std::shared_ptr<Scene_root>& scene_root,
+    const std::filesystem::path&       path
+) -> std::shared_ptr<Operation>;
+
+// Queues the import compound built by make_import_gltf_operation().
 void import_gltf(
     App_context&                       context,
     erhe::primitive::Build_info        build_info,
