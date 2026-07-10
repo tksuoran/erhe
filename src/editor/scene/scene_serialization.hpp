@@ -14,7 +14,7 @@ class Scene_root;
 // Save a scene as a directory bundle (#241), similar to an .xcodeproj bundle.
 // bundle_dir is the .erhescene directory; it is created if needed. Inside it the
 // scene is written as:
-//   scene.json          root JSON (Scene_file, version 5)
+//   scene.json          root JSON (Scene_file; current version in scene/definitions/scene_file.py)
 //   data.glb            meshes + materials (only when the scene has meshes)
 //   mesh_<i>_p<p>.geogram  geometry-normative primitives
 // The companion window layout (imgui.ini) is written separately by the caller

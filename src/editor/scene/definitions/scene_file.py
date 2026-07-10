@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Scene_file",
-    version=8,
+    version=9,
     fields=[
         field("name",              String,                                     added_in=1, default='""'),
         field("enable_physics",    Bool,                                       added_in=1, default="true"),
@@ -12,6 +12,7 @@ struct("Scene_file",
         field("graph_meshes",           Vector(StructRef("Graph_mesh_data")),             added_in=7, short_desc="Procedural Graph Mesh assets in the content library"),
         field("graph_mesh_bindings",    Vector(StructRef("Graph_mesh_binding_data")),     added_in=7, short_desc="Scene node -> Graph Mesh bindings (Geometry Graph Mesh attachments)"),
         field("brushes",                Vector(StructRef("Brush_data_serial")),           added_in=8, short_desc="Brush assets in the content library (#247)"),
+        field("prefab_instances",       Vector(StructRef("Prefab_instance_reference")),   added_in=9, short_desc="Prefab instance nodes; their subtrees are re-instantiated from the referenced glTF on load instead of being flattened into the bundle"),
         field("nodes",             Vector(StructRef("Node_data_serial")),      added_in=1),
         field("cameras",           Vector(StructRef("Camera_data")),           added_in=1),
         field("lights",            Vector(StructRef("Light_data")),            added_in=1),

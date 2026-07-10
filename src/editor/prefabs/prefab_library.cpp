@@ -213,13 +213,11 @@ auto instantiate_prefab(
     instance_root->enable_flag_bits(node_flags);
     instance_root->set_world_from_node(world_from_node);
 
-    attach_prefab_clone(prefab, instance_root);
-
-    // Retarget cloned meshes (including nested prefab content) to the
-    // destination scene's content layer and collect the mesh nodes for the
-    // raytrace kickoff.
+    // Clone (including nested prefab content), retarget to the destination
+    // scene's content layer, and collect the mesh nodes for the raytrace
+    // kickoff.
     std::vector<std::shared_ptr<erhe::Item_base>> mesh_node_items;
-    retarget_meshes(instance_root, scene_root.layers().content()->id, &mesh_node_items);
+    attach_prefab_instance(prefab, instance_root, scene_root.layers().content()->id, &mesh_node_items);
 
     // Register the prefab's shared resources in the destination scene's
     // content library (idempotent per resource; mirrors import_gltf).
@@ -396,9 +394,19 @@ void resolve_external_assets(
             );
             continue;
         }
-        attach_prefab_clone(prefab, carrier);
-        retarget_meshes(carrier, content_layer_id, out_mesh_node_items);
+        attach_prefab_instance(prefab, carrier, content_layer_id, out_mesh_node_items);
     }
+}
+
+void attach_prefab_instance(
+    const std::shared_ptr<Prefab>&                 prefab,
+    const std::shared_ptr<erhe::scene::Node>&      node,
+    const erhe::scene::Layer_id                    content_layer_id,
+    std::vector<std::shared_ptr<erhe::Item_base>>* out_mesh_node_items
+)
+{
+    attach_prefab_clone(prefab, node);
+    retarget_meshes(node, content_layer_id, out_mesh_node_items);
 }
 
 }

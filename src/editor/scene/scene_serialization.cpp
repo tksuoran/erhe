@@ -11,6 +11,8 @@
 #include "texture_graph/graph_texture_serialization.hpp"
 #include "editor_log.hpp"
 #include "parsers/gltf.hpp"
+#include "prefabs/prefab_instance.hpp"
+#include "prefabs/prefab_library.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "scene/collision_shape_from_mesh.hpp"
 #include "scene/node_physics.hpp"
@@ -554,6 +556,28 @@ auto scene_imgui_ini_path(const std::filesystem::path& bundle_dir) -> std::files
     return bundle_dir / "imgui.ini";
 }
 
+namespace {
+
+// True when the node is inside a prefab instance subtree (an ancestor
+// carries a Prefab_instance attachment). Such nodes are not serialized:
+// the instance root's Prefab_instance_reference re-creates the whole
+// subtree from the referenced glTF on load.
+[[nodiscard]] auto is_inside_prefab_instance(const erhe::scene::Node* node) -> bool
+{
+    for (
+        std::shared_ptr<erhe::scene::Node> ancestor = node->get_parent_node();
+        ancestor;
+        ancestor = ancestor->get_parent_node()
+    ) {
+        if (erhe::scene::get_attachment<Prefab_instance>(ancestor.get())) {
+            return true;
+        }
+    }
+    return false;
+}
+
+} // namespace
+
 auto save_scene(
     const Scene_root&            scene_root,
     const std::filesystem::path& bundle_dir
@@ -592,6 +616,9 @@ auto save_scene(
 
     // Serialize nodes
     for (const auto& node : flat_nodes) {
+        if (is_inside_prefab_instance(node.get())) {
+            continue;
+        }
         const uint64_t id = node_id_map[node.get()];
         uint64_t parent_id = 0;
         auto parent_node = node->get_parent_node();
@@ -613,8 +640,37 @@ auto save_scene(
         scene_file.nodes.push_back(std::move(node_data));
     }
 
+    // Serialize prefab instances: nodes carrying a Prefab_instance
+    // attachment save as references; their subtrees are skipped everywhere
+    // in this function and re-instantiated from the referenced glTF on load.
+    for (const auto& node : flat_nodes) {
+        if (is_inside_prefab_instance(node.get())) {
+            continue; // nested instance markers are re-created by the outer instance
+        }
+        const std::shared_ptr<Prefab_instance> prefab_instance = erhe::scene::get_attachment<Prefab_instance>(node.get());
+        if (!prefab_instance) {
+            continue;
+        }
+        const std::filesystem::path& source_path = prefab_instance->get_prefab_source_path();
+        std::error_code error_code;
+        const std::filesystem::path relative_path = std::filesystem::relative(source_path, bundle_dir, error_code);
+        const std::string source_path_string = (error_code || relative_path.empty())
+            ? source_path.generic_string()
+            : relative_path.generic_string();
+        scene_file.prefab_instances.push_back(
+            Prefab_instance_reference{
+                .node_id     = node_id_map[node.get()],
+                .source_path = source_path_string,
+                .prefab_name = prefab_instance->get_prefab_name(),
+            }
+        );
+    }
+
     // Serialize cameras
     for (const auto& camera : scene.get_cameras()) {
+        if (is_inside_prefab_instance(camera->get_node())) {
+            continue;
+        }
         const uint64_t node_id = get_node_id(camera->get_node(), node_id_map);
         const erhe::scene::Projection* proj = camera->projection();
         Camera_data camera_data{
@@ -630,6 +686,9 @@ auto save_scene(
     // Serialize lights
     for (const auto& light_layer : scene.get_light_layers()) {
         for (const auto& light : light_layer->lights) {
+            if (is_inside_prefab_instance(light->get_node())) {
+                continue;
+            }
             const uint64_t node_id = get_node_id(light->get_node(), node_id_map);
             Light_data light_data{
                 .node_id          = node_id,
@@ -741,6 +800,9 @@ auto save_scene(
 
     // Serialize node physics
     for (const auto& node : flat_nodes) {
+        if (is_inside_prefab_instance(node.get())) {
+            continue;
+        }
         auto node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
         if (!node_physics) {
             continue;
@@ -796,6 +858,9 @@ auto save_scene(
 
     // Serialize node joints (a node may carry multiple Node_joint attachments)
     for (const auto& node : flat_nodes) {
+        if (is_inside_prefab_instance(node.get())) {
+            continue;
+        }
         for (const auto& attachment : node->get_attachments()) {
             const auto node_joint = std::dynamic_pointer_cast<Node_joint>(attachment);
             if (!node_joint) {
@@ -1020,6 +1085,9 @@ auto save_scene(
                     continue;
                 }
             }
+            if (is_inside_prefab_instance(mesh->get_node())) {
+                continue; // prefab content lives in the referenced glTF, not in the bundle
+            }
             const uint64_t node_id = get_node_id(mesh->get_node(), node_id_map);
             const auto&    primitives = mesh->get_primitives();
             const bool     geom_normative = is_geometry_normative(*mesh);
@@ -1084,10 +1152,19 @@ auto save_scene(
         }
     }
 
-    // Export companion .glb (meshes and materials)
+    // Export companion .glb (meshes and materials). Prefab instance subtrees
+    // are not flattened into the bundle: they export as glTF 2.1 externalAsset
+    // references (mirroring File > Export), which also keeps data.glb mesh
+    // indices consistent with the mesh_references skipped above.
     if (has_any_meshes) {
         const std::filesystem::path glb_path = scene_dir / glb_filename;
-        const std::string glb_data = erhe::gltf::export_gltf(*root_node, true);
+        const std::string glb_data = erhe::gltf::export_gltf(
+            erhe::gltf::Gltf_export_arguments{
+                .root_node       = *root_node,
+                .binary          = true,
+                .external_assets = collect_prefab_external_assets(*root_node, scene_dir)
+            }
+        );
         if (!erhe::file::write_file(glb_path, glb_data)) {
             log_parsers->error("save_scene: failed to write glb: {}", glb_path.string());
             return false;
@@ -1796,6 +1873,74 @@ auto load_scene(
             }
             const std::shared_ptr<Geometry_graph_mesh> attachment = std::make_shared<Geometry_graph_mesh>(graph_mesh);
             node_it->second->attach(attachment);
+        }
+    }
+
+    // Re-instantiate prefab instances (doc/gltf-prefabs-plan.md phase 5).
+    // The saved bundle stores only the instance node + a reference; the
+    // subtree is cloned back from the referenced glTF through the app-wide
+    // Prefab_library. A missing / broken source degrades to an empty
+    // instance node that still carries the Prefab_instance marker, so the
+    // reference round-trips through the next save.
+    if ((context != nullptr) && (context->prefab_library != nullptr)) {
+        for (const Prefab_instance_reference& prefab_ref : scene_file.prefab_instances) {
+            const auto node_it = node_map.find(prefab_ref.node_id);
+            if ((node_it == node_map.end()) || !node_it->second) {
+                log_parsers->warn("load_scene: prefab instance '{}' references unknown node {}", prefab_ref.prefab_name, prefab_ref.node_id);
+                continue;
+            }
+            const std::shared_ptr<erhe::scene::Node>& instance_node = node_it->second;
+            std::filesystem::path source_path{prefab_ref.source_path};
+            if (source_path.is_relative()) {
+                source_path = bundle_dir / source_path;
+            }
+            const std::shared_ptr<Prefab> prefab = context->prefab_library->get_or_load(source_path);
+            if (!prefab) {
+                log_parsers->warn(
+                    "load_scene: prefab instance '{}' source {} could not be loaded - leaving instance empty",
+                    prefab_ref.prefab_name, prefab_ref.source_path
+                );
+                const std::shared_ptr<Prefab_instance> prefab_instance = std::make_shared<Prefab_instance>(source_path, prefab_ref.prefab_name);
+                prefab_instance->enable_flag_bits(erhe::Item_flags::visible | erhe::Item_flags::no_message | erhe::Item_flags::show_in_ui);
+                instance_node->attach(prefab_instance);
+                continue;
+            }
+            attach_prefab_instance(prefab, instance_node, scene_root->layers().content()->id, nullptr);
+
+            // Register the prefab's shared resources in the scene's content
+            // library (idempotent; mirrors instantiate_prefab's attach
+            // operations, done directly since load is not undoable).
+            if (content_library) {
+                const std::string gltf_path_str = prefab->source_path.generic_string();
+                for (size_t i = 0; i < prefab->gltf_data.images.size(); ++i) {
+                    const std::shared_ptr<erhe::graphics::Texture>& image = prefab->gltf_data.images[i];
+                    if (image && content_library->textures) {
+                        content_library->textures->add(
+                            image,
+                            Gltf_source_reference{
+                                .gltf_path  = gltf_path_str,
+                                .item_name  = image->get_name(),
+                                .item_index = static_cast<int>(i),
+                                .item_type  = "texture",
+                            }
+                        );
+                    }
+                }
+                for (size_t i = 0; i < prefab->gltf_data.materials.size(); ++i) {
+                    const std::shared_ptr<erhe::primitive::Material>& material = prefab->gltf_data.materials[i];
+                    if (material && content_library->materials) {
+                        content_library->materials->add(
+                            material,
+                            Gltf_source_reference{
+                                .gltf_path  = gltf_path_str,
+                                .item_name  = material->get_name(),
+                                .item_index = static_cast<int>(i),
+                                .item_type  = "material",
+                            }
+                        );
+                    }
+                }
+            }
         }
     }
 

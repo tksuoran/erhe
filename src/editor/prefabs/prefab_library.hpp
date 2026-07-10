@@ -76,6 +76,18 @@ auto instantiate_prefab(
     const std::shared_ptr<erhe::scene::Node>& parent = {}
 ) -> std::shared_ptr<erhe::scene::Node>;
 
+// Attach a Prefab_instance marker and a clone of the prefab's template
+// under an existing node, retargeting cloned meshes to content_layer_id and
+// appending mesh-carrying nodes to out_mesh_node_items when non-null. The
+// building block shared by instantiate_prefab, glTF external-asset import,
+// and .erhescene load.
+void attach_prefab_instance(
+    const std::shared_ptr<Prefab>&                 prefab,
+    const std::shared_ptr<erhe::scene::Node>&      node,
+    erhe::scene::Layer_id                          content_layer_id,
+    std::vector<std::shared_ptr<erhe::Item_base>>* out_mesh_node_items
+);
+
 // Collect glTF 2.1 external-asset references for export: walks the subtree
 // under root_node and maps each node carrying a Prefab_instance attachment
 // to a files-array entry (URI relativized against export_directory when

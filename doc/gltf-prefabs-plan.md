@@ -1,6 +1,8 @@
 # glTF scene prefabs in erhe -- plan
 
-Status: plan (no implementation yet). Written 2026-07-10.
+Status: phases 0-5 implemented and verified 2026-07-10 (commits 2199f0ef,
+b9264190, bad5895d, 4225b7d3, b4a1de9c + the phase 5 commit); phase 6
+(editing semantics / UX polish) remains. Written 2026-07-10.
 
 Goal: make glTF scenes usable as *prefabs* in erhe -- a glTF file can be
 instantiated (multiple times) inside another scene, instances stay live

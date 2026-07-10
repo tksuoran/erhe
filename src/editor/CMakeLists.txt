@@ -637,6 +637,7 @@ erhe_codegen_generate(
         "${_codegen_defs}/physics_joint_data.py"
         "${_codegen_defs}/material_texture_source_data.py"
         "${_codegen_defs}/physics_material_data.py"
+        "${_codegen_defs}/prefab_instance_reference.py"
         "${_codegen_defs}/projection_data.py"
         "${_codegen_defs}/scene_file.py"
         "${_codegen_defs}/scene_settings.py"
@@ -727,6 +728,9 @@ set(_codegen_sources
     ${_codegen_out}/physics_material_data.hpp
     ${_codegen_out}/physics_material_data_serialization.hpp
     ${_codegen_out}/physics_material_data.cpp
+    ${_codegen_out}/prefab_instance_reference.hpp
+    ${_codegen_out}/prefab_instance_reference_serialization.hpp
+    ${_codegen_out}/prefab_instance_reference.cpp
     ${_codegen_out}/projection_data.hpp
     ${_codegen_out}/projection_data_serialization.hpp
     ${_codegen_out}/projection_data.cpp
