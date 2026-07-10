@@ -274,6 +274,13 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"path"})}
     }});
+    m_tool_infos.push_back({"open_scene",         "Open a glTF file as a new scene (same as the Asset Browser's Open context menu entry): creates a scene root + content library + browser window and imports the file, all as a single undoable operation. The open is queued and completes on a following frame; discover the scene via list_scenes (named after the file name).", {
+        {"type", "object"},
+        {"properties", {
+            {"path", {{"type", "string"}, {"description", "Source .gltf/.glb file path"}}}
+        }},
+        {"required", json::array({"path"})}
+    }});
     m_tool_infos.push_back({"close_scene",        "Close a scene: destroys its viewport and browser windows and unregisters it from the editor (same as the Scene row's Close context menu entry). The close is queued and completes on a following frame.", {
         {"type", "object"},
         {"properties", {

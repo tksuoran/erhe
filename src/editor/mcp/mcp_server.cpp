@@ -374,6 +374,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "edit_material")      result = action_edit_material  (req->arguments);
         else if (req->tool_name == "save_scene")         result = action_save_scene     (req->arguments);
         else if (req->tool_name == "load_scene")         result = action_load_scene     (req->arguments);
+        else if (req->tool_name == "open_scene")         result = action_open_scene     (req->arguments);
         else if (req->tool_name == "close_scene")        result = action_close_scene    (req->arguments);
         else if (req->tool_name == "create_scene")       result = action_create_scene   (req->arguments);
         else if (req->tool_name == "export_gltf")        result = action_export_gltf    (req->arguments);

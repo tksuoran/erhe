@@ -4,7 +4,11 @@
 #include "mcp/mcp_server_shared.hpp"
 
 #include "app_message_bus.hpp"
+#include "operations/operation_stack.hpp"
+#include "operations/scene_open_operation.hpp"
 #include "prefabs/prefab_library.hpp"
+
+#include "erhe_file/file.hpp"
 
 namespace editor {
 
@@ -117,6 +121,34 @@ auto Mcp_server::action_load_scene(const json& args) -> std::string
         {"loaded",     true},
         {"path",       path_str},
         {"scene_name", scene_root->get_name()}
+    }).dump();
+}
+
+auto Mcp_server::action_open_scene(const json& args) -> std::string
+{
+    const std::string path_str = args.value("path", "");
+    if (path_str.empty()) {
+        json r = make_text_content("Missing required argument: path");
+        r["isError"] = true;
+        return r.dump();
+    }
+    const std::filesystem::path path{path_str};
+    std::error_code error_code;
+    if (!std::filesystem::exists(path, error_code)) {
+        json r = make_text_content("File not found: " + path_str);
+        r["isError"] = true;
+        return r.dump();
+    }
+    // Same path as the Asset Browser's "Open" context menu entry: queue a
+    // Scene_open_operation (new scene root + content library + browser
+    // window + inline glTF import, all one undo entry). It executes on a
+    // following Operation_stack::update(); discover the scene afterwards
+    // via list_scenes.
+    m_context.operation_stack->queue(std::make_shared<Scene_open_operation>(path));
+    return make_json_content({
+        {"queued",     true},
+        {"path",       path_str},
+        {"scene_name", erhe::file::to_string(path.filename())}
     }).dump();
 }
 

@@ -123,6 +123,7 @@ private:
     auto action_edit_material   (const nlohmann::json& args) -> std::string;
     auto action_save_scene      (const nlohmann::json& args) -> std::string;
     auto action_load_scene      (const nlohmann::json& args) -> std::string;
+    auto action_open_scene      (const nlohmann::json& args) -> std::string;
     auto action_close_scene     (const nlohmann::json& args) -> std::string;
     auto action_create_scene    (const nlohmann::json& args) -> std::string;
     auto action_export_gltf     (const nlohmann::json& args) -> std::string;
