@@ -156,6 +156,20 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
             att_json["materials"]     = mat_names;
             att_json["vertex_count"]  = total_vertices;
             att_json["facet_count"]   = total_facets;
+            // Layer diagnostics: layer_id is the mesh's target layer;
+            // in_layer_id is the layer that actually contains it (they
+            // diverge when the mesh was registered into the scene before
+            // its layer_id was set - such a mesh does not render).
+            att_json["layer_id"] = mesh->layer_id;
+            json in_layer_id{};
+            for (const auto& mesh_layer : scene.get_mesh_layers()) {
+                const auto& layer_meshes = mesh_layer->meshes;
+                if (std::find(layer_meshes.begin(), layer_meshes.end(), mesh) != layer_meshes.end()) {
+                    in_layer_id = mesh_layer->id;
+                    break;
+                }
+            }
+            att_json["in_layer_id"] = in_layer_id;
         }
 
         auto geometry_graph_mesh = std::dynamic_pointer_cast<Geometry_graph_mesh>(att);

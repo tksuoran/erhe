@@ -32,37 +32,6 @@ namespace editor {
 
 namespace {
 
-// Mark the node as a prefab instance and clone the prefab's template
-// subtree under it. Mesh clones share the template's Primitives (GPU
-// vertex/index ranges in Mesh_memory), so no GPU upload happens per
-// instance.
-void attach_prefab_clone(const std::shared_ptr<Prefab>& prefab, const std::shared_ptr<erhe::scene::Node>& node)
-{
-    std::shared_ptr<Prefab_instance> prefab_instance = std::make_shared<Prefab_instance>(prefab->source_path, prefab->name);
-    prefab_instance->enable_flag_bits(erhe::Item_flags::visible | erhe::Item_flags::no_message | erhe::Item_flags::show_in_ui);
-    node->attach(prefab_instance);
-
-    for (const std::shared_ptr<erhe::Hierarchy>& child : prefab->template_root->get_children()) {
-        const std::shared_ptr<erhe::scene::Node> child_node = std::dynamic_pointer_cast<erhe::scene::Node>(child);
-        if (!child_node) {
-            continue;
-        }
-        const std::shared_ptr<erhe::Item_base> clone = child_node->clone();
-        const std::shared_ptr<erhe::scene::Node> clone_node = std::dynamic_pointer_cast<erhe::scene::Node>(clone);
-        if (!clone_node) {
-            log_parsers->warn("Prefab '{}': template child '{}' could not be cloned", prefab->name, child_node->get_name());
-            continue;
-        }
-        // Node::set_parent preserves the world transform by rewriting the
-        // local transform; a prefab clone must instead keep its local
-        // (template) transform under its new parent, so restore it after
-        // parenting.
-        const erhe::scene::Trs_transform parent_from_node = clone_node->parent_from_node_transform();
-        clone_node->set_parent(node);
-        clone_node->set_parent_from_node(parent_from_node);
-    }
-}
-
 // Point meshes in the subtree at the given content layer (prefab templates
 // are parsed without a destination scene), refresh their raytrace
 // primitives, and collect the mesh-carrying nodes when requested (for the
@@ -398,6 +367,10 @@ void resolve_external_assets(
     }
 }
 
+// Mark the node as a prefab instance and clone the prefab's template
+// subtree under it. Mesh clones share the template's Primitives (GPU
+// vertex/index ranges in Mesh_memory), so no GPU upload happens per
+// instance.
 void attach_prefab_instance(
     const std::shared_ptr<Prefab>&                 prefab,
     const std::shared_ptr<erhe::scene::Node>&      node,
@@ -405,8 +378,36 @@ void attach_prefab_instance(
     std::vector<std::shared_ptr<erhe::Item_base>>* out_mesh_node_items
 )
 {
-    attach_prefab_clone(prefab, node);
-    retarget_meshes(node, content_layer_id, out_mesh_node_items);
+    std::shared_ptr<Prefab_instance> prefab_instance = std::make_shared<Prefab_instance>(prefab->source_path, prefab->name);
+    prefab_instance->enable_flag_bits(erhe::Item_flags::visible | erhe::Item_flags::no_message | erhe::Item_flags::show_in_ui);
+    node->attach(prefab_instance);
+
+    for (const std::shared_ptr<erhe::Hierarchy>& child : prefab->template_root->get_children()) {
+        const std::shared_ptr<erhe::scene::Node> child_node = std::dynamic_pointer_cast<erhe::scene::Node>(child);
+        if (!child_node) {
+            continue;
+        }
+        const std::shared_ptr<erhe::Item_base> clone = child_node->clone();
+        const std::shared_ptr<erhe::scene::Node> clone_node = std::dynamic_pointer_cast<erhe::scene::Node>(clone);
+        if (!clone_node) {
+            log_parsers->warn("Prefab '{}': template child '{}' could not be cloned", prefab->name, child_node->get_name());
+            continue;
+        }
+        // Retarget meshes BEFORE parenting: node may already be hosted in a
+        // live scene (.erhescene load), and parenting registers meshes into
+        // the scene by their layer_id at that moment (Scene::register_mesh).
+        // With the template's placeholder layer id 0 they would silently
+        // land in the brush layer (Mesh_layer_id::brush == 0) and never
+        // render as content.
+        retarget_meshes(clone_node, content_layer_id, out_mesh_node_items);
+        // Node::set_parent preserves the world transform by rewriting the
+        // local transform; a prefab clone must instead keep its local
+        // (template) transform under its new parent, so restore it after
+        // parenting.
+        const erhe::scene::Trs_transform parent_from_node = clone_node->parent_from_node_transform();
+        clone_node->set_parent(node);
+        clone_node->set_parent_from_node(parent_from_node);
+    }
 }
 
 }
