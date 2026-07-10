@@ -63,6 +63,7 @@ public:
 
 private:
     void imgui_viewport            ();
+    void update_title_from_scene   ();
     void drag_and_drop_target      (float min_x, float min_y, float max_x, float max_y);
     void cancel_brush_drag_and_drop();
     // glTF dragged from the Asset browser: while hovering (preview) draw the
@@ -81,6 +82,9 @@ private:
     bool                                               m_viewport_child_window_hovered{false};
 
     bool                                               m_request_cursor_relative_hold{false};
+
+    // Scene name currently shown in the window title; see update_title_from_scene().
+    std::string                                        m_shown_scene_name;
 
 #if !defined(NDEBUG)
     // Regression guard state for imgui_viewport(): detects the output

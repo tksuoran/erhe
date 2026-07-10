@@ -35,8 +35,10 @@ enum class Layout_state
 };
 
 // Best-effort lookup of the primary viewport window title. The Viewport_window's
-// ImGui title is composed as "{name}##{index}" by Scene_views::create_viewport_window,
-// so the first viewport window's title carries "##0".
+// ImGui title is composed as "{name}###Viewport {id}" by
+// Scene_views::create_viewport_window; the "###" suffix carries the stable
+// window ID, so this title keeps addressing the same window even after the
+// visible part is retitled to the shown scene's name.
 auto find_primary_viewport_title(App_context& context) -> std::string
 {
     if (context.imgui_windows == nullptr) {

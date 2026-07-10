@@ -373,8 +373,15 @@ auto Scene_views::create_viewport_window(
     std::string_view                                            ini_name_in
 ) -> std::shared_ptr<Viewport_window>
 {
-    std::string window_name = fmt::format("{}##{}", name, m_viewport_windows.size());
-    std::string ini_name = ini_name_in.empty() ? std::string{} : fmt::format("{}##{}", ini_name, m_viewport_windows.size());
+    // "###" makes the ImGui window ID depend only on the "###Viewport N" suffix,
+    // so Viewport_window can retitle itself after the Scene item it shows
+    // (initial bind, open_scene rebind, scene rename) without losing its
+    // window identity (docking, position, size). The counter is monotonic:
+    // a size()-based index could collide with a live window after
+    // destroy_viewport_window().
+    std::string window_name = fmt::format("{}###Viewport {}", name, m_viewport_window_counter);
+    std::string ini_name = ini_name_in.empty() ? std::string{} : fmt::format("{}##{}", ini_name_in, m_viewport_window_counter);
+    ++m_viewport_window_counter;
     auto viewport_window = std::make_shared<Viewport_window>(
         imgui_renderer,
         imgui_windows,

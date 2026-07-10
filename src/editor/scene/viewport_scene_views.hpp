@@ -154,6 +154,9 @@ private:
     Open_new_viewport_scene_view_command m_open_new_viewport_scene_view_command;
 
     ERHE_PROFILE_MUTEX(std::mutex,                      m_mutex);
+    // Monotonic id for the "###Viewport N" ImGui window ID suffix; never
+    // reused, unlike indices into m_viewport_windows.
+    std::size_t                                         m_viewport_window_counter{0};
     std::vector<std::shared_ptr<Viewport_window>>       m_viewport_windows;
     std::vector<std::shared_ptr<Viewport_scene_view>>   m_viewport_scene_views;
     std::vector<std::shared_ptr<Post_processing_node>>  m_post_processing_nodes;

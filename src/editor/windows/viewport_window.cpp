@@ -96,8 +96,37 @@ void Viewport_window::update_hover_info()
 
 void Viewport_window::on_begin()
 {
+    update_title_from_scene();
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4{0.0, 0.0, 0.0, 0.0});
+}
+
+void Viewport_window::update_title_from_scene()
+{
+    // Show the name of the Scene item this viewport is looking at. The
+    // "###Viewport N" suffix (composed by Scene_views::create_viewport_window)
+    // keeps the ImGui window identity stable while the visible part changes;
+    // a title without that suffix is left alone, since retitling it would
+    // change the window identity. Reformats only when the name changes, so
+    // steady-state frames do not allocate.
+    const std::shared_ptr<Viewport_scene_view> viewport_scene_view = m_viewport_scene_view.lock();
+    if (!viewport_scene_view) {
+        return;
+    }
+    const std::shared_ptr<Scene_root> scene_root = viewport_scene_view->get_scene_root();
+    if (!scene_root) {
+        return;
+    }
+    const std::string& scene_name = scene_root->get_name();
+    if (scene_name.empty() || (scene_name == m_shown_scene_name)) {
+        return;
+    }
+    const std::size_t id_part = m_title.find("###");
+    if (id_part == std::string::npos) {
+        return;
+    }
+    m_shown_scene_name = scene_name;
+    m_title = scene_name + m_title.substr(id_part);
 }
 
 void Viewport_window::on_end()
