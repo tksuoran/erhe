@@ -592,15 +592,13 @@ endif ()
 if (${ERHE_GLTF_LIBRARY} STREQUAL "fastgltf")
     CPMAddPackage(
         NAME              fastgltf
-        # erhe fork carrying KHR_physics_rigid_bodies spec-compliance fixes on
-        # top of upstream a31be25: mesh-keyed collider geometry (current spec;
-        # no upstream commit has it), spec inertia key names, and exporter JSON
-        # fixes (extension name, booleans, malformed motion arrays,
-        # collisionFilters trailing commas). Applying these as a CPM PATCHES
-        # patch broke on the Windows CI runner's broken Strawberry-Perl
-        # patch.exe, so the fixes now live in the fork. Drop the fork and move
-        # back to spnda/fastgltf when upstream catches up with the spec.
-        GIT_TAG           f0c81f93f5c840549043f325dd62537fda762f9e
+        # erhe fork carrying (a) KHR_physics_rigid_bodies spec-compliance fixes
+        # (mesh-keyed collider geometry, spec inertia key names, exporter JSON
+        # fixes) and (b) a subset of the glTF 2.1 proposal
+        # (KhronosGroup/glTF#2585): unified "files" array, "externalAssets" +
+        # Node::externalAssetIndex, minVersion handling. Drop the fork when
+        # upstream fastgltf ships the current physics spec and glTF 2.1.
+        GIT_TAG           234ffe08b14581244194d4e81aca992735b07b5c
         #GIT_TAG           v0.9.0
         GITHUB_REPOSITORY tksuoran/fastgltf
         OPTIONS

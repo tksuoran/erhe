@@ -29,11 +29,16 @@ performs all mapping to/from erhe::physics (see `doc/khr_physics_rigid_bodies_su
 - Backend is selected at CMake time: `ERHE_GLTF_LIBRARY_FASTGLTF` or `ERHE_GLTF_LIBRARY_NONE`.
 - `gltf.hpp` is a dispatch header that includes the appropriate backend.
 - Uses `Image_transfer` with a ring buffer for asynchronous texture uploads.
-- fastgltf is pinned in the top-level CMakeLists with
-  `cmake/patches/fastgltf_khr_physics.patch` applied by CPM at configure time: mesh-keyed
-  physics collider geometry (current spec), spec inertia key names, missing member
-  initializers, and physics extension JSON writer fixes. Drop the patch when upstream
-  catches up. The CPM cache key hashes the patch path, not its content: delete the
-  `.cpm_cache/fastgltf/<hash>` directory after editing the patch file.
+- fastgltf is pinned in the top-level CMakeLists to the `tksuoran/fastgltf` fork, which
+  carries the KHR_physics_rigid_bodies spec-compliance fixes (mesh-keyed collider
+  geometry, spec inertia key names, exporter JSON fixes) plus a subset of the glTF 2.1
+  proposal (KhronosGroup/glTF#2585): the unified top-level `files` array, the
+  `externalAssets` array with `Node::externalAssetIndex`, and `minVersion` handling.
+  Drop the fork when upstream ships both.
+- glTF 2.1 external assets: `Gltf_data::files` / `external_assets` /
+  `node_external_assets` surface what the file references, with file URIs resolved
+  against the glTF directory. Neither fastgltf nor erhe::gltf recursively parses
+  referenced assets or detects cross-file cycles -- the editor's prefab layer does
+  (see `doc/gltf-prefabs-plan.md`).
 - The text (.gltf) export variant writes no buffer URI and cannot be re-imported; use .glb
   for round-trips and .gltf for JSON inspection.
