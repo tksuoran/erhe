@@ -151,7 +151,7 @@ TEST(ItemBase, CopyConstruction)
 
     auto copy = std::make_shared<Concrete_item>(*original);
     EXPECT_NE(copy->get_id(), original->get_id());
-    EXPECT_EQ(copy->get_name(), "original Copy");
+    EXPECT_EQ(copy->get_name(), "original"); // copies keep the source name
     EXPECT_FALSE(copy->is_selected()); // selected is stripped
     EXPECT_TRUE(copy->is_visible());   // other flags are preserved
 }

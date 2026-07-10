@@ -401,7 +401,7 @@ TEST(Hierarchy, CopyConstructor)
 
     EXPECT_EQ(copy->get_child_count(), 1u);
     EXPECT_NE(copy->get_children()[0], child); // independent copy
-    EXPECT_EQ(copy->get_children()[0]->get_name(), "child Copy");
+    EXPECT_EQ(copy->get_children()[0]->get_name(), "child"); // clones keep the source name
 }
 
 TEST(Hierarchy, CopyDoesNotCopyParent)

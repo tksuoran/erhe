@@ -59,7 +59,7 @@ TEST(ItemCRTP, CloneCopyConstructor)
     auto cloned = item->clone();
     ASSERT_NE(cloned, nullptr);
     EXPECT_NE(cloned->get_id(), item->get_id());
-    EXPECT_EQ(cloned->get_name(), "original Copy");
+    EXPECT_EQ(cloned->get_name(), "original"); // clones keep the source name
     EXPECT_TRUE(cloned->is_visible());
 }
 

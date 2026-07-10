@@ -1042,10 +1042,16 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
             if (item->is_selected()) {
                 m_context.selection->duplicate_selection();
             } else {
+                // Clones keep the source name; a duplicate wants a
+                // distinguishing name, so rename the duplicate root here.
+                const std::shared_ptr<erhe::Hierarchy> duplicate = std::dynamic_pointer_cast<erhe::Hierarchy>(hierarchy->clone());
+                if (duplicate) {
+                    duplicate->set_name(hierarchy->get_name() + " Copy");
+                }
                 auto op = std::make_shared<Item_insert_remove_operation>(
                     Item_insert_remove_operation::Parameters{
                         .context         = m_context,
-                        .item            = std::dynamic_pointer_cast<erhe::Hierarchy>(hierarchy->clone()),
+                        .item            = duplicate,
                         .parent          = hierarchy->get_parent().lock(),
                         .mode            = Item_insert_remove_operation::Mode::insert,
                         .index_in_parent = hierarchy->get_index_in_parent() + 1

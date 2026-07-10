@@ -105,10 +105,12 @@ Item_base::Item_base(const std::string_view name)
 {
 }
 
+// Copies (clones) keep the source name; call sites that want a distinct
+// name for a duplicate (e.g. clipboard paste) rename the clone themselves.
 Item_base::Item_base(const Item_base& other)
     : enable_shared_from_this{other}
     , m_flag_bits  {other.m_flag_bits & ~Item_flags::selected}
-    , m_name       {fmt::format("{} Copy", other.m_name)}
+    , m_name       {other.m_name}
     , m_debug_label{erhe::utility::Debug_label{fmt::format("{}##{}", m_name, get_id())}}
     , m_source_path{other.m_source_path ? std::make_unique<std::filesystem::path>(*other.m_source_path) : nullptr}
 {
@@ -117,7 +119,7 @@ Item_base::Item_base(const Item_base& other)
 auto Item_base::operator=(const Item_base& other) -> Item_base&
 {
     m_flag_bits   = other.m_flag_bits & ~Item_flags::selected;
-    m_name        = fmt::format("{} Copy", other.m_name);
+    m_name        = other.m_name;
     m_debug_label = erhe::utility::Debug_label{fmt::format("{}##{}", m_name, get_id())};
     m_source_path = other.m_source_path ? std::make_unique<std::filesystem::path>(*other.m_source_path) : nullptr;
     return *this;

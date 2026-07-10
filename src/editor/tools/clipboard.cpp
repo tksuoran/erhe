@@ -150,6 +150,11 @@ auto Clipboard::try_paste(const std::shared_ptr<erhe::Hierarchy>& target_parent,
                 std::shared_ptr<erhe::Item_base> clone_of_item = item->clone();
                 const auto& dst_hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(clone_of_item);
 
+                // Clones keep the source name; pasting is where a duplicate
+                // wants a distinguishing name, so rename the pasted root here
+                // (descendants keep their names).
+                clone_of_item->set_name(item->get_name() + " Copy");
+
                 compound_parameters.operations.push_back(
                     std::make_shared<Item_insert_remove_operation>(
                         Item_insert_remove_operation::Parameters{
