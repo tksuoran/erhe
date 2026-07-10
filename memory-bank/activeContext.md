@@ -1,7 +1,10 @@
 §MBEL:5.0
 
 [FOCUS]
-@animation-curve-editor{#243,87678676}✓implemented+headless-verified{2026-07-09}?awaits-user-interactive-verify
+@animation-editor{#243}⚡iterating-with-user{curve-editor{87678676}→Animated-filter{7dcf73b7}→two-list-pane{f35e2a3b}→tri-state{730c52b8}→ctx-menu{6a120891}→LW-keying{aa78d9ec}}
+>LW-keying{aa78d9ec}::autokey{off|modified|all,hook@Transform_tool::record_transform_operation,compound-undo-with-transform}+CreateKey/DeleteKey{selected-objects,auto-create-channels+animation}+timeline-strip{scrub+ticks+key-markers{filter:selected-objects|active-animation|shown-channels}}+MCP{animation_create_key+animation_delete_key+autokey-param}
+!gltf-granularity::channel=whole-path{T/R/S}¬per-axis{LW-X/Y/Z/H/P/B-inapplicable}
+@plan::doc/animation-keyframing-plan.md{deferred:scene-markers+DopeTrack-key-drag-on-strip+standalone-Timeline-dock+autokey-persistence}
 >replaced::Timeline_window+Properties-curve-plot→Animation_window{combo+transport+channel-pane+curve-canvas{pan/zoom+ruler-scrub+box-select+drag-keys+ctrl-click-insert+Delete/X}}
 >added::Animation_player{per-frame-update@Editor::tick,apply→nodes+Animation_update_message}+animation_edit-helpers{glTF-sampler-storage,cubic-tangent-blocks}+Animation_edit_operation{undo}
 >added::MCP{get_scene_animations+set_animation_target+animation_playback+animation_edit_keyframe}
