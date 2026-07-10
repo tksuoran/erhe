@@ -143,7 +143,18 @@ auto Mcp_server::action_export_gltf(const json& args) -> std::string
         return r.dump();
     }
     const erhe::gltf::Gltf_physics_data physics_data = build_gltf_physics_data(sr->get_scene());
-    const std::string gltf = erhe::gltf::export_gltf(*root_node, binary, &physics_data);
+    // Prefab instances export as glTF 2.1 externalAsset references instead
+    // of flattened content; URIs are relativized against the export
+    // directory.
+    const std::filesystem::path export_path{path_str};
+    const std::string gltf = erhe::gltf::export_gltf(
+        erhe::gltf::Gltf_export_arguments{
+            .root_node       = *root_node,
+            .binary          = binary,
+            .physics_data    = &physics_data,
+            .external_assets = collect_prefab_external_assets(*root_node, export_path.parent_path())
+        }
+    );
     if (!erhe::file::write_file(std::filesystem::path{path_str}, gltf)) {
         json r = make_text_content("Failed to write file: " + path_str);
         r["isError"] = true;

@@ -76,6 +76,17 @@ auto instantiate_prefab(
     const std::shared_ptr<erhe::scene::Node>& parent = {}
 ) -> std::shared_ptr<erhe::scene::Node>;
 
+// Collect glTF 2.1 external-asset references for export: walks the subtree
+// under root_node and maps each node carrying a Prefab_instance attachment
+// to a files-array entry (URI relativized against export_directory when
+// possible, MIME type by source extension). Does not descend into instance
+// subtrees - their content lives in the referenced file. Pass the result to
+// erhe::gltf::export_gltf via Gltf_export_arguments::external_assets.
+[[nodiscard]] auto collect_prefab_external_assets(
+    const erhe::scene::Node&     root_node,
+    const std::filesystem::path& export_directory
+) -> std::map<const erhe::scene::Node*, erhe::gltf::Gltf_export_external_asset>;
+
 // Resolve glTF 2.1 external assets in freshly parsed gltf_data: for each
 // node that instantiates an external asset, load the referenced prefab
 // through the library (recursively; reference cycles are errors, per the

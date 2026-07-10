@@ -2,6 +2,7 @@
 
 #include "gltf_physics.hpp"
 
+#include <map>
 #include <memory>
 #include <filesystem>
 #include <optional>
@@ -125,8 +126,35 @@ struct Gltf_parse_arguments
 
 [[nodiscard]] auto scan_gltf(std::filesystem::path path) -> Gltf_scan;
 
-// physics_data (optional): KHR_implicit_shapes + KHR_physics_rigid_bodies
-// content built by the editor (see editor parsers/gltf_physics_export.hpp).
+// A glTF 2.1 external-asset reference to write on export: nodes mapped to
+// one of these are written with "externalAsset" (children and attachments
+// are not exported - the instantiated content comes from the referenced
+// file), creating deduplicated "files" / "externalAssets" entries.
+class Gltf_export_external_asset
+{
+public:
+    std::string uri;       // written into the files array as-is
+    std::string mime_type; // "model/gltf+json" or "model/gltf-binary"
+    std::string name;      // externalAssets entry name
+};
+
+class Gltf_export_arguments
+{
+public:
+    const erhe::scene::Node& root_node;
+    bool                     binary{true};
+    // Optional KHR_implicit_shapes + KHR_physics_rigid_bodies content built
+    // by the editor (see editor parsers/gltf_physics_export.hpp).
+    const Gltf_physics_data* physics_data{nullptr};
+    // Nodes to export as glTF 2.1 externalAsset instances. When any entry
+    // is emitted, the asset is written with version + minVersion "2.1";
+    // otherwise the exporter keeps writing plain glTF 2.0.
+    std::map<const erhe::scene::Node*, Gltf_export_external_asset> external_assets;
+};
+
+[[nodiscard]] auto export_gltf(const Gltf_export_arguments& arguments) -> std::string;
+
+// Convenience wrapper without glTF 2.1 external assets.
 [[nodiscard]] auto export_gltf(
     const erhe::scene::Node& root_node,
     bool                     binary,

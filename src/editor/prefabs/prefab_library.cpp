@@ -300,6 +300,53 @@ auto instantiate_prefab(
     return instance_root;
 }
 
+namespace {
+
+void collect_prefab_external_assets_visit(
+    const erhe::scene::Node&                                                 node,
+    const std::filesystem::path&                                             export_directory,
+    std::map<const erhe::scene::Node*, erhe::gltf::Gltf_export_external_asset>& result
+)
+{
+    const std::shared_ptr<Prefab_instance> prefab_instance = erhe::scene::get_attachment<Prefab_instance>(&node);
+    if (prefab_instance) {
+        const std::filesystem::path& source_path = prefab_instance->get_prefab_source_path();
+        std::error_code error_code;
+        const std::filesystem::path relative_path = std::filesystem::relative(source_path, export_directory, error_code);
+        const std::string uri = (error_code || relative_path.empty())
+            ? source_path.generic_string()
+            : relative_path.generic_string();
+        const bool is_binary = source_path.extension() == std::filesystem::path{".glb"};
+        result.emplace(
+            &node,
+            erhe::gltf::Gltf_export_external_asset{
+                .uri       = uri,
+                .mime_type = is_binary ? "model/gltf-binary" : "model/gltf+json",
+                .name      = prefab_instance->get_prefab_name()
+            }
+        );
+        return; // instance content lives in the referenced file
+    }
+    for (const std::shared_ptr<erhe::Hierarchy>& child : node.get_children()) {
+        const std::shared_ptr<erhe::scene::Node> child_node = std::dynamic_pointer_cast<erhe::scene::Node>(child);
+        if (child_node) {
+            collect_prefab_external_assets_visit(*child_node, export_directory, result);
+        }
+    }
+}
+
+} // namespace
+
+auto collect_prefab_external_assets(
+    const erhe::scene::Node&     root_node,
+    const std::filesystem::path& export_directory
+) -> std::map<const erhe::scene::Node*, erhe::gltf::Gltf_export_external_asset>
+{
+    std::map<const erhe::scene::Node*, erhe::gltf::Gltf_export_external_asset> result;
+    collect_prefab_external_assets_visit(root_node, export_directory, result);
+    return result;
+}
+
 void resolve_external_assets(
     Prefab_library&                                prefab_library,
     const erhe::gltf::Gltf_data&                   gltf_data,

@@ -18,6 +18,7 @@
 #include "operations/node_transform_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "parsers/gltf_physics_export.hpp"
+#include "prefabs/prefab_library.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "scene/node_joint.hpp"
 #include "scene/node_physics.hpp"
@@ -2356,7 +2357,16 @@ void Operations::export_callback(const char* const* filelist, int filter)
     if (path.has_value()) {
         const bool binary = true;
         const erhe::gltf::Gltf_physics_data physics_data = build_gltf_physics_data(scene);
-        std::string gltf = erhe::gltf::export_gltf(*root_node.get(), binary, &physics_data);
+        // Prefab instances export as glTF 2.1 externalAsset references
+        // instead of flattened content.
+        std::string gltf = erhe::gltf::export_gltf(
+            erhe::gltf::Gltf_export_arguments{
+                .root_node       = *root_node.get(),
+                .binary          = binary,
+                .physics_data    = &physics_data,
+                .external_assets = collect_prefab_external_assets(*root_node, path.value().parent_path())
+            }
+        );
         erhe::file::write_file(path.value(), gltf);
     }
 }

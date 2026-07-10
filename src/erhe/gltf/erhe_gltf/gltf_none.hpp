@@ -2,6 +2,7 @@
 
 #include "gltf_physics.hpp"
 
+#include <map>
 #include <memory>
 #include <filesystem>
 #include <optional>
@@ -112,6 +113,25 @@ struct Gltf_parse_arguments
 [[nodiscard]] auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data;
 
 [[nodiscard]] auto scan_gltf(std::filesystem::path path) -> Gltf_scan;
+
+class Gltf_export_external_asset
+{
+public:
+    std::string uri;
+    std::string mime_type;
+    std::string name;
+};
+
+class Gltf_export_arguments
+{
+public:
+    const erhe::scene::Node& root_node;
+    bool                     binary{true};
+    const Gltf_physics_data* physics_data{nullptr};
+    std::map<const erhe::scene::Node*, Gltf_export_external_asset> external_assets;
+};
+
+[[nodiscard]] auto export_gltf(const Gltf_export_arguments& arguments) -> std::string;
 
 [[nodiscard]] auto export_gltf(
     const erhe::scene::Node& root_node,

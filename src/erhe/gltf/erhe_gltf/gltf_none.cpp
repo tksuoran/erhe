@@ -12,6 +12,11 @@ auto scan_gltf(std::filesystem::path) -> Gltf_scan
     return {};
 }
 
+auto export_gltf(const Gltf_export_arguments&) -> std::string
+{
+    return {};
+}
+
 auto export_gltf(const erhe::scene::Node&, bool, const Gltf_physics_data*) -> std::string
 {
     return {};

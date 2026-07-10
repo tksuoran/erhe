@@ -2635,10 +2635,8 @@ auto scan_gltf(std::filesystem::path path) -> Gltf_scan
 class Gltf_exporter
 {
 public:
-    Gltf_exporter(const erhe::scene::Node& root_node, bool binary, const Gltf_physics_data* physics_data)
-        : m_erhe_root_node{root_node}
-        , m_binary        {binary}
-        , m_physics_data  {physics_data}
+    explicit Gltf_exporter(const Gltf_export_arguments& arguments)
+        : m_arguments{arguments}
     {
     }
 
@@ -3095,12 +3093,53 @@ private:
         return gltf_camera_index;
     }
 
+    // Emits the deduplicated glTF 2.1 "files" + "externalAssets" entries for
+    // an external-asset reference and returns the externalAssets index.
+    auto get_external_asset_index(const Gltf_export_external_asset& external_asset) -> std::size_t
+    {
+        const auto existing = m_uri_to_external_asset_index.find(external_asset.uri);
+        if (existing != m_uri_to_external_asset_index.end()) {
+            return existing->second;
+        }
+
+        fastgltf::File file{};
+        file.data = fastgltf::sources::URI{
+            .fileByteOffset = 0,
+            .uri            = fastgltf::URI{external_asset.uri},
+            .mimeType       = fastgltf::MimeType::None
+        };
+        file.mimeType = external_asset.mime_type;
+        const std::size_t file_index = m_gltf_asset.files.size();
+        m_gltf_asset.files.emplace_back(std::move(file));
+
+        fastgltf::ExternalAsset gltf_external_asset{};
+        gltf_external_asset.fileIndex = file_index;
+        gltf_external_asset.name      = external_asset.name;
+        const std::size_t external_asset_index = m_gltf_asset.externalAssets.size();
+        m_gltf_asset.externalAssets.emplace_back(std::move(gltf_external_asset));
+
+        m_uri_to_external_asset_index.emplace(external_asset.uri, external_asset_index);
+        return external_asset_index;
+    }
+
     auto process_node(const erhe::scene::Node& erhe_node) -> std::size_t
     {
         fastgltf::Node gltf_node{};
 
         gltf_node.name = erhe_node.get_name();
         gltf_node.transform = from_erhe(erhe_node.parent_from_node_transform());
+
+        // glTF 2.1: a prefab-instance node is written as an externalAsset
+        // reference. Children and attachments are not exported - the
+        // instantiated content comes from the referenced file.
+        const auto external_asset_it = m_arguments.external_assets.find(&erhe_node);
+        if (external_asset_it != m_arguments.external_assets.end()) {
+            gltf_node.externalAssetIndex = get_external_asset_index(external_asset_it->second);
+            size_t gltf_external_node_index = m_gltf_asset.nodes.size();
+            m_gltf_asset.nodes.emplace_back(std::move(gltf_node));
+            m_erhe_node_to_gltf_node_index.insert({&erhe_node, gltf_external_node_index});
+            return gltf_external_node_index;
+        }
 
         const std::shared_ptr<erhe::scene::Mesh> erhe_mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(&erhe_node);
         if (erhe_mesh) {
@@ -3112,14 +3151,17 @@ private:
             gltf_node.cameraIndex = process_camera(erhe_camera.get());
         }
 
-        erhe_node.for_each_child_const<erhe::scene::Node>(
-            [this, &gltf_node](const erhe::scene::Node& erhe_child_node) -> bool
-            {
-                std::size_t gltf_child_node_index = process_node(erhe_child_node);
+        // Direct children only: for_each_child_const() walks ALL descendants
+        // (it delegates to the recursive for_each_const()), and process_node
+        // recurses itself - using it here exported every nested node once
+        // per ancestor level.
+        for (const std::shared_ptr<erhe::Hierarchy>& child : erhe_node.get_children()) {
+            const erhe::scene::Node* erhe_child_node = dynamic_cast<const erhe::scene::Node*>(child.get());
+            if (erhe_child_node != nullptr) {
+                std::size_t gltf_child_node_index = process_node(*erhe_child_node);
                 gltf_node.children.push_back(gltf_child_node_index);
-                return true;
             }
-        );
+        }
 
         size_t gltf_node_index = m_gltf_asset.nodes.size();
         m_gltf_asset.nodes.emplace_back(std::move(gltf_node));
@@ -3218,7 +3260,7 @@ private:
 
     void process_physics()
     {
-        const Gltf_physics_data& physics = *m_physics_data;
+        const Gltf_physics_data& physics = *m_arguments.physics_data;
 
         for (const Physics_shape& shape : physics.shapes) {
             switch (shape.type) {
@@ -3511,10 +3553,9 @@ private:
     }
 
 private:
-    const erhe::scene::Node& m_erhe_root_node;
+    const Gltf_export_arguments& m_arguments;
+    std::map<std::string, std::size_t> m_uri_to_external_asset_index;
     fastgltf::Asset          m_gltf_asset;
-    bool                     m_binary{true};
-    const Gltf_physics_data* m_physics_data{nullptr};
 
     std::unordered_map<const erhe::scene::Node*, std::size_t> m_erhe_node_to_gltf_node_index;
 };
@@ -3530,24 +3571,34 @@ auto Gltf_exporter::export_gltf() -> std::string
 
     {
         fastgltf::Scene scene{};
-        m_erhe_root_node.for_each_child_const<erhe::scene::Node>(
-            [this, &scene](const erhe::scene::Node& erhe_node) -> bool
-            {
-                size_t node_index = process_node(erhe_node);
+        // Direct children only (see the matching comment in process_node);
+        // the recursive for_each_child_const() made every descendant a
+        // scene root and re-exported nested subtrees.
+        for (const std::shared_ptr<erhe::Hierarchy>& child : m_arguments.root_node.get_children()) {
+            const erhe::scene::Node* erhe_node = dynamic_cast<const erhe::scene::Node*>(child.get());
+            if (erhe_node != nullptr) {
+                size_t node_index = process_node(*erhe_node);
                 scene.nodeIndices.push_back(node_index);
-                return true;
             }
-        );
+        }
         m_gltf_asset.scenes.push_back(std::move(scene));
     }
 
 #if FASTGLTF_ENABLE_KHR_PHYSICS_RIGID_BODIES
     // Before combine_buffers(): mesh-keyed collider geometry may export
     // additional meshes (process_mesh), which adds buffers.
-    if (m_physics_data != nullptr) {
+    if (m_arguments.physics_data != nullptr) {
         process_physics();
     }
 #endif
+
+    // glTF 2.1 features in use: loaders must understand files /
+    // externalAssets, so declare both the version and the minimum version.
+    // Plain exports keep writing glTF 2.0.
+    if (!m_gltf_asset.externalAssets.empty()) {
+        m_gltf_asset.assetInfo->gltfVersion = "2.1";
+        m_gltf_asset.assetInfo->minVersion  = "2.1";
+    }
 
     combine_buffers();
 
@@ -3632,8 +3683,7 @@ auto Gltf_exporter::export_gltf() -> std::string
         }
     );
 
-    //static_cast<void>(m_binary);
-    if (m_binary)
+    if (m_arguments.binary)
     {
         auto expected_result = exporter.writeGltfBinary(m_gltf_asset, fastgltf::ExportOptions::ValidateAsset);
         auto* result = expected_result.get_if();
@@ -3658,10 +3708,21 @@ auto Gltf_exporter::export_gltf() -> std::string
     }
 }
 
+[[nodiscard]] auto export_gltf(const Gltf_export_arguments& arguments) -> std::string
+{
+    Gltf_exporter exporter{arguments};
+    return exporter.export_gltf();
+}
+
 [[nodiscard]] auto export_gltf(const erhe::scene::Node& root_node, bool binary, const Gltf_physics_data* physics_data) -> std::string
 {
-    Gltf_exporter exporter{root_node, binary, physics_data};
-    return exporter.export_gltf();
+    return export_gltf(
+        Gltf_export_arguments{
+            .root_node    = root_node,
+            .binary       = binary,
+            .physics_data = physics_data
+        }
+    );
 }
 
 } // namespace erhe::gltf
