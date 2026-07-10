@@ -27,7 +27,7 @@
         "operations": true,
         "paint_tool": false,
         "performance": false,
-        "physics": true,
+        "physics": false,
         "pipelines": false,
         "post_processing": false,
         "properties": true,
