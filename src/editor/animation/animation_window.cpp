@@ -564,7 +564,8 @@ void Animation_window::timeline_strip()
     };
 
     ImGui::InvisibleButton("timeline_strip", size, ImGuiButtonFlags_MouseButtonLeft);
-    const bool active = ImGui::IsItemActive();
+    const bool active  = ImGui::IsItemActive();
+    const bool hovered = ImGui::IsItemHovered();
 
     // Moving the timeline: click / drag anywhere on the strip scrubs.
     if (active && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
@@ -572,6 +573,9 @@ void Animation_window::timeline_strip()
         m_strip_scrubbing = true;
     } else {
         m_strip_scrubbing = false;
+    }
+    if (hovered || active) {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
     }
 
     draw_list->PushClipRect(pos, max, true);
@@ -605,23 +609,49 @@ void Animation_window::timeline_strip()
         }
     }
 
-    // Playhead
-    if (m_animation && (player->get_animation() == m_animation)) {
+    // Playhead with a grab-handle knob (LightWave frame-slider style: the
+    // knob shows the current time and is the drag affordance; clicking /
+    // dragging anywhere on the strip scrubs too).
+    if (player->get_animation()) {
         const float time = player->get_time();
         const float x    = strip_time_to_x(time);
         const ImU32 playhead_color = IM_COL32(90, 200, 220, 255);
         draw_list->AddLine(ImVec2{x, pos.y}, ImVec2{x, max.y}, playhead_color, 2.0f);
-        draw_list->AddTriangleFilled(
-            ImVec2{x - 5.0f, pos.y},
-            ImVec2{x + 5.0f, pos.y},
-            ImVec2{x, pos.y + 7.0f},
-            playhead_color
+
+        char label[32];
+        snprintf(label, sizeof(label), "%.3f", static_cast<double>(time));
+        const ImVec2 text_size  = ImGui::CalcTextSize(label);
+        const float  knob_width = text_size.x + 12.0f;
+        float knob_left = x - (knob_width * 0.5f);
+        knob_left = std::clamp(knob_left, pos.x, max.x - knob_width);
+        const ImVec2 knob_min{knob_left, pos.y + 1.0f};
+        const ImVec2 knob_max{knob_left + knob_width, max.y - 1.0f};
+        const ImU32 knob_color = ImGui::GetColorU32(
+            (active || m_strip_scrubbing) ? ImGuiCol_SliderGrabActive : (hovered ? ImGuiCol_ButtonHovered : ImGuiCol_Button)
+        );
+        draw_list->AddRectFilled(knob_min, knob_max, knob_color, style.FrameRounding);
+        draw_list->AddRect      (knob_min, knob_max, playhead_color, style.FrameRounding);
+        draw_list->AddText(
+            ImVec2{
+                knob_left + ((knob_width - text_size.x) * 0.5f),
+                pos.y + ((size.y - text_size.y) * 0.5f)
+            },
+            ImGui::GetColorU32(ImGuiCol_Text),
+            label
+        );
+    } else {
+        const char* message = "no animation";
+        const ImVec2 text_size = ImGui::CalcTextSize(message);
+        draw_list->AddText(
+            ImVec2{pos.x + ((size.x - text_size.x) * 0.5f), pos.y + ((size.y - text_size.y) * 0.5f)},
+            ImGui::GetColorU32(ImGuiCol_TextDisabled),
+            message
         );
     }
 
     draw_list->PopClipRect();
 
-    if (ImGui::IsItemHovered() || m_strip_scrubbing) {
+    if ((hovered || m_strip_scrubbing) && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
         ImGui::SetTooltip("t = %.3f", static_cast<double>(strip_x_to_time(io.MousePos.x)));
     }
 }
