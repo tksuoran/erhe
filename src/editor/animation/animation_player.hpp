@@ -37,6 +37,13 @@ public:
     // Seek to an absolute animation time (clamped to [start, end]) and apply.
     void seek(float time);
 
+    // Timeline range (LightWave-style scene range): user-editable and
+    // independent of the active animation; animation keys only ever extend it
+    // (refresh_time_range()), never shrink it. Setting one end pushes the
+    // other end if needed and keeps the play position in range.
+    void set_start_time(float time);
+    void set_end_time  (float time);
+
     void set_speed  (float speed);
     void set_looping(bool looping);
 
@@ -73,7 +80,7 @@ private:
     float m_speed          {1.0f};
     float m_time           {0.0f};
     float m_start_time     {0.0f};
-    float m_end_time       {0.0f};
+    float m_end_time       {10.0f};
     bool  m_apply_requested{false};
 };
 

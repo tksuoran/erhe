@@ -540,10 +540,25 @@ void Animation_window::timeline_strip()
     const ImGuiIO&    io        = ImGui::GetIO();
     ImDrawList* const draw_list = ImGui::GetWindowDrawList();
 
-    const float  height = ImGui::GetFrameHeight() * 1.4f;
-    const ImVec2 pos    = ImGui::GetCursorScreenPos();
-    ImVec2       size   = ImGui::GetContentRegionAvail();
-    size.x = std::max(size.x, 50.0f);
+    const float height      = ImGui::GetFrameHeight() * 1.4f;
+    const float field_width = ImGui::GetFontSize() * 3.5f;
+
+    // Editable timeline range (LightWave-style): start field, strip, end field.
+    {
+        float start_time = player->get_start_time();
+        ImGui::SetNextItemWidth(field_width);
+        if (ImGui::DragFloat("##timeline_start", &start_time, 0.01f, 0.0f, 0.0f, "%.2f", ImGuiSliderFlags_NoRoundToFormat)) {
+            player->set_start_time(start_time);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Timeline start time");
+        }
+        ImGui::SameLine();
+    }
+
+    const ImVec2 pos  = ImGui::GetCursorScreenPos();
+    ImVec2       size = ImGui::GetContentRegionAvail();
+    size.x = std::max(size.x - (field_width + ImGui::GetStyle().ItemSpacing.x), 50.0f);
     size.y = height;
     const ImVec2 max{pos.x + size.x, pos.y + size.y};
 
@@ -611,8 +626,10 @@ void Animation_window::timeline_strip()
 
     // Playhead with a grab-handle knob (LightWave frame-slider style: the
     // knob shows the current time and is the drag affordance; clicking /
-    // dragging anywhere on the strip scrubs too).
-    if (player->get_animation()) {
+    // dragging anywhere on the strip scrubs too). Drawn regardless of whether
+    // an animation is active: the current time matters even without one
+    // (Create Key / autokey key at the current time).
+    {
         const float time = player->get_time();
         const float x    = strip_time_to_x(time);
         const ImU32 playhead_color = IM_COL32(90, 200, 220, 255);
@@ -639,20 +656,24 @@ void Animation_window::timeline_strip()
             ImGui::GetColorU32(ImGuiCol_Text),
             label
         );
-    } else {
-        const char* message = "no animation";
-        const ImVec2 text_size = ImGui::CalcTextSize(message);
-        draw_list->AddText(
-            ImVec2{pos.x + ((size.x - text_size.x) * 0.5f), pos.y + ((size.y - text_size.y) * 0.5f)},
-            ImGui::GetColorU32(ImGuiCol_TextDisabled),
-            message
-        );
     }
 
     draw_list->PopClipRect();
 
     if ((hovered || m_strip_scrubbing) && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
         ImGui::SetTooltip("t = %.3f", static_cast<double>(strip_x_to_time(io.MousePos.x)));
+    }
+
+    ImGui::SameLine();
+    {
+        float end_time = player->get_end_time();
+        ImGui::SetNextItemWidth(field_width);
+        if (ImGui::DragFloat("##timeline_end", &end_time, 0.01f, 0.0f, 0.0f, "%.2f", ImGuiSliderFlags_NoRoundToFormat)) {
+            player->set_end_time(end_time);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Timeline end time");
+        }
     }
 }
 

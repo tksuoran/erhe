@@ -64,7 +64,10 @@ void Animation_player::set_animation(const std::shared_ptr<erhe::scene::Animatio
     m_animation = animation;
     m_playing   = false;
     refresh_time_range();
-    m_time = m_start_time;
+    // Keep the playhead where it is (the timeline range is independent of the
+    // animation): Create Key on a fresh animation must not jump time back to
+    // the start.
+    m_time = std::clamp(m_time, m_start_time, m_end_time);
     if (m_animation) {
         m_apply_requested = true;
     }
@@ -101,6 +104,26 @@ void Animation_player::stop()
 void Animation_player::seek(const float time)
 {
     m_time = std::clamp(time, m_start_time, m_end_time);
+    m_apply_requested = true;
+}
+
+void Animation_player::set_start_time(const float time)
+{
+    m_start_time = time;
+    if (m_end_time < m_start_time) {
+        m_end_time = m_start_time;
+    }
+    m_time = std::clamp(m_time, m_start_time, m_end_time);
+    m_apply_requested = true;
+}
+
+void Animation_player::set_end_time(const float time)
+{
+    m_end_time = time;
+    if (m_start_time > m_end_time) {
+        m_start_time = m_end_time;
+    }
+    m_time = std::clamp(m_time, m_start_time, m_end_time);
     m_apply_requested = true;
 }
 
@@ -166,16 +189,19 @@ void Animation_player::on_animation_edited(const std::shared_ptr<erhe::scene::An
 
 void Animation_player::refresh_time_range()
 {
+    // The timeline range is user-editable; animation keys only ever extend it
+    // so that every key stays visible and reachable. Never shrink it here -
+    // shrinking is a user action (set_start_time() / set_end_time()).
     if (!m_animation || m_animation->channels.empty()) {
-        m_start_time = 0.0f;
-        m_end_time   = 0.0f;
         return;
     }
-    m_start_time = m_animation->get_first_time();
-    m_end_time   = m_animation->get_last_time();
-    if (m_end_time < m_start_time) {
-        m_end_time = m_start_time;
+    const float first_time = m_animation->get_first_time();
+    const float last_time  = m_animation->get_last_time();
+    if (last_time < first_time) {
+        return;
     }
+    m_start_time = std::min(m_start_time, first_time);
+    m_end_time   = std::max(m_end_time, last_time);
 }
 
 void Animation_player::apply()
