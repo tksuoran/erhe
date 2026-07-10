@@ -2,12 +2,17 @@
 
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
+#include "asset_browser/asset_browser.hpp"
 #include "brushes/brush.hpp"
 #include "brushes/brush_tool.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
+#include "prefabs/prefab_library.hpp"
+#include "scene/scene_root.hpp"
 #include "time.hpp"
 #include "tools/fly_camera_tool.hpp"
+
+#include "erhe_math/math_util.hpp"
 
 #define IMVIEWGUIZMO_IMPLEMENTATION
 #include "ImViewGuizmo.h"
@@ -138,6 +143,38 @@ void Viewport_window::cancel_brush_drag_and_drop()
     m_app_context.brush_tool->preview_drag_and_drop({});
 }
 
+void Viewport_window::drop_gltf_as_prefab(const std::filesystem::path& source_path)
+{
+    const std::shared_ptr<Viewport_scene_view> viewport_scene_view = m_viewport_scene_view.lock();
+    if (!viewport_scene_view) {
+        return;
+    }
+    const std::shared_ptr<Scene_root> scene_root = viewport_scene_view->get_scene_root();
+    if (!scene_root) {
+        return;
+    }
+    const std::shared_ptr<Prefab> prefab = m_app_context.prefab_library->get_or_load(source_path);
+    if (!prefab) {
+        log_scene->warn("Dropped glTF could not be loaded as a prefab: {}", source_path.string());
+        return;
+    }
+
+    // Place at the hovered surface point (scene content or grid); when the
+    // drop misses both, fall back to a point in front of the camera.
+    glm::vec3 position{0.0f};
+    const Hover_entry* hover = viewport_scene_view->get_nearest_hover(Hover_entry::content_bit | Hover_entry::grid_bit);
+    if ((hover != nullptr) && hover->valid && hover->position.has_value()) {
+        position = hover->position.value();
+    } else {
+        const std::optional<glm::vec3> in_front = viewport_scene_view->get_control_position_in_world_at_distance(5.0f);
+        if (in_front.has_value()) {
+            position = in_front.value();
+        }
+    }
+
+    instantiate_prefab(m_app_context, prefab, *scene_root, erhe::math::create_translation<float>(position));
+}
+
 void Viewport_window::drag_and_drop_target(float min_x, float min_y, float max_x, float max_y)
 {
     const ImGuiID drag_target_id = ImGui::GetID(static_cast<const void*>(this));
@@ -147,6 +184,17 @@ void Viewport_window::drag_and_drop_target(float min_x, float min_y, float max_x
 
         const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Content_library_node", ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
         if (payload == nullptr) {
+            // glTF assets dragged from the Asset browser instantiate as
+            // prefabs at the drop location (delivery only, no preview).
+            const ImGuiPayload* gltf_payload = ImGui::AcceptDragDropPayload(Asset_file_gltf::static_type_name.data());
+            if (gltf_payload != nullptr) {
+                const erhe::Item_base* item_base = *(static_cast<erhe::Item_base**>(gltf_payload->Data));
+                const Asset_file_gltf* gltf = dynamic_cast<const Asset_file_gltf*>(item_base);
+                const std::filesystem::path* source_path = (gltf != nullptr) ? gltf->get_source_path() : nullptr;
+                if ((source_path != nullptr) && (m_app_context.prefab_library != nullptr)) {
+                    drop_gltf_as_prefab(*source_path);
+                }
+            }
             cancel_brush_drag_and_drop();
             return;
         }

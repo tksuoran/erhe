@@ -7,6 +7,7 @@
 
 #include <glm/glm.hpp>
 
+#include <filesystem>
 #include <memory>
 
 namespace erhe::imgui {
@@ -64,6 +65,9 @@ private:
     void imgui_viewport            ();
     void drag_and_drop_target      (float min_x, float min_y, float max_x, float max_y);
     void cancel_brush_drag_and_drop();
+    // Instantiate a glTF file dropped from the Asset browser as a prefab at
+    // the current hover position (content hit or grid, camera-front fallback).
+    void drop_gltf_as_prefab       (const std::filesystem::path& source_path);
 
     erhe::message_bus::Subscription<Open_scene_message> m_open_scene_subscription;
     App_context&                                       m_app_context;
