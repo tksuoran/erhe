@@ -2011,6 +2011,14 @@ auto Device_impl::get_frame_in_flight_index() const -> uint64_t
     return m_frame_index % get_number_of_frames_in_flight();
 }
 
+auto Device_impl::is_frame_completed(const uint64_t frame) const -> bool
+{
+    // m_latest_completed_frame is one past the last frame the GPU has
+    // retired: both advancing loops (update_frame_completion() and
+    // wait_for_idle()) leave it at completed + 1.
+    return frame < m_latest_completed_frame;
+}
+
 auto Device_impl::are_gpu_timers_supported() const -> bool
 {
     return m_gpu_timers_supported;

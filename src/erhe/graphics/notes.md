@@ -164,6 +164,18 @@ heap.bind();      // makes handles resident / updates descriptors / encodes arg 
 heap.unbind();    // releases residency / clears bindings
 ```
 
+`reset_heap()` starts an independent per-pass snapshot: several passes recorded
+into the same frame (multiple scene viewports, shadow, imgui, ...) each get
+slot state of their own, because recorded draws consume the heap contents only
+at submit/execution time. Metal achieves this by encoding each pass's argument
+buffer into a fresh ring-buffer range; Vulkan by acquiring a per-pass
+`VkDescriptorSet` (recycled via `Device_impl::is_frame_completed()`, so a set
+is only rewritten once the GPU has retired the frame that used it). GL needs
+neither: bindless handles are stable per texture, and the sampler-array path
+binds units at record time in an in-order API. Regressing this to a single
+mutable table makes the last-recorded pass's textures win for every pass of
+the frame (wrong textures whenever two viewports show different scenes).
+
 The `Bind_group_layout*` parameter is how each backend derives its runtime
 state without the caller having to know the layout details:
 

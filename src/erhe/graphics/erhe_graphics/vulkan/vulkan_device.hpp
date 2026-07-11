@@ -305,6 +305,11 @@ public:
     [[nodiscard]] auto get_frame_index               () const -> uint64_t;
     [[nodiscard]] auto get_frame_in_flight_index     () const -> uint64_t;
 
+    // True when the GPU has fully retired all work submitted for the given
+    // frame index -- resources last referenced by that frame's command
+    // buffers can be safely reused or destroyed.
+    [[nodiscard]] auto is_frame_completed            (uint64_t frame) const -> bool;
+
     // Per-frame-in-flight submission resources used by Swapchain_impl. Device_impl
     // owns the command pools and their command buffers; the submit_fence slot is
     // filled/recycled by Swapchain_impl (it owns the fence pool).
