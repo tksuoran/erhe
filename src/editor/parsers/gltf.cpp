@@ -278,6 +278,9 @@ auto make_import_gltf_operation(
     std::shared_ptr<erhe::scene::Node> default_key_light_node;
     std::shared_ptr<erhe::scene::Node> default_fill_light_node;
 
+    // The implicit defaults are editor conveniences, not authored content:
+    // exclude_from_prefab keeps them out of prefab source files
+    // (save_prefab_scene) and prefab instances.
     if (add_default_camera) {
         default_camera_node = std::make_shared<erhe::scene::Node>("Camera");
         std::shared_ptr<erhe::scene::Camera> default_camera = std::make_shared<erhe::scene::Camera>("Camera");
@@ -285,7 +288,7 @@ auto make_import_gltf_operation(
         default_camera->projection()->projection_type = erhe::scene::Projection::Type::perspective_vertical;
         default_camera->projection()->z_near          = 0.03f;
         default_camera->projection()->z_far           = 80.0f;
-        default_camera->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+        default_camera->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui | erhe::Item_flags::exclude_from_prefab);
         default_camera_node->attach(default_camera);
 
         const glm::mat4 m = erhe::math::create_look_at(
@@ -294,7 +297,7 @@ auto make_import_gltf_operation(
             glm::vec3{0.0f, 1.00f, 0.0f}  // up
         );
         default_camera_node->set_parent_from_node(m);
-        default_camera_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+        default_camera_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui | erhe::Item_flags::exclude_from_prefab);
     }
 
     if (add_default_light) {
@@ -305,9 +308,9 @@ auto make_import_gltf_operation(
         key_light->intensity = 1.0f;
         key_light->range     = 0.0f;
         key_light->layer_id  = scene_root->layers().light()->id;
-        key_light->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::show_in_ui);
+        key_light->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::show_in_ui | erhe::Item_flags::exclude_from_prefab);
         default_key_light_node->attach          (key_light);
-        default_key_light_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::show_in_ui);
+        default_key_light_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::show_in_ui | erhe::Item_flags::exclude_from_prefab);
         const glm::quat key_quat{0.8535534f, -0.3535534f, -0.353553385f, -0.146446586f};
         default_key_light_node->set_parent_from_node(glm::mat4{key_quat});
 
@@ -318,9 +321,9 @@ auto make_import_gltf_operation(
         fill_light->intensity = 0.5f;
         fill_light->range     = 0.0f;
         fill_light->layer_id  = scene_root->layers().light()->id;
-        fill_light->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::show_in_ui);
+        fill_light->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::show_in_ui | erhe::Item_flags::exclude_from_prefab);
         default_fill_light_node->attach          (fill_light);
-        default_fill_light_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::show_in_ui);
+        default_fill_light_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::show_in_ui | erhe::Item_flags::exclude_from_prefab);
         const glm::quat fill_quat{-0.353553444f, -0.8535534f, 0.146446645f, -0.353553325f};
         default_fill_light_node->set_parent_from_node(glm::mat4{fill_quat});
     }

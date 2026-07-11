@@ -550,6 +550,9 @@ void attach_prefab_instance(
         if (!child_node) {
             continue;
         }
+        if ((child_node->get_flag_bits() & erhe::Item_flags::exclude_from_prefab) != 0) {
+            continue; // editor-generated helper, never part of prefab content
+        }
         const std::shared_ptr<erhe::Item_base> clone = child_node->clone();
         const std::shared_ptr<erhe::scene::Node> clone_node = std::dynamic_pointer_cast<erhe::scene::Node>(clone);
         if (!clone_node) {
@@ -736,6 +739,10 @@ auto save_prefab_scene(App_context& context, Scene_root& scene_root) -> bool
 
     const erhe::gltf::Gltf_physics_data physics_data = build_gltf_physics_data(*scene);
     const bool binary = source_path.extension() == std::filesystem::path{".glb"};
+    // exclude_from_prefab items (the editor-added default camera / lights)
+    // ARE written to the file - the flag rides in node extras and round-trips
+    // through parse_gltf, so the prefab scene's editing setup survives
+    // reopening; attach_prefab_instance filters them out of instances.
     const std::string gltf = erhe::gltf::export_gltf(
         erhe::gltf::Gltf_export_arguments{
             .root_node       = *root_node,

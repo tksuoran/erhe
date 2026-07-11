@@ -317,6 +317,43 @@ using erhe::geometry::get_mesh_info;
     }
 }
 
+[[nodiscard]] auto from_erhe(const erhe::scene::Light_type erhe_light_type) -> fastgltf::LightType
+{
+    switch (erhe_light_type) {
+        case erhe::scene::Light_type::directional: return fastgltf::LightType::Directional;
+        case erhe::scene::Light_type::point:       return fastgltf::LightType::Point;
+        case erhe::scene::Light_type::spot:        return fastgltf::LightType::Spot;
+        default:                                   return fastgltf::LightType::Directional;
+    }
+}
+
+// erhe Item flags that round-trip through glTF node "extras" as
+// {"erhe_flags": ["<name>", ...]}. Neither glTF 2.0 core nor the glTF 2.1
+// proposals (KhronosGroup/glTF#2585 and related) define per-node
+// editor/authoring flags such as "exclude from external-asset
+// instantiation" (see doc/gltf_2_1_item_flags_comment.md), so
+// erhe-specific bits ride in extras by name; unknown names are ignored on
+// import so the list can grow without breaking older builds.
+class Serialized_item_flag
+{
+public:
+    uint64_t         bit;
+    std::string_view name;
+};
+
+constexpr Serialized_item_flag c_serialized_item_flags[] = {
+    { erhe::Item_flags::exclude_from_prefab, "exclude_from_prefab" }
+};
+
+[[nodiscard]] constexpr auto serialized_item_flags_mask() -> uint64_t
+{
+    uint64_t mask = 0;
+    for (const Serialized_item_flag& flag : c_serialized_item_flags) {
+        mask = mask | flag.bit;
+    }
+    return mask;
+}
+
 [[nodiscard]] auto is_number(std::string_view s) -> bool
 {
     return 
@@ -2344,22 +2381,55 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
         fastgltf::Extensions::KHR_physics_rigid_bodies            |
         fastgltf::Extensions::KHR_materials_unlit;
     // Collect erhe-specific extras during parsing. The parser callback
-    // runs before parse_material(), so we accumulate into a per-index map
-    // and replay each field after the standard glTF parse completes.
-    std::unordered_map<std::size_t, Material_extras> material_extras_map;
+    // runs before parse_material() / parse_node(), so we accumulate into
+    // per-index maps and replay each field after the standard glTF parse
+    // completes.
+    class Parse_extras_context
+    {
+    public:
+        std::unordered_map<std::size_t, Material_extras> material_extras;
+        std::unordered_map<std::size_t, uint64_t>        node_flags; // serialized erhe Item flags (c_serialized_item_flags)
+    };
+    Parse_extras_context parse_extras_context;
 
     fastgltf::Parser fastgltf_parser{extensions};
-    fastgltf_parser.setUserPointer(&material_extras_map);
+    fastgltf_parser.setUserPointer(&parse_extras_context);
     fastgltf_parser.setExtrasParseCallback(
         [](simdjson::dom::object* extras, std::size_t object_index, fastgltf::Category object_type, void* user_pointer) {
-            if (object_type != fastgltf::Category::Materials) {
-                return;
-            }
             if (extras == nullptr) {
                 return;
             }
-            auto* extras_map = static_cast<std::unordered_map<std::size_t, Material_extras>*>(user_pointer);
-            Material_extras& entry = (*extras_map)[object_index];
+            Parse_extras_context* context = static_cast<Parse_extras_context*>(user_pointer);
+
+            if (object_type == fastgltf::Category::Nodes) {
+                simdjson::dom::element flags_element;
+                if (extras->at_key("erhe_flags").get(flags_element) == simdjson::error_code::SUCCESS) {
+                    simdjson::dom::array flags_array;
+                    if (flags_element.get_array().get(flags_array) == simdjson::error_code::SUCCESS) {
+                        uint64_t flag_bits = 0;
+                        for (simdjson::dom::element flag_element : flags_array) {
+                            std::string_view flag_name;
+                            if (flag_element.get_string().get(flag_name) != simdjson::error_code::SUCCESS) {
+                                continue;
+                            }
+                            for (const Serialized_item_flag& serialized_flag : c_serialized_item_flags) {
+                                if (flag_name == serialized_flag.name) {
+                                    flag_bits = flag_bits | serialized_flag.bit;
+                                }
+                            }
+                        }
+                        if (flag_bits != 0) {
+                            context->node_flags[object_index] = flag_bits;
+                        }
+                    }
+                }
+                return;
+            }
+
+            if (object_type != fastgltf::Category::Materials) {
+                return;
+            }
+            Material_extras& entry = context->material_extras[object_index];
 
             simdjson::dom::element roughness_y_element;
             if (extras->at_key("roughness_y").get(roughness_y_element) == simdjson::error_code::SUCCESS) {
@@ -2433,11 +2503,23 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
     Gltf_parser erhe_parser{std::move(asset), result, arguments};
     erhe_parser.parse_and_build();
 
+    // Apply serialized erhe Item flags to parsed nodes (Gltf_data::nodes is
+    // parallel to the glTF nodes array).
+    for (const auto& [node_index, flag_bits] : parse_extras_context.node_flags) {
+        if (node_index >= result.nodes.size()) {
+            continue;
+        }
+        const std::shared_ptr<erhe::scene::Node>& node = result.nodes[node_index];
+        if (node) {
+            node->enable_flag_bits(flag_bits);
+        }
+    }
+
     // Apply extras data to parsed materials. bxdf_model in extras
     // overrides the KHR_materials_unlit-driven assignment from
     // parse_material when both are present (e.g. an anisotropic_brdf
     // material that also wrote bxdf_model into extras for clarity).
-    for (const auto& [material_index, extras] : material_extras_map) {
+    for (const auto& [material_index, extras] : parse_extras_context.material_extras) {
         if (material_index >= result.materials.size()) {
             continue;
         }
@@ -3178,6 +3260,47 @@ private:
         return external_asset_index;
     }
 
+    // Serialized erhe Item flags (c_serialized_item_flags) ride in node
+    // "extras" (written by the extras callback in export_gltf()); record
+    // them per emitted glTF node index.
+    void record_serialized_node_flags(const erhe::scene::Node& erhe_node, const std::size_t gltf_node_index)
+    {
+        const uint64_t flag_bits = erhe_node.get_flag_bits() & serialized_item_flags_mask();
+        if (flag_bits != 0) {
+            m_gltf_node_index_to_flags.emplace(gltf_node_index, flag_bits);
+        }
+    }
+
+    auto process_light(const erhe::scene::Light* erhe_light) -> std::size_t
+    {
+        const auto it = m_exported_lights.find(erhe_light);
+        if (it != m_exported_lights.end()) {
+            return it->second;
+        }
+
+        fastgltf::Light gltf_light{};
+        // Qualified: Gltf_exporter's from_erhe(Trs_transform) member hides
+        // the namespace-scope overload set.
+        gltf_light.type      = erhe::gltf::from_erhe(erhe_light->type);
+        gltf_light.color     = fastgltf::math::nvec3{erhe_light->color.x, erhe_light->color.y, erhe_light->color.z};
+        gltf_light.intensity = erhe_light->intensity;
+        // KHR_lights_punctual: range is not allowed on directional lights;
+        // erhe uses range 0 to mean infinite.
+        if ((erhe_light->type != erhe::scene::Light_type::directional) && (erhe_light->range > 0.0f)) {
+            gltf_light.range = erhe_light->range;
+        }
+        if (erhe_light->type == erhe::scene::Light_type::spot) {
+            gltf_light.innerConeAngle = erhe_light->inner_spot_angle;
+            gltf_light.outerConeAngle = erhe_light->outer_spot_angle;
+        }
+        gltf_light.name = erhe_light->get_name();
+
+        const std::size_t gltf_light_index = m_gltf_asset.lights.size();
+        m_gltf_asset.lights.emplace_back(std::move(gltf_light));
+        m_exported_lights.emplace(erhe_light, gltf_light_index);
+        return gltf_light_index;
+    }
+
     auto process_node(const erhe::scene::Node& erhe_node) -> std::size_t
     {
         fastgltf::Node gltf_node{};
@@ -3194,6 +3317,7 @@ private:
             size_t gltf_external_node_index = m_gltf_asset.nodes.size();
             m_gltf_asset.nodes.emplace_back(std::move(gltf_node));
             m_erhe_node_to_gltf_node_index.insert({&erhe_node, gltf_external_node_index});
+            record_serialized_node_flags(erhe_node, gltf_external_node_index);
             return gltf_external_node_index;
         }
 
@@ -3205,6 +3329,11 @@ private:
         const std::shared_ptr<erhe::scene::Camera> erhe_camera = erhe::scene::get_attachment<erhe::scene::Camera>(&erhe_node);
         if (erhe_camera) {
             gltf_node.cameraIndex = process_camera(erhe_camera.get());
+        }
+
+        const std::shared_ptr<erhe::scene::Light> erhe_light = erhe::scene::get_attachment<erhe::scene::Light>(&erhe_node);
+        if (erhe_light) {
+            gltf_node.lightIndex = process_light(erhe_light.get());
         }
 
         // Direct children only: for_each_child_const() walks ALL descendants
@@ -3222,6 +3351,7 @@ private:
         size_t gltf_node_index = m_gltf_asset.nodes.size();
         m_gltf_asset.nodes.emplace_back(std::move(gltf_node));
         m_erhe_node_to_gltf_node_index.insert({&erhe_node, gltf_node_index});
+        record_serialized_node_flags(erhe_node, gltf_node_index);
         return gltf_node_index;
     }
 
@@ -3613,7 +3743,9 @@ private:
     std::map<std::string, std::size_t> m_uri_to_external_asset_index;
     fastgltf::Asset          m_gltf_asset;
 
-    std::unordered_map<const erhe::scene::Node*, std::size_t> m_erhe_node_to_gltf_node_index;
+    std::unordered_map<const erhe::scene::Node*, std::size_t>  m_erhe_node_to_gltf_node_index;
+    std::unordered_map<const erhe::scene::Light*, std::size_t> m_exported_lights;
+    std::unordered_map<std::size_t, uint64_t>                  m_gltf_node_index_to_flags; // serialized erhe Item flags per glTF node index
 };
 
 auto Gltf_exporter::export_gltf() -> std::string
@@ -3656,24 +3788,57 @@ auto Gltf_exporter::export_gltf() -> std::string
         m_gltf_asset.assetInfo->minVersion  = "2.1";
     }
 
-    combine_buffers();
-
-    // Build reverse map: gltf material index -> erhe Material* for extras export
-    std::unordered_map<std::size_t, const erhe::primitive::Material*> index_to_material;
-    for (const auto& [material_ptr, gltf_index] : m_exported_materials) {
-        index_to_material[gltf_index] = material_ptr;
+    // KHR_lights_punctual: exported when process_light() emitted any light;
+    // the fastgltf exporter writes the lights array but leaves declaring the
+    // extension to the application.
+    if (!m_gltf_asset.lights.empty()) {
+        m_gltf_asset.extensionsUsed.emplace_back("KHR_lights_punctual");
     }
 
+    combine_buffers();
+
+    // Extras write context: gltf material index -> erhe Material* (erhe
+    // material extras) and gltf node index -> serialized erhe Item flags.
+    class Export_extras_context
+    {
+    public:
+        std::unordered_map<std::size_t, const erhe::primitive::Material*> index_to_material;
+        const std::unordered_map<std::size_t, uint64_t>*                  node_index_to_flags{nullptr};
+    };
+    Export_extras_context export_extras_context;
+    for (const auto& [material_ptr, gltf_index] : m_exported_materials) {
+        export_extras_context.index_to_material[gltf_index] = material_ptr;
+    }
+    export_extras_context.node_index_to_flags = &m_gltf_node_index_to_flags;
+
     fastgltf::Exporter exporter{};
-    exporter.setUserPointer(&index_to_material);
+    exporter.setUserPointer(&export_extras_context);
     exporter.setExtrasWriteCallback(
         [](std::size_t object_index, fastgltf::Category object_type, void* user_pointer) -> std::optional<std::string> {
+            const Export_extras_context* context = static_cast<const Export_extras_context*>(user_pointer);
+
+            if (object_type == fastgltf::Category::Nodes) {
+                const auto node_it = context->node_index_to_flags->find(object_index);
+                if (node_it == context->node_index_to_flags->end()) {
+                    return std::nullopt;
+                }
+                std::string out{"{\"erhe_flags\": ["};
+                const char* sep = "";
+                for (const Serialized_item_flag& serialized_flag : c_serialized_item_flags) {
+                    if ((node_it->second & serialized_flag.bit) != 0) {
+                        out += sep; out += "\""; out += serialized_flag.name; out += "\"";
+                        sep = ", ";
+                    }
+                }
+                out += "]}";
+                return out;
+            }
+
             if (object_type != fastgltf::Category::Materials) {
                 return std::nullopt;
             }
-            auto* map = static_cast<std::unordered_map<std::size_t, const erhe::primitive::Material*>*>(user_pointer);
-            auto it = map->find(object_index);
-            if (it == map->end()) {
+            const auto it = context->index_to_material.find(object_index);
+            if (it == context->index_to_material.end()) {
                 return std::nullopt;
             }
             const erhe::primitive::Material*      material = it->second;
