@@ -54,7 +54,13 @@ public:
     // (e.g. the default camera / lights import_gltf adds to a scene that
     // has none) so they never leak into prefab files or instances.
     static constexpr uint64_t exclude_from_prefab       = (1u << 26);
-    static constexpr uint64_t count                     = 27;
+    // Implicit container node created when a glTF file is opened/imported,
+    // holding the file's scene roots. Not part of the file content: glTF
+    // export writes its children in its place (composing its transform),
+    // and import re-creates it -- so open/save cycles do not nest one more
+    // wrapper node per cycle.
+    static constexpr uint64_t import_root               = (1u << 27);
+    static constexpr uint64_t count                     = 28;
 
     // High-frequency presentation-state bits (selection, hover, per-frame debug
     // visualization, transform-derived state) that never affect item tree row
@@ -92,6 +98,7 @@ public:
         "Show In Developer UI",
         "Affects Shadow",
         "Exclude From Prefab",
+        "Import Root",
     };
 
     [[nodiscard]] static auto to_string(uint64_t mask) -> std::string;

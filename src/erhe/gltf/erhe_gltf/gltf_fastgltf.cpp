@@ -3301,12 +3301,35 @@ private:
         return gltf_light_index;
     }
 
-    auto process_node(const erhe::scene::Node& erhe_node) -> std::size_t
+    // Append the gltf node indices for erhe_node's child nodes to
+    // out_node_indices. Children marked Item_flags::import_root are
+    // implicit containers created when a glTF file was opened/imported --
+    // not file content -- so their children are emitted in their place,
+    // with the container's transform composed in; import re-creates the
+    // container. Without this every open/save cycle would nest the content
+    // in one more wrapper node.
+    template <typename Index_vector>
+    void process_child_nodes(const erhe::scene::Node& erhe_node, const erhe::scene::Trs_transform& pre_transform, Index_vector& out_node_indices)
+    {
+        for (const std::shared_ptr<erhe::Hierarchy>& child : erhe_node.get_children()) {
+            const erhe::scene::Node* erhe_child_node = dynamic_cast<const erhe::scene::Node*>(child.get());
+            if (erhe_child_node == nullptr) {
+                continue;
+            }
+            if ((erhe_child_node->get_flag_bits() & erhe::Item_flags::import_root) != 0) {
+                process_child_nodes(*erhe_child_node, pre_transform * erhe_child_node->parent_from_node_transform(), out_node_indices);
+                continue;
+            }
+            out_node_indices.push_back(process_node(*erhe_child_node, pre_transform));
+        }
+    }
+
+    auto process_node(const erhe::scene::Node& erhe_node, const erhe::scene::Trs_transform& pre_transform = {}) -> std::size_t
     {
         fastgltf::Node gltf_node{};
 
         gltf_node.name = erhe_node.get_name();
-        gltf_node.transform = from_erhe(erhe_node.parent_from_node_transform());
+        gltf_node.transform = from_erhe(pre_transform * erhe_node.parent_from_node_transform());
 
         // glTF 2.1: a prefab-instance node is written as an externalAsset
         // reference. Children and attachments are not exported - the
@@ -3339,14 +3362,8 @@ private:
         // Direct children only: for_each_child_const() walks ALL descendants
         // (it delegates to the recursive for_each_const()), and process_node
         // recurses itself - using it here exported every nested node once
-        // per ancestor level.
-        for (const std::shared_ptr<erhe::Hierarchy>& child : erhe_node.get_children()) {
-            const erhe::scene::Node* erhe_child_node = dynamic_cast<const erhe::scene::Node*>(child.get());
-            if (erhe_child_node != nullptr) {
-                std::size_t gltf_child_node_index = process_node(*erhe_child_node);
-                gltf_node.children.push_back(gltf_child_node_index);
-            }
-        }
+        // per ancestor level. import_root children are unwrapped.
+        process_child_nodes(erhe_node, erhe::scene::Trs_transform{}, gltf_node.children);
 
         size_t gltf_node_index = m_gltf_asset.nodes.size();
         m_gltf_asset.nodes.emplace_back(std::move(gltf_node));
@@ -3761,14 +3778,9 @@ auto Gltf_exporter::export_gltf() -> std::string
         fastgltf::Scene scene{};
         // Direct children only (see the matching comment in process_node);
         // the recursive for_each_child_const() made every descendant a
-        // scene root and re-exported nested subtrees.
-        for (const std::shared_ptr<erhe::Hierarchy>& child : m_arguments.root_node.get_children()) {
-            const erhe::scene::Node* erhe_node = dynamic_cast<const erhe::scene::Node*>(child.get());
-            if (erhe_node != nullptr) {
-                size_t node_index = process_node(*erhe_node);
-                scene.nodeIndices.push_back(node_index);
-            }
-        }
+        // scene root and re-exported nested subtrees. import_root children
+        // (the implicit wrapper import creates) are unwrapped.
+        process_child_nodes(m_arguments.root_node, erhe::scene::Trs_transform{}, scene.nodeIndices);
         m_gltf_asset.scenes.push_back(std::move(scene));
     }
 

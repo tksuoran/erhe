@@ -181,7 +181,9 @@ auto make_import_gltf_operation(
     erhe::scene::Scene temp_scene{"temp scene", nullptr};
     const std::shared_ptr<erhe::scene::Node> temp_scene_root_node = temp_scene.get_root_node();
     std::shared_ptr<erhe::scene::Node> root_node = std::make_shared<erhe::scene::Node>(erhe::file::to_string(path.filename()));
-    root_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+    // import_root: implicit container, not file content; glTF export writes
+    // its children in its place so open/save cycles do not nest wrappers.
+    root_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui | erhe::Item_flags::import_root);
     root_node->set_parent(temp_scene_root_node);
 
     erhe::gltf::Image_transfer image_transfer{graphics_device, command_buffer};
