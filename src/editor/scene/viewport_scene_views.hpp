@@ -85,7 +85,6 @@ public:
     auto create_viewport_window(
         erhe::imgui::Imgui_renderer&                                imgui_renderer,
         erhe::imgui::Imgui_windows&                                 imgui_windows,
-        App_message_bus&                                            app_message_bus,
         const std::shared_ptr<Viewport_scene_view>&                 viewport_scene_view,
         const std::shared_ptr<erhe::rendergraph::Rendergraph_node>& rendergraph_output_node,
         std::string_view                                            name,
@@ -140,6 +139,7 @@ public:
     // keeps tracking the cursor even after it leaves the viewport rect.
     [[nodiscard]] auto owns_pointer_capture(const Viewport_scene_view* scene_view) const -> bool;
     [[nodiscard]] auto get_post_processing_nodes() const -> const std::vector<std::shared_ptr<Post_processing_node>>&;
+    [[nodiscard]] auto get_viewport_windows() const -> const std::vector<std::shared_ptr<Viewport_window>>&;
 
 private:
     void handle_graphics_settings_changed(Graphics_preset_entry* graphics_preset);

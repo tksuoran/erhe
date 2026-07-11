@@ -28,6 +28,7 @@ void Mcp_server::refresh_tool_list()
             {"scene_id",   {{"type", "integer"}, {"description", "Scene id (from list_scenes); use to disambiguate two scenes that share a name. Takes precedence over scene_name."}}}
         }}
     }});
+    m_tool_infos.push_back({"get_viewports",        "List viewport windows: window title, bound scene name, and camera name. Use to verify which scene/camera each viewport shows (e.g. that opening a scene did not rebind pre-existing viewports).", schema_no_args()});
     m_tool_infos.push_back({"get_server_info",      "Get this editor MCP server's identity: name, version, process id (pid), build timestamp (compile time of the server), and bound port. Use it to detect a STALE editor: if the pid/build does not match the editor you just launched, another editor.exe is holding the port and your calls are hitting the wrong process.", schema_no_args()});
     m_tool_infos.push_back({"get_selection",        "Get currently selected items",                          schema_no_args()});
     m_tool_infos.push_back({"get_undo_redo_stack", "Get undo/redo operation stacks",                       schema_no_args()});
@@ -274,7 +275,7 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"path"})}
     }});
-    m_tool_infos.push_back({"open_scene",         "Open a glTF file as a new scene (same as the Asset Browser's Open context menu entry): creates a scene root + content library + browser window and imports the file, all as a single undoable operation. The open is queued and completes on a following frame; discover the scene via list_scenes (named after the file name).", {
+    m_tool_infos.push_back({"open_scene",         "Open a glTF file as a new scene (same as the Asset Browser's Open context menu entry): creates a scene root + content library + browser window + a new viewport window showing the scene, and imports the file, all as a single undoable operation. Existing viewport windows are not modified. The open is queued and completes on a following frame; discover the scene via list_scenes (named after the file name).", {
         {"type", "object"},
         {"properties", {
             {"path", {{"type", "string"}, {"description", "Source .gltf/.glb file path"}}}

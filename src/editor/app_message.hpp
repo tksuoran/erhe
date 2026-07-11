@@ -84,11 +84,6 @@ struct Mesh_geometry_changed_message
     std::shared_ptr<erhe::scene::Mesh> mesh{};
 };
 
-struct Open_scene_message
-{
-    std::shared_ptr<Scene_root> scene_root{};
-};
-
 // Published when a scene_root is first created and registered -- by the
 // scene.create startup command, or by loading a scene file. Global editor tools
 // that must live inside a scene (Hud, Hotbar, the OpenXR Headset_view) build

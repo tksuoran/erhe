@@ -6,7 +6,7 @@ ImGui window implementations for the editor UI, including viewport display, prop
 
 ## Key Types
 
-- **`Viewport_window`** -- ImGui window that displays a `Viewport_scene_view`. Handles viewport toolbar, mouse position tracking, hover info updates, drag-and-drop for brushes, and a navigation gizmo (`ImViewGuizmo`). Subscribes to `Open_scene_message`. Delegates rendering to the render graph.
+- **`Viewport_window`** -- ImGui window that displays a `Viewport_scene_view`. Handles viewport toolbar, mouse position tracking, hover info updates, drag-and-drop for brushes, and a navigation gizmo (`ImViewGuizmo`). Delegates rendering to the render graph. Opening a scene never rebinds existing viewport windows; `Scene_open_operation` opens a new viewport for the opened scene instead.
 
 - **`Properties`** -- Property inspector window. Displays editable properties for selected items: cameras, lights, meshes, materials, skins, animations, textures, geometry, rendertargets, node physics, and brush placements. Extends `Property_editor` for edit state tracking (clean/dirty).
 

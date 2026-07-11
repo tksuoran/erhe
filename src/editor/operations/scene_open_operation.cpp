@@ -2,12 +2,11 @@
 
 #include "app_context.hpp"
 #include "app_scenes.hpp"
-#include "app_message.hpp"
-#include "app_message_bus.hpp"
 #include "app_settings.hpp"
 #include "content_library/content_library.hpp"
 #include "parsers/gltf.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/viewport_scene_views.hpp"
 #include "windows/item_tree_window.hpp"
 
 #include "erhe_file/file.hpp"
@@ -72,13 +71,18 @@ void Scene_open_operation::execute(App_context& context)
         // m_scene_root, so redo re-registers it without re-importing.
         std::shared_ptr<Operation> import_operation = make_import_gltf_operation(context, make_import_build_info(context), m_scene_root, m_path);
         import_operation->execute(context);
-    }
 
-    context.app_message_bus->open_scene.send_message(
-        Open_scene_message{
-            .scene_root = m_scene_root
+        // Show the opened scene in a NEW viewport window, like "Create Scene"
+        // does. Pre-existing viewport windows keep the scene and camera they
+        // were showing. (Historically an Open_scene_message rebound every
+        // live viewport to the opened scene -- while keeping its old camera,
+        // leaving a cross-scene camera binding.) Only on the first execute:
+        // redo re-registers the scene, and the viewport window from the
+        // first execute is still alive.
+        if (context.scene_views != nullptr) {
+            context.scene_views->open_new_viewport_scene_view_node(m_scene_root);
         }
-    );
+    }
 }
 
 void Scene_open_operation::undo(App_context& context)

@@ -924,7 +924,6 @@ Operations::Operations(
                     m_context.scene_views->create_viewport_window(
                         *m_context.imgui_renderer,
                         *m_context.imgui_windows,
-                        *m_context.app_message_bus,
                         viewport_scene_view,
                         rendergraph_output_node,
                         scene_root->get_name(),

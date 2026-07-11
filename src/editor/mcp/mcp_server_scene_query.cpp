@@ -3,6 +3,10 @@
 
 #include "mcp/mcp_server_shared.hpp"
 
+#include "scene/viewport_scene_view.hpp"
+#include "scene/viewport_scene_views.hpp"
+#include "windows/viewport_window.hpp"
+
 namespace editor {
 
 using namespace mcp_server_detail;
@@ -304,6 +308,29 @@ auto Mcp_server::query_scene_cameras(const json& args) -> std::string
     }
 
     return make_json_content({{"cameras", cameras}}).dump();
+}
+
+auto Mcp_server::query_viewports(const json& args) -> std::string
+{
+    static_cast<void>(args);
+
+    if (m_context.scene_views == nullptr) {
+        return make_text_content("No scene views available").dump();
+    }
+
+    json viewports = json::array();
+    for (const std::shared_ptr<Viewport_window>& viewport_window : m_context.scene_views->get_viewport_windows()) {
+        const std::shared_ptr<Viewport_scene_view> scene_view = viewport_window->viewport_scene_view();
+        const std::shared_ptr<Scene_root> scene_root = scene_view ? scene_view->get_scene_root() : std::shared_ptr<Scene_root>{};
+        const std::shared_ptr<erhe::scene::Camera> camera = scene_view ? scene_view->get_camera() : std::shared_ptr<erhe::scene::Camera>{};
+        viewports.push_back({
+            {"title",  viewport_window->get_title()},
+            {"scene",  scene_root ? scene_root->get_name() : ""},
+            {"camera", camera ? camera->get_name() : ""}
+        });
+    }
+
+    return make_json_content({{"viewports", viewports}}).dump();
 }
 
 auto Mcp_server::query_scene_lights(const json& args) -> std::string

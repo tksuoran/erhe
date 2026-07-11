@@ -366,7 +366,6 @@ auto Scene_views::create_viewport_scene_view(
 auto Scene_views::create_viewport_window(
     erhe::imgui::Imgui_renderer&                                imgui_renderer,
     erhe::imgui::Imgui_windows&                                 imgui_windows,
-    App_message_bus&                                            app_message_bus,
     const std::shared_ptr<Viewport_scene_view>&                 viewport_scene_view,
     const std::shared_ptr<erhe::rendergraph::Rendergraph_node>& rendergraph_output_node,
     std::string_view                                            name,
@@ -375,9 +374,9 @@ auto Scene_views::create_viewport_window(
 {
     // "###" makes the ImGui window ID depend only on the "###Viewport N" suffix,
     // so Viewport_window can retitle itself after the Scene item it shows
-    // (initial bind, open_scene rebind, scene rename) without losing its
-    // window identity (docking, position, size). The counter is monotonic:
-    // a size()-based index could collide with a live window after
+    // (initial bind, "Scene and Camera" dialog rebind, scene rename) without
+    // losing its window identity (docking, position, size). The counter is
+    // monotonic: a size()-based index could collide with a live window after
     // destroy_viewport_window().
     std::string window_name = fmt::format("{}###Viewport {}", name, m_viewport_window_counter);
     std::string ini_name = ini_name_in.empty() ? std::string{} : fmt::format("{}##{}", ini_name_in, m_viewport_window_counter);
@@ -387,7 +386,6 @@ auto Scene_views::create_viewport_window(
         imgui_windows,
         rendergraph_output_node,
         m_app_context,
-        app_message_bus,
         window_name,
         ini_name,
         viewport_scene_view
@@ -410,7 +408,14 @@ auto Scene_views::open_new_viewport_scene_view(
         const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = m_app_context.selection->get_selected_items();
         for (const auto& item : selected_items) {
             const auto camera = std::dynamic_pointer_cast<erhe::scene::Camera>(item);
-            if (camera) {
+            // Only honor a selected camera that lives in the scene this
+            // viewport is being opened for; a camera selected in another
+            // scene must not be bound across scenes.
+            const bool camera_in_scene =
+                camera &&
+                (camera->get_node() != nullptr) &&
+                (camera->get_node()->get_scene() == scene_root->get_hosted_scene());
+            if (camera_in_scene) {
                 return create_viewport_scene_view(
                     m_viewport_config_data,
                     *m_app_context.graphics_device,
@@ -504,7 +509,6 @@ void Scene_views::open_new_viewport_scene_view_node()
     std::shared_ptr<Viewport_window> viewport_window = create_viewport_window(
         *m_app_context.imgui_renderer,
         *m_app_context.imgui_windows,
-        *m_app_context.app_message_bus,
         viewport_scene_view,
         rendergraph_output_node,
         "scene view",
@@ -527,7 +531,6 @@ void Scene_views::open_new_viewport_scene_view_node(const std::shared_ptr<Scene_
     std::shared_ptr<Viewport_window> viewport_window = create_viewport_window(
         *m_app_context.imgui_renderer,
         *m_app_context.imgui_windows,
-        *m_app_context.app_message_bus,
         viewport_scene_view,
         rendergraph_output_node,
         "scene view",
@@ -729,6 +732,11 @@ auto Scene_views::owns_pointer_capture(const Viewport_scene_view* scene_view) co
 auto Scene_views::get_post_processing_nodes() const -> const std::vector<std::shared_ptr<Post_processing_node>>&
 {
     return m_post_processing_nodes;
+}
+
+auto Scene_views::get_viewport_windows() const -> const std::vector<std::shared_ptr<Viewport_window>>&
+{
+    return m_viewport_windows;
 }
 
 void Scene_views::update_transforms()

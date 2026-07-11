@@ -644,7 +644,6 @@ auto Scene_commands::create_new_scene() -> std::shared_ptr<Scene_root>
     std::shared_ptr<Viewport_window> viewport_window = m_context.scene_views->create_viewport_window(
         *m_context.imgui_renderer,
         *m_context.imgui_windows,
-        *m_context.app_message_bus,
         viewport_scene_view,
         rendergraph_output_node,
         scene_name,
@@ -1168,7 +1167,6 @@ auto Scene_commands::create_new_rendertarget(erhe::scene::Node* parent) -> std::
     std::shared_ptr<Viewport_window> viewport_window = m_context.scene_views->create_viewport_window(
         *m_context.imgui_renderer,
         *m_context.imgui_windows,
-        *m_context.app_message_bus,
         scene_view,
         rendergraph_output_node,
         "Viewport ",

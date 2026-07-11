@@ -350,6 +350,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "get_scene_textures") result = query_scene_textures  (req->arguments);
         else if (req->tool_name == "get_scene_brushes")  result = query_scene_brushes  (req->arguments);
         else if (req->tool_name == "get_material_details")result = query_material_details(req->arguments);
+        else if (req->tool_name == "get_viewports")       result = query_viewports       (req->arguments);
         else if (req->tool_name == "get_server_info")     result = query_server_info     (req->arguments);
         else if (req->tool_name == "get_selection")       result = query_selection       (req->arguments);
         else if (req->tool_name == "get_undo_redo_stack") result = query_undo_redo_stack (req->arguments);

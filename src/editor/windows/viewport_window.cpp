@@ -45,7 +45,6 @@ Viewport_window::Viewport_window(
     erhe::imgui::Imgui_windows&                                 imgui_windows,
     const std::shared_ptr<erhe::rendergraph::Rendergraph_node>& rendergraph_output_node,
     App_context&                                                app_context,
-    App_message_bus&                                            app_message_bus,
     const std::string_view                                      name,
     const std::string_view                                      ini_label,
     const std::shared_ptr<Viewport_scene_view>&                 viewport_scene_view
@@ -56,15 +55,6 @@ Viewport_window::Viewport_window(
     , m_rendergraph_output_node{rendergraph_output_node}
 {
     show_window();
-
-    m_open_scene_subscription = app_message_bus.open_scene.subscribe(
-        [this](Open_scene_message& message) {
-            std::shared_ptr<Viewport_scene_view> scene_view = m_viewport_scene_view.lock();
-            if (scene_view) {
-                scene_view->set_scene_root(message.scene_root);
-            }
-        }
-    );
 }
 
 Viewport_window::~Viewport_window() noexcept = default;

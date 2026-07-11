@@ -2,8 +2,6 @@
 
 #include "erhe_rendergraph/texture_rendergraph_node.hpp"
 #include "erhe_imgui/imgui_window.hpp"
-#include "app_message.hpp"
-#include "erhe_message_bus/message_bus.hpp"
 
 #include <glm/glm.hpp>
 
@@ -21,7 +19,6 @@ namespace erhe::rendergraph {
 namespace editor {
 
 class App_context;
-class App_message_bus;
 class Asset_file_gltf;
 class Post_processing_node;
 class Viewport_scene_view;
@@ -34,7 +31,6 @@ public:
         erhe::imgui::Imgui_windows&                                 imgui_windows,
         const std::shared_ptr<erhe::rendergraph::Rendergraph_node>& rendergraph_output_node,
         App_context&                                                app_context,
-        App_message_bus&                                            app_message_bus,
         std::string_view                                            name,
         std::string_view                                            ini_label,
         const std::shared_ptr<Viewport_scene_view>&                 viewport_scene_view
@@ -73,7 +69,6 @@ private:
     // with the AABB bottom-center snapped onto it when bounds are known.
     void gltf_drag_preview_and_drop(Asset_file_gltf& gltf, bool preview, bool delivery);
 
-    erhe::message_bus::Subscription<Open_scene_message> m_open_scene_subscription;
     App_context&                                       m_app_context;
     std::weak_ptr<Viewport_scene_view>                 m_viewport_scene_view;
     std::weak_ptr<erhe::rendergraph::Rendergraph_node> m_rendergraph_output_node;

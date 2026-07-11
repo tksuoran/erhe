@@ -63,7 +63,6 @@ void Scene_builder_viewport_resources_operation::execute(App_context& context)
     m_viewport_window = scene_views.create_viewport_window(
         *context.imgui_renderer,
         *context.imgui_windows,
-        *context.app_message_bus,
         m_viewport_scene_view,
         rendergraph_output_node,
         m_parameters.name,
