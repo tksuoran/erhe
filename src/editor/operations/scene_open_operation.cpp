@@ -42,6 +42,12 @@ void Scene_open_operation::execute(App_context& context)
             erhe::file::to_string(m_path.filename()),
             enable_physics
         );
+        // Remember which glTF file the scene came from (canonical, matching
+        // Prefab_library keys) so prefab edits can be saved back to it and
+        // propagated to instances (save_prefab_scene).
+        std::error_code error_code;
+        const std::filesystem::path canonical_path = std::filesystem::weakly_canonical(m_path, error_code);
+        m_scene_root->set_source_path(error_code ? m_path : canonical_path);
     }
     m_scene_root->register_to_editor_scenes(*context.app_scenes);
 

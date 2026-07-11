@@ -185,6 +185,11 @@ public:
     void export_gltf();
     void export_callback(const char* const* filelist, int filter);
 
+    // File > Save Prefab: write a scene opened from a glTF file back to its
+    // source file and reload the prefab so every instance updates
+    // (save_prefab_scene).
+    void save_prefab();
+
     void save_scene();
     // Renders pending modal confirmation dialogs (the File > Save Scene
     // overwrite prompt). Called once per frame from App_windows::viewport_menu
@@ -348,6 +353,7 @@ private:
 
     erhe::commands::Lambda_command m_export_gltf_command;
     erhe::commands::Lambda_command m_save_scene_command;
+    erhe::commands::Lambda_command m_save_prefab_command;
     erhe::commands::Lambda_command m_load_scene_command;
 
     erhe::commands::Lambda_command m_create_material;

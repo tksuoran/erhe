@@ -129,6 +129,8 @@ private:
     auto action_export_gltf     (const nlohmann::json& args) -> std::string;
     auto action_import_gltf     (const nlohmann::json& args) -> std::string;
     auto action_instantiate_prefab(const nlohmann::json& args) -> std::string;
+    auto action_reload_prefab   (const nlohmann::json& args) -> std::string;
+    auto action_save_prefab     (const nlohmann::json& args) -> std::string;
     auto query_prefabs          (const nlohmann::json& args) -> std::string;
     auto action_wake_physics_bodies(const nlohmann::json& args) -> std::string;
     auto query_physics_items    (const nlohmann::json& args) -> std::string;

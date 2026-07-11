@@ -278,6 +278,42 @@ auto Mcp_server::action_instantiate_prefab(const json& args) -> std::string
     }).dump();
 }
 
+auto Mcp_server::action_reload_prefab(const json& args) -> std::string
+{
+    const std::string path_str = args.value("path", "");
+    if (path_str.empty()) {
+        return make_error_content("Missing required argument: path");
+    }
+    if (m_context.prefab_library == nullptr) {
+        return make_error_content("Prefab library not available");
+    }
+    const bool ok = m_context.prefab_library->reload(std::filesystem::path{path_str});
+    if (!ok) {
+        return make_error_content("reload_prefab failed (not a loaded prefab, or re-parse failed - see log): " + path_str);
+    }
+    return make_json_content({
+        {"reloaded", true},
+        {"path",     path_str}
+    }).dump();
+}
+
+auto Mcp_server::action_save_prefab(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const bool ok = save_prefab_scene(m_context, *sr);
+    if (!ok) {
+        return make_error_content("save_prefab failed (scene not opened from a glTF file, or write failed - see log): " + scene_name);
+    }
+    return make_json_content({
+        {"saved", true},
+        {"path",  sr->get_source_path().generic_string()}
+    }).dump();
+}
+
 auto Mcp_server::query_prefabs(const json& args) -> std::string
 {
     static_cast<void>(args);

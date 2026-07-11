@@ -1,5 +1,7 @@
 #include "prefabs/prefab_instance.hpp"
 
+#include "erhe_scene/node.hpp"
+
 namespace editor {
 
 Prefab_instance::Prefab_instance()
@@ -33,6 +35,17 @@ auto Prefab_instance::get_prefab_source_path() const -> const std::filesystem::p
 auto Prefab_instance::get_prefab_name() const -> const std::string&
 {
     return m_prefab_name;
+}
+
+auto get_outermost_prefab_instance_node(erhe::scene::Node* node) -> erhe::scene::Node*
+{
+    erhe::scene::Node* outermost = nullptr;
+    for (erhe::scene::Node* ancestor = node; ancestor != nullptr; ancestor = ancestor->get_parent_node().get()) {
+        if (erhe::scene::get_attachment<Prefab_instance>(ancestor)) {
+            outermost = ancestor;
+        }
+    }
+    return outermost;
 }
 
 }

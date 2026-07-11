@@ -8,6 +8,7 @@
 #include "erhe_scene/scene_host.hpp"
 
 #include <deque>
+#include <filesystem>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -187,6 +188,13 @@ public:
     [[nodiscard]] auto get_scene_item    () -> std::shared_ptr<erhe::scene::Scene>;
     [[nodiscard]] auto get_name          () const -> const std::string&;
 
+    // Canonical path of the glTF file the scene was opened from
+    // (Scene_open_operation); empty for created or bundle-loaded scenes.
+    // save_prefab_scene uses it to write prefab edits back to the source
+    // file and reload every instance.
+    [[nodiscard]] auto get_source_path   () const -> const std::filesystem::path&;
+    void set_source_path(const std::filesystem::path& path);
+
     // Per-scene setting overrides (issue #239). Each field is an optional; a
     // disengaged optional means "use the editor-global default". Effective values
     // are resolved by the helpers in scene/scene_settings_resolve.hpp.
@@ -226,6 +234,7 @@ private:
 
     App_scenes*                                     m_app_scenes{nullptr};
     std::shared_ptr<Content_library>                m_content_library;
+    std::filesystem::path                           m_source_path;
     bool                                            m_is_registered{false};
 
     // Must live longer than m_scene for example

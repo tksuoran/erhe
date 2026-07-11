@@ -315,6 +315,20 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"scene_name", "path"})}
     }});
+    m_tool_infos.push_back({"reload_prefab",      "Re-parse a loaded prefab from its source glTF file and refresh every instance in every scene (prefabs whose templates reference it are rebuilt too, in dependency order). Carrier node transforms are preserved. Not undoable.", {
+        {"type", "object"},
+        {"properties", {
+            {"path", {{"type", "string"}, {"description", "Source .gltf/.glb file path of a loaded prefab"}}}
+        }},
+        {"required", json::array({"path"})}
+    }});
+    m_tool_infos.push_back({"save_prefab",        "Save a scene that was opened from a glTF file (open_scene) back to its source file, then reload the prefab so every instance in every scene reflects the edit. Prefab instances inside the scene export as glTF 2.1 externalAsset references.", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name", {{"type", "string"}, {"description", "Name of the scene to save (must have been opened from a glTF file)"}}}
+        }},
+        {"required", json::array({"scene_name"})}
+    }});
     m_tool_infos.push_back({"get_prefabs",        "List the glTF prefabs currently loaded in the app-wide prefab library (source path, name, content counts)", schema_no_args()});
     m_tool_infos.push_back({"capture_screenshot",  "Capture the current rendered frame to a PNG file and return its path. Currently supported only in the headless Vulkan configuration (emulated swapchain).", {
         {"type", "object"},

@@ -1,8 +1,27 @@
 # glTF scene prefabs in erhe -- plan
 
 Status: phases 0-5 implemented and verified 2026-07-10 (commits 2199f0ef,
-b9264190, bad5895d, 4225b7d3, b4a1de9c + the phase 5 commit); phase 6
-(editing semantics / UX polish) remains. Written 2026-07-10.
+b9264190, bad5895d, 4225b7d3, b4a1de9c + the phase 5 commit). Phase 6 items
+1 and 2 implemented 2026-07-11 as the "sealed instances" editing model (see
+below); items 3-5 remain. Written 2026-07-10.
+
+### Editing model decision (2026-07-11): sealed instances ("option 2")
+
+Prefab instances are sealed: the subtree under a `Prefab_instance` carrier
+node is not editable in the containing scene. Editing a prefab requires
+opening its source glTF as a scene (`open_scene`); saving it back
+(`save_prefab_scene` / File > Save Prefab / MCP `save_prefab`) writes the
+source file and reloads the prefab, refreshing every instance in every
+scene. `Prefab_library::reload` tracks prefab->prefab references recorded
+during template loads and rebuilds dependent templates in dependency order,
+so editing a nested prefab propagates through every prefab that references
+it. Instance refresh drops all carrier children and re-clones (consistent
+with save/export, which never persist instance subtrees) while preserving
+the carrier's transform, name and flags; it is deliberately not undoable
+(instances are projections of the source file, not scene edits). The
+alternative "option 1" model (editing through an instance writes back to the
+prefab) can later be layered on top as edit-forwarding into the opened
+prefab scene; it shares all of this propagation machinery.
 
 Goal: make glTF scenes usable as *prefabs* in erhe -- a glTF file can be
 instantiated (multiple times) inside another scene, instances stay live
@@ -260,13 +279,24 @@ gracefully.
 
 Ordered by value; each item is independent:
 
-1. **Instance subtree protection**: descendants of a `Prefab_instance` node
-   are non-editable (reuse the existing lock flags / `lock_items`); item tree
-   styles instance roots distinctly; viewport pick selects the instance root
-   by default (drill-in with a modifier).
-2. **Reload prefab**: re-parse the source, re-clone every instance in every
-   scene preserving each carrier transform (message-bus notification;
-   explicit menu/MCP action first, file watching later).
+1. **Instance subtree protection** [DONE 2026-07-11]: descendants of a
+   `Prefab_instance` node are sealed with `lock_edit |
+   lock_viewport_selection | lock_viewport_transform`
+   (`seal_instance_subtree` in prefab_library.cpp); the item tree renders
+   instance roots as non-expandable leaves with a distinct attachment icon;
+   viewport pick redirects to the outermost instance root
+   (`get_outermost_prefab_instance_node`). No drill-in modifier (sealed
+   model: interiors are edited via the opened prefab scene only).
+2. **Reload prefab** [DONE 2026-07-11]: `Prefab_library::reload(path)`
+   re-parses the source, rebuilds (transitively) referencing prefab
+   templates in dependency order, and re-clones every instance in every
+   scene preserving each carrier transform; scene content-library
+   texture/material entries from the previous parse are replaced. Entry
+   points: MCP `reload_prefab`, and the save round-trip
+   (`save_prefab_scene`: File > Save Prefab / MCP `save_prefab` exports the
+   opened prefab scene back to its source path -- recorded on `Scene_root`
+   by `Scene_open_operation` -- then reloads). File watching remains future
+   work.
 3. **Create prefab from selection**: export the selection to a `.glb` via the
    existing exporter, then replace the selection with an instance of it
    (compound operation, undoable).

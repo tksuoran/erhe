@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -54,12 +55,47 @@ public:
     // glTF 2.1).
     auto get_or_load(const std::filesystem::path& path) -> std::shared_ptr<Prefab>;
 
+    // Re-parse a previously loaded prefab from its source file and propagate
+    // the change everywhere: templates of prefabs that (transitively)
+    // reference the reloaded prefab are rebuilt in dependency order, then
+    // every Prefab_instance node in every registered scene whose source was
+    // rebuilt is re-cloned in place, preserving the carrier node's
+    // transform, name and flags. Deliberately not undoable: instances are
+    // projections of the prefab source file, not scene edits. Returns false
+    // (with log_parsers errors) when the prefab is not loaded or any
+    // affected template fails to re-parse; templates that did rebuild still
+    // have their instances refreshed.
+    auto reload(const std::filesystem::path& path) -> bool;
+
     [[nodiscard]] auto get_prefabs() const -> const std::map<std::filesystem::path, std::shared_ptr<Prefab>>&;
 
 private:
-    App_context&                                             m_context;
-    std::map<std::filesystem::path, std::shared_ptr<Prefab>> m_prefabs;
-    std::vector<std::filesystem::path>                       m_active_load_stack; // cycle detection
+    // Parse the prefab's source file into a fresh holding scene / template
+    // root inside the (already constructed) Prefab, finalize meshes and
+    // resolve nested external assets. Shared by get_or_load and reload.
+    auto load_template(Prefab& prefab) -> bool;
+
+    // Record that the prefab currently being loaded (top of the active load
+    // stack, if any) directly references referenced_path. Feeds reload's
+    // dependent propagation.
+    void record_reference(const std::filesystem::path& referenced_path);
+
+    // The reloaded prefab plus every loaded prefab that transitively
+    // references it, ordered so a referenced prefab precedes every prefab
+    // whose template instantiates it (the reference graph is acyclic: glTF
+    // 2.1 prohibits cycles and loading rejects them).
+    [[nodiscard]] auto collect_affected_in_dependency_order(const std::filesystem::path& path) const -> std::vector<std::filesystem::path>;
+
+    // Re-clone every Prefab_instance node in every registered scene whose
+    // source path is in rebuilt_paths, and replace the affected scenes'
+    // content-library texture / material entries (the re-parse produced new
+    // objects).
+    void refresh_instances(const std::vector<std::filesystem::path>& rebuilt_paths);
+
+    App_context&                                                      m_context;
+    std::map<std::filesystem::path, std::shared_ptr<Prefab>>         m_prefabs;
+    std::vector<std::filesystem::path>                                m_active_load_stack; // cycle detection
+    std::map<std::filesystem::path, std::set<std::filesystem::path>> m_references;        // template -> prefabs it directly instantiates
 };
 
 // Instantiate a prefab into a scene: clone the template subtree under a new
@@ -98,6 +134,16 @@ void attach_prefab_instance(
     const erhe::scene::Node&     root_node,
     const std::filesystem::path& export_directory
 ) -> std::map<const erhe::scene::Node*, erhe::gltf::Gltf_export_external_asset>;
+
+// The prefab editing round-trip: export a scene that was opened from a glTF
+// source file (Scene_root::get_source_path) back to that file, then reload
+// the prefab so every instance - in every scene, including nested prefab
+// templates - reflects the edit. Prefab instances inside the scene export
+// as glTF 2.1 externalAsset references, so nested prefabs round-trip as
+// references, not flattened content. Returns false when the scene has no
+// source path or the export fails; the reload step is skipped (not a
+// failure) when nothing has instantiated the file as a prefab yet.
+auto save_prefab_scene(App_context& context, Scene_root& scene_root) -> bool;
 
 // Resolve glTF 2.1 external assets in freshly parsed gltf_data: for each
 // node that instantiates an external asset, load the referenced prefab

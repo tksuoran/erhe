@@ -1105,6 +1105,16 @@ auto Scene_root::get_name() const -> const std::string&
     return m_scene->get_name();
 }
 
+auto Scene_root::get_source_path() const -> const std::filesystem::path&
+{
+    return m_source_path;
+}
+
+void Scene_root::set_source_path(const std::filesystem::path& path)
+{
+    m_source_path = path;
+}
+
 auto Scene_root::get_scene_settings() -> Scene_settings&
 {
     return m_scene_settings;

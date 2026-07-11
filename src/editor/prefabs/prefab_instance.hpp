@@ -5,6 +5,10 @@
 #include <filesystem>
 #include <string>
 
+namespace erhe::scene {
+    class Node;
+}
+
 namespace editor {
 
 // Marks a node as the root of a prefab instance: the node's subtree was
@@ -37,5 +41,12 @@ private:
     std::filesystem::path m_prefab_source_path;
     std::string           m_prefab_name;
 };
+
+// Returns the outermost node, walking up from and including the given node,
+// that carries a Prefab_instance attachment; nullptr when the node is not
+// part of any prefab instance. Instance subtrees are sealed (option 2 prefab
+// semantics): picking anything inside an instance resolves to the instance
+// root, and nested instances resolve to the outermost one.
+[[nodiscard]] auto get_outermost_prefab_instance_node(erhe::scene::Node* node) -> erhe::scene::Node*;
 
 }

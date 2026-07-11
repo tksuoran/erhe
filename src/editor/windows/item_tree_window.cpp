@@ -19,6 +19,7 @@
 #include "operations/item_parent_change_operation.hpp"
 #include "operations/item_reposition_in_parent_operation.hpp"
 #include "operations/operation_stack.hpp"
+#include "prefabs/prefab_instance.hpp"
 #include "preview/brush_preview.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/clipboard.hpp"
@@ -1377,9 +1378,13 @@ void Item_tree::flatten_visible_rows(const std::shared_ptr<erhe::Item_base>& ite
     const auto& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy   >(item);
     const auto& scene     = std::dynamic_pointer_cast<erhe::scene::Scene>(item);
     const auto& node      = std::dynamic_pointer_cast<erhe::scene::Node >(item);
+    // Prefab instance roots are sealed: their subtree is prefab content,
+    // editable only by opening the prefab's own scene, so the row renders
+    // as a leaf and the interior is never listed.
+    const bool is_prefab_instance_root = node && static_cast<bool>(erhe::scene::get_attachment<Prefab_instance>(node.get()));
     bool is_leaf = true;
     const bool is_content_library_node = std::dynamic_pointer_cast<Content_library_node>(item) != nullptr;
-    if (hierarchy) {
+    if (hierarchy && !is_prefab_instance_root) {
         // Content-library nodes bypass the tree's type filter (issue #240), so
         // count their children unfiltered; other hierarchies use the filter.
         const std::size_t child_count = is_content_library_node
@@ -1489,7 +1494,7 @@ void Item_tree::flatten_visible_rows(const std::shared_ptr<erhe::Item_base>& ite
             }
         }
     }
-    if (hierarchy) {
+    if (hierarchy && !is_prefab_instance_root) {
         const float indent_spacing = ImGui::GetStyle().IndentSpacing;
         for (const auto& child_node : hierarchy->get_children()) {
             flatten_visible_rows(child_node, indent + indent_spacing);

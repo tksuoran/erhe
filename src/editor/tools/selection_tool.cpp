@@ -9,6 +9,7 @@
 #include "operations/compound_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
+#include "prefabs/prefab_instance.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/clipboard.hpp"
 #include "tools/mesh_component_selection.hpp"
@@ -713,30 +714,45 @@ void Selection::toggle_mesh_selection(const std::shared_ptr<erhe::scene::Mesh>& 
     Scoped_selection_change selection_change{*this};
 
     using namespace erhe::utility;
-    const bool mesh_lock_viewport_select = test_bit_set(mesh->get_flag_bits(), erhe::Item_flags::lock_viewport_selection);
-    if (mesh_lock_viewport_select) {
-        return;
-    }
 
     erhe::scene::Node* const node = mesh->get_node();
     if (node == nullptr) {
         return;
     }
 
-    const bool node_lock_viewport_select = test_bit_set(node->get_flag_bits(), erhe::Item_flags::lock_viewport_selection);
+    // Prefab instance subtrees are sealed: picking anything inside an
+    // instance selects the outermost instance root instead of the picked
+    // mesh node. The interior's lock_viewport_selection is part of the seal
+    // and must not block that redirection; the redirected target's own lock
+    // flags still apply.
+    erhe::scene::Node* const prefab_instance_root = get_outermost_prefab_instance_node(node);
+    const bool redirected = (prefab_instance_root != nullptr) && (prefab_instance_root != node);
+    erhe::scene::Node* const target_node = redirected ? prefab_instance_root : node;
+
+    if (!redirected) {
+        const bool mesh_lock_viewport_select = test_bit_set(mesh->get_flag_bits(), erhe::Item_flags::lock_viewport_selection);
+        if (mesh_lock_viewport_select) {
+            return;
+        }
+    }
+
+    const bool node_lock_viewport_select = test_bit_set(target_node->get_flag_bits(), erhe::Item_flags::lock_viewport_selection);
     if (node_lock_viewport_select) {
         return;
     }
+
+    const auto item = target_node->shared_from_this();
+    const bool effective_was_selected = redirected ? is_in_selection(item) : was_selected;
 
     bool add{false};
     bool remove{false};
     if (clear_others) {
         clear_selection();
-        if (!was_selected && mesh) {
+        if (!effective_was_selected && mesh) {
             add = true;
         }
     } else if (mesh) {
-        if (was_selected) {
+        if (effective_was_selected) {
             remove = true;
         } else {
             add = true;
@@ -744,8 +760,6 @@ void Selection::toggle_mesh_selection(const std::shared_ptr<erhe::scene::Mesh>& 
     }
 
     ERHE_VERIFY(!add || !remove);
-
-    const auto item = node->shared_from_this();
 
     if (add) {
         add_to_selection(item);

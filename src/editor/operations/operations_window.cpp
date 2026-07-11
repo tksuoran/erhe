@@ -715,6 +715,7 @@ Operations::Operations(
 
     , m_export_gltf_command       {commands, "File.Export.glTF",                   [this]() -> bool { export_gltf            (); return true; } }
     , m_save_scene_command        {commands, "File.SaveScene",                     [this]() -> bool { save_scene             (); return true; } }
+    , m_save_prefab_command       {commands, "File.SavePrefab",                    [this]() -> bool { save_prefab            (); return true; } }
     , m_load_scene_command        {commands, "File.LoadScene",                     [this]() -> bool { load_scene             (); return true; } }
     , m_create_material           {commands, "Create.Material",                    [this]() -> bool { create_material        (); return true; } }
     , m_create_brush              {commands, "Create.Brush",                       [this]() -> bool { create_brush           (); return true; } }
@@ -763,6 +764,7 @@ Operations::Operations(
 
     commands.register_command(&m_export_gltf_command);
     commands.register_command(&m_save_scene_command);
+    commands.register_command(&m_save_prefab_command);
     commands.register_command(&m_load_scene_command);
     commands.register_command(&m_create_material);
     commands.register_command(&m_create_brush);
@@ -813,6 +815,7 @@ Operations::Operations(
 
     commands.bind_command_to_menu(&m_export_gltf_command,     "File.Export glTF");
     commands.bind_command_to_menu(&m_save_scene_command,      "File.Save Scene");
+    commands.bind_command_to_menu(&m_save_prefab_command,     "File.Save Prefab");
     commands.bind_command_to_menu(&m_load_scene_command,      "File.Load Scene");
     commands.bind_command_to_menu(&m_create_material,         "Create.Material");
     commands.bind_command_to_menu(&m_create_brush,            "Create.Brush from Selection");
@@ -2387,6 +2390,19 @@ void Operations::export_gltf()
     int filter = 0;
     export_callback(filelist, filter);
 #endif
+}
+
+void Operations::save_prefab()
+{
+    const std::shared_ptr<Scene_root> scene_root = get_target_scene_root();
+    if (!scene_root) {
+        log_operations->warn("save_prefab: no scene to save");
+        return;
+    }
+    // save_prefab_scene logs the failure reason (scene not opened from a
+    // glTF file, write failure); on success it also reloads the prefab so
+    // every instance in every scene reflects the edit.
+    static_cast<void>(save_prefab_scene(m_context, *scene_root));
 }
 
 void Operations::save_scene()
