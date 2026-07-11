@@ -60,7 +60,7 @@ void Scene_view_config_window::imgui(App_context& context, Scene_view& scene_vie
         Viewport_scene_view* viewport_scene_view = scene_view.as_viewport_scene_view();
         if (viewport_scene_view != nullptr) {
             if (scene_root) {
-                const auto& cameras = scene_root->get_hosted_scene()->get_cameras();
+                const std::vector<std::shared_ptr<erhe::scene::Camera>> cameras = get_selectable_cameras(*scene_root->get_hosted_scene());
                 viewport_scene_view->set_camera(
                     cameras.empty()
                         ? std::shared_ptr<erhe::scene::Camera>{}

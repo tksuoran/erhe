@@ -284,17 +284,22 @@ auto Mcp_server::query_scene_cameras(const json& args) -> std::string
         return r.dump();
     }
 
+    // "selectable": offered in camera-selection UI (see get_selectable_cameras);
+    // false for cameras embedded in content (prefab instances, import wrappers).
+    const std::vector<std::shared_ptr<erhe::scene::Camera>> selectable_cameras = get_selectable_cameras(sr->get_scene());
     json cameras = json::array();
     for (const auto& camera : sr->get_scene().get_cameras()) {
         const auto* node = camera->get_node();
         const erhe::scene::Projection* projection = camera->projection();
+        const bool selectable = std::find(selectable_cameras.begin(), selectable_cameras.end(), camera) != selectable_cameras.end();
         cameras.push_back({
             {"name",         camera->get_name()},
             {"id",           camera->get_id()},
             {"node",         node ? node->get_name() : ""},
             {"exposure",     camera->get_exposure()},
             {"shadow_range", camera->get_shadow_range()},
-            {"fov_y",        (projection != nullptr) ? projection->fov_y : 0.0f}
+            {"fov_y",        (projection != nullptr) ? projection->fov_y : 0.0f},
+            {"selectable",   selectable}
         });
     }
 

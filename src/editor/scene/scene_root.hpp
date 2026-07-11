@@ -259,4 +259,15 @@ private:
     std::shared_ptr<Item_tree_window>               m_node_tree_window;
 };
 
+// Cameras offered for user camera selection (the "Scene and Camera" dialog
+// combos, default camera picks for new viewport views, persisted-selection
+// restore): cameras authored directly in the scene. Cameras that arrived
+// embedded in content -- inside a sealed prefab instance or under a glTF
+// import wrapper (Item_flags::import_root) -- are skipped, so a scene full of
+// instanced or imported assets does not offer every asset's cameras. When the
+// scene has no authoring cameras at all (e.g. a scene opened directly from a
+// glTF file, where every camera lives under the import wrapper), all cameras
+// are offered instead so such scenes remain viewable.
+[[nodiscard]] auto get_selectable_cameras(const erhe::scene::Scene& scene) -> std::vector<std::shared_ptr<erhe::scene::Camera>>;
+
 }

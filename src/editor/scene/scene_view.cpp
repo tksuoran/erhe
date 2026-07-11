@@ -618,7 +618,10 @@ auto Scene_view::find_camera_in_scene(
     if (name.empty()) {
         return {};
     }
-    const std::vector<std::shared_ptr<erhe::scene::Camera>>& cameras = scene_root.get_scene().get_cameras();
+    // Search the selectable set so that a persisted name shared by an
+    // authoring camera and a content-embedded copy (prefab instance /
+    // import wrapper content) resolves to the authoring camera.
+    const std::vector<std::shared_ptr<erhe::scene::Camera>> cameras = get_selectable_cameras(scene_root.get_scene());
     for (const std::shared_ptr<erhe::scene::Camera>& camera : cameras) {
         if (camera->get_name() == name) {
             return camera;

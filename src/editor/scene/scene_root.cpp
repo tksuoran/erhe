@@ -14,6 +14,7 @@
 #include "texture_graph/texture_graph_window.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
+#include "prefabs/prefab_instance.hpp"
 #include "scene/attachment_types.hpp"
 #include "scene/node_joint.hpp"
 #include "scene/node_physics.hpp"
@@ -1125,6 +1126,40 @@ auto Scene_root::get_scene_settings() const -> const Scene_settings&
     return m_scene_settings;
 }
 
+namespace {
+
+// True when the camera reached the scene embedded in content -- under a
+// sealed prefab instance or a glTF import wrapper -- rather than being
+// authored in the scene itself.
+auto is_content_embedded_camera(const erhe::scene::Camera& camera) -> bool
+{
+    for (const erhe::scene::Node* node = camera.get_node(); node != nullptr; node = node->get_parent_node().get()) {
+        if ((node->get_flag_bits() & erhe::Item_flags::import_root) != 0) {
+            return true;
+        }
+        if (erhe::scene::get_attachment<Prefab_instance>(node)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+} // anonymous namespace
+
+auto get_selectable_cameras(const erhe::scene::Scene& scene) -> std::vector<std::shared_ptr<erhe::scene::Camera>>
+{
+    std::vector<std::shared_ptr<erhe::scene::Camera>> cameras;
+    for (const std::shared_ptr<erhe::scene::Camera>& camera : scene.get_cameras()) {
+        if (!is_content_embedded_camera(*camera)) {
+            cameras.push_back(camera);
+        }
+    }
+    if (cameras.empty()) {
+        cameras = scene.get_cameras();
+    }
+    return cameras;
+}
+
 auto Scene_root::camera_combo(
     const char*           label,
     erhe::scene::Camera*& selected_camera,
@@ -1140,13 +1175,24 @@ auto Scene_root::camera_combo(
         cameras.push_back(nullptr);
         ++index; // keep index in sync with the names / cameras entries
     }
-    const auto& scene_cameras = get_scene().get_cameras();
+    bool selected_present = (selected_camera == nullptr);
+    const std::vector<std::shared_ptr<erhe::scene::Camera>> scene_cameras = get_selectable_cameras(get_scene());
     for (const auto& camera : scene_cameras) {
         names.push_back(camera->get_name().c_str());
         cameras.push_back(camera.get());
         if (selected_camera == camera.get()) {
             selected_camera_index = index;
+            selected_present = true;
         }
+        ++index;
+    }
+    // The current selection can be a content-embedded camera (not offered
+    // above, e.g. set programmatically); keep it listed so the combo
+    // reflects the actual selection.
+    if (!selected_present) {
+        names.push_back(selected_camera->get_name().c_str());
+        cameras.push_back(selected_camera);
+        selected_camera_index = index;
         ++index;
     }
 
@@ -1180,13 +1226,24 @@ auto Scene_root::camera_combo(
         cameras.push_back(nullptr);
         ++index; // keep index in sync with the names / cameras entries
     }
-    const auto& scene_cameras = get_scene().get_cameras();
+    bool selected_present = (selected_camera == nullptr);
+    const std::vector<std::shared_ptr<erhe::scene::Camera>> scene_cameras = get_selectable_cameras(get_scene());
     for (const auto& camera : scene_cameras) {
         names.push_back(camera->get_name().c_str());
         cameras.push_back(camera);
         if (selected_camera == camera) {
             selected_camera_index = index;
+            selected_present = true;
         }
+        ++index;
+    }
+    // The current selection can be a content-embedded camera (not offered
+    // above, e.g. set programmatically); keep it listed so the combo
+    // reflects the actual selection.
+    if (!selected_present) {
+        names.push_back(selected_camera->get_name().c_str());
+        cameras.push_back(selected_camera);
+        selected_camera_index = index;
         ++index;
     }
 
@@ -1215,18 +1272,30 @@ auto Scene_root::camera_combo(
     int index = 0;
     std::vector<const char*> names;
     std::vector<std::weak_ptr<erhe::scene::Camera>> cameras;
-    if (nullptr_option || selected_camera.expired()) {
+    const std::shared_ptr<erhe::scene::Camera> selected = selected_camera.lock();
+    if (nullptr_option || !selected) {
         names.push_back("(none)");
         cameras.push_back({});
         ++index; // keep index in sync with the names / cameras entries
     }
-    const auto& scene_cameras = get_scene().get_cameras();
+    bool selected_present = !selected;
+    const std::vector<std::shared_ptr<erhe::scene::Camera>> scene_cameras = get_selectable_cameras(get_scene());
     for (const auto& camera : scene_cameras) {
         names.push_back(camera->get_name().c_str());
         cameras.push_back(camera);
-        if (selected_camera.lock() == camera) {
+        if (selected == camera) {
             selected_camera_index = index;
+            selected_present = true;
         }
+        ++index;
+    }
+    // The current selection can be a content-embedded camera (not offered
+    // above, e.g. set programmatically); keep it listed so the combo
+    // reflects the actual selection.
+    if (!selected_present) {
+        names.push_back(selected->get_name().c_str());
+        cameras.push_back(selected);
+        selected_camera_index = index;
         ++index;
     }
 

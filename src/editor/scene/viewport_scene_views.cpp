@@ -429,8 +429,9 @@ auto Scene_views::open_new_viewport_scene_view(
             }
         }
         // Case for when no camera found in selection
-        if (!scene_root->get_scene().get_cameras().empty()) {
-            const auto& camera = scene_root->get_scene().get_cameras().front();
+        const std::vector<std::shared_ptr<erhe::scene::Camera>> selectable_cameras = get_selectable_cameras(scene_root->get_scene());
+        if (!selectable_cameras.empty()) {
+            const std::shared_ptr<erhe::scene::Camera>& camera = selectable_cameras.front();
             return create_viewport_scene_view(
                 m_viewport_config_data,
                 *m_app_context.graphics_device,
