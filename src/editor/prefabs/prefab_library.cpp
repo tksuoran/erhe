@@ -371,7 +371,8 @@ auto instantiate_prefab(
                         .item_name  = image->get_name(),
                         .item_index = static_cast<int>(i),
                         .item_type  = "texture",
-                    }
+                    },
+                    (i < prefab->gltf_data.image_sources.size()) ? prefab->gltf_data.image_sources[i] : std::shared_ptr<erhe::gltf::Gltf_image_source>{}
                 )
             );
         }
@@ -616,7 +617,8 @@ void replace_content_library_entries(Content_library& content_library, const Pre
                     .item_name  = image->get_name(),
                     .item_index = static_cast<int>(i),
                     .item_type  = "texture",
-                }
+                },
+                (i < prefab.gltf_data.image_sources.size()) ? prefab.gltf_data.image_sources[i] : std::shared_ptr<erhe::gltf::Gltf_image_source>{}
             );
         }
     }
@@ -737,7 +739,7 @@ auto save_prefab_scene(App_context& context, Scene_root& scene_root) -> bool
         return false;
     }
 
-    const erhe::gltf::Gltf_physics_data physics_data = build_gltf_physics_data(*scene);
+    const erhe::gltf::Gltf_physics_data physics_data = build_gltf_physics_data(*scene, scene_root.get_content_library().get());
     const bool binary = source_path.extension() == std::filesystem::path{".glb"};
     // exclude_from_prefab items (the editor-added default camera / lights)
     // ARE written to the file - the flag rides in node extras and round-trips
@@ -745,10 +747,12 @@ auto save_prefab_scene(App_context& context, Scene_root& scene_root) -> bool
     // reopening; attach_prefab_instance filters them out of instances.
     const std::string gltf = erhe::gltf::export_gltf(
         erhe::gltf::Gltf_export_arguments{
-            .root_node       = *root_node,
-            .binary          = binary,
-            .physics_data    = &physics_data,
-            .external_assets = collect_prefab_external_assets(*root_node, source_path.parent_path())
+            .root_node             = *root_node,
+            .binary                = binary,
+            .physics_data          = &physics_data,
+            .external_assets       = collect_prefab_external_assets(*root_node, source_path.parent_path()),
+            .image_source_provider = make_gltf_image_source_provider(scene_root.get_content_library()),
+            .animations            = collect_gltf_export_animations(scene_root.get_content_library())
         }
     );
     if (!erhe::file::write_file(source_path, gltf)) {

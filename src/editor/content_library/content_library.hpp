@@ -21,6 +21,10 @@
 #include <string_view>
 #include <vector>
 
+namespace erhe::gltf {
+    class Gltf_image_source;
+}
+
 namespace erhe::graphics {
     class Texture_reference;
 }
@@ -68,7 +72,11 @@ public:
     void add(const std::shared_ptr<T>& entry);
 
     template <typename T>
-    void add(const std::shared_ptr<T>& entry, const Gltf_source_reference& gltf_source);
+    void add(
+        const std::shared_ptr<T>&                               entry,
+        const Gltf_source_reference&                            gltf_source,
+        const std::shared_ptr<erhe::gltf::Gltf_image_source>&   image_source = {}
+    );
 
     template <typename T>
     auto remove(const std::shared_ptr<T>& entry) -> bool;
@@ -117,6 +125,10 @@ public:
     std::string                               type_name{};
     std::shared_ptr<erhe::Item_base>          item;
     std::optional<Gltf_source_reference>      gltf_source;
+    // Texture entries only: the retained compressed source image stream, so
+    // glTF export can re-embed the image byte-exact
+    // (doc/gltf-scene-roundtrip-plan.md phase 0).
+    std::shared_ptr<erhe::gltf::Gltf_image_source> image_source;
 
 private:
     template <typename T>
@@ -276,7 +288,11 @@ void Content_library_node::add(const std::shared_ptr<T>& entry)
 }
 
 template <typename T>
-void Content_library_node::add(const std::shared_ptr<T>& entry, const Gltf_source_reference& gltf_source)
+void Content_library_node::add(
+    const std::shared_ptr<T>&                             entry,
+    const Gltf_source_reference&                          gltf_source,
+    const std::shared_ptr<erhe::gltf::Gltf_image_source>& image_source
+)
 {
     ERHE_VERIFY(entry);
     const auto i = std::find_if(
@@ -294,11 +310,15 @@ void Content_library_node::add(const std::shared_ptr<T>& entry, const Gltf_sourc
         std::shared_ptr<Content_library_node> existing = std::dynamic_pointer_cast<Content_library_node>(*i);
         if (existing) {
             existing->gltf_source = gltf_source;
+            if (image_source) {
+                existing->image_source = image_source;
+            }
         }
         return;
     }
     auto node = std::make_shared<Content_library_node>(entry);
-    node->gltf_source = gltf_source;
+    node->gltf_source  = gltf_source;
+    node->image_source = image_source;
     node->set_parent(this);
     invalidate_cache<T>();
 }

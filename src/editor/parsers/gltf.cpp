@@ -354,7 +354,8 @@ auto make_import_gltf_operation(
                         .item_name  = image->get_name(),
                         .item_index = static_cast<int>(i),
                         .item_type  = "texture",
-                    }
+                    },
+                    (i < gltf_data.image_sources.size()) ? gltf_data.image_sources[i] : std::shared_ptr<erhe::gltf::Gltf_image_source>{}
                 )
             );
         }
@@ -555,6 +556,65 @@ auto scan_gltf(const std::filesystem::path& path) -> Gltf_scan_summary
         out.push_back(fmt::format("size: {:.2f} x {:.2f} x {:.2f}", size.x, size.y, size.z));
     }
     return summary;
+}
+
+auto make_gltf_image_source_provider(const std::shared_ptr<Content_library>& content_library)
+    -> std::function<std::shared_ptr<const erhe::gltf::Gltf_image_source>(const erhe::graphics::Texture*)>
+{
+    // Snapshot the retained sources under the library mutex; the returned
+    // provider then runs lock-free inside export_gltf().
+    using Source_map = std::unordered_map<const erhe::graphics::Texture*, std::shared_ptr<const erhe::gltf::Gltf_image_source>>;
+    std::shared_ptr<Source_map> sources = std::make_shared<Source_map>();
+    if (content_library && content_library->textures) {
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
+        content_library->textures->for_each_const<Content_library_node>(
+            [&sources](const Content_library_node& node) -> bool {
+                const std::shared_ptr<erhe::graphics::Texture> texture = std::dynamic_pointer_cast<erhe::graphics::Texture>(node.item);
+                if (texture && node.image_source) {
+                    (*sources)[texture.get()] = node.image_source;
+                }
+                return true;
+            }
+        );
+    }
+    return [sources](const erhe::graphics::Texture* texture) -> std::shared_ptr<const erhe::gltf::Gltf_image_source> {
+        if (texture == nullptr) {
+            return {};
+        }
+        const auto it = sources->find(texture);
+        if (it != sources->end()) {
+            return it->second;
+        }
+        // Fallback for textures imported before retention landed: re-read a
+        // standalone source image file. Images embedded in a .glb/.gltf
+        // cannot be re-extracted here; the exporter warns and skips the slot.
+        const std::filesystem::path* source_path = texture->get_source_path();
+        if ((source_path != nullptr) && !source_path->empty()) {
+            const std::string extension = source_path->extension().generic_string();
+            if ((extension != ".glb") && (extension != ".gltf")) {
+                const std::optional<std::string> file_content = erhe::file::read("gltf export image source fallback", *source_path);
+                if (file_content.has_value() && !file_content->empty()) {
+                    std::shared_ptr<erhe::gltf::Gltf_image_source> image_source = std::make_shared<erhe::gltf::Gltf_image_source>();
+                    const std::byte* start = reinterpret_cast<const std::byte*>(file_content->data());
+                    image_source->encoded_bytes.assign(start, start + file_content->size());
+                    image_source->mime_type = erhe::gltf::sniff_image_mime_type(image_source->encoded_bytes);
+                    (*sources)[texture] = image_source;
+                    return image_source;
+                }
+            }
+        }
+        return {};
+    };
+}
+
+auto collect_gltf_export_animations(const std::shared_ptr<Content_library>& content_library)
+    -> std::vector<std::shared_ptr<erhe::scene::Animation>>
+{
+    if (!content_library || !content_library->animations) {
+        return {};
+    }
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
+    return content_library->animations->get_all<erhe::scene::Animation>();
 }
 
 }

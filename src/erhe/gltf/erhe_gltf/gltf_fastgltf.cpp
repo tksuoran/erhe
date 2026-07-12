@@ -47,6 +47,7 @@
 #include <filesystem>
 #include <limits>
 #include <optional>
+#include <span>
 #include <string_view>
 #include <string>
 #include <variant>
@@ -325,6 +326,43 @@ using erhe::geometry::get_mesh_info;
         case erhe::scene::Light_type::spot:        return fastgltf::LightType::Spot;
         default:                                   return fastgltf::LightType::Directional;
     }
+}
+
+// Sniff the media type of an encoded image stream from its magic bytes
+// (Gltf_image_source retention; doc/gltf-scene-roundtrip-plan.md phase 0).
+// Returns an empty string when unrecognized.
+[[nodiscard]] auto sniff_image_mime_type(const std::vector<std::byte>& bytes) -> std::string
+{
+    const auto starts_with = [&bytes](const std::initializer_list<unsigned char> magic, const std::size_t offset = 0) -> bool {
+        if (bytes.size() < (offset + magic.size())) {
+            return false;
+        }
+        std::size_t i = offset;
+        for (const unsigned char c : magic) {
+            if (static_cast<unsigned char>(bytes[i]) != c) {
+                return false;
+            }
+            ++i;
+        }
+        return true;
+    };
+    if (starts_with({0x89u, 'P', 'N', 'G'}))                                  return "image/png";
+    if (starts_with({0xFFu, 0xD8u, 0xFFu}))                                   return "image/jpeg";
+    if (starts_with({0xABu, 'K', 'T', 'X'}))                                  return "image/ktx2";
+    if (starts_with({'R', 'I', 'F', 'F'}) && starts_with({'W', 'E', 'B', 'P'}, 8)) return "image/webp";
+    if (starts_with({'D', 'D', 'S', ' '}))                                    return "image/vnd-ms.dds";
+    return {};
+}
+
+// Gltf_image_source::mime_type string -> fastgltf::MimeType (export side).
+[[nodiscard]] auto mime_type_from_string(const std::string& mime_type) -> fastgltf::MimeType
+{
+    if (mime_type == "image/png")        return fastgltf::MimeType::PNG;
+    if (mime_type == "image/jpeg")       return fastgltf::MimeType::JPEG;
+    if (mime_type == "image/ktx2")       return fastgltf::MimeType::KTX2;
+    if (mime_type == "image/webp")       return fastgltf::MimeType::WEBP;
+    if (mime_type == "image/vnd-ms.dds") return fastgltf::MimeType::DDS;
+    return fastgltf::MimeType::None;
 }
 
 // erhe Item flags that round-trip through glTF node "extras" as
@@ -804,6 +842,7 @@ public:
 
         /// log_gltf->trace("parsing images");
         m_data_out.images.resize(m_asset->images.size());
+        m_data_out.image_sources.resize(m_asset->images.size());
         /// for (std::size_t i = 0, end = m_asset->images.size(); i < end; ++i) {
         ///     parse_image(i);
         /// }
@@ -1293,6 +1332,7 @@ private:
         const std::string      image_name = safe_resource_name(image.name, "image", image_index);
         log_gltf->trace("Image: image index = {}, name = {}", image_index, image_name);
         std::shared_ptr<erhe::graphics::Texture> erhe_texture;
+        std::shared_ptr<Gltf_image_source>       image_source;
         std::visit(
             fastgltf::visitor {
                 [](auto& arg) {
@@ -1301,6 +1341,17 @@ private:
                 },
                 [&](const fastgltf::sources::BufferView& buffer_view_source){
                     erhe_texture = load_image_buffer(buffer_view_source.bufferViewIndex, image_index, linear, image_name);
+                    // Retain the encoded source stream for byte-exact
+                    // re-embedding on export (phase 0).
+                    if (erhe_texture) {
+                        const fastgltf::BufferView& buffer_view = m_asset->bufferViews[buffer_view_source.bufferViewIndex];
+                        const fastgltf::Buffer&     buffer      = m_asset->buffers.at(buffer_view.bufferIndex);
+                        if (const fastgltf::sources::Array* array_source = std::get_if<fastgltf::sources::Array>(&buffer.data)) {
+                            const std::byte* start = reinterpret_cast<const std::byte*>(array_source->bytes.data()) + buffer_view.byteOffset;
+                            image_source = std::make_shared<Gltf_image_source>();
+                            image_source->encoded_bytes.assign(start, start + buffer_view.byteLength);
+                        }
+                    }
                 },
                 [&](const fastgltf::sources::URI& uri){
                     // Resolve on a copy: replace_filename() mutates in place,
@@ -1310,15 +1361,24 @@ private:
                     std::filesystem::path image_path    = m_arguments.path;
                     image_path.replace_filename(relative_path);
                     erhe_texture = load_image_file(image_path, linear, image_name);
+                    if (erhe_texture) {
+                        const std::optional<std::string> file_content = erhe::file::read("gltf image source retention", image_path);
+                        if (file_content.has_value() && !file_content->empty()) {
+                            const std::byte* start = reinterpret_cast<const std::byte*>(file_content->data());
+                            image_source = std::make_shared<Gltf_image_source>();
+                            image_source->encoded_bytes.assign(start, start + file_content->size());
+                        }
+                    }
                 }
             },
             image.data
         );
 
-        if (erhe_texture) {
-            m_data_out.images.push_back(erhe_texture);
+        if (image_source) {
+            image_source->mime_type = sniff_image_mime_type(image_source->encoded_bytes);
         }
-        m_data_out.images[image_index] = erhe_texture;
+        m_data_out.images[image_index]        = erhe_texture;
+        m_data_out.image_sources[image_index] = image_source;
     }
     void parse_sampler(const std::size_t sampler_index)
     {
@@ -1369,7 +1429,6 @@ private:
         auto erhe_sampler = std::make_shared<erhe::graphics::Sampler>(m_arguments.graphics_device, create_info);
         // TODO erhe_sampler->set_source_path(m_path);
         m_data_out.samplers[sampler_index] = erhe_sampler;
-        m_data_out.samplers.push_back(erhe_sampler);
     }
     [[nodiscard]] auto is_tangent_frame_needed(const std::size_t material_index) -> bool {
         const fastgltf::Material& material = m_asset->materials[material_index];
@@ -1553,6 +1612,7 @@ private:
                     log_gltf->trace("Camera.znear:             {}", perspective.znear);
                     projection->projection_type = erhe::scene::Projection::Type::perspective_vertical;
                     projection->fov_y           = perspective.yfov;
+                    projection->z_near          = perspective.znear;
                     projection->z_far           = perspective.zfar.has_value()
                         ? perspective.zfar.value()
                         : 0.0f;
@@ -3132,6 +3192,35 @@ private:
                     gltf_material.alphaMode = fastgltf::AlphaMode::Blend;
                     break;
             }
+
+            // Texture references (phase 0): each slot embeds its retained
+            // source image stream; slots whose texture has no exportable
+            // source (e.g. graph-texture bakes) stay empty.
+            {
+                const erhe::primitive::Material_texture_samplers& slots = data.texture_samplers;
+                fastgltf::TextureInfo base_color_texture{};
+                if (fill_texture_info(slots.base_color, base_color_texture)) {
+                    gltf_material.pbrData.baseColorTexture = std::move(base_color_texture);
+                }
+                fastgltf::TextureInfo metallic_roughness_texture{};
+                if (fill_texture_info(slots.metallic_roughness, metallic_roughness_texture)) {
+                    gltf_material.pbrData.metallicRoughnessTexture = std::move(metallic_roughness_texture);
+                }
+                fastgltf::NormalTextureInfo normal_texture{};
+                if (fill_texture_info(slots.normal, normal_texture)) {
+                    normal_texture.scale = data.normal_texture_scale;
+                    gltf_material.normalTexture = std::move(normal_texture);
+                }
+                fastgltf::OcclusionTextureInfo occlusion_texture{};
+                if (fill_texture_info(slots.occlusion, occlusion_texture)) {
+                    occlusion_texture.strength = data.occlusion_texture_strength;
+                    gltf_material.occlusionTexture = std::move(occlusion_texture);
+                }
+                fastgltf::TextureInfo emissive_texture{};
+                if (fill_texture_info(slots.emissive, emissive_texture)) {
+                    gltf_material.emissiveTexture = std::move(emissive_texture);
+                }
+            }
             m_gltf_asset.materials.push_back(std::move(gltf_material));
         }
         m_exported_materials.insert({material, gltf_material_index});
@@ -3193,18 +3282,53 @@ private:
             return fi->second;
         }
 
+        // Core glTF cameras are only an interchange approximation of erhe's
+        // Projection (yfov/aspect + xmag/ymag cannot express asymmetric
+        // frusta or the per-type fov fields); the ERHE_camera extension
+        // (doc/gltf-scene-roundtrip-plan.md phase 3) carries full fidelity.
+        // glTF requires perspective znear > 0.
         fastgltf::Camera gltf_camera{};
+        const float z_near_raw = std::min(erhe_projection->z_far, erhe_projection->z_near);
+        const float z_far_raw  = std::max(erhe_projection->z_far, erhe_projection->z_near);
+        const float z_near     = std::max(z_near_raw, 0.0001f);
+        const auto make_perspective = [&](const float yfov, const std::optional<float> aspect_ratio) {
+            fastgltf::Camera::Perspective perspective{
+                .aspectRatio = {},
+                .yfov  = std::max(yfov, 0.0001f),
+                .zfar  = {},
+                .znear = z_near
+            };
+            if (aspect_ratio.has_value() && (aspect_ratio.value() > 0.0f)) {
+                perspective.aspectRatio = aspect_ratio.value();
+            }
+            if (z_far_raw > z_near) {
+                perspective.zfar = z_far_raw;
+            }
+            gltf_camera.camera = perspective;
+        };
         switch (erhe_projection->projection_type) {
-            case erhe::scene::Projection::Type::perspective_horizontal:
-            case erhe::scene::Projection::Type::perspective_vertical:
-            case erhe::scene::Projection::Type::perspective:
+            case erhe::scene::Projection::Type::perspective_horizontal: {
+                // Core glTF has no xfov; best effort without an aspect ratio.
+                make_perspective(erhe_projection->fov_x, std::nullopt);
+                break;
+            }
+            case erhe::scene::Projection::Type::perspective_vertical: {
+                make_perspective(erhe_projection->fov_y, std::nullopt);
+                break;
+            }
+            case erhe::scene::Projection::Type::perspective: {
+                make_perspective(
+                    erhe_projection->fov_y,
+                    (erhe_projection->fov_y != 0.0f) ? std::optional<float>{erhe_projection->fov_x / erhe_projection->fov_y} : std::nullopt
+                );
+                break;
+            }
             case erhe::scene::Projection::Type::perspective_xr: {
-                gltf_camera.camera = fastgltf::Camera::Perspective{
-                    .aspectRatio = (erhe_projection->fov_right - erhe_projection->fov_left) / (erhe_projection->fov_up - erhe_projection->fov_down),
-                    .yfov = erhe_projection->fov_up - erhe_projection->fov_down,
-                    .zfar = std::max(erhe_projection->z_far, erhe_projection->z_near),
-                    .znear = std::min(erhe_projection->z_far, erhe_projection->z_near)
-                };
+                const float yfov = erhe_projection->fov_up - erhe_projection->fov_down;
+                make_perspective(
+                    yfov,
+                    (yfov != 0.0f) ? std::optional<float>{(erhe_projection->fov_right - erhe_projection->fov_left) / yfov} : std::nullopt
+                );
                 break;
             }
             case erhe::scene::Projection::Type::orthogonal_horizontal:
@@ -3212,16 +3336,25 @@ private:
             case erhe::scene::Projection::Type::orthogonal:
             case erhe::scene::Projection::Type::orthogonal_rectangle: {
                 gltf_camera.camera = fastgltf::Camera::Orthographic{
-                    .xmag = erhe_projection->ortho_width,
-                    .ymag = erhe_projection->ortho_height,
-                    .zfar = std::max(erhe_projection->z_far, erhe_projection->z_near),
-                    .znear = std::min(erhe_projection->z_far, erhe_projection->z_near)
+                    .xmag  = erhe_projection->ortho_width,
+                    .ymag  = erhe_projection->ortho_height,
+                    .zfar  = z_far_raw,
+                    .znear = z_near_raw
                 };
                 break;
             }
             case erhe::scene::Projection::Type::other:
-            case erhe::scene::Projection::Type::generic_frustum: {
-                ERHE_FATAL("Not implemented");
+            case erhe::scene::Projection::Type::generic_frustum:
+            default: {
+                // No core-glTF equivalent. Write a best-effort perspective
+                // approximation instead of aborting the export.
+                log_gltf->warn(
+                    "glTF export: camera '{}' projection type '{}' has no core glTF equivalent - writing a perspective approximation",
+                    erhe_camera->get_name(),
+                    erhe::scene::Projection::c_type_strings[static_cast<unsigned int>(erhe_projection->projection_type)]
+                );
+                make_perspective((erhe_projection->fov_y > 0.0f) ? erhe_projection->fov_y : (glm::pi<float>() / 4.0f), std::nullopt);
+                break;
             }
         }
         gltf_camera.name = erhe_camera->get_name();
@@ -3229,6 +3362,426 @@ private:
         m_gltf_asset.cameras.emplace_back(std::move(gltf_camera));
         m_erhe_camera_to_gltf_camera_index.insert({erhe_camera, gltf_camera_index});
         return gltf_camera_index;
+    }
+
+    // Appends one tightly packed float accessor (own buffer + buffer view;
+    // combine_buffers() later folds it into buffer 0). with_bounds computes
+    // per-component min/max, required by the spec for animation input
+    // accessors.
+    [[nodiscard]] auto add_float_accessor(
+        const std::span<const float> values,
+        const fastgltf::AccessorType accessor_type,
+        const std::size_t            element_count,
+        const bool                   with_bounds,
+        const std::string_view       name
+    ) -> std::size_t
+    {
+        const std::size_t byte_length  = values.size_bytes();
+        const std::size_t buffer_index = m_gltf_asset.buffers.size();
+        {
+            const std::byte* bytes = reinterpret_cast<const std::byte*>(values.data());
+            fastgltf::Buffer buffer{
+                .byteLength = byte_length,
+                .data = fastgltf::sources::Vector{
+                    .bytes    = std::vector<std::byte>{bytes, bytes + byte_length},
+                    .mimeType = fastgltf::MimeType::GltfBuffer
+                },
+                .name = {}
+            };
+            m_gltf_asset.buffers.emplace_back(std::move(buffer));
+        }
+        const std::size_t buffer_view_index = m_gltf_asset.bufferViews.size();
+        {
+            fastgltf::BufferView buffer_view{};
+            buffer_view.bufferIndex = buffer_index;
+            buffer_view.byteOffset  = 0;
+            buffer_view.byteLength  = byte_length;
+            m_gltf_asset.bufferViews.emplace_back(std::move(buffer_view));
+        }
+
+        fastgltf::Accessor accessor{
+            .byteOffset      = 0,
+            .count           = element_count,
+            .type            = accessor_type,
+            .componentType   = fastgltf::ComponentType::Float,
+            .normalized      = false,
+            .max             = {},
+            .min             = {},
+            .bufferViewIndex = buffer_view_index,
+            .sparse          = {},
+            .name            = FASTGLTF_STD_PMR_NS::string{name}
+        };
+        if (with_bounds && (element_count > 0)) {
+            const std::size_t component_count = values.size() / element_count;
+            fastgltf::AccessorBoundsArray min_value{component_count, fastgltf::AccessorBoundsArray::BoundsType::float64};
+            fastgltf::AccessorBoundsArray max_value{component_count, fastgltf::AccessorBoundsArray::BoundsType::float64};
+            for (std::size_t c = 0; c < component_count; ++c) {
+                min_value.set<double>(c, static_cast<double>(std::numeric_limits<float>::max()));
+                max_value.set<double>(c, static_cast<double>(std::numeric_limits<float>::lowest()));
+            }
+            for (std::size_t i = 0; i < element_count; ++i) {
+                for (std::size_t c = 0; c < component_count; ++c) {
+                    const double v = static_cast<double>(values[(i * component_count) + c]);
+                    min_value.set<double>(c, std::min(min_value.get<double>(c), v));
+                    max_value.set<double>(c, std::max(max_value.get<double>(c), v));
+                }
+            }
+            accessor.min = std::move(min_value);
+            accessor.max = std::move(max_value);
+        }
+        const std::size_t accessor_index = m_gltf_asset.accessors.size();
+        m_gltf_asset.accessors.emplace_back(std::move(accessor));
+        return accessor_index;
+    }
+
+    // --- Images / samplers / textures (doc/gltf-scene-roundtrip-plan.md phase 0) ---
+
+    // Deduplicated image export: the retained encoded source stream
+    // (Gltf_image_source) is embedded verbatim as a buffer view, so the
+    // round-trip is byte-exact. nullopt = the texture has no exportable
+    // source (empty provider, GPU-only graph-texture bake, unrecognized
+    // stream) - slots referencing it are skipped.
+    std::unordered_map<const erhe::graphics::Texture*, std::optional<std::size_t>> m_exported_images;
+    [[nodiscard]] auto process_image(const erhe::graphics::Texture* texture) -> std::optional<std::size_t>
+    {
+        ERHE_VERIFY(texture != nullptr);
+        const auto fi = m_exported_images.find(texture);
+        if (fi != m_exported_images.end()) {
+            return fi->second;
+        }
+
+        const std::shared_ptr<const Gltf_image_source> image_source = m_arguments.image_source_provider
+            ? m_arguments.image_source_provider(texture)
+            : std::shared_ptr<const Gltf_image_source>{};
+        if (!image_source || image_source->encoded_bytes.empty()) {
+            log_gltf->warn("glTF export: texture '{}' has no retained source image bytes - texture slot skipped", texture->get_name());
+            m_exported_images.insert({texture, std::nullopt});
+            return std::nullopt;
+        }
+        const fastgltf::MimeType mime_type = mime_type_from_string(image_source->mime_type);
+        if (mime_type == fastgltf::MimeType::None) {
+            // mimeType is required when an image uses a buffer view; without
+            // it the file would be invalid.
+            log_gltf->warn("glTF export: texture '{}' source stream has unrecognized media type - texture slot skipped", texture->get_name());
+            m_exported_images.insert({texture, std::nullopt});
+            return std::nullopt;
+        }
+
+        const std::size_t buffer_index = m_gltf_asset.buffers.size();
+        {
+            fastgltf::Buffer image_buffer{
+                .byteLength = image_source->encoded_bytes.size(),
+                .data = fastgltf::sources::Vector{
+                    .bytes    = std::vector<std::byte>{image_source->encoded_bytes.begin(), image_source->encoded_bytes.end()},
+                    .mimeType = fastgltf::MimeType::GltfBuffer
+                },
+                .name = {}
+            };
+            m_gltf_asset.buffers.emplace_back(std::move(image_buffer));
+        }
+        const std::size_t buffer_view_index = m_gltf_asset.bufferViews.size();
+        {
+            fastgltf::BufferView buffer_view{};
+            buffer_view.bufferIndex = buffer_index;
+            buffer_view.byteOffset  = 0;
+            buffer_view.byteLength  = image_source->encoded_bytes.size();
+            m_gltf_asset.bufferViews.emplace_back(std::move(buffer_view));
+        }
+
+        fastgltf::Image gltf_image{};
+        gltf_image.data = fastgltf::sources::BufferView{
+            .bufferViewIndex = buffer_view_index,
+            .mimeType        = mime_type
+        };
+        gltf_image.name = FASTGLTF_STD_PMR_NS::string{texture->get_name()};
+        const std::size_t image_index = m_gltf_asset.images.size();
+        m_gltf_asset.images.emplace_back(std::move(gltf_image));
+        m_exported_images.insert({texture, image_index});
+        return image_index;
+    }
+
+    std::unordered_map<const erhe::graphics::Sampler*, std::size_t> m_exported_samplers;
+    [[nodiscard]] auto process_sampler(const erhe::graphics::Sampler* sampler) -> std::size_t
+    {
+        ERHE_VERIFY(sampler != nullptr);
+        const auto fi = m_exported_samplers.find(sampler);
+        if (fi != m_exported_samplers.end()) {
+            return fi->second;
+        }
+        const erhe::graphics::Sampler_create_info& create_info = sampler->get_create_info();
+
+        fastgltf::Sampler gltf_sampler{};
+        const bool min_linear = (create_info.min_filter == erhe::graphics::Filter::linear);
+        switch (create_info.mipmap_mode) {
+            case erhe::graphics::Sampler_mipmap_mode::not_mipmapped: gltf_sampler.minFilter = min_linear ? fastgltf::Filter::Linear             : fastgltf::Filter::Nearest;             break;
+            case erhe::graphics::Sampler_mipmap_mode::nearest:       gltf_sampler.minFilter = min_linear ? fastgltf::Filter::LinearMipMapNearest : fastgltf::Filter::NearestMipMapNearest; break;
+            case erhe::graphics::Sampler_mipmap_mode::linear:        gltf_sampler.minFilter = min_linear ? fastgltf::Filter::LinearMipMapLinear  : fastgltf::Filter::NearestMipMapLinear;  break;
+            default:                                                 gltf_sampler.minFilter = fastgltf::Filter::Linear; break;
+        }
+        gltf_sampler.magFilter = (create_info.mag_filter == erhe::graphics::Filter::linear)
+            ? fastgltf::Filter::Linear
+            : fastgltf::Filter::Nearest;
+        const auto to_gltf_wrap = [](const erhe::graphics::Sampler_address_mode mode) -> fastgltf::Wrap {
+            switch (mode) {
+                case erhe::graphics::Sampler_address_mode::repeat:          return fastgltf::Wrap::Repeat;
+                case erhe::graphics::Sampler_address_mode::clamp_to_edge:   return fastgltf::Wrap::ClampToEdge;
+                case erhe::graphics::Sampler_address_mode::mirrored_repeat: return fastgltf::Wrap::MirroredRepeat;
+                default:                                                    return fastgltf::Wrap::Repeat;
+            }
+        };
+        gltf_sampler.wrapS = to_gltf_wrap(create_info.address_mode[0]);
+        gltf_sampler.wrapT = to_gltf_wrap(create_info.address_mode[1]);
+
+        const std::size_t sampler_index = m_gltf_asset.samplers.size();
+        m_gltf_asset.samplers.emplace_back(std::move(gltf_sampler));
+        m_exported_samplers.insert({sampler, sampler_index});
+        return sampler_index;
+    }
+
+    std::map<std::pair<std::size_t, std::optional<std::size_t>>, std::size_t> m_exported_textures;
+    [[nodiscard]] auto process_texture(const erhe::graphics::Texture* texture, const erhe::graphics::Sampler* sampler) -> std::optional<std::size_t>
+    {
+        const std::optional<std::size_t> image_index = process_image(texture);
+        if (!image_index.has_value()) {
+            return std::nullopt;
+        }
+        std::optional<std::size_t> sampler_index{};
+        if (sampler != nullptr) {
+            sampler_index = process_sampler(sampler);
+        }
+        const std::pair<std::size_t, std::optional<std::size_t>> key{image_index.value(), sampler_index};
+        const auto fi = m_exported_textures.find(key);
+        if (fi != m_exported_textures.end()) {
+            return fi->second;
+        }
+        fastgltf::Texture gltf_texture{};
+        gltf_texture.imageIndex = image_index.value();
+        if (sampler_index.has_value()) {
+            gltf_texture.samplerIndex = sampler_index.value();
+        }
+        const std::size_t texture_index = m_gltf_asset.textures.size();
+        m_gltf_asset.textures.emplace_back(std::move(gltf_texture));
+        m_exported_textures.insert({key, texture_index});
+        return texture_index;
+    }
+
+    // Fills a fastgltf TextureInfo / NormalTextureInfo / OcclusionTextureInfo
+    // from an erhe material texture slot; false = slot empty or texture has
+    // no exportable source. Writes KHR_texture_transform when the slot's UV
+    // transform is non-default.
+    bool m_uses_texture_transform{false};
+    template <typename Texture_info>
+    [[nodiscard]] auto fill_texture_info(const erhe::primitive::Material_texture_sampler& slot, Texture_info& out) -> bool
+    {
+        if (!slot.texture_reference) {
+            return false;
+        }
+        const erhe::graphics::Texture* texture = slot.texture_reference->get_referenced_texture();
+        if (texture == nullptr) {
+            return false;
+        }
+        const std::optional<std::size_t> texture_index = process_texture(texture, slot.sampler.get());
+        if (!texture_index.has_value()) {
+            return false;
+        }
+        out.textureIndex  = texture_index.value();
+        out.texCoordIndex = slot.tex_coord;
+        const bool has_transform =
+            (slot.rotation != 0.0f) ||
+            (slot.offset != glm::vec2{0.0f, 0.0f}) ||
+            (slot.scale != glm::vec2{1.0f, 1.0f});
+        if (has_transform) {
+            out.transform = std::make_unique<fastgltf::TextureTransform>();
+            out.transform->rotation = slot.rotation;
+            out.transform->uvOffset = fastgltf::math::nvec2{slot.offset.x, slot.offset.y};
+            out.transform->uvScale  = fastgltf::math::nvec2{slot.scale.x, slot.scale.y};
+            m_uses_texture_transform = true;
+        }
+        return true;
+    }
+
+    // --- Animations (doc/gltf-scene-roundtrip-plan.md phase 0) ---
+    // Animation_sampler storage is already glTF-native (timestamps + flat
+    // output floats, CUBICSPLINE interleaved [in_tangent, value, out_tangent],
+    // quaternions in glTF [x,y,z,w] order), so export is a near-passthrough.
+
+    [[nodiscard]] static auto from_erhe(const erhe::scene::Animation_path path) -> fastgltf::AnimationPath
+    {
+        switch (path) {
+            case erhe::scene::Animation_path::TRANSLATION: return fastgltf::AnimationPath::Translation;
+            case erhe::scene::Animation_path::ROTATION:    return fastgltf::AnimationPath::Rotation;
+            case erhe::scene::Animation_path::SCALE:       return fastgltf::AnimationPath::Scale;
+            case erhe::scene::Animation_path::WEIGHTS:     return fastgltf::AnimationPath::Weights;
+            default:                                       return fastgltf::AnimationPath::Translation;
+        }
+    }
+
+    [[nodiscard]] static auto from_erhe(const erhe::scene::Animation_interpolation_mode mode) -> fastgltf::AnimationInterpolation
+    {
+        switch (mode) {
+            case erhe::scene::Animation_interpolation_mode::STEP:        return fastgltf::AnimationInterpolation::Step;
+            case erhe::scene::Animation_interpolation_mode::LINEAR:      return fastgltf::AnimationInterpolation::Linear;
+            case erhe::scene::Animation_interpolation_mode::CUBICSPLINE: return fastgltf::AnimationInterpolation::CubicSpline;
+            default:                                                     return fastgltf::AnimationInterpolation::Linear;
+        }
+    }
+
+    void process_animations()
+    {
+        for (const std::shared_ptr<erhe::scene::Animation>& animation : m_arguments.animations) {
+            if (animation) {
+                process_animation(*animation);
+            }
+        }
+    }
+
+    void process_animation(const erhe::scene::Animation& animation)
+    {
+        fastgltf::Animation gltf_animation{};
+        gltf_animation.name = FASTGLTF_STD_PMR_NS::string{animation.get_name()};
+
+        // erhe sampler index -> emitted glTF sampler index, filled lazily:
+        // the output accessor type comes from the channel path, and samplers
+        // referenced only by skipped channels must not be emitted.
+        std::vector<std::optional<std::size_t>> sampler_map(animation.samplers.size());
+
+        for (const erhe::scene::Animation_channel& channel : animation.channels) {
+            if (channel.path == erhe::scene::Animation_path::WEIGHTS) {
+                // erhe has no morph-target support end-to-end; there is no
+                // data behind a weights channel to export.
+                log_gltf->warn("glTF export: animation '{}' weights channel skipped (morph targets not supported)", animation.get_name());
+                continue;
+            }
+            const std::size_t component_count = erhe::scene::get_component_count(channel.path);
+            if ((component_count == 0) || (channel.sampler_index >= animation.samplers.size())) {
+                continue;
+            }
+            const std::optional<std::size_t> target_node_index = find_gltf_node_index(channel.target);
+            if (!target_node_index.has_value()) {
+                log_gltf->warn(
+                    "glTF export: animation '{}' channel targets node '{}' outside the exported subtree - skipping channel",
+                    animation.get_name(),
+                    channel.target ? channel.target->get_name() : std::string{"<null>"}
+                );
+                continue;
+            }
+
+            if (!sampler_map[channel.sampler_index].has_value()) {
+                const erhe::scene::Animation_sampler& sampler = animation.samplers[channel.sampler_index];
+                const bool        cubic       = (sampler.interpolation_mode == erhe::scene::Animation_interpolation_mode::CUBICSPLINE);
+                const std::size_t value_count = sampler.timestamps.size() * component_count * (cubic ? 3 : 1);
+                if (sampler.timestamps.empty() || (sampler.data.size() < value_count)) {
+                    log_gltf->warn(
+                        "glTF export: animation '{}' sampler {} has inconsistent keyframe data - skipping channel",
+                        animation.get_name(), channel.sampler_index
+                    );
+                    continue;
+                }
+                const std::size_t input_accessor = add_float_accessor(
+                    std::span<const float>{sampler.timestamps.data(), sampler.timestamps.size()},
+                    fastgltf::AccessorType::Scalar,
+                    sampler.timestamps.size(),
+                    true, // animation input accessors require min/max
+                    "animation_input"
+                );
+                const std::size_t output_accessor = add_float_accessor(
+                    std::span<const float>{sampler.data.data(), value_count},
+                    (component_count == 4) ? fastgltf::AccessorType::Vec4 : fastgltf::AccessorType::Vec3,
+                    sampler.timestamps.size() * (cubic ? 3 : 1),
+                    false,
+                    "animation_output"
+                );
+                fastgltf::AnimationSampler gltf_sampler{};
+                gltf_sampler.inputAccessor  = input_accessor;
+                gltf_sampler.outputAccessor = output_accessor;
+                gltf_sampler.interpolation  = from_erhe(sampler.interpolation_mode);
+                sampler_map[channel.sampler_index] = gltf_animation.samplers.size();
+                gltf_animation.samplers.emplace_back(std::move(gltf_sampler));
+            }
+
+            fastgltf::AnimationChannel gltf_channel{};
+            gltf_channel.samplerIndex = sampler_map[channel.sampler_index].value();
+            gltf_channel.nodeIndex    = target_node_index.value();
+            gltf_channel.path         = from_erhe(channel.path);
+            gltf_animation.channels.emplace_back(std::move(gltf_channel));
+        }
+
+        if (gltf_animation.channels.empty()) {
+            log_gltf->warn("glTF export: animation '{}' has no exportable channels - skipped", animation.get_name());
+            return;
+        }
+        m_gltf_asset.animations.emplace_back(std::move(gltf_animation));
+    }
+
+    // --- Skins (doc/gltf-scene-roundtrip-plan.md phase 0) ---
+    // Recorded during the node pass (a skin's joint nodes may come later in
+    // traversal order), emitted after it when every node index is known.
+    // Skin_data::skeleton is never populated on import, so the optional glTF
+    // skeleton field is omitted.
+
+    std::vector<std::pair<std::size_t, const erhe::scene::Skin*>>       m_pending_node_skins; // gltf node index -> skin
+    std::unordered_map<const erhe::scene::Skin*, std::optional<std::size_t>> m_exported_skins;
+
+    void process_skins()
+    {
+        for (const auto& [node_index, skin] : m_pending_node_skins) {
+            const std::optional<std::size_t> skin_index = process_skin(skin);
+            if (skin_index.has_value()) {
+                m_gltf_asset.nodes[node_index].skinIndex = skin_index.value();
+            }
+        }
+    }
+
+    [[nodiscard]] auto process_skin(const erhe::scene::Skin* skin) -> std::optional<std::size_t>
+    {
+        ERHE_VERIFY(skin != nullptr);
+        const auto fi = m_exported_skins.find(skin);
+        if (fi != m_exported_skins.end()) {
+            return fi->second;
+        }
+        const erhe::scene::Skin_data& skin_data = skin->skin_data;
+
+        fastgltf::Skin gltf_skin{};
+        gltf_skin.name = FASTGLTF_STD_PMR_NS::string{skin->get_name()};
+        for (const std::shared_ptr<erhe::scene::Node>& joint : skin_data.joints) {
+            const std::optional<std::size_t> joint_index = find_gltf_node_index(joint);
+            if (!joint_index.has_value()) {
+                log_gltf->warn(
+                    "glTF export: skin '{}' joint '{}' is outside the exported subtree - skipping skin",
+                    skin->get_name(),
+                    joint ? joint->get_name() : std::string{"<null>"}
+                );
+                m_exported_skins.insert({skin, std::nullopt});
+                return std::nullopt;
+            }
+            gltf_skin.joints.emplace_back(joint_index.value());
+        }
+        if (gltf_skin.joints.empty()) {
+            log_gltf->warn("glTF export: skin '{}' has no joints - skipping skin", skin->get_name());
+            m_exported_skins.insert({skin, std::nullopt});
+            return std::nullopt;
+        }
+        if (!skin_data.inverse_bind_matrices.empty()) {
+            if (skin_data.inverse_bind_matrices.size() != skin_data.joints.size()) {
+                log_gltf->warn(
+                    "glTF export: skin '{}' has {} inverse bind matrices for {} joints - omitting inverseBindMatrices",
+                    skin->get_name(), skin_data.inverse_bind_matrices.size(), skin_data.joints.size()
+                );
+            } else {
+                const float* matrix_floats = reinterpret_cast<const float*>(skin_data.inverse_bind_matrices.data());
+                gltf_skin.inverseBindMatrices = add_float_accessor(
+                    std::span<const float>{matrix_floats, skin_data.inverse_bind_matrices.size() * 16},
+                    fastgltf::AccessorType::Mat4,
+                    skin_data.inverse_bind_matrices.size(),
+                    false,
+                    "inverse_bind_matrices"
+                );
+            }
+        }
+        const std::size_t skin_index = m_gltf_asset.skins.size();
+        m_gltf_asset.skins.emplace_back(std::move(gltf_skin));
+        m_exported_skins.insert({skin, skin_index});
+        return skin_index;
     }
 
     // Emits the deduplicated glTF 2.1 "files" + "externalAssets" entries for
@@ -3369,22 +3922,40 @@ private:
         m_gltf_asset.nodes.emplace_back(std::move(gltf_node));
         m_erhe_node_to_gltf_node_index.insert({&erhe_node, gltf_node_index});
         record_serialized_node_flags(erhe_node, gltf_node_index);
+        if (erhe_mesh && erhe_mesh->skin) {
+            // node.skinIndex is resolved by process_skins() after the node
+            // pass - joint nodes may come later in traversal order.
+            m_pending_node_skins.emplace_back(gltf_node_index, erhe_mesh->skin.get());
+        }
         return gltf_node_index;
     }
 
-    static auto get_index_stride(fastgltf::ComponentType componentType) -> std::size_t
+    static auto get_gltf_component_size(fastgltf::ComponentType componentType) -> std::size_t
     {
         switch (componentType) {
-            case fastgltf::ComponentType::Invalid      : ERHE_FATAL("Bad index component type"); return 0;
-            case fastgltf::ComponentType::Byte         : ERHE_FATAL("Bad index component type"); return 0;
+            case fastgltf::ComponentType::Byte         : return 1;
             case fastgltf::ComponentType::UnsignedByte : return 1;
-            case fastgltf::ComponentType::Short        : ERHE_FATAL("Bad index component type"); return 0;
+            case fastgltf::ComponentType::Short        : return 2;
             case fastgltf::ComponentType::UnsignedShort: return 2;
-            case fastgltf::ComponentType::Int          : ERHE_FATAL("Bad index component type"); return 0;
+            case fastgltf::ComponentType::Int          : return 4;
             case fastgltf::ComponentType::UnsignedInt  : return 4;
-            case fastgltf::ComponentType::Float        : ERHE_FATAL("Bad index component type"); return 0;
-            case fastgltf::ComponentType::Double       : ERHE_FATAL("Bad index component type"); return 0;
-            default:                                     ERHE_FATAL("Bad index component type"); return 0;
+            case fastgltf::ComponentType::Float        : return 4;
+            case fastgltf::ComponentType::Double       : return 8;
+            default:                                     ERHE_FATAL("Bad component type"); return 0;
+        }
+    }
+
+    static auto get_gltf_component_count(fastgltf::AccessorType accessorType) -> std::size_t
+    {
+        switch (accessorType) {
+            case fastgltf::AccessorType::Scalar: return 1;
+            case fastgltf::AccessorType::Vec2  : return 2;
+            case fastgltf::AccessorType::Vec3  : return 3;
+            case fastgltf::AccessorType::Vec4  : return 4;
+            case fastgltf::AccessorType::Mat2  : return 4;
+            case fastgltf::AccessorType::Mat3  : return 9;
+            case fastgltf::AccessorType::Mat4  : return 16;
+            default:                             ERHE_FATAL("Bad accessor type"); return 0;
         }
     }
 
@@ -3401,25 +3972,16 @@ private:
             ERHE_VERIFY(accessor.bufferViewIndex.has_value());
             const fastgltf::BufferView& buffer_view = m_gltf_asset.bufferViews.at(accessor.bufferViewIndex.value());
             const fastgltf::Buffer& buffer = m_gltf_asset.buffers.at(buffer_view.bufferIndex);
-            std::size_t stride = (buffer_view.target == fastgltf::BufferTarget::ArrayBuffer) 
-                ? buffer_view.byteStride.value() 
-                : get_index_stride(accessor.componentType);
+            // Tightly packed when the view declares no stride (index,
+            // animation and inverse-bind-matrix accessors).
+            const std::size_t element_size = get_gltf_component_count(accessor.type) * get_gltf_component_size(accessor.componentType);
+            const std::size_t stride = buffer_view.byteStride.has_value()
+                ? buffer_view.byteStride.value()
+                : element_size;
             std::size_t start = buffer_view.byteOffset + accessor.byteOffset;
-            std::size_t end = start + (accessor.count - 1) * stride; // TODO add bytes used by last vertex
+            std::size_t end = start + ((accessor.count > 0) ? ((accessor.count - 1) * stride + element_size) : 0);
             ERHE_VERIFY(start < buffer.byteLength);
             ERHE_VERIFY(end <= buffer.byteLength);
-        }
-    }
-
-#if FASTGLTF_ENABLE_KHR_PHYSICS_RIGID_BODIES
-    [[nodiscard]] static auto from_physics_combine_mode(const Physics_combine_mode mode) -> fastgltf::CombineMode
-    {
-        switch (mode) {
-            case Physics_combine_mode::e_average:  return fastgltf::CombineMode::Average;
-            case Physics_combine_mode::e_minimum:  return fastgltf::CombineMode::Minimum;
-            case Physics_combine_mode::e_maximum:  return fastgltf::CombineMode::Maximum;
-            case Physics_combine_mode::e_multiply: return fastgltf::CombineMode::Multiply;
-            default:                               return fastgltf::CombineMode::Average;
         }
     }
 
@@ -3433,6 +3995,18 @@ private:
             return std::nullopt;
         }
         return it->second;
+    }
+
+#if FASTGLTF_ENABLE_KHR_PHYSICS_RIGID_BODIES
+    [[nodiscard]] static auto from_physics_combine_mode(const Physics_combine_mode mode) -> fastgltf::CombineMode
+    {
+        switch (mode) {
+            case Physics_combine_mode::e_average:  return fastgltf::CombineMode::Average;
+            case Physics_combine_mode::e_minimum:  return fastgltf::CombineMode::Minimum;
+            case Physics_combine_mode::e_maximum:  return fastgltf::CombineMode::Maximum;
+            case Physics_combine_mode::e_multiply: return fastgltf::CombineMode::Multiply;
+            default:                               return fastgltf::CombineMode::Average;
+        }
     }
 
     // Maps a carrier geometry to fastgltf: implicit shape index, mesh index
@@ -3792,6 +4366,11 @@ auto Gltf_exporter::export_gltf() -> std::string
     }
 #endif
 
+    // After the node pass (indices resolved), before combine_buffers()
+    // (both add buffers).
+    process_skins();
+    process_animations();
+
     // glTF 2.1 features in use: loaders must understand files /
     // externalAssets, so declare both the version and the minimum version.
     // Plain exports keep writing glTF 2.0.
@@ -3805,6 +4384,9 @@ auto Gltf_exporter::export_gltf() -> std::string
     // extension to the application.
     if (!m_gltf_asset.lights.empty()) {
         m_gltf_asset.extensionsUsed.emplace_back("KHR_lights_punctual");
+    }
+    if (m_uses_texture_transform) {
+        m_gltf_asset.extensionsUsed.emplace_back("KHR_texture_transform");
     }
 
     combine_buffers();

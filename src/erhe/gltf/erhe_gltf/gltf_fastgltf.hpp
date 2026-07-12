@@ -4,6 +4,8 @@
 
 #include "erhe_math/aabb.hpp"
 
+#include <cstddef>
+#include <functional>
 #include <map>
 #include <memory>
 #include <filesystem>
@@ -67,6 +69,17 @@ public:
     std::size_t file_index{0};
 };
 
+// Compressed source image stream retained at import so a later export can
+// re-embed the image verbatim, byte-exact (doc/gltf-scene-roundtrip-plan.md
+// phase 0). GPU-only textures (e.g. editor graph-texture bakes) have no
+// Gltf_image_source and are never exported as images.
+class Gltf_image_source
+{
+public:
+    std::vector<std::byte> encoded_bytes; // original PNG / JPEG / ... stream
+    std::string            mime_type;     // "image/png", "image/jpeg", ...
+};
+
 class Gltf_data
 {
 public:
@@ -78,6 +91,9 @@ public:
     std::vector<std::shared_ptr<erhe::scene::Node>>         nodes;
     std::vector<std::shared_ptr<erhe::primitive::Material>> materials;
     std::vector<std::shared_ptr<erhe::graphics::Texture>>   images;
+    // Parallel to images: the retained encoded source stream of each loaded
+    // image (null for images that failed to load or were never referenced).
+    std::vector<std::shared_ptr<Gltf_image_source>>         image_sources;
     std::vector<std::shared_ptr<erhe::graphics::Sampler>>   samplers;
     std::vector<std::string>                                extensions;
     Gltf_physics_data                                       physics;
@@ -136,6 +152,11 @@ struct Gltf_parse_arguments
 
 [[nodiscard]] auto scan_gltf(std::filesystem::path path) -> Gltf_scan;
 
+// Sniff the media type of an encoded image stream from its magic bytes
+// ("image/png", "image/jpeg", ...); empty when unrecognized. Used for
+// Gltf_image_source retention and export-side fallbacks.
+[[nodiscard]] auto sniff_image_mime_type(const std::vector<std::byte>& bytes) -> std::string;
+
 // A glTF 2.1 external-asset reference to write on export: nodes mapped to
 // one of these are written with "externalAsset" (children and attachments
 // are not exported - the instantiated content comes from the referenced
@@ -160,6 +181,16 @@ public:
     // is emitted, the asset is written with version + minVersion "2.1";
     // otherwise the exporter keeps writing plain glTF 2.0.
     std::map<const erhe::scene::Node*, Gltf_export_external_asset> external_assets;
+    // Returns the retained encoded source stream for a texture (see
+    // Gltf_image_source), or null when the texture has no exportable
+    // source - such texture slots are skipped on export. When the provider
+    // itself is empty, no images / textures / samplers are exported at all
+    // (pre-phase-0 behavior).
+    std::function<std::shared_ptr<const Gltf_image_source>(const erhe::graphics::Texture*)> image_source_provider;
+    // Animations to export (the editor passes the content-library
+    // animations). Channels targeting nodes outside the exported subtree
+    // are skipped with a warning.
+    std::vector<std::shared_ptr<erhe::scene::Animation>> animations;
 };
 
 [[nodiscard]] auto export_gltf(const Gltf_export_arguments& arguments) -> std::string;

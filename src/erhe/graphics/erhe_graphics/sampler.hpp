@@ -42,10 +42,14 @@ public:
     [[nodiscard]] auto get_debug_label() const -> erhe::utility::Debug_label;
     [[nodiscard]] auto uses_mipmaps   () const -> bool;
     [[nodiscard]] auto get_lod_bias   () const -> float;
+    // Retained so consumers (glTF export) can query filter / address-mode
+    // state back; the impl consumes it at construction and exposes nothing.
+    [[nodiscard]] auto get_create_info() const -> const Sampler_create_info&;
     [[nodiscard]] auto get_impl       () -> Sampler_impl&;
     [[nodiscard]] auto get_impl       () const -> const Sampler_impl&;
 
 private:
+    Sampler_create_info           m_create_info;
     std::unique_ptr<Sampler_impl> m_impl;
 };
 

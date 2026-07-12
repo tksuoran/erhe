@@ -6,6 +6,7 @@
 #include "app_message_bus.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/scene_open_operation.hpp"
+#include "parsers/gltf.hpp"
 #include "prefabs/prefab_library.hpp"
 
 #include "erhe_file/file.hpp"
@@ -174,17 +175,19 @@ auto Mcp_server::action_export_gltf(const json& args) -> std::string
         r["isError"] = true;
         return r.dump();
     }
-    const erhe::gltf::Gltf_physics_data physics_data = build_gltf_physics_data(sr->get_scene());
+    const erhe::gltf::Gltf_physics_data physics_data = build_gltf_physics_data(sr->get_scene(), sr->get_content_library().get());
     // Prefab instances export as glTF 2.1 externalAsset references instead
     // of flattened content; URIs are relativized against the export
     // directory.
     const std::filesystem::path export_path{path_str};
     const std::string gltf = erhe::gltf::export_gltf(
         erhe::gltf::Gltf_export_arguments{
-            .root_node       = *root_node,
-            .binary          = binary,
-            .physics_data    = &physics_data,
-            .external_assets = collect_prefab_external_assets(*root_node, export_path.parent_path())
+            .root_node             = *root_node,
+            .binary                = binary,
+            .physics_data          = &physics_data,
+            .external_assets       = collect_prefab_external_assets(*root_node, export_path.parent_path()),
+            .image_source_provider = make_gltf_image_source_provider(sr->get_content_library()),
+            .animations            = collect_gltf_export_animations(sr->get_content_library())
         }
     );
     if (!erhe::file::write_file(std::filesystem::path{path_str}, gltf)) {

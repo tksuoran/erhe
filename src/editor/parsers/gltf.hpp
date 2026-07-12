@@ -3,6 +3,7 @@
 #include "erhe_math/aabb.hpp"
 
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -11,14 +12,16 @@
 namespace erhe {
     class Item_base;
 }
-namespace erhe::gltf      { class Gltf_data; class Image_transfer; }
-namespace erhe::graphics  { class Device; }
+namespace erhe::gltf      { class Gltf_data; class Gltf_image_source; class Image_transfer; }
+namespace erhe::graphics  { class Device; class Texture; }
 namespace erhe::primitive { class Build_info; }
+namespace erhe::scene     { class Animation; }
 namespace tf              { class Executor; }
 
 namespace editor {
 
 class App_context;
+class Content_library;
 class Materials;
 class Operation;
 class Scene_root;
@@ -76,5 +79,20 @@ public:
 };
 
 [[nodiscard]] auto scan_gltf(const std::filesystem::path& path) -> Gltf_scan_summary;
+
+// Gltf_export_arguments::image_source_provider backed by the scene's
+// content library (doc/gltf-scene-roundtrip-plan.md phase 0): serves the
+// retained compressed source image bytes stored on texture entries.
+// Fallback for textures imported before retention landed: re-read the
+// texture's standalone source image file (images that were embedded in a
+// .glb/.gltf cannot be re-extracted and are skipped with a warning).
+[[nodiscard]] auto make_gltf_image_source_provider(
+    const std::shared_ptr<Content_library>& content_library
+) -> std::function<std::shared_ptr<const erhe::gltf::Gltf_image_source>(const erhe::graphics::Texture*)>;
+
+// The content-library animations, for Gltf_export_arguments::animations.
+[[nodiscard]] auto collect_gltf_export_animations(
+    const std::shared_ptr<Content_library>& content_library
+) -> std::vector<std::shared_ptr<erhe::scene::Animation>>;
 
 }

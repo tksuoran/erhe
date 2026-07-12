@@ -1,5 +1,6 @@
 #include "parsers/gltf_physics_export.hpp"
 
+#include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "scene/node_joint.hpp"
 #include "scene/node_physics.hpp"
@@ -303,7 +304,7 @@ public:
 
 } // anonymous namespace
 
-auto build_gltf_physics_data(const erhe::scene::Scene& scene) -> erhe::gltf::Gltf_physics_data
+auto build_gltf_physics_data(const erhe::scene::Scene& scene, const Content_library* content_library) -> erhe::gltf::Gltf_physics_data
 {
     Gltf_physics_builder builder{};
 
@@ -533,6 +534,27 @@ auto build_gltf_physics_data(const erhe::scene::Scene& scene) -> erhe::gltf::Glt
             builder.data.node_physics.size(),
             builder.data.synthesized_colliders.size()
         );
+    }
+
+    // Append content-library physics items no body / joint references, so
+    // editor-authored assets survive save / load (parity with scene.json
+    // v3+). get_*_index() deduplicates against the referenced entries above.
+    if (content_library != nullptr) {
+        if (content_library->physics_materials) {
+            for (const std::shared_ptr<erhe::physics::Physics_material>& material : content_library->physics_materials->get_all<erhe::physics::Physics_material>()) {
+                static_cast<void>(builder.get_material_index(material));
+            }
+        }
+        if (content_library->collision_filters) {
+            for (const std::shared_ptr<erhe::physics::Collision_filter>& filter : content_library->collision_filters->get_all<erhe::physics::Collision_filter>()) {
+                static_cast<void>(builder.get_filter_index(filter));
+            }
+        }
+        if (content_library->physics_joints) {
+            for (const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings : content_library->physics_joints->get_all<erhe::physics::Physics_joint_settings>()) {
+                static_cast<void>(builder.get_joint_index(settings));
+            }
+        }
     }
 
     return builder.data;

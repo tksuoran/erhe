@@ -1158,11 +1158,17 @@ auto save_scene(
     // indices consistent with the mesh_references skipped above.
     if (has_any_meshes) {
         const std::filesystem::path glb_path = scene_dir / glb_filename;
+        // The image source provider lets material textures persist in
+        // data.glb (they were silently dropped before phase 0). Animations
+        // are intentionally NOT exported here: load_scene does not consume
+        // them (node identity does not map), and .erhescene is on its way
+        // out (doc/gltf-scene-roundtrip-plan.md).
         const std::string glb_data = erhe::gltf::export_gltf(
             erhe::gltf::Gltf_export_arguments{
-                .root_node       = *root_node,
-                .binary          = true,
-                .external_assets = collect_prefab_external_assets(*root_node, scene_dir)
+                .root_node             = *root_node,
+                .binary                = true,
+                .external_assets       = collect_prefab_external_assets(*root_node, scene_dir),
+                .image_source_provider = make_gltf_image_source_provider(scene_root.get_content_library())
             }
         );
         if (!erhe::file::write_file(glb_path, glb_data)) {
@@ -1457,7 +1463,29 @@ auto load_scene(
             .mesh_layer_id   = scene_root->layers().content()->id,
             .path            = glb_path,
         };
-        gltf_cache[glb_path_str] = erhe::gltf::parse_gltf(parse_args);
+        erhe::gltf::Gltf_data& gltf_data = gltf_cache[glb_path_str] = erhe::gltf::parse_gltf(parse_args);
+
+        // Register parsed textures (with their retained source image bytes)
+        // in the content library so the material textures survive the NEXT
+        // save too - the exporter's image source provider reads them from
+        // the library texture entries.
+        if (content_library && content_library->textures) {
+            for (size_t i = 0; i < gltf_data.images.size(); ++i) {
+                const std::shared_ptr<erhe::graphics::Texture>& image = gltf_data.images[i];
+                if (image) {
+                    content_library->textures->add(
+                        image,
+                        Gltf_source_reference{
+                            .gltf_path  = glb_path_str,
+                            .item_name  = image->get_name(),
+                            .item_index = static_cast<int>(i),
+                            .item_type  = "texture",
+                        },
+                        (i < gltf_data.image_sources.size()) ? gltf_data.image_sources[i] : std::shared_ptr<erhe::gltf::Gltf_image_source>{}
+                    );
+                }
+            }
+        }
     };
     for (const auto& mesh_ref : scene_file.mesh_references) {
         // Cache glTF source path (for glTF-normative meshes)
@@ -1922,7 +1950,8 @@ auto load_scene(
                                 .item_name  = image->get_name(),
                                 .item_index = static_cast<int>(i),
                                 .item_type  = "texture",
-                            }
+                            },
+                            (i < prefab->gltf_data.image_sources.size()) ? prefab->gltf_data.image_sources[i] : std::shared_ptr<erhe::gltf::Gltf_image_source>{}
                         );
                     }
                 }

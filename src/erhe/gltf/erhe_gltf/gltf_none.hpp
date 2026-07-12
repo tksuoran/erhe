@@ -4,6 +4,8 @@
 
 #include "erhe_math/aabb.hpp"
 
+#include <cstddef>
+#include <functional>
 #include <map>
 #include <memory>
 #include <filesystem>
@@ -60,6 +62,13 @@ public:
     std::size_t file_index{0};
 };
 
+class Gltf_image_source
+{
+public:
+    std::vector<std::byte> encoded_bytes;
+    std::string            mime_type;
+};
+
 class Gltf_data
 {
 public:
@@ -71,6 +80,7 @@ public:
     std::vector<std::shared_ptr<erhe::scene::Node>>         nodes;
     std::vector<std::shared_ptr<erhe::primitive::Material>> materials;
     std::vector<std::shared_ptr<erhe::graphics::Texture>>   images;
+    std::vector<std::shared_ptr<Gltf_image_source>>         image_sources;
     std::vector<std::shared_ptr<erhe::graphics::Sampler>>   samplers;
     std::vector<std::string>                                extensions;
     Gltf_physics_data                                       physics;
@@ -118,6 +128,8 @@ struct Gltf_parse_arguments
 
 [[nodiscard]] auto scan_gltf(std::filesystem::path path) -> Gltf_scan;
 
+[[nodiscard]] auto sniff_image_mime_type(const std::vector<std::byte>& bytes) -> std::string;
+
 class Gltf_export_external_asset
 {
 public:
@@ -133,6 +145,8 @@ public:
     bool                     binary{true};
     const Gltf_physics_data* physics_data{nullptr};
     std::map<const erhe::scene::Node*, Gltf_export_external_asset> external_assets;
+    std::function<std::shared_ptr<const Gltf_image_source>(const erhe::graphics::Texture*)> image_source_provider;
+    std::vector<std::shared_ptr<erhe::scene::Animation>> animations;
 };
 
 [[nodiscard]] auto export_gltf(const Gltf_export_arguments& arguments) -> std::string;

@@ -34,6 +34,7 @@ public:
         "Perspective XR",
         "Orthogonal Horizontal",
         "Orthogonal Vertical",
+        "Orthogonal",
         "Orthogonal Rectangle",
         "Generic Frustum"
     };

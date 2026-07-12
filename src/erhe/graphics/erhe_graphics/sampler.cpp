@@ -18,10 +18,15 @@
 namespace erhe::graphics {
 
 Sampler::Sampler(Device& device, const Sampler_create_info& create_info)
-    : m_impl{std::make_unique<Sampler_impl>(device, create_info)}
+    : m_create_info{create_info}
+    , m_impl{std::make_unique<Sampler_impl>(device, create_info)}
 {
 }
 Sampler::~Sampler() noexcept = default;
+auto Sampler::get_create_info() const -> const Sampler_create_info&
+{
+    return m_create_info;
+}
 auto Sampler::get_debug_label() const -> erhe::utility::Debug_label
 {
     return m_impl->get_debug_label();
