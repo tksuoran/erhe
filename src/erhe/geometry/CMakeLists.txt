@@ -9,6 +9,8 @@ erhe_target_sources_grouped(
     erhe_geometry/geometry_log.hpp
     erhe_geometry/geometry_progress.cpp
     erhe_geometry/geometry_progress.hpp
+    erhe_geometry/geometry_serialization.cpp
+    erhe_geometry/geometry_serialization.hpp
     erhe_geometry/geometry_tangents.cpp
     erhe_geometry/plane_intersection.cpp
     erhe_geometry/plane_intersection.hpp

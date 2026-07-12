@@ -1,4 +1,5 @@
 #include "erhe_geometry/geometry_log.hpp"
+#include "erhe_geometry/geometry_serialization.hpp"
 
 #include <geogram/basic/common.h>
 #include <gtest/gtest.h>
@@ -7,6 +8,7 @@
 void initialize_test_logging()
 {
     GEO::initialize(GEO::GEOGRAM_INSTALL_NONE);
+    erhe::geometry::register_geogram_attribute_types();
 
     erhe::geometry::log_geometry          = spdlog::default_logger();
     erhe::geometry::log_geogram           = spdlog::default_logger();

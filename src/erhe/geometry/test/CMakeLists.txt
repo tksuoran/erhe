@@ -19,6 +19,7 @@ add_executable(${_target}
     test_csg.cpp
     test_edge_sharpness.cpp
     test_geometry_operation.cpp
+    test_geometry_serialization.cpp
     test_plane_intersection.cpp
     test_selective_operation_normals.cpp
     test_subdivision_chain.cpp

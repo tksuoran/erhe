@@ -122,6 +122,7 @@
 #include "erhe_file/file.hpp"
 #include "erhe_file/file_log.hpp"
 #include "erhe_geometry/geometry_log.hpp"
+#include "erhe_geometry/geometry_serialization.hpp"
 #include "erhe_geometry/geometry_progress.hpp"
 #if defined(ERHE_GRAPHICS_API_OPENGL)
 # include "erhe_gl/gl_helpers.hpp"
@@ -3216,15 +3217,7 @@ void run_editor(const std::string& startup_commands_path, const std::string& sta
         // after triangulate); with a connected input, multi_nerve works
         // correctly. It was never a Geogram bug.
         GEO::CmdLine::set_arg("remesh:multi_nerve", "true");
-        GEO::geo_register_attribute_type<GEO::vec2f>("vec2f");
-        GEO::geo_register_attribute_type<GEO::vec3f>("vec3f");
-        GEO::geo_register_attribute_type<GEO::vec4f>("vec4f");
-        GEO::geo_register_attribute_type<GEO::vec2i>("vec2i");
-        GEO::geo_register_attribute_type<GEO::vec3i>("vec3i");
-        GEO::geo_register_attribute_type<GEO::vec4i>("vec4i");
-        GEO::geo_register_attribute_type<GEO::vec2u>("vec2u");
-        GEO::geo_register_attribute_type<GEO::vec3u>("vec3u");
-        GEO::geo_register_attribute_type<GEO::vec4u>("vec4u");
+        erhe::geometry::register_geogram_attribute_types();
         // Route Geogram's GEO::Logger output into erhe::geometry::log_geogram.
         // Requires the Geogram Logger singleton (created by GEO::initialize()
         // above) and log_geogram (created by erhe::geometry::initialize_logging()).
