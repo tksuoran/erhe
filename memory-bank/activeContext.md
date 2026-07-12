@@ -27,6 +27,7 @@
 x-skills::.claude/commands-in-tree{usable-sans-LSAI:mcp__lsai__*-unregistered→grep-fallback-immediate;cpp-project.md-@code-nav-lsai/xmp4-lines-stale}
 
 [OPEN]
+?merge-save-scene+save-prefab{user-requested-2026-07-12,handoff@prompt_queue-ITEM2,after-phase6}::one-save{source_path-writeback||res/editor/scenes}+Prefab_library::reload-side-effect;decide::editor-state-in-prefab-sources{ERHE_scene-marker-flips-open-branch}+MCP-merge+menu-removal
 ?animation-editor-deferred{#243,doc/animation-keyframing-plan.md}::scene-markers+DopeTrack-key-drag-on-strip+standalone-Timeline-dock+autokey-persistence
 ?6c-fields-implementation{awaits-design-review,doc/geometry-nodes-plan.md}
 ?PhaseC-deferred-optional{C7-remainder{canvas-render-loop+links+positions→base,per-frame-risk}+C8{~9-twin-MCP-tool-bodies+scene_root-Create+save/load-dedup}}
