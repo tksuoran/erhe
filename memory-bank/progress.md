@@ -1,12 +1,8 @@
 §MBEL:5.0
 
-[TASK::gltf-scene-roundtrip]{active}
-✓phases0-5{0c3bd202+72ac5da9+f70143b5+3a4989b6;phase5:f5a58c5b+1c643354+77ca784b;details→activeContext+history}
-✓race-fix::Scene::update_node_transforms-locks-item_host_mutex{async-raytrace-kickoff-vs-main-thread-AV}
-✓geogram-wedge-fix::make_convex_hull-PDEL→BDEL+ASSERT_THROW-explicit{doc/geogram.md=upstream-issue-draft,¬yet-filed}
-✓smoke-suites-green-post-removal{geometry_nodes:130/130+texture_graph:268/268;fresh-session-per-suite}
-✓doc::scene_serialization.md{d4188760,process+parts+limitations-reference}
-?phase6::verification{last,handoff-written@prompt_queue.txt,run-with-fresh-context}
+[TASK::merge-save-scene+save-prefab]{next,not-started}
+?handoff@prompt_queue-ITEM2{read-first}
+?baseline::phase6-harness-green{scripts/scene_roundtrip_verify.py-75/75@ef31a4bb..90a8860a}→re-run-affected-checks-after-merge
 
 [TASK::#239-per-scene-settings]{parked}
 ✓runtime-setter-MCP-tool{set_scene_settings+get_scene_settings@phase4,3a4989b6}→sky/grid-override-visual-verify-unblocked
@@ -27,3 +23,9 @@
 !PS5.1-embedded-double-quotes-in-native-args-mangled{git-commit--m-heredoc-splits-at-quote}→write-msg-to-file+git-commit--F
 !smoke-suites::one-FRESH-editor-session-each{texture-material_output-resolves-material-via-get_single_scene_root→null-when->1-scene-open→section-fails}
 !scene-save-exports-only-mesh-referenced-materials{graph-binding-on-unused-material=dropped+warn}→tests/users-bind-mesh-used-materials
+!¬persisted::Brush_placement-attachments{brush-LIBRARY-persists-via-ERHE_brushes}+static-body-mass{KHR-no-motion-object-for-statics}→doc/scene_serialization.md-limitations
+!import_root-wrappers-transparent-on-export{children-written-in-their-place}→roundtrip-diffs-need-parent_id+import_root-from-get_scene_nodes
+!settings-less-joint-reload-materializes-Physics_joint_settings-item{"Physics joint 0"}→joint_settings-name-not-comparable-across-roundtrip
+!animation-authoring-headless::animation_create_key-needs-EXISTING-target{set_animation_target;new-animation-only-via-ImGui-+Key-button}→import-animated-gltf-then-key
+!MCP-create_shape-with-motion_mode-already-creates-rigid-body→edit_physics_body-for-field-tweaks{create_physics_body-errors-"already has"}
+!Blender-stock-gltf-importer-rejects-2.1{externalAssets-scene}→foreign-tool-checks-use-prefab-free-2.0-save

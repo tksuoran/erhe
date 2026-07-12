@@ -95,3 +95,14 @@
   fix::make_convex_hull-PDEL→BDEL{sequential}+editor-ASSERT_THROW-explicit-sans-debugger{GEO_DEBUG-default-was-ASSERT_ABORT}
   upstream-draft::doc/geogram.md{concurrent-geogram+non-interactive-geo_abort}
   suites-green-post-fix::texture_graph-268/268{fresh-session-per-suite!}+geometry_nodes-130/130
+
+[2026-07-12b]
+>DONE::gltf-scene-roundtrip-plan-ALL-PHASES{phase6-verification-last}✓
+>built::scripts/scene_roundtrip_verify.py{standing-harness:75/75;all-11-ERHE_*-coverage+schema-validate+reload-MCP-diff+Prefab-test-roundtrip+Khronos-validator+Blender-render}✓
+>fixed::3-export-defects-found-by-validator{3394-errors->0}
+  ef31a4bb::zero-NORMAL-dual-listing{present_*-mask-check}+soup-primitives-export-soup{TEXCOORD/JOINTS/WEIGHTS-restored,ERHE_geometry-only-authored}+mesh-names+settings-less-joint-export{empty-description}
+  f9f11321::mcp-get_scene_nodes+parent_id+import_root
+  90a8860a::harness+docs{scene_serialization-limitations:Brush_placement+static-mass;ERHE_geometry-dual-list-rule;plan-phase6-as-built}
+>verified::geometry-smoke130/130+texture-smoke268/268{post-exporter-change,fresh-sessions}✓
+>decided::no-erhe_gltf-unit-test{parse_gltf-needs-live-Device+executor+Image_transfer->harness-level-assertion}
+>tooling::Khronos-validator-win64-downloadable{github-releases}+Blender-4.2-headless-import-render{BLENDER_WORKBENCH,factory-startup}
