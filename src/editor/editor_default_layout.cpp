@@ -35,7 +35,7 @@ enum class Layout_state
 };
 
 // Best-effort lookup of the primary viewport window title. The Viewport_window's
-// ImGui title is composed as "{name}###Viewport {id}" by
+// ImGui title is composed as "{name}###Viewport_window {slot}" by
 // Scene_views::create_viewport_window; the "###" suffix carries the stable
 // window ID, so this title keeps addressing the same window even after the
 // visible part is retitled to the shown scene's name.

@@ -47,12 +47,14 @@ Viewport_window::Viewport_window(
     App_context&                                                app_context,
     const std::string_view                                      name,
     const std::string_view                                      ini_label,
+    const int                                                   window_slot,
     const std::shared_ptr<Viewport_scene_view>&                 viewport_scene_view
 )
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, name, ini_label}
     , m_app_context            {app_context}
     , m_viewport_scene_view    {viewport_scene_view}
     , m_rendergraph_output_node{rendergraph_output_node}
+    , m_window_slot            {window_slot}
 {
     show_window();
 }
@@ -94,7 +96,7 @@ void Viewport_window::on_begin()
 void Viewport_window::update_title_from_scene()
 {
     // Show the name of the Scene item this viewport is looking at. The
-    // "###Viewport N" suffix (composed by Scene_views::create_viewport_window)
+    // "###Viewport_window N" suffix (composed by Scene_views::create_viewport_window)
     // keeps the ImGui window identity stable while the visible part changes;
     // a title without that suffix is left alone, since retitling it would
     // change the window identity. Reformats only when the name changes, so

@@ -23,11 +23,12 @@ class Texture_graph_window;
 
 // Owns the dynamically-created *extra* instances of the Properties / Geometry
 // Graph / Texture Graph windows (issue #252). The primary instances remain
-// owned by Editor (persisted ini labels, present in the Window menu, always
-// instance #1); the extras created here get a unique title + empty ini_label
-// (so their open state is not persisted across runs, matching the extra
-// viewport / per-scene hierarchy windows), and are destroyed when the user
-// closes them (the window X button).
+// owned by Editor (present in the Window menu, always instance #1). The extra
+// graph windows get a slot-based title + ini label ("Geometry Graph [N]" /
+// "Geometry_graph_window N", lowest free slot >= 2) so their layout and open
+// state persist across sessions (issue #265); extra Properties windows get a
+// unique title + empty ini_label (open state not persisted). All extras are
+// destroyed when the user closes them (the window X button).
 //
 // Creation is deferred through Imgui_windows::queue() so open_* is safe to
 // call from inside ImGui iteration (context-menu callbacks, double-click) and
@@ -90,12 +91,12 @@ private:
     erhe::imgui::Imgui_windows&  m_imgui_windows;
     App_context&                 m_app_context;
 
-    // Monotonic per-type counters (never reset), so a reused window title
-    // never collides with a not-yet-fully-torn-down ImGui window. Start at 1
-    // (the primary instance is conceptually #1); the first extra is [2].
-    int m_properties_counter    {1};
-    int m_geometry_graph_counter{1};
-    int m_texture_graph_counter {1};
+    // Monotonic counter (never reset), so a reused window title never
+    // collides with a not-yet-fully-torn-down ImGui window. Starts at 1 (the
+    // primary instance is conceptually #1); the first extra is [2]. The graph
+    // windows use slot-based numbering instead (issue #265; see the class
+    // comment).
+    int m_properties_counter{1};
 
     std::vector<std::shared_ptr<Properties>>            m_properties_windows;
     std::vector<std::shared_ptr<Geometry_graph_window>> m_geometry_graph_windows;

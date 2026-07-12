@@ -646,8 +646,7 @@ auto Scene_commands::create_new_scene() -> std::shared_ptr<Scene_root>
         *m_context.imgui_windows,
         viewport_scene_view,
         rendergraph_output_node,
-        scene_name,
-        ""
+        scene_name
     );
     // Dock (tab) the new scene's viewport with the existing viewport instead of
     // leaving it floating at ImGui's default cascade position (#258).
@@ -1169,8 +1168,7 @@ auto Scene_commands::create_new_rendertarget(erhe::scene::Node* parent) -> std::
         *m_context.imgui_windows,
         scene_view,
         rendergraph_output_node,
-        "Viewport ",
-        ""
+        "Viewport "
     );
 
     // Make imgui window show in rendertarget imgui host 

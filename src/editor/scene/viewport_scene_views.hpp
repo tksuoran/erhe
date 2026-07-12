@@ -87,9 +87,13 @@ public:
         erhe::imgui::Imgui_windows&                                 imgui_windows,
         const std::shared_ptr<Viewport_scene_view>&                 viewport_scene_view,
         const std::shared_ptr<erhe::rendergraph::Rendergraph_node>& rendergraph_output_node,
-        std::string_view                                            name,
-        std::string_view                                            ini_name
+        std::string_view                                            name
     ) -> std::shared_ptr<Viewport_window>;
+
+    // Issue #265: the first Viewport_window must always exist, even when no
+    // scene is opened. Creates an empty viewport (no scene, no camera) when
+    // no viewport window exists; no-op otherwise.
+    void ensure_viewport_window_exists();
 
     void open_new_viewport_scene_view_node();
     // Issue #252: open a new viewport window bound to a specific scene (the
@@ -154,9 +158,6 @@ private:
     Open_new_viewport_scene_view_command m_open_new_viewport_scene_view_command;
 
     ERHE_PROFILE_MUTEX(std::mutex,                      m_mutex);
-    // Monotonic id for the "###Viewport N" ImGui window ID suffix; never
-    // reused, unlike indices into m_viewport_windows.
-    std::size_t                                         m_viewport_window_counter{0};
     std::vector<std::shared_ptr<Viewport_window>>       m_viewport_windows;
     std::vector<std::shared_ptr<Viewport_scene_view>>   m_viewport_scene_views;
     std::vector<std::shared_ptr<Post_processing_node>>  m_post_processing_nodes;

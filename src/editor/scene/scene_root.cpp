@@ -25,6 +25,7 @@
 #include "windows/editor_windows.hpp"
 #include "windows/item_tree_window.hpp"
 
+#include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_physics/iworld.hpp"
 #include "erhe_physics/irigid_body.hpp"
 #include "erhe_primitive/material.hpp"
@@ -272,34 +273,6 @@ Scene_root::~Scene_root() noexcept
     }
 }
 
-auto custom_isprint(const char c) -> bool
-{
-    return (c >= 32 && c <= 126);
-}
-
-auto custom_isalnum(const char c) -> bool
-{
-    if (c >= '0' && c <= '9') return true;
-    if (c >= 'A' && c <= 'Z') return true;
-    if (c >= 'a' && c <= 'z') return true;
-    return false;
-}
-
-void sanitize(std::string& s)
-{
-    s.erase(
-        std::remove_if(
-            s.begin(), s.end(), [](const char c) {
-                return !custom_isprint(c);
-            }
-        ),
-        s.end()
-    );
-    std::replace_if(s.begin(), s.end(), [](const char c){ return !custom_isalnum(c); }, '_');
-}
-
-int Scene_root::s_browser_window_count = 0;
-
 auto Scene_root::make_browser_window(
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
@@ -307,16 +280,36 @@ auto Scene_root::make_browser_window(
     App_settings&                app_settings
 ) -> std::shared_ptr<Item_tree_window>
 {
-    std::string ini_label = m_scene->get_name();
-    sanitize(ini_label);
+    // Scene-independent, slot-based window identity (issue #265): both the
+    // window title ("Scene Hierarchy [N]") and the ini label
+    // ("Hierarchy_window N") carry the lowest free slot (1, 2, ...) among the
+    // live Hierarchy windows, so the imgui.ini dock layout and the
+    // windows.json open state persist across sessions regardless of scene
+    // names or the order scenes were opened in.
+    int window_slot = 1;
+    for (;;) {
+        bool slot_in_use = false;
+        for (erhe::imgui::Imgui_window* window : imgui_windows.get_windows()) {
+            Item_tree_window* tree_window = dynamic_cast<Item_tree_window*>(window);
+            if ((tree_window != nullptr) && (tree_window->get_scene_hierarchy_slot() == window_slot)) {
+                slot_in_use = true;
+                break;
+            }
+        }
+        if (!slot_in_use) {
+            break;
+        }
+        ++window_slot;
+    }
     m_node_tree_window = std::make_shared<Item_tree_window>(
         imgui_renderer,
         imgui_windows,
         context,
-        fmt::format("Scene Hierarchy [{}]", ++s_browser_window_count),
-        ""
+        fmt::format("Scene Hierarchy [{}]", window_slot),
+        fmt::format("Hierarchy_window {}", window_slot)
     );
     m_node_tree_window->set_scene_hierarchy(true);
+    m_node_tree_window->set_scene_hierarchy_slot(window_slot);
     m_node_tree_window->set_root(m_scene->get_root_node());
     // Show a selectable Scene item at the top of the Hierarchy window, with the
     // Content Library nested under it (issue #240). The scene root node's child

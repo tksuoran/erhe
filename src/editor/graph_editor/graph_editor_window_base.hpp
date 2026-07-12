@@ -25,6 +25,14 @@ public:
     // can be docked / sized independently.
     virtual void controls_imgui() = 0;
 
+    // Stable per-instance slot (1 = the primary singleton owned by Editor,
+    // 2... = the extra "Open Editor" instances) carried in the window title
+    // and the "<Type>_graph_window N" ini label. The lowest free slot is
+    // reused after an extra instance is destroyed, so window layout and open
+    // state persist across sessions (issue #265).
+    void set_instance_slot(int slot) { m_instance_slot = slot; }
+    [[nodiscard]] auto get_instance_slot() const -> int { return m_instance_slot; }
+
 protected:
     // One selectable palette entry (a spawnable node type).
     class Palette_entry
@@ -61,6 +69,7 @@ protected:
 
     std::vector<Palette_category> m_palette_categories; // built lazily by build_palette()
     std::string                   m_palette_filter;     // node-palette search text
+    int                           m_instance_slot{1};   // primary singletons are slot 1
 };
 
 } // namespace editor

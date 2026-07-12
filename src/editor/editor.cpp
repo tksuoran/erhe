@@ -2169,6 +2169,17 @@ public:
         log_startup->info("Init: draining operation stack pre-prewarm");
         m_operation_stack->update();
 
+        // Issue #265: the first Viewport_window always exists, even when no
+        // scene is opened (--no-scene, a missing startup script, or a script
+        // that creates no viewport); it then shows nothing (no scene, no
+        // camera). Skipped while a --scene load is pending: the load runs
+        // once the main loop pumps the message bus and Scene_open_operation
+        // creates the viewport window then.
+        const bool startup_scene_load_pending = !m_no_startup_scene && !m_startup_scene_path.empty();
+        if (!startup_scene_load_pending) {
+            m_viewport_scene_views->ensure_viewport_window_exists();
+        }
+
         // Drive the standard shader-variant cache from the same buckets
         // the runtime forward path would build for the loaded scene +
         // content library. Pulls glslang -> SPIR-V -> vkCreateShaderModule
@@ -2572,6 +2583,12 @@ public:
         }
 
         log_scene->info("Closed scene '{}'", scene_root->get_name());
+
+        // Issue #265: the first Viewport_window always exists -- closing the
+        // last scene leaves one empty viewport window behind (showing
+        // nothing). on_close_scene runs from the message bus pump in tick(),
+        // outside ImGui iteration, so creating the ImGui window here is safe.
+        m_viewport_scene_views->ensure_viewport_window_exists();
     }
 
     void run_startup_script()

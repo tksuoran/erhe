@@ -210,6 +210,14 @@ public:
     void set_scene_hierarchy(bool value);
     [[nodiscard]] auto is_scene_hierarchy() const -> bool;
 
+    // Stable per-window slot (1, 2, ...) carried in the "Scene Hierarchy [N]"
+    // title and the "Hierarchy_window N" ini label. The lowest free slot is
+    // reused after a Hierarchy window is destroyed, so window layout and open
+    // state persist across sessions independent of scene names and open order
+    // (issue #265). 0 for tree windows that are not scene-hierarchy browsers.
+    void set_scene_hierarchy_slot(int slot) { m_scene_hierarchy_slot = slot; }
+    [[nodiscard]] auto get_scene_hierarchy_slot() const -> int { return m_scene_hierarchy_slot; }
+
     // Implements Imgui_window
     void imgui   () override;
     void on_begin() override;
@@ -218,6 +226,7 @@ public:
 
 private:
     bool m_is_scene_hierarchy{false};
+    int  m_scene_hierarchy_slot{0};
 };
 
 }

@@ -52,15 +52,15 @@ class Texture_graph_node;
 class Texture_graph_window : public Graph_editor_window_base
 {
 public:
-    // title / ini_label default to the primary singleton's values; the
-    // Editor_windows manager passes a unique title + empty ini_label for the
-    // extra "Open Editor" instances (issue #252).
+    // title / ini_label default to the primary singleton's values (instance
+    // slot 1); the Editor_windows manager passes slot-based values for the
+    // extra "Open Editor" instances (issues #252, #265).
     Texture_graph_window(
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
         App_context&                 app_context,
         std::string_view             title     = "Texture Graph",
-        std::string_view             ini_label = "texture_graph"
+        std::string_view             ini_label = "Texture_graph_window 1"
     );
     ~Texture_graph_window() noexcept override;
 

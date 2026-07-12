@@ -226,8 +226,6 @@ private:
 
     erhe::message_bus::Subscription<Selection_message> m_selection_subscription;
 
-    static int s_browser_window_count;
-
     // Live longest
     mutable ERHE_PROFILE_MUTEX(std::mutex, m_mutex);
     ERHE_PROFILE_MUTEX        (std::mutex, m_rendertarget_meshes_mutex);

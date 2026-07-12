@@ -37,6 +37,7 @@
 
 #include <imgui/imgui.h>
 
+#include <algorithm>
 #include <cfloat>
 
 namespace editor{
@@ -368,26 +369,42 @@ auto Scene_views::create_viewport_window(
     erhe::imgui::Imgui_windows&                                 imgui_windows,
     const std::shared_ptr<Viewport_scene_view>&                 viewport_scene_view,
     const std::shared_ptr<erhe::rendergraph::Rendergraph_node>& rendergraph_output_node,
-    std::string_view                                            name,
-    std::string_view                                            ini_name_in
+    std::string_view                                            name
 ) -> std::shared_ptr<Viewport_window>
 {
-    // "###" makes the ImGui window ID depend only on the "###Viewport N" suffix,
-    // so Viewport_window can retitle itself after the Scene item it shows
-    // (initial bind, "Scene and Camera" dialog rebind, scene rename) without
-    // losing its window identity (docking, position, size). The counter is
-    // monotonic: a size()-based index could collide with a live window after
-    // destroy_viewport_window().
-    std::string window_name = fmt::format("{}###Viewport {}", name, m_viewport_window_counter);
-    std::string ini_name = ini_name_in.empty() ? std::string{} : fmt::format("{}##{}", ini_name_in, m_viewport_window_counter);
-    ++m_viewport_window_counter;
+    // Scene-independent, slot-based window identity (issue #265): both the
+    // ImGui window ID ("###Viewport_window N") and the ini label
+    // ("Viewport_window N") carry the lowest free slot (1, 2, ...), so the
+    // imgui.ini dock layout and the windows.json open state persist across
+    // sessions regardless of which scene the viewport shows or the order the
+    // viewports were created in. "###" makes the ImGui window ID depend only
+    // on the suffix, so Viewport_window can retitle itself after the Scene
+    // item it shows (initial bind, "Scene and Camera" dialog rebind, scene
+    // rename) without losing its window identity (docking, position, size).
+    int window_slot = 1;
+    for (;;) {
+        const bool slot_in_use = std::any_of(
+            m_viewport_windows.begin(),
+            m_viewport_windows.end(),
+            [window_slot](const std::shared_ptr<Viewport_window>& window) {
+                return window->get_window_slot() == window_slot;
+            }
+        );
+        if (!slot_in_use) {
+            break;
+        }
+        ++window_slot;
+    }
+    std::string window_name = fmt::format("{}###Viewport_window {}", name, window_slot);
+    std::string ini_label   = fmt::format("Viewport_window {}", window_slot);
     auto viewport_window = std::make_shared<Viewport_window>(
         imgui_renderer,
         imgui_windows,
         rendergraph_output_node,
         m_app_context,
         window_name,
-        ini_name,
+        ini_label,
+        window_slot,
         viewport_scene_view
     );
     const auto& window_imgui_host = imgui_windows.get_window_imgui_host();
@@ -511,10 +528,20 @@ void Scene_views::open_new_viewport_scene_view_node()
         *m_app_context.imgui_windows,
         viewport_scene_view,
         rendergraph_output_node,
-        "scene view",
-        ""
+        "Viewport"
     );
     apply_editor_window_placement(*m_app_context.imgui_windows, *viewport_window);
+}
+
+void Scene_views::ensure_viewport_window_exists()
+{
+    // Issue #265: the first Viewport_window always exists, even when no scene
+    // is opened -- it then shows nothing (no scene, no camera). Called at
+    // startup when no scene is opened and after closing the last scene.
+    if (!m_viewport_windows.empty()) {
+        return;
+    }
+    open_new_viewport_scene_view_node();
 }
 
 void Scene_views::open_new_viewport_scene_view_node(const std::shared_ptr<Scene_root>& scene_root)
@@ -533,8 +560,7 @@ void Scene_views::open_new_viewport_scene_view_node(const std::shared_ptr<Scene_
         *m_app_context.imgui_windows,
         viewport_scene_view,
         rendergraph_output_node,
-        "scene view",
-        ""
+        "Viewport"
     );
     apply_editor_window_placement(*m_app_context.imgui_windows, *viewport_window);
 }

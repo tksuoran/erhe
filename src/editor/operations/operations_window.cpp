@@ -926,8 +926,7 @@ Operations::Operations(
                         *m_context.imgui_windows,
                         viewport_scene_view,
                         rendergraph_output_node,
-                        scene_root->get_name(),
-                        ""
+                        scene_root->get_name()
                     );
 
                     // Attach the global tools (Hud / Hotbar / OpenXR Headset_view) to

@@ -65,8 +65,7 @@ void Scene_builder_viewport_resources_operation::execute(App_context& context)
         *context.imgui_windows,
         m_viewport_scene_view,
         rendergraph_output_node,
-        m_parameters.name,
-        ""
+        m_parameters.name
     );
 }
 

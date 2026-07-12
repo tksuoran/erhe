@@ -43,6 +43,30 @@ void prune_closed(std::vector<std::shared_ptr<T>>& windows)
     );
 }
 
+// Lowest free instance slot for the extra graph-editor windows (issue #265).
+// Slot 1 is the primary singleton owned by Editor; the extras start at 2.
+// Freed slots are reused, so the slot-based window titles and ini labels stay
+// stable across sessions. Closed-but-not-yet-pruned windows still occupy
+// their slot, so a live title never collides.
+template <typename T>
+auto lowest_free_instance_slot(const std::vector<std::shared_ptr<T>>& windows) -> int
+{
+    int slot = 2;
+    for (;;) {
+        bool slot_in_use = false;
+        for (const std::shared_ptr<T>& window : windows) {
+            if (window->get_instance_slot() == slot) {
+                slot_in_use = true;
+                break;
+            }
+        }
+        if (!slot_in_use) {
+            return slot;
+        }
+        ++slot;
+    }
+}
+
 } // anonymous namespace
 
 Editor_windows::Editor_windows(
@@ -79,10 +103,13 @@ void Editor_windows::open_geometry_graph_window(const std::shared_ptr<Graph_mesh
 {
     m_imgui_windows.queue(
         [this, target]() {
-            const std::string title = fmt::format("Geometry Graph [{}]", ++m_geometry_graph_counter);
+            const int slot = lowest_free_instance_slot(m_geometry_graph_windows);
+            const std::string title     = fmt::format("Geometry Graph [{}]", slot);
+            const std::string ini_label = fmt::format("Geometry_graph_window {}", slot);
             std::shared_ptr<Geometry_graph_window> window = std::make_shared<Geometry_graph_window>(
-                m_imgui_renderer, m_imgui_windows, m_app_context, title, std::string_view{}
+                m_imgui_renderer, m_imgui_windows, m_app_context, title, ini_label
             );
+            window->set_instance_slot(slot);
             window->set_target(target);
             window->show_window();
             apply_editor_window_placement(m_imgui_windows, *window);
@@ -95,10 +122,13 @@ void Editor_windows::open_texture_graph_window(const std::shared_ptr<Graph_textu
 {
     m_imgui_windows.queue(
         [this, target]() {
-            const std::string title = fmt::format("Texture Graph [{}]", ++m_texture_graph_counter);
+            const int slot = lowest_free_instance_slot(m_texture_graph_windows);
+            const std::string title     = fmt::format("Texture Graph [{}]", slot);
+            const std::string ini_label = fmt::format("Texture_graph_window {}", slot);
             std::shared_ptr<Texture_graph_window> window = std::make_shared<Texture_graph_window>(
-                m_imgui_renderer, m_imgui_windows, m_app_context, title, std::string_view{}
+                m_imgui_renderer, m_imgui_windows, m_app_context, title, ini_label
             );
+            window->set_instance_slot(slot);
             window->set_target(target);
             window->show_window();
             apply_editor_window_placement(m_imgui_windows, *window);

@@ -33,6 +33,7 @@ public:
         App_context&                                                app_context,
         std::string_view                                            name,
         std::string_view                                            ini_label,
+        int                                                         window_slot,
         const std::shared_ptr<Viewport_scene_view>&                 viewport_scene_view
     );
     ~Viewport_window() noexcept override;
@@ -54,6 +55,12 @@ public:
 
     // Public API
     [[nodiscard]] auto viewport_scene_view() const -> std::shared_ptr<Viewport_scene_view>;
+    // Stable per-window slot (1, 2, ...) carried in the "###Viewport_window N"
+    // ImGui ID and the "Viewport_window N" ini label. The lowest free slot is
+    // reused after a viewport window is destroyed, so window layout and open
+    // state persist across sessions independent of scene names and creation
+    // order (issue #265).
+    [[nodiscard]] auto get_window_slot() const -> int { return m_window_slot; }
     [[nodiscard]] auto is_viewport_focused() const -> bool { return m_viewport_child_window_focused; }
     [[nodiscard]] auto is_viewport_hovered() const -> bool { return m_viewport_child_window_hovered; }
 
@@ -72,6 +79,7 @@ private:
     App_context&                                       m_app_context;
     std::weak_ptr<Viewport_scene_view>                 m_viewport_scene_view;
     std::weak_ptr<erhe::rendergraph::Rendergraph_node> m_rendergraph_output_node;
+    int                                                m_window_slot{0};
     bool                                               m_brush_drag_and_drop_active{false};
     bool                                               m_viewport_child_window_focused{false};
     bool                                               m_viewport_child_window_hovered{false};
