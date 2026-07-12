@@ -82,3 +82,16 @@
   phase3::ERHE_*-extensions{72ac5da9+f70143b5}::ERHE_node/camera/light/material{library}+ERHE_physics/scene/layout/brushes/node_graphs/collections{editor}+exclusion-hook+11-spec-pages+schemas
   phase4::save/open-switchover{3a4989b6}::save_scene_gltf+open_scene_gltf{parsers/gltf}+Load_scene_file_message-single-entry-branching+.glb-file-picker+MCP-save/load+get/set_scene_settings+per-scene-imgui.ini-REMOVED+physics-import-folded-carrier-node-removal{save/open/re-save-node-identical,was+6-nodes/cycle}
   verified-headless::save→open→re-save-identical{nodes+ERHE-payloads};settings/ambient/physics-applied-on-open;open-¬undoable;foreign-glb→Scene_open_operation;legacy-.erhescene-still-loads
+✓gltf-scene-roundtrip-phase5{migration+removal}
+  migrated::"Prefab test"+"pf2"{.erhescene→.glb,node-sets-verified-identical,bundle-dirs-deleted}
+  deleted::scene_serialization.{hpp,cpp}+29-codegen-defs{gltf_source_reference+scene_settings-stay}+Asset_file_scene-handling+.erhescene-load-branch;Item_type::asset_file_scene-kept{renumber-risk}
+  extras::writers-already-gone-since-phase3→readers-kept{old-files};stale-setExtrasWriteCallback-comment-fixed
+  smoke-tests-ported→.glb{read_glb_json+wait_for_scene;checks→extensions.ERHE_node_graphs};geometry_nodes:130/130✓
+✓race-fix::Scene::update_node_transforms-locks-m_host->item_host_mutex
+  crash::2nd-glb-load→AV@Mesh::handle_node_transform_update{async-raytrace-kickoff-worker-rebuilt-m_rt_primitives-mid-iteration}
+  diagnosed::minidump{python-minidump+llvm-symbolizer-stack-scan;live-VS-debugger-repro-failed{timing}}
+✓geogram-wedge-fix{texture-suite-hang;user-attached-VS-debugger-to-hung-pid→real-stack}
+  hang::main-thread-brush-preview-convex-hull{PDEL}+worker-geogram-threads→CellStatusArray-assert→geo_abort-getchar{Windows}=eternal-headless-wedge
+  fix::make_convex_hull-PDEL→BDEL{sequential}+editor-ASSERT_THROW-explicit-sans-debugger{GEO_DEBUG-default-was-ASSERT_ABORT}
+  upstream-draft::doc/geogram.md{concurrent-geogram+non-interactive-geo_abort}
+  suites-green-post-fix::texture_graph-268/268{fresh-session-per-suite!}+geometry_nodes-130/130

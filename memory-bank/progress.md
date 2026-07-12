@@ -1,9 +1,11 @@
 §MBEL:5.0
 
 [TASK::gltf-scene-roundtrip]{active}
-✓phases0-4{0c3bd202+72ac5da9+f70143b5+3a4989b6;details→activeContext+history}
-?phase5::migration+removal{handoff-written@prompt_queue.txt,run-with-fresh-context}
-?phase6::verification{last}
+✓phases0-5{0c3bd202+72ac5da9+f70143b5+3a4989b6+phase5-commits;details→activeContext+history}
+✓race-fix::Scene::update_node_transforms-locks-item_host_mutex{async-raytrace-kickoff-vs-main-thread-AV}
+✓geogram-wedge-fix::make_convex_hull-PDEL→BDEL+ASSERT_THROW-explicit{doc/geogram.md=upstream-issue-draft}
+✓smoke-suites-green-post-removal{geometry_nodes:130/130+texture_graph:268/268;fresh-session-per-suite}
+?phase6::verification{last,handoff-written@prompt_queue.txt,run-with-fresh-context}
 
 [TASK::#239-per-scene-settings]{parked}
 ✓runtime-setter-MCP-tool{set_scene_settings+get_scene_settings@phase4,3a4989b6}→sky/grid-override-visual-verify-unblocked
