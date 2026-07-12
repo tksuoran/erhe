@@ -185,7 +185,19 @@ Asset_browser::Asset_browser(
             }
             const std::shared_ptr<Asset_file_gltf> gltf = std::dynamic_pointer_cast<Asset_file_gltf>(item);
             if (gltf) {
-                if (try_import(gltf) || try_instantiate(gltf) || try_open(gltf)) {
+                // Open-vs-import branch (doc/gltf-scene-roundtrip-plan.md
+                // phase 4): an erhe-authored scene file (ERHE_scene in
+                // extensionsUsed) loads as a full scene; any other glTF keeps
+                // the import-as-asset flow (Open = foreign glTF as new scene).
+                ensure_scanned(*gltf);
+                const bool erhe_scene = is_erhe_scene(gltf->extensions_used);
+                if (erhe_scene && try_load(gltf)) {
+                    close = true;
+                }
+                if (try_import(gltf) || try_instantiate(gltf)) {
+                    close = true;
+                }
+                if (!erhe_scene && try_open(gltf)) {
                     close = true;
                 }
             }
@@ -279,9 +291,10 @@ void ensure_scanned(Asset_file_gltf& gltf)
         return;
     }
     Gltf_scan_summary summary = scan_gltf(*source_path);
-    gltf.contents     = std::move(summary.contents);
-    gltf.bounding_box = summary.bounding_box;
-    gltf.is_scanned   = true;
+    gltf.contents        = std::move(summary.contents);
+    gltf.extensions_used = std::move(summary.extensions_used);
+    gltf.bounding_box    = summary.bounding_box;
+    gltf.is_scanned      = true;
 }
 
 auto Asset_browser::get_target_scene_root() -> std::shared_ptr<Scene_root>
@@ -351,6 +364,23 @@ auto Asset_browser::try_open(const std::shared_ptr<Asset_file_gltf>& gltf) -> bo
     if (ImGui::MenuItem(open_label.c_str())) {
         m_context.operation_stack->queue(
             std::make_shared<Scene_open_operation>(*gltf->get_source_path())
+        );
+        return true;
+    }
+    return false;
+}
+
+auto Asset_browser::try_load(const std::shared_ptr<Asset_file_gltf>& gltf) -> bool
+{
+    std::string load_label = fmt::format("Load scene '{}'", erhe::file::to_string(*gltf->get_source_path()));
+    if (ImGui::MenuItem(load_label.c_str())) {
+        // Reuse the exact File > Load Scene path: the message handler routes
+        // an erhe-authored glTF file to open_scene_gltf (full scene: new
+        // content library, browser + viewport windows, editor state applied).
+        m_context.app_message_bus->load_scene_file.queue_message(
+            Load_scene_file_message{
+                .path = *gltf->get_source_path()
+            }
         );
         return true;
     }

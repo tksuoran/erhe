@@ -28,27 +28,36 @@ Manages 3D scene data for the editor: scene roots (the top-level scene container
 
 - **`Node_raytrace`** -- Handles raytrace instance creation/destruction for mesh nodes.
 
-## Scene serialization (directory bundles, #241)
+## Scene persistence (erhe-authored glTF, phase 4)
 
-`scene_serialization.{hpp,cpp}` saves/loads a scene as a **directory bundle** named
-`<name>.erhescene` (dedicated extension on the directory, like an `.xcodeproj`),
-rather than a loose set of sibling files. `save_scene()` / `load_scene()` take the
-bundle directory; inside it the fixed layout is:
+Scenes are saved as a **single glTF file** (`<scene name>.glb` under
+`res/editor/scenes`, no file dialog; Overwrite/Cancel modal when the file
+exists): one `export_gltf()` call carrying the render content plus physics
+data, prefab external-asset references, embedded texture sources, animations
+and the editor-domain `ERHE_*` extensions (`parsers/gltf.hpp
+save_scene_gltf`; `ERHE_scene` in `extensionsUsed` marks the file as
+erhe-authored). File > Load Scene is a `.glb`/`.gltf` file picker; the
+`load_scene_file` message handler opens an erhe-authored file as a full
+`Scene_root` (`open_scene_gltf`: not undoable, empty content library, saved
+editor state applied) and routes a foreign glTF to `Scene_open_operation`
+(undoable "open foreign glTF as new scene"). The Asset Browser branches its
+context menu on `Asset_file_gltf::extensions_used` the same way. See
+`doc/gltf-scene-roundtrip-plan.md`.
+
+### Legacy scene serialization (directory bundles, #241)
+
+`scene_serialization.{hpp,cpp}` is the superseded **directory bundle** format:
+`<name>.erhescene` (dedicated extension on the directory, like an
+`.xcodeproj`) containing:
 
 - `scene.json` -- root JSON (`Scene_file`, codegen `definitions/scene_file.py`, version 5)
 - `data.glb` -- meshes + materials (only when the scene has meshes)
 - `mesh_<i>_p<p>.geogram` -- geometry-normative primitives
-- `imgui.ini` -- window docking layout (`scene_imgui_ini_path()`)
 
-The default bundle location is `res/editor/scenes`. Save uses a native *Save-file*
-dialog (pre-filled with `<scene name>.erhescene`) because a folder picker cannot
-name a new bundle; the chosen path is treated as the bundle root and its name is
-normalized to carry `.erhescene`. Load uses a native *folder* picker
-(`SDL_ShowOpenFolderDialog` / `erhe::file::select_folder`) to select an existing
-bundle. The Asset Browser lists each `.erhescene` directory as a single
-`Asset_file_scene` leaf with a "Load" action (raw glTF import/open stays on
-`Asset_file_gltf`). Loading is bundles-only; the JSON schema is unchanged from the
-previous flat-file format.
+The loader is kept for one transition period (existing bundles still load via
+the Asset Browser's `Asset_file_scene` "Load" action or MCP `load_scene`, and
+migrate by re-saving); nothing writes bundles anymore. Slated for removal in
+phase 5 of `doc/gltf-scene-roundtrip-plan.md`.
 
 ## Public API / Integration Points
 

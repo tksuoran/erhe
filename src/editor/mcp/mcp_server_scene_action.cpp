@@ -3,9 +3,72 @@
 
 #include "mcp/mcp_server_shared.hpp"
 
+#include "scene/generated/scene_settings_serialization.hpp"
+
+#include <simdjson.h>
+
 namespace editor {
 
 using namespace mcp_server_detail;
+
+auto Mcp_server::action_set_scene_settings(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    auto* sr = find_scene(scene_name);
+    if (!sr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+    bool changed = false;
+    if (args.contains("ambient_light")) {
+        const json& value = args["ambient_light"];
+        if (!value.is_array() || (value.size() < 3)) {
+            json r = make_text_content("ambient_light must be an array of 3 or 4 numbers");
+            r["isError"] = true;
+            return r.dump();
+        }
+        sr->get_scene().ambient_light = glm::vec4{
+            value[0].get<float>(),
+            value[1].get<float>(),
+            value[2].get<float>(),
+            (value.size() >= 4) ? value[3].get<float>() : 0.0f
+        };
+        changed = true;
+    }
+    if (args.contains("settings")) {
+        const json& value = args["settings"];
+        if (!value.is_object()) {
+            json r = make_text_content("settings must be an object (Scene_settings shape; {} resets every override)");
+            r["isError"] = true;
+            return r.dump();
+        }
+        // Replace semantics: the whole Scene_settings is rebuilt from the
+        // given object, so omitted fields return to "use the editor-global
+        // default" ({} clears every override).
+        Scene_settings new_settings{};
+        const std::string            settings_text = value.dump();
+        simdjson::ondemand::parser   settings_parser;
+        simdjson::padded_string      settings_padded{settings_text};
+        simdjson::ondemand::document settings_document;
+        simdjson::ondemand::object   settings_object;
+        const bool ok =
+            (settings_parser.iterate(settings_padded).get(settings_document) == simdjson::SUCCESS) &&
+            (settings_document.get_object().get(settings_object) == simdjson::SUCCESS) &&
+            (deserialize(settings_object, new_settings) == simdjson::SUCCESS);
+        if (!ok) {
+            json r = make_text_content("settings did not deserialize as Scene_settings");
+            r["isError"] = true;
+            return r.dump();
+        }
+        sr->get_scene_settings() = new_settings;
+        changed = true;
+    }
+    return make_json_content({
+        {"updated",    changed},
+        {"scene_name", sr->get_name()}
+    }).dump();
+}
 
 auto Mcp_server::action_select_items(const json& args) -> std::string
 {

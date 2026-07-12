@@ -550,12 +550,6 @@ auto get_node_id(
 
 } // anonymous namespace
 
-auto scene_imgui_ini_path(const std::filesystem::path& bundle_dir) -> std::filesystem::path
-{
-    // Companion ImGui layout inside the scene directory bundle (#241).
-    return bundle_dir / "imgui.ini";
-}
-
 namespace {
 
 // True when the node is inside a prefab instance subtree (an ancestor

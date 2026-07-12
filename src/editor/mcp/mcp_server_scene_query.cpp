@@ -7,6 +7,8 @@
 #include "scene/viewport_scene_views.hpp"
 #include "windows/viewport_window.hpp"
 
+#include "scene/generated/scene_settings_serialization.hpp"
+
 namespace editor {
 
 using namespace mcp_server_detail;
@@ -331,6 +333,37 @@ auto Mcp_server::query_viewports(const json& args) -> std::string
     }
 
     return make_json_content({{"viewports", viewports}}).dump();
+}
+
+auto Mcp_server::query_scene_settings(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    auto* sr = find_scene(scene_name);
+    if (!sr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+    const erhe::scene::Scene& scene          = sr->get_scene();
+    const Scene_settings&     scene_settings = sr->get_scene_settings();
+    // Per-scene setting overrides (#239): null when every field is at its
+    // "use the editor-global default" state, else the codegen-serialized
+    // Scene_settings object (same shape ERHE_scene persists).
+    json settings_json{};
+    if (!is_default(scene_settings)) {
+        settings_json = json::parse(serialize(scene_settings, 0), nullptr, false);
+        if (settings_json.is_discarded()) {
+            json r = make_text_content("Scene_settings serialization did not parse");
+            r["isError"] = true;
+            return r.dump();
+        }
+    }
+    return make_json_content({
+        {"scene_name",     sr->get_name()},
+        {"ambient_light",  {scene.ambient_light.x, scene.ambient_light.y, scene.ambient_light.z, scene.ambient_light.w}},
+        {"enable_physics", sr->has_physics_world()},
+        {"settings",       settings_json}
+    }).dump();
 }
 
 auto Mcp_server::query_scene_lights(const json& args) -> std::string

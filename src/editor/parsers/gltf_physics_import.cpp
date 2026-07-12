@@ -493,6 +493,10 @@ void import_gltf_physics(
     std::size_t trigger_count = 0;
     std::size_t joint_count   = 0;
     std::unordered_set<const erhe::scene::Node*> nodes_with_body;
+    // Nodes whose collider / trigger geometry folded into another node's
+    // body; pure shape-carrier nodes among them are removed at the end (see
+    // the cleanup pass below).
+    std::unordered_set<erhe::scene::Node*> folded_contributor_nodes;
 
     for (erhe::scene::Node* root : body_roots) {
         const std::vector<const erhe::gltf::Physics_node_description*>& collider_descriptions = colliders_by_root[root];
@@ -541,6 +545,11 @@ void import_gltf_physics(
                     continue;
                 }
                 entries.push_back(Body_shape_entry{.node = description->node.get(), .shape = std::move(shape)});
+                if (description->node.get() != root) {
+                    // Non-root contributors always fold into the root's
+                    // compound below; candidates for the carrier cleanup.
+                    folded_contributor_nodes.insert(description->node.get());
+                }
             }
         }
         if (material_conflict) {
@@ -646,6 +655,9 @@ void import_gltf_physics(
                         .transform = relative_body_transform(*node, *member),
                     }
                 );
+                if (member.get() != node) {
+                    folded_contributor_nodes.insert(member.get());
+                }
             }
             if (compound_create_info.children.empty()) {
                 log_parsers->warn("gltf physics: compound trigger '{}' has no usable member geometry - skipping", node->get_name());
@@ -715,6 +727,27 @@ void import_gltf_physics(
         auto node_joint = std::make_shared<Node_joint>(joint.connected_node, settings, joint.enable_collision);
         description.node->attach(node_joint);
         ++joint_count;
+    }
+
+    // 4. Remove pure shape-carrier nodes. The erhe exporter synthesizes
+    // "<body>_collider_<i>" child nodes for compound shape entries that
+    // cannot sit on the body node itself; once such a node's geometry is
+    // folded into the owning body's compound above, the node has served its
+    // whole purpose. Left in the scene it would be re-exported as a content
+    // node while the exporter synthesizes a fresh carrier next to it, growing
+    // the node set on every save/open cycle. Only nodes with no other
+    // content are removed: no attachments (mesh, light, joint, own body,
+    // ...) and no children (external assets instantiate before physics
+    // import, so carrier nodes with instanced content have children here).
+    for (erhe::scene::Node* node : folded_contributor_nodes) {
+        if (nodes_with_body.contains(node)) {
+            continue;
+        }
+        if (!node->get_attachments().empty() || !node->get_children().empty()) {
+            continue;
+        }
+        log_parsers->info("gltf physics: removing folded shape-carrier node '{}'", node->get_name());
+        node->set_parent({});
     }
 
     log_parsers->info(

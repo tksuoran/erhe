@@ -70,15 +70,50 @@ void finalize_imported_meshes(
 // Lightweight glTF file summary for the asset browser: human-readable
 // content lines (tooltip) plus the combined default-scene AABB computed
 // from accessor bounds in the JSON (no buffer data read) - used for the
-// viewport drag-and-drop preview and bottom-snap placement.
+// viewport drag-and-drop preview and bottom-snap placement. The structured
+// extensionsUsed list is carried alongside the flattened tooltip text so
+// callers can branch on ERHE_scene (erhe-authored scene marker, phase 4
+// open-vs-import).
 class Gltf_scan_summary
 {
 public:
     std::vector<std::string>        contents;
+    std::vector<std::string>        extensions_used;
     std::optional<erhe::math::Aabb> bounding_box;
 };
 
 [[nodiscard]] auto scan_gltf(const std::filesystem::path& path) -> Gltf_scan_summary;
+
+// True when extensionsUsed lists ERHE_scene: the file is an erhe-authored
+// scene (written by save_scene_gltf / export with editor state), opened as
+// a full Scene_root instead of imported as an asset.
+[[nodiscard]] auto is_erhe_scene(const std::vector<std::string>& extensions_used) -> bool;
+
+// Scene save (doc/gltf-scene-roundtrip-plan.md phase 4): one export_gltf()
+// call writing the whole scene state into a single glTF file - render
+// content plus physics data, prefab external-asset references, embedded
+// texture sources, animations, and every editor-domain ERHE_* extension
+// payload (add_gltf_editor_state). Binary .glb unless the path ends in
+// .gltf. Returns false when the scene has no root node or the write fails.
+[[nodiscard]] auto save_scene_gltf(Scene_root& scene_root, const std::filesystem::path& path) -> bool;
+
+// Scene open (doc/gltf-scene-roundtrip-plan.md phase 4): opens an
+// erhe-authored glTF file (see is_erhe_scene) as a full Scene_root - NOT
+// undoable, mirroring the legacy .erhescene load_scene shape. Reuses the
+// import machinery (parse_gltf + finalize_imported_meshes + physics import
+// + import_gltf_editor_state) but constructs the Scene_root directly with a
+// fresh, empty Content_library (the file carries the scene's own brushes /
+// materials / textures) and applies the ERHE_scene payload (enable_physics
+// at construction, ambient light, per-scene Scene_settings) which the
+// import path deliberately leaves alone. The parsed top-level nodes are
+// parented directly under the new scene's root (no import_root wrapper)
+// and no default camera / lights are injected. The caller wires up UI
+// (browser window, viewport) and sends Scene_created_message. Returns
+// nullptr when the file cannot be read.
+[[nodiscard]] auto open_scene_gltf(
+    App_context&                 context,
+    const std::filesystem::path& path
+) -> std::shared_ptr<Scene_root>;
 
 // Gltf_export_arguments::image_source_provider backed by the scene's
 // content library (doc/gltf-scene-roundtrip-plan.md phase 0): serves the

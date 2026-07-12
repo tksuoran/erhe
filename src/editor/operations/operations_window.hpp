@@ -206,10 +206,9 @@ public:
     void create_joint_settings();
 
 private:
-    // Saves the scene into the bundle directory and persists the current
-    // window-docking layout next to it (shared by save_scene and the
-    // overwrite-confirmation modal).
-    void save_scene_to_bundle(Scene_root& scene_root, const std::filesystem::path& bundle);
+    // Saves the scene as a single erhe-authored glTF file (shared by
+    // save_scene and the overwrite-confirmation modal).
+    void save_scene_to_file(Scene_root& scene_root, const std::filesystem::path& path);
 
     void async_for_selected_nodes_with_mesh(std::function<void(Mesh_operation_parameters&&)> op, bool selection_aware = false);
 
@@ -366,12 +365,12 @@ private:
     Scene_view*                    m_last_hover_scene_view{nullptr};
 
     // Pending File > Save Scene overwrite confirmation (imgui_modal_dialogs):
-    // set by save_scene() when the target bundle already exists; the scene_root
+    // set by save_scene() when the target file already exists; the scene_root
     // being non-null is what marks the confirmation as pending. The ImGui
     // context pointer pins the modal to the imgui host that opened it, since
     // viewport_menu (and thus imgui_modal_dialogs) can run for several hosts.
     std::shared_ptr<Scene_root>    m_save_confirm_scene_root{};
-    std::filesystem::path          m_save_confirm_bundle{};
+    std::filesystem::path          m_save_confirm_path{};
     ImGuiContext*                  m_save_confirm_imgui_context{nullptr};
 
     Make_mesh_config m_make_mesh_config{};

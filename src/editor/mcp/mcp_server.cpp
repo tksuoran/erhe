@@ -349,6 +349,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "get_scene_materials") result = query_scene_materials (req->arguments);
         else if (req->tool_name == "get_scene_textures") result = query_scene_textures  (req->arguments);
         else if (req->tool_name == "get_scene_brushes")  result = query_scene_brushes  (req->arguments);
+        else if (req->tool_name == "get_scene_settings") result = query_scene_settings (req->arguments);
         else if (req->tool_name == "get_material_details")result = query_material_details(req->arguments);
         else if (req->tool_name == "get_viewports")       result = query_viewports       (req->arguments);
         else if (req->tool_name == "get_server_info")     result = query_server_info     (req->arguments);
@@ -373,6 +374,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "add_tags")           result = action_add_tags       (req->arguments);
         else if (req->tool_name == "remove_tags")        result = action_remove_tags    (req->arguments);
         else if (req->tool_name == "edit_material")      result = action_edit_material  (req->arguments);
+        else if (req->tool_name == "set_scene_settings") result = action_set_scene_settings(req->arguments);
         else if (req->tool_name == "save_scene")         result = action_save_scene     (req->arguments);
         else if (req->tool_name == "load_scene")         result = action_load_scene     (req->arguments);
         else if (req->tool_name == "open_scene")         result = action_open_scene     (req->arguments);

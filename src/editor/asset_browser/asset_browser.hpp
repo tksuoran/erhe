@@ -64,6 +64,11 @@ public:
 
     bool                            is_scanned{false};
     std::vector<std::string>        contents;
+    // Structured extensionsUsed from the file's asset; filled by
+    // ensure_scanned(). The asset browser branches on ERHE_scene
+    // (is_erhe_scene): an erhe-authored scene file loads as a full scene,
+    // any other glTF keeps the import-as-asset flow.
+    std::vector<std::string>        extensions_used;
     // Combined default-scene AABB from the file's accessor bounds (JSON
     // only, no buffer data); filled by ensure_scanned(). Used for the
     // viewport drag-and-drop preview box and bottom-snap placement.
@@ -169,6 +174,9 @@ private:
     // the content in instead).
     auto try_instantiate(const std::shared_ptr<Asset_file_gltf>& gltf) -> bool;
     auto try_open       (const std::shared_ptr<Asset_file_gltf>& gltf) -> bool;
+    // Load an erhe-authored glTF scene file (ERHE_scene in extensionsUsed)
+    // as a full scene via the File > Load Scene message path.
+    auto try_load       (const std::shared_ptr<Asset_file_gltf>& gltf) -> bool;
 
     auto try_import(const std::shared_ptr<Asset_file_geogram>& geogram) -> bool;
 

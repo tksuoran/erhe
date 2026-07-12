@@ -31,30 +31,29 @@ auto Mcp_server::action_save_scene(const json& args) -> std::string
         r["isError"] = true;
         return r.dump();
     }
-    // Scenes are saved as directory bundles (#241): treat path as the bundle
-    // directory and normalize its name to carry the .erhescene extension, matching
-    // the File > Save Scene dialog behavior.
-    std::filesystem::path bundle{path_str};
-    if (bundle.extension() != std::filesystem::path{".erhescene"}) {
-        bundle = std::filesystem::path{bundle.string() + ".erhescene"};
+    // Scenes are saved as single erhe-authored glTF files
+    // (doc/gltf-scene-roundtrip-plan.md phase 4): normalize the path to carry
+    // a glTF extension (.glb appended when missing; .gltf is honored and
+    // selects the text form), matching File > Save Scene.
+    std::filesystem::path path{path_str};
+    if (
+        (path.extension() != std::filesystem::path{".glb"}) &&
+        (path.extension() != std::filesystem::path{".gltf"})
+    ) {
+        path = std::filesystem::path{path.string() + ".glb"};
     }
-    const bool ok = editor::save_scene(*sr, bundle);
+    const bool ok = editor::save_scene_gltf(*sr, path);
     if (!ok) {
-        json r = make_text_content("save_scene failed: " + bundle.string());
+        json r = make_text_content("save_scene failed: " + path.string());
         r["isError"] = true;
         return r.dump();
     }
-    // Persist the current window-docking layout inside the bundle so a later load
-    // can restore how the windows were docked at save time.
-    if (m_context.imgui_windows != nullptr) {
-        m_context.imgui_windows->save_imgui_ini(editor::scene_imgui_ini_path(bundle).string());
-    }
-    // Rescan the asset browser so the freshly saved bundle appears without a
+    // Rescan the asset browser so the freshly saved scene appears without a
     // manual Scan (#256).
-    m_context.app_message_bus->scene_saved.send_message(Scene_saved_message{.path = bundle});
+    m_context.app_message_bus->scene_saved.send_message(Scene_saved_message{.path = path});
     return make_json_content({
         {"saved", true},
-        {"path",  bundle.string()}
+        {"path",  path.string()}
     }).dump();
 }
 
@@ -102,27 +101,28 @@ auto Mcp_server::action_load_scene(const json& args) -> std::string
         r["isError"] = true;
         return r.dump();
     }
-    // path is the .erhescene bundle directory (#241); load_scene reads scene.json
-    // from inside it. Each loaded scene gets its own content library, mirroring the
-    // file-dialog load path in Operations::load_scene.
     const std::filesystem::path path{path_str};
-    std::shared_ptr<Content_library> content_library = std::make_shared<Content_library>();
-    std::shared_ptr<Scene_root> scene_root = editor::load_scene(
-        &m_context,
-        m_context.app_message_bus,
-        m_context.app_scenes,
-        content_library,
-        path
-    );
-    if (!scene_root) {
-        json r = make_text_content("load_scene failed: " + path_str);
+    std::error_code error_code;
+    if (!std::filesystem::exists(path, error_code)) {
+        json r = make_text_content("File not found: " + path_str);
         r["isError"] = true;
         return r.dump();
     }
+    // Queue the exact File > Load Scene path: the message handler opens an
+    // erhe-authored glTF file as a full scene (fresh content library, browser
+    // + viewport windows, ERHE_scene state applied; not undoable), routes a
+    // foreign glTF to Scene_open_operation, and still accepts a legacy
+    // .erhescene bundle directory. Queued so the window setup runs from the
+    // message pump on a following frame, outside ImGui iteration.
+    m_context.app_message_bus->load_scene_file.queue_message(
+        Load_scene_file_message{
+            .path = path
+        }
+    );
     return make_json_content({
-        {"loaded",     true},
+        {"queued",     true},
         {"path",       path_str},
-        {"scene_name", scene_root->get_name()}
+        {"scene_name", erhe::file::to_string(path.stem())}
     }).dump();
 }
 

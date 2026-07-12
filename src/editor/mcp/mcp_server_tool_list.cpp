@@ -260,22 +260,38 @@ void Mcp_server::refresh_tool_list()
         {"required", json::array({"scene_name", "material_name"})}
     }});
 
-    m_tool_infos.push_back({"save_scene",         "Save a scene as an editor scene directory bundle (.erhescene folder containing scene.json, data.glb and geometry files), without a file dialog", {
+    m_tool_infos.push_back({"get_scene_settings", "Get a scene's per-scene state: ambient light color, physics enable, and the per-scene setting overrides (#239; null when every field uses the editor-global default, else the Scene_settings object: sky, grid, physics, shadow_frustum_fit, camera_controls, clear_color, post_processing).", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name", {{"type", "string"}, {"description", "Name of the scene"}}}
+        }},
+        {"required", json::array({"scene_name"})}
+    }});
+    m_tool_infos.push_back({"set_scene_settings", "Set a scene's per-scene state: ambient light color and/or the per-scene setting overrides (#239). 'settings' REPLACES the whole Scene_settings object (omitted fields return to the editor-global default; {} clears every override). These persist in the ERHE_scene extension when the scene is saved.", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name",    {{"type", "string"}, {"description", "Name of the scene"}}},
+            {"ambient_light", {{"type", "array"},  {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 4}, {"description", "Ambient light color [r, g, b] or [r, g, b, a]"}}},
+            {"settings",      {{"type", "object"}, {"description", "Scene_settings object (same shape get_scene_settings returns): optional sky, grid, physics, shadow_frustum_fit, camera_controls, clear_color ([r,g,b,a]), post_processing (bool)"}}}
+        }},
+        {"required", json::array({"scene_name"})}
+    }});
+    m_tool_infos.push_back({"save_scene",         "Save a scene as a single erhe-authored glTF file carrying FULL editor state (render content plus the ERHE_* extensions: scene settings, physics, layouts, brushes, node graphs, collections/tags; ERHE_scene in extensionsUsed marks the file), without a file dialog. This is the scene persistence path; export_gltf without editor_state is the plain interchange export.", {
         {"type", "object"},
         {"properties", {
             {"scene_name", {{"type", "string"}, {"description", "Name of the scene"}}},
-            {"path",       {{"type", "string"}, {"description", "Destination bundle directory path; a .erhescene extension is appended if missing"}}}
+            {"path",       {{"type", "string"}, {"description", "Destination file path; .glb is appended when the extension is neither .glb nor .gltf (.gltf selects the text form)"}}}
         }},
         {"required", json::array({"scene_name", "path"})}
     }});
-    m_tool_infos.push_back({"load_scene",         "Load an editor scene directory bundle (.erhescene folder saved by save_scene) as a new scene, without a file dialog", {
+    m_tool_infos.push_back({"load_scene",         "Load a saved scene, without a file dialog: an erhe-authored glTF file (saved by save_scene) opens as a full scene with its saved editor state (fresh content library, browser + viewport windows; not undoable); a foreign glTF opens as a new scene via the same path as open_scene; a legacy .erhescene bundle directory is still accepted. The load is queued and completes on a following frame; discover the scene via list_scenes.", {
         {"type", "object"},
         {"properties", {
-            {"path", {{"type", "string"}, {"description", "Source .erhescene bundle directory path"}}}
+            {"path", {{"type", "string"}, {"description", "Source .glb/.gltf scene file path (or legacy .erhescene bundle directory)"}}}
         }},
         {"required", json::array({"path"})}
     }});
-    m_tool_infos.push_back({"open_scene",         "Open a glTF file as a new scene (same as the Asset Browser's Open context menu entry): creates a scene root + content library + browser window + a new viewport window showing the scene, and imports the file, all as a single undoable operation. Existing viewport windows are not modified. The open is queued and completes on a following frame; discover the scene via list_scenes (named after the file name).", {
+    m_tool_infos.push_back({"open_scene",         "Open a FOREIGN glTF file as a new scene (same as the Asset Browser's Open context menu entry): creates a scene root + content library + browser window + a new viewport window showing the scene, and imports the file, all as a single undoable operation. Existing viewport windows are not modified. The open is queued and completes on a following frame; discover the scene via list_scenes (named after the file name). For an erhe-authored scene file, prefer load_scene, which also applies the saved editor state.", {
         {"type", "object"},
         {"properties", {
             {"path", {{"type", "string"}, {"description", "Source .gltf/.glb file path"}}}

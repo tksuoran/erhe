@@ -2,10 +2,13 @@
 
 #include "parsers/gltf.hpp"
 
+#include "parsers/gltf_extensions_export.hpp"
 #include "parsers/gltf_extensions_import.hpp"
+#include "parsers/gltf_physics_export.hpp"
 #include "parsers/gltf_physics_import.hpp"
 
 #include "app_context.hpp"
+#include "app_scenes.hpp"
 #include "content_library/content_library.hpp"
 #include "scene/scene_root.hpp"
 #include "operations/async_raytrace_kickoff_operation.hpp"
@@ -40,8 +43,12 @@
 
 #include "erhe_math/math_util.hpp"
 
-#include <fmt/format.h>
+#include "scene/generated/scene_settings_serialization.hpp"
 
+#include <fmt/format.h>
+#include <simdjson.h>
+
+#include <algorithm>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -84,6 +91,101 @@ void color_graph(
             continue;
         }
         color_graph(child_node.get(), node_colors, available_colors);
+    }
+}
+
+// Content-library attach operations for everything the parsed glTF carries
+// besides the node tree: textures (with retained source image bytes),
+// materials, skins and animations, each tagged with a Gltf_source_reference.
+// Shared by the undoable import compound (make_import_gltf_operation) and
+// the not-undoable scene open path (open_scene_gltf), which executes them
+// inline and drops them.
+void append_content_library_attach_operations(
+    const std::shared_ptr<Content_library>&  content_library,
+    const erhe::gltf::Gltf_data&             gltf_data,
+    const std::string&                       gltf_path_str,
+    std::vector<std::shared_ptr<Operation>>& operations
+)
+{
+    log_parsers->info("Processing {} textures", gltf_data.images.size());
+    for (size_t i = 0; i < gltf_data.images.size(); ++i) {
+        const std::shared_ptr<erhe::graphics::Texture>& image = gltf_data.images[i];
+        if (image) {
+            operations.push_back(
+                std::make_shared<Content_library_attach_operation<erhe::graphics::Texture>>(
+                    content_library,
+                    content_library->textures,
+                    image,
+                    Gltf_source_reference{
+                        .gltf_path  = gltf_path_str,
+                        .item_name  = image->get_name(),
+                        .item_index = static_cast<int>(i),
+                        .item_type  = "texture",
+                    },
+                    (i < gltf_data.image_sources.size()) ? gltf_data.image_sources[i] : std::shared_ptr<erhe::gltf::Gltf_image_source>{}
+                )
+            );
+        }
+    }
+
+    log_parsers->info("Processing {} materials", gltf_data.materials.size());
+    for (size_t i = 0; i < gltf_data.materials.size(); ++i) {
+        const std::shared_ptr<erhe::primitive::Material>& material = gltf_data.materials[i];
+        if (material) {
+            operations.push_back(
+                std::make_shared<Content_library_attach_operation<erhe::primitive::Material>>(
+                    content_library,
+                    content_library->materials,
+                    material,
+                    Gltf_source_reference{
+                        .gltf_path  = gltf_path_str,
+                        .item_name  = material->get_name(),
+                        .item_index = static_cast<int>(i),
+                        .item_type  = "material",
+                    }
+                )
+            );
+        }
+    }
+
+    log_parsers->info("Processing {} skins", gltf_data.skins.size());
+    for (size_t i = 0; i < gltf_data.skins.size(); ++i) {
+        const std::shared_ptr<erhe::scene::Skin>& skin = gltf_data.skins[i];
+        if (skin) {
+            operations.push_back(
+                std::make_shared<Content_library_attach_operation<erhe::scene::Skin>>(
+                    content_library,
+                    content_library->skins,
+                    skin,
+                    Gltf_source_reference{
+                        .gltf_path  = gltf_path_str,
+                        .item_name  = skin->get_name(),
+                        .item_index = static_cast<int>(i),
+                        .item_type  = "skin",
+                    }
+                )
+            );
+        }
+    }
+
+    log_parsers->info("Processing {} animations", gltf_data.animations.size());
+    for (size_t i = 0; i < gltf_data.animations.size(); ++i) {
+        const std::shared_ptr<erhe::scene::Animation>& animation = gltf_data.animations[i];
+        if (animation) {
+            operations.push_back(
+                std::make_shared<Content_library_attach_operation<erhe::scene::Animation>>(
+                    content_library,
+                    content_library->animations,
+                    animation,
+                    Gltf_source_reference{
+                        .gltf_path  = gltf_path_str,
+                        .item_name  = animation->get_name(),
+                        .item_index = static_cast<int>(i),
+                        .item_type  = "animation",
+                    }
+                )
+            );
+        }
     }
 }
 
@@ -341,91 +443,8 @@ auto make_import_gltf_operation(
     // root_node to scene_root_node on execute().
     root_node->set_parent({});
 
-    std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
-    const std::string gltf_path_str = path.generic_string();
-
     std::vector<std::shared_ptr<Operation>> operations;
-
-    log_parsers->info("Processing {} textures", gltf_data.images.size());
-    for (size_t i = 0; i < gltf_data.images.size(); ++i) {
-        const std::shared_ptr<erhe::graphics::Texture>& image = gltf_data.images[i];
-        if (image) {
-            operations.push_back(
-                std::make_shared<Content_library_attach_operation<erhe::graphics::Texture>>(
-                    content_library,
-                    content_library->textures,
-                    image,
-                    Gltf_source_reference{
-                        .gltf_path  = gltf_path_str,
-                        .item_name  = image->get_name(),
-                        .item_index = static_cast<int>(i),
-                        .item_type  = "texture",
-                    },
-                    (i < gltf_data.image_sources.size()) ? gltf_data.image_sources[i] : std::shared_ptr<erhe::gltf::Gltf_image_source>{}
-                )
-            );
-        }
-    }
-
-    log_parsers->info("Processing {} materials", gltf_data.materials.size());
-    for (size_t i = 0; i < gltf_data.materials.size(); ++i) {
-        const std::shared_ptr<erhe::primitive::Material>& material = gltf_data.materials[i];
-        if (material) {
-            operations.push_back(
-                std::make_shared<Content_library_attach_operation<erhe::primitive::Material>>(
-                    content_library,
-                    content_library->materials,
-                    material,
-                    Gltf_source_reference{
-                        .gltf_path  = gltf_path_str,
-                        .item_name  = material->get_name(),
-                        .item_index = static_cast<int>(i),
-                        .item_type  = "material",
-                    }
-                )
-            );
-        }
-    }
-
-    log_parsers->info("Processing {} skins", gltf_data.skins.size());
-    for (size_t i = 0; i < gltf_data.skins.size(); ++i) {
-        const std::shared_ptr<erhe::scene::Skin>& skin = gltf_data.skins[i];
-        if (skin) {
-            operations.push_back(
-                std::make_shared<Content_library_attach_operation<erhe::scene::Skin>>(
-                    content_library,
-                    content_library->skins,
-                    skin,
-                    Gltf_source_reference{
-                        .gltf_path  = gltf_path_str,
-                        .item_name  = skin->get_name(),
-                        .item_index = static_cast<int>(i),
-                        .item_type  = "skin",
-                    }
-                )
-            );
-        }
-    }
-
-    log_parsers->info("Processing {} animations", gltf_data.animations.size());
-    for (size_t i = 0; i < gltf_data.animations.size(); ++i) {
-        const std::shared_ptr<erhe::scene::Animation>& animation = gltf_data.animations[i];
-        if (animation) {
-            operations.push_back(
-                std::make_shared<Content_library_attach_operation<erhe::scene::Animation>>(
-                    content_library,
-                    content_library->animations,
-                    animation,
-                    Gltf_source_reference{
-                        .gltf_path  = gltf_path_str,
-                        .item_name  = animation->get_name(),
-                        .item_index = static_cast<int>(i),
-                        .item_type  = "animation",
-                    }
-                )
-            );
-        }
-    }
+    append_content_library_attach_operations(scene_root->get_content_library(), gltf_data, path.generic_string(), operations);
 
     // KHR_physics_rigid_bodies / KHR_implicit_shapes: shared physics items go
     // through content-library attach operations; Node_physics / Node_joint
@@ -569,7 +588,13 @@ auto scan_gltf(const std::filesystem::path& path) -> Gltf_scan_summary
         const glm::vec3 size = scan.bounding_box->diagonal();
         out.push_back(fmt::format("size: {:.2f} x {:.2f} x {:.2f}", size.x, size.y, size.z));
     }
+    summary.extensions_used = std::move(scan.extensions_used);
     return summary;
+}
+
+auto is_erhe_scene(const std::vector<std::string>& extensions_used) -> bool
+{
+    return std::find(extensions_used.begin(), extensions_used.end(), "ERHE_scene") != extensions_used.end();
 }
 
 auto make_gltf_image_source_provider(const std::shared_ptr<Content_library>& content_library)
@@ -629,6 +654,147 @@ auto collect_gltf_export_animations(const std::shared_ptr<Content_library>& cont
     }
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
     return content_library->animations->get_all<erhe::scene::Animation>();
+}
+
+auto save_scene_gltf(Scene_root& scene_root, const std::filesystem::path& path) -> bool
+{
+    const erhe::scene::Scene& scene = scene_root.get_scene();
+    const std::shared_ptr<erhe::scene::Node> root_node = scene.get_root_node();
+    if (!root_node) {
+        log_parsers->error("save_scene_gltf: scene '{}' has no root node", scene_root.get_name());
+        return false;
+    }
+    const erhe::gltf::Gltf_physics_data physics_data = build_gltf_physics_data(scene, scene_root.get_content_library().get());
+    erhe::gltf::Gltf_export_arguments export_arguments{
+        .root_node             = *root_node,
+        .binary                = path.extension() != std::filesystem::path{".gltf"},
+        .physics_data          = &physics_data,
+        .external_assets       = collect_prefab_external_assets(*root_node, path.parent_path()),
+        .image_source_provider = make_gltf_image_source_provider(scene_root.get_content_library()),
+        .animations            = collect_gltf_export_animations(scene_root.get_content_library())
+    };
+    // Editor-domain ERHE_* extensions + baked graph-mesh exclusion: this is
+    // what makes the file a full scene save instead of an interchange export
+    // (ERHE_scene in extensionsUsed is the erhe-authored marker).
+    add_gltf_editor_state(export_arguments, scene_root);
+    const std::string gltf = erhe::gltf::export_gltf(export_arguments);
+    if (!erhe::file::write_file(path, gltf)) {
+        log_parsers->error("save_scene_gltf: failed to write '{}'", erhe::file::to_string(path));
+        return false;
+    }
+    return true;
+}
+
+auto open_scene_gltf(
+    App_context&                 context,
+    const std::filesystem::path& path
+) -> std::shared_ptr<Scene_root>
+{
+    ERHE_VERIFY(context.current_command_buffer != nullptr);
+
+    // Parse into a temporary container first: the ERHE_scene payload
+    // (enable_physics) must be known before the Scene_root can be
+    // constructed. Mesh layer ids are editor-wide constants (Mesh_layer_id),
+    // so parsing before the destination scene exists is safe.
+    erhe::scene::Scene temp_scene{"temp scene", nullptr};
+    const std::shared_ptr<erhe::scene::Node> temp_scene_root_node = temp_scene.get_root_node();
+    std::shared_ptr<erhe::scene::Node> container_node = std::make_shared<erhe::scene::Node>("open scene container");
+    container_node->set_parent(temp_scene_root_node);
+
+    erhe::gltf::Image_transfer image_transfer{*context.graphics_device, *context.current_command_buffer};
+    erhe::gltf::Gltf_parse_arguments parse_arguments{
+        .graphics_device = *context.graphics_device,
+        .executor        = *context.executor,
+        .image_transfer  = image_transfer,
+        .root_node       = container_node,
+        .mesh_layer_id   = Mesh_layer_id::content,
+        .path            = path,
+    };
+    erhe::gltf::Gltf_data gltf_data = erhe::gltf::parse_gltf(parse_arguments);
+
+    const std::optional<Gltf_scene_state> scene_state = parse_gltf_scene_state(gltf_data);
+    if (!scene_state.has_value()) {
+        // The callers route only ERHE_scene-marked files here, so a missing
+        // payload means the file could not be parsed at all.
+        log_parsers->error("open_scene_gltf: '{}' has no ERHE_scene payload - not an erhe-authored scene or parse failed", erhe::file::to_string(path));
+        return {};
+    }
+
+    // Fresh, EMPTY content library: the file carries the scene's own brushes /
+    // materials / textures (a create_scene-style library pre-populated with
+    // the standard brushes would duplicate the saved ones).
+    std::shared_ptr<Content_library> content_library = std::make_shared<Content_library>();
+    std::shared_ptr<Scene_root> scene_root = std::make_shared<Scene_root>(
+        context.app_message_bus,
+        content_library,
+        erhe::file::to_string(path.stem()),
+        scene_state->enable_physics
+    );
+
+    // Apply the ERHE_scene payload - the one thing the import path
+    // deliberately leaves alone (importing an asset must not clobber the
+    // target scene's settings).
+    erhe::scene::Scene& scene = scene_root->get_scene();
+    scene.ambient_light = scene_state->ambient_light;
+    if (!scene_state->settings_json.empty()) {
+        simdjson::ondemand::parser settings_parser;
+        simdjson::padded_string    settings_padded{scene_state->settings_json};
+        simdjson::ondemand::document settings_document;
+        simdjson::ondemand::object   settings_object;
+        if (
+            (settings_parser.iterate(settings_padded).get(settings_document) == simdjson::SUCCESS) &&
+            (settings_document.get_object().get(settings_object) == simdjson::SUCCESS) &&
+            (deserialize(settings_object, scene_root->get_scene_settings()) == simdjson::SUCCESS)
+        ) {
+            log_parsers->info("open_scene_gltf: applied per-scene setting overrides");
+        } else {
+            log_parsers->error("open_scene_gltf: failed to deserialize ERHE_scene settings payload");
+        }
+    }
+
+    scene_root->register_to_editor_scenes(*context.app_scenes);
+
+    std::vector<std::shared_ptr<erhe::Item_base>> mesh_node_items;
+    finalize_imported_meshes(context, make_import_build_info(context), gltf_data, &mesh_node_items);
+
+    // glTF 2.1 external assets: instantiate each referenced prefab under its
+    // carrier node.
+    if (context.prefab_library != nullptr) {
+        resolve_external_assets(*context.prefab_library, gltf_data, scene_root->layers().content()->id, &mesh_node_items);
+    }
+
+    // Content-library attaches (textures / materials / skins / animations),
+    // physics items and editor-domain ERHE_* state. These build undoable
+    // operations for the import path; here they are executed inline and
+    // dropped - opening a scene is not undoable, like the legacy .erhescene
+    // load. Same ordering as the import compound: everything executes before
+    // the nodes enter the scene.
+    std::vector<std::shared_ptr<Operation>> operations;
+    append_content_library_attach_operations(content_library, gltf_data, path.generic_string(), operations);
+    import_gltf_physics(context, gltf_data, scene_root, path, operations);
+    import_gltf_editor_state(context, gltf_data, scene_root, path, operations);
+    for (const std::shared_ptr<Operation>& operation : operations) {
+        operation->execute(context);
+    }
+
+    // Move the parsed top-level nodes directly under the new scene's root:
+    // the saved file carries the scene's children in place (import_root
+    // wrappers are never written), so open adds no wrapper either. No
+    // default camera / lights are injected - an erhe-authored scene carries
+    // exactly the cameras and lights it was saved with. Copy the child list:
+    // reparenting mutates it.
+    const std::shared_ptr<erhe::scene::Node> scene_root_node = scene.get_root_node();
+    const std::vector<std::shared_ptr<erhe::Hierarchy>> children = container_node->get_children();
+    for (const std::shared_ptr<erhe::Hierarchy>& child : children) {
+        child->set_parent(scene_root_node);
+    }
+
+    // Raytrace kickoff, mirroring the import compound's final sub-operation.
+    Async_raytrace_kickoff_operation raytrace_kickoff{scene_root, std::move(mesh_node_items)};
+    raytrace_kickoff.execute(context);
+
+    log_parsers->info("open_scene_gltf: opened scene '{}' from '{}'", scene_root->get_name(), erhe::file::to_string(path));
+    return scene_root;
 }
 
 }

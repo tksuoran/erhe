@@ -17,6 +17,7 @@
 #include "operations/node_attach_operation.hpp"
 #include "operations/node_transform_operation.hpp"
 #include "operations/operation_stack.hpp"
+#include "operations/scene_open_operation.hpp"
 #include "parsers/gltf.hpp"
 #include "parsers/gltf_physics_export.hpp"
 #include "prefabs/prefab_library.hpp"
@@ -895,14 +896,35 @@ Operations::Operations(
     m_load_scene_file_subscription = app_message_bus.load_scene_file.subscribe(
         [&](Load_scene_file_message& message) {
             try {
-                auto content_library = std::make_shared<Content_library>();
-                auto scene_root = editor::load_scene(
-                    &m_context,
-                    m_context.app_message_bus,
-                    m_context.app_scenes,
-                    content_library,
-                    message.path
-                );
+                std::shared_ptr<Scene_root> scene_root;
+                if (message.path.extension() == std::filesystem::path{".erhescene"}) {
+                    // Legacy scene directory bundle (#241), kept loadable for
+                    // one transition period (phase 5 migration); scenes are
+                    // saved as single erhe-authored glTF files now.
+                    auto content_library = std::make_shared<Content_library>();
+                    scene_root = editor::load_scene(
+                        &m_context,
+                        m_context.app_message_bus,
+                        m_context.app_scenes,
+                        content_library,
+                        message.path
+                    );
+                } else {
+                    // glTF file: an erhe-authored scene (ERHE_scene in
+                    // extensionsUsed) opens as a full scene with its saved
+                    // editor state; any other glTF opens as a foreign scene
+                    // (Scene_open_operation: undoable, own new viewport).
+                    const Gltf_scan_summary summary = editor::scan_gltf(message.path);
+                    if (!is_erhe_scene(summary.extensions_used)) {
+                        log_operations->info(
+                            "Load Scene: '{}' is not an erhe-authored scene - opening as foreign glTF",
+                            erhe::file::to_string(message.path)
+                        );
+                        m_context.operation_stack->queue(std::make_shared<Scene_open_operation>(message.path));
+                        return;
+                    }
+                    scene_root = editor::open_scene_gltf(m_context, message.path);
+                }
                 if (scene_root) {
                     log_operations->info("Scene loaded: {}", scene_root->get_name());
                     // The content library is shown nested under the Scene row in the
@@ -941,19 +963,6 @@ Operations::Operations(
                     m_context.app_message_bus->scene_created.send_message(
                         Scene_created_message{ scene_root }
                     );
-
-                    // Restore the per-scene window-docking layout saved next to the
-                    // scene file (see save_scene_callback / action_save_scene), so the
-                    // viewport and content-library windows come back docked the way
-                    // they were saved instead of floating. Applied after the windows
-                    // are created so ImGui matches the saved settings to them by name.
-                    if (m_context.imgui_windows != nullptr) {
-                        const std::filesystem::path ini_path = editor::scene_imgui_ini_path(message.path);
-                        std::error_code ec;
-                        if (std::filesystem::exists(ini_path, ec)) {
-                            m_context.imgui_windows->load_imgui_ini(ini_path.string());
-                        }
-                    }
                 }
             } catch (...) {
                 log_operations->error("exception: load scene");
@@ -2300,10 +2309,10 @@ static void s_load_scene_callback(void* userdata, const char* const* filelist, i
 }
 #endif
 
-// Default location for scene directory bundles (#241): res/editor/scenes,
-// relative to the editor working directory (repo root). Created if missing so the
-// native folder dialog opens there and the asset browser can list saved bundles.
-static auto default_scene_bundle_dir() -> std::filesystem::path
+// Default location for saved scene files: res/editor/scenes, relative to the
+// editor working directory (repo root). Created if missing so the native file
+// dialog opens there and the asset browser can list saved scenes.
+static auto default_scene_dir() -> std::filesystem::path
 {
     std::error_code ec;
     std::filesystem::path dir = std::filesystem::absolute(
@@ -2412,41 +2421,37 @@ void Operations::save_prefab()
 
 void Operations::save_scene()
 {
-    // Scenes are saved as directory bundles (#241). The bundle name is derived
-    // from the scene name -- <scene name>.erhescene under res/editor/scenes --
-    // instead of asking with a file dialog. When the bundle already exists, an
+    // Scenes are saved as single erhe-authored glTF files
+    // (doc/gltf-scene-roundtrip-plan.md phase 4). The file name is derived
+    // from the scene name -- <scene name>.glb under res/editor/scenes --
+    // instead of asking with a file dialog. When the file already exists, an
     // Overwrite / Cancel confirmation modal is shown (imgui_modal_dialogs).
     const std::shared_ptr<Scene_root> scene_root = get_target_scene_root();
     if (!scene_root) {
         log_operations->warn("save_scene: no scene to save");
         return;
     }
-    const std::filesystem::path bundle = default_scene_bundle_dir() / (scene_root->get_name() + ".erhescene");
+    const std::filesystem::path path = default_scene_dir() / (scene_root->get_name() + ".glb");
     std::error_code ec;
-    const bool bundle_exists = std::filesystem::exists(bundle, ec);
-    if (bundle_exists) {
+    const bool file_exists = std::filesystem::exists(path, ec);
+    if (file_exists) {
         m_save_confirm_scene_root    = scene_root;
-        m_save_confirm_bundle        = bundle;
+        m_save_confirm_path          = path;
         m_save_confirm_imgui_context = nullptr;
         return;
     }
-    save_scene_to_bundle(*scene_root, bundle);
+    save_scene_to_file(*scene_root, path);
 }
 
-void Operations::save_scene_to_bundle(Scene_root& scene_root, const std::filesystem::path& bundle)
+void Operations::save_scene_to_file(Scene_root& scene_root, const std::filesystem::path& path)
 {
     try {
-        if (editor::save_scene(scene_root, bundle)) {
-            if (m_context.imgui_windows != nullptr) {
-                // Persist the current window-docking layout inside the bundle so a later
-                // load can restore how the windows were docked at save time.
-                m_context.imgui_windows->save_imgui_ini(editor::scene_imgui_ini_path(bundle).string());
-            }
-            // Rescan the asset browser so the freshly saved bundle appears without
+        if (editor::save_scene_gltf(scene_root, path)) {
+            // Rescan the asset browser so the freshly saved scene appears without
             // a manual Scan (#256).
-            m_context.app_message_bus->scene_saved.send_message(Scene_saved_message{.path = bundle});
+            m_context.app_message_bus->scene_saved.send_message(Scene_saved_message{.path = path});
+            log_operations->info("Scene '{}' saved to '{}'", scene_root.get_name(), erhe::file::to_string(path));
         }
-        log_operations->info("Scene '{}' saved to '{}'", scene_root.get_name(), erhe::file::to_string(bundle));
     } catch (...) {
         log_operations->error("exception: save scene");
     }
@@ -2467,10 +2472,10 @@ void Operations::imgui_modal_dialogs()
     }
     ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2{0.5f, 0.5f});
     if (ImGui::BeginPopupModal("Scene already exists", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::Text("'%s' already exists.", erhe::file::to_string(m_save_confirm_bundle).c_str());
+        ImGui::Text("'%s' already exists.", erhe::file::to_string(m_save_confirm_path).c_str());
         ImGui::Separator();
         if (ImGui::Button("Overwrite")) {
-            save_scene_to_bundle(*m_save_confirm_scene_root, m_save_confirm_bundle);
+            save_scene_to_file(*m_save_confirm_scene_root, m_save_confirm_path);
             m_save_confirm_scene_root.reset();
             m_save_confirm_imgui_context = nullptr;
             ImGui::CloseCurrentPopup();
@@ -2491,18 +2496,24 @@ void Operations::imgui_modal_dialogs()
 
 void Operations::load_scene()
 {
-    // Load a scene directory bundle (#241): the user selects the .erhescene folder.
-    // Raw glTF import / open-as-scene stays in the Asset Browser. Open a native
-    // folder dialog defaulted to res/editor/scenes and queue the load in
-    // load_scene_callback(); the native Windows fallback (select_folder) is used for
-    // non-SDL Windows builds.
+    // Load a saved scene: the user picks a .glb / .gltf file (an erhe-authored
+    // scene opens with full editor state; a foreign glTF opens as a new scene
+    // via Scene_open_operation - see the load_scene_file handler). Open a
+    // native file dialog defaulted to res/editor/scenes and queue the load in
+    // load_scene_callback(); the native Windows fallback (select_file_for_read)
+    // is used for non-SDL Windows builds.
 #if defined(ERHE_WINDOW_LIBRARY_SDL)
-    const std::string default_location = erhe::file::to_string(default_scene_bundle_dir());
+    SDL_DialogFileFilter filters[2];
+    filters[0].name    = "glTF files";
+    filters[0].pattern = "glb;gltf";
+    filters[1].name    = "All files";
+    filters[1].pattern = "*";
+    const std::string default_location = erhe::file::to_string(default_scene_dir());
     SDL_Window* window = static_cast<SDL_Window*>(m_context.context_window->get_sdl_window());
-    SDL_ShowOpenFolderDialog(s_load_scene_callback, this, window, default_location.c_str(), false);
+    SDL_ShowOpenFileDialog(s_load_scene_callback, this, window, filters, 2, default_location.c_str(), false);
 #elif defined(ERHE_OS_WINDOWS)
     try {
-        std::optional<std::filesystem::path> path_opt = erhe::file::select_folder(default_scene_bundle_dir());
+        std::optional<std::filesystem::path> path_opt = erhe::file::select_file_for_read();
         if (path_opt.has_value()) {
             std::string path = path_opt.value().string();
             const char* const filelist[2] = {
@@ -2512,10 +2523,10 @@ void Operations::load_scene()
             load_scene_callback(filelist, 0);
         }
     } catch (...) {
-        log_operations->error("exception: folder dialog / load scene");
+        log_operations->error("exception: file dialog / load scene");
     }
 #else
-    log_operations->warn("load_scene: no native folder dialog available on this platform");
+    log_operations->warn("load_scene: no native file dialog available on this platform");
 #endif
 }
 
