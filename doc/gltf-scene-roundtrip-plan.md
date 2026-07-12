@@ -200,6 +200,58 @@ Names remain only inside graph JSON references (same as today).
   physics items, brushes, animations) + `capture_screenshot` compare.
 - Prefab scenes: save/load with an external-asset prefab instance present.
 
+## Alternative considered: OpenUSD (reviewed 2026-07-12, not chosen)
+
+OpenUSD (v26.05, github.com/PixarAnimationStudios/OpenUSD) was evaluated as
+the persistence format instead of glTF. Semantically it is the better fit -
+almost every mechanism this plan has to invent or track as a draft is
+ratified core USD:
+
+- **Polygon meshes are native**: UsdGeomMesh faceVertexCounts /
+  faceVertexIndices carries n-gons directly - no EXT_mesh_polygon /
+  KHR_mesh_primitive_restart draft-PR tracking (phase 1 disappears).
+- **Primvar interpolation matches geogram elements**: constant / uniform
+  (per-facet) / vertex / faceVarying (per-corner) primvars map 1:1 onto the
+  attribute dump of phase 2. Only edge attributes need a custom encoding
+  (same as under glTF).
+- **UsdPhysics is a ratified schema** (rigid bodies, colliders, joints,
+  materials, collision groups, mass/COM/velocities) vs KHR_physics_rigid_bodies
+  carried in our fastgltf fork.
+- **Composition arcs (references/payloads) are native prefabs** - strictly
+  stronger than the glTF 2.1 externalAssets proposal (also fork-carried),
+  and layering/variants would naturally express per-scene overrides (#239)
+  and future non-destructive workflows.
+- **.usda is diffable text**, .usdc binary, .usdz single-file package -
+  covers the deferred ".gltf + .bin" wish natively.
+- **Editor state** goes into custom (codeless) schemas or namespaced custom
+  attributes - first-class, instead of extras conventions.
+
+Rejected on operational grounds:
+
+1. **Quest/Android is unsupported.** OpenUSD officially supports
+   Linux/macOS/Windows/iOS/visionOS/WASM but not Android; the erhe editor
+   runs on Quest and must load scenes there. A port is nontrivial ongoing
+   maintenance; tinyusdz (third-party MIT reader) has incomplete/experimental
+   write support. This alone is close to a hard blocker.
+2. **Dependency weight clashes with erhe's CPM model.** OpenUSD is a very
+   large source build (TBB required, long configure+build even with imaging
+   and Python disabled) fetched-from-source at configure time like all erhe
+   deps; fastgltf is tiny and already integrated.
+3. **It adds a stack instead of replacing one.** glTF import/export stays
+   regardless (interchange, prefab sources are glTF). USD-for-persistence
+   means maintaining two serialization stacks; the glTF plan collapses to
+   one, reusing the existing fork (physics, 2.1 external assets), extras
+   plumbing, and import machinery.
+4. **Animation model mismatch**: the animation editor (#243) authors
+   glTF-style samplers with cubic tangents; USD is time-sample-first (spline
+   curves are a recent addition), so round-trip would need re-encoding.
+
+Revisit trigger: if Android support lands upstream (or write-capable
+tinyusdz matures) AND erhe starts needing composition features glTF cannot
+express (variants, non-destructive layering, collaborative workflows), USD
+export could first be added as an *interchange target* without changing the
+persistence format.
+
 ## Risks / open items
 
 - **PR 2570 is a moving target**: encoding may change before ratification;
