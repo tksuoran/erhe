@@ -164,9 +164,8 @@ TEST(Edge_sharpness, survives_geogram_save_load)
     ioflags.set_elements(GEO::MeshElementsFlags::MESH_ALL_ELEMENTS);
     ASSERT_TRUE(GEO::mesh_save(source->get_mesh(), path.string(), ioflags));
 
-    // Mirror the scene_serialization load pattern: unbind erhe attributes
-    // before mesh_load (it binds same-named attributes itself), rebind after,
-    // then process() as load_scene does.
+    // Unbind erhe attributes before mesh_load (it binds same-named
+    // attributes itself), rebind after, then process().
     Geometry loaded{"loaded"};
     loaded.get_attributes().unbind();
     GEO::Mesh& loaded_mesh = loaded.get_mesh();

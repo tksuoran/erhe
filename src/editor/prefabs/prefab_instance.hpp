@@ -15,9 +15,8 @@ namespace editor {
 // instantiated (cloned) from a glTF source file managed by Prefab_library.
 // The attachment is the durable record of that association -- glTF export
 // writes such nodes as glTF 2.1 externalAsset references instead of
-// flattening the subtree, and .erhescene serialization stores an instance
-// reference. Clonable so clipboard copy / paste of an instance yields
-// another instance of the same prefab.
+// flattening the subtree. Clonable so clipboard copy / paste of an instance
+// yields another instance of the same prefab.
 class Prefab_instance : public erhe::Item<erhe::Item_base, erhe::scene::Node_attachment, Prefab_instance, erhe::Item_kind::clone_using_custom_clone_constructor>
 {
 public:

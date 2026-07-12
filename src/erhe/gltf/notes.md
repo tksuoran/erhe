@@ -42,3 +42,13 @@ performs all mapping to/from erhe::physics (see `doc/khr_physics_rigid_bodies_su
   (see `doc/gltf-prefabs-plan.md`).
 - The text (.gltf) export variant writes no buffer URI and cannot be re-imported; use .glb
   for round-trips and .gltf for JSON inspection.
+- Library-domain `ERHE_*` extensions (`ERHE_node`, `ERHE_camera`, `ERHE_light`,
+  `ERHE_material`, `ERHE_geometry`) round-trip erhe-specific state that has no standard
+  glTF representation; editor-domain extensions (`ERHE_scene`, collections, brushes,
+  physics payloads, ...) are injected by the editor through the generic extension
+  passthrough (captured/emitted as raw JSON per object). This is the single scene
+  persistence format (`doc/gltf-scene-roundtrip-plan.md`; the editor's legacy
+  `.erhescene` bundle format was removed in phase 5). Legacy reads remain for files
+  written before the extensions existed: node `extras.erhe_flags` and the material
+  extras carrier (`roughness_y`, `bxdf_model`, `blending_mode`, ...) are parsed but no
+  longer written.

@@ -2603,14 +2603,14 @@ public:
             return;
         }
 
-        // --scene <bundle>: load a saved scene directory bundle (.erhescene) on
-        // startup instead of procedurally building the default scene. Uses the same
+        // --scene <file>: load a saved scene file (.glb / .gltf) on startup
+        // instead of procedurally building the default scene. Uses the same
         // queued load path as File > Load Scene / the scene.load_scene command; the
         // load runs once the main loop starts pumping the message bus, and the
         // resulting Scene_created_message homes the global tools (Hud / Hotbar /
         // Headset_view) onto it. Takes precedence over the commands.json script.
         if (!m_startup_scene_path.empty()) {
-            log_startup->info("Loading startup scene bundle '{}' (--scene); skipping procedural startup script", m_startup_scene_path);
+            log_startup->info("Loading startup scene '{}' (--scene); skipping procedural startup script", m_startup_scene_path);
             m_app_message_bus->load_scene_file.queue_message(
                 Load_scene_file_message{ .path = std::filesystem::path{m_startup_scene_path} }
             );

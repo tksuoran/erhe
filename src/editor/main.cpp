@@ -26,9 +26,9 @@ auto main(int argc, char** argv) -> int
     //   --commands overrides the startup script that sets up the scene (e.g.
     //     --commands config/editor/commands_cuboctahedron.json loads a single-mesh
     //     debug scene instead of the default).
-    //   --scene loads a saved scene directory bundle (.erhescene) on startup
-    //     instead of building a scene procedurally, e.g.
-    //     --scene "res/editor/scenes/Default Scene.erhescene".
+    //   --scene loads a saved scene file (.glb / .gltf) on startup instead of
+    //     building a scene procedurally, e.g.
+    //     --scene "res/editor/scenes/Default Scene.glb".
     //   --no-scene starts with an empty editor: no procedural default scene and no
     //     scene load (takes precedence over --scene).
     // Unknown options are ignored (the OS / launcher may append its own), and any
@@ -40,7 +40,7 @@ auto main(int argc, char** argv) -> int
         cxxopts::Options options{"editor", "erhe editor"};
         options.add_options()
             ("commands", "Startup commands script (scene setup) JSON path", cxxopts::value<std::string>()->default_value("config/editor/commands.json"))
-            ("scene",    "Scene directory bundle (.erhescene) to load on startup instead of building the default scene", cxxopts::value<std::string>()->default_value(""))
+            ("scene",    "Scene file (.glb / .gltf) to load on startup instead of building the default scene", cxxopts::value<std::string>()->default_value(""))
             ("no-scene", "Start with an empty editor: no procedural default scene and no scene load (overrides --scene)")
             ("h,help",   "Print usage");
         options.allow_unrecognised_options();

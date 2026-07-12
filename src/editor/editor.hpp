@@ -8,8 +8,8 @@ namespace editor {
 // scene-setup commands). Overridable from the command line (--commands); defaults
 // to the standard config/editor/commands.json.
 //
-// startup_scene_path, when non-empty, loads a saved scene directory bundle
-// (.erhescene) on startup instead of running the procedural startup script.
+// startup_scene_path, when non-empty, loads a saved scene file (.glb / .gltf)
+// on startup instead of running the procedural startup script.
 // Overridable from the command line (--scene).
 //
 // no_startup_scene, when true, starts with an empty editor: neither the procedural

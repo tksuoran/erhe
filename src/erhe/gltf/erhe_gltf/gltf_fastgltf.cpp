@@ -3817,8 +3817,8 @@ private:
             // Preserve the unlit BxDF via the standard KHR_materials_unlit
             // extension; the import path keys off material.unlit in the
             // same way. The other bxdf_model values + the use_* flags are
-            // erhe-specific and round-trip via extras (see
-            // setExtrasWriteCallback below).
+            // erhe-specific and round-trip via the ERHE_material extension
+            // (see record_material_extensions below).
             gltf_material.unlit = (data.bxdf_model == erhe::primitive::Bxdf_model::unlit);
 
             // Material_blending_mode -> alphaMode (+ alphaCutoff for
@@ -3975,9 +3975,8 @@ private:
                 log_gltf->warn("Mesh primitive has neither triangle soup nor geometry");
                 continue;
             }
-            // Geometry is normative when present (matches is_geometry_normative
-            // in scene_serialization; per-primitive, so mixed meshes keep
-            // their soup primitives too).
+            // Geometry is normative when present (per-primitive, so mixed
+            // meshes keep their soup primitives too).
             Export_entry export_entry = geometry
                 ? process_geometry(geometry.get())
                 : process_triangle_soup(triangle_soup.get());

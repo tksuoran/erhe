@@ -284,10 +284,10 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"scene_name", "path"})}
     }});
-    m_tool_infos.push_back({"load_scene",         "Load a saved scene, without a file dialog: an erhe-authored glTF file (saved by save_scene) opens as a full scene with its saved editor state (fresh content library, browser + viewport windows; not undoable); a foreign glTF opens as a new scene via the same path as open_scene; a legacy .erhescene bundle directory is still accepted. The load is queued and completes on a following frame; discover the scene via list_scenes.", {
+    m_tool_infos.push_back({"load_scene",         "Load a saved scene, without a file dialog: an erhe-authored glTF file (saved by save_scene) opens as a full scene with its saved editor state (fresh content library, browser + viewport windows; not undoable); a foreign glTF opens as a new scene via the same path as open_scene. The load is queued and completes on a following frame; discover the scene via list_scenes.", {
         {"type", "object"},
         {"properties", {
-            {"path", {{"type", "string"}, {"description", "Source .glb/.gltf scene file path (or legacy .erhescene bundle directory)"}}}
+            {"path", {{"type", "string"}, {"description", "Source .glb/.gltf scene file path"}}}
         }},
         {"required", json::array({"path"})}
     }});

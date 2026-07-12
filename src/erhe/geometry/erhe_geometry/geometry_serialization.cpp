@@ -224,8 +224,8 @@ auto geometry_from_flat_data(const Geometry_flat_data& data, Geometry& geometry)
     }
 
     // The erhe Mesh_attributes wrapper holds GEO::Attribute bindings; drop
-    // them while the stores are (re)created, mirroring the geofile load
-    // path in scene_serialization.
+    // them while the stores are (re)created (GEO::Attribute bindings do not
+    // survive the underlying stores being destroyed and recreated).
     geometry.get_attributes().unbind();
     GEO::Mesh& mesh = geometry.get_mesh();
     mesh.clear(false, false);

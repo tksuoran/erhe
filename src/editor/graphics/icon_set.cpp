@@ -92,7 +92,6 @@ Icon_set::Icon_set(
     type_icons[erhe::Item_type::index_asset_file_geogram  ] = { .code = icons.scene,       .color = glm::vec4{0.0f, 0.8f, 1.0f, 1.0f}};
     //type_icons[erhe::Item_type::index_asset_file_png      ] = { .code = icons.texture,     .color = glm::vec4{0.8f, 0.8f, 0.8f, 1.0f}};
     type_icons[erhe::Item_type::index_asset_file_other    ] = { .code = icons.file,        .color = glm::vec4{0.5f, 0.5f, 0.5f, 1.0f}};
-    type_icons[erhe::Item_type::index_asset_file_scene    ] = { .code = icons.scene,       .color = glm::vec4{0.0f, 1.0f, 1.0f, 1.0f}};
     type_icons[erhe::Item_type::index_brush_placement     ] = {
         .font  = material_design,
         .code  = ICON_MDI_BRUSH,

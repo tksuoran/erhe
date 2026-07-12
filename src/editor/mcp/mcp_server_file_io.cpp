@@ -110,10 +110,9 @@ auto Mcp_server::action_load_scene(const json& args) -> std::string
     }
     // Queue the exact File > Load Scene path: the message handler opens an
     // erhe-authored glTF file as a full scene (fresh content library, browser
-    // + viewport windows, ERHE_scene state applied; not undoable), routes a
-    // foreign glTF to Scene_open_operation, and still accepts a legacy
-    // .erhescene bundle directory. Queued so the window setup runs from the
-    // message pump on a following frame, outside ImGui iteration.
+    // + viewport windows, ERHE_scene state applied; not undoable) and routes
+    // a foreign glTF to Scene_open_operation. Queued so the window setup runs
+    // from the message pump on a following frame, outside ImGui iteration.
     m_context.app_message_bus->load_scene_file.queue_message(
         Load_scene_file_message{
             .path = path

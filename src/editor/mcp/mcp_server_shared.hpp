@@ -53,7 +53,6 @@
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
 #include "renderers/id_renderer.hpp"
-#include "scene/scene_serialization.hpp"
 #include "scene/shadow_fit_debug.hpp"
 #include "tools/mesh_component_selection.hpp"
 #include "tools/mesh_component_selection_tool.hpp"

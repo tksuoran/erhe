@@ -24,7 +24,6 @@ directly (write_graph_file).
 
 import json
 import pathlib
-import shutil
 import sys
 import time
 import urllib.request
@@ -1124,6 +1123,31 @@ def section_stress():
     call("capture_screenshot", {"path": "logs/smoke_stress.png"})
 
 
+def read_glb_json(path):
+    """Parse the JSON chunk of a .glb file."""
+    blob = pathlib.Path(path).read_bytes()
+    if blob[0:4] != b"glTF":
+        raise RuntimeError(f"not a GLB file: {path}")
+    offset = 12
+    while offset + 8 <= len(blob):
+        chunk_length = int.from_bytes(blob[offset:offset + 4], "little")
+        chunk_type   = blob[offset + 4:offset + 8]
+        if chunk_type == b"JSON":
+            return json.loads(blob[offset + 8:offset + 8 + chunk_length].decode("utf-8"))
+        offset += 8 + chunk_length
+    raise RuntimeError(f"no JSON chunk in GLB: {path}")
+
+
+def wait_for_scene(scene_name, tries=50):
+    """load_scene is queued; poll list_scenes until the scene appears."""
+    for _ in range(tries):
+        scenes = call("list_scenes").get("scenes", [])
+        if any(s.get("name") == scene_name for s in scenes):
+            return True
+        time.sleep(0.2)
+    return False
+
+
 def node_attachments(scene_name, node_name):
     details = call("get_node_details", {"scene_name": scene_name, "node_name": node_name})
     return details.get("attachments", []) if isinstance(details, dict) else []
@@ -1242,38 +1266,42 @@ def section_graph_mesh_asset():
     types = [a.get("type") for a in node_attachments(scene_name, "Smoke GM Node 2")]
     check(S, "unbind removes attachment and controlled mesh", ("Geometry_graph_mesh" not in types) and ("Mesh" not in types), detail=str(types))
 
-    # Scene save/load round-trip (scene file v7). The baked products must
-    # NOT be double-persisted as ordinary mesh/physics records.
-    bundle = pathlib.Path("res/editor/scenes/smoke_graph_mesh.erhescene")
-    mutate("save_scene", {"scene_name": scene_name, "path": "res/editor/scenes/smoke_graph_mesh"})
-    scene_json_path = bundle / "scene.json"
-    check(S, "save wrote scene.json", scene_json_path.is_file(), detail=str(scene_json_path))
-    binding_node_id = None
-    if scene_json_path.is_file():
-        doc = json.loads(scene_json_path.read_text(encoding="utf-8"))
-        saved_assets = [g for g in doc.get("graph_meshes", []) if g.get("name") == "Smoke GM" and g.get("graph")]
-        check(S, "scene.json persists the Graph Mesh asset", len(saved_assets) == 1, detail=str(saved_assets)[:120])
-        bindings = doc.get("graph_mesh_bindings", [])
-        check(S, "scene.json persists the node binding", len(bindings) == 1 and bindings[0].get("graph_mesh_name") == "Smoke GM", detail=str(bindings))
+    # Scene save/load round-trip (erhe-authored glTF scene file; the graph
+    # assets and bindings ride in the root-level ERHE_node_graphs extension).
+    # The baked products must NOT be double-persisted as ordinary mesh /
+    # physics records on the bound node.
+    scene_path = pathlib.Path("res/editor/scenes/smoke_graph_mesh.glb")
+    mutate("save_scene", {"scene_name": scene_name, "path": str(scene_path)})
+    check(S, "save wrote the scene file", scene_path.is_file(), detail=str(scene_path))
+    if scene_path.is_file():
+        doc = read_glb_json(scene_path)
+        node_graphs = doc.get("extensions", {}).get("ERHE_node_graphs", {})
+        saved_assets = [g for g in node_graphs.get("graph_meshes", []) if g.get("name") == "Smoke GM" and g.get("graph")]
+        check(S, "ERHE_node_graphs persists the Graph Mesh asset", len(saved_assets) == 1, detail=str(saved_assets)[:120])
+        bindings = node_graphs.get("node_bindings", [])
+        check(S, "ERHE_node_graphs persists the node binding", len(bindings) == 1 and bindings[0].get("graph_mesh") == "Smoke GM", detail=str(bindings))
         if len(bindings) == 1:
-            binding_node_id = bindings[0].get("node_id")
-            mesh_refs    = [m for m in doc.get("mesh_references", []) if m.get("node_id") == binding_node_id]
-            physics_refs = [p for p in doc.get("node_physics", [])    if p.get("node_id") == binding_node_id]
-            check(S, "controlled mesh is not double-persisted", len(mesh_refs) == 0, detail=str(mesh_refs)[:120])
-            check(S, "controlled physics is not double-persisted", len(physics_refs) == 0, detail=str(physics_refs)[:120])
+            gltf_nodes = doc.get("nodes", [])
+            node_index = bindings[0].get("node", -1)
+            bound_node = gltf_nodes[node_index] if 0 <= node_index < len(gltf_nodes) else {}
+            node_extensions = bound_node.get("extensions", {})
+            check(S, "controlled mesh is not double-persisted", "mesh" not in bound_node, detail=str(bound_node)[:120])
+            has_physics = ("KHR_physics_rigid_bodies" in node_extensions) or ("ERHE_physics" in node_extensions)
+            check(S, "controlled physics is not double-persisted", not has_physics, detail=str(sorted(node_extensions.keys())))
 
     before = len([g for g in call("get_graph_meshes")["graph_meshes"] if g["name"] == "Smoke GM"])
-    loaded = mutate("load_scene", {"path": "res/editor/scenes/smoke_graph_mesh.erhescene"})
-    check(S, "load_scene loaded the bundle", bool(loaded) and loaded.get("loaded"), detail=str(loaded))
+    queued = mutate("load_scene", {"path": str(scene_path)})
+    check(S, "load_scene queued the load", bool(queued) and queued.get("queued"), detail=str(queued))
+    check(S, "loaded scene appears in list_scenes", wait_for_scene("smoke_graph_mesh"))
     get_graph()  # barrier: the loaded graph evaluates and pushes to its binding
     after = [g for g in call("get_graph_meshes")["graph_meshes"] if g["name"] == "Smoke GM"]
     check(S, "reloaded scene reconstructs the asset", len(after) >= before + 1, detail=f"{before}->{len(after)}")
     check(S, "reloaded asset re-bakes", len(after) >= 1 and all(g.get("has_bake") for g in after), detail=str(after))
 
-    # Cleanup: unbind the remaining node, drop the bundle, clear the target.
+    # Cleanup: unbind the remaining node, drop the scene file, clear the target.
     mutate("set_node_graph_mesh", {"node_name": "Smoke GM Node", "graph_mesh": "", "scene_name": scene_name})
     mutate("set_geometry_graph_target", {"graph_mesh": ""})
-    shutil.rmtree(bundle, ignore_errors=True)
+    scene_path.unlink(missing_ok=True)
     check(S, "empty state after cleanup", get_graph().get("selected") is False)
 
 

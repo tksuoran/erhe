@@ -209,6 +209,31 @@ def undo_depth():
     return len(stack.get("undo", []))
 
 
+def read_glb_json(path):
+    """Parse the JSON chunk of a .glb file."""
+    blob = pathlib.Path(path).read_bytes()
+    if blob[0:4] != b"glTF":
+        raise RuntimeError(f"not a GLB file: {path}")
+    offset = 12
+    while offset + 8 <= len(blob):
+        chunk_length = int.from_bytes(blob[offset:offset + 4], "little")
+        chunk_type   = blob[offset + 4:offset + 8]
+        if chunk_type == b"JSON":
+            return json.loads(blob[offset + 8:offset + 8 + chunk_length].decode("utf-8"))
+        offset += 8 + chunk_length
+    raise RuntimeError(f"no JSON chunk in GLB: {path}")
+
+
+def wait_for_scene(scene_name, tries=50):
+    """load_scene is queued; poll list_scenes until the scene appears."""
+    for _ in range(tries):
+        scenes = call("list_scenes").get("scenes", [])
+        if any(s.get("name") == scene_name for s in scenes):
+            return True
+        time.sleep(0.2)
+    return False
+
+
 # ------------------------------------------------------------------ PNG decode
 
 def decode_png(path):
@@ -1142,7 +1167,7 @@ def section_material_output():
 def section_graph_texture_asset():
     """Graph Texture as a content-library asset: create + select, edit the
     selected asset, bind a material slot to it, and round-trip both the asset and
-    the binding through save_scene / load_scene (scene file v6)."""
+    the binding through save_scene / load_scene (ERHE_node_graphs extension)."""
     S = "graph-texture-asset"
 
     scenes = call("list_scenes")["scenes"]
@@ -1180,11 +1205,28 @@ def section_graph_texture_asset():
     check(S, "asset bakes an output after connect", bool(asset) and asset.get("has_output") is True, detail=str(asset))
 
     # Bind a material's base_color to the asset (the material -> graph back-ref).
-    materials = call("get_scene_materials", {"scene_name": scene_name})["materials"]
-    if not materials:
-        check(S, "a material exists to bind", False)
+    # The material must be one a mesh actually uses: glTF scene save exports
+    # only mesh-referenced materials and drops graph bindings of unexported
+    # materials (with a warning), so binding an unused library material would
+    # not round-trip. Find a used material via a mesh node's details.
+    material_name = ""
+    nodes = call("get_scene_nodes", {"scene_name": scene_name}).get("nodes", [])
+    for node in nodes:
+        if "Mesh" not in node.get("attachment_types", []):
+            continue
+        node_details = call("get_node_details", {"scene_name": scene_name, "node_name": node["name"]})
+        for attachment in node_details.get("attachments", []):
+            for name in attachment.get("materials", []):
+                if name and name != "(none)":
+                    material_name = name
+                    break
+            if material_name:
+                break
+        if material_name:
+            break
+    check(S, "a mesh-used material exists to bind", bool(material_name), detail=material_name)
+    if not material_name:
         return
-    material_name = materials[0]["name"]
     bound = mutate("set_material_texture_source",
                    {"material_name": material_name, "slot": "base_color", "graph_texture": "Smoke Asset", "scene_name": scene_name})
     check(S, "set_material_texture_source bound", bool(bound) and bound.get("bound"), detail=str(bound))
@@ -1193,26 +1235,33 @@ def section_graph_texture_asset():
     src_name = details.get("texture_samplers", {}).get("base_color", {}).get("graph_texture_name")
     check(S, "material base_color reports the graph source", src_name == "Smoke Asset", detail=str(src_name))
 
-    # Persist and inspect the on-disk scene.json (v6 fields), then reload.
+    # Persist and inspect the saved scene file (the graph assets and material
+    # bindings ride in the root-level ERHE_node_graphs extension), then reload.
     TMP_DIR.mkdir(parents=True, exist_ok=True)
-    bundle = TMP_DIR / "asset_roundtrip.erhescene"
-    mutate("save_scene", {"scene_name": scene_name, "path": str(bundle)})
-    scene_json_path = bundle / "scene.json"
-    check(S, "save wrote scene.json", scene_json_path.is_file(), detail=str(scene_json_path))
-    if scene_json_path.is_file():
-        scene_doc = json.loads(scene_json_path.read_text(encoding="utf-8"))
-        gts = scene_doc.get("graph_textures", [])
+    scene_path = TMP_DIR / "asset_roundtrip.glb"
+    mutate("save_scene", {"scene_name": scene_name, "path": str(scene_path)})
+    check(S, "save wrote the scene file", scene_path.is_file(), detail=str(scene_path))
+    if scene_path.is_file():
+        scene_doc = read_glb_json(scene_path)
+        node_graphs = scene_doc.get("extensions", {}).get("ERHE_node_graphs", {})
+        gts = node_graphs.get("graph_textures", [])
         saved_asset = next((g for g in gts if g.get("name") == "Smoke Asset"), None)
-        check(S, "scene.json persists the Graph Texture asset", bool(saved_asset) and bool(saved_asset.get("graph")),
+        check(S, "scene file persists the Graph Texture asset", bool(saved_asset) and bool(saved_asset.get("graph")),
               detail=str(saved_asset)[:120])
-        bindings = scene_doc.get("material_texture_sources", [])
-        saved_binding = next((b for b in bindings if b.get("material_name") == material_name
-                              and b.get("slot") == "base_color" and b.get("graph_texture_name") == "Smoke Asset"), None)
-        check(S, "scene.json persists the material -> graph binding", bool(saved_binding), detail=str(bindings)[:160])
+        # material_bindings reference the material by its glTF material index.
+        gltf_materials = scene_doc.get("materials", [])
+        def bound_material_name(binding):
+            index = binding.get("material", -1)
+            return gltf_materials[index].get("name") if 0 <= index < len(gltf_materials) else None
+        bindings = node_graphs.get("material_bindings", [])
+        saved_binding = next((b for b in bindings if bound_material_name(b) == material_name
+                              and b.get("slot") == "base_color" and b.get("graph_texture") == "Smoke Asset"), None)
+        check(S, "scene file persists the material -> graph binding", bool(saved_binding), detail=str(bindings)[:160])
 
     before = len([g for g in call("get_graph_textures")["graph_textures"] if g["name"] == "Smoke Asset"])
-    loaded = mutate("load_scene", {"path": str(bundle)})
-    check(S, "load_scene loaded the bundle", bool(loaded) and loaded.get("loaded"), detail=str(loaded))
+    queued = mutate("load_scene", {"path": str(scene_path)})
+    check(S, "load_scene queued the load", bool(queued) and queued.get("queued"), detail=str(queued))
+    check(S, "loaded scene appears in list_scenes", wait_for_scene("asset_roundtrip"))
     after_list = call("get_graph_textures")["graph_textures"]
     after = [g for g in after_list if g["name"] == "Smoke Asset"]
     check(S, "reloaded scene reconstructs the asset", len(after) >= before + 1, detail=f"{before}->{len(after)}")

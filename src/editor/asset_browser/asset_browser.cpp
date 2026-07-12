@@ -61,11 +61,6 @@ Asset_file_other& Asset_file_other::operator=(const Asset_file_other&) = default
 Asset_file_other::~Asset_file_other() noexcept                         = default;
 Asset_file_other::Asset_file_other(const std::filesystem::path& path) : Item{path} {}
 
-Asset_file_scene::Asset_file_scene(const Asset_file_scene&)            = default;
-Asset_file_scene& Asset_file_scene::operator=(const Asset_file_scene&) = default;
-Asset_file_scene::~Asset_file_scene() noexcept                         = default;
-Asset_file_scene::Asset_file_scene(const std::filesystem::path& path) : Item{path} {}
-
 auto Asset_browser::make_node(const std::filesystem::path& path, Asset_node* const parent) -> std::shared_ptr<Asset_node>
 {
     std::error_code error_code;
@@ -75,10 +70,6 @@ auto Asset_browser::make_node(const std::filesystem::path& path, Asset_node* con
         is_directory = is_directory_test;
     }
 
-    // An erhe scene directory bundle (#241) is a directory named *.erhescene; it
-    // is shown as a single leaf asset rather than descended into.
-    const bool is_scene_bundle = is_directory && (path.extension() == std::filesystem::path{".erhescene"});
-
     const bool is_gltf =
         path.extension() == std::filesystem::path{".gltf"} ||
         path.extension() == std::filesystem::path{".glb"};
@@ -86,9 +77,7 @@ auto Asset_browser::make_node(const std::filesystem::path& path, Asset_node* con
     const bool is_geogram = path.extension() == std::filesystem::path{".geogram"};
 
     std::shared_ptr<Asset_node> new_node;
-    if (is_scene_bundle) {
-        new_node = std::make_shared<Asset_file_scene>(path);
-    } else if (is_directory) {
+    if (is_directory) {
         new_node = std::make_shared<Asset_folder>(path);
     } else if (is_gltf) {
         new_node = std::make_shared<Asset_file_gltf>(path);
@@ -135,7 +124,7 @@ Asset_browser::Asset_browser(
 {
     ERHE_PROFILE_FUNCTION();
 
-    // A freshly saved scene bundle (#256) must appear in the browser without a
+    // A freshly saved scene file (#256) must appear in the browser without a
     // manual Scan; rescan whenever a scene is saved to disk.
     m_scene_saved_subscription = app_message_bus.scene_saved.subscribe(
         [this](Scene_saved_message&) {
@@ -171,12 +160,6 @@ Asset_browser::Asset_browser(
             bool&                                   close
         ) {
             // Primary type-specific actions.
-            const std::shared_ptr<Asset_file_scene> scene = std::dynamic_pointer_cast<Asset_file_scene>(item);
-            if (scene) {
-                if (try_load(scene)) {
-                    close = true;
-                }
-            }
             const std::shared_ptr<Asset_file_geogram> geogram = std::dynamic_pointer_cast<Asset_file_geogram>(item);
             if (geogram) {
                 if (try_import(geogram)) {
@@ -202,7 +185,7 @@ Asset_browser::Asset_browser(
                 }
             }
             // Copy-path items for every asset that has a source path: folders and
-            // all file-based assets (gltf/glb, geogram, scene bundles, other).
+            // all file-based assets (gltf/glb, geogram, other).
             add_copy_path_menu_items(item, close);
         }
     );
@@ -249,10 +232,7 @@ void Asset_browser::scan(const std::filesystem::path& path, Asset_node* parent)
         }
 
         auto asset_node = make_node(entry, parent);
-        // Descend into plain folders only; scene directory bundles (#241) are leaf
-        // assets and must not be scanned into.
-        const bool is_scene_bundle = is_directory && (entry.path().extension() == std::filesystem::path{".erhescene"});
-        if (is_directory && !is_scene_bundle) {
+        if (is_directory) {
             scan(entry, asset_node.get());
         }
     }
@@ -265,11 +245,11 @@ void Asset_browser::scan()
     const std::filesystem::path scenes_root = editor_root / std::filesystem::path{"scenes"};
 
     // Ensure the scenes directory exists so a fresh checkout does not log a scan
-    // warning and so saved scene bundles have a home (#241).
+    // warning and so saved scene files have a home (#241).
     static_cast<void>(erhe::file::ensure_directory_exists(scenes_root));
 
     // Synthetic root under which both the read-only glTF/geogram assets and the
-    // saved scene bundles are shown.
+    // saved scene files are shown.
     m_root = make_node(editor_root, nullptr);
 
     std::shared_ptr<Asset_node> assets_node = make_node(assets_root, m_root.get());
@@ -380,23 +360,6 @@ auto Asset_browser::try_load(const std::shared_ptr<Asset_file_gltf>& gltf) -> bo
         m_context.app_message_bus->load_scene_file.queue_message(
             Load_scene_file_message{
                 .path = *gltf->get_source_path()
-            }
-        );
-        return true;
-    }
-    return false;
-}
-
-auto Asset_browser::try_load(const std::shared_ptr<Asset_file_scene>& scene) -> bool
-{
-    std::string load_label = fmt::format("Load '{}'", erhe::file::to_string(*scene->get_source_path()));
-    if (ImGui::MenuItem(load_label.c_str())) {
-        // Reuse the exact File > Load Scene path (new content library + windows +
-        // viewport) by queueing the bundle directory to the load-scene message bus
-        // (#241).
-        m_context.app_message_bus->load_scene_file.queue_message(
-            Load_scene_file_message{
-                .path = *scene->get_source_path()
             }
         );
         return true;

@@ -766,9 +766,8 @@ auto open_scene_gltf(
     // Content-library attaches (textures / materials / skins / animations),
     // physics items and editor-domain ERHE_* state. These build undoable
     // operations for the import path; here they are executed inline and
-    // dropped - opening a scene is not undoable, like the legacy .erhescene
-    // load. Same ordering as the import compound: everything executes before
-    // the nodes enter the scene.
+    // dropped - opening a scene is not undoable. Same ordering as the import
+    // compound: everything executes before the nodes enter the scene.
     std::vector<std::shared_ptr<Operation>> operations;
     append_content_library_attach_operations(content_library, gltf_data, path.generic_string(), operations);
     import_gltf_physics(context, gltf_data, scene_root, path, operations);

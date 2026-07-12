@@ -99,7 +99,7 @@ public:
 
 // Scene open (doc/gltf-scene-roundtrip-plan.md phase 4): opens an
 // erhe-authored glTF file (see is_erhe_scene) as a full Scene_root - NOT
-// undoable, mirroring the legacy .erhescene load_scene shape. Reuses the
+// undoable. Reuses the
 // import machinery (parse_gltf + finalize_imported_meshes + physics import
 // + import_gltf_editor_state) but constructs the Scene_root directly with a
 // fresh, empty Content_library (the file carries the scene's own brushes /

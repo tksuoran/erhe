@@ -561,7 +561,7 @@ void attach_prefab_instance(
             continue;
         }
         // Retarget meshes BEFORE parenting: node may already be hosted in a
-        // live scene (.erhescene load), and parenting registers meshes into
+        // live scene, and parenting registers meshes into
         // the scene by their layer_id at that moment (Scene::register_mesh).
         // With the template's placeholder layer id 0 they would silently
         // land in the brush layer (Mesh_layer_id::brush == 0) and never

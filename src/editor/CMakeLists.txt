@@ -434,8 +434,6 @@ erhe_target_sources_grouped(
     scene/scene_commands.hpp
     scene/scene_root.cpp
     scene/scene_root.hpp
-    scene/scene_serialization.cpp
-    scene/scene_serialization.hpp
     scene/scene_settings_resolve.cpp
     scene/scene_settings_resolve.hpp
     scene/scene_view.cpp
@@ -603,7 +601,11 @@ set(_renderer_defs       "${CMAKE_SOURCE_DIR}/src/erhe/renderer/definitions")
 set(_scene_renderer_defs "${CMAKE_SOURCE_DIR}/src/erhe/scene_renderer/definitions")
 set(_xr_config_defs      "${CMAKE_SOURCE_DIR}/src/erhe/xr/definitions")
 
-# Scene serialization codegen — generate into build directory
+# Scene codegen — generate into build directory. Gltf_source_reference is
+# used by the content library; Scene_settings carries per-scene setting
+# overrides (#239) persisted in the ERHE_scene glTF extension. (The legacy
+# .erhescene scene.json serial types were removed with scene_serialization
+# in the glTF scene roundtrip phase 5.)
 set(_codegen_defs "${CMAKE_CURRENT_SOURCE_DIR}/scene/definitions")
 set(_codegen_out  "${CMAKE_CURRENT_BINARY_DIR}/scene/generated")
 
@@ -618,138 +620,17 @@ erhe_codegen_generate(
         "${_scene_renderer_defs}:erhe_scene_renderer/generated/"
         "${_xr_config_defs}:erhe_xr/generated/"
     DEFINITIONS
-        "${_codegen_defs}/brush_data_serial.py"
-        "${_codegen_defs}/camera_data.py"
-        "${_codegen_defs}/collision_filter_data.py"
-        "${_codegen_defs}/collision_shape_data.py"
-        "${_codegen_defs}/collision_shape_type_serial.py"
-        "${_codegen_defs}/combine_mode_serial.py"
-        "${_codegen_defs}/compound_child_data.py"
-        "${_codegen_defs}/drive_mode_serial.py"
-        "${_codegen_defs}/drive_type_serial.py"
         "${_codegen_defs}/gltf_source_reference.py"
-        "${_codegen_defs}/graph_mesh_binding_data.py"
-        "${_codegen_defs}/graph_mesh_data.py"
-        "${_codegen_defs}/graph_texture_data.py"
-        "${_codegen_defs}/joint_drive_data.py"
-        "${_codegen_defs}/joint_limit_data.py"
-        "${_codegen_defs}/layout_data.py"
-        "${_codegen_defs}/light_data.py"
-        "${_codegen_defs}/mesh_reference.py"
-        "${_codegen_defs}/mesh_source_type.py"
-        "${_codegen_defs}/motion_mode_serial.py"
-        "${_codegen_defs}/node_data.py"
-        "${_codegen_defs}/node_joint_data.py"
-        "${_codegen_defs}/node_physics_data.py"
-        "${_codegen_defs}/physics_joint_data.py"
-        "${_codegen_defs}/material_texture_source_data.py"
-        "${_codegen_defs}/physics_material_data.py"
-        "${_codegen_defs}/prefab_instance_reference.py"
-        "${_codegen_defs}/projection_data.py"
-        "${_codegen_defs}/scene_file.py"
         "${_codegen_defs}/scene_settings.py"
-        "${_codegen_defs}/transform_data.py"
 )
 
 set(_codegen_sources
-    ${_codegen_out}/brush_data_serial.hpp
-    ${_codegen_out}/brush_data_serial_serialization.hpp
-    ${_codegen_out}/brush_data_serial.cpp
-    ${_codegen_out}/camera_data.hpp
-    ${_codegen_out}/camera_data_serialization.hpp
-    ${_codegen_out}/camera_data.cpp
-    ${_codegen_out}/collision_filter_data.hpp
-    ${_codegen_out}/collision_filter_data_serialization.hpp
-    ${_codegen_out}/collision_filter_data.cpp
-    ${_codegen_out}/collision_shape_data.hpp
-    ${_codegen_out}/collision_shape_data_serialization.hpp
-    ${_codegen_out}/collision_shape_data.cpp
-    ${_codegen_out}/collision_shape_type_serial.hpp
-    ${_codegen_out}/collision_shape_type_serial.cpp
-    ${_codegen_out}/combine_mode_serial.hpp
-    ${_codegen_out}/combine_mode_serial.cpp
-    ${_codegen_out}/compound_child_data.hpp
-    ${_codegen_out}/compound_child_data_serialization.hpp
-    ${_codegen_out}/compound_child_data.cpp
-    ${_codegen_out}/drive_mode_serial.hpp
-    ${_codegen_out}/drive_mode_serial.cpp
-    ${_codegen_out}/drive_type_serial.hpp
-    ${_codegen_out}/drive_type_serial.cpp
     ${_codegen_out}/gltf_source_reference.hpp
     ${_codegen_out}/gltf_source_reference_serialization.hpp
     ${_codegen_out}/gltf_source_reference.cpp
-    ${_codegen_out}/graph_mesh_binding_data.hpp
-    ${_codegen_out}/graph_mesh_binding_data_serialization.hpp
-    ${_codegen_out}/graph_mesh_binding_data.cpp
-    ${_codegen_out}/graph_mesh_data.hpp
-    ${_codegen_out}/graph_mesh_data_serialization.hpp
-    ${_codegen_out}/graph_mesh_data.cpp
-    ${_codegen_out}/graph_texture_data.hpp
-    ${_codegen_out}/graph_texture_data_serialization.hpp
-    ${_codegen_out}/graph_texture_data.cpp
-    ${_codegen_out}/joint_drive_data.hpp
-    ${_codegen_out}/joint_drive_data_serialization.hpp
-    ${_codegen_out}/joint_drive_data.cpp
-    ${_codegen_out}/joint_limit_data.hpp
-    ${_codegen_out}/joint_limit_data_serialization.hpp
-    ${_codegen_out}/joint_limit_data.cpp
-    ${_codegen_out}/axis_direction_serial.hpp
-    ${_codegen_out}/axis_direction_serial.cpp
-    ${_codegen_out}/layout_alignment_serial.hpp
-    ${_codegen_out}/layout_alignment_serial.cpp
-    ${_codegen_out}/layout_data.hpp
-    ${_codegen_out}/layout_data_serialization.hpp
-    ${_codegen_out}/layout_data.cpp
-    ${_codegen_out}/layout_item_data.hpp
-    ${_codegen_out}/layout_item_data_serialization.hpp
-    ${_codegen_out}/layout_item_data.cpp
-    ${_codegen_out}/layout_type_serial.hpp
-    ${_codegen_out}/layout_type_serial.cpp
-    ${_codegen_out}/light_data.hpp
-    ${_codegen_out}/light_data_serialization.hpp
-    ${_codegen_out}/light_data.cpp
-    ${_codegen_out}/light_type_serial.hpp
-    ${_codegen_out}/light_type_serial.cpp
-    ${_codegen_out}/mesh_reference.hpp
-    ${_codegen_out}/mesh_reference_serialization.hpp
-    ${_codegen_out}/mesh_reference.cpp
-    ${_codegen_out}/mesh_source_type.hpp
-    ${_codegen_out}/mesh_source_type.cpp
-    ${_codegen_out}/material_texture_source_data.hpp
-    ${_codegen_out}/material_texture_source_data_serialization.hpp
-    ${_codegen_out}/material_texture_source_data.cpp
-    ${_codegen_out}/motion_mode_serial.hpp
-    ${_codegen_out}/motion_mode_serial.cpp
-    ${_codegen_out}/node_data_serial.hpp
-    ${_codegen_out}/node_data_serial_serialization.hpp
-    ${_codegen_out}/node_data_serial.cpp
-    ${_codegen_out}/node_joint_data.hpp
-    ${_codegen_out}/node_joint_data_serialization.hpp
-    ${_codegen_out}/node_joint_data.cpp
-    ${_codegen_out}/node_physics_data.hpp
-    ${_codegen_out}/node_physics_data_serialization.hpp
-    ${_codegen_out}/node_physics_data.cpp
-    ${_codegen_out}/physics_joint_data.hpp
-    ${_codegen_out}/physics_joint_data_serialization.hpp
-    ${_codegen_out}/physics_joint_data.cpp
-    ${_codegen_out}/physics_material_data.hpp
-    ${_codegen_out}/physics_material_data_serialization.hpp
-    ${_codegen_out}/physics_material_data.cpp
-    ${_codegen_out}/prefab_instance_reference.hpp
-    ${_codegen_out}/prefab_instance_reference_serialization.hpp
-    ${_codegen_out}/prefab_instance_reference.cpp
-    ${_codegen_out}/projection_data.hpp
-    ${_codegen_out}/projection_data_serialization.hpp
-    ${_codegen_out}/projection_data.cpp
-    ${_codegen_out}/scene_file.hpp
-    ${_codegen_out}/scene_file_serialization.hpp
-    ${_codegen_out}/scene_file.cpp
     ${_codegen_out}/scene_settings.hpp
     ${_codegen_out}/scene_settings_serialization.hpp
     ${_codegen_out}/scene_settings.cpp
-    ${_codegen_out}/transform_data.hpp
-    ${_codegen_out}/transform_data_serialization.hpp
-    ${_codegen_out}/transform_data.cpp
 )
 set_source_files_properties(${_codegen_sources} PROPERTIES GENERATED TRUE)
 target_sources(${_target} PRIVATE ${_codegen_sources})

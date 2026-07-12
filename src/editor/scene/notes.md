@@ -44,20 +44,16 @@ editor state applied) and routes a foreign glTF to `Scene_open_operation`
 context menu on `Asset_file_gltf::extensions_used` the same way. See
 `doc/gltf-scene-roundtrip-plan.md`.
 
-### Legacy scene serialization (directory bundles, #241)
+### Removed: legacy scene serialization (directory bundles, #241)
 
-`scene_serialization.{hpp,cpp}` is the superseded **directory bundle** format:
-`<name>.erhescene` (dedicated extension on the directory, like an
-`.xcodeproj`) containing:
-
-- `scene.json` -- root JSON (`Scene_file`, codegen `definitions/scene_file.py`, version 5)
-- `data.glb` -- meshes + materials (only when the scene has meshes)
-- `mesh_<i>_p<p>.geogram` -- geometry-normative primitives
-
-The loader is kept for one transition period (existing bundles still load via
-the Asset Browser's `Asset_file_scene` "Load" action or MCP `load_scene`, and
-migrate by re-saving); nothing writes bundles anymore. Slated for removal in
-phase 5 of `doc/gltf-scene-roundtrip-plan.md`.
+The superseded `.erhescene` **directory bundle** format
+(`scene_serialization.{hpp,cpp}`: `scene.json` + `data.glb` +
+`mesh_<i>_p<p>.geogram` inside a `<name>.erhescene` directory) was removed in
+phase 5 of `doc/gltf-scene-roundtrip-plan.md`, together with its
+scene.json-only codegen serial types under `definitions/` (only
+`gltf_source_reference.py` and `scene_settings.py` remain) and the Asset
+Browser's `Asset_file_scene` bundle handling. Existing bundles were migrated
+by loading and re-saving as `.glb`.
 
 ## Public API / Integration Points
 

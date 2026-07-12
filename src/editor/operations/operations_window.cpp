@@ -29,7 +29,6 @@
 #include "scene/scene_root.hpp"
 
 #include <algorithm>
-#include "scene/scene_serialization.hpp"
 #include "scene/viewport_scene_views.hpp"
 #include "brushes/reference_frame.hpp"
 #include "tools/mesh_component_selection.hpp"
@@ -896,35 +895,20 @@ Operations::Operations(
     m_load_scene_file_subscription = app_message_bus.load_scene_file.subscribe(
         [&](Load_scene_file_message& message) {
             try {
-                std::shared_ptr<Scene_root> scene_root;
-                if (message.path.extension() == std::filesystem::path{".erhescene"}) {
-                    // Legacy scene directory bundle (#241), kept loadable for
-                    // one transition period (phase 5 migration); scenes are
-                    // saved as single erhe-authored glTF files now.
-                    auto content_library = std::make_shared<Content_library>();
-                    scene_root = editor::load_scene(
-                        &m_context,
-                        m_context.app_message_bus,
-                        m_context.app_scenes,
-                        content_library,
-                        message.path
+                // glTF file: an erhe-authored scene (ERHE_scene in
+                // extensionsUsed) opens as a full scene with its saved
+                // editor state; any other glTF opens as a foreign scene
+                // (Scene_open_operation: undoable, own new viewport).
+                const Gltf_scan_summary summary = editor::scan_gltf(message.path);
+                if (!is_erhe_scene(summary.extensions_used)) {
+                    log_operations->info(
+                        "Load Scene: '{}' is not an erhe-authored scene - opening as foreign glTF",
+                        erhe::file::to_string(message.path)
                     );
-                } else {
-                    // glTF file: an erhe-authored scene (ERHE_scene in
-                    // extensionsUsed) opens as a full scene with its saved
-                    // editor state; any other glTF opens as a foreign scene
-                    // (Scene_open_operation: undoable, own new viewport).
-                    const Gltf_scan_summary summary = editor::scan_gltf(message.path);
-                    if (!is_erhe_scene(summary.extensions_used)) {
-                        log_operations->info(
-                            "Load Scene: '{}' is not an erhe-authored scene - opening as foreign glTF",
-                            erhe::file::to_string(message.path)
-                        );
-                        m_context.operation_stack->queue(std::make_shared<Scene_open_operation>(message.path));
-                        return;
-                    }
-                    scene_root = editor::open_scene_gltf(m_context, message.path);
+                    m_context.operation_stack->queue(std::make_shared<Scene_open_operation>(message.path));
+                    return;
                 }
+                std::shared_ptr<Scene_root> scene_root = editor::open_scene_gltf(m_context, message.path);
                 if (scene_root) {
                     log_operations->info("Scene loaded: {}", scene_root->get_name());
                     // The content library is shown nested under the Scene row in the
