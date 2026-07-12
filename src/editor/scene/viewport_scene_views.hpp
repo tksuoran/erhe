@@ -95,6 +95,18 @@ public:
     // no viewport window exists; no-op otherwise.
     void ensure_viewport_window_exists();
 
+    // Issue #265 follow-up: opening a viewport for a scene first repurposes an
+    // existing viewport window that shows no scene (e.g. the always-present
+    // empty first viewport), binding the scene and camera to its live scene
+    // view instead of creating a new window. Returns the repurposed window,
+    // or null when every existing viewport already shows a scene. A null
+    // camera picks one the same way open_new_viewport_scene_view does (a
+    // selected camera in the scene, else the scene's first selectable one).
+    auto try_repurpose_empty_viewport_window(
+        const std::shared_ptr<Scene_root>&          scene_root,
+        const std::shared_ptr<erhe::scene::Camera>& camera = {}
+    ) -> std::shared_ptr<Viewport_window>;
+
     void open_new_viewport_scene_view_node();
     // Issue #252: open a new viewport window bound to a specific scene (the
     // scene "Open Editor" entry), instead of cloning the current view.
@@ -146,6 +158,10 @@ public:
     [[nodiscard]] auto get_viewport_windows() const -> const std::vector<std::shared_ptr<Viewport_window>>&;
 
 private:
+    // Camera to show when binding a scene to a viewport: a selected camera
+    // living in the scene, else the scene's first selectable camera, else null.
+    [[nodiscard]] auto choose_camera_for_scene(const std::shared_ptr<Scene_root>& scene_root) const -> std::shared_ptr<erhe::scene::Camera>;
+
     void handle_graphics_settings_changed(Graphics_preset_entry* graphics_preset);
 
     void update_pointer_from_imgui_viewport_windows(erhe::imgui::Imgui_host* imgui_host);

@@ -413,6 +413,58 @@ auto Scene_views::create_viewport_window(
     return viewport_window;
 }
 
+auto Scene_views::choose_camera_for_scene(const std::shared_ptr<Scene_root>& scene_root) const -> std::shared_ptr<erhe::scene::Camera>
+{
+    if (!scene_root) {
+        return {};
+    }
+    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = m_app_context.selection->get_selected_items();
+    for (const std::shared_ptr<erhe::Item_base>& item : selected_items) {
+        const std::shared_ptr<erhe::scene::Camera> camera = std::dynamic_pointer_cast<erhe::scene::Camera>(item);
+        // Only honor a selected camera that lives in the scene this viewport
+        // is being opened for; a camera selected in another scene must not be
+        // bound across scenes.
+        const bool camera_in_scene =
+            camera &&
+            (camera->get_node() != nullptr) &&
+            (camera->get_node()->get_scene() == scene_root->get_hosted_scene());
+        if (camera_in_scene) {
+            return camera;
+        }
+    }
+    // Case for when no camera found in selection
+    const std::vector<std::shared_ptr<erhe::scene::Camera>> selectable_cameras = get_selectable_cameras(scene_root->get_scene());
+    if (!selectable_cameras.empty()) {
+        return selectable_cameras.front();
+    }
+    return {};
+}
+
+auto Scene_views::try_repurpose_empty_viewport_window(
+    const std::shared_ptr<Scene_root>&          scene_root,
+    const std::shared_ptr<erhe::scene::Camera>& camera
+) -> std::shared_ptr<Viewport_window>
+{
+    if (!scene_root) {
+        return {};
+    }
+    for (const std::shared_ptr<Viewport_window>& viewport_window : m_viewport_windows) {
+        const std::shared_ptr<Viewport_scene_view> viewport_scene_view = viewport_window->viewport_scene_view();
+        if (!viewport_scene_view || viewport_scene_view->get_scene_root()) {
+            continue;
+        }
+        // Rebinding a live scene view uses the same mechanism as the
+        // viewport's "Scene and Camera" dialog: plain set_scene_root +
+        // set_camera. The window retitles itself to the scene name on its
+        // next frame (update_title_from_scene).
+        viewport_scene_view->set_scene_root(scene_root);
+        viewport_scene_view->set_camera(camera ? camera : choose_camera_for_scene(scene_root));
+        viewport_window->show_window();
+        return viewport_window;
+    }
+    return {};
+}
+
 auto Scene_views::open_new_viewport_scene_view(
     std::shared_ptr<erhe::rendergraph::Rendergraph_node>& out_rendergraph_output_node,
     const std::shared_ptr<Scene_root>&                    scene_root
@@ -421,55 +473,23 @@ auto Scene_views::open_new_viewport_scene_view(
     const std::string name = fmt::format("Viewport_scene_view {}", m_viewport_scene_views.size());
 
     const int msaa_sample_count = m_app_context.app_settings->graphics.current_graphics_preset.msaa_sample_count;
-    if (scene_root) {
-        const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = m_app_context.selection->get_selected_items();
-        for (const auto& item : selected_items) {
-            const auto camera = std::dynamic_pointer_cast<erhe::scene::Camera>(item);
-            // Only honor a selected camera that lives in the scene this
-            // viewport is being opened for; a camera selected in another
-            // scene must not be bound across scenes.
-            const bool camera_in_scene =
-                camera &&
-                (camera->get_node() != nullptr) &&
-                (camera->get_node()->get_scene() == scene_root->get_hosted_scene());
-            if (camera_in_scene) {
-                return create_viewport_scene_view(
-                    m_viewport_config_data,
-                    *m_app_context.graphics_device,
-                    *m_app_context.rendergraph,
-                    *m_app_context.imgui_windows,
-                    *m_app_context.app_rendering,
-                    *m_app_context.app_settings,
-                    *m_app_context.post_processing,
-                    *m_app_context.tools,
-                    name,
-                    scene_root,
-                    camera,
-                    msaa_sample_count,
-                    out_rendergraph_output_node
-                );
-            }
-        }
-        // Case for when no camera found in selection
-        const std::vector<std::shared_ptr<erhe::scene::Camera>> selectable_cameras = get_selectable_cameras(scene_root->get_scene());
-        if (!selectable_cameras.empty()) {
-            const std::shared_ptr<erhe::scene::Camera>& camera = selectable_cameras.front();
-            return create_viewport_scene_view(
-                m_viewport_config_data,
-                *m_app_context.graphics_device,
-                *m_app_context.rendergraph,
-                *m_app_context.imgui_windows,
-                *m_app_context.app_rendering,
-                *m_app_context.app_settings,
-                *m_app_context.post_processing,
-                *m_app_context.tools,
-                name,
-                scene_root,
-                camera,
-                msaa_sample_count,
-                out_rendergraph_output_node
-            );
-        }
+    const std::shared_ptr<erhe::scene::Camera> camera = choose_camera_for_scene(scene_root);
+    if (scene_root && camera) {
+        return create_viewport_scene_view(
+            m_viewport_config_data,
+            *m_app_context.graphics_device,
+            *m_app_context.rendergraph,
+            *m_app_context.imgui_windows,
+            *m_app_context.app_rendering,
+            *m_app_context.app_settings,
+            *m_app_context.post_processing,
+            *m_app_context.tools,
+            name,
+            scene_root,
+            camera,
+            msaa_sample_count,
+            out_rendergraph_output_node
+        );
     }
 
     // Case for when no cameras found in scene
@@ -550,6 +570,13 @@ void Scene_views::open_new_viewport_scene_view_node(const std::shared_ptr<Scene_
     // viewport to the given scene (open_new_viewport_scene_view picks a camera
     // from the selection or the scene's cameras) instead of cloning the last
     // hovered / single scene view.
+
+    // Issue #265 follow-up: prefer repurposing an existing viewport window
+    // that shows no scene over creating a new window.
+    if (try_repurpose_empty_viewport_window(scene_root)) {
+        return;
+    }
+
     std::shared_ptr<erhe::rendergraph::Rendergraph_node> rendergraph_output_node{};
     std::shared_ptr<Viewport_scene_view> viewport_scene_view = open_new_viewport_scene_view(
         rendergraph_output_node,

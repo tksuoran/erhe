@@ -915,19 +915,23 @@ Operations::Operations(
                     );
                     browser_window->show_window();
 
-                    // Create viewport window for the loaded scene
-                    std::shared_ptr<erhe::rendergraph::Rendergraph_node> rendergraph_output_node;
-                    auto viewport_scene_view = m_context.scene_views->open_new_viewport_scene_view(
-                        rendergraph_output_node,
-                        scene_root
-                    );
-                    m_context.scene_views->create_viewport_window(
-                        *m_context.imgui_renderer,
-                        *m_context.imgui_windows,
-                        viewport_scene_view,
-                        rendergraph_output_node,
-                        scene_root->get_name()
-                    );
+                    // Show the loaded scene in a viewport window: repurpose an
+                    // existing viewport that shows no scene when one exists
+                    // (#265 follow-up), else create a new one.
+                    if (!m_context.scene_views->try_repurpose_empty_viewport_window(scene_root)) {
+                        std::shared_ptr<erhe::rendergraph::Rendergraph_node> rendergraph_output_node;
+                        auto viewport_scene_view = m_context.scene_views->open_new_viewport_scene_view(
+                            rendergraph_output_node,
+                            scene_root
+                        );
+                        m_context.scene_views->create_viewport_window(
+                            *m_context.imgui_renderer,
+                            *m_context.imgui_windows,
+                            viewport_scene_view,
+                            rendergraph_output_node,
+                            scene_root->get_name()
+                        );
+                    }
 
                     // Attach the global tools (Hud / Hotbar / OpenXR Headset_view) to
                     // this scene if none existed yet -- e.g. a load-only commands.json

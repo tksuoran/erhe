@@ -622,35 +622,42 @@ auto Scene_commands::create_new_scene() -> std::shared_ptr<Scene_root>
     // of leaving it floating at ImGui's default cascade position (#258).
     apply_hierarchy_window_placement(*m_context.imgui_windows, *browser_window);
 
-    // A viewport window looking through the new camera. create_viewport_scene_view
-    // is called directly (rather than open_new_viewport_scene_view) so the new
-    // scene's own camera is used even when a camera of another scene is selected.
-    std::shared_ptr<erhe::rendergraph::Rendergraph_node> rendergraph_output_node;
-    std::shared_ptr<Viewport_scene_view> viewport_scene_view = m_context.scene_views->create_viewport_scene_view(
-        m_context.scene_views->get_viewport_config_data(),
-        *m_context.graphics_device,
-        *m_context.rendergraph,
-        *m_context.imgui_windows,
-        *m_context.app_rendering,
-        *m_context.app_settings,
-        *m_context.post_processing,
-        *m_context.tools,
-        scene_name,
-        scene_root,
-        camera,
-        m_context.app_settings->graphics.current_graphics_preset.msaa_sample_count,
-        rendergraph_output_node
-    );
-    std::shared_ptr<Viewport_window> viewport_window = m_context.scene_views->create_viewport_window(
-        *m_context.imgui_renderer,
-        *m_context.imgui_windows,
-        viewport_scene_view,
-        rendergraph_output_node,
-        scene_name
-    );
-    // Dock (tab) the new scene's viewport with the existing viewport instead of
-    // leaving it floating at ImGui's default cascade position (#258).
-    apply_editor_window_placement(*m_context.imgui_windows, *viewport_window);
+    // A viewport window looking through the new camera. Repurposes an
+    // existing viewport window that shows no scene when one exists (#265
+    // follow-up); otherwise creates a new one. create_viewport_scene_view is
+    // called directly (rather than open_new_viewport_scene_view) so the new
+    // scene's own camera is used even when a camera of another scene is
+    // selected -- the explicit camera argument to
+    // try_repurpose_empty_viewport_window serves the same purpose.
+    std::shared_ptr<Viewport_window> viewport_window = m_context.scene_views->try_repurpose_empty_viewport_window(scene_root, camera);
+    if (!viewport_window) {
+        std::shared_ptr<erhe::rendergraph::Rendergraph_node> rendergraph_output_node;
+        std::shared_ptr<Viewport_scene_view> viewport_scene_view = m_context.scene_views->create_viewport_scene_view(
+            m_context.scene_views->get_viewport_config_data(),
+            *m_context.graphics_device,
+            *m_context.rendergraph,
+            *m_context.imgui_windows,
+            *m_context.app_rendering,
+            *m_context.app_settings,
+            *m_context.post_processing,
+            *m_context.tools,
+            scene_name,
+            scene_root,
+            camera,
+            m_context.app_settings->graphics.current_graphics_preset.msaa_sample_count,
+            rendergraph_output_node
+        );
+        viewport_window = m_context.scene_views->create_viewport_window(
+            *m_context.imgui_renderer,
+            *m_context.imgui_windows,
+            viewport_scene_view,
+            rendergraph_output_node,
+            scene_name
+        );
+        // Dock (tab) the new scene's viewport with the existing viewport instead of
+        // leaving it floating at ImGui's default cascade position (#258).
+        apply_editor_window_placement(*m_context.imgui_windows, *viewport_window);
+    }
 
     // Attach the global tools (Hud / Hotbar / OpenXR Headset_view) to this
     // scene if none existed yet (e.g. a --no-scene startup). on_scene_created()
