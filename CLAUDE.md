@@ -198,7 +198,7 @@ Each part constructor must receive the other parts and resources it needs as exp
 - External dependencies are fetched at configure time via CPM (`cmake/CPM.cmake`).
 - **Dependency version pins are not sacred.** A `GIT_TAG` / `VERSION` pin in `CMakeLists.txt` exists only to prevent uncontrolled upstream changes from breaking the build while nothing in erhe changes - it is not a statement that the pinned version is required. If the currently pinned version has a bug (build break, runtime defect, spec non-compliance), bumping the dependency to the latest version that fixes it is the preferred fix over carrying a downstream patch or fork. Prefer the newest release that resolves the issue; only carry a downstream change when no released upstream version fixes it yet.
 - **Do not use CPM's `PATCHES` keyword.** Applying patches at configure time relies on a host `patch` program, which is not portable (e.g. GitHub Windows CI runners have a broken Strawberry-Perl `patch.exe` 2.5.9 that asserts on valid diffs). When a dependency genuinely needs a downstream change that no upstream release provides, do NOT carry a `.patch` file applied via CPM. Instead, **ask the user to provide a fork repo we control** (e.g. `tksuoran/<dep>`), apply the change in a dedicated branch of that fork, push it, and point `CPMAddPackage(... GITHUB_REPOSITORY tksuoran/<dep> GIT_TAG <commit>)` at the patched commit. This keeps the build free of any host `patch` invocation. Record in a comment why the fork exists and when it can be dropped (i.e. which upstream version would obsolete it). Precedent: `tksuoran/fastgltf` branch `khr_physics_rigid_bodies`.
-- **Do not do any development work inside `.cpm_cache/` checkouts.** The CPM source cache is a fetch artifact, not a workspace: commits made there are invisible to the fork's real clone, easily lost to a re-fetch, and leave builds silently depending on unpushed state. When a dependency fork needs changes, work in the dedicated clone the user has prepared (the fastgltf fork lives at `C:\git\tksuoran\fastgltf`; ask the user to prepare a clone when none exists for a dependency), commit there, then prompt the user to arrange branches and perform pushes - never push yourself. Bump the `CPMAddPackage` `GIT_TAG` only after the commit is on GitHub.
+- **Do not do any development work inside `.cpm_cache/` checkouts.** The CPM source cache is a fetch artifact, not a workspace: commits made there are invisible to the fork's real clone, easily lost to a re-fetch, and leave builds silently depending on unpushed state. When a dependency fork needs changes, work in the dedicated clone the user has prepared (per-machine clone locations are recorded in `memory-bank/local/`; ask the user to prepare a clone when none exists for a dependency), commit there, then prompt the user to arrange branches and perform pushes - never push yourself. Bump the `CPMAddPackage` `GIT_TAG` only after the commit is on GitHub.
 
 ### Code Generation
 
@@ -408,6 +408,10 @@ Get-CimInstance Win32_Process -Filter "Name='find.exe'" | ForEach-Object { Stop-
 ## Editor Improvement Plan
 
 See [`doc/editor_improvements.md`](doc/editor_improvements.md) for the prioritized list of architectural improvements to `src/editor/`.
+
+## Machine-Neutral Committed Files
+
+**Never write machine-dependent information into files that are committed / pushed to the repo** - this applies to ALL committed files (sources, docs, CLAUDE.md, memory-bank), not just the Memory Bank (whose README "Machine-Scope Rule" defines the same policy). Forbidden: absolute per-machine paths (`C:\Users\<name>\...`, `C:\git\...`, `D:\...`), usernames, hostnames, per-machine install state. Phrase facts as capabilities or with placeholders (`%USERPROFILE%`, `<your clone>`), and record the actual per-machine values (clone locations, tool install paths) in `memory-bank/local/*.md`, which is gitignored.
 
 ## Text Encoding
 
