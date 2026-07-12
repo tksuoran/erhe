@@ -374,6 +374,9 @@ using erhe::geometry::get_mesh_info;
 // instantiation" (see doc/gltf_2_1_item_flags_comment.md), so
 // erhe-specific bits ride in extras by name; unknown names are ignored on
 // import so the list can grow without breaking older builds.
+// LEGACY READ PATH: new files carry flags in the ERHE_node extension
+// (doc/gltf-scene-roundtrip-plan.md phase 3); the extras form is still
+// parsed for files written before the migration.
 class Serialized_item_flag
 {
 public:
@@ -392,6 +395,114 @@ constexpr Serialized_item_flag c_serialized_item_flags[] = {
         mask = mask | flag.bit;
     }
     return mask;
+}
+
+// The persistent (authored) Item flags serialized by name in ERHE_*
+// extensions (doc/gltf-scene-roundtrip-plan.md phase 3). Names, never raw
+// bit values: bit positions are not stable across erhe versions; unknown
+// names are ignored on load so the set can grow. Transient presentation
+// state (selected, hovered_*, negative_determinant, affects_shadow) and
+// the structurally handled import_root are deliberately absent.
+constexpr Serialized_item_flag c_persistent_item_flags[] = {
+    { erhe::Item_flags::no_message,                "no_message"                },
+    { erhe::Item_flags::no_transform_update,       "no_transform_update"       },
+    { erhe::Item_flags::transform_world_normative, "transform_world_normative" },
+    { erhe::Item_flags::show_in_ui,                "show_in_ui"                },
+    { erhe::Item_flags::show_debug_visualizations, "show_debug_visualizations" },
+    { erhe::Item_flags::shadow_cast,               "shadow_cast"               },
+    { erhe::Item_flags::lock_viewport_selection,   "lock_viewport_selection"   },
+    { erhe::Item_flags::lock_viewport_transform,   "lock_viewport_transform"   },
+    { erhe::Item_flags::visible,                   "visible"                   },
+    { erhe::Item_flags::invisible_parent,          "invisible_parent"          },
+    { erhe::Item_flags::render_wireframe,          "render_wireframe"          },
+    { erhe::Item_flags::render_bounding_volume,    "render_bounding_volume"    },
+    { erhe::Item_flags::content,                   "content"                   },
+    { erhe::Item_flags::id,                        "id"                        },
+    { erhe::Item_flags::tool,                      "tool"                      },
+    { erhe::Item_flags::brush,                     "brush"                     },
+    { erhe::Item_flags::controller,                "controller"                },
+    { erhe::Item_flags::rendertarget,              "rendertarget"              },
+    { erhe::Item_flags::expand,                    "expand"                    },
+    { erhe::Item_flags::lock_edit,                 "lock_edit"                 },
+    { erhe::Item_flags::show_in_developer_ui,      "show_in_developer_ui"      },
+    { erhe::Item_flags::exclude_from_prefab,       "exclude_from_prefab"       }
+};
+
+// JSON array of persistent flag names for the set bits, e.g.
+// ["visible","content"].
+[[nodiscard]] auto persistent_flags_to_json(const uint64_t flag_bits) -> std::string
+{
+    std::string out{"["};
+    const char* separator = "";
+    for (const Serialized_item_flag& flag : c_persistent_item_flags) {
+        if ((flag_bits & flag.bit) != 0) {
+            out += separator;
+            out += '"';
+            out += flag.name;
+            out += '"';
+            separator = ",";
+        }
+    }
+    out += "]";
+    return out;
+}
+
+// erhe::scene::Projection::Type <-> ERHE_camera projection_type string.
+[[nodiscard]] auto projection_type_name(const erhe::scene::Projection::Type type) -> const char*
+{
+    switch (type) {
+        case erhe::scene::Projection::Type::other:                 return "other";
+        case erhe::scene::Projection::Type::perspective_horizontal:return "perspective_horizontal";
+        case erhe::scene::Projection::Type::perspective_vertical:  return "perspective_vertical";
+        case erhe::scene::Projection::Type::perspective:           return "perspective";
+        case erhe::scene::Projection::Type::perspective_xr:        return "perspective_xr";
+        case erhe::scene::Projection::Type::orthogonal_horizontal: return "orthogonal_horizontal";
+        case erhe::scene::Projection::Type::orthogonal_vertical:   return "orthogonal_vertical";
+        case erhe::scene::Projection::Type::orthogonal:            return "orthogonal";
+        case erhe::scene::Projection::Type::orthogonal_rectangle:  return "orthogonal_rectangle";
+        case erhe::scene::Projection::Type::generic_frustum:       return "generic_frustum";
+        default:                                                   return "perspective_vertical";
+    }
+}
+
+[[nodiscard]] auto projection_type_from_name(const std::string_view name) -> erhe::scene::Projection::Type
+{
+    if (name == "other")                  return erhe::scene::Projection::Type::other;
+    if (name == "perspective_horizontal") return erhe::scene::Projection::Type::perspective_horizontal;
+    if (name == "perspective_vertical")   return erhe::scene::Projection::Type::perspective_vertical;
+    if (name == "perspective")            return erhe::scene::Projection::Type::perspective;
+    if (name == "perspective_xr")         return erhe::scene::Projection::Type::perspective_xr;
+    if (name == "orthogonal_horizontal")  return erhe::scene::Projection::Type::orthogonal_horizontal;
+    if (name == "orthogonal_vertical")    return erhe::scene::Projection::Type::orthogonal_vertical;
+    if (name == "orthogonal")             return erhe::scene::Projection::Type::orthogonal;
+    if (name == "orthogonal_rectangle")   return erhe::scene::Projection::Type::orthogonal_rectangle;
+    if (name == "generic_frustum")        return erhe::scene::Projection::Type::generic_frustum;
+    return erhe::scene::Projection::Type::perspective_vertical;
+}
+
+// Applies a parsed flag-name array exactly: every persistent flag is
+// enabled when listed and disabled when not (unknown names ignored).
+void apply_persistent_flags(erhe::Item_base& item, const simdjson::dom::array& flags_array)
+{
+    uint64_t listed_bits = 0;
+    for (const simdjson::dom::element flag_element : flags_array) {
+        std::string_view flag_name;
+        if (flag_element.get_string().get(flag_name) != simdjson::SUCCESS) {
+            continue;
+        }
+        for (const Serialized_item_flag& flag : c_persistent_item_flags) {
+            if (flag_name == flag.name) {
+                listed_bits |= flag.bit;
+            }
+        }
+    }
+    for (const Serialized_item_flag& flag : c_persistent_item_flags) {
+        if ((listed_bits & flag.bit) != 0) {
+            item.enable_flag_bits(flag.bit);
+        } else {
+            item.disable_flag_bits(flag.bit);
+        }
+    }
 }
 
 [[nodiscard]] auto is_number(std::string_view s) -> bool
@@ -2915,6 +3026,163 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
         }
     }
 
+    // Apply library-domain ERHE_* extensions to the parsed objects:
+    // ERHE_node / ERHE_light on nodes, ERHE_camera on cameras and
+    // ERHE_material on materials (doc/gltf-scene-roundtrip-plan.md
+    // phase 3). Runs after the legacy extras replay so the extensions win
+    // when both are present. Editor-domain extensions stay raw in
+    // Gltf_data for the editor layer.
+    {
+        simdjson::dom::parser extension_parser;
+        const auto get_extension_object = [&extension_parser](const std::string& json, simdjson::dom::object& out_object) -> bool {
+            simdjson::dom::element root;
+            if (extension_parser.parse(simdjson::padded_string{json}).get(root) != simdjson::SUCCESS) {
+                return false;
+            }
+            return root.get_object().get(out_object) == simdjson::SUCCESS;
+        };
+        const auto read_float = [](const simdjson::dom::object& object, const char* key, float& out_value) -> bool {
+            double value{0.0};
+            if (object.at_key(key).get_double().get(value) != simdjson::SUCCESS) {
+                return false;
+            }
+            out_value = static_cast<float>(value);
+            return true;
+        };
+
+        for (std::size_t i = 0; i < result.node_extensions.size(); ++i) {
+            const std::shared_ptr<erhe::scene::Node>& node = result.nodes[i];
+            if (!node) {
+                continue;
+            }
+            for (const auto& [extension_name, extension_json] : result.node_extensions[i].entries) {
+                simdjson::dom::object extension_object;
+                if (!get_extension_object(extension_json, extension_object)) {
+                    continue;
+                }
+                if (extension_name == "ERHE_node") {
+                    simdjson::dom::array flags_array;
+                    if (extension_object.at_key("flags").get_array().get(flags_array) == simdjson::SUCCESS) {
+                        apply_persistent_flags(*node, flags_array);
+                    }
+                    if (extension_object.at_key("mesh_flags").get_array().get(flags_array) == simdjson::SUCCESS) {
+                        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+                        if (mesh) {
+                            apply_persistent_flags(*mesh, flags_array);
+                        }
+                    }
+                } else if (extension_name == "ERHE_light") {
+                    const std::shared_ptr<erhe::scene::Light> light = erhe::scene::get_attachment<erhe::scene::Light>(node.get());
+                    if (light) {
+                        bool bool_value{false};
+                        if (extension_object.at_key("cast_shadow").get_bool().get(bool_value) == simdjson::SUCCESS) {
+                            light->cast_shadow = bool_value;
+                        }
+                        if ((extension_object.at_key("infinite_range").get_bool().get(bool_value) == simdjson::SUCCESS) && bool_value) {
+                            light->range = 0.0f;
+                        }
+                        simdjson::dom::array flags_array;
+                        if (extension_object.at_key("flags").get_array().get(flags_array) == simdjson::SUCCESS) {
+                            apply_persistent_flags(*light, flags_array);
+                        }
+                    }
+                }
+            }
+        }
+
+        for (std::size_t i = 0; i < result.camera_extensions.size(); ++i) {
+            const std::shared_ptr<erhe::scene::Camera>& camera = result.cameras[i];
+            if (!camera) {
+                continue;
+            }
+            for (const auto& [extension_name, extension_json] : result.camera_extensions[i].entries) {
+                if (extension_name != "ERHE_camera") {
+                    continue;
+                }
+                simdjson::dom::object extension_object;
+                if (!get_extension_object(extension_json, extension_object)) {
+                    continue;
+                }
+                erhe::scene::Projection* projection = camera->projection();
+                if (projection != nullptr) {
+                    std::string_view type_name;
+                    if (extension_object.at_key("projection_type").get_string().get(type_name) == simdjson::SUCCESS) {
+                        projection->projection_type = projection_type_from_name(type_name);
+                    }
+                    static_cast<void>(read_float(extension_object, "z_near",         projection->z_near));
+                    static_cast<void>(read_float(extension_object, "z_far",          projection->z_far));
+                    static_cast<void>(read_float(extension_object, "fov_x",          projection->fov_x));
+                    static_cast<void>(read_float(extension_object, "fov_y",          projection->fov_y));
+                    static_cast<void>(read_float(extension_object, "fov_left",       projection->fov_left));
+                    static_cast<void>(read_float(extension_object, "fov_right",      projection->fov_right));
+                    static_cast<void>(read_float(extension_object, "fov_up",         projection->fov_up));
+                    static_cast<void>(read_float(extension_object, "fov_down",       projection->fov_down));
+                    static_cast<void>(read_float(extension_object, "ortho_left",     projection->ortho_left));
+                    static_cast<void>(read_float(extension_object, "ortho_width",    projection->ortho_width));
+                    static_cast<void>(read_float(extension_object, "ortho_bottom",   projection->ortho_bottom));
+                    static_cast<void>(read_float(extension_object, "ortho_height",   projection->ortho_height));
+                    static_cast<void>(read_float(extension_object, "frustum_left",   projection->frustum_left));
+                    static_cast<void>(read_float(extension_object, "frustum_right",  projection->frustum_right));
+                    static_cast<void>(read_float(extension_object, "frustum_bottom", projection->frustum_bottom));
+                    static_cast<void>(read_float(extension_object, "frustum_top",    projection->frustum_top));
+                }
+                float float_value{0.0f};
+                if (read_float(extension_object, "exposure", float_value)) {
+                    camera->set_exposure(float_value);
+                }
+                if (read_float(extension_object, "shadow_range", float_value)) {
+                    camera->set_shadow_range(float_value);
+                }
+                simdjson::dom::array flags_array;
+                if (extension_object.at_key("flags").get_array().get(flags_array) == simdjson::SUCCESS) {
+                    apply_persistent_flags(*camera, flags_array);
+                }
+            }
+        }
+
+        for (std::size_t i = 0; i < result.material_extensions.size(); ++i) {
+            const std::shared_ptr<erhe::primitive::Material>& material = result.materials[i];
+            if (!material) {
+                continue;
+            }
+            for (const auto& [extension_name, extension_json] : result.material_extensions[i].entries) {
+                if (extension_name != "ERHE_material") {
+                    continue;
+                }
+                simdjson::dom::object extension_object;
+                if (!get_extension_object(extension_json, extension_object)) {
+                    continue;
+                }
+                float float_value{0.0f};
+                if (read_float(extension_object, "roughness_y", float_value)) {
+                    material->data.roughness.y = float_value;
+                }
+                std::string_view string_value;
+                if (extension_object.at_key("bxdf_model").get_string().get(string_value) == simdjson::SUCCESS) {
+                    if (const auto parsed = bxdf_model_from_string(string_value); parsed.has_value()) {
+                        material->data.bxdf_model = parsed.value();
+                    }
+                }
+                if (extension_object.at_key("blending_mode").get_string().get(string_value) == simdjson::SUCCESS) {
+                    if (const auto parsed = blending_mode_from_string(string_value); parsed.has_value()) {
+                        material->data.blending_mode = parsed.value();
+                    }
+                }
+                bool bool_value{false};
+                if (extension_object.at_key("use_circular_brushed_metal").get_bool().get(bool_value) == simdjson::SUCCESS) {
+                    material->data.use_circular_brushed_metal = bool_value;
+                }
+                std::uint64_t uint_value{0};
+                if (extension_object.at_key("circular_brushed_metal_tex_coord").get_uint64().get(uint_value) == simdjson::SUCCESS) {
+                    material->data.circular_brushed_metal_tex_coord = static_cast<uint32_t>(uint_value);
+                }
+                if (extension_object.at_key("use_aniso_control").get_bool().get(bool_value) == simdjson::SUCCESS) {
+                    material->data.use_aniso_control = bool_value;
+                }
+            }
+        }
+    }
+
     timer.end();
     if (timer.duration().has_value()) {
         log_gltf->info("glTF loaded {} in {}", arguments.path.string(), format_duration(timer.duration().value()));
@@ -3663,8 +3931,70 @@ private:
             }
             m_gltf_asset.materials.push_back(std::move(gltf_material));
         }
+        record_material_extensions(*material, gltf_material_index);
         m_exported_materials.insert({material, gltf_material_index});
         return gltf_material_index;
+    }
+
+    // ERHE_material extension per emitted glTF material
+    // (doc/gltf-scene-roundtrip-plan.md phase 3): the erhe-specific
+    // Material_data fields that have no standard glTF representation.
+    // Migrates the legacy material extras writer (same conditional field
+    // set); the extras remain parsed for older files.
+    std::unordered_map<std::size_t, std::string> m_internal_material_extensions;
+    void record_material_extensions(const erhe::primitive::Material& material, const std::size_t gltf_material_index)
+    {
+        const erhe::primitive::Material_data& data = material.data;
+
+        // Skip fields at their round-trip defaults; unlit rides on
+        // KHR_materials_unlit and OPAQUE/BLEND/MASK on alphaMode.
+        const bool emit_bxdf_model =
+            (data.bxdf_model != erhe::primitive::Bxdf_model::isotropic_brdf) &&
+            (data.bxdf_model != erhe::primitive::Bxdf_model::unlit);
+        const bool emit_roughness_y = (data.roughness.x != data.roughness.y);
+        const bool emit_blending_mode =
+            (data.blending_mode != erhe::primitive::Material_blending_mode::opaque) &&
+            (data.blending_mode != erhe::primitive::Material_blending_mode::alpha_blend) &&
+            (data.blending_mode != erhe::primitive::Material_blending_mode::alpha_test);
+        const bool emit_circular_brushed_metal_tex_coord = (data.circular_brushed_metal_tex_coord != 1u);
+
+        if (!emit_roughness_y &&
+            !emit_bxdf_model &&
+            !emit_blending_mode &&
+            !data.use_circular_brushed_metal &&
+            !emit_circular_brushed_metal_tex_coord &&
+            !data.use_aniso_control)
+        {
+            return;
+        }
+
+        std::string fields;
+        const char* separator = "";
+        if (emit_roughness_y) {
+            fields += fmt::format("{}\"roughness_y\":{}", separator, data.roughness.y);
+            separator = ",";
+        }
+        if (emit_bxdf_model) {
+            fields += fmt::format("{}\"bxdf_model\":\"{}\"", separator, bxdf_model_to_c_str(data.bxdf_model));
+            separator = ",";
+        }
+        if (emit_blending_mode) {
+            fields += fmt::format("{}\"blending_mode\":\"{}\"", separator, blending_mode_to_c_str(data.blending_mode));
+            separator = ",";
+        }
+        if (data.use_circular_brushed_metal) {
+            fields += fmt::format("{}\"use_circular_brushed_metal\":true", separator);
+            separator = ",";
+        }
+        if (emit_circular_brushed_metal_tex_coord) {
+            fields += fmt::format("{}\"circular_brushed_metal_tex_coord\":{}", separator, data.circular_brushed_metal_tex_coord);
+            separator = ",";
+        }
+        if (data.use_aniso_control) {
+            fields += fmt::format("{}\"use_aniso_control\":true", separator);
+            separator = ",";
+        }
+        m_internal_material_extensions.emplace(gltf_material_index, fmt::format("\"ERHE_material\":{{{}}}", fields));
     }
 
     std::unordered_map<const erhe::scene::Mesh*, std::size_t> m_erhe_mesh_to_gltf_mesh_index;
@@ -3824,7 +4154,40 @@ private:
         std::size_t gltf_camera_index = m_gltf_asset.cameras.size();
         m_gltf_asset.cameras.emplace_back(std::move(gltf_camera));
         m_erhe_camera_to_gltf_camera_index.insert({erhe_camera, gltf_camera_index});
+        record_camera_extensions(*erhe_camera, *erhe_projection, gltf_camera_index);
         return gltf_camera_index;
+    }
+
+    // ERHE_camera extension per emitted glTF camera
+    // (doc/gltf-scene-roundtrip-plan.md phase 3): the FULL
+    // erhe::scene::Projection (core glTF cameras carry only yfov/aspect +
+    // xmag/ymag and cannot express erhe's projection types or asymmetric
+    // frusta), plus exposure, shadow_range and the camera Item flags.
+    // Floats format with fmt "{}" (shortest round-trip, value-exact).
+    std::unordered_map<std::size_t, std::string> m_internal_camera_extensions;
+    void record_camera_extensions(
+        const erhe::scene::Camera&     erhe_camera,
+        const erhe::scene::Projection& projection,
+        const std::size_t              gltf_camera_index
+    )
+    {
+        std::string members = fmt::format(
+            "\"ERHE_camera\":{{\"projection_type\":\"{}\""
+            ",\"z_near\":{},\"z_far\":{}"
+            ",\"fov_x\":{},\"fov_y\":{},\"fov_left\":{},\"fov_right\":{},\"fov_up\":{},\"fov_down\":{}"
+            ",\"ortho_left\":{},\"ortho_width\":{},\"ortho_bottom\":{},\"ortho_height\":{}"
+            ",\"frustum_left\":{},\"frustum_right\":{},\"frustum_bottom\":{},\"frustum_top\":{}"
+            ",\"exposure\":{},\"shadow_range\":{},\"flags\":{}}}",
+            projection_type_name(projection.projection_type),
+            projection.z_near, projection.z_far,
+            projection.fov_x, projection.fov_y,
+            projection.fov_left, projection.fov_right, projection.fov_up, projection.fov_down,
+            projection.ortho_left, projection.ortho_width, projection.ortho_bottom, projection.ortho_height,
+            projection.frustum_left, projection.frustum_right, projection.frustum_bottom, projection.frustum_top,
+            erhe_camera.get_exposure(), erhe_camera.get_shadow_range(),
+            persistent_flags_to_json(erhe_camera.get_flag_bits())
+        );
+        m_internal_camera_extensions.emplace(gltf_camera_index, std::move(members));
     }
 
     // Appends one tightly packed float accessor (own buffer + buffer view;
@@ -4276,15 +4639,39 @@ private:
         return external_asset_index;
     }
 
-    // Serialized erhe Item flags (c_serialized_item_flags) ride in node
-    // "extras" (written by the extras callback in export_gltf()); record
-    // them per emitted glTF node index.
-    void record_serialized_node_flags(const erhe::scene::Node& erhe_node, const std::size_t gltf_node_index)
+    // ERHE_node (+ ERHE_light for light-carrying nodes) extension members
+    // per emitted glTF node (doc/gltf-scene-roundtrip-plan.md phase 3):
+    // persistent Item flags by name, the mesh attachment's Item flags (core
+    // meshes have no erhe payload of their own, and erhe Mesh attachments
+    // are per node), and the light attachment's erhe-only state (per-light
+    // hooks inside KHR_lights_punctual would need extra fork surface; erhe
+    // lights are 1:1 with their node). Replaces the legacy erhe_flags node
+    // extras writer; the extras are still parsed for older files.
+    std::unordered_map<std::size_t, std::string> m_internal_node_extensions;
+    void record_node_extensions(
+        const erhe::scene::Node&                   erhe_node,
+        const std::size_t                          gltf_node_index,
+        const std::shared_ptr<erhe::scene::Mesh>&  erhe_mesh,
+        const std::shared_ptr<erhe::scene::Light>& erhe_light
+    )
     {
-        const uint64_t flag_bits = erhe_node.get_flag_bits() & serialized_item_flags_mask();
-        if (flag_bits != 0) {
-            m_gltf_node_index_to_flags.emplace(gltf_node_index, flag_bits);
+        std::string members = fmt::format(
+            "\"ERHE_node\":{{\"flags\":{}",
+            persistent_flags_to_json(erhe_node.get_flag_bits())
+        );
+        if (erhe_mesh) {
+            members += fmt::format(",\"mesh_flags\":{}", persistent_flags_to_json(erhe_mesh->get_flag_bits()));
         }
+        members += "}";
+        if (erhe_light) {
+            members += fmt::format(
+                ",\"ERHE_light\":{{\"cast_shadow\":{},\"infinite_range\":{},\"flags\":{}}}",
+                erhe_light->cast_shadow ? "true" : "false",
+                (erhe_light->range <= 0.0f) ? "true" : "false",
+                persistent_flags_to_json(erhe_light->get_flag_bits())
+            );
+        }
+        m_internal_node_extensions.emplace(gltf_node_index, std::move(members));
     }
 
     auto process_light(const erhe::scene::Light* erhe_light) -> std::size_t
@@ -4356,7 +4743,7 @@ private:
             size_t gltf_external_node_index = m_gltf_asset.nodes.size();
             m_gltf_asset.nodes.emplace_back(std::move(gltf_node));
             m_erhe_node_to_gltf_node_index.insert({&erhe_node, gltf_external_node_index});
-            record_serialized_node_flags(erhe_node, gltf_external_node_index);
+            record_node_extensions(erhe_node, gltf_external_node_index, {}, {});
             return gltf_external_node_index;
         }
 
@@ -4384,7 +4771,7 @@ private:
         size_t gltf_node_index = m_gltf_asset.nodes.size();
         m_gltf_asset.nodes.emplace_back(std::move(gltf_node));
         m_erhe_node_to_gltf_node_index.insert({&erhe_node, gltf_node_index});
-        record_serialized_node_flags(erhe_node, gltf_node_index);
+        record_node_extensions(erhe_node, gltf_node_index, erhe_mesh, erhe_light);
         if (erhe_mesh && erhe_mesh->skin) {
             // node.skinIndex is resolved by process_skins() after the node
             // pass - joint nodes may come later in traversal order.
@@ -4799,7 +5186,17 @@ private:
 
     std::unordered_map<const erhe::scene::Node*, std::size_t>  m_erhe_node_to_gltf_node_index;
     std::unordered_map<const erhe::scene::Light*, std::size_t> m_exported_lights;
-    std::unordered_map<std::size_t, uint64_t>                  m_gltf_node_index_to_flags; // serialized erhe Item flags per glTF node index
+
+    // Adds an extension name to extensionsUsed once.
+    void declare_extension_used(const std::string_view extension_name)
+    {
+        for (const auto& existing : m_gltf_asset.extensionsUsed) {
+            if (std::string_view{existing} == extension_name) {
+                return;
+            }
+        }
+        m_gltf_asset.extensionsUsed.emplace_back(std::string{extension_name}.c_str());
+    }
 };
 
 auto Gltf_exporter::export_gltf() -> std::string
@@ -4854,17 +5251,11 @@ auto Gltf_exporter::export_gltf() -> std::string
 
     combine_buffers();
 
-    // Extras write context: gltf material index -> erhe Material* (erhe
-    // material extras) and gltf node index -> serialized erhe Item flags.
-    // Also carries the ERHE_* extension payloads (keyed by glTF index) for
-    // the generic extensions write callback; both callbacks share
-    // userPointer.
+    // Extensions write context: the ERHE_* extension members (raw JSON,
+    // keyed by glTF index) served to the generic extensions write callback.
     class Export_extras_context
     {
     public:
-        std::unordered_map<std::size_t, const erhe::primitive::Material*> index_to_material;
-        const std::unordered_map<std::size_t, uint64_t>*                  node_index_to_flags{nullptr};
-
         std::string                                                asset_extensions;
         std::string                                                scene_extensions;
         std::unordered_map<std::size_t, std::string>               node_extensions;
@@ -4874,10 +5265,6 @@ auto Gltf_exporter::export_gltf() -> std::string
         std::map<std::pair<std::size_t, std::size_t>, std::string> mesh_primitive_extensions;
     };
     Export_extras_context export_extras_context;
-    for (const auto& [material_ptr, gltf_index] : m_exported_materials) {
-        export_extras_context.index_to_material[gltf_index] = material_ptr;
-    }
-    export_extras_context.node_index_to_flags = &m_gltf_node_index_to_flags;
 
     // Resolve extension payloads from erhe objects to glTF indices; payloads
     // whose object did not end up in the export are skipped with a warning.
@@ -4934,44 +5321,50 @@ auto Gltf_exporter::export_gltf() -> std::string
             }
             export_extras_context.mesh_primitive_extensions[{mesh_it->second, map_it->second[erhe_primitive_index].value()}] = payload;
         }
-        // Exporter-generated ERHE_geometry members (geometry-normative
-        // primitives) merge with any caller payload on the same primitive.
-        for (const auto& [key, extension_members] : m_geometry_primitive_extensions) {
-            std::string& slot = export_extras_context.mesh_primitive_extensions[key];
+        // Exporter-generated ERHE_* members (ERHE_geometry on primitives,
+        // ERHE_node / ERHE_light on nodes, ERHE_camera on cameras,
+        // ERHE_material on materials) merge with any caller payload on the
+        // same object.
+        const auto merge_extension_members = [](std::string& slot, const std::string& extension_members) {
             if (slot.empty()) {
                 slot = extension_members;
             } else {
                 slot += ",";
                 slot += extension_members;
             }
+        };
+        for (const auto& [key, extension_members] : m_geometry_primitive_extensions) {
+            merge_extension_members(export_extras_context.mesh_primitive_extensions[key], extension_members);
+        }
+        for (const auto& [index, extension_members] : m_internal_node_extensions) {
+            merge_extension_members(export_extras_context.node_extensions[index], extension_members);
+        }
+        for (const auto& [index, extension_members] : m_internal_camera_extensions) {
+            merge_extension_members(export_extras_context.camera_extensions[index], extension_members);
+        }
+        for (const auto& [index, extension_members] : m_internal_material_extensions) {
+            merge_extension_members(export_extras_context.material_extensions[index], extension_members);
         }
         if (!m_geometry_primitive_extensions.empty()) {
-            bool already_declared = false;
-            for (const auto& existing : m_gltf_asset.extensionsUsed) {
-                if (std::string_view{existing} == std::string_view{"ERHE_geometry"}) {
-                    already_declared = true;
-                    break;
-                }
-            }
-            if (!already_declared) {
-                m_gltf_asset.extensionsUsed.emplace_back("ERHE_geometry");
-            }
+            declare_extension_used("ERHE_geometry");
+        }
+        if (!m_internal_node_extensions.empty()) {
+            declare_extension_used("ERHE_node");
+        }
+        if (!m_gltf_asset.lights.empty()) {
+            declare_extension_used("ERHE_light");
+        }
+        if (!m_internal_camera_extensions.empty()) {
+            declare_extension_used("ERHE_camera");
+        }
+        if (!m_internal_material_extensions.empty()) {
+            declare_extension_used("ERHE_material");
         }
     }
 
-    // Caller-declared extension names (for the payloads above); avoid
-    // duplicates against what the exporter already declared.
+    // Caller-declared extension names (for the payloads above).
     for (const std::string& extension_name : m_arguments.extensions_used) {
-        bool already_declared = false;
-        for (const auto& existing : m_gltf_asset.extensionsUsed) {
-            if (std::string_view{existing} == std::string_view{extension_name}) {
-                already_declared = true;
-                break;
-            }
-        }
-        if (!already_declared) {
-            m_gltf_asset.extensionsUsed.emplace_back(extension_name.c_str());
-        }
+        declare_extension_used(extension_name);
     }
 
     fastgltf::Exporter exporter{};
@@ -5033,96 +5426,10 @@ auto Gltf_exporter::export_gltf() -> std::string
             }
         }
     );
-    exporter.setExtrasWriteCallback(
-        [](std::size_t object_index, fastgltf::Category object_type, void* user_pointer) -> std::optional<std::string> {
-            const Export_extras_context* context = static_cast<const Export_extras_context*>(user_pointer);
-
-            if (object_type == fastgltf::Category::Nodes) {
-                const auto node_it = context->node_index_to_flags->find(object_index);
-                if (node_it == context->node_index_to_flags->end()) {
-                    return std::nullopt;
-                }
-                std::string out{"{\"erhe_flags\": ["};
-                const char* sep = "";
-                for (const Serialized_item_flag& serialized_flag : c_serialized_item_flags) {
-                    if ((node_it->second & serialized_flag.bit) != 0) {
-                        out += sep; out += "\""; out += serialized_flag.name; out += "\"";
-                        sep = ", ";
-                    }
-                }
-                out += "]}";
-                return out;
-            }
-
-            if (object_type != fastgltf::Category::Materials) {
-                return std::nullopt;
-            }
-            const auto it = context->index_to_material.find(object_index);
-            if (it == context->index_to_material.end()) {
-                return std::nullopt;
-            }
-            const erhe::primitive::Material*      material = it->second;
-            const erhe::primitive::Material_data& data     = material->data;
-
-            // Skip writing the bxdf_model extra when it's the
-            // round-trip default (isotropic_brdf) or when it's unlit
-            // (KHR_materials_unlit carries that case at the standard
-            // extension level).
-            const bool emit_bxdf_model =
-                (data.bxdf_model != erhe::primitive::Bxdf_model::isotropic_brdf) &&
-                (data.bxdf_model != erhe::primitive::Bxdf_model::unlit);
-            const bool emit_roughness_y =
-                (data.roughness.x != data.roughness.y);
-            // alphaMode covers opaque / alpha_blend / alpha_test. Other
-            // modes need extras so they survive a round-trip.
-            const bool emit_blending_mode =
-                (data.blending_mode != erhe::primitive::Material_blending_mode::opaque) &&
-                (data.blending_mode != erhe::primitive::Material_blending_mode::alpha_blend) &&
-                (data.blending_mode != erhe::primitive::Material_blending_mode::alpha_test);
-            // 1 is the round-trip default (set by Material_data).
-            const bool emit_circular_brushed_metal_tex_coord =
-                (data.circular_brushed_metal_tex_coord != 1u);
-
-            if (!emit_roughness_y &&
-                !emit_bxdf_model &&
-                !emit_blending_mode &&
-                !data.use_circular_brushed_metal &&
-                !emit_circular_brushed_metal_tex_coord &&
-                !data.use_aniso_control)
-            {
-                return std::nullopt;
-            }
-
-            std::string out{"{"};
-            const char* sep = "";
-            if (emit_roughness_y) {
-                out += sep; out += "\"roughness_y\": "; out += std::to_string(data.roughness.y);
-                sep = ", ";
-            }
-            if (emit_bxdf_model) {
-                out += sep; out += "\"bxdf_model\": \""; out += bxdf_model_to_c_str(data.bxdf_model); out += "\"";
-                sep = ", ";
-            }
-            if (emit_blending_mode) {
-                out += sep; out += "\"blending_mode\": \""; out += blending_mode_to_c_str(data.blending_mode); out += "\"";
-                sep = ", ";
-            }
-            if (data.use_circular_brushed_metal) {
-                out += sep; out += "\"use_circular_brushed_metal\": true";
-                sep = ", ";
-            }
-            if (emit_circular_brushed_metal_tex_coord) {
-                out += sep; out += "\"circular_brushed_metal_tex_coord\": "; out += std::to_string(data.circular_brushed_metal_tex_coord);
-                sep = ", ";
-            }
-            if (data.use_aniso_control) {
-                out += sep; out += "\"use_aniso_control\": true";
-                sep = ", ";
-            }
-            out += "}";
-            return out;
-        }
-    );
+    // No extras write callback: the legacy erhe_flags node extras and the
+    // material extras migrated to the ERHE_node / ERHE_material extensions
+    // (doc/gltf-scene-roundtrip-plan.md phase 3); the extras remain parsed
+    // for files written before the migration.
 
     if (m_arguments.binary)
     {
