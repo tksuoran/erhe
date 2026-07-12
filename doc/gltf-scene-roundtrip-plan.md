@@ -120,20 +120,19 @@ Branch on `tksuoran/fastgltf` (precedent: `khr_physics_rigid_bodies`):
 ## Phase 2 - Geometry (geogram) round-trip: `ERHE_geometry`
 
 New `erhe_gltf` <-> `erhe_geometry` conversion (editor-independent,
-unit-testable). The attribute model is deliberately **shaped after USD
-primvar interpolation** (see the USD-inspired section below), which maps
-1:1 onto geogram elements:
+unit-testable). The attribute model uses erhe/geogram's own element
+vocabulary - USD primvar terms would be confusing in a Khronos/glTF
+context; the USD naming mapping is documented in `doc/usd_compatibility.md`:
 
 - **Export**: for each geometry-normative primitive, write one glTF mesh
   primitive with: POSITION accessor (geogram vertices, no welding/unwelding -
   glTF vertex i == geogram vertex i), TRIANGLES indices from the existing
   triangulation, and EXT_mesh_polygon ring indices from geogram facets.
 - **`ERHE_geometry` primitive extension**: an array of attribute records
-  {name, interpolation, type, dimension, accessor}, where interpolation is
-  one of `constant` (whole mesh), `uniform` (per facet), `vertex`
-  (per vertex), `faceVarying` (per corner, in ring order), `edge`
-  (per edge; the edge index list itself is one more accessor pair) - the
-  USD primvar vocabulary plus `edge`, which USD lacks. Full dump: every
+  {name, element, type, dimension, accessor}, where element is one of
+  `mesh` (whole mesh), `facet` (per polygon), `vertex` (per vertex),
+  `corner` (per polygon-corner, in ring order), `edge` (per edge; the edge
+  index list itself is one more accessor pair). Full dump: every
   geogram attribute is written, so the round-trip is bit-exact; loader
   applies the dump first and runs process() only for genuinely missing data
   (new-file case).
@@ -187,62 +186,32 @@ material index, mesh index) instead of scene.json's parallel numeric id maps -
 the whole class of scene.json <-> data.glb index-mismatch bugs disappears.
 Names remain only inside graph JSON references (same as today).
 
-## USD-inspired extensions (review, 2026-07-12)
+## USD-inspired features (review, 2026-07-12)
 
-Reviewing USD (see Alternative-considered section) for concepts worth
+USD was reviewed (see Alternative-considered section) for concepts worth
 carrying into glTF. First preference is always an existing **ratified**
-glTF extension; only where none exists do we define `ERHE_*`.
+glTF extension; only where none exists do we define `ERHE_*`. Full detail -
+the erhe <-> USD naming/concept mapping and the specifications of the
+planned future features - lives in **`doc/usd_compatibility.md`**; erhe
+extensions use erhe/glTF-context naming, never USD vocabulary.
 
-### Adopt now (in scope for this plan)
+In scope for this plan:
 
-- **Primvar interpolation model** (USD: UsdGeomPrimvar) -> shapes
-  `ERHE_geometry` in phase 2. The constant/uniform/vertex/faceVarying
-  vocabulary is proven, documented, and understood by DCC developers;
-  adopting it verbatim (plus `edge`) makes the extension legible and keeps a
-  future USD export path trivial.
 - **Collections** (USD: UsdCollectionAPI) -> `ERHE_collections` in phase 3.
   Named sets of node references express item tags today and selection sets /
   render-layer-like groupings later, without inventing per-node tag strings.
 
-### Near-term follow-ups (specified here, implemented after the switchover)
+Documented in `doc/usd_compatibility.md`, implemented after the switchover:
 
-- **Sparse overrides on references** (USD: "overs" / opinion strength) ->
-  `ERHE_overrides`: a per-prefab-instance-node list of sparse property
-  overrides (node transforms, visibility flags, material rebinds) applied
-  on top of the instantiated externalAsset subtree, addressed by
-  stable-path-within-asset. This fixes a real current limitation: edits
-  inside a prefab instance are silently lost on save (the subtree is
-  re-created from the source glTF). Highest-value USD idea for erhe;
-  deferred only because it needs a stable intra-asset addressing scheme
-  (name paths with disambiguation) designed carefully.
-- **Material variants** (USD: variantSets; glTF: **KHR_materials_variants**,
-  ratified) -> adopt KHR_materials_variants as-is for per-primitive material
-  alternatives (fastgltf already knows this extension). Editor UI for
-  authoring/switching variants comes with it.
-- **Animate-anything** (USD: time samples on any attribute; glTF:
-  **KHR_animation_pointer**, ratified) -> adopt KHR_animation_pointer so
-  animations can target lights, materials, camera parameters - a natural
-  growth path for the #243 animation editor beyond node TRS.
-
-### Deferred / noted, not planned
-
-- **Node-level variant sets** (USD variants beyond materials) ->
-  `ERHE_variants` switching subtree alternatives (LODs, configuration
-  options). Powerful but no current editor feature needs it; design only
-  when one does.
-- **Instancing** (USD: scenegraph/point instancers; glTF:
-  **EXT_mesh_gpu_instancing**, ratified) -> relevant if/when erhe adds
-  mass placement (scatter) tooling; adopt the EXT then rather than
-  inventing anything.
-- **Payloads** (USD: deferred loading) -> externalAssets + Prefab_library
-  caching already give lazy structure; explicit load/unload policy flags
-  can ride `ERHE_scene` later if scenes grow big enough to need it.
-- **Sublayering / composition of whole scene files** (USD sublayers) ->
-  out of scope; one scene = one asset + external references remains the
-  model. Revisit only with a concrete collaborative-workflow requirement.
-- **Purpose (render/proxy/guide)** (USD imageable purpose) -> erhe's
-  layer/flag system already covers this internally; `ERHE_node` flags carry
-  it.
+- **`ERHE_overrides`** (USD: sparse "overs" on a reference) - persist edits
+  made inside prefab instances, which are silently lost on save today.
+  Highest-value USD idea; off the critical path because its intra-asset
+  addressing scheme needs careful design.
+- **KHR_materials_variants** and **KHR_animation_pointer** adoption (both
+  ratified) - USD's variants and animate-anything, respectively.
+- Deferred: `ERHE_variants` (node-level variant sets),
+  EXT_mesh_gpu_instancing, payload-style load policies. Non-goal:
+  sublayering.
 
 ## Phase 4 - Save / Open switchover
 
@@ -351,11 +320,12 @@ Rejected on operational grounds:
    curves are a recent addition), so round-trip would need re-encoding.
 
 The 2026-07-12 revision harvests USD's transferable ideas into glTF
-extensions instead (see "USD-inspired extensions" above): primvar
-interpolation shapes `ERHE_geometry`, collections shape `ERHE_collections`,
-overs shape the planned `ERHE_overrides`, and variants / animate-anything /
+extensions instead (see "USD-inspired features" above and
+`doc/usd_compatibility.md`): collections shape `ERHE_collections`, overs
+shape the planned `ERHE_overrides`, and variants / animate-anything /
 instancing arrive via the ratified KHR_materials_variants /
-KHR_animation_pointer / EXT_mesh_gpu_instancing.
+KHR_animation_pointer / EXT_mesh_gpu_instancing. `ERHE_geometry` keeps
+erhe/geogram element naming; the primvar mapping is documented, not adopted.
 
 Revisit trigger: if Android support lands upstream (or write-capable
 tinyusdz matures) AND erhe starts needing composition features glTF cannot
@@ -379,4 +349,5 @@ persistence format.
   gtest is written first (bit-exact dump round-trip) to pin it down.
 - `ERHE_overrides` intra-asset addressing (stable node paths inside a
   referenced glTF) is the hardest USD-inspired design; kept out of the
-  switchover critical path deliberately.
+  switchover critical path deliberately (design notes in
+  `doc/usd_compatibility.md`).
