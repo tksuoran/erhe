@@ -73,3 +73,12 @@
   ninja-wrappers-vswhere-fix✓;clangd--check-0-errors✓
   policy::LSAI+xmp4-opt-in-per-machine;memory-bank-trimmed+Machine-Scope-Rule-added
 >user-verified::uniform-scale-gizmo-drag-feel{2026-07-09,windowed}✓→task-fully-DONE{no-tuning-needed}
+
+[2026-07-12]
+>focus-switch::animation-editor{#243}→gltf-scene-roundtrip{plan-executed-via-prompt_queue-handoffs}
+  animation-editor-state-at-switch::LW-keying{aa78d9ec}✓user-iterated;deferred→doc/animation-keyframing-plan.md{scene-markers+DopeTrack-key-drag-on-strip+standalone-Timeline-dock+autokey-persistence}
+✓gltf-scene-roundtrip-phases0-4{doc/gltf-scene-roundtrip-plan.md-rev3}
+  phase0::exporter-completeness;phase1::fastgltf-fork-generic-ERHE_*-passthrough{0c3bd202};phase2::ERHE_geometry
+  phase3::ERHE_*-extensions{72ac5da9+f70143b5}::ERHE_node/camera/light/material{library}+ERHE_physics/scene/layout/brushes/node_graphs/collections{editor}+exclusion-hook+11-spec-pages+schemas
+  phase4::save/open-switchover{3a4989b6}::save_scene_gltf+open_scene_gltf{parsers/gltf}+Load_scene_file_message-single-entry-branching+.glb-file-picker+MCP-save/load+get/set_scene_settings+per-scene-imgui.ini-REMOVED+physics-import-folded-carrier-node-removal{save/open/re-save-node-identical,was+6-nodes/cycle}
+  verified-headless::save→open→re-save-identical{nodes+ERHE-payloads};settings/ambient/physics-applied-on-open;open-¬undoable;foreign-glb→Scene_open_operation;legacy-.erhescene-still-loads
