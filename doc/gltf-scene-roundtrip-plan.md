@@ -12,10 +12,19 @@ Decisions taken (user-confirmed 2026-07-12):
   missing buffer URI first).
 - **Per-scene window layout**: dropped entirely. No imgui.ini persistence per
   scene; only the global editor layout remains.
-- **Polygon geometry**: implement `EXT_mesh_polygon` + its dependency
-  `KHR_mesh_primitive_restart` exactly as drafted in
-  KhronosGroup/glTF#2570 (open PR). Adjust if the spec changes before
-  ratification.
+- **Polygon geometry** (revised 2026-07-12 design review, user-confirmed):
+  the core primitive stays TRIANGLES; polygon rings are carried inside the
+  `ERHE_geometry` extension as a facet_vertex_counts / facet_vertex_indices
+  accessor pair. `EXT_mesh_polygon` + its dependency
+  `KHR_mesh_primitive_restart` (KhronosGroup/glTF#2570 / #2569, open PRs)
+  are NOT adopted while they are drafts: the 2026-05-20 draft revision
+  flipped the encoding to LINE_LOOP-primary (TRIANGLES render indices moved
+  into the extension as `triangleIndices`, optionality still under
+  discussion), which would make stock viewers render shape-authored meshes
+  as ring outlines and make the Khronos validator reject the restart
+  sentinels until ratification. Adopt EXT_mesh_polygon when it ratifies
+  (mechanical mapping from the counts/indices encoding; same
+  transition-period reader pattern as extras -> extensions).
 - **Geometry fidelity**: full geogram attribute dump - every vertex / facet /
   corner / edge attribute is serialized (bit-exact round-trip), not just
   authored attributes.
@@ -31,17 +40,19 @@ Decisions taken (user-confirmed 2026-07-12):
 | erhe state | glTF mechanism | status |
 |---|---|---|
 | node tree, TRS, names | core | exists |
-| node Item flags | `ERHE_node` extension (migrates `erhe_flags` extras) | NEW |
-| cameras (projection) | core cameras | exists |
-| camera exposure, shadow_range | `ERHE_camera` extension | NEW |
-| lights | KHR_lights_punctual | exists |
+| node Item flags + mesh-attachment Item flags | `ERHE_node` extension (migrates `erhe_flags` extras) | NEW |
+| cameras (interchange approximation) | core cameras | exists (lossy by design; exporter currently ERHE_FATALs on `other` / `generic_frustum` and importer drops z_near - phase 0 fixes) |
+| camera full projection (all 9 `Projection::Type`s, asymmetric fov/ortho/frustum fields, z_near/z_far), exposure, shadow_range, Item flags | `ERHE_camera` extension | NEW (core cameras carry only yfov/aspect + xmag/ymag - they CANNOT express erhe's Projection) |
+| lights (type, color, intensity, range, spot angles) | KHR_lights_punctual | exists (fix range round-trip asymmetry: export omits range 0 = infinite, import defaults missing range to 1000) |
+| light cast_shadow, Item flags | `ERHE_light` extension | NEW (KHR_lights_punctual has no shadow flag; cast_shadow is silently lost today) |
 | materials + erhe fields | core + `ERHE_material` extension (migrates material extras) | NEW (extras exist) |
-| textures / images / samplers | core | NEW (exporter currently drops them) |
+| textures / images / samplers | core | NEW (exporter currently drops them; sampler wrap/filter state is not even queryable - see phase 0) |
 | animations | core | NEW (exporter currently drops them) |
 | skins | core | NEW (exporter currently drops them) |
 | meshes (triangle soup) | core | exists |
-| meshes (geometry-normative, geogram) | EXT_mesh_polygon + KHR_mesh_primitive_restart + `ERHE_geometry` extension | NEW |
+| meshes (geometry-normative, geogram) | core TRIANGLES + `ERHE_geometry` extension (polygon rings + attribute dump; see decision above) | NEW |
 | physics bodies, colliders, triggers, velocities, COM | KHR_physics_rigid_bodies + KHR_implicit_shapes | exists |
+| physics motion_mode detail (both kinematic modes), per-body friction / restitution, linear / angular damping | `ERHE_physics` node extension | NEW (KHR_physics_rigid_bodies has a single isKinematic bool and no per-body friction / restitution / damping - scene.json carries all of these today) |
 | physics materials, collision filters, joint settings (incl. unreferenced library items) | same extension top-level arrays | exists / verify unreferenced |
 | node joints | KHR_physics_rigid_bodies joints | exists |
 | prefab instances | glTF 2.1 externalAssets | exists |
@@ -49,7 +60,7 @@ Decisions taken (user-confirmed 2026-07-12):
 | graph textures / graph meshes (node-graph JSON) + bindings | `ERHE_node_graphs` root extension + node/material entries | NEW |
 | layouts / layout items | `ERHE_layout` node extension | NEW |
 | per-scene settings (#239), ambient light (#237), enable_physics | `ERHE_scene` scene extension | NEW |
-| item tags | `ERHE_collections` root extension (USD-inspired, see below) | NEW |
+| item tags | `ERHE_collections` root extension (USD-inspired, see below) | NEW (net-new persistence: tags live only in `Item_base::m_tags` at runtime and are never saved in .erhescene - there is nothing to migrate) |
 | per-scene imgui layout | DROPPED (decision above) | - |
 
 Editor state intentionally not persisted (unchanged from today): selection,
@@ -69,6 +80,17 @@ undo stack, viewport bindings.
 - Every `ERHE_*` extension is optional: files list them in `extensionsUsed`
   only, never `extensionsRequired`, so any glTF loader can open a saved
   scene and see the plain render content.
+- Item flags serialize as name lists (like today's `erhe_flags` extras,
+  which carry only `exclude_from_prefab`), never as raw bit values -
+  `Item_flags` bit positions are not stable across erhe versions. Unknown
+  names are ignored on load so the sets can grow. This corrects
+  scene.json's fragile raw `flag_bits` uint64.
+- Attachment Item flags (defect: today load_scene assigns fixed flag sets
+  to cameras / lights / meshes / layouts) ride the extension that describes
+  the attachment: `ERHE_camera`, `ERHE_light`, `ERHE_layout` each carry an
+  optional `flags` list. Mesh-attachment flags ride `ERHE_node` (core
+  meshes have no erhe payload of their own, and the erhe Mesh attachment
+  is per-node while glTF meshes are shareable).
 
 ## Phase 0 - Exporter completeness (prerequisite; valuable standalone)
 
@@ -76,46 +98,87 @@ undo stack, viewport bindings.
 
 1. **Images / textures / samplers export.** Round-trip needs the original
    encoded bytes: retain the compressed source image bytes at import time
-   (alongside `erhe::graphics::Texture`, e.g. on the content-library texture
-   entry) and write them back verbatim into the GLB buffer. GPU-only textures
-   (graph-texture bakes) are never exported as images - they regenerate.
-   Wire material texture references (`baseColorTexture` etc., currently
-   written empty).
+   and write them back verbatim into the GLB buffer. Retention home
+   (design reviewed 2026-07-12): the **content-library texture entry**
+   (editor layer, next to the `Gltf_source_reference` that
+   `Content_library_node` already carries) - NOT `erhe::graphics::Texture`,
+   which is deliberately GPU-only. Export falls back to re-reading the
+   bytes from `Gltf_source_reference::gltf_path` + `item_index` when no
+   retained bytes exist (assets imported before this lands), with a loud
+   warning when the source file is gone. GPU-only textures (graph-texture
+   bakes) are never exported as images - they regenerate. Wire material
+   texture references (`baseColorTexture` etc., currently written empty).
+   **Samplers need their own retention**: `erhe::graphics::Sampler` exposes
+   no wrap / filter getters - the glTF sampler state is consumed into
+   `Sampler_create_info` at import and becomes unqueryable. Retain the
+   create-info (or add accessors) so samplers can be written back.
 2. **Animation export**: `erhe::scene::Animation` -> samplers + channels
-   (node targets by exported node index; T/R/S/weights paths; STEP / LINEAR /
-   CUBICSPLINE). This closes the #243 animation-editor data-loss gap.
-3. **Skin export**: joints (node indices), inverseBindMatrices accessor,
-   skeleton; `Node::skinIndex` on skinned mesh nodes.
-4. Verify unreferenced physics materials / filters / joint settings from the
+   (node targets by exported node index; STEP / LINEAR / CUBICSPLINE).
+   Verified feasible with no new retention: `Animation_sampler` stores
+   `timestamps` + `data` permanently in glTF-native layout (quaternions in
+   glTF [x,y,z,w] order, CUBICSPLINE interleaved [in_tangent, value,
+   out_tangent]), and the #243 animation editor mutates that same storage
+   directly - export is a near-passthrough. The `weights` path is
+   DEFERRED: erhe has no morph-target support end-to-end
+   (`erhe::scene::Mesh` has no weights, `Animation_sampler::evaluate` has
+   no WEIGHTS case, the importer drops scalar sampler outputs), so there
+   is no data to export. This closes the #243 animation-editor data-loss
+   gap for node TRS animation.
+3. **Skin export**: joints (node indices), inverseBindMatrices accessor;
+   `Node::skinIndex` on skinned mesh nodes (erhe stores the skin on
+   `erhe::scene::Mesh::skin`). `Skin_data::skeleton` is never populated by
+   the importer, so the optional glTF `skeleton` field is omitted.
+4. **Camera correctness**: the exporter `ERHE_FATAL`s on
+   `Projection::Type::other` / `generic_frustum` - replace with a
+   best-effort core approximation (never abort a save); the importer drops
+   `z_near` on perspective cameras - fix. Under this plan the core camera
+   is only the interchange approximation (full fidelity is `ERHE_camera`,
+   phase 3), but both paths must be correct for foreign files.
+5. Verify unreferenced physics materials / filters / joint settings from the
    content library export into the extension's top-level arrays (they must
    survive save/load like scene.json v3+ does today).
 
 Import side already parses animations / skins / images; add the source-byte
-retention.
+and sampler-state retention.
 
-## Phase 1 - fastgltf fork: polygon extensions + generic extension passthrough
+## Phase 1 - fastgltf fork: generic extension passthrough
 
-Branch on `tksuoran/fastgltf` (precedent: `khr_physics_rigid_bodies`):
+Branch on `tksuoran/fastgltf` (precedent: `khr_physics_rigid_bodies`).
+Polygon extensions dropped from this phase - see the polygon-geometry
+decision above (rings live in `ERHE_geometry`, no draft-PR tracking).
 
-- `KHR_mesh_primitive_restart`: primitive-restart flag on index accessors.
-- `EXT_mesh_polygon` per PR 2570: per-primitive extension carrying polygon
-  ring indices (LINE_LOOP topology, restart-separated rings, first ring =
-  exterior; erhe facets are simple polygons so only exterior rings are
-  written, but the reader must accept holes) plus the mandatory TRIANGLES
-  render indices in the primitive proper.
 - **Generic vendor-extension JSON passthrough** (the enabler for `ERHE_*`
   extensions without per-extension fastgltf C++ types): read + write
-  callbacks analogous to the existing extras callbacks, invoked per object
-  (asset root, scene, node, camera, material, mesh, mesh primitive) with the
-  extension name and raw JSON. erhe's editor layer serializes/parses its
-  `ERHE_*` payloads through these; fastgltf stays schema-agnostic for them.
-  This also lets the existing extras carriers (`erhe_flags`, material
-  extras) migrate to `ERHE_node` / `ERHE_material` without new fork work
-  per extension.
-- extensionsUsed bookkeeping for passthrough extensions.
-- Record in CMake comments when the fork additions can be dropped (upstream
-  fastgltf shipping polygon extensions; generic passthrough is worth
-  offering upstream).
+  callbacks analogous to the existing extras callbacks
+  (`Parser::setExtrasParseCallback` / `Exporter::setExtrasWriteCallback`,
+  which erhe already drives for `erhe_flags` and material extras), invoked
+  per object (asset root, scene, node, camera, material, mesh, mesh
+  primitive) with the extension name and raw JSON. erhe's editor layer
+  serializes/parses its `ERHE_*` payloads through these; fastgltf stays
+  schema-agnostic for them. This also lets the existing extras carriers
+  (`erhe_flags`, material extras) migrate to `ERHE_node` / `ERHE_material`
+  without new fork work per extension.
+  Scope facts (verified against the fork source, fastgltf 0.9.0 base):
+  - Today unknown extension keys are silently dropped at each per-object
+    extension parse site; nothing preserves raw JSON. The read side must
+    re-stringify simdjson sub-values - new surface for fastgltf.
+  - The write side has no generic per-object `"extensions"` emitter; each
+    writer emits known extensions from hardcoded code and the block is
+    often conditional - name-keyed injection with correct comma handling
+    is the fiddliest part.
+  - `Category::Asset` exists in the enum but is wired to nothing (even the
+    extras callbacks never fire for the asset root), and mesh primitives
+    have no callback category at all - these two hook points are net-new
+    on both the read and write sides.
+  - The read callback fires before the object is appended (index =
+    future index); erhe already accumulates+replays extras this way
+    (`Parse_extras_context`) and the passthrough inherits the same
+    pattern.
+- extensionsUsed bookkeeping stays caller-side (erhe already pushes
+  `KHR_lights_punctual` etc. manually); the editor layer adds each
+  `ERHE_*` name it attaches.
+- Record in CMake comments when the fork additions can be dropped
+  (generic passthrough is worth offering upstream).
 
 ## Phase 2 - Geometry (geogram) round-trip: `ERHE_geometry`
 
@@ -126,20 +189,41 @@ context; the USD naming mapping is documented in `doc/usd_compatibility.md`:
 
 - **Export**: for each geometry-normative primitive, write one glTF mesh
   primitive with: POSITION accessor (geogram vertices, no welding/unwelding -
-  glTF vertex i == geogram vertex i), TRIANGLES indices from the existing
-  triangulation, and EXT_mesh_polygon ring indices from geogram facets.
-- **`ERHE_geometry` primitive extension**: an array of attribute records
-  {name, element, type, dimension, accessor}, where element is one of
-  `mesh` (whole mesh), `facet` (per polygon), `vertex` (per vertex),
-  `corner` (per polygon-corner, in ring order), `edge` (per edge; the edge
-  index list itself is one more accessor pair). Full dump: every
-  geogram attribute is written, so the round-trip is bit-exact; loader
-  applies the dump first and runs process() only for genuinely missing data
-  (new-file case).
-- **Load**: presence of EXT_mesh_polygon on a primitive marks the mesh
-  geometry-normative -> rebuild `erhe::geometry::Geometry` (geogram mesh from
-  rings + `ERHE_geometry` attributes), then the standard Primitive build.
-  Absence -> Triangle_soup path exactly as today.
+  glTF vertex i == geogram vertex i) and TRIANGLES indices. The indices are
+  generated by fan-triangulating each facet directly over geogram vertex
+  ids - the existing render mesh's index buffer CANNOT be reused (it
+  indexes the corner-expanded vertex stream `build_buffer_mesh` produces,
+  not geogram vertices). Use the same facet triangulation scheme the
+  Primitive builder uses so render output matches.
+- **Polygon rings** (in `ERHE_geometry`, per the decision above): a
+  `facet_vertex_counts` accessor (one uint per facet) + a
+  `facet_vertex_indices` accessor (flat corner->vertex ids in facet-corner
+  order). erhe facets are simple polygons, so no hole encoding is needed;
+  no restart sentinels, validator-clean. (Deliberately the same shape as
+  UsdGeomMesh faceVertexCounts/faceVertexIndices and mechanically mappable
+  to EXT_mesh_polygon rings when that ratifies.)
+- **`ERHE_geometry` primitive extension**: the rings above plus an array of
+  attribute records {name, element, type, dimension, accessor}, where
+  element is one of `mesh` (whole mesh), `facet` (per polygon), `vertex`
+  (per vertex), `corner` (per polygon-corner, in the flat
+  facet_vertex_indices order), `edge` (per edge; the edge index list itself
+  is one more accessor pair). Full dump: every geogram attribute is
+  written, so the round-trip is bit-exact; loader applies the dump first
+  and runs process() only for genuinely missing data (new-file case).
+- **Viewer friendliness for free**: vertex-element attributes that map to
+  standard glTF semantics (e.g. smooth vertex normals -> NORMAL, a
+  per-vertex UV set -> TEXCOORD_0) are ALSO referenced from the core
+  attributes map - the same accessor listed twice costs no extra bytes and
+  gives stock viewers smooth shading. Corner-element attributes cannot be
+  (they are not per-vertex); missing NORMAL falls back to spec-mandated
+  flat shading, which is fine for polygonal shapes.
+- **Load**: presence of `ERHE_geometry` on a primitive marks that
+  PRIMITIVE geometry-normative -> rebuild `erhe::geometry::Geometry`
+  (geogram mesh from rings + attributes), then the standard Primitive
+  build. Absence -> Triangle_soup path exactly as today. Detection is
+  per-primitive, not per-mesh - this also fixes today's mixed-mesh loss
+  (`is_geometry_normative` is per-mesh, so a mesh with both Geometry and
+  soup-only primitives silently drops the soup primitives on load).
 - **Brush geometry** uses the same path (brush meshes are glTF meshes that no
   node references).
 - gtest in `src/erhe/geometry/test/` (suite exists): Geometry -> glTF
@@ -158,16 +242,42 @@ editor-controlled attachments:
   baked artifacts (rebuilt on load) and must NOT be exported - today's
   save_scene skips them in scene.json but they leak into data.glb (known
   index-shift bug); the hook fixes this class of problem for good.
-- `ERHE_node` (node extension): Item flag bits (migrates `erhe_flags`
-  extras; legacy extras still parsed during transition).
-- `ERHE_camera` (camera extension): exposure, shadow_range.
+- `ERHE_node` (node extension): node Item flags as a name list (migrates
+  `erhe_flags` extras, which today carry only `exclude_from_prefab`;
+  scene.json carries the full raw flag_bits - the extension serializes the
+  full serializable set by name; legacy extras still parsed during
+  transition), plus the node's mesh-attachment Item flags (see extension
+  conventions).
+- `ERHE_camera` (camera extension): the FULL `erhe::scene::Projection`
+  (projection_type - all 9 values - fov_x/fov_y/fov_left/right/up/down,
+  ortho_left/width/bottom/height, frustum_left/right/bottom/top, z_near,
+  z_far), exposure, shadow_range, Item flags. The core camera object is
+  only the interchange approximation; without this extension asymmetric
+  frusta, XR projections and offset orthos cannot round-trip (scene.json
+  serializes all 17 projection fields today).
+- `ERHE_light` (node extension on the light-carrying node - NOT inside the
+  KHR_lights_punctual light entry, which would need an extra passthrough
+  hook point in the fork; erhe lights are 1:1 with their node anyway):
+  cast_shadow (silently lost today), Item flags, and an explicit
+  `infinite_range` marker resolving the export-omits-0 / import-defaults-
+  1000 asymmetry.
+- `ERHE_physics` (node extension, alongside KHR_physics_rigid_bodies):
+  motion_mode (distinguishes e_kinematic_non_physical from
+  e_kinematic_physical - KHR has a single isKinematic bool), per-body
+  friction and restitution (KHR only has them on physics materials; erhe
+  rigid bodies carry them even with no material assigned), linear_damping,
+  angular_damping (no KHR carrier at all). All of these round-trip through
+  scene.json today and would silently regress without this extension.
 - `ERHE_material` (material extension): roughness_y, bxdf_model,
   blending_mode, brushed-metal fields (migrates material extras).
 - `ERHE_scene` (scene extension): per-scene settings (#239), ambient_light
   (#237), enable_physics (replace the hard-coded TODO with real tracking).
 - `ERHE_layout` (node extension): Layout and Layout_item fields (two
-  optional sub-objects on one extension). Include the prefab-instance skip
-  that today's layout pass misses.
+  optional sub-objects on one extension), each with its Item flags.
+  Include the prefab-instance skip that today's layout pass misses
+  (confirmed: scene_serialization.cpp's layout pass is the only save pass
+  without the `is_inside_prefab_instance` guard, producing dangling
+  node_id references).
 - `ERHE_brushes` (asset-root extension): array of {name, folder_path, mesh
   index, material index, density, normal_style}. Collision shape still
   rebuilt at first instantiation (Brush::late_initialize), as today.
@@ -178,8 +288,11 @@ editor-controlled attachments:
   {node index, graph_mesh name}. Graphs load born-dirty and re-bake, as
   today.
 - `ERHE_collections` (asset-root extension): named node collections -
-  initially used for item tags (today's add_tags/remove_tags state);
-  see the USD-inspired section.
+  initially used for item tags (the add_tags/remove_tags MCP state, which
+  is runtime-only today - `.erhescene` never persisted tags, so this is
+  net-new persistence, not a migration); see the USD-inspired section.
+  Initial scope: tags on scene nodes; tags on content-library items are a
+  later extension of the same mechanism.
 
 Identity: everything binds by glTF index within the same asset (node index,
 material index, mesh index) instead of scene.json's parallel numeric id maps -
@@ -217,25 +330,44 @@ Documented in `doc/usd_compatibility.md`, implemented after the switchover:
 
 - **Save**: `save_scene()` becomes a single `export_gltf()` call (binary,
   physics data, prefab external assets, `ERHE_*` extension payloads,
-  exclusion hook) -> write one `.glb`. Save dialog filter becomes `.glb`;
-  default location stays `res/editor/scenes/`.
+  exclusion hook) -> write one `.glb`. There is NO save file dialog today:
+  `Operations::save_scene` derives `<scene name>.erhescene` from the scene
+  name with an Overwrite/Cancel modal - keep that scheme, the derived name
+  becomes `<scene name>.glb`; default location stays `res/editor/scenes/`.
+  File > Load Scene currently uses a FOLDER dialog
+  (`SDL_ShowOpenFolderDialog`, because the bundle is a directory) - it
+  becomes a file picker filtered to `.glb`/`.gltf`.
 - **Open vs Import**: a `.glb`/`.gltf` whose asset lists `ERHE_scene` in
   extensionsUsed opens as a full `Scene_root` (new Open-Scene path: nodes,
   cameras, lights, meshes, physics import, brushes, graphs, layouts,
   settings); any other glTF keeps the existing import-as-asset flow (default
   camera/lights, import_root wrapper, undoable compound operation).
-  `scan_gltf` already reports extensionsUsed - the asset browser
-  distinguishes on that (`Asset_file_scene` becomes "erhe-authored .glb"
-  instead of ".erhescene directory").
-- Open-Scene reuses the import machinery (parse_gltf + finalize_imported_meshes
-  + physics import) but constructs the Scene_root directly (not undoable),
-  mirroring today's load_scene structure.
-- MCP `save_scene` / `export_gltf` / `import_gltf` tools: `save_scene` now
-  writes `.glb`; `export_gltf` (plain interchange export) remains but is
-  nearly the same call minus editor extensions - keep both tools, document
-  the difference (scene save = full state; export = interchange).
+  The library-layer `erhe::gltf::scan_gltf` already reports extensionsUsed,
+  but the editor wrapper (`editor::scan_gltf` -> `Gltf_scan_summary`)
+  flattens it into tooltip text and discards the structured list - extend
+  `Gltf_scan_summary` / `Asset_file_gltf` to carry `extensions_used` so the
+  asset browser (which classifies purely by file extension in `make_node`
+  today) can branch on `ERHE_scene` (`Asset_file_scene` becomes
+  "erhe-authored .glb" instead of ".erhescene directory").
+- **Two open paths exist today and must be reconciled**: the `.erhescene`
+  `load_scene` path (not undoable, repurposes an empty viewport window,
+  #265) and `Scene_open_operation` (undoable Operation, always opens a NEW
+  viewport, used by the asset browser's manual "open as scene" and MCP
+  `open_scene`). The ERHE_scene Open-Scene path follows the `load_scene`
+  shape: reuse the import machinery (parse_gltf + finalize_imported_meshes
+  + physics import) but construct the Scene_root directly (not undoable)
+  and repurpose an empty viewport. `Scene_open_operation` remains as the
+  explicit "open a foreign glTF as a new scene" action.
+- MCP `save_scene` / `load_scene` / `open_scene` / `export_gltf` /
+  `import_gltf` tools: `save_scene` now writes `.glb` (and stops saving the
+  per-scene imgui.ini); `load_scene` opens erhe-authored `.glb`;
+  `export_gltf` (plain interchange export) remains but is nearly the same
+  call minus editor extensions - keep the tools, update their descriptions
+  in `mcp_server_tool_list.cpp`, and document the difference (scene save =
+  full state; export = interchange).
 - Remove `scene_imgui_ini_path()` and all per-scene imgui.ini save/restore
-  call sites (decision: dropped).
+  call sites (decision: dropped; call sites: operations_window.cpp save +
+  restore, mcp_server_file_io.cpp save).
 
 ## Phase 5 - Migration and removal
 
@@ -271,7 +403,11 @@ Documented in `doc/usd_compatibility.md`, implemented after the switchover:
 - Prefab scenes: save/load with an external-asset prefab instance present.
 - Foreign-tool smoke check: a saved scene passes the Khronos glTF validator
   (ERHE extensions in extensionsUsed only) and opens in a stock viewer
-  showing the render content.
+  showing the render content. This holds cleanly with the TRIANGLES-primary
+  polygon decision (no draft extensions, no restart sentinels);
+  geometry-normative meshes render filled - flat-shaded where no
+  per-vertex NORMAL could be dual-listed (corner normals stay
+  ERHE_geometry-only).
 
 ## Alternative considered: OpenUSD (reviewed 2026-07-12, not chosen)
 
@@ -281,8 +417,10 @@ almost every mechanism this plan has to invent or track as a draft is
 ratified core USD:
 
 - **Polygon meshes are native**: UsdGeomMesh faceVertexCounts /
-  faceVertexIndices carries n-gons directly - no EXT_mesh_polygon /
-  KHR_mesh_primitive_restart draft-PR tracking (phase 1 disappears).
+  faceVertexIndices carries n-gons directly - no draft-PR tracking.
+  (The 2026-07-12 review neutralized this advantage on the glTF side too:
+  `ERHE_geometry` now carries rings as the same counts/indices shape and
+  the draft polygon extensions are not adopted until ratified.)
 - **Primvar interpolation matches geogram elements**: constant / uniform
   (per-facet) / vertex / faceVarying (per-corner) primvars map 1:1 onto the
   attribute dump of phase 2. Only edge attributes need a custom encoding
@@ -335,18 +473,29 @@ persistence format.
 
 ## Risks / open items
 
-- **PR 2570 is a moving target**: encoding may change before ratification;
-  we track the draft (decision above). Contained in the fastgltf fork.
+- **EXT_mesh_polygon ratification watch**: rings live in `ERHE_geometry`
+  until the draft ratifies (decision above; the draft already flipped its
+  encoding once, 2026-05-20). Migration when it lands is mechanical
+  (counts/indices -> rings) using the extras->extensions transition-period
+  reader pattern.
 - **Source image byte retention** increases memory per imported textured
-  asset (kept compressed, so typically small relative to GPU copies).
+  asset (kept compressed, so typically small relative to GPU copies). The
+  re-read-from-source fallback covers pre-existing imports but silently
+  depends on the source file still being present - warn loudly.
 - **Generic extension passthrough in the fork** is new fastgltf surface
   (read + write callbacks per object type); scope it to the object types the
   plan needs (asset, scene, node, camera, material, mesh primitive) and
-  propose it upstream to shorten the fork's life.
+  propose it upstream to shorten the fork's life. Two hook points are
+  net-new even relative to the extras callbacks (asset root is wired to
+  nothing today; mesh primitives have no callback category), and the read
+  side must re-stringify simdjson sub-values (fastgltf never round-trips
+  raw JSON today).
 - **ERHE prefix registration** (Khronos glTF registry Prefixes.md PR) should
   land before files escape into the wild; until then the names are squattable.
-- Corner-attribute ring-order mapping is the fiddliest part of phase 2; the
-  gtest is written first (bit-exact dump round-trip) to pin it down.
+- Corner-attribute order mapping is the fiddliest part of phase 2 (corner
+  records follow the flat facet_vertex_indices order, which must equal
+  geogram's facet-corner iteration order); the gtest is written first
+  (bit-exact dump round-trip) to pin it down.
 - `ERHE_overrides` intra-asset addressing (stable node paths inside a
   referenced glTF) is the hardest USD-inspired design; kept out of the
   switchover critical path deliberately (design notes in

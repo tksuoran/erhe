@@ -26,7 +26,7 @@ erhe/geogram's own:
 | `mesh`   | mesh (attribute on the whole mesh) | `constant`    | one value for the whole mesh |
 | `facet`  | facet                              | `uniform`     | one value per polygon |
 | `vertex` | vertex                             | `vertex`      | one value per vertex (glTF vertex i == geogram vertex i) |
-| `corner` | corner                             | `faceVarying` | one value per polygon-corner, in EXT_mesh_polygon ring order |
+| `corner` | corner                             | `faceVarying` | one value per polygon-corner, in the flat facet_vertex_indices order of ERHE_geometry's polygon encoding |
 | `edge`   | edge                               | (none)        | one value per edge; the edge index list is serialized alongside. USD has no edge element - a USD exporter would carry these as namespaced constant arrays plus the edge index list |
 
 ## Concept mapping (glTF-side <-> USD-side)
@@ -34,7 +34,7 @@ erhe/geogram's own:
 | erhe / glTF mechanism | USD equivalent | notes |
 |---|---|---|
 | node tree, TRS | prim hierarchy, UsdGeomXformable | glTF quantizes to one T*R*S; USD allows arbitrary xformOp stacks |
-| mesh primitive + EXT_mesh_polygon | UsdGeomMesh faceVertexCounts/faceVertexIndices | USD n-gons are native; glTF needs the (draft) polygon extension |
+| mesh primitive + `ERHE_geometry` polygons (facet_vertex_counts / facet_vertex_indices) | UsdGeomMesh faceVertexCounts/faceVertexIndices | deliberately the same encoding shape; EXT_mesh_polygon (draft, KhronosGroup/glTF#2570) is adopted only once ratified |
 | `ERHE_geometry` attributes | UsdGeomPrimvar | see table above |
 | materials + `ERHE_material` | UsdShade / UsdPreviewSurface | PBR metallic-roughness maps to UsdPreviewSurface inputs |
 | KHR_lights_punctual | UsdLux | directional/point/spot map to DistantLight/SphereLight/spot cone |
@@ -71,11 +71,18 @@ overrides applied after the externalAsset subtree is instantiated:
 
 - **Addressing**: each override targets a node inside the referenced asset
   by a stable intra-asset path (name path from the asset root, with an
-  index-based disambiguator for duplicate names). This addressing scheme is
-  the hard design problem and the reason the feature is not in the
-  switchover critical path: it must survive re-exports of the source asset
-  as long as names/structure are unchanged, and must fail loudly (keep the
-  override, mark unresolved) when the source changed shape.
+  index-based disambiguator for duplicate names). Record the node's glTF
+  index at authoring time as a secondary consistency check: resolution
+  goes by name path, and an index mismatch downgrades to a warning (the
+  source was re-exported) while a name-path miss marks the override
+  unresolved. This addressing scheme is the hard design problem and the
+  reason the feature is not in the switchover critical path: it must
+  survive re-exports of the source asset as long as names/structure are
+  unchanged, and must fail loudly (keep the override, mark unresolved)
+  when the source changed shape. Scope: overrides address nodes of the
+  directly referenced asset only - content inside a nested prefab
+  instance is out of scope initially (an override of the nested instance
+  node itself is fine; reaching through it is not).
 - **Override kinds** (initial set): node transform (full TRS replace),
   node Item flags (e.g. hide a subtree member), material rebind
   (primitive -> material index in the *outer* asset), removal (prune a
