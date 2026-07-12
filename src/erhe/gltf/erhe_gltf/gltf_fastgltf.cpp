@@ -8,6 +8,7 @@
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_file/file.hpp"
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_geometry/geometry_serialization.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/image_loader.hpp"
 #include "erhe_graphics/sampler.hpp"
@@ -887,9 +888,9 @@ public:
             const fastgltf::Mesh& mesh = m_asset->meshes[i];
             erhe::scene::Mesh& erhe_mesh = *m_data_out.meshes[i].get();
             taskflow.emplace(
-                [this, &mesh, &erhe_mesh]()
+                [this, i, &mesh, &erhe_mesh]()
                 {
-                    parse_mesh(mesh, erhe_mesh);
+                    parse_mesh(i, mesh, erhe_mesh);
                 }
             );
         }
@@ -1967,8 +1968,190 @@ private:
         }
     }
 
+    // ERHE_geometry extension JSON per (mesh index, primitive index),
+    // captured by the generic extensions parse callback and handed over
+    // before parse_and_build(). Primitives listed here are
+    // geometry-normative: the full erhe::geometry::Geometry is rebuilt
+    // instead of the Triangle_soup path.
+    std::map<std::pair<std::size_t, std::size_t>, std::string> m_primitive_geometry_extensions;
+public:
+    void set_primitive_geometry_extensions(std::map<std::pair<std::size_t, std::size_t>, std::string>&& extensions)
+    {
+        m_primitive_geometry_extensions = std::move(extensions);
+    }
+private:
+
+    // Reads a uint32 accessor referenced by an ERHE_geometry field.
+    [[nodiscard]] auto read_extension_u32_accessor(
+        const simdjson::dom::object& extension_object,
+        const char*                  key,
+        std::vector<uint32_t>&       out_values
+    ) -> bool
+    {
+        std::uint64_t accessor_index{0};
+        if (extension_object.at_key(key).get_uint64().get(accessor_index) != simdjson::SUCCESS) {
+            return false;
+        }
+        if (accessor_index >= m_asset->accessors.size()) {
+            return false;
+        }
+        const fastgltf::Accessor& accessor = m_asset->accessors[accessor_index];
+        out_values.resize(accessor.count);
+        fastgltf::iterateAccessorWithIndex<uint32_t>(
+            m_asset.get(), accessor,
+            [&](const uint32_t value, const std::size_t index) {
+                out_values[index] = value;
+            }
+        );
+        return true;
+    }
+
+    // Rebuilds a full Geometry from a primitive carrying ERHE_geometry
+    // (doc/gltf-scene-roundtrip-plan.md phase 2): POSITION accessor +
+    // ring accessors + raw attribute-store buffer views. Returns null on
+    // any inconsistency; the caller falls back to the Triangle_soup path.
+    [[nodiscard]] auto parse_erhe_geometry_primitive(
+        const fastgltf::Primitive& primitive,
+        const std::string&         extension_json,
+        const std::string&         name
+    ) -> std::shared_ptr<erhe::primitive::Primitive>
+    {
+        simdjson::dom::parser json_parser;
+        simdjson::dom::element root;
+        if (json_parser.parse(simdjson::padded_string{extension_json}).get(root) != simdjson::SUCCESS) {
+            log_gltf->warn("ERHE_geometry: primitive '{}' extension JSON does not parse", name);
+            return {};
+        }
+        simdjson::dom::object extension_object;
+        if (root.get_object().get(extension_object) != simdjson::SUCCESS) {
+            log_gltf->warn("ERHE_geometry: primitive '{}' extension is not an object", name);
+            return {};
+        }
+
+        erhe::geometry::Geometry_flat_data flat;
+        const auto read_count = [&extension_object](const char* key, std::size_t& out_value) -> bool {
+            std::uint64_t value{0};
+            if (extension_object.at_key(key).get_uint64().get(value) != simdjson::SUCCESS) {
+                return false;
+            }
+            out_value = static_cast<std::size_t>(value);
+            return true;
+        };
+        if (
+            !read_count("vertex_count", flat.vertex_count) ||
+            !read_count("facet_count",  flat.facet_count)  ||
+            !read_count("corner_count", flat.corner_count) ||
+            !read_count("edge_count",   flat.edge_count)
+        ) {
+            log_gltf->warn("ERHE_geometry: primitive '{}' is missing element counts", name);
+            return {};
+        }
+
+        const auto* position_attribute = primitive.findAttribute("POSITION");
+        if (position_attribute == primitive.attributes.cend()) {
+            log_gltf->warn("ERHE_geometry: primitive '{}' has no POSITION attribute", name);
+            return {};
+        }
+        const fastgltf::Accessor& position_accessor = m_asset->accessors[position_attribute->accessorIndex];
+        if (position_accessor.count != flat.vertex_count) {
+            log_gltf->warn("ERHE_geometry: primitive '{}' POSITION count does not match vertex_count", name);
+            return {};
+        }
+        flat.positions.resize(flat.vertex_count * 3);
+        fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec3>(
+            m_asset.get(), position_accessor,
+            [&](const fastgltf::math::fvec3 value, const std::size_t index) {
+                flat.positions[(index * 3) + 0] = value.x();
+                flat.positions[(index * 3) + 1] = value.y();
+                flat.positions[(index * 3) + 2] = value.z();
+            }
+        );
+
+        if (
+            !read_extension_u32_accessor(extension_object, "facet_vertex_counts",  flat.facet_vertex_counts) ||
+            !read_extension_u32_accessor(extension_object, "facet_vertex_indices", flat.facet_vertex_indices)
+        ) {
+            log_gltf->warn("ERHE_geometry: primitive '{}' is missing ring accessors", name);
+            return {};
+        }
+        if (flat.edge_count > 0) {
+            if (!read_extension_u32_accessor(extension_object, "edge_vertices", flat.edge_vertex_indices)) {
+                log_gltf->warn("ERHE_geometry: primitive '{}' is missing the edge_vertices accessor", name);
+                return {};
+            }
+        }
+
+        simdjson::dom::array attributes_array;
+        if (extension_object.at_key("attributes").get_array().get(attributes_array) == simdjson::SUCCESS) {
+            for (simdjson::dom::element attribute_element : attributes_array) {
+                simdjson::dom::object attribute_object;
+                if (attribute_element.get_object().get(attribute_object) != simdjson::SUCCESS) {
+                    continue;
+                }
+                erhe::geometry::Geometry_attribute_record record;
+                std::string_view string_value;
+                std::uint64_t    number_value{0};
+                if (attribute_object.at_key("name").get_string().get(string_value) != simdjson::SUCCESS) {
+                    continue;
+                }
+                record.name = std::string{string_value};
+                if (attribute_object.at_key("element").get_string().get(string_value) != simdjson::SUCCESS) {
+                    continue;
+                }
+                record.element = std::string{string_value};
+                if (attribute_object.at_key("element_type").get_string().get(string_value) != simdjson::SUCCESS) {
+                    continue;
+                }
+                record.element_type = std::string{string_value};
+                if (attribute_object.at_key("element_size").get_uint64().get(number_value) != simdjson::SUCCESS) {
+                    continue;
+                }
+                record.element_size = static_cast<std::size_t>(number_value);
+                if (attribute_object.at_key("dimension").get_uint64().get(number_value) != simdjson::SUCCESS) {
+                    continue;
+                }
+                record.dimension = static_cast<std::size_t>(number_value);
+                if (attribute_object.at_key("item_count").get_uint64().get(number_value) != simdjson::SUCCESS) {
+                    continue;
+                }
+                record.item_count = static_cast<std::size_t>(number_value);
+                if (attribute_object.at_key("buffer_view").get_uint64().get(number_value) != simdjson::SUCCESS) {
+                    continue;
+                }
+                if (number_value >= m_asset->bufferViews.size()) {
+                    log_gltf->warn("ERHE_geometry: primitive '{}' attribute '{}' has an out-of-range buffer view", name, record.name);
+                    return {};
+                }
+                const fastgltf::BufferView& buffer_view = m_asset->bufferViews[number_value];
+                const fastgltf::Buffer&     buffer      = m_asset->buffers.at(buffer_view.bufferIndex);
+                const auto* array_source = std::get_if<fastgltf::sources::Array>(&buffer.data);
+                if (array_source == nullptr) {
+                    log_gltf->warn("ERHE_geometry: primitive '{}' attribute '{}' buffer is not loaded", name, record.name);
+                    return {};
+                }
+                const std::byte* start = reinterpret_cast<const std::byte*>(array_source->bytes.data()) + buffer_view.byteOffset;
+                record.bytes.assign(start, start + buffer_view.byteLength);
+                flat.attributes.push_back(std::move(record));
+            }
+        }
+
+        auto geometry = std::make_shared<erhe::geometry::Geometry>(name);
+        if (!erhe::geometry::geometry_from_flat_data(flat, *geometry)) {
+            log_gltf->warn("ERHE_geometry: primitive '{}' flat data is inconsistent - falling back to triangles", name);
+            return {};
+        }
+        // Deliberately NO process() here: the dump restored every derived
+        // attribute (edges, centroids, smooth normals, texcoords) byte-exact
+        // and facet adjacency was reconnected by geometry_from_flat_data.
+        // Recomputing would overwrite the dump and break the bit-exact
+        // round-trip; processing runs only for genuinely missing data
+        // (finalize_imported_meshes gates on missing edges).
+        return std::make_shared<erhe::primitive::Primitive>(geometry);
+    }
+
     void parse_primitive(
         erhe::scene::Mesh&    erhe_mesh,
+        const std::size_t     mesh_index,
         const fastgltf::Mesh& mesh,
         const std::size_t     primitive_index
     )
@@ -1983,6 +2166,16 @@ private:
         std::shared_ptr<erhe::primitive::Material> erhe_material = primitive.materialIndex.has_value()
             ? m_data_out.materials.at(primitive.materialIndex.value())
             : std::shared_ptr<erhe::primitive::Material>{};
+
+        const auto geometry_extension_it = m_primitive_geometry_extensions.find({mesh_index, primitive_index});
+        if (geometry_extension_it != m_primitive_geometry_extensions.end()) {
+            std::shared_ptr<erhe::primitive::Primitive> geometry_primitive =
+                parse_erhe_geometry_primitive(primitive, geometry_extension_it->second, name);
+            if (geometry_primitive) {
+                erhe_mesh.add_primitive(geometry_primitive, erhe_material);
+                return;
+            }
+        }
 
         Primitive_entry primitive_entry;
         get_primitive_geometry(primitive, primitive_entry, tangent_frame_needed);
@@ -2031,7 +2224,7 @@ private:
         auto erhe_mesh = std::make_shared<erhe::scene::Mesh>(mesh_name);
         m_data_out.meshes[mesh_index] = erhe_mesh;
     }
-    void parse_mesh(const fastgltf::Mesh& mesh, erhe::scene::Mesh& erhe_mesh)
+    void parse_mesh(const std::size_t mesh_index, const fastgltf::Mesh& mesh, erhe::scene::Mesh& erhe_mesh)
     {
         ERHE_PROFILE_FUNCTION();
 
@@ -2045,7 +2238,7 @@ private:
             Item_flags::id
         );
         for (std::size_t i = 0, end = mesh.primitives.size(); i < end; ++i) {
-            parse_primitive(erhe_mesh, mesh, i);
+            parse_primitive(erhe_mesh, mesh_index, mesh, i);
         }
     }
 
@@ -2612,6 +2805,22 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
 
     Gltf_data result;
     Gltf_parser erhe_parser{std::move(asset), result, arguments};
+
+    // Hand captured ERHE_geometry payloads to the parser: primitives
+    // carrying them are geometry-normative and rebuild a full
+    // erhe::geometry::Geometry instead of a Triangle_soup.
+    {
+        std::map<std::pair<std::size_t, std::size_t>, std::string> geometry_extensions;
+        for (const auto& [key, captured] : parse_extras_context.mesh_primitive_extensions) {
+            for (const auto& [extension_name, extension_value] : captured.entries) {
+                if (extension_name == "ERHE_geometry") {
+                    geometry_extensions[key] = extension_value;
+                }
+            }
+        }
+        erhe_parser.set_primitive_geometry_extensions(std::move(geometry_extensions));
+    }
+
     erhe_parser.parse_and_build();
 
     // Apply serialized erhe Item flags to parsed nodes (Gltf_data::nodes is
@@ -2964,6 +3173,9 @@ private:
         std::size_t                      vertex_buffer;
         std::size_t                      vertex_buffer_view;
         std::vector<fastgltf::Attribute> attributes;
+        // ERHE_geometry extension members for geometry-normative primitives
+        // (empty for triangle-soup primitives).
+        std::string                      erhe_geometry_extension;
     };
     void add_index_data_source(
         Export_entry&              entry,
@@ -3143,6 +3355,95 @@ private:
         return entry;
     }
 
+    // Appends one tightly packed uint32 scalar accessor (own buffer + view).
+    [[nodiscard]] auto add_u32_accessor(const std::span<const uint32_t> values, const std::string_view name) -> std::size_t
+    {
+        const std::size_t byte_length  = values.size_bytes();
+        const std::size_t buffer_index = m_gltf_asset.buffers.size();
+        {
+            const std::byte* bytes = reinterpret_cast<const std::byte*>(values.data());
+            fastgltf::Buffer buffer{
+                .byteLength = byte_length,
+                .data = fastgltf::sources::Vector{
+                    .bytes    = std::vector<std::byte>{bytes, bytes + byte_length},
+                    .mimeType = fastgltf::MimeType::GltfBuffer
+                },
+                .name = {}
+            };
+            m_gltf_asset.buffers.emplace_back(std::move(buffer));
+        }
+        const std::size_t buffer_view_index = m_gltf_asset.bufferViews.size();
+        {
+            fastgltf::BufferView buffer_view{};
+            buffer_view.bufferIndex = buffer_index;
+            buffer_view.byteOffset  = 0;
+            buffer_view.byteLength  = byte_length;
+            m_gltf_asset.bufferViews.emplace_back(std::move(buffer_view));
+        }
+        fastgltf::Accessor accessor{
+            .byteOffset      = 0,
+            .count           = values.size(),
+            .type            = fastgltf::AccessorType::Scalar,
+            .componentType   = fastgltf::ComponentType::UnsignedInt,
+            .normalized      = false,
+            .max             = {},
+            .min             = {},
+            .bufferViewIndex = buffer_view_index,
+            .sparse          = {},
+            .name            = FASTGLTF_STD_PMR_NS::string{name}
+        };
+        const std::size_t accessor_index = m_gltf_asset.accessors.size();
+        m_gltf_asset.accessors.emplace_back(std::move(accessor));
+        return accessor_index;
+    }
+
+    // Appends a raw buffer view (no accessor) holding a geogram attribute
+    // store dump for the ERHE_geometry extension.
+    [[nodiscard]] auto add_raw_buffer_view(const std::span<const std::byte> bytes) -> std::size_t
+    {
+        const std::size_t buffer_index = m_gltf_asset.buffers.size();
+        {
+            fastgltf::Buffer buffer{
+                .byteLength = bytes.size(),
+                .data = fastgltf::sources::Vector{
+                    .bytes    = std::vector<std::byte>{bytes.begin(), bytes.end()},
+                    .mimeType = fastgltf::MimeType::GltfBuffer
+                },
+                .name = {}
+            };
+            m_gltf_asset.buffers.emplace_back(std::move(buffer));
+        }
+        const std::size_t buffer_view_index = m_gltf_asset.bufferViews.size();
+        {
+            fastgltf::BufferView buffer_view{};
+            buffer_view.bufferIndex = buffer_index;
+            buffer_view.byteOffset  = 0;
+            buffer_view.byteLength  = bytes.size();
+            m_gltf_asset.bufferViews.emplace_back(std::move(buffer_view));
+        }
+        return buffer_view_index;
+    }
+
+    [[nodiscard]] static auto json_escape(const std::string& in) -> std::string
+    {
+        std::string out;
+        out.reserve(in.size());
+        for (const char c : in) {
+            if ((c == '"') || (c == '\\')) {
+                out += '\\';
+            }
+            out += c;
+        }
+        return out;
+    }
+
+    // Geometry-normative primitive export (doc/gltf-scene-roundtrip-plan.md
+    // phase 2): POSITION over geogram vertices (glTF vertex i == geogram
+    // vertex i), facet-fan TRIANGLES for stock viewers, and the
+    // ERHE_geometry extension carrying polygon rings (accessors) plus the
+    // raw geogram attribute dump (buffer views) for a bit-exact reload.
+    // Vertex-element attributes that map to standard glTF semantics are
+    // dual-listed as core attributes over the same bytes.
     std::unordered_map<erhe::geometry::Geometry*, Export_entry> m_erhe_geometry_entries;
     [[nodiscard]] auto process_geometry(erhe::geometry::Geometry* geometry) -> Export_entry
     {
@@ -3153,62 +3454,102 @@ private:
             return fi->second;
         }
 
-        const GEO::Mesh& geo_mesh = geometry->get_mesh();
+        const erhe::geometry::Geometry_flat_data flat = erhe::geometry::geometry_to_flat_data(*geometry);
+        ERHE_VERIFY(flat.vertex_count > 0);
 
-        // TODO
-        const erhe::dataformat::Vertex_format vertex_format{
-            {
-                0,
-                {
-                    { erhe::dataformat::Format::format_32_vec3_float, erhe::dataformat::Vertex_attribute_usage::position,  0},
-                    { erhe::dataformat::Format::format_32_vec3_float, erhe::dataformat::Vertex_attribute_usage::normal,    0},
-                    { erhe::dataformat::Format::format_32_vec2_float, erhe::dataformat::Vertex_attribute_usage::tex_coord, 0}
+        Export_entry entry{};
+        {
+            const std::byte* index_bytes = reinterpret_cast<const std::byte*>(flat.triangle_indices.data());
+            add_index_data_source(
+                entry,
+                flat.vertex_count,
+                flat.triangle_indices.size(),
+                std::span<const std::byte>{index_bytes, flat.triangle_indices.size() * sizeof(uint32_t)}
+            );
+        }
+        const std::size_t position_accessor = add_float_accessor(
+            std::span<const float>{flat.positions.data(), flat.positions.size()},
+            fastgltf::AccessorType::Vec3,
+            flat.vertex_count,
+            true, // POSITION requires min/max
+            "POSITION"
+        );
+        entry.attributes.emplace_back(FASTGLTF_STD_PMR_NS::string{"POSITION"}, position_accessor);
+
+        const std::size_t facet_vertex_counts_accessor  = add_u32_accessor(flat.facet_vertex_counts,  "facet_vertex_counts");
+        const std::size_t facet_vertex_indices_accessor = add_u32_accessor(flat.facet_vertex_indices, "facet_vertex_indices");
+        std::optional<std::size_t> edge_vertices_accessor{};
+        if (!flat.edge_vertex_indices.empty()) {
+            edge_vertices_accessor = add_u32_accessor(flat.edge_vertex_indices, "edge_vertices");
+        }
+
+        std::string json = fmt::format(
+            "\"ERHE_geometry\":{{\"vertex_count\":{},\"facet_count\":{},\"corner_count\":{},\"edge_count\":{}"
+            ",\"facet_vertex_counts\":{},\"facet_vertex_indices\":{}",
+            flat.vertex_count, flat.facet_count, flat.corner_count, flat.edge_count,
+            facet_vertex_counts_accessor, facet_vertex_indices_accessor
+        );
+        if (edge_vertices_accessor.has_value()) {
+            json += fmt::format(",\"edge_vertices\":{}", edge_vertices_accessor.value());
+        }
+        json += ",\"attributes\":[";
+        bool dual_listed_normal = false;
+        const char* separator = "";
+        for (const erhe::geometry::Geometry_attribute_record& record : flat.attributes) {
+            const std::byte* record_bytes = record.bytes.data();
+            const std::size_t buffer_view_index = add_raw_buffer_view(
+                std::span<const std::byte>{record_bytes, record.bytes.size()}
+            );
+            json += fmt::format(
+                "{}{{\"name\":\"{}\",\"element\":\"{}\",\"element_type\":\"{}\",\"element_size\":{},\"dimension\":{},\"item_count\":{},\"buffer_view\":{}}}",
+                separator,
+                json_escape(record.name), json_escape(record.element), json_escape(record.element_type),
+                record.element_size, record.dimension, record.item_count, buffer_view_index
+            );
+            separator = ",";
+
+            // Dual-list smooth vertex normals as core NORMAL (same bytes,
+            // one extra accessor) so stock viewers get smooth shading;
+            // prefer authored "normal" over computed "normal_smooth".
+            const bool is_vertex_vec3f =
+                (record.element == "vertex") &&
+                (record.element_type == "vec3f") &&
+                (record.item_count == flat.vertex_count) &&
+                ((record.element_size * record.dimension) == (3 * sizeof(float)));
+            if (is_vertex_vec3f && ((record.name == "normal") || (!dual_listed_normal && (record.name == "normal_smooth")))) {
+                fastgltf::Accessor normal_accessor{
+                    .byteOffset      = 0,
+                    .count           = flat.vertex_count,
+                    .type            = fastgltf::AccessorType::Vec3,
+                    .componentType   = fastgltf::ComponentType::Float,
+                    .normalized      = false,
+                    .max             = {},
+                    .min             = {},
+                    .bufferViewIndex = buffer_view_index,
+                    .sparse          = {},
+                    .name            = "NORMAL"
+                };
+                const std::size_t normal_accessor_index = m_gltf_asset.accessors.size();
+                m_gltf_asset.accessors.emplace_back(std::move(normal_accessor));
+                if (record.name == "normal") {
+                    // Authored normals win: replace a previously dual-listed
+                    // normal_smooth entry.
+                    for (auto& attribute : entry.attributes) {
+                        if (std::string_view{attribute.name} == "NORMAL") {
+                            attribute.accessorIndex = normal_accessor_index;
+                            dual_listed_normal = true;
+                            break;
+                        }
+                    }
+                }
+                if (!dual_listed_normal) {
+                    entry.attributes.emplace_back(FASTGLTF_STD_PMR_NS::string{"NORMAL"}, normal_accessor_index);
+                    dual_listed_normal = true;
                 }
             }
-        };
-
-        const Mesh_info   mesh_info     = get_mesh_info(geo_mesh);
-        const std::size_t vertex_stride = vertex_format.streams.front().stride;
-        const std::size_t index_stride  = 4;
-        const std::size_t index_count   = mesh_info.index_count_fill_triangles;
-        const std::size_t vertex_count  = mesh_info.vertex_count_corners;
-
-        erhe::buffer::Cpu_buffer vertex_buffer{"", vertex_count * vertex_stride};
-        erhe::buffer::Cpu_buffer index_buffer {"", index_count * index_stride};
-
-        // Declared after the buffers: buffer_mesh holds Buffer_allocation RAII
-        // handles that free into the buffers' allocators on destruction, so it
-        // must be destroyed before vertex_buffer / index_buffer.
-        erhe::primitive::Buffer_mesh buffer_mesh;
-
-        erhe::primitive::Cpu_vertex_buffer_sink vertex_buffer_sink{{&vertex_buffer}};
-        erhe::primitive::Cpu_index_buffer_sink index_buffer_sink{index_buffer};
-        const erhe::primitive::Build_info build_info{
-            .primitive_types = {
-                .fill_triangles = true,
-            },
-            .buffer_info = {
-                .normal_style       = erhe::primitive::Normal_style::corner_normals,
-                .index_type         = erhe::dataformat::Format::format_32_scalar_uint,
-                .vertex_format      = vertex_format,
-                .vertex_buffer_sink = vertex_buffer_sink,
-                .index_buffer_sink  = index_buffer_sink
-            }
-        };
-
-        erhe::primitive::Element_mappings dummy_mappings;
-        const bool build_ok = erhe::primitive::build_buffer_mesh(
-            buffer_mesh,
-            geo_mesh, 
-            build_info, 
-            dummy_mappings, 
-            erhe::primitive::Normal_style::corner_normals
-        );
-        ERHE_VERIFY(build_ok); // TODO
-
-        Export_entry entry;
-        add_index_data_source(entry, vertex_count, index_count, index_buffer.get_span());
-        add_vertex_data_source(entry, vertex_count, vertex_format, vertex_buffer.get_span());
+        }
+        json += "]}";
+        entry.erhe_geometry_extension = std::move(json);
 
         m_erhe_geometry_entries.insert({geometry, entry});
         return entry;
@@ -3345,6 +3686,7 @@ private:
         const std::vector<erhe::scene::Mesh_primitive>& erhe_primitives = erhe_mesh->get_primitives();
         std::vector<std::optional<std::size_t>>& primitive_index_map = m_erhe_mesh_primitive_index_map[erhe_mesh];
         primitive_index_map.resize(erhe_primitives.size());
+        std::vector<std::pair<std::size_t, std::string>> pending_geometry_extensions; // (gltf primitive index, extension members)
         for (std::size_t primitive_index = 0; primitive_index < erhe_primitives.size(); ++primitive_index) {
             const erhe::scene::Mesh_primitive& erhe_mesh_primitive = erhe_primitives[primitive_index];
             const erhe::primitive::Primitive& erhe_primitive = *erhe_mesh_primitive.primitive.get();
@@ -3359,9 +3701,12 @@ private:
                 log_gltf->warn("Mesh primitive has neither triangle soup nor geometry");
                 continue;
             }
-            Export_entry export_entry = triangle_soup
-                ? process_triangle_soup(triangle_soup.get())
-                : process_geometry(geometry.get());
+            // Geometry is normative when present (matches is_geometry_normative
+            // in scene_serialization; per-primitive, so mixed meshes keep
+            // their soup primitives too).
+            Export_entry export_entry = geometry
+                ? process_geometry(geometry.get())
+                : process_triangle_soup(triangle_soup.get());
             for (const fastgltf::Attribute& attribute : export_entry.attributes) {
                 gltf_primitive.attributes.emplace_back(attribute.name, attribute.accessorIndex);
             }
@@ -3369,14 +3714,24 @@ private:
             if (erhe_mesh_primitive.material) {
                 gltf_primitive.materialIndex = process_material(erhe_mesh_primitive.material.get());
             }
+            if (!export_entry.erhe_geometry_extension.empty()) {
+                pending_geometry_extensions.emplace_back(gltf_mesh.primitives.size(), export_entry.erhe_geometry_extension);
+            }
             primitive_index_map[primitive_index] = gltf_mesh.primitives.size();
             gltf_mesh.primitives.emplace_back(std::move(gltf_primitive));
         }
         std::size_t gltf_mesh_index = m_gltf_asset.meshes.size();
         m_gltf_asset.meshes.emplace_back(std::move(gltf_mesh));
         m_erhe_mesh_to_gltf_mesh_index.insert({erhe_mesh, gltf_mesh_index});
+        for (auto& [gltf_primitive_index, extension_members] : pending_geometry_extensions) {
+            m_geometry_primitive_extensions[{gltf_mesh_index, gltf_primitive_index}] = std::move(extension_members);
+        }
         return gltf_mesh_index;
     }
+
+    // ERHE_geometry extension members per exported (mesh, primitive), merged
+    // into the extensions write callback context in export_gltf().
+    std::map<std::pair<std::size_t, std::size_t>, std::string> m_geometry_primitive_extensions;
 
     std::unordered_map<const erhe::scene::Camera*, std::size_t> m_erhe_camera_to_gltf_camera_index;
     [[nodiscard]] auto process_camera(erhe::scene::Camera* erhe_camera) -> std::size_t
@@ -4578,6 +4933,29 @@ auto Gltf_exporter::export_gltf() -> std::string
                 continue;
             }
             export_extras_context.mesh_primitive_extensions[{mesh_it->second, map_it->second[erhe_primitive_index].value()}] = payload;
+        }
+        // Exporter-generated ERHE_geometry members (geometry-normative
+        // primitives) merge with any caller payload on the same primitive.
+        for (const auto& [key, extension_members] : m_geometry_primitive_extensions) {
+            std::string& slot = export_extras_context.mesh_primitive_extensions[key];
+            if (slot.empty()) {
+                slot = extension_members;
+            } else {
+                slot += ",";
+                slot += extension_members;
+            }
+        }
+        if (!m_geometry_primitive_extensions.empty()) {
+            bool already_declared = false;
+            for (const auto& existing : m_gltf_asset.extensionsUsed) {
+                if (std::string_view{existing} == std::string_view{"ERHE_geometry"}) {
+                    already_declared = true;
+                    break;
+                }
+            }
+            if (!already_declared) {
+                m_gltf_asset.extensionsUsed.emplace_back("ERHE_geometry");
+            }
         }
     }
 

@@ -148,9 +148,14 @@ void finalize_imported_meshes(
             // glTF arrives with facets + vertices but no edges. Build edges
             // (and the smooth vertex normals used for wireframe bias) so
             // the content wide-line renderer has something to draw.
+            // Geometry restored from the ERHE_geometry extension already
+            // carries edges (and every other attribute) byte-exact from the
+            // dump - reprocessing would overwrite it and break the
+            // bit-exact round-trip, so process only when edges are
+            // genuinely missing.
             if (primitive.render_shape) {
                 const std::shared_ptr<erhe::geometry::Geometry>& geometry = primitive.render_shape->get_geometry();
-                if (geometry) {
+                if (geometry && (geometry->get_mesh().edges.nb() == 0)) {
                     geometry->process({.flags =
                         erhe::geometry::Geometry::process_flag_connect                       |
                         erhe::geometry::Geometry::process_flag_build_edges                   |
