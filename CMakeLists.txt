@@ -596,11 +596,14 @@ if (${ERHE_GLTF_LIBRARY} STREQUAL "fastgltf")
         # (mesh-keyed collider geometry, spec inertia key names, exporter JSON
         # fixes), (b) a subset of the glTF 2.1 proposal
         # (KhronosGroup/glTF#2585): unified "files" array, "externalAssets" +
-        # Node::externalAssetIndex, minVersion handling, and (c) the
+        # Node::externalAssetIndex, minVersion handling, (c) the
         # KHR_lights_punctual spot-light exporter fix (nested "spot" object;
-        # PR'd upstream). Drop the fork when upstream fastgltf ships the
-        # current physics spec and glTF 2.1.
-        GIT_TAG           af8ff21af5c57d78bb92eccc5b70c6966f06c05f
+        # PR'd upstream), and (d) generic extension passthrough callbacks
+        # (ExtensionsParseCallback / ExtensionsWriteCallback, the enabler for
+        # erhe's ERHE_* vendor extensions; worth offering upstream). Drop the
+        # fork when upstream fastgltf ships the current physics spec, glTF 2.1
+        # and an extension passthrough.
+        GIT_TAG           a0600c11a1d183f418f15e8d634a5d149e5bf3c2
         #GIT_TAG           v0.9.0
         GITHUB_REPOSITORY tksuoran/fastgltf
         OPTIONS
