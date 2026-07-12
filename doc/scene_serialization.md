@@ -44,8 +44,11 @@ Cross-references between payloads use glTF indices within the same asset
 (see [`gltf_extensions/flags.md`](gltf_extensions/flags.md)). Geometry-normative
 meshes carry a bit-exact geogram dump in `ERHE_geometry` on the mesh
 primitive, dual-listed with plain TRIANGLES render data so foreign viewers
-still render them (flat-shaded where no per-vertex NORMAL could be
-dual-listed; corner normals stay `ERHE_geometry`-only).
+still render them (flat-shaded where no fully-present per-vertex NORMAL
+could be dual-listed; corner normals stay `ERHE_geometry`-only). A primitive
+whose source of truth is an imported triangle soup exports the soup instead
+(full vertex attributes: TEXCOORD_n, JOINTS_n / WEIGHTS_n, COLOR_n) with no
+`ERHE_geometry` - its geometry is a derived artifact, re-derived on load.
 
 ## Save pipeline
 
@@ -66,6 +69,10 @@ Entry point: `editor::save_scene_gltf(Scene_root&, path)` in
    Compound / off-axis shapes export via synthesized child collider nodes;
    the importer folds them back (and removes the carrier nodes when they
    have no other content, keeping save/open/re-save node-identical).
+   A settings-less joint (free six-dof) exports as a joint description with
+   no limits / drives; reload materializes a `Physics_joint_settings` item
+   from it. World-attached joints (no connected node) are skipped with a
+   warning - the Khronos extension cannot express them.
 3. **Prefab external assets** - `collect_prefab_external_assets()`
    (`prefabs/prefab_library.cpp`) walks the tree for `Prefab_instance`
    attachments and maps those nodes to glTF 2.1 `externalAssets` references
@@ -207,6 +214,13 @@ keep their state on import.
   .glb/.gltf imported before source retention, or graph bakes) do not embed
   an image; graph bakes are re-derived on load, others lose the slot with a
   warning.
+- **`Brush_placement` attachments are not persisted** (the brush *library*
+  is, via `ERHE_brushes`): a placed-brush node reloads as a plain mesh node
+  without the link back to its source brush. The legacy scene.json format
+  did not persist them either.
+- A static rigid body's mass is not persisted (KHR_physics_rigid_bodies has
+  no `motion` object for static bodies); the value is meaningless for
+  statics and is shape-derived on reload.
 - Window layout / imgui state is not part of the scene (per-scene imgui ini
   support was removed in phase 4).
 - Undo/redo history, selection, and other transient session state are not
@@ -216,10 +230,23 @@ keep their state on import.
 
 ## Verifying round-trips
 
-Headless: save -> load -> compare via the in-editor MCP (`get_scene_nodes`,
-`get_scene_materials`, `get_physics_items`, `get_scene_brushes`, ...) and
-`capture_screenshot`. The graph asset round-trips are covered by
+**`scripts/scene_roundtrip_verify.py`** is the standing verification
+harness (phase 6 of the roundtrip plan): against a fresh headless editor
+session it builds a scene exercising every `ERHE_*` extension (shapes,
+imported textured + skinned/animated assets, physics bodies + joint, brush
+placement, graph mesh + graph texture bindings, layouts, tags, authored
+animation keys, an external-asset prefab instance), saves it, validates
+every `ERHE_*` payload against the JSON schemas in
+`doc/gltf_extensions/schema/`, reloads it and diffs the MCP-visible state,
+round-trips `res/editor/scenes/Prefab test.glb` when present, and runs the
+optional foreign-tool checks (Khronos glTF validator via
+`--gltf-validator` / `ERHE_GLTF_VALIDATOR`; Blender headless import+render
+via `--blender` / `ERHE_BLENDER`). Exit 0 = all executed checks passed.
+
+The graph asset round-trips are additionally covered by
 `scripts/geometry_nodes_smoke_test.py` and
 `scripts/texture_graph_smoke_test.py` (each parses the saved GLB JSON chunk
-directly; run each suite in its own fresh editor session). Full phase 6
-verification checklist: `gltf-scene-roundtrip-plan.md`.
+directly; run each suite in its own fresh editor session). Ad-hoc checks:
+save -> load -> compare via the in-editor MCP (`get_scene_nodes`,
+`get_scene_materials`, `get_physics_items`, `get_scene_brushes`, ...) and
+`capture_screenshot`. Design history: `gltf-scene-roundtrip-plan.md`.

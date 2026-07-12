@@ -409,6 +409,45 @@ Documented in `doc/usd_compatibility.md`, implemented after the switchover:
   per-vertex NORMAL could be dual-listed (corner normals stay
   ERHE_geometry-only).
 
+### Phase 6 as built (2026-07-12)
+
+All five bullets landed in one standing harness,
+**`scripts/scene_roundtrip_verify.py`** (run book:
+`doc/scene_serialization.md` "Verifying round-trips"). The schema
+validation, end-to-end diff, prefab round-trip and foreign-tool checks are
+sections of that script; a dedicated erhe_gltf unit test was rejected
+because `parse_gltf` requires a live `erhe::graphics::Device` + executor +
+`Image_transfer` (import only runs inside an editor session), so
+animation / skin / texture round-trip is asserted at the harness level
+(channel-exact animation diff, skin + embedded-image checks against the
+saved GLB, Khronos validator, Blender import+render).
+
+Verification surfaced and fixed three export defects plus one MCP gap:
+
+1. Dual-listed `NORMAL` accessors were written from allocated-but-unset
+   geogram attributes (all-zero bytes, `present_*` mask false) - every
+   geometry-normative mesh failed `ACCESSOR_VECTOR3_NON_UNIT`. Fixed:
+   dual-listing requires a fully-present vertex attribute
+   (`gltf_fastgltf.cpp` `process_geometry`).
+2. Imported triangle-soup primitives exported geometry-normative (the
+   derived, welded geometry won over the soup), dropping `TEXCOORD_0` /
+   `JOINTS_0` / `WEIGHTS_0` from the render payload - textured imports
+   failed `MESH_PRIMITIVE_TOO_FEW_TEXCOORDS`, skinned meshes failed
+   `NODE_SKIN_WITH_NON_SKINNED_MESH`. Fixed: the soup, when present, is
+   the primitive's source of truth and exports as-is (its geometry is
+   re-derived on load); `ERHE_geometry` attaches only to authored
+   geometry. Exported glTF mesh names now come from the erhe mesh name.
+3. Settings-less (free six-dof) physics joints were skipped on export.
+   Fixed: they export as a joint description with no limits/drives
+   (`gltf_physics_export.cpp`); reload materializes a settings item.
+4. MCP `get_scene_nodes` now reports `parent_id` and `import_root` so the
+   harness can apply the exporter's import_root transparency to pre-save
+   snapshots.
+
+Known non-round-tripping state is documented in
+`doc/scene_serialization.md` "What is not persisted" (`Brush_placement`
+attachments, static-body mass).
+
 ## Alternative considered: OpenUSD (reviewed 2026-07-12, not chosen)
 
 OpenUSD (v26.05, github.com/PixarAnimationStudios/OpenUSD) was evaluated as

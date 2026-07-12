@@ -21,13 +21,23 @@ editor can rebuild its `erhe::geometry::Geometry` bit-exact on load. Stock
 viewers render the core primitive (POSITION + fan-triangulated indices) and
 never need this extension.
 
+The writer attaches this extension only to primitives whose geometry is
+authored (geogram-first). A primitive whose source of truth is an imported
+triangle soup exports the soup's own vertex attributes (TEXCOORD_n,
+JOINTS_n / WEIGHTS_n, COLOR_n, ...) without this extension - its geometry
+is a derived artifact, re-derived from the soup on load.
+
 Core-payload contract when this extension is present:
 
 - glTF vertex `i` == geogram vertex `i` (no welding / corner expansion).
 - The core indices fan-triangulate each facet in facet order.
 - Vertex-element attributes that map to standard glTF semantics may be
   dual-listed as core attributes over the same bytes (e.g. smooth vertex
-  normals as `NORMAL`); corner-element attributes cannot be (they are not
+  normals as `NORMAL`), but only when the attribute holds a value for
+  every vertex - the dump also contains allocated-but-unset attributes
+  (zero bytes, `present_*` mask false), which must not become core
+  accessors (glTF requires e.g. unit-length `NORMAL` for every element).
+  Corner-element attributes cannot be dual-listed (they are not
   per-vertex), so shading falls back to spec-mandated flat shading in
   viewers that only read core data.
 
