@@ -168,7 +168,7 @@ Each `Scene_root` owns a physics world. `Node_physics` is a `Node_attachment` wr
 
 ### Scene Serialization
 
-Scenes persist as single erhe-authored glTF files (`.glb`; `ERHE_scene` in `extensionsUsed` marks the file): one `export_gltf()` call carries render content, physics (KHR_physics_rigid_bodies), prefab external-asset references, texture sources, animations, and the editor-domain `ERHE_*` extension payloads (`parsers/gltf.hpp` `save_scene_gltf` / `open_scene_gltf`; see `doc/gltf-scene-roundtrip-plan.md`). Collision shape types (box, sphere, cylinder, capsule, compound) are persisted and faithfully recreated on load instead of degrading to convex hulls. The legacy `.erhescene` directory-bundle format (scene.json via `erhe_codegen` structs) was removed in phase 5 of the plan; the scene codegen unit now generates only `Gltf_source_reference` and `Scene_settings`.
+Scenes persist as single erhe-authored glTF files (`.glb`; `ERHE_scene` in `extensionsUsed` marks the file): one `export_gltf()` call carries render content, physics (KHR_physics_rigid_bodies), prefab external-asset references, texture sources, animations, and the editor-domain `ERHE_*` extension payloads (`parsers/gltf.hpp` `save_scene_gltf` / `open_scene_gltf`; full reference `doc/scene_serialization.md`, design history `doc/gltf-scene-roundtrip-plan.md`). Collision shape types (box, sphere, cylinder, capsule, compound) are persisted and faithfully recreated on load instead of degrading to convex hulls. The legacy `.erhescene` directory-bundle format (scene.json via `erhe_codegen` structs) was removed in phase 5 of the plan; the scene codegen unit now generates only `Gltf_source_reference` and `Scene_settings`.
 
 ### Item Locking and Tagging
 

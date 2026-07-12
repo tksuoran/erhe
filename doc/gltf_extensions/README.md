@@ -1,9 +1,10 @@
 # erhe glTF vendor extensions (`ERHE_*`)
 
-erhe persists full editor scenes as single glTF files
-(doc/gltf-scene-roundtrip-plan.md). Editor state that core glTF 2.x cannot
-express is carried in the vendor extensions specified here. Conventions
-shared by all of them:
+erhe persists full editor scenes as single glTF files (process and parts:
+[`../scene_serialization.md`](../scene_serialization.md); design history:
+[`../gltf-scene-roundtrip-plan.md`](../gltf-scene-roundtrip-plan.md)).
+Editor state that core glTF 2.x cannot express is carried in the vendor
+extensions specified here. Conventions shared by all of them:
 
 - Every `ERHE_*` extension is **optional**: files list them in
   `extensionsUsed` only, never `extensionsRequired`, so any glTF loader can

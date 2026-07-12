@@ -41,8 +41,9 @@ erhe-authored). File > Load Scene is a `.glb`/`.gltf` file picker; the
 `Scene_root` (`open_scene_gltf`: not undoable, empty content library, saved
 editor state applied) and routes a foreign glTF to `Scene_open_operation`
 (undoable "open foreign glTF as new scene"). The Asset Browser branches its
-context menu on `Asset_file_gltf::extensions_used` the same way. See
-`doc/gltf-scene-roundtrip-plan.md`.
+context menu on `Asset_file_gltf::extensions_used` the same way. Full
+reference (pipelines, parts map, limitations): `doc/scene_serialization.md`;
+design history: `doc/gltf-scene-roundtrip-plan.md`.
 
 ### Removed: legacy scene serialization (directory bundles, #241)
 
