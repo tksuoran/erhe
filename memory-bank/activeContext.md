@@ -2,6 +2,8 @@
 
 [FOCUS]
 @gltf-scene-roundtrip{doc/gltf-scene-roundtrip-plan.md,rev3}⚡phases0-5✓→?phase6{verification,LAST,handoff@prompt_queue.txt}
+>phase5-commits::f5a58c5b{mutex}+1c643354{removal}+77ca784b{geogram}+533e7784{mb}+d4188760{doc}
+>doc::scene_serialization.md{NEW,d4188760}::process+parts-reference{save/open-pipelines+parts-map+not-persisted-limitations;cross-linked-from-editor/scene-notes+gltf_extensions-README;wire-format-stays@gltf_extensions/,history@roundtrip-plan}
 >phase5::migration+removal
   migrated::"Prefab test"+"pf2"{.erhescene→.glb,MCP-load+save,node-sets-verified-identical{name/parent/attachments/TRS/tags},bundle-dirs-deleted,.glb-untracked@res/editor/scenes}
   deleted::scene_serialization.{hpp,cpp}+scene.json-codegen-defs{29×.py;gltf_source_reference.py+scene_settings.py-STAY}+Asset_file_scene{asset-browser-bundle-handling}+.erhescene-branch@Load_scene_file-handler

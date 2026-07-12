@@ -55,3 +55,11 @@ editor-run::repo-root-cwd{config/+res/+logs/}
 
 [VS_MCP]
 symbol_workspace::¬cpp-index{C#-oriented,0-matches}→goto_definition/find_references-from-open-documents+Grep{CLAUDE.md-VS-MCP-section=canonical-debug/build-flow}
+¬attach-tool{debugger_launch-only}→hung-external-process::ASK-user-attach-manually{Debug>Attach}→debugger_break/get_callstack/evaluate-then-work{proven-2026-07-12-geogram-wedge}
+get_callstack::current-thread-only→multi-thread-hang::ask-user-switch-thread-in-Threads-window-between-reads
+
+[MINIDUMP_ANALYSIS]{no-cdb/windbg-on-machine}
+write-live-dump::ctypes-MiniDumpWriteDump{scratchpad-script,ThreadInfo|DataSegs}
+parse::py-minidump-pkg{pip}→exception-record+modules+thread-contexts+stack-bytes
+symbolize::llvm-symbolizer{LLVM-bin,--obj=editor.exe,addr=0x140000000+offset;default-output-style¬GNU{GNU=no-blank-line-separators→block-mapping-breaks}}
+stack-scan-caveat::conservative{stale-frames+cross-stack-bleed}→hypothesis-grade;live-debugger-stack=diagnosis-grade{proven:scan-showed-geo_abort-frames-misread-as-noise,VS-attach-gave-truth}

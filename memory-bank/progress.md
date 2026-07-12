@@ -1,10 +1,11 @@
 §MBEL:5.0
 
 [TASK::gltf-scene-roundtrip]{active}
-✓phases0-5{0c3bd202+72ac5da9+f70143b5+3a4989b6+phase5-commits;details→activeContext+history}
+✓phases0-5{0c3bd202+72ac5da9+f70143b5+3a4989b6;phase5:f5a58c5b+1c643354+77ca784b;details→activeContext+history}
 ✓race-fix::Scene::update_node_transforms-locks-item_host_mutex{async-raytrace-kickoff-vs-main-thread-AV}
-✓geogram-wedge-fix::make_convex_hull-PDEL→BDEL+ASSERT_THROW-explicit{doc/geogram.md=upstream-issue-draft}
+✓geogram-wedge-fix::make_convex_hull-PDEL→BDEL+ASSERT_THROW-explicit{doc/geogram.md=upstream-issue-draft,¬yet-filed}
 ✓smoke-suites-green-post-removal{geometry_nodes:130/130+texture_graph:268/268;fresh-session-per-suite}
+✓doc::scene_serialization.md{d4188760,process+parts+limitations-reference}
 ?phase6::verification{last,handoff-written@prompt_queue.txt,run-with-fresh-context}
 
 [TASK::#239-per-scene-settings]{parked}
@@ -24,3 +25,5 @@
 !stale-editor.exe::locks-exe{headless-relink-LNK1168}+holds-port-8080→kill-before-build+launch
 !incremental-build-stamp-stale{get_server_info-"built"-from-unchanged-TU}→check-exe-LastWriteTime
 !PS5.1-embedded-double-quotes-in-native-args-mangled{git-commit--m-heredoc-splits-at-quote}→write-msg-to-file+git-commit--F
+!smoke-suites::one-FRESH-editor-session-each{texture-material_output-resolves-material-via-get_single_scene_root→null-when->1-scene-open→section-fails}
+!scene-save-exports-only-mesh-referenced-materials{graph-binding-on-unused-material=dropped+warn}→tests/users-bind-mesh-used-materials

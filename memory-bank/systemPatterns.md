@@ -12,6 +12,9 @@ Rendergraph::DAG{Rendergraph_node,typed-io,exec/frame}
 App_context::holds-all-parts+shared-resources
 !rule::PartCtor¬ReadAppContext{nullptr-until-post-construct}→PassRefsExplicit
 Backends::swappable{#ifdef ERHE_<SUBSYS>_LIBRARY_<VALUE>}{physics+raytrace+window+xr}
+ScenePersistence::single-erhe-authored-glb{ERHE_scene-marker+ERHE_*-extensions;ref:doc/scene_serialization.md;wire:doc/gltf_extensions/;¬persisted:unused-library-materials+session-state}
+ItemHostMutex::async-workers-lock-scene-item_host_mutex-for-hosted-state-mutation;main-thread-consumers-lock-too{Scene::update_node_transforms-locks-internally-since-f5a58c5b}
+!geogram-threading::PDEL/parallel-algos-require-no-other-geogram-threads{unenforceable-in-erhe→use-sequential-BDEL-for-convex-hull;asserts→ASSERT_THROW-sans-debugger;upstream-ask:doc/geogram.md}
 
 [CMAKE]
 CPM::configure-time-deps
