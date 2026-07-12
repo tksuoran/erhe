@@ -111,6 +111,7 @@ public:
     std::unordered_map<const erhe::physics::Physics_material*,       std::size_t> material_index_map;
     std::unordered_map<const erhe::physics::Collision_filter*,       std::size_t> filter_index_map;
     std::unordered_map<const erhe::physics::Physics_joint_settings*, std::size_t> joint_index_map;
+    std::optional<std::size_t> free_joint_index; // shared empty description for settings-less (free six-dof) joints
 
     [[nodiscard]] auto get_material_index(const std::shared_ptr<erhe::physics::Physics_material>& material) -> std::optional<std::size_t>
     {
@@ -154,10 +155,18 @@ public:
         return index;
     }
 
-    [[nodiscard]] auto get_joint_index(const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings) -> std::optional<std::size_t>
+    [[nodiscard]] auto get_joint_index(const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings) -> std::size_t
     {
         if (!settings) {
-            return std::nullopt;
+            // A joint without settings is a free six-dof joint; it is
+            // representable as a joint description with no limits and no
+            // drives. Share one such description across all settings-less
+            // joints (the importer materializes a settings item from it).
+            if (!free_joint_index.has_value()) {
+                free_joint_index = data.joints.size();
+                data.joints.push_back(erhe::gltf::Physics_joint_description{});
+            }
+            return free_joint_index.value();
         }
         const auto it = joint_index_map.find(settings.get());
         if (it != joint_index_map.end()) {
@@ -513,18 +522,15 @@ auto build_gltf_physics_data(const erhe::scene::Scene& scene, const Content_libr
                 );
             }
             const std::shared_ptr<erhe::scene::Node> connected_node = node_joint->get_connected_node();
-            const std::optional<std::size_t> joint_index = builder.get_joint_index(node_joint->get_settings());
             if (!connected_node) {
                 log_parsers->warn(
                     "gltf physics export: node '{}' joint has no connected node (world attachment is not representable) - skipping joint",
                     node->get_name()
                 );
-            } else if (!joint_index.has_value()) {
-                log_parsers->warn("gltf physics export: node '{}' joint has no settings - skipping joint", node->get_name());
             } else {
                 erhe::gltf::Physics_node_joint joint{};
                 joint.connected_node   = connected_node;
-                joint.joint_index      = joint_index.value();
+                joint.joint_index      = builder.get_joint_index(node_joint->get_settings());
                 joint.enable_collision = node_joint->get_enable_collision();
                 description.joint = std::move(joint);
                 has_content = true;

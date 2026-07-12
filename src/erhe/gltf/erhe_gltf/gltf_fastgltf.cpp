@@ -3705,6 +3705,30 @@ private:
             json += fmt::format(",\"edge_vertices\":{}", edge_vertices_accessor.value());
         }
         json += ",\"attributes\":[";
+
+        // The flat dump contains every ALLOCATED geogram attribute; the
+        // parallel "present_<name>" bool records tell which elements hold a
+        // value (unset elements are zero bytes). Dual-listing may only use
+        // fully-present vertex attributes: glTF requires e.g. unit-length
+        // NORMAL for every element of the accessor.
+        const auto vertex_attribute_fully_present = [&flat](const std::string& attribute_name) -> bool {
+            const std::string present_name = "present_" + attribute_name;
+            for (const erhe::geometry::Geometry_attribute_record& present_record : flat.attributes) {
+                if ((present_record.element == "vertex") && (present_record.name == present_name)) {
+                    if (present_record.bytes.empty()) {
+                        return false;
+                    }
+                    for (const std::byte value : present_record.bytes) {
+                        if (value == std::byte{0}) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+            }
+            return false;
+        };
+
         bool dual_listed_normal = false;
         const char* separator = "";
         for (const erhe::geometry::Geometry_attribute_record& record : flat.attributes) {
@@ -3728,7 +3752,11 @@ private:
                 (record.element_type == "vec3f") &&
                 (record.item_count == flat.vertex_count) &&
                 ((record.element_size * record.dimension) == (3 * sizeof(float)));
-            if (is_vertex_vec3f && ((record.name == "normal") || (!dual_listed_normal && (record.name == "normal_smooth")))) {
+            if (
+                is_vertex_vec3f &&
+                ((record.name == "normal") || (!dual_listed_normal && (record.name == "normal_smooth"))) &&
+                vertex_attribute_fully_present(record.name)
+            ) {
                 fastgltf::Accessor normal_accessor{
                     .byteOffset      = 0,
                     .count           = flat.vertex_count,
@@ -3957,6 +3985,7 @@ private:
         }
 
         fastgltf::Mesh gltf_mesh{};
+        gltf_mesh.name = FASTGLTF_STD_PMR_NS::string{erhe_mesh->get_name()};
         const std::vector<erhe::scene::Mesh_primitive>& erhe_primitives = erhe_mesh->get_primitives();
         std::vector<std::optional<std::size_t>>& primitive_index_map = m_erhe_mesh_primitive_index_map[erhe_mesh];
         primitive_index_map.resize(erhe_primitives.size());
@@ -3975,11 +4004,18 @@ private:
                 log_gltf->warn("Mesh primitive has neither triangle soup nor geometry");
                 continue;
             }
-            // Geometry is normative when present (per-primitive, so mixed
-            // meshes keep their soup primitives too).
-            Export_entry export_entry = geometry
-                ? process_geometry(geometry.get())
-                : process_triangle_soup(triangle_soup.get());
+            // The triangle soup, when present, is the primitive's source of
+            // truth: soups exist only on imported render primitives (a
+            // primitive restored from ERHE_geometry parses to geometry
+            // alone), and a geometry alongside a soup is a derived artifact
+            // (make_geometry), re-derivable after reload. Exporting the soup
+            // keeps the full imported vertex attributes (TEXCOORD_n,
+            // JOINTS_n / WEIGHTS_n, COLOR_n) that the welded geometry only
+            // holds per-corner. Authored geometry (no soup) exports
+            // geometry-normative with the ERHE_geometry extension.
+            Export_entry export_entry = triangle_soup
+                ? process_triangle_soup(triangle_soup.get())
+                : process_geometry(geometry.get());
             for (const fastgltf::Attribute& attribute : export_entry.attributes) {
                 gltf_primitive.attributes.emplace_back(attribute.name, attribute.accessorIndex);
             }
