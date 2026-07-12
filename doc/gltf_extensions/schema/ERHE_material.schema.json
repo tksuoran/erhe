@@ -1,0 +1,20 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "ERHE_material.schema.json",
+    "title": "ERHE_material glTF material extension",
+    "type": "object",
+    "properties": {
+        "roughness_y": {"type": "number"},
+        "bxdf_model": {
+            "type": "string",
+            "enum": ["unlit", "isotropic_brdf", "anisotropic_brdf", "anisotropic_slope", "anisotropic_engine_ready"]
+        },
+        "blending_mode": {
+            "type": "string",
+            "enum": ["opaque", "alpha_blend", "alpha_test", "multiply", "add", "subtract", "screen_door"]
+        },
+        "use_circular_brushed_metal":       {"type": "boolean"},
+        "circular_brushed_metal_tex_coord": {"type": "integer", "minimum": 0},
+        "use_aniso_control":                {"type": "boolean"}
+    }
+}

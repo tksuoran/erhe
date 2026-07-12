@@ -1,0 +1,43 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "ERHE_camera.schema.json",
+    "title": "ERHE_camera glTF camera extension",
+    "type": "object",
+    "properties": {
+        "projection_type": {
+            "type": "string",
+            "enum": [
+                "other",
+                "perspective_horizontal",
+                "perspective_vertical",
+                "perspective",
+                "perspective_xr",
+                "orthogonal_horizontal",
+                "orthogonal_vertical",
+                "orthogonal",
+                "orthogonal_rectangle",
+                "generic_frustum"
+            ]
+        },
+        "z_near":         {"type": "number"},
+        "z_far":          {"type": "number"},
+        "fov_x":          {"type": "number"},
+        "fov_y":          {"type": "number"},
+        "fov_left":       {"type": "number"},
+        "fov_right":      {"type": "number"},
+        "fov_up":         {"type": "number"},
+        "fov_down":       {"type": "number"},
+        "ortho_left":     {"type": "number"},
+        "ortho_width":    {"type": "number"},
+        "ortho_bottom":   {"type": "number"},
+        "ortho_height":   {"type": "number"},
+        "frustum_left":   {"type": "number"},
+        "frustum_right":  {"type": "number"},
+        "frustum_bottom": {"type": "number"},
+        "frustum_top":    {"type": "number"},
+        "exposure":       {"type": "number"},
+        "shadow_range":   {"type": "number"},
+        "flags":          {"type": "array", "items": {"type": "string"}}
+    },
+    "required": ["projection_type"]
+}

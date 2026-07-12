@@ -1,0 +1,20 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "ERHE_scene.schema.json",
+    "title": "ERHE_scene glTF scene extension",
+    "type": "object",
+    "properties": {
+        "ambient_light": {
+            "type": "array",
+            "items": {"type": "number"},
+            "minItems": 4,
+            "maxItems": 4
+        },
+        "enable_physics": {"type": "boolean"},
+        "settings": {
+            "type": "object",
+            "description": "Scene_settings object (erhe_codegen schema, src/editor/scene/definitions/scene_settings.py)"
+        }
+    },
+    "required": ["ambient_light", "enable_physics"]
+}

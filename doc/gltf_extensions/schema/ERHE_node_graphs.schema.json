@@ -1,0 +1,43 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "ERHE_node_graphs.schema.json",
+    "title": "ERHE_node_graphs glTF asset-root extension",
+    "type": "object",
+    "$defs": {
+        "graph_asset": {
+            "type": "object",
+            "properties": {
+                "name":  {"type": "string"},
+                "graph": {"type": "object", "description": "Editor node-graph JSON (graph_mesh_serialization / graph_texture_serialization v1 format)"}
+            },
+            "required": ["name", "graph"]
+        }
+    },
+    "properties": {
+        "graph_textures": {"type": "array", "items": {"$ref": "#/$defs/graph_asset"}},
+        "graph_meshes":   {"type": "array", "items": {"$ref": "#/$defs/graph_asset"}},
+        "material_bindings": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "material":      {"type": "integer", "minimum": 0},
+                    "slot":          {"type": "string", "enum": ["base_color", "metallic_roughness", "normal", "occlusion", "emissive"]},
+                    "graph_texture": {"type": "string"}
+                },
+                "required": ["material", "slot", "graph_texture"]
+            }
+        },
+        "node_bindings": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "node":       {"type": "integer", "minimum": 0},
+                    "graph_mesh": {"type": "string"}
+                },
+                "required": ["node", "graph_mesh"]
+            }
+        }
+    }
+}

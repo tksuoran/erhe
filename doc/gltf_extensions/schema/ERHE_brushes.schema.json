@@ -1,0 +1,24 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "ERHE_brushes.schema.json",
+    "title": "ERHE_brushes glTF asset-root extension",
+    "type": "object",
+    "properties": {
+        "brushes": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name":         {"type": "string"},
+                    "folder_path":  {"type": "string"},
+                    "mesh":         {"type": "integer", "minimum": 0},
+                    "material":     {"type": "integer", "minimum": 0},
+                    "density":      {"type": "number"},
+                    "normal_style": {"type": "string", "enum": ["none", "corner_normals", "polygon_normals", "point_normals"]}
+                },
+                "required": ["name", "mesh", "density", "normal_style"]
+            }
+        }
+    },
+    "required": ["brushes"]
+}

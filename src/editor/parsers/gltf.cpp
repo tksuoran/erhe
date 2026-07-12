@@ -2,6 +2,7 @@
 
 #include "parsers/gltf.hpp"
 
+#include "parsers/gltf_extensions_import.hpp"
 #include "parsers/gltf_physics_import.hpp"
 
 #include "app_context.hpp"
@@ -432,6 +433,14 @@ auto make_import_gltf_operation(
     // and enter the scene with the insert operation below. Must run after
     // mesh finalization above (mesh-sourced collision shapes need Geometry).
     import_gltf_physics(context, gltf_data, scene_root, path, operations);
+
+    // Editor-domain ERHE_* extensions (doc/gltf-scene-roundtrip-plan.md
+    // phase 3): ERHE_layout / ERHE_collections onto the imported nodes,
+    // ERHE_brushes / ERHE_node_graphs into the content library. ERHE_scene
+    // is deliberately NOT applied here - importing an asset must not
+    // clobber the target scene's settings (the phase-4 Open-Scene path
+    // consumes it).
+    import_gltf_editor_state(context, gltf_data, scene_root, path, operations);
 
     operations.push_back(
         std::make_shared<Item_insert_remove_operation>(

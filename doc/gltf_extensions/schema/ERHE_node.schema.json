@@ -1,0 +1,11 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "ERHE_node.schema.json",
+    "title": "ERHE_node glTF node extension",
+    "type": "object",
+    "properties": {
+        "flags":      {"type": "array", "items": {"type": "string"}},
+        "mesh_flags": {"type": "array", "items": {"type": "string"}}
+    },
+    "required": ["flags"]
+}

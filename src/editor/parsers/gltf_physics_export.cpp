@@ -2,6 +2,7 @@
 
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
+#include "geometry_graph/geometry_graph_mesh.hpp"
 #include "scene/node_joint.hpp"
 #include "scene/node_physics.hpp"
 
@@ -309,7 +310,18 @@ auto build_gltf_physics_data(const erhe::scene::Scene& scene, const Content_libr
     Gltf_physics_builder builder{};
 
     for (const std::shared_ptr<erhe::scene::Node>& node : scene.get_flat_nodes()) {
-        const std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
+        std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
+        // A Node_physics controlled by a Geometry Graph Mesh attachment is a
+        // baked artifact the graph rebuilds on load - persisting it would
+        // duplicate the rigid body on every save/load round-trip (same check
+        // as save_scene; doc/gltf-scene-roundtrip-plan.md phase 3 exclusion
+        // hook).
+        if (node_physics) {
+            const std::shared_ptr<Geometry_graph_mesh> graph_mesh_attachment = erhe::scene::get_attachment<Geometry_graph_mesh>(node.get());
+            if (graph_mesh_attachment && (graph_mesh_attachment->get_controlled_node_physics() == node_physics)) {
+                node_physics.reset();
+            }
+        }
         std::shared_ptr<Node_joint>         node_joint{};
         std::size_t                         joint_count = 0;
         for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : node->get_attachments()) {

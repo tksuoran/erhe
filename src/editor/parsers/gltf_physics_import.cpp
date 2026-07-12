@@ -1,5 +1,7 @@
 #include "parsers/gltf_physics_import.hpp"
 
+#include "parsers/gltf_extensions_import.hpp"
+
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "operations/content_library_attach_operation.hpp"
@@ -304,6 +306,23 @@ void import_gltf_physics(
 
     Gltf_physics_importer importer{.physics = physics};
 
+    // ERHE_physics node payloads (doc/gltf-scene-roundtrip-plan.md phase 3):
+    // rigid-body state KHR_physics_rigid_bodies cannot carry, applied onto
+    // each body's create info before Node_physics construction.
+    const std::unordered_map<const erhe::scene::Node*, Gltf_physics_overrides> physics_overrides = parse_gltf_physics_overrides(gltf_data);
+    const auto apply_physics_overrides = [&physics_overrides](erhe::physics::IRigid_body_create_info& create_info, const erhe::scene::Node* node) {
+        const auto it = physics_overrides.find(node);
+        if (it == physics_overrides.end()) {
+            return;
+        }
+        const Gltf_physics_overrides& overrides = it->second;
+        if (overrides.motion_mode.has_value())     { create_info.motion_mode     = overrides.motion_mode.value(); }
+        if (overrides.friction.has_value())        { create_info.friction        = overrides.friction.value(); }
+        if (overrides.restitution.has_value())     { create_info.restitution     = overrides.restitution.value(); }
+        if (overrides.linear_damping.has_value())  { create_info.linear_damping  = overrides.linear_damping.value(); }
+        if (overrides.angular_damping.has_value()) { create_info.angular_damping = overrides.angular_damping.value(); }
+    };
+
     // 1. Shared content-library items (1:1 with the glTF top-level arrays),
     //    attached through undoable operations like materials / textures.
     importer.material_items.reserve(physics.materials.size());
@@ -562,8 +581,9 @@ void import_gltf_physics(
             continue;
         }
 
-        const erhe::physics::IRigid_body_create_info create_info =
+        erhe::physics::IRigid_body_create_info create_info =
             importer.make_body_create_info(*root, motion, body_shape, body_material, body_filter, false);
+        apply_physics_overrides(create_info, root);
         // The imported subtree arrives pre-attached (like meshes); rigid
         // bodies are created when the insert operation gives the nodes a
         // scene host.
@@ -642,8 +662,9 @@ void import_gltf_physics(
             continue;
         }
 
-        const erhe::physics::IRigid_body_create_info create_info =
+        erhe::physics::IRigid_body_create_info create_info =
             importer.make_body_create_info(*node, description.motion, trigger_shape, {}, trigger_filter, true);
+        apply_physics_overrides(create_info, node);
         auto node_physics = std::make_shared<Node_physics>(create_info);
         node->attach(node_physics);
         nodes_with_body.insert(node);
@@ -660,7 +681,7 @@ void import_gltf_physics(
         if (nodes_with_body.contains(node)) {
             continue;
         }
-        const erhe::physics::IRigid_body_create_info create_info = importer.make_body_create_info(
+        erhe::physics::IRigid_body_create_info create_info = importer.make_body_create_info(
             *node,
             description.motion,
             erhe::physics::ICollision_shape::create_empty_shape_shared(),
@@ -668,6 +689,7 @@ void import_gltf_physics(
             {},
             false
         );
+        apply_physics_overrides(create_info, node);
         auto node_physics = std::make_shared<Node_physics>(create_info);
         node->attach(node_physics);
         nodes_with_body.insert(node);

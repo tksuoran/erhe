@@ -1163,14 +1163,23 @@ auto save_scene(
         // are intentionally NOT exported here: load_scene does not consume
         // them (node identity does not map), and .erhescene is on its way
         // out (doc/gltf-scene-roundtrip-plan.md).
-        const std::string glb_data = erhe::gltf::export_gltf(
-            erhe::gltf::Gltf_export_arguments{
-                .root_node             = *root_node,
-                .binary                = true,
-                .external_assets       = collect_prefab_external_assets(*root_node, scene_dir),
-                .image_source_provider = make_gltf_image_source_provider(scene_root.get_content_library())
+        erhe::gltf::Gltf_export_arguments export_arguments{
+            .root_node             = *root_node,
+            .binary                = true,
+            .external_assets       = collect_prefab_external_assets(*root_node, scene_dir),
+            .image_source_provider = make_gltf_image_source_provider(scene_root.get_content_library())
+        };
+        // Graph-mesh-controlled meshes are baked artifacts skipped in the
+        // mesh_references pass above; exclude them from data.glb too so its
+        // mesh indices stay consistent with the item_index values written
+        // there (they used to leak in, shifting every later index).
+        for (const auto& node : flat_nodes) {
+            const auto graph_mesh_attachment = erhe::scene::get_attachment<Geometry_graph_mesh>(node.get());
+            if (graph_mesh_attachment && graph_mesh_attachment->get_controlled_mesh()) {
+                export_arguments.excluded_meshes.insert(graph_mesh_attachment->get_controlled_mesh().get());
             }
-        );
+        }
+        const std::string glb_data = erhe::gltf::export_gltf(export_arguments);
         if (!erhe::file::write_file(glb_path, glb_data)) {
             log_parsers->error("save_scene: failed to write glb: {}", glb_path.string());
             return false;

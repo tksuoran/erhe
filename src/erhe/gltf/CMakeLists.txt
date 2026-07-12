@@ -3,6 +3,8 @@ add_library(${_target})
 add_library(erhe::gltf ALIAS ${_target})
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+    erhe_gltf/gltf_item_flags.cpp
+    erhe_gltf/gltf_item_flags.hpp
     erhe_gltf/gltf_log.cpp
     erhe_gltf/gltf_log.hpp
     erhe_gltf/gltf_physics.hpp

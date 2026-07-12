@@ -11,6 +11,9 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace erhe::geometry {
@@ -210,6 +213,33 @@ public:
     std::map<std::pair<const erhe::scene::Mesh*, std::size_t>, std::string> mesh_primitives; // (mesh, primitive index)
 };
 
+// An extra glTF mesh to export that no node references, carrying one
+// geometry-normative primitive (the ERHE_geometry accessor/dump path).
+// Used by the editor for brush geometry (doc/gltf-scene-roundtrip-plan.md
+// phase 3, ERHE_brushes).
+class Gltf_export_extra_mesh
+{
+public:
+    std::string                                name;
+    std::shared_ptr<erhe::geometry::Geometry>  geometry;
+    std::shared_ptr<erhe::primitive::Material> material; // optional primitive material
+};
+
+// glTF indices assigned during export, handed to asset_extensions_builder
+// so asset-root extension payloads (ERHE_brushes, ERHE_node_graphs,
+// ERHE_collections) can reference exported objects by index - the indices
+// only exist once the export passes have run.
+class Gltf_export_index_lookup
+{
+public:
+    std::unordered_map<const erhe::scene::Node*, std::size_t>         node_indices;
+    std::unordered_map<const erhe::primitive::Material*, std::size_t> material_indices;
+    std::unordered_map<const erhe::scene::Mesh*, std::size_t>         mesh_indices;
+    // Parallels Gltf_export_arguments::extra_meshes; nullopt for entries
+    // that could not be exported (missing geometry).
+    std::vector<std::optional<std::size_t>>                           extra_mesh_indices;
+};
+
 class Gltf_export_arguments
 {
 public:
@@ -238,6 +268,18 @@ public:
     // Extension names to declare in the asset's extensionsUsed (for the
     // extension_payloads above).
     std::vector<std::string> extensions_used;
+    // Mesh attachments to skip in the node pass (the node exports without
+    // its mesh): baked artifacts that are rebuilt on load, e.g. graph-mesh
+    // controlled meshes (doc/gltf-scene-roundtrip-plan.md phase 3
+    // exclusion hook).
+    std::unordered_set<const erhe::scene::Mesh*> excluded_meshes;
+    // Extra unreferenced meshes to export (see Gltf_export_extra_mesh).
+    std::vector<Gltf_export_extra_mesh> extra_meshes;
+    // Called after all objects are emitted (glTF indices known); returns
+    // (extension name, extension JSON value) pairs to attach to the asset
+    // root, e.g. ("ERHE_brushes", "{\"brushes\":[...]}"). Each returned
+    // name is declared in extensionsUsed automatically.
+    std::function<std::vector<std::pair<std::string, std::string>>(const Gltf_export_index_lookup&)> asset_extensions_builder;
 };
 
 [[nodiscard]] auto export_gltf(const Gltf_export_arguments& arguments) -> std::string;

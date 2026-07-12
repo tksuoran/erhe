@@ -1,0 +1,50 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "ERHE_layout.schema.json",
+    "title": "ERHE_layout glTF node extension",
+    "type": "object",
+    "$defs": {
+        "vec3":  {"type": "array", "items": {"type": "number"},  "minItems": 3, "maxItems": 3},
+        "ivec3": {"type": "array", "items": {"type": "integer"}, "minItems": 3, "maxItems": 3},
+        "axis_direction": {"type": "string", "enum": ["pos_x", "neg_x", "pos_y", "neg_y", "pos_z", "neg_z"]},
+        "alignment": {"type": "string", "enum": ["negative", "positive", "stretch"]}
+    },
+    "properties": {
+        "layout": {
+            "type": "object",
+            "properties": {
+                "name":                {"type": "string"},
+                "type":                {"type": "string", "enum": ["stack", "grid", "flow"]},
+                "volume_min":          {"$ref": "#/$defs/vec3"},
+                "volume_max":          {"$ref": "#/$defs/vec3"},
+                "primary":             {"$ref": "#/$defs/axis_direction"},
+                "secondary":           {"$ref": "#/$defs/axis_direction"},
+                "tertiary":            {"$ref": "#/$defs/axis_direction"},
+                "gap":                 {"$ref": "#/$defs/vec3"},
+                "grid_track_count":    {"$ref": "#/$defs/ivec3"},
+                "grid_track_extent_x": {"type": "array", "items": {"type": "number"}},
+                "grid_track_extent_y": {"type": "array", "items": {"type": "number"}},
+                "grid_track_extent_z": {"type": "array", "items": {"type": "number"}},
+                "flags":               {"type": "array", "items": {"type": "string"}}
+            },
+            "required": ["type"]
+        },
+        "layout_item": {
+            "type": "object",
+            "properties": {
+                "name":           {"type": "string"},
+                "align":          {"type": "array", "items": {"$ref": "#/$defs/alignment"}, "minItems": 3, "maxItems": 3},
+                "margin_min":     {"$ref": "#/$defs/vec3"},
+                "margin_max":     {"$ref": "#/$defs/vec3"},
+                "grid_cell_auto": {"type": "boolean"},
+                "grid_cell":      {"$ref": "#/$defs/ivec3"},
+                "grid_span":      {"$ref": "#/$defs/ivec3"},
+                "flags":          {"type": "array", "items": {"type": "string"}}
+            }
+        }
+    },
+    "anyOf": [
+        {"required": ["layout"]},
+        {"required": ["layout_item"]}
+    ]
+}

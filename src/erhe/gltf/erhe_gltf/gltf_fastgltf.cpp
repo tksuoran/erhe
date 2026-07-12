@@ -1,6 +1,7 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "gltf_fastgltf.hpp"
+#include "gltf_item_flags.hpp"
 #include "gltf_log.hpp"
 #include "image_transfer.hpp"
 
@@ -397,55 +398,8 @@ constexpr Serialized_item_flag c_serialized_item_flags[] = {
     return mask;
 }
 
-// The persistent (authored) Item flags serialized by name in ERHE_*
-// extensions (doc/gltf-scene-roundtrip-plan.md phase 3). Names, never raw
-// bit values: bit positions are not stable across erhe versions; unknown
-// names are ignored on load so the set can grow. Transient presentation
-// state (selected, hovered_*, negative_determinant, affects_shadow) and
-// the structurally handled import_root are deliberately absent.
-constexpr Serialized_item_flag c_persistent_item_flags[] = {
-    { erhe::Item_flags::no_message,                "no_message"                },
-    { erhe::Item_flags::no_transform_update,       "no_transform_update"       },
-    { erhe::Item_flags::transform_world_normative, "transform_world_normative" },
-    { erhe::Item_flags::show_in_ui,                "show_in_ui"                },
-    { erhe::Item_flags::show_debug_visualizations, "show_debug_visualizations" },
-    { erhe::Item_flags::shadow_cast,               "shadow_cast"               },
-    { erhe::Item_flags::lock_viewport_selection,   "lock_viewport_selection"   },
-    { erhe::Item_flags::lock_viewport_transform,   "lock_viewport_transform"   },
-    { erhe::Item_flags::visible,                   "visible"                   },
-    { erhe::Item_flags::invisible_parent,          "invisible_parent"          },
-    { erhe::Item_flags::render_wireframe,          "render_wireframe"          },
-    { erhe::Item_flags::render_bounding_volume,    "render_bounding_volume"    },
-    { erhe::Item_flags::content,                   "content"                   },
-    { erhe::Item_flags::id,                        "id"                        },
-    { erhe::Item_flags::tool,                      "tool"                      },
-    { erhe::Item_flags::brush,                     "brush"                     },
-    { erhe::Item_flags::controller,                "controller"                },
-    { erhe::Item_flags::rendertarget,              "rendertarget"              },
-    { erhe::Item_flags::expand,                    "expand"                    },
-    { erhe::Item_flags::lock_edit,                 "lock_edit"                 },
-    { erhe::Item_flags::show_in_developer_ui,      "show_in_developer_ui"      },
-    { erhe::Item_flags::exclude_from_prefab,       "exclude_from_prefab"       }
-};
-
-// JSON array of persistent flag names for the set bits, e.g.
-// ["visible","content"].
-[[nodiscard]] auto persistent_flags_to_json(const uint64_t flag_bits) -> std::string
-{
-    std::string out{"["};
-    const char* separator = "";
-    for (const Serialized_item_flag& flag : c_persistent_item_flags) {
-        if ((flag_bits & flag.bit) != 0) {
-            out += separator;
-            out += '"';
-            out += flag.name;
-            out += '"';
-            separator = ",";
-        }
-    }
-    out += "]";
-    return out;
-}
+// The persistent (authored) Item flag helpers live in gltf_item_flags.{hpp,cpp}
+// (shared with the editor-domain extension builders, e.g. ERHE_layout).
 
 // erhe::scene::Projection::Type <-> ERHE_camera projection_type string.
 [[nodiscard]] auto projection_type_name(const erhe::scene::Projection::Type type) -> const char*
@@ -490,19 +444,9 @@ void apply_persistent_flags(erhe::Item_base& item, const simdjson::dom::array& f
         if (flag_element.get_string().get(flag_name) != simdjson::SUCCESS) {
             continue;
         }
-        for (const Serialized_item_flag& flag : c_persistent_item_flags) {
-            if (flag_name == flag.name) {
-                listed_bits |= flag.bit;
-            }
-        }
+        listed_bits |= persistent_item_flag_from_name(flag_name);
     }
-    for (const Serialized_item_flag& flag : c_persistent_item_flags) {
-        if ((listed_bits & flag.bit) != 0) {
-            item.enable_flag_bits(flag.bit);
-        } else {
-            item.disable_flag_bits(flag.bit);
-        }
-    }
+    apply_persistent_item_flags(item, listed_bits);
 }
 
 [[nodiscard]] auto is_number(std::string_view s) -> bool
@@ -4063,6 +4007,42 @@ private:
     // into the extensions write callback context in export_gltf().
     std::map<std::pair<std::size_t, std::size_t>, std::string> m_geometry_primitive_extensions;
 
+    // Extra unreferenced meshes (doc/gltf-scene-roundtrip-plan.md phase 3):
+    // one glTF mesh with one geometry-normative primitive each, exported
+    // through the ERHE_geometry path. Used for brush geometry; the caller's
+    // asset_extensions_builder resolves the resulting mesh indices via
+    // Gltf_export_index_lookup::extra_mesh_indices.
+    std::vector<std::optional<std::size_t>> m_extra_mesh_indices;
+    void process_extra_meshes()
+    {
+        m_extra_mesh_indices.resize(m_arguments.extra_meshes.size());
+        for (std::size_t i = 0, end = m_arguments.extra_meshes.size(); i < end; ++i) {
+            const Gltf_export_extra_mesh& extra_mesh = m_arguments.extra_meshes[i];
+            if (!extra_mesh.geometry) {
+                log_gltf->warn("glTF export: extra mesh '{}' has no geometry - skipped", extra_mesh.name);
+                continue;
+            }
+            Export_entry export_entry = process_geometry(extra_mesh.geometry.get());
+            fastgltf::Mesh gltf_mesh{};
+            gltf_mesh.name = extra_mesh.name;
+            fastgltf::Primitive gltf_primitive;
+            for (const fastgltf::Attribute& attribute : export_entry.attributes) {
+                gltf_primitive.attributes.emplace_back(attribute.name, attribute.accessorIndex);
+            }
+            gltf_primitive.indicesAccessor = export_entry.index_buffer_accessor;
+            if (extra_mesh.material) {
+                gltf_primitive.materialIndex = process_material(extra_mesh.material.get());
+            }
+            gltf_mesh.primitives.emplace_back(std::move(gltf_primitive));
+            const std::size_t gltf_mesh_index = m_gltf_asset.meshes.size();
+            m_gltf_asset.meshes.emplace_back(std::move(gltf_mesh));
+            if (!export_entry.erhe_geometry_extension.empty()) {
+                m_geometry_primitive_extensions[{gltf_mesh_index, 0}] = export_entry.erhe_geometry_extension;
+            }
+            m_extra_mesh_indices[i] = gltf_mesh_index;
+        }
+    }
+
     std::unordered_map<const erhe::scene::Camera*, std::size_t> m_erhe_camera_to_gltf_camera_index;
     [[nodiscard]] auto process_camera(erhe::scene::Camera* erhe_camera) -> std::size_t
     {
@@ -4185,7 +4165,7 @@ private:
             projection.ortho_left, projection.ortho_width, projection.ortho_bottom, projection.ortho_height,
             projection.frustum_left, projection.frustum_right, projection.frustum_bottom, projection.frustum_top,
             erhe_camera.get_exposure(), erhe_camera.get_shadow_range(),
-            persistent_flags_to_json(erhe_camera.get_flag_bits())
+            persistent_item_flags_to_json(erhe_camera.get_flag_bits())
         );
         m_internal_camera_extensions.emplace(gltf_camera_index, std::move(members));
     }
@@ -4657,10 +4637,10 @@ private:
     {
         std::string members = fmt::format(
             "\"ERHE_node\":{{\"flags\":{}",
-            persistent_flags_to_json(erhe_node.get_flag_bits())
+            persistent_item_flags_to_json(erhe_node.get_flag_bits())
         );
         if (erhe_mesh) {
-            members += fmt::format(",\"mesh_flags\":{}", persistent_flags_to_json(erhe_mesh->get_flag_bits()));
+            members += fmt::format(",\"mesh_flags\":{}", persistent_item_flags_to_json(erhe_mesh->get_flag_bits()));
         }
         members += "}";
         if (erhe_light) {
@@ -4668,7 +4648,7 @@ private:
                 ",\"ERHE_light\":{{\"cast_shadow\":{},\"infinite_range\":{},\"flags\":{}}}",
                 erhe_light->cast_shadow ? "true" : "false",
                 (erhe_light->range <= 0.0f) ? "true" : "false",
-                persistent_flags_to_json(erhe_light->get_flag_bits())
+                persistent_item_flags_to_json(erhe_light->get_flag_bits())
             );
         }
         m_internal_node_extensions.emplace(gltf_node_index, std::move(members));
@@ -4747,7 +4727,14 @@ private:
             return gltf_external_node_index;
         }
 
-        const std::shared_ptr<erhe::scene::Mesh> erhe_mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(&erhe_node);
+        // Exclusion hook (doc/gltf-scene-roundtrip-plan.md phase 3): an
+        // excluded mesh is a baked artifact rebuilt on load (graph-mesh
+        // controlled) - the node exports without it (no glTF mesh, no
+        // mesh_flags, no skin).
+        std::shared_ptr<erhe::scene::Mesh> erhe_mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(&erhe_node);
+        if (erhe_mesh && m_arguments.excluded_meshes.contains(erhe_mesh.get())) {
+            erhe_mesh.reset();
+        }
         if (erhe_mesh) {
             gltf_node.meshIndex = process_mesh(erhe_mesh.get());
         }
@@ -5226,6 +5213,10 @@ auto Gltf_exporter::export_gltf() -> std::string
     }
 #endif
 
+    // After the node and physics passes so the extra meshes land last in
+    // the meshes array (deterministic indices for ERHE_brushes).
+    process_extra_meshes();
+
     // After the node pass (indices resolved), before combine_buffers()
     // (both add buffers).
     process_skins();
@@ -5344,6 +5335,24 @@ auto Gltf_exporter::export_gltf() -> std::string
         }
         for (const auto& [index, extension_members] : m_internal_material_extensions) {
             merge_extension_members(export_extras_context.material_extensions[index], extension_members);
+        }
+        // Asset-root extension payloads built against the now-known glTF
+        // indices (doc/gltf-scene-roundtrip-plan.md phase 3: ERHE_brushes,
+        // ERHE_node_graphs, ERHE_collections).
+        if (m_arguments.asset_extensions_builder) {
+            Gltf_export_index_lookup index_lookup{};
+            index_lookup.node_indices       = m_erhe_node_to_gltf_node_index;
+            index_lookup.material_indices   = m_exported_materials;
+            index_lookup.mesh_indices       = m_erhe_mesh_to_gltf_mesh_index;
+            index_lookup.extra_mesh_indices = m_extra_mesh_indices;
+            const std::vector<std::pair<std::string, std::string>> asset_entries = m_arguments.asset_extensions_builder(index_lookup);
+            for (const auto& [extension_name, extension_json] : asset_entries) {
+                merge_extension_members(
+                    export_extras_context.asset_extensions,
+                    fmt::format("\"{}\":{}", extension_name, extension_json)
+                );
+                declare_extension_used(extension_name);
+            }
         }
         if (!m_geometry_primitive_extensions.empty()) {
             declare_extension_used("ERHE_geometry");

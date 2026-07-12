@@ -11,6 +11,9 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace erhe::geometry {
@@ -164,6 +167,23 @@ public:
     std::map<std::pair<const erhe::scene::Mesh*, std::size_t>, std::string> mesh_primitives;
 };
 
+class Gltf_export_extra_mesh
+{
+public:
+    std::string                                name;
+    std::shared_ptr<erhe::geometry::Geometry>  geometry;
+    std::shared_ptr<erhe::primitive::Material> material;
+};
+
+class Gltf_export_index_lookup
+{
+public:
+    std::unordered_map<const erhe::scene::Node*, std::size_t>         node_indices;
+    std::unordered_map<const erhe::primitive::Material*, std::size_t> material_indices;
+    std::unordered_map<const erhe::scene::Mesh*, std::size_t>         mesh_indices;
+    std::vector<std::optional<std::size_t>>                           extra_mesh_indices;
+};
+
 class Gltf_export_arguments
 {
 public:
@@ -175,6 +195,9 @@ public:
     std::vector<std::shared_ptr<erhe::scene::Animation>> animations;
     Gltf_export_extension_payloads extension_payloads;
     std::vector<std::string> extensions_used;
+    std::unordered_set<const erhe::scene::Mesh*> excluded_meshes;
+    std::vector<Gltf_export_extra_mesh> extra_meshes;
+    std::function<std::vector<std::pair<std::string, std::string>>(const Gltf_export_index_lookup&)> asset_extensions_builder;
 };
 
 [[nodiscard]] auto export_gltf(const Gltf_export_arguments& arguments) -> std::string;

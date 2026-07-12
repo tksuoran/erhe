@@ -1,0 +1,32 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "ERHE_geometry.schema.json",
+    "title": "ERHE_geometry glTF mesh primitive extension",
+    "type": "object",
+    "properties": {
+        "vertex_count":         {"type": "integer", "minimum": 0},
+        "facet_count":          {"type": "integer", "minimum": 0},
+        "corner_count":         {"type": "integer", "minimum": 0},
+        "edge_count":           {"type": "integer", "minimum": 0},
+        "facet_vertex_counts":  {"type": "integer", "minimum": 0, "description": "Accessor index: vertices per facet"},
+        "facet_vertex_indices": {"type": "integer", "minimum": 0, "description": "Accessor index: flat corner-to-vertex ids in facet-corner order"},
+        "edge_vertices":        {"type": "integer", "minimum": 0, "description": "Accessor index: vertex id pairs per edge"},
+        "attributes": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name":         {"type": "string"},
+                    "element":      {"type": "string", "enum": ["mesh", "facet", "vertex", "corner", "edge"]},
+                    "element_type": {"type": "string"},
+                    "element_size": {"type": "integer", "minimum": 1},
+                    "dimension":    {"type": "integer", "minimum": 1},
+                    "item_count":   {"type": "integer", "minimum": 0},
+                    "buffer_view":  {"type": "integer", "minimum": 0}
+                },
+                "required": ["name", "element", "element_type", "element_size", "dimension", "item_count", "buffer_view"]
+            }
+        }
+    },
+    "required": ["vertex_count", "facet_count", "corner_count", "edge_count", "facet_vertex_counts", "facet_vertex_indices", "attributes"]
+}

@@ -1,0 +1,17 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "ERHE_physics.schema.json",
+    "title": "ERHE_physics glTF node extension",
+    "type": "object",
+    "properties": {
+        "motion_mode": {
+            "type": "string",
+            "enum": ["static", "kinematic_non_physical", "kinematic_physical", "dynamic"]
+        },
+        "friction":        {"type": "number"},
+        "restitution":     {"type": "number"},
+        "linear_damping":  {"type": "number"},
+        "angular_damping": {"type": "number"}
+    },
+    "required": ["motion_mode", "friction", "restitution", "linear_damping", "angular_damping"]
+}
