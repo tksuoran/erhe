@@ -86,11 +86,13 @@ auto Mcp_server::query_scene_nodes(const json& args) -> std::string
             {"name",             node->get_name()},
             {"id",               node->get_id()},
             {"parent",           parent_node ? parent_node->get_name() : ""},
+            {"parent_id",        parent_node ? json(parent_node->get_id()) : json()},
             {"position",         {t.x, t.y, t.z}},
             {"rotation_xyzw",    {r.x, r.y, r.z, r.w}},
             {"scale",            {s.x, s.y, s.z}},
             {"attachment_types", attachment_types},
             {"locked",           node->is_lock_edit()},
+            {"import_root",      (node->get_flag_bits() & erhe::Item_flags::import_root) != 0},
             {"tags",             tags_arr}
         });
     }
