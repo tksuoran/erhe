@@ -69,6 +69,12 @@ public:
     std::string            mime_type;
 };
 
+class Gltf_raw_extensions
+{
+public:
+    std::vector<std::pair<std::string, std::string>> entries;
+};
+
 class Gltf_data
 {
 public:
@@ -88,6 +94,14 @@ public:
     std::vector<Gltf_file_reference>        files;
     std::vector<Gltf_external_asset>        external_assets;
     std::vector<std::optional<std::size_t>> node_external_assets;
+
+    Gltf_raw_extensions                           asset_extensions;
+    Gltf_raw_extensions                           scene_extensions;
+    std::vector<Gltf_raw_extensions>              node_extensions;
+    std::vector<Gltf_raw_extensions>              camera_extensions;
+    std::vector<Gltf_raw_extensions>              material_extensions;
+    std::vector<Gltf_raw_extensions>              mesh_extensions;
+    std::vector<std::vector<Gltf_raw_extensions>> mesh_primitive_extensions;
 };
 
 class Gltf_scan
@@ -138,6 +152,18 @@ public:
     std::string name;
 };
 
+class Gltf_export_extension_payloads
+{
+public:
+    std::string                                                             asset;
+    std::string                                                             scene;
+    std::map<const erhe::scene::Node*, std::string>                         nodes;
+    std::map<const erhe::scene::Camera*, std::string>                       cameras;
+    std::map<const erhe::primitive::Material*, std::string>                 materials;
+    std::map<const erhe::scene::Mesh*, std::string>                         meshes;
+    std::map<std::pair<const erhe::scene::Mesh*, std::size_t>, std::string> mesh_primitives;
+};
+
 class Gltf_export_arguments
 {
 public:
@@ -147,6 +173,8 @@ public:
     std::map<const erhe::scene::Node*, Gltf_export_external_asset> external_assets;
     std::function<std::shared_ptr<const Gltf_image_source>(const erhe::graphics::Texture*)> image_source_provider;
     std::vector<std::shared_ptr<erhe::scene::Animation>> animations;
+    Gltf_export_extension_payloads extension_payloads;
+    std::vector<std::string> extensions_used;
 };
 
 [[nodiscard]] auto export_gltf(const Gltf_export_arguments& arguments) -> std::string;

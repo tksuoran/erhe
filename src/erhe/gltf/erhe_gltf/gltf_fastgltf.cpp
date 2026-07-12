@@ -48,6 +48,7 @@
 #include <limits>
 #include <optional>
 #include <span>
+#include <sstream>
 #include <string_view>
 #include <string>
 #include <variant>
@@ -2443,17 +2444,67 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
     // Collect erhe-specific extras during parsing. The parser callback
     // runs before parse_material() / parse_node(), so we accumulate into
     // per-index maps and replay each field after the standard glTF parse
-    // completes.
+    // completes. The same context also captures ERHE_* extension payloads
+    // through the generic passthrough (both callbacks share userPointer).
     class Parse_extras_context
     {
     public:
         std::unordered_map<std::size_t, Material_extras> material_extras;
         std::unordered_map<std::size_t, uint64_t>        node_flags; // serialized erhe Item flags (c_serialized_item_flags)
+
+        // Captured ERHE_* extension payloads, keyed by the future object
+        // index (the callback fires before each object is appended).
+        Gltf_raw_extensions                                      asset_extensions;
+        std::vector<std::pair<std::size_t, Gltf_raw_extensions>> scene_extensions;
+        std::vector<std::pair<std::size_t, Gltf_raw_extensions>> node_extensions;
+        std::vector<std::pair<std::size_t, Gltf_raw_extensions>> camera_extensions;
+        std::vector<std::pair<std::size_t, Gltf_raw_extensions>> material_extensions;
+        std::vector<std::pair<std::size_t, Gltf_raw_extensions>> mesh_extensions;
+        std::vector<std::pair<std::pair<std::size_t, std::size_t>, Gltf_raw_extensions>> mesh_primitive_extensions;
     };
     Parse_extras_context parse_extras_context;
 
     fastgltf::Parser fastgltf_parser{extensions};
     fastgltf_parser.setUserPointer(&parse_extras_context);
+    fastgltf_parser.setExtensionsParseCallback(
+        [](simdjson::dom::object* extensions_object, std::size_t object_index, std::size_t sub_object_index, fastgltf::Category object_type, void* user_pointer) {
+            if (extensions_object == nullptr) {
+                return;
+            }
+            Parse_extras_context* context = static_cast<Parse_extras_context*>(user_pointer);
+            Gltf_raw_extensions captured;
+            for (const simdjson::dom::key_value_pair& field : *extensions_object) {
+                const std::string_view key = field.key;
+                if (!key.starts_with("ERHE_")) {
+                    continue; // typed extensions keep their typed paths
+                }
+                std::ostringstream json_stream;
+                json_stream << field.value; // simdjson dom streaming emits minified JSON
+                captured.entries.emplace_back(std::string{key}, json_stream.str());
+            }
+            if (captured.entries.empty()) {
+                return;
+            }
+            switch (object_type) {
+                case fastgltf::Category::Asset:     context->asset_extensions = std::move(captured); break;
+                case fastgltf::Category::Scenes:    context->scene_extensions   .emplace_back(object_index, std::move(captured)); break;
+                case fastgltf::Category::Nodes:     context->node_extensions    .emplace_back(object_index, std::move(captured)); break;
+                case fastgltf::Category::Cameras:   context->camera_extensions  .emplace_back(object_index, std::move(captured)); break;
+                case fastgltf::Category::Materials: context->material_extensions.emplace_back(object_index, std::move(captured)); break;
+                case fastgltf::Category::Meshes: {
+                    if (sub_object_index == fastgltf::invalidSubObjectIndex) {
+                        context->mesh_extensions.emplace_back(object_index, std::move(captured));
+                    } else {
+                        context->mesh_primitive_extensions.emplace_back(std::make_pair(object_index, sub_object_index), std::move(captured));
+                    }
+                    break;
+                }
+                default: {
+                    break;
+                }
+            }
+        }
+    );
     fastgltf_parser.setExtrasParseCallback(
         [](simdjson::dom::object* extras, std::size_t object_index, fastgltf::Category object_type, void* user_pointer) {
             if (extras == nullptr) {
@@ -2572,6 +2623,54 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
         const std::shared_ptr<erhe::scene::Node>& node = result.nodes[node_index];
         if (node) {
             node->enable_flag_bits(flag_bits);
+        }
+    }
+
+    // Transfer captured ERHE_* extension payloads into Gltf_data (the
+    // per-object vectors parallel the object vectors).
+    {
+        result.asset_extensions = std::move(parse_extras_context.asset_extensions);
+        for (auto& [scene_index, captured] : parse_extras_context.scene_extensions) {
+            if (scene_index == 0) { // only one scene is parsed
+                result.scene_extensions = std::move(captured);
+            }
+        }
+        result.node_extensions.resize(result.nodes.size());
+        for (auto& [index, captured] : parse_extras_context.node_extensions) {
+            if (index < result.node_extensions.size()) {
+                result.node_extensions[index] = std::move(captured);
+            }
+        }
+        result.camera_extensions.resize(result.cameras.size());
+        for (auto& [index, captured] : parse_extras_context.camera_extensions) {
+            if (index < result.camera_extensions.size()) {
+                result.camera_extensions[index] = std::move(captured);
+            }
+        }
+        result.material_extensions.resize(result.materials.size());
+        for (auto& [index, captured] : parse_extras_context.material_extensions) {
+            if (index < result.material_extensions.size()) {
+                result.material_extensions[index] = std::move(captured);
+            }
+        }
+        result.mesh_extensions.resize(result.meshes.size());
+        for (auto& [index, captured] : parse_extras_context.mesh_extensions) {
+            if (index < result.mesh_extensions.size()) {
+                result.mesh_extensions[index] = std::move(captured);
+            }
+        }
+        result.mesh_primitive_extensions.resize(result.meshes.size());
+        for (std::size_t m = 0; m < result.meshes.size(); ++m) {
+            const std::size_t primitive_count = result.meshes[m] ? result.meshes[m]->get_primitives().size() : 0;
+            result.mesh_primitive_extensions[m].resize(primitive_count);
+        }
+        for (auto& [key, captured] : parse_extras_context.mesh_primitive_extensions) {
+            const auto [mesh_index, primitive_index] = key;
+            if ((mesh_index < result.mesh_primitive_extensions.size()) &&
+                (primitive_index < result.mesh_primitive_extensions[mesh_index].size()))
+            {
+                result.mesh_primitive_extensions[mesh_index][primitive_index] = std::move(captured);
+            }
         }
     }
 
@@ -3228,6 +3327,10 @@ private:
     }
 
     std::unordered_map<const erhe::scene::Mesh*, std::size_t> m_erhe_mesh_to_gltf_mesh_index;
+    // erhe primitive index -> exported glTF primitive index (nullopt when
+    // the primitive was skipped); used to place per-primitive extension
+    // payloads.
+    std::unordered_map<const erhe::scene::Mesh*, std::vector<std::optional<std::size_t>>> m_erhe_mesh_primitive_index_map;
     [[nodiscard]] auto process_mesh(const erhe::scene::Mesh* erhe_mesh) -> std::size_t
     {
         ERHE_VERIFY(erhe_mesh != nullptr);
@@ -3239,7 +3342,11 @@ private:
         }
 
         fastgltf::Mesh gltf_mesh{};
-        for (const erhe::scene::Mesh_primitive& erhe_mesh_primitive : erhe_mesh->get_primitives()) {
+        const std::vector<erhe::scene::Mesh_primitive>& erhe_primitives = erhe_mesh->get_primitives();
+        std::vector<std::optional<std::size_t>>& primitive_index_map = m_erhe_mesh_primitive_index_map[erhe_mesh];
+        primitive_index_map.resize(erhe_primitives.size());
+        for (std::size_t primitive_index = 0; primitive_index < erhe_primitives.size(); ++primitive_index) {
+            const erhe::scene::Mesh_primitive& erhe_mesh_primitive = erhe_primitives[primitive_index];
             const erhe::primitive::Primitive& erhe_primitive = *erhe_mesh_primitive.primitive.get();
             fastgltf::Primitive gltf_primitive;
             const erhe::primitive::Primitive_render_shape* primitive_render_shape = erhe_primitive.render_shape.get();
@@ -3262,6 +3369,7 @@ private:
             if (erhe_mesh_primitive.material) {
                 gltf_primitive.materialIndex = process_material(erhe_mesh_primitive.material.get());
             }
+            primitive_index_map[primitive_index] = gltf_mesh.primitives.size();
             gltf_mesh.primitives.emplace_back(std::move(gltf_primitive));
         }
         std::size_t gltf_mesh_index = m_gltf_asset.meshes.size();
@@ -4393,11 +4501,22 @@ auto Gltf_exporter::export_gltf() -> std::string
 
     // Extras write context: gltf material index -> erhe Material* (erhe
     // material extras) and gltf node index -> serialized erhe Item flags.
+    // Also carries the ERHE_* extension payloads (keyed by glTF index) for
+    // the generic extensions write callback; both callbacks share
+    // userPointer.
     class Export_extras_context
     {
     public:
         std::unordered_map<std::size_t, const erhe::primitive::Material*> index_to_material;
         const std::unordered_map<std::size_t, uint64_t>*                  node_index_to_flags{nullptr};
+
+        std::string                                                asset_extensions;
+        std::string                                                scene_extensions;
+        std::unordered_map<std::size_t, std::string>               node_extensions;
+        std::unordered_map<std::size_t, std::string>               camera_extensions;
+        std::unordered_map<std::size_t, std::string>               material_extensions;
+        std::unordered_map<std::size_t, std::string>               mesh_extensions;
+        std::map<std::pair<std::size_t, std::size_t>, std::string> mesh_primitive_extensions;
     };
     Export_extras_context export_extras_context;
     for (const auto& [material_ptr, gltf_index] : m_exported_materials) {
@@ -4405,8 +4524,137 @@ auto Gltf_exporter::export_gltf() -> std::string
     }
     export_extras_context.node_index_to_flags = &m_gltf_node_index_to_flags;
 
+    // Resolve extension payloads from erhe objects to glTF indices; payloads
+    // whose object did not end up in the export are skipped with a warning.
+    {
+        const Gltf_export_extension_payloads& payloads = m_arguments.extension_payloads;
+        export_extras_context.asset_extensions = payloads.asset;
+        export_extras_context.scene_extensions = payloads.scene;
+        for (const auto& [node, payload] : payloads.nodes) {
+            const auto it = m_erhe_node_to_gltf_node_index.find(node);
+            if (it != m_erhe_node_to_gltf_node_index.end()) {
+                export_extras_context.node_extensions[it->second] = payload;
+            } else {
+                log_gltf->warn("glTF export: extension payload for node '{}' outside the exported asset - skipped", node ? node->get_name() : std::string{"<null>"});
+            }
+        }
+        for (const auto& [camera, payload] : payloads.cameras) {
+            const auto it = m_erhe_camera_to_gltf_camera_index.find(camera);
+            if (it != m_erhe_camera_to_gltf_camera_index.end()) {
+                export_extras_context.camera_extensions[it->second] = payload;
+            } else {
+                log_gltf->warn("glTF export: extension payload for camera '{}' outside the exported asset - skipped", camera ? camera->get_name() : std::string{"<null>"});
+            }
+        }
+        for (const auto& [material, payload] : payloads.materials) {
+            const auto it = m_exported_materials.find(material);
+            if (it != m_exported_materials.end()) {
+                export_extras_context.material_extensions[it->second] = payload;
+            } else {
+                log_gltf->warn("glTF export: extension payload for material '{}' outside the exported asset - skipped", material ? material->get_name() : std::string{"<null>"});
+            }
+        }
+        for (const auto& [mesh, payload] : payloads.meshes) {
+            const auto it = m_erhe_mesh_to_gltf_mesh_index.find(mesh);
+            if (it != m_erhe_mesh_to_gltf_mesh_index.end()) {
+                export_extras_context.mesh_extensions[it->second] = payload;
+            } else {
+                log_gltf->warn("glTF export: extension payload for mesh '{}' outside the exported asset - skipped", mesh ? mesh->get_name() : std::string{"<null>"});
+            }
+        }
+        for (const auto& [key, payload] : payloads.mesh_primitives) {
+            const auto& [mesh, erhe_primitive_index] = key;
+            const auto mesh_it = m_erhe_mesh_to_gltf_mesh_index.find(mesh);
+            const auto map_it  = m_erhe_mesh_primitive_index_map.find(mesh);
+            if ((mesh_it == m_erhe_mesh_to_gltf_mesh_index.end()) ||
+                (map_it == m_erhe_mesh_primitive_index_map.end()) ||
+                (erhe_primitive_index >= map_it->second.size()) ||
+                !map_it->second[erhe_primitive_index].has_value())
+            {
+                log_gltf->warn(
+                    "glTF export: extension payload for mesh '{}' primitive {} outside the exported asset - skipped",
+                    mesh ? mesh->get_name() : std::string{"<null>"}, erhe_primitive_index
+                );
+                continue;
+            }
+            export_extras_context.mesh_primitive_extensions[{mesh_it->second, map_it->second[erhe_primitive_index].value()}] = payload;
+        }
+    }
+
+    // Caller-declared extension names (for the payloads above); avoid
+    // duplicates against what the exporter already declared.
+    for (const std::string& extension_name : m_arguments.extensions_used) {
+        bool already_declared = false;
+        for (const auto& existing : m_gltf_asset.extensionsUsed) {
+            if (std::string_view{existing} == std::string_view{extension_name}) {
+                already_declared = true;
+                break;
+            }
+        }
+        if (!already_declared) {
+            m_gltf_asset.extensionsUsed.emplace_back(extension_name.c_str());
+        }
+    }
+
     fastgltf::Exporter exporter{};
     exporter.setUserPointer(&export_extras_context);
+    exporter.setExtensionsWriteCallback(
+        [](std::size_t object_index, std::size_t sub_object_index, fastgltf::Category object_type, void* user_pointer) -> std::optional<std::string> {
+            const Export_extras_context* context = static_cast<const Export_extras_context*>(user_pointer);
+            switch (object_type) {
+                case fastgltf::Category::Asset: {
+                    if (!context->asset_extensions.empty()) {
+                        return context->asset_extensions;
+                    }
+                    return std::nullopt;
+                }
+                case fastgltf::Category::Scenes: {
+                    if ((object_index == 0) && !context->scene_extensions.empty()) {
+                        return context->scene_extensions;
+                    }
+                    return std::nullopt;
+                }
+                case fastgltf::Category::Nodes: {
+                    const auto it = context->node_extensions.find(object_index);
+                    if (it != context->node_extensions.end()) {
+                        return it->second;
+                    }
+                    return std::nullopt;
+                }
+                case fastgltf::Category::Cameras: {
+                    const auto it = context->camera_extensions.find(object_index);
+                    if (it != context->camera_extensions.end()) {
+                        return it->second;
+                    }
+                    return std::nullopt;
+                }
+                case fastgltf::Category::Materials: {
+                    const auto it = context->material_extensions.find(object_index);
+                    if (it != context->material_extensions.end()) {
+                        return it->second;
+                    }
+                    return std::nullopt;
+                }
+                case fastgltf::Category::Meshes: {
+                    if (sub_object_index == fastgltf::invalidSubObjectIndex) {
+                        const auto it = context->mesh_extensions.find(object_index);
+                        if (it != context->mesh_extensions.end()) {
+                            return it->second;
+                        }
+                        return std::nullopt;
+                    }
+                    const auto it = context->mesh_primitive_extensions.find({object_index, sub_object_index});
+                    if (it != context->mesh_primitive_extensions.end()) {
+                        return it->second;
+                    }
+                    return std::nullopt;
+                }
+                default: {
+                    return std::nullopt;
+                }
+            }
+        }
+    );
     exporter.setExtrasWriteCallback(
         [](std::size_t object_index, fastgltf::Category object_type, void* user_pointer) -> std::optional<std::string> {
             const Export_extras_context* context = static_cast<const Export_extras_context*>(user_pointer);

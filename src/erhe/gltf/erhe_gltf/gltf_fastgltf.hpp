@@ -80,6 +80,18 @@ public:
     std::string            mime_type;     // "image/png", "image/jpeg", ...
 };
 
+// Generic ERHE_* vendor-extension passthrough
+// (doc/gltf-scene-roundtrip-plan.md phases 1 + 3): raw JSON payloads of
+// extensions erhe::gltf has no typed support for, captured per object at
+// parse time. Only `ERHE_`-prefixed extension names are captured; typed
+// extensions (KHR_*, EXT_*) keep their typed paths.
+class Gltf_raw_extensions
+{
+public:
+    // (extension name, minified extension JSON value) pairs.
+    std::vector<std::pair<std::string, std::string>> entries;
+};
+
 class Gltf_data
 {
 public:
@@ -106,6 +118,17 @@ public:
     std::vector<Gltf_file_reference>        files;
     std::vector<Gltf_external_asset>        external_assets;
     std::vector<std::optional<std::size_t>> node_external_assets;
+
+    // Captured ERHE_* extension payloads (see Gltf_raw_extensions). The
+    // per-object vectors parallel the object vectors above;
+    // mesh_primitive_extensions is indexed [mesh][primitive].
+    Gltf_raw_extensions                           asset_extensions;
+    Gltf_raw_extensions                           scene_extensions; // first scene (only one is parsed)
+    std::vector<Gltf_raw_extensions>              node_extensions;
+    std::vector<Gltf_raw_extensions>              camera_extensions;
+    std::vector<Gltf_raw_extensions>              material_extensions;
+    std::vector<Gltf_raw_extensions>              mesh_extensions;
+    std::vector<std::vector<Gltf_raw_extensions>> mesh_primitive_extensions;
 };
 
 class Gltf_scan
@@ -169,6 +192,24 @@ public:
     std::string name;      // externalAssets entry name
 };
 
+// Raw JSON members to splice into exported objects' "extensions" objects
+// (doc/gltf-scene-roundtrip-plan.md phase 3). Each string holds one or more
+// comma-separated members, e.g. R"("ERHE_node":{"flags":["hidden"]})" - no
+// surrounding braces. Keyed by the erhe objects the exporter maps to glTF
+// indices; payloads for objects that do not end up in the export are
+// skipped with a warning.
+class Gltf_export_extension_payloads
+{
+public:
+    std::string                                                             asset;
+    std::string                                                             scene;
+    std::map<const erhe::scene::Node*, std::string>                         nodes;
+    std::map<const erhe::scene::Camera*, std::string>                       cameras;
+    std::map<const erhe::primitive::Material*, std::string>                 materials;
+    std::map<const erhe::scene::Mesh*, std::string>                         meshes;
+    std::map<std::pair<const erhe::scene::Mesh*, std::size_t>, std::string> mesh_primitives; // (mesh, primitive index)
+};
+
 class Gltf_export_arguments
 {
 public:
@@ -191,6 +232,12 @@ public:
     // animations). Channels targeting nodes outside the exported subtree
     // are skipped with a warning.
     std::vector<std::shared_ptr<erhe::scene::Animation>> animations;
+    // ERHE_* extension payloads to attach to exported objects; the caller
+    // must also list each extension name in extensions_used.
+    Gltf_export_extension_payloads extension_payloads;
+    // Extension names to declare in the asset's extensionsUsed (for the
+    // extension_payloads above).
+    std::vector<std::string> extensions_used;
 };
 
 [[nodiscard]] auto export_gltf(const Gltf_export_arguments& arguments) -> std::string;
