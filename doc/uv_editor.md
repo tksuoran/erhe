@@ -166,8 +166,10 @@ the missing piece is almost entirely the 2D editor front-end.
 
 - Scene save/load: geometry-normative meshes serialize the full `GEO::Mesh`
   (all attribute stores, including corner texcoords and any new seam
-  attribute) to `.geogram` files (`scene_serialization.cpp:959-1010`,
-  load at :1337-1370). UV edits therefore persist with no serializer work.
+  attribute) bit-exact through the `ERHE_geometry` glTF extension
+  (`doc/gltf_extensions/ERHE_geometry.md`; process:
+  `doc/scene_serialization.md`). UV edits therefore persist with no
+  serializer work.
 - glTF: import preserves all `TEXCOORD_n` sets; export emits
   `TEXCOORD_{usage_index}`. Material per-sampler UV set
   (`Material_texture_sampler::tex_coord`) imports from glTF including
@@ -490,7 +492,7 @@ faces; pack margin; stretch display (angle vs area).
 | Window pattern | `src/editor/windows/properties.{hpp,cpp}`, registration in `src/editor/editor.cpp` |
 | Command pattern | `src/editor/tools/mesh_component_selection_tool.cpp:373-440` |
 | MCP pattern | `src/editor/mcp/mcp_server.cpp`, `mcp_server_tool_list.cpp`, `mcp_server_mesh_components.cpp` |
-| Persistence | `src/editor/scene/scene_serialization.cpp:932-1010` (geometry `.geogram` files) |
+| Persistence | `ERHE_geometry` glTF extension (bit-exact geogram attribute dump; `doc/gltf_extensions/ERHE_geometry.md`, `doc/scene_serialization.md`) |
 | Material UV set | `src/erhe/primitive/erhe_primitive/material.hpp:34` (`Material_texture_sampler::tex_coord`) |
 
 ## Known constraints and gotchas

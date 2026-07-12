@@ -284,14 +284,16 @@ a loaded graph lays out on a spawn grid). The shared
 graph, and degrades gracefully (an unknown node type or a cyclic link is refused,
 not accepted).
 
-The assets and their bindings persist in the **scene file** (`scene.json`,
-codegen struct version 7 - `src/editor/scene/definitions/scene_file.py`):
-`Graph_texture_data` / `Graph_mesh_data` carry the graph blob;
-`Material_texture_source_data` / `Graph_mesh_binding_data` carry the bindings
-(material slot -> texture asset, scene node id -> mesh asset). Load reconstructs
-the assets, re-resolves the bindings by name / node id (warn + skip on a
-mismatch), and lets the first evaluation re-bake. See
-`src/editor/scene/scene_serialization.cpp`.
+The assets and their bindings persist in the **scene file** (erhe-authored
+`.glb`, `doc/scene_serialization.md`): the root-level `ERHE_node_graphs`
+extension carries `graph_textures` / `graph_meshes` (the embedded node-graph
+JSON) plus `material_bindings` (glTF material index + slot -> texture asset)
+and `node_bindings` (glTF node index -> mesh asset); spec in
+`doc/gltf_extensions/ERHE_node_graphs.md`, writer/reader in
+`src/editor/parsers/gltf_extensions_export.cpp` /
+`gltf_extensions_import.cpp`. Load reconstructs the assets, re-resolves the
+bindings (warn + skip on a mismatch; bindings on materials no mesh references
+are dropped at save with a warning), and lets the first evaluation re-bake.
 
 ---
 
@@ -415,6 +417,7 @@ Wiring: `src/editor/editor.cpp` (window construction),
 `src/editor/windows/editor_windows.cpp` (multi-instance windows, #252),
 `src/editor/scene/scene_root.cpp` (content-library Create menu),
 `src/editor/content_library/content_library.{hpp,cpp}` (asset folders),
-`src/editor/scene/scene_serialization.cpp` + `scene/definitions/scene_file.py`
-(persistence, scene file v7), `src/editor/mcp/mcp_server_graphs.cpp` (MCP tools),
+`src/editor/parsers/gltf_extensions_export.cpp` / `gltf_extensions_import.cpp`
+(persistence, `ERHE_node_graphs` extension - see `doc/scene_serialization.md`),
+`src/editor/mcp/mcp_server_graphs.cpp` (MCP tools),
 `src/erhe/item/erhe_item/item.hpp` (`Item_type` indices 42/43/44).

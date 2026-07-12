@@ -186,22 +186,20 @@ same build pass. Build twice, or the binary is stale.
 
 ### Save / load
 
-- Schema: `Scene_file` (`src/editor/scene/definitions/scene_file.py`, `version=5`):
-  name, enable_physics, scene_settings (added_in=4), ambient_light (added_in=5),
-  nodes, cameras, lights, mesh_references, node_physics,
-  layouts+layout_items, physics_materials/collision_filters/physics_joints/
-  node_joints.
-- Code: `src/editor/scene/scene_serialization.cpp` - `save_scene()` and
-  `load_scene()` (simdjson). Save also calls `erhe::gltf::export_gltf(...)`.
-- On-disk set for one scene: `<name>.json` (this schema), `<name>.glb` (meshes +
-  materials via glTF), `<name>_mesh_*.geogram` (geometry-normative meshes),
-  `<name>_imgui.ini` (window layout).
+(UPDATED after the glTF scene roundtrip work: the `Scene_file` scene.json
+schema and `scene_serialization.{hpp,cpp}` described by earlier revisions of
+this section were removed in phase 5 of `doc/gltf-scene-roundtrip-plan.md`.)
+
+- Scenes persist as a single erhe-authored glTF file (`<name>.glb`); the full
+  process reference is `doc/scene_serialization.md`.
+- The scene codegen unit (`src/editor/scene/definitions/`) now defines only
+  `Scene_settings` and `Gltf_source_reference`.
 - The per-scene settings container landed with #239: `Scene_settings`
-  (codegen struct, `Optional` per overridable group) is stored on `Scene_root`
-  and serialized as the `scene_settings` field (`Scene_file` v4+). Scene-level
-  metadata stays in `Scene_file` (no glTF extras/extensions are used for it);
-  it remains the place to add scene-level fields (precedent: `ambient_light`
-  in v5, issue #240).
+  (codegen struct, `Optional` per overridable group) is stored on
+  `Scene_root` and serialized inside the `ERHE_scene` glTF extension on the
+  scene object (together with `ambient_light` and `enable_physics`,
+  `doc/gltf_extensions/ERHE_scene.md`); that extension is the place to add
+  scene-level fields.
 
 ---
 

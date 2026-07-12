@@ -88,10 +88,16 @@ A surprising amount already exists. Inventory (verified 2026-07-04):
 
 ### Scene save / load
 
-`src/editor/scene/scene_serialization.cpp` persists meshes/materials through a
-companion `.glb` (written with `export_gltf`) plus `Gltf_source_reference`
-entries. **Animations are not serialized at all** -- an imported animation
-exists only for the session. Phase 5 fixes this.
+(SINCE LANDED, differently than planned: the glTF scene roundtrip work made
+the scene file a single erhe-authored `.glb` and `export_gltf` now exports
+every content-library animation, so animations persist with the scene -
+`doc/scene_serialization.md`. The paragraph below describes the state when
+this plan was written.)
+
+`src/editor/scene/scene_serialization.cpp` persisted meshes/materials through
+a companion `.glb` (written with `export_gltf`) plus `Gltf_source_reference`
+entries. Animations were not serialized at all -- an imported animation
+existed only for the session.
 
 ### Playback plumbing (currently a placeholder hack)
 
@@ -433,6 +439,11 @@ handle lines; MCP verifies evaluation after tangent edit.
 
 ### Phase 5: persistence and glTF export
 
+(SUPERSEDED: animation export and scene persistence landed via the glTF
+scene roundtrip - `export_gltf` writes animations and the scene saves as a
+single `.glb`; no codegen struct / scene-file version was needed. See
+`doc/scene_serialization.md`.)
+
 1. `Gltf_exporter` animation output (D6.1).
 2. Scene save/load round-trip via companion glb + `animation_reference.py`
    codegen struct + scene file version bump (D6.2).
@@ -511,7 +522,7 @@ require lossy conversion at both ends.
 | New unit tests | `src/erhe/scene/test/` (new), pattern: `src/erhe/item/test/` |
 | glTF import/export | `src/erhe/gltf/erhe_gltf/gltf_fastgltf.cpp` (`parse_animation`, `Gltf_exporter`) |
 | Editor import attach | `src/editor/parsers/gltf.cpp` |
-| Scene save/load | `src/editor/scene/scene_serialization.cpp`, `src/editor/scene/definitions/*.py` (codegen) |
+| Scene save/load | `src/editor/parsers/gltf.cpp` (`save_scene_gltf` / `open_scene_gltf`; see `doc/scene_serialization.md`) |
 | Player (new) | `src/editor/animation/animation_player.{hpp,cpp}` (new) |
 | Transport UI | `src/editor/animation/timeline_window.{hpp,cpp}` |
 | Editor window | `src/editor/animation/animation_window.{hpp,cpp}` (currently empty placeholders) |

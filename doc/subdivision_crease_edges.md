@@ -105,11 +105,12 @@ Geometry core (`src/erhe/geometry/`):
   Selective subdivision already pins selection-boundary vertices and places
   interface-edge midpoints exactly on the segment - conveniently identical
   to the sharp edge rule.
-- Serialization: geometry-normative meshes are saved as native `.geogram`
-  files with `MESH_ALL_ATTRIBUTES` + `MESH_ALL_ELEMENTS`
-  (`src/editor/scene/scene_serialization.cpp:936-976`), so a per-edge
-  attribute persists for free once it survives to save time. glTF cannot
-  carry it (no edge domain).
+- Serialization: geometry-normative meshes persist the full geogram
+  attribute dump (all elements including edges) bit-exact through the
+  `ERHE_geometry` glTF extension (`doc/gltf_extensions/ERHE_geometry.md`,
+  `doc/scene_serialization.md`), so a per-edge attribute persists for free
+  once it survives to save time. (Core glTF cannot carry it - no edge
+  domain - but the extension's attribute dump can.)
 
 Editor (`src/editor/`):
 

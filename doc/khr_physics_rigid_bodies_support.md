@@ -63,9 +63,11 @@ available for Phase 6 round-trip verification.
   per-node `node.physicsRigidBody`, synthesized collider child nodes (compound triggers
   become node-list triggers over their synthesized children), and pushes both extension
   names into `extensionsUsed` (not extensionsRequired).
-- Call sites: `operations_window.cpp` File > Export and the MCP `export_gltf` tool pass
-  built data; `scene_serialization.cpp` companion-.glb save keeps passing nullptr (scene
-  JSON remains the canonical physics store).
+- Call sites: `operations_window.cpp` File > Export, the MCP `export_gltf` tool, and
+  scene save (`save_scene_gltf` in `parsers/gltf.cpp`) all pass built data - since the
+  glTF scene roundtrip work the scene file itself is the canonical physics store
+  (`doc/scene_serialization.md`; the erhe-specific remainder rides in the `ERHE_physics`
+  node extension).
 - Import folds synthesized children back: dynamic bodies via the motion-root compound fold;
   static synthesized children become individual static bodies (physically equivalent).
 
