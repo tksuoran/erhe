@@ -268,6 +268,16 @@ void Scene::update_node_transforms()
 {
     ERHE_PROFILE_FUNCTION();
 
+    // Worker threads (the editor's async raytrace kickoff and geometry
+    // operations) mutate hosted item state under the Item_host mutex, and
+    // the transform-update attachment callbacks read that state (e.g.
+    // Mesh::handle_node_transform_update() iterates the raytrace primitive
+    // vector that Mesh::update_rt_primitives() clears and rebuilds). Hold
+    // the same mutex so the update cannot interleave with a worker.
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{
+        (m_host != nullptr) ? m_host->item_host_mutex : Item_host::orphan_item_host_mutex
+    };
+
     if (!m_nodes_sorted) {
         sort_transform_nodes();
     }

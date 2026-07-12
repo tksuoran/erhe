@@ -119,14 +119,14 @@ void App_scenes::update_node_transforms()
 {
     ERHE_PROFILE_FUNCTION();
 
+    // Scene::update_node_transforms() locks the scene's Item_host mutex
+    // itself, synchronizing against async workers.
     for (const auto& scene_root : m_scene_roots) {
-        // TODO ? std::lock_guard<std::mutex> scene_lock{scene_root->item_host_mutex};
         scene_root->get_scene().update_node_transforms();
     }
 
     // Not in m_scene_roots
     Scene_root& scene_root = *m_context.tools->get_tool_scene_root().get();
-    // TODO ? std::lock_guard<std::mutex> scene_lock{scene_root.item_host_mutex};
     scene_root.get_hosted_scene()->update_node_transforms();
 }
 
