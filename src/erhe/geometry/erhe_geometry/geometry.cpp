@@ -38,16 +38,19 @@
 #define ERHE_CAPTURE_DELAUNAY_REPRO 0
 
 // Convex-hull backend selector for make_convex_hull():
-//   0 = Geogram parallel 3D Delaunay ("PDEL")  -- default
+//   0 = Geogram sequential 3D Delaunay ("BDEL")  -- default
 //   1 = erhe's own QuickHull (erhe::math::calculate_bounding_convex_hull)
-// PDEL is the default again now that the Geogram lock-free locate_inexact()
-// race is fixed. That race mishandled a concurrently freed tetrahedron (the
-// VERTEX_OF_DELETED_TET assert / out-of-range read in parallel_delaunay_3d.cpp
-// in debug builds, plus a freed-hint livelock once the read was guarded), and
-// triggered on degenerate-but-valid convex-hull inputs such as
-// chamfer(ortho^4(dodecahedron)). The fix ships in the geogram fork pin (see
-// the geogram CPMAddPackage GIT_TAG in the top-level CMakeLists.txt). The
-// QuickHull path is kept behind this define as an alternative / fallback.
+// Geogram Delaunay stayed the default after the Geogram lock-free
+// locate_inexact() race was fixed (that race mishandled a concurrently freed
+// tetrahedron - the VERTEX_OF_DELETED_TET assert / out-of-range read in
+// parallel_delaunay_3d.cpp in debug builds, plus a freed-hint livelock once
+// the read was guarded - and triggered on degenerate-but-valid convex-hull
+// inputs such as chamfer(ortho^4(dodecahedron)); the fix ships in the geogram
+// fork pin, see the geogram CPMAddPackage GIT_TAG in the top-level
+// CMakeLists.txt). The build is now SEQUENTIAL ("BDEL" instead of "PDEL"):
+// PDEL requires that no other geogram threads are running, which erhe cannot
+// guarantee (see doc/geogram.md). The QuickHull path is kept behind this
+// define as an alternative / fallback.
 //
 // https://github.com/BrunoLevy/geogram/issues/367
 #define ERHE_CONVEX_HULL_USE_QUICKHULL 0
@@ -872,14 +875,21 @@ auto make_convex_hull(const GEO::Mesh& source, GEO::Mesh& destination) -> bool
                 points.push_back(static_cast<double>(p[c]));
             }
         }
-        // Parallel 3D Delaunay ("PDEL"). Passing the algorithm to create()
+        // Sequential 3D Delaunay ("BDEL"). Passing the algorithm to create()
         // avoids mutating the process-global "algo:delaunay" CmdLine state.
+        // Sequential on purpose: the parallel variant ("PDEL") requires that no
+        // other geogram threads are running (CellStatusArray::resize asserts
+        // !Process::is_running_threads()), which cannot be guaranteed here -
+        // convex hulls are built both on the main thread (brush previews) and
+        // on async operation workers while other geogram work (parallel_for in
+        // mesh builds) may be in flight (see doc/geogram.md). Hull inputs are
+        // small, so the parallel build bought nothing anyway.
         // NOTE: geogram MUST be built with -ffp-contract=off (see the geogram
         // section of the top-level CMakeLists.txt and doc/intermittent_main_loop_hang.md);
         // otherwise FMA contraction breaks its exact predicates and this call
         // spins forever in locate_inexact() on degenerate input such as a cone's
         // coplanar base ring (ARM-only, intermittent).
-        GEO::Delaunay_var delaunay = GEO::Delaunay::create(GEO::coord_index_t(dim), "PDEL");
+        GEO::Delaunay_var delaunay = GEO::Delaunay::create(GEO::coord_index_t(dim), "BDEL");
         delaunay->set_keeps_infinite(true);
 #if ERHE_CAPTURE_DELAUNAY_REPRO
         write_geogram_delaunay_repro(dim, nb_pts, points);
