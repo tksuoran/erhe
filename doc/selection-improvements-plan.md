@@ -1,6 +1,12 @@
 # Selection improvements plan: per-scene selection
 
-Status: draft, not started.
+Status: IMPLEMENTED (phases 1-5, 2026-07-13; commits 572141cc, 8f1ceb9b,
+a2b85321, 165a73a4, 458dcda1). Headless-verified via the MCP smoke flows
+described per phase; interactive verification (window tints, per-viewport
+gizmo visibility, drags, Ctrl-A / ctrl-click across hierarchy windows) is
+with the user. The gizmo design was revised during implementation from
+per-viewport rebuilding to active-scene binding - see the transform gizmo
+section for the rationale.
 
 ## Problem
 

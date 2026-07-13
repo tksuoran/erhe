@@ -27,3 +27,7 @@
 !Blender-stock-gltf-importer-rejects-2.1{externalAssets-scene}→foreign-tool-checks-use-prefab-free-2.0-save
 !MCP-save_prefab-REMOVED{b1eecef0}→save_scene{path-optional:omitted→source-path||res/editor/scenes/<name>.glb;written-path=loaded-prefab→auto-reload-instances;explicit-path¬re-associates-scene}
 !scene-with-source_path-saves-back-SILENTLY{¬overwrite-modal;open/load-sets-source_path;first-default-dir-save-associates}
+!MCP-select_items-SCOPED-since-per-scene-selection{clears+selects-within-target-scene-only;ids=[]-clears-that-scene-only;activates-target-scene;materials=non-hosted→persist-across-scene-scoped-clears}
+!commands-target-ACTIVE-scene{transform_selection/mesh-ops/Selection.delete→active-scene-selection-only;switch-via-set_active_scene||select_items;get_selection-reports-active_scene+per-item-scene_name}
+!Operation_stack::queue=main-thread-only{async-worker-completions→queue_from_thread;drained-in-update}
+!get_hosted_selection-returns-host-owned-scratch{cleared+refilled-per-call→copy-before-next-call-with-same-host}
