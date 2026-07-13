@@ -5,6 +5,10 @@
 ?PENDING::viewport+post_processing{init-consumed¬applied→needs-per-scene-refactor}+clear_color{editor-global-never-read→decide-wire||drop}+sky/grid-override-visual-verify
 
 [NOTES]
+!library-items-HOSTED-since-99998e3d{material/brush/graph-asset/physics-item->get_item_host()=owning-Scene_root;prefab-shared-items+not-in-library=null-host;get_hosting_scene_root(item)-helper}
+!Content_library-add-claims-host{ERHE_VERIFY-¬already-owned-elsewhere}→listing-item-owned-by-another-library-needs-add_reference{is_reference-entry;precedent:material_preview+prefab-paths}
+!MCP-copy_library_item{item_name+source_scene+target_scene;material/brush/physics-types;textures/graph-assets-not-copyable;"(N)"-suffix;¬undoable}
+!MCP-place_brush-takes-brush_id{¬brush_name;get_scene_brushes-for-ids;ids-differ-per-scene-since-brush-copies}
 !¬get_type_name-in-Item-derived{clashes-erhe::Item-virtual→C2555}→factory_type_name
 !¬ImGui-popups-inside-ax-NodeEditor-canvas→steppers
 !¬mutate-upstream-shared-Geometry→copy-first{copy_with_transform+identity}
