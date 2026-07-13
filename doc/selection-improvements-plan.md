@@ -122,35 +122,33 @@ Multi-scene selection thus remains possible and intentional (ctrl-click in a
 second scene ADDS), but a scene's selection is never collateral damage of
 working in another scene.
 
-### Transform gizmo: per-viewport, single-scene
+### Transform gizmo: bound to the active scene (implemented)
 
-The gizmo becomes a function of the viewport it appears in:
+Implementation note (revised from the earlier per-viewport-rebuild idea):
+`shared.entries` / `world_from_anchor` are consumed outside rendering too
+(numeric edits, MCP `transform_selection`, undo recording), so making them
+view-dependent within a frame would make those consumers depend on render
+order. Instead the gizmo binds to the ACTIVE scene - the same state commands
+target and the UI highlights - which the user controls via selection and
+window focus:
 
-- In each viewport, the gizmo anchors to and shows handles for THAT viewport's
-  scene bucket only (`scene_view->get_scene_root()->get_selection()`, node
-  filter as today). Two viewports showing two scenes each get their own gizmo
-  over their own selection. Anchor averaging is then always within one world
-  space.
-- Idle refresh: `Transform_tool::update_for_view(Scene_view*)` (already called
-  per rendered view) rebuilds anchor + `shared.entries` from the view's scene
-  bucket before that view's tool render. A viewport whose scene has no
-  selected nodes renders no gizmo.
-- Drag: `Transform_tool_drag_command::try_ready` captures the hovered
-  viewport's scene; entries and anchor are locked to that scene for the whole
-  drag (the existing "do not stomp the anchor mid-edit" guard in
-  `update_for_view` extends to cover this). Only that scene's nodes move; its
+- `update_target_nodes` builds `shared.entries` + anchor from the active
+  scene's bucket (`Selection::get_hosted_selection(active)`); selection in
+  other scenes never feeds the gizmo. Rebinds on `Active_scene_changed`
+  (window-focus activation without a selection change) and on selection
+  changes as before.
+- Per-view visibility: `Transform_tool::update_for_view` (runs once per
+  rendered view - the same flow that already drives the per-view handle
+  scale) tells `Handle_visualizations` whether the view being rendered shows
+  the active scene; handle meshes are shown only there.
+- Hover and drag: `update_hover` reports no handle hover, and
+  `Transform_tool_drag_command::try_ready` refuses, in views of non-active
+  scenes. `tool_render` (cast rays, bounding-box cube lines) draws nothing
+  into such views.
+- A drag therefore only ever moves one scene's nodes, and that scene's
   `item_host_mutex` is the single lock needed - correct by construction.
-- Mesh-component mode (`component_mode`) scopes the same way via the component
-  selection's mesh host.
-- `compute_selection_box` (bounding-box scale gizmo) and the box handles
-  follow the per-view entries automatically.
-
-Note: `shared.entries` / `world_from_anchor` being rebuilt per view during
-idle means their contents are view-dependent within a frame. Audit the
-remaining readers of `shared.entries` (`tool_render` ray rendering, MCP
-`transform_selection`, `Node_transform_operation` undo path) for assumptions
-that entries are stable across a frame; MCP and numeric edits use the active
-scene (below), drags use the drag-captured scene.
+- Numeric edits and MCP `transform_selection` operate on `shared.entries`,
+  i.e. the active scene, deterministically.
 
 ### Active scene
 

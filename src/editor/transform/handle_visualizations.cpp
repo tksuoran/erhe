@@ -345,6 +345,7 @@ void Handle_visualizations::update_mesh_visibility(bool precondition, const std:
 
     const bool visible =
         precondition &&
+        m_view_scene_is_active &&
         (!transform_tool.shared.entries.empty() || transform_tool.shared.component_mode) &&
         show &&
         (

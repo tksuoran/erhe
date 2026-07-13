@@ -192,6 +192,11 @@ Transform_tool::Transform_tool(
             on_selection(message);
         }
     );
+    m_active_scene_subscription = app_message_bus.active_scene.subscribe(
+        [&](Active_scene_changed_message& message) {
+            on_active_scene(message);
+        }
+    );
     m_animation_update_subscription = app_message_bus.animation_update.subscribe(
         [&](Animation_update_message& message) {
             on_animation_update(message);
@@ -234,6 +239,17 @@ void Transform_tool::on_selection(Selection_message&)
         return;
     }
     update_target_nodes(nullptr);
+}
+
+void Transform_tool::on_active_scene(Active_scene_changed_message&)
+{
+    // Rebind the gizmo to the new active scene's selection (window-focus
+    // activation changes the active scene without a selection change).
+    if (shared.component_mode) {
+        return;
+    }
+    update_target_nodes(nullptr);
+    update_visibility();
 }
 
 void Transform_tool::on_animation_update(Animation_update_message&)
@@ -429,7 +445,16 @@ void Transform_tool::on_reference_settings_changed()
 
 void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
 {
-    const auto& selection = m_context.selection->get_selected_items();
+    // The gizmo operates on one scene at a time: the ACTIVE scene
+    // (Selection::get_active_scene_root - follows selection changes and
+    // viewport / hierarchy window focus). Selection in other scenes persists
+    // but never feeds the gizmo, so the anchor is always an average within
+    // one world space and a drag can only ever move one scene's nodes.
+    static const std::vector<std::shared_ptr<erhe::Item_base>> s_no_selection{};
+    const std::shared_ptr<Scene_root> active_scene_root = m_context.selection->get_active_scene_root();
+    const auto& selection = active_scene_root
+        ? m_context.selection->get_hosted_selection(static_cast<erhe::Item_host*>(active_scene_root.get()))
+        : s_no_selection;
 
     vec3 cumulative_world_translation{0.0f, 0.0f, 0.0f};
     quat cumulative_world_rotation   {1.0f, 0.0f, 0.0f, 0.0f};
@@ -777,6 +802,15 @@ void Transform_tool::update_hover()
         return;
     }
 
+    // The gizmo targets the active scene only: in views of other scenes the
+    // handles are hidden, and any stale tool-slot hover there must not arm it.
+    if (!is_scene_view_of_active_scene(scene_view)) {
+        m_hover_handle          = Handle::e_handle_none;
+        m_box_face_hover_active = false;
+        m_hover_tool            = nullptr;
+        return;
+    }
+
     Handle new_handle = Handle::e_handle_none;
 
     const auto& tool = scene_view->get_hover(Hover_entry::tool_slot);
@@ -901,6 +935,10 @@ auto Transform_tool::on_drag_ready() -> bool
     auto* scene_view = get_hover_scene_view();
     if (scene_view == nullptr) {
         log_trs_tool->trace("Transform tool cannot start drag - Hover scene is not set");
+        return false;
+    }
+    if (!is_scene_view_of_active_scene(scene_view)) {
+        log_trs_tool->trace("Transform tool cannot start drag - Hovered view does not show the active scene");
         return false;
     }
     const auto camera = scene_view->get_camera();
@@ -1058,6 +1096,12 @@ void Transform_tool::tool_render(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 
+    // The gizmo (and its debug lines: cast rays, bounding-box cube) targets
+    // the active scene; draw nothing into views of other scenes.
+    if (!is_scene_view_of_active_scene(&context.scene_view)) {
+        return;
+    }
+
     for (auto& entry : shared.entries) {
         auto& node = entry.node;
         if (!node) {
@@ -1118,9 +1162,23 @@ void Transform_tool::update_for_view(Scene_view* scene_view)
     Handle_visualizations* visualizations = shared.get_visualizations();
     if (visualizations != nullptr) {
         visualizations->update_for_view(scene_view);
+        // Per-view gizmo scoping: show the handles only in views of the
+        // active scene (the scene the gizmo targets). This runs per rendered
+        // view, the same flow that already drives the per-view handle scale.
+        visualizations->set_view_scene_is_active(is_scene_view_of_active_scene(scene_view));
     }
     update_visibility();
     update_transforms();
+}
+
+auto Transform_tool::is_scene_view_of_active_scene(Scene_view* scene_view) const -> bool
+{
+    if (scene_view == nullptr) {
+        return false;
+    }
+    const std::shared_ptr<Scene_root> view_scene_root   = scene_view->get_scene_root();
+    const std::shared_ptr<Scene_root> active_scene_root = m_context.selection->get_active_scene_root();
+    return view_scene_root && (view_scene_root == active_scene_root);
 }
 
 void Transform_tool::update_visibility()

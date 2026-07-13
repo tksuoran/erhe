@@ -78,6 +78,13 @@ public:
     void update_for_view  (Scene_view* scene_view);
     void update_transforms(); //const uint64_t serial);
 
+    // Per-view gizmo scoping: the gizmo binds to the ACTIVE scene, so its
+    // handle meshes are shown only while the view being rendered / hovered
+    // shows that scene. Set by Transform_tool::update_for_view before each
+    // view's visibility update (the same per-view flow that already drives
+    // the view-distance handle scale).
+    void set_view_scene_is_active(bool value) { m_view_scene_is_active = value; }
+
     void update_mesh_visibility(bool precondition, const std::shared_ptr<erhe::scene::Mesh>& mesh);
 
     void set_anchor(const erhe::scene::Trs_transform& world_from_anchor);
@@ -117,6 +124,7 @@ private:
     App_context& m_context;
     float        m_scale     {1.0f};
     Scene_view*  m_scene_view{nullptr};
+    bool         m_view_scene_is_active{true};
 
     std::map<erhe::scene::Mesh*, Handle>             m_handles;
     erhe::scene::Trs_transform                       m_world_from_anchor;

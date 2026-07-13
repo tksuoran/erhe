@@ -110,6 +110,11 @@ auto Mcp_server::action_select_items(const json& args) -> std::string
             m_context.selection->add_to_selection(item);
         }
     }
+    // A UI click both selects and focuses the scene's window; the focus part
+    // activates the scene even when the selection itself did not change
+    // (re-selecting an already-selected item produces no selection diff).
+    // Mirror that here so select_items always activates the target scene.
+    m_context.selection->set_active_scene_root(sr->shared_from_this());
 
     json selected = json::array();
     for (const auto& item : items_to_select) {
