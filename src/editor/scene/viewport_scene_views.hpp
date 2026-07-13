@@ -164,9 +164,16 @@ private:
 
     void handle_graphics_settings_changed(Graphics_preset_entry* graphics_preset);
 
+    // Bring a viewport window showing the newly active scene to the front
+    // (select its dock tab), so the active scene is also the scene shown.
+    // No-op when a viewport window of that scene is already focused (the
+    // activation then came from focusing that window).
+    void handle_active_scene_changed(const std::shared_ptr<Scene_root>& scene_root);
+
     void update_pointer_from_imgui_viewport_windows(erhe::imgui::Imgui_host* imgui_host);
 
-    erhe::message_bus::Subscription<Graphics_settings_message> m_graphics_settings_subscription;
+    erhe::message_bus::Subscription<Graphics_settings_message>    m_graphics_settings_subscription;
+    erhe::message_bus::Subscription<Active_scene_changed_message> m_active_scene_subscription;
     App_context&                m_app_context;
     const Viewport_config_data& m_viewport_config_data;
 

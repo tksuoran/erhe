@@ -366,15 +366,21 @@ void Viewport_window::imgui()
     // (edge-triggered: selection changes elsewhere may activate another
     // scene while this window stays focused, and must not be fought).
     {
-        const bool focused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
-        if (focused && !m_was_focused) {
+        const bool focused        = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+        const bool focus_gained   = focused && !m_was_focused;
+        // Update m_was_focused before set_active_scene_root: the activation
+        // message is handled synchronously (Scene_views focuses a viewport
+        // window of the newly active scene unless one is already focused),
+        // so this window must already report itself focused or the handler
+        // would redundantly focus another window showing the same scene.
+        m_was_focused = focused;
+        if (focus_gained) {
             const std::shared_ptr<Viewport_scene_view> viewport_scene_view = m_viewport_scene_view.lock();
             const std::shared_ptr<Scene_root> scene_root = viewport_scene_view ? viewport_scene_view->get_scene_root() : std::shared_ptr<Scene_root>{};
             if (scene_root && (m_app_context.selection != nullptr)) {
                 m_app_context.selection->set_active_scene_root(scene_root);
             }
         }
-        m_was_focused = focused;
     }
 
     draw_toolbar();

@@ -88,6 +88,12 @@ Scene_views::Scene_views(
         }
     );
 
+    m_active_scene_subscription = app_message_bus.active_scene.subscribe(
+        [&](Active_scene_changed_message& message) {
+            handle_active_scene_changed(message.scene_root);
+        }
+    );
+
     m_open_new_viewport_scene_view_command.set_host(this);
 }
 
@@ -413,6 +419,33 @@ auto Scene_views::create_viewport_window(
     return viewport_window;
 }
 
+void Scene_views::handle_active_scene_changed(const std::shared_ptr<Scene_root>& scene_root)
+{
+    if (!scene_root) {
+        return;
+    }
+    Viewport_window* first_match = nullptr;
+    for (const std::shared_ptr<Viewport_window>& viewport_window : m_viewport_windows) {
+        const std::shared_ptr<Viewport_scene_view> viewport_scene_view = viewport_window->viewport_scene_view();
+        if (!viewport_scene_view || (viewport_scene_view->get_scene_root() != scene_root)) {
+            continue;
+        }
+        // A viewport of this scene already has ImGui focus: the activation
+        // came from focusing it (Viewport_window::imgui() updates
+        // m_was_focused before set_active_scene_root); focusing another
+        // window showing the same scene would steal its focus.
+        if (viewport_window->is_window_focused()) {
+            return;
+        }
+        if (first_match == nullptr) {
+            first_match = viewport_window.get();
+        }
+    }
+    if (first_match != nullptr) {
+        first_match->request_window_focus();
+    }
+}
+
 auto Scene_views::choose_camera_for_scene(const std::shared_ptr<Scene_root>& scene_root) const -> std::shared_ptr<erhe::scene::Camera>
 {
     if (!scene_root) {
@@ -573,7 +606,15 @@ void Scene_views::open_new_viewport_scene_view_node(const std::shared_ptr<Scene_
 
     // Issue #265 follow-up: prefer repurposing an existing viewport window
     // that shows no scene over creating a new window.
-    if (try_repurpose_empty_viewport_window(scene_root)) {
+    //
+    // The viewport window for the opened scene is brought to the front
+    // (dock tab selected): the scene may have become the active scene while
+    // this window did not exist yet (import runs before the viewport is
+    // created), in which case the Active_scene_changed_message handler found
+    // no window to focus.
+    const std::shared_ptr<Viewport_window> repurposed_window = try_repurpose_empty_viewport_window(scene_root);
+    if (repurposed_window) {
+        repurposed_window->request_window_focus();
         return;
     }
 
@@ -590,6 +631,7 @@ void Scene_views::open_new_viewport_scene_view_node(const std::shared_ptr<Scene_
         "Viewport"
     );
     apply_editor_window_placement(*m_app_context.imgui_windows, *viewport_window);
+    viewport_window->request_window_focus();
 }
 
 void Scene_views::debug_imgui()

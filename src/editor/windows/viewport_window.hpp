@@ -63,6 +63,10 @@ public:
     [[nodiscard]] auto get_window_slot() const -> int { return m_window_slot; }
     [[nodiscard]] auto is_viewport_focused() const -> bool { return m_viewport_child_window_focused; }
     [[nodiscard]] auto is_viewport_hovered() const -> bool { return m_viewport_child_window_hovered; }
+    // ImGui focus state (window or any of its children) as of this window's
+    // last imgui() frame. Used by Scene_views to skip focusing a viewport of
+    // the newly active scene when one is already focused.
+    [[nodiscard]] auto is_window_focused  () const -> bool { return m_was_focused; }
 
 private:
     void imgui_viewport            ();

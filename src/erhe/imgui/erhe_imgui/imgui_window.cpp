@@ -136,6 +136,12 @@ void Imgui_window::set_show_in_menu(const bool show)
     m_show_in_menu = show;
 }
 
+void Imgui_window::request_window_focus()
+{
+    m_focus_requested = true;
+    show_window();
+}
+
 void Imgui_window::set_initial_placement(
     const std::string_view dock_target_title,
     const float            fallback_width_ratio,
@@ -186,6 +192,13 @@ auto Imgui_window::begin() -> bool
 
     on_begin();
     apply_initial_placement();
+    if (m_focus_requested) {
+        m_focus_requested = false;
+        // Selects this window's dock tab and brings it to the front: Begin()
+        // routes this through FocusWindow(), and the dock node tab bar applies
+        // NavWindow focus back to its SelectedTabId.
+        ImGui::SetNextWindowFocus();
+    }
     bool keep_visible{true};
     ImGui::SetNextWindowSizeConstraints(
         ImVec2{m_min_size[0], m_min_size[1]},

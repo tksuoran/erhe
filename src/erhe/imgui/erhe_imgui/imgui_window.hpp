@@ -52,6 +52,11 @@ public:
         float            fallback_height_ratio
     );
     void set_show_in_menu        (bool show);
+
+    // Request ImGui focus for this window, applied once on its next begin()
+    // and then cleared. Focusing selects the window's tab when it is docked
+    // and brings it to the front. Also shows the window if it was hidden.
+    void request_window_focus    ();
     auto begin                   () -> bool;
     void end                     ();
     void set_window_visibility   (bool visible);
@@ -96,6 +101,9 @@ private:
 
     bool            m_is_hovered  {false};
     bool            m_is_visible  {true};
+
+    // One-shot focus request (see request_window_focus()).
+    bool            m_focus_requested{false};
 
     // One-shot initial placement request (see set_initial_placement()).
     bool            m_has_initial_placement    {false};
