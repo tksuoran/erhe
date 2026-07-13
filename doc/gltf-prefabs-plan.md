@@ -9,10 +9,12 @@ below); items 3-5 remain. Written 2026-07-10.
 
 Prefab instances are sealed: the subtree under a `Prefab_instance` carrier
 node is not editable in the containing scene. Editing a prefab requires
-opening its source glTF as a scene (`open_scene`); saving it back
-(`save_prefab_scene` / File > Save Prefab / MCP `save_prefab`) writes the
+opening its source glTF as a scene (`open_scene`); saving it back writes the
 source file and reloads the prefab, refreshing every instance in every
-scene. `Prefab_library::reload` tracks prefab->prefab references recorded
+scene. (Historical note: this was a separate Save Prefab command / MCP
+`save_prefab` tool / `save_prefab_scene` function; it was later merged into
+Save Scene, which saves back to the scene's source file and performs the
+prefab reload itself -- see `doc/scene_serialization.md`.) `Prefab_library::reload` tracks prefab->prefab references recorded
 during template loads and rebuilds dependent templates in dependency order,
 so editing a nested prefab propagates through every prefab that references
 it. Instance refresh drops all carrier children and re-clones (consistent

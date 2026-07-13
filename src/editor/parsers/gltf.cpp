@@ -8,6 +8,7 @@
 #include "parsers/gltf_physics_import.hpp"
 
 #include "app_context.hpp"
+#include "app_message_bus.hpp"
 #include "app_scenes.hpp"
 #include "content_library/content_library.hpp"
 #include "scene/scene_root.hpp"
@@ -389,8 +390,8 @@ auto make_import_gltf_operation(
     std::shared_ptr<erhe::scene::Node> default_fill_light_node;
 
     // The implicit defaults are editor conveniences, not authored content:
-    // exclude_from_prefab keeps them out of prefab source files
-    // (save_prefab_scene) and prefab instances.
+    // exclude_from_prefab keeps them out of prefab instances (the flag
+    // persists in node extras and instantiation filters flagged items).
     if (add_default_camera) {
         default_camera_node = std::make_shared<erhe::scene::Node>("Camera");
         std::shared_ptr<erhe::scene::Camera> default_camera = std::make_shared<erhe::scene::Camera>("Camera");
@@ -685,6 +686,49 @@ auto save_scene_gltf(Scene_root& scene_root, const std::filesystem::path& path) 
     return true;
 }
 
+auto save_scene_gltf(App_context& context, Scene_root& scene_root, const std::filesystem::path& path) -> bool
+{
+    if (!save_scene_gltf(scene_root, path)) {
+        return false;
+    }
+    // Rescan the asset browser so the freshly saved scene appears without a
+    // manual Scan (#256).
+    context.app_message_bus->scene_saved.send_message(Scene_saved_message{.path = path});
+    // Saving over a loaded prefab source refreshes every instance in every
+    // scene (this side effect used to be the separate Save Prefab command).
+    if (context.prefab_library != nullptr) {
+        std::error_code error_code;
+        std::filesystem::path canonical_path = std::filesystem::weakly_canonical(path, error_code);
+        if (error_code) {
+            canonical_path = path;
+        }
+        if (context.prefab_library->get_prefabs().contains(canonical_path)) {
+            context.prefab_library->reload(canonical_path);
+        }
+    }
+    return true;
+}
+
+auto default_scene_dir() -> std::filesystem::path
+{
+    std::error_code ec;
+    std::filesystem::path dir = std::filesystem::absolute(std::filesystem::path{"res"} / "editor" / "scenes", ec);
+    if (ec) {
+        dir = std::filesystem::path{"res"} / "editor" / "scenes";
+    }
+    static_cast<void>(erhe::file::ensure_directory_exists(dir));
+    return dir;
+}
+
+auto resolve_scene_save_path(const Scene_root& scene_root) -> std::filesystem::path
+{
+    const std::filesystem::path& source_path = scene_root.get_source_path();
+    if (!source_path.empty()) {
+        return source_path;
+    }
+    return default_scene_dir() / (scene_root.get_name() + ".glb");
+}
+
 auto open_scene_gltf(
     App_context&                 context,
     const std::filesystem::path& path
@@ -730,6 +774,13 @@ auto open_scene_gltf(
         erhe::file::to_string(path.stem()),
         scene_state->enable_physics
     );
+    // Remember where the scene came from (same as Scene_open_operation does
+    // for foreign glTF): Save Scene writes back here, without confirmation.
+    {
+        std::error_code error_code;
+        const std::filesystem::path canonical_path = std::filesystem::weakly_canonical(path, error_code);
+        scene_root->set_source_path(error_code ? path : canonical_path);
+    }
 
     // Apply the ERHE_scene payload - the one thing the import path
     // deliberately leaves alone (importing an asset must not clobber the

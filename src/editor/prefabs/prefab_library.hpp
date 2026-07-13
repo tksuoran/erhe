@@ -135,16 +135,6 @@ void attach_prefab_instance(
     const std::filesystem::path& export_directory
 ) -> std::map<const erhe::scene::Node*, erhe::gltf::Gltf_export_external_asset>;
 
-// The prefab editing round-trip: export a scene that was opened from a glTF
-// source file (Scene_root::get_source_path) back to that file, then reload
-// the prefab so every instance - in every scene, including nested prefab
-// templates - reflects the edit. Prefab instances inside the scene export
-// as glTF 2.1 externalAsset references, so nested prefabs round-trip as
-// references, not flattened content. Returns false when the scene has no
-// source path or the export fails; the reload step is skipped (not a
-// failure) when nothing has instantiated the file as a prefab yet.
-auto save_prefab_scene(App_context& context, Scene_root& scene_root) -> bool;
-
 // Resolve glTF 2.1 external assets in freshly parsed gltf_data: for each
 // node that instantiates an external asset, load the referenced prefab
 // through the library (recursively; reference cycles are errors, per the

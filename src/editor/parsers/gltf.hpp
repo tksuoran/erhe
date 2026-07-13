@@ -97,6 +97,27 @@ public:
 // .gltf. Returns false when the scene has no root node or the write fails.
 [[nodiscard]] auto save_scene_gltf(Scene_root& scene_root, const std::filesystem::path& path) -> bool;
 
+// THE scene save entry point (File > Save Scene, MCP save_scene): writes the
+// scene with save_scene_gltf() above, sends Scene_saved_message (asset
+// browser rescan), and, when 'path' is a loaded prefab source, reloads the
+// prefab so every instance in every scene reflects the edit (this replaced
+// the separate Save Prefab command).
+[[nodiscard]] auto save_scene_gltf(
+    App_context&                 context,
+    Scene_root&                  scene_root,
+    const std::filesystem::path& path
+) -> bool;
+
+// Default location for saved scene files: res/editor/scenes, relative to the
+// editor working directory (repo root). Created if missing so file dialogs
+// can open there and the asset browser can list saved scenes.
+[[nodiscard]] auto default_scene_dir() -> std::filesystem::path;
+
+// Where "save this scene" writes without further input: the scene's own
+// source file when it was opened/loaded from one (saved back silently), else
+// default_scene_dir()/<scene name>.glb (a new file; UI confirms overwrite).
+[[nodiscard]] auto resolve_scene_save_path(const Scene_root& scene_root) -> std::filesystem::path;
+
 // Scene open (doc/gltf-scene-roundtrip-plan.md phase 4): opens an
 // erhe-authored glTF file (see is_erhe_scene) as a full Scene_root - NOT
 // undoable. Reuses the

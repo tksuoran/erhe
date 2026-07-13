@@ -30,13 +30,18 @@ Manages 3D scene data for the editor: scene roots (the top-level scene container
 
 ## Scene persistence (erhe-authored glTF, phase 4)
 
-Scenes are saved as a **single glTF file** (`<scene name>.glb` under
-`res/editor/scenes`, no file dialog; Overwrite/Cancel modal when the file
-exists): one `export_gltf()` call carrying the render content plus physics
-data, prefab external-asset references, embedded texture sources, animations
-and the editor-domain `ERHE_*` extensions (`parsers/gltf.hpp
-save_scene_gltf`; `ERHE_scene` in `extensionsUsed` marks the file as
-erhe-authored). File > Load Scene is a `.glb`/`.gltf` file picker; the
+Scenes are saved as a **single glTF file**, no file dialog: a scene
+opened/loaded from a glTF file saves back to its own source file without
+confirmation (when that file is a loaded prefab source the prefab reloads,
+refreshing every instance - the former separate Save Prefab command was
+merged into Save Scene); a scene with no source file saves to
+`<scene name>.glb` under `res/editor/scenes` (Overwrite/Cancel modal when
+the file exists) and is then associated with that file. One `export_gltf()`
+call carries the render content plus physics data, prefab external-asset
+references, embedded texture sources, animations and the editor-domain
+`ERHE_*` extensions (`parsers/gltf.hpp save_scene_gltf`; `ERHE_scene` in
+`extensionsUsed` marks the file as erhe-authored). File > Load Scene is a
+`.glb`/`.gltf` file picker; the
 `load_scene_file` message handler opens an erhe-authored file as a full
 `Scene_root` (`open_scene_gltf`: not undoable, empty content library, saved
 editor state applied) and routes a foreign glTF to `Scene_open_operation`

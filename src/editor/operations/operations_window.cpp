@@ -716,7 +716,6 @@ Operations::Operations(
 
     , m_export_gltf_command       {commands, "File.Export.glTF",                   [this]() -> bool { export_gltf            (); return true; } }
     , m_save_scene_command        {commands, "File.SaveScene",                     [this]() -> bool { save_scene             (); return true; } }
-    , m_save_prefab_command       {commands, "File.SavePrefab",                    [this]() -> bool { save_prefab            (); return true; } }
     , m_load_scene_command        {commands, "File.LoadScene",                     [this]() -> bool { load_scene             (); return true; } }
     , m_create_material           {commands, "Create.Material",                    [this]() -> bool { create_material        (); return true; } }
     , m_create_brush              {commands, "Create.Brush",                       [this]() -> bool { create_brush           (); return true; } }
@@ -765,7 +764,6 @@ Operations::Operations(
 
     commands.register_command(&m_export_gltf_command);
     commands.register_command(&m_save_scene_command);
-    commands.register_command(&m_save_prefab_command);
     commands.register_command(&m_load_scene_command);
     commands.register_command(&m_create_material);
     commands.register_command(&m_create_brush);
@@ -816,7 +814,6 @@ Operations::Operations(
 
     commands.bind_command_to_menu(&m_export_gltf_command,     "File.Export glTF");
     commands.bind_command_to_menu(&m_save_scene_command,      "File.Save Scene");
-    commands.bind_command_to_menu(&m_save_prefab_command,     "File.Save Prefab");
     commands.bind_command_to_menu(&m_load_scene_command,      "File.Load Scene");
     commands.bind_command_to_menu(&m_create_material,         "Create.Material");
     commands.bind_command_to_menu(&m_create_brush,            "Create.Brush from Selection");
@@ -2293,22 +2290,6 @@ static void s_load_scene_callback(void* userdata, const char* const* filelist, i
 }
 #endif
 
-// Default location for saved scene files: res/editor/scenes, relative to the
-// editor working directory (repo root). Created if missing so the native file
-// dialog opens there and the asset browser can list saved scenes.
-static auto default_scene_dir() -> std::filesystem::path
-{
-    std::error_code ec;
-    std::filesystem::path dir = std::filesystem::absolute(
-        std::filesystem::path{"res"} / "editor" / "scenes", ec
-    );
-    if (ec) {
-        dir = std::filesystem::path{"res"} / "editor" / "scenes";
-    }
-    static_cast<void>(erhe::file::ensure_directory_exists(dir));
-    return dir;
-}
-
 void Operations::export_callback(const char* const* filelist, int filter)
 {
     static_cast<void>(filter);
@@ -2390,39 +2371,31 @@ void Operations::export_gltf()
 #endif
 }
 
-void Operations::save_prefab()
-{
-    const std::shared_ptr<Scene_root> scene_root = get_target_scene_root();
-    if (!scene_root) {
-        log_operations->warn("save_prefab: no scene to save");
-        return;
-    }
-    // save_prefab_scene logs the failure reason (scene not opened from a
-    // glTF file, write failure); on success it also reloads the prefab so
-    // every instance in every scene reflects the edit.
-    static_cast<void>(save_prefab_scene(m_context, *scene_root));
-}
-
 void Operations::save_scene()
 {
     // Scenes are saved as single erhe-authored glTF files
-    // (doc/gltf-scene-roundtrip-plan.md phase 4). The file name is derived
-    // from the scene name -- <scene name>.glb under res/editor/scenes --
-    // instead of asking with a file dialog. When the file already exists, an
-    // Overwrite / Cancel confirmation modal is shown (imgui_modal_dialogs).
+    // (doc/gltf-scene-roundtrip-plan.md phase 4). A scene opened/loaded from
+    // a glTF file saves back to its own source file without confirmation
+    // (when that file is a loaded prefab, every instance refreshes - this
+    // subsumed the former Save Prefab command). A scene with no source file
+    // saves to <scene name>.glb under res/editor/scenes; when that file
+    // already exists, an Overwrite / Cancel confirmation modal is shown
+    // (imgui_modal_dialogs).
     const std::shared_ptr<Scene_root> scene_root = get_target_scene_root();
     if (!scene_root) {
         log_operations->warn("save_scene: no scene to save");
         return;
     }
-    const std::filesystem::path path = default_scene_dir() / (scene_root->get_name() + ".glb");
-    std::error_code ec;
-    const bool file_exists = std::filesystem::exists(path, ec);
-    if (file_exists) {
-        m_save_confirm_scene_root    = scene_root;
-        m_save_confirm_path          = path;
-        m_save_confirm_imgui_context = nullptr;
-        return;
+    const std::filesystem::path path = resolve_scene_save_path(*scene_root);
+    if (scene_root->get_source_path().empty()) {
+        std::error_code ec;
+        const bool file_exists = std::filesystem::exists(path, ec);
+        if (file_exists) {
+            m_save_confirm_scene_root    = scene_root;
+            m_save_confirm_path          = path;
+            m_save_confirm_imgui_context = nullptr;
+            return;
+        }
     }
     save_scene_to_file(*scene_root, path);
 }
@@ -2430,10 +2403,12 @@ void Operations::save_scene()
 void Operations::save_scene_to_file(Scene_root& scene_root, const std::filesystem::path& path)
 {
     try {
-        if (editor::save_scene_gltf(scene_root, path)) {
-            // Rescan the asset browser so the freshly saved scene appears without
-            // a manual Scan (#256).
-            m_context.app_message_bus->scene_saved.send_message(Scene_saved_message{.path = path});
+        if (editor::save_scene_gltf(m_context, scene_root, path)) {
+            if (scene_root.get_source_path().empty()) {
+                // The scene now lives in this file: further saves write back
+                // to it without confirmation.
+                scene_root.set_source_path(path);
+            }
             log_operations->info("Scene '{}' saved to '{}'", scene_root.get_name(), erhe::file::to_string(path));
         }
     } catch (...) {

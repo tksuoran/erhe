@@ -10,7 +10,6 @@
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "parsers/gltf.hpp"
-#include "parsers/gltf_physics_export.hpp"
 #include "prefabs/prefab_instance.hpp"
 #include "scene/generated/gltf_source_reference.hpp"
 #include "scene/scene_root.hpp"
@@ -723,48 +722,6 @@ void Prefab_library::refresh_instances(const std::vector<std::filesystem::path>&
         Async_raytrace_kickoff_operation kickoff{scene_root, std::move(mesh_node_items)};
         kickoff.execute(m_context);
     }
-}
-
-auto save_prefab_scene(App_context& context, Scene_root& scene_root) -> bool
-{
-    const std::filesystem::path& source_path = scene_root.get_source_path();
-    if (source_path.empty()) {
-        log_parsers->error("save_prefab: scene '{}' was not opened from a glTF file", scene_root.get_name());
-        return false;
-    }
-    erhe::scene::Scene* scene = scene_root.get_hosted_scene();
-    const std::shared_ptr<erhe::scene::Node> root_node = (scene != nullptr) ? scene->get_root_node() : std::shared_ptr<erhe::scene::Node>{};
-    if (!root_node) {
-        log_parsers->error("save_prefab: scene '{}' has no root node", scene_root.get_name());
-        return false;
-    }
-
-    const erhe::gltf::Gltf_physics_data physics_data = build_gltf_physics_data(*scene, scene_root.get_content_library().get());
-    const bool binary = source_path.extension() == std::filesystem::path{".glb"};
-    // exclude_from_prefab items (the editor-added default camera / lights)
-    // ARE written to the file - the flag rides in node extras and round-trips
-    // through parse_gltf, so the prefab scene's editing setup survives
-    // reopening; attach_prefab_instance filters them out of instances.
-    const std::string gltf = erhe::gltf::export_gltf(
-        erhe::gltf::Gltf_export_arguments{
-            .root_node             = *root_node,
-            .binary                = binary,
-            .physics_data          = &physics_data,
-            .external_assets       = collect_prefab_external_assets(*root_node, source_path.parent_path()),
-            .image_source_provider = make_gltf_image_source_provider(scene_root.get_content_library()),
-            .animations            = collect_gltf_export_animations(scene_root.get_content_library())
-        }
-    );
-    if (!erhe::file::write_file(source_path, gltf)) {
-        log_parsers->error("save_prefab: failed to write {}", erhe::file::to_string(source_path));
-        return false;
-    }
-    log_parsers->info("save_prefab: scene '{}' written to {}", scene_root.get_name(), erhe::file::to_string(source_path));
-
-    if ((context.prefab_library != nullptr) && context.prefab_library->get_prefabs().contains(source_path)) {
-        context.prefab_library->reload(source_path);
-    }
-    return true;
 }
 
 }

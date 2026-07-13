@@ -111,19 +111,26 @@ Entry point: `editor::save_scene_gltf(Scene_root&, path)` in
 7. `erhe::gltf::export_gltf()` produces the GLB/JSON string;
    `erhe::file::write_file()` writes it.
 
-Save entry points:
+Save entry points (there is ONE save shape - full editor state; the former
+Save Prefab command / MCP `save_prefab` tool were merged into Save Scene):
 
 - **File > Save Scene** (`operations_window.cpp` `Operations::save_scene`):
+  a scene opened/loaded from a glTF file (`Scene_root::get_source_path`)
+  saves back to that file without confirmation; a scene with no source file
   writes `<scene name>.glb` under `res/editor/scenes` (created on demand),
-  with an Overwrite/Cancel modal when the file exists. A save triggers
-  `Scene_saved_message`, which rescans the Asset Browser.
-- **MCP `save_scene`** (`mcp/mcp_server_file_io.cpp`): explicit path; a
+  with an Overwrite/Cancel modal when the file exists, and is then
+  associated with that file (further saves write back silently).
+- **MCP `save_scene`** (`mcp/mcp_server_file_io.cpp`): optional path
+  (default: same resolution as File > Save Scene); an explicit path with a
   missing/other extension is normalized to `.glb`.
+- Both run `editor::save_scene_gltf(App_context&, ...)`: a save triggers
+  `Scene_saved_message` (Asset Browser rescan), and when the written file is
+  a loaded prefab source the prefab is reloaded so every instance in every
+  scene reflects the edit - the prefab editing round-trip is open the
+  source as a scene, edit, Save Scene.
 - **MCP `export_gltf`** exports plain interchange (same call minus
   `add_gltf_editor_state` unless `editor_state: true` is passed) - use it
   for handing content to other tools, `save_scene` for full state.
-- **`save_prefab`** re-saves a scene opened from a glTF file back to its
-  source path.
 
 ## Open pipeline
 
@@ -227,6 +234,15 @@ keep their state on import.
   saved.
 - Corner normals of geometry-normative meshes live only in `ERHE_geometry`;
   foreign viewers render such meshes flat-shaded.
+- **Prefab templates ignore editor-domain payloads.** Since the Save Scene /
+  Save Prefab merge, saving over a prefab source writes the full editor
+  state (the file becomes erhe-authored: `ERHE_scene` in `extensionsUsed`);
+  instantiating it as a prefab parses only the render/physics content -
+  `ERHE_*` payloads (layouts, tags, brushes, node graphs) do not transfer
+  into instances. In particular, a mesh controlled by a
+  `Geometry_graph_mesh` attachment is excluded from the save (re-derived
+  from the graph on scene load) and prefab instances do not rebuild it, so
+  graph-baked products are missing from instances of such a prefab.
 
 ## Verifying round-trips
 

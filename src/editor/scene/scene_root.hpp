@@ -188,10 +188,11 @@ public:
     [[nodiscard]] auto get_scene_item    () -> std::shared_ptr<erhe::scene::Scene>;
     [[nodiscard]] auto get_name          () const -> const std::string&;
 
-    // Canonical path of the glTF file the scene was opened from
-    // (Scene_open_operation); empty for created or bundle-loaded scenes.
-    // save_prefab_scene uses it to write prefab edits back to the source
-    // file and reload every instance.
+    // Canonical path of the glTF file the scene was opened/loaded from
+    // (Scene_open_operation, open_scene_gltf), or last saved to; empty for
+    // scenes not yet associated with a file. Save Scene writes back here
+    // without confirmation and reloads every prefab instance when the file
+    // is a loaded prefab source.
     [[nodiscard]] auto get_source_path   () const -> const std::filesystem::path&;
     void set_source_path(const std::filesystem::path& path);
 

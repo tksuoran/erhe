@@ -276,13 +276,13 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"scene_name"})}
     }});
-    m_tool_infos.push_back({"save_scene",         "Save a scene as a single erhe-authored glTF file carrying FULL editor state (render content plus the ERHE_* extensions: scene settings, physics, layouts, brushes, node graphs, collections/tags; ERHE_scene in extensionsUsed marks the file), without a file dialog. This is the scene persistence path; export_gltf without editor_state is the plain interchange export.", {
+    m_tool_infos.push_back({"save_scene",         "Save a scene as a single erhe-authored glTF file carrying FULL editor state (render content plus the ERHE_* extensions: scene settings, physics, layouts, brushes, node graphs, collections/tags; ERHE_scene in extensionsUsed marks the file), without a file dialog. Without 'path' the scene saves back to its own source file when it was opened/loaded from one, else to res/editor/scenes/<scene name>.glb. When the written file is a loaded prefab source, the prefab is reloaded so every instance in every scene reflects the edit (this subsumed the former save_prefab tool). This is the scene persistence path; export_gltf without editor_state is the plain interchange export.", {
         {"type", "object"},
         {"properties", {
             {"scene_name", {{"type", "string"}, {"description", "Name of the scene"}}},
-            {"path",       {{"type", "string"}, {"description", "Destination file path; .glb is appended when the extension is neither .glb nor .gltf (.gltf selects the text form)"}}}
+            {"path",       {{"type", "string"}, {"description", "Destination file path (default: the scene's source file, else res/editor/scenes/<scene name>.glb); .glb is appended when the extension is neither .glb nor .gltf (.gltf selects the text form)"}}}
         }},
-        {"required", json::array({"scene_name", "path"})}
+        {"required", json::array({"scene_name"})}
     }});
     m_tool_infos.push_back({"load_scene",         "Load a saved scene, without a file dialog: an erhe-authored glTF file (saved by save_scene) opens as a full scene with its saved editor state (fresh content library, browser + viewport windows; not undoable); a foreign glTF opens as a new scene via the same path as open_scene. The load is queued and completes on a following frame; discover the scene via list_scenes.", {
         {"type", "object"},
@@ -339,13 +339,6 @@ void Mcp_server::refresh_tool_list()
             {"path", {{"type", "string"}, {"description", "Source .gltf/.glb file path of a loaded prefab"}}}
         }},
         {"required", json::array({"path"})}
-    }});
-    m_tool_infos.push_back({"save_prefab",        "Save a scene that was opened from a glTF file (open_scene) back to its source file, then reload the prefab so every instance in every scene reflects the edit. Prefab instances inside the scene export as glTF 2.1 externalAsset references.", {
-        {"type", "object"},
-        {"properties", {
-            {"scene_name", {{"type", "string"}, {"description", "Name of the scene to save (must have been opened from a glTF file)"}}}
-        }},
-        {"required", json::array({"scene_name"})}
     }});
     m_tool_infos.push_back({"get_prefabs",        "List the glTF prefabs currently loaded in the app-wide prefab library (source path, name, content counts)", schema_no_args()});
     m_tool_infos.push_back({"capture_screenshot",  "Capture the current rendered frame to a PNG file and return its path. Currently supported only in the headless Vulkan configuration (emulated swapchain).", {

@@ -48,11 +48,11 @@ public:
     // map. Recomputed each frame the visualization runs; not authored or
     // serialized (like selected / hovered_*).
     static constexpr uint64_t affects_shadow            = (1u << 25);
-    // The item is not part of prefab content: it is excluded when a scene
-    // is saved back to its prefab source file (save_prefab_scene) and when
-    // a prefab template is instantiated. Set on editor-generated helpers
-    // (e.g. the default camera / lights import_gltf adds to a scene that
-    // has none) so they never leak into prefab files or instances.
+    // The item is not part of prefab content: the flag persists in node
+    // extras when the scene is saved, and instantiating a prefab template
+    // filters flagged items out of the instance. Set on editor-generated
+    // helpers (e.g. the default camera / lights import_gltf adds to a scene
+    // that has none) so they never leak into prefab instances.
     static constexpr uint64_t exclude_from_prefab       = (1u << 26);
     // Implicit container node created when a glTF file is opened/imported,
     // holding the file's scene roots. Not part of the file content: glTF

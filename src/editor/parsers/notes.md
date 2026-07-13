@@ -10,7 +10,7 @@ erhe-authored glTF scene persistence entry points
 
 - **`import_gltf()`** -- Imports a glTF file into a `Scene_root` as an undoable compound operation. Uses `erhe::gltf` for parsing and creates meshes, materials, animations, and skins. Supports async loading via `tf::Executor`.
 
-- **`save_scene_gltf()`** -- Scene save: one `export_gltf()` call writing the whole scene (render content + physics + prefab external assets + texture sources + animations + editor-domain `ERHE_*` extensions via `add_gltf_editor_state`) into a single `.glb`/`.gltf`. `ERHE_scene` in `extensionsUsed` marks the file erhe-authored.
+- **`save_scene_gltf()`** -- Scene save: one `export_gltf()` call writing the whole scene (render content + physics + prefab external assets + texture sources + animations + editor-domain `ERHE_*` extensions via `add_gltf_editor_state`) into a single `.glb`/`.gltf`. `ERHE_scene` in `extensionsUsed` marks the file erhe-authored. The `App_context&` overload is THE save entry point: it also sends `Scene_saved_message` and reloads the prefab when the written path is a loaded prefab source (this replaced the separate Save Prefab command / `save_prefab_scene`). `resolve_scene_save_path()` picks the destination: the scene's own source file when set, else `default_scene_dir()/<scene name>.glb`.
 
 - **`open_scene_gltf()`** -- Scene open: opens an erhe-authored glTF file as a full `Scene_root` (not undoable; fresh empty `Content_library`; `ERHE_scene` payload applied: `enable_physics` at construction, ambient light, per-scene `Scene_settings`). Reuses the import machinery; no import_root wrapper, no default camera/lights.
 

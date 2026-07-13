@@ -20,11 +20,6 @@ auto Mcp_server::action_save_scene(const json& args) -> std::string
 {
     const std::string scene_name = args.value("scene_name", "");
     const std::string path_str   = args.value("path", "");
-    if (path_str.empty()) {
-        json r = make_text_content("Missing required argument: path");
-        r["isError"] = true;
-        return r.dump();
-    }
     Scene_root* sr = find_scene(scene_name);
     if (sr == nullptr) {
         json r = make_text_content("Scene not found: " + scene_name);
@@ -32,25 +27,37 @@ auto Mcp_server::action_save_scene(const json& args) -> std::string
         return r.dump();
     }
     // Scenes are saved as single erhe-authored glTF files
-    // (doc/gltf-scene-roundtrip-plan.md phase 4): normalize the path to carry
-    // a glTF extension (.glb appended when missing; .gltf is honored and
-    // selects the text form), matching File > Save Scene.
-    std::filesystem::path path{path_str};
-    if (
-        (path.extension() != std::filesystem::path{".glb"}) &&
-        (path.extension() != std::filesystem::path{".gltf"})
-    ) {
-        path = std::filesystem::path{path.string() + ".glb"};
+    // (doc/gltf-scene-roundtrip-plan.md phase 4), matching File > Save Scene:
+    // without 'path' the scene saves to its own source file when it was
+    // opened/loaded from one, else to res/editor/scenes/<scene name>.glb.
+    // An explicit path is normalized to carry a glTF extension (.glb
+    // appended when missing; .gltf is honored and selects the text form).
+    std::filesystem::path path;
+    if (path_str.empty()) {
+        path = resolve_scene_save_path(*sr);
+    } else {
+        path = std::filesystem::path{path_str};
+        if (
+            (path.extension() != std::filesystem::path{".glb"}) &&
+            (path.extension() != std::filesystem::path{".gltf"})
+        ) {
+            path = std::filesystem::path{path.string() + ".glb"};
+        }
     }
-    const bool ok = editor::save_scene_gltf(*sr, path);
+    // save_scene_gltf also reloads the prefab when 'path' is a loaded prefab
+    // source, refreshing every instance in every scene (this subsumed the
+    // former save_prefab tool).
+    const bool ok = editor::save_scene_gltf(m_context, *sr, path);
     if (!ok) {
         json r = make_text_content("save_scene failed: " + path.string());
         r["isError"] = true;
         return r.dump();
     }
-    // Rescan the asset browser so the freshly saved scene appears without a
-    // manual Scan (#256).
-    m_context.app_message_bus->scene_saved.send_message(Scene_saved_message{.path = path});
+    if (path_str.empty() && sr->get_source_path().empty()) {
+        // Same writeback as File > Save Scene: the scene now lives in this
+        // file, further path-less saves write back to it.
+        sr->set_source_path(path);
+    }
     return make_json_content({
         {"saved", true},
         {"path",  path.string()}
@@ -303,23 +310,6 @@ auto Mcp_server::action_reload_prefab(const json& args) -> std::string
     return make_json_content({
         {"reloaded", true},
         {"path",     path_str}
-    }).dump();
-}
-
-auto Mcp_server::action_save_prefab(const json& args) -> std::string
-{
-    const std::string scene_name = args.value("scene_name", "");
-    Scene_root* sr = find_scene(scene_name);
-    if (sr == nullptr) {
-        return make_error_content("Scene not found: " + scene_name);
-    }
-    const bool ok = save_prefab_scene(m_context, *sr);
-    if (!ok) {
-        return make_error_content("save_prefab failed (scene not opened from a glTF file, or write failed - see log): " + scene_name);
-    }
-    return make_json_content({
-        {"saved", true},
-        {"path",  sr->get_source_path().generic_string()}
     }).dump();
 }
 
