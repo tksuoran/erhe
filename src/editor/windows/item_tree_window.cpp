@@ -27,6 +27,7 @@
 #include "tools/clipboard.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tool.hpp"
+#include "windows/active_scene_highlight.hpp"
 #include "windows/editor_windows.hpp"
 
 #include "erhe_defer/defer.hpp"
@@ -68,6 +69,11 @@ void Item_tree::set_root(const std::shared_ptr<erhe::Hierarchy>& root)
     m_flat_rows_dirty = true;
 }
 
+auto Item_tree::get_root() const -> const std::shared_ptr<erhe::Hierarchy>&
+{
+    return m_root;
+}
+
 void Item_tree::set_header_item(const std::shared_ptr<erhe::Item_base>& item)
 {
     m_header_item = item;
@@ -105,7 +111,9 @@ void Item_tree::clear_selection()
 {
     SPDLOG_LOGGER_TRACE(log_tree, "clear_selection()");
 
-    m_context.selection->clear_selection();
+    // Scoped to this window's root (its scene / library); other hosts'
+    // selections are left untouched.
+    m_context.selection->clear_selection(m_root ? m_root->get_item_host() : nullptr);
 }
 
 void Item_tree::recursive_add_to_selection(const std::shared_ptr<erhe::Item_base>& item)
@@ -125,13 +133,14 @@ void Item_tree::select_all()
 {
     SPDLOG_LOGGER_TRACE(log_tree, "select_all()");
 
-    m_context.selection->clear_selection();
-    const auto& scene_roots = m_context.app_scenes->get_scene_roots();
-    for (const auto& scene_root : scene_roots) {
-        const auto& scene = scene_root->get_scene();
-        for (const auto& node : scene.get_root_node()->get_children()) {
-            recursive_add_to_selection(node);
-        }
+    // Select all within this window's root (its scene / library) only;
+    // other scenes' selections are left untouched.
+    if (!m_root) {
+        return;
+    }
+    m_context.selection->clear_selection(m_root->get_item_host());
+    for (const auto& node : m_root->get_children()) {
+        recursive_add_to_selection(node);
     }
 }
 
@@ -977,7 +986,7 @@ void Item_tree::item_update_selection(const std::shared_ptr<erhe::Item_base>& it
 
     if (non_mouse_activated || (hovered && mouse_released)) {
         if (ctrl_down) {
-            range_selection.reset();
+            range_selection.reset(item->get_item_host());
             if (item->is_selected()) {
                 set_item_selection(item, false);
             } else {
@@ -988,8 +997,11 @@ void Item_tree::item_update_selection(const std::shared_ptr<erhe::Item_base>& it
             SPDLOG_LOGGER_TRACE(log_tree, "click with shift down on {} {} - range select", item->get_type_name(), item->get_name());
             set_item_selection_terminator(item);
         } else {
-            range_selection.reset();
-            m_context.selection->clear_selection();
+            // Plain click deselects within the clicked item's host (its scene,
+            // or the non-hosted bucket for library items) only; other scenes'
+            // selections are left untouched.
+            range_selection.reset(item->get_item_host());
+            m_context.selection->clear_selection(item->get_item_host());
             SPDLOG_LOGGER_TRACE(
                 log_tree,
                 "mouse button release without modifier keys on {} {} - {} selecting it",
@@ -1866,8 +1878,21 @@ Item_tree_window::Item_tree_window(
 {
 }
 
+auto Item_tree_window::get_tree_scene_root() const -> Scene_root*
+{
+    if (!m_is_scene_hierarchy) {
+        return nullptr;
+    }
+    const std::shared_ptr<erhe::Hierarchy>& root = get_root();
+    if (!root) {
+        return nullptr;
+    }
+    return dynamic_cast<Scene_root*>(root->get_item_host());
+}
+
 void Item_tree_window::on_begin()
 {
+    m_active_scene_tint_count = push_active_scene_window_tint(m_context, get_tree_scene_root());
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,      ImVec2{0.0f, 0.0f});
     ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2{3.0f, 3.0f});
 }
@@ -1875,6 +1900,10 @@ void Item_tree_window::on_begin()
 void Item_tree_window::on_end()
 {
     ImGui::PopStyleVar(2);
+    if (m_active_scene_tint_count > 0) {
+        ImGui::PopStyleColor(m_active_scene_tint_count);
+        m_active_scene_tint_count = 0;
+    }
 }
 
 void Item_tree_window::set_scene_hierarchy(const bool value)
@@ -1897,6 +1926,20 @@ void Item_tree_window::hidden()
 void Item_tree_window::imgui()
 {
     ERHE_PROFILE_FUNCTION();
+
+    // Giving this scene's hierarchy window focus makes its scene the active
+    // scene (edge-triggered: selection changes elsewhere may activate another
+    // scene while this window stays focused, and must not be fought).
+    if (m_is_scene_hierarchy) {
+        const bool focused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+        if (focused && !m_was_focused) {
+            Scene_root* const scene_root = get_tree_scene_root();
+            if (scene_root != nullptr) {
+                m_context.selection->set_active_scene_root(scene_root->shared_from_this());
+            }
+        }
+        m_was_focused = focused;
+    }
 
     imgui_tree(get_scale_value());
 

@@ -94,13 +94,22 @@ auto Mcp_server::action_select_items(const json& args) -> std::string
         }
     }
 
+    // Mirrors the UI's scoped selection semantics: selecting (or clearing)
+    // in one scene leaves other scenes' selections untouched, and the
+    // selection change makes the target scene the active scene.
     if (target_ids.empty()) {
-        m_context.selection->clear_selection();
-        return make_text_content("Selection cleared").dump();
+        m_context.selection->clear_selection(static_cast<erhe::Item_host*>(sr));
+        return make_text_content("Selection cleared in scene: " + sr->get_name()).dump();
     }
 
     auto items_to_select = find_items_by_ids(*sr, target_ids);
-    m_context.selection->set_selection(items_to_select);
+    {
+        Scoped_selection_change selection_change{*m_context.selection};
+        m_context.selection->clear_selection(static_cast<erhe::Item_host*>(sr));
+        for (const std::shared_ptr<erhe::Item_base>& item : items_to_select) {
+            m_context.selection->add_to_selection(item);
+        }
+    }
 
     json selected = json::array();
     for (const auto& item : items_to_select) {

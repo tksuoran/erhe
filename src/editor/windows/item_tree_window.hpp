@@ -30,6 +30,7 @@ class Brush;
 class Icon_set;
 class Operation;
 class Operation_stack;
+class Scene_root;
 class Selection_tool;
 
 enum class Placement : unsigned int {
@@ -58,6 +59,7 @@ public:
     )>;
 
     void set_root                       (const std::shared_ptr<erhe::Hierarchy>& root);
+    [[nodiscard]] auto get_root         () const -> const std::shared_ptr<erhe::Hierarchy>&;
     // Optional item flattened before the root, at indent 0 (a sibling of the
     // root's rows). Used by the scene hierarchy window to show a selectable
     // Scene item with the Content Library nested under it (issue #240); left
@@ -225,8 +227,14 @@ public:
     void hidden  () override;
 
 private:
+    // The Scene_root this window browses; nullptr for non-scene-hierarchy
+    // trees (content library, tools scene browser).
+    [[nodiscard]] auto get_tree_scene_root() const -> Scene_root*;
+
     bool m_is_scene_hierarchy{false};
     int  m_scene_hierarchy_slot{0};
+    int  m_active_scene_tint_count{0};
+    bool m_was_focused{false};
 };
 
 }

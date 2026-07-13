@@ -46,6 +46,15 @@ Range_selection::Range_selection(Selection& selection)
 
 void Range_selection::set_terminator(const std::shared_ptr<erhe::Item_base>& item)
 {
+    // A terminator hosted elsewhere than the current range starts a fresh
+    // range in that host: a range cannot span hosts (each tree feeds entries
+    // for its own host only, so a cross-host range could never resolve).
+    if (m_primary_terminator && item && (item->get_item_host() != m_primary_terminator->get_item_host())) {
+        log_selection->trace("terminator from another host - starting a fresh range");
+        m_primary_terminator.reset();
+        m_secondary_terminator.reset();
+    }
+
     if (!m_primary_terminator) {
         log_selection->trace(
             "setting primary terminator to '{}'",
@@ -124,7 +133,26 @@ void Range_selection::end()
         return;
     }
 
-    m_selection.set_selection(selection);
+    // Scope the range to the hosts its entries came from (one tree feeds the
+    // entries per frame): items selected in other hosts (other scenes, the
+    // content library) are preserved instead of being replaced wholesale.
+    std::vector<erhe::Item_host*> entry_hosts;
+    for (const std::shared_ptr<erhe::Item_base>& item : m_entries) {
+        erhe::Item_host* const host = item ? item->get_item_host() : nullptr;
+        if (std::find(entry_hosts.begin(), entry_hosts.end(), host) == entry_hosts.end()) {
+            entry_hosts.push_back(host);
+        }
+    }
+    std::vector<std::shared_ptr<erhe::Item_base>> final_selection;
+    for (const std::shared_ptr<erhe::Item_base>& item : m_selection.get_selected_items()) {
+        erhe::Item_host* const host = item ? item->get_item_host() : nullptr;
+        if (std::find(entry_hosts.begin(), entry_hosts.end(), host) == entry_hosts.end()) {
+            final_selection.push_back(item);
+        }
+    }
+    final_selection.insert(final_selection.end(), selection.begin(), selection.end());
+
+    m_selection.set_selection(final_selection);
     m_entries.clear();
 }
 
@@ -133,6 +161,21 @@ void Range_selection::reset()
     log_selection->trace("resetting range selection");
     if (m_primary_terminator && m_secondary_terminator) {
         m_selection.clear_selection();
+    }
+    m_primary_terminator.reset();
+    m_secondary_terminator.reset();
+}
+
+void Range_selection::reset(erhe::Item_host* host)
+{
+    const bool primary_hosted   = m_primary_terminator   && (m_primary_terminator  ->get_item_host() == host);
+    const bool secondary_hosted = m_secondary_terminator && (m_secondary_terminator->get_item_host() == host);
+    if (!primary_hosted && !secondary_hosted) {
+        return; // range (if any) belongs to another host - leave it alone
+    }
+    log_selection->trace("resetting range selection for host");
+    if (m_primary_terminator && m_secondary_terminator) {
+        m_selection.clear_selection(host);
     }
     m_primary_terminator.reset();
     m_secondary_terminator.reset();
@@ -765,9 +808,18 @@ auto Selection::on_viewport_select() -> bool
     }
 
     if (!m_hover_content) {
-        clear_selection();
+        // Plain click on empty space deselects within the hovered scene only;
+        // other scenes (and non-hosted items) keep their selection.
+        Scene_root* const hover_scene_root = (m_hover_scene_view != nullptr) ? m_hover_scene_view->get_scene_root().get() : nullptr;
+        if (hover_scene_root != nullptr) {
+            m_range_selection.reset(static_cast<erhe::Item_host*>(hover_scene_root));
+            clear_selection(static_cast<erhe::Item_host*>(hover_scene_root));
+        } else {
+            clear_selection();
+        }
     } else {
-        m_range_selection.reset();
+        erhe::Item_host* const host = shared_hover_mesh->get_node()->get_item_host();
+        m_range_selection.reset(host);
         toggle_mesh_selection(shared_hover_mesh, was_selected, true);
     }
     return true;
@@ -853,7 +905,9 @@ void Selection::toggle_mesh_selection(const std::shared_ptr<erhe::scene::Mesh>& 
     bool add{false};
     bool remove{false};
     if (clear_others) {
-        clear_selection();
+        // Deselect within the clicked node's scene only; other scenes (and
+        // non-hosted items) keep their selection.
+        clear_selection(target_node->get_item_host());
         if (!effective_was_selected && mesh) {
             add = true;
         }

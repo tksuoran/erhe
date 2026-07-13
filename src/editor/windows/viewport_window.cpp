@@ -21,6 +21,8 @@
 #include "scene/viewport_scene_views.hpp"
 #include "tools/material_paint_tool.hpp"
 #include "tools/mesh_component_selection_tool.hpp"
+#include "tools/selection_tool.hpp"
+#include "windows/active_scene_highlight.hpp"
 
 #include "erhe_defer/defer.hpp"
 #include "erhe_imgui/imgui_host.hpp"
@@ -89,6 +91,11 @@ void Viewport_window::update_hover_info()
 void Viewport_window::on_begin()
 {
     update_title_from_scene();
+    {
+        const std::shared_ptr<Viewport_scene_view> viewport_scene_view = m_viewport_scene_view.lock();
+        const std::shared_ptr<Scene_root> scene_root = viewport_scene_view ? viewport_scene_view->get_scene_root() : std::shared_ptr<Scene_root>{};
+        m_active_scene_tint_count = push_active_scene_window_tint(m_app_context, scene_root.get());
+    }
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4{0.0, 0.0, 0.0, 0.0});
 }
@@ -125,6 +132,10 @@ void Viewport_window::on_end()
 {
     ImGui::PopStyleColor();
     ImGui::PopStyleVar();
+    if (m_active_scene_tint_count > 0) {
+        ImGui::PopStyleColor(m_active_scene_tint_count);
+        m_active_scene_tint_count = 0;
+    }
 }
 
 void Viewport_window::set_imgui_host(erhe::imgui::Imgui_host* imgui_host)
@@ -351,6 +362,21 @@ void Viewport_window::drag_and_drop_target(float min_x, float min_y, float max_x
 
 void Viewport_window::imgui()
 {
+    // Giving this viewport focus makes its scene the active scene
+    // (edge-triggered: selection changes elsewhere may activate another
+    // scene while this window stays focused, and must not be fought).
+    {
+        const bool focused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+        if (focused && !m_was_focused) {
+            const std::shared_ptr<Viewport_scene_view> viewport_scene_view = m_viewport_scene_view.lock();
+            const std::shared_ptr<Scene_root> scene_root = viewport_scene_view ? viewport_scene_view->get_scene_root() : std::shared_ptr<Scene_root>{};
+            if (scene_root && (m_app_context.selection != nullptr)) {
+                m_app_context.selection->set_active_scene_root(scene_root);
+            }
+        }
+        m_was_focused = focused;
+    }
+
     draw_toolbar();
     ImGui::BeginChildEx(
         "Viewport_window::imgui()", // name

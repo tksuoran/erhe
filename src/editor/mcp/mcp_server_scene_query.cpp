@@ -660,14 +660,25 @@ auto Mcp_server::query_selection(const json& args) -> std::string
 
     json items = json::array();
     for (const auto& item : m_context.selection->get_selected_items()) {
-        items.push_back({
+        json entry = {
             {"name",      item->get_name()},
             {"type",      std::string{item->get_type_name()}},
             {"id",        item->get_id()}
-        });
+        };
+        // Selection is partitioned per host: report which scene each item
+        // belongs to (absent for non-hosted items, e.g. content library).
+        Scene_root* const item_scene_root = dynamic_cast<Scene_root*>(item->get_item_host());
+        if (item_scene_root != nullptr) {
+            entry["scene_name"] = item_scene_root->get_name();
+        }
+        items.push_back(entry);
     }
 
     json result = {{"items", items}};
+    const std::shared_ptr<Scene_root> active_scene_root = m_context.selection->get_active_scene_root();
+    if (active_scene_root) {
+        result["active_scene"] = active_scene_root->get_name();
+    }
     if (m_context.transform_tool != nullptr) {
         result["transform_reference_mode"] = transform_reference_mode_lc(m_context.transform_tool->shared.settings.reference_mode);
     }

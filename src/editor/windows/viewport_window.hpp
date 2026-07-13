@@ -80,6 +80,8 @@ private:
     std::weak_ptr<Viewport_scene_view>                 m_viewport_scene_view;
     std::weak_ptr<erhe::rendergraph::Rendergraph_node> m_rendergraph_output_node;
     int                                                m_window_slot{0};
+    int                                                m_active_scene_tint_count{0};
+    bool                                               m_was_focused{false};
     bool                                               m_brush_drag_and_drop_active{false};
     bool                                               m_viewport_child_window_focused{false};
     bool                                               m_viewport_child_window_hovered{false};

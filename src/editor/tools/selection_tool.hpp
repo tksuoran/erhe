@@ -108,11 +108,18 @@ public:
     void end           ();
     void reset         ();
 
+    // Host-scoped reset: collapses the range (including reset()'s
+    // selection-clearing side effect, restricted to `host`) only when a
+    // terminator belongs to `host`. A range running in another host's tree
+    // is left untouched, so interacting with one scene never cancels a
+    // range selection in another.
+    void reset(erhe::Item_host* host);
+
     // Drop the terminators (without the selection-clearing side effect of
     // reset()) when either one is hosted by `host`. Used by the host-scoped
     // Selection::clear_selection(Item_host*) so clearing one scene's
     // selection does not disturb a range selection running in another
-    // scene's tree.
+    // scene's tree (and without re-entering clear_selection).
     void reset_terminators_for_host(erhe::Item_host* host);
 
 private:
