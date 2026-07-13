@@ -21,6 +21,7 @@ public:
     erhe::message_bus::Message_bus<Hover_tree_node_message,       queue> hover_tree_node;
     erhe::message_bus::Message_bus<Hover_scene_item_tree_message, sync>  hover_scene_item_tree;
     erhe::message_bus::Message_bus<Selection_message,             sync>  selection;
+    erhe::message_bus::Message_bus<Active_scene_changed_message,  sync>  active_scene;
     erhe::message_bus::Message_bus<Graphics_settings_message,     queue> graphics_settings;
     erhe::message_bus::Message_bus<Node_touched_message,          sync>  node_touched;
     erhe::message_bus::Message_bus<Mesh_geometry_changed_message, sync>  mesh_geometry_changed;

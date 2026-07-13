@@ -2524,19 +2524,17 @@ public:
         }
 #endif
 
-        // Drop selected items hosted by this scene (including the Scene item
-        // itself) so the selection does not keep dead-scene items alive or
-        // feed them to tools.
-        {
-            const std::vector<std::shared_ptr<erhe::Item_base>> selected_items = m_selection->get_selected_items();
-            for (const std::shared_ptr<erhe::Item_base>& selected_item : selected_items) {
-                if (
-                    (selected_item->get_item_host() == scene_root.get()) ||
-                    (selected_item == scene_root->get_scene_item())
-                ) {
-                    m_selection->remove_from_selection(selected_item);
-                }
-            }
+        // Drop selected items hosted by this scene (including the Scene item,
+        // whose host is also this scene_root) so the selection does not keep
+        // dead-scene items alive or feed them to tools. Other scenes'
+        // selections are untouched.
+        m_selection->clear_selection(static_cast<erhe::Item_host*>(scene_root.get()));
+
+        // Stop tracking this scene as the active scene; consumers fall back
+        // via Selection::get_active_scene_root() until another scene is
+        // activated by selection or window focus.
+        if (m_selection->get_active_scene_root() == scene_root) {
+            m_selection->set_active_scene_root({});
         }
 
         // Detach the global tools when they are homed in this scene; they

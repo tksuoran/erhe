@@ -31,6 +31,7 @@ class App_context;
 class App_message_bus;
 class App_scenes;
 class Icon_set;
+class Scene_root;
 class Selection;
 class Tools;
 
@@ -107,6 +108,13 @@ public:
     void end           ();
     void reset         ();
 
+    // Drop the terminators (without the selection-clearing side effect of
+    // reset()) when either one is hosted by `host`. Used by the host-scoped
+    // Selection::clear_selection(Item_host*) so clearing one scene's
+    // selection does not disturb a range selection running in another
+    // scene's tree.
+    void reset_terminators_for_host(erhe::Item_host* host);
+
 private:
     Selection&                                    m_selection;
     std::shared_ptr<erhe::Item_base>              m_primary_terminator;
@@ -160,6 +168,28 @@ public:
     [[nodiscard]] auto range_selection   () -> Range_selection&;
     [[nodiscard]] auto get_last_selected (uint64_t type) -> std::shared_ptr<erhe::Item_base>;
 
+    // Per-host selection view: the items of the current selection hosted by
+    // `host` (nullptr = items with no Item_host, e.g. content library
+    // entries). The authoritative selection is the union returned by
+    // get_selected_items(); this clears and refills the host-owned bucket
+    // (capacity retained) from it at query time, so a host change while
+    // selected (e.g. a cross-scene reparent) can never leave a stale view.
+    [[nodiscard]] auto get_hosted_selection(erhe::Item_host* host) -> const std::vector<std::shared_ptr<erhe::Item_base>>&;
+
+    // Remove from the selection all items hosted by `host` (nullptr = items
+    // with no Item_host). Other hosts' selections are left untouched.
+    // Returns true when anything was removed.
+    auto clear_selection(erhe::Item_host* host) -> bool;
+
+    // Active scene: the scene commands targeting scene-hosted items act on;
+    // the UI highlights its windows. Explicit tracked state, updated by
+    // selection changes (the changed scene becomes active) and by focusing a
+    // scene's viewport / hierarchy window - never by hover alone. The getter
+    // falls back to the last hovered scene view's scene, then to the single
+    // open scene, when nothing is explicitly active.
+    [[nodiscard]] auto get_active_scene_root() -> std::shared_ptr<Scene_root>;
+    void set_active_scene_root(const std::shared_ptr<Scene_root>& scene_root);
+
     template <typename T>
     [[nodiscard]] auto get_last_selected() const -> std::shared_ptr<T>;
 
@@ -202,6 +232,8 @@ private:
 
     Scene_view*                                   m_hover_scene_view{nullptr};
     std::vector<std::shared_ptr<erhe::Item_base>> m_selection;
+    std::vector<std::shared_ptr<erhe::Item_base>> m_non_hosted_selection; // get_hosted_selection(nullptr) bucket
+    std::weak_ptr<Scene_root>                     m_active_scene_root;
     Range_selection                               m_range_selection;
     std::weak_ptr<erhe::scene::Mesh>              m_hover_mesh   {};
     bool                                          m_hover_content{false};

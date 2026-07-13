@@ -11,12 +11,15 @@
 #include "operations/operation_stack.hpp"
 #include "prefabs/prefab_instance.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/viewport_scene_view.hpp"
+#include "scene/viewport_scene_views.hpp"
 #include "tools/clipboard.hpp"
 #include "tools/mesh_component_selection.hpp"
 #include "tools/tools.hpp"
 
 #include "erhe_commands/commands.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
+#include "erhe_item/item_host.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_utility/bit_helpers.hpp"
@@ -133,6 +136,19 @@ void Range_selection::reset()
     }
     m_primary_terminator.reset();
     m_secondary_terminator.reset();
+}
+
+void Range_selection::reset_terminators_for_host(erhe::Item_host* host)
+{
+    const bool primary_hosted   = m_primary_terminator   && (m_primary_terminator  ->get_item_host() == host);
+    const bool secondary_hosted = m_secondary_terminator && (m_secondary_terminator->get_item_host() == host);
+    if (!primary_hosted && !secondary_hosted) {
+        return;
+    }
+    log_selection->trace("resetting range selection terminators for host");
+    m_primary_terminator.reset();
+    m_secondary_terminator.reset();
+    m_edited = false;
 }
 
 #pragma endregion Range_selection
@@ -324,6 +340,81 @@ void Selection_tool::handle_priority_update(int old_priority, int new_priority)
 auto Selection::get_selected_items() const -> const std::vector<std::shared_ptr<erhe::Item_base>>&
 {
     return m_selection;
+}
+
+auto Selection::get_hosted_selection(erhe::Item_host* host) -> const std::vector<std::shared_ptr<erhe::Item_base>>&
+{
+    std::vector<std::shared_ptr<erhe::Item_base>>& bucket = (host != nullptr) ? host->hosted_selection : m_non_hosted_selection;
+    bucket.clear();
+    for (const std::shared_ptr<erhe::Item_base>& item : m_selection) {
+        if (item && (item->get_item_host() == host)) {
+            bucket.push_back(item);
+        }
+    }
+    return bucket;
+}
+
+auto Selection::clear_selection(erhe::Item_host* host) -> bool
+{
+    Scoped_selection_change selection_change{*this};
+
+    bool removed_any{false};
+    auto i = m_selection.begin();
+    while (i != m_selection.end()) {
+        const std::shared_ptr<erhe::Item_base>& item = *i;
+        if (item && (item->get_item_host() == host)) {
+            item->set_selected(false);
+            i = m_selection.erase(i);
+            removed_any = true;
+        } else {
+            ++i;
+        }
+    }
+
+    if (removed_any) {
+        log_selection->trace("Cleared selection for host {}", (host != nullptr) ? host->get_host_name() : "(none)");
+        m_range_selection.reset_terminators_for_host(host);
+#if !defined(NDEBUG)
+        sanity_check();
+#endif
+    }
+    return removed_any;
+}
+
+auto Selection::get_active_scene_root() -> std::shared_ptr<Scene_root>
+{
+    std::shared_ptr<Scene_root> active_scene_root = m_active_scene_root.lock();
+    if (active_scene_root) {
+        return active_scene_root;
+    }
+
+    // Fallbacks: last hovered scene view's scene, then the single open scene.
+    if (m_context.scene_views != nullptr) {
+        const std::shared_ptr<Viewport_scene_view> last_scene_view = m_context.scene_views->last_scene_view();
+        if (last_scene_view) {
+            const std::shared_ptr<Scene_root> scene_root = last_scene_view->get_scene_root();
+            if (scene_root) {
+                return scene_root;
+            }
+        }
+    }
+    if (m_context.app_scenes != nullptr) {
+        return m_context.app_scenes->get_single_scene_root();
+    }
+    return {};
+}
+
+void Selection::set_active_scene_root(const std::shared_ptr<Scene_root>& scene_root)
+{
+    if (m_active_scene_root.lock() == scene_root) {
+        return;
+    }
+    m_active_scene_root = scene_root;
+    m_context.app_message_bus->active_scene.send_message(
+        Active_scene_changed_message{
+            .scene_root = scene_root
+        }
+    );
 }
 
 auto Selection::delete_selection() -> bool
@@ -591,6 +682,21 @@ void Selection::end_selection_change()
         std::back_inserter(selection_change.newly_selected),
         item_set_sort_predicate
     );
+
+    // A selection change in a scene makes that scene the active scene
+    // (deselect-only changes do not). Set before broadcasting so
+    // Selection_message subscribers observe the up-to-date active scene.
+    for (const std::shared_ptr<erhe::Item_base>& item : selection_change.newly_selected) {
+        erhe::Item_host* const item_host = item ? item->get_item_host() : nullptr;
+        if (item_host == nullptr) {
+            continue;
+        }
+        Scene_root* const scene_root = dynamic_cast<Scene_root*>(item_host);
+        if (scene_root != nullptr) {
+            set_active_scene_root(scene_root->shared_from_this());
+            break;
+        }
+    }
 
     m_context.app_message_bus->selection.send_message(
         Selection_message{
@@ -864,6 +970,16 @@ void Selection::sanity_check()
                 is_in(item, m_selection)
             ) {
                 log_selection->error("Node does not have selection flag set while being in selection");
+                ++error_count;
+            }
+        }
+    }
+
+    // No duplicates in the selection (each per-host view assumes one entry per item)
+    for (std::size_t i = 0, end = m_selection.size(); i < end; ++i) {
+        for (std::size_t j = i + 1; j < end; ++j) {
+            if (m_selection[i] == m_selection[j]) {
+                log_selection->error("Item '{}' is in the selection more than once", m_selection[i] ? m_selection[i]->get_name() : "(null)");
                 ++error_count;
             }
         }

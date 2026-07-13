@@ -58,6 +58,15 @@ struct Selection_message
     Selection_change selection_change{};
 };
 
+// Published when the active scene changes (Selection::set_active_scene_root).
+// The active scene is the scene that commands targeting scene-hosted items
+// act on; the UI highlights its windows. scene_root is null when no scene is
+// explicitly active (consumers fall back via Selection::get_active_scene_root).
+struct Active_scene_changed_message
+{
+    std::shared_ptr<Scene_root> scene_root{};
+};
+
 struct Graphics_settings_message
 {
     Graphics_preset_entry* graphics_preset{nullptr};
