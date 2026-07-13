@@ -188,6 +188,12 @@ public:
     // Returns true when anything was removed.
     auto clear_selection(erhe::Item_host* host) -> bool;
 
+    // The items commands act on (operation scoping policy): the ACTIVE
+    // scene's items plus non-hosted items. Selection in other scenes
+    // persists but is never an invisible participant in a command.
+    // Cleared and refilled (capacity retained) at call time.
+    [[nodiscard]] auto get_command_target_selection() -> const std::vector<std::shared_ptr<erhe::Item_base>>&;
+
     // Active scene: the scene commands targeting scene-hosted items act on;
     // the UI highlights its windows. Explicit tracked state, updated by
     // selection changes (the changed scene becomes active) and by focusing a
@@ -240,6 +246,7 @@ private:
     Scene_view*                                   m_hover_scene_view{nullptr};
     std::vector<std::shared_ptr<erhe::Item_base>> m_selection;
     std::vector<std::shared_ptr<erhe::Item_base>> m_non_hosted_selection; // get_hosted_selection(nullptr) bucket
+    std::vector<std::shared_ptr<erhe::Item_base>> m_command_target_selection; // get_command_target_selection() scratch
     std::weak_ptr<Scene_root>                     m_active_scene_root;
     Range_selection                               m_range_selection;
     std::weak_ptr<erhe::scene::Mesh>              m_hover_mesh   {};

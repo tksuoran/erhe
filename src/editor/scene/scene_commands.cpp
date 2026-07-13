@@ -449,55 +449,21 @@ auto Scene_commands::get_scene_root(erhe::scene::Node* parent) const -> Scene_ro
         return static_cast<Scene_root*>(parent->get_item_host());
     }
 
-    Selection& selection = *m_context.selection;
-    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = selection.get_selected_items();
-
-    const auto  first_selected_node  = get<erhe::scene::Node>(selected_items);
-    const auto  first_selected_scene = get<erhe::scene::Scene>(selected_items);
-    const auto& viewport_scene_view  = m_context.scene_views->last_scene_view();
-
-    erhe::Item_host* item_host = first_selected_node ? first_selected_node->get_item_host() : nullptr;
-    if ((item_host == nullptr) && first_selected_scene) {
-        item_host = first_selected_scene->get_root_node()->get_item_host();
-    }
-    if ((item_host == nullptr) && viewport_scene_view) {
-        return viewport_scene_view->get_scene_root().get();
-    }
-    if (item_host == nullptr) {
-        // Nothing selected and no viewport hovered yet: when exactly one
-        // scene exists, use it as the target.
-        return m_context.app_scenes->get_single_scene_root().get();
-    }
-    Scene_root* scene_root = static_cast<Scene_root*>(item_host);
-    return scene_root;
+    // The active scene replaces the old first-selected-item scan: it is the
+    // deterministic, user-visible target scene (its getter already falls back
+    // to the last hovered scene view's scene, then the single open scene).
+    return m_context.selection->get_active_scene_root().get();
 }
 
 auto Scene_commands::get_scene_root(erhe::primitive::Material* material) const -> Scene_root*
 {
-    Selection& selection = *m_context.selection;
-    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = selection.get_selected_items();
+    erhe::Item_host* const item_host = (material != nullptr) ? material->get_item_host() : nullptr;
+    if (item_host != nullptr) {
+        return static_cast<Scene_root*>(item_host);
+    }
 
-    const auto  first_selected_node  = get<erhe::scene::Node>(selected_items);
-    const auto  first_selected_scene = get<erhe::scene::Scene>(selected_items);
-    const auto& viewport_scene_view  = m_context.scene_views->last_scene_view();
-
-    erhe::Item_host* item_host = (material != nullptr) ? material->get_item_host() : nullptr;
-    if ((item_host == nullptr) && first_selected_node) {
-        item_host = first_selected_node->get_item_host();
-    }
-    if ((item_host == nullptr) && first_selected_scene) {
-        item_host = first_selected_scene->get_root_node()->get_item_host();
-    }
-    if ((item_host == nullptr) && viewport_scene_view) {
-        return viewport_scene_view->get_scene_root().get();
-    }
-    if (item_host == nullptr) {
-        // Nothing selected and no viewport hovered yet: when exactly one
-        // scene exists, use it as the target.
-        return m_context.app_scenes->get_single_scene_root().get();
-    }
-    Scene_root* scene_root = static_cast<Scene_root*>(item_host);
-    return scene_root;
+    // See the Node* overload above.
+    return m_context.selection->get_active_scene_root().get();
 }
 
 namespace {

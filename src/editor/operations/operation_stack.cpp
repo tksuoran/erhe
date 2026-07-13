@@ -90,6 +90,12 @@ void Operation_stack::queue(const std::shared_ptr<Operation>& operation)
     m_queued.push_back(operation);
 }
 
+void Operation_stack::queue_from_thread(const std::shared_ptr<Operation>& operation)
+{
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_thread_queue_mutex};
+    m_queued_from_threads.push_back(operation);
+}
+
 void Operation_stack::execute_now(const std::shared_ptr<Operation>& operation)
 {
     verify_main_thread();
@@ -108,6 +114,20 @@ void Operation_stack::update()
 
     verify_main_thread();
     ERHE_VERIFY(!m_executing);
+
+    // Drain the cross-thread inbox (async worker completions) into the
+    // main-thread queue, preserving arrival order.
+    {
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_thread_queue_mutex};
+        if (!m_queued_from_threads.empty()) {
+            m_queued.insert(
+                m_queued.end(),
+                std::make_move_iterator(m_queued_from_threads.begin()),
+                std::make_move_iterator(m_queued_from_threads.end())
+            );
+            m_queued_from_threads.clear();
+        }
+    }
 
     if (m_queued.empty()) {
         return;

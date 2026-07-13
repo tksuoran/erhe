@@ -25,8 +25,17 @@ namespace editor {
 Merge_operation::Merge_operation(Parameters&& parameters)
     : m_parameters{std::move(parameters)}
 {
+    // Merge acts on the ACTIVE scene's selection only: one host, so the
+    // reference frame is composed within one world space and no node is
+    // detached from another scene into this one. Selection in other scenes
+    // persists but never participates.
+    const std::shared_ptr<Scene_root> active_scene_root = parameters.context.selection->get_active_scene_root();
+    if (!active_scene_root) {
+        return;
+    }
     // TODO count meshes in selection
-    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = parameters.context.selection->get_selected_items();
+    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items =
+        parameters.context.selection->get_hosted_selection(static_cast<erhe::Item_host*>(active_scene_root.get()));
     if (selected_items.size() < 2) {
         return;
     }

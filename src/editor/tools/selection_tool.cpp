@@ -460,9 +460,23 @@ void Selection::set_active_scene_root(const std::shared_ptr<Scene_root>& scene_r
     );
 }
 
+auto Selection::get_command_target_selection() -> const std::vector<std::shared_ptr<erhe::Item_base>>&
+{
+    Scene_root* const active_scene_root = get_active_scene_root().get();
+    m_command_target_selection.clear();
+    for (const std::shared_ptr<erhe::Item_base>& item : m_selection) {
+        erhe::Item_host* const host = item ? item->get_item_host() : nullptr;
+        if ((host == nullptr) || (host == static_cast<erhe::Item_host*>(active_scene_root))) {
+            m_command_target_selection.push_back(item);
+        }
+    }
+    return m_command_target_selection;
+}
+
 auto Selection::delete_selection() -> bool
 {
-    if (m_selection.empty()) {
+    const std::vector<std::shared_ptr<erhe::Item_base>>& target_selection = get_command_target_selection();
+    if (target_selection.empty()) {
         return false;
     }
 
@@ -475,7 +489,7 @@ auto Selection::delete_selection() -> bool
         recursive_selection.push_back(item.shared_from_this());
         return true;
     };
-    for (const std::shared_ptr<erhe::Item_base>& item : m_selection) {
+    for (const std::shared_ptr<erhe::Item_base>& item : target_selection) {
         if (item->is_lock_edit()) {
             continue;
         }
@@ -532,11 +546,12 @@ auto Selection::delete_selection() -> bool
 
 auto Selection::cut_selection() -> bool
 {
-    if (m_selection.empty()) {
+    const std::vector<std::shared_ptr<erhe::Item_base>>& target_selection = get_command_target_selection();
+    if (target_selection.empty()) {
         return false;
     }
 
-    m_context.clipboard->set_contents(m_selection);
+    m_context.clipboard->set_contents(target_selection);
     return delete_selection();
 }
 
@@ -556,13 +571,14 @@ auto Selection::copy_selection() -> bool
 
 auto Selection::duplicate_selection() -> bool
 {
-    if (m_selection.empty()) {
+    const std::vector<std::shared_ptr<erhe::Item_base>>& target_selection = get_command_target_selection();
+    if (target_selection.empty()) {
         return false;
     }
 
     Compound_operation::Parameters compound_parameters{};
 
-    for (const auto& item : m_selection) {
+    for (const auto& item : target_selection) {
         const auto& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
         if (hierarchy) {
             // Clones keep the source name; a duplicate wants a

@@ -405,7 +405,14 @@ auto Fly_camera_frame_command::try_call() -> bool
     const erhe::math::Viewport viewport = viewport_scene_view->get_projection_viewport();
 
     erhe::math::Aabb bbox{};
-    const std::vector<std::shared_ptr<erhe::Item_base>>& selection = m_context.selection->get_selected_items();
+    // Frame only this viewport's scene's selection: nodes selected in other
+    // scenes live in unrelated world spaces and must not stretch the box.
+    const std::shared_ptr<Scene_root> view_scene_root = scene_view->get_scene_root();
+    if (!view_scene_root) {
+        return false;
+    }
+    const std::vector<std::shared_ptr<erhe::Item_base>>& selection =
+        m_context.selection->get_hosted_selection(static_cast<erhe::Item_host*>(view_scene_root.get()));
     for (const std::shared_ptr<erhe::Item_base>& item : selection) {
         const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
         if (!node) {

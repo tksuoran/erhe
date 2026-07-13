@@ -683,7 +683,10 @@ void Animation_window::collect_selected_nodes(std::vector<std::shared_ptr<erhe::
     if (m_context.selection == nullptr) {
         return;
     }
-    for (const std::shared_ptr<erhe::Item_base>& item : m_context.selection->get_selected_items()) {
+    // Keying is a command targeting scene-hosted items: it acts on the ACTIVE
+    // scene's selection only, so nodes selected in other scenes are never
+    // keyed against this scene's animation.
+    for (const std::shared_ptr<erhe::Item_base>& item : m_context.selection->get_command_target_selection()) {
         std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
         if (node) {
             out_nodes.push_back(std::move(node));

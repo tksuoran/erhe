@@ -450,7 +450,16 @@ auto Binary_mesh_operation::make_operations(
     std::shared_ptr<erhe::primitive::Material> material{};
     erhe::primitive::Normal_style normal_style = erhe::primitive::Normal_style::none;
 
-    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = parameters.context.selection->get_selected_items();
+    // Booleans act on the ACTIVE scene's selection only: one host, so the
+    // single item_host_mutex lock below is correct, and world transforms are
+    // composed within one world space. Selection in other scenes persists but
+    // never participates.
+    const std::shared_ptr<Scene_root> active_scene_root = parameters.context.selection->get_active_scene_root();
+    if (!active_scene_root) {
+        return {};
+    }
+    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items =
+        parameters.context.selection->get_hosted_selection(static_cast<erhe::Item_host*>(active_scene_root.get()));
     glm::mat4 target_node_from_world = glm::mat4{1};
     glm::mat4 target_world_from_node = glm::mat4{1};
 

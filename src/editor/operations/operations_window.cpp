@@ -632,7 +632,14 @@ auto Operations::resolve_operation_items(
         // A component mode is active but nothing is live (e.g. all entries dormant):
         // fall through to the object selection rather than silently doing nothing.
     }
-    out_items = m_context.selection->get_selected_items();
+    // Commands targeting scene-hosted items act on the ACTIVE scene's
+    // selection only (selection in other scenes persists but is never an
+    // invisible participant in an operation).
+    const std::shared_ptr<Scene_root> active_scene_root = m_context.selection->get_active_scene_root();
+    if (!active_scene_root) {
+        return false;
+    }
+    out_items = m_context.selection->get_hosted_selection(static_cast<erhe::Item_host*>(active_scene_root.get()));
     return true;
 }
 
@@ -648,7 +655,8 @@ void Operations::async_mesh_operation(const bool selection_aware)
         items,
         [this](Mesh_operation_parameters&& mesh_operation_parameters)
         {
-            m_context.operation_stack->queue(
+            // Runs on a tf::Executor worker: queue() is main-thread-only.
+            m_context.operation_stack->queue_from_thread(
                 std::make_shared<T>(std::move(mesh_operation_parameters))
             );
         }
@@ -1846,14 +1854,23 @@ void Operations::normalize()
 
 void Operations::bake_transform()
 {
+    // Active-scene selection (operation scoping policy); also fills the bake
+    // operation's items - constructing it from a bare mesh_context() left
+    // items empty, so make_entries produced no entries and only the node
+    // transform reset half ever ran.
+    std::vector<std::shared_ptr<erhe::Item_base>> items;
+    if (!resolve_operation_items(false, items)) {
+        return;
+    }
     Compound_operation::Parameters compound_operation_parameters;
     // First: Transform geometries using node transforms
+    Mesh_operation_parameters bake_parameters = mesh_context();
+    bake_parameters.items = items;
     compound_operation_parameters.operations.push_back(
-        std::make_shared<Bake_transform_operation>(mesh_context())
+        std::make_shared<Bake_transform_operation>(std::move(bake_parameters))
     );
     // Second: Reset transform in all nodes
-    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = m_context.selection->get_selected_items();
-    const std::vector<std::shared_ptr<erhe::scene::Node>>& nodes = get_all<erhe::scene::Node>(selected_items);
+    const std::vector<std::shared_ptr<erhe::scene::Node>>& nodes = get_all<erhe::scene::Node>(items);
     for (const std::shared_ptr<erhe::scene::Node>& node : nodes) {
         compound_operation_parameters.operations.push_back(
             std::make_shared<Node_transform_operation>(
@@ -1872,10 +1889,17 @@ void Operations::bake_transform()
 
 void Operations::center_transform()
 {
+    // Active-scene selection (operation scoping policy); also fills the bake
+    // operation's items, see bake_transform().
+    std::vector<std::shared_ptr<erhe::Item_base>> items;
+    if (!resolve_operation_items(false, items)) {
+        return;
+    }
     Compound_operation::Parameters compound_operation_parameters;
 
     // First: Transform geometries using node transforms
     Mesh_operation_parameters parameters = mesh_context();
+    parameters.items = items;
     //std::unordered_map<uint64_t, glm::mat4> mesh_transform;
     parameters.make_entry_node_callback = [](erhe::scene::Node* node, Mesh_operation_parameters& parameters) {
         const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node);
@@ -1890,8 +1914,7 @@ void Operations::center_transform()
         std::make_shared<Bake_transform_operation>(std::move(parameters))
     );
     // Second: Reset transform in all nodes
-    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = m_context.selection->get_selected_items();
-    const std::vector<std::shared_ptr<erhe::scene::Node>>& nodes = get_all<erhe::scene::Node>(selected_items);
+    const std::vector<std::shared_ptr<erhe::scene::Node>>& nodes = get_all<erhe::scene::Node>(items);
     for (const std::shared_ptr<erhe::scene::Node>& node : nodes) {
         const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
         if (!mesh) {
@@ -1942,7 +1965,7 @@ void Operations::remesh(const unsigned int target_point_count, const bool regene
 {
     async_for_selected_nodes_with_mesh(
         [this, target_point_count, regenerate_attributes](Mesh_operation_parameters&& params) {
-            m_context.operation_stack->queue(
+            m_context.operation_stack->queue_from_thread(
                 std::make_shared<Remesh_operation>(std::move(params), target_point_count, regenerate_attributes)
             );
         }
@@ -1958,7 +1981,7 @@ void Operations::anisotropic_remesh(const unsigned int target_point_count, const
 {
     async_for_selected_nodes_with_mesh(
         [this, target_point_count, anisotropy, regenerate_attributes](Mesh_operation_parameters&& params) {
-            m_context.operation_stack->queue(
+            m_context.operation_stack->queue_from_thread(
                 std::make_shared<Anisotropic_remesh_operation>(std::move(params), target_point_count, anisotropy, regenerate_attributes)
             );
         }
@@ -1974,7 +1997,7 @@ void Operations::decimate(const unsigned int nb_bins, const bool regenerate_attr
 {
     async_for_selected_nodes_with_mesh(
         [this, nb_bins, regenerate_attributes](Mesh_operation_parameters&& params) {
-            m_context.operation_stack->queue(
+            m_context.operation_stack->queue_from_thread(
                 std::make_shared<Decimate_operation>(std::move(params), nb_bins, regenerate_attributes)
             );
         }
@@ -1990,7 +2013,7 @@ void Operations::smooth(const unsigned int iterations, const float strength, con
 {
     async_for_selected_nodes_with_mesh(
         [this, iterations, strength, regenerate_attributes](Mesh_operation_parameters&& params) {
-            m_context.operation_stack->queue(
+            m_context.operation_stack->queue_from_thread(
                 std::make_shared<Smooth_operation>(std::move(params), iterations, strength, regenerate_attributes)
             );
         }
@@ -2008,7 +2031,7 @@ void Operations::make_atlas(const std::size_t usage_index, const float hard_angl
     const auto atlas_packer        = static_cast<erhe::geometry::operation::Atlas_packer>(packer);
     async_for_selected_nodes_with_mesh(
         [this, usage_index, hard_angles_threshold, atlas_parameterizer, atlas_packer](Mesh_operation_parameters&& params) {
-            m_context.operation_stack->queue(
+            m_context.operation_stack->queue_from_thread(
                 std::make_shared<Make_atlas_operation>(std::move(params), usage_index, hard_angles_threshold, atlas_parameterizer, atlas_packer)
             );
         }

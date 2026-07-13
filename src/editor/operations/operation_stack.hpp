@@ -2,8 +2,10 @@
 
 #include "erhe_commands/command.hpp"
 #include "erhe_imgui/imgui_window.hpp"
+#include "erhe_profile/profile.hpp"
 
 #include <memory>
+#include <mutex>
 #include <vector>
 
 namespace erhe::commands { class Commands; }
@@ -42,8 +44,9 @@ private:
 // thread (App_context::main_thread_id) instead of locking. All operation
 // sources (ImGui windows/tools, commands, MCP handlers dispatched via
 // Mcp_server::process_queued_requests(), startup script, message-bus
-// callbacks) run on the main thread; worker threads must hand results to
-// the main thread rather than call into this class.
+// callbacks) run on the main thread; the single exception for worker
+// threads is queue_from_thread(), a mutex-protected inbox drained by
+// update() - used by the async mesh-operation completions.
 //
 // Re-entrancy contract: while an operation is executing (or being undone),
 // the only legal Operation_stack call is queue(). Operations queued during
@@ -64,6 +67,13 @@ public:
     [[nodiscard]] auto can_undo      () const -> bool;
     [[nodiscard]] auto can_redo      () const -> bool;
     void queue(const std::shared_ptr<Operation>& operation);
+
+    // Thread-safe variant of queue() for async worker completions (the
+    // async_for_nodes_with_mesh callbacks run on tf::Executor workers):
+    // appends to a mutex-protected inbox that update() drains on the main
+    // thread before executing. This is the ONLY Operation_stack entry point
+    // legal off the main thread.
+    void queue_from_thread(const std::shared_ptr<Operation>& operation);
 
     // Executes the operation immediately (caller must be on the main
     // thread) and records it for undo. Used where the caller needs the
@@ -105,6 +115,10 @@ private:
     std::vector<std::shared_ptr<Operation>> m_executed;
     std::vector<std::shared_ptr<Operation>> m_undone;
     std::vector<std::shared_ptr<Operation>> m_queued;
+
+    // Cross-thread inbox for queue_from_thread(); drained by update().
+    ERHE_PROFILE_MUTEX(std::mutex,          m_thread_queue_mutex);
+    std::vector<std::shared_ptr<Operation>> m_queued_from_threads;
 };
 
 }

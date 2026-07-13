@@ -100,7 +100,9 @@ auto Clipboard::try_ready() -> bool
     }
 
     Selection& selection = *m_context.selection;
-    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = selection.get_selected_items();
+    // Paste is a command: it targets the active scene's selection (plus
+    // non-hosted items), never a hierarchy selected in another scene.
+    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = selection.get_command_target_selection();
     const std::shared_ptr<erhe::Hierarchy>& selected_hierarchy = get<erhe::Hierarchy>(selected_items);
     if (selected_hierarchy) {
         return selected_hierarchy;
@@ -111,13 +113,15 @@ auto Clipboard::try_ready() -> bool
         return last_selected_hierarchy;
     }
 
-    const std::shared_ptr<Scene_root> scene_root = m_last_hover_scene_view->get_scene_root();
-    if (scene_root) {
-        const erhe::scene::Scene& scene = scene_root->get_scene();
-        std::shared_ptr<erhe::scene::Node> root_node = scene.get_root_node();
-        const std::shared_ptr<erhe::Hierarchy>& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(root_node);
-        if (hierarchy) {
-            return hierarchy;
+    if (m_last_hover_scene_view != nullptr) {
+        const std::shared_ptr<Scene_root> scene_root = m_last_hover_scene_view->get_scene_root();
+        if (scene_root) {
+            const erhe::scene::Scene& scene = scene_root->get_scene();
+            std::shared_ptr<erhe::scene::Node> root_node = scene.get_root_node();
+            const std::shared_ptr<erhe::Hierarchy>& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(root_node);
+            if (hierarchy) {
+                return hierarchy;
+            }
         }
     }
     return {};
@@ -126,6 +130,9 @@ auto Clipboard::try_ready() -> bool
 auto Clipboard::try_paste() -> bool
 {
     const std::shared_ptr<erhe::Hierarchy>& target = resolve_paste_target();
+    if (!target) {
+        return false;
+    }
     const std::size_t index_in_parent = target->get_child_count();
     return try_paste(target, index_in_parent);
 }

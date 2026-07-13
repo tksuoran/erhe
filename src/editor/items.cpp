@@ -43,15 +43,22 @@ void async_for_nodes_with_mesh(
 {
     purge_completed_tasks();
 
-    // Locate item host
+    // Locate the item host from the first mesh-carrying content node. A
+    // leading non-scene item (e.g. a selected material, whose host is null)
+    // must not abort the whole operation. Callers pass a single scene's
+    // items (the active scene's selection bucket), so one host covers all
+    // qualifying nodes; the VERIFY below documents that invariant.
     erhe::Item_host* item_host = nullptr;
-    {
-        for (const auto& item : input_items) {
-            if (item_host == nullptr) {
-                item_host = item->get_item_host();
-                break;
-            }
+    for (const std::shared_ptr<erhe::Item_base>& item : input_items) {
+        if (!erhe::utility::test_bit_set(item->get_flag_bits(), erhe::Item_flags::content)) {
+            continue;
         }
+        const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+        if (!node || !erhe::scene::get_attachment<erhe::scene::Mesh>(node.get())) {
+            continue;
+        }
+        item_host = item->get_item_host();
+        break;
     }
     if (item_host == nullptr) {
         return;
@@ -78,6 +85,10 @@ void async_for_nodes_with_mesh(
         if (!mesh) {
             continue;
         }
+        // All participating nodes share one host: the scene_lock above is
+        // only correct under this invariant (callers pass a single scene's
+        // items - the active scene's selection bucket).
+        ERHE_VERIFY(item->get_item_host() == item_host);
         items.push_back(item);
         auto it = s_item_tasks.find(item->get_id());
         if (it != s_item_tasks.end() && !it->second.empty()) {
