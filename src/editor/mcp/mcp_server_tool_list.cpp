@@ -34,13 +34,21 @@ void Mcp_server::refresh_tool_list()
     m_tool_infos.push_back({"get_undo_redo_stack", "Get undo/redo operation stacks",                       schema_no_args()});
     m_tool_infos.push_back({"get_async_status",   "Get pending/running async operation counts",          schema_no_args()});
     m_tool_infos.push_back({"get_shadow_fit_debug","Dump directional shadow frustum fit debug geometry per shadow node: F_shadow planes, their bounded face quads (the truncated view-frustum faces caster AABBs are tested against), and receiver frustum corners. Needs the Shadow Fit 'Collect Debug' setting enabled.", schema_no_args()});
-    m_tool_infos.push_back({"select_items",        "Select items by ID (scene nodes, materials, etc.)",   {
+    m_tool_infos.push_back({"select_items",        "Select items by ID (scene nodes, materials, etc.). Mirrors UI selection semantics: replaces the selection within the target scene only (other scenes' selections persist; ids=[] clears the target scene only) and makes the target scene the active scene.",   {
         {"type", "object"},
         {"properties", {
             {"scene_name", {{"type", "string"}, {"description", "Name of the scene to search for items"}}},
             {"ids",        {{"type", "array"}, {"items", {{"type", "integer"}}}, {"description", "Array of item IDs to select"}}}
         }},
         {"required", json::array({"scene_name", "ids"})}
+    }});
+    m_tool_infos.push_back({"get_active_scene",    "Get the active scene: the scene that commands targeting scene-hosted items act on (the transform gizmo, mesh operations, delete/cut/duplicate). Follows selection changes and window focus; null when no scene is active.", schema_no_args()});
+    m_tool_infos.push_back({"set_active_scene",    "Make a scene the active scene, through the same activation path as focusing that scene's window in the UI (the gizmo rebinds to its selection, the window highlight moves, commands target it).", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name", {{"type", "string"}, {"description", "Name of the scene to activate"}}}
+        }},
+        {"required", json::array({"scene_name"})}
     }});
     m_tool_infos.push_back({"transform_selection", "Apply a Transform tool edit (translation / rotation / scale / skew) to the currently selected node(s), through the same code path as the Transform window numeric entry. space=local applies values in parent space (requires exactly one selected node); space=global applies in world (anchor) space. end_edit=true (default) records an undo operation and refreshes the edit baselines; end_edit=false keeps the edit session open like an active drag, so repeated calls re-apply against the same initial state.", {
         {"type", "object"},

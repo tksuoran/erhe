@@ -358,6 +358,8 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "get_async_status")   result = query_async_status    (req->arguments);
         else if (req->tool_name == "get_shadow_fit_debug")result = query_shadow_fit_debug(req->arguments);
         else if (req->tool_name == "select_items")       result = action_select_items   (req->arguments);
+        else if (req->tool_name == "get_active_scene")   result = query_active_scene    (req->arguments);
+        else if (req->tool_name == "set_active_scene")   result = action_set_active_scene(req->arguments);
         else if (req->tool_name == "transform_selection") result = action_transform_selection(req->arguments);
         else if (req->tool_name == "place_brush")        result = action_place_brush    (req->arguments);
         else if (req->tool_name == "create_shape")       result = action_create_shape   (req->arguments);

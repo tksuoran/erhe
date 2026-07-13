@@ -131,6 +131,44 @@ auto Mcp_server::action_select_items(const json& args) -> std::string
     }).dump();
 }
 
+auto Mcp_server::query_active_scene(const json& args) -> std::string
+{
+    static_cast<void>(args);
+    if (!m_context.selection) {
+        json r = make_text_content("Selection system not available");
+        r["isError"] = true;
+        return r.dump();
+    }
+    const std::shared_ptr<Scene_root> active_scene_root = m_context.selection->get_active_scene_root();
+    if (!active_scene_root) {
+        return make_json_content({{"active_scene", nullptr}}).dump();
+    }
+    return make_json_content({
+        {"active_scene", active_scene_root->get_name()},
+        {"scene_id",     active_scene_root->get_scene().get_id()}
+    }).dump();
+}
+
+auto Mcp_server::action_set_active_scene(const json& args) -> std::string
+{
+    if (!m_context.selection) {
+        json r = make_text_content("Selection system not available");
+        r["isError"] = true;
+        return r.dump();
+    }
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* const sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+    // Same activation path as focusing the scene's window in the UI
+    // (emits Active_scene_changed; the gizmo rebinds, the highlight moves).
+    m_context.selection->set_active_scene_root(sr->shared_from_this());
+    return make_json_content({{"active_scene", sr->get_name()}}).dump();
+}
+
 auto Mcp_server::action_transform_selection(const json& args) -> std::string
 {
     Transform_tool* transform_tool = m_context.transform_tool;
