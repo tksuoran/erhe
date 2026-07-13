@@ -152,34 +152,60 @@ remaining readers of `shared.entries` (`tool_render` ray rendering, MCP
 that entries are stable across a frame; MCP and numeric edits use the active
 scene (below), drags use the drag-captured scene.
 
-### Active scene for non-viewport consumers
+### Active scene
 
-Consumers with no viewport context (Transform window numeric edits, MCP
-`transform_selection` without an explicit scene, mesh operations menu,
-`Scene_commands::get_scene_root` fallback) need one scene. Define:
+Because commands target it (below) and the UI shows it, the active scene is
+explicit, tracked state - not a heuristic recomputed at each call site. It is
+a single `Scene_root*` (with the usual lifetime care on scene close), owned
+centrally (`Selection` or `App_scenes`), with an `Active_scene_changed`
+app message so UI and tools react to changes.
 
-    active scene root = host of the most recent selection change
-                        (tracked in Selection when a hosted item is added)
-                        -> fallback: Scene_views::last_scene_view()->get_scene_root()
-                        -> fallback: App_scenes::get_single_scene_root()
+The active scene changes on deliberate acts, not on hover (hover-switching
+would flicker as the pointer crosses viewports on the way elsewhere):
 
-exposed as `Selection::get_active_scene_root()`. This replaces the first-item
-scan in `Scene_commands::get_scene_root` and gives menu-driven operations a
-deterministic target that follows what the user touched last.
+- a selection change in a scene makes that scene active;
+- clicking in / giving ImGui focus to a scene's viewport window or hierarchy
+  window makes that scene active;
+- closing the active scene falls back: `Scene_views::last_scene_view()`'s
+  scene root -> `App_scenes::get_single_scene_root()` -> null.
+
+Exposed as `get_active_scene_root()`. This replaces the first-item scan in
+`Scene_commands::get_scene_root` and gives menu-driven operations a
+deterministic, user-visible target.
 
 ### Operation scoping policy
 
-- Per-item-safe commands (properties editing, copy) keep operating on the
-  union.
-- Single-scene-by-nature operations (merge, booleans, mesh ops) operate on the
-  ACTIVE scene's bucket; nodes selected in other scenes are not silently
-  included. Lock that one scene's `item_host_mutex` - fixes the single-lock
-  hole.
-- Destructive keyboard commands (Delete, Cut): with persistent per-scene
-  selections, acting on the union would delete selection the user cannot see
-  (selected last week in a viewport that is now behind another tab). Planned:
-  scope Delete/Cut to the active scene's bucket plus the non-hosted bucket.
-  Flagged as an open question since it is a behavior choice.
+Commands that target scene-hosted items act on the ACTIVE scene's bucket
+only. Selection in other scenes is never an invisible participant in a
+command.
+
+- Delete, Cut, duplicate, merge, booleans, mesh operations: active scene's
+  bucket. Lock that one scene's `item_host_mutex` - fixes the single-lock
+  hole by construction.
+- Deselect-all (Escape): consistent with the rule, clears the active scene's
+  bucket (plus the non-hosted bucket); other scenes keep their selection.
+- Read-only / per-item-safe UI (properties window, selection listing) keeps
+  showing the union - inspecting items from several scenes side by side is a
+  supported use case.
+- Non-hosted items (content library selections with no host) are unaffected
+  by scene scoping and handled per command as today.
+
+### Active scene UI highlight
+
+The user must be able to see which scene commands will hit. Planned
+indicators, driven by `Active_scene_changed` / `get_active_scene_root()`:
+
+- Viewport windows: title bar tint for viewports whose scene root is the
+  active scene (push `ImGuiCol_TitleBg` / `ImGuiCol_TitleBgActive` /
+  `ImGuiCol_TitleBgCollapsed` around the window `Begin`; `Imgui_window`
+  already has `on_begin` / `on_end` hooks).
+- Hierarchy windows: same title tint on the active scene's hierarchy window,
+  and/or an accent on the tree (e.g. header/scene-item row color or node text
+  tint). Start with the title tint (cheap, consistent with viewports); tree
+  text tinting can follow if the title alone is too subtle, but it must not
+  fight the selection highlight.
+- Keep the treatment consistent between viewport and hierarchy windows so one
+  visual language means "active scene" everywhere.
 
 ## Phases
 
@@ -191,11 +217,13 @@ deterministic target that follows what the user touched last.
    union for `get_selected_items()`. No behavior change yet - all producers
    and consumers still see the union.
 2. Accessors: `Scene_root::get_selection()`,
-   `Selection::clear_selection(Item_host*)`,
-   `Selection::get_active_scene_root()` (with the fallback chain).
-3. Scene close: selection bucket dies with the `Scene_root`; simplify the
+   `Selection::clear_selection(Item_host*)`.
+3. Active scene tracking: the tracked `Scene_root*`, `get_active_scene_root()`,
+   update on selection change and on viewport/hierarchy window focus,
+   scene-close fallback chain, and the `Active_scene_changed` app message.
+4. Scene close: selection bucket dies with the `Scene_root`; simplify the
    editor.cpp scene-close selection cleanup to message emission.
-4. Extend `Selection::sanity_check` to verify bucket/host consistency and
+5. Extend `Selection::sanity_check` to verify bucket/host consistency and
    union == sum of buckets.
 
 Verification: headless MCP - existing selection flows unchanged
@@ -210,11 +238,16 @@ sanity_check clean.
 3. `Range_selection` per tree (move ownership from `Selection` to `Item_tree`,
    or key terminators by tree) - fixes the cross-window shift-range bug.
 4. Content-library trees scope their clear/select-all to their own bucket.
-5. Decide + implement Escape / deselect-all behavior (see open questions).
+5. Deselect-all (Escape): clear the active scene's bucket plus the non-hosted
+   bucket, per the operation scoping policy.
+6. Active scene UI highlight: viewport window title tint + hierarchy window
+   title tint for the active scene, driven by `Active_scene_changed`.
 
 Verification: interactive (user) - two hierarchy windows: plain click in
-scene B keeps scene A's selection; Ctrl-A selects one scene; shift-range
-confined to one window behaves; viewport plain click clears only its scene.
+scene B keeps scene A's selection AND moves the active-scene highlight to
+scene B's windows; Ctrl-A selects one scene; shift-range confined to one
+window behaves; viewport plain click clears only its scene; focusing a
+viewport switches the highlight without changing any selection.
 Headless MCP where reachable (`select_items` per scene, `get_selection`).
 
 ### Phase 3: Per-viewport transform gizmo
@@ -252,10 +285,12 @@ interactive drag test by user (drag in viewport A moves only scene A nodes).
 3. `Scene_commands::get_scene_root(Node*)` and Material overload: use
    `get_active_scene_root()`; keep hover-viewport / single-scene fallbacks.
 4. `Fly_camera_tool` frame-selection: frame the viewport's own scene bucket.
-5. `Clipboard::resolve_paste_target`: null-check `m_last_hover_scene_view`
-   before `get_scene_root()` (unchecked deref found in audit). Cut/Delete
-   scoping per the operation scoping policy.
-6. Sweep remaining first-item consumers (grid attach, brush tool parent,
+5. `Selection::delete_selection` / `cut_selection` / `duplicate_selection`:
+   scope to the active scene's bucket (plus non-hosted items where the
+   command applies), per the operation scoping policy.
+6. `Clipboard::resolve_paste_target`: null-check `m_last_hover_scene_view`
+   before `get_scene_root()` (unchecked deref found in audit).
+7. Sweep remaining first-item consumers (grid attach, brush tool parent,
    animation keying) to use the active scene or per-item hosts as appropriate.
 
 Verification: headless MCP smoke - merge and boolean ops in a two-scene
@@ -270,13 +305,22 @@ plus mesh nodes runs (previously aborted).
 3. Re-run the full selection/gizmo smoke suite; update `doc/` user-facing
    notes if any.
 
+## Decided
+
+- Commands that target scene-hosted items act on the ACTIVE scene only
+  (Delete, Cut, duplicate, merge, booleans, mesh ops, deselect-all).
+- The active scene is explicit tracked state, changed by selection changes
+  and viewport/hierarchy window focus - never by hover alone - and is shown
+  in the UI (window title tints).
+
 ## Open questions
 
-- Escape / "deselect all": clear every bucket, or active scene first and
-  everything on second press? Planned default: clear everything (simple,
-  predictable); revisit if per-scene workflows want the two-step.
-- Delete/Cut scoping: active scene bucket + non-hosted bucket (planned, avoids
-  destroying selection the user cannot see) vs union (today's behavior).
-- Should hierarchy windows visually distinguish selection in the ACTIVE scene
-  from selection in other scenes (e.g. dimmed highlight)? Nice-to-have,
+- Exact highlight treatment: title tint only, or also node-text / scene-row
+  accent inside the active hierarchy tree? Start with title tint, evaluate
+  visibility, extend if needed (must not fight the selection highlight).
+- Should hierarchy windows visually dim selection highlights in NON-active
+  scenes to reinforce that commands will not touch them? Nice-to-have,
   deferred.
+- MCP: does `select_items` implicitly set the active scene (matching the
+  "selection change activates the scene" rule), and should an explicit
+  `set_active_scene` tool exist for scripts? Leaning yes to both.
