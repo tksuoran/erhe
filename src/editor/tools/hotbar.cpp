@@ -48,6 +48,7 @@
 #include "erhe_utility/bit_helpers.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <algorithm>
 #include <cmath>
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -742,9 +743,23 @@ void Hotbar::update_node_transform()
                 // and is not constant-size scaled.
                 half_height = 1.0f;
             } else {
-                const float physical_height = m_height * frustum_full_height;
-                half_height = 0.5f * physical_height;
+                float physical_height = m_height * frustum_full_height;
+                // All slots must always be visible: the quad's width is its fixed
+                // aspect ratio (slot count) times its height, so in a narrow
+                // viewport cap the height to whatever keeps the full width inside
+                // the horizontal frustum extent at this depth (accounting for the
+                // horizontal offset m_x; fov.left is negative). Within that
+                // constraint the height approaches the configured target.
+                const float base_width  = (m_quad_view != nullptr) ? m_quad_view->get_local_width()  : 0.0f;
                 const float base_height = (m_quad_view != nullptr) ? m_quad_view->get_local_height() : 0.0f;
+                if ((base_width > 0.0f) && (base_height > 0.0f)) {
+                    const float space_right = depth * std::tan(fov.right) - m_x;
+                    const float space_left  = m_x - depth * std::tan(fov.left);
+                    const float max_width   = 2.0f * std::min(space_left, space_right);
+                    const float max_height  = std::max(max_width, 0.0f) * (base_height / base_width);
+                    physical_height = std::min(physical_height, max_height);
+                }
+                half_height = 0.5f * physical_height;
                 if ((m_quad_view != nullptr) && (base_height > 0.0f)) {
                     quad_scale = physical_height / base_height;
                 }
