@@ -266,8 +266,9 @@ Headless MCP where reachable (`select_items` per scene, `get_selection`).
    handle transforms consistent per view within a frame.
 5. Mesh-component mode scoping via the component mesh's host.
 6. Numeric edits (`apply_*_edit`, Transform window) and MCP
-   `transform_selection` use `get_active_scene_root()`'s bucket; MCP
-   optionally grows an explicit `scene` argument.
+   `transform_selection` use `get_active_scene_root()`'s bucket. No per-call
+   scene override in MCP: scripts switch scenes via `set_active_scene`
+   (Phase 5), keeping MCP behavior identical to the UI.
 
 Verification: headless MCP - two scenes in two viewports, select a node in
 each scene, `capture_screenshot` -> each viewport shows its own gizmo at its
@@ -299,10 +300,24 @@ plus mesh nodes runs (previously aborted).
 
 ### Phase 5: MCP and polish
 
-1. `get_selection` reports each item's scene (and the active scene) so scripts
+MCP semantics mirror the user experience one-to-one, so headless MCP
+verification exercises the same rules an interactive user hits - no
+MCP-only selection or activation behavior.
+
+1. New tools `set_active_scene` / `get_active_scene`: the explicit
+   getter/setter for the active scene. `set_active_scene` goes through the
+   same activation path as focusing a scene's window (emits
+   `Active_scene_changed`); `get_active_scene` reports the tracked state.
+2. `select_items` behaves exactly like a user selection change: scoped clear
+   in the target scene, additive across scenes with toggle semantics, and it
+   activates the scene of the changed selection (same rule as the UI).
+3. `get_selection` reports each item's scene and the active scene so scripts
    can see the partition.
-2. `select_items` semantics documented: additive across scenes, scoped clears.
-3. Re-run the full selection/gizmo smoke suite; update `doc/` user-facing
+4. Command-like tools (`transform_selection`, mesh operations, delete-style
+   actions) target the active scene's bucket, exactly like their UI
+   counterparts - scripts wanting another scene call `set_active_scene`
+   first, just as a user would click that scene's window.
+5. Re-run the full selection/gizmo smoke suite; update `doc/` user-facing
    notes if any.
 
 ## Decided
@@ -312,6 +327,12 @@ plus mesh nodes runs (previously aborted).
 - The active scene is explicit tracked state, changed by selection changes
   and viewport/hierarchy window focus - never by hover alone - and is shown
   in the UI (window title tints).
+- MCP mirrors the user experience exactly: explicit `set_active_scene` /
+  `get_active_scene` tools, `select_items` follows the same activation and
+  scoped-clear rules as UI selection, command tools target the active scene,
+  and there are no MCP-only per-call scene overrides. Headless MCP
+  verification therefore exercises the same code paths and rules as an
+  interactive user.
 
 ## Open questions
 
@@ -321,6 +342,3 @@ plus mesh nodes runs (previously aborted).
 - Should hierarchy windows visually dim selection highlights in NON-active
   scenes to reinforce that commands will not touch them? Nice-to-have,
   deferred.
-- MCP: does `select_items` implicitly set the active scene (matching the
-  "selection change activates the scene" rule), and should an explicit
-  `set_active_scene` tool exist for scripts? Leaning yes to both.
