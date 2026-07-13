@@ -329,7 +329,8 @@ auto instantiate_prefab(
     const std::shared_ptr<Prefab>&            prefab,
     Scene_root&                               scene_root,
     const glm::mat4&                          world_from_node,
-    const std::shared_ptr<erhe::scene::Node>& parent
+    const std::shared_ptr<erhe::scene::Node>& parent,
+    const std::size_t                         index_in_parent
 ) -> std::shared_ptr<erhe::scene::Node>
 {
     ERHE_VERIFY(prefab);
@@ -404,10 +405,11 @@ auto instantiate_prefab(
     operations.push_back(
         std::make_shared<Item_insert_remove_operation>(
             Item_insert_remove_operation::Parameters{
-                .context = context,
-                .item    = instance_root,
-                .parent  = insert_parent,
-                .mode    = Item_insert_remove_operation::Mode::insert
+                .context         = context,
+                .item            = instance_root,
+                .parent          = insert_parent,
+                .mode            = Item_insert_remove_operation::Mode::insert,
+                .index_in_parent = index_in_parent
             }
         )
     );

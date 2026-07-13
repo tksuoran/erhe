@@ -7,6 +7,7 @@
 #include "app_message_bus.hpp"
 #include "app_scenes.hpp"
 #include "app_settings.hpp"
+#include "asset_browser/asset_browser.hpp"
 #include "brushes/brush.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
@@ -20,6 +21,7 @@
 #include "operations/item_reposition_in_parent_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "prefabs/prefab_instance.hpp"
+#include "prefabs/prefab_library.hpp"
 #include "preview/brush_preview.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/clipboard.hpp"
@@ -452,6 +454,33 @@ void drag_and_drop_gradient_preview(
     }
 }
 
+// glTF asset dropped from the Asset browser onto the scene hierarchy:
+// parse the file once through the prefab library (cached app-wide) and
+// insert an instance clone under the chosen parent, with an identity
+// local transform, as one undoable operation (mirrors the viewport drop).
+void instantiate_gltf_prefab(
+    App_context&                              context,
+    Asset_file_gltf&                          gltf,
+    Scene_root&                               scene_root,
+    const std::shared_ptr<erhe::scene::Node>& parent,
+    const std::size_t                         index_in_parent
+)
+{
+    if (!parent) {
+        return;
+    }
+    const std::filesystem::path* source_path = gltf.get_source_path();
+    if ((source_path == nullptr) || (context.prefab_library == nullptr)) {
+        return;
+    }
+    const std::shared_ptr<Prefab> prefab = context.prefab_library->get_or_load(*source_path);
+    if (!prefab) {
+        log_tree->warn("Dropped glTF could not be loaded as a prefab: {}", source_path->string());
+        return;
+    }
+    instantiate_prefab(context, prefab, scene_root, parent->world_from_node(), parent, index_in_parent);
+}
+
 }
 
 auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& item) -> bool
@@ -526,6 +555,40 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
                 ImGui::EndDragDropTarget();
                 return true;
             }
+        }
+    }
+
+    // glTF asset dragged from the Asset browser: extract the payload once;
+    // accepted below by the Scene header row and by scene node rows.
+    std::shared_ptr<Asset_file_gltf> gltf_asset{};
+    if ((payload_peek != nullptr) && payload_peek->IsDataType(Asset_file_gltf::static_type_name.data())) {
+        erhe::Item_base* payload_item_base = *(static_cast<erhe::Item_base**>(payload_peek->Data));
+        gltf_asset = std::dynamic_pointer_cast<Asset_file_gltf>(payload_item_base->shared_from_this());
+    }
+
+    // Dropping a glTF asset on the Scene header row inserts the prefab
+    // instance as the last child of the scene root node.
+    if (gltf_asset) {
+        const std::shared_ptr<erhe::scene::Scene> scene_item = std::dynamic_pointer_cast<erhe::scene::Scene>(item);
+        if (scene_item) {
+            const std::shared_ptr<erhe::scene::Node> root_node = scene_item->get_root_node();
+            Scene_root* scene_root = root_node ? static_cast<Scene_root*>(root_node->get_item_host()) : nullptr;
+            if (scene_root == nullptr) {
+                return false;
+            }
+            const ImRect rect{rect_min, rect_max};
+            if (ImGui::BeginDragDropTargetCustom(rect, imgui_id_center)) {
+                drag_and_drop_rectangle_preview(rect);
+                const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(
+                    Asset_file_gltf::static_type_name.data(), ImGuiDragDropFlags_AcceptNoDrawDefaultRect
+                );
+                if (payload != nullptr) {
+                    instantiate_gltf_prefab(m_context, *gltf_asset, *scene_root, root_node, std::numeric_limits<std::size_t>::max());
+                }
+                ImGui::EndDragDropTarget();
+                return true;
+            }
+            return false;
         }
     }
 
@@ -706,6 +769,61 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
             const ImGuiPayload* payload = accept_brush_or_material_payload();
             if (payload != nullptr) {
                 insert_brush_instance(node->get_parent_node(), node->get_index_in_parent() + 1);
+            }
+            ImGui::EndDragDropTarget();
+            return true;
+        }
+    } else if (gltf_asset) {
+        // glTF asset dropped onto a scene node: instantiate as a prefab, as
+        // sibling before / child of / sibling after the drop target (the
+        // same three rects as the brush drop).
+        Scene_root* scene_root = static_cast<Scene_root*>(node->get_item_host());
+        if (scene_root == nullptr) {
+            return false;
+        }
+        const auto accept_gltf_payload = []() -> const ImGuiPayload* {
+            return ImGui::AcceptDragDropPayload(Asset_file_gltf::static_type_name.data(), ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
+        };
+
+        // Prefab instance subtrees are sealed projections of their source
+        // file (an instance refresh re-clones the template and would drop
+        // any child inserted from outside), so an instance root accepts
+        // only the sibling rects; the child (middle) rect is not offered.
+        const bool is_prefab_instance_root = static_cast<bool>(erhe::scene::get_attachment<Prefab_instance>(node.get()));
+
+        // Insert as sibling before drop target
+        const ImRect top_rect{rect_min, ImVec2{rect_max.x, y1}};
+        if (ImGui::BeginDragDropTargetCustom(top_rect, imgui_id_top)) {
+            drag_and_drop_gradient_preview(x0, x1, y0, y2, ImGui::GetColorU32(ImGuiCol_DragDropTarget), 0);
+            const ImGuiPayload* payload = accept_gltf_payload();
+            if (payload != nullptr) {
+                instantiate_gltf_prefab(m_context, *gltf_asset, *scene_root, node->get_parent_node(), node->get_index_in_parent());
+            }
+            ImGui::EndDragDropTarget();
+            return true;
+        }
+
+        // Insert as last child of drop target
+        if (!is_prefab_instance_root) {
+            const ImRect middle_rect{ImVec2{rect_min.x, y1}, ImVec2{rect_max.x, y2}};
+            if (ImGui::BeginDragDropTargetCustom(middle_rect, imgui_id_center)) {
+                drag_and_drop_rectangle_preview(middle_rect);
+                const ImGuiPayload* payload = accept_gltf_payload();
+                if (payload != nullptr) {
+                    instantiate_gltf_prefab(m_context, *gltf_asset, *scene_root, node, std::numeric_limits<std::size_t>::max());
+                }
+                ImGui::EndDragDropTarget();
+                return true;
+            }
+        }
+
+        // Insert as sibling after drop target
+        const ImRect bottom_rect{ImVec2{rect_min.x, y2}, rect_max};
+        if (ImGui::BeginDragDropTargetCustom(bottom_rect, imgui_id_bottom)) {
+            drag_and_drop_gradient_preview(x0, x1, y1, y3, 0, ImGui::GetColorU32(ImGuiCol_DragDropTarget));
+            const ImGuiPayload* payload = accept_gltf_payload();
+            if (payload != nullptr) {
+                instantiate_gltf_prefab(m_context, *gltf_asset, *scene_root, node->get_parent_node(), node->get_index_in_parent() + 1);
             }
             ImGui::EndDragDropTarget();
             return true;
