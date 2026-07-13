@@ -111,6 +111,7 @@ public:
     [[nodiscard]] auto get_normal_style          () const -> erhe::primitive::Normal_style;
     void               set_material              (const std::shared_ptr<erhe::primitive::Material>& material);
     [[nodiscard]] auto make_with_material        (const std::shared_ptr<erhe::primitive::Material>& material) const -> std::shared_ptr<Brush>;
+    [[nodiscard]] auto make_shared_payload_copy  () const -> std::shared_ptr<Brush>;
 
 private:
     void update_facet_statistics();

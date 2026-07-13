@@ -269,4 +269,11 @@ private:
 // are offered instead so such scenes remain viewable.
 [[nodiscard]] auto get_selectable_cameras(const erhe::scene::Scene& scene) -> std::vector<std::shared_ptr<erhe::scene::Camera>>;
 
+// Resolves the Scene_root hosting the given item: a content-library item's
+// Item_host is its owning scene (scene items resolve through their scene the
+// same way). Returns null when the item is not hosted by a scene - not in
+// any library, or a shared prefab template resource (reference entries are
+// deliberately non-hosted).
+[[nodiscard]] auto get_hosting_scene_root(const erhe::Item_base* item) -> std::shared_ptr<Scene_root>;
+
 }

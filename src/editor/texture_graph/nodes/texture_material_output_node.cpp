@@ -2,6 +2,7 @@
 
 #include "graph_editor/graph_editor_widgets.hpp"
 
+#include "texture_graph/graph_texture.hpp"
 #include "texture_graph/texture_graph_compose.hpp"
 #include "texture_graph/texture_payload.hpp"
 #include "texture_graph/texture_renderer.hpp"
@@ -236,6 +237,13 @@ auto Texture_material_output_node::ensure_sampler() -> const std::shared_ptr<erh
 
 auto Texture_material_output_node::get_content_library_ok() -> bool
 {
+    if (!m_scene_root) {
+        // The owning Graph_texture asset lives in exactly one scene's content
+        // library, and library items are hosted by their owning Scene_root -
+        // resolve through the asset so this works with any number of scenes
+        // open (the old get_single_scene_root() returned null for >1 scene).
+        m_scene_root = get_hosting_scene_root(get_owning_graph_texture().get());
+    }
     if (!m_scene_root) {
         m_scene_root = m_context.app_scenes->get_single_scene_root();
     }

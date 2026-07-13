@@ -132,6 +132,12 @@ void Texture_output_node::register_texture()
     texture->set_name(m_texture_name);
 
     if (!m_scene_root) {
+        // Resolve the owning scene via the Graph_texture asset's Item_host
+        // (works with any number of scenes open); see
+        // Texture_material_output_node::get_content_library_ok.
+        m_scene_root = get_hosting_scene_root(get_owning_graph_texture().get());
+    }
+    if (!m_scene_root) {
         m_scene_root = m_context.app_scenes->get_single_scene_root();
     }
     if (!m_scene_root) {

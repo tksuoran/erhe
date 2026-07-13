@@ -41,6 +41,7 @@ namespace editor {
 
 class Brush;
 class App_context;
+class Content_library;
 
 class Content_library_node : public erhe::Item<erhe::Item_base, erhe::Hierarchy, Content_library_node>
 {
@@ -60,6 +61,10 @@ public:
     void handle_add_child   (const std::shared_ptr<erhe::Hierarchy>& child_node, std::size_t position) override;
     void handle_remove_child(erhe::Hierarchy* child_node) override;
 
+    // Walks up the node hierarchy to the root, which carries the back-pointer
+    // to the owning Content_library. Null for nodes not (yet) in a library.
+    [[nodiscard]] auto get_library() const -> Content_library*;
+
     auto make_folder(std::string_view folder_name) -> std::shared_ptr<Content_library_node>;
 
     template <typename T, typename ...Args>
@@ -71,11 +76,18 @@ public:
     template <typename T>
     void add(const std::shared_ptr<T>& entry);
 
+    // Adds a REFERENCE entry: a listing of an item owned elsewhere (e.g. the
+    // material preview scene listing the inspected material of another
+    // scene). Never claims or releases the item's Item_host.
+    template <typename T>
+    void add_reference(const std::shared_ptr<T>& entry);
+
     template <typename T>
     void add(
         const std::shared_ptr<T>&                               entry,
         const Gltf_source_reference&                            gltf_source,
-        const std::shared_ptr<erhe::gltf::Gltf_image_source>&   image_source = {}
+        const std::shared_ptr<erhe::gltf::Gltf_image_source>&   image_source = {},
+        bool                                                    is_reference = false
     );
 
     template <typename T>
@@ -124,6 +136,12 @@ public:
     uint64_t                                  type_code{};
     std::string                               type_name{};
     std::shared_ptr<erhe::Item_base>          item;
+    // A reference entry lists an item owned elsewhere (e.g. a prefab
+    // template's texture / material, shared by every instancing scene
+    // because GPU textures cannot be duplicated per scene); it never claims
+    // or releases the item's Item_host. An owning entry (the default) hosts
+    // its item: item->get_item_host() == the library owner.
+    bool                                      is_reference{false};
     std::optional<Gltf_source_reference>      gltf_source;
     // Texture entries only: the retained compressed source image stream, so
     // glTF export can re-embed the image byte-exact
@@ -137,6 +155,10 @@ private:
         m_cache.erase(T::get_static_type());
     }
 
+    friend class Content_library;
+
+    // Set only on a library's root node, by the Content_library constructor.
+    Content_library*                       m_library{nullptr};
     std::unordered_map<uint64_t, std::any> m_cache;
 };
 
@@ -144,6 +166,15 @@ class Content_library
 {
 public:
     Content_library();
+    ~Content_library() noexcept;
+
+    // The owner is the erhe::Item_host - in practice the owning Scene_root -
+    // that every wrapped library item reports from get_item_host(). Set once
+    // by the owning Scene_root's constructor (retroactively hosting items
+    // added before the Scene_root existed). A library whose owner is never
+    // set (e.g. Scene_builder's template palette) hosts nothing.
+    void set_owner(erhe::Item_host* owner);
+    [[nodiscard]] auto get_owner() const -> erhe::Item_host*;
 
     // One combo listing both plain textures and Graph Texture assets - the two
     // sources a Material_texture_sampler::texture_reference can hold. Both
@@ -169,7 +200,29 @@ public:
     std::shared_ptr<Content_library_node> physics_joints;
 
     ERHE_PROFILE_MUTEX(std::mutex, mutex);
+
+private:
+    erhe::Item_host* m_owner{nullptr};
 };
+
+// Recursively copies a content-library subtree into another library so that
+// no item is ever a member of two libraries (each library owns its items).
+// Folders are recreated. Brush leaves are copied via
+// Brush::make_shared_payload_copy() - fresh per-library item identity, with
+// the expensive immutable payload (geometry, GPU primitive, collision
+// shapes) shared by reference. Other leaf types are cloned when clonable and
+// skipped with a warning otherwise. Used to seed a new scene's library from
+// the Scene_builder template palette.
+void copy_content_library_folder(const Content_library_node& src_folder, Content_library_node& dst_folder);
+
+// Copies a single library item into the matching category folder of another
+// library. Copies never alias: the copy is a fresh item owned by the target
+// library's scene (a Brush shares its expensive payload by reference). A
+// name collision in the target folder gets a " (N)" suffix. Returns the
+// copy, or null when the item type is not copyable (textures and graph
+// assets are shared GPU / graph resources) or has no category folder. The
+// caller is responsible for holding the target library's mutex.
+auto copy_library_item_to_library(const std::shared_ptr<erhe::Item_base>& item, Content_library& target_library) -> std::shared_ptr<erhe::Item_base>;
 
 template <typename T, typename ...Args>
 auto Content_library_node::make(Args&& ...args) -> std::shared_ptr<T>
@@ -288,10 +341,37 @@ void Content_library_node::add(const std::shared_ptr<T>& entry)
 }
 
 template <typename T>
+void Content_library_node::add_reference(const std::shared_ptr<T>& entry)
+{
+    ERHE_VERIFY(entry);
+    const auto i = std::find_if(
+        m_children.begin(),
+        m_children.end(),
+        [&entry](const std::shared_ptr<Hierarchy>& hierarchy) {
+            std::shared_ptr<Content_library_node> node = std::dynamic_pointer_cast<Content_library_node>(hierarchy);
+            if (!node) {
+                return false;
+            }
+            return std::dynamic_pointer_cast<T>(node->item) == entry;
+        }
+    );
+    if (i != m_children.end()) {
+        return;
+    }
+    auto node = std::make_shared<Content_library_node>(entry);
+    // Must be set before set_parent(): handle_add_child() decides whether to
+    // claim the item's host based on it.
+    node->is_reference = true;
+    node->set_parent(this);
+    invalidate_cache<T>();
+}
+
+template <typename T>
 void Content_library_node::add(
     const std::shared_ptr<T>&                             entry,
     const Gltf_source_reference&                          gltf_source,
-    const std::shared_ptr<erhe::gltf::Gltf_image_source>& image_source
+    const std::shared_ptr<erhe::gltf::Gltf_image_source>& image_source,
+    const bool                                            is_reference
 )
 {
     ERHE_VERIFY(entry);
@@ -317,6 +397,9 @@ void Content_library_node::add(
         return;
     }
     auto node = std::make_shared<Content_library_node>(entry);
+    // Must be set before set_parent(): handle_add_child() decides whether to
+    // claim the item's host based on it.
+    node->is_reference = is_reference;
     node->gltf_source  = gltf_source;
     node->image_source = image_source;
     node->set_parent(this);

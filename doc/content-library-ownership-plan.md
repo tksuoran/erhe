@@ -1,6 +1,57 @@
 # Content Library Ownership Plan
 
-Status: PROPOSAL (design review pending, no implementation yet)
+Status: IMPLEMENTED (2026-07-13), with one refinement found during
+implementation - see "Implementation refinement: owning vs. reference
+entries" below. The rest of this document is the reviewed proposal, kept
+as the design rationale.
+
+## Implementation refinement: owning vs. reference entries
+
+The plan's strict invariant ("every library item is a member of exactly one
+Content_library") holds for everything EXCEPT prefab template resources:
+`erhe::graphics::Texture` owns its GPU storage via a non-copyable impl, so
+prefab textures (and the materials sampling them) genuinely cannot be
+duplicated per instancing scene. Instead of weakening hosting everywhere,
+membership is split into two entry kinds
+(`Content_library_node::is_reference`):
+
+- OWNING entry (the default): the library owns the item; the item's
+  `Item_host` is the library's owner (`Content_library::set_owner`, wired by
+  `Scene_root`). Adding an item already owned elsewhere trips `ERHE_VERIFY`.
+- REFERENCE entry (`is_reference == true`): a listing of an item owned
+  elsewhere; never claims or releases the item's host. Used only by prefab
+  instantiation / refresh (`Content_library_attach_operation` with
+  `is_reference`, `replace_content_library_entries`), whose texture/material
+  objects are deliberately shared by every instancing scene.
+
+Consequences: scene-owned items (created, imported, copied) resolve their
+scene via `get_item_host()` / `get_hosting_scene_root()`; prefab-shared items
+stay non-hosted (active-scene fallback, non-hosted selection bucket), which
+matches their shared, read-only-by-convention nature.
+
+Other notable implementation facts:
+- `erhe::Item_base` carries the host pointer (`set_item_host`; not copied on
+  copy/clone); the default `get_item_host()` returns it. Node / attachment /
+  Scene overrides are unaffected.
+- Seeding uses `copy_content_library_folder` (+
+  `Brush::make_shared_payload_copy`): the default scene and every new scene
+  get their own Brush items sharing geometry / GPU primitive / collision
+  payloads. `Scene_builder`'s template library is never owned by a scene,
+  and its scene-population paths (floor material, torus chain / mesh-node /
+  cube materials) use the target scene's library.
+- Copy-to-scene: `copy_library_item_to_library` (collision suffix " (N)"),
+  exposed as the `copy_library_item` MCP tool and the library-item
+  "Copy to Scene" context menu.
+- `Tool::get_default_material` ignores a selected material hosted by a
+  different scene.
+- Graph output nodes resolve their scene via the owning graph asset's host
+  (fixes the ">1 scene open disables graph material output" issue).
+- Known bounded cost: a brush whose geometry is still a lazy generator at
+  copy time (not yet materialized in the template) copies the generator, so
+  each scene's copy materializes its own geometry / primitive on first use
+  instead of sharing the template's later materialization. One-time per
+  brush per scene, never per-frame; brushes materialized before the copy
+  share their payload as designed.
 
 ## 1. Problem statement
 

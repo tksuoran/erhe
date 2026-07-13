@@ -268,6 +268,17 @@ void Mcp_server::refresh_tool_list()
         {"required", json::array({"scene_name", "material_name"})}
     }});
 
+    m_tool_infos.push_back({"copy_library_item", "Copy a content-library item from one scene's library to another's. Copies never alias: the copy is a fresh item owned by the target scene (brushes share their expensive payload by reference). Name collisions in the target get a ' (N)' suffix. Textures and graph assets cannot be copied; a copied material keeps its texture references into the source scene's textures (they render, but do not export with the target scene). Not undoable.", {
+        {"type", "object"},
+        {"properties", {
+            {"item_name",    {{"type", "string"}, {"description", "Name of the item to copy (must be unique within its folder)"}}},
+            {"item_type",    {{"type", "string"}, {"enum", json::array({"material", "brush", "physics_material", "collision_filter", "physics_joint"})}, {"description", "Item category; default material"}}},
+            {"source_scene", {{"type", "string"}, {"description", "Scene whose library holds the item"}}},
+            {"target_scene", {{"type", "string"}, {"description", "Scene whose library receives the copy"}}}
+        }},
+        {"required", json::array({"item_name", "source_scene", "target_scene"})}
+    }});
+
     m_tool_infos.push_back({"get_scene_settings", "Get a scene's per-scene state: ambient light color, physics enable, and the per-scene setting overrides (#239; null when every field uses the editor-global default, else the Scene_settings object: sky, grid, physics, shadow_frustum_fit, camera_controls, clear_color, post_processing).", {
         {"type", "object"},
         {"properties", {

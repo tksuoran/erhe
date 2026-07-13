@@ -172,7 +172,10 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
     erhe::graphics::Scoped_debug_group outer_debug_scope{command_buffer, "Scene_preview::render_preview()"};
 
     m_content_library->materials->remove_all_children_recursively();
-    m_content_library->materials->add(material);
+    // Reference entry: the inspected material is owned by its own scene's
+    // content library; the preview library only lists it for rendering and
+    // must not claim the item's host.
+    m_content_library->materials->add_reference(material);
     m_last_material = material;
 
     m_mesh->get_mutable_primitives().front().material = material;

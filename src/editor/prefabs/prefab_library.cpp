@@ -352,7 +352,11 @@ auto instantiate_prefab(
     attach_prefab_instance(prefab, instance_root, scene_root.layers().content()->id, &mesh_node_items);
 
     // Register the prefab's shared resources in the destination scene's
-    // content library (idempotent per resource; mirrors import_gltf).
+    // content library (idempotent per resource; mirrors import_gltf). These
+    // are REFERENCE entries: the prefab template owns the texture / material
+    // objects and shares them with every instancing scene (GPU textures
+    // cannot be duplicated per scene), so the entries never claim the item's
+    // Item_host - unlike scene-owned imports.
     std::shared_ptr<Content_library> content_library = scene_root.get_content_library();
     const std::string gltf_path_str = prefab->source_path.generic_string();
 
@@ -372,7 +376,8 @@ auto instantiate_prefab(
                         .item_index = static_cast<int>(i),
                         .item_type  = "texture",
                     },
-                    (i < prefab->gltf_data.image_sources.size()) ? prefab->gltf_data.image_sources[i] : std::shared_ptr<erhe::gltf::Gltf_image_source>{}
+                    (i < prefab->gltf_data.image_sources.size()) ? prefab->gltf_data.image_sources[i] : std::shared_ptr<erhe::gltf::Gltf_image_source>{},
+                    true // is_reference
                 )
             );
         }
@@ -391,7 +396,9 @@ auto instantiate_prefab(
                         .item_name  = material->get_name(),
                         .item_index = static_cast<int>(i),
                         .item_type  = "material",
-                    }
+                    },
+                    std::shared_ptr<erhe::gltf::Gltf_image_source>{},
+                    true // is_reference
                 )
             );
         }
@@ -608,6 +615,8 @@ void replace_content_library_entries(Content_library& content_library, const Pre
     const std::string gltf_path_str = prefab.source_path.generic_string();
     remove_gltf_source_entries<erhe::graphics::Texture  >(content_library.textures,  gltf_path_str);
     remove_gltf_source_entries<erhe::primitive::Material>(content_library.materials, gltf_path_str);
+    // Reference entries, like instantiate_prefab: the prefab template owns
+    // these objects and shares them with every instancing scene.
     for (std::size_t i = 0; i < prefab.gltf_data.images.size(); ++i) {
         const std::shared_ptr<erhe::graphics::Texture>& image = prefab.gltf_data.images[i];
         if (image) {
@@ -619,7 +628,8 @@ void replace_content_library_entries(Content_library& content_library, const Pre
                     .item_index = static_cast<int>(i),
                     .item_type  = "texture",
                 },
-                (i < prefab.gltf_data.image_sources.size()) ? prefab.gltf_data.image_sources[i] : std::shared_ptr<erhe::gltf::Gltf_image_source>{}
+                (i < prefab.gltf_data.image_sources.size()) ? prefab.gltf_data.image_sources[i] : std::shared_ptr<erhe::gltf::Gltf_image_source>{},
+                true // is_reference
             );
         }
     }
@@ -633,7 +643,9 @@ void replace_content_library_entries(Content_library& content_library, const Pre
                     .item_name  = material->get_name(),
                     .item_index = static_cast<int>(i),
                     .item_type  = "material",
-                }
+                },
+                std::shared_ptr<erhe::gltf::Gltf_image_source>{},
+                true // is_reference
             );
         }
     }

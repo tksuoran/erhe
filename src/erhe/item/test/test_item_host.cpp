@@ -88,4 +88,30 @@ TEST(ItemHost, LockGuardWithNoHost)
     { erhe::Item_host_lock_guard guard(a.get()); }
 }
 
+TEST(ItemHost, SetItemHost_DefaultGetterReturnsIt)
+{
+    Concrete_item_host host;
+    auto a = std::make_shared<Plain_item>("a");
+    EXPECT_EQ(a->get_item_host(), nullptr);
+
+    a->set_item_host(&host);
+    EXPECT_EQ(a->get_item_host(), &host);
+    EXPECT_EQ(erhe::resolve_item_host(a.get(), nullptr, nullptr), &host);
+
+    a->set_item_host(nullptr);
+    EXPECT_EQ(a->get_item_host(), nullptr);
+}
+
+TEST(ItemHost, SetItemHost_NotCopied)
+{
+    Concrete_item_host host;
+    auto a = std::make_shared<Plain_item>("a");
+    a->set_item_host(&host);
+
+    // A copy starts outside any owning container.
+    auto b = std::make_shared<Plain_item>(*a);
+    EXPECT_EQ(b->get_item_host(), nullptr);
+    EXPECT_EQ(a->get_item_host(), &host);
+}
+
 } // namespace

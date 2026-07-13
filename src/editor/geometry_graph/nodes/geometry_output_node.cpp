@@ -215,8 +215,12 @@ void Geometry_output_node::imgui()
     }
 
     // Material selection, from the owning asset's scene content library
-    // (falls back to the single scene root when the asset cannot say).
-    const std::shared_ptr<Scene_root> scene_root = m_context.app_scenes->get_single_scene_root();
+    // (the asset's Item_host is its owning scene; falls back to the single
+    // scene root when the asset cannot say).
+    std::shared_ptr<Scene_root> scene_root = get_hosting_scene_root(get_owning_graph_mesh().get());
+    if (!scene_root) {
+        scene_root = m_context.app_scenes->get_single_scene_root();
+    }
     if (scene_root) {
         const std::shared_ptr<Content_library> library = scene_root->get_content_library();
         if (library && library->materials) {
@@ -284,7 +288,11 @@ void Geometry_output_node::read_parameters(const nlohmann::json& in)
     m_name = in.value("name", m_name);
     const std::string material_name = in.value("material", "");
     if (!material_name.empty()) {
-        const std::shared_ptr<Scene_root> scene_root = m_context.app_scenes->get_single_scene_root();
+        // See imgui(): the owning asset's scene first, single scene fallback.
+        std::shared_ptr<Scene_root> scene_root = get_hosting_scene_root(get_owning_graph_mesh().get());
+        if (!scene_root) {
+            scene_root = m_context.app_scenes->get_single_scene_root();
+        }
         const std::shared_ptr<Content_library> library = scene_root ? scene_root->get_content_library() : std::shared_ptr<Content_library>{};
         if (library && library->materials) {
             const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials = library->materials->get_all<erhe::primitive::Material>();

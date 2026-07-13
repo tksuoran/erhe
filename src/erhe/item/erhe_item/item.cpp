@@ -301,5 +301,10 @@ auto Item_base::get_id() const -> std::size_t
     return m_id.get_id();
 }
 
+void Item_base::set_item_host(Item_host* const item_host)
+{
+    m_item_host = item_host;
+}
+
 } // namespace erhe
 

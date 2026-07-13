@@ -522,5 +522,109 @@ auto Mcp_server::action_edit_material(const json& args) -> std::string
     }).dump();
 }
 
+auto Mcp_server::action_copy_library_item(const json& args) -> std::string
+{
+    const std::string item_type    = args.value("item_type", "material");
+    const std::string item_name    = args.value("item_name", "");
+    const std::string source_scene = args.value("source_scene", "");
+    const std::string target_scene = args.value("target_scene", "");
+
+    Scene_root* const source = find_scene(source_scene);
+    if (source == nullptr) {
+        json r = make_text_content("Source scene not found: " + source_scene);
+        r["isError"] = true;
+        return r.dump();
+    }
+    Scene_root* const target = find_scene(target_scene);
+    if (target == nullptr) {
+        json r = make_text_content("Target scene not found: " + target_scene);
+        r["isError"] = true;
+        return r.dump();
+    }
+    if (source == target) {
+        json r = make_text_content("Source and target are the same scene");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    const std::shared_ptr<Content_library> source_library = source->get_content_library();
+    const std::shared_ptr<Content_library> target_library = target->get_content_library();
+    if (!source_library || !target_library) {
+        json r = make_text_content("Scene has no content library");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    const auto pick_folder = [](Content_library& library, const std::string& type) -> std::shared_ptr<Content_library_node> {
+        if (type == "material")         return library.materials;
+        if (type == "brush")            return library.brushes;
+        if (type == "physics_material") return library.physics_materials;
+        if (type == "collision_filter") return library.collision_filters;
+        if (type == "physics_joint")    return library.physics_joints;
+        return {};
+    };
+    const std::shared_ptr<Content_library_node> source_folder = pick_folder(*source_library.get(), item_type);
+    const std::shared_ptr<Content_library_node> target_folder = pick_folder(*target_library.get(), item_type);
+    if (!source_folder || !target_folder) {
+        json r = make_text_content(
+            "Unsupported item_type '" + item_type + "' - supported: material, brush, physics_material, "
+            "collision_filter, physics_joint (textures and graph assets cannot be copied across scenes)"
+        );
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    std::shared_ptr<erhe::Item_base> found{};
+    std::size_t                      match_count = 0;
+    {
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{source_library->mutex};
+        source_folder->for_each<Content_library_node>(
+            [&found, &match_count, &item_name](Content_library_node& node) -> bool {
+                if (node.item && (node.item->get_name() == item_name)) {
+                    if (!found) {
+                        found = node.item;
+                    }
+                    ++match_count;
+                }
+                return true;
+            }
+        );
+    }
+    if (!found) {
+        json r = make_text_content("Item not found in " + source_scene + ": " + item_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+    if (match_count > 1) {
+        json r = make_text_content(
+            "Item name '" + item_name + "' matches " + std::to_string(match_count) + " items in " + source_scene
+        );
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    // Copy, never alias: each library owns its items (item host = the
+    // owning scene). Brushes get a payload-sharing copy; other types clone.
+    std::shared_ptr<erhe::Item_base> copy{};
+    {
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{target_library->mutex};
+        copy = copy_library_item_to_library(found, *target_library.get());
+    }
+    if (!copy) {
+        json r = make_text_content(
+            std::string{found->get_type_name()} + " '" + item_name + "' is not copyable"
+        );
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    return make_json_content({
+        {"name",         copy->get_name()},
+        {"id",           copy->get_id()},
+        {"type",         std::string{copy->get_type_name()}},
+        {"target_scene", target->get_name()}
+    }).dump();
+}
+
 
 } // namespace editor

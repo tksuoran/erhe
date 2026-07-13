@@ -457,6 +457,10 @@ auto Scene_commands::get_scene_root(erhe::scene::Node* parent) const -> Scene_ro
 
 auto Scene_commands::get_scene_root(erhe::primitive::Material* material) const -> Scene_root*
 {
+    // The common path: a material in a scene's content library is hosted by
+    // that library's owning Scene_root. The active-scene fallback remains
+    // only for materials outside any library (not yet inserted, or shared
+    // prefab template resources, which are deliberately non-hosted).
     erhe::Item_host* const item_host = (material != nullptr) ? material->get_item_host() : nullptr;
     if (item_host != nullptr) {
         return static_cast<Scene_root*>(item_host);
@@ -465,37 +469,6 @@ auto Scene_commands::get_scene_root(erhe::primitive::Material* material) const -
     // See the Node* overload above.
     return m_context.selection->get_active_scene_root().get();
 }
-
-namespace {
-
-// Recursively mirror a content-library subtree into another library, creating
-// fresh Content_library_node wrappers that share the same underlying items.
-// Folders (item == nullptr) are recreated; leaf entries (e.g. Brush) are shared
-// by reference. Sharing is safe because the brushes are read-only, procedurally
-// generated library primitives with no per-scene state -- each scene gets its
-// own tree structure while the (expensive to build) Brush objects and their GPU
-// buffers are reused rather than rebuilt. See Scene_commands::create_new_scene.
-void share_content_library_folder(const Content_library_node& src_folder, Content_library_node& dst_folder)
-{
-    for (const std::shared_ptr<erhe::Hierarchy>& child_hierarchy : src_folder.get_children()) {
-        const std::shared_ptr<Content_library_node> src_child = std::dynamic_pointer_cast<Content_library_node>(child_hierarchy);
-        if (!src_child) {
-            continue;
-        }
-        if (src_child->item) {
-            std::shared_ptr<Content_library_node> dst_child = std::make_shared<Content_library_node>(src_child->item);
-            dst_child->gltf_source = src_child->gltf_source;
-            dst_child->set_parent(&dst_folder);
-            // Leaves have no children in practice, but recurse for generality.
-            share_content_library_folder(*src_child, *dst_child);
-        } else {
-            std::shared_ptr<Content_library_node> dst_child = dst_folder.make_folder(src_child->get_name());
-            share_content_library_folder(*src_child, *dst_child);
-        }
-    }
-}
-
-} // anonymous namespace
 
 auto Scene_commands::create_new_scene() -> std::shared_ptr<Scene_root>
 {
@@ -519,17 +492,19 @@ auto Scene_commands::create_new_scene() -> std::shared_ptr<Scene_root>
     }
 
     // The new scene gets its own content library. It starts empty, but is then
-    // populated with the standard brushes shared from the default content
-    // library (where Scene_builder builds them at editor init) so the scene can
-    // immediately be used to place content. Without this the Content Library
-    // under the new scene has no brushes (#259). The brushes are shared by
-    // reference rather than rebuilt -- see share_content_library_folder.
+    // populated with the standard brushes copied from the Scene_builder
+    // template library (where Scene_builder builds them at editor init) so the
+    // scene can immediately be used to place content. Without this the Content
+    // Library under the new scene has no brushes (#259). Each scene owns its
+    // own Brush items (item host = the scene), while the expensive payload
+    // (geometry, GPU buffers) is shared by reference -- see
+    // copy_content_library_folder / Brush::make_shared_payload_copy.
     std::shared_ptr<Content_library> content_library = std::make_shared<Content_library>();
     if (m_context.scene_builder != nullptr) {
         const std::shared_ptr<Content_library> brush_source = m_context.scene_builder->get_content_library();
         if (brush_source && brush_source->brushes && content_library->brushes) {
             std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{brush_source->mutex};
-            share_content_library_folder(*brush_source->brushes, *content_library->brushes);
+            copy_content_library_folder(*brush_source->brushes, *content_library->brushes);
         }
     }
     // The default scene starts with a set of default materials (added at editor

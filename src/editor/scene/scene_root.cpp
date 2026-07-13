@@ -128,6 +128,14 @@ Scene_root::Scene_root(
 {
     ERHE_PROFILE_FUNCTION();
 
+    // The scene owns its content library: every library item reports this
+    // Scene_root as its Item_host. Items added before this point (e.g. the
+    // default materials created ahead of Scene_root construction) are hosted
+    // retroactively by set_owner().
+    if (m_content_library) {
+        m_content_library->set_owner(this);
+    }
+
     m_scene = std::make_shared<Scene>(name, this);
     m_layers.add_layers_to_scene(*m_scene.get());
 
@@ -270,6 +278,13 @@ Scene_root::~Scene_root() noexcept
     // Mesh::detach_rt_from_scene, Node_physics world removal).
     if (m_scene) {
         m_scene->sever_host();
+    }
+
+    // Library items (and possibly the library itself, via browser windows or
+    // clipboard/selection references) can outlive this host; detach them now
+    // so no item keeps a dangling Item_host pointer.
+    if (m_content_library) {
+        m_content_library->set_owner(nullptr);
     }
 }
 
@@ -597,6 +612,52 @@ auto Scene_root::make_browser_window(
                         }
                     );
                     close = true;
+                }
+            }
+            // "Copy to Scene": copy a library item into another open scene's
+            // library. Copies never alias - each library owns its items (see
+            // doc/content-library-ownership-plan.md); shown only for copyable
+            // types (copy_library_item_to_library rejects textures and graph
+            // assets, which are shared GPU / graph resources).
+            const uint64_t copyable_types =
+                erhe::Item_type::brush |
+                erhe::Item_type::material |
+                erhe::Item_type::physics_material |
+                erhe::Item_type::collision_filter |
+                erhe::Item_type::physics_joint_settings;
+            if (content_node->item && ((content_node->item->get_type() & copyable_types) != 0) && (context.app_scenes != nullptr)) {
+                const std::vector<std::shared_ptr<Scene_root>>& scene_roots = context.app_scenes->get_scene_roots();
+                bool has_other_scene = false;
+                for (const std::shared_ptr<Scene_root>& other : scene_roots) {
+                    if (other && (other.get() != this)) {
+                        has_other_scene = true;
+                        break;
+                    }
+                }
+                if (has_other_scene && ImGui::BeginMenu("Copy to Scene")) {
+                    for (const std::shared_ptr<Scene_root>& other : scene_roots) {
+                        if (!other || (other.get() == this)) {
+                            continue;
+                        }
+                        if (ImGui::MenuItem(other->get_name().c_str())) {
+                            const std::shared_ptr<erhe::Item_base> library_item = content_node->item;
+                            deferred_operations.push_back(
+                                [library_item, other]() {
+                                    const std::shared_ptr<Content_library> target_library = other->get_content_library();
+                                    if (!target_library) {
+                                        return;
+                                    }
+                                    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{target_library->mutex};
+                                    const std::shared_ptr<erhe::Item_base> copy = copy_library_item_to_library(library_item, *target_library.get());
+                                    if (!copy) {
+                                        log_scene->warn("Copy to Scene: {} '{}' is not copyable", library_item->get_type_name(), library_item->get_name());
+                                    }
+                                }
+                            );
+                            close = true;
+                        }
+                    }
+                    ImGui::EndMenu();
                 }
             }
         }
@@ -1151,6 +1212,19 @@ auto get_selectable_cameras(const erhe::scene::Scene& scene) -> std::vector<std:
         cameras = scene.get_cameras();
     }
     return cameras;
+}
+
+auto get_hosting_scene_root(const erhe::Item_base* const item) -> std::shared_ptr<Scene_root>
+{
+    if (item == nullptr) {
+        return {};
+    }
+    erhe::Item_host* const host       = item->get_item_host();
+    Scene_root* const      scene_root = dynamic_cast<Scene_root*>(host);
+    if (scene_root == nullptr) {
+        return {};
+    }
+    return scene_root->shared_from_this();
 }
 
 auto Scene_root::camera_combo(

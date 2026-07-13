@@ -666,7 +666,9 @@ auto Mcp_server::query_selection(const json& args) -> std::string
             {"id",        item->get_id()}
         };
         // Selection is partitioned per host: report which scene each item
-        // belongs to (absent for non-hosted items, e.g. content library).
+        // belongs to. Content-library items are hosted by their owning scene
+        // too; scene_name is absent only for genuinely non-hosted items
+        // (shared prefab template resources, items outside any library).
         Scene_root* const item_scene_root = dynamic_cast<Scene_root*>(item->get_item_host());
         if (item_scene_root != nullptr) {
             entry["scene_name"] = item_scene_root->get_name();

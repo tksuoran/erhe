@@ -6,7 +6,7 @@ Provides a hierarchical container for reusable editor assets: materials, brushes
 
 ## Key Types
 
-- **`Content_library`** -- Top-level container with a root `Content_library_node` and category folders (brushes, animations, skins, materials, textures). Each `Scene_root` has its own `Content_library`.
+- **`Content_library`** -- Top-level container with a root `Content_library_node` and category folders (brushes, animations, skins, materials, textures, graph textures/meshes, physics items). Each `Scene_root` has its own `Content_library` and OWNS it: `Scene_root` calls `set_owner(this)`, and every owning entry's wrapped item reports that `Scene_root` from `erhe::Item_base::get_item_host()` (see `doc/content-library-ownership-plan.md`). An item is an owning member of exactly one library; `ERHE_VERIFY` enforces this on add. `Scene_builder`'s template library is never owned - scenes seed their own libraries with copies (`copy_content_library_folder`, `Brush::make_shared_payload_copy` shares the expensive payload). Prefab template textures/materials are the exception: they enter instancing scenes' libraries as REFERENCE entries (`Content_library_node::is_reference`) that never claim the item's host, because GPU textures cannot be duplicated per scene. `copy_library_item_to_library` copies a single item across libraries (also exposed as the `copy_library_item` MCP tool and the "Copy to Scene" context menu).
 
 - **`Content_library_node`** -- Extends `erhe::Hierarchy`. Each node wraps an `erhe::Item_base` (e.g., a material or brush) or serves as a folder (no item, but has `type_code` and `type_name`). Features:
   - Typed `get_all<T>()` with internal caching (invalidated on add/remove)

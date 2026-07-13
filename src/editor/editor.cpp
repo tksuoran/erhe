@@ -1583,16 +1583,16 @@ public:
             ERHE_TASK_HEADER(default_scene_task)
             {
                 ERHE_GET_GL_CONTEXT
-                // Only the content library (brushes / materials) is created at init,
-                // because Scene_builder builds brushes into it. The Scene_root itself
-                // is created later by the scene.create startup command (or a loaded
-                // scene becomes the only scene) -- so a commands.json that just loads a
-                // scene yields exactly one scene, with no empty default. The scene_root
-                // and its windows are built in create_default_scene(); see
-                // run_startup_script().
+                // Only the template content library is created at init, because
+                // Scene_builder builds brushes into it. It is a palette source
+                // only: no scene ever owns it, and every scene (default or new)
+                // seeds its OWN library with brush copies from it plus fresh
+                // default materials (create_default_scene /
+                // Scene_commands::create_new_scene). The Scene_root itself is
+                // created later by the scene.create startup command (or a loaded
+                // scene becomes the only scene) -- so a commands.json that just
+                // loads a scene yields exactly one scene, with no empty default.
                 m_default_content_library = std::make_shared<Content_library>();
-                add_default_materials(*m_default_content_library.get());
-                add_default_physics_materials(*m_default_content_library.get());
             }
             ERHE_TASK_FOOTER(
                 .name("Default content library")
@@ -2466,9 +2466,23 @@ public:
             return;
         }
         const bool enable_physics = m_editor_settings.physics.static_enable;
+        // The default scene gets its own content library, seeded exactly like
+        // Scene_commands::create_new_scene: brushes copied from the
+        // Scene_builder template library (per-scene Brush items, shared
+        // payload) plus fresh default materials. The template library itself
+        // (m_default_content_library) is never owned by any scene - scenes
+        // own their library items (item host = the Scene_root), and an item
+        // is a member of exactly one library.
+        std::shared_ptr<Content_library> content_library = std::make_shared<Content_library>();
+        if (m_default_content_library && m_default_content_library->brushes && content_library->brushes) {
+            std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_default_content_library->mutex};
+            copy_content_library_folder(*m_default_content_library->brushes, *content_library->brushes);
+        }
+        add_default_materials(*content_library.get());
+        add_default_physics_materials(*content_library.get());
         m_default_scene = std::make_shared<Scene_root>(
             m_app_message_bus.get(),
-            m_default_content_library,
+            content_library,
             name,
             enable_physics
         );

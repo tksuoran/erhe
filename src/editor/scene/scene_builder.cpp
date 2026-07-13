@@ -904,7 +904,10 @@ void Scene_builder::add_torus_chain(const Make_mesh_config& config, bool connect
     const float major_radius = 1.0f  * config.object_scale;
     const float minor_radius = 0.25f * config.object_scale;
 
-    auto&       material_library = m_content_library->materials;
+    // Scene content must reference materials from the scene's OWN content
+    // library (each scene owns its library items), not from the template
+    // library the brushes were built into.
+    auto&       material_library = m_scene_root->get_content_library()->materials;
     const auto& materials        = material_library->get_all<erhe::primitive::Material>();
     std::size_t material_index   = 0;
 
@@ -1043,7 +1046,8 @@ void Scene_builder::make_mesh_nodes(const Make_mesh_config& config, std::vector<
     {
         ERHE_PROFILE_SCOPE("make instances");
 
-        auto&       material_library = m_content_library->materials;
+        // See add_torus_chain: materials come from the scene's own library.
+        auto&       material_library = m_scene_root->get_content_library()->materials;
         const auto& materials        = material_library->get_all<erhe::primitive::Material>();
         std::size_t material_index   = 0;
 
@@ -1148,7 +1152,8 @@ void Scene_builder::add_cubes(glm::ivec3 shape, float scale, float gap)
 
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
 
-    auto& material_library = m_content_library->materials;
+    // See add_torus_chain: the material is created in the scene's own library.
+    auto& material_library = m_scene_root->get_content_library()->materials;
     auto material = material_library->make<erhe::primitive::Material>(
         erhe::primitive::Material_create_info{
             .name = "cube",
@@ -1547,7 +1552,10 @@ void Scene_builder::register_floor_resources(
     }
 
     if (material && m_scene_root) {
-        const std::shared_ptr<Content_library>& content_library = m_content_library;
+        // The floor material belongs to the scene that gets the floor
+        // instance (the scene's library owns it), not to the template
+        // library the brushes were built into.
+        const std::shared_ptr<Content_library> content_library = m_scene_root->get_content_library();
         if (content_library && content_library->materials) {
             std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
             content_library->materials->add(material);
@@ -1578,7 +1586,8 @@ void Scene_builder::unregister_floor_resources(
     }
 
     if (material && m_scene_root) {
-        const std::shared_ptr<Content_library>& content_library = m_content_library;
+        // See register_floor_resources: the scene's own library.
+        const std::shared_ptr<Content_library> content_library = m_scene_root->get_content_library();
         if (content_library && content_library->materials) {
             std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
             content_library->materials->remove(material);

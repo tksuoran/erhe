@@ -158,6 +158,16 @@ auto get_default_material(App_context& context, Scene_root& scene_root) -> std::
         return {};
     }
     std::shared_ptr<erhe::primitive::Material> material = context.selection->get_last_selected<erhe::primitive::Material>();
+    if (material) {
+        // Scene content references materials from its own scene's library:
+        // a selected material hosted by ANOTHER scene must not leak in here.
+        // Non-hosted materials (shared prefab template resources) are usable
+        // anywhere.
+        erhe::Item_host* const host = material->get_item_host();
+        if ((host != nullptr) && (host != &scene_root)) {
+            material.reset();
+        }
+    }
     if (!material) {
         content_library->materials->for_each<Content_library_node>(
             [&material](const Content_library_node& node) {

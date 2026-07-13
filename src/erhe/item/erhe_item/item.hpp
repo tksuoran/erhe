@@ -326,7 +326,14 @@ public:
 
     [[nodiscard]] virtual auto get_type     () const -> uint64_t         { return 0; };
     [[nodiscard]] virtual auto get_type_name() const -> std::string_view { return "Item_base"; };
-    [[nodiscard]] virtual auto get_item_host() const -> Item_host*       { return nullptr; }
+    [[nodiscard]] virtual auto get_item_host() const -> Item_host*       { return m_item_host; }
+
+    // For items whose host is tracked by an owning container (e.g. the
+    // editor's content library): the container maintains this pointer on
+    // add / remove / owner change. Types that derive their host from scene
+    // structure (Node, Node_attachment, Scene) override get_item_host()
+    // and do not use this member.
+    void set_item_host(Item_host* item_host);
 
     virtual void handle_flag_bits_update(const uint64_t old_flag_bits, const uint64_t new_flag_bits) {
         static_cast<void>(old_flag_bits);
@@ -367,6 +374,8 @@ public:
     void clear_tags       ();
 
 protected:
+    // Not copied: a copy / clone starts outside any owning container.
+    Item_host*                             m_item_host  {nullptr};
     Unique_id<Item_base>                   m_id         {};
     uint64_t                               m_flag_bits  {Item_flags::none};
     std::string                            m_name       {};

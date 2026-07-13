@@ -77,6 +77,22 @@ auto Brush::make_with_material(const std::shared_ptr<erhe::primitive::Material>&
     return result;
 }
 
+auto Brush::make_shared_payload_copy() const -> std::shared_ptr<Brush>
+{
+    // Per-library copy: fresh item identity (id, Item_host), same name,
+    // sharing the expensive immutable payload (geometry, GPU primitive,
+    // collision shapes, scaled entries) by reference - each content library
+    // owns its own Brush item while the payload is built only once. The
+    // material is intentionally NOT carried over: it would point into the
+    // source scene's content library; the destination scene supplies
+    // materials at placement time.
+    std::shared_ptr<Brush> result = std::make_shared<Brush>(m_data);
+    result->m_primitive        = m_primitive;
+    result->m_reference_frames = m_reference_frames;
+    result->m_scaled_entries   = m_scaled_entries;
+    return result;
+}
+
 void Brush::update_facet_statistics()
 {
     const auto geometry = get_geometry();

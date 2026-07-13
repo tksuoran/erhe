@@ -376,6 +376,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "add_tags")           result = action_add_tags       (req->arguments);
         else if (req->tool_name == "remove_tags")        result = action_remove_tags    (req->arguments);
         else if (req->tool_name == "edit_material")      result = action_edit_material  (req->arguments);
+        else if (req->tool_name == "copy_library_item")  result = action_copy_library_item(req->arguments);
         else if (req->tool_name == "set_scene_settings") result = action_set_scene_settings(req->arguments);
         else if (req->tool_name == "save_scene")         result = action_save_scene     (req->arguments);
         else if (req->tool_name == "load_scene")         result = action_load_scene     (req->arguments);
