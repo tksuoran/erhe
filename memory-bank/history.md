@@ -106,3 +106,11 @@
 >verified::geometry-smoke130/130+texture-smoke268/268{post-exporter-change,fresh-sessions}✓
 >decided::no-erhe_gltf-unit-test{parse_gltf-needs-live-Device+executor+Image_transfer->harness-level-assertion}
 >tooling::Khronos-validator-win64-downloadable{github-releases}+Blender-4.2-headless-import-render{BLENDER_WORKBENCH,factory-startup}
+
+## 2026-07-13
+>merge-save-scene+save-prefab::DONE✓{commit-b1eecef0,prompt_queue-ITEM2}
+  one-save::always-full-editor-state;source_path-save-back-silent||default-dir+modal+writeback
+  prefab-reload@save_scene_gltf{App_context&};open_scene_gltf-sets-source_path
+  removed::File.SavePrefab+Operations::save_prefab+save_prefab_scene+MCP-save_prefab;MCP-save_scene-path-optional
+  limitation-doc::prefab-templates-ignore-ERHE_*→graph-baked-products-missing-in-instances
+>verified::prefab-edit-loop-18/18+scene_roundtrip_verify-73/73{validator-skipped:not-installed}

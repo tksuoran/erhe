@@ -1,9 +1,5 @@
 §MBEL:5.0
 
-[TASK::merge-save-scene+save-prefab]{next,not-started}
-?handoff@prompt_queue-ITEM2{read-first}
-?baseline::phase6-harness-green{scripts/scene_roundtrip_verify.py-75/75@ef31a4bb..90a8860a}→re-run-affected-checks-after-merge
-
 [TASK::#239-per-scene-settings]{parked}
 ✓runtime-setter-MCP-tool{set_scene_settings+get_scene_settings@phase4,3a4989b6}→sky/grid-override-visual-verify-unblocked
 ?PENDING::viewport+post_processing{init-consumed¬applied→needs-per-scene-refactor}+clear_color{editor-global-never-read→decide-wire||drop}+sky/grid-override-visual-verify
@@ -29,3 +25,5 @@
 !animation-authoring-headless::animation_create_key-needs-EXISTING-target{set_animation_target;new-animation-only-via-ImGui-+Key-button}→import-animated-gltf-then-key
 !MCP-create_shape-with-motion_mode-already-creates-rigid-body→edit_physics_body-for-field-tweaks{create_physics_body-errors-"already has"}
 !Blender-stock-gltf-importer-rejects-2.1{externalAssets-scene}→foreign-tool-checks-use-prefab-free-2.0-save
+!MCP-save_prefab-REMOVED{b1eecef0}→save_scene{path-optional:omitted→source-path||res/editor/scenes/<name>.glb;written-path=loaded-prefab→auto-reload-instances;explicit-path¬re-associates-scene}
+!scene-with-source_path-saves-back-SILENTLY{¬overwrite-modal;open/load-sets-source_path;first-default-dir-save-associates}
