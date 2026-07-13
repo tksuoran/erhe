@@ -846,13 +846,22 @@ void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
         m_rendertarget_meshes.push_back(std::dynamic_pointer_cast<Rendertarget_mesh>(mesh));
     }
 
-    // Make sure materials are in the material library
+    // Make sure materials are in the material library. A material not yet in
+    // any library is claimed by this scene (owning entry); a material owned
+    // by ANOTHER scene's library - a mesh migrating between scenes, e.g. the
+    // Hotbar rendertarget following the active scene - is listed as a
+    // reference entry so membership stays with the owning scene.
     auto& material_library = get_content_library()->materials;
     for (const auto& primitive : mesh->get_primitives()) {
         if (!primitive.material) {
             continue;
         }
-        material_library->add(primitive.material);
+        erhe::Item_host* const material_host = primitive.material->get_item_host();
+        if ((material_host == nullptr) || (material_host == this)) {
+            material_library->add(primitive.material);
+        } else {
+            material_library->add_reference(primitive.material);
+        }
     }
 }
 
