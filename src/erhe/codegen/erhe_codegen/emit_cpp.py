@@ -366,20 +366,27 @@ def emit_struct_cpp(s: StructSchema) -> str:
 
     # Suppress deprecation warnings for removed fields accessed in deserialize/reflection,
     # and -Wfloat-equal for the floating-point == comparisons in is_default()/omit-defaults.
+    # The reflection tables always use offsetof, which is conditionally-supported
+    # (and correct on MSVC/GCC/clang) for the non-standard-layout config structs
+    # (std::string members etc.); GCC and clang warn via -Winvalid-offsetof, so
+    # the guard is always emitted.
     has_deprecated = any(f.removed_in is not None for f in s.fields)
     needs_float_guard = _has_float_comparison(s)
-    needs_guard = has_deprecated or needs_float_guard
+    needs_guard = True
     if needs_guard:
-        lines.append("#if defined(_MSC_VER)")
-        lines.append("#   pragma warning(push)")
-        if has_deprecated:
-            lines.append('#   pragma warning(disable : 4996)')
-        lines.append("#elif defined(__GNUC__) || defined(__clang__)")
+        # __clang__/__GNUC__ first: clang-cl defines _MSC_VER too, but takes
+        # the GCC-style diagnostic pragmas, not MSVC warning numbers.
+        lines.append("#if defined(__GNUC__) || defined(__clang__)")
         lines.append('#   pragma GCC diagnostic push')
         if has_deprecated:
             lines.append('#   pragma GCC diagnostic ignored "-Wdeprecated-declarations"')
         if needs_float_guard:
             lines.append('#   pragma GCC diagnostic ignored "-Wfloat-equal"')
+        lines.append('#   pragma GCC diagnostic ignored "-Winvalid-offsetof"')
+        lines.append("#elif defined(_MSC_VER)")
+        lines.append("#   pragma warning(push)")
+        if has_deprecated:
+            lines.append('#   pragma warning(disable : 4996)')
         lines.append("#endif")
         lines.append("")
 
@@ -467,10 +474,10 @@ def emit_struct_cpp(s: StructSchema) -> str:
     lines.append(emit_struct_reflect(s))
 
     if needs_guard:
-        lines.append("#if defined(_MSC_VER)")
-        lines.append("#   pragma warning(pop)")
-        lines.append("#elif defined(__GNUC__) || defined(__clang__)")
+        lines.append("#if defined(__GNUC__) || defined(__clang__)")
         lines.append("#   pragma GCC diagnostic pop")
+        lines.append("#elif defined(_MSC_VER)")
+        lines.append("#   pragma warning(pop)")
         lines.append("#endif")
         lines.append("")
 

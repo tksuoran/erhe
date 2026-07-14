@@ -348,6 +348,11 @@ elseif (${ERHE_GRAPHICS_API} STREQUAL "vulkan")
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator
     )
+    # Treat VMA's interface include dir as SYSTEM so vk_mem_alloc.h (included
+    # by erhe_graphics TUs) does not spill clang -Wnullability-completeness
+    # noise into erhe builds. The SYSTEM target property needs CMake >= 3.25;
+    # older CMake ignores it (warnings return, nothing breaks).
+    set_target_properties(VulkanMemoryAllocator PROPERTIES SYSTEM ON)
     set(VOLK_STATIC_DEFINES VK_NO_PROTOTYPES CACHE STRING "" FORCE)
     # Force volk to use the CPM-fetched Vulkan-Headers instead of an installed
     # Vulkan SDK ($ENV{VULKAN_SDK}) or whatever find_package(Vulkan) locates.

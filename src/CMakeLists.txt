@@ -18,6 +18,19 @@ if (MSVC)
     set(CMAKE_INCLUDE_SYSTEM_FLAG_CXX_WARNING "")
 endif ()
 
+if (WIN32)
+    # Dependency targets export Windows-version/charset macros PUBLIC to
+    # their consumers (mango: UNICODE; Tracy under clang: WINVER=0x0A00 +
+    # _WIN32_WINNT=0x0A00), so most -- but not all -- targets in this tree
+    # compiled with them, while erhe_pch (whose erhe_windows.hpp includes
+    # <windows.h>, i.e. sdkddkver.h) did not. clang-cl's PCH validation
+    # rightly flags that divergence (-Wclang-cl-pch / -Wmacro-redefined).
+    # erhe is not a TCHAR codebase and targets Windows 10+; define the
+    # macros uniformly for the whole src/ tree (including the PCH) so every
+    # TU preprocesses windows.h the same way.
+    add_compile_definitions(UNICODE WINVER=0x0A00 _WIN32_WINNT=0x0A00)
+endif ()
+
 #add_subdirectory(hidapi)
 
 if (${ERHE_PROFILE_LIBRARY} STREQUAL "superluminal")

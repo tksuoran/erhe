@@ -12,14 +12,23 @@ else ()
     set(ERHE_GNU_WARNING_FLAG_PREFIX "")
 endif ()
 
-set(ERHE_GNU_WARNING_FLAGS -Wall;-Wextra;-Wno-unused;-Wno-unknown-pragmas;-Wno-sign-compare;-Wwrite-strings;-Wno-narrowing)
-list(TRANSFORM ERHE_GNU_WARNING_FLAGS PREPEND "${ERHE_GNU_WARNING_FLAG_PREFIX}")
-add_compile_options(${ERHE_GNU_WARNING_FLAGS})
+# erhe's warning set. Applied per target in erhe_target_settings_toolchain
+# below (mirroring cmake/msvc.cmake, which sets /W4 per target) so that CPM
+# dependency targets build with their own warning defaults instead of erhe's.
+set(ERHE_GNU_WARNING_FLAGS -Wall;-Wextra;-Wno-unused;-Wno-unknown-pragmas;-Wno-sign-compare;-Wwrite-strings;-Wno-narrowing;-Woverloaded-virtual)
 check_cxx_compiler_flag(-Wno-unqualified-std-cast-call ERHE_CXX_HAS_NO_UNQUALIFIED_STD_CAST_CALL_FLAG)
 if (ERHE_CXX_HAS_NO_UNQUALIFIED_STD_CAST_CALL_FLAG)
-    add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:${ERHE_GNU_WARNING_FLAG_PREFIX}-Wno-deprecated-copy>")
+    list(APPEND ERHE_GNU_WARNING_FLAGS -Wno-deprecated-copy)
 endif ()
-add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:${ERHE_GNU_WARNING_FLAG_PREFIX}-Woverloaded-virtual>")
+if (CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+    # A single shared PCH (erhe_pch) cannot match every consumer's macro set:
+    # dependency targets export PUBLIC compile definitions (JPH_*, TRACY_*,
+    # SIMDJSON_*, ...) that differ between erhe targets, and none of them
+    # affect any header actually inside the PCH. cl.exe tolerates the same
+    # divergence silently; silence clang-cl's per-TU macro-mismatch warning.
+    list(APPEND ERHE_GNU_WARNING_FLAGS -Wno-clang-cl-pch)
+endif ()
+list(TRANSFORM ERHE_GNU_WARNING_FLAGS PREPEND "${ERHE_GNU_WARNING_FLAG_PREFIX}")
 # Optimization / debug levels, GNU-style. clang-cl (the MSVC-ABI clang driver)
 # rejects -g3 as an unknown argument -- normally just a -Wunknown-argument
 # warning, but Jolt compiles with -Werror, which makes it fatal -- and it
@@ -76,6 +85,11 @@ if (("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "x86_64") OR ("${CMAKE_SYSTEM_PROCESSO
 endif ()
 
 function (erhe_target_settings_toolchain target)
+    # C++-only: erhe targets may contain vendored C sources (e.g. wuffs),
+    # and -Woverloaded-virtual / -Wno-deprecated-copy are invalid for C.
+    foreach (erhe_warning_flag IN LISTS ERHE_GNU_WARNING_FLAGS)
+        target_compile_options(${target} PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${erhe_warning_flag}>")
+    endforeach ()
     if (WIN32)
         target_compile_definitions(${target} PUBLIC $<$<COMPILE_LANGUAGE:CXX>:NOMINMAX>)
         target_compile_definitions(${target} PUBLIC $<$<COMPILE_LANGUAGE:CXX>:_CRT_SECURE_NO_WARNINGS>)
