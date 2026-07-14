@@ -34,6 +34,7 @@
 #include "tools/mesh_component_selection.hpp"
 #include "tools/selection_tool.hpp"
 #include "windows/item_tree_window.hpp"
+#include "windows/window_placement.hpp"
 
 #include "erhe_rendergraph/rendergraph_node.hpp"
 
@@ -907,24 +908,17 @@ Operations::Operations(
                         *m_context.app_settings
                     );
                     browser_window->show_window();
+                    // Dock (tab) the new scene's Hierarchy window with the
+                    // existing one instead of leaving it floating at ImGui's
+                    // default cascade position (#258).
+                    apply_hierarchy_window_placement(*m_context.imgui_windows, *browser_window);
 
-                    // Show the loaded scene in a viewport window: repurpose an
+                    // Show the loaded scene in a viewport window: repurposes an
                     // existing viewport that shows no scene when one exists
-                    // (#265 follow-up), else create a new one.
-                    if (!m_context.scene_views->try_repurpose_empty_viewport_window(scene_root)) {
-                        std::shared_ptr<erhe::rendergraph::Rendergraph_node> rendergraph_output_node;
-                        auto viewport_scene_view = m_context.scene_views->open_new_viewport_scene_view(
-                            rendergraph_output_node,
-                            scene_root
-                        );
-                        m_context.scene_views->create_viewport_window(
-                            *m_context.imgui_renderer,
-                            *m_context.imgui_windows,
-                            viewport_scene_view,
-                            rendergraph_output_node,
-                            scene_root->get_name()
-                        );
-                    }
+                    // (#265 follow-up), else creates a new one docked (tabbed)
+                    // with the existing viewport (#258) and brings its tab to
+                    // the front.
+                    m_context.scene_views->open_new_viewport_scene_view_node(scene_root);
 
                     // Attach the global tools (Hud / Hotbar / OpenXR Headset_view) to
                     // this scene if none existed yet -- e.g. a load-only commands.json

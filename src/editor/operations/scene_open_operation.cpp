@@ -8,6 +8,7 @@
 #include "scene/scene_root.hpp"
 #include "scene/viewport_scene_views.hpp"
 #include "windows/item_tree_window.hpp"
+#include "windows/window_placement.hpp"
 
 #include "erhe_file/file.hpp"
 #include "erhe_primitive/build_info.hpp"
@@ -61,6 +62,11 @@ void Scene_open_operation::execute(App_context& context)
         *context.app_settings
     );
     browser_window->show_window();
+    // Dock (tab) the new scene's Hierarchy window with the existing one
+    // instead of leaving it floating at ImGui's default cascade position
+    // (#258). ImGuiCond_FirstUseEver keeps a remembered layout intact when
+    // the window identity already has persisted ini state (e.g. redo).
+    apply_hierarchy_window_placement(*context.imgui_windows, *browser_window);
 
     if (first_time) {
         // Execute the import compound inline as part of this operation
