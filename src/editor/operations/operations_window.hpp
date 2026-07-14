@@ -184,12 +184,12 @@ public:
     void export_gltf();
     void export_callback(const char* const* filelist, int filter);
 
-    // File > Save Scene: a scene opened/loaded from a glTF file saves back
-    // to its own source file (when that file is a loaded prefab, every
+    // File > Save glTF (erhe): a scene opened/loaded from a glTF file saves
+    // back to its own source file (when that file is a loaded prefab, every
     // instance in every scene refreshes); a scene with no source file saves
     // to res/editor/scenes/<scene name>.glb, confirming overwrite.
     void save_scene();
-    // Renders pending modal confirmation dialogs (the File > Save Scene
+    // Renders pending modal confirmation dialogs (the File > Save glTF (erhe)
     // overwrite prompt). Called once per frame from App_windows::viewport_menu
     // -- the imgui-host begin callback -- so the modal shows regardless of the
     // Operations window's own visibility.
@@ -358,7 +358,7 @@ private:
     erhe::commands::Lambda_command m_create_collision_filter;
     erhe::commands::Lambda_command m_create_joint_settings;
 
-    // Pending File > Save Scene overwrite confirmation (imgui_modal_dialogs):
+    // Pending File > Save glTF (erhe) overwrite confirmation (imgui_modal_dialogs):
     // set by save_scene() when the target file already exists; the scene_root
     // being non-null is what marks the confirmation as pending. The ImGui
     // context pointer pins the modal to the imgui host that opened it, since

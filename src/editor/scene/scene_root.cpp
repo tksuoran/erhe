@@ -25,6 +25,7 @@
 #include "windows/editor_windows.hpp"
 #include "windows/item_tree_window.hpp"
 
+#include "erhe_file/file.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_physics/iworld.hpp"
 #include "erhe_physics/irigid_body.hpp"
@@ -679,6 +680,36 @@ auto Scene_root::make_browser_window(
                     Close_scene_message{
                         .scene_root = std::dynamic_pointer_cast<Scene_root>(shared_from_this())
                     }
+                );
+                close = true;
+            }
+        }
+    );
+    // Prefab instance root context menu: "Load '<source>'" opens the
+    // instance's source glTF file as its own scene -- the same entry (and
+    // the same File > Load Scene message path) the Asset browser offers on
+    // the file itself.
+    m_node_tree_window->add_item_context_menu_callback(
+        [&context](
+            const std::shared_ptr<erhe::Item_base>& item,
+            std::vector<std::function<void()>>&,
+            bool&                                   close
+        ) {
+            std::shared_ptr<Prefab_instance> prefab_instance = std::dynamic_pointer_cast<Prefab_instance>(item);
+            if (!prefab_instance) {
+                const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+                if (node) {
+                    prefab_instance = erhe::scene::get_attachment<Prefab_instance>(node.get());
+                }
+            }
+            if (!prefab_instance || prefab_instance->get_prefab_source_path().empty()) {
+                return;
+            }
+            const std::filesystem::path& source_path = prefab_instance->get_prefab_source_path();
+            const std::string label = fmt::format("Load '{}'", erhe::file::to_string(source_path));
+            if (ImGui::MenuItem(label.c_str())) {
+                context.app_message_bus->load_scene_file.queue_message(
+                    Load_scene_file_message{ .path = source_path }
                 );
                 close = true;
             }

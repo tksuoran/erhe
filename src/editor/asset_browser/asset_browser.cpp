@@ -171,7 +171,7 @@ Asset_browser::Asset_browser(
                 // Open-vs-import branch (doc/gltf-scene-roundtrip-plan.md
                 // phase 4): an erhe-authored scene file (ERHE_scene in
                 // extensionsUsed) loads as a full scene; any other glTF keeps
-                // the import-as-asset flow (Open = foreign glTF as new scene).
+                // the import-as-asset flow (Load = foreign glTF as new scene).
                 ensure_scanned(*gltf);
                 const bool erhe_scene = is_erhe_scene(gltf->extensions_used);
                 if (erhe_scene && try_load(gltf)) {
@@ -340,7 +340,7 @@ auto Asset_browser::try_instantiate(const std::shared_ptr<Asset_file_gltf>& gltf
 
 auto Asset_browser::try_open(const std::shared_ptr<Asset_file_gltf>& gltf) -> bool
 {
-    std::string open_label = fmt::format("Open '{}'", erhe::file::to_string(*gltf->get_source_path()));
+    std::string open_label = fmt::format("Load '{}'", erhe::file::to_string(*gltf->get_source_path()));
     if (ImGui::MenuItem(open_label.c_str())) {
         m_context.operation_stack->queue(
             std::make_shared<Scene_open_operation>(*gltf->get_source_path())

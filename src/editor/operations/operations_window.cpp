@@ -722,8 +722,8 @@ Operations::Operations(
     , m_make_geometry_command     {commands, "Mesh.MakeGeometry",                  [this]() -> bool { make_geometry    (); return true; } }
     , m_make_raytrace_command     {commands, "Mesh.MakeRaytrace",                  [this]() -> bool { make_raytrace    (); return true; } }
 
-    , m_export_gltf_command       {commands, "File.Export.glTF",                   [this]() -> bool { export_gltf            (); return true; } }
-    , m_save_scene_command        {commands, "File.SaveScene",                     [this]() -> bool { save_scene             (); return true; } }
+    , m_export_gltf_command       {commands, "File.SaveGltfStandard",              [this]() -> bool { export_gltf            (); return true; } }
+    , m_save_scene_command        {commands, "File.SaveGltfErhe",                  [this]() -> bool { save_scene             (); return true; } }
     , m_load_scene_command        {commands, "File.LoadScene",                     [this]() -> bool { load_scene             (); return true; } }
     , m_create_material           {commands, "Create.Material",                    [this]() -> bool { create_material        (); return true; } }
     , m_create_brush              {commands, "Create.Brush",                       [this]() -> bool { create_brush           (); return true; } }
@@ -820,8 +820,8 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_make_geometry_command,     "Mesh.Make Geometry");
     commands.bind_command_to_menu(&m_make_raytrace_command,     "Mesh.Make Raytrace");
 
-    commands.bind_command_to_menu(&m_export_gltf_command,     "File.Export glTF");
-    commands.bind_command_to_menu(&m_save_scene_command,      "File.Save Scene");
+    commands.bind_command_to_menu(&m_export_gltf_command,     "File.Save glTF (standard)");
+    commands.bind_command_to_menu(&m_save_scene_command,      "File.Save glTF (erhe)");
     commands.bind_command_to_menu(&m_load_scene_command,      "File.Load Scene");
     commands.bind_command_to_menu(&m_create_material,         "Create.Material");
     commands.bind_command_to_menu(&m_create_brush,            "Create.Brush from Selection");
@@ -1367,7 +1367,7 @@ void Operations::imgui()
         if (visible("Create Brush") && operation_button("Create Brush", &m_create_brush, has_selection_mode, button_size)) {
             create_brush();
         }
-        if (visible("Export glTF") && operation_button("Export glTF", &m_export_gltf_command, erhe::imgui::Item_mode::normal, button_size)) {
+        if (visible("Save glTF (standard)") && operation_button("Save glTF (standard)", &m_export_gltf_command, erhe::imgui::Item_mode::normal, button_size)) {
             export_gltf();
         }
     }
