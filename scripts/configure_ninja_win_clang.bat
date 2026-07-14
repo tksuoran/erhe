@@ -14,7 +14,15 @@ if not defined VSINSTALL (
     echo No Visual Studio installation with C++ build tools found by vswhere.
     exit /b 1
 )
-call "%VSINSTALL%\Common7\Tools\VsDevCmd.bat" -arch=amd64 -host_arch=amd64
+rem VsDevCmd.bat pushd's into the VS Installer directory and runs bare
+rem "vswhere.exe", relying on cmd's current-directory lookup. Shells that set
+rem NoDefaultCurrentDirectoryInExePath (Git for Windows, agent shells) disable
+rem that lookup, yielding a noisy (harmless) "'vswhere.exe' is not recognized"
+rem error and an unset VSCMD_VER. Appending the Installer directory to the
+rem setlocal-scoped PATH lets that call resolve either way; -no_logo drops the
+rem banner.
+set "PATH=%PATH%;%ProgramFiles(x86)%\Microsoft Visual Studio\Installer"
+call "%VSINSTALL%\Common7\Tools\VsDevCmd.bat" -arch=amd64 -host_arch=amd64 -no_logo
 if errorlevel 1 exit /b 1
 
 :: Build erhe with clang-cl (LLVM), MSVC-ABI compatible, so clangd (same LLVM)
