@@ -75,6 +75,11 @@ auto Geometry_graph_mesh::get_controlled_mesh() const -> const std::shared_ptr<e
     return m_mesh;
 }
 
+auto Geometry_graph_mesh::get_controlled_ghost_mesh() const -> const std::shared_ptr<erhe::scene::Mesh>&
+{
+    return m_ghost_mesh;
+}
+
 auto Geometry_graph_mesh::get_controlled_node_physics() const -> const std::shared_ptr<Node_physics>&
 {
     return m_node_physics;
@@ -105,10 +110,14 @@ void Geometry_graph_mesh::release_controlled_products()
         if (m_mesh) {
             node->detach(m_mesh.get());
         }
+        if (m_ghost_mesh) {
+            node->detach(m_ghost_mesh.get());
+        }
     }
     m_controlled_node.reset();
     m_node_physics.reset();
     m_mesh.reset();
+    m_ghost_mesh.reset();
     m_applied_revision = 0;
 }
 
@@ -121,7 +130,7 @@ void Geometry_graph_mesh::apply_baked_products()
     // If the products are still attached to a previous node (detach path
     // that fired no hook, e.g. detached from a node outside any scene),
     // reclaim them before materializing on the current node.
-    if (m_mesh && (m_controlled_node.lock().get() != node)) {
+    if ((m_mesh || m_ghost_mesh) && (m_controlled_node.lock().get() != node)) {
         release_controlled_products();
     }
     const uint64_t revision = m_graph_mesh->get_baked_revision();
@@ -153,20 +162,6 @@ void Geometry_graph_mesh::apply_baked_products()
         m_controlled_node = node->shared_node_from_this();
     }
 
-    if (!products.primitive) {
-        // The graph evaluated to empty / disconnected: keep the node but
-        // show nothing (mirrors the output node's empty handling).
-        if (m_mesh) {
-            m_mesh->clear_primitives();
-        }
-        if (m_node_physics) {
-            node->detach(m_node_physics.get());
-            m_node_physics.reset();
-        }
-        m_applied_revision = revision;
-        return;
-    }
-
     // The graph's output node may not have selected a material (it needs
     // no scene of its own); fall back to the first material of THIS
     // node's scene, the same default the legacy scratch path uses.
@@ -179,6 +174,41 @@ void Geometry_graph_mesh::apply_baked_products()
                 material = materials.front();
             }
         }
+    }
+
+    // Ghost-node companion mesh (edge lines only). Applied in both the
+    // empty and the regular path: the display node baking empty does not
+    // clear a designated ghost, and vice versa.
+    if (products.ghost_primitive) {
+        if (!m_ghost_mesh) {
+            m_ghost_mesh = std::make_shared<erhe::scene::Mesh>(node->get_name() + " Ghost Mesh");
+            m_ghost_mesh->layer_id = scene_root->layers().content()->id;
+            // visible + render_wireframe only: no `content` (skipped by all
+            // fill / point passes), no shadow_cast, no id (not pickable);
+            // the primitive has no raytrace shape, so hover misses it too.
+            m_ghost_mesh->enable_flag_bits(erhe::Item_flags::visible | erhe::Item_flags::render_wireframe);
+            node->attach(m_ghost_mesh);
+            m_controlled_node = node->shared_node_from_this();
+        }
+        m_ghost_mesh->clear_primitives();
+        m_ghost_mesh->add_primitive(products.ghost_primitive, material);
+    } else if (m_ghost_mesh) {
+        node->detach(m_ghost_mesh.get());
+        m_ghost_mesh.reset();
+    }
+
+    if (!products.primitive) {
+        // The graph evaluated to empty / disconnected: keep the node but
+        // show nothing (mirrors the output node's empty handling).
+        if (m_mesh) {
+            m_mesh->clear_primitives();
+        }
+        if (m_node_physics) {
+            node->detach(m_node_physics.get());
+            m_node_physics.reset();
+        }
+        m_applied_revision = revision;
+        return;
     }
 
     if (!m_mesh) {

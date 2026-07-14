@@ -185,6 +185,9 @@ void add_gltf_editor_state(erhe::gltf::Gltf_export_arguments& arguments, Scene_r
             if (graph_mesh_attachment->get_controlled_mesh()) {
                 arguments.excluded_meshes.insert(graph_mesh_attachment->get_controlled_mesh().get());
             }
+            if (graph_mesh_attachment->get_controlled_ghost_mesh()) {
+                arguments.excluded_meshes.insert(graph_mesh_attachment->get_controlled_ghost_mesh().get());
+            }
             if (graph_mesh_attachment->get_controlled_node_physics() == node_physics) {
                 node_physics.reset(); // build_gltf_physics_data skips it too
             }

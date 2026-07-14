@@ -44,6 +44,7 @@ public:
     ~Geometry_output_node() noexcept override;
 
     void evaluate(Geometry_graph&) override;
+    [[nodiscard]] auto is_scene_output() const -> bool override;
     void imgui   () override;
     void on_removed_from_graph() override;
     void write_parameters(nlohmann::json& out) const override;
@@ -73,6 +74,10 @@ private:
     std::shared_ptr<erhe::geometry::Geometry>         m_evaluated_geometry;
     std::shared_ptr<erhe::primitive::Primitive>       m_evaluated_primitive;
     std::shared_ptr<erhe::physics::ICollision_shape>  m_evaluated_collision_shape;
+    // Ghost-node products (edge-lines-only companion mesh; no raytrace,
+    // no physics). Null when no ghost node is designated.
+    std::shared_ptr<erhe::geometry::Geometry>         m_evaluated_ghost_geometry;
+    std::shared_ptr<erhe::primitive::Primitive>       m_evaluated_ghost_primitive;
 };
 
 }

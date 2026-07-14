@@ -175,6 +175,13 @@ public:
     std::shared_ptr<Composition_pass> hover_outline;
     std::shared_ptr<Composition_pass> edge_lines_not_selected;
     std::shared_ptr<Composition_pass> edge_lines_selected;
+    // Edge-lines-only pass for geometry graph ghost meshes (Houdini
+    // template flag): meshes flagged visible | render_wireframe (and
+    // deliberately not `content`, so no other pass touches them). Not
+    // gated by the per-viewport edge-lines render style; fixed dim
+    // appearance via primitive_settings. Fed by Viewport_scene_view /
+    // Headset_view in color mode (invisible in id-buffer edge mode).
+    std::shared_ptr<Composition_pass> ghost_edge_lines;
     std::shared_ptr<Composition_pass> translucent_outline;
     // Overlay pass that draws rendertarget meshes (e.g. the hotbar), ignoring
     // camera exposure and rendered after post-processing when enabled (#230).

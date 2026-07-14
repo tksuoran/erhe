@@ -435,6 +435,10 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
                         erhe::graphics::Scoped_debug_group feed_debug_group{command_buffer, "translucent_outline"};
                         feed_pass(m_context.app_rendering->translucent_outline.get());
                     }
+                    {
+                        erhe::graphics::Scoped_debug_group feed_debug_group{command_buffer, "ghost_edge_lines"};
+                        feed_pass(m_context.app_rendering->ghost_edge_lines.get());
+                    }
                     } // end else (color edge-line feed)
                 }
             }

@@ -86,6 +86,7 @@ public:
     // on load, not authored content (persisting them would duplicate the
     // mesh and rigid body on every save/load round-trip).
     [[nodiscard]] auto get_controlled_mesh() const -> const std::shared_ptr<erhe::scene::Mesh>&;
+    [[nodiscard]] auto get_controlled_ghost_mesh() const -> const std::shared_ptr<erhe::scene::Mesh>&;
     [[nodiscard]] auto get_controlled_node_physics() const -> const std::shared_ptr<Node_physics>&;
 
 private:
@@ -99,6 +100,12 @@ private:
 
     std::shared_ptr<Graph_mesh>        m_graph_mesh;
     std::shared_ptr<erhe::scene::Mesh> m_mesh;
+    // The graph's ghost node baked as an edge-lines-only companion mesh
+    // (Houdini template flag): flags visible | render_wireframe, NOT
+    // content / shadow_cast / id, so only the dedicated ghost edge-lines
+    // composition pass draws it. Never adopted from the node - always
+    // created and owned here.
+    std::shared_ptr<erhe::scene::Mesh> m_ghost_mesh;
     std::shared_ptr<Node_physics>      m_node_physics;
     // The node the controlled products are currently attached to; kept
     // beside get_node() because release must reach the OLD node after

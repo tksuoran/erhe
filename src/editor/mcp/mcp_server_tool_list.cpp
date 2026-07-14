@@ -771,6 +771,15 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"node_id", "parameters"})}
     }});
+    m_tool_infos.push_back({"geometry_graph_set_display_flags", "Set or clear a geometry graph node's display / ghost designation (Houdini display / template flags). The display node's geometry replaces the output node's wired input in the scene bake (render mesh AND physics); the ghost node's geometry additionally shows as a dim edge-lines-only mesh (no shadow, not pickable). One node each per graph: setting a flag moves it from any previous holder; false clears the flag only when this node holds it. Undoable; the graph re-bakes in the background (get_geometry_graph waits and reports display_node_id / ghost_node_id).", {
+        {"type", "object"},
+        {"properties", {
+            {"node_id", {{"type", "integer"}, {"description", "Id of the node to (un)designate"}}},
+            {"display", {{"type", "boolean"}, {"description", "true: make this the display node; false: clear the display flag if this node holds it"}}},
+            {"ghost",   {{"type", "boolean"}, {"description", "true: make this the ghost node; false: clear the ghost flag if this node holds it"}}}
+        }},
+        {"required", json::array({"node_id"})}
+    }});
     m_tool_infos.push_back({"geometry_graph_set_view", "Show the Geometry Graph window and set its node-editor zoom (view scale) immediately, centered on the graph content. zoom > 1 zooms in (content drawn larger), zoom < 1 zooms out. Deterministic (no animation / no mouse input) - intended for headless zoom-quality verification (capture_screenshot on the next frame). Requires the window to have a target Graph Mesh (create_graph_mesh / set_geometry_graph_target) for it to render nodes.", {
         {"type", "object"},
         {"properties", {

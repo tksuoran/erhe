@@ -1,6 +1,7 @@
 #include "geometry_graph/geometry_graph_node.hpp"
 #include "geometry_graph/geometry_graph_operations.hpp"
 #include "geometry_graph/geometry_graph_window.hpp"
+#include "geometry_graph/graph_mesh.hpp"
 #include "app_context.hpp"
 #include "operations/operation_stack.hpp"
 #include "tools/selection_tool.hpp"
@@ -148,6 +149,89 @@ void Geometry_graph_node::make_output_pin(const std::size_t key, const std::stri
 void Geometry_graph_node::evaluate(Geometry_graph&)
 {
     // Overridden in derived classes
+}
+
+auto Geometry_graph_node::is_scene_output() const -> bool
+{
+    return false;
+}
+
+void Geometry_graph_node::after_node_content(App_context& context)
+{
+    // Houdini-style display ("D") / ghost ("G") designation badges. Hidden
+    // for scene outputs (designating the output is a no-op), for nodes
+    // without a geometry output (value / math nodes have nothing to show)
+    // and for nodes outside an asset graph (scratch / shadow / group
+    // subgraph nodes have no owning Graph_mesh).
+    if (is_scene_output()) {
+        return;
+    }
+    const std::shared_ptr<Graph_mesh> graph_mesh = get_owning_graph_mesh();
+    if (!graph_mesh) {
+        return;
+    }
+    bool has_geometry_output = false;
+    for (const erhe::graph::Pin& pin : get_output_pins()) {
+        if (pin.get_key() == Geometry_pin_key::geometry) {
+            has_geometry_output = true;
+            break;
+        }
+    }
+    if (!has_geometry_output) {
+        return;
+    }
+
+    Geometry_graph&   graph      = graph_mesh->graph();
+    const std::size_t node_id    = get_id();
+    const std::size_t display_id = graph.get_display_node_id();
+    const std::size_t ghost_id   = graph.get_ghost_node_id();
+    const bool        is_display = (display_id == node_id);
+    const bool        is_ghost   = (ghost_id   == node_id);
+
+    const ImVec2 badge_size{18.0f * m_content_scale, 18.0f * m_content_scale};
+
+    bool toggle_display = false;
+    bool toggle_ghost   = false;
+
+    if (is_display) {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.20f, 0.45f, 0.85f, 1.0f});
+    }
+    if (ImGui::Button("D", badge_size)) {
+        toggle_display = true;
+    }
+    if (is_display) {
+        ImGui::PopStyleColor();
+    }
+
+    ImGui::SameLine();
+
+    if (is_ghost) {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.60f, 0.35f, 0.75f, 1.0f});
+    }
+    if (ImGui::Button("G", badge_size)) {
+        toggle_ghost = true;
+    }
+    if (is_ghost) {
+        ImGui::PopStyleColor();
+    }
+
+    if (toggle_display || toggle_ghost) {
+        // Toggle off on the current holder, move otherwise; one operation
+        // covers the implicit un-badge of the previous holder.
+        std::size_t new_display_id = display_id;
+        std::size_t new_ghost_id   = ghost_id;
+        if (toggle_display) {
+            new_display_id = is_display ? 0 : node_id;
+        }
+        if (toggle_ghost) {
+            new_ghost_id = is_ghost ? 0 : node_id;
+        }
+        context.operation_stack->execute_now(
+            std::make_shared<Geometry_graph_display_designation_operation>(
+                graph_mesh, get_name(), display_id, ghost_id, new_display_id, new_ghost_id
+            )
+        );
+    }
 }
 
 void Geometry_graph_node::on_removed_from_graph()

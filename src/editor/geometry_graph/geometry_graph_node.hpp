@@ -64,6 +64,14 @@ public:
 
     virtual void evaluate(Geometry_graph& graph);
 
+    // True for terminal nodes that publish scene products (the output
+    // node). Geometry_graph::evaluate() runs these in a final phase so a
+    // display / ghost designation can read any other node's payload
+    // regardless of topological order, and Geometry_graph's designation
+    // setters mark them dirty. Group_output_node is a subgraph pin, not a
+    // scene output.
+    [[nodiscard]] virtual auto is_scene_output() const -> bool;
+
     // Called when the node leaves the graph (deletion, undo of add,
     // graph clear / load). The node object may stay alive in the undo
     // stack, so side effects outside the graph - like the scene mesh
@@ -90,6 +98,13 @@ protected:
     // Implements Graph_editor_node
     [[nodiscard]] auto pin_key_color(std::size_t key) const -> ImU32 override;
     void commit_parameter_operation(App_context& context, std::string&& before_parameters, std::string&& after_parameters) override;
+    // Draws the display ("D") / ghost ("G") designation badges under the
+    // node content (Houdini display / template flags). Runs after the
+    // parameter-undo dirty-delta bracket in Graph_editor_node::node_editor,
+    // so the toggle cannot fabricate a spurious parameter operation; the
+    // click executes an undoable Geometry_graph_display_designation_operation
+    // instead.
+    void after_node_content(App_context& context) override;
 
     std::vector<Geometry_payload> m_input_payloads;
     std::vector<Geometry_payload> m_output_payloads;

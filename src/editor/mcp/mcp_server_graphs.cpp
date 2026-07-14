@@ -3,6 +3,8 @@
 
 #include "mcp/mcp_server_shared.hpp"
 
+#include "geometry_graph/geometry_graph_operations.hpp"
+
 namespace editor {
 
 using namespace mcp_server_detail;
@@ -142,6 +144,8 @@ auto Mcp_server::query_geometry_graph(const json& args) -> std::string
     result["links"]           = links;
     result["graph_mesh_name"] = graph_mesh->get_name();
     result["graph_mesh_id"]   = graph_mesh->get_id();
+    result["display_node_id"] = graph_mesh->graph().get_display_node_id();
+    result["ghost_node_id"]   = graph_mesh->graph().get_ghost_node_id();
     return make_json_content(result).dump();
 }
 
@@ -243,6 +247,57 @@ auto Mcp_server::action_geometry_graph_set_parameter(const json& args) -> std::s
         args["parameters"]
     );
     return make_json_content(geometry_graph_node_json(*node)).dump();
+}
+
+auto Mcp_server::action_geometry_graph_set_display_flags(const json& args) -> std::string
+{
+    Geometry_graph_window* window = m_context.geometry_graph_window;
+    if (window == nullptr) {
+        return make_error_content("Geometry graph window not available");
+    }
+    const std::shared_ptr<Graph_mesh> graph_mesh = window->get_current_graph_mesh();
+    if (!graph_mesh) {
+        return make_error_content("No target Graph Mesh - create one (create_graph_mesh) or set the target (set_geometry_graph_target) first");
+    }
+    const std::size_t node_id = args.value("node_id", std::size_t{0});
+    Geometry_graph_node* node = find_geometry_graph_node(window->get_nodes(), node_id);
+    if (node == nullptr) {
+        return make_error_content("Node not found");
+    }
+    if (node->is_scene_output()) {
+        return make_error_content("Cannot set display/ghost flags on an output node");
+    }
+    const bool has_display = args.contains("display") && args["display"].is_boolean();
+    const bool has_ghost   = args.contains("ghost")   && args["ghost"].is_boolean();
+    if (!has_display && !has_ghost) {
+        return make_error_content("Provide 'display' and/or 'ghost' (bool)");
+    }
+
+    Geometry_graph&   graph          = graph_mesh->graph();
+    const std::size_t before_display = graph.get_display_node_id();
+    const std::size_t before_ghost   = graph.get_ghost_node_id();
+    std::size_t       after_display  = before_display;
+    std::size_t       after_ghost    = before_ghost;
+    if (has_display) {
+        // true: this node becomes the display node; false: clears the flag
+        // only when this node holds it (another holder is left alone).
+        after_display = args["display"].get<bool>() ? node_id : ((before_display == node_id) ? 0 : before_display);
+    }
+    if (has_ghost) {
+        after_ghost = args["ghost"].get<bool>() ? node_id : ((before_ghost == node_id) ? 0 : before_ghost);
+    }
+    if ((after_display != before_display) || (after_ghost != before_ghost)) {
+        m_context.operation_stack->execute_now(
+            std::make_shared<Geometry_graph_display_designation_operation>(
+                graph_mesh, node->get_name(), before_display, before_ghost, after_display, after_ghost
+            )
+        );
+    }
+
+    json result;
+    result["display_node_id"] = after_display;
+    result["ghost_node_id"]   = after_ghost;
+    return make_json_content(result).dump();
 }
 
 auto Mcp_server::action_geometry_graph_connect(const json& args) -> std::string

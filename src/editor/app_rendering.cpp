@@ -448,6 +448,36 @@ App_rendering::App_rendering(
         }, selected
     );
 
+    // Geometry graph ghost meshes (Houdini template flag): edge lines only,
+    // always on (no get_render_style -> not gated by the per-viewport
+    // edge-lines style; pattern: the corner-cap passes above). The filter
+    // keys on the otherwise-unused render_wireframe flag; ghost meshes carry
+    // no `content` flag, so every other pass skips them and this pass never
+    // sees regular content.
+    ghost_edge_lines = make_composition_pass(
+        "Ghost edge lines",
+        Composition_pass_data{
+            .content_wide_line_group       {3},
+            .mesh_layers                   {Mesh_layer_id::content},
+            .blending_mode_policy          {Blending_mode_policy::override_with_base_render_pipeline},
+            .primitive_mode                {Primitive_mode::edge_lines},
+            .filter{
+                .require_all_bits_set         = Item_flags::visible | Item_flags::render_wireframe,
+                .require_at_least_one_bit_set = 0,
+                .require_all_bits_clear       = 0
+            },
+            .primitive_settings{
+                erhe::scene_renderer::Primitive_interface_settings{
+                    .color_source    = erhe::scene_renderer::Primitive_color_source::constant_color,
+                    .constant_color0 = glm::vec4{0.55f, 0.45f, 0.7f, 1.0f},
+                    .size_source     = erhe::scene_renderer::Primitive_size_source::constant_size,
+                    .constant_size   = 1.5f
+                }
+            }
+        },
+        not_selected
+    );
+
     selection_outline = make_composition_pass(
         "Content outline opaque selected",
         Composition_pass_data{

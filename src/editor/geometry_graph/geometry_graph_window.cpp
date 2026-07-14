@@ -174,6 +174,10 @@ void Geometry_graph_window::erase_node(Graph_mesh& graph_mesh, const std::shared
     graph_mesh.graph().unregister_node(node.get());
     nodes.erase(i);
     node->on_removed_from_graph();
+    // A designated (display / ghost) node leaving the graph re-bakes so the
+    // scene falls back to the wired input; the designation id is kept so an
+    // undo of this erase (same node object, same id) self-heals it.
+    graph_mesh.graph().handle_designated_node_removed(node->get_id());
 }
 
 auto Geometry_graph_window::connect_pins(Graph_mesh& graph_mesh, erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool
@@ -496,6 +500,11 @@ void Geometry_graph_window::launch_evaluation(const std::shared_ptr<Graph_mesh>&
             &shadow_sink  ->get_input_pins ().at(link->get_sink  ()->get_slot())
         );
     }
+    // Display / ghost designation follows the snapshot: shadow nodes carry
+    // set_log_source_id(live id), so the live ids resolve unchanged in the
+    // shadow graph (raw copy - the snapshot's per-node dirty flags are
+    // authoritative and must not be disturbed).
+    run->shadow_graph.copy_display_designation_from(live_graph);
     // A fresh Geometry_graph is born forced-full (so a graph's first
     // evaluation runs every node); the snapshot's per-node dirty flags
     // already carry the live state, so discard the shadow's birth flag

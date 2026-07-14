@@ -6,10 +6,12 @@
 #include "app_scenes.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
+#include "geometry_graph/geometry_graph.hpp"
 #include "geometry_graph/graph_mesh.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_graph/pin.hpp"
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_primitive/primitive.hpp"
@@ -75,28 +77,27 @@ void Geometry_output_node::on_removed_from_graph()
     }
 }
 
-void Geometry_output_node::evaluate(Geometry_graph&)
+namespace {
+
+// The first geometry output payload of a designated (display / ghost)
+// node; null when the node has no geometry output or its payload is
+// empty. Nodes place geometry on the pin keyed Geometry_pin_key::geometry
+// (not necessarily slot 0).
+[[nodiscard]] auto get_designated_geometry(Geometry_graph_node& node) -> std::shared_ptr<erhe::geometry::Geometry>
 {
-    pull_inputs();
-    const std::shared_ptr<erhe::geometry::Geometry> source = get_input(0).get_geometry();
-
-    m_evaluated_geometry.reset();
-    m_evaluated_primitive.reset();
-    m_evaluated_collision_shape.reset();
-    m_evaluated_valid = true;
-
-    // A facet-less geometry (e.g. an out-of-range Conway operation index,
-    // a boolean of empty inputs) has nothing to render; treat it like a
-    // disconnected input rather than asking the primitive builder to
-    // build zero-index buffers (which it refuses with a VERIFY abort).
-    // A valid-but-empty result makes apply_evaluated_to_scene() clear
-    // the scene mesh.
-    if (!source || (source->get_mesh().facets.nb() == 0)) {
-        return;
+    const auto& pins = node.get_output_pins();
+    for (std::size_t slot = 0, end = pins.size(); slot < end; ++slot) {
+        if (pins[slot].get_key() == Geometry_pin_key::geometry) {
+            return node.get_output(slot).get_geometry();
+        }
     }
+    return {};
+}
 
-    // Copy before render processing; the input geometry is shared with
-    // upstream nodes and must not be mutated.
+// Copy + render-process a graph payload geometry (the payload is shared
+// with upstream nodes and must not be mutated).
+[[nodiscard]] auto prepare_render_geometry(const std::shared_ptr<erhe::geometry::Geometry>& source) -> std::shared_ptr<erhe::geometry::Geometry>
+{
     std::shared_ptr<erhe::geometry::Geometry> render_geometry = std::make_shared<erhe::geometry::Geometry>(source->get_name());
     GEO::mat4f identity;
     identity.load_identity();
@@ -112,6 +113,40 @@ void Geometry_output_node::evaluate(Geometry_graph&)
                 erhe::geometry::Geometry::process_flag_generate_tangents
         }
     );
+    return render_geometry;
+}
+
+} // anonymous namespace
+
+auto Geometry_output_node::is_scene_output() const -> bool
+{
+    return true;
+}
+
+void Geometry_output_node::evaluate(Geometry_graph& graph)
+{
+    pull_inputs();
+
+    // Houdini display flag: a designated display node's geometry replaces
+    // the wired input - the whole bake (render mesh AND physics collision)
+    // follows it, exactly as if that node were wired to this output. A
+    // designated-but-empty payload bakes empty (the scene mesh clears); a
+    // designation whose node no longer resolves falls back to the wired
+    // input (tolerant resolution: undo of a node delete self-heals).
+    std::shared_ptr<erhe::geometry::Geometry> source{};
+    Geometry_graph_node* display_node = graph.find_node_by_log_id(graph.get_display_node_id());
+    if ((display_node != nullptr) && !display_node->is_scene_output()) {
+        source = get_designated_geometry(*display_node);
+    } else {
+        source = get_input(0).get_geometry();
+    }
+
+    m_evaluated_geometry.reset();
+    m_evaluated_primitive.reset();
+    m_evaluated_collision_shape.reset();
+    m_evaluated_ghost_geometry.reset();
+    m_evaluated_ghost_primitive.reset();
+    m_evaluated_valid = true;
 
     const erhe::primitive::Build_info build_info{
         .primitive_types = {
@@ -124,40 +159,73 @@ void Geometry_output_node::evaluate(Geometry_graph&)
         .buffer_info = m_context.mesh_memory->make_primitive_buffer_info()
     };
 
-    std::shared_ptr<erhe::primitive::Primitive> primitive = std::make_shared<erhe::primitive::Primitive>(render_geometry);
-    const bool renderable_ok = primitive->make_renderable_mesh(build_info, erhe::primitive::Normal_style::point_normals);
-    if (!renderable_ok) {
-        log_graph_editor->warn("Geometry_output_node: failed to build renderable mesh for '{}'", render_geometry->get_name());
-        // Leave the scene mesh as it is rather than clearing it.
-        m_evaluated_valid = false;
-        return;
-    }
-    if (!primitive->make_raytrace()) {
-        log_graph_editor->warn("Geometry_output_node: failed to build raytrace shape for '{}'", render_geometry->get_name());
-    }
+    // A facet-less geometry (e.g. an out-of-range Conway operation index,
+    // a boolean of empty inputs) has nothing to render; treat it like a
+    // disconnected input rather than asking the primitive builder to
+    // build zero-index buffers (which it refuses with a VERIFY abort).
+    // A valid-but-empty result makes apply_evaluated_to_scene() clear
+    // the scene mesh. The ghost bake below still runs.
+    if (source && (source->get_mesh().facets.nb() > 0)) {
+        const std::shared_ptr<erhe::geometry::Geometry> render_geometry = prepare_render_geometry(source);
 
-    m_evaluated_geometry  = render_geometry;
-    m_evaluated_primitive = primitive;
+        std::shared_ptr<erhe::primitive::Primitive> primitive = std::make_shared<erhe::primitive::Primitive>(render_geometry);
+        const bool renderable_ok = primitive->make_renderable_mesh(build_info, erhe::primitive::Normal_style::point_normals);
+        if (!renderable_ok) {
+            log_graph_editor->warn("Geometry_output_node: failed to build renderable mesh for '{}'", render_geometry->get_name());
+            // Leave the scene mesh as it is rather than clearing it.
+            m_evaluated_valid = false;
+            return;
+        }
+        if (!primitive->make_raytrace()) {
+            log_graph_editor->warn("Geometry_output_node: failed to build raytrace shape for '{}'", render_geometry->get_name());
+        }
 
-    if (m_physics_enabled) {
-        GEO::Mesh convex_hull{};
-        const bool convex_hull_ok = erhe::geometry::make_convex_hull(render_geometry->get_mesh(), convex_hull);
-        if (!convex_hull_ok) {
-            log_graph_editor->warn("Geometry_output_node: failed to build convex hull collision shape for '{}'", render_geometry->get_name());
-        } else {
-            std::vector<float> coordinates;
-            coordinates.resize(3 * convex_hull.vertices.nb());
-            for (GEO::index_t vertex : convex_hull.vertices) {
-                const GEO::vec3f p = erhe::geometry::get_pointf(convex_hull.vertices, vertex);
-                coordinates[(3 * vertex) + 0] = p.x;
-                coordinates[(3 * vertex) + 1] = p.y;
-                coordinates[(3 * vertex) + 2] = p.z;
+        m_evaluated_geometry  = render_geometry;
+        m_evaluated_primitive = primitive;
+
+        if (m_physics_enabled) {
+            GEO::Mesh convex_hull{};
+            const bool convex_hull_ok = erhe::geometry::make_convex_hull(render_geometry->get_mesh(), convex_hull);
+            if (!convex_hull_ok) {
+                log_graph_editor->warn("Geometry_output_node: failed to build convex hull collision shape for '{}'", render_geometry->get_name());
+            } else {
+                std::vector<float> coordinates;
+                coordinates.resize(3 * convex_hull.vertices.nb());
+                for (GEO::index_t vertex : convex_hull.vertices) {
+                    const GEO::vec3f p = erhe::geometry::get_pointf(convex_hull.vertices, vertex);
+                    coordinates[(3 * vertex) + 0] = p.x;
+                    coordinates[(3 * vertex) + 1] = p.y;
+                    coordinates[(3 * vertex) + 2] = p.z;
+                }
+                m_evaluated_collision_shape = erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
+                    coordinates.data(),
+                    static_cast<int>(convex_hull.vertices.nb()),
+                    static_cast<int>(3 * sizeof(float))
+                );
             }
-            m_evaluated_collision_shape = erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
-                coordinates.data(),
-                static_cast<int>(convex_hull.vertices.nb()),
-                static_cast<int>(3 * sizeof(float))
-            );
+        }
+    }
+
+    // Houdini template flag: bake the ghost node's geometry as an
+    // edge-lines-only companion. No raytrace (invisible to hover /
+    // picking) and no physics; the consuming attachment renders it
+    // through the dedicated ghost edge-lines pass (render_wireframe
+    // flag). The fill primitive types are built too - the primitive
+    // builder's fill path is its primary path - but no composition pass
+    // draws them (the ghost mesh carries no `content` flag).
+    Geometry_graph_node* ghost_node = graph.find_node_by_log_id(graph.get_ghost_node_id());
+    if ((ghost_node != nullptr) && !ghost_node->is_scene_output()) {
+        const std::shared_ptr<erhe::geometry::Geometry> ghost_source = get_designated_geometry(*ghost_node);
+        if (ghost_source && (ghost_source->get_mesh().facets.nb() > 0)) {
+            const std::shared_ptr<erhe::geometry::Geometry> ghost_geometry = prepare_render_geometry(ghost_source);
+            std::shared_ptr<erhe::primitive::Primitive> ghost_primitive = std::make_shared<erhe::primitive::Primitive>(ghost_geometry);
+            const bool ghost_ok = ghost_primitive->make_renderable_mesh(build_info, erhe::primitive::Normal_style::point_normals);
+            if (ghost_ok) {
+                m_evaluated_ghost_geometry  = ghost_geometry;
+                m_evaluated_ghost_primitive = ghost_primitive;
+            } else {
+                log_graph_editor->warn("Geometry_output_node: failed to build ghost renderable mesh for '{}'", ghost_geometry->get_name());
+            }
         }
     }
 }
@@ -168,6 +236,8 @@ void Geometry_output_node::take_evaluated(Geometry_output_node& from)
     m_evaluated_geometry        = std::move(from.m_evaluated_geometry);
     m_evaluated_primitive       = std::move(from.m_evaluated_primitive);
     m_evaluated_collision_shape = std::move(from.m_evaluated_collision_shape);
+    m_evaluated_ghost_geometry  = std::move(from.m_evaluated_ghost_geometry);
+    m_evaluated_ghost_primitive = std::move(from.m_evaluated_ghost_primitive);
     from.m_evaluated_valid = false;
 }
 
@@ -197,11 +267,15 @@ void Geometry_output_node::apply_evaluated_to_scene()
         products.collision_shape     = std::move(m_evaluated_collision_shape);
         products.physics_enabled     = m_physics_enabled;
         products.physics_motion_mode = m_physics_motion_mode;
+        products.ghost_geometry      = std::move(m_evaluated_ghost_geometry);
+        products.ghost_primitive     = std::move(m_evaluated_ghost_primitive);
         owning_graph_mesh->set_baked_products(products);
     }
     m_evaluated_geometry.reset();
     m_evaluated_primitive.reset();
     m_evaluated_collision_shape.reset();
+    m_evaluated_ghost_geometry.reset();
+    m_evaluated_ghost_primitive.reset();
 }
 
 void Geometry_output_node::imgui()

@@ -181,6 +181,7 @@ private:
     auto action_geometry_graph_add_node       (const nlohmann::json& args) -> std::string;
     auto action_geometry_graph_remove_node    (const nlohmann::json& args) -> std::string;
     auto action_geometry_graph_set_parameter  (const nlohmann::json& args) -> std::string;
+    auto action_geometry_graph_set_display_flags(const nlohmann::json& args) -> std::string;
     auto action_geometry_graph_connect        (const nlohmann::json& args) -> std::string;
     auto action_geometry_graph_disconnect     (const nlohmann::json& args) -> std::string;
     auto action_geometry_graph_set_view       (const nlohmann::json& args) -> std::string;

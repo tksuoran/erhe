@@ -921,6 +921,7 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                     feed_pass(m_app_context.app_rendering->edge_lines_not_selected.get());
                     feed_pass(m_app_context.app_rendering->edge_lines_selected.get());
                     feed_pass(m_app_context.app_rendering->translucent_outline.get());
+                    feed_pass(m_app_context.app_rendering->ghost_edge_lines.get());
                 }
             }
 

@@ -36,6 +36,12 @@ public:
     std::shared_ptr<erhe::physics::ICollision_shape> collision_shape;
     bool                                             physics_enabled{false};
     erhe::physics::Motion_mode                       physics_motion_mode{erhe::physics::Motion_mode::e_static};
+    // The graph's ghost node (Houdini template flag), baked as an
+    // edge-lines-only companion mesh: no raytrace / picking, no shadow,
+    // no physics. Null when no ghost node is designated (attachments
+    // then clear their ghost mesh).
+    std::shared_ptr<erhe::geometry::Geometry>        ghost_geometry;
+    std::shared_ptr<erhe::primitive::Primitive>      ghost_primitive;
 };
 
 // A procedural mesh asset backed by a geometry node graph.
