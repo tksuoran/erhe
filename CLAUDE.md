@@ -274,12 +274,16 @@ The editor and other apps write their spdlog output to `logs/` relative to the w
 
 **Always use erhe logging in the editor -- never `printf` / `fprintf` / `std::cout` / `std::cerr`, not even for temporary debug tracing.** Editor code logs through the `log_*` spdlog categories declared in `src/editor/editor_log.hpp` (e.g. `log_startup->info("...", ...)`); pick the closest existing category or add a new one in `editor_log.{hpp,cpp}` (declare `extern`, create it in `initialize_logging()` via `make_logger("editor.<name>")`). Library (`erhe::*`) code uses that library's own `erhe::log::make_logger(...)` category. Only erhe logging reaches `logs/log.txt` and the Android logcat `erhe` tag, honors per-category levels in `config/editor/logging.json`, and carries timestamps -- raw `printf`/`std::cout` bypasses the file sink (see the redirect note above) and is invisible to the standard `grep logs/log.txt` verification flow. This applies to throwaway diagnostics too: add a temporary `log_*->info/trace(...)` line, not a `printf`, and remove it (or keep a concise permanent line) when done.
 
-## Editor runs dirty the ImGui ini file
+## ImGui ini file is untracked; default layout is procedural
 
-Any editor run rewrites `config/editor/desktop_window_imgui_host_imgui.ini`
-(window layout state) on exit. After a verification run, restore it with
-`git checkout -- config/editor/desktop_window_imgui_host_imgui.ini` and never
-commit changes to it (or to other erhe_imgui window/ini state files).
+`config/editor/desktop_window_imgui_host_imgui.ini` (window layout state) is
+gitignored and rewritten by every editor run on exit -- never add it (or other
+erhe_imgui window/ini state files) to the repo. When the ini is absent at
+startup, the default layout is built procedurally from
+`config/editor/default_layout.json`, an ordered list of dock placements
+(codegen structs; see `src/editor/editor_default_layout.cpp`). To iterate on
+the default layout, edit the JSON (no rebuild needed), delete the ini, and
+relaunch; a present ini always wins untouched.
 
 ## Once the user starts testing, stop headless testing yourself
 

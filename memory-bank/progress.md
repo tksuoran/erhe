@@ -13,7 +13,9 @@
 !¬ImGui-popups-inside-ax-NodeEditor-canvas→steppers
 !¬mutate-upstream-shared-Geometry→copy-first{copy_with_transform+identity}
 !ax-GetNodePosition{never-drawn→ImVec2{FLT_MAX}}→is_valid_node_position-filter
-!editor-run-dirties-desktop_window_imgui_host_imgui.ini→git-checkout-after-runs
+!imgui-ini-untracked+gitignored-since-bb96806e{editor-runs-rewrite-it-freely;¬git-checkout-needed;rm-ini→procedural-default-layout-from-config/editor/default_layout.json}
+!default-layout-iteration::edit-default_layout.json{no-rebuild}→rm-ini→relaunch;window-key=ImGui-TITLE¬ini_label{"$primary_viewport"-token-for-viewport};fraction=root-dockspace-relative
+!DockBuilderDockWindow-on-closed-window::settings-only→empty-node-merged-away→wrong-place-on-open→layout-build-temporarily-shows-placement-windows-1-frame{still-imperfect-for-some,parked}
 !clangd-new-file-diagnostics::false-positives-until-reconfigure{ninja-build=truth}
 !MCP-execute_command-fallback::any-registered-command-callable-by-name{BUT-Hotbar.rotate-executes-without-switching-tool-headless}→gizmo-handle-visibility-via-set_gizmo_visibility-tool¬hotbar
 !MCP-node-ids-differ-per-run{create_shape-returns-node_id→always-use-returned-id,¬cached-from-previous-run}
