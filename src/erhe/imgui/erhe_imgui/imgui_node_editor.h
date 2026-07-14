@@ -105,6 +105,7 @@ struct Config
     int                     SelectButtonIndex;      // Mouse button index select action will react to (0-left, 1-right, 2-middle)
     int                     NavigateButtonIndex;    // Mouse button index navigate action will react to (0-left, 1-right, 2-middle)
     int                     ContextMenuButtonIndex; // Mouse button index context menu action will react to (0-left, 1-right, 2-middle)
+    ImGuiKey                CutLinksKey;            // Key held to turn a select-button drag into a Houdini-style wire cut (erhe)
     bool                    EnableSmoothZoom;
     float                   SmoothZoomPower;
 
@@ -123,6 +124,7 @@ struct Config
         , SelectButtonIndex(0)
         , NavigateButtonIndex(1)
         , ContextMenuButtonIndex(1)
+        , CutLinksKey(ImGuiKey_Y)
         , EnableSmoothZoom(false)
 # ifdef __APPLE__
         , SmoothZoomPower(1.1f)

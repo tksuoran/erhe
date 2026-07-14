@@ -1076,6 +1076,7 @@ ed::EditorContext::EditorContext(const ax::NodeEditor::Config* config)
     , m_SizeAction(this)
     , m_DragAction(this)
     , m_SelectAction(this)
+    , m_CutLinksAction(this)
     , m_ContextMenuAction(this)
     , m_ShortcutAction(this)
     , m_CreateItemAction(this)
@@ -1347,6 +1348,11 @@ void ed::EditorContext::End()
             m_CurrentAction = &m_ContextMenuAction;
         else if (accept(m_ShortcutAction))
             m_CurrentAction = &m_ShortcutAction;
+        // erhe: wire cutting is accepted ahead of the remaining mouse actions
+        // so holding the cut key suppresses node-drag / link-create / box-select
+        // for the duration of the stroke.
+        else if (accept(m_CutLinksAction))
+            m_CurrentAction = &m_CutLinksAction;
         else if (accept(m_SizeAction))
             m_CurrentAction = &m_SizeAction;
         else if (accept(m_DragAction))
@@ -1370,6 +1376,9 @@ void ed::EditorContext::End()
 
     // Draw selection rectangle
     m_SelectAction.Draw(m_DrawList);
+
+    // erhe: draw wire-cut stroke and highlight the links it crosses
+    m_CutLinksAction.Draw(m_DrawList);
 
     bool sortGroups = false;
     if (control.ActiveNode)
@@ -4180,6 +4189,154 @@ void ed::SelectAction::Draw(ImDrawList* drawList)
 
     drawList->AddRectFilled(Editor->DrawPos(min), Editor->DrawPos(max), fillColor);
     drawList->AddRect(Editor->DrawPos(min), Editor->DrawPos(max), outlineColor);
+}
+
+
+
+
+//------------------------------------------------------------------------------
+//
+// Cut Links Action (erhe)
+//
+//------------------------------------------------------------------------------
+ed::CutLinksAction::CutLinksAction(EditorContext* editor):
+    EditorAction(editor),
+    m_IsActive(false)
+{
+}
+
+ed::EditorAction::AcceptResult ed::CutLinksAction::Accept(const Control& control)
+{
+    IM_ASSERT(!m_IsActive);
+
+    if (m_IsActive)
+        return False;
+
+    IM_UNUSED(control);
+
+    if (!Editor->CanAcceptUserInput() || !ImGui::IsKeyDown(Editor->GetConfig().CutLinksKey))
+        return False;
+
+    if (!ImGui::IsMouseDragging(Editor->GetConfig().SelectButtonIndex, 1))
+        return False;
+
+    m_IsActive = true;
+    m_StrokePoints.resize(0);
+    m_CutLinkCandidates.resize(0);
+    m_StrokePoints.push_back(Editor->ToCanvas(ImGui_GetMouseClickPos(Editor->GetConfig().SelectButtonIndex)));
+
+    return True;
+}
+
+bool ed::CutLinksAction::Process(const Control& control)
+{
+    IM_UNUSED(control);
+
+    if (!m_IsActive)
+        return false;
+
+    if (ImGui::IsKeyPressed(ImGuiKey_Escape))
+    {
+        // Cancel the stroke without deleting anything.
+        m_IsActive = false;
+        m_StrokePoints.resize(0);
+        m_CutLinkCandidates.resize(0);
+        return false;
+    }
+
+    if (ImGui::IsMouseDragging(Editor->GetConfig().SelectButtonIndex, 0))
+    {
+        AddStrokePoint(Editor->HitMouse());
+    }
+    else
+    {
+        // Released: queue every crossed link for deletion. The deletions
+        // surface through the standard BeginDelete()/QueryDeletedLink()
+        // flow, so clients treat a cut exactly like a Delete-key deletion
+        // (undo handling included).
+        for (auto link : m_CutLinkCandidates)
+            if (link->m_IsLive)
+                Editor->GetItemDeleter().Add(link);
+
+        m_IsActive = false;
+        m_StrokePoints.resize(0);
+        m_CutLinkCandidates.resize(0);
+        return false;
+    }
+
+    return m_IsActive;
+}
+
+void ed::CutLinksAction::AddStrokePoint(const ImVec2& canvasPoint)
+{
+    IM_ASSERT(!m_StrokePoints.empty());
+
+    const auto lastPoint = m_StrokePoints.back();
+
+    // Skip sub-pixel moves (threshold in screen space, so behavior is
+    // zoom-invariant).
+    const auto screenDelta = Editor->DrawVec(canvasPoint - lastPoint);
+    if ((screenDelta.x * screenDelta.x + screenDelta.y * screenDelta.y) < (2.0f * 2.0f))
+        return;
+
+    m_StrokePoints.push_back(canvasPoint);
+
+    // Broad phase: links whose bounds touch the new segment's rectangle
+    // (slightly inflated so axis-aligned segments do not degenerate to an
+    // empty rectangle)...
+    ImRect segmentRect(
+        ImVec2(std::min(lastPoint.x, canvasPoint.x), std::min(lastPoint.y, canvasPoint.y)),
+        ImVec2(ImMax(lastPoint.x, canvasPoint.x), ImMax(lastPoint.y, canvasPoint.y)));
+    segmentRect.Expand(1.0f);
+
+    Editor->FindLinksInRect(segmentRect, m_SegmentLinks);
+
+    // ...narrow phase: exact segment vs. link-curve intersection.
+    for (auto link : m_SegmentLinks)
+    {
+        if (!link->m_IsLive)
+            continue;
+
+        if (std::find(m_CutLinkCandidates.begin(), m_CutLinkCandidates.end(), link) != m_CutLinkCandidates.end())
+            continue;
+
+        const auto curve = link->GetCurve();
+        if (ImCubicBezierLineIntersect(curve.P0, curve.P1, curve.P2, curve.P3, lastPoint, canvasPoint).Count > 0)
+            m_CutLinkCandidates.push_back(link);
+    }
+}
+
+void ed::CutLinksAction::ShowMetrics()
+{
+    EditorAction::ShowMetrics();
+
+    ImGui::Text("%s:", GetName());
+    ImGui::Text("    Active: %s", m_IsActive ? "yes" : "no");
+    ImGui::Text("    Stroke Points: %d", static_cast<int>(m_StrokePoints.size()));
+    ImGui::Text("    Cut Candidates: %d", static_cast<int>(m_CutLinkCandidates.size()));
+}
+
+void ed::CutLinksAction::Draw(ImDrawList* drawList)
+{
+    if (!m_IsActive)
+        return;
+
+    // Highlight the links the stroke has crossed so far ("will be cut").
+    const auto cutColor = IM_COL32(255, 64, 48, 255);
+
+    drawList->ChannelsSetCurrent(c_LinkChannel_Selection);
+    for (auto link : m_CutLinkCandidates)
+        if (link->m_IsLive)
+            link->Draw(drawList, cutColor, 3.5f);
+
+    if (m_StrokePoints.size() < 2)
+        return;
+
+    // The stroke itself, on top of links. Screen-space thickness: the cut
+    // gesture is a screen gesture, so the stroke stays crisp at any zoom.
+    drawList->ChannelsSetCurrent(c_LinkChannel_NewLink);
+    for (size_t i = 1; i < m_StrokePoints.size(); ++i)
+        drawList->AddLine(Editor->DrawPos(m_StrokePoints[i - 1]), Editor->DrawPos(m_StrokePoints[i]), cutColor, 2.0f);
 }
 
 

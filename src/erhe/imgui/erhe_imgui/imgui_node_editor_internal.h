@@ -581,6 +581,7 @@ struct NavigateAction;
 struct SizeAction;
 struct DragAction;
 struct SelectAction;
+struct CutLinksAction;
 struct CreateItemAction;
 struct DeleteItemsAction;
 struct ContextMenuAction;
@@ -741,6 +742,7 @@ struct EditorAction
     virtual SizeAction*         AsSize()         { return nullptr; }
     virtual DragAction*         AsDrag()         { return nullptr; }
     virtual SelectAction*       AsSelect()       { return nullptr; }
+    virtual CutLinksAction*     AsCutLinks()     { return nullptr; }
     virtual CreateItemAction*   AsCreateItem()   { return nullptr; }
     virtual DeleteItemsAction*  AsDeleteItems()  { return nullptr; }
     virtual ContextMenuAction*  AsContextMenu()  { return nullptr; }
@@ -921,6 +923,40 @@ struct SelectAction final: EditorAction
     virtual SelectAction* AsSelect() override final { return this; }
 
     void Draw(ImDrawList* drawList);
+};
+
+// erhe: Houdini-style wire cutting. Holding Config::CutLinksKey turns a
+// select-button drag into a cut stroke: every link the stroke crosses is
+// queued into DeleteItemsAction on release, so clients receive the cuts
+// through the standard BeginDelete()/QueryDeletedLink() flow exactly like a
+// Delete-key deletion. Escape cancels the stroke.
+struct CutLinksAction final: EditorAction
+{
+    bool            m_IsActive;
+    vector<ImVec2>  m_StrokePoints;      // canvas space
+    vector<Link*>   m_CutLinkCandidates; // links crossed by the stroke so far
+
+    CutLinksAction(EditorContext* editor);
+
+    virtual const char* GetName() const override final { return "Cut Links"; }
+
+    virtual AcceptResult Accept(const Control& control) override final;
+    virtual bool Process(const Control& control) override final;
+
+    virtual void ShowMetrics() override final;
+
+    virtual bool IsDragging() override final { return m_IsActive; }
+
+    virtual CutLinksAction* AsCutLinks() override final { return this; }
+
+    void Draw(ImDrawList* drawList);
+
+private:
+    // Appends a stroke point (skipping sub-pixel moves) and accumulates the
+    // links whose curve the new stroke segment crosses.
+    void AddStrokePoint(const ImVec2& canvasPoint);
+
+    vector<Link*>   m_SegmentLinks; // scratch for the segment broad-phase
 };
 
 struct ContextMenuAction final: EditorAction
@@ -1504,6 +1540,7 @@ private:
     SizeAction          m_SizeAction;
     DragAction          m_DragAction;
     SelectAction        m_SelectAction;
+    CutLinksAction      m_CutLinksAction;
     ContextMenuAction   m_ContextMenuAction;
     ShortcutAction      m_ShortcutAction;
     CreateItemAction    m_CreateItemAction;
