@@ -480,7 +480,14 @@ void Viewport_window::imgui_viewport()
     const int    width  = static_cast<int>(size.x);
     const int    height = static_cast<int>(size.y);
     std::shared_ptr<erhe::rendergraph::Rendergraph_node> rendergraph_output_node = m_rendergraph_output_node.lock();
-    if (rendergraph_output_node) {
+    // Without a scene and a camera nothing is rendered into the output
+    // texture, so drawing it would show stale / missing-texture content
+    // (e.g. the empty viewport window left behind after closing the last
+    // scene). Fall through to the imageless branch instead.
+    const bool has_scene_and_camera =
+        static_cast<bool>(viewport_scene_view->get_scene_root()) &&
+        static_cast<bool>(viewport_scene_view->get_camera());
+    if (rendergraph_output_node && has_scene_and_camera) {
         SPDLOG_LOGGER_TRACE(
             log_render,
             "Viewport_window::imgui() rendering texture {} {}",

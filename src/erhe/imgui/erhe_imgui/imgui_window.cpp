@@ -161,6 +161,21 @@ void Imgui_window::apply_initial_placement()
     }
     m_has_initial_placement = false;
 
+    // Initial placement only applies to a window ImGui has never seen. A
+    // window recreated with the same identity (the "###" id suffix; ImHashStr
+    // hashes only the part after "###") still has its live ImGuiWindow with
+    // its dock node and position, and a window with persisted ini settings
+    // restores from them inside Begin(). Forcing the dock-target / floating
+    // placement in those cases would discard the remembered layout - e.g.
+    // the viewport window recreated when the last scene is closed would come
+    // back floating instead of staying in its dock node.
+    if (ImGui::FindWindowByName(m_title.c_str()) != nullptr) {
+        return;
+    }
+    if (ImGui::FindWindowSettingsByID(ImHashStr(m_title.c_str())) != nullptr) {
+        return;
+    }
+
     // Prefer docking (tabbing) into the target window's dock node, if it is
     // currently docked.
     if (!m_initial_dock_target_title.empty()) {
