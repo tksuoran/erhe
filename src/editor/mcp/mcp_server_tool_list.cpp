@@ -780,6 +780,12 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"node_id"})}
     }});
+    m_tool_infos.push_back({"geometry_graph_set_node_previews", "Enable/disable per-node mesh preview thumbnails on the geometry graph canvas for the window's target Graph Mesh (the 'Show node previews' checkbox). Enabling forces a full background re-evaluation so every node gets a preview; previews render a few nodes per frame after evaluation completes.", {
+        {"type", "object"},
+        {"properties", {
+            {"enabled", {{"type", "boolean"}, {"description", "true (default) to show previews, false to hide"}}}
+        }}
+    }});
     m_tool_infos.push_back({"geometry_graph_set_view", "Show the Geometry Graph window and set its node-editor zoom (view scale) immediately, centered on the graph content. zoom > 1 zooms in (content drawn larger), zoom < 1 zooms out. Deterministic (no animation / no mouse input) - intended for headless zoom-quality verification (capture_screenshot on the next frame). Requires the window to have a target Graph Mesh (create_graph_mesh / set_geometry_graph_target) for it to render nodes.", {
         {"type", "object"},
         {"properties", {

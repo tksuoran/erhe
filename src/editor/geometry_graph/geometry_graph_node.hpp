@@ -11,6 +11,9 @@
 #include <vector>
 
 namespace ax::NodeEditor { class EditorContext; }
+namespace erhe::graphics { class Texture; }
+namespace erhe::primitive { class Primitive; }
+namespace erhe::scene_renderer { class Mesh_memory; }
 
 namespace editor {
 
@@ -94,6 +97,22 @@ public:
     [[nodiscard]] auto get_owning_graph_mesh() const -> std::shared_ptr<Graph_mesh>;
     void set_owning_graph_mesh(const std::shared_ptr<Graph_mesh>& graph_mesh);
 
+    // Per-node mesh preview thumbnails (texture-graph-style; enabled per
+    // asset via Graph_mesh::set_node_previews_enabled). Split like the
+    // output node's bake: build_preview_primitive() runs on the evaluation
+    // worker (shadow nodes) right after evaluate(); take_preview() moves
+    // the built primitive onto the live node on the main thread and arms
+    // m_preview_needs_render; Geometry_graph_window::update_node_previews()
+    // then renders it into m_preview_texture with a per-frame budget, and
+    // after_node_content() draws the texture on the canvas.
+    void build_preview_primitive(erhe::scene_renderer::Mesh_memory& mesh_memory);
+    void take_preview(Geometry_graph_node& from);
+    [[nodiscard]] auto get_preview_primitive() const -> const std::shared_ptr<erhe::primitive::Primitive>&;
+    [[nodiscard]] auto preview_needs_render() const -> bool;
+    void clear_preview_needs_render();
+    [[nodiscard]] auto get_preview_texture() const -> const std::shared_ptr<erhe::graphics::Texture>&;
+    void set_preview_texture(const std::shared_ptr<erhe::graphics::Texture>& texture);
+
 protected:
     // Implements Graph_editor_node
     [[nodiscard]] auto pin_key_color(std::size_t key) const -> ImU32 override;
@@ -106,10 +125,17 @@ protected:
     // instead.
     void after_node_content(App_context& context) override;
 
+    // Draws the preview thumbnail (see the preview block above); called
+    // from after_node_content() when the owning asset has previews on.
+    void draw_preview(App_context& context);
+
     std::vector<Geometry_payload> m_input_payloads;
     std::vector<Geometry_payload> m_output_payloads;
     std::weak_ptr<Graph_mesh>     m_owning_graph_mesh;
     std::size_t                   m_log_source_id{0};
+    std::shared_ptr<erhe::primitive::Primitive> m_preview_primitive;
+    std::shared_ptr<erhe::graphics::Texture>    m_preview_texture;
+    bool                                        m_preview_needs_render{false};
 };
 
 }

@@ -67,6 +67,7 @@ Geometry_output_node::~Geometry_output_node() noexcept
 
 void Geometry_output_node::on_removed_from_graph()
 {
+    Geometry_graph_node::on_removed_from_graph();
     // An output leaving the graph must not strand its last bake on bound
     // attachments: publish an empty bake (attachments clear their mesh on
     // the next push).

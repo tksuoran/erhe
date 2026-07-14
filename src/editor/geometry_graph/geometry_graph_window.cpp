@@ -17,12 +17,15 @@
 #include "items.hpp"
 #include "content_library/content_library.hpp"
 #include "operations/operation_stack.hpp"
+#include "preview/brush_preview.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 #include "windows/item_reference.hpp"
 
 #include "erhe_graph/link.hpp"
 #include "erhe_graph/pin.hpp"
+#include "erhe_graphics/device.hpp"
+#include "erhe_graphics/texture.hpp"
 #include "erhe_imgui/imgui_node_editor.h"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_scene/node.hpp"
@@ -505,6 +508,12 @@ void Geometry_graph_window::launch_evaluation(const std::shared_ptr<Graph_mesh>&
     // shadow graph (raw copy - the snapshot's per-node dirty flags are
     // authoritative and must not be disturbed).
     run->shadow_graph.copy_display_designation_from(live_graph);
+    // Per-node previews: the worker builds a preview primitive for every
+    // node it evaluates (mesh_memory's buffer writes are worker-safe here -
+    // the output node already builds its renderable mesh on this worker).
+    if (graph_mesh->get_node_previews_enabled()) {
+        run->shadow_graph.set_preview_mesh_memory(m_app_context.mesh_memory);
+    }
     // A fresh Geometry_graph is born forced-full (so a graph's first
     // evaluation runs every node); the snapshot's per-node dirty flags
     // already carry the live state, so discard the shadow's birth flag
@@ -577,6 +586,7 @@ void Geometry_graph_window::finish_evaluation()
         for (std::size_t slot = 0; slot < output_count; ++slot) {
             live_node->set_output(slot, shadow_node->get_output(slot));
         }
+        live_node->take_preview(*shadow_node);
         Geometry_output_node* live_output   = dynamic_cast<Geometry_output_node*>(live_node);
         Geometry_output_node* shadow_output = dynamic_cast<Geometry_output_node*>(shadow_node);
         if ((live_output != nullptr) && (shadow_output != nullptr)) {
@@ -620,14 +630,84 @@ void Geometry_graph_window::update_evaluation()
     process_attachment_push_requests();
 
     if (m_evaluation_run) {
-        if (!is_evaluation_run_done()) {
+        if (is_evaluation_run_done()) {
+            finish_evaluation();
+        }
+    }
+    if (!m_evaluation_run) {
+        const std::shared_ptr<Graph_mesh> next = next_graph_needing_evaluation();
+        if (next) {
+            launch_evaluation(next);
+        }
+    }
+
+    update_node_previews();
+}
+
+void Geometry_graph_window::update_node_previews()
+{
+    // Renders pending per-node preview thumbnails (armed by
+    // finish_evaluation via take_preview) into per-node textures, a few
+    // per frame. Reuses Brush_preview's offscreen scene; needs a recording
+    // command buffer (present during the normal frame update).
+    if ((m_app_context.current_command_buffer == nullptr) || (m_app_context.brush_preview == nullptr)) {
+        return;
+    }
+    int budget = 2;
+    const auto render_graph_previews = [this, &budget](const std::shared_ptr<Graph_mesh>& graph_mesh) {
+        if (!graph_mesh || !graph_mesh->get_node_previews_enabled()) {
             return;
         }
-        finish_evaluation();
-    }
-    const std::shared_ptr<Graph_mesh> next = next_graph_needing_evaluation();
-    if (next) {
-        launch_evaluation(next);
+        for (const std::shared_ptr<Geometry_graph_node>& node : graph_mesh->nodes()) {
+            if (budget <= 0) {
+                return;
+            }
+            if (!node->preview_needs_render() || !node->get_preview_primitive()) {
+                continue;
+            }
+            if (!node->get_preview_texture()) {
+                constexpr int size_pixels = 128;
+                node->set_preview_texture(
+                    std::make_shared<erhe::graphics::Texture>(
+                        *m_app_context.graphics_device,
+                        erhe::graphics::Texture_create_info{
+                            .device      = *m_app_context.graphics_device,
+                            .usage_mask  =
+                                erhe::graphics::Image_usage_flag_bit_mask::color_attachment |
+                                erhe::graphics::Image_usage_flag_bit_mask::sampled |
+                                erhe::graphics::Image_usage_flag_bit_mask::transfer_src |
+                                erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
+                            .type        = erhe::graphics::Texture_type::texture_2d,
+                            .pixelformat = erhe::dataformat::Format::format_8_vec4_unorm,
+                            .use_mipmaps = true,
+                            .width       = size_pixels,
+                            .height      = size_pixels,
+                            .debug_label = "Geometry graph node preview"
+                        }
+                    )
+                );
+            }
+            m_app_context.brush_preview->render_preview(node->get_preview_texture(), 0, node->get_preview_primitive(), {}, 0);
+            node->clear_preview_needs_render();
+            --budget;
+        }
+    };
+    // The currently edited graph first (it may be a library orphan), then
+    // every scene's Graph_mesh assets (previews may be enabled on graphs
+    // edited by other window instances).
+    render_graph_previews(m_graph_mesh);
+    if (m_app_context.app_scenes != nullptr) {
+        for (const std::shared_ptr<Scene_root>& scene_root : m_app_context.app_scenes->get_scene_roots()) {
+            const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
+            if (!content_library || !content_library->graph_meshes) {
+                continue;
+            }
+            for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->graph_meshes->get_all<Graph_mesh>()) {
+                if (graph_mesh != m_graph_mesh) {
+                    render_graph_previews(graph_mesh);
+                }
+            }
+        }
     }
 }
 
@@ -715,6 +795,13 @@ void Geometry_graph_window::controls_imgui()
         return;
     }
     ImGui::Text("Editing: %s", m_graph_mesh->get_name().c_str());
+    // Per-node mesh preview thumbnails on the canvas; per asset, default
+    // off (each node change then costs a preview primitive build on the
+    // evaluation worker plus a small GPU render).
+    bool node_previews = m_graph_mesh->get_node_previews_enabled();
+    if (ImGui::Checkbox("Show node previews", &node_previews)) {
+        m_graph_mesh->set_node_previews_enabled(node_previews);
+    }
     ImGui::Separator();
     node_palette();
 

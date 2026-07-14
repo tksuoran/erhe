@@ -85,10 +85,19 @@ public:
     void request_attachment_push();
     [[nodiscard]] auto consume_attachment_push_request() -> bool;
 
+    // Per-node mesh preview thumbnails on the geometry graph canvas
+    // (texture-graph-style). Runtime-only, not serialized; default off
+    // (each preview costs a worker-side primitive build per node change
+    // plus a small GPU render). Enabling forces a full re-evaluation so
+    // every node gets a preview primitive.
+    void set_node_previews_enabled(bool enabled);
+    [[nodiscard]] auto get_node_previews_enabled() const -> bool;
+
 private:
     Graph_mesh_baked_products                         m_baked_products;
     uint64_t                                          m_baked_revision{0};
     bool                                              m_attachment_push_requested{false};
+    bool                                              m_node_previews_enabled{false};
 };
 
 } // namespace editor

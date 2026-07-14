@@ -83,6 +83,7 @@ Group_node::Group_node(App_context& context)
 
 void Group_node::on_removed_from_graph()
 {
+    Geometry_graph_node::on_removed_from_graph();
     // Release internal side effects (an output node inside the asset
     // owns a scene mesh) and force a reload when re-inserted (undo).
     unload_subgraph();

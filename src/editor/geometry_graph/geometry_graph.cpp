@@ -88,6 +88,11 @@ auto Geometry_graph::find_node_by_log_id(const std::size_t id) const -> Geometry
     return nullptr;
 }
 
+void Geometry_graph::set_preview_mesh_memory(erhe::scene_renderer::Mesh_memory* mesh_memory)
+{
+    m_preview_mesh_memory = mesh_memory;
+}
+
 void Geometry_graph::mark_scene_output_nodes_dirty()
 {
     for (erhe::graph::Node* node : m_nodes) {
@@ -136,6 +141,9 @@ void Geometry_graph::evaluate()
         log_graph_editor->trace("Geometry_graph: evaluating node '{}' {}", geometry_graph_node->get_name(), geometry_graph_node->get_log_id());
         geometry_graph_node->evaluate(*this);
         geometry_graph_node->clear_dirty();
+        if (m_preview_mesh_memory != nullptr) {
+            geometry_graph_node->build_preview_primitive(*m_preview_mesh_memory);
+        }
         if ((geometry_graph_node == display_node) || (geometry_graph_node == ghost_node)) {
             designated_node_evaluated = true;
         }

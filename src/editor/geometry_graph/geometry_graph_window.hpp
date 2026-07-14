@@ -218,6 +218,11 @@ private:
     // node removed).
     void process_attachment_push_requests();
 
+    // Renders pending per-node preview thumbnails (Graph_mesh assets with
+    // node previews enabled) into per-node textures via Brush_preview, a
+    // few per frame. Called from update_evaluation().
+    void update_node_previews();
+
     App_context&                                      m_app_context;
     // The explicit target this window edits (issue #252). weak_ptr so a
     // deleted asset clears the target automatically. Bound to the target

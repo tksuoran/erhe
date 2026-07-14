@@ -4,6 +4,8 @@
 
 #include <cstddef>
 
+namespace erhe::scene_renderer { class Mesh_memory; }
+
 namespace editor {
 
 class Geometry_graph_node;
@@ -67,13 +69,21 @@ public:
     // id is 0 or no longer present.
     [[nodiscard]] auto find_node_by_log_id(std::size_t id) const -> Geometry_graph_node*;
 
+    // Per-node mesh preview support: when set (background-evaluation shadow
+    // graphs only; configured by Geometry_graph_window::launch_evaluation
+    // from Graph_mesh::get_node_previews_enabled), evaluate() builds a
+    // fill-only preview primitive for every node it evaluates. Null (the
+    // default) disables preview builds.
+    void set_preview_mesh_memory(erhe::scene_renderer::Mesh_memory* mesh_memory);
+
 private:
     void evaluate();
     void mark_scene_output_nodes_dirty();
 
-    bool        m_dirty{true};
-    std::size_t m_display_node_id{0};
-    std::size_t m_ghost_node_id{0};
+    bool                               m_dirty{true};
+    std::size_t                        m_display_node_id{0};
+    std::size_t                        m_ghost_node_id{0};
+    erhe::scene_renderer::Mesh_memory* m_preview_mesh_memory{nullptr};
 };
 
 }

@@ -433,6 +433,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "geometry_graph_remove_node")   result = action_geometry_graph_remove_node  (req->arguments);
         else if (req->tool_name == "geometry_graph_set_parameter") result = action_geometry_graph_set_parameter(req->arguments);
         else if (req->tool_name == "geometry_graph_set_display_flags") result = action_geometry_graph_set_display_flags(req->arguments);
+        else if (req->tool_name == "geometry_graph_set_node_previews") result = action_geometry_graph_set_node_previews(req->arguments);
         else if (req->tool_name == "geometry_graph_connect")       result = action_geometry_graph_connect      (req->arguments);
         else if (req->tool_name == "geometry_graph_disconnect")    result = action_geometry_graph_disconnect   (req->arguments);
         else if (req->tool_name == "geometry_graph_set_view")      result = action_geometry_graph_set_view     (req->arguments);

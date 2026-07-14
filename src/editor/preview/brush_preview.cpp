@@ -134,7 +134,22 @@ void Brush_preview::render_preview(
     int64_t                                         time
 )
 {
-    //log_tree->trace("Brush_preview::render_preview()");
+    // Breadcrumb names the brush whose preview primitive is being (lazily)
+    // built, so the watchdog can identify the culprit if build_polygon_fill
+    // spins on a corrupt mesh. See doc/intermittent_main_loop_hang.md.
+    erhe::log::set_breadcrumb(fmt::format("thumbnail: brush '{}'", brush->get_name()));
+    const Brush::Scaled& brush_scaled = brush->get_scaled(1.0);
+    render_preview(texture, texture_layer, brush_scaled.primitive, brush->get_material(), time);
+}
+
+void Brush_preview::render_preview(
+    const std::shared_ptr<erhe::graphics::Texture>&    texture,
+    unsigned int                                       texture_layer,
+    const std::shared_ptr<erhe::primitive::Primitive>& primitive,
+    const std::shared_ptr<erhe::primitive::Material>&  material,
+    int64_t                                            time
+)
+{
     set_color_texture(texture);
     set_color_texture_layer(texture_layer);
     resize(texture->get_width(), texture->get_height());
@@ -148,11 +163,6 @@ void Brush_preview::render_preview(
 
     ERHE_VERIFY(m_context.current_command_buffer != nullptr);
     erhe::graphics::Command_buffer& command_buffer = *m_context.current_command_buffer;
-    // Breadcrumb names the brush whose preview primitive is being (lazily)
-    // built, so the watchdog can identify the culprit if build_polygon_fill
-    // spins on a corrupt mesh. See doc/intermittent_main_loop_hang.md.
-    erhe::log::set_breadcrumb(fmt::format("thumbnail: brush '{}'", brush->get_name()));
-    const Brush::Scaled& brush_scaled = brush->get_scaled(1.0);
     m_context.mesh_memory->flush(command_buffer);
 
     if (m_mesh) {
@@ -168,10 +178,8 @@ void Brush_preview::render_preview(
         m_mesh->layer_id = { Mesh_layer_id::brush };
     }
 
-    const std::shared_ptr<erhe::primitive::Material>& render_material = brush->get_material()
-        ? brush->get_material()
-        : m_material;
-    m_mesh->add_primitive(brush_scaled.primitive, render_material);
+    const std::shared_ptr<erhe::primitive::Material>& render_material = material ? material : m_material;
+    m_mesh->add_primitive(primitive, render_material);
     m_node->attach(m_mesh);
 
     // Get brush primitive aabb in world space
@@ -182,7 +190,7 @@ void Brush_preview::render_preview(
     //const glm::vec3 target_position = world_aabb.center();
     //const float     size            = glm::length(world_aabb.diagonal());
 
-    const erhe::primitive::Buffer_mesh* renderable_mesh = brush_scaled.primitive->get_renderable_mesh();
+    const erhe::primitive::Buffer_mesh* renderable_mesh = primitive->get_renderable_mesh();
     ERHE_VERIFY(renderable_mesh != nullptr);
     const erhe::math::Sphere primitive_local_bounding_sphere = renderable_mesh->bounding_sphere;
     const erhe::math::Sphere world_sphere    = primitive_local_bounding_sphere.transformed_by(m_node->world_from_node());

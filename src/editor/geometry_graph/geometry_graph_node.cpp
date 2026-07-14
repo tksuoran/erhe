@@ -10,7 +10,14 @@
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_graph/link.hpp"
 #include "erhe_graph/pin.hpp"
+#include "erhe_graphics/texture.hpp"
 #include "erhe_imgui/imgui_node_editor.h"
+#include "erhe_imgui/imgui_renderer.hpp"
+#include "erhe_primitive/primitive.hpp"
+#include "erhe_primitive/primitive_builder.hpp"
+#include "erhe_scene_renderer/mesh_memory.hpp"
+
+#include <geogram/mesh/mesh.h>
 
 #include <imgui/imgui.h>
 #include <nlohmann/json.hpp>
@@ -232,10 +239,125 @@ void Geometry_graph_node::after_node_content(App_context& context)
             )
         );
     }
+
+    if (graph_mesh->get_node_previews_enabled()) {
+        draw_preview(context);
+    }
 }
 
 void Geometry_graph_node::on_removed_from_graph()
 {
+    // The node object may stay alive in the undo stack; GPU resources
+    // (preview texture + primitive buffers) must not stay alive with it
+    // (texture-graph precedent). Re-insertion re-marks the node dirty, so
+    // the preview rebuilds.
+    m_preview_primitive.reset();
+    m_preview_texture.reset();
+    m_preview_needs_render = false;
+}
+
+void Geometry_graph_node::build_preview_primitive(erhe::scene_renderer::Mesh_memory& mesh_memory)
+{
+    m_preview_primitive.reset();
+
+    // The first geometry output payload; value / math nodes have none.
+    std::shared_ptr<erhe::geometry::Geometry> source{};
+    const auto& pins = get_output_pins();
+    for (std::size_t slot = 0, end = pins.size(); slot < end; ++slot) {
+        if (pins[slot].get_key() == Geometry_pin_key::geometry) {
+            source = get_output(slot).get_geometry();
+            break;
+        }
+    }
+    if (!source || (source->get_mesh().facets.nb() == 0)) {
+        return;
+    }
+
+    // Copy before render processing; the payload geometry is shared with
+    // downstream nodes and must not be mutated.
+    std::shared_ptr<erhe::geometry::Geometry> preview_geometry = std::make_shared<erhe::geometry::Geometry>(source->get_name());
+    GEO::mat4f identity;
+    identity.load_identity();
+    preview_geometry->copy_with_transform(*source.get(), identity);
+    preview_geometry->process(
+        {
+            .flags =
+                erhe::geometry::Geometry::process_flag_connect                            |
+                erhe::geometry::Geometry::process_flag_build_edges                        |
+                erhe::geometry::Geometry::process_flag_compute_facet_centroids            |
+                erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals      |
+                erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates |
+                erhe::geometry::Geometry::process_flag_generate_tangents
+        }
+    );
+
+    const erhe::primitive::Build_info build_info{
+        .primitive_types = { .fill_triangles = true },
+        .buffer_info     = mesh_memory.make_primitive_buffer_info()
+    };
+    std::shared_ptr<erhe::primitive::Primitive> primitive = std::make_shared<erhe::primitive::Primitive>(preview_geometry);
+    if (primitive->make_renderable_mesh(build_info, erhe::primitive::Normal_style::point_normals)) {
+        m_preview_primitive = primitive;
+    } else {
+        log_graph_editor->warn("Geometry_graph_node: failed to build preview mesh for '{}'", get_name());
+    }
+}
+
+void Geometry_graph_node::take_preview(Geometry_graph_node& from)
+{
+    if (!from.m_preview_primitive) {
+        return;
+    }
+    m_preview_primitive = std::move(from.m_preview_primitive);
+    m_preview_needs_render = true;
+}
+
+auto Geometry_graph_node::get_preview_primitive() const -> const std::shared_ptr<erhe::primitive::Primitive>&
+{
+    return m_preview_primitive;
+}
+
+auto Geometry_graph_node::preview_needs_render() const -> bool
+{
+    return m_preview_needs_render;
+}
+
+void Geometry_graph_node::clear_preview_needs_render()
+{
+    m_preview_needs_render = false;
+}
+
+auto Geometry_graph_node::get_preview_texture() const -> const std::shared_ptr<erhe::graphics::Texture>&
+{
+    return m_preview_texture;
+}
+
+void Geometry_graph_node::set_preview_texture(const std::shared_ptr<erhe::graphics::Texture>& texture)
+{
+    m_preview_texture = texture;
+}
+
+void Geometry_graph_node::draw_preview(App_context& context)
+{
+    if (!m_preview_texture || (context.imgui_renderer == nullptr)) {
+        return;
+    }
+    // Display geometry laid out in the zoomed node content, so the
+    // on-screen size scales with the view; the render-target resolution
+    // deliberately does not (issue #251, texture-graph pattern).
+    const float size = 96.0f * m_content_scale;
+    context.imgui_renderer->image(
+        erhe::imgui::Draw_texture_parameters{
+            .texture_reference = m_preview_texture,
+            .width             = static_cast<int>(size),
+            .height            = static_cast<int>(size),
+            .uv0               = context.imgui_renderer->get_rtt_uv0(),
+            .uv1               = context.imgui_renderer->get_rtt_uv1(),
+            .filter            = erhe::graphics::Filter::linear,
+            .mipmap_mode       = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
+            .debug_label       = "Geometry_graph_node preview"
+        }
+    );
 }
 
 auto Geometry_graph_node::get_log_id() const -> std::size_t
