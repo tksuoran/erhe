@@ -10774,10 +10774,12 @@ static void ImGui::UpdateMouseInputs()
     // If mouse just appeared or disappeared (usually denoted by -FLT_MAX components) we cancel out movement in MouseDelta
     const float MOUSE_INVALID = -256000.0f;
     if (io.MouseDelta.x <= MOUSE_INVALID || io.MouseDelta.y <= MOUSE_INVALID )
+    {
         if (IsMousePosValid(&io.MousePos) && IsMousePosValid(&io.MousePosPrev))
             io.MouseDelta = io.MousePos - io.MousePosPrev;
         else
             io.MouseDelta = ImVec2(0.0f, 0.0f);
+    }
 
     // Update stationary timer.
     // FIXME: May need to rework again to have some tolerance for occasional small movement, while being functional on high-framerates.
