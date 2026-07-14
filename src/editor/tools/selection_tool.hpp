@@ -221,6 +221,12 @@ public:
     auto on_viewport_select_toggle   () -> bool;
 
     auto delete_selection   () -> bool;
+    // Queue a recursive delete of the given items (the operation delete_selection
+    // performs on the command target selection). Each item's subtree is deleted;
+    // lock_edit items and their subtrees survive, except inside a prefab
+    // instance: the instance is always deleted as a whole (its interior is
+    // sealed with lock_edit to be non-editable, not to outlive the instance).
+    auto delete_items       (const std::vector<std::shared_ptr<erhe::Item_base>>& items) -> bool;
     auto cut_selection      () -> bool;
     auto copy_selection     () -> bool;
     auto duplicate_selection() -> bool;

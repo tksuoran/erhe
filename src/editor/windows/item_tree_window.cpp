@@ -1202,15 +1202,11 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
             if (item->is_selected()) {
                 m_context.selection->delete_selection();
             } else {
-                auto op = std::make_shared<Item_insert_remove_operation>(
-                    Item_insert_remove_operation::Parameters{
-                        .context = m_context,
-                        .item    = hierarchy,
-                        .parent  = hierarchy->get_parent().lock(),
-                        .mode    = Item_insert_remove_operation::Mode::remove,
-                    }
-                );
-                m_context.operation_stack->queue(op);
+                // Same recursive delete as delete_selection: a bare remove
+                // operation would re-parent the item's children to the
+                // grandparent instead of deleting them (and orphan a prefab
+                // instance's sealed interior).
+                m_context.selection->delete_items({item});
             }
         }
         if (!selected_or_hierarchy) {

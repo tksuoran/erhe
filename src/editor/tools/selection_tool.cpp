@@ -21,10 +21,13 @@
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_item/item_host.hpp"
 #include "erhe_scene/mesh.hpp"
+#include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_utility/bit_helpers.hpp"
 #include "erhe_hash/xxhash.hpp"
 #include "erhe_verify/verify.hpp"
+
+#include <functional>
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
@@ -475,21 +478,43 @@ auto Selection::get_command_target_selection() -> const std::vector<std::shared_
 
 auto Selection::delete_selection() -> bool
 {
-    const std::vector<std::shared_ptr<erhe::Item_base>>& target_selection = get_command_target_selection();
-    if (target_selection.empty()) {
+    return delete_items(get_command_target_selection());
+}
+
+auto Selection::delete_items(const std::vector<std::shared_ptr<erhe::Item_base>>& items) -> bool
+{
+    if (items.empty()) {
         return false;
     }
 
     Compound_operation::Parameters compound_parameters;
     std::vector<std::shared_ptr<erhe::Item_base>> recursive_selection;
-    auto collect_item = [&recursive_selection](erhe::Hierarchy& item) -> bool {
-        if (item.is_lock_edit()) {
-            return false; // Skip locked items and their children
+
+    // Collect an item and its subtree for deletion. lock_edit items and their
+    // subtrees are skipped (locked items survive deletion of an ancestor),
+    // with one exception: a prefab instance is always deleted as a whole. Its
+    // interior is sealed with lock_edit (seal_instance_subtree) to make it
+    // non-editable, not to protect it from deleting the instance, so below a
+    // node carrying a Prefab_instance attachment everything is collected
+    // unconditionally. (The previous for_each<Hierarchy> collection had abort
+    // semantics: the first locked item ended the whole traversal, leaving
+    // even unlocked siblings uncollected.)
+    std::function<void(erhe::Hierarchy&, bool)> collect_item =
+        [&recursive_selection, &collect_item](erhe::Hierarchy& item, bool inside_prefab_instance) {
+        if (!inside_prefab_instance && item.is_lock_edit()) {
+            return; // Skip locked items and their children
         }
         recursive_selection.push_back(item.shared_from_this());
-        return true;
+        bool collect_subtree_unconditionally = inside_prefab_instance;
+        erhe::scene::Node* const node = dynamic_cast<erhe::scene::Node*>(&item);
+        if ((node != nullptr) && erhe::scene::get_attachment<Prefab_instance>(node)) {
+            collect_subtree_unconditionally = true;
+        }
+        for (const std::shared_ptr<erhe::Hierarchy>& child : item.get_children()) {
+            collect_item(*child, collect_subtree_unconditionally);
+        }
     };
-    for (const std::shared_ptr<erhe::Item_base>& item : target_selection) {
+    for (const std::shared_ptr<erhe::Item_base>& item : items) {
         if (item->is_lock_edit()) {
             continue;
         }
@@ -497,8 +522,7 @@ auto Selection::delete_selection() -> bool
         if (!hierarchy) {
             continue;
         }
-        erhe::Hierarchy& hierarchy_reference = *hierarchy.get();
-        hierarchy_reference.for_each<erhe::Hierarchy>(collect_item);
+        collect_item(*hierarchy, false);
     }
 
     // Sort deepest first
