@@ -22,7 +22,11 @@ function (erhe_target_settings_toolchain target)
     # Disable unreachable warning (libfmt)
     target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/wd4702>) # unreachable
 
-    # Treat code included using angle brackets as external, and set warning level 3 for external code
+    # Treat code included using angle brackets as external, and set warning level 3 for external code.
+    # src/CMakeLists.txt clears CMAKE_INCLUDE_SYSTEM_FLAG_CXX_WARNING so CMake's
+    # own "-external:W0" injection for SYSTEM includes does not conflict with
+    # this (cl warning D9025) -- /external:W3 below is the single external
+    # warning level for erhe targets.
     target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/external:anglebrackets>)
     target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/external:W3>)
 

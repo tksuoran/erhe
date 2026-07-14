@@ -4,6 +4,20 @@ set(CMAKE_CXX_STANDARD          20)
 set(CMAKE_CXX_STANDARD_REQUIRED YES)
 set(CMAKE_CXX_EXTENSIONS        NO)
 
+if (MSVC)
+    # CMake injects "-external:W0" next to the "-external:I" flags it emits
+    # for SYSTEM include directories (Modules/Compiler/MSVC.cmake). Every
+    # erhe target then appends /external:W3 (erhe_target_settings_toolchain
+    # in cmake/msvc.cmake), which overrides the W0 and makes cl print
+    # "D9025: overriding '/external:W0' with '/external:W3'" once per TU.
+    # Suppress the injection for this source tree so /external:W3 is the
+    # single external warning level here. The CPM dependencies are added
+    # from the root scope and keep CMake's default W0; the vendored
+    # third-party under src/ (imgui, mango, ...) receives no SYSTEM
+    # includes, so this is a no-op for it.
+    set(CMAKE_INCLUDE_SYSTEM_FLAG_CXX_WARNING "")
+endif ()
+
 #add_subdirectory(hidapi)
 
 if (${ERHE_PROFILE_LIBRARY} STREQUAL "superluminal")
