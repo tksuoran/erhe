@@ -1,11 +1,25 @@
 include(CheckCXXCompilerFlag)
 
-add_compile_options(-Wall;-Wextra;-Wno-unused;-Wno-unknown-pragmas;-Wno-sign-compare;-Wwrite-strings;-Wno-unused;-Wno-narrowing)
+# clang-cl (the MSVC-frontend clang driver) resolves options against the MSVC
+# option table before GNU -W flags, and "-Wall" matches MSVC "/Wall", which
+# clang-cl maps to -Weverything. Forward the warning flags through /clang: on
+# the MSVC frontend so every flag keeps its GNU-driver meaning; the GNU
+# frontend takes them as-is. Only -Wall collides today, but prefixing the
+# whole set prevents a future flag from silently colliding the same way.
+if (CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+    set(ERHE_GNU_WARNING_FLAG_PREFIX "/clang:")
+else ()
+    set(ERHE_GNU_WARNING_FLAG_PREFIX "")
+endif ()
+
+set(ERHE_GNU_WARNING_FLAGS -Wall;-Wextra;-Wno-unused;-Wno-unknown-pragmas;-Wno-sign-compare;-Wwrite-strings;-Wno-narrowing)
+list(TRANSFORM ERHE_GNU_WARNING_FLAGS PREPEND "${ERHE_GNU_WARNING_FLAG_PREFIX}")
+add_compile_options(${ERHE_GNU_WARNING_FLAGS})
 check_cxx_compiler_flag(-Wno-unqualified-std-cast-call ERHE_CXX_HAS_NO_UNQUALIFIED_STD_CAST_CALL_FLAG)
 if (ERHE_CXX_HAS_NO_UNQUALIFIED_STD_CAST_CALL_FLAG)
-    add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-Wno-deprecated-copy>")
+    add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:${ERHE_GNU_WARNING_FLAG_PREFIX}-Wno-deprecated-copy>")
 endif ()
-add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-Woverloaded-virtual>")
+add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:${ERHE_GNU_WARNING_FLAG_PREFIX}-Woverloaded-virtual>")
 # Optimization / debug levels, GNU-style. clang-cl (the MSVC-ABI clang driver)
 # rejects -g3 as an unknown argument -- normally just a -Wunknown-argument
 # warning, but Jolt compiles with -Werror, which makes it fatal -- and it
