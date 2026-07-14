@@ -56,10 +56,10 @@ public:
     // (the editor observed VK_ERROR_SURFACE_LOST_KHR or
     // m_swapchain_dirty was set by the lifecycle event watch).
     [[nodiscard]] auto recreate_for_new_window() -> bool;
-    [[nodiscard]] auto get_surface_format     () -> VkSurfaceFormatKHR const;
-    [[nodiscard]] auto get_present_mode       () -> VkPresentModeKHR const;
-    [[nodiscard]] auto get_image_count        () -> uint32_t const;
-    [[nodiscard]] auto get_vulkan_surface     () -> VkSurfaceKHR const;
+    [[nodiscard]] auto get_surface_format     () const -> VkSurfaceFormatKHR;
+    [[nodiscard]] auto get_present_mode       () const -> VkPresentModeKHR;
+    [[nodiscard]] auto get_image_count        () const -> uint32_t;
+    [[nodiscard]] auto get_vulkan_surface     () const -> VkSurfaceKHR;
 
     // Returns true if swapchain needs to be (re)created
     [[nodiscard]] auto update_swapchain(Vulkan_swapchain_create_info& out_swapchain_create_info) -> bool;

@@ -2,7 +2,7 @@
 
 #if defined(ERHE_USE_MIMALLOC)
 #   include <mimalloc-new-delete.h>
-#endif`
+#endif
 
 // #if defined(ERHE_PROFILE_LIBRARY_TRACY)
 // 

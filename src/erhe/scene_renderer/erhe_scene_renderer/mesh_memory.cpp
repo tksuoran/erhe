@@ -524,7 +524,7 @@ Render_bucket::Render_bucket(
     ERHE_VERIFY(done);
 }
 
-Render_bucket::~Render_bucket() = default;
+Render_bucket::~Render_bucket() noexcept = default;
 
 auto Render_bucket::accept(
     erhe::scene::Mesh&                  mesh,

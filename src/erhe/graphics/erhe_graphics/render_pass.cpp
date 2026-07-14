@@ -275,7 +275,7 @@ Scoped_render_pass::Scoped_render_pass(
     m_render_pass.start_render_pass(command_buffer, render_pass_before, render_pass_after);
 }
 
-Scoped_render_pass::~Scoped_render_pass()
+Scoped_render_pass::~Scoped_render_pass() noexcept
 {
     m_render_pass.end_render_pass(m_render_pass_after);
 }

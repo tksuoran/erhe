@@ -18,7 +18,7 @@
 
 namespace erhe::commands {
 
-Commands::~Commands()
+Commands::~Commands() noexcept
 {
 }
 

@@ -570,22 +570,22 @@ auto Surface_impl::get_present_mode_score(const VkPresentModeKHR present_mode) c
     }
 }
 
-auto Surface_impl::get_surface_format() -> VkSurfaceFormatKHR const
+auto Surface_impl::get_surface_format() const -> VkSurfaceFormatKHR
 {
     return m_surface_format;
 }
 
-auto Surface_impl::get_present_mode() -> VkPresentModeKHR const
+auto Surface_impl::get_present_mode() const -> VkPresentModeKHR
 {
     return m_present_mode;
 }
 
-auto Surface_impl::get_image_count() -> uint32_t const
+auto Surface_impl::get_image_count() const -> uint32_t
 {
     return m_image_count;
 }
 
-auto Surface_impl::get_vulkan_surface() -> VkSurfaceKHR const
+auto Surface_impl::get_vulkan_surface() const -> VkSurfaceKHR
 {
     return m_surface;
 }
