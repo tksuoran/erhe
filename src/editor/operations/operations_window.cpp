@@ -878,25 +878,6 @@ Operations::Operations(
     // detail and mass_scale moved to per-command args in commands.json;
     // the Operations UI uses Make_mesh_config defaults for them.
 
-    m_hover_scene_view_subscription = app_message_bus.hover_scene_view.subscribe(
-        [&](Hover_scene_view_message& message) {
-            // A closed viewport's Scene_view is being destroyed: drop any cached
-            // pointer to it so get_target_scene_root() (used by Save Scene) does
-            // not dereference a dead Scene_view (#256).
-            if (message.destroyed_scene_view != nullptr) {
-                if (m_hover_scene_view == message.destroyed_scene_view) {
-                    m_hover_scene_view = nullptr;
-                }
-                if (m_last_hover_scene_view == message.destroyed_scene_view) {
-                    m_last_hover_scene_view = nullptr;
-                }
-            }
-            m_hover_scene_view = message.scene_view;
-            if (message.scene_view != nullptr) {
-                m_last_hover_scene_view = message.scene_view;
-            }
-        }
-    );
     m_load_scene_file_subscription = app_message_bus.load_scene_file.subscribe(
         [&](Load_scene_file_message& message) {
             try {
@@ -2289,15 +2270,13 @@ void Operations::merge_faces()
 
 auto Operations::get_target_scene_root() -> std::shared_ptr<Scene_root>
 {
-    Scene_view* scene_view = (m_last_hover_scene_view != nullptr) ? m_last_hover_scene_view : m_hover_scene_view;
-    if (scene_view != nullptr) {
-        std::shared_ptr<Scene_root> scene_root = scene_view->get_scene_root();
-        if (scene_root) {
-            return scene_root;
-        }
-    }
-    // No viewport hovered yet: when exactly one scene exists, use it.
-    return m_context.app_scenes->get_single_scene_root();
+    // The active scene (with its fallbacks: last hovered scene view, then the
+    // sole open scene). Targeting the last HOVERED viewport instead diverged
+    // from every other command once a scene became active without the mouse
+    // crossing its viewport -- e.g. File > Load Scene focuses the new
+    // viewport, but File > Save Scene still saved the previously hovered
+    // scene (surfacing as a bogus overwrite prompt for a just-loaded scene).
+    return m_context.selection->get_active_scene_root();
 }
 
 #if defined(ERHE_WINDOW_LIBRARY_SDL)

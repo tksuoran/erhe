@@ -76,7 +76,6 @@ struct Tool_slot
 class App_context;
 class App_message_bus;
 class Scene_root;
-class Scene_view;
 
 // Obstacles the Add Joint initial-orientation search treats as blocking when
 // looking for a non-intersecting placement.
@@ -253,13 +252,13 @@ private:
 
     [[nodiscard]] auto mesh_context() -> Mesh_operation_parameters;
 
-    // Scene root of the last hovered scene view; before any viewport has been
-    // hovered, falls back to the sole scene when exactly one exists.
+    // The active scene root (Selection::get_active_scene_root), which falls
+    // back to the last hovered scene view's scene, then to the sole scene
+    // when exactly one exists.
     [[nodiscard]] auto get_target_scene_root() -> std::shared_ptr<Scene_root>;
 
     template<typename T> void async_mesh_operation(bool selection_aware = false);
 
-    erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
     erhe::message_bus::Subscription<Load_scene_file_message>  m_load_scene_file_subscription;
     App_context& m_context;
 
@@ -358,9 +357,6 @@ private:
     erhe::commands::Lambda_command m_create_physics_material;
     erhe::commands::Lambda_command m_create_collision_filter;
     erhe::commands::Lambda_command m_create_joint_settings;
-
-    Scene_view*                    m_hover_scene_view     {nullptr};
-    Scene_view*                    m_last_hover_scene_view{nullptr};
 
     // Pending File > Save Scene overwrite confirmation (imgui_modal_dialogs):
     // set by save_scene() when the target file already exists; the scene_root
