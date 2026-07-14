@@ -61,6 +61,13 @@ private:
     // One selectable / draggable point on a curve: a (channel, component)
     // curve's key. The same underlying sampler key appears once per visible
     // component.
+    //
+    // Do not use value-based std::find / std::remove / std::count on this
+    // type: MSVC STL's vectorized-find gate admits any type clang reports
+    // __is_trivially_equality_comparable (such as this one) but implements
+    // only element sizes 1/2/4/8, so clang-cl fails with "static assertion
+    // failed: unexpected size" for this 24-byte type. Use predicate-based
+    // algorithms (std::find_if, std::erase_if) instead.
     class Curve_point
     {
     public:

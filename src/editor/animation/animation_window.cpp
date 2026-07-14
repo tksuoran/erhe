@@ -161,7 +161,14 @@ void Animation_window::prune_stale_selection()
 
 auto Animation_window::is_point_selected(const Curve_point& point) const -> bool
 {
-    return std::find(m_selection.begin(), m_selection.end(), point) != m_selection.end();
+    // find_if, not value-based find: see the Curve_point declaration.
+    return std::find_if(
+        m_selection.begin(),
+        m_selection.end(),
+        [&point](const Curve_point& entry) {
+            return entry == point;
+        }
+    ) != m_selection.end();
 }
 
 auto Animation_window::is_component_visible(const std::size_t channel_index, const std::size_t component) const -> bool
@@ -1346,7 +1353,13 @@ void Animation_window::curve_canvas()
             if (!m_drag_moved) {
                 // Plain click on a key: resolve selection.
                 if (io.KeyCtrl && m_pressed_point_was_selected) {
-                    m_selection.erase(std::remove(m_selection.begin(), m_selection.end(), m_pressed_point), m_selection.end());
+                    // erase_if, not value-based remove: see the Curve_point declaration.
+                    std::erase_if(
+                        m_selection,
+                        [this](const Curve_point& entry) {
+                            return entry == m_pressed_point;
+                        }
+                    );
                 } else if (!io.KeyCtrl) {
                     m_selection.clear();
                     m_selection.push_back(m_pressed_point);
