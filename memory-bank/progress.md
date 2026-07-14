@@ -1,5 +1,13 @@
 §MBEL:5.0
 
+[TASK::houdini-graph-features]{impl-done,awaiting-user-interactive-verify}
+✓wire-cutting{a7d98635}+display/ghost-flags{886e4c31}+node-previews{77feb2a8}
+?user-verify::Y+drag-cuts-wires-in-geometry/texture/shader-graph-windows{undo-restores,Escape-cancels,plain-drag=box-select}+D/G-badge-clicks+"Show node previews"-checkbox
+!designation-ids=session-node-ids{persist-as-node-INDICES-in-graph-JSON;shadow-resolution-via-get_log_id}
+!ghost-invisible-when-content_edge_lines.use_id_buffer{known-limitation,documented-in-commit}
+!designating-value-node→null-geometry-bake→scene-mesh-clears{consistent-with-empty-semantics;badges-hidden-on-non-geometry-output-nodes}
+!Brush_preview-primitive-overload{render_preview(texture,layer,primitive,material,time);brush-overload-delegates}
+
 [TASK::#239-per-scene-settings]{parked}
 ✓runtime-setter-MCP-tool{set_scene_settings+get_scene_settings@phase4,3a4989b6}→sky/grid-override-visual-verify-unblocked
 ?PENDING::viewport+post_processing{init-consumed¬applied→needs-per-scene-refactor}+clear_color{editor-global-never-read→decide-wire||drop}+sky/grid-override-visual-verify
