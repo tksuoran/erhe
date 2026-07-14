@@ -23,13 +23,13 @@ public:
     class Parameters
     {
     public:
-        std::shared_ptr<erhe::scene::Mesh> mesh;
+        std::shared_ptr<erhe::scene::Mesh> mesh{};
         std::size_t                        primitive_index{0};
-        erhe::scene::Mesh_primitive        before; // shared primitive
-        erhe::scene::Mesh_primitive        after;  // forked primitive
+        erhe::scene::Mesh_primitive        before{}; // shared primitive
+        erhe::scene::Mesh_primitive        after{};  // forked primitive
         // Undo-history label. Empty keeps the default "Fork geometry"; the extrude
         // commit passes "Extrude" since this op is a generic primitive swap.
-        std::string                        description;
+        std::string                        description{};
     };
 
     explicit Fork_geometry_operation(Parameters&& parameters);

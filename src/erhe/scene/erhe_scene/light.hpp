@@ -99,11 +99,11 @@ public:
     // max for non-point or non-shadow lights. The cube occupies array layers
     // [6*point_shadow_index, 6*point_shadow_index + 6).
     std::size_t   point_shadow_index{0};
-    Projection    projection;      // resolved projection; the shadow pass must rasterize with this so it matches clip_from_world / texture_from_world
-    Trs_transform world_from_light_camera;
-    Transform     clip_from_light_camera;
-    Transform     clip_from_world;
-    Transform     texture_from_world;
+    Projection    projection{};    // resolved projection; the shadow pass must rasterize with this so it matches clip_from_world / texture_from_world
+    Trs_transform world_from_light_camera{};
+    Transform     clip_from_light_camera{};
+    Transform     clip_from_world{};
+    Transform     texture_from_world{};
 };
 
 class Light : public erhe::Item<Item_base, Node_attachment, Light, erhe::Item_kind::clone_using_custom_clone_constructor>

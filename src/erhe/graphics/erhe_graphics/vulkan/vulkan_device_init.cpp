@@ -804,9 +804,20 @@ Device_impl::Device_impl(
     }
 
     VkPhysicalDeviceVulkan11Features query_vulkan_11_features{
-        .sType            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
-        .pNext            = nullptr,
-        .shaderDrawParameters = VK_FALSE,
+        .sType                              = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
+        .pNext                              = nullptr,
+        .storageBuffer16BitAccess           = VK_FALSE,
+        .uniformAndStorageBuffer16BitAccess = VK_FALSE,
+        .storagePushConstant16              = VK_FALSE,
+        .storageInputOutput16               = VK_FALSE,
+        .multiview                          = VK_FALSE,
+        .multiviewGeometryShader            = VK_FALSE,
+        .multiviewTessellationShader        = VK_FALSE,
+        .variablePointersStorageBuffer      = VK_FALSE,
+        .variablePointers                   = VK_FALSE,
+        .protectedMemory                    = VK_FALSE,
+        .samplerYcbcrConversion             = VK_FALSE,
+        .shaderDrawParameters               = VK_FALSE,
     };
     {
         query_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&query_vulkan_11_features);
@@ -814,11 +825,23 @@ Device_impl::Device_impl(
     }
 
     VkPhysicalDeviceVulkan13Features query_vulkan_13_features{
-        .sType                          = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
-        .pNext                          = nullptr,
-        .shaderDemoteToHelperInvocation = VK_FALSE,
-        .synchronization2               = VK_FALSE,
-        .dynamicRendering               = VK_FALSE,
+        .sType                                              = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+        .pNext                                              = nullptr,
+        .robustImageAccess                                  = VK_FALSE,
+        .inlineUniformBlock                                 = VK_FALSE,
+        .descriptorBindingInlineUniformBlockUpdateAfterBind = VK_FALSE,
+        .pipelineCreationCacheControl                       = VK_FALSE,
+        .privateData                                        = VK_FALSE,
+        .shaderDemoteToHelperInvocation                     = VK_FALSE,
+        .shaderTerminateInvocation                          = VK_FALSE,
+        .subgroupSizeControl                                = VK_FALSE,
+        .computeFullSubgroups                               = VK_FALSE,
+        .synchronization2                                   = VK_FALSE,
+        .textureCompressionASTC_HDR                         = VK_FALSE,
+        .shaderZeroInitializeWorkgroupMemory                = VK_FALSE,
+        .dynamicRendering                                   = VK_FALSE,
+        .shaderIntegerDotProduct                            = VK_FALSE,
+        .maintenance4                                       = VK_FALSE,
     };
     {
         query_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&query_vulkan_13_features);
@@ -1050,28 +1073,72 @@ Device_impl::Device_impl(
         .sType    = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
         .pNext    = nullptr,
         .features = {
+            .robustBufferAccess                      = VK_FALSE,
+            .fullDrawIndexUint32                     = VK_FALSE,
             // erhe samples cube-map-array textures (e.g. the point-light cube
             // shadow maps) via samplerCubeArray, whose SPIR-V declares the
             // SampledCubeArray capability. That capability requires the
             // imageCubeArray device feature to be enabled, else shaders trip
             // VUID-VkShaderModuleCreateInfo-pCode-08740. Desktop drivers do not
             // enforce it; KosmicKrisp / the validation layer do.
-            .imageCubeArray                 = qf.imageCubeArray,
-            .geometryShader                 = qf.geometryShader,
-            .sampleRateShading              = qf.sampleRateShading,
-            .multiDrawIndirect              = qf.multiDrawIndirect,
-            .depthClamp                     = qf.depthClamp,
-            .samplerAnisotropy              = qf.samplerAnisotropy,
-            .vertexPipelineStoresAndAtomics = qf.vertexPipelineStoresAndAtomics,
+            .imageCubeArray                          = qf.imageCubeArray,
+            .independentBlend                        = VK_FALSE,
+            .geometryShader                          = qf.geometryShader,
+            .tessellationShader                      = VK_FALSE,
+            .sampleRateShading                       = qf.sampleRateShading,
+            .dualSrcBlend                            = VK_FALSE,
+            .logicOp                                 = VK_FALSE,
+            .multiDrawIndirect                       = qf.multiDrawIndirect,
+            .drawIndirectFirstInstance               = VK_FALSE,
+            .depthClamp                              = qf.depthClamp,
+            .depthBiasClamp                          = VK_FALSE,
+            .fillModeNonSolid                        = VK_FALSE,
+            .depthBounds                             = VK_FALSE,
+            .wideLines                               = VK_FALSE,
+            .largePoints                             = VK_FALSE,
+            .alphaToOne                              = VK_FALSE,
+            .multiViewport                           = VK_FALSE,
+            .samplerAnisotropy                       = qf.samplerAnisotropy,
+            .textureCompressionETC2                  = VK_FALSE,
+            .textureCompressionASTC_LDR              = VK_FALSE,
+            .textureCompressionBC                    = VK_FALSE,
+            .occlusionQueryPrecise                   = VK_FALSE,
+            .pipelineStatisticsQuery                 = VK_FALSE,
+            .vertexPipelineStoresAndAtomics          = qf.vertexPipelineStoresAndAtomics,
+            .fragmentStoresAndAtomics                = VK_FALSE,
+            .shaderTessellationAndGeometryPointSize  = VK_FALSE,
+            .shaderImageGatherExtended               = VK_FALSE,
+            .shaderStorageImageExtendedFormats       = VK_FALSE,
             // OpenXR runtimes (e.g. SteamVR) can inject internal compositor
             // shaders through xrCreateVulkanDeviceKHR that declare the
             // StorageImageMultisample SPIR-V capability. Enable the feature
             // when the physical device supports it so those shaders pass
             // VUID-VkShaderModuleCreateInfo-pCode-08740.
-            .shaderStorageImageMultisample  = qf.shaderStorageImageMultisample,
-            .shaderClipDistance             = qf.shaderClipDistance,
-            .shaderCullDistance             = qf.shaderCullDistance,
-            .shaderInt64                    = qf.shaderInt64,
+            .shaderStorageImageMultisample           = qf.shaderStorageImageMultisample,
+            .shaderStorageImageReadWithoutFormat     = VK_FALSE,
+            .shaderStorageImageWriteWithoutFormat    = VK_FALSE,
+            .shaderUniformBufferArrayDynamicIndexing = VK_FALSE,
+            .shaderSampledImageArrayDynamicIndexing  = VK_FALSE,
+            .shaderStorageBufferArrayDynamicIndexing = VK_FALSE,
+            .shaderStorageImageArrayDynamicIndexing  = VK_FALSE,
+            .shaderClipDistance                      = qf.shaderClipDistance,
+            .shaderCullDistance                      = qf.shaderCullDistance,
+            .shaderFloat64                           = VK_FALSE,
+            .shaderInt64                             = qf.shaderInt64,
+            .shaderInt16                             = VK_FALSE,
+            .shaderResourceResidency                 = VK_FALSE,
+            .shaderResourceMinLod                    = VK_FALSE,
+            .sparseBinding                           = VK_FALSE,
+            .sparseResidencyBuffer                   = VK_FALSE,
+            .sparseResidencyImage2D                  = VK_FALSE,
+            .sparseResidencyImage3D                  = VK_FALSE,
+            .sparseResidency2Samples                 = VK_FALSE,
+            .sparseResidency4Samples                 = VK_FALSE,
+            .sparseResidency8Samples                 = VK_FALSE,
+            .sparseResidency16Samples                = VK_FALSE,
+            .sparseResidencyAliased                  = VK_FALSE,
+            .variableMultisampleRate                 = VK_FALSE,
+            .inheritedQueries                        = VK_FALSE,
         }
     };
     VkBaseOutStructure* set_features_chain_last = reinterpret_cast<VkBaseOutStructure*>(&set_device_features);
@@ -1177,6 +1244,10 @@ Device_impl::Device_impl(
         .multiview                          = query_multiview_features.multiview,
         .multiviewGeometryShader            = query_multiview_features.multiviewGeometryShader,
         .multiviewTessellationShader        = query_multiview_features.multiviewTessellationShader,
+        .variablePointersStorageBuffer      = VK_FALSE,
+        .variablePointers                   = VK_FALSE,
+        .protectedMemory                    = VK_FALSE,
+        .samplerYcbcrConversion             = VK_FALSE,
         .shaderDrawParameters               = query_vulkan_11_features.shaderDrawParameters,
     };
     {
@@ -1193,11 +1264,23 @@ Device_impl::Device_impl(
     }
 
     VkPhysicalDeviceVulkan13Features set_vulkan_13_features{
-        .sType                          = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
-        .pNext                          = nullptr,
-        .shaderDemoteToHelperInvocation = query_vulkan_13_features.shaderDemoteToHelperInvocation,
-        .synchronization2               = query_vulkan_13_features.synchronization2,
-        .dynamicRendering               = query_vulkan_13_features.dynamicRendering,
+        .sType                                              = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+        .pNext                                              = nullptr,
+        .robustImageAccess                                  = VK_FALSE,
+        .inlineUniformBlock                                 = VK_FALSE,
+        .descriptorBindingInlineUniformBlockUpdateAfterBind = VK_FALSE,
+        .pipelineCreationCacheControl                       = VK_FALSE,
+        .privateData                                        = VK_FALSE,
+        .shaderDemoteToHelperInvocation                     = query_vulkan_13_features.shaderDemoteToHelperInvocation,
+        .shaderTerminateInvocation                          = VK_FALSE,
+        .subgroupSizeControl                                = VK_FALSE,
+        .computeFullSubgroups                               = VK_FALSE,
+        .synchronization2                                   = query_vulkan_13_features.synchronization2,
+        .textureCompressionASTC_HDR                         = VK_FALSE,
+        .shaderZeroInitializeWorkgroupMemory                = VK_FALSE,
+        .dynamicRendering                                   = query_vulkan_13_features.dynamicRendering,
+        .shaderIntegerDotProduct                            = VK_FALSE,
+        .maintenance4                                       = VK_FALSE,
     };
     {
         set_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&set_vulkan_13_features);
@@ -1302,6 +1385,7 @@ Device_impl::Device_impl(
         .preferredLargeHeapBlockSize    = 0,
         .pAllocationCallbacks           = nullptr,
         .pDeviceMemoryCallbacks         = nullptr,
+        .pHeapSizeLimit                 = nullptr,
         .pVulkanFunctions               = nullptr,
         .instance                       = m_vulkan_instance,
         .vulkanApiVersion               = application_info.apiVersion,

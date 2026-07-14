@@ -16,7 +16,7 @@ public:
     const erhe::dataformat::Vertex_format& vertex_format;
     Vertex_buffer_sink&                    vertex_buffer_sink;
     Index_buffer_sink&                     index_buffer_sink;
-    size_t                                 vertex_input_key;
+    size_t                                 vertex_input_key{0};
 
     // Optional separate stream descriptor used by Primitive_builder to
     // allocate Buffer_mesh::edge_line_vertex_buffer_range. When null, no

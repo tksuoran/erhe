@@ -56,9 +56,9 @@ public:
     // edge_line_color + edge_line_width + vp_y_sign); no face-ID texture needed.
     bool                                                                   edge_lines_corner_cap{false};
     uint32_t                                                               content_wide_line_group{0};
-    std::vector<erhe::scene::Layer_id>                                     mesh_layers;
+    std::vector<erhe::scene::Layer_id>                                     mesh_layers{};
     std::size_t                                                            non_mesh_vertex_count{0};
-    std::vector<erhe::graphics::Base_render_pipeline*>                     base_render_pipelines;
+    std::vector<erhe::graphics::Base_render_pipeline*>                     base_render_pipelines{};
     erhe::scene_renderer::Blending_mode_policy                             blending_mode_policy{erhe::scene_renderer::Blending_mode_policy::not_set};
     erhe::primitive::Primitive_mode                                        primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
     erhe::Item_filter                                                      filter{};
@@ -76,22 +76,22 @@ public:
     // Sky settings (horizon / zenith / ground colors, checker pattern)
     // forwarded to the camera UBO; read by sky.frag.
     erhe::scene_renderer::Sky_parameters                                   sky_parameters{};
-    std::optional<erhe::scene_renderer::Primitive_interface_settings>      primitive_settings;
-    std::function<void()>                                                  begin;
-    std::function<void()>                                                  end; 
-    std::function<const Render_style_data&(const Render_context& context)> get_render_style;
+    std::optional<erhe::scene_renderer::Primitive_interface_settings>      primitive_settings{};
+    std::function<void()>                                                  begin{};
+    std::function<void()>                                                  end{};
+    std::function<const Render_style_data&(const Render_context& context)> get_render_style{};
     // Editor-global appearance (colors / widths / color sources) for this pass's
     // primitive_mode, selected to match get_render_style (Default vs Selection
     // appearance). Read via get_primitive_settings when primitive_settings is
     // not explicitly set. The matching per-view Render_style_data still gates
     // visibility through get_render_style / is_primitive_mode_enabled.
-    std::function<const Render_style_appearance&(const Render_context& context)> get_appearance;
+    std::function<const Render_style_appearance&(const Render_context& context)> get_appearance{};
     // Optional render-time activation predicate, evaluated against the current
     // viewport's Render_context (e.g. to gate on a render-style flag). The pass
     // is skipped when this is set and returns false. Distinct from
     // get_render_style / is_primitive_mode_enabled, which gate on the pass's own
     // primitive_mode.
-    std::function<bool(const Render_context& context)>                     is_enabled;
+    std::function<bool(const Render_context& context)>                     is_enabled{};
 };
 
 class Composition_pass : public erhe::Item<erhe::Item_base, erhe::Item_base, Composition_pass>

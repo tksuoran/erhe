@@ -86,7 +86,7 @@ public:
         // SHADER_MULTIVIEW_COUNT environment key) read directly from
         // this span; the multiview shader pipeline kicks in when
         // views.size() >= 2.
-        std::span<const Camera_view_input>                                 views;
+        std::span<const Camera_view_input>                                 views{};
         // Camera exposure applied to all entries written to the Camera
         // UBO this pass. Per-camera, not per-view (both eyes share the
         // same exposure), so it lives in Base_render_parameters rather
@@ -102,7 +102,7 @@ public:
         uint64_t                                                           frame_number     {0};
         bool                                                               reverse_depth    {true};
         erhe::math::Depth_range                                            depth_range      {erhe::math::Depth_range::zero_to_one};
-        erhe::math::Coordinate_conventions                                 conventions;
+        erhe::math::Coordinate_conventions                                 conventions{};
         // Grid composition pass settings (cell sizes, line widths,
         // per-level colors, axis label settings) written to the camera
         // UBO; ignored by passes that do not draw the grid.
@@ -120,7 +120,7 @@ public:
         // Edge-line width for the EDGE_LINES_CORNER_CAP overlay's screen-space
         // half-width (matches the wide-line ribbon). Ignored by other variants.
         float                                                              edge_line_width  {1.0f};
-        const std::string_view                                             debug_label;
+        const std::string_view                                             debug_label{};
     };
 
     class Render_parameters

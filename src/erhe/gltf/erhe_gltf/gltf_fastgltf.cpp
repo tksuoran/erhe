@@ -5225,6 +5225,7 @@ auto Gltf_exporter::export_gltf() -> std::string
 {
     m_gltf_asset.assetInfo = fastgltf::AssetInfo{
         .gltfVersion = "2.0",
+        .minVersion  = "",
         .copyright   = "",
         .generator   = "erhe"
     };

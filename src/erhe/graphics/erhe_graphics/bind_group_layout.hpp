@@ -96,7 +96,7 @@ public:
 class Bind_group_layout_create_info
 {
 public:
-    std::vector<Bind_group_layout_binding> bindings;
+    std::vector<Bind_group_layout_binding> bindings{};
     erhe::utility::Debug_label             debug_label;
 
     // When true, pipelines built with this layout participate in the

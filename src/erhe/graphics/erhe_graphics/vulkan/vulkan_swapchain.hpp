@@ -66,7 +66,7 @@ public:
     // Any present semaphores that were pending recycle at the time the swapchain
     // was recreated will be scheduled for recycling at the same time as the swapchain's
     // destruction.
-	std::vector<VkSemaphore> semaphores;
+	std::vector<VkSemaphore> semaphores{};
 };
 
 // Keeps track of resources that are waiting for conditions suitable cleanup

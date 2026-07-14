@@ -138,11 +138,11 @@ class Gltf_physics_importer
 {
 public:
     const erhe::gltf::Gltf_physics_data&                                physics;
-    std::vector<std::shared_ptr<erhe::physics::Physics_material>>       material_items;
-    std::vector<std::shared_ptr<erhe::physics::Collision_filter>>       filter_items;
-    std::vector<std::shared_ptr<erhe::physics::Physics_joint_settings>> joint_items;
+    std::vector<std::shared_ptr<erhe::physics::Physics_material>>       material_items{};
+    std::vector<std::shared_ptr<erhe::physics::Collision_filter>>       filter_items{};
+    std::vector<std::shared_ptr<erhe::physics::Physics_joint_settings>> joint_items{};
 
-    std::unordered_map<const erhe::scene::Node*, const erhe::gltf::Physics_node_description*> description_by_node;
+    std::unordered_map<const erhe::scene::Node*, const erhe::gltf::Physics_node_description*> description_by_node{};
 
     [[nodiscard]] auto get_material(const std::optional<std::size_t>& index) const -> std::shared_ptr<erhe::physics::Physics_material>
     {

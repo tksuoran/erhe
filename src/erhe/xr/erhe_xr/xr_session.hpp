@@ -28,7 +28,14 @@ class Xr_perf_counter
 public:
     XrPath                          path        {XR_NULL_PATH};
     std::string                     display_name;
-    XrPerformanceMetricsCounterMETA last       {.type = XR_TYPE_PERFORMANCE_METRICS_COUNTER_META, .next = nullptr};
+    XrPerformanceMetricsCounterMETA last{
+        .type         = XR_TYPE_PERFORMANCE_METRICS_COUNTER_META,
+        .next         = nullptr,
+        .counterFlags = 0,
+        .counterUnit  = XR_PERFORMANCE_METRICS_COUNTER_UNIT_GENERIC_META,
+        .uintValue    = 0,
+        .floatValue   = 0.0f
+    };
 };
 
 // Aggregate handed to the multiview render callback. The shared color

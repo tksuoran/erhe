@@ -44,15 +44,15 @@ public:
     int                  stencil_size    {0};
     int                  image_texel_size{0};
 
-    std::vector<int>     texture_2d_sample_counts;
+    std::vector<int>     texture_2d_sample_counts{};
     int                  texture_2d_array_max_width{0};
     int                  texture_2d_array_max_height{0};
     int                  texture_2d_array_max_layers{0};
 
     // These are all texture_2d
-    std::vector<int64_t> sparse_tile_x_sizes;
-    std::vector<int64_t> sparse_tile_y_sizes;
-    std::vector<int64_t> sparse_tile_z_sizes;
+    std::vector<int64_t> sparse_tile_x_sizes{};
+    std::vector<int64_t> sparse_tile_y_sizes{};
+    std::vector<int64_t> sparse_tile_z_sizes{};
 };
 
 class Blit_command_encoder;

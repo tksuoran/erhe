@@ -251,35 +251,35 @@ public:
     // Nodes to export as glTF 2.1 externalAsset instances. When any entry
     // is emitted, the asset is written with version + minVersion "2.1";
     // otherwise the exporter keeps writing plain glTF 2.0.
-    std::map<const erhe::scene::Node*, Gltf_export_external_asset> external_assets;
+    std::map<const erhe::scene::Node*, Gltf_export_external_asset> external_assets{};
     // Returns the retained encoded source stream for a texture (see
     // Gltf_image_source), or null when the texture has no exportable
     // source - such texture slots are skipped on export. When the provider
     // itself is empty, no images / textures / samplers are exported at all
     // (pre-phase-0 behavior).
-    std::function<std::shared_ptr<const Gltf_image_source>(const erhe::graphics::Texture*)> image_source_provider;
+    std::function<std::shared_ptr<const Gltf_image_source>(const erhe::graphics::Texture*)> image_source_provider{};
     // Animations to export (the editor passes the content-library
     // animations). Channels targeting nodes outside the exported subtree
     // are skipped with a warning.
-    std::vector<std::shared_ptr<erhe::scene::Animation>> animations;
+    std::vector<std::shared_ptr<erhe::scene::Animation>> animations{};
     // ERHE_* extension payloads to attach to exported objects; the caller
     // must also list each extension name in extensions_used.
-    Gltf_export_extension_payloads extension_payloads;
+    Gltf_export_extension_payloads extension_payloads{};
     // Extension names to declare in the asset's extensionsUsed (for the
     // extension_payloads above).
-    std::vector<std::string> extensions_used;
+    std::vector<std::string> extensions_used{};
     // Mesh attachments to skip in the node pass (the node exports without
     // its mesh): baked artifacts that are rebuilt on load, e.g. graph-mesh
     // controlled meshes (doc/gltf-scene-roundtrip-plan.md phase 3
     // exclusion hook).
-    std::unordered_set<const erhe::scene::Mesh*> excluded_meshes;
+    std::unordered_set<const erhe::scene::Mesh*> excluded_meshes{};
     // Extra unreferenced meshes to export (see Gltf_export_extra_mesh).
-    std::vector<Gltf_export_extra_mesh> extra_meshes;
+    std::vector<Gltf_export_extra_mesh> extra_meshes{};
     // Called after all objects are emitted (glTF indices known); returns
     // (extension name, extension JSON value) pairs to attach to the asset
     // root, e.g. ("ERHE_brushes", "{\"brushes\":[...]}"). Each returned
     // name is declared in extensionsUsed automatically.
-    std::function<std::vector<std::pair<std::string, std::string>>(const Gltf_export_index_lookup&)> asset_extensions_builder;
+    std::function<std::vector<std::pair<std::string, std::string>>(const Gltf_export_index_lookup&)> asset_extensions_builder{};
 };
 
 [[nodiscard]] auto export_gltf(const Gltf_export_arguments& arguments) -> std::string;

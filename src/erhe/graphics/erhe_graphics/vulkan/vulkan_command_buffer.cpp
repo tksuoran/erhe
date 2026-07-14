@@ -259,16 +259,24 @@ void Command_buffer_impl::upload_to_buffer(const Buffer& buffer, const std::size
     VmaAllocator allocator   = device_impl.get_allocator();
 
     const VkBufferCreateInfo staging_buffer_create_info{
-        .sType       = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .pNext       = nullptr,
-        .flags       = 0,
-        .size        = length,
-        .usage       = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        .sharingMode = VK_SHARING_MODE_EXCLUSIVE
+        .sType                 = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .pNext                 = nullptr,
+        .flags                 = 0,
+        .size                  = length,
+        .usage                 = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        .sharingMode           = VK_SHARING_MODE_EXCLUSIVE,
+        .queueFamilyIndexCount = 0,
+        .pQueueFamilyIndices   = nullptr
     };
     VmaAllocationCreateInfo staging_alloc_info{
-        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-        .usage = VMA_MEMORY_USAGE_AUTO
+        .flags          = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+        .usage          = VMA_MEMORY_USAGE_AUTO,
+        .requiredFlags  = 0,
+        .preferredFlags = 0,
+        .memoryTypeBits = 0,
+        .pool           = VK_NULL_HANDLE,
+        .pUserData      = nullptr,
+        .priority       = 0.0f
     };
     VkBuffer          staging_buffer{VK_NULL_HANDLE};
     VmaAllocation     staging_allocation{VK_NULL_HANDLE};
