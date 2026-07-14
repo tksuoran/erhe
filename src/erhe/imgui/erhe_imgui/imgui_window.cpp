@@ -161,27 +161,21 @@ void Imgui_window::apply_initial_placement()
     }
     m_has_initial_placement = false;
 
-    // Initial placement only applies to a window ImGui has never seen. A
-    // window recreated with the same identity (the "###" id suffix; ImHashStr
-    // hashes only the part after "###") still has its live ImGuiWindow with
-    // its dock node and position, and a window with persisted ini settings
-    // restores from them inside Begin(). Forcing the dock-target / floating
-    // placement in those cases would discard the remembered layout - e.g.
-    // the viewport window recreated when the last scene is closed would come
-    // back floating instead of staying in its dock node.
-    if (ImGui::FindWindowByName(m_title.c_str()) != nullptr) {
-        return;
-    }
-    if (ImGui::FindWindowSettingsByID(ImHashStr(m_title.c_str())) != nullptr) {
-        return;
-    }
+    // ImGuiCond_FirstUseEver makes the placement apply only to a window ImGui
+    // has no prior state for: it is disarmed when persisted ini settings exist
+    // at ImGuiWindow creation, and consumed once a placement applies or the
+    // window spends a hosted frame docked (the dock node position write
+    // consumes the pos/size conds). This keeps the remembered layout intact
+    // for a window recreated with the same identity (the "###" id suffix) -
+    // e.g. the viewport window recreated when the last scene is closed stays
+    // in its dock node instead of coming back floating.
 
     // Prefer docking (tabbing) into the target window's dock node, if it is
     // currently docked.
     if (!m_initial_dock_target_title.empty()) {
         const ImGuiWindow* target_window = ImGui::FindWindowByName(m_initial_dock_target_title.c_str());
         if ((target_window != nullptr) && (target_window->DockId != 0)) {
-            ImGui::SetNextWindowDockID(target_window->DockId, ImGuiCond_Always);
+            ImGui::SetNextWindowDockID(target_window->DockId, ImGuiCond_FirstUseEver);
             return;
         }
     }
@@ -197,8 +191,8 @@ void Imgui_window::apply_initial_placement()
         viewport->Pos.x + ((viewport->Size.x - size.x) * 0.5f),
         viewport->Pos.y + ((viewport->Size.y - size.y) * 0.5f)
     };
-    ImGui::SetNextWindowPos (pos,  ImGuiCond_Always);
-    ImGui::SetNextWindowSize(size, ImGuiCond_Always);
+    ImGui::SetNextWindowPos (pos,  ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(size, ImGuiCond_FirstUseEver);
 }
 
 auto Imgui_window::begin() -> bool

@@ -45,7 +45,10 @@ public:
     // docked, this window is docked (tabbed) into that window's dock node.
     // Otherwise the window is shown floating, centered on the main ImGui
     // viewport, sized to the given fraction of the viewport size. Intended for
-    // dynamically created windows that have no persisted ini position.
+    // dynamically created windows that have no persisted ini position: the
+    // placement is issued with ImGuiCond_FirstUseEver, so persisted ini
+    // settings and layout ImGui already has for this window identity win
+    // over it.
     void set_initial_placement(
         std::string_view dock_target_title,
         float            fallback_width_ratio,
