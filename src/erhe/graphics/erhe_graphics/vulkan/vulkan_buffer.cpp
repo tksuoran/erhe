@@ -22,12 +22,12 @@ namespace erhe::graphics {
 
 Buffer_impl::Buffer_impl(Device& device, const Buffer_create_info& create_info) noexcept
     : m_device_impl                           {device.get_impl()}
-    , m_capacity_byte_count                   {create_info.capacity_byte_count}
     , m_usage                                 {create_info.usage}
     , m_memory_allocation_create_flag_bit_mask{create_info.memory_allocation_create_flag_bit_mask}
     , m_required_memory_property_bit_mask     {create_info.required_memory_property_bit_mask}
     , m_preferred_memory_property_bit_mask    {create_info.preferred_memory_property_bit_mask}
     , m_debug_label                           {create_info.debug_label}
+    , m_capacity_byte_count                   {create_info.capacity_byte_count}
 {
     constexpr const std::size_t sanity_threshold{2'000'000'000};
     ERHE_VERIFY(m_capacity_byte_count < sanity_threshold); // sanity check, can raise limit when needed
@@ -170,9 +170,9 @@ Buffer_impl::Buffer_impl(Buffer_impl&& old) noexcept
     , m_vma_allocation     {std::exchange(old.m_vma_allocation, VK_NULL_HANDLE)}
     , m_vk_buffer          {std::exchange(old.m_vk_buffer,      VK_NULL_HANDLE)}
     , m_debug_label        {std::move(old.m_debug_label)}
+    , m_capacity_byte_count{std::exchange(old.m_capacity_byte_count, 0)}
     , m_map                {std::exchange(old.m_map, {})}
     , m_map_byte_offset    {std::exchange(old.m_map_byte_offset, 0)}
-    , m_capacity_byte_count{std::exchange(old.m_capacity_byte_count, 0)}
 {
 }
 

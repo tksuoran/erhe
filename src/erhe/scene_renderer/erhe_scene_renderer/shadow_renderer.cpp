@@ -66,10 +66,10 @@ Shadow_renderer::Shadow_renderer(
         }
     }
     , m_vertex_input        {graphics_device}
-    , m_camera_buffer       {graphics_device, program_interface.camera_interface}
     , m_draw_indirect_buffer{graphics_device, program_interface.config.max_draw_count}
     , m_joint_buffer        {graphics_device, program_interface.joint_interface}
     , m_light_buffer        {graphics_device, init_command_buffer, program_interface.light_interface}
+    , m_camera_buffer       {graphics_device, program_interface.camera_interface}
     , m_primitive_buffer    {graphics_device, program_interface.primitive_interface}
     , m_material_buffer     {graphics_device, program_interface.material_interface}
     // NOTE m_dummy_texture is NOT used for shadow map texture

@@ -137,9 +137,9 @@ Text_renderer::Text_renderer(
     , m_u_texture_offset               {m_texture_resource             ->get_offset_in_parent()}
     , m_u_vertex_data_offset_size      {m_vertex_data_offset_resource  ->get_size_bytes()}
     , m_u_vertex_data_offset_offset    {m_vertex_data_offset_resource  ->get_offset_in_parent()}
+    , m_u_vertex_data_size             {m_vertex_data_resource         ->get_size_bytes()}
+    , m_u_vertex_data_offset           {m_vertex_data_resource         ->get_offset_in_parent()}
     , m_use_buffer_texture             {!graphics_device.get_info().use_shader_storage_buffers}
-    , m_u_vertex_data_size       {m_vertex_data_resource     ->get_size_bytes()}
-    , m_u_vertex_data_offset     {m_vertex_data_resource     ->get_offset_in_parent()}
     , m_fragment_outputs{
         erhe::graphics::Fragment_output{
             .name     = "out_color",

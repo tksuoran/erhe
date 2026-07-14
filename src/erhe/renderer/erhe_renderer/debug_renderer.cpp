@@ -391,11 +391,11 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(
 Debug_renderer::Debug_renderer(erhe::graphics::Device& graphics_device, const int view_count)
     : m_graphics_device   {graphics_device}
     , m_program_interface {graphics_device, view_count}
-    , m_empty_vertex_input{graphics_device, erhe::graphics::Vertex_input_state_data{}}
     , m_line_vertex_input{
         graphics_device,
         erhe::graphics::Vertex_input_state_data::make(m_program_interface.line_vertex_format)
     }
+    , m_empty_vertex_input{graphics_device, erhe::graphics::Vertex_input_state_data{}}
     , m_lines_to_triangles_compute_pipeline{
         m_program_interface.use_compute
             ? std::optional<erhe::graphics::Compute_pipeline>{

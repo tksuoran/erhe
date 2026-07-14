@@ -373,7 +373,6 @@ auto Render_pass_impl::get_render_pass() const -> VkRenderPass
 
 Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor& descriptor)
     : m_device              {device}
-    , m_device_impl         {device.get_impl()}
     , m_swapchain           {descriptor.swapchain}
     , m_color_attachments   {descriptor.color_attachments}
     , m_depth_attachment    {descriptor.depth_attachment}
@@ -384,6 +383,7 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
     , m_fragment_density_map_texture{descriptor.fragment_density_map_texture}
     , m_debug_label         {descriptor.debug_label}
     , m_debug_group_name    {fmt::format("Render pass: {}", descriptor.debug_label.string_view())}
+    , m_device_impl         {device.get_impl()}
 {
     // Resolve an emulated (headless) swapchain from the descriptor's surface
     // when there is no real WSI swapchain. The real path keeps using
