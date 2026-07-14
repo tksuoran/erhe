@@ -1,6 +1,10 @@
 {
     "windows": {
-        "animation": true,
+        "Geometry_graph_window 1": false,
+        "Hierarchy_window 1": true,
+        "Texture_graph_window 1": false,
+        "Viewport_window 1": true,
+        "animation": false,
         "asset_browser": true,
         "clipboard": false,
         "commands": false,
@@ -9,7 +13,6 @@
         "depth_visualization": false,
         "fly_camera": false,
         "frame_log": false,
-        "Geometry_graph_window 1": false,
         "geometry_graph_palette": false,
         "gradient_editor": false,
         "graph": false,
@@ -36,9 +39,8 @@
         "settings": false,
         "sheet": false,
         "tail_log": false,
-        "Texture_graph_window 1": false,
         "texture_graph_palette": false,
-        "tool_properties": false,
+        "tool_properties": true,
         "tools_content_library": false,
         "transform": true
     }

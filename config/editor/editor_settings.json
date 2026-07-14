@@ -219,10 +219,7 @@
             { "_version": 2 },
             { "_version": 2 },
             { "_version": 2 },
-            {
-                "_version": 2,
-                "tool_name": "Move Tool"
-            },
+            { "_version": 2 },
             { "_version": 2 },
             { "_version": 2 },
             { "_version": 2 },
@@ -234,7 +231,7 @@
         "hotbar_slots": [
             {
                 "_version": 2,
-                "command_name": "Geometry.Subdivision.Catmull-Clark"
+                "tool_name": "Move Tool"
             },
             {
                 "_version": 2,
