@@ -82,18 +82,30 @@ public:
         bool                                                  enable_post_processing = true
     ) -> std::shared_ptr<Viewport_scene_view>;
 
+    // window_slot 0 picks the lowest free slot; a positive slot is used as
+    // given (callers restoring persisted windows pass the recorded slot).
     auto create_viewport_window(
         erhe::imgui::Imgui_renderer&                                imgui_renderer,
         erhe::imgui::Imgui_windows&                                 imgui_windows,
         const std::shared_ptr<Viewport_scene_view>&                 viewport_scene_view,
         const std::shared_ptr<erhe::rendergraph::Rendergraph_node>& rendergraph_output_node,
-        std::string_view                                            name
+        std::string_view                                            name,
+        int                                                         window_slot = 0
     ) -> std::shared_ptr<Viewport_window>;
 
-    // Issue #265: the first Viewport_window must always exist, even when no
-    // scene is opened. Creates an empty viewport (no scene, no camera) when
-    // no viewport window exists; no-op otherwise.
-    void ensure_viewport_window_exists();
+    // Recreate the viewport windows recorded open in the persisted window
+    // state (what was open when the previous run last saved), regardless of
+    // scene state: viewport windows exist independent of scenes, showing
+    // nothing until a scene binds into them (see
+    // try_repurpose_empty_viewport_window). Slots already in use (e.g. the
+    // startup script's scene created its viewport) are left alone.
+    void restore_persistent_viewport_windows();
+
+    // Unbind every viewport scene view showing the given scene (closing it):
+    // clears the scene root and the camera reference (which would otherwise
+    // keep the closed scene's content alive). The viewport windows stay open,
+    // now empty, and persist through the window-state save.
+    void unbind_views_from_scene(const std::shared_ptr<Scene_root>& scene_root);
 
     // Issue #265 follow-up: opening a viewport for a scene first repurposes an
     // existing viewport window that shows no scene (e.g. the always-present
@@ -125,11 +137,6 @@ public:
         const std::shared_ptr<Post_processing_node>& post_processing_node
     );
     void destroy_viewport_window(const std::shared_ptr<Viewport_window>& viewport_window);
-
-    // Destroys every Viewport_window and Viewport_scene_view (with its
-    // post-processing node) that shows the given scene. Used when a scene is
-    // closed; must run outside ImGui iteration (destroys ImGui windows).
-    void destroy_views_for_scene(const std::shared_ptr<Scene_root>& scene_root);
 
     void erase(Viewport_scene_view* viewport_scene_view);
 

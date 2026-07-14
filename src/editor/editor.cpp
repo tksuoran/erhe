@@ -2170,16 +2170,15 @@ public:
         log_startup->info("Init: draining operation stack pre-prewarm");
         m_operation_stack->update();
 
-        // Issue #265: the first Viewport_window always exists, even when no
-        // scene is opened (--no-scene, a missing startup script, or a script
-        // that creates no viewport); it then shows nothing (no scene, no
-        // camera). Skipped while a --scene load is pending: the load runs
-        // once the main loop pumps the message bus and Scene_open_operation
-        // creates the viewport window then.
-        const bool startup_scene_load_pending = !m_no_startup_scene && !m_startup_scene_path.empty();
-        if (!startup_scene_load_pending) {
-            m_viewport_scene_views->ensure_viewport_window_exists();
-        }
+        // Restore the viewport windows that were open in the previous run
+        // (recorded in the windows visibility config), regardless of scene
+        // state: viewport windows exist independent of scenes and show
+        // nothing until a scene binds into them. Runs after the startup
+        // script drain, so a viewport created by scene.create keeps its slot
+        // and only the remaining recorded slots are restored; a pending
+        // --scene load binds into a restored empty viewport later
+        // (try_repurpose_empty_viewport_window) instead of creating one.
+        m_viewport_scene_views->restore_persistent_viewport_windows();
 
         // Drive the standard shader-variant cache from the same buckets
         // the runtime forward path would build for the loaded scene +
@@ -2571,7 +2570,11 @@ public:
         // executing against the torn-down scene every frame. Drop the history.
         m_operation_stack->clear_history();
 
-        m_viewport_scene_views->destroy_views_for_scene(scene_root);
+        // Viewport windows are not destroyed with the scene: they exist
+        // independent of scenes (their open state persists in the windows
+        // visibility config). Unbind them instead -- they stay open, empty,
+        // until another scene binds into them.
+        m_viewport_scene_views->unbind_views_from_scene(scene_root);
         scene_root->remove_browser_window();
         scene_root->unregister_from_editor_scenes(*m_app_scenes);
 
@@ -2596,12 +2599,6 @@ public:
         }
 
         log_scene->info("Closed scene '{}'", scene_root->get_name());
-
-        // Issue #265: the first Viewport_window always exists -- closing the
-        // last scene leaves one empty viewport window behind (showing
-        // nothing). on_close_scene runs from the message bus pump in tick(),
-        // outside ImGui iteration, so creating the ImGui window here is safe.
-        m_viewport_scene_views->ensure_viewport_window_exists();
     }
 
     void run_startup_script()

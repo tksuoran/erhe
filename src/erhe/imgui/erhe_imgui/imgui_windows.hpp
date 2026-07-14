@@ -72,6 +72,12 @@ public:
     [[nodiscard]] auto want_capture_mouse        () const -> bool;
     [[nodiscard]] auto get_persistent_window_open(std::string_view ini_label) const -> bool;
 
+    // Ini labels recorded as open in the persisted window-state config, i.e.
+    // the windows that were open when the previous run last saved its state.
+    // Used to restore dynamically created windows (e.g. viewport windows) at
+    // startup, before their window objects exist.
+    [[nodiscard]] auto get_persistent_open_window_labels() const -> std::vector<std::string>;
+
     // Implements Input_event_han
     // Forwards events to each window
     auto on_key_event         (const erhe::window::Input_event& input_event) -> bool override;

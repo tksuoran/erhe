@@ -39,6 +39,7 @@
 
 #include <algorithm>
 #include <cfloat>
+#include <charconv>
 
 namespace editor{
 
@@ -229,59 +230,22 @@ void Scene_views::destroy_viewport_window(const std::shared_ptr<Viewport_window>
     }
 }
 
-void Scene_views::destroy_views_for_scene(const std::shared_ptr<Scene_root>& scene_root)
+void Scene_views::unbind_views_from_scene(const std::shared_ptr<Scene_root>& scene_root)
 {
     if (!scene_root) {
         return;
     }
-
-    // Collect strong references first: destroy_viewport_window() and
-    // destroy_viewport_scene_view() lock m_mutex and mutate the vectors.
-    std::vector<std::shared_ptr<Viewport_window>>     windows_to_destroy;
-    std::vector<std::shared_ptr<Viewport_scene_view>> views_to_destroy;
-    {
-        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
-        for (const std::shared_ptr<Viewport_window>& viewport_window : m_viewport_windows) {
-            const std::shared_ptr<Viewport_scene_view> scene_view = viewport_window->viewport_scene_view();
-            if (scene_view && (scene_view->get_scene_root() == scene_root)) {
-                windows_to_destroy.push_back(viewport_window);
-            }
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+    for (const std::shared_ptr<Viewport_scene_view>& scene_view : m_viewport_scene_views) {
+        if (scene_view->get_scene_root() == scene_root) {
+            // Clear both bindings: the camera is held by shared_ptr and would
+            // otherwise keep the closed scene's content alive. The scene view
+            // and its rendergraph nodes stay; with no scene and no camera the
+            // viewport renders nothing (same state as an empty viewport
+            // restored at startup).
+            scene_view->set_scene_root({});
+            scene_view->set_camera(nullptr);
         }
-        for (const std::shared_ptr<Viewport_scene_view>& scene_view : m_viewport_scene_views) {
-            if (scene_view->get_scene_root() == scene_root) {
-                views_to_destroy.push_back(scene_view);
-            }
-        }
-    }
-
-    for (const std::shared_ptr<Viewport_window>& viewport_window : windows_to_destroy) {
-        destroy_viewport_window(viewport_window);
-    }
-    for (const std::shared_ptr<Viewport_scene_view>& scene_view : views_to_destroy) {
-        // Destroy the viewport's shadow render node: App_rendering holds a
-        // shared_ptr to it, so it would otherwise stay registered in the
-        // rendergraph and keep executing with a dangling Scene_view reference
-        // after the viewport is destroyed below.
-        const std::shared_ptr<Shadow_render_node> shadow_node = m_app_context.app_rendering->get_shadow_node_for_view(*scene_view.get());
-        if (shadow_node) {
-            m_app_context.app_rendering->destroy_shadow_node(shadow_node);
-        }
-        // Find the post-processing node fed by this viewport (when
-        // post-processing is enabled) via its rendergraph input.
-        std::shared_ptr<Post_processing_node> post_processing_node{};
-        {
-            std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
-            for (const std::shared_ptr<Post_processing_node>& candidate : m_post_processing_nodes) {
-                if (
-                    candidate &&
-                    (candidate->get_producer_output_node(erhe::rendergraph::Rendergraph_node_key::viewport_texture) == scene_view.get())
-                ) {
-                    post_processing_node = candidate;
-                    break;
-                }
-            }
-        }
-        destroy_viewport_scene_view(scene_view, post_processing_node);
     }
 }
 
@@ -375,31 +339,36 @@ auto Scene_views::create_viewport_window(
     erhe::imgui::Imgui_windows&                                 imgui_windows,
     const std::shared_ptr<Viewport_scene_view>&                 viewport_scene_view,
     const std::shared_ptr<erhe::rendergraph::Rendergraph_node>& rendergraph_output_node,
-    std::string_view                                            name
+    std::string_view                                            name,
+    int                                                         window_slot
 ) -> std::shared_ptr<Viewport_window>
 {
     // Scene-independent, slot-based window identity (issue #265): both the
     // ImGui window ID ("###Viewport_window N") and the ini label
-    // ("Viewport_window N") carry the lowest free slot (1, 2, ...), so the
-    // imgui.ini dock layout and the windows.json open state persist across
-    // sessions regardless of which scene the viewport shows or the order the
+    // ("Viewport_window N") carry the slot (1, 2, ...), so the imgui.ini
+    // dock layout and the windows.json open state persist across sessions
+    // regardless of which scene the viewport shows or the order the
     // viewports were created in. "###" makes the ImGui window ID depend only
     // on the suffix, so Viewport_window can retitle itself after the Scene
     // item it shows (initial bind, "Scene and Camera" dialog rebind, scene
     // rename) without losing its window identity (docking, position, size).
-    int window_slot = 1;
-    for (;;) {
-        const bool slot_in_use = std::any_of(
-            m_viewport_windows.begin(),
-            m_viewport_windows.end(),
-            [window_slot](const std::shared_ptr<Viewport_window>& window) {
-                return window->get_window_slot() == window_slot;
+    // The slot is the lowest free one unless the caller passed an explicit
+    // slot (restore_persistent_viewport_windows recreates recorded slots).
+    if (window_slot <= 0) {
+        window_slot = 1;
+        for (;;) {
+            const bool slot_in_use = std::any_of(
+                m_viewport_windows.begin(),
+                m_viewport_windows.end(),
+                [window_slot](const std::shared_ptr<Viewport_window>& window) {
+                    return window->get_window_slot() == window_slot;
+                }
+            );
+            if (!slot_in_use) {
+                break;
             }
-        );
-        if (!slot_in_use) {
-            break;
+            ++window_slot;
         }
-        ++window_slot;
     }
     std::string window_name = fmt::format("{}###Viewport_window {}", name, window_slot);
     std::string ini_label   = fmt::format("Viewport_window {}", window_slot);
@@ -586,15 +555,56 @@ void Scene_views::open_new_viewport_scene_view_node()
     apply_editor_window_placement(*m_app_context.imgui_windows, *viewport_window);
 }
 
-void Scene_views::ensure_viewport_window_exists()
+void Scene_views::restore_persistent_viewport_windows()
 {
-    // Issue #265: the first Viewport_window always exists, even when no scene
-    // is opened -- it then shows nothing (no scene, no camera). Called at
-    // startup when no scene is opened and after closing the last scene.
-    if (!m_viewport_windows.empty()) {
-        return;
+    // Recreate the viewport windows that were open when the previous run
+    // last saved its window state, regardless of scenes: viewport windows
+    // exist independent of scenes and show nothing until one binds into them
+    // (try_repurpose_empty_viewport_window). Runs after the startup script
+    // has executed, so a viewport the script's scene created keeps its slot
+    // and only the remaining recorded slots are restored. No placement is
+    // requested: the windows restore position and dock state from the
+    // imgui ini by their slot-based identity.
+    constexpr std::string_view prefix{"Viewport_window "};
+    std::vector<int> slots;
+    const std::vector<std::string> labels = m_app_context.imgui_windows->get_persistent_open_window_labels();
+    for (const std::string& label : labels) {
+        if ((label.size() <= prefix.size()) || (label.compare(0, prefix.size(), prefix) != 0)) {
+            continue;
+        }
+        int slot = 0;
+        const char* const first = label.c_str() + prefix.size();
+        const char* const last  = label.c_str() + label.size();
+        const std::from_chars_result result = std::from_chars(first, last, slot);
+        if ((result.ec != std::errc{}) || (result.ptr != last) || (slot < 1)) {
+            continue;
+        }
+        slots.push_back(slot);
     }
-    open_new_viewport_scene_view_node();
+    std::sort(slots.begin(), slots.end());
+
+    for (const int slot : slots) {
+        const bool slot_in_use = std::any_of(
+            m_viewport_windows.begin(),
+            m_viewport_windows.end(),
+            [slot](const std::shared_ptr<Viewport_window>& window) {
+                return window->get_window_slot() == slot;
+            }
+        );
+        if (slot_in_use) {
+            continue;
+        }
+        std::shared_ptr<erhe::rendergraph::Rendergraph_node> rendergraph_output_node{};
+        std::shared_ptr<Viewport_scene_view> viewport_scene_view = open_new_viewport_scene_view(rendergraph_output_node);
+        create_viewport_window(
+            *m_app_context.imgui_renderer,
+            *m_app_context.imgui_windows,
+            viewport_scene_view,
+            rendergraph_output_node,
+            "Viewport",
+            slot
+        );
+    }
 }
 
 void Scene_views::open_new_viewport_scene_view_node(const std::shared_ptr<Scene_root>& scene_root)

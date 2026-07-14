@@ -128,6 +128,21 @@ auto Imgui_windows::get_persistent_window_open(std::string_view ini_label) const
     return true;
 }
 
+auto Imgui_windows::get_persistent_open_window_labels() const -> std::vector<std::string>
+{
+    std::vector<std::string> labels;
+    if (m_config_path.empty()) {
+        return labels;
+    }
+    const Windows_visibility_config& config = get_windows_config();
+    for (const auto& entry : config.windows) {
+        if (entry.second) {
+            labels.push_back(entry.first);
+        }
+    }
+    return labels;
+}
+
 auto Imgui_windows::get_windows_config() const -> const Windows_visibility_config&
 {
     if (!m_windows_config) {
