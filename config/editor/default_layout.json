@@ -1,0 +1,87 @@
+{
+    "placements": [
+        {
+            "window": "$primary_viewport"
+        },
+        {
+            "window": "Animation",
+            "target": "$primary_viewport",
+            "direction": "down",
+            "fraction": 0.25
+        },
+        {
+            "window": "Scene Hierarchy [1]",
+            "target": "$primary_viewport",
+            "direction": "left",
+            "fraction": 0.15
+        },
+        {
+            "window": "Operations",
+            "target": "$primary_viewport",
+            "direction": "left",
+            "fraction": 0.12
+        },
+        {
+            "window": "Properties",
+            "target": "$primary_viewport",
+            "direction": "left",
+            "fraction": 0.15
+        },
+        {
+            "window": "Transform",
+            "target": "Properties",
+            "direction": "down",
+            "fraction": 0.4
+        },
+        {
+            "window": "Asset Browser",
+            "target": "Scene Hierarchy [1]",
+            "direction": "up",
+            "fraction": 0.24
+        },
+        {
+            "window": "Create",
+            "target": "Operations",
+            "direction": "down",
+            "fraction": 0.25
+        },
+        {
+            "window": "Fly Camera",
+            "target": "Properties"
+        },
+        {
+            "window": "Geometry Graph",
+            "target": "$primary_viewport"
+        },
+        {
+            "window": "Geometry Graph Palette",
+            "target": "Geometry Graph",
+            "direction": "left",
+            "fraction": 0.1
+        },
+        {
+            "window": "Paint Tool",
+            "target": "Transform"
+        },
+        {
+            "window": "Physics",
+            "target": "Scene Hierarchy [1]",
+            "direction": "down",
+            "fraction": 0.05
+        },
+        {
+            "window": "Texture Graph",
+            "target": "$primary_viewport"
+        },
+        {
+            "window": "Texture Graph Palette",
+            "target": "Texture Graph",
+            "direction": "left",
+            "fraction": 0.1
+        },
+        {
+            "window": "Tool Properties",
+            "target": "Properties"
+        }
+    ]
+}

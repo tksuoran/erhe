@@ -17,7 +17,7 @@ erhe_target_sources_grouped(
 
     config/editor/commands.json
     config/editor/commands_cuboctahedron.json
-    config/editor/desktop_window_imgui_host_imgui.ini
+    config/editor/default_layout.json
     config/editor/desktop_windows.json
     config/editor/editor_settings.json
     config/editor/erhe_graphics.json
@@ -696,6 +696,9 @@ erhe_codegen_generate(
         "${_config_defs}/scene_and_camera_settings.py"
         "${_config_defs}/scene_view_settings.py"
         "${_config_defs}/default_viewport_config.py"
+        "${_config_defs}/dock_direction.py"
+        "${_config_defs}/dock_placement.py"
+        "${_config_defs}/default_layout_config.py"
         "${_config_defs}/make_mesh_args.py"
         "${_config_defs}/add_lights_args.py"
         "${_config_defs}/add_room_args.py"
@@ -828,6 +831,14 @@ set(_config_sources
     ${_config_out}/scene_view_settings.hpp
     ${_config_out}/scene_view_settings_serialization.hpp
     ${_config_out}/scene_view_settings.cpp
+    ${_config_out}/dock_direction.hpp
+    ${_config_out}/dock_direction.cpp
+    ${_config_out}/dock_placement.hpp
+    ${_config_out}/dock_placement_serialization.hpp
+    ${_config_out}/dock_placement.cpp
+    ${_config_out}/default_layout_config.hpp
+    ${_config_out}/default_layout_config_serialization.hpp
+    ${_config_out}/default_layout_config.cpp
     ${_config_out}/make_mesh_args.hpp
     ${_config_out}/make_mesh_args_serialization.hpp
     ${_config_out}/make_mesh_args.cpp

@@ -90,6 +90,10 @@ public:
     void save_imgui_ini(const std::string& path);
     void load_imgui_ini(const std::string& path);
 
+    // Path of the persisted layout ini (io.IniFilename); empty when this host
+    // does not persist its layout.
+    [[nodiscard]] auto get_imgui_ini_path() const -> const std::string&;
+
 protected:
     std::function<void(Imgui_host& viewport)> m_begin_callback;
     std::string     m_imgui_ini_path;

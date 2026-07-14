@@ -109,10 +109,10 @@ private:
     bool            m_focus_requested{false};
 
     // One-shot initial placement request (see set_initial_placement()).
-    bool            m_has_initial_placement    {false};
+    bool            m_has_initial_placement    {true};
     std::string     m_initial_dock_target_title{};
-    float           m_initial_width_ratio      {0.0f};
-    float           m_initial_height_ratio     {0.0f};
+    float           m_initial_width_ratio      {0.16f};
+    float           m_initial_height_ratio     {0.5f};
 };
 
 } // namespace erhe::imgui

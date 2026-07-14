@@ -224,6 +224,11 @@ void Imgui_host::load_imgui_ini(const std::string& path)
     ImGui::LoadIniSettingsFromDisk(path.c_str());
 }
 
+auto Imgui_host::get_imgui_ini_path() const -> const std::string&
+{
+    return m_imgui_ini_path;
+}
+
 auto Imgui_host::want_capture_keyboard() const -> bool
 {
     ImGuiIO& io = m_imgui_context->IO;

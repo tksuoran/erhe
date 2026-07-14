@@ -88,5 +88,9 @@ android-project/app/.cxx/
 android-project/app/libs/
 android-project/local.properties
 
+# ImGui window layout state; the default layout is built procedurally
+# (src/editor/editor_default_layout.cpp) when this file is absent.
+config/editor/desktop_window_imgui_host_imgui.ini
+
 # Per-machine memory bank state (see memory-bank/README.md Machine-Scope Rule)
 memory-bank/local/
