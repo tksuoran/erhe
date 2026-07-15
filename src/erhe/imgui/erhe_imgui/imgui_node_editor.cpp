@@ -3989,10 +3989,27 @@ bool ed::SizeAction::Process(const Control& control)
         const auto dragOffset = (control.ActiveNode == m_SizedNode) ? Editor->ToCanvasVec(ImGui::GetMouseDragDelta(0, 0.0f)) : m_LastDragOffset;
         m_LastDragOffset = dragOffset;
 
-        if (m_MinimumSize.x == 0.0f && m_LastSize.x != m_SizedNode->m_Bounds.GetWidth())
+        // Detect the content minimum: the applied size stops following the
+        // request when the node's content refuses to shrink further. The
+        // application adopts the requested size through GetNodeResize() and
+        // the node is re-measured with ImCeil to whole canvas units
+        // (NodeBuilder::End), so the adopted size legitimately comes back up
+        // to one canvas unit LARGER than requested. Only an excess beyond
+        // that quantum is a real refusal; an exact-equality test here latched
+        // the quantization error as a false minimum one frame after every
+        // applied change, locking the resize after a single grid step until
+        // the button was released.
+        const float sizeAdoptionQuantum = 1.5f; // ImCeil quantum (1) + margin for float rounding
+        if (m_MinimumSize.x == 0.0f && m_SizedNode->m_Bounds.GetWidth() > m_LastSize.x + sizeAdoptionQuantum)
+        {
             m_MinimumSize.x = m_SizedNode->m_Bounds.GetWidth();
-        if (m_MinimumSize.y == 0.0f && m_LastSize.y != m_SizedNode->m_Bounds.GetHeight())
+            erhe::imgui::log_node_editor->trace("resize: content minimum width latched at {:.1f} (requested {:.1f})", m_MinimumSize.x, m_LastSize.x);
+        }
+        if (m_MinimumSize.y == 0.0f && m_SizedNode->m_Bounds.GetHeight() > m_LastSize.y + sizeAdoptionQuantum)
+        {
             m_MinimumSize.y = m_SizedNode->m_Bounds.GetHeight();
+            erhe::imgui::log_node_editor->trace("resize: content minimum height latched at {:.1f} (requested {:.1f})", m_MinimumSize.y, m_LastSize.y);
+        }
 
         // Plain nodes shrink down to their content minimum (detected above
         // when the applied size stops following the request); the group term
