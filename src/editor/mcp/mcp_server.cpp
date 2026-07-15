@@ -91,6 +91,20 @@ void Mcp_server::start()
     for (int candidate = preferred_port; candidate < (preferred_port + k_port_retry_count); ++candidate) {
         m_http_server = std::make_unique<httplib::Server>();
         m_http_server->set_payload_max_length(k_max_payload_bytes);
+#if defined(_WIN32)
+        // httplib's default socket options set SO_REUSEADDR, which on
+        // Windows (unlike POSIX) lets bind() succeed on a port another
+        // process is actively LISTENing on. The new socket is silently
+        // shadowed (the first listener keeps receiving all connections),
+        // so the fallback scan below never fires and this server logs a
+        // port that a DIFFERENT editor instance is answering on.
+        // SO_EXCLUSIVEADDRUSE makes bind() fail like POSIX would.
+        m_http_server->set_socket_options(
+            [](socket_t sock) {
+                httplib::set_socket_opt(sock, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, 1);
+            }
+        );
+#endif
         setup_routes();
         if (m_http_server->bind_to_port("127.0.0.1", candidate)) {
             bound_port = candidate;
