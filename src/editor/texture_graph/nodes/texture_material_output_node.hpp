@@ -15,6 +15,7 @@ namespace erhe::texgen    { class Uniform; }
 namespace editor {
 
 class App_context;
+class Content_library;
 class Scene_root;
 class Texture_renderer;
 
@@ -120,11 +121,23 @@ private:
     void register_texture  (Baked_texture& slot, const std::string& name);
     void unregister_texture(Baked_texture& slot);
     void unregister_orm    ();
-    [[nodiscard]] auto get_content_library_ok() -> bool;
+    // The scene whose content library receives the baked textures: the
+    // stored selection when set and still registered, else re-resolved
+    // through the owning asset's host (single-scene fallback). The
+    // resolved scene is stored back into m_scene_root.
+    [[nodiscard]] auto resolve_scene_root() -> std::shared_ptr<Scene_root>;
+    // resolve_scene_root()'s content library; null when no scene resolves
+    // or the library has no textures folder.
+    [[nodiscard]] auto get_content_library() -> std::shared_ptr<Content_library>;
     [[nodiscard]] auto ensure_sampler() -> const std::shared_ptr<erhe::graphics::Sampler>&;
 
     App_context&                                                        m_context;
-    std::shared_ptr<Scene_root>                                         m_scene_root;
+    // weak: this node is owned (via its Graph_texture asset) by the scene's
+    // content library, so a shared_ptr here would be a strong ownership
+    // cycle Scene_root -> content library -> Graph_texture -> this node ->
+    // Scene_root, keeping a closed scene alive forever (scene-close bug
+    // class, see CLAUDE.md "Scene-hosted references in editor parts").
+    std::weak_ptr<Scene_root>                                           m_scene_root;
     std::shared_ptr<erhe::primitive::Material>                          m_material;
     std::shared_ptr<erhe::graphics::Sampler>                            m_sampler;
     std::array<Baked_texture, static_cast<std::size_t>(Separate_channel::count)> m_separate;

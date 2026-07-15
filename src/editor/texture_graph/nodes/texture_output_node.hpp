@@ -59,9 +59,18 @@ private:
     void register_texture();
     void unregister_texture();
     void assign_to_material();
+    // The scene whose content library receives the baked texture: the stored
+    // selection when set and still registered, else re-resolved through the
+    // owning asset's host (single-scene fallback); stored back on resolve.
+    [[nodiscard]] auto resolve_scene_root() -> std::shared_ptr<Scene_root>;
 
     App_context&                               m_context;
-    std::shared_ptr<Scene_root>                m_scene_root;
+    // weak: this node is owned (via its Graph_texture asset) by the scene's
+    // content library, so a shared_ptr here would be a strong ownership
+    // cycle Scene_root -> content library -> Graph_texture -> this node ->
+    // Scene_root, keeping a closed scene alive forever (scene-close bug
+    // class, see CLAUDE.md "Scene-hosted references in editor parts").
+    std::weak_ptr<Scene_root>                  m_scene_root;
     std::shared_ptr<erhe::primitive::Material> m_material;
     std::shared_ptr<erhe::graphics::Sampler>   m_sampler;
     std::shared_ptr<erhe::graphics::Texture>   m_registered_texture; // what is currently in the content library

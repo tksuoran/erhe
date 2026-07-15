@@ -126,19 +126,11 @@ void Texture_output_node::register_texture()
     }
     texture->set_name(m_texture_name);
 
-    if (!m_scene_root) {
-        // Resolve the owning scene via the Graph_texture asset's Item_host
-        // (works with any number of scenes open); see
-        // Texture_material_output_node::get_content_library_ok.
-        m_scene_root = get_hosting_scene_root(get_owning_graph_texture().get());
-    }
-    if (!m_scene_root) {
-        m_scene_root = m_context.app_scenes->get_single_scene_root();
-    }
-    if (!m_scene_root) {
+    const std::shared_ptr<Scene_root> scene_root = resolve_scene_root();
+    if (!scene_root) {
         return;
     }
-    const std::shared_ptr<Content_library> library = m_scene_root->get_content_library();
+    const std::shared_ptr<Content_library> library = scene_root->get_content_library();
     if (!library || !library->textures) {
         return;
     }
@@ -154,13 +146,41 @@ void Texture_output_node::register_texture()
 
 void Texture_output_node::unregister_texture()
 {
-    if (m_registered_texture && m_scene_root) {
-        const std::shared_ptr<Content_library> library = m_scene_root->get_content_library();
+    // Unregister from the scene the texture was registered into (the stored
+    // selection), without re-resolving; a scene that is already gone has
+    // nothing to unregister from.
+    const std::shared_ptr<Scene_root> scene_root = m_scene_root.lock();
+    if (m_registered_texture && scene_root) {
+        const std::shared_ptr<Content_library> library = scene_root->get_content_library();
         if (library && library->textures) {
             library->textures->remove(m_registered_texture);
         }
     }
     m_registered_texture.reset();
+}
+
+auto Texture_output_node::resolve_scene_root() -> std::shared_ptr<Scene_root>
+{
+    // Drop a stored selection whose scene was closed (m_scene_root is weak,
+    // but the Scene_root can be pinned past its close by other holders).
+    std::shared_ptr<Scene_root> scene_root = m_scene_root.lock();
+    if (scene_root && !m_context.app_scenes->is_host_registered(scene_root.get())) {
+        scene_root.reset();
+        m_scene_root.reset();
+    }
+    if (!scene_root) {
+        // Resolve the owning scene via the Graph_texture asset's Item_host
+        // (works with any number of scenes open); see
+        // Texture_material_output_node::resolve_scene_root.
+        scene_root = get_hosting_scene_root(get_owning_graph_texture().get());
+    }
+    if (!scene_root) {
+        scene_root = m_context.app_scenes->get_single_scene_root();
+    }
+    if (scene_root) {
+        m_scene_root = scene_root;
+    }
+    return scene_root;
 }
 
 void Texture_output_node::assign_to_material()
@@ -213,25 +233,30 @@ void Texture_output_node::imgui()
     // Scene selection (only shown when several scenes exist).
     const std::vector<std::shared_ptr<Scene_root>>& scene_roots = m_context.app_scenes->get_scene_roots();
     if (scene_roots.size() > 1) {
+        std::shared_ptr<Scene_root> current_scene_root = m_scene_root.lock();
         int scene_index = 0;
         for (std::size_t i = 0, end = scene_roots.size(); i < end; ++i) {
-            if (scene_roots[i] == m_scene_root) {
+            if (scene_roots[i] == current_scene_root) {
                 scene_index = static_cast<int>(i);
                 break;
             }
         }
         if (imgui_index_stepper("scene", scene_index, static_cast<int>(scene_roots.size()))) {
             unregister_texture();
-            m_scene_root = scene_roots.at(static_cast<std::size_t>(scene_index));
+            current_scene_root = scene_roots.at(static_cast<std::size_t>(scene_index));
+            m_scene_root = current_scene_root;
             m_material.reset();
             mark_dirty();
         }
         ImGui::SameLine();
-        ImGui::TextUnformatted(m_scene_root ? m_scene_root->get_name().c_str() : "(no scene)");
+        ImGui::TextUnformatted(current_scene_root ? current_scene_root->get_name().c_str() : "(no scene)");
     }
 
     // Material selection.
-    std::shared_ptr<Scene_root> selection_root = m_scene_root ? m_scene_root : m_context.app_scenes->get_single_scene_root();
+    std::shared_ptr<Scene_root> selection_root = m_scene_root.lock();
+    if (!selection_root) {
+        selection_root = m_context.app_scenes->get_single_scene_root();
+    }
     if (selection_root) {
         const std::shared_ptr<Content_library> library = selection_root->get_content_library();
         if (library && library->materials) {
@@ -264,8 +289,9 @@ void Texture_output_node::write_parameters(nlohmann::json& out) const
     out["name"]   = m_texture_name;
     out["size"]   = render_target_size();
     out["assign"] = m_assign_to_material;
-    if (m_scene_root) {
-        out["scene"] = m_scene_root->get_name();
+    const std::shared_ptr<Scene_root> scene_root = m_scene_root.lock();
+    if (scene_root) {
+        out["scene"] = scene_root->get_name();
     }
     if (m_material) {
         out["material"] = m_material->get_name();
@@ -297,7 +323,10 @@ void Texture_output_node::read_parameters(const nlohmann::json& in)
     }
     const std::string material_name = in.value("material", "");
     if (!material_name.empty()) {
-        std::shared_ptr<Scene_root> selection_root = m_scene_root ? m_scene_root : m_context.app_scenes->get_single_scene_root();
+        std::shared_ptr<Scene_root> selection_root = m_scene_root.lock();
+        if (!selection_root) {
+            selection_root = m_context.app_scenes->get_single_scene_root();
+        }
         if (selection_root) {
             const std::shared_ptr<Content_library> library = selection_root->get_content_library();
             if (library && library->materials) {
