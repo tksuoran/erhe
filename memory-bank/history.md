@@ -114,3 +114,16 @@
   removed::File.SavePrefab+Operations::save_prefab+save_prefab_scene+MCP-save_prefab;MCP-save_scene-path-optional
   limitation-doc::prefab-templates-ignore-ERHE_*→graph-baked-products-missing-in-instances
 >verified::prefab-edit-loop-18/18+scene_roundtrip_verify-73/73{validator-skipped:not-installed}
+
+[2026-07-15::node-properties+houdini-graph-features::COMPLETE]
+>node-properties-graph-selection{a2eeba7b+bc8c8377+c62ef868+6aa91d97+042d7c13+040e6f18}::NodeProperties-canvas-selection-all-editors+panel-param-edit+pin-edge-layout+node-Size{width/height-canvas-units}+preview-fit+interactive-edge/corner-resize+SDL-cursor-shapes-impl{was-empty-stub}
+>houdini-graph-features{a7d98635+886e4c31+77feb2a8+11061763+a939c8e6+51c064fd}::wire-cutting{Y+drag,tessellated-hit-test}+display/ghost-flags+node-previews{N.V-headlight,hover-spin,zoom-sharp}
+>user-verified::selection+pin-edges+resize{cursor-fix+cut-re-test-still-open→carried-in-activeContext-OPEN}
+
+[2026-07-15::graph-editor-UX-sprint::COMPLETE{awaiting-interactive-verify}]
+>e1637cc9::context-menu-node-at-click-pos
+>b537d80b::preview-edge-line-overlay{solid-wireframe-pass;Preview_edge_lines_config×2-v14}
+>db3a6b23::brush+scene_mesh-source-nodes+brush-drop-on-canvas
+>ef39f4f9::multilink-merge-crash-root-fix+replace-on-connect+Pin::multi_link{smoke-130/130}
+>ad71b6ca::resize-vs-drag-press-pos-hit-test
+>cd164589::arcball-preview-rotation{quat}+Graph_node_previews_config-v15{on-by-default,global,persistent}
