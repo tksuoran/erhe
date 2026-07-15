@@ -201,7 +201,9 @@ void Geometry_graph_mesh::apply_baked_products()
         // The graph evaluated to empty / disconnected: keep the node but
         // show nothing (mirrors the output node's empty handling).
         if (m_mesh) {
+            scene_root->begin_mesh_rt_update(m_mesh);
             m_mesh->clear_primitives();
+            scene_root->end_mesh_rt_update(m_mesh);
         }
         if (m_node_physics) {
             node->detach(m_node_physics.get());
@@ -214,12 +216,20 @@ void Geometry_graph_mesh::apply_baked_products()
     if (!m_mesh) {
         m_mesh = std::make_shared<erhe::scene::Mesh>(node->get_name() + " Mesh");
         m_mesh->layer_id = scene_root->layers().content()->id;
-        m_mesh->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::shadow_cast);
+        m_mesh->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::shadow_cast | erhe::Item_flags::id);
         node->attach(m_mesh);
         m_controlled_node = node->shared_node_from_this();
     }
+    // The mesh is registered in the scene at this point (node->attach()
+    // above, or adopted from an in-scene node), so its raytrace instances
+    // are already attached to the scene's raytrace world. Swapping the
+    // primitives rebuilds the instances; without the rt-update bracket
+    // the new instances would never be attached (or masked) and hover /
+    // ray picking would pass straight through the mesh.
+    scene_root->begin_mesh_rt_update(m_mesh);
     m_mesh->clear_primitives();
     m_mesh->add_primitive(products.primitive, material);
+    scene_root->end_mesh_rt_update(m_mesh);
 
     if (products.physics_enabled && products.collision_shape) {
         if (!m_node_physics) {
