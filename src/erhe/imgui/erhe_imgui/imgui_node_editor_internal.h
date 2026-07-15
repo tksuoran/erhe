@@ -957,6 +957,7 @@ private:
     void AddStrokePoint(const ImVec2& canvasPoint);
 
     vector<Link*>   m_SegmentLinks; // scratch for the segment broad-phase
+    vector<ImVec2>  m_CurvePoints;  // scratch for the tessellated link curve
 };
 
 struct ContextMenuAction final: EditorAction
@@ -1116,6 +1117,13 @@ struct DeleteItemsAction final: EditorAction
     virtual DeleteItemsAction* AsDeleteItems() override final { return this; }
 
     bool Add(Object* object);
+
+    // erhe: queue an object for deletion from inside another action. Add()
+    // refuses while any action is current, which silently drops objects
+    // queued by CutLinksAction (it is the current action when its stroke
+    // ends). The queue is consumed by Accept() on a later frame, after the
+    // queueing action has finished, exactly like Add().
+    void AddFromAction(Object* object);
 
     bool Begin();
     void End();

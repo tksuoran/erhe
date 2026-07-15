@@ -687,7 +687,9 @@ void Geometry_graph_window::update_node_previews()
                     )
                 );
             }
-            m_app_context.brush_preview->render_preview(node->get_preview_texture(), 0, node->get_preview_primitive(), {}, 0);
+            // Headlight shading: N.V-dimmed neutral look (reads curvature
+            // better than the brush preview material).
+            m_app_context.brush_preview->render_preview(node->get_preview_texture(), 0, node->get_preview_primitive(), {}, 0, true);
             node->clear_preview_needs_render();
             --budget;
         }

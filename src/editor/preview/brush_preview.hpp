@@ -29,18 +29,24 @@ public:
     // fit, auto-rotation by `time`). The brush overload above reduces to
     // this; the geometry graph's per-node mesh previews call it directly.
     // Null material falls back to the preview scene's default material.
+    // headlight_shading gives an N.V-dimmed look: the key light is
+    // co-located with the fitted camera (Lambert diffuse then falls off
+    // with dot(N, V)), the fill light is off, and a neutral white diffuse
+    // material is used when none is given.
     void render_preview(
         const std::shared_ptr<erhe::graphics::Texture>&    texture,
         unsigned int                                       texture_layer,
         const std::shared_ptr<erhe::primitive::Primitive>& primitive,
         const std::shared_ptr<erhe::primitive::Material>&  material,
-        int64_t                                            time
+        int64_t                                            time,
+        bool                                               headlight_shading = false
     );
 
 private:
     void make_preview_scene();
 
     std::shared_ptr<erhe::primitive::Material> m_material;
+    std::shared_ptr<erhe::primitive::Material> m_headlight_material;
     std::shared_ptr<erhe::scene::Node>         m_node;
     std::shared_ptr<erhe::scene::Mesh>         m_mesh;
     std::shared_ptr<erhe::scene::Node>         m_key_light_node;

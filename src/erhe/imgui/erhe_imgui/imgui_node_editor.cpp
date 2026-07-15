@@ -4252,11 +4252,13 @@ bool ed::CutLinksAction::Process(const Control& control)
     {
         // Released: queue every crossed link for deletion. The deletions
         // surface through the standard BeginDelete()/QueryDeletedLink()
-        // flow, so clients treat a cut exactly like a Delete-key deletion
-        // (undo handling included).
+        // flow (on the next frame, once this action has finished), so
+        // clients treat a cut exactly like a Delete-key deletion (undo
+        // handling included). AddFromAction, not Add: Add refuses while
+        // any action is current, and this action still is.
         for (auto link : m_CutLinkCandidates)
             if (link->m_IsLive)
-                Editor->GetItemDeleter().Add(link);
+                Editor->GetItemDeleter().AddFromAction(link);
 
         m_IsActive = false;
         m_StrokePoints.resize(0);
@@ -4265,6 +4267,37 @@ bool ed::CutLinksAction::Process(const Control& control)
     }
 
     return m_IsActive;
+}
+
+// Exact 2D segment-segment intersection (orientation tests, endpoint
+// touches count as hits). Robust for arbitrarily short segments, unlike the
+// analytic cubic-vs-line solve, which loses roots when the segment is a few
+// pixels long (slow cut strokes produce exactly those).
+static bool ImLine_SegmentsIntersect(const ImVec2& a, const ImVec2& b, const ImVec2& c, const ImVec2& d)
+{
+    auto cross = [](const ImVec2& u, const ImVec2& v) -> float { return u.x * v.y - u.y * v.x; };
+    auto on_segment = [](const ImVec2& p, const ImVec2& q, const ImVec2& r) -> bool
+    {
+        // Collinear p-q-r: is q within the p..r bounding box?
+        return (q.x >= std::min(p.x, r.x)) && (q.x <= ImMax(p.x, r.x)) &&
+               (q.y >= std::min(p.y, r.y)) && (q.y <= ImMax(p.y, r.y));
+    };
+
+    const float d1 = cross(b - a, c - a);
+    const float d2 = cross(b - a, d - a);
+    const float d3 = cross(d - c, a - c);
+    const float d4 = cross(d - c, b - c);
+
+    if (((d1 > 0.0f && d2 < 0.0f) || (d1 < 0.0f && d2 > 0.0f)) &&
+        ((d3 > 0.0f && d4 < 0.0f) || (d3 < 0.0f && d4 > 0.0f)))
+        return true;
+
+    if ((d1 == 0.0f) && on_segment(a, c, b)) return true;
+    if ((d2 == 0.0f) && on_segment(a, d, b)) return true;
+    if ((d3 == 0.0f) && on_segment(c, a, d)) return true;
+    if ((d4 == 0.0f) && on_segment(c, b, d)) return true;
+
+    return false;
 }
 
 void ed::CutLinksAction::AddStrokePoint(const ImVec2& canvasPoint)
@@ -4281,17 +4314,22 @@ void ed::CutLinksAction::AddStrokePoint(const ImVec2& canvasPoint)
 
     m_StrokePoints.push_back(canvasPoint);
 
-    // Broad phase: links whose bounds touch the new segment's rectangle
-    // (slightly inflated so axis-aligned segments do not degenerate to an
-    // empty rectangle)...
+    // Broad phase: links whose bounds touch the new segment's rectangle.
+    // Generously inflated: Link::TestHit intersects the curve against the
+    // rectangle's edges with the analytic cubic solve, which is unreliable
+    // for the degenerate-small rectangles a slow stroke produces - the
+    // margin keeps the rectangle (and its edges) comfortably large, and the
+    // exact narrow phase below discards the false positives.
     ImRect segmentRect(
         ImVec2(std::min(lastPoint.x, canvasPoint.x), std::min(lastPoint.y, canvasPoint.y)),
         ImVec2(ImMax(lastPoint.x, canvasPoint.x), ImMax(lastPoint.y, canvasPoint.y)));
-    segmentRect.Expand(1.0f);
+    segmentRect.Expand(16.0f);
 
     Editor->FindLinksInRect(segmentRect, m_SegmentLinks);
 
-    // ...narrow phase: exact segment vs. link-curve intersection.
+    // Narrow phase: stroke segment vs. the tessellated link curve (adaptive
+    // subdivision, ~1px error bound - the same tessellation the link is
+    // drawn with), tested with exact segment-segment intersections.
     for (auto link : m_SegmentLinks)
     {
         if (!link->m_IsLive)
@@ -4301,8 +4339,22 @@ void ed::CutLinksAction::AddStrokePoint(const ImVec2& canvasPoint)
             continue;
 
         const auto curve = link->GetCurve();
-        if (ImCubicBezierLineIntersect(curve.P0, curve.P1, curve.P2, curve.P3, lastPoint, canvasPoint).Count > 0)
-            m_CutLinkCandidates.push_back(link);
+
+        m_CurvePoints.resize(0);
+        auto collect = [this](const ImCubicBezierSubdivideSample& sample)
+        {
+            m_CurvePoints.push_back(sample.Point);
+        };
+        ImCubicBezierSubdivide(collect, curve);
+
+        for (size_t i = 1; i < m_CurvePoints.size(); ++i)
+        {
+            if (ImLine_SegmentsIntersect(lastPoint, canvasPoint, m_CurvePoints[i - 1], m_CurvePoints[i]))
+            {
+                m_CutLinkCandidates.push_back(link);
+                break;
+            }
+        }
     }
 }
 
@@ -5136,6 +5188,11 @@ bool ed::DeleteItemsAction::Add(Object* object)
     m_ManuallyDeletedObjects.push_back(object);
 
     return true;
+}
+
+void ed::DeleteItemsAction::AddFromAction(Object* object)
+{
+    m_ManuallyDeletedObjects.push_back(object);
 }
 
 bool ed::DeleteItemsAction::Begin()

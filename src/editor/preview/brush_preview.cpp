@@ -70,6 +70,20 @@ void Brush_preview::make_preview_scene()
         }
     );
 
+    // Neutral diffuse white for headlight_shading (geometry graph node
+    // previews): with the key light at the camera, Lambert diffuse dims
+    // with dot(N, V), reading surface curvature without material color.
+    m_headlight_material = std::make_shared<erhe::primitive::Material>(
+        erhe::primitive::Material_create_info{
+            .name = "Headlight preview material",
+            .data = {
+                .base_color = glm::vec3{0.85f, 0.85f, 0.85f},
+                .roughness  = glm::vec2{0.9f, 0.9f},
+                .metallic   = 0.0f
+            }
+        }
+    );
+
     m_camera_node = std::make_shared<erhe::scene::Node>("Camera node");
     m_camera = std::make_shared<erhe::scene::Camera>("Camera");
     //m_camera_node->enable_flag_bits(erhe::Item_flags::content);
@@ -147,7 +161,8 @@ void Brush_preview::render_preview(
     unsigned int                                       texture_layer,
     const std::shared_ptr<erhe::primitive::Primitive>& primitive,
     const std::shared_ptr<erhe::primitive::Material>&  material,
-    int64_t                                            time
+    int64_t                                            time,
+    const bool                                         headlight_shading
 )
 {
     set_color_texture(texture);
@@ -178,7 +193,8 @@ void Brush_preview::render_preview(
         m_mesh->layer_id = { Mesh_layer_id::brush };
     }
 
-    const std::shared_ptr<erhe::primitive::Material>& render_material = material ? material : m_material;
+    const std::shared_ptr<erhe::primitive::Material>& render_material =
+        material ? material : (headlight_shading ? m_headlight_material : m_material);
     m_mesh->add_primitive(primitive, render_material);
     m_node->attach(m_mesh);
 
@@ -232,6 +248,27 @@ void Brush_preview::render_preview(
     const glm::vec3 new_position        = target_position - fit_distance * direction_normalized;
     const glm::mat4 new_world_from_node = erhe::math::create_look_at(new_position, target_position, glm::vec3{0.0f, 1.0f, 0.0});
     m_camera_node->set_world_from_node(new_world_from_node);
+
+    // Light setup is per-call state (the preview scene is shared by brush
+    // thumbnails and headlight-shaded graph node previews), so both modes
+    // set it fully instead of relying on the constructor pose.
+    if (headlight_shading) {
+        // Key light co-located with the fitted camera: Lambert diffuse
+        // then falls off with dot(N, V) (the N.V-dimmed look).
+        m_key_light->intensity  = 2.5f;
+        m_fill_light->intensity = 0.0f;
+        m_key_light_node->set_world_from_node(new_world_from_node);
+    } else {
+        m_key_light->intensity  = 2.0f;
+        m_fill_light->intensity = 0.5f;
+        m_key_light_node->set_world_from_node(
+            erhe::math::create_look_at(
+                glm::vec3{8.0f, 8.0f, 8.0f},  // eye
+                glm::vec3{0.0f, 0.0f, 0.0f},  // center
+                glm::vec3{0.0f, 1.0f, 0.0f}   // up
+            )
+        );
+    }
 
     //const glm::mat4 clip_from_node  = m_camera->projection()->get_projection_matrix(1.0f);
     //const glm::mat4 clip_from_world = clip_from_node * m_camera_node->node_from_world();
