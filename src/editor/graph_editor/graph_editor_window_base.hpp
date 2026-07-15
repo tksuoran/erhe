@@ -2,6 +2,9 @@
 
 #include "erhe_imgui/imgui_window.hpp"
 
+#include <nlohmann/json_fwd.hpp>
+
+#include <cstddef>
 #include <memory>
 #include <string>
 #include <vector>
@@ -9,6 +12,7 @@
 struct ImVec2;
 
 namespace ax::NodeEditor { class EditorContext; }
+namespace erhe::graph { class Graph; }
 
 namespace editor {
 
@@ -90,6 +94,53 @@ protected:
     // Call right after the canvas End().
     void apply_node_resize(ax::NodeEditor::EditorContext& node_editor);
 
+    // Cut / Copy / Paste / Duplicate for canvas nodes. The clipboard is
+    // editor-global (one per process, tagged with clipboard_kind()), so nodes
+    // copy between windows - and between graphs - of the same editor kind.
+    // Copy serializes the selected nodes (factory type + parameters + layout +
+    // canvas position) and the links among them; paste rebuilds them through
+    // the concrete window's factory as one undo step, preserving relative
+    // layout anchored at the paste position, and selects the pasted nodes.
+
+    // Right-click menu on a canvas node: Cut / Copy / Paste / Duplicate /
+    // Delete, acting on the canvas selection (right-clicking a node outside
+    // the selection first retargets the selection to it). Call inside the
+    // ax::NodeEditor Begin/End, like node_background_context_menu().
+    void node_context_menu(ax::NodeEditor::EditorContext& node_editor);
+
+    // The node editor's built-in Ctrl+X / Ctrl+C / Ctrl+V / Ctrl+D shortcuts
+    // on a focused canvas, routed to the same actions as the context menu.
+    // Call inside the ax::NodeEditor Begin/End.
+    void handle_clipboard_shortcuts(ax::NodeEditor::EditorContext& node_editor);
+
+    // Applies the canvas selection deferred by a paste / duplicate: the
+    // editor context creates canvas nodes on first draw, so freshly pasted
+    // nodes can only be selected after the node draw loop of the next frame.
+    // Call right after the node draw loop, inside Begin/End.
+    void apply_pending_canvas_selection(ax::NodeEditor::EditorContext& node_editor);
+
+    // Serializes the nodes to the editor-global clipboard (no-op when empty).
+    void copy_nodes(const std::vector<std::shared_ptr<Graph_editor_node>>& nodes);
+    // Whether the clipboard holds content this editor kind can paste.
+    [[nodiscard]] auto can_paste() const -> bool;
+    // Pastes the clipboard with the block's top-left corner at the given
+    // canvas position (no-op when can_paste() is false).
+    void paste_clipboard(const ImVec2& canvas_position);
+    // Copy + paste slightly offset, without touching the shared clipboard.
+    void duplicate_nodes(const std::vector<std::shared_ptr<Graph_editor_node>>& nodes);
+
+    // Per-editor hooks for the clipboard machinery.
+    // Tags clipboard content ("geometry_graph" / "texture_graph") so paste
+    // only accepts content from the same editor kind.
+    [[nodiscard]] virtual auto clipboard_kind() const -> const char* = 0;
+    // The currently edited graph, or nullptr in the empty state.
+    [[nodiscard]] virtual auto get_current_graph() -> erhe::graph::Graph* = 0;
+    // Rebuilds clipboard-format JSON as one undo step (paste_graph_nodes with
+    // the concrete factory / operation types); returns the new node ids.
+    virtual auto paste_nodes(const nlohmann::json& clipboard, const ImVec2& position) -> std::vector<std::size_t> = 0;
+    // Removes the nodes as one undo step (remove_graph_nodes).
+    virtual void remove_nodes(const std::vector<std::shared_ptr<Graph_editor_node>>& nodes) = 0;
+
     // Fills m_palette_categories once (the node set is fixed per editor).
     virtual void build_palette() = 0;
     // Spawns the node type chosen in the palette (the concrete window creates it
@@ -102,6 +153,18 @@ protected:
     std::vector<Palette_category> m_palette_categories; // built lazily by build_palette()
     std::string                   m_palette_filter;     // node-palette search text
     int                           m_instance_slot{1};   // primary singletons are slot 1
+
+private:
+    // Clipboard-format JSON for the given nodes (see graph_clipboard.hpp);
+    // null when the selection or the edited graph is empty.
+    [[nodiscard]] auto serialize_nodes_json(const std::vector<std::shared_ptr<Graph_editor_node>>& nodes) -> nlohmann::json;
+
+    // Node ids to select once they have been drawn (paste / duplicate),
+    // applied by apply_pending_canvas_selection().
+    std::vector<std::size_t>                        m_pending_canvas_selection;
+    // Reused scratch for the context menu / shortcut selection queries
+    // (cleared at point of use, capacity kept).
+    std::vector<std::shared_ptr<Graph_editor_node>> m_selected_nodes_scratch;
 };
 
 } // namespace editor

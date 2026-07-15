@@ -19,6 +19,7 @@
 #include "editor_log.hpp"
 #include "items.hpp"
 #include "content_library/content_library.hpp"
+#include "graph_editor/graph_clipboard.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "preview/brush_preview.hpp"
@@ -399,6 +400,37 @@ auto Geometry_graph_window::add_node_of_type(const std::string& type_name, const
 void Geometry_graph_window::add_node_from_palette(const std::string& type_name, const ImVec2* spawn_position)
 {
     add_node_of_type(type_name, spawn_position);
+}
+
+auto Geometry_graph_window::clipboard_kind() const -> const char*
+{
+    return "geometry_graph";
+}
+
+auto Geometry_graph_window::get_current_graph() -> erhe::graph::Graph*
+{
+    const std::shared_ptr<Graph_mesh>& graph_mesh = get_current_graph_mesh();
+    return graph_mesh ? &graph_mesh->graph() : nullptr;
+}
+
+auto Geometry_graph_window::paste_nodes(const nlohmann::json& clipboard, const ImVec2& position) -> std::vector<std::size_t>
+{
+    // By value: get_current_graph_mesh() returns a reference to m_graph_mesh,
+    // which a nested refresh would reassign under a reference binding.
+    const std::shared_ptr<Graph_mesh> graph_mesh = get_current_graph_mesh();
+    if (!graph_mesh) {
+        return {}; // empty state - no asset selected
+    }
+    return paste_graph_nodes<Geometry_graph_op_traits>(*this, m_app_context, graph_mesh, clipboard, position, &make_geometry_graph_node);
+}
+
+void Geometry_graph_window::remove_nodes(const std::vector<std::shared_ptr<Graph_editor_node>>& nodes)
+{
+    const std::shared_ptr<Graph_mesh> graph_mesh = get_current_graph_mesh();
+    if (!graph_mesh) {
+        return; // empty state - no asset selected
+    }
+    remove_graph_nodes<Geometry_graph_op_traits>(*this, m_app_context, graph_mesh, nodes);
 }
 
 void Geometry_graph_window::build_palette()
@@ -1027,11 +1059,21 @@ void Geometry_graph_window::imgui()
         );
     }
 
+    // Selection deferred by last frame's paste / duplicate (the pasted nodes
+    // exist on the canvas only after the node draw loop above).
+    apply_pending_canvas_selection(*m_node_editor.get());
+
     handle_link_create();
     handle_deletions();
 
-    // Right-click "Add node" menu on the canvas background (shared with the
-    // texture graph via Graph_editor_window_base).
+    // Ctrl+X / Ctrl+C / Ctrl+V / Ctrl+D on the focused canvas (shared with
+    // the texture graph via Graph_editor_window_base).
+    handle_clipboard_shortcuts(*m_node_editor.get());
+
+    // Right-click menus: Cut / Copy / Paste / Duplicate / Delete on a node,
+    // Paste + "Add node" on the canvas background (shared with the texture
+    // graph via Graph_editor_window_base).
+    node_context_menu(*m_node_editor.get());
     node_background_context_menu(*m_node_editor.get());
 
     m_node_editor->End();

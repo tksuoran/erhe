@@ -21,6 +21,7 @@ namespace erhe {
     class Item_base;
 }
 namespace erhe::graph {
+    class Graph;
     class Pin;
 }
 namespace erhe::imgui {
@@ -182,6 +183,12 @@ private:
     // node set, and spawns a chosen type through the factory + undoable insert.
     void build_palette   () override;
     void add_node_from_palette(const std::string& type_name, const ImVec2* spawn_position) override;
+    // Implements the Graph_editor_window_base clipboard hooks (Cut / Copy /
+    // Paste / Duplicate in the canvas context menus and shortcuts).
+    [[nodiscard]] auto clipboard_kind() const -> const char* override;
+    [[nodiscard]] auto get_current_graph() -> erhe::graph::Graph* override;
+    auto paste_nodes(const nlohmann::json& clipboard, const ImVec2& position) -> std::vector<std::size_t> override;
+    void remove_nodes(const std::vector<std::shared_ptr<Graph_editor_node>>& nodes) override;
     // Issue #252: the target-item selector row drawn at the top of the
     // window. Drag-drop a Graph_mesh asset onto it, pick from the popup, or
     // clear it. Bound to m_target.

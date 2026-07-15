@@ -16,6 +16,7 @@
 #include "editor_log.hpp"
 #include "items.hpp"
 #include "content_library/content_library.hpp"
+#include "graph_editor/graph_clipboard.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "scene/scene_root.hpp"
@@ -379,6 +380,35 @@ auto Texture_graph_window::make_node(const std::string& type_name) -> std::share
     return make_texture_graph_node(m_app_context, type_name);
 }
 
+auto Texture_graph_window::clipboard_kind() const -> const char*
+{
+    return "texture_graph";
+}
+
+auto Texture_graph_window::get_current_graph() -> erhe::graph::Graph*
+{
+    const std::shared_ptr<Graph_texture>& graph_texture = get_current_graph_texture();
+    return graph_texture ? &graph_texture->graph() : nullptr;
+}
+
+auto Texture_graph_window::paste_nodes(const nlohmann::json& clipboard, const ImVec2& position) -> std::vector<std::size_t>
+{
+    const std::shared_ptr<Graph_texture> graph_texture = get_current_graph_texture();
+    if (!graph_texture) {
+        return {}; // empty state - no asset selected
+    }
+    return paste_graph_nodes<Texture_graph_op_traits>(*this, m_app_context, graph_texture, clipboard, position, &make_texture_graph_node);
+}
+
+void Texture_graph_window::remove_nodes(const std::vector<std::shared_ptr<Graph_editor_node>>& nodes)
+{
+    const std::shared_ptr<Graph_texture> graph_texture = get_current_graph_texture();
+    if (!graph_texture) {
+        return; // empty state - no asset selected
+    }
+    remove_graph_nodes<Texture_graph_op_traits>(*this, m_app_context, graph_texture, nodes);
+}
+
 auto Texture_graph_window::next_node_spawn_position() -> ImVec2
 {
     constexpr float step_x  = 320.0f; // node width is ~290 (70 + 150 + 70 pin/center columns)
@@ -596,11 +626,21 @@ void Texture_graph_window::imgui()
         );
     }
 
+    // Selection deferred by last frame's paste / duplicate (the pasted nodes
+    // exist on the canvas only after the node draw loop above).
+    apply_pending_canvas_selection(*m_node_editor.get());
+
     handle_link_create();
     handle_deletions();
 
-    // Right-click "Add node" menu on the canvas background (shared with the
-    // geometry graph via Graph_editor_window_base).
+    // Ctrl+X / Ctrl+C / Ctrl+V / Ctrl+D on the focused canvas (shared with
+    // the geometry graph via Graph_editor_window_base).
+    handle_clipboard_shortcuts(*m_node_editor.get());
+
+    // Right-click menus: Cut / Copy / Paste / Duplicate / Delete on a node,
+    // Paste + "Add node" on the canvas background (shared with the geometry
+    // graph via Graph_editor_window_base).
+    node_context_menu(*m_node_editor.get());
     node_background_context_menu(*m_node_editor.get());
 
     m_node_editor->End();
