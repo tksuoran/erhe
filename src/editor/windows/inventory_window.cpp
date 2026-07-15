@@ -96,8 +96,11 @@ void Inventory_window::collect_tools()
             m_grid_slots[i].graph_node_kind  = saved.graph_node_kind;
             m_grid_slots[i].graph_node_type  = saved.graph_node_type;
             m_grid_slots[i].graph_node_label = saved.graph_node_label;
-            // Brush resolution would require content library access - deferred for now
-            // Brushes are resolved by name when the content library is available
+            // Brushes / materials resolve by name against the scene content
+            // libraries (below and retried per frame; see Pending_slot_item).
+            if (!saved.brush_name.empty() || !saved.material_name.empty()) {
+                m_pending_slot_items.push_back(Pending_slot_item{false, i, saved.brush_name, saved.material_name});
+            }
         }
     }
     m_saved_grid_names.clear();
@@ -114,9 +117,17 @@ void Inventory_window::collect_tools()
             m_hotbar_slots[i].graph_node_kind  = saved.graph_node_kind;
             m_hotbar_slots[i].graph_node_type  = saved.graph_node_type;
             m_hotbar_slots[i].graph_node_label = saved.graph_node_label;
+            if (!saved.brush_name.empty() || !saved.material_name.empty()) {
+                m_pending_slot_items.push_back(Pending_slot_item{true, i, saved.brush_name, saved.material_name});
+            }
         }
     }
     m_saved_hotbar_names.clear();
+
+    // The default scene's content library normally exists by now, so saved
+    // brush / material slots resolve here; scenes still loading resolve in
+    // imgui(). apply_hotbar() below picks up any resolved hotbar slots.
+    resolve_pending_slot_items();
 
     // If hotbar has no configured slots, populate with all tools (first-run default).
     // An operation (command) slot counts as configured too, so a hotbar filled only
@@ -135,6 +146,103 @@ void Inventory_window::collect_tools()
     }
 
     apply_hotbar();
+}
+
+auto Inventory_window::find_brush_by_name(const std::string& name) const -> std::shared_ptr<Brush>
+{
+    if (name.empty() || (m_context.app_scenes == nullptr)) {
+        return {};
+    }
+    for (const std::shared_ptr<Scene_root>& scene_root : m_context.app_scenes->get_scene_roots()) {
+        const std::shared_ptr<Content_library>& content_library = scene_root->get_content_library();
+        if (!content_library || !content_library->brushes) {
+            continue;
+        }
+        const std::vector<std::shared_ptr<Brush>>& brushes = content_library->brushes->get_all<Brush>();
+        for (const std::shared_ptr<Brush>& brush : brushes) {
+            if (brush && (brush->get_name() == name)) {
+                return brush;
+            }
+        }
+    }
+    return {};
+}
+
+auto Inventory_window::find_material_by_name(const std::string& name) const -> std::shared_ptr<erhe::primitive::Material>
+{
+    if (name.empty() || (m_context.app_scenes == nullptr)) {
+        return {};
+    }
+    for (const std::shared_ptr<Scene_root>& scene_root : m_context.app_scenes->get_scene_roots()) {
+        const std::shared_ptr<Content_library>& content_library = scene_root->get_content_library();
+        if (!content_library || !content_library->materials) {
+            continue;
+        }
+        const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials = content_library->materials->get_all<erhe::primitive::Material>();
+        for (const std::shared_ptr<erhe::primitive::Material>& material : materials) {
+            if (material && (material->get_name() == name)) {
+                return material;
+            }
+        }
+    }
+    return {};
+}
+
+void Inventory_window::drop_pending_slot_item(const bool hotbar, const int index)
+{
+    for (auto it = m_pending_slot_items.begin(); it != m_pending_slot_items.end();) {
+        if ((it->hotbar == hotbar) && (it->index == index)) {
+            it = m_pending_slot_items.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+auto Inventory_window::find_pending_slot_item(const bool hotbar, const int index) const -> const Pending_slot_item*
+{
+    for (const Pending_slot_item& pending : m_pending_slot_items) {
+        if ((pending.hotbar == hotbar) && (pending.index == index)) {
+            return &pending;
+        }
+    }
+    return nullptr;
+}
+
+auto Inventory_window::resolve_pending_slot_items() -> bool
+{
+    bool hotbar_changed = false;
+    for (auto it = m_pending_slot_items.begin(); it != m_pending_slot_items.end();) {
+        Pending_slot_item&       pending = *it;
+        std::vector<Slot_entry>& slots   = pending.hotbar ? m_hotbar_slots : m_grid_slots;
+        if ((pending.index < 0) || (pending.index >= static_cast<int>(slots.size()))) {
+            it = m_pending_slot_items.erase(it);
+            continue;
+        }
+        Slot_entry& slot = slots[pending.index];
+        if (!pending.brush_name.empty()) {
+            const std::shared_ptr<Brush> brush = find_brush_by_name(pending.brush_name);
+            if (brush) {
+                slot.brush = brush;
+                pending.brush_name.clear();
+                hotbar_changed = hotbar_changed || pending.hotbar;
+            }
+        }
+        if (!pending.material_name.empty()) {
+            const std::shared_ptr<erhe::primitive::Material> material = find_material_by_name(pending.material_name);
+            if (material) {
+                slot.material = material;
+                pending.material_name.clear();
+                hotbar_changed = hotbar_changed || pending.hotbar;
+            }
+        }
+        if (pending.brush_name.empty() && pending.material_name.empty()) {
+            it = m_pending_slot_items.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    return hotbar_changed;
 }
 
 auto Inventory_window::resolve_tool(const std::string& tool_name) const -> Tool*
@@ -336,6 +444,9 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
                     Slot_entry old_dest = slot;
                     slot         = source_entry;
                     *source_slot = old_dest;
+                    // The source slot's content moved away; an unresolved
+                    // saved name for it no longer applies.
+                    drop_pending_slot_item(source.section == Slot_section::hotbar, source.index);
                 } else {
                     // Palette: copy only
                     slot = source_entry;
@@ -416,6 +527,12 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
 
     ImGui::PopID();
 
+    // Any user change to this slot (clear, drop, swap) supersedes a saved
+    // name that never resolved - forget it so it cannot resurrect.
+    if (changed && ((section == 1) || (section == 2))) {
+        drop_pending_slot_item(section == 2, slot_index);
+    }
+
     return changed;
 }
 
@@ -464,6 +581,12 @@ auto Inventory_window::find_or_create_brush_with_material(
 
 void Inventory_window::imgui()
 {
+    // Retry brush / material names whose content library was not loaded yet
+    // at collect_tools() time (asynchronously loading scenes).
+    if (resolve_pending_slot_items()) {
+        apply_hotbar();
+    }
+
     int next_id = 0;
 
     // --- Tools Palette (top) ---
@@ -541,12 +664,17 @@ void Inventory_window::write_config(Inventory_config& config) const
     config.row_count         = m_row_count;
     config.hotbar_slot_count = m_hotbar_slot_count;
 
+    // Slot items whose names never resolved this session (their content
+    // library did not load) are written back verbatim, not dropped - saving
+    // must not degrade a brush / material slot to its bare tool.
     config.grid_slots.clear();
-    for (const Slot_entry& entry : m_grid_slots) {
+    for (int i = 0; i < static_cast<int>(m_grid_slots.size()); ++i) {
+        const Slot_entry&        entry   = m_grid_slots[i];
+        const Pending_slot_item* pending = find_pending_slot_item(false, i);
         Inventory_slot slot;
         slot.tool_name     = (entry.tool != nullptr) ? entry.tool->get_description() : "";
-        slot.brush_name    = entry.brush    ? entry.brush->get_name()    : "";
-        slot.material_name = entry.material ? entry.material->get_name() : "";
+        slot.brush_name    = entry.brush    ? entry.brush->get_name()    : (pending != nullptr) ? pending->brush_name    : "";
+        slot.material_name = entry.material ? entry.material->get_name() : (pending != nullptr) ? pending->material_name : "";
         slot.command_name  = (entry.command != nullptr) ? entry.command->get_name() : "";
         slot.operation_params  = entry.operation_params;
         slot.graph_node_kind   = entry.graph_node_kind;
@@ -556,11 +684,13 @@ void Inventory_window::write_config(Inventory_config& config) const
     }
 
     config.hotbar_slots.clear();
-    for (const Slot_entry& entry : m_hotbar_slots) {
+    for (int i = 0; i < static_cast<int>(m_hotbar_slots.size()); ++i) {
+        const Slot_entry&        entry   = m_hotbar_slots[i];
+        const Pending_slot_item* pending = find_pending_slot_item(true, i);
         Inventory_slot slot;
         slot.tool_name     = (entry.tool != nullptr) ? entry.tool->get_description() : "";
-        slot.brush_name    = entry.brush    ? entry.brush->get_name()    : "";
-        slot.material_name = entry.material ? entry.material->get_name() : "";
+        slot.brush_name    = entry.brush    ? entry.brush->get_name()    : (pending != nullptr) ? pending->brush_name    : "";
+        slot.material_name = entry.material ? entry.material->get_name() : (pending != nullptr) ? pending->material_name : "";
         slot.command_name  = (entry.command != nullptr) ? entry.command->get_name() : "";
         slot.operation_params  = entry.operation_params;
         slot.graph_node_kind   = entry.graph_node_kind;

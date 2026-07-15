@@ -4,6 +4,7 @@
 
 #include "config/generated/operation_params.hpp"
 
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -74,6 +75,30 @@ private:
     };
     std::vector<Saved_slot_name> m_saved_grid_names;
     std::vector<Saved_slot_name> m_saved_hotbar_names;
+
+    // Brushes / materials referenced by saved slots resolve by name against
+    // the scene content libraries. The libraries may not be populated yet at
+    // collect_tools() time (scenes can load asynchronously), so unresolved
+    // names are retried each frame the window renders, and write_config()
+    // preserves them verbatim until they resolve - a not-yet-loaded brush
+    // must not be silently degraded to its bare tool by the next save.
+    struct Pending_slot_item
+    {
+        bool        hotbar{false}; // grid slot otherwise
+        int         index {-1};
+        std::string brush_name;
+        std::string material_name;
+    };
+    std::vector<Pending_slot_item> m_pending_slot_items;
+
+    // Assigns resolved items into their slots and drops completed entries;
+    // returns true when a hotbar slot changed (caller re-applies the hotbar).
+    auto resolve_pending_slot_items() -> bool;
+    // Forgets an unresolved name once the user clears / overwrites its slot.
+    void drop_pending_slot_item(bool hotbar, int index);
+    [[nodiscard]] auto find_pending_slot_item(bool hotbar, int index) const -> const Pending_slot_item*;
+    [[nodiscard]] auto find_brush_by_name   (const std::string& name) const -> std::shared_ptr<Brush>;
+    [[nodiscard]] auto find_material_by_name(const std::string& name) const -> std::shared_ptr<erhe::primitive::Material>;
 };
 
 }
