@@ -399,6 +399,14 @@ struct Link final: Object
     ImVec2 m_Start;
     ImVec2 m_End;
 
+    // erhe: user-editable routing control points (canvas space, ordered from
+    // start pin to end pin). The link is drawn as a chain of bezier segments
+    // through them. Double-click on the link adds one, double-click on a
+    // handle removes it, dragging a handle moves it.
+    ImVector<ImVec2> m_MidPoints;
+    int              m_DraggedMidPoint;  // index while a handle drag is active, else -1
+    ImVec2           m_MidPointDragStart;
+
     Link(EditorContext* editor, LinkId id)
         : Object(editor)
         , m_ID(id)
@@ -406,6 +414,9 @@ struct Link final: Object
         , m_EndPin(nullptr)
         , m_Color(IM_COL32_WHITE)
         , m_Thickness(1.0f)
+        , m_MidPoints()
+        , m_DraggedMidPoint(-1)
+        , m_MidPointDragStart(0.0f, 0.0f)
     {
     }
 
@@ -413,12 +424,36 @@ struct Link final: Object
 
     virtual bool IsSelectable() override { return true; }
 
+    // erhe: dragging a link grabs the mid-point handle under the mouse press
+    // position (no handle hit -> the drag is not accepted and the gesture
+    // falls through, preserving the previous link behavior).
+    bool AcceptDrag() override;
+    void UpdateDrag(const ImVec2& offset) override;
+    bool EndDrag() override;
+    ImVec2 DragStartLocation() override { return m_MidPointDragStart; }
+
     virtual void Draw(ImDrawList* drawList, DrawFlags flags = None) override final;
     void Draw(ImDrawList* drawList, ImU32 color, float extraThickness = 0.0f) const;
 
     void UpdateEndpoints();
 
+    // Whole-link curve ignoring mid points (kept for flow animation).
     ImCubicBezierPoints GetCurve() const;
+
+    // erhe: the link as a chain of curve segments through the mid points.
+    // Segment i runs from anchor i to anchor i + 1, where the anchors are
+    // { m_Start, m_MidPoints..., m_End }.
+    int GetSegmentCount() const { return m_MidPoints.size() + 1; }
+    ImCubicBezierPoints GetSegmentCurve(int segment) const;
+
+    // erhe: mid-point handle geometry / hit testing (canvas space).
+    float GetMidPointRadius() const;      // drawn handle radius
+    float GetMidPointGrabRadius() const;  // interaction radius
+    int FindMidPointAt(const ImVec2& point, float radius) const;
+    // Inserts a mid point at the given position, ordered by the closest
+    // curve segment so the chain stays untangled.
+    void InsertMidPoint(const ImVec2& canvasPoint);
+    void RemoveMidPoint(int index);
 
     virtual bool TestHit(const ImVec2& point, float extraThickness = 0.0f) const override final;
     virtual bool TestHit(const ImRect& rect, bool allowIntersect = true) const override final;

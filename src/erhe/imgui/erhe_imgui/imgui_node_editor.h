@@ -441,6 +441,15 @@ public:
 
     bool GetLinkPins(LinkId linkId, PinId* startPinId, PinId* endPinId); // pass nullptr if particular pin do not interest you
 
+    // erhe: link routing mid points (canvas space, ordered from start pin to
+    // end pin). Interactively edited on the canvas: double-click on the link
+    // adds one at the click position, double-click on a handle removes it,
+    // dragging a handle moves it. These accessors expose them for scripting
+    // and persistence (clipboard).
+    int    GetLinkMidPointCount(LinkId linkId);
+    ImVec2 GetLinkMidPoint(LinkId linkId, int index);
+    void   SetLinkMidPoints(LinkId linkId, const ImVec2* points, int count);
+
     bool PinHadAnyLinks(PinId pinId);
 
     ImVec2 GetScreenSize();

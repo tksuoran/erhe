@@ -719,6 +719,42 @@ bool EditorContext::GetLinkPins(LinkId linkId, PinId* startPinId, PinId* endPinI
     return true;
 }
 
+int EditorContext::GetLinkMidPointCount(LinkId linkId)
+{
+    auto link = m_impl->FindLink(linkId);
+    if (!link)
+        return 0;
+
+    return link->m_MidPoints.size();
+}
+
+ImVec2 EditorContext::GetLinkMidPoint(LinkId linkId, int index)
+{
+    auto link = m_impl->FindLink(linkId);
+    if (!link || index < 0 || index >= link->m_MidPoints.size())
+        return ImVec2(0.0f, 0.0f);
+
+    return link->m_MidPoints[index];
+}
+
+void EditorContext::SetLinkMidPoints(LinkId linkId, const ImVec2* points, int count)
+{
+    // Mirror SetNodePosition(): a link that has not been submitted yet is
+    // created on demand but kept not-live (its pins are null until the first
+    // Link() submission revives it), so paste can route links it just made.
+    auto link = m_impl->FindLink(linkId);
+    if (!link)
+    {
+        link = m_impl->GetLink(linkId);
+        link->m_IsLive = false;
+    }
+
+    link->m_MidPoints.resize(0);
+    for (int i = 0; i < count; ++i)
+        link->m_MidPoints.push_back(points[i]);
+    link->m_DraggedMidPoint = -1;
+}
+
 bool EditorContext::PinHadAnyLinks(PinId pinId)
 {
     return m_impl->PinHadAnyLinks(pinId);

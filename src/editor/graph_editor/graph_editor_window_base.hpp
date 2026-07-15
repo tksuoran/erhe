@@ -59,6 +59,11 @@ public:
     virtual void set_node_position(const Graph_editor_node& node, const ImVec2& position) = 0;
     [[nodiscard]] virtual auto get_node_size(const Graph_editor_node& node) -> ImVec2 = 0;
 
+    // The window's ax::NodeEditor context (canvas state: node positions, link
+    // routing mid points). Used by the clipboard machinery and the MCP graph
+    // tools; never null once the window is constructed.
+    [[nodiscard]] virtual auto get_node_editor() -> ax::NodeEditor::EditorContext* = 0;
+
 protected:
     // One selectable palette entry (a spawnable node type).
     class Palette_entry

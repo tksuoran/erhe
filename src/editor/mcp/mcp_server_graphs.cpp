@@ -6,6 +6,8 @@
 #include "geometry_graph/geometry_graph_operations.hpp"
 #include "graph/node_properties.hpp"
 
+#include "erhe_imgui/imgui_node_editor.h"
+
 namespace editor {
 
 using namespace mcp_server_detail;
@@ -195,12 +197,25 @@ auto Mcp_server::query_geometry_graph(const json& args) -> std::string
 
     json links = json::array();
     for (const std::unique_ptr<erhe::graph::Link>& link : graph_mesh->graph().get_links()) {
-        links.push_back({
+        json link_json{
             {"source_node_id", link->get_source()->get_owner_node()->get_id()},
             {"source_slot",    link->get_source()->get_slot()},
             {"sink_node_id",   link->get_sink()->get_owner_node()->get_id()},
             {"sink_slot",      link->get_sink()->get_slot()}
-        });
+        };
+        // Canvas routing mid points (see geometry_graph_set_link_mid_points).
+        ax::NodeEditor::EditorContext* node_editor = window->get_node_editor();
+        const ax::NodeEditor::LinkId link_id{link.get()};
+        const int mid_point_count = node_editor->GetLinkMidPointCount(link_id);
+        if (mid_point_count > 0) {
+            json mid_points = json::array();
+            for (int i = 0; i < mid_point_count; ++i) {
+                const ImVec2 mid_point = node_editor->GetLinkMidPoint(link_id, i);
+                mid_points.push_back({mid_point.x, mid_point.y});
+            }
+            link_json["mid_points"] = mid_points;
+        }
+        links.push_back(link_json);
     }
 
     json result;
@@ -440,6 +455,63 @@ auto Mcp_server::action_geometry_graph_disconnect(const json& args) -> std::stri
 
     json result;
     result["disconnected"] = true;
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_geometry_graph_set_link_mid_points(const json& args) -> std::string
+{
+    Geometry_graph_window* window = m_context.geometry_graph_window;
+    if (window == nullptr) {
+        return make_error_content("Geometry graph window not available");
+    }
+    const std::size_t source_node_id = args.value("source_node_id", std::size_t{0});
+    const std::size_t source_slot    = args.value("source_slot",    std::size_t{0});
+    const std::size_t sink_node_id   = args.value("sink_node_id",   std::size_t{0});
+    const std::size_t sink_slot      = args.value("sink_slot",      std::size_t{0});
+
+    Geometry_graph_node* source_node = find_geometry_graph_node(window->get_nodes(), source_node_id);
+    Geometry_graph_node* sink_node   = find_geometry_graph_node(window->get_nodes(), sink_node_id);
+    if ((source_node == nullptr) || (sink_node == nullptr)) {
+        return make_error_content("Node not found");
+    }
+    if ((source_slot >= source_node->get_output_pins().size()) || (sink_slot >= sink_node->get_input_pins().size())) {
+        return make_error_content("Pin slot out of range");
+    }
+    erhe::graph::Pin* source_pin = &source_node->get_output_pins().at(source_slot);
+    erhe::graph::Pin* sink_pin   = &sink_node->get_input_pins().at(sink_slot);
+    erhe::graph::Link* graph_link = nullptr;
+    for (erhe::graph::Link* link : sink_pin->get_links()) {
+        if (link->get_source() == source_pin) {
+            graph_link = link;
+            break;
+        }
+    }
+    if (graph_link == nullptr) {
+        return make_error_content("No link between the given pins");
+    }
+
+    std::vector<ImVec2> mid_points;
+    if (args.contains("mid_points")) {
+        if (!args["mid_points"].is_array()) {
+            return make_error_content("'mid_points' must be an array of [x, y] pairs");
+        }
+        for (const json& point_json : args["mid_points"]) {
+            if (!point_json.is_array() || (point_json.size() != 2) || !point_json.at(0).is_number() || !point_json.at(1).is_number()) {
+                return make_error_content("'mid_points' entries must be [x, y] number pairs");
+            }
+            mid_points.push_back(ImVec2{point_json.at(0).get<float>(), point_json.at(1).get<float>()});
+        }
+    }
+    window->get_node_editor()->SetLinkMidPoints(
+        ax::NodeEditor::LinkId{graph_link},
+        mid_points.data(),
+        static_cast<int>(mid_points.size())
+    );
+    // Make the routing observable in the next capture_screenshot.
+    window->request_window_focus();
+
+    json result;
+    result["mid_point_count"] = mid_points.size();
     return make_json_content(result).dump();
 }
 

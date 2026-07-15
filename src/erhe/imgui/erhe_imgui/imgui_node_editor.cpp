@@ -902,24 +902,42 @@ void ed::Link::Draw(ImDrawList* drawList, ImU32 color, float extraThickness) con
     if (!m_IsLive)
         return;
 
-    const auto curve = GetCurve();
+    // erhe: the link is a chain of curve segments through the mid points
+    // (one segment, identical to the original single curve, when there are
+    // none). Arrows appear only on the terminal segments.
+    const int segmentCount = GetSegmentCount();
+    for (int segment = 0; segment < segmentCount; ++segment)
+    {
+        const auto curve = GetSegmentCurve(segment);
+        const bool isFirst = (segment == 0);
+        const bool isLast  = (segment == segmentCount - 1);
 
-    // Author the bezier in screen space (points transformed, thicknesses /
-    // arrow sizes scaled); the arrow-geometry math inside is affine so it is
-    // correct in either space. Phase 1: DrawPos/DrawLen are the identity.
-    const ImCubicBezierPoints screenCurve{
-        Editor->DrawPos(curve.P0), Editor->DrawPos(curve.P1),
-        Editor->DrawPos(curve.P2), Editor->DrawPos(curve.P3)
-    };
+        // Author the bezier in screen space (points transformed, thicknesses /
+        // arrow sizes scaled); the arrow-geometry math inside is affine so it is
+        // correct in either space. Phase 1: DrawPos/DrawLen are the identity.
+        const ImCubicBezierPoints screenCurve{
+            Editor->DrawPos(curve.P0), Editor->DrawPos(curve.P1),
+            Editor->DrawPos(curve.P2), Editor->DrawPos(curve.P3)
+        };
 
-    ImDrawList_AddBezierWithArrows(drawList, screenCurve, Editor->DrawLen(m_Thickness + extraThickness),
-        m_StartPin && m_StartPin->m_ArrowSize  > 0.0f ? Editor->DrawLen(m_StartPin->m_ArrowSize  + extraThickness) : 0.0f,
-        m_StartPin && m_StartPin->m_ArrowWidth > 0.0f ? Editor->DrawLen(m_StartPin->m_ArrowWidth + extraThickness) : 0.0f,
-          m_EndPin &&   m_EndPin->m_ArrowSize  > 0.0f ? Editor->DrawLen(  m_EndPin->m_ArrowSize  + extraThickness) : 0.0f,
-          m_EndPin &&   m_EndPin->m_ArrowWidth > 0.0f ? Editor->DrawLen(  m_EndPin->m_ArrowWidth + extraThickness) : 0.0f,
-        true, color, Editor->DrawLen(1.0f),
-        m_StartPin && m_StartPin->m_SnapLinkToDir ? &m_StartPin->m_Dir : nullptr,
-        m_EndPin   &&   m_EndPin->m_SnapLinkToDir ?   &m_EndPin->m_Dir : nullptr);
+        ImDrawList_AddBezierWithArrows(drawList, screenCurve, Editor->DrawLen(m_Thickness + extraThickness),
+            isFirst && m_StartPin && m_StartPin->m_ArrowSize  > 0.0f ? Editor->DrawLen(m_StartPin->m_ArrowSize  + extraThickness) : 0.0f,
+            isFirst && m_StartPin && m_StartPin->m_ArrowWidth > 0.0f ? Editor->DrawLen(m_StartPin->m_ArrowWidth + extraThickness) : 0.0f,
+            isLast  &&   m_EndPin &&   m_EndPin->m_ArrowSize  > 0.0f ? Editor->DrawLen(  m_EndPin->m_ArrowSize  + extraThickness) : 0.0f,
+            isLast  &&   m_EndPin &&   m_EndPin->m_ArrowWidth > 0.0f ? Editor->DrawLen(  m_EndPin->m_ArrowWidth + extraThickness) : 0.0f,
+            true, color, Editor->DrawLen(1.0f),
+            isFirst && m_StartPin && m_StartPin->m_SnapLinkToDir ? &m_StartPin->m_Dir : nullptr,
+            isLast  &&   m_EndPin &&   m_EndPin->m_SnapLinkToDir ?   &m_EndPin->m_Dir : nullptr);
+    }
+
+    // erhe: mid-point handles on top of the curve, in the same color pass so
+    // the hover / selection halo passes enlarge them like the curve itself.
+    if (!m_MidPoints.empty())
+    {
+        const float radius = Editor->DrawLen(GetMidPointRadius() + extraThickness * 0.5f);
+        for (int i = 0; i < m_MidPoints.size(); ++i)
+            drawList->AddCircleFilled(Editor->DrawPos(m_MidPoints[i]), radius, color);
+    }
 }
 
 void ed::Link::UpdateEndpoints()
@@ -929,23 +947,25 @@ void ed::Link::UpdateEndpoints()
     m_End   = line.B;
 }
 
+// erhe: shared by GetCurve() / GetSegmentCurve() - shortens the tangent when
+// the anchors are close so short links do not overshoot.
+static float ImLink_EaseLinkStrength(const ImVec2& a, const ImVec2& b, float strength)
+{
+    const auto distanceX    = b.x - a.x;
+    const auto distanceY    = b.y - a.y;
+    const auto distance     = ImSqrt(distanceX * distanceX + distanceY * distanceY);
+    const auto halfDistance = distance * 0.5f;
+
+    if (halfDistance < strength)
+        strength = strength * ImSin(IM_PI * 0.5f * halfDistance / strength);
+
+    return strength;
+}
+
 ImCubicBezierPoints ed::Link::GetCurve() const
 {
-    auto easeLinkStrength = [](const ImVec2& a, const ImVec2& b, float strength)
-    {
-        const auto distanceX    = b.x - a.x;
-        const auto distanceY    = b.y - a.y;
-        const auto distance     = ImSqrt(distanceX * distanceX + distanceY * distanceY);
-        const auto halfDistance = distance * 0.5f;
-
-        if (halfDistance < strength)
-            strength = strength * ImSin(IM_PI * 0.5f * halfDistance / strength);
-
-        return strength;
-    };
-
-    const auto startStrength = easeLinkStrength(m_Start, m_End, m_StartPin->m_Strength);
-    const auto   endStrength = easeLinkStrength(m_Start, m_End,   m_EndPin->m_Strength);
+    const auto startStrength = ImLink_EaseLinkStrength(m_Start, m_End, m_StartPin->m_Strength);
+    const auto   endStrength = ImLink_EaseLinkStrength(m_Start, m_End,   m_EndPin->m_Strength);
     const auto           cp0 = m_Start + m_StartPin->m_Dir * startStrength;
     const auto           cp1 =   m_End +   m_EndPin->m_Dir *   endStrength;
 
@@ -958,10 +978,156 @@ ImCubicBezierPoints ed::Link::GetCurve() const
     return result;
 }
 
+ImCubicBezierPoints ed::Link::GetSegmentCurve(int segment) const
+{
+    const int segmentCount = GetSegmentCount();
+    IM_ASSERT(segment >= 0 && segment < segmentCount);
+
+    // Anchor i of the chain: 0 = start pin, 1..N = mid points, N + 1 = end pin.
+    auto anchor = [this, segmentCount](int index) -> ImVec2
+    {
+        if (index <= 0)
+            return m_Start;
+        if (index > m_MidPoints.size())
+            return m_End;
+        return m_MidPoints[index - 1];
+    };
+
+    const auto a = anchor(segment);
+    const auto b = anchor(segment + 1);
+
+    // The pin ends keep the pin direction and strength, so a link without mid
+    // points is identical to GetCurve(). Interior anchors take their tangent
+    // from the chain direction (previous anchor towards next anchor), which
+    // keeps the chain G1-smooth through each mid point.
+    const float interiorStrength = 0.25f * (m_StartPin->m_Strength + m_EndPin->m_Strength);
+
+    ImVec2 startDir;
+    float  startStrength;
+    if (segment == 0)
+    {
+        startDir      = m_StartPin->m_Dir;
+        startStrength = ImLink_EaseLinkStrength(a, b, m_StartPin->m_Strength);
+    }
+    else
+    {
+        startDir      = ImNormalized(anchor(segment + 1) - anchor(segment - 1));
+        startStrength = ImLink_EaseLinkStrength(a, b, interiorStrength);
+    }
+
+    ImVec2 endDir;
+    float  endStrength;
+    if (segment == segmentCount - 1)
+    {
+        endDir      = m_EndPin->m_Dir;
+        endStrength = ImLink_EaseLinkStrength(a, b, m_EndPin->m_Strength);
+    }
+    else
+    {
+        // Points backwards along the chain, mirroring how the end pin's
+        // direction points away from the link.
+        endDir      = ImNormalized(anchor(segment) - anchor(segment + 2));
+        endStrength = ImLink_EaseLinkStrength(a, b, interiorStrength);
+    }
+
+    ImCubicBezierPoints result;
+    result.P0 = a;
+    result.P1 = a + startDir * startStrength;
+    result.P2 = b + endDir * endStrength;
+    result.P3 = b;
+
+    return result;
+}
+
+float ed::Link::GetMidPointRadius() const
+{
+    return ImMax(4.0f, m_Thickness * 2.0f);
+}
+
+float ed::Link::GetMidPointGrabRadius() const
+{
+    return GetMidPointRadius() + 4.0f;
+}
+
+int ed::Link::FindMidPointAt(const ImVec2& point, float radius) const
+{
+    for (int i = 0; i < m_MidPoints.size(); ++i)
+    {
+        const auto delta = m_MidPoints[i] - point;
+        if ((delta.x * delta.x + delta.y * delta.y) <= (radius * radius))
+            return i;
+    }
+    return -1;
+}
+
+void ed::Link::InsertMidPoint(const ImVec2& canvasPoint)
+{
+    // Insert into the segment whose curve is closest to the point, keeping
+    // the chain ordered from start pin to end pin.
+    int       bestSegment  = 0;
+    float     bestDistance = FLT_MAX;
+    const int segmentCount = GetSegmentCount();
+    for (int segment = 0; segment < segmentCount; ++segment)
+    {
+        const auto bezier = GetSegmentCurve(segment);
+        const auto result = ImProjectOnCubicBezier(canvasPoint, bezier.P0, bezier.P1, bezier.P2, bezier.P3, 50);
+        if (result.Distance < bestDistance)
+        {
+            bestDistance = result.Distance;
+            bestSegment  = segment;
+        }
+    }
+    m_MidPoints.insert(m_MidPoints.Data + bestSegment, canvasPoint);
+}
+
+void ed::Link::RemoveMidPoint(int index)
+{
+    if (index >= 0 && index < m_MidPoints.size())
+        m_MidPoints.erase(m_MidPoints.Data + index);
+}
+
+bool ed::Link::AcceptDrag()
+{
+    // Hit-test the PRESS position, not the current one (cf. SizeAction):
+    // this accept only runs once the drag threshold has tripped, i.e. after
+    // the mouse has already moved off the small handle. A press that did not
+    // land on a mid-point handle is not a drag - the gesture falls through
+    // and links behave as before.
+    const auto pressPos = Editor->ToCanvas(ImGui_GetMouseClickPos(Editor->GetConfig().DragButtonIndex));
+    m_DraggedMidPoint = FindMidPointAt(pressPos, GetMidPointGrabRadius());
+    if (m_DraggedMidPoint < 0)
+        return false;
+    m_MidPointDragStart = m_MidPoints[m_DraggedMidPoint];
+    return true;
+}
+
+void ed::Link::UpdateDrag(const ImVec2& offset)
+{
+    if (m_DraggedMidPoint >= 0 && m_DraggedMidPoint < m_MidPoints.size())
+        m_MidPoints[m_DraggedMidPoint] = m_MidPointDragStart + offset;
+}
+
+bool ed::Link::EndDrag()
+{
+    if (m_DraggedMidPoint < 0)
+        return false;
+    const bool changed =
+        (m_DraggedMidPoint < m_MidPoints.size()) &&
+        ((m_MidPoints[m_DraggedMidPoint].x != m_MidPointDragStart.x) ||
+         (m_MidPoints[m_DraggedMidPoint].y != m_MidPointDragStart.y));
+    m_DraggedMidPoint = -1;
+    return changed;
+}
+
 bool ed::Link::TestHit(const ImVec2& point, float extraThickness) const
 {
     if (!m_IsLive)
         return false;
+
+    // erhe: mid-point handles extend a little beyond the curve (and its
+    // bounds), so test them before the bounds rejection.
+    if (FindMidPointAt(point, GetMidPointGrabRadius() + extraThickness) >= 0)
+        return true;
 
     auto bounds = GetBounds();
     if (extraThickness > 0.0f)
@@ -970,10 +1136,16 @@ bool ed::Link::TestHit(const ImVec2& point, float extraThickness) const
     if (!bounds.Contains(point))
         return false;
 
-    const auto bezier = GetCurve();
-    const auto result = ImProjectOnCubicBezier(point, bezier.P0, bezier.P1, bezier.P2, bezier.P3, 50);
+    const int segmentCount = GetSegmentCount();
+    for (int segment = 0; segment < segmentCount; ++segment)
+    {
+        const auto bezier = GetSegmentCurve(segment);
+        const auto result = ImProjectOnCubicBezier(point, bezier.P0, bezier.P1, bezier.P2, bezier.P3, 50);
+        if (result.Distance <= m_Thickness + extraThickness)
+            return true;
+    }
 
-    return result.Distance <= m_Thickness + extraThickness;
+    return false;
 }
 
 bool ed::Link::TestHit(const ImRect& rect, bool allowIntersect) const
@@ -989,21 +1161,25 @@ bool ed::Link::TestHit(const ImRect& rect, bool allowIntersect) const
     if (!allowIntersect || !rect.Overlaps(bounds))
         return false;
 
-    const auto bezier = GetCurve();
-
     const auto p0 = rect.GetTL();
     const auto p1 = rect.GetTR();
     const auto p2 = rect.GetBR();
     const auto p3 = rect.GetBL();
 
-    if (ImCubicBezierLineIntersect(bezier.P0, bezier.P1, bezier.P2, bezier.P3, p0, p1).Count > 0)
-        return true;
-    if (ImCubicBezierLineIntersect(bezier.P0, bezier.P1, bezier.P2, bezier.P3, p1, p2).Count > 0)
-        return true;
-    if (ImCubicBezierLineIntersect(bezier.P0, bezier.P1, bezier.P2, bezier.P3, p2, p3).Count > 0)
-        return true;
-    if (ImCubicBezierLineIntersect(bezier.P0, bezier.P1, bezier.P2, bezier.P3, p3, p0).Count > 0)
-        return true;
+    const int segmentCount = GetSegmentCount();
+    for (int segment = 0; segment < segmentCount; ++segment)
+    {
+        const auto bezier = GetSegmentCurve(segment);
+
+        if (ImCubicBezierLineIntersect(bezier.P0, bezier.P1, bezier.P2, bezier.P3, p0, p1).Count > 0)
+            return true;
+        if (ImCubicBezierLineIntersect(bezier.P0, bezier.P1, bezier.P2, bezier.P3, p1, p2).Count > 0)
+            return true;
+        if (ImCubicBezierLineIntersect(bezier.P0, bezier.P1, bezier.P2, bezier.P3, p2, p3).Count > 0)
+            return true;
+        if (ImCubicBezierLineIntersect(bezier.P0, bezier.P1, bezier.P2, bezier.P3, p3, p0).Count > 0)
+            return true;
+    }
 
     return false;
 }
@@ -1012,8 +1188,16 @@ ImRect ed::Link::GetBounds() const
 {
     if (m_IsLive)
     {
-        const auto curve = GetCurve();
-        auto bounds = ImCubicBezierBoundingRect(curve.P0, curve.P1, curve.P2, curve.P3);
+        auto boundsOfSegment = [this](int segment) -> ImRect
+        {
+            const auto curve = GetSegmentCurve(segment);
+            return ImCubicBezierBoundingRect(curve.P0, curve.P1, curve.P2, curve.P3);
+        };
+
+        auto bounds = boundsOfSegment(0);
+        const int segmentCount = GetSegmentCount();
+        for (int segment = 1; segment < segmentCount; ++segment)
+            bounds.Add(boundsOfSegment(segment));
 
         if (bounds.GetWidth() == 0.0f)
         {
@@ -1258,6 +1442,23 @@ void ed::EditorContext::End()
     m_HoveredNode             = control.HotNode && m_CurrentAction == nullptr ? control.HotNode->m_ID : 0;
     m_HoveredPin              = control.HotPin  && m_CurrentAction == nullptr ? control.HotPin->m_ID  : 0;
     m_HoveredLink             = control.HotLink && m_CurrentAction == nullptr ? control.HotLink->m_ID : 0;
+
+    // erhe: double-click edits the link's mid points - on a handle it removes
+    // that mid point, elsewhere on the link it adds one at the click position.
+    // Consumed here, so the application never sees these as link double-clicks.
+    if (control.DoubleClickedLink && m_CurrentAction == nullptr)
+    {
+        auto link = control.DoubleClickedLink;
+        const auto clickPos = HitMouse();
+        const int midPointIndex = link->FindMidPointAt(clickPos, link->GetMidPointGrabRadius());
+        if (midPointIndex >= 0)
+            link->RemoveMidPoint(midPointIndex);
+        else
+            link->InsertMidPoint(clickPos);
+        control.DoubleClickedObject = nullptr;
+        control.DoubleClickedLink   = nullptr;
+    }
+
     m_DoubleClickedNode       = control.DoubleClickedNode ? control.DoubleClickedNode->m_ID : 0;
     m_DoubleClickedPin        = control.DoubleClickedPin  ? control.DoubleClickedPin->m_ID  : 0;
     m_DoubleClickedLink       = control.DoubleClickedLink ? control.DoubleClickedLink->m_ID : 0;
@@ -4387,14 +4588,17 @@ void ed::CutLinksAction::AddStrokePoint(const ImVec2& canvasPoint)
         if (std::find(m_CutLinkCandidates.begin(), m_CutLinkCandidates.end(), link) != m_CutLinkCandidates.end())
             continue;
 
-        const auto curve = link->GetCurve();
-
         m_CurvePoints.resize(0);
         auto collect = [this](const ImCubicBezierSubdivideSample& sample)
         {
             m_CurvePoints.push_back(sample.Point);
         };
-        ImCubicBezierSubdivide(collect, curve);
+        // erhe: tessellate every segment of the (possibly mid-point routed)
+        // link; consecutive segments share their boundary anchor, so the
+        // concatenated polyline stays continuous.
+        const int segmentCount = link->GetSegmentCount();
+        for (int segment = 0; segment < segmentCount; ++segment)
+            ImCubicBezierSubdivide(collect, link->GetSegmentCurve(segment));
 
         for (size_t i = 1; i < m_CurvePoints.size(); ++i)
         {

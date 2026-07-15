@@ -786,6 +786,17 @@ void Mcp_server::refresh_tool_list()
             {"enabled", {{"type", "boolean"}, {"description", "true (default) to show previews, false to hide"}}}
         }}
     }});
+    m_tool_infos.push_back({"geometry_graph_set_link_mid_points", "Set (or clear) the canvas routing mid points of a geometry graph link. Mid points are canvas-space control points the link's wire is routed through (the on-canvas gestures: double-click a link to add one at the click position, double-click a handle to remove it, drag a handle to move it). The link is identified by its endpoint pins (see get_geometry_graph 'links'); the whole mid point list is replaced. Omitted / empty mid_points clears the routing (plain direct wire). Canvas-only state (like node positions): not undoable, not saved to the scene, but carried by canvas copy / paste. get_geometry_graph reports each link's current 'mid_points'.", {
+        {"type", "object"},
+        {"properties", {
+            {"source_node_id", {{"type", "integer"}, {"description", "Id of the source (output) node"}}},
+            {"source_slot",    {{"type", "integer"}, {"description", "Output pin slot on the source node (default 0)"}}},
+            {"sink_node_id",   {{"type", "integer"}, {"description", "Id of the sink (input) node"}}},
+            {"sink_slot",      {{"type", "integer"}, {"description", "Input pin slot on the sink node (default 0)"}}},
+            {"mid_points",     {{"type", "array"},   {"items", {{"type", "array"}, {"items", {{"type", "number"}}}}}, {"description", "Canvas-space [x, y] control points, ordered from source to sink; empty / omitted clears"}}}
+        }},
+        {"required", json::array({"source_node_id", "sink_node_id"})}
+    }});
     m_tool_infos.push_back({"geometry_graph_set_view", "Show the Geometry Graph window and set its node-editor zoom (view scale) immediately, centered on the graph content. zoom > 1 zooms in (content drawn larger), zoom < 1 zooms out. Deterministic (no animation / no mouse input) - intended for headless zoom-quality verification (capture_screenshot on the next frame). Requires the window to have a target Graph Mesh (create_graph_mesh / set_geometry_graph_target) for it to render nodes.", {
         {"type", "object"},
         {"properties", {

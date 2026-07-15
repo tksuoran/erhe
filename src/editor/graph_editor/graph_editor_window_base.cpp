@@ -294,6 +294,7 @@ auto Graph_editor_window_base::serialize_nodes_json(const std::vector<std::share
         }
         return -1;
     };
+    ax::NodeEditor::EditorContext* node_editor = get_node_editor();
     nlohmann::json links_json = nlohmann::json::array();
     for (const std::unique_ptr<erhe::graph::Link>& link : graph->get_links()) {
         const int source_node = index_of(link->get_source()->get_owner_node());
@@ -301,12 +302,25 @@ auto Graph_editor_window_base::serialize_nodes_json(const std::vector<std::share
         if ((source_node < 0) || (sink_node < 0)) {
             continue; // link reaches outside the copied set
         }
-        links_json.push_back({
+        nlohmann::json link_json{
             {"source_node", source_node},
             {"source_slot", link->get_source()->get_slot()},
             {"sink_node",   sink_node},
             {"sink_slot",   link->get_sink()->get_slot()}
-        });
+        };
+        // Link routing mid points (absolute canvas positions, like the node
+        // "x" / "y" above - paste translates them with the block).
+        const ax::NodeEditor::LinkId link_id{link.get()};
+        const int mid_point_count = node_editor->GetLinkMidPointCount(link_id);
+        if (mid_point_count > 0) {
+            nlohmann::json mid_points_json = nlohmann::json::array();
+            for (int i = 0; i < mid_point_count; ++i) {
+                const ImVec2 mid_point = node_editor->GetLinkMidPoint(link_id, i);
+                mid_points_json.push_back({mid_point.x, mid_point.y});
+            }
+            link_json["mid_points"] = mid_points_json;
+        }
+        links_json.push_back(link_json);
     }
     root["links"] = links_json;
     return root;
