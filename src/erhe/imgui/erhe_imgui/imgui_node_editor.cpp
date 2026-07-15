@@ -3732,7 +3732,16 @@ ed::EditorAction::AcceptResult ed::SizeAction::Accept(const Control& control)
         //const auto mousePos     = to_point(ImGui::GetMousePos());
         //const auto closestPoint = control.ActiveNode->Bounds.get_closest_point_hollow(mousePos, static_cast<int>(control.ActiveNode->Rounding));
 
-        auto pivot = GetRegion(control.ActiveNode);
+        // Hit-test the PRESS position, not the current one: this accept only
+        // runs once the drag threshold has tripped, i.e. after the mouse has
+        // already moved, and a quick flick leaves the narrow edge strip
+        // before that - the gesture would then fall through to DragAction
+        // and move the node although the resize cursor was showing at press.
+        // The gesture must follow what the user aimed at when the button
+        // went down. (The hover branch below keeps the live position; it
+        // only drives the cursor shape.)
+        const auto pressPos = Editor->ToCanvas(ImGui_GetMouseClickPos(Editor->GetConfig().DragButtonIndex));
+        auto pivot = control.ActiveNode->GetRegion(pressPos);
         if (pivot != NodeRegion::Header && pivot != NodeRegion::Center && pivot != NodeRegion::None)
         {
             m_StartBounds      = control.ActiveNode->m_Bounds;
