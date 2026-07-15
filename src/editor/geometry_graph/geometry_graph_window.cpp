@@ -9,9 +9,11 @@
 #include "geometry_graph/geometry_graph_operations.hpp"
 #include "geometry_graph/graph_mesh.hpp"
 #include "geometry_graph/nodes/geometry_output_node.hpp"
+#include "geometry_graph/nodes/geometry_source_nodes.hpp"
 #include "geometry_graph/nodes/group_nodes.hpp"
 
 #include "app_context.hpp"
+#include "brushes/brush.hpp"
 #include "app_scenes.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "editor_log.hpp"
@@ -23,6 +25,7 @@
 #include "tools/selection_tool.hpp"
 #include "windows/item_reference.hpp"
 
+#include "erhe_defer/defer.hpp"
 #include "erhe_graph/link.hpp"
 #include "erhe_graph/pin.hpp"
 #include "erhe_graphics/device.hpp"
@@ -33,6 +36,7 @@
 #include "erhe_scene/scene.hpp"
 
 #include <imgui/imgui.h>
+#include <imgui/imgui_internal.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
 #include <nlohmann/json.hpp>
 #include <taskflow/taskflow.hpp>
@@ -387,6 +391,13 @@ void Geometry_graph_window::build_palette()
                 Palette_entry{.type_name = "torus",  .label = "Torus"},
                 Palette_entry{.type_name = "cone",   .label = "Cone"},
                 Palette_entry{.type_name = "disc",   .label = "Disc"}
+            }
+        },
+        Palette_category{
+            .name    = "Sources",
+            .entries = {
+                Palette_entry{.type_name = "brush",      .label = "Brush"},
+                Palette_entry{.type_name = "scene_mesh", .label = "Scene Mesh"}
             }
         },
         Palette_category{
@@ -921,8 +932,10 @@ void Geometry_graph_window::imgui()
     }
 
     // Issue #251 (bug a): remember where the canvas starts so the zoom-level
-    // overlay can be drawn over its top-left corner after End().
+    // overlay can be drawn over its top-left corner after End(). The size is
+    // captured too, for the drag-and-drop target rect below.
     const ImVec2 canvas_screen_pos = ImGui::GetCursorScreenPos();
+    const ImVec2 canvas_avail_size = ImGui::GetContentRegionAvail();
 
     m_node_editor->Begin("Geometry Graph", ImVec2{0.0f, 0.0f});
 
@@ -954,6 +967,13 @@ void Geometry_graph_window::imgui()
     // size into the node's requested extent.
     apply_node_resize(*m_node_editor.get());
 
+    // Dropping a content-library brush on the canvas creates a Brush source
+    // node at the drop position.
+    canvas_drag_and_drop_target(
+        canvas_screen_pos,
+        ImVec2{canvas_screen_pos.x + canvas_avail_size.x, canvas_screen_pos.y + canvas_avail_size.y}
+    );
+
     // Issue #251 (bug a): show the current canvas zoom in the corner so
     // rendering issues that appear only at certain zoom levels are diagnosable
     // at a glance (and correlate with the erhe.imgui.node_editor log traces).
@@ -965,6 +985,46 @@ void Geometry_graph_window::imgui()
         IM_COL32(220, 220, 220, 220),
         zoom_text
     );
+}
+
+void Geometry_graph_window::canvas_drag_and_drop_target(const ImVec2& rect_min, const ImVec2& rect_max)
+{
+    // Custom target over the whole canvas rect (the ax::NodeEditor canvas is
+    // not a single ImGui item, so BeginDragDropTarget() cannot latch onto it).
+    // Accepts a content-library brush (the same "Content_library_node" payload
+    // the item tree sets and the 3D viewport accepts) and creates a Brush
+    // source node at the drop position, bound to the dropped brush.
+    const ImGuiID drag_target_id = ImGui::GetID(static_cast<const void*>(this));
+    const ImRect  rect{rect_min, rect_max};
+    if (!ImGui::BeginDragDropTargetCustom(rect, drag_target_id)) {
+        return;
+    }
+    ERHE_DEFER( ImGui::EndDragDropTarget(); );
+
+    const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Content_library_node");
+    if (payload == nullptr) {
+        return; // not delivered yet (still dragging), or not a library node
+    }
+    erhe::Item_base* const      item_base    = *(static_cast<erhe::Item_base**>(payload->Data));
+    const Content_library_node* library_node = dynamic_cast<const Content_library_node*>(item_base);
+    if (library_node == nullptr) {
+        return;
+    }
+    const std::shared_ptr<Brush> brush = std::dynamic_pointer_cast<Brush>(library_node->item);
+    if (!brush) {
+        return; // only brushes make geometry source nodes
+    }
+
+    // The drop happens outside the canvas Begin/End (screen space), so
+    // convert through the editor's stored view transform.
+    const ImVec2 spawn_position = m_node_editor->ScreenToCanvas(ImGui::GetMousePos());
+    Geometry_graph_node* node = add_node_of_type("brush", &spawn_position);
+    Brush_geometry_node* brush_node = dynamic_cast<Brush_geometry_node*>(node);
+    if (brush_node != nullptr) {
+        // Undo of the drop removes the node object itself (the insert
+        // operation keeps it alive), so the brush binding survives redo.
+        brush_node->set_brush(brush);
+    }
 }
 
 void Geometry_graph_window::set_node_editor_zoom(float zoom)

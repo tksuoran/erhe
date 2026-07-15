@@ -3,6 +3,7 @@
 #include "geometry_graph/nodes/boolean_node.hpp"
 #include "geometry_graph/nodes/conway_node.hpp"
 #include "geometry_graph/nodes/geometry_output_node.hpp"
+#include "geometry_graph/nodes/geometry_source_nodes.hpp"
 #include "geometry_graph/nodes/geometry_unary_operation_node.hpp"
 #include "geometry_graph/nodes/group_nodes.hpp"
 #include "geometry_graph/nodes/instance_nodes.hpp"
@@ -32,6 +33,8 @@ auto make_geometry_graph_node(App_context& context, const std::string& type_name
     else if (type_name == "torus")        { node = std::make_shared<Mesh_torus_node >(); }
     else if (type_name == "cone")         { node = std::make_shared<Mesh_cone_node  >(); }
     else if (type_name == "disc")         { node = std::make_shared<Mesh_disc_node  >(); }
+    else if (type_name == "brush")        { node = std::make_shared<Brush_geometry_node     >(context); }
+    else if (type_name == "scene_mesh")   { node = std::make_shared<Scene_mesh_geometry_node>(context); }
     else if (type_name == "subdivide")    { node = std::make_shared<Subdivide_node  >(); }
     else if (type_name == "conway")       { node = std::make_shared<Conway_node     >(); }
     else if (type_name == "transform")    { node = std::make_shared<Transform_node  >(); }

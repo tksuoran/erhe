@@ -95,11 +95,11 @@ public:
     // the operation stack. Used by the toolbar / canvas gestures and the
     // in-editor MCP server. All target the current graph (see
     // get_current_graph_mesh()).
-    // Type names: box, sphere, torus, cone, disc, subdivide, conway,
-    // transform, triangulate, normalize, reverse, repair, distribute,
-    // instance, realize, join, boolean, float, integer, vector, math,
-    // output, group_input, group_output, group (see
-    // make_geometry_graph_node()). position is the canvas-space position for
+    // Type names: box, sphere, torus, cone, disc, brush, scene_mesh,
+    // subdivide, conway, transform, triangulate, normalize, reverse,
+    // repair, distribute, instance, realize, join, boolean, float,
+    // integer, vector, math, output, group_input, group_output, group
+    // (see make_geometry_graph_node()). position is the canvas-space position for
     // the new node; nullptr uses the auto-advancing spawn grid.
     auto add_node_of_type(const std::string& type_name, const ImVec2* position = nullptr) -> Geometry_graph_node*;
     void remove_node     (const std::shared_ptr<Geometry_graph_node>& node);
@@ -180,6 +180,9 @@ private:
     void target_selector_imgui();
     void handle_link_create();
     void handle_deletions();
+    // Drop target covering the canvas: dropping a content-library brush
+    // creates a Brush source node at the drop position, bound to that brush.
+    void canvas_drag_and_drop_target(const ImVec2& rect_min, const ImVec2& rect_max);
 
     // Resolves the weak_ptr target into m_graph_mesh (locks it, or null
     // when unset / expired). Resets the spawn grid when the resolved
