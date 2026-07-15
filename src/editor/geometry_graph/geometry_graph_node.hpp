@@ -156,6 +156,11 @@ protected:
     std::size_t                   m_log_source_id{0};
     std::shared_ptr<erhe::primitive::Primitive> m_preview_primitive;
     std::shared_ptr<erhe::graphics::Texture>    m_preview_texture;
+    // Shadow-node side: build_preview_primitive() ran since the last
+    // take_preview(), so its (possibly null) primitive is the fresh truth -
+    // as opposed to a clean shadow that never evaluated, whose null
+    // primitive must NOT wipe the live node's cached preview.
+    bool                                        m_preview_built{false};
     bool                                        m_preview_needs_render{false};
     glm::quat                                   m_preview_orientation{1.0f, 0.0f, 0.0f, 0.0f};
     float                                       m_preview_display_size{128.0f}; // screen px, zoom-scaled

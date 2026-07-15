@@ -261,6 +261,11 @@ void Geometry_graph_node::on_removed_from_graph()
 void Geometry_graph_node::build_preview_primitive(erhe::scene_renderer::Mesh_memory& mesh_memory)
 {
     m_preview_primitive.reset();
+    // Even when the node evaluated to no / empty geometry and the primitive
+    // stays null: take_preview() must adopt that emptiness (clearing the
+    // stale thumbnail), which only the flag can distinguish from a shadow
+    // that never evaluated.
+    m_preview_built = true;
 
     // The first geometry output payload; value / math nodes have none.
     std::shared_ptr<erhe::geometry::Geometry> source{};
@@ -312,10 +317,19 @@ void Geometry_graph_node::build_preview_primitive(erhe::scene_renderer::Mesh_mem
 
 void Geometry_graph_node::take_preview(Geometry_graph_node& from)
 {
-    if (!from.m_preview_primitive) {
+    if (!from.m_preview_built) {
+        return; // shadow did not evaluate - keep the cached preview
+    }
+    from.m_preview_built = false;
+    m_preview_primitive = std::move(from.m_preview_primitive);
+    if (!m_preview_primitive) {
+        // Evaluated to no / empty geometry (e.g. an operation node whose
+        // input link was cut): drop the stale thumbnail too, or the canvas
+        // keeps drawing the old geometry.
+        m_preview_texture.reset();
+        m_preview_needs_render = false;
         return;
     }
-    m_preview_primitive = std::move(from.m_preview_primitive);
     m_preview_needs_render = true;
 }
 
