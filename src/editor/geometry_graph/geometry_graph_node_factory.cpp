@@ -37,7 +37,7 @@ auto make_geometry_graph_node(App_context& context, const std::string& type_name
     else if (type_name == "brush")        { node = std::make_shared<Brush_geometry_node     >(context); }
     else if (type_name == "scene_mesh")   { node = std::make_shared<Scene_mesh_geometry_node>(context); }
     else if (type_name == "subdivide")    { node = std::make_shared<Subdivide_node  >(); }
-    else if (type_name == "conway")       { node = std::make_shared<Conway_node     >(); }
+    else if (type_name == "conway")       { node = std::make_shared<Conway_node     >(); } // legacy combo node: read_parameters adopts the saved operation
     else if (type_name == "transform")    { node = std::make_shared<Transform_node  >(); }
     else if (type_name == "triangulate")  { node = std::make_shared<Geometry_unary_operation_node>("Triangulate", &erhe::geometry::operation::triangulate); }
     else if (type_name == "normalize")    { node = std::make_shared<Geometry_unary_operation_node>("Normalize",   &erhe::geometry::operation::normalize); }
@@ -57,6 +57,15 @@ auto make_geometry_graph_node(App_context& context, const std::string& type_name
     else if (type_name == "group_input")  { node = std::make_shared<Group_input_node    >(); }
     else if (type_name == "group_output") { node = std::make_shared<Group_output_node   >(); }
     else if (type_name == "group")        { node = std::make_shared<Group_node          >(context); }
+    if (!node) {
+        // Per-operator Conway types ("conway_ambo" ... "conway_gyro").
+        for (const Conway_node::Operation_info& info : Conway_node::c_operation_infos) {
+            if (type_name == info.type_name) {
+                node = std::make_shared<Conway_node>(info.operation);
+                break;
+            }
+        }
+    }
     if (node) {
         node->set_factory_type_name(type_name); // used by graph serialization to recreate the node
     }

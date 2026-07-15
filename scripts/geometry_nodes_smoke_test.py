@@ -491,6 +491,24 @@ def section_parameter_sweeps():
                   {"kis_height": 1.0, "truncate_ratio": 0.45, "chamfer_ratio": 0.9, "gyro_ratio": 0.9},
           verify=lambda: geometry_counts(conway)[0] > 0, label="conway ratios")
 
+    # Per-operator Conway node types (palette "Conway" group): each operator
+    # is its own factory type; the legacy "conway" node (exercised above)
+    # still loads and adopts its "operation" parameter.
+    all_ok = True
+    for type_name in ("conway_ambo", "conway_dual", "conway_join", "conway_kis", "conway_meta",
+                      "conway_subdivide", "conway_truncate", "conway_chamfer", "conway_gyro"):
+        fresh_graph()
+        box = add_node("box")["id"]
+        node = add_node(type_name)["id"]
+        output = add_node("output")["id"]
+        connect(box, 0, node, 0)
+        connect(node, 0, output, 0)
+        counts = geometry_counts(node)
+        if counts is None or counts[0] == 0:
+            all_ok = False
+            print(f"  {type_name}: FAILED counts={counts}")
+    check(S, "per-operator conway node types produce geometry", all_ok)
+
     # Transform.
     fresh_graph()
     box = add_node("box")["id"]

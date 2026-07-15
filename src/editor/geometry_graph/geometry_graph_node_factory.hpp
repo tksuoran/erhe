@@ -10,7 +10,9 @@ class Geometry_graph_node;
 
 // Creates a geometry graph node from its factory type name (the names
 // used by graph serialization and the MCP geometry_graph_add_node tool):
-// box, sphere, torus, cone, disc, subdivide, conway, transform,
+// box, sphere, torus, cone, disc, subdivide, conway_<operator> (one type
+// per Conway operator, see Conway_node::c_operation_infos; plain "conway"
+// is the legacy combo node kept for old graph files), transform,
 // triangulate, normalize, reverse, repair, distribute, instance,
 // realize, join, boolean, float, integer, vector, math, passthrough,
 // output, group_input, group_output, group.

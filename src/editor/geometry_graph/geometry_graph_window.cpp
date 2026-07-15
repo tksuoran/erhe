@@ -10,6 +10,7 @@
 #include "geometry_graph/graph_mesh.hpp"
 #include "geometry_graph/nodes/geometry_output_node.hpp"
 #include "geometry_graph/nodes/geometry_source_nodes.hpp"
+#include "geometry_graph/nodes/conway_node.hpp"
 #include "geometry_graph/nodes/group_nodes.hpp"
 
 #include "app_context.hpp"
@@ -463,7 +464,6 @@ void Geometry_graph_window::build_palette()
             .name    = "Operations",
             .entries = {
                 Palette_entry{.type_name = "subdivide",   .label = "Subdivide"},
-                Palette_entry{.type_name = "conway",      .label = "Conway"},
                 Palette_entry{.type_name = "transform",   .label = "Transform"},
                 Palette_entry{.type_name = "triangulate", .label = "Triangulate"},
                 Palette_entry{.type_name = "normalize",   .label = "Normalize"},
@@ -471,6 +471,8 @@ void Geometry_graph_window::build_palette()
                 Palette_entry{.type_name = "repair",      .label = "Repair"}
             }
         },
+        // The "Conway" category is inserted below, built from the operator
+        // table (each operator is its own node type).
         Palette_category{
             .name    = "Points",
             .entries = {
@@ -516,6 +518,21 @@ void Geometry_graph_window::build_palette()
             }
         }
     };
+
+    // "Conway" group right after "Operations", one entry per operator, built
+    // from the operator table so the palette cannot drift from the factory.
+    Palette_category conway_category{.name = "Conway"};
+    for (const Conway_node::Operation_info& info : Conway_node::c_operation_infos) {
+        conway_category.entries.push_back(Palette_entry{.type_name = info.type_name, .label = info.label});
+    }
+    const auto operations_it = std::find_if(
+        m_palette_categories.begin(), m_palette_categories.end(),
+        [](const Palette_category& category) { return category.name == "Operations"; }
+    );
+    m_palette_categories.insert(
+        (operations_it != m_palette_categories.end()) ? operations_it + 1 : m_palette_categories.end(),
+        std::move(conway_category)
+    );
 }
 
 auto Geometry_graph_window::is_evaluation_run_done() -> bool

@@ -97,10 +97,10 @@ public:
     // in-editor MCP server. All target the current graph (see
     // get_current_graph_mesh()).
     // Type names: box, sphere, torus, cone, disc, brush, scene_mesh,
-    // subdivide, conway, transform, triangulate, normalize, reverse,
-    // repair, distribute, instance, realize, join, boolean, float,
-    // integer, vector, math, passthrough, output, group_input,
-    // group_output, group
+    // subdivide, conway_<operator> (plus legacy "conway"), transform,
+    // triangulate, normalize, reverse, repair, distribute, instance,
+    // realize, join, boolean, float, integer, vector, math, passthrough,
+    // output, group_input, group_output, group
     // (see make_geometry_graph_node()). position is the canvas-space position for
     // the new node; nullptr uses the auto-advancing spawn grid.
     auto add_node_of_type(const std::string& type_name, const ImVec2* position = nullptr) -> Geometry_graph_node*;

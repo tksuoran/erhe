@@ -16,11 +16,42 @@
 
 namespace editor {
 
-Conway_node::Conway_node()
-    : Geometry_graph_node{"Conway"}
+namespace {
+
+[[nodiscard]] auto node_name_for(const Conway_node::Conway_operation operation) -> const char*
+{
+    const Conway_node::Operation_info* info = Conway_node::find_operation_info(operation);
+    return (info != nullptr) ? info->label : "Conway";
+}
+
+} // anonymous namespace
+
+auto Conway_node::find_operation_info(const Conway_operation operation) -> const Operation_info*
+{
+    for (const Operation_info& info : c_operation_infos) {
+        if (info.operation == operation) {
+            return &info;
+        }
+    }
+    return nullptr;
+}
+
+Conway_node::Conway_node(const Conway_operation operation)
+    : Geometry_graph_node{node_name_for(operation)}
+    , m_operation        {operation}
 {
     make_input_pin(Geometry_pin_key::geometry, "in");
     make_output_pin(Geometry_pin_key::geometry, "out");
+}
+
+void Conway_node::set_operation(const Conway_operation operation)
+{
+    m_operation = operation;
+    const Operation_info* info = find_operation_info(operation);
+    if (info != nullptr) {
+        set_name(info->label);
+        set_factory_type_name(info->type_name);
+    }
 }
 
 void Conway_node::evaluate(Geometry_graph&)
@@ -46,33 +77,15 @@ void Conway_node::evaluate(Geometry_graph&)
         case Conway_operation::truncate:  erhe::geometry::operation::truncate (*source.get(), *destination.get(), m_truncate_ratio); break;
         case Conway_operation::chamfer:   erhe::geometry::operation::chamfer3 (*source.get(), *destination.get(), m_chamfer_ratio); break;
         case Conway_operation::gyro:      erhe::geometry::operation::gyro     (*source.get(), *destination.get(), m_gyro_ratio); break;
+        default:                          break; // out-of-range operation: empty geometry
     }
     set_output(0, Geometry_payload{.value = destination});
 }
 
 void Conway_node::imgui()
 {
-    const char* operation_names[] = { "Ambo", "Dual", "Join", "Kis", "Meta", "Subdivide", "Truncate", "Chamfer", "Gyro" };
-    const int operation = static_cast<int>(m_operation);
-    // m_operation can be out of range (e.g. a malformed graph file or the MCP
-    // set_parameter abuse path), so guard the preview index - operation_names[N]
-    // for N out of bounds is an overread.
-    const char* preview = (operation >= 0 && operation < IM_ARRAYSIZE(operation_names)) ? operation_names[operation] : "?";
-    ImGui::SetNextItemWidth(140.0f * content_scale());
-    if (ImGui::BeginCombo("operation", preview)) {
-        for (int i = 0; i < IM_ARRAYSIZE(operation_names); ++i) {
-            const bool is_selected = (operation == i);
-            if (ImGui::Selectable(operation_names[i], is_selected)) {
-                m_operation = static_cast<Conway_operation>(i);
-                mark_dirty();
-            }
-            if (is_selected) {
-                ImGui::SetItemDefaultFocus();
-            }
-        }
-        ImGui::EndCombo();
-    }
-
+    // The operation is fixed per node type (the node name shows it); only the
+    // operator's own parameter is editable.
     switch (m_operation) {
         case Conway_operation::kis: {
             ImGui::TextUnformatted("Height");
@@ -112,6 +125,9 @@ void Conway_node::imgui()
 
 void Conway_node::write_parameters(nlohmann::json& out) const
 {
+    // "operation" is redundant with the factory type name for the
+    // per-operator types, but keeps the parameter surface (MCP, older
+    // readers) unchanged from the legacy combo node.
     out["operation"]      = static_cast<int>(m_operation);
     out["kis_height"]     = m_kis_height;
     out["truncate_ratio"] = m_truncate_ratio;
@@ -121,7 +137,11 @@ void Conway_node::write_parameters(nlohmann::json& out) const
 
 void Conway_node::read_parameters(const nlohmann::json& in)
 {
-    m_operation      = static_cast<Conway_operation>(in.value("operation", static_cast<int>(m_operation)));
+    // Adopting "operation" is what migrates a legacy "conway" node (the
+    // parameter is its only record of the operator) and keeps the parameter
+    // writable through MCP; for per-operator types the value normally just
+    // restates the type.
+    set_operation(static_cast<Conway_operation>(in.value("operation", static_cast<int>(m_operation))));
     m_kis_height     = in.value("kis_height",     m_kis_height);
     m_truncate_ratio = in.value("truncate_ratio", m_truncate_ratio);
     m_chamfer_ratio  = in.value("chamfer_ratio",  m_chamfer_ratio);
