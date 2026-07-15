@@ -1,5 +1,7 @@
 #include "geometry_graph/geometry_payload.hpp"
 
+#include "geometry_graph/geometry_graph_node.hpp"
+
 #include "erhe_geometry/geometry.hpp"
 
 namespace editor {
@@ -107,6 +109,11 @@ auto Geometry_payload::operator+=(const Geometry_payload& rhs) -> Geometry_paylo
         identity.load_identity();
         merged->merge_with_transform(*lhs_geometry.get(), identity);
         merged->merge_with_transform(*rhs_geometry.get(), identity);
+        // merge_with_transform appends raw mesh data only; every payload
+        // geometry must be graph-processed (connectivity + edges present),
+        // or downstream operations reading e.g. get_vertex_corners() index
+        // empty tables and abort.
+        process_for_graph(*merged.get());
         value = merged;
         return *this;
     }

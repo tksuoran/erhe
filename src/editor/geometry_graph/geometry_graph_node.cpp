@@ -141,10 +141,11 @@ void Geometry_graph_node::set_output(const std::size_t i, const Geometry_payload
     m_output_payloads.at(i) = payload;
 }
 
-void Geometry_graph_node::make_input_pin(const std::size_t key, const std::string_view name)
+void Geometry_graph_node::make_input_pin(const std::size_t key, const std::string_view name, const bool multi_link)
 {
     m_input_payloads.emplace_back();
     base_make_input_pin(key, name);
+    get_input_pins().back().set_multi_link(multi_link);
 }
 
 void Geometry_graph_node::make_output_pin(const std::size_t key, const std::string_view name)

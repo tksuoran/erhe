@@ -10,7 +10,9 @@ namespace editor {
 Join_geometry_node::Join_geometry_node()
     : Geometry_graph_node{"Join"}
 {
-    make_input_pin(Geometry_pin_key::geometry, "in");
+    // Multi-input socket: all connected geometries merge (see
+    // Geometry_payload::operator+=).
+    make_input_pin(Geometry_pin_key::geometry, "in", true);
     make_output_pin(Geometry_pin_key::geometry, "out");
 }
 

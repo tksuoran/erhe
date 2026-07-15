@@ -130,7 +130,8 @@ void Distribute_points_node::read_parameters(const nlohmann::json& in)
 Instance_on_points_node::Instance_on_points_node()
     : Geometry_graph_node{"Instance on Points"}
 {
-    make_input_pin(Geometry_pin_key::points,      "points");
+    // Multi-input socket: connected point clouds concatenate.
+    make_input_pin(Geometry_pin_key::points,      "points", true);
     make_input_pin(Geometry_pin_key::geometry,    "instance");
     make_input_pin(Geometry_pin_key::float_value, "scale");
     make_output_pin(Geometry_pin_key::instances, "instances");
@@ -208,7 +209,8 @@ void Instance_on_points_node::read_parameters(const nlohmann::json& in)
 Realize_instances_node::Realize_instances_node()
     : Geometry_graph_node{"Realize Instances"}
 {
-    make_input_pin(Geometry_pin_key::instances, "instances");
+    // Multi-input socket: connected instance sets concatenate.
+    make_input_pin(Geometry_pin_key::instances, "instances", true);
     make_output_pin(Geometry_pin_key::geometry, "out");
 }
 

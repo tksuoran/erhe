@@ -1209,16 +1209,22 @@ auto Geometry::get_mesh() const -> const GEO::Mesh&
 
 auto Geometry::get_vertex_corners(GEO::index_t vertex) const -> const std::vector<GEO::index_t>&
 {
+    // Out of range means the connectivity tables were never built for this
+    // mesh state (process_flag_connect) - abort loudly instead of indexing
+    // out of bounds (debug-STL fastfail / silent corruption in release).
+    ERHE_VERIFY(vertex < m_vertex_to_corners.size());
     return m_vertex_to_corners[vertex];
 }
 
 auto Geometry::get_vertex_edges(GEO::index_t vertex) const -> const std::vector<GEO::index_t>&
 {
+    ERHE_VERIFY(vertex < m_vertex_to_edges.size());
     return m_vertex_to_edges[vertex];
 }
 
 auto Geometry::get_corner_facet(GEO::index_t corner) const -> GEO::index_t
 {
+    ERHE_VERIFY(corner < m_corner_to_facet.size());
     return m_corner_to_facet[corner];
 }
 

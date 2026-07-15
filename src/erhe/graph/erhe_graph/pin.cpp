@@ -80,4 +80,14 @@ auto Pin::get_slot() const -> std::size_t
     return m_slot;
 }
 
+auto Pin::allows_multiple_links() const -> bool
+{
+    return m_multi_link;
+}
+
+void Pin::set_multi_link(const bool multi_link)
+{
+    m_multi_link = multi_link;
+}
+
 } // namespace erhe::graph

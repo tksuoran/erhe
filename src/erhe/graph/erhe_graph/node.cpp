@@ -32,6 +32,7 @@ void Node::copy_pins_from(const Node& other)
 {
     for (const Pin& pin : other.m_input_pins) {
         base_make_input_pin(pin.get_key(), pin.get_name());
+        m_input_pins.back().set_multi_link(pin.allows_multiple_links());
     }
     for (const Pin& pin : other.m_output_pins) {
         base_make_output_pin(pin.get_key(), pin.get_name());

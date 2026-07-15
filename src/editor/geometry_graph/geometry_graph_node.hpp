@@ -62,7 +62,11 @@ public:
     [[nodiscard]] auto get_output(std::size_t i) const -> const Geometry_payload&;
     void set_input      (std::size_t i, const Geometry_payload& payload);
     void set_output     (std::size_t i, const Geometry_payload& payload);
-    void make_input_pin (std::size_t key, std::string_view name);
+    // multi_link marks a Blender-style multi-input socket: the pin accepts
+    // multiple simultaneous links and accumulate_input_from_links() merges
+    // their payloads (Join, Instance points, Realize instances). Single-link
+    // pins (the default) are replace-on-connect in the graph editors.
+    void make_input_pin (std::size_t key, std::string_view name, bool multi_link = false);
     void make_output_pin(std::size_t key, std::string_view name);
 
     virtual void evaluate(Geometry_graph& graph);

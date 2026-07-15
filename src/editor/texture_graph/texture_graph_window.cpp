@@ -16,6 +16,7 @@
 #include "editor_log.hpp"
 #include "items.hpp"
 #include "content_library/content_library.hpp"
+#include "operations/compound_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
@@ -305,7 +306,8 @@ auto Texture_graph_window::connect(erhe::graph::Pin* source_pin, erhe::graph::Pi
         return false; // empty state - no asset selected
     }
     // Validate before creating the operation: a refused link must not leave a
-    // no-op entry on the undo stack.
+    // no-op entry on the undo stack. (The cycle test is unaffected by the sink
+    // pin's existing input links, so it can run before the replace handling.)
     if (graph_texture->graph().would_create_cycle(source_pin, sink_pin)) {
         log_graph_editor->warn(
             "Texture graph: connecting '{}' to '{}' would create a cycle - refusing",
@@ -313,6 +315,28 @@ auto Texture_graph_window::connect(erhe::graph::Pin* source_pin, erhe::graph::Pi
             sink_pin  ->get_owner_node()->get_name()
         );
         return false;
+    }
+    // Connecting to a single-link input pin that already has a link replaces
+    // it: the old link(s) are disconnected in the same undo step (Compound),
+    // so one undo restores the previous wiring (mirrors the geometry graph).
+    // No texture node marks its pins multi-link today, but honor the flag.
+    const std::vector<erhe::graph::Link*>& existing_links = sink_pin->get_links();
+    if (!sink_pin->allows_multiple_links() && !existing_links.empty()) {
+        Compound_operation::Parameters parameters;
+        for (erhe::graph::Link* link : existing_links) {
+            parameters.operations.push_back(
+                std::make_shared<Texture_graph_link_insert_remove_operation>(
+                    *this, graph_texture, link->get_source(), link->get_sink(), Texture_graph_link_insert_remove_operation::Mode::remove
+                )
+            );
+        }
+        parameters.operations.push_back(
+            std::make_shared<Texture_graph_link_insert_remove_operation>(
+                *this, graph_texture, source_pin, sink_pin, Texture_graph_link_insert_remove_operation::Mode::insert
+            )
+        );
+        m_app_context.operation_stack->execute_now(std::make_shared<Compound_operation>(std::move(parameters)));
+        return true;
     }
     m_app_context.operation_stack->execute_now(
         std::make_shared<Texture_graph_link_insert_remove_operation>(

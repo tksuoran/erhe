@@ -33,12 +33,21 @@ public:
     [[nodiscard]] auto get_owner_node() const -> Node*;
     [[nodiscard]] auto get_slot      () const -> std::size_t;
 
+    // Whether this (input) pin accepts multiple simultaneous links, with the
+    // payload accumulating over them (Blender-style multi-input socket, e.g.
+    // the geometry graph's Join node). Editors treat single-link pins (the
+    // default) as replace-on-connect: connecting over an existing link first
+    // drops the old one.
+    [[nodiscard]] auto allows_multiple_links() const -> bool;
+                  void set_multi_link       (bool multi_link);
+
 protected:
     int                m_id;
     std::size_t        m_key;
     Node*              m_owner_node{nullptr};
     std::size_t        m_slot;
     bool               m_is_source {true};
+    bool               m_multi_link{false};
     std::string        m_name;
     std::vector<Link*> m_links;
 };

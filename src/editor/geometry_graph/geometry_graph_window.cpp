@@ -19,6 +19,7 @@
 #include "editor_log.hpp"
 #include "items.hpp"
 #include "content_library/content_library.hpp"
+#include "operations/compound_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "preview/brush_preview.hpp"
 #include "scene/scene_root.hpp"
@@ -290,7 +291,9 @@ auto Geometry_graph_window::connect(erhe::graph::Pin* source_pin, erhe::graph::P
         return false; // empty state - no asset selected
     }
     // Validate before creating the operation: a refused link must not
-    // leave a no-op entry on the undo stack.
+    // leave a no-op entry on the undo stack. (The cycle test is unaffected
+    // by the sink pin's existing input links, so it can run before the
+    // replace handling below.)
     if (graph_mesh->graph().would_create_cycle(source_pin, sink_pin)) {
         log_graph_editor->warn(
             "Geometry graph: connecting '{}' to '{}' would create a cycle - refusing",
@@ -298,6 +301,29 @@ auto Geometry_graph_window::connect(erhe::graph::Pin* source_pin, erhe::graph::P
             sink_pin  ->get_owner_node()->get_name()
         );
         return false;
+    }
+    // Connecting to a single-link input pin that already has a link replaces
+    // it: the old link(s) are disconnected in the same undo step (Compound),
+    // so one undo restores the previous wiring. Multi-input sockets (Join,
+    // Instance points, Realize instances - Pin::allows_multiple_links) keep
+    // every link and accumulate payloads instead.
+    const std::vector<erhe::graph::Link*>& existing_links = sink_pin->get_links();
+    if (!sink_pin->allows_multiple_links() && !existing_links.empty()) {
+        Compound_operation::Parameters parameters;
+        for (erhe::graph::Link* link : existing_links) {
+            parameters.operations.push_back(
+                std::make_shared<Geometry_graph_link_insert_remove_operation>(
+                    *this, graph_mesh, link->get_source(), link->get_sink(), Geometry_graph_link_insert_remove_operation::Mode::remove
+                )
+            );
+        }
+        parameters.operations.push_back(
+            std::make_shared<Geometry_graph_link_insert_remove_operation>(
+                *this, graph_mesh, source_pin, sink_pin, Geometry_graph_link_insert_remove_operation::Mode::insert
+            )
+        );
+        m_app_context.operation_stack->execute_now(std::make_shared<Compound_operation>(std::move(parameters)));
+        return true;
     }
     m_app_context.operation_stack->execute_now(
         std::make_shared<Geometry_graph_link_insert_remove_operation>(
