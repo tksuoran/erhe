@@ -1,12 +1,14 @@
 §MBEL:5.0
 
-[TASK::node-properties-graph-selection]{impl-done+headless-verified,awaiting-user-verify}
-✓all{a2eeba7b}::NodeProperties-shows-canvas-selection-of-every-graph-editor+per-node-size-scale+panel-parameter-editing+2-MCP-select-tools+dispatch-table
-✓pin-edges{bc8c8377}::Inputs/Outputs-layout-for-geometry+texture-nodes{shared-node_edge.hpp;left|right-only;serialized-input_edge/output_edge;MCP-set_node_layout-tools;headless-verified-flip+scale-render}
-?user-verify::size-scale-slider{node-grows/shrinks-on-canvas,previews-sharpen}+panel-parameter-edit-undo+position-drag+Inputs/Outputs-combos{flip-pins-live,links-follow}
+[TASK::node-properties-graph-selection]{impl-done;user-verified-selection+pin-edges;size-rework-awaits-user-verify}
+✓all{a2eeba7b}::NodeProperties-shows-canvas-selection-of-every-graph-editor+panel-parameter-editing+2-MCP-select-tools+dispatch-table
+✓pin-edges{bc8c8377}::Inputs/Outputs-layout-for-geometry+texture-nodes{shared-node_edge.hpp;left|right-only;serialized-input_edge/output_edge;MCP-set_node_layout-tools}
+✓size-rework{c62ef868,user-rejected-scale}::Size=requested-width/height{canvas-units,<=0=auto;content-NOT-scaled;width→center-column,height→Dummy-pad;JSON-width/height;MCP-width/height-args;headless-verified-500x320+auto-restore}
+?user-verify::Size-width/height-drags+Auto-button-feel+panel-parameter-edit-undo+position-drag
 !canvas-selection-per-window-persists{clicking-in-one-graph-window-does-NOT-clear-another's→NodeProperties-can-show-nodes-from-several-windows-at-once;dedup-by-node-only}
 !MSVC-C1061::~125-else-if=nesting-limit{mcp_server.cpp-dispatch;table-must-be-function-local{private-member-ptr-access}}
-!ui_scale-¬in-write_parameters{concrete-nodes-don't-call-base}→serialized-by-write/read_graph_asset_json-next-to-parameters;¬in-shadow-clones{irrelevant-for-eval}
+!node-layout-¬in-write_parameters{concrete-nodes-don't-call-base}→serialized-by-write/read_graph_asset_json-next-to-parameters{width/height/input_edge/output_edge};¬in-shadow-clones{irrelevant-for-eval}
+!requested-node-width-must-subtract-NodePadding{ax-Style.NodePadding-ImVec4-canvas-units}-else-GetNodeSize≠request
 !properties_imgui-forces-content_scale=1{restores-after;else-preview-size-quantization-thrash-between-panel+canvas}
 !ax-SelectNode-needs-node-drawn-once{editor-context-creates-canvas-nodes-on-first-draw}→MCP-select-tools-document-show-window-first
 
