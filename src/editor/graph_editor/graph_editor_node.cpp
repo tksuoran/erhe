@@ -38,7 +38,7 @@ void Graph_editor_node::imgui()
 void Graph_editor_node::properties_imgui(App_context& app_context)
 {
     // Content-scale-neutral: imgui() widgets size themselves with
-    // content_scale(), which on the canvas carries zoom * ui-scale. Render
+    // content_scale(), which on the canvas carries the view zoom. Render
     // at 1 here and restore, so a properties-panel edit does not disturb
     // canvas-derived state (e.g. the preview display size).
     const float saved_content_scale = m_content_scale;
@@ -55,14 +55,20 @@ void Graph_editor_node::properties_imgui(App_context& app_context)
     commit_parameter_edit(app_context);
 }
 
-auto Graph_editor_node::get_ui_scale() const -> float
+auto Graph_editor_node::get_ui_width() const -> float
 {
-    return m_ui_scale;
+    return m_ui_width;
 }
 
-void Graph_editor_node::set_ui_scale(const float scale)
+auto Graph_editor_node::get_ui_height() const -> float
 {
-    m_ui_scale = std::clamp(scale, 0.25f, 4.0f);
+    return m_ui_height;
+}
+
+void Graph_editor_node::set_ui_size(const float width, const float height)
+{
+    m_ui_width  = std::clamp(width,  0.0f, 4096.0f);
+    m_ui_height = std::clamp(height, 0.0f, 4096.0f);
 }
 
 auto Graph_editor_node::get_input_pin_edge() const -> int
@@ -151,21 +157,31 @@ void Graph_editor_node::node_editor(App_context& app_context, ax::NodeEditor::Ed
     ERHE_DEFER( ImGui::PopStyleVar(1); );
 
     // Issue #251: node content is authored in screen space at the zoomed size,
-    // so canvas-unit pixel metrics must be multiplied by the view scale. The
-    // per-node ui scale (Node Properties "Size") folds in here so the whole
-    // node - widths, pins, previews - scales with it.
-    m_content_scale = node_editor.GetCurrentZoom() * m_ui_scale;
+    // so canvas-unit pixel metrics must be multiplied by the view scale.
+    m_content_scale = node_editor.GetCurrentZoom();
 
     ax::NodeEditor::NodeId node_id{get_id()};
     m_is_hovered = (node_editor.GetHoveredNode() == node_id);
     node_editor.BeginNode(node_id);
 
-    // The canvas pushed the font at (base * zoom); scale that pushed base by
-    // the node's ui scale so text tracks the scaled widths.
-    ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * m_ui_scale);
+    // Top of the node content in screen space, for the requested-height pad
+    // below the content.
+    const float content_top_y = ImGui::GetCursorScreenPos().y;
 
+    // Node size (Node Properties "Size" row): a requested width stretches the
+    // center column - content keeps its normal zoomed size, it just gets more
+    // (or less, down to a minimum) room. NodePadding is part of the node's
+    // outer extent, so subtract it to hit the requested canvas-unit width.
+    const ImVec4 node_padding    = node_editor.GetStyle().NodePadding; // canvas units: left, top, right, bottom
     const float  pin_label_width = 70.0f  * m_content_scale;
-    const float  center_width    = 150.0f * m_content_scale;
+    float        center_width    = 150.0f * m_content_scale;
+    if (m_ui_width > 0.0f) {
+        const float padding_width = (node_padding.x + node_padding.z) * m_content_scale;
+        center_width = std::max(
+            (m_ui_width * m_content_scale) - (2.0f * pin_label_width) - padding_width,
+            50.0f * m_content_scale
+        );
+    }
     const ImVec2 node_table_size{center_width + (2.0f * pin_label_width), 0.0f};
 
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
@@ -244,7 +260,17 @@ void Graph_editor_node::node_editor(App_context& app_context, ax::NodeEditor::Ed
 
     ImGui::EndTable();
 
-    ImGui::PopFont();
+    // Requested node height: pad with empty space below the content (the
+    // width is exact through the table; the height stays content-driven
+    // otherwise). Content taller than the request wins.
+    if (m_ui_height > 0.0f) {
+        const float padding_height         = (node_padding.y + node_padding.w) * m_content_scale;
+        const float desired_content_height = (m_ui_height * m_content_scale) - padding_height;
+        const float content_height         = ImGui::GetCursorScreenPos().y - content_top_y;
+        if (desired_content_height > content_height) {
+            ImGui::Dummy(ImVec2{1.0f, desired_content_height - content_height});
+        }
+    }
 
     node_editor.EndNode();
 

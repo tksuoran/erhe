@@ -43,10 +43,13 @@ template <typename NodeT>
         nlohmann::json parameters = nlohmann::json::object();
         node->write_parameters(parameters);
         node_json["parameters"] = parameters;
-        // Node layout (Node Properties "Size" scale and "Inputs" / "Outputs"
-        // pin edges); optional, defaults 1 / left / right.
-        if (node->get_ui_scale() != 1.0f) {
-            node_json["ui_scale"] = node->get_ui_scale();
+        // Node layout (Node Properties "Size" extent and "Inputs" / "Outputs"
+        // pin edges); optional, defaults automatic / left / right.
+        if (node->get_ui_width() > 0.0f) {
+            node_json["width"] = node->get_ui_width();
+        }
+        if (node->get_ui_height() > 0.0f) {
+            node_json["height"] = node->get_ui_height();
         }
         if (node->get_input_pin_edge() != Node_edge::left) {
             node_json["input_edge"] = node->get_input_pin_edge();
@@ -130,7 +133,7 @@ auto read_graph_asset_json(
         if (node_json.contains("parameters") && node_json["parameters"].is_object()) {
             node->read_parameters(node_json["parameters"]);
         }
-        node->set_ui_scale(node_json.value("ui_scale", 1.0f));
+        node->set_ui_size(node_json.value("width", 0.0f), node_json.value("height", 0.0f));
         node->set_input_pin_edge (node_json.value("input_edge",  Node_edge::left));
         node->set_output_pin_edge(node_json.value("output_edge", Node_edge::right));
         new_nodes.push_back(node);

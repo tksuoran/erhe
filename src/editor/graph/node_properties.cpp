@@ -156,10 +156,21 @@ void Node_properties_window::node_properties(Shader_graph_node& node)
     m_property_editor.add_entry(
         "Size",
         [&node]() {
-            float ui_scale = node.get_ui_scale();
-            if (ImGui::SliderFloat("##size", &ui_scale, 0.25f, 4.0f, "%.2f")) {
-                node.set_ui_scale(ui_scale);
+            // Requested node size in canvas units; 0 = automatic
+            // (content-derived). Content is not scaled.
+            float size[2] = {node.get_ui_width(), node.get_ui_height()};
+            const float auto_button_width = ImGui::CalcTextSize("Auto").x + (2.0f * ImGui::GetStyle().FramePadding.x);
+            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - auto_button_width - ImGui::GetStyle().ItemSpacing.x);
+            if (ImGui::DragFloat2("##size", size, 1.0f, 0.0f, 4096.0f, "%.0f")) {
+                node.set_ui_size(size[0], size[1]);
             }
+            ImGui::SameLine();
+            const bool is_automatic = (node.get_ui_width() <= 0.0f) && (node.get_ui_height() <= 0.0f);
+            ImGui::BeginDisabled(is_automatic);
+            if (ImGui::Button("Auto")) {
+                node.set_ui_size(0.0f, 0.0f);
+            }
+            ImGui::EndDisabled();
         }
     );
     m_property_editor.pop_group();
@@ -227,15 +238,27 @@ void Node_properties_window::graph_editor_node_properties(Graph_editor_window_ba
         }
     });
     m_property_editor.add_entry("Size", [&window, node]() {
-        // The on-canvas extent is content-derived; the scale below adjusts it.
-        const ImVec2 size = window.get_node_size(*node.get());
-        float ui_scale = node->get_ui_scale();
-        ImGui::Text("%.0f x %.0f", size.x, size.y);
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(-FLT_MIN);
-        if (ImGui::SliderFloat("##size_scale", &ui_scale, 0.25f, 4.0f, "x %.2f")) {
-            node->set_ui_scale(ui_scale);
+        // Requested node size in canvas units; automatic (content-derived)
+        // when unset, in which case the drags start from the actual on-canvas
+        // extent. Content is not scaled - the node just gets more room (a
+        // wider center column, empty space below the content).
+        const ImVec2 actual_size = window.get_node_size(*node.get());
+        float size[2] = {
+            (node->get_ui_width()  > 0.0f) ? node->get_ui_width()  : actual_size.x,
+            (node->get_ui_height() > 0.0f) ? node->get_ui_height() : actual_size.y
+        };
+        const float auto_button_width = ImGui::CalcTextSize("Auto").x + (2.0f * ImGui::GetStyle().FramePadding.x);
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - auto_button_width - ImGui::GetStyle().ItemSpacing.x);
+        if (ImGui::DragFloat2("##size", size, 1.0f, 0.0f, 4096.0f, "%.0f")) {
+            node->set_ui_size(size[0], size[1]);
         }
+        ImGui::SameLine();
+        const bool is_automatic = (node->get_ui_width() <= 0.0f) && (node->get_ui_height() <= 0.0f);
+        ImGui::BeginDisabled(is_automatic);
+        if (ImGui::Button("Auto")) {
+            node->set_ui_size(0.0f, 0.0f);
+        }
+        ImGui::EndDisabled();
     });
     // Pin layout: only left / right are implemented by the node renderer, so
     // the combos offer just those two edges (unlike the shader graph's).

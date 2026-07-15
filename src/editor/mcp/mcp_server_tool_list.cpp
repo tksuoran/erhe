@@ -805,23 +805,25 @@ void Mcp_server::refresh_tool_list()
             {"node_ids", {{"type", "array"}, {"items", {{"type", "integer"}}}, {"description", "Ids of the nodes to select (see get_texture_graph); empty clears the selection"}}}
         }}
     }});
-    m_tool_infos.push_back({"geometry_graph_set_node_layout", "Set a geometry graph node's canvas layout: position, ui scale (node size, clamped to [0.25, 4]), and which node edge the input / output pins are laid out on. All arguments except node_id are optional; omitted ones are left unchanged. Returns the resulting layout. Same knobs as the Node Properties window's Position / Size / Inputs / Outputs rows.", {
+    m_tool_infos.push_back({"geometry_graph_set_node_layout", "Set a geometry graph node's canvas layout: position, requested width / height (canvas units; content is not scaled - the node gets more room; 0 = automatic, content taller/wider than the request wins), and which node edge the input / output pins are laid out on. All arguments except node_id are optional; omitted ones are left unchanged. Returns the resulting layout. Same knobs as the Node Properties window's Position / Size / Inputs / Outputs rows.", {
         {"type", "object"},
         {"properties", {
             {"node_id",     {{"type", "integer"}, {"description", "Id of the node (see get_geometry_graph)"}}},
             {"position",    {{"type", "array"},   {"items", {{"type", "number"}}}, {"description", "Canvas position [x, y]"}}},
-            {"ui_scale",    {{"type", "number"},  {"description", "Node size scale, 1 = default, clamped to [0.25, 4]"}}},
+            {"width",       {{"type", "number"},  {"description", "Requested node width in canvas units; 0 = automatic (content-derived)"}}},
+            {"height",      {{"type", "number"},  {"description", "Requested node height in canvas units; 0 = automatic (content-derived)"}}},
             {"input_edge",  {{"type", "string"},  {"description", "Edge for input pins: left (default) or right"}}},
             {"output_edge", {{"type", "string"},  {"description", "Edge for output pins: left or right (default)"}}}
         }},
         {"required", json::array({"node_id"})}
     }});
-    m_tool_infos.push_back({"texture_graph_set_node_layout", "Set a texture graph node's canvas layout: position, ui scale (node size, clamped to [0.25, 4]), and which node edge the input / output pins are laid out on. All arguments except node_id are optional; omitted ones are left unchanged. Returns the resulting layout. Same knobs as the Node Properties window's Position / Size / Inputs / Outputs rows.", {
+    m_tool_infos.push_back({"texture_graph_set_node_layout", "Set a texture graph node's canvas layout: position, requested width / height (canvas units; content is not scaled - the node gets more room; 0 = automatic, content taller/wider than the request wins), and which node edge the input / output pins are laid out on. All arguments except node_id are optional; omitted ones are left unchanged. Returns the resulting layout. Same knobs as the Node Properties window's Position / Size / Inputs / Outputs rows.", {
         {"type", "object"},
         {"properties", {
             {"node_id",     {{"type", "integer"}, {"description", "Id of the node (see get_texture_graph)"}}},
             {"position",    {{"type", "array"},   {"items", {{"type", "number"}}}, {"description", "Canvas position [x, y]"}}},
-            {"ui_scale",    {{"type", "number"},  {"description", "Node size scale, 1 = default, clamped to [0.25, 4]"}}},
+            {"width",       {{"type", "number"},  {"description", "Requested node width in canvas units; 0 = automatic (content-derived)"}}},
+            {"height",      {{"type", "number"},  {"description", "Requested node height in canvas units; 0 = automatic (content-derived)"}}},
             {"input_edge",  {{"type", "string"},  {"description", "Edge for input pins: left (default) or right"}}},
             {"output_edge", {{"type", "string"},  {"description", "Edge for output pins: left or right (default)"}}}
         }},

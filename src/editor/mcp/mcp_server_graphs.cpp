@@ -127,11 +127,16 @@ namespace {
         const float y = args["position"][1].get<float>();
         window.set_node_position(node, ImVec2{x, y});
     }
-    if (args.contains("ui_scale")) {
-        if (!args["ui_scale"].is_number()) {
-            return make_error_content("'ui_scale' must be a number");
+    if (args.contains("width") || args.contains("height")) {
+        if (args.contains("width") && !args["width"].is_number()) {
+            return make_error_content("'width' must be a number (canvas units; 0 = automatic)");
         }
-        node.set_ui_scale(args["ui_scale"].get<float>());
+        if (args.contains("height") && !args["height"].is_number()) {
+            return make_error_content("'height' must be a number (canvas units; 0 = automatic)");
+        }
+        const float width  = args.contains("width")  ? args["width"].get<float>()  : node.get_ui_width();
+        const float height = args.contains("height") ? args["height"].get<float>() : node.get_ui_height();
+        node.set_ui_size(width, height);
     }
     int edge = 0;
     if (args.contains("input_edge")) {
@@ -150,7 +155,8 @@ namespace {
     json result;
     result["node_id"]     = node.get_id();
     result["position"]    = json::array({position.x, position.y});
-    result["ui_scale"]    = node.get_ui_scale();
+    result["width"]       = node.get_ui_width();  // 0 = automatic
+    result["height"]      = node.get_ui_height(); // 0 = automatic
     result["input_edge"]  = (node.get_input_pin_edge()  == Node_edge::right) ? "right" : "left";
     result["output_edge"] = (node.get_output_pin_edge() == Node_edge::right) ? "right" : "left";
     return make_json_content(result).dump();

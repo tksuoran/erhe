@@ -34,11 +34,13 @@ public:
     virtual void evaluate(Shader_graph& graph);
     virtual void imgui   ();
 
-    // Node size: per-node scale multiplying the node's on-canvas widths and
-    // font (1 = default). Adjusted from the Node Properties window. Clamped
-    // to [0.25, 4].
-    [[nodiscard]] auto get_ui_scale() const -> float;
-    void set_ui_scale(float scale);
+    // Node size: requested node extent in canvas units; <= 0 = automatic
+    // (content-derived). Content is NOT scaled - a wider node stretches the
+    // center column, a taller node pads below the content. Adjusted from the
+    // Node Properties window "Size" row.
+    [[nodiscard]] auto get_ui_width () const -> float;
+    [[nodiscard]] auto get_ui_height() const -> float;
+    void set_ui_size(float width, float height);
 
 protected:
     friend class Node_properties_window;
@@ -72,7 +74,8 @@ protected:
     std::vector<Payload> m_input_payloads;
     std::vector<Payload> m_output_payloads;
     float                m_content_scale  {1.0f};
-    float                m_ui_scale       {1.0f};
+    float                m_ui_width       {0.0f}; // canvas units; <= 0 = automatic
+    float                m_ui_height      {0.0f}; // canvas units; <= 0 = automatic
     int                  m_input_pin_edge {Node_edge::left};
     int                  m_output_pin_edge{Node_edge::right};
 };
