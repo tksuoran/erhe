@@ -3,6 +3,7 @@
 #include "geometry_graph/geometry_payload.hpp"
 #include "graph_editor/graph_editor_node.hpp"
 
+#include <glm/gtc/quaternion.hpp>
 #include <nlohmann/json_fwd.hpp>
 
 #include <memory>
@@ -120,10 +121,12 @@ public:
     void mark_preview_needs_render();
     [[nodiscard]] auto get_preview_texture() const -> const std::shared_ptr<erhe::graphics::Texture>&;
     void set_preview_texture(const std::shared_ptr<erhe::graphics::Texture>& texture);
-    // Current preview orientation (radians around Y). Advanced while the
-    // pointer hovers the node on the canvas (draw_preview); persists so
-    // the model stops in place when the hover ends.
-    [[nodiscard]] auto get_preview_rotation() const -> float;
+    // Current preview orientation. Left-drag on the preview image tumbles it
+    // arcball-style (world-Y yaw + camera-right pitch); when auto-rotation is
+    // enabled (graph_node_previews.auto_rotate) hovering the node spins it
+    // around Y - paused while dragging. Persists so the model stops in place
+    // when the interaction ends.
+    [[nodiscard]] auto get_preview_orientation() const -> const glm::quat&;
     // The render-target resolution matching the preview's latest on-canvas
     // display size (recorded zoom-scaled in draw_preview), quantized to
     // powers of two in [64, 512] so zooming does not thrash reallocations.
@@ -154,7 +157,7 @@ protected:
     std::shared_ptr<erhe::primitive::Primitive> m_preview_primitive;
     std::shared_ptr<erhe::graphics::Texture>    m_preview_texture;
     bool                                        m_preview_needs_render{false};
-    float                                       m_preview_rotation{0.0f};
+    glm::quat                                   m_preview_orientation{1.0f, 0.0f, 0.0f, 0.0f};
     float                                       m_preview_display_size{128.0f}; // screen px, zoom-scaled
 };
 

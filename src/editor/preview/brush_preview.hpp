@@ -2,6 +2,8 @@
 
 #include "preview/scene_preview.hpp"
 
+#include <glm/gtc/quaternion.hpp>
+
 struct Preview_edge_lines_config;
 
 namespace erhe::primitive { class Primitive; }
@@ -29,9 +31,9 @@ public:
     );
 
     // Renders any prebuilt renderable primitive (bounding-sphere camera
-    // fit, oriented by `rotation_radians` around Y - the brush overload
-    // above derives it from `time` for the spinning thumbnails, the
-    // geometry graph passes each node's persistent hover-spun angle).
+    // fit, model oriented by `orientation` - the brush overload above
+    // derives a Y spin from `time` for the spinning thumbnails, the
+    // geometry graph passes each node's persistent arcball orientation).
     // Null material falls back to the preview scene's default material.
     // headlight_shading gives an N.V-dimmed look: the key light is
     // co-located with the fitted camera (Lambert diffuse then falls off
@@ -48,7 +50,7 @@ public:
         unsigned int                                       texture_layer,
         const std::shared_ptr<erhe::primitive::Primitive>& primitive,
         const std::shared_ptr<erhe::primitive::Material>&  material,
-        float                                              rotation_radians,
+        const glm::quat&                                   orientation,
         bool                                               headlight_shading = false,
         const Preview_edge_lines_config*                   edge_lines = nullptr
     );

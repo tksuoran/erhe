@@ -46,22 +46,4 @@ auto Graph_mesh::consume_attachment_push_request() -> bool
     return requested;
 }
 
-void Graph_mesh::set_node_previews_enabled(const bool enabled)
-{
-    if (m_node_previews_enabled == enabled) {
-        return;
-    }
-    m_node_previews_enabled = enabled;
-    if (enabled) {
-        // Preview primitives are only built when a node evaluates; force a
-        // full run so clean nodes get previews too.
-        graph().mark_dirty();
-    }
-}
-
-auto Graph_mesh::get_node_previews_enabled() const -> bool
-{
-    return m_node_previews_enabled;
-}
-
 } // namespace editor

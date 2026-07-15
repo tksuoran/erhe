@@ -780,7 +780,7 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"node_id"})}
     }});
-    m_tool_infos.push_back({"geometry_graph_set_node_previews", "Enable/disable per-node mesh preview thumbnails on the geometry graph canvas for the window's target Graph Mesh (the 'Show node previews' checkbox). Enabling forces a full background re-evaluation so every node gets a preview; previews render a few nodes per frame after evaluation completes.", {
+    m_tool_infos.push_back({"geometry_graph_set_node_previews", "Enable/disable per-node mesh preview thumbnails on the geometry graph canvas (the 'Show node previews' checkbox; editor-global persistent setting, ON by default). Enabling forces a full background re-evaluation of every graph so every node gets a preview; previews render a few nodes per frame after evaluation completes.", {
         {"type", "object"},
         {"properties", {
             {"enabled", {{"type", "boolean"}, {"description", "true (default) to show previews, false to hide"}}}

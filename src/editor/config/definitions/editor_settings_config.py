@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Editor_settings_config",
-    version=14,
+    version=15,
     short_desc="Editor settings",
     long_desc="Runtime-editable settings saved to editor_settings.json.",
     developer=False,
@@ -39,6 +39,9 @@ struct("Editor_settings_config",
         # members keep the struct's own defaults).
         field("graph_node_preview_edge_lines",    StructRef("Preview_edge_lines_config"), added_in=14, short_desc="Graph Node Preview Edge Lines"),
         field("brush_preview_edge_lines",         StructRef("Preview_edge_lines_config"), added_in=14, short_desc="Brush Preview Edge Lines", default=".enabled = false"),
+        # Editor-global geometry graph node preview thumbnails: visibility
+        # (on by default) and hover auto-rotation.
+        field("graph_node_previews",              StructRef("Graph_node_previews_config"), added_in=15),
         field("scene_views",          Vector(StructRef("Scene_view_settings")), added_in=5),
         field("developer",            StructRef("Developer_config"),       added_in=1),
         field("grid",                 StructRef("Grid_config"),            added_in=1),

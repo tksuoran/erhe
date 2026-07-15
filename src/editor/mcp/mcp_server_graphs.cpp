@@ -371,12 +371,10 @@ auto Mcp_server::action_geometry_graph_set_node_previews(const json& args) -> st
     if (window == nullptr) {
         return make_error_content("Geometry graph window not available");
     }
-    const std::shared_ptr<Graph_mesh> graph_mesh = window->get_current_graph_mesh();
-    if (!graph_mesh) {
-        return make_error_content("No target Graph Mesh - create one (create_graph_mesh) or set the target (set_geometry_graph_target) first");
-    }
+    // Editor-global setting now (Editor_settings_config::graph_node_previews,
+    // persistent, on by default); enabling re-evaluates every graph.
     const bool enabled = args.value("enabled", true);
-    graph_mesh->set_node_previews_enabled(enabled);
+    window->set_node_previews_enabled(enabled);
     json result;
     result["node_previews_enabled"] = enabled;
     return make_json_content(result).dump();

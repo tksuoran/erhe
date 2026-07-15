@@ -117,6 +117,14 @@ public:
     // headless zoom-quality knob used by the #251 verification harness.
     void set_node_editor_zoom(float zoom);
 
+    // Sets the editor-global "Show node previews" setting
+    // (Editor_settings_config::graph_node_previews.enabled; persistent, on
+    // by default). Turning previews ON forces a full background
+    // re-evaluation of every Graph_mesh so clean nodes get preview
+    // primitives too. Used by the checkbox in controls_imgui and the MCP
+    // geometry_graph_set_node_previews tool.
+    void set_node_previews_enabled(bool enabled);
+
     // Canvas selection setter: clears the ax::NodeEditor selection and
     // selects the given node ids (empty = just clear). A node must have
     // been drawn at least once (the editor context creates canvas nodes on

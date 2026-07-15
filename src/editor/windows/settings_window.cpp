@@ -31,6 +31,7 @@
 #include "config/generated/mesh_component_style_serialization.hpp"
 #include "config/generated/content_edge_lines_config_serialization.hpp"
 #include "config/generated/preview_edge_lines_config_serialization.hpp"
+#include "config/generated/graph_node_previews_config_serialization.hpp"
 #include "config/generated/debug_visualizations_settings_serialization.hpp"
 #include "config/generated/developer_config_serialization.hpp"
 #include "config/generated/grid_config_serialization.hpp"
@@ -511,6 +512,9 @@ void Settings_window::imgui()
         // twice; the label override gives each a distinct group header).
         add_config_section(settings.graph_node_preview_edge_lines, "Graph Node Preview Edge Lines");
         add_config_section(settings.brush_preview_edge_lines,      "Brush Preview Edge Lines");
+        // Editor-global geometry graph node preview thumbnails (also toggled
+        // from the graph editor's palette panel).
+        add_config_section(settings.graph_node_previews);
         // Note: the per-view debug-visualization enable toggles / modes
         // (Debug_visualizations_settings) are intentionally NOT shown here -
         // they live only per scene view (edited in the scene-view Debug

@@ -586,7 +586,7 @@ void Geometry_graph_window::launch_evaluation(const std::shared_ptr<Graph_mesh>&
     // Per-node previews: the worker builds a preview primitive for every
     // node it evaluates (mesh_memory's buffer writes are worker-safe here -
     // the output node already builds its renderable mesh on this worker).
-    if (graph_mesh->get_node_previews_enabled()) {
+    if ((m_app_context.editor_settings != nullptr) && m_app_context.editor_settings->graph_node_previews.enabled) {
         run->shadow_graph.set_preview_mesh_memory(m_app_context.mesh_memory);
     }
     // A fresh Geometry_graph is born forced-full (so a graph's first
@@ -719,6 +719,43 @@ void Geometry_graph_window::update_evaluation()
     update_node_previews();
 }
 
+void Geometry_graph_window::set_node_previews_enabled(const bool enabled)
+{
+    if (m_app_context.editor_settings == nullptr) {
+        return;
+    }
+    Graph_node_previews_config& previews = m_app_context.editor_settings->graph_node_previews;
+    if (previews.enabled == enabled) {
+        return;
+    }
+    previews.enabled = enabled;
+    if (!enabled) {
+        return;
+    }
+    // Preview primitives are only built when a node evaluates; force a full
+    // run of every graph so clean nodes get previews too (the setting is
+    // editor-global, so every Graph_mesh in every scene participates).
+    const auto mark_graph = [](const std::shared_ptr<Graph_mesh>& graph_mesh) {
+        if (graph_mesh) {
+            graph_mesh->graph().mark_dirty();
+        }
+    };
+    mark_graph(m_graph_mesh);
+    if (m_app_context.app_scenes != nullptr) {
+        for (const std::shared_ptr<Scene_root>& scene_root : m_app_context.app_scenes->get_scene_roots()) {
+            const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
+            if (!content_library || !content_library->graph_meshes) {
+                continue;
+            }
+            for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->graph_meshes->get_all<Graph_mesh>()) {
+                if (graph_mesh != m_graph_mesh) {
+                    mark_graph(graph_mesh);
+                }
+            }
+        }
+    }
+}
+
 void Geometry_graph_window::update_node_previews()
 {
     // Renders pending per-node preview thumbnails (armed by
@@ -726,6 +763,10 @@ void Geometry_graph_window::update_node_previews()
     // per frame. Reuses Brush_preview's offscreen scene; needs a recording
     // command buffer (present during the normal frame update).
     if ((m_app_context.current_command_buffer == nullptr) || (m_app_context.brush_preview == nullptr)) {
+        return;
+    }
+    // Previews are an editor-global setting now (graph_node_previews).
+    if ((m_app_context.editor_settings == nullptr) || !m_app_context.editor_settings->graph_node_previews.enabled) {
         return;
     }
     // Previews are cached textures; a change to the edge-line settings must
@@ -770,7 +811,7 @@ void Geometry_graph_window::update_node_previews()
     }
     int budget = 2;
     const auto render_graph_previews = [this, &budget, edge_lines](const std::shared_ptr<Graph_mesh>& graph_mesh) {
-        if (!graph_mesh || !graph_mesh->get_node_previews_enabled()) {
+        if (!graph_mesh) {
             return;
         }
         for (const std::shared_ptr<Geometry_graph_node>& node : graph_mesh->nodes()) {
@@ -812,9 +853,9 @@ void Geometry_graph_window::update_node_previews()
                 );
             }
             // Headlight shading: N.V-dimmed neutral look (reads curvature
-            // better than the brush preview material). Rotation is the
-            // node's persistent hover-spun angle.
-            m_app_context.brush_preview->render_preview(node->get_preview_texture(), 0, node->get_preview_primitive(), {}, node->get_preview_rotation(), true, edge_lines);
+            // better than the brush preview material). Orientation is the
+            // node's persistent arcball / hover-spin orientation.
+            m_app_context.brush_preview->render_preview(node->get_preview_texture(), 0, node->get_preview_primitive(), {}, node->get_preview_orientation(), true, edge_lines);
             node->clear_preview_needs_render();
             --budget;
         }
@@ -922,12 +963,18 @@ void Geometry_graph_window::controls_imgui()
         return;
     }
     ImGui::Text("Editing: %s", m_graph_mesh->get_name().c_str());
-    // Per-node mesh preview thumbnails on the canvas; per asset, default
-    // off (each node change then costs a preview primitive build on the
-    // evaluation worker plus a small GPU render).
-    bool node_previews = m_graph_mesh->get_node_previews_enabled();
-    if (ImGui::Checkbox("Show node previews", &node_previews)) {
-        m_graph_mesh->set_node_previews_enabled(node_previews);
+    // Per-node mesh preview thumbnails on the canvas; editor-global and
+    // persistent (Editor_settings_config::graph_node_previews), on by
+    // default. Auto-rotate spins a hovered node's preview (paused while
+    // drag-rotating it).
+    if (m_app_context.editor_settings != nullptr) {
+        Graph_node_previews_config& previews = m_app_context.editor_settings->graph_node_previews;
+        bool node_previews = previews.enabled;
+        if (ImGui::Checkbox("Show node previews", &node_previews)) {
+            set_node_previews_enabled(node_previews);
+        }
+        ImGui::SameLine();
+        ImGui::Checkbox("Auto-rotate", &previews.auto_rotate);
     }
     ImGui::Separator();
     node_palette();

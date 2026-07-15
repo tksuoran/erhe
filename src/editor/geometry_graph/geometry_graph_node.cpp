@@ -3,6 +3,7 @@
 #include "geometry_graph/geometry_graph_window.hpp"
 #include "geometry_graph/graph_mesh.hpp"
 #include "app_context.hpp"
+#include "config/generated/editor_settings_config.hpp"
 #include "operations/operation_stack.hpp"
 #include "tools/selection_tool.hpp"
 
@@ -241,7 +242,7 @@ void Geometry_graph_node::after_node_content(App_context& context)
         );
     }
 
-    if (graph_mesh->get_node_previews_enabled()) {
+    if ((context.editor_settings != nullptr) && context.editor_settings->graph_node_previews.enabled) {
         draw_preview(context);
     }
 }
@@ -348,9 +349,9 @@ void Geometry_graph_node::set_preview_texture(const std::shared_ptr<erhe::graphi
     m_preview_texture = texture;
 }
 
-auto Geometry_graph_node::get_preview_rotation() const -> float
+auto Geometry_graph_node::get_preview_orientation() const -> const glm::quat&
 {
-    return m_preview_rotation;
+    return m_preview_orientation;
 }
 
 auto Geometry_graph_node::get_preview_desired_texture_size() const -> int
@@ -374,20 +375,10 @@ void Geometry_graph_node::draw_preview(App_context& context)
     const float size = get_preview_fit_size();
     m_preview_display_size = size;
 
-    // Hovering the node spins the preview; the angle persists so the
-    // model stops in place when the hover ends. Re-rendering goes through
-    // the normal budgeted path (update_node_previews).
-    if (m_is_hovered && m_preview_primitive) {
-        m_preview_rotation += 1.5f * ImGui::GetIO().DeltaTime;
-        if (m_preview_rotation > 6.2831853f) {
-            m_preview_rotation -= 6.2831853f;
-        }
-        m_preview_needs_render = true;
-    }
-
     if (!m_preview_texture || (context.imgui_renderer == nullptr)) {
         return;
     }
+    const ImVec2 image_top_left = ImGui::GetCursorScreenPos();
     context.imgui_renderer->image(
         erhe::imgui::Draw_texture_parameters{
             .texture_reference = m_preview_texture,
@@ -400,6 +391,41 @@ void Geometry_graph_node::draw_preview(App_context& context)
             .debug_label       = "Geometry_graph_node preview"
         }
     );
+
+    // Arcball tumble: an invisible button overlaid on the image captures the
+    // left drag (an active ImGui item also keeps the node editor from
+    // interpreting the drag as a node move). World-Y yaw for horizontal
+    // motion, camera-right (world X - the preview camera has no roll and no
+    // sideways offset) pitch for vertical, composed in world space so it
+    // behaves like grabbing the surface. Sensitivity is per screen pixel.
+    ImGui::SetCursorScreenPos(image_top_left);
+    ImGui::InvisibleButton("##preview_arcball", ImVec2{size, size});
+    const bool arcball_active = ImGui::IsItemActive();
+    if (arcball_active && m_preview_primitive) {
+        const ImVec2 mouse_delta = ImGui::GetIO().MouseDelta;
+        if ((mouse_delta.x != 0.0f) || (mouse_delta.y != 0.0f)) {
+            constexpr float radians_per_pixel = 0.012f;
+            const glm::quat yaw   = glm::angleAxis(radians_per_pixel * mouse_delta.x, glm::vec3{0.0f, 1.0f, 0.0f});
+            const glm::quat pitch = glm::angleAxis(radians_per_pixel * mouse_delta.y, glm::vec3{1.0f, 0.0f, 0.0f});
+            m_preview_orientation = glm::normalize(yaw * pitch * m_preview_orientation);
+            m_preview_needs_render = true;
+        }
+    }
+
+    // Auto-rotation (optional; graph_node_previews.auto_rotate): hovering
+    // the node spins the preview around world Y. Paused while the arcball
+    // drag is active - it resumes when the drag ends. The orientation
+    // persists so the model stops in place when the interaction ends.
+    // Re-rendering goes through the normal budgeted path
+    // (update_node_previews).
+    const bool auto_rotate =
+        (context.editor_settings != nullptr) &&
+        context.editor_settings->graph_node_previews.auto_rotate;
+    if (auto_rotate && !arcball_active && (m_is_hovered || ImGui::IsItemHovered()) && m_preview_primitive) {
+        const glm::quat spin = glm::angleAxis(1.5f * ImGui::GetIO().DeltaTime, glm::vec3{0.0f, 1.0f, 0.0f});
+        m_preview_orientation = glm::normalize(spin * m_preview_orientation);
+        m_preview_needs_render = true;
+    }
 }
 
 auto Geometry_graph_node::get_log_id() const -> std::size_t

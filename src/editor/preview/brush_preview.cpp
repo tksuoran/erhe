@@ -200,7 +200,8 @@ void Brush_preview::render_preview(
     const Preview_edge_lines_config* edge_lines = (m_context.editor_settings != nullptr)
         ? &m_context.editor_settings->brush_preview_edge_lines
         : nullptr;
-    render_preview(texture, texture_layer, brush_scaled.primitive, brush->get_material(), 2.0f * time_s, false, edge_lines);
+    const glm::quat orientation = glm::angleAxis(2.0f * time_s, glm::vec3{0.0f, 1.0f, 0.0f});
+    render_preview(texture, texture_layer, brush_scaled.primitive, brush->get_material(), orientation, false, edge_lines);
 }
 
 void Brush_preview::render_preview(
@@ -208,7 +209,7 @@ void Brush_preview::render_preview(
     unsigned int                                       texture_layer,
     const std::shared_ptr<erhe::primitive::Primitive>& primitive,
     const std::shared_ptr<erhe::primitive::Material>&  material,
-    const float                                        rotation_radians,
+    const glm::quat&                                   orientation,
     const bool                                         headlight_shading,
     const Preview_edge_lines_config*                   edge_lines
 )
@@ -285,8 +286,7 @@ void Brush_preview::render_preview(
         .height = m_height
     };
 
-    const glm::quat                  rotation = glm::angleAxis(rotation_radians, glm::vec3{0.0f, 1.0f, 0.0f});
-    const erhe::scene::Trs_transform node_transform{rotation};
+    const erhe::scene::Trs_transform node_transform{orientation};
     m_node->set_parent_from_node(node_transform);
 
     m_camera_node->set_parent_from_node(
