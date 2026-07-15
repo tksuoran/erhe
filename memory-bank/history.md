@@ -127,3 +127,16 @@
 >ef39f4f9::multilink-merge-crash-root-fix+replace-on-connect+Pin::multi_link{smoke-130/130}
 >ad71b6ca::resize-vs-drag-press-pos-hit-test
 >cd164589::arcball-preview-rotation{quat}+Graph_node_previews_config-v15{on-by-default,global,persistent}
+
+## 2026-07-15 (pm) graph-editor drag-drop + inventory session
+§MBEL:5.0
+>6-commits::all-on-main
+- 6c4dc32e::imgui-node-editor-resize-shrink-fix{SizeAction-m_MinimumSize-latch-exact-equality-vs-ImCeil-quantized-adoption→tolerance-1.5cu+direction-check+trace-log}
+- 9d3002ce::brush-drag-ghost-preview-on-geometry-canvas{AcceptBeforeDelivery+IsDelivery}
+- ddc2a75f::palette-entries-draggable→canvas{ghost}+inventory/hotbar{Inventory_slot-v3:graph_node_kind/type/label;spawn_node_from_slot;find_window_by_kind;new-graph_node_drag_payload.hpp}
+- d4ef5d1b::canvas-accepts-"Inventory_Slot"-payloads{graph-node+brush-slots;copy-semantics}
+- 5cedd865::inventory-brush/material-slots-resolve-by-name-on-load{was-deferred-TODO→slot-mutated-to-bare-tool-across-restart+autosave-made-permanent;fix:all-scene-libraries+per-frame-retry+write_config-preserves-unresolved}
+- 4fea814b::per-operator-Conway-node-types{conway_ambo..conway_gyro}+Conway-palette-group{c_operation_infos-single-source;legacy-"conway"-migrates-via-read_parameters;smoke+per-op-section→132/132}
+verification::headless-boot-smoke{config-v3-loads}+full-geometry-smoke-132/132{fresh-headless-session,logging-trace-tweak-restored}+config-brush-slot-survives-session
+carry-over::user-interactive-verify-list-in-activeContext
+lesson::user's-live-editor{build_vs2026_vulkan}held-8080+shares-logs/config→always-identify-editor.exe-owner{ExecutablePath+CreationDate}before-headless-runs;user-must-rebuild-their-tree-to-pick-up-fixes

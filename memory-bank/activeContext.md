@@ -1,23 +1,27 @@
 §MBEL:5.0
 
 [FOCUS]
->graph-editor-UX-sprint::6-commits{2026-07-15,all-headless-verified-where-possible}
-  context-menu-spawn{e1637cc9}::right-click-add-node-spawns-AT-click-position{GetMousePosOnOpeningCurrentPopup→ScreenToCanvas{valid-while-suspended};add_node_from_palette+add_node_of_type-gain-optional-position;palette-list-passes-nullptr→grid}
-  preview-edge-lines{b537d80b}::graph-node+brush-previews-draw-edge-overlay{Brush_preview-2nd-composition-pass{solid_wireframe+SOLID_WIREFRAME-mask,depth-LE-no-write-pipeline-mirrors-Pipeline_renderpasses};per-render_preview-call-state{two-settings-groups};preview-primitives-build-fill_triangles_expanded;codegen-Preview_edge_lines_config{enabled+width+color}×2-in-editor-settings-v14{graph=on,brush=off-via-designated-init-field-default};settings-UI-reflection;window-snapshots-settings→re-arms-cached-previews}
-  source-nodes{db3a6b23}::Brush+Scene_Mesh-geometry-source-nodes{types:brush+scene_mesh;palette-"Sources";MAIN-THREAD-geometry-capture{lazy-getters-unsafe-on-worker}→evaluate-only-copies;serialize-by-name;resolve-owner-scene→ALL-scenes{shadow-clones-ownerless};Refresh-re-captures;drag-brush-from-item-tree-onto-canvas→bound-Brush-node-at-drop-pos{BeginDragDropTargetCustom+"Content_library_node"-payload}}
-  multilink-crash-fix{ef39f4f9}::2nd-link-to-linked-input-pin-crashed{VS-debugger-diagnosed:payload-merge-geometry-lacked-connectivity→catmull-clark-get_vertex_corners-empty-table-fastfail-on-worker{NOT-c++-exception→try/catch-blind→silent-death}}
-    root-fix::operator+=-merge-runs-process_for_graph{payload-invariant-restored}
-    defense::ERHE_VERIFY-bounds-in-get_vertex_corners/edges/corner_facet
-    behavior::replace-on-connect{single-link-pins;old-link-out+new-in=ONE-Compound_operation;geometry+texture-windows;canvas+MCP}
-    multi-input-sockets::Pin::multi_link-flag{join-in,instance-points,realize-instances=accumulate-preserved;smoke-130/130}
-  resize-vs-drag{ad71b6ca}::vendored-SizeAction::Accept-hit-tests-PRESS-position{ImGui_GetMouseClickPos}¬current{drag-threshold-fires-after-motion→flick-left-6px-edge-strip→fell-to-DragAction}
-  arcball+preview-settings{cd164589}::LMB-drag-on-preview-image-tumbles{InvisibleButton-overlay{active-item-suppresses-node-drag};yaw-worldY+pitch-worldX-premultiplied;auto-rotate-paused-during-drag-resumes-after;orientation-quat-persists}
-    settings::Graph_node_previews_config{enabled+auto_rotate,BOTH-default-true}-editor-settings-v15{editor-global+persistent;per-Graph_mesh-flag-REMOVED;Auto-rotate-checkbox-next-to-Show-node-previews;MCP-geometry_graph_set_node_previews→global+marks-all-graphs-dirty-on-enable}
-    orientation::float-Y-angle→glm::quat{Brush_preview::render_preview-takes-quat;brush-thumbnails-derive-Y-spin-from-time}
+>graph-editor-dragdrop+inventory-session::6-commits{2026-07-15-pm,follow-up-to-UX-sprint}
+  resize-shrink-fix{6c4dc32e}::bottom-edge-shrink-stuck-after-1-grid-step
+    root-cause::SizeAction-m_MinimumSize-latch-EXACT-float-equality{requested-vs-adopted}✗ImCeil-quantized-adoption{NodeBuilder::End-ceils-size/zoom→adopted=requested+1-when-fp-lands-above-integer;bottom-edge-deterministic{node-top=measurement-base-fixed-during-gesture}}
+    fix::latch-only-when-adopted>requested+1.5{quantum+fp-margin}+trace-log-on-latch{erhe.imgui.node_editor}
+  brush-drop-ghost{9d3002ce}::content-library-brush-drag-over-geometry-canvas→ghost-rect{AcceptBeforeDelivery-peek+AcceptNoDrawDefaultRect;IsDelivery-separates-drop}
+  palette-drag{ddc2a75f}::palette-entries-drag-sources{Graph_node_drag_payload:kind/type/label-char-arrays-POD}
+    →canvas{both-editors,ghost,kind-checked-vs-clipboard_kind}
+    →inventory/hotbar{graph-node-slot-kind:Inventory_slot-v3{graph_node_kind/type/label};click→spawn_node_from_slot{show_window+spawn-grid};find_window_by_kind{App_context-routing}}
+  inventory→canvas{d4ef5d1b}::canvas-targets-also-accept-"Inventory_Slot"-payload{graph-node-slots+brush-slots{Brush*→shared_from_this};slot-keeps-content=copy-semantics}
+  brush-slot-persistence-fix{5cedd865}::brush-in-slot-mutated-to-Brush-tool-across-restart
+    root-cause::collect_tools-resolved-tool-name-only{brush/material-resolution="deferred-for-now"-TODO}→next-autosave-collected-brush_name-from-null→PERMANENT-config-degradation
+    fix::resolve-by-name-vs-ALL-scene-content-libraries{collect_tools+per-frame-retry-while-window-renders}+write_config-preserves-unresolved-names-verbatim+user-slot-change-drops-pending
+  conway-per-op{4fea814b}::"Conway"-palette-GROUP+9-node-types{conway_ambo..conway_gyro}
+    Conway_node-single-class-fixed-op-at-ctor{combo-REMOVED;name=operator;only-own-param-editable}
+    c_operation_infos-table=single-source{factory+palette-built-from-it};"Conway Join"/"Conway Subdivide"-labels{plain-Join/Subdivide-exist}
+    legacy-"conway"::still-constructs;read_parameters-adopts-"operation"→set_name+set_factory_type_name{migrates-on-load,re-saves-as-specific-type};out-of-range-op→empty-geometry+recoverable{smoke-abuse-path-preserved}
+    smoke::+per-op-section→132/132✓{fresh-headless-session}
 
 [PREV]
->node-properties-graph-selection::DONE✓{2026-07-15,user-verified-selection+pin-edges+resize}
->houdini-graph-features::DONE✓{cut-fixes+previews+shading}
+>graph-editor-UX-sprint::6-commits{2026-07-15-am}✓{context-menu-spawn{e1637cc9}+preview-edge-lines{b537d80b}+source-nodes{db3a6b23}+multilink-crash{ef39f4f9}+resize-vs-drag{ad71b6ca}+arcball+preview-settings{cd164589};details:archive/2026-07-15}
+>node-properties-graph-selection::DONE✓
 >procedural-default-window-layout::DONE✓{bb96806e}
 
 [STATE]
@@ -26,13 +30,13 @@ uncommitted::desktop_windows.json+editor_settings.json{pre-existing-local-mods}
 
 [OPEN]
 ?user-verify-INTERACTIVE::
-  sdl-cursor-fix{040e6f18}::hover-edge/corner-cursors-change
-  wire-cutting-re-test{11061763}::slow-Y+drag-highlights+DELETES
-  brush-drag-drop{db3a6b23}::drag-brush-onto-canvas→bound-node-at-cursor+undo
-  replace-on-connect{ef39f4f9}::drag-link-to-linked-input→old-drops{1-undo-restores};join-still-stacks
-  resize-gesture{ad71b6ca}::fast-flick-from-edge-always-resizes¬drags
-  arcball{cd164589}::LMB-drag-tumbles{node-¬moves}+auto-rotate-pause/resume+checkbox-off+settings-survive-restart
-  edge-lines{b537d80b}::settings-groups-in-Settings-window+brush-preview-toggle-on-look
+  resize-shrink{6c4dc32e}::bottom-edge-continuous-shrink-in-one-drag{+other-edges/corners}
+  brush-canvas-ghost{9d3002ce}::drag-brush-over-geometry-canvas→ghost+name{zoom-scales}
+  palette-drag{ddc2a75f}::palette→canvas{ghost;wrong-editor-kind-refused}+palette→inventory/hotbar+slot-click-spawns+slots-persist-restart
+  inventory→canvas{d4ef5d1b}::brush-slot+graph-node-slot-drag-to-canvas
+  brush-slot-restart{5cedd865}::cube-brush-slot-survives-close/restart{thumbnail-returns}
+  conway-group{4fea814b}::palette+context-menu-Conway-group;drag-Truncate-to-canvas/hotbar
+  earlier-sprint-list::sdl-cursor+wire-cutting+replace-on-connect+arcball+edge-lines{see-archive-2026-07-15}
 ?content-library-user-interactive-verify{Copy-to-Scene,texture-combo,prefab}
 ?content-library-deferred+selection-deferred+animation-editor{#243}+6c-fields+PhaseC+cc-perf-leftovers+#239-per-scene-settings{parked}+geogram-upstream-issue{unfiled}
 

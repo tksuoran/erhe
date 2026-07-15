@@ -1,31 +1,39 @@
 §MBEL:5.0
 
-[TASK::graph-editor-UX-sprint]{impl-done+committed;awaiting-user-interactive-verify}
-✓context-menu-spawn{e1637cc9}::node-at-right-click-pos{ScreenToCanvas(GetMousePosOnOpeningCurrentPopup);popup-runs-suspended=screen-space;canvas-transform-valid-while-suspended}
-✓preview-edge-lines{b537d80b}::solid-wireframe-overlay-pass-in-Brush_preview+Preview_edge_lines_config×2{v14}+expanded-fill-for-preview-primitives+settings-change-re-arms-cached-previews;headless-verified{box+sphere-edges}
-✓source-nodes{db3a6b23}::brush+scene_mesh-types+Sources-palette+brush-drop-on-canvas;headless-verified{dodecahedron→subdivide→output-bake+icosahedron-payload+previews}
-✓multilink-crash{ef39f4f9}::merge+process_for_graph+VERIFY-bounds+replace-on-connect{Compound}+Pin::multi_link;headless-verified{replace+undo/redo}+smoke-130/130
-✓resize-vs-drag{ad71b6ca}::SizeAction-press-pos-hit-test
-✓arcball+settings{cd164589}::quat-orientation+InvisibleButton-drag+Graph_node_previews_config{v15,on-by-default,global,per-asset-flag-REMOVED};headless-verified{previews-on-by-default+toggle-off/on-pixel-diff}
-?user-verify::see-activeContext-[OPEN]-user-verify-INTERACTIVE-list
+[TASK::graph-editor-dragdrop+inventory]{impl-done+committed+headless-verified;awaiting-user-interactive-verify}
+✓resize-shrink-fix{6c4dc32e}::SizeAction-latch-tolerance{1.5-canvas-units;only-adopted>requested}
+✓brush-drop-ghost{9d3002ce}::geometry-canvas-ghost-preview-for-content-library-brush-drag
+✓palette-drag{ddc2a75f}::palette-entries→canvas/inventory/hotbar{Graph_node_drag_payload;Inventory_slot-v3;headless-boot-smoke✓}
+✓inventory→canvas{d4ef5d1b}::"Inventory_Slot"-payload-accepted-by-canvas-targets{graph-node+brush-slots}
+✓brush-slot-persistence{5cedd865}::name-resolution-vs-scene-content-libraries+save-preservation
+✓conway-per-op{4fea814b}::9-types+Conway-palette-group+legacy-migration;smoke-132/132✓
+?user-verify::see-activeContext-[OPEN]
 
 [TASK::#239-per-scene-settings]{parked}
 ✓runtime-setter-MCP-tool{set_scene_settings+get_scene_settings@phase4,3a4989b6}→sky/grid-override-visual-verify-unblocked
 ?PENDING::viewport+post_processing{init-consumed¬applied→needs-per-scene-refactor}+clear_color{editor-global-never-read→decide-wire||drop}+sky/grid-override-visual-verify
 
 [NOTES]
+!SizeAction-minimum-latch::plain-node-resize-adoption-is-QUANTIZED{NodeBuilder::End-ImCeil-size/zoom,#251-zoom-jitter-fix}→any-requested-vs-adopted-compare-needs>=1-canvas-unit-tolerance{exact-equality=false-content-minimum→edge-pins-after-1-step;groups-adopt-bit-exact-so-upstream-never-hit-it}
+!dragdrop-payload-types::"Graph_palette_node"{Graph_node_drag_payload:kind/type_name/label-char-arrays,graph_editor/graph_node_drag_payload.hpp}+"Inventory_Slot"{Slot_drag_payload+graph_node_*-char-arrays}+"Content_library_node"{Item_base**};canvas-targets-accept-ALL-3{accept_palette_drop-handles-palette+inventory-graph-slots;geometry-brush-path-handles-library+inventory-brush}
+!dragdrop-peek-pattern::AcceptDragDropPayload{AcceptBeforeDelivery|AcceptNoDrawDefaultRect}→ghost-while-in-flight{draw_canvas_drop_ghost:footprint-canvas-units×zoom,top-left=cursor=spawn-origin}+IsDelivery→spawn;payload-must-be-POD-string-COPIES{palette-rebuilds-per-frame}
+!inventory-slot-kinds::tool|brush|material|command+params|graph-node{kind/type/label-strings};slot-click-spawns-via-Graph_editor_window_base::spawn_node_from_slot+find_window_by_kind{static,compares-clipboard_kind}
+!inventory-name-resolution::brush/material-slots-resolve-by-name-vs-ALL-scene-content-libraries{collect_tools+imgui()-retry;Pending_slot_item};write_config-MUST-preserve-unresolved-names{else-autosave-permanently-degrades-slot};user-slot-change-drops-pending
+!conway-operator-table::Conway_node::c_operation_infos{op+type_name+label}=single-source{factory-loop+palette-category-built-from-it};legacy-"conway"-migrates-in-read_parameters{adopt-operation→set_name+set_factory_type_name}
+!smoke-suite-now-132-checks{+per-op-conway};still-one-FRESH-session+logging.json-"editor.graph_editor":"trace"-for-incremental-section{backup/restore-pattern-worked}
+!smoke-suite-PORT-hardcoded-8080::user's-live-editor-holds-8080→NEVER-run-suite-while-user-editor-up{would-drive-THEIR-session};check-Get-CimInstance-editor.exe+port-owner-first;user-editor-also-shares-logs/+config-autosave
 !geometry-payload-INVARIANT::every-geometry-payload-carries-connectivity+edges{process_for_graph}→producers-of-NEW-geometry{incl-merges}must-process;get_vertex_corners/edges/corner_facet-ERHE_VERIFY-bounds-since-ef39f4f9
-!debug-STL-fastfail{_STL_VERIFY}::NOT-a-c++-exception→worker-try/catch-blind→silent-editor-death-no-log{diagnose-live-under-VS-debugger;ExceptionNotHandled-break-gives-throw-frame}
-!Pin::multi_link{erhe::graph}::input-pins-default-single-link→editors-replace-on-connect{old-links+new-link=one-Compound_operation};multi-input-sockets{join-in,instance-points,realize-instances}accumulate{make_input_pin(key,name,true);copy_pins_from-propagates}
-!smoke-test-multilink-section::codifies-accumulate-behavior{join/instance/realize}→blanket-replace-on-connect-breaks-11-checks;incremental-section-needs-logging.json-"editor.graph_editor":"trace"-else-evaluated=[]-false-fails{revert-after}
-!source-nodes::resolve+CAPTURE-geometry-on-MAIN-thread{Brush::get_geometry+Primitive_shape::get_geometry-lazily-BUILD→worker-unsafe};evaluate-copies-only;name-serialization{"brush"/"mesh"};owner-scene→all-scenes-fallback{shadow-clones-ownerless};capture=snapshot→Refresh-button
+!debug-STL-fastfail{_STL_VERIFY}::NOT-a-c++-exception→worker-try/catch-blind→silent-editor-death-no-log{diagnose-live-under-VS-debugger}
+!Pin::multi_link{erhe::graph}::input-pins-default-single-link→editors-replace-on-connect{one-Compound_operation};multi-input-sockets{join-in,instance-points,realize-instances}accumulate
+!smoke-test-multilink-section::codifies-accumulate-behavior→blanket-replace-on-connect-breaks-11-checks
+!source-nodes::resolve+CAPTURE-geometry-on-MAIN-thread{lazy-getters-worker-unsafe};evaluate-copies-only;name-serialization;owner-scene→all-scenes-fallback;capture=snapshot→Refresh-button
 !canvas-drag-drop::item-tree-brush-payload-type="Content_library_node"{raw-Item_base*};BeginDragDropTargetCustom-over-canvas-rect{ax-canvas-not-an-item};drop-pos→ScreenToCanvas(GetMousePos)
-!preview-edge-lines::2nd-composition-pass-per-call-state{enabled+primitive_settings-set-in-render_preview;shared-preview-scene-2-settings-groups};requires-fill_triangles_expanded{mesh-without=skipped→fill-only};¬prewarmed{first-use-compiles};macOS-GL4.1-inert{no-wide-line-fallback};brush-thumbnails-refresh-on-hover/eviction-only
-!codegen-StructRef-field-default::designated-init-string-works{default=".enabled = false"→Type-name{.enabled = false};unmentioned-members-keep-member-initializers-C++20}
-!editor-settings-v15::graph_node_previews{enabled+auto_rotate,default-true}+v14-preview_edge_lines×2;per-Graph_mesh-node_previews-flag-REMOVED{MCP-geometry_graph_set_node_previews→global;enable→mark-ALL-graphs-dirty}
-!preview-orientation=glm::quat{Brush_preview::render_preview-param;arcball=yaw-worldY+pitch-worldX-PREmultiplied+normalize;auto-spin-premultiplied-Y;InvisibleButton-overlay-on-image{active-ImGui-item-suppresses-node-editor-drag}}
-!SizeAction-press-pos::accept-runs-AFTER-drag-threshold{mouse-already-moved}→hit-test-ImGui_GetMouseClickPos¬HitMouse{6cu-edge-strip-thin;hover-cursor-branch-keeps-live-pos}
-!MSVC-C1060-out-of-heap::transient-under-parallel-build-memory-pressure→just-rebuild
+!preview-edge-lines::2nd-composition-pass-per-call-state;requires-fill_triangles_expanded;¬prewarmed;macOS-GL4.1-inert;brush-thumbnails-refresh-on-hover/eviction-only
+!codegen-StructRef-field-default::designated-init-string-works{unmentioned-members-keep-member-initializers-C++20}
+!editor-settings-v15::graph_node_previews{enabled+auto_rotate,default-true}+v14-preview_edge_lines×2
+!preview-orientation=glm::quat{arcball=yaw-worldY+pitch-worldX-PREmultiplied;InvisibleButton-overlay-on-image}
+!SizeAction-press-pos::accept-runs-AFTER-drag-threshold→hit-test-ImGui_GetMouseClickPos¬HitMouse{ad71b6ca}
+!MSVC-C1060-out-of-heap::transient-under-parallel-build{exit-2-mid-command-line-print}→just-rebuild{second-run-clean}
 !library-items-HOSTED-since-99998e3d{get_item_host()=owning-Scene_root;get_hosting_scene_root(item)-helper}
 !Content_library-add-claims-host{ERHE_VERIFY-¬already-owned}→cross-library-listing-needs-add_reference
 !MCP-copy_library_item{material/brush/physics;"(N)"-suffix;¬undoable}
@@ -46,9 +54,9 @@
 !MCP-execute_command-fallback{Hotbar.rotate-headless-gotcha→set_gizmo_visibility}
 !MCP-node-ids-differ-per-run{use-returned-id}
 !MCP-load_scene-async{poll-list_scenes}
-!stale-editor.exe::locks-exe{LNK1168}+holds-8080→kill-before-build+launch
+!stale-editor.exe::locks-exe{LNK1168}+holds-8080→kill-before-build+launch;CHECK-ExecutablePath+CreationDate{may-be-USER's-live-session→never-kill/drive-that-one}
 !incremental-build-stamp-stale→check-exe-LastWriteTime
-!PS5.1-embedded-quotes-mangled→git-commit--F-file||bash-heredoc
+!PS5.1-embedded-quotes-mangled→git-commit--F-file||bash-heredoc||py-script-FILE{inline-py -3 -c-with-quotes-also-mangled}
 !smoke-suites::one-FRESH-editor-session-each
 !scene-save-exports-only-mesh-referenced-materials
 !¬persisted::Brush_placement-attachments+static-body-mass
