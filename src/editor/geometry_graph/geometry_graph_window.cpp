@@ -106,6 +106,21 @@ void Geometry_graph_window::resolve_target()
     // Issue #252: the window edits an explicit target, not the global
     // selection. Lock the weak_ptr; a deleted asset resolves to null.
     std::shared_ptr<Graph_mesh> target = m_target.lock();
+    // Self-healing against the scene-close bug class (see CLAUDE.md
+    // "Scene-hosted references in editor parts"): weak_ptr expiry can
+    // never signal a scene close, because this window's own m_graph_mesh
+    // shared_ptr keeps the asset alive. Drop a target whose hosting scene
+    // is no longer registered so the window cannot keep showing (and
+    // editing) closed-scene content. A host-less asset (library orphan,
+    // e.g. removed from the library while an undo entry keeps it alive)
+    // stays editable, as before.
+    if (target && (m_app_context.app_scenes != nullptr)) {
+        erhe::Item_host* const item_host = target->get_item_host();
+        if ((item_host != nullptr) && !m_app_context.app_scenes->is_host_registered(item_host)) {
+            m_target.reset();
+            target.reset();
+        }
+    }
     if (m_graph_mesh != target) {
         m_graph_mesh = target;
         // Restart the spawn grid for the newly edited graph so new nodes do

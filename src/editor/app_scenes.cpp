@@ -187,6 +187,20 @@ auto App_scenes::get_scene_roots() -> const std::vector<std::shared_ptr<Scene_ro
     return m_scene_roots;
 }
 
+auto App_scenes::is_host_registered(const erhe::Item_host* item_host) -> bool
+{
+    if (item_host == nullptr) {
+        return false;
+    }
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+    for (const std::shared_ptr<Scene_root>& scene_root : m_scene_roots) {
+        if (static_cast<const erhe::Item_host*>(scene_root.get()) == item_host) {
+            return true;
+        }
+    }
+    return false;
+}
+
 auto App_scenes::get_single_scene_root() -> std::shared_ptr<Scene_root>
 {
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};

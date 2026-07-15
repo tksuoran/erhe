@@ -430,6 +430,31 @@ parsed back with `%a` / `strtod` / `std::from_chars`). Decimal formatting is los
 and round-trips are not guaranteed bit-exact, which silently invalidates any
 diagnostic that depends on reproducing the exact same bits.
 
+## Scene-hosted references in editor parts
+
+Scenes can be closed at runtime (Hierarchy "Close" context menu, MCP
+`close_scene`). Any editor part (window, tool, cache, singleton) that stores a
+reference across frames to scene-hosted content - items of a scene's content
+library (materials, brushes, `Graph_mesh` / `Graph_texture` assets), scene
+nodes, meshes, cameras, or the `Scene_root` itself - must handle that scene
+closing, or it keeps showing / editing / simulating content of a dead scene
+(a recurring bug class).
+
+- A `weak_ptr` alone is NOT sufficient: any cached resolved `shared_ptr`
+  (including the part's own resolve cache) keeps the item alive, so expiry
+  never signals the close.
+- Either subscribe to `App_message_bus::close_scene` and drop the references
+  (precedent: `Editor::on_close_scene()` clearing graph editor targets), or
+  validate on access that the item's host is still a registered scene:
+  `App_scenes::is_host_registered(item->get_item_host())` (precedent:
+  `Geometry_graph_window::resolve_target()`).
+- `Editor::on_close_scene()` arms a **scene-close leak watchdog**: 60 frames
+  after a close it logs a `scene-close leak: ...` warning for every tracked
+  item of the closed scene still alive (and an all-released info line when
+  clean). Treat these warnings as bugs of this class; when touching close /
+  teardown paths, close a scene and grep `logs/log.txt` for
+  `scene-close leak` as part of verification.
+
 ## No Band-Aid Fixes
 
 Every proposed solution must be evaluated with the question: "is this just a band-aid?" If the answer is yes, the solution must be rejected. A band-aid is any change that masks, works around, or tolerates the symptom of a bug without addressing the root cause - for example, a defensive null check that lets shutdown proceed when an object should not have been null in the first place, a try/catch that swallows an unexpected error, or a "tolerant" code path that accommodates state the system was not supposed to enter. Find and fix the actual cause; do not paper over it.

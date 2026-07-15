@@ -20,6 +20,7 @@ ItemHostMutex::async-workers-lock-scene-item_host_mutex-for-hosted-state-mutatio
 !geometry-payload-invariant::graph-payload-geometries-carry-connectivity+edges{process_for_graph}→every-producer-incl-merges-must-process{violation=fastfail-on-worker,uncatchable}
 GraphPins::input-default-single-link{editors-replace-on-connect,one-Compound-undo}|Pin::multi_link=multi-input-socket{accumulate;join+instance-points+realize-instances}
 GraphSourceNodes::external-item-refs{brush/scene_mesh}capture-geometry-MAIN-thread{lazy-getters-worker-unsafe}+serialize-by-name{owner-scene→all-scenes-resolution;shadow-clones-ownerless}
+!scene-close-bug-class::parts-caching-scene-hosted-refs-must-handle-close{weak_ptr-insufficient:own-resolve-cache-pins-item}→subscribe-close_scene||validate-App_scenes::is_host_registered(get_item_host())-on-access{precedent:Geometry_graph_window::resolve_target};watchdog::on_close_scene-arms-60-frame-check→"scene-close leak:"-log-warnings{treat-as-bug;CLAUDE.md-"Scene-hosted references"}
 
 [CMAKE]
 CPM::configure-time-deps

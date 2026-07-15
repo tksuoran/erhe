@@ -39,6 +39,7 @@
 #include "app_scenes.hpp"
 #include "app_settings.hpp"
 #include "app_windows.hpp"
+#include "content_library/content_library.hpp"
 #include "content_library/material_library.hpp"
 #include "init_status_display.hpp"
 #include "input_state.hpp"
@@ -472,6 +473,10 @@ public:
         //    - Fly_camera_tool
         //    - Network_window
         m_app_message_bus->update(); // Flushes queued messages
+
+        // Scene-close leak watchdog (armed by on_close_scene, which runs
+        // from the message pump above).
+        update_scene_close_leak_watches();
 
         // Apply physics updates
 
@@ -2631,7 +2636,96 @@ public:
             }
         }
 
+        // Arm the scene-close leak watchdog: collect weak references to the
+        // closed scene's content (the scene root, its nodes, its owned
+        // content-library items) and verify a short while later that they
+        // were actually released (update_scene_close_leak_watches). Anything
+        // still alive then is an instance of the scene-close bug class: a
+        // subsystem cached a shared_ptr to scene-hosted content and did not
+        // enroll in this close cleanup (see CLAUDE.md "Scene-hosted
+        // references in editor parts"). Collected LAST so content the
+        // cleanup above legitimately re-homed (e.g. HUD / Hotbar nodes
+        // detached from a tools scene) is not tracked.
+        {
+            Scene_close_leak_watch watch;
+            watch.scene_name       = scene_root->get_name();
+            watch.frames_remaining = k_scene_close_leak_check_frames;
+            watch.scene_root       = scene_root;
+            const std::shared_ptr<Content_library> library = scene_root->get_content_library();
+            if (library && library->root) {
+                library->root->for_each<Content_library_node>(
+                    [&watch](const Content_library_node& node) -> bool {
+                        // Reference entries list items owned by another
+                        // scene's library; only owned items must die with
+                        // this scene.
+                        if (node.item && !node.is_reference) {
+                            watch.items.emplace_back(node.item);
+                        }
+                        return true;
+                    }
+                );
+            }
+            for (const std::shared_ptr<erhe::scene::Node>& node : scene_root->get_scene().get_flat_nodes()) {
+                watch.items.emplace_back(node);
+            }
+            m_scene_close_leak_watches.push_back(std::move(watch));
+        }
+
         log_scene->info("Closed scene '{}'", scene_root->get_name());
+    }
+
+    // Scene-close leak watchdog check (armed by on_close_scene). Runs a
+    // fixed frame count after the close so legitimately deferred releases
+    // (an in-flight background graph evaluation holding its target, queued
+    // ImGui window teardown) have drained; warns - does not abort - because
+    // rare legitimate survivors exist (e.g. a prefab template whose
+    // instances in other scenes keep resources alive).
+    void update_scene_close_leak_watches()
+    {
+        for (std::size_t i = 0; i < m_scene_close_leak_watches.size(); ) {
+            Scene_close_leak_watch& watch = m_scene_close_leak_watches[i];
+            --watch.frames_remaining;
+            if (watch.frames_remaining > 0) {
+                ++i;
+                continue;
+            }
+            constexpr std::size_t max_reported = 16;
+            std::size_t survivor_count = 0;
+            const std::shared_ptr<Scene_root> pinned_scene_root = watch.scene_root.lock();
+            if (pinned_scene_root) {
+                ++survivor_count;
+                log_scene->warn(
+                    "scene-close leak: Scene_root '{}' is still alive {} frames after close",
+                    watch.scene_name, k_scene_close_leak_check_frames
+                );
+            }
+            for (const std::weak_ptr<erhe::Item_base>& weak_item : watch.items) {
+                const std::shared_ptr<erhe::Item_base> item = weak_item.lock();
+                if (!item) {
+                    continue;
+                }
+                ++survivor_count;
+                if (survivor_count <= max_reported) {
+                    log_scene->warn(
+                        "scene-close leak: {} '{}' of closed scene '{}' is still alive {} frames after close",
+                        item->get_type_name(), item->get_name(), watch.scene_name, k_scene_close_leak_check_frames
+                    );
+                }
+            }
+            if (survivor_count > max_reported) {
+                log_scene->warn(
+                    "scene-close leak: ... and {} more surviving items of closed scene '{}'",
+                    survivor_count - max_reported, watch.scene_name
+                );
+            }
+            if (survivor_count == 0) {
+                log_scene->info(
+                    "scene-close check: all {} tracked items of closed scene '{}' released",
+                    watch.items.size(), watch.scene_name
+                );
+            }
+            m_scene_close_leak_watches.erase(m_scene_close_leak_watches.begin() + static_cast<std::ptrdiff_t>(i));
+        }
     }
 
     void run_startup_script()
@@ -3031,6 +3125,19 @@ public:
     // is created or loaded. m_tools_attached_to_scene makes that happen exactly once.
     erhe::message_bus::Subscription<Scene_created_message> m_scene_created_subscription;
     erhe::message_bus::Subscription<Close_scene_message>   m_close_scene_subscription;
+
+    // Scene-close leak watchdog state (see on_close_scene /
+    // update_scene_close_leak_watches).
+    static constexpr int k_scene_close_leak_check_frames = 60;
+    class Scene_close_leak_watch
+    {
+    public:
+        std::string                                 scene_name;
+        int                                         frames_remaining{0};
+        std::weak_ptr<Scene_root>                   scene_root;
+        std::vector<std::weak_ptr<erhe::Item_base>> items;
+    };
+    std::vector<Scene_close_leak_watch> m_scene_close_leak_watches;
     bool                                    m_tools_attached_to_scene{false};
     // The scene the global tools are currently homed in (set by
     // on_scene_created, cleared when that scene is closed).

@@ -6,6 +6,10 @@
 #include <mutex>
 #include <vector>
 
+namespace erhe {
+    class Item_host;
+}
+
 namespace editor {
 
 class App_context;
@@ -29,6 +33,13 @@ public:
     void update_node_transforms              ();
 
     [[nodiscard]] auto get_scene_roots() -> const std::vector<std::shared_ptr<Scene_root>>&;
+
+    // True when the Item_host is one of the registered scene roots. Parts
+    // that cache scene-hosted items across frames (window targets, tool
+    // state) use this to self-heal when the hosting scene is closed: the
+    // cached shared_ptr keeps the item alive, so weak_ptr expiry can never
+    // signal the close (see CLAUDE.md "Scene-hosted references").
+    [[nodiscard]] auto is_host_registered(const erhe::Item_host* item_host) -> bool;
 
     // Returns the sole registered scene root when exactly one is registered,
     // nullptr otherwise. Used as a fallback target for commands that look for
