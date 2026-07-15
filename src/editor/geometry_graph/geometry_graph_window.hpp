@@ -115,6 +115,13 @@ public:
     // headless zoom-quality knob used by the #251 verification harness.
     void set_node_editor_zoom(float zoom);
 
+    // Canvas selection setter: clears the ax::NodeEditor selection and
+    // selects the given node ids (empty = just clear). A node must have
+    // been drawn at least once (the editor context creates canvas nodes on
+    // first draw). Used by the in-editor MCP server to drive the Node
+    // Properties window headlessly.
+    void select_canvas_nodes(const std::vector<std::size_t>& node_ids);
+
     // Sets / clears the explicit target Graph_mesh this window edits
     // (issue #252). Stored as a weak_ptr so a deleted asset clears the
     // target automatically. Passing null clears the target (empty state).
@@ -149,10 +156,14 @@ public:
     void erase_node     (Graph_mesh& graph_mesh, const std::shared_ptr<Geometry_graph_node>& node);
     auto connect_pins   (Graph_mesh& graph_mesh, erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool;
     auto disconnect_pins(Graph_mesh& graph_mesh, erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool;
-    // Canvas node positions live in the ax::NodeEditor context keyed by
-    // node id, so they are graph-independent (no Graph_mesh argument).
-    [[nodiscard]] auto get_node_position(const Geometry_graph_node& node) -> ImVec2;
-    void set_node_position(const Geometry_graph_node& node, const ImVec2& position);
+    // Implements Graph_editor_window_base: canvas node positions / sizes live
+    // in the ax::NodeEditor context keyed by node id, so they are
+    // graph-independent (no Graph_mesh argument); selected nodes are the
+    // canvas selection (issue #252 - not the global selection).
+    [[nodiscard]] auto get_node_position(const Graph_editor_node& node) -> ImVec2 override;
+    void set_node_position(const Graph_editor_node& node, const ImVec2& position) override;
+    [[nodiscard]] auto get_node_size(const Graph_editor_node& node) -> ImVec2 override;
+    void collect_selected_nodes(std::vector<std::shared_ptr<Graph_editor_node>>& out) override;
 
 private:
     auto make_node       (const std::string& type_name) -> std::shared_ptr<Geometry_graph_node>;

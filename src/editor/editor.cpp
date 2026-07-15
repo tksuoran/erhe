@@ -2364,6 +2364,7 @@ public:
         m_app_context.mesh_component_selection_tool = m_mesh_component_selection_tool.get();
         m_app_context.content_wide_line_renderer = m_content_wide_line_renderer.get();
         m_app_context.move_tool                = m_move_tool             .get();
+        m_app_context.node_properties_window   = m_node_properties_window.get();
         m_app_context.operation_stack          = m_operation_stack       .get();
         m_app_context.operations               = m_operations            .get();
         m_app_context.paint_tool               = m_paint_tool            .get();

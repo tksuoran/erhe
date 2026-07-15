@@ -7,6 +7,24 @@ namespace editor {
 
 using namespace mcp_server_detail;
 
+namespace {
+
+// Name -> handler dispatch table type (the table itself lives inside
+// Mcp_server::process_queued_requests(), which has access to the private
+// handler members). A table, not an if/else-if chain: MSVC counts each
+// else-if as a nested block and aborts with C1061 ("blocks nested too
+// deeply") once the tool count passes its limit (~120).
+using Tool_handler = auto (Mcp_server::*)(const nlohmann::json&) -> std::string;
+
+class Tool_dispatch_entry
+{
+public:
+    const char*  name;
+    Tool_handler handler;
+};
+
+} // anonymous namespace
+
 Mcp_server::Mcp_server(
     erhe::commands::Commands& commands,
     App_context&              context,
@@ -341,127 +359,140 @@ auto Mcp_server::process_queued_requests() -> int
         std::string result;
         try {
 
-        if      (req->tool_name == "list_scenes")         result = query_list_scenes     (req->arguments);
-        else if (req->tool_name == "get_scene_nodes")     result = query_scene_nodes     (req->arguments);
-        else if (req->tool_name == "get_node_details")    result = query_node_details    (req->arguments);
-        else if (req->tool_name == "get_scene_cameras")   result = query_scene_cameras   (req->arguments);
-        else if (req->tool_name == "get_scene_lights")    result = query_scene_lights    (req->arguments);
-        else if (req->tool_name == "get_scene_materials") result = query_scene_materials (req->arguments);
-        else if (req->tool_name == "get_scene_textures") result = query_scene_textures  (req->arguments);
-        else if (req->tool_name == "get_scene_brushes")  result = query_scene_brushes  (req->arguments);
-        else if (req->tool_name == "get_scene_settings") result = query_scene_settings (req->arguments);
-        else if (req->tool_name == "get_material_details")result = query_material_details(req->arguments);
-        else if (req->tool_name == "get_viewports")       result = query_viewports       (req->arguments);
-        else if (req->tool_name == "get_server_info")     result = query_server_info     (req->arguments);
-        else if (req->tool_name == "get_selection")       result = query_selection       (req->arguments);
-        else if (req->tool_name == "get_undo_redo_stack") result = query_undo_redo_stack (req->arguments);
-        else if (req->tool_name == "get_async_status")   result = query_async_status    (req->arguments);
-        else if (req->tool_name == "get_shadow_fit_debug")result = query_shadow_fit_debug(req->arguments);
-        else if (req->tool_name == "select_items")       result = action_select_items   (req->arguments);
-        else if (req->tool_name == "get_active_scene")   result = query_active_scene    (req->arguments);
-        else if (req->tool_name == "set_active_scene")   result = action_set_active_scene(req->arguments);
-        else if (req->tool_name == "transform_selection") result = action_transform_selection(req->arguments);
-        else if (req->tool_name == "place_brush")        result = action_place_brush    (req->arguments);
-        else if (req->tool_name == "create_shape")       result = action_create_shape   (req->arguments);
-        else if (req->tool_name == "create_node")        result = action_create_node    (req->arguments);
-        else if (req->tool_name == "create_light")       result = action_create_light   (req->arguments);
-        else if (req->tool_name == "edit_light")         result = action_edit_light     (req->arguments);
-        else if (req->tool_name == "edit_camera")        result = action_edit_camera    (req->arguments);
-        else if (req->tool_name == "toggle_physics")     result = action_toggle_physics (req->arguments);
-        else if (req->tool_name == "add_node_attachment")    result = action_add_node_attachment(req->arguments);
-        else if (req->tool_name == "remove_node_attachment") result = action_remove_node_attachment(req->arguments);
-        else if (req->tool_name == "reparent_node")      result = action_reparent_node  (req->arguments);
-        else if (req->tool_name == "lock_items")         result = action_lock_items     (req->arguments);
-        else if (req->tool_name == "unlock_items")       result = action_unlock_items   (req->arguments);
-        else if (req->tool_name == "add_tags")           result = action_add_tags       (req->arguments);
-        else if (req->tool_name == "remove_tags")        result = action_remove_tags    (req->arguments);
-        else if (req->tool_name == "edit_material")      result = action_edit_material  (req->arguments);
-        else if (req->tool_name == "copy_library_item")  result = action_copy_library_item(req->arguments);
-        else if (req->tool_name == "set_scene_settings") result = action_set_scene_settings(req->arguments);
-        else if (req->tool_name == "save_scene")         result = action_save_scene     (req->arguments);
-        else if (req->tool_name == "load_scene")         result = action_load_scene     (req->arguments);
-        else if (req->tool_name == "open_scene")         result = action_open_scene     (req->arguments);
-        else if (req->tool_name == "close_scene")        result = action_close_scene    (req->arguments);
-        else if (req->tool_name == "create_scene")       result = action_create_scene   (req->arguments);
-        else if (req->tool_name == "export_gltf")        result = action_export_gltf    (req->arguments);
-        else if (req->tool_name == "import_gltf")        result = action_import_gltf    (req->arguments);
-        else if (req->tool_name == "instantiate_prefab") result = action_instantiate_prefab(req->arguments);
-        else if (req->tool_name == "reload_prefab")      result = action_reload_prefab  (req->arguments);
-        else if (req->tool_name == "get_prefabs")        result = query_prefabs         (req->arguments);
-        else if (req->tool_name == "capture_screenshot") result = action_capture_screenshot(req->arguments);
-        else if (req->tool_name == "wake_physics_bodies") result = action_wake_physics_bodies(req->arguments);
-        else if (req->tool_name == "get_physics_items")  result = query_physics_items   (req->arguments);
-        else if (req->tool_name == "get_physics_state")  result = query_get_physics_state(req->arguments);
-        else if (req->tool_name == "create_physics_body") result = action_create_physics_body(req->arguments);
-        else if (req->tool_name == "edit_physics_body")  result = action_edit_physics_body(req->arguments);
-        else if (req->tool_name == "create_physics_joint") result = action_create_physics_joint(req->arguments);
-        else if (req->tool_name == "edit_physics_joint") result = action_edit_physics_joint(req->arguments);
-        else if (req->tool_name == "create_physics_material") result = action_create_physics_material(req->arguments);
-        else if (req->tool_name == "edit_physics_material")   result = action_edit_physics_material(req->arguments);
-        else if (req->tool_name == "create_collision_filter") result = action_create_collision_filter(req->arguments);
-        else if (req->tool_name == "edit_collision_filter")   result = action_edit_collision_filter(req->arguments);
-        else if (req->tool_name == "create_physics_joint_settings") result = action_create_physics_joint_settings(req->arguments);
-        else if (req->tool_name == "edit_physics_joint_settings")   result = action_edit_physics_joint_settings(req->arguments);
-        else if (req->tool_name == "set_mesh_component_mode")        result = action_set_mesh_component_mode(req->arguments);
-        else if (req->tool_name == "select_mesh_components")         result = action_select_mesh_components(req->arguments);
-        else if (req->tool_name == "grow_mesh_selection")           result = action_grow_mesh_selection(req->arguments);
-        else if (req->tool_name == "shrink_mesh_selection")         result = action_shrink_mesh_selection(req->arguments);
-        else if (req->tool_name == "get_mesh_component_selection")   result = query_mesh_component_selection(req->arguments);
-        else if (req->tool_name == "get_id_range_mapping")           result = query_id_range_mapping(req->arguments);
-        else if (req->tool_name == "debug_region_select")            result = action_debug_region_select(req->arguments);
-        else if (req->tool_name == "get_mesh_geometry_info")         result = query_mesh_geometry_info(req->arguments);
-        else if (req->tool_name == "get_mesh_attribute_values")      result = query_mesh_attribute_values(req->arguments);
-        else if (req->tool_name == "clear_mesh_component_selection") result = action_clear_mesh_component_selection(req->arguments);
-        else if (req->tool_name == "set_edge_sharpness")             result = action_set_edge_sharpness(req->arguments);
-        else if (req->tool_name == "catmull_clark")                  result = action_catmull_clark(req->arguments);
-        else if (req->tool_name == "align_components")              result = action_align_components(req->arguments);
-        else if (req->tool_name == "add_joint")                    result = action_add_joint(req->arguments);
-        else if (req->tool_name == "flip_joint")                   result = action_flip_joint(req->arguments);
-        else if (req->tool_name == "remesh")                       result = action_remesh(req->arguments);
-        else if (req->tool_name == "decimate")                     result = action_decimate(req->arguments);
-        else if (req->tool_name == "smooth")                       result = action_smooth(req->arguments);
-        else if (req->tool_name == "chamfer")                      result = action_chamfer3(req->arguments);
-        else if (req->tool_name == "merge_faces")                  result = action_merge_faces(req->arguments);
-        else if (req->tool_name == "generate_texture_coordinates") result = action_generate_texture_coordinates(req->arguments);
-        else if (req->tool_name == "set_transform_reference_mode") result = action_set_transform_reference_mode(req->arguments);
-        else if (req->tool_name == "set_transform_mode")           result = action_set_transform_mode          (req->arguments);
-        else if (req->tool_name == "set_gizmo_visibility")         result = action_set_gizmo_visibility        (req->arguments);
-        else if (req->tool_name == "get_transform_state")          result = query_transform_state              (req->arguments);
-        else if (req->tool_name == "get_geometry_graph")           result = query_geometry_graph               (req->arguments);
-        else if (req->tool_name == "set_geometry_graph_target")    result = action_set_geometry_graph_target   (req->arguments);
-        else if (req->tool_name == "geometry_graph_add_node")      result = action_geometry_graph_add_node     (req->arguments);
-        else if (req->tool_name == "geometry_graph_remove_node")   result = action_geometry_graph_remove_node  (req->arguments);
-        else if (req->tool_name == "geometry_graph_set_parameter") result = action_geometry_graph_set_parameter(req->arguments);
-        else if (req->tool_name == "geometry_graph_set_display_flags") result = action_geometry_graph_set_display_flags(req->arguments);
-        else if (req->tool_name == "geometry_graph_set_node_previews") result = action_geometry_graph_set_node_previews(req->arguments);
-        else if (req->tool_name == "geometry_graph_connect")       result = action_geometry_graph_connect      (req->arguments);
-        else if (req->tool_name == "geometry_graph_disconnect")    result = action_geometry_graph_disconnect   (req->arguments);
-        else if (req->tool_name == "geometry_graph_set_view")      result = action_geometry_graph_set_view     (req->arguments);
-        else if (req->tool_name == "create_graph_texture")         result = action_create_graph_texture        (req->arguments);
-        else if (req->tool_name == "set_material_texture_source")  result = action_set_material_texture_source (req->arguments);
-        else if (req->tool_name == "get_graph_textures")           result = query_graph_textures               (req->arguments);
-        else if (req->tool_name == "create_graph_mesh")            result = action_create_graph_mesh           (req->arguments);
-        else if (req->tool_name == "set_node_graph_mesh")          result = action_set_node_graph_mesh         (req->arguments);
-        else if (req->tool_name == "get_graph_meshes")             result = query_graph_meshes                 (req->arguments);
-        else if (req->tool_name == "get_texture_graph")            result = query_texture_graph                (req->arguments);
-        else if (req->tool_name == "set_texture_graph_target")     result = action_set_texture_graph_target    (req->arguments);
-        else if (req->tool_name == "texture_graph_add_node")       result = action_texture_graph_add_node      (req->arguments);
-        else if (req->tool_name == "texture_graph_remove_node")    result = action_texture_graph_remove_node   (req->arguments);
-        else if (req->tool_name == "texture_graph_set_parameter")  result = action_texture_graph_set_parameter (req->arguments);
-        else if (req->tool_name == "texture_graph_connect")        result = action_texture_graph_connect       (req->arguments);
-        else if (req->tool_name == "texture_graph_disconnect")     result = action_texture_graph_disconnect    (req->arguments);
-        else if (req->tool_name == "texture_graph_export_png")     result = action_texture_graph_export_png    (req->arguments);
-        else if (req->tool_name == "texture_graph_export_material") result = action_texture_graph_export_material(req->arguments);
-        else if (req->tool_name == "open_geometry_graph_window")   result = action_open_geometry_graph_window  (req->arguments);
-        else if (req->tool_name == "open_texture_graph_window")    result = action_open_texture_graph_window   (req->arguments);
-        else if (req->tool_name == "open_properties_window")       result = action_open_properties_window      (req->arguments);
-        else if (req->tool_name == "get_scene_animations")         result = query_scene_animations             (req->arguments);
-        else if (req->tool_name == "set_animation_target")         result = action_set_animation_target        (req->arguments);
-        else if (req->tool_name == "animation_playback")           result = action_animation_playback          (req->arguments);
-        else if (req->tool_name == "animation_edit_keyframe")      result = action_animation_edit_keyframe     (req->arguments);
-        else if (req->tool_name == "animation_create_key")         result = action_animation_create_key        (req->arguments);
-        else if (req->tool_name == "animation_delete_key")         result = action_animation_delete_key        (req->arguments);
-        else                                              result = execute_command       (req->tool_name);
+        // Function-local: the handlers are private members, so their
+        // addresses can only be taken from inside the class.
+        static constexpr Tool_dispatch_entry c_tool_dispatch[] = {
+            { "list_scenes",                    &Mcp_server::query_list_scenes                    },
+            { "get_scene_nodes",                &Mcp_server::query_scene_nodes                    },
+            { "get_node_details",               &Mcp_server::query_node_details                   },
+            { "get_scene_cameras",              &Mcp_server::query_scene_cameras                  },
+            { "get_scene_lights",               &Mcp_server::query_scene_lights                   },
+            { "get_scene_materials",            &Mcp_server::query_scene_materials                },
+            { "get_scene_textures",             &Mcp_server::query_scene_textures                 },
+            { "get_scene_brushes",              &Mcp_server::query_scene_brushes                  },
+            { "get_scene_settings",             &Mcp_server::query_scene_settings                 },
+            { "get_material_details",           &Mcp_server::query_material_details               },
+            { "get_viewports",                  &Mcp_server::query_viewports                      },
+            { "get_server_info",                &Mcp_server::query_server_info                    },
+            { "get_selection",                  &Mcp_server::query_selection                      },
+            { "get_undo_redo_stack",            &Mcp_server::query_undo_redo_stack                },
+            { "get_async_status",               &Mcp_server::query_async_status                   },
+            { "get_shadow_fit_debug",           &Mcp_server::query_shadow_fit_debug               },
+            { "select_items",                   &Mcp_server::action_select_items                  },
+            { "get_active_scene",               &Mcp_server::query_active_scene                   },
+            { "set_active_scene",               &Mcp_server::action_set_active_scene              },
+            { "transform_selection",            &Mcp_server::action_transform_selection           },
+            { "place_brush",                    &Mcp_server::action_place_brush                   },
+            { "create_shape",                   &Mcp_server::action_create_shape                  },
+            { "create_node",                    &Mcp_server::action_create_node                   },
+            { "create_light",                   &Mcp_server::action_create_light                  },
+            { "edit_light",                     &Mcp_server::action_edit_light                    },
+            { "edit_camera",                    &Mcp_server::action_edit_camera                   },
+            { "toggle_physics",                 &Mcp_server::action_toggle_physics                },
+            { "add_node_attachment",            &Mcp_server::action_add_node_attachment           },
+            { "remove_node_attachment",         &Mcp_server::action_remove_node_attachment        },
+            { "reparent_node",                  &Mcp_server::action_reparent_node                 },
+            { "lock_items",                     &Mcp_server::action_lock_items                    },
+            { "unlock_items",                   &Mcp_server::action_unlock_items                  },
+            { "add_tags",                       &Mcp_server::action_add_tags                      },
+            { "remove_tags",                    &Mcp_server::action_remove_tags                   },
+            { "edit_material",                  &Mcp_server::action_edit_material                 },
+            { "copy_library_item",              &Mcp_server::action_copy_library_item             },
+            { "set_scene_settings",             &Mcp_server::action_set_scene_settings            },
+            { "save_scene",                     &Mcp_server::action_save_scene                    },
+            { "load_scene",                     &Mcp_server::action_load_scene                    },
+            { "open_scene",                     &Mcp_server::action_open_scene                    },
+            { "close_scene",                    &Mcp_server::action_close_scene                   },
+            { "create_scene",                   &Mcp_server::action_create_scene                  },
+            { "export_gltf",                    &Mcp_server::action_export_gltf                   },
+            { "import_gltf",                    &Mcp_server::action_import_gltf                   },
+            { "instantiate_prefab",             &Mcp_server::action_instantiate_prefab            },
+            { "reload_prefab",                  &Mcp_server::action_reload_prefab                 },
+            { "get_prefabs",                    &Mcp_server::query_prefabs                        },
+            { "capture_screenshot",             &Mcp_server::action_capture_screenshot            },
+            { "wake_physics_bodies",            &Mcp_server::action_wake_physics_bodies           },
+            { "get_physics_items",              &Mcp_server::query_physics_items                  },
+            { "get_physics_state",              &Mcp_server::query_get_physics_state              },
+            { "create_physics_body",            &Mcp_server::action_create_physics_body           },
+            { "edit_physics_body",              &Mcp_server::action_edit_physics_body             },
+            { "create_physics_joint",           &Mcp_server::action_create_physics_joint          },
+            { "edit_physics_joint",             &Mcp_server::action_edit_physics_joint            },
+            { "create_physics_material",        &Mcp_server::action_create_physics_material       },
+            { "edit_physics_material",          &Mcp_server::action_edit_physics_material         },
+            { "create_collision_filter",        &Mcp_server::action_create_collision_filter       },
+            { "edit_collision_filter",          &Mcp_server::action_edit_collision_filter         },
+            { "create_physics_joint_settings",  &Mcp_server::action_create_physics_joint_settings },
+            { "edit_physics_joint_settings",    &Mcp_server::action_edit_physics_joint_settings   },
+            { "set_mesh_component_mode",        &Mcp_server::action_set_mesh_component_mode       },
+            { "select_mesh_components",         &Mcp_server::action_select_mesh_components        },
+            { "grow_mesh_selection",            &Mcp_server::action_grow_mesh_selection           },
+            { "shrink_mesh_selection",          &Mcp_server::action_shrink_mesh_selection         },
+            { "get_mesh_component_selection",   &Mcp_server::query_mesh_component_selection       },
+            { "get_id_range_mapping",           &Mcp_server::query_id_range_mapping               },
+            { "debug_region_select",            &Mcp_server::action_debug_region_select           },
+            { "get_mesh_geometry_info",         &Mcp_server::query_mesh_geometry_info             },
+            { "get_mesh_attribute_values",      &Mcp_server::query_mesh_attribute_values          },
+            { "clear_mesh_component_selection", &Mcp_server::action_clear_mesh_component_selection},
+            { "set_edge_sharpness",             &Mcp_server::action_set_edge_sharpness            },
+            { "catmull_clark",                  &Mcp_server::action_catmull_clark                 },
+            { "align_components",               &Mcp_server::action_align_components              },
+            { "add_joint",                      &Mcp_server::action_add_joint                     },
+            { "flip_joint",                     &Mcp_server::action_flip_joint                    },
+            { "remesh",                         &Mcp_server::action_remesh                        },
+            { "decimate",                       &Mcp_server::action_decimate                      },
+            { "smooth",                         &Mcp_server::action_smooth                        },
+            { "chamfer",                        &Mcp_server::action_chamfer3                      },
+            { "merge_faces",                    &Mcp_server::action_merge_faces                   },
+            { "generate_texture_coordinates",   &Mcp_server::action_generate_texture_coordinates  },
+            { "set_transform_reference_mode",   &Mcp_server::action_set_transform_reference_mode  },
+            { "set_transform_mode",             &Mcp_server::action_set_transform_mode            },
+            { "set_gizmo_visibility",           &Mcp_server::action_set_gizmo_visibility          },
+            { "get_transform_state",            &Mcp_server::query_transform_state                },
+            { "get_geometry_graph",             &Mcp_server::query_geometry_graph                 },
+            { "set_geometry_graph_target",      &Mcp_server::action_set_geometry_graph_target     },
+            { "geometry_graph_add_node",        &Mcp_server::action_geometry_graph_add_node       },
+            { "geometry_graph_remove_node",     &Mcp_server::action_geometry_graph_remove_node    },
+            { "geometry_graph_set_parameter",   &Mcp_server::action_geometry_graph_set_parameter  },
+            { "geometry_graph_set_display_flags", &Mcp_server::action_geometry_graph_set_display_flags },
+            { "geometry_graph_set_node_previews", &Mcp_server::action_geometry_graph_set_node_previews },
+            { "geometry_graph_connect",         &Mcp_server::action_geometry_graph_connect        },
+            { "geometry_graph_disconnect",      &Mcp_server::action_geometry_graph_disconnect     },
+            { "geometry_graph_set_view",        &Mcp_server::action_geometry_graph_set_view       },
+            { "geometry_graph_select_nodes",    &Mcp_server::action_geometry_graph_select_nodes   },
+            { "create_graph_texture",           &Mcp_server::action_create_graph_texture          },
+            { "set_material_texture_source",    &Mcp_server::action_set_material_texture_source   },
+            { "get_graph_textures",             &Mcp_server::query_graph_textures                 },
+            { "create_graph_mesh",              &Mcp_server::action_create_graph_mesh             },
+            { "set_node_graph_mesh",            &Mcp_server::action_set_node_graph_mesh           },
+            { "get_graph_meshes",               &Mcp_server::query_graph_meshes                   },
+            { "get_texture_graph",              &Mcp_server::query_texture_graph                  },
+            { "set_texture_graph_target",       &Mcp_server::action_set_texture_graph_target      },
+            { "texture_graph_add_node",         &Mcp_server::action_texture_graph_add_node        },
+            { "texture_graph_remove_node",      &Mcp_server::action_texture_graph_remove_node     },
+            { "texture_graph_set_parameter",    &Mcp_server::action_texture_graph_set_parameter   },
+            { "texture_graph_connect",          &Mcp_server::action_texture_graph_connect         },
+            { "texture_graph_disconnect",       &Mcp_server::action_texture_graph_disconnect      },
+            { "texture_graph_export_png",       &Mcp_server::action_texture_graph_export_png      },
+            { "texture_graph_export_material",  &Mcp_server::action_texture_graph_export_material },
+            { "texture_graph_select_nodes",     &Mcp_server::action_texture_graph_select_nodes    },
+            { "open_geometry_graph_window",     &Mcp_server::action_open_geometry_graph_window    },
+            { "open_texture_graph_window",      &Mcp_server::action_open_texture_graph_window     },
+            { "open_properties_window",         &Mcp_server::action_open_properties_window        },
+            { "get_scene_animations",           &Mcp_server::query_scene_animations               },
+            { "set_animation_target",           &Mcp_server::action_set_animation_target          },
+            { "animation_playback",             &Mcp_server::action_animation_playback            },
+            { "animation_edit_keyframe",        &Mcp_server::action_animation_edit_keyframe       },
+            { "animation_create_key",           &Mcp_server::action_animation_create_key          },
+            { "animation_delete_key",           &Mcp_server::action_animation_delete_key          },
+        };
+        Tool_handler handler = nullptr;
+        for (const Tool_dispatch_entry& entry : c_tool_dispatch) {
+            if (req->tool_name == entry.name) {
+                handler = entry.handler;
+                break;
+            }
+        }
+        result = (handler != nullptr) ? (this->*handler)(req->arguments) : execute_command(req->tool_name);
 
         } catch (const std::exception& e) {
             log_mcp->error("MCP server: handler for '{}' threw: {}", req->tool_name, e.what());

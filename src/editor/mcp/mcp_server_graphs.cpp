@@ -4,6 +4,7 @@
 #include "mcp/mcp_server_shared.hpp"
 
 #include "geometry_graph/geometry_graph_operations.hpp"
+#include "graph/node_properties.hpp"
 
 namespace editor {
 
@@ -396,6 +397,37 @@ auto Mcp_server::action_geometry_graph_set_view(const json& args) -> std::string
 
     json result;
     result["zoom"] = zoom;
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_geometry_graph_select_nodes(const json& args) -> std::string
+{
+    Geometry_graph_window* window = m_context.geometry_graph_window;
+    if (window == nullptr) {
+        return make_error_content("Geometry graph window not available");
+    }
+    std::vector<std::size_t> node_ids;
+    if (args.contains("node_ids") && args["node_ids"].is_array()) {
+        for (const json& value : args["node_ids"]) {
+            if (!value.is_number()) {
+                return make_error_content("'node_ids' entries must be node ids (integers)");
+            }
+            const std::size_t node_id = value.get<std::size_t>();
+            if (find_geometry_graph_node(window->get_nodes(), node_id) == nullptr) {
+                return make_error_content("Node not found: " + std::to_string(node_id));
+            }
+            node_ids.push_back(node_id);
+        }
+    }
+    window->select_canvas_nodes(node_ids);
+    // Make the result observable in a screenshot: the canvas showing the
+    // selection and the Node Properties window showing the selected nodes.
+    window->show_window();
+    if (m_context.node_properties_window != nullptr) {
+        m_context.node_properties_window->show_window();
+    }
+    json result;
+    result["selected_count"] = node_ids.size();
     return make_json_content(result).dump();
 }
 
@@ -1224,5 +1256,35 @@ auto Mcp_server::action_texture_graph_export_material(const json& args) -> std::
     }).dump();
 }
 
+auto Mcp_server::action_texture_graph_select_nodes(const json& args) -> std::string
+{
+    Texture_graph_window* window = m_context.texture_graph_window;
+    if (window == nullptr) {
+        return make_error_content("Texture graph window not available");
+    }
+    std::vector<std::size_t> node_ids;
+    if (args.contains("node_ids") && args["node_ids"].is_array()) {
+        for (const json& value : args["node_ids"]) {
+            if (!value.is_number()) {
+                return make_error_content("'node_ids' entries must be node ids (integers)");
+            }
+            const std::size_t node_id = value.get<std::size_t>();
+            if (find_texture_graph_node(window->get_nodes(), node_id) == nullptr) {
+                return make_error_content("Node not found: " + std::to_string(node_id));
+            }
+            node_ids.push_back(node_id);
+        }
+    }
+    window->select_canvas_nodes(node_ids);
+    // Make the result observable in a screenshot: the canvas showing the
+    // selection and the Node Properties window showing the selected nodes.
+    window->show_window();
+    if (m_context.node_properties_window != nullptr) {
+        m_context.node_properties_window->show_window();
+    }
+    json result;
+    result["selected_count"] = node_ids.size();
+    return make_json_content(result).dump();
+}
 
 } // namespace editor

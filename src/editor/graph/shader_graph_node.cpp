@@ -10,6 +10,8 @@
 #include "erhe_imgui/imgui_node_editor.h"
 #include "erhe_imgui/imgui_renderer.hpp"
 
+#include <algorithm>
+
 namespace editor {
 
 auto get_node_edge_name(int direction) -> const char*
@@ -88,6 +90,16 @@ void Shader_graph_node::imgui()
 {
 }
 
+auto Shader_graph_node::get_ui_scale() const -> float
+{
+    return m_ui_scale;
+}
+
+void Shader_graph_node::set_ui_scale(const float scale)
+{
+    m_ui_scale = std::clamp(scale, 0.25f, 4.0f);
+}
+
 void Shader_graph_node::node_editor(App_context& app_context, ax::NodeEditor::EditorContext& node_editor)
 {
     log_graph_editor->info("Shader_graph_node {} {}", get_name(), get_id());
@@ -99,11 +111,18 @@ void Shader_graph_node::node_editor(App_context& app_context, ax::NodeEditor::Ed
     ERHE_DEFER( ImGui::PopStyleVar(1); );
 
     // Issue #251: node content is authored in screen space at the zoomed size,
-    // so canvas-unit pixel metrics must be multiplied by the view scale.
-    m_content_scale = node_editor.GetCurrentZoom();
+    // so canvas-unit pixel metrics must be multiplied by the view scale. The
+    // per-node ui scale (Node Properties "Size") folds in here so the whole
+    // node scales with it.
+    m_content_scale = node_editor.GetCurrentZoom() * m_ui_scale;
 
     ax::NodeEditor::NodeId node_id{get_id()};
     node_editor.BeginNode(node_id);
+
+    // The canvas pushed the font at (base * zoom); scale that pushed base by
+    // the node's ui scale so text tracks the scaled widths.
+    ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * m_ui_scale);
+
     Node_context context {
         .context              = app_context,
         .node_editor          = node_editor,
@@ -188,6 +207,8 @@ void Shader_graph_node::node_editor(App_context& app_context, ax::NodeEditor::Ed
     }
 
     ImGui::EndTable();
+
+    ImGui::PopFont();
 
     node_editor.EndNode();
     const bool item_selection   = is_selected();

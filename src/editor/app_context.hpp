@@ -82,6 +82,7 @@ class Mesh_component_selection;
 class Mesh_component_selection_tool;
 class Move_tool;
 class Navigation_gizmo_tool;
+class Node_properties_window;
 class Operation_stack;
 class Operations;
 class Paint_tool;
@@ -197,6 +198,7 @@ public:
     Mesh_component_selection_tool*     mesh_component_selection_tool{nullptr};
     Move_tool*                         move_tool            {nullptr};
     Navigation_gizmo_tool*             navigation_gizmo_tool{nullptr};
+    Node_properties_window*            node_properties_window{nullptr};
     Operation_stack*                   operation_stack      {nullptr};
     Operations*                        operations           {nullptr};
     Paint_tool*                        paint_tool           {nullptr};

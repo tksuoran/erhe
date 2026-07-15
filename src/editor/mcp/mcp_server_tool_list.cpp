@@ -793,6 +793,18 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"zoom"})}
     }});
+    m_tool_infos.push_back({"geometry_graph_select_nodes", "Set the Geometry Graph window's canvas node selection: clears the current canvas selection and selects the given node ids (empty / omitted node_ids just clears). Also shows the Geometry Graph and Node Properties windows so the selection and its properties are observable in the next capture_screenshot. Nodes must have rendered at least once (show the window first, e.g. geometry_graph_set_view).", {
+        {"type", "object"},
+        {"properties", {
+            {"node_ids", {{"type", "array"}, {"items", {{"type", "integer"}}}, {"description", "Ids of the nodes to select (see get_geometry_graph); empty clears the selection"}}}
+        }}
+    }});
+    m_tool_infos.push_back({"texture_graph_select_nodes", "Set the Texture Graph window's canvas node selection: clears the current canvas selection and selects the given node ids (empty / omitted node_ids just clears). Also shows the Texture Graph and Node Properties windows so the selection and its properties are observable in the next capture_screenshot. Nodes must have rendered at least once (show the window first).", {
+        {"type", "object"},
+        {"properties", {
+            {"node_ids", {{"type", "array"}, {"items", {{"type", "integer"}}}, {"description", "Ids of the nodes to select (see get_texture_graph); empty clears the selection"}}}
+        }}
+    }});
     m_tool_infos.push_back({"create_graph_texture", "Create a Graph Texture asset (a procedural texture backed by a node graph) in a scene's content library and point the Texture Graph window at it (its new target). The window's target Graph Texture is what the texture_graph_* tools operate on (retarget later with set_texture_graph_target). A Material slot can then source from it (set_material_texture_source). Returns the new asset's id and name.", {
         {"type", "object"},
         {"properties", {

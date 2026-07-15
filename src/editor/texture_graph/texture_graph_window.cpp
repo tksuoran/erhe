@@ -235,14 +235,36 @@ auto Texture_graph_window::disconnect_pins(Graph_texture& graph_texture, erhe::g
     return true;
 }
 
-auto Texture_graph_window::get_node_position(const Texture_graph_node& node) -> ImVec2
+auto Texture_graph_window::get_node_position(const Graph_editor_node& node) -> ImVec2
 {
     return m_node_editor->GetNodePosition(ax::NodeEditor::NodeId{node.get_id()});
 }
 
-void Texture_graph_window::set_node_position(const Texture_graph_node& node, const ImVec2& position)
+void Texture_graph_window::set_node_position(const Graph_editor_node& node, const ImVec2& position)
 {
     m_node_editor->SetNodePosition(ax::NodeEditor::NodeId{node.get_id()}, position);
+}
+
+void Texture_graph_window::select_canvas_nodes(const std::vector<std::size_t>& node_ids)
+{
+    m_node_editor->ClearSelection();
+    for (const std::size_t node_id : node_ids) {
+        m_node_editor->SelectNode(ax::NodeEditor::NodeId{node_id}, true);
+    }
+}
+
+auto Texture_graph_window::get_node_size(const Graph_editor_node& node) -> ImVec2
+{
+    return m_node_editor->GetNodeSize(ax::NodeEditor::NodeId{node.get_id()});
+}
+
+void Texture_graph_window::collect_selected_nodes(std::vector<std::shared_ptr<Graph_editor_node>>& out)
+{
+    for (const std::shared_ptr<Texture_graph_node>& node : get_nodes()) {
+        if (m_node_editor->IsNodeSelected(ax::NodeEditor::NodeId{node->get_id()})) {
+            out.push_back(node);
+        }
+    }
 }
 
 void Texture_graph_window::remove_node(const std::shared_ptr<Texture_graph_node>& node)

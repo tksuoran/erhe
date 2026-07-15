@@ -129,10 +129,21 @@ public:
     void erase_node     (Graph_texture& graph_texture, const std::shared_ptr<Texture_graph_node>& node);
     auto connect_pins   (Graph_texture& graph_texture, erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool;
     auto disconnect_pins(Graph_texture& graph_texture, erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool;
-    // Canvas node positions live in the ax::NodeEditor context keyed by node id,
-    // so they are graph-independent (no Graph_texture argument needed).
-    [[nodiscard]] auto get_node_position(const Texture_graph_node& node) -> ImVec2;
-    void set_node_position(const Texture_graph_node& node, const ImVec2& position);
+    // Implements Graph_editor_window_base: canvas node positions / sizes live
+    // in the ax::NodeEditor context keyed by node id, so they are
+    // graph-independent (no Graph_texture argument); selected nodes are the
+    // canvas selection (issue #252 - not the global selection).
+    [[nodiscard]] auto get_node_position(const Graph_editor_node& node) -> ImVec2 override;
+    void set_node_position(const Graph_editor_node& node, const ImVec2& position) override;
+    [[nodiscard]] auto get_node_size(const Graph_editor_node& node) -> ImVec2 override;
+    void collect_selected_nodes(std::vector<std::shared_ptr<Graph_editor_node>>& out) override;
+
+    // Canvas selection setter: clears the ax::NodeEditor selection and
+    // selects the given node ids (empty = just clear). A node must have
+    // been drawn at least once (the editor context creates canvas nodes on
+    // first draw). Used by the in-editor MCP server to drive the Node
+    // Properties window headlessly.
+    void select_canvas_nodes(const std::vector<std::size_t>& node_ids);
 
 private:
     auto make_node       (const std::string& type_name) -> std::shared_ptr<Texture_graph_node>;

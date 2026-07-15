@@ -2,8 +2,12 @@
 #include "graph/shader_graph_node.hpp"
 
 #include "app_context.hpp"
+#include "geometry_graph/geometry_graph_window.hpp"
+#include "graph_editor/graph_editor_node.hpp"
 #include "items.hpp"
+#include "texture_graph/texture_graph_window.hpp"
 #include "tools/selection_tool.hpp"
+#include "windows/editor_windows.hpp"
 
 #include "erhe_defer/defer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
@@ -18,6 +22,8 @@
 
 #include <imgui/imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
+
+#include <algorithm>
 
 namespace editor {
 
@@ -147,6 +153,94 @@ void Node_properties_window::node_properties(Shader_graph_node& node)
             }
         }
     );
+    m_property_editor.add_entry(
+        "Size",
+        [&node]() {
+            float ui_scale = node.get_ui_scale();
+            if (ImGui::SliderFloat("##size", &ui_scale, 0.25f, 4.0f, "%.2f")) {
+                node.set_ui_scale(ui_scale);
+            }
+        }
+    );
+    m_property_editor.pop_group();
+}
+
+void Node_properties_window::collect_graph_editor_selection()
+{
+    m_graph_editor_selection.clear();
+
+    const auto collect_from = [this](Graph_editor_window_base* window) {
+        if (window == nullptr) {
+            return;
+        }
+        m_selected_nodes_scratch.clear();
+        window->collect_selected_nodes(m_selected_nodes_scratch);
+        for (const std::shared_ptr<Graph_editor_node>& node : m_selected_nodes_scratch) {
+            // Two windows can edit (and select in) the same graph; show each
+            // node once, from the first window that has it selected.
+            const bool already_present = std::any_of(
+                m_graph_editor_selection.begin(),
+                m_graph_editor_selection.end(),
+                [&node](const std::pair<Graph_editor_window_base*, std::shared_ptr<Graph_editor_node>>& entry) {
+                    return entry.second == node;
+                }
+            );
+            if (!already_present) {
+                m_graph_editor_selection.emplace_back(window, node);
+            }
+        }
+    };
+
+    collect_from(m_context.geometry_graph_window);
+    collect_from(m_context.texture_graph_window);
+    if (m_context.editor_windows != nullptr) {
+        for (const std::shared_ptr<Geometry_graph_window>& window : m_context.editor_windows->get_extra_geometry_graph_windows()) {
+            collect_from(window.get());
+        }
+        for (const std::shared_ptr<Texture_graph_window>& window : m_context.editor_windows->get_extra_texture_graph_windows()) {
+            collect_from(window.get());
+        }
+    }
+}
+
+void Node_properties_window::graph_editor_node_properties(Graph_editor_window_base& window, const std::shared_ptr<Graph_editor_node>& node)
+{
+    m_property_editor.push_group(fmt::format("Node {}", node->get_name()), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed, 0.0f);
+
+    m_property_editor.add_entry("Name", [node]() {
+        std::string name = node->get_name();
+        const bool enter_pressed = ImGui::InputText("##name", &name, ImGuiInputTextFlags_EnterReturnsTrue);
+        if (enter_pressed || ImGui::IsItemDeactivatedAfterEdit()) {
+            if (name != node->get_name()) {
+                node->set_name(name);
+            }
+        }
+    });
+    m_property_editor.add_entry("Type",   [node]() { ImGui::TextUnformatted(node->get_factory_type_name().c_str()); });
+    m_property_editor.add_entry("Id",     [node]() { ImGui::Text("%u", static_cast<unsigned int>(node->get_id())); });
+    m_property_editor.add_entry("Window", [&window]() { ImGui::TextUnformatted(window.get_title().c_str()); });
+    m_property_editor.add_entry("Position", [&window, node]() {
+        const ImVec2 position = window.get_node_position(*node.get());
+        float xy[2] = {position.x, position.y};
+        if (ImGui::DragFloat2("##position", xy, 1.0f)) {
+            window.set_node_position(*node.get(), ImVec2{xy[0], xy[1]});
+        }
+    });
+    m_property_editor.add_entry("Size", [&window, node]() {
+        // The on-canvas extent is content-derived; the scale below adjusts it.
+        const ImVec2 size = window.get_node_size(*node.get());
+        float ui_scale = node->get_ui_scale();
+        ImGui::Text("%.0f x %.0f", size.x, size.y);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::SliderFloat("##size_scale", &ui_scale, 0.25f, 4.0f, "x %.2f")) {
+            node->set_ui_scale(ui_scale);
+        }
+    });
+    m_property_editor.add_entry("Parameters", [this, node]() {
+        node->properties_imgui(m_context);
+    });
+
     m_property_editor.pop_group();
 }
 
@@ -171,6 +265,15 @@ void Node_properties_window::imgui()
         if (shader_graph_node != nullptr) {
             node_properties(*shader_graph_node);
         }
+    }
+
+    // Geometry / texture graph nodes selected on any graph editor canvas
+    // (their selection is not in the global selection; see issue #252).
+    collect_graph_editor_selection();
+    for (const std::pair<Graph_editor_window_base*, std::shared_ptr<Graph_editor_node>>& entry : m_graph_editor_selection) {
+        ImGui::PushID(id++);
+        ERHE_DEFER( ImGui::PopID(); );
+        graph_editor_node_properties(*entry.first, entry.second);
     }
 
     m_property_editor.show_entries();

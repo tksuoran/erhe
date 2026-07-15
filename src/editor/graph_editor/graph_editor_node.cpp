@@ -7,6 +7,8 @@
 #include <imgui/imgui.h>
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
+
 namespace editor {
 
 Graph_editor_node::Graph_editor_node(const char* label)
@@ -31,6 +33,36 @@ void Graph_editor_node::clear_dirty()
 
 void Graph_editor_node::imgui()
 {
+}
+
+void Graph_editor_node::properties_imgui(App_context& app_context)
+{
+    // Content-scale-neutral: imgui() widgets size themselves with
+    // content_scale(), which on the canvas carries zoom * ui-scale. Render
+    // at 1 here and restore, so a properties-panel edit does not disturb
+    // canvas-derived state (e.g. the preview display size).
+    const float saved_content_scale = m_content_scale;
+    m_content_scale = 1.0f;
+    if (m_committed_parameters.empty()) {
+        m_committed_parameters = dump_parameters(); // baseline for parameter undo
+    }
+    const bool was_dirty_before_widgets = is_dirty();
+    imgui();
+    if (!was_dirty_before_widgets && is_dirty()) {
+        m_parameter_edit_in_progress = true; // a widget changed a parameter this frame
+    }
+    m_content_scale = saved_content_scale;
+    commit_parameter_edit(app_context);
+}
+
+auto Graph_editor_node::get_ui_scale() const -> float
+{
+    return m_ui_scale;
+}
+
+void Graph_editor_node::set_ui_scale(const float scale)
+{
+    m_ui_scale = std::clamp(scale, 0.25f, 4.0f);
 }
 
 auto Graph_editor_node::get_factory_type_name() const -> const std::string&
@@ -72,6 +104,23 @@ void Graph_editor_node::after_node_content(App_context&)
 {
 }
 
+void Graph_editor_node::commit_parameter_edit(App_context& app_context)
+{
+    // Commit the parameter edit gesture once its widget deactivates (mouse
+    // released on a drag / stepper, text input defocused). One undoable
+    // operation per completed gesture. Runs from both the canvas and the
+    // Node Properties window; the operation records the new committed state,
+    // so a second call in the same frame is a no-op.
+    if (m_parameter_edit_in_progress && !ImGui::IsAnyItemActive()) {
+        m_parameter_edit_in_progress = false;
+        std::string after_parameters = dump_parameters();
+        if (after_parameters != m_committed_parameters) {
+            std::string before_parameters = m_committed_parameters;
+            commit_parameter_operation(app_context, std::move(before_parameters), std::move(after_parameters));
+        }
+    }
+}
+
 void Graph_editor_node::node_editor(App_context& app_context, ax::NodeEditor::EditorContext& node_editor)
 {
     ImGui::PushID(static_cast<int>(get_id()));
@@ -81,12 +130,18 @@ void Graph_editor_node::node_editor(App_context& app_context, ax::NodeEditor::Ed
     ERHE_DEFER( ImGui::PopStyleVar(1); );
 
     // Issue #251: node content is authored in screen space at the zoomed size,
-    // so canvas-unit pixel metrics must be multiplied by the view scale.
-    m_content_scale = node_editor.GetCurrentZoom();
+    // so canvas-unit pixel metrics must be multiplied by the view scale. The
+    // per-node ui scale (Node Properties "Size") folds in here so the whole
+    // node - widths, pins, previews - scales with it.
+    m_content_scale = node_editor.GetCurrentZoom() * m_ui_scale;
 
     ax::NodeEditor::NodeId node_id{get_id()};
     m_is_hovered = (node_editor.GetHoveredNode() == node_id);
     node_editor.BeginNode(node_id);
+
+    // The canvas pushed the font at (base * zoom); scale that pushed base by
+    // the node's ui scale so text tracks the scaled widths.
+    ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * m_ui_scale);
 
     const float  pin_label_width = 70.0f  * m_content_scale;
     const float  center_width    = 150.0f * m_content_scale;
@@ -148,19 +203,11 @@ void Graph_editor_node::node_editor(App_context& app_context, ax::NodeEditor::Ed
 
     ImGui::EndTable();
 
+    ImGui::PopFont();
+
     node_editor.EndNode();
 
-    // Commit the parameter edit gesture once its widget deactivates (mouse
-    // released on a drag / stepper, text input defocused). One undoable
-    // operation per completed gesture.
-    if (m_parameter_edit_in_progress && !ImGui::IsAnyItemActive()) {
-        m_parameter_edit_in_progress = false;
-        std::string after_parameters = dump_parameters();
-        if (after_parameters != m_committed_parameters) {
-            std::string before_parameters = m_committed_parameters;
-            commit_parameter_operation(app_context, std::move(before_parameters), std::move(after_parameters));
-        }
-    }
+    commit_parameter_edit(app_context);
 
     // Issue #252: node selection lives purely in the ax::NodeEditor canvas.
     // The node is deliberately NOT synced into the global selection - doing so

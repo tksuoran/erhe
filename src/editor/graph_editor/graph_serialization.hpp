@@ -42,6 +42,10 @@ template <typename NodeT>
         nlohmann::json parameters = nlohmann::json::object();
         node->write_parameters(parameters);
         node_json["parameters"] = parameters;
+        // Node size (Node Properties "Size" scale); optional, default 1.
+        if (node->get_ui_scale() != 1.0f) {
+            node_json["ui_scale"] = node->get_ui_scale();
+        }
         nodes_json.push_back(node_json);
     }
     root["nodes"] = nodes_json;
@@ -118,6 +122,7 @@ auto read_graph_asset_json(
         if (node_json.contains("parameters") && node_json["parameters"].is_object()) {
             node->read_parameters(node_json["parameters"]);
         }
+        node->set_ui_scale(node_json.value("ui_scale", 1.0f));
         new_nodes.push_back(node);
     }
 

@@ -247,4 +247,14 @@ void Editor_windows::update_once_per_frame()
     prune_closed(m_texture_graph_windows);
 }
 
+auto Editor_windows::get_extra_geometry_graph_windows() const -> const std::vector<std::shared_ptr<Geometry_graph_window>>&
+{
+    return m_geometry_graph_windows;
+}
+
+auto Editor_windows::get_extra_texture_graph_windows() const -> const std::vector<std::shared_ptr<Texture_graph_window>>&
+{
+    return m_texture_graph_windows;
+}
+
 } // namespace editor

@@ -46,6 +46,19 @@ public:
     // Node content widgets. Concrete nodes override; the base is empty.
     virtual void imgui();
 
+    // Draws the node's parameter widgets (imgui()) outside the canvas - the
+    // Node Properties window - with the same edit-gesture -> undoable
+    // parameter operation commit node_editor() applies on the canvas.
+    // Content-scale-neutral: widgets render at scale 1 regardless of the
+    // canvas zoom / node size.
+    void properties_imgui(App_context& context);
+
+    // Node size: per-node scale multiplying the node's on-canvas widths and
+    // font (1 = default). Adjusted from the Node Properties window; persisted
+    // in the graph JSON next to the node's parameters. Clamped to [0.25, 4].
+    [[nodiscard]] auto get_ui_scale() const -> float;
+    void set_ui_scale(float scale);
+
     // Graph serialization: the factory type name is set by the node factory and
     // recreates the node on load; parameters are the node's editable values.
     // (Named to avoid clashing with erhe::Item::get_type_name().)
@@ -82,9 +95,15 @@ protected:
     virtual void commit_parameter_operation(App_context& context, std::string&& before_parameters, std::string&& after_parameters) = 0;
     virtual void after_node_content(App_context& context);
 
+    // Shared tail of the parameter-edit gesture: once the widget deactivates,
+    // dump the parameters and push one undoable operation against the
+    // committed baseline. Called by node_editor() and properties_imgui().
+    void commit_parameter_edit(App_context& context);
+
     std::string m_type_name;
     std::string m_committed_parameters;
     float       m_content_scale{1.0f};
+    float       m_ui_scale{1.0f};
     bool        m_dirty{true};
     bool        m_parameter_edit_in_progress{false};
     // Whether the pointer hovers this node on the canvas (from the node

@@ -81,6 +81,12 @@ public:
     // frame from the editor tick (outside ImGui iteration).
     void update_once_per_frame();
 
+    // The live extra graph-editor instances (the primaries are in
+    // App_context). Used by the Node Properties window to gather the
+    // canvas-selected nodes of every graph editor window.
+    [[nodiscard]] auto get_extra_geometry_graph_windows() const -> const std::vector<std::shared_ptr<Geometry_graph_window>>&;
+    [[nodiscard]] auto get_extra_texture_graph_windows () const -> const std::vector<std::shared_ptr<Texture_graph_window>>&;
+
 private:
     // "Open Editor" for a graph asset: retarget the primary window when it
     // has no target, else open a fresh instance (keeps the window count sane).

@@ -2,12 +2,17 @@
 
 #include "erhe_imgui/imgui_window.hpp"
 
+#include <memory>
 #include <string>
 #include <vector>
+
+struct ImVec2;
 
 namespace ax::NodeEditor { class EditorContext; }
 
 namespace editor {
+
+class Graph_editor_node;
 
 // Common base for the node-graph editor windows (the geometry graph and the
 // texture graph). It carries the seam the companion palette window forwards to
@@ -32,6 +37,20 @@ public:
     // state persist across sessions (issue #265).
     void set_instance_slot(int slot) { m_instance_slot = slot; }
     [[nodiscard]] auto get_instance_slot() const -> int { return m_instance_slot; }
+
+    // Node Properties window support. Node selection lives purely in each
+    // window's ax::NodeEditor context (issue #252 - it is deliberately not
+    // synced into the global selection), so the Node Properties window asks
+    // every graph editor window for its canvas-selected nodes directly.
+    // Appends this window's selected nodes to out.
+    virtual void collect_selected_nodes(std::vector<std::shared_ptr<Graph_editor_node>>& out) = 0;
+
+    // Canvas node geometry, keyed by node id in the window's ax::NodeEditor
+    // context (graph-independent). Size is the content-derived on-canvas
+    // extent (read-only by nature; adjust through the node's ui scale).
+    [[nodiscard]] virtual auto get_node_position(const Graph_editor_node& node) -> ImVec2 = 0;
+    virtual void set_node_position(const Graph_editor_node& node, const ImVec2& position) = 0;
+    [[nodiscard]] virtual auto get_node_size(const Graph_editor_node& node) -> ImVec2 = 0;
 
 protected:
     // One selectable palette entry (a spawnable node type).
