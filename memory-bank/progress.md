@@ -5,8 +5,11 @@
 ✓pin-edges{bc8c8377}::Inputs/Outputs-layout-for-geometry+texture-nodes{shared-node_edge.hpp;left|right-only;serialized-input_edge/output_edge;MCP-set_node_layout-tools}
 ✓size-rework{c62ef868,user-rejected-scale}::Size=requested-width/height{canvas-units,<=0=auto;content-NOT-scaled;width→center-column,height→Dummy-pad;JSON-width/height;MCP-width/height-args;headless-verified-500x320+auto-restore}
 ✓preview-fit{6aa91d97}::geometry+texture-previews-fill-node{get_preview_fit_size;preview_display_size-virtual-removed;default-preview-150cu-now;headless-verified-420-node-fill-both-graphs}
-✓interactive-resize{042d7c13}::edge/corner-drag-resizing+sizing-cursors{vendored-SizeAction-extended-to-plain-nodes;EnableNodeResize+GetNodeResize-API;apply_node_resize-adopts-into-ui_width/height;headless-smoke-only}
-?user-verify::INTERACTIVE::hover-edge/corner-cursors+drag-resize{right/bottom/BR-in-place;left/top-repositions;interior-drag-still-moves-node;shrink-stops-at-content-min}+Size-drags+Auto-button+preview-fill-look
+✓interactive-resize{042d7c13}::edge/corner-drag-resizing+sizing-cursors{vendored-SizeAction-extended-to-plain-nodes;EnableNodeResize+GetNodeResize-API;apply_node_resize-adopts-into-ui_width/height}
+>user-tested-2026-07-15::resize-WORKS,cursor-did-NOT-change→root-cause:SDL-set_cursor-was-EMPTY-STUB{no-ImGui-cursor-shape-EVER-reached-OS-on-SDL-backend}→fixed{040e6f18}
+✓sdl-cursor-fix{040e6f18}::SDL_CreateSystemCursor-set+set_cursor-impl{skip-while-relative-hold,None→HideCursor,arrow-fallback}+Mouse_cursor-enum-aligned-with-ImGui{Wait=8,Progress=9,NotAllowed=10,Crosshair=11-erhe-extension;old-enum-mismatched-ImGui-NotAllowed(10)-out-of-range-in-cast}
+?user-verify::INTERACTIVE::hover-edge/corner-cursors-NOW-change+drag-resize{right/bottom/BR-in-place;left/top-repositions;interior-drag-still-moves-node;shrink-stops-at-content-min}+Size-drags+Auto-button+preview-fill-look
+!glfw-backend-edits-compile-unverified{GLFW-deprecated,not-built-on-this-machine}
 !plain-node-resize-grab-strip=6-canvas-px{c_GroupSelectThickness;inside-8cu-NodePadding→content-widgets-not-covered;pins-hit-tested-first→no-resize-over-pin-squares}
 !preview-fit-quantization-cap-512{very-large-node-preview-upscales-past-512px-display}
 !canvas-selection-per-window-persists{clicking-in-one-graph-window-does-NOT-clear-another's→NodeProperties-can-show-nodes-from-several-windows-at-once;dedup-by-node-only}
