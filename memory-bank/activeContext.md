@@ -1,6 +1,15 @@
 §MBEL:5.0
 
 [FOCUS]
+>node-properties-graph-selection::IMPLEMENTED✓{2026-07-15,commit:a2eeba7b}
+  window::shows-canvas-selected-nodes-from-ALL-graph-editors{Graph+GeometryGraph+TextureGraph+extra-instances;canvas-selection-¬in-global-selection-per-#252→new-Graph_editor_window_base::collect_selected_nodes+get/set_node_position+get_node_size-virtuals}
+  per-node::name-edit+type+id+window+position-edit+canvas-size-view+size-scale-slider[0.25,4]+parameter-widgets{properties_imgui=same-undo-gesture-commit-as-canvas;commit_parameter_edit-shared-tail;content-scale-forced-1-during-panel-render}
+  node-size::Graph_editor_node::m_ui_scale{content_scale=zoom*ui_scale+PushFont(base*ui_scale)→widths+pins+text+previews-scale;persisted-optional-"ui_scale"-per-node-in-graph-JSON;Shader_graph_node-same-knob}
+  mcp::geometry_graph_select_nodes+texture_graph_select_nodes{set-canvas-selection+show-graph+NodeProperties-windows;App_context.node_properties_window-added}
+  !mcp-dispatch-table::else-if-chain→function-local-member-ptr-table-in-process_queued_requests{MSVC-C1061-blocks-nested-too-deeply-at~125-tools;function-local=private-handler-access}
+  verified::headless{box+noise-nodes-selected-via-new-tools→NodeProperties-shows-both-groups+params;canvas-highlights}✓
+  ?user-verify::size-scale-slider-feel+undo-of-panel-parameter-edits+multi-window-selection-display
+
 >houdini-graph-features::IMPLEMENTED✓{2026-07-14/15,commits:a7d98635+886e4c31+77feb2a8+11061763+a939c8e6+51c064fd}
   wire-cutting::CutLinksAction-in-vendored-imgui-node-editor{hold-Y+LMB-drag;Config::CutLinksKey;Escape-cancels;accepted-before-SelectAction→suppresses-box-select;crossed-links→DeleteItemsAction→standard-QueryDeletedLink-flow→all-3-graph-windows-undoable-zero-per-window-changes}
     >fixed{11061763,after-user-report}::
@@ -33,6 +42,7 @@
 uncommitted::desktop_windows.json+editor_settings.json{pre-existing-local-mods}+res/editor/scenes/{untracked}
 
 [OPEN]
+?node-properties-user-verify{see-FOCUS}
 ?houdini-graph-user-verify{see-FOCUS}
 ?default-layout-closed-window-placement-imperfect{user:"not bad,ignore-for-now"}
 ?content-library-user-interactive-verify{Copy-to-Scene-menu,Properties-texture-combo-across-scenes,prefab-instantiate/refresh}
