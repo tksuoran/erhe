@@ -4,7 +4,9 @@
 ✓all{a2eeba7b}::NodeProperties-shows-canvas-selection-of-every-graph-editor+panel-parameter-editing+2-MCP-select-tools+dispatch-table
 ✓pin-edges{bc8c8377}::Inputs/Outputs-layout-for-geometry+texture-nodes{shared-node_edge.hpp;left|right-only;serialized-input_edge/output_edge;MCP-set_node_layout-tools}
 ✓size-rework{c62ef868,user-rejected-scale}::Size=requested-width/height{canvas-units,<=0=auto;content-NOT-scaled;width→center-column,height→Dummy-pad;JSON-width/height;MCP-width/height-args;headless-verified-500x320+auto-restore}
-?user-verify::Size-width/height-drags+Auto-button-feel+panel-parameter-edit-undo+position-drag
+✓preview-fit{6aa91d97}::geometry+texture-previews-fill-node{get_preview_fit_size;preview_display_size-virtual-removed;default-preview-150cu-now;headless-verified-420-node-fill-both-graphs}
+?user-verify::Size-width/height-drags+Auto-button-feel+preview-fill-look{default-slightly-larger-previews}+panel-parameter-edit-undo+position-drag
+!preview-fit-quantization-cap-512{very-large-node-preview-upscales-past-512px-display}
 !canvas-selection-per-window-persists{clicking-in-one-graph-window-does-NOT-clear-another's→NodeProperties-can-show-nodes-from-several-windows-at-once;dedup-by-node-only}
 !MSVC-C1061::~125-else-if=nesting-limit{mcp_server.cpp-dispatch;table-must-be-function-local{private-member-ptr-access}}
 !node-layout-¬in-write_parameters{concrete-nodes-don't-call-base}→serialized-by-write/read_graph_asset_json-next-to-parameters{width/height/input_edge/output_edge};¬in-shadow-clones{irrelevant-for-eval}
