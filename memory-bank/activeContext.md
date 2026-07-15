@@ -1,7 +1,8 @@
 §MBEL:5.0
 
 [FOCUS]
->node-properties-graph-selection::IMPLEMENTED✓{2026-07-15,commit:a2eeba7b}
+>node-properties-graph-selection::IMPLEMENTED✓{2026-07-15,commits:a2eeba7b+bc8c8377}
+  pin-edges{bc8c8377}::Inputs/Outputs-combos-for-geometry+texture-nodes{Node_edge→shared-graph_editor/node_edge.hpp;Graph_editor_node-input/output-pin-edge{left|right-only,setters-clamp};node_editor-lays-either-pin-set-on-either-edge{mirrors-shader-style-vars};persisted-"input_edge"/"output_edge"-in-graph-JSON;MCP-*_graph_set_node_layout{position+ui_scale+edges}→headless-verified-flip+1.5x-scale✓;select-tools-now-request_window_focus{raise-docked-tab-for-screenshot}}
   window::shows-canvas-selected-nodes-from-ALL-graph-editors{Graph+GeometryGraph+TextureGraph+extra-instances;canvas-selection-¬in-global-selection-per-#252→new-Graph_editor_window_base::collect_selected_nodes+get/set_node_position+get_node_size-virtuals}
   per-node::name-edit+type+id+window+position-edit+canvas-size-view+size-scale-slider[0.25,4]+parameter-widgets{properties_imgui=same-undo-gesture-commit-as-canvas;commit_parameter_edit-shared-tail;content-scale-forced-1-during-panel-render}
   node-size::Graph_editor_node::m_ui_scale{content_scale=zoom*ui_scale+PushFont(base*ui_scale)→widths+pins+text+previews-scale;persisted-optional-"ui_scale"-per-node-in-graph-JSON;Shader_graph_node-same-knob}
