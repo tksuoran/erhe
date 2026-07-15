@@ -85,6 +85,7 @@ void Graph_editor_node::node_editor(App_context& app_context, ax::NodeEditor::Ed
     m_content_scale = node_editor.GetCurrentZoom();
 
     ax::NodeEditor::NodeId node_id{get_id()};
+    m_is_hovered = (node_editor.GetHoveredNode() == node_id);
     node_editor.BeginNode(node_id);
 
     const float  pin_label_width = 70.0f  * m_content_scale;

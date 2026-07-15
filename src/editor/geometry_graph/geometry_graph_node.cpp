@@ -337,15 +337,44 @@ void Geometry_graph_node::set_preview_texture(const std::shared_ptr<erhe::graphi
     m_preview_texture = texture;
 }
 
+auto Geometry_graph_node::get_preview_rotation() const -> float
+{
+    return m_preview_rotation;
+}
+
+auto Geometry_graph_node::get_preview_desired_texture_size() const -> int
+{
+    int size = 64;
+    while ((static_cast<float>(size) < m_preview_display_size) && (size < 512)) {
+        size *= 2;
+    }
+    return size;
+}
+
 void Geometry_graph_node::draw_preview(App_context& context)
 {
+    // Display geometry laid out in the zoomed node content, so the
+    // on-screen size scales with the view (issue #251). The render-target
+    // resolution follows it too (quantized; see
+    // get_preview_desired_texture_size), so a zoomed-in node is not
+    // upscaled from a low-resolution render.
+    const float size = 96.0f * m_content_scale;
+    m_preview_display_size = size;
+
+    // Hovering the node spins the preview; the angle persists so the
+    // model stops in place when the hover ends. Re-rendering goes through
+    // the normal budgeted path (update_node_previews).
+    if (m_is_hovered && m_preview_primitive) {
+        m_preview_rotation += 1.5f * ImGui::GetIO().DeltaTime;
+        if (m_preview_rotation > 6.2831853f) {
+            m_preview_rotation -= 6.2831853f;
+        }
+        m_preview_needs_render = true;
+    }
+
     if (!m_preview_texture || (context.imgui_renderer == nullptr)) {
         return;
     }
-    // Display geometry laid out in the zoomed node content, so the
-    // on-screen size scales with the view; the render-target resolution
-    // deliberately does not (issue #251, texture-graph pattern).
-    const float size = 96.0f * m_content_scale;
     context.imgui_renderer->image(
         erhe::imgui::Draw_texture_parameters{
             .texture_reference = m_preview_texture,

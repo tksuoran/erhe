@@ -662,11 +662,20 @@ void Geometry_graph_window::update_node_previews()
             if (budget <= 0) {
                 return;
             }
-            if (!node->preview_needs_render() || !node->get_preview_primitive()) {
+            if (!node->get_preview_primitive()) {
                 continue;
             }
-            if (!node->get_preview_texture()) {
-                constexpr int size_pixels = 128;
+            // The render-target resolution follows the preview's on-canvas
+            // display size (zoom-scaled, quantized) so a zoomed-in node is
+            // rendered sharp instead of upscaled; a size change forces a
+            // re-render even when the geometry is unchanged.
+            const int                                size_pixels = node->get_preview_desired_texture_size();
+            std::shared_ptr<erhe::graphics::Texture> texture     = node->get_preview_texture();
+            const bool wrong_size = !texture || (texture->get_width() != size_pixels);
+            if (!node->preview_needs_render() && !wrong_size) {
+                continue;
+            }
+            if (wrong_size) {
                 node->set_preview_texture(
                     std::make_shared<erhe::graphics::Texture>(
                         *m_app_context.graphics_device,
@@ -688,8 +697,9 @@ void Geometry_graph_window::update_node_previews()
                 );
             }
             // Headlight shading: N.V-dimmed neutral look (reads curvature
-            // better than the brush preview material).
-            m_app_context.brush_preview->render_preview(node->get_preview_texture(), 0, node->get_preview_primitive(), {}, 0, true);
+            // better than the brush preview material). Rotation is the
+            // node's persistent hover-spun angle.
+            m_app_context.brush_preview->render_preview(node->get_preview_texture(), 0, node->get_preview_primitive(), {}, node->get_preview_rotation(), true);
             node->clear_preview_needs_render();
             --budget;
         }

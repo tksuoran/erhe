@@ -87,6 +87,11 @@ protected:
     float       m_content_scale{1.0f};
     bool        m_dirty{true};
     bool        m_parameter_edit_in_progress{false};
+    // Whether the pointer hovers this node on the canvas (from the node
+    // editor's hover state of the previous frame; set at the top of
+    // node_editor()). The geometry graph uses it to spin the hovered
+    // node's mesh preview.
+    bool        m_is_hovered{false};
 };
 
 } // namespace editor

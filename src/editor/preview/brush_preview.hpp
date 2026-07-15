@@ -26,8 +26,9 @@ public:
     );
 
     // Renders any prebuilt renderable primitive (bounding-sphere camera
-    // fit, auto-rotation by `time`). The brush overload above reduces to
-    // this; the geometry graph's per-node mesh previews call it directly.
+    // fit, oriented by `rotation_radians` around Y - the brush overload
+    // above derives it from `time` for the spinning thumbnails, the
+    // geometry graph passes each node's persistent hover-spun angle).
     // Null material falls back to the preview scene's default material.
     // headlight_shading gives an N.V-dimmed look: the key light is
     // co-located with the fitted camera (Lambert diffuse then falls off
@@ -38,7 +39,7 @@ public:
         unsigned int                                       texture_layer,
         const std::shared_ptr<erhe::primitive::Primitive>& primitive,
         const std::shared_ptr<erhe::primitive::Material>&  material,
-        int64_t                                            time,
+        float                                              rotation_radians,
         bool                                               headlight_shading = false
     );
 

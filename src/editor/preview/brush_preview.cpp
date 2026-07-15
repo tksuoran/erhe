@@ -153,7 +153,8 @@ void Brush_preview::render_preview(
     // spins on a corrupt mesh. See doc/intermittent_main_loop_hang.md.
     erhe::log::set_breadcrumb(fmt::format("thumbnail: brush '{}'", brush->get_name()));
     const Brush::Scaled& brush_scaled = brush->get_scaled(1.0);
-    render_preview(texture, texture_layer, brush_scaled.primitive, brush->get_material(), time);
+    const float time_s = static_cast<float>(static_cast<double>(time) / 1'000'000'000.0);
+    render_preview(texture, texture_layer, brush_scaled.primitive, brush->get_material(), 2.0f * time_s);
 }
 
 void Brush_preview::render_preview(
@@ -161,7 +162,7 @@ void Brush_preview::render_preview(
     unsigned int                                       texture_layer,
     const std::shared_ptr<erhe::primitive::Primitive>& primitive,
     const std::shared_ptr<erhe::primitive::Material>&  material,
-    int64_t                                            time,
+    const float                                        rotation_radians,
     const bool                                         headlight_shading
 )
 {
@@ -220,8 +221,7 @@ void Brush_preview::render_preview(
         .height = m_height
     };
 
-    const float                      time_s   = static_cast<float>(static_cast<double>(time) / 1'000'000'000.0);
-    const glm::quat                  rotation = glm::angleAxis(2.0f * time_s, glm::vec3{0.0f, 1.0f, 0.0f});
+    const glm::quat                  rotation = glm::angleAxis(rotation_radians, glm::vec3{0.0f, 1.0f, 0.0f});
     const erhe::scene::Trs_transform node_transform{rotation};
     m_node->set_parent_from_node(node_transform);
 

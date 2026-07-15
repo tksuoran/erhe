@@ -112,6 +112,16 @@ public:
     void clear_preview_needs_render();
     [[nodiscard]] auto get_preview_texture() const -> const std::shared_ptr<erhe::graphics::Texture>&;
     void set_preview_texture(const std::shared_ptr<erhe::graphics::Texture>& texture);
+    // Current preview orientation (radians around Y). Advanced while the
+    // pointer hovers the node on the canvas (draw_preview); persists so
+    // the model stops in place when the hover ends.
+    [[nodiscard]] auto get_preview_rotation() const -> float;
+    // The render-target resolution matching the preview's latest on-canvas
+    // display size (recorded zoom-scaled in draw_preview), quantized to
+    // powers of two in [64, 512] so zooming does not thrash reallocations.
+    // update_node_previews() recreates the texture when this changes, so a
+    // zoomed-in node gets a sharper render instead of upscaling.
+    [[nodiscard]] auto get_preview_desired_texture_size() const -> int;
 
 protected:
     // Implements Graph_editor_node
@@ -136,6 +146,8 @@ protected:
     std::shared_ptr<erhe::primitive::Primitive> m_preview_primitive;
     std::shared_ptr<erhe::graphics::Texture>    m_preview_texture;
     bool                                        m_preview_needs_render{false};
+    float                                       m_preview_rotation{0.0f};
+    float                                       m_preview_display_size{128.0f}; // screen px, zoom-scaled
 };
 
 }
