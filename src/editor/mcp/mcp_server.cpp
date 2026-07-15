@@ -378,6 +378,7 @@ auto Mcp_server::process_queued_requests() -> int
             { "get_undo_redo_stack",            &Mcp_server::query_undo_redo_stack                },
             { "get_async_status",               &Mcp_server::query_async_status                   },
             { "get_shadow_fit_debug",           &Mcp_server::query_shadow_fit_debug               },
+            { "raycast",                        &Mcp_server::query_raycast                        },
             { "select_items",                   &Mcp_server::action_select_items                  },
             { "get_active_scene",               &Mcp_server::query_active_scene                   },
             { "set_active_scene",               &Mcp_server::action_set_active_scene              },

@@ -3,9 +3,15 @@
 
 #include "mcp/mcp_server_shared.hpp"
 
+#include "scene/node_raytrace_mask.hpp"
 #include "scene/viewport_scene_view.hpp"
 #include "scene/viewport_scene_views.hpp"
 #include "windows/viewport_window.hpp"
+
+#include "erhe_raytrace/iinstance.hpp"
+#include "erhe_raytrace/iscene.hpp"
+#include "erhe_raytrace/ray.hpp"
+#include "erhe_scene/mesh_raytrace.hpp"
 
 #include "scene/generated/scene_settings_serialization.hpp"
 
@@ -399,6 +405,83 @@ auto Mcp_server::query_scene_lights(const json& args) -> std::string
     }
 
     return make_json_content({{"lights", lights}}).dump();
+}
+
+auto Mcp_server::query_raycast(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    auto* sr = find_scene(scene_name);
+    if (!sr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    const json origin_json    = args.value("origin",    json::array());
+    const json direction_json = args.value("direction", json::array());
+    if ((origin_json.size() != 3) || (direction_json.size() != 3)) {
+        json r = make_text_content("raycast needs origin [x, y, z] and direction [x, y, z]");
+        r["isError"] = true;
+        return r.dump();
+    }
+    const glm::vec3 ray_origin{
+        origin_json.at(0).get<float>(),
+        origin_json.at(1).get<float>(),
+        origin_json.at(2).get<float>()
+    };
+    glm::vec3 ray_direction{
+        direction_json.at(0).get<float>(),
+        direction_json.at(1).get<float>(),
+        direction_json.at(2).get<float>()
+    };
+    if (glm::length(ray_direction) == 0.0f) {
+        json r = make_text_content("raycast direction must be non-zero");
+        r["isError"] = true;
+        return r.dump();
+    }
+    ray_direction = glm::normalize(ray_direction);
+
+    // Same defaults as Scene_view::update_hover_with_raytrace(): the
+    // pickable_static mask sees everything the interactive hover ray sees.
+    erhe::raytrace::IScene& rt_scene = sr->get_raytrace_scene();
+    rt_scene.commit();
+    erhe::raytrace::Ray ray{
+        .origin    = ray_origin,
+        .t_near    = 0.0f,
+        .direction = ray_direction,
+        .time      = 0.0f,
+        .t_far     = args.value("max_distance", 9999.0f),
+        .mask      = args.value("mask", Raytrace_node_mask::pickable_static),
+        .id        = 0,
+        .flags     = 0
+    };
+    erhe::raytrace::Hit hit;
+    rt_scene.intersect(ray, hit);
+
+    if (hit.instance == nullptr) {
+        return make_json_content({{"hit", false}}).dump();
+    }
+
+    auto* raytrace_primitive = static_cast<erhe::scene::Raytrace_primitive*>(hit.instance->get_user_data());
+    if ((raytrace_primitive == nullptr) || (raytrace_primitive->mesh == nullptr)) {
+        json r = make_text_content("raycast hit an instance without Raytrace_primitive user data");
+        r["isError"] = true;
+        return r.dump();
+    }
+    erhe::scene::Mesh* mesh = raytrace_primitive->mesh;
+    erhe::scene::Node* node = mesh->get_node();
+    const glm::vec3 position = ray.origin + ray.t_far * ray.direction;
+    return make_json_content({
+        {"hit",             true},
+        {"mesh_name",       mesh->get_name()},
+        {"mesh_id",         mesh->get_id()},
+        {"node_name",       node ? node->get_name() : ""},
+        {"node_id",         node ? node->get_id() : 0},
+        {"primitive_index", raytrace_primitive->primitive_index},
+        {"distance",        ray.t_far},
+        {"position",        {position.x, position.y, position.z}},
+        {"normal",          {hit.normal.x, hit.normal.y, hit.normal.z}}
+    }).dump();
 }
 
 auto Mcp_server::query_shadow_fit_debug(const json& args) -> std::string

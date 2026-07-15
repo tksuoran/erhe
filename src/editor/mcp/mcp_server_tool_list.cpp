@@ -34,6 +34,17 @@ void Mcp_server::refresh_tool_list()
     m_tool_infos.push_back({"get_undo_redo_stack", "Get undo/redo operation stacks",                       schema_no_args()});
     m_tool_infos.push_back({"get_async_status",   "Get pending/running async operation counts",          schema_no_args()});
     m_tool_infos.push_back({"get_shadow_fit_debug","Dump directional shadow frustum fit debug geometry per shadow node: F_shadow planes, their bounded face quads (the truncated view-frustum faces caster AABBs are tested against), and receiver frustum corners. Needs the Shadow Fit 'Collect Debug' setting enabled.", schema_no_args()});
+    m_tool_infos.push_back({"raycast",             "Shoot a ray through a scene's raytrace world and report the closest hit (mesh, node, primitive index, distance, position, normal). Uses the same mask defaults as the interactive viewport hover ray, so it verifies hover / ray picking behavior headlessly.", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name",   {{"type", "string"}, {"description", "Name of the scene"}}},
+            {"origin",       {{"type", "array"},  {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Ray origin in world space [x, y, z]"}}},
+            {"direction",    {{"type", "array"},  {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Ray direction [x, y, z] (normalized internally)"}}},
+            {"max_distance", {{"type", "number"}, {"description", "Maximum hit distance (default 9999)"}}},
+            {"mask",         {{"type", "integer"}, {"description", "Raytrace instance mask (default pickable_static: content|shadow_cast|tool|brush|rendertarget|controller|grid)"}}}
+        }},
+        {"required", json::array({"scene_name", "origin", "direction"})}
+    }});
     m_tool_infos.push_back({"select_items",        "Select items by ID (scene nodes, materials, etc.). Mirrors UI selection semantics: replaces the selection within the target scene only (other scenes' selections persist; ids=[] clears the target scene only) and makes the target scene the active scene.",   {
         {"type", "object"},
         {"properties", {
