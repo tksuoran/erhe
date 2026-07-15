@@ -346,7 +346,7 @@ auto Geometry_graph_window::next_node_spawn_position() -> ImVec2
     return ImVec2{static_cast<float>(column) * step_x, static_cast<float>(row) * step_y};
 }
 
-auto Geometry_graph_window::add_node_of_type(const std::string& type_name) -> Geometry_graph_node*
+auto Geometry_graph_window::add_node_of_type(const std::string& type_name, const ImVec2* position) -> Geometry_graph_node*
 {
     const std::shared_ptr<Graph_mesh> graph_mesh = get_current_graph_mesh();
     if (!graph_mesh) {
@@ -361,13 +361,13 @@ auto Geometry_graph_window::add_node_of_type(const std::string& type_name) -> Ge
             *this, graph_mesh, node, Geometry_graph_node_insert_remove_operation::Mode::insert
         )
     );
-    set_node_position(*node.get(), next_node_spawn_position());
+    set_node_position(*node.get(), (position != nullptr) ? *position : next_node_spawn_position());
     return node.get();
 }
 
-void Geometry_graph_window::add_node_from_palette(const std::string& type_name)
+void Geometry_graph_window::add_node_from_palette(const std::string& type_name, const ImVec2* spawn_position)
 {
-    add_node_of_type(type_name);
+    add_node_of_type(type_name, spawn_position);
 }
 
 void Geometry_graph_window::build_palette()

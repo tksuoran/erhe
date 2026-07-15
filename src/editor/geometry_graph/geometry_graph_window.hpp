@@ -98,8 +98,9 @@ public:
     // transform, triangulate, normalize, reverse, repair, distribute,
     // instance, realize, join, boolean, float, integer, vector, math,
     // output, group_input, group_output, group (see
-    // make_geometry_graph_node()).
-    auto add_node_of_type(const std::string& type_name) -> Geometry_graph_node*;
+    // make_geometry_graph_node()). position is the canvas-space position for
+    // the new node; nullptr uses the auto-advancing spawn grid.
+    auto add_node_of_type(const std::string& type_name, const ImVec2* position = nullptr) -> Geometry_graph_node*;
     void remove_node     (const std::shared_ptr<Geometry_graph_node>& node);
     auto connect         (erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool;
     void disconnect      (erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin);
@@ -171,7 +172,7 @@ private:
     // Implements Graph_editor_window_base: fills the palette with the geometry
     // node set, and spawns a chosen type through the factory + undoable insert.
     void build_palette   () override;
-    void add_node_from_palette(const std::string& type_name) override;
+    void add_node_from_palette(const std::string& type_name, const ImVec2* spawn_position) override;
     // Issue #252: the target-item selector row drawn at the top of the
     // window. Drag-drop a Graph_mesh asset onto it, pick from the popup, or
     // clear it. Bound to m_target.

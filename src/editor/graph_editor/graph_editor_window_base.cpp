@@ -83,7 +83,7 @@ void Graph_editor_window_base::node_palette()
                 }
                 ImGui::PushID(entry.type_name.c_str());
                 if (ImGui::Selectable(entry.label.c_str())) {
-                    add_node_from_palette(entry.type_name);
+                    add_node_from_palette(entry.type_name, nullptr);
                 }
                 ImGui::PopID();
             }
@@ -104,12 +104,18 @@ void Graph_editor_window_base::node_background_context_menu(ax::NodeEditor::Edit
         ImGui::OpenPopup("graph_editor_background_menu");
     }
     if (ImGui::BeginPopup("graph_editor_background_menu")) {
+        // Spawn the new node where the right-click opened the menu, not on the
+        // auto-advancing grid. The popup outlives the click (the mouse is over
+        // a menu item by the time one is chosen), so resolve the canvas
+        // position from where the popup was opened. The popup runs suspended
+        // (screen space), hence the ScreenToCanvas conversion.
+        const ImVec2 spawn_position = node_editor.ScreenToCanvas(ImGui::GetMousePosOnOpeningCurrentPopup());
         build_palette();
         for (const Palette_category& category : m_palette_categories) {
             if (ImGui::BeginMenu(category.name.c_str())) {
                 for (const Palette_entry& entry : category.entries) {
                     if (ImGui::MenuItem(entry.label.c_str())) {
-                        add_node_from_palette(entry.type_name);
+                        add_node_from_palette(entry.type_name, &spawn_position);
                     }
                 }
                 ImGui::EndMenu();

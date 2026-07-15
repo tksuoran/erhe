@@ -84,8 +84,9 @@ public:
 
     // Undoable edits: each creates an Operation and executes it through the
     // operation stack. Used by the toolbar / canvas gestures (and, from Step 5,
-    // the in-editor MCP server).
-    auto add_node_of_type(const std::string& type_name) -> Texture_graph_node*;
+    // the in-editor MCP server). position is the canvas-space position for the
+    // new node; nullptr uses the auto-advancing spawn grid.
+    auto add_node_of_type(const std::string& type_name, const ImVec2* position = nullptr) -> Texture_graph_node*;
     void remove_node     (const std::shared_ptr<Texture_graph_node>& node);
     auto connect         (erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool;
     void disconnect      (erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin);
@@ -152,7 +153,7 @@ private:
     // descriptor registry, and spawns a chosen type through the factory + an
     // undoable insert.
     void build_palette   () override;
-    void add_node_from_palette(const std::string& type_name) override;
+    void add_node_from_palette(const std::string& type_name, const ImVec2* spawn_position) override;
     // Issue #252: the target-item selector row drawn at the top of the
     // window. Drag-drop a Graph_texture asset onto it, pick from the popup,
     // or clear it. Bound to m_target.

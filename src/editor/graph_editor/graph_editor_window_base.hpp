@@ -93,8 +93,11 @@ protected:
     // Fills m_palette_categories once (the node set is fixed per editor).
     virtual void build_palette() = 0;
     // Spawns the node type chosen in the palette (the concrete window creates it
-    // through its factory + an undoable insert operation).
-    virtual void add_node_from_palette(const std::string& type_name) = 0;
+    // through its factory + an undoable insert operation). spawn_position is the
+    // canvas-space position for the new node, or nullptr to use the window's
+    // auto-advancing spawn grid (the background context menu passes the position
+    // where the right-click opened the menu; the palette list passes nullptr).
+    virtual void add_node_from_palette(const std::string& type_name, const ImVec2* spawn_position) = 0;
 
     std::vector<Palette_category> m_palette_categories; // built lazily by build_palette()
     std::string                   m_palette_filter;     // node-palette search text

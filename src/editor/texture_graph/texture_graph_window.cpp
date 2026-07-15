@@ -366,7 +366,7 @@ auto Texture_graph_window::next_node_spawn_position() -> ImVec2
     return ImVec2{static_cast<float>(column) * step_x, static_cast<float>(row) * step_y};
 }
 
-auto Texture_graph_window::add_node_of_type(const std::string& type_name) -> Texture_graph_node*
+auto Texture_graph_window::add_node_of_type(const std::string& type_name, const ImVec2* position) -> Texture_graph_node*
 {
     const std::shared_ptr<Graph_texture>& graph_texture = get_current_graph_texture();
     if (!graph_texture) {
@@ -381,7 +381,7 @@ auto Texture_graph_window::add_node_of_type(const std::string& type_name) -> Tex
             *this, graph_texture, node, Texture_graph_node_insert_remove_operation::Mode::insert
         )
     );
-    set_node_position(*node.get(), next_node_spawn_position());
+    set_node_position(*node.get(), (position != nullptr) ? *position : next_node_spawn_position());
     return node.get();
 }
 
@@ -439,9 +439,9 @@ void Texture_graph_window::reseed_all()
     }
 }
 
-void Texture_graph_window::add_node_from_palette(const std::string& type_name)
+void Texture_graph_window::add_node_from_palette(const std::string& type_name, const ImVec2* spawn_position)
 {
-    add_node_of_type(type_name);
+    add_node_of_type(type_name, spawn_position);
 }
 
 void Texture_graph_window::build_palette()
