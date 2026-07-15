@@ -137,6 +137,7 @@ public:
     void set_node_position(const Graph_editor_node& node, const ImVec2& position) override;
     [[nodiscard]] auto get_node_size(const Graph_editor_node& node) -> ImVec2 override;
     void collect_selected_nodes(std::vector<std::shared_ptr<Graph_editor_node>>& out) override;
+    [[nodiscard]] auto find_graph_editor_node(std::size_t node_id) -> std::shared_ptr<Graph_editor_node> override;
 
     // Canvas selection setter: clears the ax::NodeEditor selection and
     // selects the given node ids (empty = just clear). A node must have

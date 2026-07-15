@@ -74,6 +74,11 @@ Texture_graph_window::Texture_graph_window(
     style.PinArrowSize  = 14.0f;
     style.PinArrowWidth = 14.0f;
 
+    // Node edges / corners get sizing cursors and left-drag resizing; the
+    // resulting size is adopted into the node's requested extent each frame
+    // (apply_node_resize, after the canvas End()).
+    m_node_editor->EnableNodeResize(true);
+
     // Self-consistency check for the ported node descriptors: the editor has no
     // gtest target, so compose every MVP descriptor standalone once at startup
     // and log any that fail to assemble (see doc/texture-graph-plan.md Phase 3
@@ -265,6 +270,16 @@ void Texture_graph_window::collect_selected_nodes(std::vector<std::shared_ptr<Gr
             out.push_back(node);
         }
     }
+}
+
+auto Texture_graph_window::find_graph_editor_node(const std::size_t node_id) -> std::shared_ptr<Graph_editor_node>
+{
+    for (const std::shared_ptr<Texture_graph_node>& node : get_nodes()) {
+        if (node->get_id() == node_id) {
+            return node;
+        }
+    }
+    return {};
 }
 
 void Texture_graph_window::remove_node(const std::shared_ptr<Texture_graph_node>& node)
@@ -565,6 +580,10 @@ void Texture_graph_window::imgui()
     node_background_context_menu(*m_node_editor.get());
 
     m_node_editor->End();
+
+    // Interactive node resizing (edge / corner drags): adopt the dragged
+    // size into the node's requested extent.
+    apply_node_resize(*m_node_editor.get());
 
     // Issue #251 (bug a): show the current canvas zoom in the corner so
     // rendering issues that appear only at certain zoom levels are diagnosable

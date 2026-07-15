@@ -717,12 +717,17 @@ void ed::Node::GetGroupedNodes(std::vector<Node*>& result, bool append)
 
 ImRect ed::Node::GetRegionBounds(NodeRegion region) const
 {
-    if (m_Type == NodeType::Node)
+    // Plain nodes get the group-style edge / corner regions when the editor
+    // has interactive node resizing enabled; the interior is then the
+    // "Header" (grab-to-move) region.
+    const bool resizableNode = (m_Type == NodeType::Node) && Editor->IsNodeResizeEnabled();
+
+    if (m_Type == NodeType::Node && !resizableNode)
     {
         if (region == NodeRegion::Header)
             return m_Bounds;
     }
-    else if (m_Type == NodeType::Group)
+    else if (m_Type == NodeType::Group || resizableNode)
     {
         const float activeAreaMinimumSize = ImMax(ImMax(
             Editor->GetView().InvScale * c_GroupSelectThickness,
@@ -792,11 +797,16 @@ ImRect ed::Node::GetRegionBounds(NodeRegion region) const
             bounds.Min.x += activeAreaMinimumSize;
             bounds.Max.x -= activeAreaMinimumSize;
             bounds.Min.y += activeAreaMinimumSize;
-            bounds.Max.y  = ImMax(bounds.Min.y + activeAreaMinimumSize, m_GroupBounds.Min.y);
+            if (resizableNode)
+                bounds.Max.y -= activeAreaMinimumSize; // whole interior moves the node
+            else
+                bounds.Max.y  = ImMax(bounds.Min.y + activeAreaMinimumSize, m_GroupBounds.Min.y);
             return bounds;
         }
         else if (region == NodeRegion::Center)
         {
+            if (resizableNode)
+                return ImRect(); // plain nodes have no group content hole
             bounds.Max.x -= activeAreaMinimumSize;
             bounds.Min.y  = ImMax(bounds.Min.y + activeAreaMinimumSize, m_GroupBounds.Min.y);
             bounds.Min.x += activeAreaMinimumSize;
@@ -810,14 +820,16 @@ ImRect ed::Node::GetRegionBounds(NodeRegion region) const
 
 ed::NodeRegion ed::Node::GetRegion(const ImVec2& point) const
 {
-    if (m_Type == NodeType::Node)
+    const bool resizableNode = (m_Type == NodeType::Node) && Editor->IsNodeResizeEnabled();
+
+    if (m_Type == NodeType::Node && !resizableNode)
     {
         if (m_Bounds.Contains(point))
             return NodeRegion::Header;
         else
             return NodeRegion::None;
     }
-    else if (m_Type == NodeType::Group)
+    else if (m_Type == NodeType::Group || resizableNode)
     {
         static const NodeRegion c_Regions[] =
         {
@@ -1647,6 +1659,21 @@ ImVec2 ed::EditorContext::GetNodeSize(NodeId nodeId)
         return ImVec2(0, 0);
 
     return node->m_Bounds.GetSize();
+}
+
+bool ed::EditorContext::GetNodeResize(NodeId& nodeId, ImVec2& position, ImVec2& size)
+{
+    // Active plain-node resize drag (see EnableNodeResize). Groups own their
+    // size (m_GroupBounds) and are not reported here.
+    if (!m_SizeAction.m_IsActive || (m_SizeAction.m_SizedNode == nullptr))
+        return false;
+    Node* node = m_SizeAction.m_SizedNode;
+    if (node->m_Type != NodeType::Node)
+        return false;
+    nodeId   = node->m_ID;
+    position = node->m_Bounds.Min;
+    size     = node->m_Bounds.GetSize();
+    return true;
 }
 
 void ed::EditorContext::SetNodeZPosition(NodeId nodeId, float z)
@@ -3692,13 +3719,21 @@ ed::EditorAction::AcceptResult ed::SizeAction::Accept(const Control& control)
     if (m_IsActive)
         return False;
 
-    if (control.ActiveNode && IsGroup(control.ActiveNode) && ImGui::IsMouseDragging(Editor->GetConfig().DragButtonIndex, 1))
+    // Groups are always resizable; plain nodes when the editor has
+    // interactive node resizing enabled (the application adopts the size
+    // through EditorContext::GetNodeResize()).
+    auto isResizable = [this](Node* node) -> bool
+    {
+        return IsGroup(node) || ((node->m_Type == NodeType::Node) && Editor->IsNodeResizeEnabled());
+    };
+
+    if (control.ActiveNode && isResizable(control.ActiveNode) && ImGui::IsMouseDragging(Editor->GetConfig().DragButtonIndex, 1))
     {
         //const auto mousePos     = to_point(ImGui::GetMousePos());
         //const auto closestPoint = control.ActiveNode->Bounds.get_closest_point_hollow(mousePos, static_cast<int>(control.ActiveNode->Rounding));
 
         auto pivot = GetRegion(control.ActiveNode);
-        if (pivot != NodeRegion::Header && pivot != NodeRegion::Center)
+        if (pivot != NodeRegion::Header && pivot != NodeRegion::Center && pivot != NodeRegion::None)
         {
             m_StartBounds      = control.ActiveNode->m_Bounds;
             m_StartGroupBounds = control.ActiveNode->m_GroupBounds;
@@ -3711,7 +3746,7 @@ ed::EditorAction::AcceptResult ed::SizeAction::Accept(const Control& control)
             m_IsActive         = true;
         }
     }
-    else if (control.HotNode && IsGroup(control.HotNode))
+    else if (control.HotNode && isResizable(control.HotNode))
     {
         m_Cursor = ChooseCursor(GetRegion(control.HotNode));
         return Possible;
@@ -3749,7 +3784,12 @@ bool ed::SizeAction::Process(const Control& control)
         if (m_MinimumSize.y == 0.0f && m_LastSize.y != m_SizedNode->m_Bounds.GetHeight())
             m_MinimumSize.y = m_SizedNode->m_Bounds.GetHeight();
 
-        auto minimumSize = ImMax(m_MinimumSize, m_StartBounds.GetSize() - m_StartGroupBounds.GetSize());
+        // Plain nodes shrink down to their content minimum (detected above
+        // when the applied size stops following the request); the group term
+        // would pin them to their start size (their group bounds are empty).
+        auto minimumSize = IsGroup(m_SizedNode)
+            ? ImMax(m_MinimumSize, m_StartBounds.GetSize() - m_StartGroupBounds.GetSize())
+            : m_MinimumSize;
 
 
         auto newBounds = m_StartBounds;

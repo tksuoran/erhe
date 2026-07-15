@@ -1,4 +1,5 @@
 #include "graph_editor/graph_editor_window_base.hpp"
+#include "graph_editor/graph_editor_node.hpp"
 
 #include "erhe_imgui/imgui_node_editor.h"
 
@@ -21,6 +22,26 @@ namespace {
 }
 
 } // namespace
+
+void Graph_editor_window_base::apply_node_resize(ax::NodeEditor::EditorContext& node_editor)
+{
+    ax::NodeEditor::NodeId node_id{};
+    ImVec2                 position{};
+    ImVec2                 size{};
+    if (!node_editor.GetNodeResize(node_id, position, size)) {
+        return;
+    }
+    const std::shared_ptr<Graph_editor_node> node = find_graph_editor_node(static_cast<std::size_t>(node_id.Get()));
+    if (!node) {
+        return;
+    }
+    node->set_ui_size(size.x, size.y);
+    // Left / top edge pivots move the node; right / bottom keep Min in place.
+    const ImVec2 current_position = node_editor.GetNodePosition(node_id);
+    if ((current_position.x != position.x) || (current_position.y != position.y)) {
+        node_editor.SetNodePosition(node_id, position);
+    }
+}
 
 void Graph_editor_window_base::node_palette()
 {

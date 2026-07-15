@@ -370,6 +370,21 @@ ImVec2 EditorContext::GetNodeSize(NodeId nodeId)
     return m_impl->GetNodeSize(nodeId);
 }
 
+void EditorContext::EnableNodeResize(bool enable)
+{
+    m_impl->EnableNodeResize(enable);
+}
+
+bool EditorContext::IsNodeResizeEnabled() const
+{
+    return m_impl->IsNodeResizeEnabled();
+}
+
+bool EditorContext::GetNodeResize(NodeId& nodeId, ImVec2& position, ImVec2& size)
+{
+    return m_impl->GetNodeResize(nodeId, position, size);
+}
+
 void EditorContext::CenterNodeOnScreen(NodeId nodeId)
 {
     if (auto node = m_impl->FindNode(nodeId))

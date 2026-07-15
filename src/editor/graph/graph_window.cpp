@@ -94,6 +94,11 @@ Graph_window::Graph_window(
     ax::NodeEditor::Config config;
     m_node_editor = std::make_unique<ax::NodeEditor::EditorContext>(nullptr);
 
+    // Node edges / corners get sizing cursors and left-drag resizing; the
+    // resulting size is adopted into the node's requested extent each frame
+    // (after the canvas End() in imgui()).
+    m_node_editor->EnableNodeResize(true);
+
     m_style_editor_window = std::make_unique<Node_style_editor_window>(imgui_renderer, imgui_windows, *m_node_editor.get());
 }
 
@@ -281,6 +286,28 @@ void Graph_window::imgui()
     }
     m_node_editor->EndDelete();
     m_node_editor->End();
+
+    // Interactive node resizing (edge / corner drags): adopt the dragged
+    // size into the node's requested extent.
+    {
+        ax::NodeEditor::NodeId sized_node_id{};
+        ImVec2                 sized_position{};
+        ImVec2                 sized_size{};
+        if (m_node_editor->GetNodeResize(sized_node_id, sized_position, sized_size)) {
+            for (const std::shared_ptr<Shader_graph_node>& node : m_nodes) {
+                if (node->get_id() != static_cast<std::size_t>(sized_node_id.Get())) {
+                    continue;
+                }
+                node->set_ui_size(sized_size.x, sized_size.y);
+                // Left / top edge pivots move the node.
+                const ImVec2 current_position = m_node_editor->GetNodePosition(sized_node_id);
+                if ((current_position.x != sized_position.x) || (current_position.y != sized_position.y)) {
+                    m_node_editor->SetNodePosition(sized_node_id, sized_position);
+                }
+                break;
+            }
+        }
+    }
 }
 
 }

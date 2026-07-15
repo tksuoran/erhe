@@ -1327,6 +1327,13 @@ public:
     bool HasSelectionChanged();
     uint64_t GetSelectionId() const { return m_SelectionId; }
 
+    // Interactive resizing of plain (non-group) nodes; see the public API
+    // (EditorContext::EnableNodeResize) for the contract. Groups are always
+    // resizable regardless of this flag.
+    void EnableNodeResize(bool enable) { m_NodeResizeEnabled = enable; }
+    bool IsNodeResizeEnabled() const   { return m_NodeResizeEnabled; }
+    bool GetNodeResize(NodeId& nodeId, ImVec2& position, ImVec2& size);
+
     Node* FindNodeAt(const ImVec2& p);
     void FindNodesInRect(const ImRect& r, vector<Node*>& result, bool append = false, bool includeIntersecting = true);
     void FindLinksInRect(const ImRect& r, vector<Link*>& result, bool append = false);
@@ -1542,6 +1549,9 @@ private:
 
     NodeBuilder         m_NodeBuilder;
     HintBuilder         m_HintBuilder;
+
+    // Interactive resizing of plain nodes (see EnableNodeResize above).
+    bool                m_NodeResizeEnabled = false;
 
     EditorAction*       m_CurrentAction;
     NavigateAction      m_NavigateAction;

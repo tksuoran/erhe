@@ -356,6 +356,17 @@ public:
     void SetGroupSize(NodeId nodeId, const ImVec2& size);
     ImVec2 GetNodePosition(NodeId nodeId);
     ImVec2 GetNodeSize(NodeId nodeId);
+
+    // Interactive resizing of plain (non-group) nodes. When enabled, hovering
+    // a node's edges / corners shows the matching sizing cursor and dragging
+    // with the left mouse button resizes the node (left / top edges also move
+    // it). The editor does not own a plain node's size - the application must
+    // adopt the gesture: while a resize drag is active, GetNodeResize()
+    // returns true with the dragged node and its requested position + size
+    // (canvas units); apply those to the node's own layout each frame.
+    void EnableNodeResize(bool enable);
+    bool IsNodeResizeEnabled() const;
+    bool GetNodeResize(NodeId& nodeId, ImVec2& position, ImVec2& size);
     void CenterNodeOnScreen(NodeId nodeId);
     void SetNodeZPosition(NodeId nodeId, float z); // Sets node z position, nodes with higher value are drawn over nodes with lower value
     float GetNodeZPosition(NodeId nodeId); // Returns node z position, defaults is 0.0f

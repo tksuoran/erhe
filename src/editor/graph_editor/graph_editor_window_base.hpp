@@ -45,6 +45,9 @@ public:
     // Appends this window's selected nodes to out.
     virtual void collect_selected_nodes(std::vector<std::shared_ptr<Graph_editor_node>>& out) = 0;
 
+    // The node with the given item id in the currently edited graph, or null.
+    [[nodiscard]] virtual auto find_graph_editor_node(std::size_t node_id) -> std::shared_ptr<Graph_editor_node> = 0;
+
     // Canvas node geometry, keyed by node id in the window's ax::NodeEditor
     // context (graph-independent). Size is the content-derived on-canvas
     // extent (read-only by nature; adjust through the node's ui scale).
@@ -79,6 +82,13 @@ protected:
     // Begin/End, bracketed by the editor's own Suspend/Resume. The editor
     // context is still owned by the concrete window (passed in here).
     void node_background_context_menu(ax::NodeEditor::EditorContext& node_editor);
+
+    // Adopts an active interactive node-resize drag (EnableNodeResize on the
+    // editor context): while the user drags a node's edge / corner, applies
+    // the reported size to the node's requested extent (Node Properties
+    // "Size") and the reported position (left / top edges move the node).
+    // Call right after the canvas End().
+    void apply_node_resize(ax::NodeEditor::EditorContext& node_editor);
 
     // Fills m_palette_categories once (the node set is fixed per editor).
     virtual void build_palette() = 0;

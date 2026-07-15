@@ -164,6 +164,7 @@ public:
     void set_node_position(const Graph_editor_node& node, const ImVec2& position) override;
     [[nodiscard]] auto get_node_size(const Graph_editor_node& node) -> ImVec2 override;
     void collect_selected_nodes(std::vector<std::shared_ptr<Graph_editor_node>>& out) override;
+    [[nodiscard]] auto find_graph_editor_node(std::size_t node_id) -> std::shared_ptr<Graph_editor_node> override;
 
 private:
     auto make_node       (const std::string& type_name) -> std::shared_ptr<Geometry_graph_node>;
