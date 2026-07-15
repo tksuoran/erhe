@@ -55,11 +55,6 @@ auto Texture_buffer_node::preview_output_index() const -> int
     return -1;
 }
 
-auto Texture_buffer_node::preview_display_size() const -> float
-{
-    return 128.0f;
-}
-
 auto Texture_buffer_node::render_target_size() const -> int
 {
     const int index = std::clamp(m_size_index, 0, c_size_count - 1);

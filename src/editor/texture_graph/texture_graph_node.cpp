@@ -146,11 +146,6 @@ auto Texture_graph_node::get_preview_texture_ref() -> std::shared_ptr<erhe::grap
     return m_preview_texture;
 }
 
-auto Texture_graph_node::preview_display_size() const -> float
-{
-    return 96.0f;
-}
-
 auto Texture_graph_node::render_target_size() const -> int
 {
     return 128;
@@ -281,12 +276,14 @@ void Texture_graph_node::draw_preview(App_context& app_context)
 {
     // Issue #251: the preview thumbnail is display geometry (an ImGui image
     // widget) laid out in the zoomed node content, so its on-screen size scales
-    // with the view. For display-scaled previews the render-target resolution
-    // follows it too (quantized; recorded here, consumed by
-    // preview_render_pending / render_products), so a zoomed-in node is not
-    // upscaled from a low-resolution render. Bake / buffer textures keep
-    // their configured resolution (uses_display_scaled_preview() == false).
-    const float size = preview_display_size() * m_content_scale;
+    // with the view, fitted to the node's available content space
+    // (center-column width, remaining height when the node has a requested
+    // Size). For display-scaled previews the render-target resolution follows
+    // it too (quantized; recorded here, consumed by preview_render_pending /
+    // render_products), so a zoomed-in or enlarged node is not upscaled from
+    // a low-resolution render. Bake / buffer textures keep their configured
+    // resolution (uses_display_scaled_preview() == false).
+    const float size = get_preview_fit_size();
     m_preview_display_size = size;
 
     if (!m_preview_texture || (app_context.imgui_renderer == nullptr)) {

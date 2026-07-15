@@ -42,7 +42,6 @@ public:
     void render_products  (App_context& context, Texture_renderer& renderer) override;
     void write_parameters (nlohmann::json& out) const override;
     void read_parameters  (const nlohmann::json& in) override;
-    [[nodiscard]] auto preview_display_size() const -> float override;
     [[nodiscard]] auto render_target_size  () const -> int   override;
     // The bake resolution is content (the serialized "size" parameter) -
     // never display-scaled.

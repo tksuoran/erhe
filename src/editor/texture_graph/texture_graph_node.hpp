@@ -87,9 +87,6 @@ public:
     [[nodiscard]] auto get_preview_texture() const -> const std::shared_ptr<erhe::graphics::Texture>&;
     [[nodiscard]] auto get_preview_texture_ref() -> std::shared_ptr<erhe::graphics::Texture>&;
 
-    // Edge length of the preview thumbnail drawn in the node UI.
-    [[nodiscard]] virtual auto preview_display_size() const -> float;
-
     // Resolution of the rendered preview / bake texture (square).
     [[nodiscard]] virtual auto render_target_size() const -> int;
 

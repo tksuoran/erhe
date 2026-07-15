@@ -63,11 +63,6 @@ void Texture_output_node::on_removed_from_graph()
     }
 }
 
-auto Texture_output_node::preview_display_size() const -> float
-{
-    return 160.0f;
-}
-
 auto Texture_output_node::render_target_size() const -> int
 {
     const int index = std::clamp(m_size_index, 0, 3);

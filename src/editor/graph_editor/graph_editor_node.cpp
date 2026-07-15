@@ -55,6 +55,18 @@ void Graph_editor_node::properties_imgui(App_context& app_context)
     commit_parameter_edit(app_context);
 }
 
+auto Graph_editor_node::get_preview_fit_size() const -> float
+{
+    // Remaining width of the (fixed-width) center column; when the node has
+    // a requested height, the remaining vertical room limits the square too.
+    float size = ImGui::GetContentRegionAvail().x;
+    if (m_content_target_bottom_y > 0.0f) {
+        const float available_height = m_content_target_bottom_y - ImGui::GetCursorScreenPos().y;
+        size = std::min(size, available_height);
+    }
+    return std::max(size, 32.0f * m_content_scale);
+}
+
 auto Graph_editor_node::get_ui_width() const -> float
 {
     return m_ui_width;
@@ -184,6 +196,15 @@ void Graph_editor_node::node_editor(App_context& app_context, ax::NodeEditor::Ed
     }
     const ImVec2 node_table_size{center_width + (2.0f * pin_label_width), 0.0f};
 
+    // Bottom of the requested content extent, for the height pad below the
+    // content and for get_preview_fit_size().
+    if (m_ui_height > 0.0f) {
+        const float padding_height = (node_padding.y + node_padding.w) * m_content_scale;
+        m_content_target_bottom_y = content_top_y + (m_ui_height * m_content_scale) - padding_height;
+    } else {
+        m_content_target_bottom_y = 0.0f;
+    }
+
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
     // The node's frame is drawn from its canvas-space bounds mapped to screen;
@@ -263,12 +284,10 @@ void Graph_editor_node::node_editor(App_context& app_context, ax::NodeEditor::Ed
     // Requested node height: pad with empty space below the content (the
     // width is exact through the table; the height stays content-driven
     // otherwise). Content taller than the request wins.
-    if (m_ui_height > 0.0f) {
-        const float padding_height         = (node_padding.y + node_padding.w) * m_content_scale;
-        const float desired_content_height = (m_ui_height * m_content_scale) - padding_height;
-        const float content_height         = ImGui::GetCursorScreenPos().y - content_top_y;
-        if (desired_content_height > content_height) {
-            ImGui::Dummy(ImVec2{1.0f, desired_content_height - content_height});
+    if (m_content_target_bottom_y > 0.0f) {
+        const float pad_height = m_content_target_bottom_y - ImGui::GetCursorScreenPos().y;
+        if (pad_height > 0.0f) {
+            ImGui::Dummy(ImVec2{1.0f, pad_height});
         }
     }
 

@@ -98,6 +98,13 @@ protected:
     // at the top of node_editor().
     [[nodiscard]] auto content_scale() const -> float { return m_content_scale; }
 
+    // The square edge (screen px) for a preview thumbnail that fills the
+    // node's available content space: the remaining center-column width,
+    // further limited by the remaining height when the node has a requested
+    // height (Node Properties "Size"). Call from after_node_content(), with
+    // the preview drawn last in the node content.
+    [[nodiscard]] auto get_preview_fit_size() const -> float;
+
     void show_pins(
         ax::NodeEditor::EditorContext&                                  node_editor,
         ImDrawList&                                                     draw_list,
@@ -121,6 +128,10 @@ protected:
     float       m_content_scale{1.0f};
     float       m_ui_width {0.0f}; // canvas units; <= 0 = automatic
     float       m_ui_height{0.0f}; // canvas units; <= 0 = automatic
+    // Bottom of the requested node content extent in screen space (0 = no
+    // requested height); set per frame by node_editor(), consumed by the
+    // height pad and by get_preview_fit_size().
+    float       m_content_target_bottom_y{0.0f};
     int         m_input_pin_edge {Node_edge::left};
     int         m_output_pin_edge{Node_edge::right};
     bool        m_dirty{true};

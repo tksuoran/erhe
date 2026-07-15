@@ -354,11 +354,13 @@ auto Geometry_graph_node::get_preview_desired_texture_size() const -> int
 void Geometry_graph_node::draw_preview(App_context& context)
 {
     // Display geometry laid out in the zoomed node content, so the
-    // on-screen size scales with the view (issue #251). The render-target
-    // resolution follows it too (quantized; see
-    // get_preview_desired_texture_size), so a zoomed-in node is not
-    // upscaled from a low-resolution render.
-    const float size = 96.0f * m_content_scale;
+    // on-screen size scales with the view (issue #251), fitted to the node's
+    // available content space (center-column width, remaining height when
+    // the node has a requested Size). The render-target resolution follows
+    // it too (quantized; see get_preview_desired_texture_size), so a
+    // zoomed-in or enlarged node is not upscaled from a low-resolution
+    // render.
+    const float size = get_preview_fit_size();
     m_preview_display_size = size;
 
     // Hovering the node spins the preview; the angle persists so the
