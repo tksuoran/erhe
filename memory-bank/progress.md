@@ -1,12 +1,18 @@
 §MBEL:5.0
 
-[TASK::houdini-graph-features]{impl-done,awaiting-user-interactive-verify}
-✓wire-cutting{a7d98635}+display/ghost-flags{886e4c31}+node-previews{77feb2a8}
-?user-verify::Y+drag-cuts-wires-in-geometry/texture/shader-graph-windows{undo-restores,Escape-cancels,plain-drag=box-select}+D/G-badge-clicks+"Show node previews"-checkbox
+[TASK::houdini-graph-features]{impl-done,awaiting-user-RE-verify-post-fixes}
+✓wire-cutting{a7d98635}+display/ghost-flags{886e4c31}+node-previews{77feb2a8}+cut-fixes+N.V-shading{11061763}+hover-spin+zoom-sharp{a939c8e6}+texture-graph-zoom-sharp{51c064fd}
+>user-tested-2026-07-15::cut-gesture-partial{slow-drag-missed+highlight-without-delete}→both-root-caused+fixed{11061763}
+?user-re-verify::slow-Y+drag-highlights+DELETES{undo,Escape}+hover-spin-feel+zoom-sharpening-both-graphs+badge-clicks
 !designation-ids=session-node-ids{persist-as-node-INDICES-in-graph-JSON;shadow-resolution-via-get_log_id}
 !ghost-invisible-when-content_edge_lines.use_id_buffer{known-limitation,documented-in-commit}
 !designating-value-node→null-geometry-bake→scene-mesh-clears{consistent-with-empty-semantics;badges-hidden-on-non-geometry-output-nodes}
-!Brush_preview-primitive-overload{render_preview(texture,layer,primitive,material,time);brush-overload-delegates}
+!Brush_preview-primitive-overload{render_preview(texture,layer,primitive,material,rotation_radians,headlight_shading);brush-overload-derives-rotation-from-time;headlight=key-light-at-camera→Lambert=dot(N,V)}
+!DeleteItemsAction::Add-refuses-while-any-action-current{silent-drop!}→AddFromAction-for-queueing-from-inside-an-action
+!ImCubicBezierLineIntersect-unreliable-for-tiny-segments{~2px;also-inside-Link::TestHit-rect-edges}→tessellate{ImCubicBezierSubdivide}+exact-segment-segment-tests;broad-phase-rects-need-generous-Expand
+!open_texture_graph_window-MCP-opens-NEW-instance-without-target→pass{"graph_texture":name}-arg
+!no-texture_graph_set_view-zoom-MCP-tool{geometry-has-one;add-if-headless-zoom-verify-needed}
+!preview-texture-size-quantization::pow2-[64,512]-from-display-px{96*content_scale}→reallocs-only-at-boundaries
 
 [TASK::#239-per-scene-settings]{parked}
 ✓runtime-setter-MCP-tool{set_scene_settings+get_scene_settings@phase4,3a4989b6}→sky/grid-override-visual-verify-unblocked

@@ -1,8 +1,11 @@
 §MBEL:5.0
 
 [FOCUS]
->houdini-graph-features::IMPLEMENTED✓{2026-07-14,commits:a7d98635+886e4c31+77feb2a8}
-  wire-cutting::CutLinksAction-in-vendored-imgui-node-editor{hold-Y+LMB-drag;Config::CutLinksKey;segment-vs-curve-ImCubicBezierLineIntersect;crossed-links→DeleteItemsAction→standard-QueryDeletedLink-flow→all-3-graph-windows-undoable-zero-per-window-changes;Escape-cancels;accepted-before-SelectAction→suppresses-box-select}
+>houdini-graph-features::IMPLEMENTED✓{2026-07-14/15,commits:a7d98635+886e4c31+77feb2a8+11061763+a939c8e6+51c064fd}
+  wire-cutting::CutLinksAction-in-vendored-imgui-node-editor{hold-Y+LMB-drag;Config::CutLinksKey;Escape-cancels;accepted-before-SelectAction→suppresses-box-select;crossed-links→DeleteItemsAction→standard-QueryDeletedLink-flow→all-3-graph-windows-undoable-zero-per-window-changes}
+    >fixed{11061763,after-user-report}::
+      deletion::Add()-refuses-while-ANY-action-current{cut-action-IS-current-when-queueing}→new-AddFromAction{unconditional-push;consumed-by-Accept-next-frame}
+      slow-stroke-misses::analytic-ImCubicBezierLineIntersect-unreliable-for-~2px-segments{fast=long-segments-ok}→broad-phase-rect-Expand(16-canvas-units)+narrow-phase=stroke-segment-vs-ImCubicBezierSubdivide-tessellated-curve{~1px-adaptive}+exact-segment-segment-orientation-tests
   display/ghost-flags::per-graph-ids-on-Geometry_graph{0=none;setters-mark-scene-outputs-dirty;two-phase-evaluate{scene-outputs-last→designation-reads-any-payload-despite-topo-order};ids-resolve-via-get_log_id→shadow-clone-raw-copy-in-launch_evaluation}
     display::replaces-output-wired-input-in-WHOLE-bake{render+physics}
     ghost::edge-lines-only-companion-mesh{visible|render_wireframe,¬content/shadow_cast/id;no-raytrace;ghost_geometry+ghost_primitive-in-baked-products;second-controlled-mesh-in-Geometry_graph_mesh;excluded-from-gltf-export}
@@ -12,10 +15,13 @@
     mcp::geometry_graph_set_display_flags+get_geometry_graph-reports-ids
   node-previews::texture-graph-style-per-node-mesh-thumbnails{OFF-default;per-Graph_mesh-toggle{checkbox+geometry_graph_set_node_previews-MCP};enable→mark_dirty-full-re-eval}
     worker::build_preview_primitive-fill-only-after-evaluate{Geometry_graph::set_preview_mesh_memory-shadow-only-hook};take_preview-in-finish_evaluation→needs-render
-    main::Geometry_graph_window::update_node_previews{budget-2/frame;lazy-128px-per-node-texture;Brush_preview-new-primitive-overload{brush-overload-delegates}}
-    on_removed_from_graph-releases-preview-GPU-resources{output/group-overrides-call-base-now}
-  verified::headless-MCP+screenshots{display-override+ghost-render+undo/redo+save/reload-roundtrip+previews-visible}✓
-  ?user-interactive-verify-PENDING::wire-cutting{Y+drag-in-all-3-graph-windows,undo,Escape,plain-drag-still-box-select}+badge-clicks+preview-toggle-checkbox
+    main::Geometry_graph_window::update_node_previews{budget-2/frame;lazy-per-node-texture;Brush_preview-primitive-overload}
+    shading::N.V-dimmed-headlight{a939c8e6-predecessor-11061763;key-light-co-located-with-fitted-camera→Lambert=dot(N,V);white-diffuse-m_headlight_material;per-call-light-setup→brush-thumbnails-keep-2-light-look}
+    hover-spin::m_is_hovered-on-Graph_editor_node{GetHoveredNode-per-frame}→advance-persistent-m_preview_rotation{1.5rad/s}+arm-re-render;Brush_preview-primitive-overload-takes-rotation_radians{brush-overload-derives-from-time}
+    zoom-sharp::draw_preview-records-display-size{96*content_scale}→pow2-quantized-[64,512]→texture-recreate+re-render-on-mismatch
+  texture-graph-previews::same-zoom-scaling{51c064fd;preview_render_pending+get_preview_desired_texture_size;render_into-already-recreates-on-size-change;uses_display_scaled_preview()=false-for-buffer/output/material-output{texture-size=content,serialized-"size"-param}}
+  verified::headless-MCP+screenshots{display-override+ghost+undo/redo+save/reload+previews+N.V-look+zoom-3.0-sharp+texture-graph-no-regression}✓
+  ?user-interactive-verify-PENDING::wire-cutting-RE-test-post-fix{slow-Y+drag-highlights+DELETES,undo,Escape}+hover-spin-feel{speed-knob=1.5f-in-Geometry_graph_node::draw_preview}+zoom-sharpening-both-graphs+badge-clicks
 
 [PREV]
 >procedural-default-window-layout::DONE✓{2026-07-14,commit:bb96806e;iterate:edit-default_layout.json→rm-ini→relaunch}
