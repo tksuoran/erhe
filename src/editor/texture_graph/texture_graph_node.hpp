@@ -93,6 +93,23 @@ public:
     // Resolution of the rendered preview / bake texture (square).
     [[nodiscard]] virtual auto render_target_size() const -> int;
 
+    // Whether the preview texture resolution follows the thumbnail's actual
+    // on-canvas display size (zoom-scaled, quantized to powers of two in
+    // [64, 512]) so a zoomed-in node is not upscaled from a low-resolution
+    // render. True for plain thumbnail previews; overridden false where the
+    // texture is content with a configured resolution (buffer / output /
+    // material output nodes, whose "size" is a serialized parameter).
+    [[nodiscard]] virtual auto uses_display_scaled_preview() const -> bool;
+
+    // The quantized resolution matching the display size draw_preview()
+    // recorded last (screen pixels, zoom-scaled).
+    [[nodiscard]] auto get_preview_desired_texture_size() const -> int;
+
+    // Whether render_products() should run this frame: the composition
+    // changed (preview_needs_render), or - display-scaled previews only -
+    // the on-canvas display size no longer matches the texture resolution.
+    [[nodiscard]] auto preview_render_pending() const -> bool;
+
     // Recomposes this node's subtree and (re)renders its products: the base
     // renders the primary output into the preview thumbnail; sink nodes (the
     // output node) override this to bake and assign a Content_library texture.
@@ -173,6 +190,7 @@ protected:
     std::weak_ptr<Graph_texture>             m_owning_graph_texture;
     std::shared_ptr<erhe::graphics::Texture> m_preview_texture;
     bool                                     m_preview_needs_render{true};
+    float                                    m_preview_display_size{96.0f}; // screen px, zoom-scaled
 
 private:
     void draw_preview(App_context& context);

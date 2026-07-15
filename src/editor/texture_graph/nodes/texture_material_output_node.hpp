@@ -77,6 +77,9 @@ public:
     void read_parameters  (const nlohmann::json& in) override;
     [[nodiscard]] auto preview_display_size() const -> float override;
     [[nodiscard]] auto render_target_size  () const -> int   override;
+    // The bake resolution is content (the serialized "size" parameter) -
+    // never display-scaled.
+    [[nodiscard]] auto uses_display_scaled_preview() const -> bool override { return false; }
 
     // Composes every connected channel's subtree into a fragment shader + its
     // ordered uniform values, for scripted PNG export (the ORM channels are

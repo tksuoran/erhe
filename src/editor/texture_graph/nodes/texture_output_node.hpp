@@ -44,6 +44,9 @@ public:
     void read_parameters  (const nlohmann::json& in) override;
     [[nodiscard]] auto preview_display_size() const -> float override;
     [[nodiscard]] auto render_target_size  () const -> int   override;
+    // The bake resolution is content (the serialized "size" parameter) -
+    // never display-scaled.
+    [[nodiscard]] auto uses_display_scaled_preview() const -> bool override { return false; }
 
     // The most recently baked output texture (what is registered in the content
     // library), or nullptr when nothing has been baked yet. Used by the owning

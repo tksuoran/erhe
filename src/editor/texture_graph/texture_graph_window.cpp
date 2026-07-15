@@ -167,7 +167,9 @@ void Texture_graph_window::evaluate_and_render(Graph_texture& graph_texture)
     // samples it - including a buffer feeding another buffer.
     for (erhe::graph::Node* graph_node : graph_texture.graph().get_nodes()) {
         Texture_graph_node* node = dynamic_cast<Texture_graph_node*>(graph_node);
-        if ((node != nullptr) && node->preview_needs_render()) {
+        // preview_render_pending: composition changed, or (display-scaled
+        // thumbnails) the on-canvas display size outgrew the texture (zoom).
+        if ((node != nullptr) && node->preview_render_pending()) {
             node->render_products(m_app_context, *m_renderer);
             node->clear_preview_needs_render();
         }

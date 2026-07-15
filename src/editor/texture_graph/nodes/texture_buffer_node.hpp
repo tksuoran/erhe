@@ -41,6 +41,9 @@ public:
     [[nodiscard]] auto preview_output_index () const -> int   override;
     [[nodiscard]] auto preview_display_size () const -> float override;
     [[nodiscard]] auto render_target_size   () const -> int   override;
+    // The buffer's texture is sampled by downstream compositions at its
+    // configured resolution (the "size" parameter) - never display-scaled.
+    [[nodiscard]] auto uses_display_scaled_preview() const -> bool override { return false; }
 
 private:
     // Index (0..2) of the connected input pin to render, preferring the highest
