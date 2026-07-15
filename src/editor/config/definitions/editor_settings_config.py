@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Editor_settings_config",
-    version=13,
+    version=14,
     short_desc="Editor settings",
     long_desc="Runtime-editable settings saved to editor_settings.json.",
     developer=False,
@@ -33,6 +33,12 @@ struct("Editor_settings_config",
         field("clear_color",                      Vec4,  added_in=11, default="0.0f, 0.0f, 0.0f, 0.4f", short_desc="Clear Color", long_desc="Viewport background clear color."),
         # Editor-global content edge-line (wide-line) method and bias tuning.
         field("content_edge_lines",               StructRef("Content_edge_lines_config"), added_in=11),
+        # Edge-line overlay for the preview thumbnails: geometry graph node
+        # previews (on by default) and brush previews (off by default; the
+        # designated-initializer default overrides only 'enabled', the other
+        # members keep the struct's own defaults).
+        field("graph_node_preview_edge_lines",    StructRef("Preview_edge_lines_config"), added_in=14, short_desc="Graph Node Preview Edge Lines"),
+        field("brush_preview_edge_lines",         StructRef("Preview_edge_lines_config"), added_in=14, short_desc="Brush Preview Edge Lines", default=".enabled = false"),
         field("scene_views",          Vector(StructRef("Scene_view_settings")), added_in=5),
         field("developer",            StructRef("Developer_config"),       added_in=1),
         field("grid",                 StructRef("Grid_config"),            added_in=1),

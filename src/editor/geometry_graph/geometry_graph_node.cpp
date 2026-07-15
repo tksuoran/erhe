@@ -292,7 +292,12 @@ void Geometry_graph_node::build_preview_primitive(erhe::scene_renderer::Mesh_mem
     );
 
     const erhe::primitive::Build_info build_info{
-        .primitive_types = { .fill_triangles = true },
+        .primitive_types = {
+            .fill_triangles          = true,
+            // Expanded fill soup for the preview's solid-wireframe edge-line
+            // overlay (see Brush_preview / Preview_edge_lines_config).
+            .fill_triangles_expanded = true
+        },
         .buffer_info     = mesh_memory.make_primitive_buffer_info()
     };
     std::shared_ptr<erhe::primitive::Primitive> primitive = std::make_shared<erhe::primitive::Primitive>(preview_geometry);
@@ -325,6 +330,11 @@ auto Geometry_graph_node::preview_needs_render() const -> bool
 void Geometry_graph_node::clear_preview_needs_render()
 {
     m_preview_needs_render = false;
+}
+
+void Geometry_graph_node::mark_preview_needs_render()
+{
+    m_preview_needs_render = true;
 }
 
 auto Geometry_graph_node::get_preview_texture() const -> const std::shared_ptr<erhe::graphics::Texture>&

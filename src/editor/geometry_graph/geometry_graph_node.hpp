@@ -110,6 +110,10 @@ public:
     [[nodiscard]] auto get_preview_primitive() const -> const std::shared_ptr<erhe::primitive::Primitive>&;
     [[nodiscard]] auto preview_needs_render() const -> bool;
     void clear_preview_needs_render();
+    // Arms a re-render of the existing preview (e.g. after the preview
+    // edge-line settings change); harmless on nodes without a preview
+    // primitive (update_node_previews skips those).
+    void mark_preview_needs_render();
     [[nodiscard]] auto get_preview_texture() const -> const std::shared_ptr<erhe::graphics::Texture>&;
     void set_preview_texture(const std::shared_ptr<erhe::graphics::Texture>& texture);
     // Current preview orientation (radians around Y). Advanced while the

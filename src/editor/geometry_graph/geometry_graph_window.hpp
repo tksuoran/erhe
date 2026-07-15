@@ -3,6 +3,7 @@
 #include "geometry_graph/geometry_graph.hpp"
 #include "graph_editor/graph_editor_window_base.hpp"
 
+#include "config/generated/preview_edge_lines_config.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 
 #include <nlohmann/json_fwd.hpp>
@@ -250,6 +251,10 @@ private:
     int                                               m_spawn_count{0};
     // Reused scratch for the target selector's picker (cleared + refilled each frame).
     std::vector<std::shared_ptr<erhe::Item_base>>     m_target_candidates;
+    // Last edge-line settings the previews were rendered with; a change arms
+    // a re-render on every cached preview (see update_node_previews).
+    Preview_edge_lines_config                         m_preview_edge_lines_snapshot{};
+    bool                                              m_preview_edge_lines_snapshot_valid{false};
 };
 
 }

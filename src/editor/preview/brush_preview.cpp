@@ -3,6 +3,7 @@
 #include "app_context.hpp"
 #include "editor_log.hpp"
 #include "brushes/brush.hpp"
+#include "config/generated/editor_settings_config.hpp"
 #include "content_library/content_library.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "renderers/programs.hpp"
@@ -27,6 +28,7 @@
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene_renderer/shader_key.hpp"
 
 #include <fmt/format.h>
 
@@ -38,6 +40,24 @@ Brush_preview::Brush_preview(
     App_context&                    app_context
 )
     : Scene_preview{graphics_device, init_command_buffer, app_context}
+    , m_solid_wireframe_supported{graphics_device.get_info().use_solid_wireframe}
+    , m_wireframe_pipeline{
+        graphics_device,
+        erhe::graphics::Base_render_pipeline_create_info{
+            .debug_label    = erhe::utility::Debug_label{"Brush Preview Solid Wireframe"},
+            .input_assembly = erhe::graphics::Input_assembly_state::triangle,
+            .rasterization  = erhe::graphics::Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
+            // Depth less-or-equal overlay over the fill (same expanded
+            // positions -> equal depth -> passes), no depth write - mirrors
+            // Pipeline_renderpasses::solid_wireframe.
+            .depth_stencil  = {
+                .depth_test_enable   = true,
+                .depth_write_enable  = false,
+                .depth_compare_op    = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::less_or_equal, graphics_device.get_reverse_depth()),
+                .stencil_test_enable = false
+            }
+        }
+    }
 {
     make_preview_scene();
 }
@@ -135,9 +155,32 @@ void Brush_preview::make_preview_scene()
     composition_pass->data.filter                = erhe::Item_filter{};
     composition_pass->data.base_render_pipelines = m_render_pipelines;
     composition_pass->data.blending_mode_policy  = erhe::scene_renderer::Blending_mode_policy::allow_all;
+
+    // Edge-line overlay: the expanded fill soup redrawn depth less-or-equal
+    // with the SOLID_WIREFRAME variant, painting real polygon edges inside
+    // the fill shader (no z-fight). Enabled / colored per render_preview call
+    // from Preview_edge_lines_config; meshes without an expanded fill range
+    // are skipped by the bucket walk (fill-only look). Not created where the
+    // device cannot link the variant (macOS GL 4.1); no wide-line fallback
+    // for previews.
+    if (m_solid_wireframe_supported) {
+        auto wireframe_pass = std::make_shared<Composition_pass>("Brush preview solid wireframe");
+        wireframe_pass->data.enabled                      = false; // per-call state (render_preview)
+        wireframe_pass->data.mesh_layers                  = {Mesh_layer_id::brush};
+        wireframe_pass->data.primitive_mode               = erhe::primitive::Primitive_mode::solid_wireframe;
+        wireframe_pass->data.filter                       = erhe::Item_filter{};
+        wireframe_pass->data.base_render_pipelines        = {&m_wireframe_pipeline};
+        wireframe_pass->data.blending_mode_policy         = erhe::scene_renderer::Blending_mode_policy::allow_all;
+        wireframe_pass->data.shader_key_force_enable_mask = erhe::scene_renderer::make_shader_bool_mask(erhe::scene_renderer::Shader_bool::SOLID_WIREFRAME);
+        m_wireframe_pass = wireframe_pass;
+    }
+
     {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_composer.mutex};
         m_composer.composition_passes.push_back(composition_pass);
+        if (m_wireframe_pass) {
+            m_composer.composition_passes.push_back(m_wireframe_pass);
+        }
     }
 }
 
@@ -154,7 +197,10 @@ void Brush_preview::render_preview(
     erhe::log::set_breadcrumb(fmt::format("thumbnail: brush '{}'", brush->get_name()));
     const Brush::Scaled& brush_scaled = brush->get_scaled(1.0);
     const float time_s = static_cast<float>(static_cast<double>(time) / 1'000'000'000.0);
-    render_preview(texture, texture_layer, brush_scaled.primitive, brush->get_material(), 2.0f * time_s);
+    const Preview_edge_lines_config* edge_lines = (m_context.editor_settings != nullptr)
+        ? &m_context.editor_settings->brush_preview_edge_lines
+        : nullptr;
+    render_preview(texture, texture_layer, brush_scaled.primitive, brush->get_material(), 2.0f * time_s, false, edge_lines);
 }
 
 void Brush_preview::render_preview(
@@ -163,9 +209,27 @@ void Brush_preview::render_preview(
     const std::shared_ptr<erhe::primitive::Primitive>& primitive,
     const std::shared_ptr<erhe::primitive::Material>&  material,
     const float                                        rotation_radians,
-    const bool                                         headlight_shading
+    const bool                                         headlight_shading,
+    const Preview_edge_lines_config*                   edge_lines
 )
 {
+    // Edge-line overlay is per-call state (the preview scene is shared by
+    // brush thumbnails and graph node previews, each with its own settings
+    // group), so enable / color the pass here rather than at construction.
+    if (m_wireframe_pass) {
+        const bool edge_lines_enabled = (edge_lines != nullptr) && edge_lines->enabled;
+        m_wireframe_pass->data.enabled = edge_lines_enabled;
+        if (edge_lines_enabled) {
+            m_wireframe_pass->data.primitive_settings = erhe::scene_renderer::Primitive_interface_settings{
+                .color_source    = erhe::scene_renderer::Primitive_color_source::constant_color,
+                .constant_color0 = edge_lines->color,
+                .constant_color1 = edge_lines->color,
+                .size_source     = erhe::scene_renderer::Primitive_size_source::constant_size,
+                .constant_size   = edge_lines->width
+            };
+        }
+    }
+
     set_color_texture(texture);
     set_color_texture_layer(texture_layer);
     resize(texture->get_width(), texture->get_height());

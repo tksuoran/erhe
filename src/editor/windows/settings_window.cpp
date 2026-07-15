@@ -30,6 +30,7 @@
 #include "config/generated/selection_outline_style_serialization.hpp"
 #include "config/generated/mesh_component_style_serialization.hpp"
 #include "config/generated/content_edge_lines_config_serialization.hpp"
+#include "config/generated/preview_edge_lines_config_serialization.hpp"
 #include "config/generated/debug_visualizations_settings_serialization.hpp"
 #include "config/generated/developer_config_serialization.hpp"
 #include "config/generated/grid_config_serialization.hpp"
@@ -506,6 +507,10 @@ void Settings_window::imgui()
         pop_group();
         // Editor-global content edge-line (wide-line) method + bias tuning.
         add_config_section(settings.content_edge_lines);
+        // Edge-line overlay for the preview thumbnails (same struct shown
+        // twice; the label override gives each a distinct group header).
+        add_config_section(settings.graph_node_preview_edge_lines, "Graph Node Preview Edge Lines");
+        add_config_section(settings.brush_preview_edge_lines,      "Brush Preview Edge Lines");
         // Note: the per-view debug-visualization enable toggles / modes
         // (Debug_visualizations_settings) are intentionally NOT shown here -
         // they live only per scene view (edited in the scene-view Debug

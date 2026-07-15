@@ -13,6 +13,7 @@
 
 #include "app_context.hpp"
 #include "app_scenes.hpp"
+#include "config/generated/editor_settings_config.hpp"
 #include "editor_log.hpp"
 #include "items.hpp"
 #include "content_library/content_library.hpp"
@@ -690,8 +691,48 @@ void Geometry_graph_window::update_node_previews()
     if ((m_app_context.current_command_buffer == nullptr) || (m_app_context.brush_preview == nullptr)) {
         return;
     }
+    // Previews are cached textures; a change to the edge-line settings must
+    // arm a re-render on every existing preview (nodes without a preview
+    // primitive skip the flag). First frame just records the snapshot.
+    const Preview_edge_lines_config* edge_lines = (m_app_context.editor_settings != nullptr)
+        ? &m_app_context.editor_settings->graph_node_preview_edge_lines
+        : nullptr;
+    if (edge_lines != nullptr) {
+        const bool changed =
+            (edge_lines->enabled != m_preview_edge_lines_snapshot.enabled) ||
+            (edge_lines->width   != m_preview_edge_lines_snapshot.width  ) ||
+            (edge_lines->color   != m_preview_edge_lines_snapshot.color  );
+        if (changed) {
+            if (m_preview_edge_lines_snapshot_valid) {
+                const auto arm_graph = [](const std::shared_ptr<Graph_mesh>& graph_mesh) {
+                    if (!graph_mesh) {
+                        return;
+                    }
+                    for (const std::shared_ptr<Geometry_graph_node>& node : graph_mesh->nodes()) {
+                        node->mark_preview_needs_render();
+                    }
+                };
+                arm_graph(m_graph_mesh);
+                if (m_app_context.app_scenes != nullptr) {
+                    for (const std::shared_ptr<Scene_root>& scene_root : m_app_context.app_scenes->get_scene_roots()) {
+                        const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
+                        if (!content_library || !content_library->graph_meshes) {
+                            continue;
+                        }
+                        for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->graph_meshes->get_all<Graph_mesh>()) {
+                            if (graph_mesh != m_graph_mesh) {
+                                arm_graph(graph_mesh);
+                            }
+                        }
+                    }
+                }
+            }
+            m_preview_edge_lines_snapshot = *edge_lines;
+        }
+        m_preview_edge_lines_snapshot_valid = true;
+    }
     int budget = 2;
-    const auto render_graph_previews = [this, &budget](const std::shared_ptr<Graph_mesh>& graph_mesh) {
+    const auto render_graph_previews = [this, &budget, edge_lines](const std::shared_ptr<Graph_mesh>& graph_mesh) {
         if (!graph_mesh || !graph_mesh->get_node_previews_enabled()) {
             return;
         }
@@ -736,7 +777,7 @@ void Geometry_graph_window::update_node_previews()
             // Headlight shading: N.V-dimmed neutral look (reads curvature
             // better than the brush preview material). Rotation is the
             // node's persistent hover-spun angle.
-            m_app_context.brush_preview->render_preview(node->get_preview_texture(), 0, node->get_preview_primitive(), {}, node->get_preview_rotation(), true);
+            m_app_context.brush_preview->render_preview(node->get_preview_texture(), 0, node->get_preview_primitive(), {}, node->get_preview_rotation(), true, edge_lines);
             node->clear_preview_needs_render();
             --budget;
         }
