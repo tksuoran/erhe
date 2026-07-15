@@ -16,6 +16,7 @@ namespace erhe::graph { class Graph; }
 
 namespace editor {
 
+class App_context;
 class Graph_editor_node;
 
 // Common base for the node-graph editor windows (the geometry graph and the
@@ -64,6 +65,16 @@ public:
     // tools; never null once the window is constructed.
     [[nodiscard]] virtual auto get_node_editor() -> ax::NodeEditor::EditorContext* = 0;
 
+    // Spawns a palette node type from outside the window (inventory / hotbar
+    // slots): shows the window and creates the node on the auto-advancing
+    // spawn grid. No-op in the empty state (no graph being edited).
+    void spawn_node_from_slot(const std::string& type_name);
+
+    // The primary graph editor window whose clipboard_kind() matches, or
+    // nullptr (used to route inventory / hotbar graph-node slots and dropped
+    // palette payloads to the right editor).
+    [[nodiscard]] static auto find_window_by_kind(App_context& context, const char* kind) -> Graph_editor_window_base*;
+
 protected:
     // One selectable palette entry (a spawnable node type).
     class Palette_entry
@@ -91,6 +102,30 @@ protected:
     // Begin/End, bracketed by the editor's own Suspend/Resume. The editor
     // context is still owned by the concrete window (passed in here).
     void node_background_context_menu(ax::NodeEditor::EditorContext& node_editor);
+
+    // Accepts a node-palette payload (c_graph_node_payload_type) of this
+    // editor's kind. Must be called inside an open drag-drop target block
+    // covering the canvas: while the drag is in flight it draws a ghost of
+    // the prospective node at the cursor; on delivery it spawns the node at
+    // the drop position.
+    void accept_palette_drop(ax::NodeEditor::EditorContext& node_editor, const ImVec2& rect_min, const ImVec2& rect_max);
+
+    // Whole-canvas drag-drop target that accepts only palette payloads
+    // (accept_palette_drop). For windows without their own canvas target;
+    // call right after the canvas End().
+    void palette_drop_target(ax::NodeEditor::EditorContext& node_editor, const ImVec2& rect_min, const ImVec2& rect_max);
+
+    // Ghost rectangle for an in-flight canvas drop: node footprint (canvas
+    // units) anchored with its top-left corner at the cursor - where the
+    // spawned node's origin lands - scaled to the canvas zoom, clipped to
+    // the canvas rect, with a label inside.
+    void draw_canvas_drop_ghost(
+        ax::NodeEditor::EditorContext& node_editor,
+        const ImVec2&                  rect_min,
+        const ImVec2&                  rect_max,
+        const char*                    label,
+        const ImVec2&                  footprint
+    );
 
     // Adopts an active interactive node-resize drag (EnableNodeResize on the
     // editor context): while the user drags a node's edge / corner, applies

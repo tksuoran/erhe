@@ -13,6 +13,7 @@
 #include <glm/glm.hpp>
 
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace erhe::commands {
@@ -64,6 +65,9 @@ public:
     std::shared_ptr<erhe::primitive::Material> material{}; // Non-null for material slots
     erhe::commands::Command*                   command {nullptr}; // Non-null for operation slots
     Operation_params                           operation_params{}; // Frozen parameter snapshot for the operation slot
+    std::string                                graph_node_kind {}; // Non-empty (with type) for graph-node slots ("geometry_graph" / "texture_graph")
+    std::string                                graph_node_type {}; // Node factory type; non-empty means graph-node slot
+    std::string                                graph_node_label{}; // Palette display label for the slot button
 };
 
 class Toggle_menu_visibility_command : public erhe::commands::Command

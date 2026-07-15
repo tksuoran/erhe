@@ -1,5 +1,7 @@
 ﻿#include "tools/hotbar.hpp"
 
+#include "graph_editor/graph_editor_window_base.hpp"
+
 #include "app_context.hpp"
 #include "brushes/brush.hpp"
 #include "brushes/brush_tool.hpp"
@@ -1045,6 +1047,22 @@ void Hotbar::slot_button(const uint32_t id, Slot_entry& entry)
         ImGui::SameLine();
         if (pressed && (m_context.operations != nullptr)) {
             m_context.operations->run_operation(entry.command, entry.operation_params);
+        }
+    } else if (!entry.graph_node_type.empty()) {
+        // Graph-node slot: a labeled button that spawns the node type in its
+        // graph editor window (on the window's spawn grid) on click. Advances
+        // the layout with SameLine like the other branches.
+        const ImVec2 button_size{icon_size, icon_size};
+        const bool pressed = ImGui::Button(entry.graph_node_label.c_str(), button_size);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s (%s node)", entry.graph_node_label.c_str(), entry.graph_node_kind.c_str());
+        }
+        ImGui::SameLine();
+        if (pressed) {
+            Graph_editor_window_base* window = Graph_editor_window_base::find_window_by_kind(m_context, entry.graph_node_kind.c_str());
+            if (window != nullptr) {
+                window->spawn_node_from_slot(entry.graph_node_type);
+            }
         }
     } else {
         // Empty slot: render a placeholder box so the hotbar keeps a fixed width and

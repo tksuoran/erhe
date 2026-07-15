@@ -6,6 +6,8 @@
 #include "brushes/brush.hpp"
 #include "content_library/content_library.hpp"
 #include "scene/scene_root.hpp"
+#include "graph_editor/graph_editor_window_base.hpp"
+#include "graph_editor/graph_node_drag_payload.hpp"
 #include "graphics/icon_set.hpp"
 #include "graphics/thumbnails.hpp"
 #include "preview/brush_preview.hpp"
@@ -26,6 +28,8 @@
 #include "erhe_utility/bit_helpers.hpp"
 
 #include <imgui/imgui.h>
+
+#include <cstdio>
 
 namespace editor {
 
@@ -56,11 +60,11 @@ Inventory_window::Inventory_window(
     // Save slot names for later resolution (after tools are registered)
     m_saved_grid_names.reserve(config.grid_slots.size());
     for (const Inventory_slot& slot : config.grid_slots) {
-        m_saved_grid_names.push_back(Saved_slot_name{slot.tool_name, slot.brush_name, slot.material_name, slot.command_name, slot.operation_params});
+        m_saved_grid_names.push_back(Saved_slot_name{slot.tool_name, slot.brush_name, slot.material_name, slot.command_name, slot.operation_params, slot.graph_node_kind, slot.graph_node_type, slot.graph_node_label});
     }
     m_saved_hotbar_names.reserve(config.hotbar_slots.size());
     for (const Inventory_slot& slot : config.hotbar_slots) {
-        m_saved_hotbar_names.push_back(Saved_slot_name{slot.tool_name, slot.brush_name, slot.material_name, slot.command_name, slot.operation_params});
+        m_saved_hotbar_names.push_back(Saved_slot_name{slot.tool_name, slot.brush_name, slot.material_name, slot.command_name, slot.operation_params, slot.graph_node_kind, slot.graph_node_type, slot.graph_node_label});
     }
 }
 
@@ -88,6 +92,10 @@ void Inventory_window::collect_tools()
                 m_grid_slots[i].command          = m_context.commands->find_command(saved.command_name);
                 m_grid_slots[i].operation_params = saved.operation_params;
             }
+            // Graph-node slots are plain strings; no resolution needed.
+            m_grid_slots[i].graph_node_kind  = saved.graph_node_kind;
+            m_grid_slots[i].graph_node_type  = saved.graph_node_type;
+            m_grid_slots[i].graph_node_label = saved.graph_node_label;
             // Brush resolution would require content library access - deferred for now
             // Brushes are resolved by name when the content library is available
         }
@@ -103,6 +111,9 @@ void Inventory_window::collect_tools()
                 m_hotbar_slots[i].command          = m_context.commands->find_command(saved.command_name);
                 m_hotbar_slots[i].operation_params = saved.operation_params;
             }
+            m_hotbar_slots[i].graph_node_kind  = saved.graph_node_kind;
+            m_hotbar_slots[i].graph_node_type  = saved.graph_node_type;
+            m_hotbar_slots[i].graph_node_label = saved.graph_node_label;
         }
     }
     m_saved_hotbar_names.clear();
@@ -112,7 +123,7 @@ void Inventory_window::collect_tools()
     // with operations is not overwritten by the default tools on reload.
     bool hotbar_empty = true;
     for (const Slot_entry& entry : m_hotbar_slots) {
-        if ((entry.tool != nullptr) || entry.brush || entry.material || (entry.command != nullptr)) {
+        if ((entry.tool != nullptr) || entry.brush || entry.material || (entry.command != nullptr) || !entry.graph_node_type.empty()) {
             hotbar_empty = false;
             break;
         }
@@ -142,7 +153,7 @@ auto Inventory_window::resolve_tool(const std::string& tool_name) const -> Tool*
 auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is_source, const bool is_target, const int section, const int slot_index) -> bool
 {
     bool changed  = false;
-    bool has_item = (slot.tool != nullptr) || slot.brush || slot.material || (slot.command != nullptr);
+    bool has_item = (slot.tool != nullptr) || slot.brush || slot.material || (slot.command != nullptr) || !slot.graph_node_type.empty();
 
     const ImVec2 button_size{c_slot_size, c_slot_size};
 
@@ -213,6 +224,15 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
             if (ImGui::Button(operation_short_label(slot.command), button_size) && (m_context.operations != nullptr)) {
                 m_context.operations->run_operation(slot.command, slot.operation_params);
             }
+        } else if (!slot.graph_node_type.empty()) {
+            // Graph-node slot: a labeled button that spawns the node type in
+            // its graph editor window (on the window's spawn grid) on click.
+            if (ImGui::Button(slot.graph_node_label.c_str(), button_size)) {
+                Graph_editor_window_base* window = Graph_editor_window_base::find_window_by_kind(m_context, slot.graph_node_kind.c_str());
+                if (window != nullptr) {
+                    window->spawn_node_from_slot(slot.graph_node_type);
+                }
+            }
         } else {
             ImGui::Button("##empty", button_size);
         }
@@ -226,6 +246,10 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
         // Tooltip for operation slots: the full (dotted) command name.
         if ((slot.tool == nullptr) && (slot.command != nullptr) && ImGui::IsItemHovered()) {
             ImGui::SetTooltip("%s", slot.command->get_name());
+        }
+        // Tooltip for graph-node slots: label plus the owning editor kind.
+        if (!slot.graph_node_type.empty() && ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s (%s node)", slot.graph_node_label.c_str(), slot.graph_node_kind.c_str());
         }
     }
 
@@ -241,6 +265,9 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
                 .section  = static_cast<Slot_section>(section),
                 .index    = slot_index
             };
+            snprintf(drag.graph_node_kind,  sizeof(drag.graph_node_kind),  "%s", slot.graph_node_kind.c_str());
+            snprintf(drag.graph_node_type,  sizeof(drag.graph_node_type),  "%s", slot.graph_node_type.c_str());
+            snprintf(drag.graph_node_label, sizeof(drag.graph_node_label), "%s", slot.graph_node_label.c_str());
             ImGui::SetDragDropPayload(c_inventory_slot_payload_type, &drag, sizeof(Slot_drag_payload));
             if (slot.brush) {
                 ImGui::Text("%s", slot.brush->get_name().c_str());
@@ -250,6 +277,8 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
                 ImGui::Text("%s", slot.tool->get_description());
             } else if (slot.command != nullptr) {
                 ImGui::Text("%s", slot.command->get_name());
+            } else if (!slot.graph_node_type.empty()) {
+                ImGui::Text("%s", slot.graph_node_label.c_str());
             }
             ImGui::EndDragDropSource();
         }
@@ -261,6 +290,9 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
         slot.brush.reset();
         slot.material.reset();
         slot.command = nullptr;
+        slot.graph_node_kind.clear();
+        slot.graph_node_type.clear();
+        slot.graph_node_label.clear();
         changed = true;
     }
 
@@ -283,6 +315,9 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
                 }
                 source_entry.command          = source.command;
                 source_entry.operation_params = source.params;
+                source_entry.graph_node_kind  = source.graph_node_kind;
+                source_entry.graph_node_type  = source.graph_node_type;
+                source_entry.graph_node_label = source.graph_node_label;
 
                 // Find the source slot and swap (palette sources are copy-only)
                 Slot_entry* source_slot = nullptr;
@@ -317,6 +352,23 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
                 slot.material.reset();
                 slot.command          = op.command;
                 slot.operation_params = op.params;
+                slot.graph_node_kind.clear();
+                slot.graph_node_type.clear();
+                slot.graph_node_label.clear();
+                changed = true;
+            }
+
+            // Accept a node type dragged out of a graph editor's node palette.
+            const ImGuiPayload* graph_node_payload = ImGui::AcceptDragDropPayload(c_graph_node_payload_type);
+            if (graph_node_payload != nullptr) {
+                const Graph_node_drag_payload& node = *static_cast<const Graph_node_drag_payload*>(graph_node_payload->Data);
+                slot.tool = nullptr;
+                slot.brush.reset();
+                slot.material.reset();
+                slot.command          = nullptr;
+                slot.graph_node_kind  = node.kind;
+                slot.graph_node_type  = node.type_name;
+                slot.graph_node_label = node.label;
                 changed = true;
             }
 
@@ -332,6 +384,9 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
                         slot.material.reset();
                         slot.tool     = m_context.brush_tool;
                         slot.command  = nullptr;
+                        slot.graph_node_kind.clear();
+                        slot.graph_node_type.clear();
+                        slot.graph_node_label.clear();
                         changed       = true;
                     }
                     std::shared_ptr<erhe::primitive::Material> dropped_material =
@@ -347,6 +402,9 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
                             slot.tool     = m_context.material_paint_tool;
                         }
                         slot.command = nullptr;
+                        slot.graph_node_kind.clear();
+                        slot.graph_node_type.clear();
+                        slot.graph_node_label.clear();
                         changed = true;
                     }
                 }
@@ -490,7 +548,10 @@ void Inventory_window::write_config(Inventory_config& config) const
         slot.brush_name    = entry.brush    ? entry.brush->get_name()    : "";
         slot.material_name = entry.material ? entry.material->get_name() : "";
         slot.command_name  = (entry.command != nullptr) ? entry.command->get_name() : "";
-        slot.operation_params = entry.operation_params;
+        slot.operation_params  = entry.operation_params;
+        slot.graph_node_kind   = entry.graph_node_kind;
+        slot.graph_node_type   = entry.graph_node_type;
+        slot.graph_node_label  = entry.graph_node_label;
         config.grid_slots.push_back(slot);
     }
 
@@ -501,7 +562,10 @@ void Inventory_window::write_config(Inventory_config& config) const
         slot.brush_name    = entry.brush    ? entry.brush->get_name()    : "";
         slot.material_name = entry.material ? entry.material->get_name() : "";
         slot.command_name  = (entry.command != nullptr) ? entry.command->get_name() : "";
-        slot.operation_params = entry.operation_params;
+        slot.operation_params  = entry.operation_params;
+        slot.graph_node_kind   = entry.graph_node_kind;
+        slot.graph_node_type   = entry.graph_node_type;
+        slot.graph_node_label  = entry.graph_node_label;
         config.hotbar_slots.push_back(slot);
     }
 }

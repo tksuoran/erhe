@@ -264,6 +264,7 @@ erhe_target_sources_grouped(
     graph_editor/graph_editor_widgets.hpp
     graph_editor/graph_editor_window_base.cpp
     graph_editor/graph_editor_window_base.hpp
+    graph_editor/graph_node_drag_payload.hpp
     graph_editor/graph_operations.hpp
     graph_editor/graph_serialization.hpp
     graph_editor/node_edge.hpp

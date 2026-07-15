@@ -606,8 +606,10 @@ void Texture_graph_window::imgui()
     }
 
     // Issue #251 (bug a): remember where the canvas starts so the zoom-level
-    // overlay can be drawn over its top-left corner after End().
+    // overlay can be drawn over its top-left corner after End(). The size is
+    // captured too, for the palette drop target rect below.
     const ImVec2 canvas_screen_pos = ImGui::GetCursorScreenPos();
+    const ImVec2 canvas_avail_size = ImGui::GetContentRegionAvail();
 
     m_node_editor->Begin("Texture Graph", ImVec2{0.0f, 0.0f});
 
@@ -648,6 +650,14 @@ void Texture_graph_window::imgui()
     // Interactive node resizing (edge / corner drags): adopt the dragged
     // size into the node's requested extent.
     apply_node_resize(*m_node_editor.get());
+
+    // Node types dragged from this editor's palette spawn at the drop
+    // position (with a ghost preview while the drag is in flight).
+    palette_drop_target(
+        *m_node_editor.get(),
+        canvas_screen_pos,
+        ImVec2{canvas_screen_pos.x + canvas_avail_size.x, canvas_screen_pos.y + canvas_avail_size.y}
+    );
 
     // Issue #251 (bug a): show the current canvas zoom in the corner so
     // rendering issues that appear only at certain zoom levels are diagnosable

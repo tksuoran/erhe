@@ -27,7 +27,7 @@ struct("Operation_params",
 )
 
 struct("Inventory_slot",
-    version=2,
+    version=3,
     short_desc="Inventory Slot",
     long_desc="A single slot in the inventory or hotbar grid",
     developer=False,
@@ -80,6 +80,36 @@ struct("Inventory_slot",
             short_desc="Operation params",
             long_desc="Frozen parameter snapshot for an operation slot; ignored unless command_name is non-empty",
             visible=False,
+            developer=False
+        ),
+        field(
+            "graph_node_kind",
+            String,
+            added_in=3,
+            default='""',
+            short_desc="Graph node kind",
+            long_desc="Graph editor kind tag for a graph-node slot (\"geometry_graph\" or \"texture_graph\"); paired with graph_node_type",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "graph_node_type",
+            String,
+            added_in=3,
+            default='""',
+            short_desc="Graph node type",
+            long_desc="Node factory type name for a graph-node slot; non-empty means the slot spawns this node in its graph editor",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "graph_node_label",
+            String,
+            added_in=3,
+            default='""',
+            short_desc="Graph node label",
+            long_desc="Palette display label shown on a graph-node slot button",
+            visible=True,
             developer=False
         ),
     ],

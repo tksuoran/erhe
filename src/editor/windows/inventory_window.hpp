@@ -68,6 +68,9 @@ private:
         std::string      material_name;
         std::string      command_name;
         Operation_params operation_params{};
+        std::string      graph_node_kind;
+        std::string      graph_node_type;
+        std::string      graph_node_label;
     };
     std::vector<Saved_slot_name> m_saved_grid_names;
     std::vector<Saved_slot_name> m_saved_hotbar_names;

@@ -1,6 +1,11 @@
 #include "graph_editor/graph_editor_window_base.hpp"
 #include "graph_editor/graph_editor_node.hpp"
+#include "graph_editor/graph_node_drag_payload.hpp"
 #include "graph_editor/node_edge.hpp"
+
+#include "app_context.hpp"
+#include "geometry_graph/geometry_graph_window.hpp"
+#include "texture_graph/texture_graph_window.hpp"
 
 #include "erhe_graph/graph.hpp"
 #include "erhe_graph/link.hpp"
@@ -8,12 +13,15 @@
 #include "erhe_imgui/imgui_node_editor.h"
 
 #include <imgui/imgui.h>
+#include <imgui/imgui_internal.h> // BeginDragDropTargetCustom
 #include <imgui/misc/cpp/imgui_stdlib.h>
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <cctype>
 #include <cfloat>
+#include <cstdio>
+#include <cstring>
 #include <string>
 
 namespace editor {
@@ -57,6 +65,102 @@ void Graph_editor_window_base::apply_node_resize(ax::NodeEditor::EditorContext& 
     }
 }
 
+void Graph_editor_window_base::spawn_node_from_slot(const std::string& type_name)
+{
+    // Bring the editor window into view so the spawned node is visible; the
+    // node lands on the window's auto-advancing spawn grid. No-op in the
+    // empty state (add_node_from_palette checks the edited graph).
+    show_window();
+    add_node_from_palette(type_name, nullptr);
+}
+
+auto Graph_editor_window_base::find_window_by_kind(App_context& context, const char* kind) -> Graph_editor_window_base*
+{
+    if (kind == nullptr) {
+        return nullptr;
+    }
+    Graph_editor_window_base* const windows[] = {
+        static_cast<Graph_editor_window_base*>(context.geometry_graph_window),
+        static_cast<Graph_editor_window_base*>(context.texture_graph_window)
+    };
+    for (Graph_editor_window_base* window : windows) {
+        if ((window != nullptr) && (std::strcmp(window->clipboard_kind(), kind) == 0)) {
+            return window;
+        }
+    }
+    return nullptr;
+}
+
+void Graph_editor_window_base::accept_palette_drop(ax::NodeEditor::EditorContext& node_editor, const ImVec2& rect_min, const ImVec2& rect_max)
+{
+    // Peek at the payload while the drag is still in flight so a ghost of the
+    // prospective node can be drawn at the cursor; IsDelivery() below tells
+    // the actual drop apart. The default whole-canvas highlight is replaced
+    // by that ghost.
+    const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(
+        c_graph_node_payload_type,
+        ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect
+    );
+    if (payload == nullptr) {
+        return; // no palette node dragged over the canvas
+    }
+    const Graph_node_drag_payload& node_payload = *static_cast<const Graph_node_drag_payload*>(payload->Data);
+    if (std::strcmp(node_payload.kind, clipboard_kind()) != 0) {
+        return; // a palette entry of the other editor kind - not spawnable here
+    }
+
+    if (!payload->IsDelivery()) {
+        // Typical plain-node footprint: pin columns + center column +
+        // NodePadding wide; the real node is content-sized on spawn.
+        draw_canvas_drop_ghost(node_editor, rect_min, rect_max, node_payload.label, ImVec2{306.0f, 150.0f});
+        return;
+    }
+
+    // The drop happens outside the canvas Begin/End (screen space), so
+    // convert through the editor's stored view transform.
+    const ImVec2 spawn_position = node_editor.ScreenToCanvas(ImGui::GetMousePos());
+    add_node_from_palette(node_payload.type_name, &spawn_position);
+}
+
+void Graph_editor_window_base::palette_drop_target(ax::NodeEditor::EditorContext& node_editor, const ImVec2& rect_min, const ImVec2& rect_max)
+{
+    // Custom target over the whole canvas rect (the ax::NodeEditor canvas is
+    // not a single ImGui item, so BeginDragDropTarget() cannot latch onto it).
+    const ImGuiID drag_target_id = ImGui::GetID(static_cast<const void*>(this));
+    const ImRect  rect{rect_min, rect_max};
+    if (!ImGui::BeginDragDropTargetCustom(rect, drag_target_id)) {
+        return;
+    }
+    accept_palette_drop(node_editor, rect_min, rect_max);
+    ImGui::EndDragDropTarget();
+}
+
+void Graph_editor_window_base::draw_canvas_drop_ghost(
+    ax::NodeEditor::EditorContext& node_editor,
+    const ImVec2&                  rect_min,
+    const ImVec2&                  rect_max,
+    const char*                    label,
+    const ImVec2&                  footprint
+)
+{
+    // The node spawns with its top-left corner at the cursor, so anchor the
+    // ghost there; the footprint is in canvas units, scaled to the zoom.
+    const float  zoom      = node_editor.GetCurrentZoom();
+    const ImVec2 ghost_min = ImGui::GetMousePos();
+    const ImVec2 ghost_max{ghost_min.x + (footprint.x * zoom), ghost_min.y + (footprint.y * zoom)};
+    const float  rounding  = node_editor.GetStyle().NodeRounding * zoom;
+    ImDrawList*  draw_list = ImGui::GetWindowDrawList();
+    draw_list->PushClipRect(rect_min, rect_max, true);
+    draw_list->AddRectFilled(ghost_min, ghost_max, IM_COL32(128, 128, 128, 48), rounding);
+    draw_list->AddRect      (ghost_min, ghost_max, IM_COL32(204, 204, 204, 200), rounding, ImDrawFlags_RoundCornersAll, 2.0f * zoom);
+    draw_list->AddText(
+        ImVec2{ghost_min.x + (8.0f * zoom), ghost_min.y + (8.0f * zoom)},
+        IM_COL32(230, 230, 230, 220),
+        label
+    );
+    draw_list->PopClipRect();
+}
+
 void Graph_editor_window_base::node_palette()
 {
     build_palette();
@@ -98,6 +202,19 @@ void Graph_editor_window_base::node_palette()
                 ImGui::PushID(entry.type_name.c_str());
                 if (ImGui::Selectable(entry.label.c_str())) {
                     add_node_from_palette(entry.type_name, nullptr);
+                }
+                // Palette entries drag onto the canvas (spawn at the drop
+                // position) and into inventory / hotbar slots. The payload
+                // copies the strings, so it survives the per-frame palette
+                // rebuild.
+                if (ImGui::BeginDragDropSource()) {
+                    Graph_node_drag_payload payload{};
+                    snprintf(payload.kind,      sizeof(payload.kind),      "%s", clipboard_kind());
+                    snprintf(payload.type_name, sizeof(payload.type_name), "%s", entry.type_name.c_str());
+                    snprintf(payload.label,     sizeof(payload.label),     "%s", entry.label.c_str());
+                    ImGui::SetDragDropPayload(c_graph_node_payload_type, &payload, sizeof(payload));
+                    ImGui::Text("Add %s node", entry.label.c_str());
+                    ImGui::EndDragDropSource();
                 }
                 ImGui::PopID();
             }

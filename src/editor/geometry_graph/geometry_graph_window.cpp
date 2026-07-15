@@ -1122,6 +1122,10 @@ void Geometry_graph_window::canvas_drag_and_drop_target(const ImVec2& rect_min, 
     }
     ERHE_DEFER( ImGui::EndDragDropTarget(); );
 
+    // Node types dragged from this editor's palette spawn at the drop
+    // position (with their own ghost preview while in flight).
+    accept_palette_drop(*m_node_editor.get(), rect_min, rect_max);
+
     // Peek at the payload while the drag is still in flight so a ghost of the
     // prospective node can be drawn at the cursor; IsDelivery() below tells
     // the actual drop apart. The default whole-canvas highlight is replaced
@@ -1144,27 +1148,11 @@ void Geometry_graph_window::canvas_drag_and_drop_target(const ImVec2& rect_min, 
     }
 
     if (!payload->IsDelivery()) {
-        // Still dragging: preview where the node would land. The node spawns
-        // with its top-left corner at the cursor, so draw a ghost rectangle
-        // of the typical Brush source node footprint (pin columns + center
+        // Still dragging: preview where the node would land, as a ghost of
+        // the typical Brush source node footprint (pin columns + center
         // column + NodePadding wide; header, brush combo, preview image and
-        // stats tall - the real node is content-sized on spawn), scaled to
-        // the current canvas zoom and clipped to the canvas rect.
-        const float  zoom = m_node_editor->GetCurrentZoom();
-        const ImVec2 footprint{306.0f, 250.0f}; // canvas units
-        const ImVec2 ghost_min = ImGui::GetMousePos();
-        const ImVec2 ghost_max{ghost_min.x + (footprint.x * zoom), ghost_min.y + (footprint.y * zoom)};
-        const float  rounding  = m_node_editor->GetStyle().NodeRounding * zoom;
-        ImDrawList*  draw_list = ImGui::GetWindowDrawList();
-        draw_list->PushClipRect(rect_min, rect_max, true);
-        draw_list->AddRectFilled(ghost_min, ghost_max, IM_COL32(128, 128, 128, 48), rounding);
-        draw_list->AddRect      (ghost_min, ghost_max, IM_COL32(204, 204, 204, 200), rounding, ImDrawFlags_RoundCornersAll, 2.0f * zoom);
-        draw_list->AddText(
-            ImVec2{ghost_min.x + (8.0f * zoom), ghost_min.y + (8.0f * zoom)},
-            IM_COL32(230, 230, 230, 220),
-            brush->get_name().c_str()
-        );
-        draw_list->PopClipRect();
+        // stats tall - the real node is content-sized on spawn).
+        draw_canvas_drop_ghost(*m_node_editor.get(), rect_min, rect_max, brush->get_name().c_str(), ImVec2{306.0f, 250.0f});
         return;
     }
 
