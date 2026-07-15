@@ -14,6 +14,7 @@
 #include "geometry_graph/nodes/mesh_disc_node.hpp"
 #include "geometry_graph/nodes/mesh_sphere_node.hpp"
 #include "geometry_graph/nodes/mesh_torus_node.hpp"
+#include "geometry_graph/nodes/passthrough_node.hpp"
 #include "geometry_graph/nodes/subdivide_node.hpp"
 #include "geometry_graph/nodes/transform_node.hpp"
 #include "geometry_graph/nodes/value_nodes.hpp"
@@ -51,6 +52,7 @@ auto make_geometry_graph_node(App_context& context, const std::string& type_name
     else if (type_name == "integer")      { node = std::make_shared<Integer_value_node>(); }
     else if (type_name == "vector")       { node = std::make_shared<Vector_value_node >(); }
     else if (type_name == "math")         { node = std::make_shared<Math_node         >(); }
+    else if (type_name == "passthrough")  { node = std::make_shared<Passthrough_node  >(); }
     else if (type_name == "output")       { node = std::make_shared<Geometry_output_node>(context); }
     else if (type_name == "group_input")  { node = std::make_shared<Group_input_node    >(); }
     else if (type_name == "group_output") { node = std::make_shared<Group_output_node   >(); }

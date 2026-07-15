@@ -495,6 +495,12 @@ void Geometry_graph_window::build_palette()
             }
         },
         Palette_category{
+            .name    = "Utility",
+            .entries = {
+                Palette_entry{.type_name = "passthrough", .label = "Passthrough"}
+            }
+        },
+        Palette_category{
             .name    = "Groups",
             .entries = {
                 Palette_entry{.type_name = "group_input",  .label = "Group Input"},

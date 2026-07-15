@@ -288,12 +288,12 @@ def section_every_node_type():
           f"join={join_counts} expected_v={total_v}")
     check(S, "output publishes a bake to the asset", current_graph_has_bake())
 
-    # Operation chain: box -> subdivide -> conway -> transform ->
-    # triangulate -> normalize -> reverse -> repair -> output
+    # Operation chain: box -> passthrough -> subdivide -> conway ->
+    # transform -> triangulate -> normalize -> reverse -> repair -> output
     fresh_graph()
     box = add_node("box")["id"]
     ops = {}
-    for type_name in ("subdivide", "conway", "transform", "triangulate", "normalize", "reverse", "repair"):
+    for type_name in ("passthrough", "subdivide", "conway", "transform", "triangulate", "normalize", "reverse", "repair"):
         ops[type_name] = add_node(type_name)["id"]
     output = add_node("output")["id"]
     chain = [box] + list(ops.values()) + [output]
@@ -302,6 +302,8 @@ def section_every_node_type():
 
     box_counts = geometry_counts(box)
     check(S, "box baseline (default box is 26/24)", box_counts == (26, 24), f"counts={box_counts}")
+    pass_counts = geometry_counts(ops["passthrough"])
+    check(S, "passthrough forwards geometry unchanged", pass_counts == box_counts, f"counts={pass_counts}")
     sub_counts = geometry_counts(ops["subdivide"])
     check(S, "subdivide grows mesh", sub_counts is not None and sub_counts[0] > box_counts[0], f"counts={sub_counts}")
     for type_name in ("conway", "transform", "triangulate", "normalize", "reverse", "repair"):

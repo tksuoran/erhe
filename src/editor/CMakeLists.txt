@@ -220,6 +220,8 @@ erhe_target_sources_grouped(
     geometry_graph/nodes/mesh_sphere_node.hpp
     geometry_graph/nodes/mesh_torus_node.cpp
     geometry_graph/nodes/mesh_torus_node.hpp
+    geometry_graph/nodes/passthrough_node.cpp
+    geometry_graph/nodes/passthrough_node.hpp
     geometry_graph/nodes/subdivide_node.cpp
     geometry_graph/nodes/subdivide_node.hpp
     geometry_graph/nodes/transform_node.cpp
