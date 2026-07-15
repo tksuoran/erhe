@@ -63,6 +63,7 @@
 #include "experiments/network_window.hpp"
 #include "experiments/sheet_window.hpp"
 #include "geometry_graph/geometry_graph_window.hpp"
+#include "geometry_graph/graph_mesh.hpp"
 #include "graph/graph_window.hpp"
 #include "graph_editor/graph_editor_palette_window.hpp"
 #include "graph/node_properties.hpp"
@@ -86,6 +87,7 @@
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_scene_views.hpp"
+#include "texture_graph/graph_texture.hpp"
 #include "texture_graph/texture_graph_window.hpp"
 #include "tools/clipboard.hpp"
 #include "tools/mesh_component_selection.hpp"
@@ -2570,6 +2572,36 @@ public:
         // objects alive and its viewport rendergraph nodes registered -- and
         // executing against the torn-down scene every frame. Drop the history.
         m_operation_stack->clear_history();
+
+        // Graph editor windows (the primaries and the "Open Editor" extras)
+        // may be editing a Graph_mesh / Graph_texture asset owned by this
+        // scene's content library. The target weak_ptr does not expire on
+        // its own here - the window's resolved shared_ptr keeps the asset
+        // alive - so clear it explicitly, or the window keeps showing (and
+        // editing) content of the closed scene.
+        {
+            erhe::Item_host* const closing_host = static_cast<erhe::Item_host*>(scene_root.get());
+            const auto clear_geometry_target_if_hosted = [closing_host](Geometry_graph_window& window) {
+                const std::shared_ptr<Graph_mesh> target = window.get_target();
+                if (target && (target->get_item_host() == closing_host)) {
+                    window.set_target({});
+                }
+            };
+            const auto clear_texture_target_if_hosted = [closing_host](Texture_graph_window& window) {
+                const std::shared_ptr<Graph_texture> target = window.get_target();
+                if (target && (target->get_item_host() == closing_host)) {
+                    window.set_target({});
+                }
+            };
+            clear_geometry_target_if_hosted(*m_geometry_graph_window.get());
+            clear_texture_target_if_hosted (*m_texture_graph_window.get());
+            for (const std::shared_ptr<Geometry_graph_window>& window : m_editor_windows->get_extra_geometry_graph_windows()) {
+                clear_geometry_target_if_hosted(*window.get());
+            }
+            for (const std::shared_ptr<Texture_graph_window>& window : m_editor_windows->get_extra_texture_graph_windows()) {
+                clear_texture_target_if_hosted(*window.get());
+            }
+        }
 
         // Viewport windows are not destroyed with the scene: they exist
         // independent of scenes (their open state persists in the windows
