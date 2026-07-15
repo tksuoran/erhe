@@ -605,6 +605,22 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
 
     if (primary) {
         SDL_ShowWindow(sdl_window);
+
+        // ImGui mouse cursor shapes -> SDL system cursors. Consumed by
+        // set_cursor(), fed from ImGui::GetMouseCursor() once per frame by
+        // Window_imgui_host.
+        m_mouse_cursors[Mouse_cursor_Arrow     ] = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_DEFAULT);
+        m_mouse_cursors[Mouse_cursor_TextInput ] = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_TEXT);
+        m_mouse_cursors[Mouse_cursor_ResizeAll ] = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_MOVE);
+        m_mouse_cursors[Mouse_cursor_ResizeNS  ] = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_NS_RESIZE);
+        m_mouse_cursors[Mouse_cursor_ResizeEW  ] = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_EW_RESIZE);
+        m_mouse_cursors[Mouse_cursor_ResizeNESW] = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_NESW_RESIZE);
+        m_mouse_cursors[Mouse_cursor_ResizeNWSE] = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_NWSE_RESIZE);
+        m_mouse_cursors[Mouse_cursor_Hand      ] = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_POINTER);
+        m_mouse_cursors[Mouse_cursor_Wait      ] = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_WAIT);
+        m_mouse_cursors[Mouse_cursor_Progress  ] = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_PROGRESS);
+        m_mouse_cursors[Mouse_cursor_NotAllowed] = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_NOT_ALLOWED);
+        m_mouse_cursors[Mouse_cursor_Crosshair ] = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_CROSSHAIR);
     }
 
     s_window_count++;
@@ -632,6 +648,13 @@ Context_window::~Context_window() noexcept
 
     if (m_joystick_scan_task.joinable()) {
         m_joystick_scan_task.join();
+    }
+
+    for (Mouse_cursor cursor_n = 0; cursor_n < Mouse_cursor_COUNT; cursor_n++) {
+        if (m_mouse_cursors[cursor_n] != nullptr) {
+            SDL_DestroyCursor(reinterpret_cast<SDL_Cursor*>(m_mouse_cursors[cursor_n]));
+            m_mouse_cursors[cursor_n] = nullptr;
+        }
     }
 
     auto* const window = reinterpret_cast<SDL_Window*>(m_sdl_window);
@@ -912,7 +935,31 @@ void Context_window::set_visible(const bool visible)
 
 void Context_window::set_cursor(const Mouse_cursor cursor)
 {
-    static_cast<void>(cursor);
+    auto* const window = reinterpret_cast<SDL_Window*>(m_sdl_window);
+    if (window == nullptr) {
+        return;
+    }
+    if (m_current_mouse_cursor == cursor) {
+        return;
+    }
+    if (m_is_mouse_relative_hold_enabled) {
+        // Pointer is captured / hidden. Keep m_current_mouse_cursor
+        // unchanged so the shape is (re)applied after release.
+        return;
+    }
+    m_current_mouse_cursor = cursor;
+    if (cursor == Mouse_cursor_None) {
+        SDL_HideCursor();
+        return;
+    }
+    SDL_Cursor* const sdl_cursor =
+        ((cursor >= 0) && (cursor < Mouse_cursor_COUNT) && (m_mouse_cursors[cursor] != nullptr))
+            ? reinterpret_cast<SDL_Cursor*>(m_mouse_cursors[cursor])
+            : reinterpret_cast<SDL_Cursor*>(m_mouse_cursors[Mouse_cursor_Arrow]);
+    if (sdl_cursor != nullptr) {
+        SDL_SetCursor(sdl_cursor);
+    }
+    SDL_ShowCursor();
 }
 
 void Context_window::set_cursor_relative_hold(const bool relative_hold_enabled)

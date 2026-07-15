@@ -534,6 +534,10 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
         m_mouse_cursor[Mouse_cursor_ResizeNWSE] = glfwCreateStandardCursor(GLFW_ARROW_CURSOR);
         m_mouse_cursor[Mouse_cursor_NotAllowed] = glfwCreateStandardCursor(GLFW_ARROW_CURSOR);
 #endif
+        // GLFW has no standard wait / progress cursors; set_cursor() falls
+        // back to the arrow for null entries.
+        m_mouse_cursor[Mouse_cursor_Wait    ] = nullptr;
+        m_mouse_cursor[Mouse_cursor_Progress] = nullptr;
         glfwSetErrorCallback(prev_error_callback);
 
         glfwSetInputMode(window, GLFW_CURSOR,               GLFW_CURSOR_NORMAL);

@@ -40,9 +40,11 @@ constexpr Mouse_cursor Mouse_cursor_ResizeEW   =  4;
 constexpr Mouse_cursor Mouse_cursor_ResizeNESW =  5;
 constexpr Mouse_cursor Mouse_cursor_ResizeNWSE =  6;
 constexpr Mouse_cursor Mouse_cursor_Hand       =  7;
-constexpr Mouse_cursor Mouse_cursor_NotAllowed =  8;
-constexpr Mouse_cursor Mouse_cursor_Crosshair  =  9;
-constexpr Mouse_cursor Mouse_cursor_COUNT      = 10;
+constexpr Mouse_cursor Mouse_cursor_Wait       =  8;
+constexpr Mouse_cursor Mouse_cursor_Progress   =  9;
+constexpr Mouse_cursor Mouse_cursor_NotAllowed = 10;
+constexpr Mouse_cursor Mouse_cursor_Crosshair  = 11;
+constexpr Mouse_cursor Mouse_cursor_COUNT      = 12;
 
 class Context_window
 {

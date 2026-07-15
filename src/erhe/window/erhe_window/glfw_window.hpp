@@ -42,9 +42,11 @@ constexpr Mouse_cursor Mouse_cursor_ResizeEW   =  4;   // When hovering over a v
 constexpr Mouse_cursor Mouse_cursor_ResizeNESW =  5;   // When hovering over the bottom-left corner of a window
 constexpr Mouse_cursor Mouse_cursor_ResizeNWSE =  6;   // When hovering over the bottom-right corner of a window
 constexpr Mouse_cursor Mouse_cursor_Hand       =  7;   // (Unused by Dear ImGui functions. Use for e.g. hyperlinks)
-constexpr Mouse_cursor Mouse_cursor_NotAllowed =  8;   // When hovering something with disallowed interaction. Usually a crossed circle.
-constexpr Mouse_cursor Mouse_cursor_Crosshair  =  9;   // Crosshair cursor
-constexpr Mouse_cursor Mouse_cursor_COUNT      = 10;
+constexpr Mouse_cursor Mouse_cursor_Wait       =  8;   // When waiting for something to process/load.
+constexpr Mouse_cursor Mouse_cursor_Progress   =  9;   // When waiting for something to process/load, but application is still interactive.
+constexpr Mouse_cursor Mouse_cursor_NotAllowed = 10;   // When hovering something with disallowed interaction. Usually a crossed circle.
+constexpr Mouse_cursor Mouse_cursor_Crosshair  = 11;   // Crosshair cursor
+constexpr Mouse_cursor Mouse_cursor_COUNT      = 12;
 
 class Context_window
 {
@@ -121,7 +123,7 @@ private:
     bool                     m_is_mouse_captured   {false};
     bool                     m_is_window_visible   {false};
     bool                     m_use_raw_mouse       {false};
-    GLFWcursor*              m_mouse_cursor        [Mouse_cursor_COUNT];
+    GLFWcursor*              m_mouse_cursor        [Mouse_cursor_COUNT]{};
     Window_configuration     m_configuration;
     double                   m_last_mouse_x        {0.0};
     double                   m_last_mouse_y        {0.0};

@@ -34,6 +34,8 @@ struct wl_display;
 
 namespace erhe::window {
 
+// Values -1 .. 10 mirror ImGuiMouseCursor_ (imgui.h) so ImGui::GetMouseCursor()
+// can be cast directly (see Window_imgui_host); Crosshair is an erhe extension.
 using Mouse_cursor = signed int;
 constexpr Mouse_cursor Mouse_cursor_None       = -1;
 constexpr Mouse_cursor Mouse_cursor_Arrow      =  0;
@@ -44,9 +46,11 @@ constexpr Mouse_cursor Mouse_cursor_ResizeEW   =  4;   // When hovering over a v
 constexpr Mouse_cursor Mouse_cursor_ResizeNESW =  5;   // When hovering over the bottom-left corner of a window
 constexpr Mouse_cursor Mouse_cursor_ResizeNWSE =  6;   // When hovering over the bottom-right corner of a window
 constexpr Mouse_cursor Mouse_cursor_Hand       =  7;   // (Unused by Dear ImGui functions. Use for e.g. hyperlinks)
-constexpr Mouse_cursor Mouse_cursor_NotAllowed =  8;   // When hovering something with disallowed interaction. Usually a crossed circle.
-constexpr Mouse_cursor Mouse_cursor_Crosshair  =  9;   // Crosshair cursor
-constexpr Mouse_cursor Mouse_cursor_COUNT      = 10;
+constexpr Mouse_cursor Mouse_cursor_Wait       =  8;   // When waiting for something to process/load.
+constexpr Mouse_cursor Mouse_cursor_Progress   =  9;   // When waiting for something to process/load, but application is still interactive.
+constexpr Mouse_cursor Mouse_cursor_NotAllowed = 10;   // When hovering something with disallowed interaction. Usually a crossed circle.
+constexpr Mouse_cursor Mouse_cursor_Crosshair  = 11;   // Crosshair cursor
+constexpr Mouse_cursor Mouse_cursor_COUNT      = 12;
 
 typedef void (*SDL_FunctionPointer)(void);
 
@@ -158,6 +162,7 @@ private:
     void*                      m_sdl_window                    {nullptr};
     void*                      m_sdl_gl_context                {nullptr};
     Mouse_cursor               m_current_mouse_cursor          {Mouse_cursor_Arrow};
+    void*                      m_mouse_cursors[Mouse_cursor_COUNT]{}; // SDL_Cursor*, created for the primary window
     bool                       m_is_mouse_relative_hold_enabled{false};
     bool                       m_is_window_visible             {false};
     bool                       m_mouse_inside_window           {false};
