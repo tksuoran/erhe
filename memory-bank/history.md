@@ -140,3 +140,13 @@
 verification::headless-boot-smoke{config-v3-loads}+full-geometry-smoke-132/132{fresh-headless-session,logging-trace-tweak-restored}+config-brush-slot-survives-session
 carry-over::user-interactive-verify-list-in-activeContext
 lesson::user's-live-editor{build_vs2026_vulkan}held-8080+shares-logs/config→always-identify-editor.exe-owner{ExecutablePath+CreationDate}before-headless-runs;user-must-rebuild-their-tree-to-pick-up-fixes
+
+[2026-07-15-eve::scene-close-bug-class-session]
+✓graph-mesh-raytrace-pick{c18b2608}::apply_baked_products-primitive-swap-on-registered-mesh→begin/end_mesh_rt_update-bracket+Item_flags::id
+✓raycast-MCP-tool{c3ee16ce}::headless-raytrace-hit-query{pickable_static-default}
+✓mcp-port-exclusive{a32dbbde}::Windows-SO_REUSEADDR-shadow-bind→SO_EXCLUSIVEADDRUSE{fallback-scan-now-works}
+✓close-scene-clears-graph-targets{dd9022bc}::geometry+texture-windows{primaries+extras}
+✓scene-close-defenses{37807545}::leak-watchdog{60-frames,"scene-close leak"-warnings}+App_scenes::is_host_registered+resolve_target-self-heal+CLAUDE.md-rule+systemPatterns-line
+✓texture-node-Scene_root-cycle{ba23b612}::Texture_material_output_node+Texture_output_node-weak_ptr+resolve_scene_root{cycle-kept-whole-scene-alive}
+✓audit{Explore-agent}::remaining-findings→prompt_queue-ITEM2{clipboard-copy-pins-originals+animation-player/window+hotbar/inventory-slots+brush/paint-tool-state+trivial-caches}
+>handoff::prompt_queue-ITEM1{PLAN-asset-reference+asset-manager}
