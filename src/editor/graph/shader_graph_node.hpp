@@ -1,6 +1,7 @@
 #pragma once
 
 #include "graph/payload.hpp"
+#include "graph_editor/node_edge.hpp"
 #include "erhe_graph/node.hpp"
 
 #include <imgui/imgui.h>
@@ -14,18 +15,6 @@ namespace editor {
 class App_context;
 class Sheet;
 class Shader_graph;
-
-class Node_edge
-{
-public:
-    static constexpr int left   = 0;
-    static constexpr int right  = 1;
-    static constexpr int top    = 2;
-    static constexpr int bottom = 3;
-    static constexpr int count  = 4;
-};
-
-auto get_node_edge_name(int direction) -> const char*;
 
 class Shader_graph_node : public erhe::graph::Node
 {

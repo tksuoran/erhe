@@ -14,17 +14,6 @@
 
 namespace editor {
 
-auto get_node_edge_name(int direction) -> const char*
-{
-    switch (direction) {
-        case Node_edge::left:   return "Left";
-        case Node_edge::right:  return "Right";
-        case Node_edge::top:    return "Top";
-        case Node_edge::bottom: return "Bottom";
-        default: return "?";
-    }
-}
-
 Shader_graph_node::Shader_graph_node(const char* label)
     : erhe::graph::Node{label}
 {

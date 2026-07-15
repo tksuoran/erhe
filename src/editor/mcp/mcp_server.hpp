@@ -187,6 +187,7 @@ private:
     auto action_geometry_graph_disconnect     (const nlohmann::json& args) -> std::string;
     auto action_geometry_graph_set_view       (const nlohmann::json& args) -> std::string;
     auto action_geometry_graph_select_nodes   (const nlohmann::json& args) -> std::string;
+    auto action_geometry_graph_set_node_layout(const nlohmann::json& args) -> std::string;
     auto action_create_graph_texture          (const nlohmann::json& args) -> std::string;
     auto action_set_material_texture_source    (const nlohmann::json& args) -> std::string;
     auto query_graph_textures                 (const nlohmann::json& args) -> std::string;
@@ -203,6 +204,7 @@ private:
     auto action_texture_graph_export_png      (const nlohmann::json& args) -> std::string;
     auto action_texture_graph_export_material (const nlohmann::json& args) -> std::string;
     auto action_texture_graph_select_nodes    (const nlohmann::json& args) -> std::string;
+    auto action_texture_graph_set_node_layout (const nlohmann::json& args) -> std::string;
     auto action_open_geometry_graph_window    (const nlohmann::json& args) -> std::string;
     auto action_open_texture_graph_window     (const nlohmann::json& args) -> std::string;
     auto action_open_properties_window        (const nlohmann::json& args) -> std::string;

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "graph_editor/node_edge.hpp"
+
 #include "erhe_graph/node.hpp"
 
 #include <nlohmann/json_fwd.hpp>
@@ -59,6 +61,16 @@ public:
     [[nodiscard]] auto get_ui_scale() const -> float;
     void set_ui_scale(float scale);
 
+    // Pin layout: which node edge the input / output pins are laid out on
+    // (Node_edge::left / right; the renderer implements only those two, so
+    // the setters clamp anything else back to the default edge). Adjusted
+    // from the Node Properties window "Inputs" / "Outputs" combos; persisted
+    // in the graph JSON next to the node's parameters.
+    [[nodiscard]] auto get_input_pin_edge () const -> int;
+    [[nodiscard]] auto get_output_pin_edge() const -> int;
+    void set_input_pin_edge (int edge);
+    void set_output_pin_edge(int edge);
+
     // Graph serialization: the factory type name is set by the node factory and
     // recreates the node on load; parameters are the node's editable values.
     // (Named to avoid clashing with erhe::Item::get_type_name().)
@@ -104,6 +116,8 @@ protected:
     std::string m_committed_parameters;
     float       m_content_scale{1.0f};
     float       m_ui_scale{1.0f};
+    int         m_input_pin_edge {Node_edge::left};
+    int         m_output_pin_edge{Node_edge::right};
     bool        m_dirty{true};
     bool        m_parameter_edit_in_progress{false};
     // Whether the pointer hovers this node on the canvas (from the node

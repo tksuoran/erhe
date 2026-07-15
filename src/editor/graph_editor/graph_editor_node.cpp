@@ -65,6 +65,27 @@ void Graph_editor_node::set_ui_scale(const float scale)
     m_ui_scale = std::clamp(scale, 0.25f, 4.0f);
 }
 
+auto Graph_editor_node::get_input_pin_edge() const -> int
+{
+    return m_input_pin_edge;
+}
+
+auto Graph_editor_node::get_output_pin_edge() const -> int
+{
+    return m_output_pin_edge;
+}
+
+void Graph_editor_node::set_input_pin_edge(const int edge)
+{
+    // Only left / right are rendered; anything else falls back to the default.
+    m_input_pin_edge = (edge == Node_edge::right) ? Node_edge::right : Node_edge::left;
+}
+
+void Graph_editor_node::set_output_pin_edge(const int edge)
+{
+    m_output_pin_edge = (edge == Node_edge::left) ? Node_edge::left : Node_edge::right;
+}
+
 auto Graph_editor_node::get_factory_type_name() const -> const std::string&
 {
     return m_type_name;
@@ -172,13 +193,24 @@ void Graph_editor_node::node_editor(App_context& app_context, ax::NodeEditor::Ed
 
     ImGui::TableNextRow();
 
-    // Input pins on the left edge
+    // Left-edge pins (inputs by default; either pin set can be moved to
+    // either edge from the Node Properties "Inputs" / "Outputs" combos).
     ImGui::TableSetColumnIndex(0);
-    node_editor.PushStyleVar(ax::NodeEditor::StyleVar_SourceDirection, ImVec2{ 1.0f, 0.0});
-    node_editor.PushStyleVar(ax::NodeEditor::StyleVar_TargetDirection, ImVec2{-1.0f, 0.0});
-    node_editor.PushStyleVar(ax::NodeEditor::StyleVar_PivotAlignment,  ImVec2{-0.75f, 0.5f});
-    show_pins(node_editor, *draw_list, get_input_pins(), left_edge, false);
-    node_editor.PopStyleVar(3);
+    if (m_input_pin_edge == Node_edge::left) {
+        node_editor.PushStyleVar(ax::NodeEditor::StyleVar_SourceDirection, ImVec2{ 1.0f, 0.0});
+        node_editor.PushStyleVar(ax::NodeEditor::StyleVar_TargetDirection, ImVec2{-1.0f, 0.0});
+        node_editor.PushStyleVar(ax::NodeEditor::StyleVar_PivotAlignment,  ImVec2{-0.75f, 0.5f});
+        show_pins(node_editor, *draw_list, get_input_pins(), left_edge, false);
+        node_editor.PopStyleVar(3);
+    }
+    if (m_output_pin_edge == Node_edge::left) {
+        node_editor.PushStyleVar(ax::NodeEditor::StyleVar_SourceDirection, ImVec2{-1.0f, 0.0});
+        node_editor.PushStyleVar(ax::NodeEditor::StyleVar_TargetDirection, ImVec2{ 1.0f, 0.0});
+        node_editor.PushStyleVar(ax::NodeEditor::StyleVar_PinArrowSize,  0.0f);
+        node_editor.PushStyleVar(ax::NodeEditor::StyleVar_PinArrowWidth, 0.0f);
+        show_pins(node_editor, *draw_list, get_output_pins(), left_edge, false);
+        node_editor.PopStyleVar(4);
+    }
 
     // Content
     ImGui::TableSetColumnIndex(1);
@@ -192,14 +224,23 @@ void Graph_editor_node::node_editor(App_context& app_context, ax::NodeEditor::Ed
     }
     after_node_content(app_context);
 
-    // Output pins on the right edge
+    // Right-edge pins (outputs by default).
     ImGui::TableSetColumnIndex(2);
-    node_editor.PushStyleVar(ax::NodeEditor::StyleVar_SourceDirection, ImVec2{1.0f, 0.0});
-    node_editor.PushStyleVar(ax::NodeEditor::StyleVar_TargetDirection, ImVec2{1.0f, 0.0});
-    node_editor.PushStyleVar(ax::NodeEditor::StyleVar_PinArrowSize,  0.0f);
-    node_editor.PushStyleVar(ax::NodeEditor::StyleVar_PinArrowWidth, 0.0f);
-    show_pins(node_editor, *draw_list, get_output_pins(), right_edge, true);
-    node_editor.PopStyleVar(4);
+    if (m_input_pin_edge == Node_edge::right) {
+        node_editor.PushStyleVar(ax::NodeEditor::StyleVar_SourceDirection, ImVec2{1.0f, 0.0});
+        node_editor.PushStyleVar(ax::NodeEditor::StyleVar_TargetDirection, ImVec2{1.0f, 0.0});
+        node_editor.PushStyleVar(ax::NodeEditor::StyleVar_PivotAlignment,  ImVec2{1.75f, 0.5f});
+        show_pins(node_editor, *draw_list, get_input_pins(), right_edge, true);
+        node_editor.PopStyleVar(3);
+    }
+    if (m_output_pin_edge == Node_edge::right) {
+        node_editor.PushStyleVar(ax::NodeEditor::StyleVar_SourceDirection, ImVec2{1.0f, 0.0});
+        node_editor.PushStyleVar(ax::NodeEditor::StyleVar_TargetDirection, ImVec2{1.0f, 0.0});
+        node_editor.PushStyleVar(ax::NodeEditor::StyleVar_PinArrowSize,  0.0f);
+        node_editor.PushStyleVar(ax::NodeEditor::StyleVar_PinArrowWidth, 0.0f);
+        show_pins(node_editor, *draw_list, get_output_pins(), right_edge, true);
+        node_editor.PopStyleVar(4);
+    }
 
     ImGui::EndTable();
 

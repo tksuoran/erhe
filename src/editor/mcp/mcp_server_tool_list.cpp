@@ -805,6 +805,28 @@ void Mcp_server::refresh_tool_list()
             {"node_ids", {{"type", "array"}, {"items", {{"type", "integer"}}}, {"description", "Ids of the nodes to select (see get_texture_graph); empty clears the selection"}}}
         }}
     }});
+    m_tool_infos.push_back({"geometry_graph_set_node_layout", "Set a geometry graph node's canvas layout: position, ui scale (node size, clamped to [0.25, 4]), and which node edge the input / output pins are laid out on. All arguments except node_id are optional; omitted ones are left unchanged. Returns the resulting layout. Same knobs as the Node Properties window's Position / Size / Inputs / Outputs rows.", {
+        {"type", "object"},
+        {"properties", {
+            {"node_id",     {{"type", "integer"}, {"description", "Id of the node (see get_geometry_graph)"}}},
+            {"position",    {{"type", "array"},   {"items", {{"type", "number"}}}, {"description", "Canvas position [x, y]"}}},
+            {"ui_scale",    {{"type", "number"},  {"description", "Node size scale, 1 = default, clamped to [0.25, 4]"}}},
+            {"input_edge",  {{"type", "string"},  {"description", "Edge for input pins: left (default) or right"}}},
+            {"output_edge", {{"type", "string"},  {"description", "Edge for output pins: left or right (default)"}}}
+        }},
+        {"required", json::array({"node_id"})}
+    }});
+    m_tool_infos.push_back({"texture_graph_set_node_layout", "Set a texture graph node's canvas layout: position, ui scale (node size, clamped to [0.25, 4]), and which node edge the input / output pins are laid out on. All arguments except node_id are optional; omitted ones are left unchanged. Returns the resulting layout. Same knobs as the Node Properties window's Position / Size / Inputs / Outputs rows.", {
+        {"type", "object"},
+        {"properties", {
+            {"node_id",     {{"type", "integer"}, {"description", "Id of the node (see get_texture_graph)"}}},
+            {"position",    {{"type", "array"},   {"items", {{"type", "number"}}}, {"description", "Canvas position [x, y]"}}},
+            {"ui_scale",    {{"type", "number"},  {"description", "Node size scale, 1 = default, clamped to [0.25, 4]"}}},
+            {"input_edge",  {{"type", "string"},  {"description", "Edge for input pins: left (default) or right"}}},
+            {"output_edge", {{"type", "string"},  {"description", "Edge for output pins: left or right (default)"}}}
+        }},
+        {"required", json::array({"node_id"})}
+    }});
     m_tool_infos.push_back({"create_graph_texture", "Create a Graph Texture asset (a procedural texture backed by a node graph) in a scene's content library and point the Texture Graph window at it (its new target). The window's target Graph Texture is what the texture_graph_* tools operate on (retarget later with set_texture_graph_target). A Material slot can then source from it (set_material_texture_source). Returns the new asset's id and name.", {
         {"type", "object"},
         {"properties", {

@@ -98,6 +98,64 @@ namespace {
     return nullptr;
 }
 
+[[nodiscard]] auto parse_node_edge(const json& value, int& out_edge) -> bool
+{
+    if (value.is_string()) {
+        const std::string name = value.get<std::string>();
+        if (name == "left") {
+            out_edge = Node_edge::left;
+            return true;
+        }
+        if (name == "right") {
+            out_edge = Node_edge::right;
+            return true;
+        }
+    }
+    return false;
+}
+
+// Shared implementation of the *_graph_set_node_layout tools: applies the
+// optional layout arguments (canvas position, ui scale, pin edges) to a
+// graph editor node and reports the resulting layout.
+[[nodiscard]] auto apply_node_layout(Graph_editor_window_base& window, Graph_editor_node& node, const json& args) -> std::string
+{
+    if (args.contains("position")) {
+        if (!args["position"].is_array() || (args["position"].size() != 2)) {
+            return make_error_content("'position' must be an array of two numbers");
+        }
+        const float x = args["position"][0].get<float>();
+        const float y = args["position"][1].get<float>();
+        window.set_node_position(node, ImVec2{x, y});
+    }
+    if (args.contains("ui_scale")) {
+        if (!args["ui_scale"].is_number()) {
+            return make_error_content("'ui_scale' must be a number");
+        }
+        node.set_ui_scale(args["ui_scale"].get<float>());
+    }
+    int edge = 0;
+    if (args.contains("input_edge")) {
+        if (!parse_node_edge(args["input_edge"], edge)) {
+            return make_error_content("'input_edge' must be \"left\" or \"right\"");
+        }
+        node.set_input_pin_edge(edge);
+    }
+    if (args.contains("output_edge")) {
+        if (!parse_node_edge(args["output_edge"], edge)) {
+            return make_error_content("'output_edge' must be \"left\" or \"right\"");
+        }
+        node.set_output_pin_edge(edge);
+    }
+    const ImVec2 position = window.get_node_position(node);
+    json result;
+    result["node_id"]     = node.get_id();
+    result["position"]    = json::array({position.x, position.y});
+    result["ui_scale"]    = node.get_ui_scale();
+    result["input_edge"]  = (node.get_input_pin_edge()  == Node_edge::right) ? "right" : "left";
+    result["output_edge"] = (node.get_output_pin_edge() == Node_edge::right) ? "right" : "left";
+    return make_json_content(result).dump();
+}
+
 } // anonymous namespace
 
 auto Mcp_server::query_geometry_graph(const json& args) -> std::string
@@ -421,14 +479,29 @@ auto Mcp_server::action_geometry_graph_select_nodes(const json& args) -> std::st
     }
     window->select_canvas_nodes(node_ids);
     // Make the result observable in a screenshot: the canvas showing the
-    // selection and the Node Properties window showing the selected nodes.
-    window->show_window();
+    // selection (focus raises the window's tab when it is docked behind
+    // another) and the Node Properties window showing the selected nodes.
+    window->request_window_focus();
     if (m_context.node_properties_window != nullptr) {
         m_context.node_properties_window->show_window();
     }
     json result;
     result["selected_count"] = node_ids.size();
     return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_geometry_graph_set_node_layout(const json& args) -> std::string
+{
+    Geometry_graph_window* window = m_context.geometry_graph_window;
+    if (window == nullptr) {
+        return make_error_content("Geometry graph window not available");
+    }
+    const std::size_t node_id = args.value("node_id", std::size_t{0});
+    Geometry_graph_node* node = find_geometry_graph_node(window->get_nodes(), node_id);
+    if (node == nullptr) {
+        return make_error_content("Node not found");
+    }
+    return apply_node_layout(*window, *node, args);
 }
 
 namespace {
@@ -1277,14 +1350,29 @@ auto Mcp_server::action_texture_graph_select_nodes(const json& args) -> std::str
     }
     window->select_canvas_nodes(node_ids);
     // Make the result observable in a screenshot: the canvas showing the
-    // selection and the Node Properties window showing the selected nodes.
-    window->show_window();
+    // selection (focus raises the window's tab when it is docked behind
+    // another) and the Node Properties window showing the selected nodes.
+    window->request_window_focus();
     if (m_context.node_properties_window != nullptr) {
         m_context.node_properties_window->show_window();
     }
     json result;
     result["selected_count"] = node_ids.size();
     return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_texture_graph_set_node_layout(const json& args) -> std::string
+{
+    Texture_graph_window* window = m_context.texture_graph_window;
+    if (window == nullptr) {
+        return make_error_content("Texture graph window not available");
+    }
+    const std::size_t node_id = args.value("node_id", std::size_t{0});
+    Texture_graph_node* node = find_texture_graph_node(window->get_nodes(), node_id);
+    if (node == nullptr) {
+        return make_error_content("Node not found");
+    }
+    return apply_node_layout(*window, *node, args);
 }
 
 } // namespace editor

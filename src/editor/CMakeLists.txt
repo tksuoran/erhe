@@ -261,6 +261,7 @@ erhe_target_sources_grouped(
     graph_editor/graph_editor_window_base.hpp
     graph_editor/graph_operations.hpp
     graph_editor/graph_serialization.hpp
+    graph_editor/node_edge.hpp
     graphics/gradients.cpp
     graphics/gradients.hpp
     graphics/icon_set.cpp

@@ -237,6 +237,32 @@ void Node_properties_window::graph_editor_node_properties(Graph_editor_window_ba
             node->set_ui_scale(ui_scale);
         }
     });
+    // Pin layout: only left / right are implemented by the node renderer, so
+    // the combos offer just those two edges (unlike the shader graph's).
+    m_property_editor.add_entry("Inputs", [node]() {
+        if (ImGui::BeginCombo("##inputs", get_node_edge_name(node->get_input_pin_edge()))) {
+            for (int edge : {Node_edge::left, Node_edge::right}) {
+                bool selected = (node->get_input_pin_edge() == edge);
+                ImGui::Selectable(get_node_edge_name(edge), &selected, ImGuiSelectableFlags_None);
+                if (selected) {
+                    node->set_input_pin_edge(edge);
+                }
+            }
+            ImGui::EndCombo();
+        }
+    });
+    m_property_editor.add_entry("Outputs", [node]() {
+        if (ImGui::BeginCombo("##outputs", get_node_edge_name(node->get_output_pin_edge()))) {
+            for (int edge : {Node_edge::left, Node_edge::right}) {
+                bool selected = (node->get_output_pin_edge() == edge);
+                ImGui::Selectable(get_node_edge_name(edge), &selected, ImGuiSelectableFlags_None);
+                if (selected) {
+                    node->set_output_pin_edge(edge);
+                }
+            }
+            ImGui::EndCombo();
+        }
+    });
     m_property_editor.add_entry("Parameters", [this, node]() {
         node->properties_imgui(m_context);
     });
