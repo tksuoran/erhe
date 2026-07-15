@@ -25,6 +25,7 @@
 #include "preview/brush_preview.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
+#include "windows/inventory_slot_payload.hpp"
 #include "windows/item_reference.hpp"
 
 #include "erhe_defer/defer.hpp"
@@ -1126,28 +1127,45 @@ void Geometry_graph_window::canvas_drag_and_drop_target(const ImVec2& rect_min, 
     // position (with their own ghost preview while in flight).
     accept_palette_drop(*m_node_editor.get(), rect_min, rect_max);
 
-    // Peek at the payload while the drag is still in flight so a ghost of the
-    // prospective node can be drawn at the cursor; IsDelivery() below tells
-    // the actual drop apart. The default whole-canvas highlight is replaced
-    // by that ghost.
+    // Peek at the payloads while the drag is still in flight so a ghost of
+    // the prospective node can be drawn at the cursor; IsDelivery() below
+    // tells the actual drop apart. The default whole-canvas highlight is
+    // replaced by that ghost. A brush arrives either as a content-library
+    // node (item tree drag) or inside an inventory / hotbar brush slot
+    // (Inventory window drag).
+    std::shared_ptr<Brush> brush{};
+    bool                   delivery = false;
     const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(
         "Content_library_node",
         ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect
     );
-    if (payload == nullptr) {
-        return; // no library node dragged over the canvas
+    if (payload != nullptr) {
+        erhe::Item_base* const      item_base    = *(static_cast<erhe::Item_base**>(payload->Data));
+        const Content_library_node* library_node = dynamic_cast<const Content_library_node*>(item_base);
+        if (library_node == nullptr) {
+            return;
+        }
+        brush = std::dynamic_pointer_cast<Brush>(library_node->item);
+        delivery = payload->IsDelivery();
+    } else {
+        const ImGuiPayload* slot_payload = ImGui::AcceptDragDropPayload(
+            c_inventory_slot_payload_type,
+            ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect
+        );
+        if (slot_payload == nullptr) {
+            return; // no brush-carrying payload dragged over the canvas
+        }
+        const Slot_drag_payload& slot = *static_cast<const Slot_drag_payload*>(slot_payload->Data);
+        if (slot.brush != nullptr) {
+            brush = std::dynamic_pointer_cast<Brush>(slot.brush->shared_from_this());
+        }
+        delivery = slot_payload->IsDelivery();
     }
-    erhe::Item_base* const      item_base    = *(static_cast<erhe::Item_base**>(payload->Data));
-    const Content_library_node* library_node = dynamic_cast<const Content_library_node*>(item_base);
-    if (library_node == nullptr) {
-        return;
-    }
-    const std::shared_ptr<Brush> brush = std::dynamic_pointer_cast<Brush>(library_node->item);
     if (!brush) {
         return; // only brushes make geometry source nodes
     }
 
-    if (!payload->IsDelivery()) {
+    if (!delivery) {
         // Still dragging: preview where the node would land, as a ghost of
         // the typical Brush source node footprint (pin columns + center
         // column + NodePadding wide; header, brush combo, preview image and

@@ -6,6 +6,7 @@
 #include "app_context.hpp"
 #include "geometry_graph/geometry_graph_window.hpp"
 #include "texture_graph/texture_graph_window.hpp"
+#include "windows/inventory_slot_payload.hpp"
 
 #include "erhe_graph/graph.hpp"
 #include "erhe_graph/link.hpp"
@@ -93,33 +94,56 @@ auto Graph_editor_window_base::find_window_by_kind(App_context& context, const c
 
 void Graph_editor_window_base::accept_palette_drop(ax::NodeEditor::EditorContext& node_editor, const ImVec2& rect_min, const ImVec2& rect_max)
 {
-    // Peek at the payload while the drag is still in flight so a ghost of the
-    // prospective node can be drawn at the cursor; IsDelivery() below tells
-    // the actual drop apart. The default whole-canvas highlight is replaced
-    // by that ghost.
+    // Peek at the payloads while the drag is still in flight so a ghost of
+    // the prospective node can be drawn at the cursor; IsDelivery() below
+    // tells the actual drop apart. The default whole-canvas highlight is
+    // replaced by that ghost. Two payload shapes carry a spawnable node
+    // type: a palette entry dragged straight from the node palette, and an
+    // inventory / hotbar graph-node slot dragged out of the Inventory window.
+    const char* type_name = nullptr;
+    const char* label     = nullptr;
+    bool        delivery  = false;
+
     const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(
         c_graph_node_payload_type,
         ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect
     );
-    if (payload == nullptr) {
-        return; // no palette node dragged over the canvas
-    }
-    const Graph_node_drag_payload& node_payload = *static_cast<const Graph_node_drag_payload*>(payload->Data);
-    if (std::strcmp(node_payload.kind, clipboard_kind()) != 0) {
-        return; // a palette entry of the other editor kind - not spawnable here
+    if (payload != nullptr) {
+        const Graph_node_drag_payload& node_payload = *static_cast<const Graph_node_drag_payload*>(payload->Data);
+        if (std::strcmp(node_payload.kind, clipboard_kind()) != 0) {
+            return; // a palette entry of the other editor kind - not spawnable here
+        }
+        type_name = node_payload.type_name;
+        label     = node_payload.label;
+        delivery  = payload->IsDelivery();
+    } else {
+        const ImGuiPayload* slot_payload = ImGui::AcceptDragDropPayload(
+            c_inventory_slot_payload_type,
+            ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect
+        );
+        if (slot_payload == nullptr) {
+            return; // no spawnable payload dragged over the canvas
+        }
+        const Slot_drag_payload& slot = *static_cast<const Slot_drag_payload*>(slot_payload->Data);
+        if ((slot.graph_node_type[0] == '\0') || (std::strcmp(slot.graph_node_kind, clipboard_kind()) != 0)) {
+            return; // not a graph-node slot of this editor kind
+        }
+        type_name = slot.graph_node_type;
+        label     = slot.graph_node_label;
+        delivery  = slot_payload->IsDelivery();
     }
 
-    if (!payload->IsDelivery()) {
+    if (!delivery) {
         // Typical plain-node footprint: pin columns + center column +
         // NodePadding wide; the real node is content-sized on spawn.
-        draw_canvas_drop_ghost(node_editor, rect_min, rect_max, node_payload.label, ImVec2{306.0f, 150.0f});
+        draw_canvas_drop_ghost(node_editor, rect_min, rect_max, label, ImVec2{306.0f, 150.0f});
         return;
     }
 
     // The drop happens outside the canvas Begin/End (screen space), so
     // convert through the editor's stored view transform.
     const ImVec2 spawn_position = node_editor.ScreenToCanvas(ImGui::GetMousePos());
-    add_node_from_palette(node_payload.type_name, &spawn_position);
+    add_node_from_palette(type_name, &spawn_position);
 }
 
 void Graph_editor_window_base::palette_drop_target(ax::NodeEditor::EditorContext& node_editor, const ImVec2& rect_min, const ImVec2& rect_max)
