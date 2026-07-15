@@ -1122,9 +1122,16 @@ void Geometry_graph_window::canvas_drag_and_drop_target(const ImVec2& rect_min, 
     }
     ERHE_DEFER( ImGui::EndDragDropTarget(); );
 
-    const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Content_library_node");
+    // Peek at the payload while the drag is still in flight so a ghost of the
+    // prospective node can be drawn at the cursor; IsDelivery() below tells
+    // the actual drop apart. The default whole-canvas highlight is replaced
+    // by that ghost.
+    const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(
+        "Content_library_node",
+        ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect
+    );
     if (payload == nullptr) {
-        return; // not delivered yet (still dragging), or not a library node
+        return; // no library node dragged over the canvas
     }
     erhe::Item_base* const      item_base    = *(static_cast<erhe::Item_base**>(payload->Data));
     const Content_library_node* library_node = dynamic_cast<const Content_library_node*>(item_base);
@@ -1134,6 +1141,31 @@ void Geometry_graph_window::canvas_drag_and_drop_target(const ImVec2& rect_min, 
     const std::shared_ptr<Brush> brush = std::dynamic_pointer_cast<Brush>(library_node->item);
     if (!brush) {
         return; // only brushes make geometry source nodes
+    }
+
+    if (!payload->IsDelivery()) {
+        // Still dragging: preview where the node would land. The node spawns
+        // with its top-left corner at the cursor, so draw a ghost rectangle
+        // of the typical Brush source node footprint (pin columns + center
+        // column + NodePadding wide; header, brush combo, preview image and
+        // stats tall - the real node is content-sized on spawn), scaled to
+        // the current canvas zoom and clipped to the canvas rect.
+        const float  zoom = m_node_editor->GetCurrentZoom();
+        const ImVec2 footprint{306.0f, 250.0f}; // canvas units
+        const ImVec2 ghost_min = ImGui::GetMousePos();
+        const ImVec2 ghost_max{ghost_min.x + (footprint.x * zoom), ghost_min.y + (footprint.y * zoom)};
+        const float  rounding  = m_node_editor->GetStyle().NodeRounding * zoom;
+        ImDrawList*  draw_list = ImGui::GetWindowDrawList();
+        draw_list->PushClipRect(rect_min, rect_max, true);
+        draw_list->AddRectFilled(ghost_min, ghost_max, IM_COL32(128, 128, 128, 48), rounding);
+        draw_list->AddRect      (ghost_min, ghost_max, IM_COL32(204, 204, 204, 200), rounding, ImDrawFlags_RoundCornersAll, 2.0f * zoom);
+        draw_list->AddText(
+            ImVec2{ghost_min.x + (8.0f * zoom), ghost_min.y + (8.0f * zoom)},
+            IM_COL32(230, 230, 230, 220),
+            brush->get_name().c_str()
+        );
+        draw_list->PopClipRect();
+        return;
     }
 
     // The drop happens outside the canvas Begin/End (screen space), so
