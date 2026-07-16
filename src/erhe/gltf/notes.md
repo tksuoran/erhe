@@ -40,6 +40,19 @@ performs all mapping to/from erhe::physics (see `doc/khr_physics_rigid_bodies_su
   against the glTF directory. Neither fastgltf nor erhe::gltf recursively parses
   referenced assets or detects cross-file cycles -- the editor's prefab layer does
   (see `doc/gltf-prefabs-plan.md`).
+- glTF 2.1 unique IDs (KhronosGroup/glTF#2597, pre-ratification; parsed/written by
+  the fastgltf fork): import carries each top-level object's `uid` onto the created
+  erhe item (`Item_base::set_gltf_uid`); `scan_gltf` reports them in the
+  `Gltf_scan::*_uids` vectors (parallel to the name vectors). Export stamps a uid
+  on every item-backed top-level object (nodes, meshes, cameras, materials,
+  images, skins, animations): a carried uid is preserved verbatim, an absent one
+  is generated exactly once (16-char alphanumeric, unique against every uid AND
+  name in the file -- one identifier namespace) and stored back on the item, so
+  re-saving never changes uids. Objects without a backing item (accessors,
+  buffers, buffer views, samplers, texture entries, extra meshes, the scene) are
+  not stamped. Lights are extension-hosted and cannot carry uids. All uid
+  read/write stays behind erhe::gltf so the pre-ratification surface can drift
+  without touching clients.
 - The text (.gltf) export variant writes no buffer URI and cannot be re-imported; use .glb
   for round-trips and .gltf for JSON inspection.
 - Library-domain `ERHE_*` extensions (`ERHE_node`, `ERHE_camera`, `ERHE_light`,

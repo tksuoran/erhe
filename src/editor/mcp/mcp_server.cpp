@@ -421,6 +421,7 @@ auto Mcp_server::process_queued_requests() -> int
             { "create_scene",                   &Mcp_server::action_create_scene                  },
             { "export_gltf",                    &Mcp_server::action_export_gltf                   },
             { "import_gltf",                    &Mcp_server::action_import_gltf                   },
+            { "scan_gltf",                      &Mcp_server::query_scan_gltf                      },
             { "instantiate_prefab",             &Mcp_server::action_instantiate_prefab            },
             { "reload_prefab",                  &Mcp_server::action_reload_prefab                 },
             { "get_prefabs",                    &Mcp_server::query_prefabs                        },

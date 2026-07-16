@@ -353,6 +353,7 @@ public:
     [[nodiscard]] auto is_lock_viewport_selection   () const -> bool;
     [[nodiscard]] auto is_lock_viewport_transform   () const -> bool;
     [[nodiscard]] auto get_source_path             () const -> const std::filesystem::path*;
+    [[nodiscard]] auto get_gltf_uid                () const -> const std::string&;
     [[nodiscard]] auto get_tags                    () const -> const std::set<std::string>&;
     [[nodiscard]] auto has_tag                     (std::string_view tag) const -> bool;
     [[nodiscard]] auto get_name                    () const -> const std::string&;
@@ -368,6 +369,7 @@ public:
     void show             ();
     void hide             ();
     void set_source_path  (const std::filesystem::path& path);
+    void set_gltf_uid     (std::string_view uid);
     void set_lock_edit    (bool value);
     void add_tag          (std::string_view tag);
     void remove_tag       (std::string_view tag);
@@ -381,6 +383,14 @@ protected:
     std::string                            m_name       {};
     erhe::utility::Debug_label             m_debug_label{};
     std::unique_ptr<std::filesystem::path> m_source_path{};
+    // glTF 2.1 unique ID (KhronosGroup/glTF#2597): the item's persistent
+    // file-scoped identity. Empty until assigned - at import when the
+    // source file carries one, or generated exactly once at first export
+    // (see erhe::gltf) - and never changed afterwards, so external
+    // references to the item stay valid across re-saves. Not copied by
+    // copy / clone: a clone is a new object and must not claim the
+    // original's identity (uids are unique within a file).
+    std::string                            m_gltf_uid   {};
     std::set<std::string>                  m_tags       {};
 };
 

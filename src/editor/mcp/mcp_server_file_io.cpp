@@ -11,6 +11,7 @@
 #include "prefabs/prefab_library.hpp"
 
 #include "erhe_file/file.hpp"
+#include "erhe_gltf/gltf.hpp"
 
 namespace editor {
 
@@ -252,6 +253,51 @@ auto Mcp_server::action_import_gltf(const json& args) -> std::string
     return make_json_content({
         {"imported", true},
         {"path",     path_str}
+    }).dump();
+}
+
+auto Mcp_server::query_scan_gltf(const json& args) -> std::string
+{
+    const std::string path_str = args.value("path", "");
+    if (path_str.empty()) {
+        json r = make_text_content("Missing required argument: path");
+        r["isError"] = true;
+        return r.dump();
+    }
+    const std::filesystem::path path{path_str};
+    std::error_code error_code;
+    if (!std::filesystem::exists(path, error_code)) {
+        json r = make_text_content("File not found: " + path_str);
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    const erhe::gltf::Gltf_scan scan = erhe::gltf::scan_gltf(path);
+    const auto entries = [](const std::vector<std::string>& names, const std::vector<std::string>& uids) -> json {
+        json category = json::array();
+        for (std::size_t i = 0, end = names.size(); i < end; ++i) {
+            json entry{{"name", names[i]}};
+            if ((i < uids.size()) && !uids[i].empty()) {
+                entry["uid"] = uids[i];
+            }
+            category.push_back(std::move(entry));
+        }
+        return category;
+    };
+    return make_json_content({
+        {"scenes",          entries(scan.scenes,          scan.scene_uids)},
+        {"nodes",           entries(scan.nodes,           scan.node_uids)},
+        {"meshes",          entries(scan.meshes,          scan.mesh_uids)},
+        {"cameras",         entries(scan.cameras,         scan.camera_uids)},
+        {"materials",       entries(scan.materials,       scan.material_uids)},
+        {"images",          entries(scan.images,          scan.image_uids)},
+        {"samplers",        entries(scan.samplers,        scan.sampler_uids)},
+        {"skins",           entries(scan.skins,           scan.skin_uids)},
+        {"animations",      entries(scan.animations,      scan.animation_uids)},
+        {"files",           entries(scan.files,           scan.file_uids)},
+        {"external_assets", entries(scan.external_assets, scan.external_asset_uids)},
+        {"extensions_used", scan.extensions_used},
+        {"errors",          scan.errors}
     }).dump();
 }
 

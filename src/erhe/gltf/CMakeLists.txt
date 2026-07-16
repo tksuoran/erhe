@@ -21,6 +21,11 @@ if (${ERHE_GLTF_LIBRARY} STREQUAL "fastgltf")
         erhe_gltf/gltf_fastgltf.hpp
     )
     target_link_libraries(${_target} PRIVATE fastgltf)
+    if (MSVC)
+        # The single fastgltf-backend TU exceeds the default COFF section
+        # limit (C1128) in debug builds.
+        set_source_files_properties(erhe_gltf/gltf_fastgltf.cpp PROPERTIES COMPILE_OPTIONS "/bigobj")
+    endif ()
 else ()
     erhe_target_sources_grouped(
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES

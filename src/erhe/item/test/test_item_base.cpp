@@ -186,6 +186,34 @@ TEST(ItemBase, Describe)
     EXPECT_NE(d3.find("flags"), std::string::npos);
 }
 
+// --- glTF uid ---
+
+TEST(ItemBase, GltfUidDefaultEmpty)
+{
+    auto item = std::make_shared<Concrete_item>("test");
+    EXPECT_TRUE(item->get_gltf_uid().empty());
+}
+
+TEST(ItemBase, SetGltfUid)
+{
+    auto item = std::make_shared<Concrete_item>("test");
+    item->set_gltf_uid("Ab12Cd34Ef56Gh78");
+    EXPECT_EQ(item->get_gltf_uid(), "Ab12Cd34Ef56Gh78");
+}
+
+// A clone is a new object and must not claim the original's file identity:
+// two items carrying the same uid would make an exported file invalid
+// (glTF 2.1 uids are unique within a file).
+TEST(ItemBase, CopyDoesNotCopyGltfUid)
+{
+    auto original = std::make_shared<Concrete_item>("original");
+    original->set_gltf_uid("Ab12Cd34Ef56Gh78");
+
+    auto copy = std::make_shared<Concrete_item>(*original);
+    EXPECT_TRUE(copy->get_gltf_uid().empty());
+    EXPECT_EQ(original->get_gltf_uid(), "Ab12Cd34Ef56Gh78");
+}
+
 // --- Tags ---
 
 TEST(ItemBase, TagsDefaultEmpty)

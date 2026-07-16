@@ -135,6 +135,7 @@ private:
     auto action_create_scene    (const nlohmann::json& args) -> std::string;
     auto action_export_gltf     (const nlohmann::json& args) -> std::string;
     auto action_import_gltf     (const nlohmann::json& args) -> std::string;
+    auto query_scan_gltf        (const nlohmann::json& args) -> std::string;
     auto action_instantiate_prefab(const nlohmann::json& args) -> std::string;
     auto action_reload_prefab   (const nlohmann::json& args) -> std::string;
     auto query_prefabs          (const nlohmann::json& args) -> std::string;

@@ -49,10 +49,12 @@
 #include <filesystem>
 #include <limits>
 #include <optional>
+#include <random>
 #include <span>
 #include <sstream>
 #include <string_view>
 #include <string>
+#include <unordered_set>
 #include <variant>
 #include <vector>
 
@@ -885,6 +887,17 @@ public:
         return std::string{name};
     }
 
+    // glTF 2.1 unique ID carry (KhronosGroup/glTF#2597): imported items keep
+    // the source file's uid so identity survives the round trip - export
+    // preserves a carried uid verbatim instead of generating a new one.
+    template <typename T>
+    static void copy_uid(const T& gltf_object, erhe::Item_base& item)
+    {
+        if (!gltf_object.uid.empty()) {
+            item.set_gltf_uid(std::string_view{gltf_object.uid});
+        }
+    }
+
     void parse_and_build()
     {
         ERHE_PROFILE_FUNCTION();
@@ -934,6 +947,7 @@ public:
         const std::size_t mesh_count = m_asset->meshes.size();
         log_gltf->trace("parsing {} meshes", mesh_count);
         m_data_out.meshes.resize(mesh_count);
+        m_mesh_uid_claimed.resize(mesh_count);
         for (std::size_t i = 0; i < mesh_count; ++i) {
             pre_parse_mesh(i);
         }
@@ -1014,6 +1028,7 @@ private:
             const fastgltf::File& file     = m_asset->files[i];
             Gltf_file_reference&  out_file = m_data_out.files[i];
             out_file.name      = safe_resource_name(file.name, "file", i);
+            out_file.uid       = std::string{file.uid};
             out_file.mime_type = std::string{file.mimeType};
             if (const fastgltf::sources::URI* uri = std::get_if<fastgltf::sources::URI>(&file.data)) {
                 const std::filesystem::path uri_path = uri->uri.fspath();
@@ -1032,6 +1047,7 @@ private:
             const fastgltf::ExternalAsset& external_asset = m_asset->externalAssets[i];
             Gltf_external_asset&           out_external_asset = m_data_out.external_assets[i];
             out_external_asset.name       = safe_resource_name(external_asset.name, "externalAsset", i);
+            out_external_asset.uid        = std::string{external_asset.uid};
             out_external_asset.file_index = external_asset.fileIndex;
             log_gltf->trace("External asset: index = {}, name = {}, file = {}", i, out_external_asset.name, out_external_asset.file_index);
         }
@@ -1078,6 +1094,7 @@ private:
 
         auto erhe_animation = std::make_shared<erhe::scene::Animation>(animation_name);
         erhe_animation->set_source_path(m_arguments.path);
+        copy_uid(animation, *erhe_animation);
         erhe_animation->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
         m_data_out.animations.push_back(erhe_animation);
         erhe_animation->samplers.resize(animation.samplers.size());
@@ -1434,6 +1451,9 @@ private:
         if (image_source) {
             image_source->mime_type = sniff_image_mime_type(image_source->encoded_bytes);
         }
+        if (erhe_texture) {
+            copy_uid(image, *erhe_texture);
+        }
         m_data_out.images[image_index]        = erhe_texture;
         m_data_out.image_sources[image_index] = image_source;
     }
@@ -1610,6 +1630,7 @@ private:
             log_gltf->trace("Material PBR metallic roughness roughness factor = {}", pbr_data.roughnessFactor);
             auto new_material = std::make_shared<erhe::primitive::Material>(create_info);
             new_material->set_source_path(m_arguments.path);
+            copy_uid(material, *new_material);
             new_material->enable_flag_bits(erhe::Item_flags::show_in_ui);
             m_data_out.materials[material_index] = new_material;
 
@@ -1652,6 +1673,7 @@ private:
 
         auto erhe_camera = std::make_shared<erhe::scene::Camera>(camera_name);
         erhe_camera->set_source_path(m_arguments.path);
+        copy_uid(camera, *erhe_camera);
         m_data_out.cameras[camera_index] = erhe_camera;
         erhe_camera->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
         auto* projection = erhe_camera->projection();
@@ -2246,6 +2268,7 @@ private:
 
         auto erhe_skin = std::make_shared<erhe::scene::Skin>(skin_name);
         erhe_skin->set_source_path(m_arguments.path);
+        copy_uid(skin, *erhe_skin);
         m_data_out.skins[skin_index] = erhe_skin;
         erhe_skin->enable_flag_bits(
             Item_flags::content    |
@@ -2277,6 +2300,7 @@ private:
         const fastgltf::Mesh& mesh = m_asset->meshes[mesh_index];
         const std::string mesh_name = safe_resource_name(mesh.name, "mesh", mesh_index);
         auto erhe_mesh = std::make_shared<erhe::scene::Mesh>(mesh_name);
+        copy_uid(mesh, *erhe_mesh);
         m_data_out.meshes[mesh_index] = erhe_mesh;
     }
     void parse_mesh(const std::size_t mesh_index, const fastgltf::Mesh& mesh, erhe::scene::Mesh& erhe_mesh)
@@ -2298,6 +2322,9 @@ private:
     }
 
     std::vector<std::size_t> m_nodes_with_skin;
+    // Per glTF mesh: has a node clone already claimed the mesh's uid
+    // (see the mesh instantiation in parse_node)?
+    std::vector<bool> m_mesh_uid_claimed;
     void parse_node(const std::size_t node_index, const std::shared_ptr<erhe::scene::Node>& parent)
     {
         ERHE_PROFILE_FUNCTION();
@@ -2308,6 +2335,7 @@ private:
         log_gltf->trace("Node: node index = {}, name = {}", node_index, node.name);
         auto erhe_node = std::make_shared<erhe::scene::Node>(node_name);
         erhe_node->set_source_path(m_arguments.path);
+        copy_uid(node, *erhe_node);
         erhe_node->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
         m_data_out.nodes[node_index] = erhe_node;
         erhe_node->Hierarchy::set_parent(parent);
@@ -2349,6 +2377,15 @@ private:
                 template_mesh,
                 erhe::for_clone{true}
             );
+            // The clone starts uid-less (a clone is a new object); the FIRST
+            // instantiation of a glTF mesh inherits the file identity so it
+            // round-trips. Later instantiations of the same mesh are
+            // additional objects (a glTF mesh shared by N nodes re-exports
+            // as N meshes) and get fresh uids at export.
+            if (!template_mesh.get_gltf_uid().empty() && !m_mesh_uid_claimed[mesh_index]) {
+                erhe_mesh->set_gltf_uid(template_mesh.get_gltf_uid());
+                m_mesh_uid_claimed[mesh_index] = true;
+            }
             if (node.skinIndex.has_value()) {
                 m_nodes_with_skin.push_back(node_index);
             }
@@ -3215,23 +3252,31 @@ auto scan_gltf(std::filesystem::path path) -> Gltf_scan
     }
 
     result.images.resize(asset->images.size());
+    result.image_uids.resize(asset->images.size());
     for (std::size_t i = 0, end = asset->images.size(); i < end; ++i) {
-        result.images[i] = resource_name(asset->images[i].name, "image", i);
+        result.images[i]     = resource_name(asset->images[i].name, "image", i);
+        result.image_uids[i] = std::string{asset->images[i].uid};
     }
 
     result.samplers.resize(asset->samplers.size());
+    result.sampler_uids.resize(asset->samplers.size());
     for (std::size_t i = 0, end = asset->samplers.size(); i < end; ++i) {
-        result.samplers[i] = resource_name(asset->samplers[i].name, "sampler", i);
+        result.samplers[i]     = resource_name(asset->samplers[i].name, "sampler", i);
+        result.sampler_uids[i] = std::string{asset->samplers[i].uid};
     }
 
     result.materials.resize(asset->materials.size());
+    result.material_uids.resize(asset->materials.size());
     for (std::size_t i = 0, end = asset->materials.size(); i < end; ++i) {
-        result.materials[i] = resource_name(asset->materials[i].name, "material", i);
+        result.materials[i]     = resource_name(asset->materials[i].name, "material", i);
+        result.material_uids[i] = std::string{asset->materials[i].uid};
     }
 
     result.cameras.resize(asset->cameras.size());
+    result.camera_uids.resize(asset->cameras.size());
     for (std::size_t i = 0, end = asset->cameras.size(); i < end; ++i) {
-        result.cameras[i] = resource_name(asset->cameras[i].name, "camera", i);
+        result.cameras[i]     = resource_name(asset->cameras[i].name, "camera", i);
+        result.camera_uids[i] = std::string{asset->cameras[i].uid};
     }
 
     for (std::size_t i = 0, end = asset->lights.size(); i < end; ++i) {
@@ -3252,38 +3297,52 @@ auto scan_gltf(std::filesystem::path path) -> Gltf_scan
     }
 
     result.meshes.resize(asset->meshes.size());
+    result.mesh_uids.resize(asset->meshes.size());
     for (std::size_t i = 0, end = asset->meshes.size(); i < end; ++i) {
-        result.meshes[i] = resource_name(asset->meshes[i].name, "mesh", i);
+        result.meshes[i]    = resource_name(asset->meshes[i].name, "mesh", i);
+        result.mesh_uids[i] = std::string{asset->meshes[i].uid};
     }
 
     result.nodes.resize(asset->nodes.size());
+    result.node_uids.resize(asset->nodes.size());
     for (std::size_t i = 0, end = asset->nodes.size(); i < end; ++i) {
-        result.nodes[i] = resource_name(asset->nodes[i].name, "node", i);
+        result.nodes[i]     = resource_name(asset->nodes[i].name, "node", i);
+        result.node_uids[i] = std::string{asset->nodes[i].uid};
     }
 
     result.skins.resize(asset->skins.size());
+    result.skin_uids.resize(asset->skins.size());
     for (std::size_t i = 0, end = asset->skins.size(); i < end; ++i) {
-        result.skins[i] = resource_name(asset->skins[i].name, "skin", i);
+        result.skins[i]     = resource_name(asset->skins[i].name, "skin", i);
+        result.skin_uids[i] = std::string{asset->skins[i].uid};
     }
 
     result.animations.resize(asset->animations.size());
+    result.animation_uids.resize(asset->animations.size());
     for (std::size_t i = 0, end = asset->animations.size(); i < end; ++i) {
-        result.animations[i] = resource_name(asset->animations[i].name, "animation", i);
+        result.animations[i]     = resource_name(asset->animations[i].name, "animation", i);
+        result.animation_uids[i] = std::string{asset->animations[i].uid};
     }
 
     result.scenes.resize(asset->scenes.size());
+    result.scene_uids.resize(asset->scenes.size());
     for (std::size_t i = 0, end = asset->scenes.size(); i < end; ++i) {
-        result.scenes[i] = resource_name(asset->scenes[i].name, "scene", i);
+        result.scenes[i]     = resource_name(asset->scenes[i].name, "scene", i);
+        result.scene_uids[i] = std::string{asset->scenes[i].uid};
     }
 
     result.files.resize(asset->files.size());
+    result.file_uids.resize(asset->files.size());
     for (std::size_t i = 0, end = asset->files.size(); i < end; ++i) {
-        result.files[i] = resource_name(asset->files[i].name, "file", i);
+        result.files[i]     = resource_name(asset->files[i].name, "file", i);
+        result.file_uids[i] = std::string{asset->files[i].uid};
     }
 
     result.external_assets.resize(asset->externalAssets.size());
+    result.external_asset_uids.resize(asset->externalAssets.size());
     for (std::size_t i = 0, end = asset->externalAssets.size(); i < end; ++i) {
-        result.external_assets[i] = resource_name(asset->externalAssets[i].name, "externalAsset", i);
+        result.external_assets[i]     = resource_name(asset->externalAssets[i].name, "externalAsset", i);
+        result.external_asset_uids[i] = std::string{asset->externalAssets[i].uid};
     }
 
     // Combined scene-space AABB from POSITION accessor min/max (required by
@@ -4551,8 +4610,11 @@ private:
             log_gltf->warn("glTF export: animation '{}' has no exportable channels - skipped", animation.get_name());
             return;
         }
+        m_exported_animations.insert({&animation, m_gltf_asset.animations.size()});
         m_gltf_asset.animations.emplace_back(std::move(gltf_animation));
     }
+
+    std::unordered_map<const erhe::scene::Animation*, std::size_t> m_exported_animations;
 
     // --- Skins (doc/gltf-scene-roundtrip-plan.md phase 0) ---
     // Recorded during the node pass (a skin's joint nodes may come later in
@@ -5163,6 +5225,144 @@ private:
     }
 #endif
 
+    // glTF 2.1 unique IDs (KhronosGroup/glTF#2597): stamp a uid on every
+    // exported top-level object that is backed by an erhe item. An item's
+    // existing uid is preserved verbatim; an absent one is generated exactly
+    // once and stored back on the item, so re-saving a file never changes
+    // uids (external references depend on that stability). uids and names
+    // form a single identifier namespace within the file - a carried uid
+    // that collides with another object's uid or name (possible e.g. after
+    // importing the same source file twice) is regenerated with a warning,
+    // because the writer's ValidateAsset pass rejects such files outright.
+    // Objects without a backing item (accessors, buffers, buffer views,
+    // samplers, synthesized texture entries, extra meshes, the scene) are
+    // not stamped: a generated uid could not be stored anywhere and would
+    // churn on every save.
+    void stamp_uids()
+    {
+        // Every object name in every top-level array: a uid must not share
+        // a value with any of them. A uid may equal its OWN object's name,
+        // hence per-name counts rather than a set.
+        std::unordered_map<std::string, std::size_t> name_counts;
+        const auto count_names = [&name_counts](const auto& gltf_objects) {
+            for (const auto& gltf_object : gltf_objects) {
+                if (!gltf_object.name.empty()) {
+                    ++name_counts[std::string{gltf_object.name}];
+                }
+            }
+        };
+        count_names(m_gltf_asset.accessors);
+        count_names(m_gltf_asset.animations);
+        count_names(m_gltf_asset.buffers);
+        count_names(m_gltf_asset.bufferViews);
+        count_names(m_gltf_asset.cameras);
+        count_names(m_gltf_asset.externalAssets);
+        count_names(m_gltf_asset.files);
+        count_names(m_gltf_asset.images);
+        count_names(m_gltf_asset.materials);
+        count_names(m_gltf_asset.meshes);
+        count_names(m_gltf_asset.nodes);
+        count_names(m_gltf_asset.samplers);
+        count_names(m_gltf_asset.scenes);
+        count_names(m_gltf_asset.skins);
+        count_names(m_gltf_asset.textures);
+
+        // Item-backed objects in deterministic (category, index) order. The
+        // uid/name pointers stay valid: no top-level array grows between
+        // here and serialization.
+        class Uid_target
+        {
+        public:
+            std::size_t                  index;
+            FASTGLTF_STD_PMR_NS::string* gltf_uid;
+            FASTGLTF_STD_PMR_NS::string* gltf_name;
+            const erhe::Item_base*       item;
+        };
+        std::vector<Uid_target> targets;
+        const auto add_targets = [&targets](auto& gltf_objects, const auto& item_to_index) {
+            std::vector<Uid_target> category_targets;
+            for (const auto& [item, index_entry] : item_to_index) {
+                const std::optional<std::size_t> index{index_entry}; // map values are size_t or optional<size_t>
+                if (!index.has_value()) {
+                    continue;
+                }
+                auto& gltf_object = gltf_objects[index.value()];
+                category_targets.push_back(Uid_target{index.value(), &gltf_object.uid, &gltf_object.name, item});
+            }
+            std::sort(
+                category_targets.begin(),
+                category_targets.end(),
+                [](const Uid_target& lhs, const Uid_target& rhs) {
+                    return lhs.index < rhs.index;
+                }
+            );
+            targets.insert(targets.end(), category_targets.begin(), category_targets.end());
+        };
+        add_targets(m_gltf_asset.nodes,      m_erhe_node_to_gltf_node_index);
+        add_targets(m_gltf_asset.meshes,     m_erhe_mesh_to_gltf_mesh_index);
+        add_targets(m_gltf_asset.cameras,    m_erhe_camera_to_gltf_camera_index);
+        add_targets(m_gltf_asset.materials,  m_exported_materials);
+        add_targets(m_gltf_asset.images,     m_exported_images);
+        add_targets(m_gltf_asset.skins,      m_exported_skins);
+        add_targets(m_gltf_asset.animations, m_exported_animations);
+
+        // Pass 1: carried uids, preserved verbatim when they satisfy the
+        // uniqueness rules; violators are left empty for pass 2.
+        std::unordered_set<std::string> used_uids;
+        const auto collides_with_name = [&name_counts](const std::string& uid, const FASTGLTF_STD_PMR_NS::string& own_name) -> bool {
+            const auto it = name_counts.find(uid);
+            if (it == name_counts.end()) {
+                return false;
+            }
+            const std::size_t own_match = (std::string_view{own_name} == std::string_view{uid}) ? 1 : 0;
+            return it->second > own_match;
+        };
+        for (const Uid_target& target : targets) {
+            const std::string& carried = target.item->get_gltf_uid();
+            if (carried.empty()) {
+                continue;
+            }
+            if (used_uids.contains(carried)) {
+                log_gltf->warn("glTF export: uid '{}' of '{}' collides with another object's uid - regenerating", carried, target.item->get_name());
+                continue;
+            }
+            if (collides_with_name(carried, *target.gltf_name)) {
+                log_gltf->warn("glTF export: uid '{}' of '{}' collides with another object's name - regenerating", carried, target.item->get_name());
+                continue;
+            }
+            *target.gltf_uid = FASTGLTF_STD_PMR_NS::string{carried};
+            used_uids.insert(carried);
+        }
+
+        // Pass 2: generate for items without a (valid) uid. Alphanumeric
+        // (the explainer's recommended charset), 16 chars (~95 bits);
+        // regenerated on the astronomically unlikely collision with any
+        // existing identifier.
+        std::mt19937_64 rng{std::random_device{}()};
+        constexpr char alphabet[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+        std::uniform_int_distribution<std::size_t> pick_char{0, sizeof(alphabet) - 2};
+        for (const Uid_target& target : targets) {
+            if (!target.gltf_uid->empty()) {
+                continue;
+            }
+            std::string uid;
+            do {
+                uid.clear();
+                for (int i = 0; i < 16; ++i) {
+                    uid.push_back(alphabet[pick_char(rng)]);
+                }
+            } while (used_uids.contains(uid) || name_counts.contains(uid));
+            *target.gltf_uid = FASTGLTF_STD_PMR_NS::string{uid};
+            used_uids.insert(uid);
+            // Persisting the generated uid on the item is required so the
+            // next save reuses it. Exported items arrive through const
+            // pointers, but they are never created const, and uid
+            // assignment is the export's one sanctioned item mutation.
+            const_cast<erhe::Item_base*>(target.item)->set_gltf_uid(uid);
+            log_gltf->trace("glTF export: assigned uid '{}' to '{}'", uid, target.item->get_name());
+        }
+    }
+
     void combine_buffers()
     {
         validate_buffers();
@@ -5277,6 +5477,11 @@ auto Gltf_exporter::export_gltf() -> std::string
     }
 
     combine_buffers();
+
+    // After every pass that adds top-level objects or names (nodes, physics,
+    // extra meshes, skins, animations, buffer combining): the uid pass needs
+    // the complete identifier namespace of the final file.
+    stamp_uids();
 
     // Extensions write context: the ERHE_* extension members (raw JSON,
     // keyed by glTF index) served to the generic extensions write callback.

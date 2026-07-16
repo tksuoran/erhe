@@ -354,6 +354,13 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"scene_name", "path"})}
     }});
+    m_tool_infos.push_back({"scan_gltf",          "Scan a glTF file without loading it: per-category object names with their glTF 2.1 unique IDs (uid, when declared), extensions used, and scan errors", {
+        {"type", "object"},
+        {"properties", {
+            {"path", {{"type", "string"}, {"description", "Source .gltf/.glb file path"}}}
+        }},
+        {"required", json::array({"path"})}
+    }});
     m_tool_infos.push_back({"instantiate_prefab", "Instantiate a glTF file as a prefab into a scene: the file is parsed once (cached app-wide) and inserted as a clone that stays a reference to the source file. Instances share GPU buffers; insertion is undoable.", {
         {"type", "object"},
         {"properties", {

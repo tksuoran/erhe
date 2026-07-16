@@ -55,6 +55,7 @@ class Gltf_file_reference
 {
 public:
     std::string           name;
+    std::string           uid; // glTF 2.1 unique ID; empty when the file does not declare one
     std::string           mime_type;
     std::filesystem::path resolved_path;
     bool                  embedded{false};
@@ -69,6 +70,7 @@ class Gltf_external_asset
 {
 public:
     std::string name;
+    std::string uid; // glTF 2.1 unique ID; empty when the file does not declare one
     std::size_t file_index{0};
 };
 
@@ -154,6 +156,21 @@ public:
     std::vector<std::string> extensions_used;
     std::vector<std::string> extensions_required;
     std::vector<std::string> errors;
+
+    // glTF 2.1 unique IDs (KhronosGroup/glTF#2597), parallel to the name
+    // vectors above; empty string when the object declares no uid. Lights
+    // are extension-hosted (KHR_lights_punctual) and cannot carry uids.
+    std::vector<std::string> animation_uids;
+    std::vector<std::string> camera_uids;
+    std::vector<std::string> mesh_uids;
+    std::vector<std::string> skin_uids;
+    std::vector<std::string> node_uids;
+    std::vector<std::string> material_uids;
+    std::vector<std::string> image_uids;
+    std::vector<std::string> sampler_uids;
+    std::vector<std::string> scene_uids;
+    std::vector<std::string> file_uids;
+    std::vector<std::string> external_asset_uids;
 
     // Combined default-scene AABB computed from POSITION accessor min/max
     // (required by the glTF spec) transformed through the node hierarchy;

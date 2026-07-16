@@ -107,6 +107,8 @@ Item_base::Item_base(const std::string_view name)
 
 // Copies (clones) keep the source name; call sites that want a distinct
 // name for a duplicate (e.g. clipboard paste) rename the clone themselves.
+// m_gltf_uid is intentionally NOT copied (see its declaration): a clone is
+// a new object and gets its own uid at first export.
 Item_base::Item_base(const Item_base& other)
     : enable_shared_from_this{other}
     , m_flag_bits  {other.m_flag_bits & ~Item_flags::selected}
@@ -277,6 +279,16 @@ void Item_base::set_source_path(const std::filesystem::path& path)
 auto Item_base::get_source_path() const -> const std::filesystem::path*
 {
     return m_source_path.get();
+}
+
+void Item_base::set_gltf_uid(const std::string_view uid)
+{
+    m_gltf_uid = uid;
+}
+
+auto Item_base::get_gltf_uid() const -> const std::string&
+{
+    return m_gltf_uid;
 }
 
 void Item_base::set_name(const std::string_view name)

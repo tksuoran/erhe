@@ -23,6 +23,7 @@ Foundational entity system for erhe. Provides identity, flags, naming, tags, par
 - `is_visible()`, `is_selected()`, `is_hovered()`, `show()`, `hide()`, `set_selected()`
 - `add_tag()`, `remove_tag()`, `has_tag()`, `get_tags()`, `clear_tags()`
 - `set_source_path()`, `get_source_path()`
+- `set_gltf_uid()`, `get_gltf_uid()` - glTF 2.1 unique ID (persistent file-scoped identity; assigned once at import or first export by `erhe::gltf`, never changed afterwards, NOT copied by copy/clone)
 - `clone()` - polymorphic deep copy via CRTP
 - `get_type()`, `get_type_name()` - virtual, overridden by CRTP `Item<>`
 

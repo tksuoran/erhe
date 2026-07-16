@@ -53,6 +53,7 @@ class Gltf_file_reference
 {
 public:
     std::string           name;
+    std::string           uid;
     std::string           mime_type;
     std::filesystem::path resolved_path;
     bool                  embedded{false};
@@ -62,6 +63,7 @@ class Gltf_external_asset
 {
 public:
     std::string name;
+    std::string uid;
     std::size_t file_index{0};
 };
 
@@ -127,6 +129,18 @@ public:
     std::vector<std::string> extensions_used;
     std::vector<std::string> extensions_required;
     std::vector<std::string> errors;
+
+    std::vector<std::string> animation_uids;
+    std::vector<std::string> camera_uids;
+    std::vector<std::string> mesh_uids;
+    std::vector<std::string> skin_uids;
+    std::vector<std::string> node_uids;
+    std::vector<std::string> material_uids;
+    std::vector<std::string> image_uids;
+    std::vector<std::string> sampler_uids;
+    std::vector<std::string> scene_uids;
+    std::vector<std::string> file_uids;
+    std::vector<std::string> external_asset_uids;
 
     std::optional<erhe::math::Aabb> bounding_box;
 };

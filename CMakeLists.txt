@@ -605,10 +605,12 @@ if (${ERHE_GLTF_LIBRARY} STREQUAL "fastgltf")
         # KHR_lights_punctual spot-light exporter fix (nested "spot" object;
         # PR'd upstream), and (d) generic extension passthrough callbacks
         # (ExtensionsParseCallback / ExtensionsWriteCallback, the enabler for
-        # erhe's ERHE_* vendor extensions; worth offering upstream). Drop the
-        # fork when upstream fastgltf ships the current physics spec, glTF 2.1
-        # and an extension passthrough.
-        GIT_TAG           a0600c11a1d183f418f15e8d634a5d149e5bf3c2
+        # erhe's ERHE_* vendor extensions; worth offering upstream), and
+        # (e) glTF 2.1 unique IDs (uid property on top-level objects, parse +
+        # verbatim re-export + uniqueness validation; KhronosGroup/glTF#2597).
+        # Drop the fork when upstream fastgltf ships the current physics spec,
+        # glTF 2.1 and an extension passthrough.
+        GIT_TAG           e42e44f250ab980cea369b2bf5edcc91662bb75a
         #GIT_TAG           v0.9.0
         GITHUB_REPOSITORY tksuoran/fastgltf
         OPTIONS
