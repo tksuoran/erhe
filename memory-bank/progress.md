@@ -10,9 +10,12 @@
 ✓/bigobj{gltf_fastgltf.cpp-C1128}
 ✓verify::export×2-identical+import→re-export+save→load→re-save+save×2+scan-match+validator-0-errors+roundtrip-62/62{Blender✓}
 
-[TASK::F1-scene-close-fixes]{next;prompt_queue-ITEM1}
-?animation-player/window-clear+brush/material-paint-tool-clear+write-only-caches+watchdog-slot-pin-whitelist+2-verify-and-fix-items
-?clipboard=OPEN-DECISION{ask-user-first:pin+whitelist|pin-no-whitelist|drop-on-close;clone-at-copy-REJECTED}
+[TASK::F1-scene-close-fixes]{DONE-856dedd3-2026-07-16}
+✓per-part-close_scene-subscriptions{7-parts;4-gained-bus-ctor-arg}
+✓watchdog-armed-post-pump{pending-queue;subscription-order-independent}
+✓slot-pin-whitelist{collect_pinned_items;info¬warn}
+✓verify::3-legs{plain+animation-playing+slot-pinned-brush}
+?clipboard=OPEN-USER-DECISION{pin+whitelist|pin-no-whitelist|drop-on-close;clone-at-copy-REJECTED;plan-"Open decisions"}
 
 [TASK::scene-close-bug-class]{6-commits-done+headless-verified;awaiting-user-interactive-verify}
 ✓details::activeContext-PREV+archive/2026-07-15
@@ -23,7 +26,9 @@
 !Khronos-validator-uid-warnings::UNEXPECTED_PROPERTY-per-uid{validator-predates-2.1}=expected;errors-must-stay-0
 !save_scene-MCP-can-exceed-request-timeout{cold-first-save≈25s-debug;save-COMPLETES-server-side→check-file+log-"processed 'save_scene'";retry-warm=fast}
 !validator-download::github-KhronosGroup/glTF-Validator-2.0.0-dev.3.10-win64.zip{per-session,scratchpad}
-!scene-close-verification::after-close_scene-wait≈5s→grep-log-"scene-close"{watchdog-60-frames;warn=bug,info-"all released"=clean}
+!scene-close-verification::after-close_scene-wait≈5s→grep-log-"scene-close"{watchdog-60-frames;warn=bug,info-"all released"=clean,info-"intentionally pinned"=slot-pin-by-design}
+!inventory-slot-resolution-headless::pending-brush/material-names-resolve-in-Inventory_window::imgui{window-must-DRAW}→visibility-flag-in-desktop_windows.json{"inventory"}¬windows.json{Imgui_windows-prefixes-m_config_path};slot-config-in-editor_settings.json-"inventory"-grid_slots/hotbar_slots{brush_name/material_name}
+!headless-config-autosave-DURING-run{editor_settings.json-rewritten-periodically¬just-exit;force-kill-skips-exit-write}
 !live-mesh-primitive-swap::MUST-bracket-Scene_root::begin/end_mesh_rt_update{else-rebuilt-rt-instances-never-attach+mask-unset+dangling-on-clear;precedents:operations_window-make_raytrace+geometry_graph_mesh-apply_baked_products}
 !raycast-MCP-tool::origin+direction+optional-mask/max_distance{default-mask=pickable_static=viewport-hover-equivalent}
 !MCP-port-since-a32dbbde::Windows-bind-exclusive→2nd-editor-falls-back-8081-correctly{mcp_call.py---port-8081};smoke-suite-still-hardcodes-8080→NEVER-run-while-user-editor-owns-8080;get_server_info-pid-check-before-driving
