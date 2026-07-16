@@ -12,12 +12,13 @@ carry an attribution comment).
 ## Table of Contents
 
 1. [Implementation Status](#implementation-status)
-2. [Material Maker Architecture](#material-maker-architecture)
-3. [erhe Existing Infrastructure](#erhe-existing-infrastructure)
-4. [Architecture Decisions](#architecture-decisions)
-5. [Implementation Plan (Phases)](#implementation-plan-phases)
-6. [Verification Strategy](#verification-strategy)
-7. [Key Files Reference](#key-files-reference)
+2. [Node Library Comparison](#node-library-comparison-erhe-vs-material-maker)
+3. [Material Maker Architecture](#material-maker-architecture)
+4. [erhe Existing Infrastructure](#erhe-existing-infrastructure)
+5. [Architecture Decisions](#architecture-decisions)
+6. [Implementation Plan (Phases)](#implementation-plan-phases)
+7. [Verification Strategy](#verification-strategy)
+8. [Key Files Reference](#key-files-reference)
 
 ---
 
@@ -38,6 +39,82 @@ carry an attribution comment).
 | Phase 4b: node library expansion + searchable palette       | DONE    | b54e0060, e20f2a0c |
 | Phase 5: buffer nodes, blur, reseed (async compile deferred) | DONE    | dac3a31a, 94668795 |
 | Phase 6: PBR material output, multi-channel bake, PNG export| DONE    | ac4d8045 |
+
+---
+
+## Node Library Comparison (erhe vs Material Maker)
+
+Snapshot 2026-07-16 against Material Maker master (392 `.mmg` node definitions
+under `addons/material_maker/nodes/` plus ~19 engine-level node types in
+`engine/nodes/gen_*.gd`: buffer, switch, image, text, graph/group, remote,
+comment, export, iterate_buffer, ...). erhe has 30 node types: 27 descriptors
+in `src/editor/texture_graph/nodes/texture_node_descriptors.cpp` plus the
+descriptor-less `output`, `material_output`, and `buffer` nodes
+(`texture_graph_node_factory.cpp`). Note the 392 count includes internal
+companion sub-nodes of compound graphs (e.g. `edge_detect_1..3`,
+`fill_preprocess`), so the user-visible Material Maker library is somewhat
+smaller than the raw file count.
+
+### erhe nodes and their Material Maker counterparts
+
+| erhe node             | Category   | Material Maker source        | Coverage notes |
+|-----------------------|------------|------------------------------|----------------|
+| `uniform`             | Generators | `uniform.mmg`                | Full. MM also has `uniform_greyscale`. |
+| `perlin`              | Generators | `perlin.mmg`                 | Full grayscale port. MM also has `perlin_color`. |
+| `voronoi`             | Generators | `voronoi.mmg`                | 3 of 4 outputs (nodes, borders, random color); the companion-node "Fill" output is dropped. |
+| `bricks`              | Generators | `bricks.mmg`                 | Grayscale pattern output only; per-brick random-color / UV / corner outputs and mortar/bevel/round map inputs dropped. 5 bond patterns. |
+| `shape`               | Generators | `shape.mmg`                  | 3 of 5 shapes (circle, polygon, star); curved-star and rays shapes plus size/edge map inputs dropped. |
+| `fbm`                 | Generators | `fbm.mmg`                    | 4 bases (value, perlin, cellular, cellular2); octave loop inlined instead of per-instance helper function. |
+| `noise`               | Generators | `noise.mmg`                  | Density map input dropped (parameter only). |
+| `color_noise`         | Generators | `color_noise.mmg`            | Full. |
+| `sine_wave`           | Patterns   | `sine_wave.mmg`              | Full. |
+| `truchet`             | Patterns   | `truchet.mmg`                | Line and circle tiles. MM also has `truchet_generic`. |
+| `weave`               | Patterns   | `weave.mmg`                  | Width map input dropped. MM also has `weave2`, `diagonal_weave`, `weave_random`. |
+| `blend`               | Filters    | `blend.mmg`                  | 14 modes; mask input dropped (opacity parameter only); "Linear Light" mode dropped (MM ships no implementation). |
+| `colorize`            | Filters    | `colorize.mmg`               | Full, including gradient widget codegen. |
+| `curve`               | Filters    | `curve.mmg` (widget)         | Hermite tone curve per RGB channel, alpha pass-through. |
+| `transform`           | Filters    | `transform.mmg`              | Per-channel map inputs (tx/ty/r/sx/sy) dropped; scalar parameters only. |
+| `brightness_contrast` | Filters    | `brightness_contrast.mmg`    | Full. |
+| `normal_map`          | Filters    | `normal_map.mmg`             | MM's compound graph (buffer + switch + edge detect) flattened to the edge-detect core; "Default" output format only. |
+| `blur`                | Filters    | `gaussian_blur_x/_y.mmg`     | Self-contained 2D 13x13 kernel instead of MM's separable X/Y pair around buffers; composes without a buffer (expensively). |
+| `math`                | Filters    | `math.mmg`                   | 18 operations. MM also has `math_v3` for vec3. |
+| `invert`              | Filters    | `invert.mmg`                 | Full. |
+| `quantize`            | Filters    | `quantize.mmg`               | Full. |
+| `adjust_hsv`          | Filters    | `adjust_hsv.mmg`             | Full. MM also has `alter_hsv`. |
+| `remap`               | Filters    | `remap.mmg`                  | Full. |
+| `combine`             | Channels   | `combine.mmg`                | Full. |
+| `decompose`           | Channels   | `decompose.mmg`              | Full (4 grayscale outputs). |
+| `swap_channels`       | Channels   | `swap_channels.mmg`          | Full (10 sources per output channel). |
+| `reroute`             | Utility    | `gen_reroute.gd` (engine)    | Pass-through wiring helper, same concept. |
+| `buffer`              | Utility    | `gen_buffer.gd` (engine)     | Explicit RTT cut point, same semantics (size + format, dirty-driven re-render). |
+| `output`              | Output     | (none)                       | erhe-specific: bakes one texture into `Content_library`, optional assign-to-material. MM's nearest concept is the material node. |
+| `material_output`     | Output     | `material.mmg`               | PBR channel bake. MM also has `material_3d`, `material_unlit`, `material_dynamic`, `material_tesselated`, `material_raymarching` variants. |
+
+### Material Maker families not (yet) in erhe
+
+Counts are approximate `.mmg` file counts per family. "Planned" cites the
+phase in this document that names the family; families without a plan entry
+are candidates for future node-library expansion or explicitly out of scope.
+
+| Material Maker family        | ~Count | Representative nodes | erhe status |
+|------------------------------|--------|----------------------|-------------|
+| Gradients                    | 5      | `gradient`, `circular_gradient`, `radial_gradient`, `spiral_gradient`, `multigradient` | Missing. |
+| Noise variants               | 15     | `voronoi2`, `voronoi_triangle`, `clouds_noise`, `wavelet_noise`, `noise_anisotropic`, `noise_white`, `directional_noise`, `perlin_color`, `crystal`, `shard_fbm`, `fbm2..4` | Base `perlin`/`voronoi`/`fbm`/`noise` covered; variants missing. |
+| Deterministic patterns       | 20     | `pattern`, `arc_pavement`, `beehive`, `cairo`, `iching`, `runes`, `japanese_glyphs`, `roman_numerals`, `seven_segment`, `scratches`, `splines`, `polycurve`, `profile`, `dirt` | Missing; `cairo` named in Phase 4. |
+| Brick / weave variants       | 13     | `bricks2`, `bricks3`, `bricks_uneven*`, `skewed_bricks`, `weave2`, `diagonal_weave`, `weave_random` | Base `bricks`/`weave` covered; variants missing. |
+| Transform / UV warps         | 25     | `translate`, `rotate`, `scale`, `shear`, `skew`, `warp`, `directional_warp`, `multi_warp`, `warp_dilation*`, `swirl`, `twist`, `spherize`, `kaleidoscope`, `mirror`, `repeat`, `custom_uv`, `distort`, `refract`, `magnify` | Only the combined `transform` covered. Warp needs function-form inputs (supported) or buffers (exist). |
+| Tiling / splatter            | 10     | `tiler`, `tiler_advanced`, `splatter`, `circle_splatter`, `tile2x2`, `make_tileable` | Missing; `make_tileable` named in Phase 5. |
+| Color / tone filters         | 18     | `auto_tones`, `tonality`, `tones`, `tones_map/range/step`, `palettize`, `colormap`, `convert_colorspace`, `greyscale`, `ensure_greyscale`, `ensure_rgba`, `default_color`, `compare` | Missing. |
+| Image-processing filters     | 30     | `sharpen`, `emboss`, `edge_detect`, `dilate`, `morphology`, `denoiser`, `*_kuwahara`, `symmetric_nearest_neighbor`, `pixelize`, `supersample`, `fast_blur`, `directional_blur`, `slope_blur`, `bevel` | Only `blur` covered; `slope_blur`/`bevel`/`distance` named in Phase 5 (buffer-dependent). |
+| Height / normal / AO         | 12     | `normal2height`, `normal_blend`, `normal_map2`, `normal_map_convert`, `height_to_angle`, `height_to_offset`, `occlusion`, `hbao`, `slope`, `smooth_curvature` | Only `normal_map` covered. |
+| Fill family                  | 25     | `fill`, `fill_to_color`, `fill_to_gradient`, `fill_to_position`, `fill_to_random_color`, `fill_to_size`, `fill_to_uv`, `rgba_to_fill` | Missing; requires iterate-buffer machinery (`gen_iterate_buffer.gd`), which erhe does not have. |
+| 2D SDF                       | 51     | `sdcircle`, `sdbox`, `sdline`, `sdpolygon`, `sdstar`, `sdboolean`, `sdsmoothboolean`, `sdrepeat`, `sdmorph`, `sdshow` | Missing; `sdf2d` type + shape/ops/stroke/fill nodes named in Phase 4. |
+| 3D SDF + raymarching         | 42     | `sdf3d_sphere`, `sdf3d_box`, `sdf3d_boolean`, `sdf3d_revolution`, `raymarching`, `material_raymarching` | Out of scope (no `sdf3d` type planned). |
+| 3D / mesh-based textures     | 42     | `tex3d_*` (36), `mesh`, `mesh_curvature`, `brush_triplanar`, `sphere`, `box`, `mwf_*` workflow nodes | Out of scope (erhe texture graph is 2D `vec2 uv` only). |
+| Variations / randomization   | 11     | `variations_*`, `randomize`, `controlled_variations`, `iterate_variations`, `layer_variations` | Missing; per-node seed/reseed system (Phase 5) covers part of the use case. |
+| Painting                     | 3      | `brush`, `brush_3d`, `brush_select_from_id` | Out of scope (interactive paint pipeline). |
+| Bit packing                  | 4      | `pack_1x32_to_2x16`, `pack_2x16_to_1x32`, ... | Missing. |
+| Engine special nodes         | ~19    | `image`, `texture`, `text`, `webcam`, `switch`, `remote`, `comment`, `export`, `portal`, `graph` (subgraph/group), `iterate_buffer` | erhe has `reroute` + `buffer`; node groups named in Phase 6; `switch`/`image` are natural next candidates. |
 
 ---
 
