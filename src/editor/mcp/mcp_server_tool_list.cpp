@@ -30,6 +30,14 @@ void Mcp_server::refresh_tool_list()
     }});
     m_tool_infos.push_back({"get_viewports",        "List viewport windows: window title, bound scene name, and camera name. Use to verify which scene/camera each viewport shows (e.g. that opening a scene did not rebind pre-existing viewports).", schema_no_args()});
     m_tool_infos.push_back({"get_server_info",      "Get this editor MCP server's identity: name, version, process id (pid), build timestamp (compile time of the server), and bound port. Use it to detect a STALE editor: if the pid/build does not match the editor you just launched, another editor.exe is holding the port and your calls are hitting the wrong process.", schema_no_args()});
+    m_tool_infos.push_back({"set_window_visibility", "Show or hide an editor ImGui window by its title (e.g. \"Inventory\"). Windows do per-frame work only while visible, so headless verification uses this to open windows the default layout leaves closed. On an unknown title the error payload lists all window titles.", {
+        {"type", "object"},
+        {"properties", {
+            {"title",   {{"type", "string"},  {"description", "Window title, e.g. \"Inventory\""}}},
+            {"visible", {{"type", "boolean"}, {"description", "true shows the window (default), false hides it"}}}
+        }},
+        {"required", {"title"}}
+    }});
     m_tool_infos.push_back({"get_selection",        "Get currently selected items",                          schema_no_args()});
     m_tool_infos.push_back({"get_undo_redo_stack", "Get undo/redo operation stacks",                       schema_no_args()});
     m_tool_infos.push_back({"get_async_status",   "Get pending/running async operation counts",          schema_no_args()});

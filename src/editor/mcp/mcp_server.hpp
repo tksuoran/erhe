@@ -102,6 +102,7 @@ private:
     auto query_scene_settings   (const nlohmann::json& args) -> std::string;
     auto query_viewports        (const nlohmann::json& args) -> std::string;
     auto query_server_info      (const nlohmann::json& args) -> std::string;
+    auto action_set_window_visibility(const nlohmann::json& args) -> std::string;
     auto query_selection        (const nlohmann::json& args) -> std::string;
     auto query_undo_redo_stack  (const nlohmann::json& args) -> std::string;
     auto query_async_status     (const nlohmann::json& args) -> std::string;

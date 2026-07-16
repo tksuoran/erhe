@@ -116,6 +116,8 @@ erhe_target_sources_grouped(
     assets/asset_paths.hpp
     assets/asset_reference.cpp
     assets/asset_reference.hpp
+    assets/asset_reference_config.cpp
+    assets/asset_reference_config.hpp
     brushes/brush.cpp
     brushes/brush.hpp
     brushes/brush_placement.cpp
@@ -721,6 +723,7 @@ erhe_codegen_generate(
         "${_config_defs}/add_lights_args.py"
         "${_config_defs}/add_room_args.py"
         "${_config_defs}/add_cameras_args.py"
+        "${_config_defs}/asset_reference_data.py"
 )
 
 set(_config_sources
@@ -744,6 +747,9 @@ set(_config_sources
     ${_config_out}/operation_params.hpp
     ${_config_out}/operation_params_serialization.hpp
     ${_config_out}/operation_params.cpp
+    ${_config_out}/asset_reference_data.hpp
+    ${_config_out}/asset_reference_data_serialization.hpp
+    ${_config_out}/asset_reference_data.cpp
     ${_config_out}/inventory_slot.hpp
     ${_config_out}/inventory_slot_serialization.hpp
     ${_config_out}/inventory_slot.cpp

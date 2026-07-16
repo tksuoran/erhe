@@ -54,6 +54,14 @@ public:
     // uid addressing (plan D1).
     auto resolve(Asset_manager& manager) -> const std::shared_ptr<erhe::Item_base>&;
 
+    // Adopt an already-loaded asset object (e.g. a drag-and-drop payload):
+    // sets the key from the manager's make_key() and registers this
+    // reference as a user of exactly that object. Deliberately NOT a
+    // re-resolution through the registry - a name lookup could select a
+    // different same-named object (e.g. a builtin shadowing a scene copy).
+    // A null item clears the reference.
+    void adopt(Asset_manager& manager, const std::shared_ptr<erhe::Item_base>& item);
+
     [[nodiscard]] auto get() const -> const std::shared_ptr<erhe::Item_base>&; // null while unresolved / failed
 
     template <typename T>

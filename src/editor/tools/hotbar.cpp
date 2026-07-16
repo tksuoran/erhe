@@ -50,6 +50,8 @@
 #include "erhe_utility/bit_helpers.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <fmt/format.h>
+
 #include <algorithm>
 #include <cmath>
 
@@ -97,6 +99,16 @@
 namespace editor {
 
 using glm::vec3;
+
+auto Slot_entry::get_brush() const -> std::shared_ptr<Brush>
+{
+    return brush.get_as<Brush>();
+}
+
+auto Slot_entry::get_material() const -> std::shared_ptr<erhe::primitive::Material>
+{
+    return material.get_as<erhe::primitive::Material>();
+}
 
 namespace {
 
@@ -579,6 +591,14 @@ void Hotbar::get_all_tools()
 void Hotbar::set_slots(const std::vector<Slot_entry>& slots)
 {
     m_slots      = slots;
+    // The copies are their own asset userships: label them as the hotbar's
+    // so unload refusals / query_asset_manager distinguish them from the
+    // Inventory window's authoritative row ("inventory hotbar slot N").
+    for (std::size_t i = 0; i < m_slots.size(); ++i) {
+        const std::string label = fmt::format("hotbar slot {}", i + 1);
+        m_slots[i].brush   .set_user_label(label);
+        m_slots[i].material.set_user_label(label);
+    }
     m_slot_first = 0;
     m_slot_last  = m_slots.empty() ? 0 : m_slots.size() - 1;
     if (m_slot > m_slot_last) {
@@ -597,16 +617,16 @@ void Hotbar::rebuild_if_needed()
 
 void Hotbar::collect_pinned_items(std::unordered_set<const erhe::Item_base*>& out_pinned) const
 {
+    // The slot brushes / materials themselves are declared asset-manager
+    // users since R2 (Asset_reference userships; the watchdog covers them
+    // through Asset_manager::is_pinned). What the manager cannot see is the
+    // TRANSITIVE pin: a slot-held brush keeps its own material alive via
+    // the brush's shared_ptr, with no usership on the material - whitelist
+    // just that.
     for (const Slot_entry& slot : m_slots) {
-        if (slot.brush) {
-            out_pinned.insert(slot.brush.get());
-            // A brush-with-material slot pins the brush's material too.
-            if (slot.brush->get_material()) {
-                out_pinned.insert(slot.brush->get_material().get());
-            }
-        }
-        if (slot.material) {
-            out_pinned.insert(slot.material.get());
+        const std::shared_ptr<Brush> brush = slot.get_brush();
+        if (brush && brush->get_material()) {
+            out_pinned.insert(brush->get_material().get());
         }
     }
 }
@@ -875,8 +895,9 @@ void Hotbar::handle_slot_update()
     if ((m_slot >= m_slot_first) && (m_slot <= m_slot_last)) {
         const Slot_entry& entry = m_slots.at(m_slot);
         m_context.tools->set_priority_tool(entry.tool);
-        if (entry.brush && (m_context.brush_tool != nullptr)) {
-            m_context.brush_tool->set_active_brush(entry.brush);
+        const std::shared_ptr<Brush> brush = entry.get_brush();
+        if (brush && (m_context.brush_tool != nullptr)) {
+            m_context.brush_tool->set_active_brush(brush);
         }
     }
 }
@@ -977,10 +998,12 @@ void Hotbar::slot_button(const uint32_t id, Slot_entry& entry)
     ImGui::PushID(id);
 
     // Brush slot: render thumbnail
-    if (entry.brush && m_context.thumbnails && m_context.brush_preview) {
+    const std::shared_ptr<Brush>                     entry_brush    = entry.get_brush();
+    const std::shared_ptr<erhe::primitive::Material> entry_material = entry.get_material();
+    if (entry_brush && m_context.thumbnails && m_context.brush_preview) {
         Tool* tool = entry.tool;
         const bool is_boosted = (tool != nullptr) && (tool->get_priority_boost() > 0);
-        std::shared_ptr<Brush> brush = entry.brush;
+        std::shared_ptr<Brush> brush = entry_brush;
         const bool thumbnail_drawn = m_context.thumbnails->draw(
             brush,
             [this, brush](const std::shared_ptr<erhe::graphics::Texture>& texture, unsigned int texture_layer, int64_t time) {
@@ -1007,11 +1030,11 @@ void Hotbar::slot_button(const uint32_t id, Slot_entry& entry)
                 }
             }
         }
-    } else if (entry.material && m_context.thumbnails && m_context.material_preview) {
+    } else if (entry_material && m_context.thumbnails && m_context.material_preview) {
         // Material slot: render thumbnail
         Tool* tool = entry.tool;
         const bool is_boosted = (tool != nullptr) && (tool->get_priority_boost() > 0);
-        std::shared_ptr<erhe::primitive::Material> material = entry.material;
+        std::shared_ptr<erhe::primitive::Material> material = entry_material;
         const bool thumbnail_drawn = m_context.thumbnails->draw(
             material,
             [this, material](const std::shared_ptr<erhe::graphics::Texture>& texture, unsigned int /*texture_layer*/, int64_t) {

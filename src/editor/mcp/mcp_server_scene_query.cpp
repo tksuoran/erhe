@@ -551,6 +551,46 @@ auto Mcp_server::query_server_info(const json& args) -> std::string
     }).dump();
 }
 
+auto Mcp_server::action_set_window_visibility(const json& args) -> std::string
+{
+    // Show / hide an editor ImGui window by its title. Windows do per-frame
+    // work only while visible (e.g. the Inventory window resolves pending
+    // slot asset references in imgui()), so headless verification needs a
+    // way to open windows the procedural default layout leaves closed.
+    if (m_context.imgui_windows == nullptr) {
+        json r = make_text_content("ImGui windows not available");
+        r["isError"] = true;
+        return r.dump();
+    }
+    const std::string title   = args.value("title", "");
+    const bool        visible = args.value("visible", true);
+    for (erhe::imgui::Imgui_window* window : m_context.imgui_windows->get_windows()) {
+        if ((window != nullptr) && (window->get_title() == title)) {
+            if (visible) {
+                window->show_window();
+            } else {
+                window->hide_window();
+            }
+            return make_json_content({
+                {"title",   title},
+                {"visible", visible}
+            }).dump();
+        }
+    }
+    json titles = json::array();
+    for (erhe::imgui::Imgui_window* window : m_context.imgui_windows->get_windows()) {
+        if (window != nullptr) {
+            titles.push_back(window->get_title());
+        }
+    }
+    json r = make_json_content({
+        {"error",  "Window not found: " + title},
+        {"titles", titles}
+    });
+    r["isError"] = true;
+    return r.dump();
+}
+
 auto Mcp_server::query_material_details(const json& args) -> std::string
 {
     const std::string scene_name    = args.value("scene_name", "");

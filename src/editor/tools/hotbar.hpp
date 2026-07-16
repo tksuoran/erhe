@@ -1,5 +1,6 @@
 #pragma once
 
+#include "assets/asset_reference.hpp"
 #include "tools/tool.hpp"
 #include "tools/tool_window.hpp"
 
@@ -64,14 +65,23 @@ class Headset_view;
 class Slot_entry
 {
 public:
-    Tool*                                      tool    {nullptr};
-    std::shared_ptr<Brush>                     brush   {};  // Non-null for brush slots
-    std::shared_ptr<erhe::primitive::Material> material{}; // Non-null for material slots
-    erhe::commands::Command*                   command {nullptr}; // Non-null for operation slots
-    Operation_params                           operation_params{}; // Frozen parameter snapshot for the operation slot
-    std::string                                graph_node_kind {}; // Non-empty (with type) for graph-node slots ("geometry_graph" / "texture_graph")
-    std::string                                graph_node_type {}; // Node factory type; non-empty means graph-node slot
-    std::string                                graph_node_label{}; // Palette display label for the slot button
+    Tool*                    tool    {nullptr};
+    // Brush / material slots hold Asset_references (asset-manager plan R2):
+    // a resolved reference is a declared user of the asset - the manager
+    // names the slot in unload refusals and keeps the item reported as
+    // intentionally pinned across scene close (persistent inventory). A
+    // reference may carry a not-yet-resolved key (its content library has
+    // not loaded); the key persists through write_config regardless.
+    Asset_reference          brush   {};  // Non-empty key for brush slots
+    Asset_reference          material{};  // Non-empty key for material slots
+    erhe::commands::Command* command {nullptr}; // Non-null for operation slots
+    Operation_params         operation_params{}; // Frozen parameter snapshot for the operation slot
+    std::string              graph_node_kind {}; // Non-empty (with type) for graph-node slots ("geometry_graph" / "texture_graph")
+    std::string              graph_node_type {}; // Node factory type; non-empty means graph-node slot
+    std::string              graph_node_label{}; // Palette display label for the slot button
+
+    [[nodiscard]] auto get_brush   () const -> std::shared_ptr<Brush>;
+    [[nodiscard]] auto get_material() const -> std::shared_ptr<erhe::primitive::Material>;
 };
 
 class Toggle_menu_visibility_command : public erhe::commands::Command

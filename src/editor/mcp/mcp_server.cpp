@@ -388,6 +388,7 @@ auto Mcp_server::process_queued_requests() -> int
             { "get_material_details",           &Mcp_server::query_material_details               },
             { "get_viewports",                  &Mcp_server::query_viewports                      },
             { "get_server_info",                &Mcp_server::query_server_info                    },
+            { "set_window_visibility",          &Mcp_server::action_set_window_visibility         },
             { "get_selection",                  &Mcp_server::query_selection                      },
             { "get_undo_redo_stack",            &Mcp_server::query_undo_redo_stack                },
             { "get_async_status",               &Mcp_server::query_async_status                   },

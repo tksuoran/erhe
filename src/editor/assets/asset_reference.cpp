@@ -152,6 +152,20 @@ auto Asset_reference::resolve(Asset_manager& manager) -> const std::shared_ptr<e
     return m_resolved;
 }
 
+void Asset_reference::adopt(Asset_manager& manager, const std::shared_ptr<erhe::Item_base>& item)
+{
+    release_usership();
+    if (!item) {
+        m_key = Asset_key{};
+        return;
+    }
+    m_key      = manager.make_key(*item);
+    m_resolved = item;
+    m_manager  = &manager;
+    m_state    = Asset_resolve_state::resolved;
+    manager.register_user(this);
+}
+
 auto Asset_reference::get() const -> const std::shared_ptr<erhe::Item_base>&
 {
     return m_resolved;

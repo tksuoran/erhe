@@ -68,12 +68,15 @@ private:
     int                     m_row_count;
     int                     m_hotbar_slot_count;
 
-    // Saved config slot names (resolved in collect_tools)
+    // Saved config slot names (resolved in collect_tools). Brush / material
+    // references are NOT here: their Asset_keys are set straight into the
+    // Slot_entry Asset_references at construction and resolve lazily
+    // (resolve_slot_references), so an unresolved key survives write_config
+    // by construction - a not-yet-loaded brush is never silently degraded
+    // to its bare tool by the next save.
     struct Saved_slot_name
     {
         std::string      tool_name;
-        std::string      brush_name;
-        std::string      material_name;
         std::string      command_name;
         Operation_params operation_params{};
         std::string      graph_node_kind;
@@ -83,29 +86,16 @@ private:
     std::vector<Saved_slot_name> m_saved_grid_names;
     std::vector<Saved_slot_name> m_saved_hotbar_names;
 
-    // Brushes / materials referenced by saved slots resolve by name against
-    // the scene content libraries. The libraries may not be populated yet at
-    // collect_tools() time (scenes can load asynchronously), so unresolved
-    // names are retried each frame the window renders, and write_config()
-    // preserves them verbatim until they resolve - a not-yet-loaded brush
-    // must not be silently degraded to its bare tool by the next save.
-    struct Pending_slot_item
-    {
-        bool        hotbar{false}; // grid slot otherwise
-        int         index {-1};
-        std::string brush_name;
-        std::string material_name;
-    };
-    std::vector<Pending_slot_item> m_pending_slot_items;
-
-    // Assigns resolved items into their slots and drops completed entries;
-    // returns true when a hotbar slot changed (caller re-applies the hotbar).
-    auto resolve_pending_slot_items() -> bool;
-    // Forgets an unresolved name once the user clears / overwrites its slot.
-    void drop_pending_slot_item(bool hotbar, int index);
-    [[nodiscard]] auto find_pending_slot_item(bool hotbar, int index) const -> const Pending_slot_item*;
-    [[nodiscard]] auto find_brush_by_name   (const std::string& name) const -> std::shared_ptr<Brush>;
-    [[nodiscard]] auto find_material_by_name(const std::string& name) const -> std::shared_ptr<erhe::primitive::Material>;
+    // Per-frame resolve of slot references still carrying an unresolved key
+    // (their content library was not loaded yet - scenes load
+    // asynchronously; scene_local misses do not latch). Returns true when a
+    // hotbar slot resolved (caller re-applies the hotbar).
+    auto resolve_slot_references() -> bool;
+    // (Re)stamps the slot's asset-usership labels ("inventory grid slot N" /
+    // "inventory hotbar slot N") so unload refusals and query_asset_manager
+    // name the holding slot; applied after any slot content change (labels
+    // travel with Slot_entry copies in swaps).
+    static void set_slot_labels(Slot_entry& slot, bool hotbar, int index);
 };
 
 }
