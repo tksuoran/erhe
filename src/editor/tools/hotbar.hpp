@@ -14,8 +14,12 @@
 
 #include <memory>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
+namespace erhe {
+    class Item_base;
+}
 namespace erhe::commands {
     class Commands;
 }
@@ -160,6 +164,11 @@ public:
     void get_all_tools();
     void set_slots             (const std::vector<Slot_entry>& slots);
     void rebuild_if_needed     ();
+
+    // Scene-close leak watchdog whitelist: slot-held items (brushes, their
+    // materials, materials) are intentionally kept alive across scene close
+    // (persistent inventory; see CLAUDE.md "Scene-hosted references").
+    void collect_pinned_items  (std::unordered_set<const erhe::Item_base*>& out_pinned) const;
 
     // Number of number-key hotbar slots (Minecraft-style: keys 1..9,0 -> slots 1..10).
     static constexpr std::size_t key_slot_count = 10;

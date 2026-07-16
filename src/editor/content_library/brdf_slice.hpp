@@ -1,5 +1,7 @@
 #pragma once
 
+#include "app_message.hpp"
+#include "erhe_message_bus/message_bus.hpp"
 #include "erhe_rendergraph/texture_rendergraph_node.hpp"
 #include "erhe_graphics/render_pipeline.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
@@ -16,6 +18,7 @@ namespace editor {
 
 class Brdf_slice;
 class App_context;
+class App_message_bus;
 class Programs;
 
 class Brdf_slice_rendergraph_node : public erhe::rendergraph::Texture_rendergraph_node
@@ -56,6 +59,7 @@ public:
         erhe::rendergraph::Rendergraph&         rendergraph,
         erhe::scene_renderer::Forward_renderer& forward_renderer,
         App_context&                            app_context,
+        App_message_bus&                        app_message_bus,
         Programs&                               programs
     );
 
@@ -66,9 +70,16 @@ public:
     float incident_phi{0.0f};
 
 private:
+    // Scene close: drop the inspected material when the closing scene's
+    // content library hosts it (write-only cache; it would keep the dead
+    // scene's material alive).
+    void on_close_scene(erhe::Item_host* closing_host);
+
     erhe::rendergraph::Rendergraph&              m_rendergraph;
     App_context&                                 m_context;
     std::shared_ptr<Brdf_slice_rendergraph_node> m_node;
+
+    erhe::message_bus::Subscription<Close_scene_message> m_close_scene_subscription;
 };
 
 }

@@ -2,13 +2,18 @@
 
 #include "animation/animation_keying.hpp"
 
+#include "app_message.hpp"
+#include "erhe_message_bus/message_bus.hpp"
+
 #include <memory>
 
+namespace erhe        { class Item_host; }
 namespace erhe::scene { class Animation; }
 
 namespace editor {
 
 class App_context;
+class App_message_bus;
 
 // Owns animation playback state for the editor: the active animation, the
 // play position and the transport state (playing / looping / speed).
@@ -21,7 +26,7 @@ class App_context;
 class Animation_player
 {
 public:
-    explicit Animation_player(App_context& context);
+    Animation_player(App_context& context, App_message_bus& app_message_bus);
 
     // Called once per frame from Editor::tick() with the wall-clock frame
     // duration in seconds.
@@ -69,7 +74,14 @@ private:
     void refresh_time_range();
     void apply();
 
+    // Scene close: drop the active animation when the closing scene's
+    // content library hosts it - stops the player applying a dead scene's
+    // animation every frame.
+    void on_close_scene(erhe::Item_host* closing_host);
+
     App_context& m_context;
+
+    erhe::message_bus::Subscription<Close_scene_message> m_close_scene_subscription;
 
     std::shared_ptr<erhe::scene::Animation> m_animation;
 

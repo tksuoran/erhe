@@ -658,6 +658,26 @@ void Inventory_window::apply_hotbar()
     m_context.hotbar->set_slots(m_hotbar_slots);
 }
 
+void Inventory_window::collect_pinned_items(std::unordered_set<const erhe::Item_base*>& out_pinned) const
+{
+    const auto collect = [&out_pinned](const std::vector<Slot_entry>& slots) {
+        for (const Slot_entry& slot : slots) {
+            if (slot.brush) {
+                out_pinned.insert(slot.brush.get());
+                // A brush-with-material slot pins the brush's material too.
+                if (slot.brush->get_material()) {
+                    out_pinned.insert(slot.brush->get_material().get());
+                }
+            }
+            if (slot.material) {
+                out_pinned.insert(slot.material.get());
+            }
+        }
+    };
+    collect(m_grid_slots);
+    collect(m_hotbar_slots);
+}
+
 void Inventory_window::write_config(Inventory_config& config) const
 {
     config.column_count      = m_column_count;

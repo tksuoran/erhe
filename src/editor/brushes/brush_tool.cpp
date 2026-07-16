@@ -188,6 +188,11 @@ Brush_tool::Brush_tool(
             on_hover_mesh(message);
         }
     );
+    m_close_scene_subscription = app_message_bus.close_scene.subscribe(
+        [this](Close_scene_message& message) {
+            on_close_scene(static_cast<erhe::Item_host*>(message.scene_root.get()));
+        }
+    );
 
     m_grid_scale = scene_config.object_scale;
 
@@ -208,6 +213,19 @@ void Brush_tool::set_active_brush(const std::shared_ptr<Brush>& brush)
 void Brush_tool::clear_active_brush()
 {
     m_active_brush.reset();
+}
+
+void Brush_tool::on_close_scene(erhe::Item_host* const closing_host)
+{
+    if (m_active_brush && (m_active_brush->get_item_host() == closing_host)) {
+        m_active_brush.reset();
+    }
+    if (m_drag_and_drop_brush && (m_drag_and_drop_brush->get_item_host() == closing_host)) {
+        m_drag_and_drop_brush.reset();
+    }
+    if (m_preview_node && (m_preview_node->get_item_host() == closing_host)) {
+        remove_preview_mesh();
+    }
 }
 
 void Brush_tool::on_hover_scene_view(Hover_scene_view_message& message)

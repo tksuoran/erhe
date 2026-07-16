@@ -1,6 +1,7 @@
 #include "preview/material_preview.hpp"
 
 #include "app_context.hpp"
+#include "app_message_bus.hpp"
 #include "brushes/brush.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
@@ -37,6 +38,7 @@ Material_preview::Material_preview(
     erhe::graphics::Device&            graphics_device,
     erhe::graphics::Command_buffer&    init_command_buffer,
     App_context&                       app_context,
+    App_message_bus&                   app_message_bus,
     erhe::scene_renderer::Mesh_memory& mesh_memory
 )
     : Scene_preview{graphics_device, init_command_buffer, app_context}
@@ -45,6 +47,12 @@ Material_preview::Material_preview(
 
     resize(256, 256);
     update_rendertarget(graphics_device);
+
+    m_close_scene_subscription = app_message_bus.close_scene.subscribe(
+        [this](Close_scene_message& message) {
+            on_close_scene(static_cast<erhe::Item_host*>(message.scene_root.get()));
+        }
+    );
 }
 
 Material_preview::~Material_preview() noexcept
@@ -161,6 +169,20 @@ void Material_preview::render_preview(
     set_clear_color(glm::vec4{0.0f, 0.0f, 0.0f, 0.0f});
     update_rendertarget(*m_context.graphics_device);
     render_preview(material);
+}
+
+void Material_preview::on_close_scene(erhe::Item_host* const closing_host)
+{
+    if (!m_last_material || (m_last_material->get_item_host() != closing_host)) {
+        return;
+    }
+    if (m_content_library && m_content_library->materials) {
+        m_content_library->materials->remove_all_children_recursively();
+    }
+    if (m_mesh && !m_mesh->get_mutable_primitives().empty()) {
+        m_mesh->get_mutable_primitives().front().material.reset();
+    }
+    m_last_material.reset();
 }
 
 void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Material>& material)

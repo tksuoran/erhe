@@ -8,6 +8,7 @@
 
 #include <memory>
 
+namespace erhe            { class Item_host; }
 namespace erhe::imgui     { class Imgui_windows; }
 namespace erhe::primitive { class Material; }
 
@@ -79,7 +80,13 @@ public:
 private:
     [[nodiscard]] auto get_hover_mesh() const -> const Hover_entry*;
 
+    // Scene close: drop the paint material when the closing scene's content
+    // library hosts it, so the tool does not keep a dead scene's material
+    // alive (and paint it into other scenes).
+    void on_close_scene(erhe::Item_host* closing_host);
+
     erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
+    erhe::message_bus::Subscription<Close_scene_message>      m_close_scene_subscription;
     Material_paint_command m_paint_command;
     Material_pick_command  m_pick_command;
 

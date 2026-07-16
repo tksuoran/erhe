@@ -6,8 +6,10 @@
 
 #include <memory>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
+namespace erhe            { class Item_base; }
 namespace erhe::commands { class Command; }
 
 struct Inventory_config;
@@ -44,6 +46,11 @@ public:
 
     // Push current hotbar slot state to Hotbar
     void apply_hotbar();
+
+    // Scene-close leak watchdog whitelist: slot-held items (brushes, their
+    // materials, materials) are intentionally kept alive across scene close
+    // (persistent inventory; see CLAUDE.md "Scene-hosted references").
+    void collect_pinned_items(std::unordered_set<const erhe::Item_base*>& out_pinned) const;
 
 private:
     auto resolve_tool(const std::string& tool_name) const -> Tool*;

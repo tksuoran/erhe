@@ -3,6 +3,7 @@
 #include "animation/animation_keying.hpp"
 #include "animation/animation_player.hpp"
 #include "app_context.hpp"
+#include "app_message_bus.hpp"
 #include "app_scenes.hpp"
 #include "content_library/content_library.hpp"
 #include "operations/animation_edit_operation.hpp"
@@ -72,12 +73,26 @@ const char* const c_component_names[4] = { "X", "Y", "Z", "W" };
 Animation_window::Animation_window(
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
-    App_context&                 app_context
+    App_context&                 app_context,
+    App_message_bus&             app_message_bus
 )
     : Imgui_window{imgui_renderer, imgui_windows, "Animation", "animation"}
     , m_context   {app_context}
 {
     set_min_size(480.0f, 200.0f);
+
+    m_close_scene_subscription = app_message_bus.close_scene.subscribe(
+        [this](Close_scene_message& message) {
+            on_close_scene(static_cast<erhe::Item_host*>(message.scene_root.get()));
+        }
+    );
+}
+
+void Animation_window::on_close_scene(erhe::Item_host* const closing_host)
+{
+    if (m_animation && (m_animation->get_item_host() == closing_host)) {
+        set_animation({});
+    }
 }
 
 void Animation_window::set_animation(const std::shared_ptr<erhe::scene::Animation>& animation)

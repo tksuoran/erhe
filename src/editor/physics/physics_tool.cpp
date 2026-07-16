@@ -128,6 +128,11 @@ Physics_tool::Physics_tool(
             on_message(message);
         }
     );
+    m_close_scene_subscription = app_message_bus.close_scene.subscribe(
+        [this](Close_scene_message& message) {
+            on_close_scene(static_cast<erhe::Item_host*>(message.scene_root.get()));
+        }
+    );
 
     m_drag_command.set_host(this);
 }
@@ -372,6 +377,13 @@ void Physics_tool::release_target()
     if (m_constraint_world_point_rigid_body) {
         m_physics_world->remove_rigid_body(m_constraint_world_point_rigid_body.get());
         m_constraint_world_point_rigid_body.reset();
+    }
+}
+
+void Physics_tool::on_close_scene(erhe::Item_host* const closing_host)
+{
+    if (m_last_target_mesh && (m_last_target_mesh->get_item_host() == closing_host)) {
+        m_last_target_mesh.reset();
     }
 }
 

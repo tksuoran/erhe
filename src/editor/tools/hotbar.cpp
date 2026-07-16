@@ -595,6 +595,22 @@ void Hotbar::rebuild_if_needed()
     }
 }
 
+void Hotbar::collect_pinned_items(std::unordered_set<const erhe::Item_base*>& out_pinned) const
+{
+    for (const Slot_entry& slot : m_slots) {
+        if (slot.brush) {
+            out_pinned.insert(slot.brush.get());
+            // A brush-with-material slot pins the brush's material too.
+            if (slot.brush->get_material()) {
+                out_pinned.insert(slot.brush->get_material().get());
+            }
+        }
+        if (slot.material) {
+            out_pinned.insert(slot.material.get());
+        }
+    }
+}
+
 void Hotbar::on_hover_scene_view_message(Hover_scene_view_message& message)
 {
     Scene_view* const old_scene_view = get_hover_scene_view();

@@ -12,6 +12,9 @@
 
 #include <memory>
 
+namespace erhe {
+    class Item_host;
+}
 namespace erhe::physics {
     class IConstraint;
     class IRigid_body;
@@ -85,11 +88,15 @@ public:
 private:
     void on_message(Hover_scene_view_message& message);
     void tool_hover(Scene_view* scene_view);
+    // Scene close: drop the last-target cache when the closing scene hosts
+    // it (write-only debug state; it would keep the dead scene's mesh alive).
+    void on_close_scene(erhe::Item_host* closing_host);
 
     void move_drag_point_instant  (glm::vec3 position);
     void move_drag_point_kinematic(glm::vec3 position);
 
     erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
+    erhe::message_bus::Subscription<Close_scene_message>      m_close_scene_subscription;
 
     // Commands
     Physics_tool_drag_command                 m_drag_command;

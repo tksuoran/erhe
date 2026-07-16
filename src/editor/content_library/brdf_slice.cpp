@@ -3,8 +3,12 @@
 #include "content_library/brdf_slice.hpp"
 
 #include "app_context.hpp"
+#include "app_message_bus.hpp"
 #include "editor_log.hpp"
 #include "renderers/programs.hpp"
+#include "scene/scene_root.hpp"
+
+#include "erhe_primitive/material.hpp"
 
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
@@ -131,6 +135,7 @@ Brdf_slice::Brdf_slice(
     erhe::rendergraph::Rendergraph&         rendergraph,
     erhe::scene_renderer::Forward_renderer& forward_renderer,
     App_context&                            app_context,
+    App_message_bus&                        app_message_bus,
     Programs&                               programs
 )
     : m_rendergraph{rendergraph}
@@ -139,6 +144,19 @@ Brdf_slice::Brdf_slice(
         std::make_shared<Brdf_slice_rendergraph_node>(rendergraph, forward_renderer, *this, programs)
     }
 {
+    m_close_scene_subscription = app_message_bus.close_scene.subscribe(
+        [this](Close_scene_message& message) {
+            on_close_scene(static_cast<erhe::Item_host*>(message.scene_root.get()));
+        }
+    );
+}
+
+void Brdf_slice::on_close_scene(erhe::Item_host* const closing_host)
+{
+    erhe::primitive::Material* const material = m_node ? m_node->get_material() : nullptr;
+    if ((material != nullptr) && (material->get_item_host() == closing_host)) {
+        m_node->set_material({});
+    }
 }
 
 auto Brdf_slice::get_node() const -> Brdf_slice_rendergraph_node*

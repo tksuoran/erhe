@@ -2,7 +2,9 @@
 
 #include "animation/animation_edit.hpp"
 
+#include "app_message.hpp"
 #include "erhe_imgui/imgui_window.hpp"
+#include "erhe_message_bus/message_bus.hpp"
 
 #include <imgui/imgui.h>
 
@@ -11,6 +13,7 @@
 #include <string>
 #include <vector>
 
+namespace erhe        { class Item_host; }
 namespace erhe::imgui { class Imgui_windows; }
 namespace erhe::scene {
     class Animation;
@@ -20,6 +23,7 @@ namespace erhe::scene {
 namespace editor {
 
 class App_context;
+class App_message_bus;
 
 // Animation timeline / curve graph editor (issue #243), in the spirit of
 // Blender's Graph Editor. Shows the keyframe curves of a glTF animation as
@@ -39,7 +43,8 @@ public:
     Animation_window(
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
-        App_context&                 app_context
+        App_context&                 app_context,
+        App_message_bus&             app_message_bus
     );
 
     // Implements Imgui_window
@@ -93,6 +98,10 @@ private:
         shown_channels   = 2  // keys of the channels visible in the curve editor
     };
 
+    // Scene close: drop the edited animation when the closing scene's
+    // content library hosts it (set_animation({}) also clears the player).
+    void on_close_scene     (erhe::Item_host* closing_host);
+
     void animation_combo    ();
     void transport_toolbar  ();
     void keying_toolbar     ();
@@ -134,6 +143,8 @@ private:
     [[nodiscard]] auto y_to_value(float y)     const -> float;
 
     App_context& m_context;
+
+    erhe::message_bus::Subscription<Close_scene_message> m_close_scene_subscription;
 
     std::shared_ptr<erhe::scene::Animation> m_animation;
 

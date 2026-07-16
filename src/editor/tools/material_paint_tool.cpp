@@ -122,6 +122,11 @@ Material_paint_tool::Material_paint_tool(
             Tool::on_message(message);
         }
     );
+    m_close_scene_subscription = app_message_bus.close_scene.subscribe(
+        [this](Close_scene_message& message) {
+            on_close_scene(static_cast<erhe::Item_host*>(message.scene_root.get()));
+        }
+    );
 }
 
 auto Material_paint_tool::get_hover_mesh() const -> const Hover_entry*
@@ -170,6 +175,13 @@ void Material_paint_tool::from_drag_and_drop(const std::shared_ptr<erhe::primiti
     }
     auto& hover_primitive = mesh->get_mutable_primitives().at(hover_entry->scene_mesh_primitive_index);
     hover_primitive.material = material;
+}
+
+void Material_paint_tool::on_close_scene(erhe::Item_host* const closing_host)
+{
+    if (m_material && (m_material->get_item_host() == closing_host)) {
+        m_material.reset();
+    }
 }
 
 auto Material_paint_tool::on_paint() -> bool

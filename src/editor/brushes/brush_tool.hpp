@@ -14,6 +14,8 @@
 
 struct Scene_config;
 
+namespace erhe { class Item_host; }
+
 namespace editor {
 
 class Brush;
@@ -111,6 +113,13 @@ public:
 private:
     void on_hover_scene_view               (Hover_scene_view_message& message);
     void on_hover_mesh                     (Hover_mesh_message& message);
+    // Scene close: drop tool state referring to the closing scene's content -
+    // the active / drag-and-drop brush hosted by its content library, and the
+    // preview mesh/node parented into it (a close can arrive mid-hover). A
+    // hotbar slot holding the same brush intentionally keeps it alive;
+    // clicking the slot re-activates the now host-less orphan (brush payloads
+    // are self-contained).
+    void on_close_scene                    (erhe::Item_host* closing_host);
     void update_preview_mesh               ();
     void do_insert_operation               (Brush& brush);
     void add_preview_mesh                  (Brush& brush);
@@ -127,6 +136,7 @@ private:
 
     erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
     erhe::message_bus::Subscription<Hover_mesh_message>       m_hover_mesh_subscription;
+    erhe::message_bus::Subscription<Close_scene_message>      m_close_scene_subscription;
     Brush_preview_command                   m_preview_command;
     Brush_insert_command                    m_insert_command;
     Brush_pick_command                      m_pick_command;

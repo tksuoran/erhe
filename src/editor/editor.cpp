@@ -474,8 +474,9 @@ public:
         //    - Network_window
         m_app_message_bus->update(); // Flushes queued messages
 
-        // Scene-close leak watchdog (armed by on_close_scene, which runs
-        // from the message pump above).
+        // Scene-close leak watchdog: arms watches for scenes closed by the
+        // pump above (after EVERY close_scene subscriber has run) and checks
+        // previously armed watches.
         update_scene_close_leak_watches();
 
         // Apply physics updates
@@ -1008,7 +1009,7 @@ public:
 
             m_clipboard            = std::make_unique<Clipboard     >(commands, m_app_context, app_message_bus);
             m_prefab_library       = std::make_unique<Prefab_library>(m_app_context);
-            m_animation_player     = std::make_unique<Animation_player>(m_app_context);
+            m_animation_player     = std::make_unique<Animation_player>(m_app_context, app_message_bus);
             m_app_scenes           = std::make_unique<App_scenes    >(m_app_context);
             m_app_windows          = std::make_unique<App_windows   >(m_app_context, commands);
             m_viewport_scene_views = std::make_unique<Scene_views   >(m_editor_settings.viewport, commands, m_app_context, app_message_bus);
@@ -1531,7 +1532,7 @@ public:
                 m_gradient_editor        = std::make_unique<Gradient_editor                 >(*m_imgui_renderer.get(), *m_imgui_windows.get());
                 m_icon_browser           = std::make_unique<Icon_browser                    >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_sheet_window           = std::make_unique<Sheet_window                    >(*m_commands.get(),       *m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
-                m_animation_window       = std::make_unique<Animation_window                >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
+                m_animation_window       = std::make_unique<Animation_window                >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
                 m_layers_window          = std::make_unique<Layers_window                   >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_network_window         = std::make_unique<Network_window                  >(m_editor_settings.network, *m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_operations             = std::make_unique<Operations                      >(m_editor_settings.scene, *m_commands.get(),       *m_imgui_renderer.get(), *m_imgui_windows.get(), m_app_context, *m_app_message_bus.get());
@@ -1745,6 +1746,7 @@ public:
                     *m_rendergraph.get(),
                     *m_forward_renderer.get(),
                     m_app_context,
+                    *m_app_message_bus.get(),
                     *m_programs.get()
                 );
                 m_debug_view_window = std::make_unique<Depth_visualization_window>(
@@ -1780,6 +1782,7 @@ public:
                         *m_graphics_device.get(),
                         *m_app_context.current_command_buffer,
                         m_app_context,
+                        *m_app_message_bus.get(),
                         *m_mesh_memory.get()
                     );
                     m_brush_preview = std::make_unique<Brush_preview>(
@@ -2584,6 +2587,12 @@ public:
         // its own here - the window's resolved shared_ptr keeps the asset
         // alive - so clear it explicitly, or the window keeps showing (and
         // editing) content of the closed scene.
+        //
+        // Part-owned close cleanup (tool state, caches) is NOT here: parts
+        // subscribe to close_scene themselves and drop their own hosted
+        // references (Brush_tool, Material_paint_tool, Material_preview,
+        // Brdf_slice, Physics_tool, Operations, Animation_player /
+        // Animation_window; see CLAUDE.md "Scene-hosted references").
         {
             erhe::Item_host* const closing_host = static_cast<erhe::Item_host*>(scene_root.get());
             const auto clear_geometry_target_if_hosted = [closing_host](Geometry_graph_window& window) {
@@ -2636,17 +2645,39 @@ public:
             }
         }
 
-        // Arm the scene-close leak watchdog: collect weak references to the
-        // closed scene's content (the scene root, its nodes, its owned
-        // content-library items) and verify a short while later that they
-        // were actually released (update_scene_close_leak_watches). Anything
-        // still alive then is an instance of the scene-close bug class: a
-        // subsystem cached a shared_ptr to scene-hosted content and did not
-        // enroll in this close cleanup (see CLAUDE.md "Scene-hosted
-        // references in editor parts"). Collected LAST so content the
-        // cleanup above legitimately re-homed (e.g. HUD / Hotbar nodes
-        // detached from a tools scene) is not tracked.
-        {
+        // Queue the scene for the scene-close leak watchdog. The watch itself
+        // is armed in update_scene_close_leak_watches(), which runs after the
+        // message bus pump in tick(): by then EVERY close_scene subscriber
+        // (this handler plus the per-part cleanup subscriptions) has run,
+        // regardless of subscription order, so content the cleanup
+        // legitimately re-homed (e.g. HUD / Hotbar nodes detached from a
+        // tools scene) is never tracked. The shared_ptr keeps the scene alive
+        // until the arming collects its weak references.
+        m_scene_roots_pending_close_watch.push_back(scene_root);
+
+        log_scene->info("Closed scene '{}'", scene_root->get_name());
+    }
+
+    // Scene-close leak watchdog. Called from tick() after the message bus
+    // pump. First arms watches for scenes whose close was handled this frame
+    // (queued by on_close_scene): collects weak references to the closed
+    // scene's content (the scene root, its nodes, its owned content-library
+    // items). Because arming runs after the pump, every close_scene
+    // subscriber's cleanup has already run and re-homed content is never
+    // tracked. Then checks armed watches a fixed frame count after the
+    // close, so legitimately deferred releases (an in-flight background
+    // graph evaluation holding its target, queued ImGui window teardown)
+    // have drained; warns - does not abort - because rare legitimate
+    // survivors exist (e.g. a prefab template whose instances in other
+    // scenes keep resources alive). Anything reported is an instance of the
+    // scene-close bug class: a subsystem cached a shared_ptr to scene-hosted
+    // content and did not enroll in close cleanup (see CLAUDE.md
+    // "Scene-hosted references in editor parts"). Items intentionally kept
+    // alive by inventory / hotbar slots (persistent inventory) are reported
+    // as info, not warnings.
+    void update_scene_close_leak_watches()
+    {
+        for (const std::shared_ptr<Scene_root>& scene_root : m_scene_roots_pending_close_watch) {
             Scene_close_leak_watch watch;
             watch.scene_name       = scene_root->get_name();
             watch.frames_remaining = k_scene_close_leak_check_frames;
@@ -2670,18 +2701,8 @@ public:
             }
             m_scene_close_leak_watches.push_back(std::move(watch));
         }
+        m_scene_roots_pending_close_watch.clear();
 
-        log_scene->info("Closed scene '{}'", scene_root->get_name());
-    }
-
-    // Scene-close leak watchdog check (armed by on_close_scene). Runs a
-    // fixed frame count after the close so legitimately deferred releases
-    // (an in-flight background graph evaluation holding its target, queued
-    // ImGui window teardown) have drained; warns - does not abort - because
-    // rare legitimate survivors exist (e.g. a prefab template whose
-    // instances in other scenes keep resources alive).
-    void update_scene_close_leak_watches()
-    {
         for (std::size_t i = 0; i < m_scene_close_leak_watches.size(); ) {
             Scene_close_leak_watch& watch = m_scene_close_leak_watches[i];
             --watch.frames_remaining;
@@ -2689,8 +2710,18 @@ public:
                 ++i;
                 continue;
             }
+            // Items intentionally pinned by inventory / hotbar slots
+            // (persistent inventory survives scene close by design).
+            std::unordered_set<const erhe::Item_base*> slot_pinned_items;
+            if (m_hotbar) {
+                m_hotbar->collect_pinned_items(slot_pinned_items);
+            }
+            if (m_inventory_window) {
+                m_inventory_window->collect_pinned_items(slot_pinned_items);
+            }
             constexpr std::size_t max_reported = 16;
             std::size_t survivor_count = 0;
+            std::size_t pinned_count   = 0;
             const std::shared_ptr<Scene_root> pinned_scene_root = watch.scene_root.lock();
             if (pinned_scene_root) {
                 ++survivor_count;
@@ -2702,6 +2733,14 @@ public:
             for (const std::weak_ptr<erhe::Item_base>& weak_item : watch.items) {
                 const std::shared_ptr<erhe::Item_base> item = weak_item.lock();
                 if (!item) {
+                    continue;
+                }
+                if (slot_pinned_items.contains(item.get())) {
+                    ++pinned_count;
+                    log_scene->info(
+                        "scene-close check: {} '{}' of closed scene '{}' intentionally pinned by an inventory slot",
+                        item->get_type_name(), item->get_name(), watch.scene_name
+                    );
                     continue;
                 }
                 ++survivor_count;
@@ -2720,8 +2759,8 @@ public:
             }
             if (survivor_count == 0) {
                 log_scene->info(
-                    "scene-close check: all {} tracked items of closed scene '{}' released",
-                    watch.items.size(), watch.scene_name
+                    "scene-close check: all {} tracked items of closed scene '{}' released ({} intentionally pinned)",
+                    watch.items.size(), watch.scene_name, pinned_count
                 );
             }
             m_scene_close_leak_watches.erase(m_scene_close_leak_watches.begin() + static_cast<std::ptrdiff_t>(i));
@@ -3137,7 +3176,11 @@ public:
         std::weak_ptr<Scene_root>                   scene_root;
         std::vector<std::weak_ptr<erhe::Item_base>> items;
     };
-    std::vector<Scene_close_leak_watch> m_scene_close_leak_watches;
+    // Scenes closed this frame, waiting for their watch to be armed after
+    // the message bus pump (the shared_ptr keeps the scene alive until the
+    // arming collects its weak references).
+    std::vector<std::shared_ptr<Scene_root>> m_scene_roots_pending_close_watch;
+    std::vector<Scene_close_leak_watch>      m_scene_close_leak_watches;
     bool                                    m_tools_attached_to_scene{false};
     // The scene the global tools are currently homed in (set by
     // on_scene_created, cleared when that scene is closed).

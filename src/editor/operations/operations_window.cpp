@@ -933,6 +933,11 @@ Operations::Operations(
             }
         }
     );
+    m_close_scene_subscription = app_message_bus.close_scene.subscribe(
+        [this](Close_scene_message& message) {
+            on_close_scene(message.scene_root);
+        }
+    );
 }
 
 
@@ -2409,6 +2414,14 @@ void Operations::save_scene_to_file(Scene_root& scene_root, const std::filesyste
         }
     } catch (...) {
         log_operations->error("exception: save scene");
+    }
+}
+
+void Operations::on_close_scene(const std::shared_ptr<Scene_root>& scene_root)
+{
+    if (m_save_confirm_scene_root == scene_root) {
+        m_save_confirm_scene_root.reset();
+        m_save_confirm_imgui_context = nullptr;
     }
 }
 

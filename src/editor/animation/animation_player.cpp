@@ -2,6 +2,7 @@
 
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
+#include "scene/scene_root.hpp"
 
 #include "erhe_scene/animation.hpp"
 #include "erhe_scene/node.hpp"
@@ -11,9 +12,21 @@
 
 namespace editor {
 
-Animation_player::Animation_player(App_context& context)
+Animation_player::Animation_player(App_context& context, App_message_bus& app_message_bus)
     : m_context{context}
 {
+    m_close_scene_subscription = app_message_bus.close_scene.subscribe(
+        [this](Close_scene_message& message) {
+            on_close_scene(static_cast<erhe::Item_host*>(message.scene_root.get()));
+        }
+    );
+}
+
+void Animation_player::on_close_scene(erhe::Item_host* const closing_host)
+{
+    if (m_animation && (m_animation->get_item_host() == closing_host)) {
+        set_animation({});
+    }
 }
 
 void Animation_player::update(const float dt_s)

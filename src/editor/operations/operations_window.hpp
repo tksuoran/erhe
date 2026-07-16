@@ -259,7 +259,13 @@ private:
 
     template<typename T> void async_mesh_operation(bool selection_aware = false);
 
+    // Scene close: drop a pending save-overwrite confirmation targeting the
+    // closing scene - the modal's shared_ptr would pin the scene, and
+    // confirming would save an already-closed scene.
+    void on_close_scene(const std::shared_ptr<Scene_root>& scene_root);
+
     erhe::message_bus::Subscription<Load_scene_file_message>  m_load_scene_file_subscription;
+    erhe::message_bus::Subscription<Close_scene_message>      m_close_scene_subscription;
     App_context& m_context;
 
     // Maps each draggable operation's registered command to a thunk that runs that
