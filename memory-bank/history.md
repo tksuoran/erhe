@@ -164,3 +164,9 @@ verification::headless-isolated{same-object-name-vs-uid+refusal-names-holds+clea
 ✓verify::7-headless-legs-clean+clang-cl-build
 >method::displacement-bisect{one-action-diff-releases=holder-named}+holder-count→single-slot-cache
 >prompt_queue::ITEM1-removed{R2-next}
+
+[2026-07-16-late::R2-slots-session]
+✓R2{95ec5eec}::Slot_entry-brush/material→Asset_reference{slot-labeled-userships;Asset_reference_data-v1-codegen;Inventory_slot-v4{legacy-migrate};per-frame-resolve;adopt-for-drag-drop;collect_pinned_items→transitive-only;MCP-set_window_visibility}
+✓verify::legacy-migrate+file-container-on-demand+unload-refusal-names-slot+restart-restore{uid-self-heal}+close-scene→"intentionally pinned by the asset manager"+zero-warns
+>plan::R2-AS-LANDED-noted{next:R3-tool-state}
+>prompt_queue::both-items-done→file-deleted
