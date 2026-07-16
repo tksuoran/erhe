@@ -18,10 +18,18 @@
 
 namespace editor {
 
-// Maps item ID -> pending async task handle.
-// Entries are purged when completed to prevent unbounded growth.
+// Maps item ID -> pending async task handle. Main thread only.
 // Item IDs are monotonically increasing (never reused), so stale
 // entries for destroyed items are harmless and get purged here.
+//
+// Completed entries MUST be purged deterministically (once per frame via
+// purge_completed_item_async_tasks), not just opportunistically on the next
+// submission: a retained tf::AsyncTask handle keeps the underlying task node
+// alive, and taskflow destroys the task lambda - and so its captures (scene
+// root, mesh node items) - only when the last handle is released, not at
+// completion. A handle left here past its task's completion would pin a
+// closed scene's content indefinitely (the load/import raytrace kickoff
+// captures the Scene_root).
 namespace {
 
 std::unordered_map<std::size_t, tf::AsyncTask> s_item_tasks;
@@ -34,6 +42,11 @@ void purge_completed_tasks()
 }
 
 } // anonymous namespace
+
+void purge_completed_item_async_tasks()
+{
+    purge_completed_tasks();
+}
 
 void async_for_nodes_with_mesh(
     App_context&                                                context,

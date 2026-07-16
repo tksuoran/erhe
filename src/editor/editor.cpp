@@ -475,6 +475,12 @@ public:
         //    - Network_window
         m_app_message_bus->update(); // Flushes queued messages
 
+        // Release completed per-item async task handles: a retained handle
+        // keeps the task lambda's captures (scene root, mesh nodes) alive
+        // past completion and would pin a closed scene's content (see
+        // items.cpp).
+        purge_completed_item_async_tasks();
+
         // Scene-close leak watchdog: arms watches for scenes closed by the
         // pump above (after EVERY close_scene subscriber has run) and checks
         // previously armed watches.

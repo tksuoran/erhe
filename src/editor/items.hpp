@@ -127,6 +127,13 @@ void async_for_nodes_with_mesh(
     std::function<void(Mesh_operation_parameters&&)>     op
 );
 
+// Drops the handles of completed async tasks. A retained tf::AsyncTask
+// handle keeps the whole task node alive - including the task lambda and its
+// captures (scene root, mesh node items); completion alone does not free
+// them. Called once per frame (Editor::tick, main thread) so a closed
+// scene's content is not pinned by handles of its already-finished tasks.
+void purge_completed_item_async_tasks();
+
 // RAII guard that clears async task handles on destruction.
 // Must be destroyed before the executor and loggers.
 class Item_async_task_guard
