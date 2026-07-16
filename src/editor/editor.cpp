@@ -48,6 +48,7 @@
 #include "animation/animation_player.hpp"
 #include "animation/animation_window.hpp"
 #include "asset_browser/asset_browser.hpp"
+#include "assets/asset_manager.hpp"
 #include "brushes/brush.hpp"
 #include "content_library/brdf_slice.hpp"
 #include "developer/clipboard_window.hpp"
@@ -1011,6 +1012,7 @@ public:
             m_prefab_library       = std::make_unique<Prefab_library>(m_app_context);
             m_animation_player     = std::make_unique<Animation_player>(m_app_context, app_message_bus);
             m_app_scenes           = std::make_unique<App_scenes    >(m_app_context);
+            m_asset_manager        = std::make_unique<Asset_manager >(m_app_context, app_message_bus, *m_app_scenes.get());
             m_app_windows          = std::make_unique<App_windows   >(m_app_context, commands);
             m_viewport_scene_views = std::make_unique<Scene_views   >(m_editor_settings.viewport, commands, m_app_context, app_message_bus);
             m_selection            = std::make_unique<Selection     >(commands, m_app_context, app_message_bus);
@@ -1939,6 +1941,21 @@ public:
 
         fill_app_context();
 
+        // Register Scene_builder's template palette brushes with the asset
+        // manager as builtin-scope assets ({builtin, brush, <name>}). The
+        // palette names are a persistence contract from here on (see the
+        // note in Scene_builder::make_brushes). The brushes were built
+        // synchronously in the Scene_builder constructor, so the palette is
+        // complete at this point.
+        {
+            const std::shared_ptr<Content_library>& palette_library = m_scene_builder->get_content_library();
+            if (palette_library && palette_library->brushes) {
+                for (const std::shared_ptr<Brush>& brush : palette_library->brushes->get_all<Brush>()) {
+                    m_asset_manager->register_builtin(Asset_type::brush, brush);
+                }
+            }
+        }
+
         // Start MCP server (exposes editor commands over HTTP)
         m_mcp_server = std::make_unique<Mcp_server>(*m_commands.get(), m_app_context);
         m_mcp_server->start();
@@ -2341,6 +2358,7 @@ public:
         m_app_context.app_message_bus          = m_app_message_bus       .get();
         m_app_context.app_rendering            = m_app_rendering         .get();
         m_app_context.app_scenes               = m_app_scenes            .get();
+        m_app_context.asset_manager            = m_asset_manager         .get();
         m_app_context.app_settings             = &m_app_settings;
         m_app_context.developer_config         = &m_editor_settings.developer;
         m_app_context.graphics_config          = &m_graphics_config;
@@ -2739,6 +2757,18 @@ public:
                     ++pinned_count;
                     log_scene->info(
                         "scene-close check: {} '{}' of closed scene '{}' intentionally pinned by an inventory slot",
+                        item->get_type_name(), item->get_name(), watch.scene_name
+                    );
+                    continue;
+                }
+                // Items the asset manager keeps alive intentionally: a
+                // manager-owned strong reference or a declared usership (a
+                // registered Asset_reference, e.g. a debug hold). Replaced
+                // by full manager userships as R2..R5 land.
+                if (m_asset_manager && m_asset_manager->is_pinned(item.get())) {
+                    ++pinned_count;
+                    log_scene->info(
+                        "scene-close check: {} '{}' of closed scene '{}' intentionally pinned by the asset manager",
                         item->get_type_name(), item->get_name(), watch.scene_name
                     );
                     continue;
@@ -3270,6 +3300,10 @@ public:
     std::unique_ptr<Tools            >                       m_tools;
     std::unique_ptr<Scene_builder    >                       m_scene_builder;
     std::unique_ptr<Prefab_library   >                       m_prefab_library;
+    // Declared after Scene_builder / Prefab_library: destroyed before them,
+    // so the manager releases its builtin palette brushes while
+    // Scene_builder still co-owns them.
+    std::unique_ptr<Asset_manager    >                       m_asset_manager;
     std::unique_ptr<Fly_camera_tool  >                       m_fly_camera_tool;
     std::unique_ptr<Navigation_gizmo_tool>                   m_navigation_gizmo_tool;
     std::unique_ptr<Headset_view     >                       m_headset_view;

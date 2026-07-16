@@ -136,6 +136,10 @@ private:
     auto action_export_gltf     (const nlohmann::json& args) -> std::string;
     auto action_import_gltf     (const nlohmann::json& args) -> std::string;
     auto query_scan_gltf        (const nlohmann::json& args) -> std::string;
+    auto query_asset_manager    (const nlohmann::json& args) -> std::string;
+    auto action_acquire_asset   (const nlohmann::json& args) -> std::string;
+    auto action_release_asset   (const nlohmann::json& args) -> std::string;
+    auto action_unload_asset    (const nlohmann::json& args) -> std::string;
     auto action_instantiate_prefab(const nlohmann::json& args) -> std::string;
     auto action_reload_prefab   (const nlohmann::json& args) -> std::string;
     auto query_prefabs          (const nlohmann::json& args) -> std::string;

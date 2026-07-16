@@ -670,6 +670,12 @@ void Scene_builder::make_brushes(
 {
     ERHE_PROFILE_FUNCTION();
 
+    // NOTE: The palette brush names created here are registered with the
+    // Asset_manager as builtin-scope asset identities ({builtin, brush,
+    // <name>}) and get persisted by anything holding such a key (inventory
+    // slots, graph source nodes, scene wire format). Renaming a palette
+    // brush breaks existing content - the names are a stability contract.
+
     const bool  make_johnson_solid_brushes   = m_scene_config.make_johnson_solid_brushes;
     const bool  make_platonic_solid_brushes_ = m_scene_config.make_platonic_solid_brushes;
     const bool  make_curved_brushes          = m_scene_config.make_curved_brushes;

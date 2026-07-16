@@ -108,6 +108,14 @@ erhe_target_sources_grouped(
     app_windows.hpp
     asset_browser/asset_browser.cpp
     asset_browser/asset_browser.hpp
+    assets/asset_key.cpp
+    assets/asset_key.hpp
+    assets/asset_manager.cpp
+    assets/asset_manager.hpp
+    assets/asset_paths.cpp
+    assets/asset_paths.hpp
+    assets/asset_reference.cpp
+    assets/asset_reference.hpp
     brushes/brush.cpp
     brushes/brush.hpp
     brushes/brush_placement.cpp
@@ -288,6 +296,7 @@ erhe_target_sources_grouped(
     mcp/mcp_server.cpp
     mcp/mcp_server.hpp
     mcp/mcp_server_animation.cpp
+    mcp/mcp_server_assets.cpp
     mcp/mcp_server_file_io.cpp
     mcp/mcp_server_graphs.cpp
     mcp/mcp_server_material.cpp

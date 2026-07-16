@@ -361,6 +361,33 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"path"})}
     }});
+    const json asset_key_properties = {
+        {"scope", {{"type", "string"}, {"enum", json::array({"builtin", "scene_local", "file"})}, {"description", "Asset scope: builtin (manager-registered procedural item, e.g. palette brushes), scene_local (by-name lookup against the registry and open scenes), file (asset defined in a glTF container file)"}}},
+        {"type",  {{"type", "string"}, {"enum", json::array({"brush", "material", "animation", "mesh"})}, {"description", "Managed asset type"}}},
+        {"path",  {{"type", "string"}, {"description", "Container file path (file scope only)"}}},
+        {"uid",   {{"type", "string"}, {"description", "glTF 2.1 unique ID of the asset within the container (preferred identity; file scope)"}}},
+        {"name",  {{"type", "string"}, {"description", "Asset name (identity fallback; must be unique within the container for file scope)"}}}
+    };
+    json acquire_asset_properties = asset_key_properties;
+    acquire_asset_properties["hold_name"] = {{"type", "string"}, {"description", "Name of the debug hold that keeps the asset acquired"}};
+    m_tool_infos.push_back({"query_asset_manager", "Inspect the asset manager (Phase R1): registered assets (builtins, loaded container assets, scene-local userships) with their declared users, loaded container files with per-type asset counts and identifiability errors, and the named debug holds.", schema_no_args()});
+    m_tool_infos.push_back({"acquire_asset",       "Acquire an asset through the asset manager and keep it held under a named debug hold (a declared user). Loads the container on first request (file scope); repeated acquires of the same key return the same object (compare item_id). Re-using a hold_name re-targets that hold.", {
+        {"type", "object"},
+        {"properties", acquire_asset_properties},
+        {"required", json::array({"hold_name", "scope", "type"})}
+    }});
+    m_tool_infos.push_back({"release_asset",       "Release a named debug hold created by acquire_asset, dropping its usership of the held asset.", {
+        {"type", "object"},
+        {"properties", {
+            {"hold_name", {{"type", "string"}, {"description", "Name of the debug hold to release"}}}
+        }},
+        {"required", json::array({"hold_name"})}
+    }});
+    m_tool_infos.push_back({"unload_asset",        "Request unload of a file-scope asset's container. Refused while any asset of the container has users (the refusal names them). A successful unload verifies exclusivity: managed assets still alive afterwards are logged as undeclared users.", {
+        {"type", "object"},
+        {"properties", asset_key_properties},
+        {"required", json::array({"scope", "type", "path"})}
+    }});
     m_tool_infos.push_back({"instantiate_prefab", "Instantiate a glTF file as a prefab into a scene: the file is parsed once (cached app-wide) and inserted as a clone that stays a reference to the source file. Instances share GPU buffers; insertion is undoable.", {
         {"type", "object"},
         {"properties", {

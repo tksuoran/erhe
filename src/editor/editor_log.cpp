@@ -3,6 +3,7 @@
 
 namespace editor {
 
+std::shared_ptr<spdlog::logger> log_asset;
 std::shared_ptr<spdlog::logger> log_asset_browser;
 std::shared_ptr<spdlog::logger> log_brush;
 std::shared_ptr<spdlog::logger> log_composer;
@@ -50,6 +51,7 @@ std::shared_ptr<spdlog::logger> log_watchdog;
 void initialize_logging()
 {
     using namespace erhe::log;
+    log_asset                      = make_logger      ("editor.asset"                     );
     log_asset_browser              = make_logger      ("editor.asset_browser"             );
     log_startup                    = make_logger      ("editor.startup"                   );
     log_brush                      = make_logger      ("editor.brush"                     );
