@@ -1,24 +1,34 @@
 §MBEL:5.0
 
-[TASK::scene-close-bug-class]{6-commits-done+headless-verified;awaiting-user-interactive-verify}
-✓graph-mesh-raytrace-pick{c18b2608}::begin/end_mesh_rt_update-bracket+Item_flags::id
-✓raycast-MCP-tool{c3ee16ce}::headless-raytrace-verification-query
-✓port-exclusive-bind{a32dbbde}::SO_EXCLUSIVEADDRUSE@_WIN32
-✓close-scene-clears-graph-targets{dd9022bc}::primaries+extras
-✓watchdog+is_host_registered+self-heal+docs{37807545}
-✓texture-node-Scene_root-cycle{ba23b612}::weak_ptr+resolve_scene_root
-✓verify::raycast{hit@x=0.5→box-resize→hit@x=2.0→disconnect→miss→reconnect→hit}+close-scene{get_geometry_graph→selected:false}+watchdog{clean:"all 120 released";clipboard-pin-test:warns-Node+Material-by-name}+cycle{baked-ORM-scene-closes-clean}
-?remaining-audit-findings→prompt_queue-ITEM2{clipboard>animation>hotbar/inventory>tool-state>trivial-caches}
+[TASK::U1-gltf-2.1-unique-ids]{DONE-577d9f75-2026-07-16}
+✓fork-pin-bump{a0600c11→e42e44f2}+comment{(e)-uid-support}
+✓Item_base::m_gltf_uid{¬copied-by-copy/clone;gtests-28/28}
+✓parse-carry{7-item-types+file/external-asset-refs;mesh-clone-first-instantiation-inherits}
+✓scan{*_uids-parallel-vectors;none-backend-synced}
+✓export-stamp_uids{carried-verbatim+collision-regenerate+generate-once+store-back}
+✓MCP-scan_gltf-tool
+✓/bigobj{gltf_fastgltf.cpp-C1128}
+✓verify::export×2-identical+import→re-export+save→load→re-save+save×2+scan-match+validator-0-errors+roundtrip-62/62{Blender✓}
 
-[TASK::asset-reference+manager]{handoff-written¬started}
-?prompt_queue-ITEM1::PLAN-first{asset-ref=path+asset-in-file+loaded-ptr;manager=load-once-dedup;design-questions+precedents+scene-close-constraints-recorded-in-file}
+[TASK::F1-scene-close-fixes]{next;prompt_queue-ITEM1}
+?animation-player/window-clear+brush/material-paint-tool-clear+write-only-caches+watchdog-slot-pin-whitelist+2-verify-and-fix-items
+?clipboard=OPEN-DECISION{ask-user-first:pin+whitelist|pin-no-whitelist|drop-on-close;clone-at-copy-REJECTED}
+
+[TASK::scene-close-bug-class]{6-commits-done+headless-verified;awaiting-user-interactive-verify}
+✓details::activeContext-PREV+archive/2026-07-15
 
 [NOTES]
+!U1-uid-model::uid-on-Item_base{gltf_uid};export-stamps-item-backed-only{node/mesh/camera/material/image/skin/animation};¬stamped=accessors/buffers/bufferViews/samplers/textures/scene/extra-brush-meshes/synthesized-collider-nodes{no-store-back-target→would-churn};version-stays-2.0
+!U1-mesh-clone-gotcha::parse_node-attaches-mesh-CLONES{skin-in-mesh}→uid-carry-needs-explicit-first-instantiation-transfer{m_mesh_uid_claimed};cameras/lights-attach-originals
+!Khronos-validator-uid-warnings::UNEXPECTED_PROPERTY-per-uid{validator-predates-2.1}=expected;errors-must-stay-0
+!save_scene-MCP-can-exceed-request-timeout{cold-first-save≈25s-debug;save-COMPLETES-server-side→check-file+log-"processed 'save_scene'";retry-warm=fast}
+!validator-download::github-KhronosGroup/glTF-Validator-2.0.0-dev.3.10-win64.zip{per-session,scratchpad}
 !scene-close-verification::after-close_scene-wait≈5s→grep-log-"scene-close"{watchdog-60-frames;warn=bug,info-"all released"=clean}
 !live-mesh-primitive-swap::MUST-bracket-Scene_root::begin/end_mesh_rt_update{else-rebuilt-rt-instances-never-attach+mask-unset+dangling-on-clear;precedents:operations_window-make_raytrace+geometry_graph_mesh-apply_baked_products}
 !raycast-MCP-tool::origin+direction+optional-mask/max_distance{default-mask=pickable_static=viewport-hover-equivalent}
 !MCP-port-since-a32dbbde::Windows-bind-exclusive→2nd-editor-falls-back-8081-correctly{mcp_call.py---port-8081};smoke-suite-still-hardcodes-8080→NEVER-run-while-user-editor-owns-8080;get_server_info-pid-check-before-driving
 !isolated-headless-run::scratchpad-cwd{config-COPY+res-JUNCTION+own-logs/}avoids-clobbering-user-session-logs+config-autosave{CAUTION:res-junction-writes-pass-through→scene-saves-would-land-in-real-res/}
+!repo-root-headless-run{roundtrip-harness-requires}::backup-config/-first→restore-user-local-mods-after{editor-autosaves-config}
 !create_scene-MCP-ignores-name-arg{scenes-named-"Scene N"}
 !texture-graph-node-types::from-all_texture_node_descriptors{uniform/perlin/voronoi/bricks/shape/blend/colorize/curve/transform/brightness_contrast/normal_map/fbm/noise/color_noise/sine_wave/...}+output+material_output
 !texture_graph_add_node-invalid-type=silent-no-node{check-get_texture_graph-ids}

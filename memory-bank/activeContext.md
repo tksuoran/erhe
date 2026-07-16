@@ -1,38 +1,36 @@
 §MBEL:5.0
 
 [FOCUS]
->scene-close-bug-class-session::6-commits{2026-07-15-eve}
-  graph-mesh-raytrace-pick{c18b2608}::Graph_mesh-bound-node-invisible-to-hover+pick
-    root-cause::apply_baked_products-swapped-primitives-on-REGISTERED-mesh{rt-instances-attach+mask-only-at-register_mesh→rebuilt-instances-never-attached;rebake=dangling-instances}✗+missing-Item_flags::id{id_renderer-requires-visible|id}
-    fix::begin/end_mesh_rt_update-bracket{mesh-ops-pattern}+id-flag
-  raycast-MCP-tool{c3ee16ce}::rt-scene-query{origin+direction;mask-default=pickable_static→hit/mesh/node/primitive_index/distance/position/normal;raytrace-visibility-now-headless-observable}
-  mcp-port-exclusive{a32dbbde}::Windows-SO_REUSEADDR-shadow-bind✗{httplib-default;2nd-editor-"bound"-8080-while-1st-answers-all-connections→fallback-scan-dead+MCP-drove-WRONG-process}→SO_EXCLUSIVEADDRUSE@_WIN32{verified:8080-taken→"bound to 8081 instead"✓}
-  close-scene-graph-targets{dd9022bc}::geometry+texture-graph-windows-kept-showing-closed-scene-asset{weak_ptr-never-expires:window-own-m_graph_mesh-pins}→on_close_scene-clears{primaries+Editor_windows-extras}
-  scene-close-defenses{37807545}::watchdog+self-heal+rule{systemPatterns-!scene-close-bug-class+CLAUDE.md-"Scene-hosted references"}
-    watchdog::on_close_scene-collects-weak{Scene_root+flat-nodes+owned-library-items¬reference-entries}→60-frames→warn-per-survivor|info-"all released"
-    App_scenes::is_host_registered{Item_host*-vs-registered-scene-roots}+resolve_target-self-heal{both-graph-windows;host-less-orphan-stays-editable}
-  texture-node-cycle{ba23b612}::Texture_material_output_node+Texture_output_node-m_scene_root-shared_ptr=STRONG-CYCLE{Scene_root→library→Graph_texture→node→Scene_root;scene-with-baked-texture-graph-NEVER-freed}→weak_ptr+resolve_scene_root{is_host_registered-validated;scene-selector+serialization-preserved}
-  audit::Explore-agent-sweep{scene-hosted-shared_ptr-members}→remaining-findings→prompt_queue-ITEM2
+>U1-gltf-2.1-unique-ids{577d9f75,2026-07-16}✓
+  plan::asset-manager-plan.md{OUTSIDE-repo,next-to-asset_database.md;sequence:F1→U1→R1..R7→X1..X3;U1-done-before-F1-per-user{fastgltf-momentum}}
+  fork-pin::a0600c11→e42e44f2{uid-member-all-child-of-root-types+verbatim-re-export+validate-uid/name-single-namespace;fork-commit-pushed-by-user}
+  Item_base::m_gltf_uid{set/get_gltf_uid;assigned-once-never-changed;NOT-copied-by-copy/clone{clone=new-object;dup-uids=invalid-file};gtests×3}
+  parse::copy_uid-onto-items{node/mesh/camera/material/image/skin/animation}+Gltf_file_reference/Gltf_external_asset.uid
+    !mesh-clone-gotcha::parse_node-attaches-CLONE-of-template-mesh{skin-in-mesh}→first-instantiation-inherits-mesh-uid{m_mesh_uid_claimed};later-instantiations=new-objects
+  scan::Gltf_scan::*_uids-vectors{parallel-to-names;lights-extension-hosted-no-uid;gltf_none.hpp-synced}
+  export::stamp_uids()-after-combine_buffers{carried-verbatim+validated-vs-whole-identifier-namespace{uids+names;collision→warn+regenerate;writer-ValidateAsset-would-reject}+generate-16-char-alnum-once+store-back{const_cast-sanctioned-mutation}→re-save-never-changes-uids}
+    ¬stamped::non-item-backed{accessors/buffers/bufferViews/samplers/textures/scene/extra-brush-meshes/synthesized-collider-nodes}→no-churn
+    version-stays-2.0{erhe-sets-assetInfo;Blender-leg-safe}
+  MCP::scan_gltf-tool{names+uids+extensions+errors-per-category}
+  /bigobj::gltf_fastgltf.cpp-C1128{erhe_gltf-CMakeLists,MSVC}
+  verify✓::export×2-identical+import→re-export-preserves+save→load_scene→re-save-preserves+save×2-identical+scan-matches+validator-0-errors{32-warnings=UNEXPECTED_PROPERTY-uid}+roundtrip-harness-62/62{Blender-render✓}+item-tests-28/28
 
 [PREV]
->graph-editor-dragdrop+inventory-session::6-commits{2026-07-15-pm}✓{resize-shrink+brush-ghost+palette-drag+inventory→canvas+brush-slot-persistence+conway-per-op;details:archive/2026-07-15}
->graph-editor-UX-sprint{2026-07-15-am}✓
+>scene-close-bug-class-session::6-commits{2026-07-15-eve;details:archive+progress}
+>graph-editor-dragdrop+inventory{2026-07-15-pm}✓
 
 [STATE]
 @branch::main
-uncommitted::desktop_windows.json+editor_settings.json{pre-existing-local-mods}
-untracked::res/editor/scenes/Default-Scene.glb{user-saved-from-their-live-session-18:40¬touch}+prompt_queue.txt{handoff}
+untracked::res/editor/scenes/{user-saved¬touch}+prompt_queue.txt{handoff:F1}
+uncommitted-held::doc/gltf_extensions/ERHE_asset_reference.{md,schema.json}+README-row{DRAFT-wire-spec;ask-user-before-committing}
 
 [HANDOFF]
-prompt_queue.txt::2-items!
-  ITEM1::PLAN-asset-reference+asset-manager{path+asset-in-file+loaded-ptr;manager=load-once-dedup;design-questions+precedents+scene-close-constraints-in-file;PLAN-deliverable¬code}
-  ITEM2::remaining-scene-close-audit-findings{ranked:clipboard-copy-pins-originals>animation-player/window>hotbar/inventory-slots{maybe-intended,ask}>brush/paint-tool-state>3-trivial-caches;watchdog-flags-all-at-runtime}
+prompt_queue.txt::1-item
+  ITEM1::F1-scene-close-fixes{animation-player/window+brush/material-paint-tools+write-only-caches+watchdog-slot-whitelist+2-verify-and-fix;clipboard=OPEN-DECISION-ask-user-first;plan-Phase-F1-section=details}
 
 [OPEN]
 ?user-verify-INTERACTIVE::
-  graph-mesh-hover/pick{c18b2608}::hover+click-select-Graph-Mesh-node-in-viewport{+after-graph-param-change}
-  close-scene-graph-window{dd9022bc}::close-scene→geometry-graph-window-empty-state{+extra-"Open Editor"-instances}
-  earlier-dragdrop-list{2026-07-15-pm}::resize-shrink+brush-ghost+palette-drag+inventory→canvas+brush-slot-restart+conway-group
+  graph-mesh-hover/pick{c18b2608}+close-scene-graph-window{dd9022bc}+dragdrop-list{2026-07-15-pm}
 ?content-library-user-interactive-verify{Copy-to-Scene,texture-combo,prefab}
 ?content-library-deferred+selection-deferred+animation-editor{#243}+6c-fields+PhaseC+cc-perf-leftovers+#239-per-scene-settings{parked}+geogram-upstream-issue{unfiled}
 
