@@ -18,7 +18,8 @@
 
 [STATE]
 @branch::main
-prompt_queue.txt::DELETED{both-items-done:ITEM1-leak{8c3db108+8df79fa1}+R2{95ec5eec}}
+prompt_queue.txt::WRITTEN{handoff-for-fresh-context;ITEM1=interactive-verification-redo{windowed-launch+checklist}→ITEM2=R3-tool-state;read-first-next-session}
+uncommitted::config/editor/{desktop_windows.json+editor_settings.json}{user's-short-interactive-run:inventory-flag-true+slots-migrated-v2→v4+grid-slot-1-cube-from-real-drag-drop{adopt-proven-live};expected-R2-behavior;ask-user-commit-or-leave}
 untracked::res/editor/scenes/{user-saved¬touch}
 uncommitted-held::doc/gltf_extensions/ERHE_asset_reference.{md,schema.json}+README-row{DRAFT-R6-wire-spec;ask-user-before-committing}
 plan::asset-manager-plan.md{OUTSIDE-repo;R2-AS-LANDED-noted;next:R3-tool-state{brush_tool-m_active_brush+material_paint_tool-m_material→Asset_reference;supersedes-F1-subscriptions-there}}
