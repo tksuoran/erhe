@@ -150,3 +150,10 @@ lesson::user's-live-editor{build_vs2026_vulkan}held-8080+shares-logs/config→al
 ✓texture-node-Scene_root-cycle{ba23b612}::Texture_material_output_node+Texture_output_node-weak_ptr+resolve_scene_root{cycle-kept-whole-scene-alive}
 ✓audit{Explore-agent}::remaining-findings→prompt_queue-ITEM2{clipboard-copy-pins-originals+animation-player/window+hotbar/inventory-slots+brush/paint-tool-state+trivial-caches}
 >handoff::prompt_queue-ITEM1{PLAN-asset-reference+asset-manager}
+
+[2026-07-16-late::R1-asset-manager-core-session]
+✓R1{a5cdda26}::asset-registry/reference/manager-core{src/editor/assets/:asset_paths+asset_key+asset_reference+asset_manager;mcp_server_assets.cpp:query_asset_manager+acquire_asset+release_asset+unload_asset}
+  single-loader-axiom{uid-wins→unique-name→ambiguous-loud-error}+usership{resolved-Asset_reference=registered-user}+container-granularity-unload{refuse-naming-users+weak_ptr-exclusivity-verify}+builtin-palette-brushes{#103}+watchdog-is_pinned-info-branch
+verification::headless-isolated{same-object-name-vs-uid+refusal-names-holds+clean-unload-0-undeclared+"1 intentionally pinned"+open-as-scene-refusal}
+!found::pre-existing-load_scene→close-scene-leak{Scene_root+brushes;control-run-confirmed;holder-unknown;→activeContext-BUG-FOUND}
+>prompt_queue::ITEM1-done→file-deleted
