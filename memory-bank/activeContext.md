@@ -23,7 +23,7 @@
 
 [STATE]
 @branch::main
-prompt_queue.txt::DELETED{R1-done;nothing-outstanding}
+prompt_queue.txt::WRITTEN{handoff-2026-07-16-late;ITEM1=load-close-leak-root-cause{fixes-before-machinery}→ITEM2=R2-slots;read-first-next-session}
 untracked::res/editor/scenes/{user-saved¬touch}
 uncommitted-held::doc/gltf_extensions/ERHE_asset_reference.{md,schema.json}+README-row{DRAFT-R6-wire-spec;ask-user-before-committing}
 plan::asset-manager-plan.md{OUTSIDE-repo;R1-AS-LANDED-noted;next:R2-slots→Asset_reference}
