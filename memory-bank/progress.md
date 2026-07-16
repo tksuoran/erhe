@@ -1,14 +1,16 @@
 §MBEL:5.0
 
+[TASK::ITEM1-scene-close-leak-root-cause]{DONE-8c3db108+8df79fa1-2026-07-16}
+✓repro::save→load_scene→close→17-warns{Scene_root+brushes+nodes;control-confirmed-pre-R1}
+✓proof-1::identical-run+any-async_for_nodes_with_mesh-call-post-close→clean{purge-at-entry-released-handles}→holder=s_item_tasks
+✓fix-1{8c3db108}::purge_completed_item_async_tasks{items.hpp/cpp+Editor::tick-pre-watchdog};taskflow-verified{.cpm_cache:_tear_down_dependent_async-recycles-node-only-at-use_count-0;callable-lives-in-node->_handle-until-recycle}
+✓import-close-leaked-too{pre-fix-confirmed;same-kickoff-capture;F1-leg-was-masked}
+✓fix-2{8df79fa1}::5-selection-holders{see-activeContext-FOCUS}+watchdog-use_count-log
+✓verify::7-legs-clean{see-activeContext}+clang-cl-editor-builds
+✓prompt_queue::ITEM1-removed{R2=next}
+
 [TASK::R1-asset-manager-core]{DONE-a5cdda26-2026-07-16}
-✓asset_paths{normalize_asset_path=weakly_canonical-fallback-raw+asset_path_to_string=generic_string}
-✓asset_key{scope+type+path+uid+name;¬index-field{decision-11};traits-table{Item_type-bit+Content_library-folder-member-ptr;mesh=nullptr→scene-node-mesh-attachments}}
-✓asset_reference{lazy;file-scope-failed-latch{scene_local/builtin-retryable};copy-re-registers+move-re-points+dtor-releases;user_label;get_as<T>}
-✓asset_manager{acquire{builtin|file|scene_local}+register_builtin+get_or_load_container+request_unload+make_key+find_loaded+inspect_*+is_pinned+debug-holds}
-✓editor-wiring{App_context::asset_manager;ctor-after-App_scenes;member-decl-after-Prefab_library→destroyed-first;builtin-registration-post-fill_app_context;watchdog-is_pinned-info-branch;log_asset}
-✓MCP{query_asset_manager+acquire_asset+release_asset+unload_asset;mcp_server_assets.cpp}
-✓verify::headless-isolated{builtins#103+same-object-name-vs-uid{item_id-equal}+refusal-names-holds+clean-unload{all-7-released,0-undeclared}+watchdog-"1 intentionally pinned"+open-as-scene-refusal}
-!found::pre-existing-load_scene→close-leak{Scene_root+brushes;control-confirmed;NOT-R1;holder-unknown{undo-stack-empty}}
+✓details→activeContext-PREV+archive{asset_paths+asset_key+asset_reference+asset_manager+MCP-debug-holds;verify-headless-isolated}
 
 [TASK::F1-scene-close-fixes]{DONE-856dedd3-2026-07-16}
 ✓details→activeContext-PREV+archive
@@ -22,8 +24,9 @@
 !R1-debug-holds::MCP-test-hooks{acquire_asset{hold_name+scope/type/path/uid/name}→item_id-for-same-object-checks;release_asset{hold_name};unload_asset→users-in-refusal-payload;exit-code-1-on-refusal=isError-expected}
 !R1-container-load-needs-current_command_buffer{parse_gltf-texture-upload→MCP-dispatch-in-tick-OK;VERIFYs-like-Prefab_library}
 !normalize_asset_path-resolves-8.3-short-paths{TIMO~1.SUO-vs-long-form-match-via-weakly_canonical}
-!scene-close-verification::close→wait≈5s→grep-"scene-close"{watchdog-60-frames}
-!U1-uid-model+save_scene-timeout+validator-download+headless-gotchas→see-git-history{92270d67,569b0a8c}+archive
+!scene-close-verification::close→wait≈5s→grep-"scene-close"{watchdog-60-frames;warns-now-carry-"N holder(s)"=use_count}
+!leak-hunt-recipe::displacement-bisect{same-repro±one-action;deselect-vs-select-other-distinguishes-follows-vs-latch}+1-holder-log→single-slot-cache
+!scratch-retention-pattern::clear-at-point-of-use-KEEPS-contents-between-uses→item-shared_ptr-scratches-must-ALSO-clear-after-use{capacity-kept;precedents:m_material_candidates+m_begin_selection_change_state+m_command_target_selection}
 !isolated-headless-run::scratchpad-cwd{config-COPY+res-JUNCTION+own-logs/}avoids-clobbering-user-session{CAUTION:res-junction-writes-pass-through→save-scenes-to-ABSOLUTE-scratchpad-paths¬res/}
 !stale-editor.exe::locks-exe{LNK1168}+holds-port→kill-before-build+launch;CHECK-ExecutablePath+CreationDate{may-be-USER's-live-session→never-kill/drive}
 !MCP-port-since-a32dbbde::Windows-bind-exclusive→2nd-editor-falls-back-8081{mcp_call.py---port-8081};get_server_info-pid-check-before-driving
@@ -32,3 +35,4 @@
 !MCP-load_scene-async{poll-list_scenes}
 !commands-target-ACTIVE-scene
 !Operation_stack::queue=main-thread-only{workers→queue_from_thread}
+!save_scene-MCP-args::{scene_name+path}both-required{path-alone→"Scene not found"}

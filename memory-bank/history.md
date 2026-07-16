@@ -157,3 +157,10 @@ lesson::user's-live-editor{build_vs2026_vulkan}held-8080+shares-logs/config→al
 verification::headless-isolated{same-object-name-vs-uid+refusal-names-holds+clean-unload-0-undeclared+"1 intentionally pinned"+open-as-scene-refusal}
 !found::pre-existing-load_scene→close-scene-leak{Scene_root+brushes;control-run-confirmed;holder-unknown;→activeContext-BUG-FOUND}
 >prompt_queue::ITEM1-done→file-deleted
+
+[2026-07-16-late::ITEM1-scene-close-leak-session]
+✓root-caused+fixed::load/import-scene→close-leak{8c3db108:s_item_tasks-completed-AsyncTask-handles-pinned-captures{taskflow-frees-at-last-handle-release}→per-frame-purge;8df79fa1:5-selection-holders{selection-change-snapshot+command-target-scratch+range-terminators+Transform-Edit_state-m_first_node+Operations-make_mesh_config.material-self-sustaining-weak-pin+Properties-picker-scratch/pinned-target/material-latch}}
+✓watchdog::survivor-warns-log-use_count{"N holder(s)"}
+✓verify::7-headless-legs-clean+clang-cl-build
+>method::displacement-bisect{one-action-diff-releases=holder-named}+holder-count→single-slot-cache
+>prompt_queue::ITEM1-removed{R2-next}
