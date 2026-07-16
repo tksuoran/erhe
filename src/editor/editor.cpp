@@ -1546,7 +1546,7 @@ public:
                 m_operations             = std::make_unique<Operations                      >(m_editor_settings.scene, *m_commands.get(),       *m_imgui_renderer.get(), *m_imgui_windows.get(), m_app_context, *m_app_message_bus.get());
                 m_physics_window         = std::make_unique<Physics_window                  >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_post_processing_window = std::make_unique<Post_processing_window          >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
-                m_properties             = std::make_unique<Properties                      >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
+                m_properties             = std::make_unique<Properties                      >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
                 m_editor_windows         = std::make_unique<Editor_windows                  >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_rendergraph_window     = std::make_unique<Rendergraph_window              >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_tool_properties_window = std::make_unique<Tool_properties_window          >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
@@ -2781,9 +2781,11 @@ public:
                 }
                 ++survivor_count;
                 if (survivor_count <= max_reported) {
+                    // use_count - 1 excludes the lock above: the number of
+                    // strong references actually pinning the item.
                     log_scene->warn(
-                        "scene-close leak: {} '{}' of closed scene '{}' is still alive {} frames after close",
-                        item->get_type_name(), item->get_name(), watch.scene_name, k_scene_close_leak_check_frames
+                        "scene-close leak: {} '{}' of closed scene '{}' is still alive {} frames after close ({} holder(s))",
+                        item->get_type_name(), item->get_name(), watch.scene_name, k_scene_close_leak_check_frames, item.use_count() - 1
                     );
                 }
             }

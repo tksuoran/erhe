@@ -1,7 +1,9 @@
 #pragma once
 
+#include "app_message.hpp"
 #include "windows/property_editor.hpp"
 
+#include "erhe_message_bus/message_bus.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 
@@ -48,6 +50,7 @@ namespace editor {
 class Brush;
 class Brush_placement;
 class App_context;
+class App_message_bus;
 class Geometry_graph_mesh;
 class Node_joint;
 class Node_physics;
@@ -63,6 +66,7 @@ public:
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
         App_context&                 app_context,
+        App_message_bus&             app_message_bus,
         std::string_view             title     = "Properties",
         std::string_view             ini_label = "properties"
     );
@@ -117,7 +121,16 @@ private:
 
     void end_material_inspect();
 
+    // Scene-hosted references (see CLAUDE.md "Scene-hosted references in
+    // editor parts"): drop the pinned target and the material-edit latch
+    // when their host scene closes - the window's own strong references
+    // would otherwise keep the closed scene's items alive (a weak_ptr
+    // target alone does not expire while m_target_items pins the item).
+    void on_close_scene(erhe::Item_host* closing_host);
+
     App_context& m_context;
+
+    erhe::message_bus::Subscription<Close_scene_message> m_close_scene_subscription;
 
     // Issue #252: the explicit pinned target (weak_ptr so a deleted item
     // reverts the window to selection mode), and the reused single-element

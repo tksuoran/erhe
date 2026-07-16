@@ -2423,6 +2423,15 @@ void Operations::on_close_scene(const std::shared_ptr<Scene_root>& scene_root)
         m_save_confirm_scene_root.reset();
         m_save_confirm_imgui_context = nullptr;
     }
+    // imgui() re-resolves get_last_selected<Material>() into this strong
+    // reference every frame; because the last-selected entry is a weak_ptr,
+    // this member is what keeps it lockable - a self-sustaining pin that
+    // would keep a closed scene's material alive. Drop it here; it re-fills
+    // from the next material selection.
+    const std::shared_ptr<erhe::primitive::Material>& make_mesh_material = m_make_mesh_config.material;
+    if (make_mesh_material && (make_mesh_material->get_item_host() == static_cast<erhe::Item_host*>(scene_root.get()))) {
+        m_make_mesh_config.material.reset();
+    }
 }
 
 void Operations::imgui_modal_dialogs()

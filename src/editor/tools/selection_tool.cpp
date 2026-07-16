@@ -417,9 +417,13 @@ auto Selection::clear_selection(erhe::Item_host* host) -> bool
         }
     }
 
+    // Reset range terminators for this host even when nothing was selected:
+    // terminators are strong references set independently of the selection
+    // (tree shift-click), so a stale pair must not outlive its host scene.
+    m_range_selection.reset_terminators_for_host(host);
+
     if (removed_any) {
         log_selection->trace("Cleared selection for host {}", (host != nullptr) ? host->get_host_name() : "(none)");
-        m_range_selection.reset_terminators_for_host(host);
 #if !defined(NDEBUG)
         sanity_check();
 #endif
@@ -786,6 +790,13 @@ void Selection::end_selection_change()
             .selection_change = selection_change
         }
     );
+
+    // Release the scratch contents (capacity kept): the pre-change snapshot
+    // and the command-target scratch hold strong references that would
+    // otherwise pin items - including a closed scene's content - until the
+    // next selection change / command-target query, which may never come.
+    m_begin_selection_change_state.clear();
+    m_command_target_selection.clear();
 }
 
 auto Selection::on_viewport_select_try_ready() -> bool

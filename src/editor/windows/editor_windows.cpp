@@ -88,8 +88,10 @@ void Editor_windows::open_properties_window(const std::shared_ptr<erhe::Item_bas
     m_imgui_windows.queue(
         [this, target]() {
             const std::string title = fmt::format("Properties [{}]", ++m_properties_counter);
+            // Runs deferred at flush_queue() time, well after init: reading
+            // App_context here (not in a part constructor) is legal.
             std::shared_ptr<Properties> window = std::make_shared<Properties>(
-                m_imgui_renderer, m_imgui_windows, m_app_context, title, std::string_view{}
+                m_imgui_renderer, m_imgui_windows, m_app_context, *m_app_context.app_message_bus, title, std::string_view{}
             );
             window->set_target(target);
             window->show_window();

@@ -94,12 +94,33 @@ Properties::Properties(
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
     App_context&                 app_context,
+    App_message_bus&             app_message_bus,
     std::string_view             title,
     std::string_view             ini_label
 )
     : Imgui_window{imgui_renderer, imgui_windows, title, ini_label}
     , m_context   {app_context}
 {
+    m_close_scene_subscription = app_message_bus.close_scene.subscribe(
+        [this](Close_scene_message& message) {
+            on_close_scene(static_cast<erhe::Item_host*>(message.scene_root.get()));
+        }
+    );
+}
+
+void Properties::on_close_scene(erhe::Item_host* const closing_host)
+{
+    const std::shared_ptr<erhe::Item_base> target = m_target.lock();
+    if (target && (target->get_item_host() == closing_host)) {
+        m_target.reset();
+        m_target_items.clear();
+    }
+    if (m_inspected_material && (m_inspected_material->get_item_host() == closing_host)) {
+        // The edit session dies with the scene: no Material_change_operation
+        // is recorded (the close drops the undo history anyway).
+        m_inspected_material.reset();
+        m_material_state = Editor_state::clean;
+    }
 }
 
 void Properties::animation_properties(const std::shared_ptr<erhe::scene::Animation>& animation)
@@ -615,6 +636,10 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh)
             if (item_reference_imgui(m_context, "##material", value, erhe::primitive::Material::get_static_type(), options)) {
                 mesh_primitive.material = std::dynamic_pointer_cast<erhe::primitive::Material>(value);
             }
+            // Release the scratch contents (capacity kept): the strong
+            // references would otherwise persist past the last draw and pin
+            // a closed scene's materials.
+            m_material_candidates.clear();
         });
         if (m_context.developer_mode) {
             if (mesh_primitive.material) {

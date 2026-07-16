@@ -498,6 +498,15 @@ void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
 
     if (node_count == 0) {
         shared.world_from_anchor_initial_state = erhe::scene::Trs_transform{};
+        // The Transform window's numeric-edit state is rebuilt from the
+        // selection each draw (transform_properties), but not when the
+        // selection is empty - the stale state would keep the previous first
+        // node (possibly of a closed scene) alive through its shared_ptr.
+        // Drop it here, on the same selection / active-scene update that
+        // emptied the entries, independent of window visibility.
+        if (node_filter == nullptr) {
+            m_edit_state = Edit_state{};
+        }
     } else {
         shared.world_from_anchor_initial_state.set_trs(
             cumulative_world_translation / static_cast<float>(node_count),
