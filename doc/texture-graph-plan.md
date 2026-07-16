@@ -92,29 +92,41 @@ smaller than the raw file count.
 
 ### Material Maker families not (yet) in erhe
 
-Counts are approximate `.mmg` file counts per family. "Planned" cites the
-phase in this document that names the family; families without a plan entry
-are candidates for future node-library expansion or explicitly out of scope.
+Counts are approximate `.mmg` file counts per family. Each family is scored
+for prioritization and the table is sorted by score, highest first:
 
-| Material Maker family        | ~Count | Representative nodes | erhe status |
-|------------------------------|--------|----------------------|-------------|
-| Gradients                    | 5      | `gradient`, `circular_gradient`, `radial_gradient`, `spiral_gradient`, `multigradient` | Missing. |
-| Noise variants               | 15     | `voronoi2`, `voronoi_triangle`, `clouds_noise`, `wavelet_noise`, `noise_anisotropic`, `noise_white`, `directional_noise`, `perlin_color`, `crystal`, `shard_fbm`, `fbm2..4` | Base `perlin`/`voronoi`/`fbm`/`noise` covered; variants missing. |
-| Deterministic patterns       | 20     | `pattern`, `arc_pavement`, `beehive`, `cairo`, `iching`, `runes`, `japanese_glyphs`, `roman_numerals`, `seven_segment`, `scratches`, `splines`, `polycurve`, `profile`, `dirt` | Missing; `cairo` named in Phase 4. |
-| Brick / weave variants       | 13     | `bricks2`, `bricks3`, `bricks_uneven*`, `skewed_bricks`, `weave2`, `diagonal_weave`, `weave_random` | Base `bricks`/`weave` covered; variants missing. |
-| Transform / UV warps         | 25     | `translate`, `rotate`, `scale`, `shear`, `skew`, `warp`, `directional_warp`, `multi_warp`, `warp_dilation*`, `swirl`, `twist`, `spherize`, `kaleidoscope`, `mirror`, `repeat`, `custom_uv`, `distort`, `refract`, `magnify` | Only the combined `transform` covered. Warp needs function-form inputs (supported) or buffers (exist). |
-| Tiling / splatter            | 10     | `tiler`, `tiler_advanced`, `splatter`, `circle_splatter`, `tile2x2`, `make_tileable` | Missing; `make_tileable` named in Phase 5. |
-| Color / tone filters         | 18     | `auto_tones`, `tonality`, `tones`, `tones_map/range/step`, `palettize`, `colormap`, `convert_colorspace`, `greyscale`, `ensure_greyscale`, `ensure_rgba`, `default_color`, `compare` | Missing. |
-| Image-processing filters     | 30     | `sharpen`, `emboss`, `edge_detect`, `dilate`, `morphology`, `denoiser`, `*_kuwahara`, `symmetric_nearest_neighbor`, `pixelize`, `supersample`, `fast_blur`, `directional_blur`, `slope_blur`, `bevel` | Only `blur` covered; `slope_blur`/`bevel`/`distance` named in Phase 5 (buffer-dependent). |
-| Height / normal / AO         | 12     | `normal2height`, `normal_blend`, `normal_map2`, `normal_map_convert`, `height_to_angle`, `height_to_offset`, `occlusion`, `hbao`, `slope`, `smooth_curvature` | Only `normal_map` covered. |
-| Fill family                  | 25     | `fill`, `fill_to_color`, `fill_to_gradient`, `fill_to_position`, `fill_to_random_color`, `fill_to_size`, `fill_to_uv`, `rgba_to_fill` | Missing; requires iterate-buffer machinery (`gen_iterate_buffer.gd`), which erhe does not have. |
-| 2D SDF                       | 51     | `sdcircle`, `sdbox`, `sdline`, `sdpolygon`, `sdstar`, `sdboolean`, `sdsmoothboolean`, `sdrepeat`, `sdmorph`, `sdshow` | Missing; `sdf2d` type + shape/ops/stroke/fill nodes named in Phase 4. |
-| 3D SDF + raymarching         | 42     | `sdf3d_sphere`, `sdf3d_box`, `sdf3d_boolean`, `sdf3d_revolution`, `raymarching`, `material_raymarching` | Out of scope (no `sdf3d` type planned). |
-| 3D / mesh-based textures     | 42     | `tex3d_*` (36), `mesh`, `mesh_curvature`, `brush_triplanar`, `sphere`, `box`, `mwf_*` workflow nodes | Out of scope (erhe texture graph is 2D `vec2 uv` only). |
-| Variations / randomization   | 11     | `variations_*`, `randomize`, `controlled_variations`, `iterate_variations`, `layer_variations` | Missing; per-node seed/reseed system (Phase 5) covers part of the use case. |
-| Painting                     | 3      | `brush`, `brush_3d`, `brush_select_from_id` | Out of scope (interactive paint pipeline). |
-| Bit packing                  | 4      | `pack_1x32_to_2x16`, `pack_2x16_to_1x32`, ... | Missing. |
-| Engine special nodes         | ~19    | `image`, `texture`, `text`, `webcam`, `switch`, `remote`, `comment`, `export`, `portal`, `graph` (subgraph/group), `iterate_buffer` | erhe has `reroute` + `buffer`; node groups named in Phase 6; `switch`/`image` are natural next candidates. |
+- **Cost** (1-5): implementation effort. 1 = trivial descriptor ports using
+  existing `erhe::texgen` features (widgets, function-form inputs, buffers);
+  3 = a new value type or a family of many small nodes; 5 = new engine
+  machinery (iterate buffers, paint pipeline) or a scope change.
+- **Benefit** (1-5): material-authoring value added in erhe, given what the
+  existing 30 nodes already cover.
+- **Score** = Benefit / Cost. Coarse estimates for ordering the backlog, not
+  commitments; "named in Phase N" cites the phase of this plan that already
+  claims the family.
+
+| Material Maker family        | ~Count | Representative nodes | Cost | Benefit | Score | erhe status |
+|------------------------------|--------|----------------------|------|---------|-------|-------------|
+| Gradients                    | 5      | `gradient`, `circular_gradient`, `radial_gradient`, `spiral_gradient`, `multigradient` | 1 | 4 | 4.0 | Missing. Trivial descriptor ports; the gradient widget already exists (`colorize`). Core building block for masks and ramps. |
+| Switch                       | 1      | `switch` (engine, `gen_switch.gd`) | 1 | 3 | 3.0 | Missing; named in Phase 4. Enum-parameter input selector; cheap A/B comparison workflow win. |
+| Image / texture input        | 2      | `image`, `texture` (engine) | 2 | 5 | 2.5 | Missing. Sample an external bitmap as a graph source; the `buffer` node already proves `sampler2D`-backed expressions downstream. |
+| Transform / UV warps         | 25     | `translate`, `rotate`, `scale`, `shear`, `skew`, `warp`, `directional_warp`, `multi_warp`, `warp_dilation*`, `swirl`, `twist`, `spherize`, `kaleidoscope`, `mirror`, `repeat`, `custom_uv`, `distort`, `refract`, `magnify` | 2 | 5 | 2.5 | Only the combined `transform` covered. Warp is the heart of the noise -> warp -> colorize workflow; needs function-form inputs (supported) or buffers (exist). |
+| Color / tone filters         | 18     | `auto_tones`, `tonality`, `tones`, `tones_map/range/step`, `palettize`, `colormap`, `convert_colorspace`, `greyscale`, `ensure_greyscale`, `ensure_rgba`, `default_color`, `compare` | 2 | 4 | 2.0 | Missing. Mostly per-pixel one-liners; `auto_tones` needs a min/max reduction pass, `tones` a levels widget. |
+| Noise variants               | 15     | `voronoi2`, `voronoi_triangle`, `clouds_noise`, `wavelet_noise`, `noise_anisotropic`, `noise_white`, `directional_noise`, `perlin_color`, `crystal`, `shard_fbm`, `fbm2..4` | 2 | 3 | 1.5 | Base `perlin`/`voronoi`/`fbm`/`noise` covered; variants are straight GLSL ports adding looks, not capability. |
+| Deterministic patterns       | 20     | `pattern`, `arc_pavement`, `beehive`, `cairo`, `iching`, `runes`, `japanese_glyphs`, `roman_numerals`, `seven_segment`, `scratches`, `splines`, `polycurve`, `profile`, `dirt` | 2 | 3 | 1.5 | Missing; `cairo` named in Phase 4. Straight GLSL ports, each self-contained. |
+| 2D SDF                       | 51     | `sdcircle`, `sdbox`, `sdline`, `sdpolygon`, `sdstar`, `sdboolean`, `sdsmoothboolean`, `sdrepeat`, `sdmorph`, `sdshow` | 3 | 4 | 1.3 | Missing; `sdf2d` type + shape/ops/stroke/fill nodes named in Phase 4. New value type up front, then many tiny nodes; crisp resolution-independent shape authoring. |
+| Height / normal / AO         | 12     | `normal2height`, `normal_blend`, `normal_map2`, `normal_map_convert`, `height_to_angle`, `height_to_offset`, `occlusion`, `hbao`, `slope`, `smooth_curvature` | 3 | 4 | 1.3 | Only `normal_map` covered. Key for PBR authoring; several need buffers (exist). |
+| Brick / weave variants       | 13     | `bricks2`, `bricks3`, `bricks_uneven*`, `skewed_bricks`, `weave2`, `diagonal_weave`, `weave_random` | 2 | 2 | 1.0 | Base `bricks`/`weave` covered; variants are straight ports with diminishing returns. |
+| Tiling / splatter            | 10     | `tiler`, `tiler_advanced`, `splatter`, `circle_splatter`, `tile2x2`, `make_tileable` | 4 | 4 | 1.0 | Missing; `make_tileable` named in Phase 5. Signature MM feature for organic materials, but `tiler`/`splatter` are complex compound nodes. |
+| Bit packing                  | 4      | `pack_1x32_to_2x16`, `pack_2x16_to_1x32`, ... | 1 | 1 | 1.0 | Missing. Trivial ports, niche use. |
+| Image-processing filters     | 30     | `sharpen`, `emboss`, `edge_detect`, `dilate`, `morphology`, `denoiser`, `*_kuwahara`, `symmetric_nearest_neighbor`, `pixelize`, `supersample`, `fast_blur`, `directional_blur`, `slope_blur`, `bevel` | 4 | 3 | 0.75 | Only `blur` covered; `slope_blur`/`bevel`/`distance` named in Phase 5. Mostly buffer-dependent multi-pass filters. |
+| Node groups (subgraphs)      | 1      | `graph` (engine, `gen_graph.gd`) | 4 | 3 | 0.75 | Named in Phase 6; the geometry graph's Group pattern is the precedent. Payoff grows with library size. |
+| Fill family                  | 25     | `fill`, `fill_to_color`, `fill_to_gradient`, `fill_to_position`, `fill_to_random_color`, `fill_to_size`, `fill_to_uv`, `rgba_to_fill` | 5 | 3 | 0.6 | Missing; requires iterate-buffer machinery (`gen_iterate_buffer.gd`), which erhe does not have. |
+| Variations / randomization   | 11     | `variations_*`, `randomize`, `controlled_variations`, `iterate_variations`, `layer_variations` | 4 | 2 | 0.5 | Missing; the per-node seed/reseed system (Phase 5) covers part of the use case. |
+| Editor conveniences          | ~8     | `comment`, `remote`, `export`, `portal`, `text`, `webcam` (engine) | 2 | 1 | 0.5 | Missing; low value in erhe (PNG export and MCP scripting already cover the main uses). |
+| 3D SDF + raymarching         | 42     | `sdf3d_sphere`, `sdf3d_box`, `sdf3d_boolean`, `sdf3d_revolution`, `raymarching`, `material_raymarching` | 5 | 2 | 0.4 | Out of scope (no `sdf3d` type planned). |
+| 3D / mesh-based textures     | 42     | `tex3d_*` (36), `mesh`, `mesh_curvature`, `brush_triplanar`, `sphere`, `box`, `mwf_*` workflow nodes | 5 | 1 | 0.2 | Out of scope (erhe texture graph is 2D `vec2 uv` only). |
+| Painting                     | 3      | `brush`, `brush_3d`, `brush_select_from_id` | 5 | 1 | 0.2 | Out of scope (interactive paint pipeline). |
 
 ---
 
