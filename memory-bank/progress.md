@@ -15,7 +15,7 @@
 ✓watchdog-armed-post-pump{pending-queue;subscription-order-independent}
 ✓slot-pin-whitelist{collect_pinned_items;info¬warn}
 ✓verify::3-legs{plain+animation-playing+slot-pinned-brush}
-?clipboard=OPEN-USER-DECISION{pin+whitelist|pin-no-whitelist|drop-on-close;clone-at-copy-REJECTED;plan-"Open decisions"}
+✓clipboard=DECIDED{user-2026-07-16:pin-NO-whitelist=zero-code;copy-then-close-warnings=known-intentional-until-R5}
 
 [TASK::scene-close-bug-class]{6-commits-done+headless-verified;awaiting-user-interactive-verify}
 ✓details::activeContext-PREV+archive/2026-07-15
