@@ -3,6 +3,7 @@
 #include "animation/animation_keying.hpp"
 #include "animation/animation_player.hpp"
 #include "app_context.hpp"
+#include "assets/asset_manager.hpp"
 #include "app_message_bus.hpp"
 #include "app_scenes.hpp"
 #include "content_library/content_library.hpp"
@@ -740,7 +741,7 @@ void Animation_window::create_key_for_selection()
         if (!library || !library->animations) {
             return;
         }
-        animation = std::make_shared<erhe::scene::Animation>("Animation");
+        animation = m_context.asset_manager->create<erhe::scene::Animation>(*scene_root, "Animation");
         animation->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
         compound_parameters.operations.push_back(
             std::make_shared<Content_library_attach_operation<erhe::scene::Animation>>(

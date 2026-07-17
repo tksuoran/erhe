@@ -7,6 +7,7 @@
 #include "rendertarget_mesh.hpp"
 
 #include "app_context.hpp"
+#include "assets/asset_manager.hpp"
 #include "content_library/content_library.hpp"
 #include "geometry_graph/graph_mesh.hpp"
 #include "geometry_graph/geometry_graph_window.hpp"
@@ -381,7 +382,7 @@ auto Scene_root::make_browser_window(
                                 if (!is_same_library && ImGui::BeginDragDropTarget()) {
                                     const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Content_library_node");
                                     if (payload != nullptr) {
-                                        auto new_material = std::make_shared<erhe::primitive::Material>(*source_material);
+                                        auto new_material = context.asset_manager->create<erhe::primitive::Material>(*this, *source_material);
                                         auto new_node = std::make_shared<Content_library_node>(new_material);
                                         auto op = std::make_shared<Item_insert_remove_operation>(
                                             Item_insert_remove_operation::Parameters{
@@ -535,8 +536,9 @@ auto Scene_root::make_browser_window(
                 App_context* context_ptr = &context;
                 if (ImGui::MenuItem("Create Material")) {
                     deferred_operations.push_back(
-                        [context_ptr, materials]() {
-                            auto new_material = std::make_shared<erhe::primitive::Material>(
+                        [this, context_ptr, materials]() {
+                            auto new_material = context_ptr->asset_manager->create<erhe::primitive::Material>(
+                                *this,
                                 erhe::primitive::Material_create_info{
                                     .name = "New Material",
                                     .data = {

@@ -2,6 +2,7 @@
 
 #include "app_settings.hpp"
 
+#include "assets/asset_manager.hpp"
 #include "brushes/brush.hpp"
 #include "brushes/brush_placement.hpp"
 #include "operations/ambient_light_operation.hpp"
@@ -1160,7 +1161,8 @@ void Scene_builder::add_cubes(glm::ivec3 shape, float scale, float gap)
 
     // See add_torus_chain: the material is created in the scene's own library.
     auto& material_library = m_scene_root->get_content_library()->materials;
-    auto material = material_library->make<erhe::primitive::Material>(
+    auto material = m_context.asset_manager->create<erhe::primitive::Material>(
+        *m_scene_root,
         erhe::primitive::Material_create_info{
             .name = "cube",
             .data = {
@@ -1170,6 +1172,7 @@ void Scene_builder::add_cubes(glm::ivec3 shape, float scale, float gap)
             }
         }
     );
+    material_library->add(material);
 
     const int x_count = shape.x;
     const int y_count = shape.y;

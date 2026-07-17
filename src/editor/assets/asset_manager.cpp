@@ -1,6 +1,7 @@
 #include "assets/asset_manager.hpp"
 
 #include "app_context.hpp"
+#include "app_message_bus.hpp"
 #include "app_scenes.hpp"
 #include "assets/asset_paths.hpp"
 #include "content_library/content_library.hpp"
@@ -39,6 +40,26 @@ auto Asset_container_record::get_type_entries(const Asset_type type) const -> co
     switch (type) {
         case Asset_type::material:  return &materials;
         case Asset_type::animation: return &animations;
+        default:                    return nullptr;
+    }
+}
+
+auto Asset_container_record::get_shadow_entries(const Asset_type type) -> Shadow_type_entries*
+{
+    switch (type) {
+        case Asset_type::brush:     return &shadow_brushes;
+        case Asset_type::material:  return &shadow_materials;
+        case Asset_type::animation: return &shadow_animations;
+        default:                    return nullptr;
+    }
+}
+
+auto Asset_container_record::get_shadow_entries(const Asset_type type) const -> const Shadow_type_entries*
+{
+    switch (type) {
+        case Asset_type::brush:     return &shadow_brushes;
+        case Asset_type::material:  return &shadow_materials;
+        case Asset_type::animation: return &shadow_animations;
         default:                    return nullptr;
     }
 }
@@ -103,6 +124,115 @@ void build_type_entries(Asset_container_record& record, const Asset_type type, c
     }
 }
 
+[[nodiscard]] auto describe_scene_record(const Asset_container_record& record) -> std::string
+{
+    const std::shared_ptr<Scene_root> scene_root = record.scene_root.lock();
+    const std::string scene_name = scene_root ? scene_root->get_name() : std::string{"?"};
+    return record.display_path.empty()
+        ? fmt::format("scene '{}' (session)", scene_name)
+        : fmt::format("scene '{}' ('{}')", scene_name, record.display_path);
+}
+
+// R5.5: resolution within an open scene's identity record - the scene's own
+// library objects, served through the record's non-owning shadow entries.
+// Same precedence as the container path (uid wins, unique name is the
+// fallback, ambiguity is an error), but names are read LIVE from the locked
+// items: scene content is mutable, so there are no prebuilt name maps and
+// uniqueness is evaluated against current names. Expired entries (an item
+// removed between hook and resolution) are skipped.
+auto resolve_in_scene_record(const Asset_container_record& record, const Asset_key& key, std::string& out_error) -> std::shared_ptr<erhe::Item_base>
+{
+    const Asset_container_record::Shadow_type_entries* entries = record.get_shadow_entries(key.type);
+    if (entries == nullptr) {
+        out_error = fmt::format(
+            "acquisition of type '{}' from an open scene is not supported (scene records serve brushes, materials and animations)",
+            c_str(key.type)
+        );
+        return {};
+    }
+    if (!key.uid.empty()) {
+        for (const Asset_container_record::Shadow_entry& entry : entries->entries) {
+            const std::shared_ptr<erhe::Item_base> item = entry.item.lock();
+            if (item && (item->get_gltf_uid() == key.uid)) {
+                return item;
+            }
+        }
+        // Fall through to the name fallback, matching resolve_in_container:
+        // the uid may predate a re-authored scene.
+    }
+    if (!key.name.empty()) {
+        std::shared_ptr<erhe::Item_base> match;
+        std::size_t                      match_count = 0;
+        for (const Asset_container_record::Shadow_entry& entry : entries->entries) {
+            const std::shared_ptr<erhe::Item_base> item = entry.item.lock();
+            if (item && (item->get_name() == key.name)) {
+                ++match_count;
+                if (!match) {
+                    match = item;
+                }
+            }
+        }
+        if (match_count == 1) {
+            if (!key.uid.empty()) {
+                log_asset->warn(
+                    "{}: uid '{}' not found; {} resolved by name '{}' instead",
+                    describe_scene_record(record), key.uid, c_str(key.type), key.name
+                );
+            }
+            return match;
+        }
+        if (match_count > 1) {
+            out_error = fmt::format(
+                "{} name '{}' is ambiguous in {} ({} matches); addressing requires a uid (decision 11)",
+                c_str(key.type), key.name, describe_scene_record(record), match_count
+            );
+            return {};
+        }
+    }
+    out_error = fmt::format(
+        "no {} with{}{} in {}",
+        c_str(key.type),
+        key.uid.empty()  ? "" : fmt::format(" uid '{}'", key.uid),
+        key.name.empty() ? (key.uid.empty() ? " an empty key" : "") : fmt::format(" name '{}'", key.name),
+        describe_scene_record(record)
+    );
+    return {};
+}
+
+// Unique-current-name lookup over a scene record's shadow entries, the
+// scene-record counterpart of Type_entries::by_unique_name used by
+// resolve_scene_local. Null when absent or ambiguous.
+auto find_shadow_by_unique_name(const Asset_container_record& record, const Asset_type type, const std::string& name) -> std::shared_ptr<erhe::Item_base>
+{
+    const Asset_container_record::Shadow_type_entries* entries = record.get_shadow_entries(type);
+    if (entries == nullptr) {
+        return {};
+    }
+    std::shared_ptr<erhe::Item_base> match;
+    std::size_t                      match_count = 0;
+    for (const Asset_container_record::Shadow_entry& entry : entries->entries) {
+        const std::shared_ptr<erhe::Item_base> item = entry.item.lock();
+        if (item && (item->get_name() == name)) {
+            ++match_count;
+            if (!match) {
+                match = item;
+            }
+        }
+    }
+    return (match_count == 1) ? match : std::shared_ptr<erhe::Item_base>{};
+}
+
+[[nodiscard]] auto count_live_shadow_entries(const Asset_container_record::Shadow_type_entries& entries) -> std::size_t
+{
+    std::size_t count = 0;
+    for (const Asset_container_record::Shadow_entry& entry : entries.entries) {
+        if (!entry.item.expired()) {
+            ++count;
+        }
+    }
+    return count;
+}
+
 }
 
 Asset_manager::Asset_manager(App_context& context, App_message_bus& app_message_bus, App_scenes& app_scenes)
@@ -110,13 +240,27 @@ Asset_manager::Asset_manager(App_context& context, App_message_bus& app_message_
     , m_app_message_bus{app_message_bus}
     , m_app_scenes     {app_scenes}
 {
-    // m_app_message_bus is reserved for the R5 scene-open routing; read it
-    // here so the field is not flagged unused until then.
-    static_cast<void>(m_app_message_bus);
+    m_close_scene_subscription = m_app_message_bus.close_scene.subscribe(
+        [this](Close_scene_message& message) {
+            on_close_scene(message.scene_root.get());
+        }
+    );
 }
 
 Asset_manager::~Asset_manager() noexcept
 {
+    // Unhook the content libraries' shadow-registration pointers: libraries
+    // (and their scenes) can outlive this manager during editor teardown,
+    // and their claim/release walks must not call into a destroyed manager.
+    for (const auto& [container_id, record] : m_containers) {
+        const std::shared_ptr<Scene_root> scene_root = record->scene_root.lock();
+        if (scene_root) {
+            const std::shared_ptr<Content_library> library = scene_root->get_content_library();
+            if (library) {
+                library->set_asset_manager(nullptr);
+            }
+        }
+    }
     // Debug holds unregister into m_users on destruction; drop them while
     // every registry map is still fully alive.
     m_debug_holds.clear();
@@ -181,6 +325,12 @@ auto Asset_manager::resolve_builtin(const Asset_key& key, std::string& out_error
 
 auto Asset_manager::resolve_in_container(const Asset_container_record& record, const Asset_key& key, std::string& out_error) const -> std::shared_ptr<erhe::Item_base>
 {
+    if (record.is_open_as_scene()) {
+        // R5.5: a path open as a scene serves THE scene's objects through
+        // the record's shadow entries - one object regardless of which
+        // direction reached it first.
+        return resolve_in_scene_record(record, key, out_error);
+    }
     const Asset_container_record::Type_entries* entries = record.get_type_entries(key.type);
     if (entries == nullptr) {
         out_error = fmt::format(
@@ -240,12 +390,24 @@ auto Asset_manager::resolve_scene_local(const Asset_key& key, std::string& out_e
     }
 
     // Deterministic resolution order (plan risk 6): the manager registry
-    // first (builtins, then loaded containers in path order), then open
-    // scene libraries in registration order; the first match wins and
-    // multi-matches are debug-logged.
+    // first (builtins, then containers in path order), then open scene
+    // libraries in registration order; the first match wins and
+    // multi-matches are debug-logged. Match counting dedupes by object
+    // identity (R5.5): a path-bound open scene's record entries and the
+    // scene library walk below find the SAME object - one object is one
+    // candidate.
     std::shared_ptr<erhe::Item_base> match;
     std::size_t                      match_count = 0;
+    static thread_local std::vector<const erhe::Item_base*> s_seen;
+    s_seen.clear();
     const auto consider = [&match, &match_count](const std::shared_ptr<erhe::Item_base>& candidate) {
+        if (!candidate) {
+            return;
+        }
+        if (std::find(s_seen.begin(), s_seen.end(), candidate.get()) != s_seen.end()) {
+            return;
+        }
+        s_seen.push_back(candidate.get());
         ++match_count;
         if (!match) {
             match = candidate;
@@ -263,6 +425,13 @@ auto Asset_manager::resolve_scene_local(const Asset_key& key, std::string& out_e
     }
     for (const auto& [path, container_id] : m_path_index) {
         const std::shared_ptr<Asset_container_record> record = m_containers.at(container_id);
+        if (record->is_open_as_scene()) {
+            // R5.5: path-bound scene records participate through their
+            // shadow entries (unique-current-name semantics, the mutable
+            // counterpart of by_unique_name).
+            consider(find_shadow_by_unique_name(*record, key.type, key.name));
+            continue;
+        }
         const Asset_container_record::Type_entries* entries = record->get_type_entries(key.type);
         if (entries == nullptr) {
             continue;
@@ -393,6 +562,10 @@ auto Asset_manager::make_key(const erhe::Item_base& item) const -> Asset_key
             }
         }
     }
+    // Scene records' shadow entries are deliberately NOT consulted: assets
+    // of an open scene keep producing scene_local keys until the R5.7 key
+    // flip (file-scope keys for path-bound scene records need the
+    // reference-first record adoption to stay resolvable).
     for (const auto& [container_id, record] : m_containers) {
         const Asset_container_record::Type_entries* entries = record->get_type_entries(key.type);
         if (entries == nullptr) {
@@ -539,28 +712,15 @@ auto Asset_manager::get_or_load_container(const std::filesystem::path& path, std
     verify_main_thread();
     const std::filesystem::path canonical_path = normalize_asset_path(path);
     const std::shared_ptr<Asset_container_record> existing = find_record_by_path(canonical_path);
-    if (existing && !existing->is_open_as_scene()) {
+    if (existing) {
+        // R5.5: an open scene's identity record IS the container for its
+        // path - file-scope acquisition against a path open as a scene
+        // serves THE scene's objects through the record's shadow entries.
+        // This replaces the former container-direction two-loader refusal
+        // with correct behavior; the open direction (opening a scene over
+        // an already-loaded container) still warns in bind_record_path
+        // until the R5.7 record adoption.
         return existing;
-    }
-    // A path-bound scene identity record (R5.3) is NOT served as an asset
-    // container - it holds no assets; fall through to the open-as-scene
-    // refusal below (unchanged behavior until the R5.7 adoption).
-
-    // Until the R5 single-loader flip routes scene open through the
-    // manager, loading a file that is open as a scene would create a second
-    // copy of every asset in it (the two-loader hazard, plan risk 2).
-    for (const std::shared_ptr<Scene_root>& scene_root : m_app_scenes.get_scene_roots()) {
-        const std::filesystem::path& scene_source_path = scene_root->get_source_path();
-        if (scene_source_path.empty()) {
-            continue;
-        }
-        if (normalize_asset_path(scene_source_path) == canonical_path) {
-            out_error = fmt::format(
-                "'{}' is currently open as scene '{}'; loading it as an asset container would duplicate its assets (scene open routes through the asset manager from phase R5 on)",
-                asset_path_to_string(canonical_path), scene_root->get_name()
-            );
-            return {};
-        }
     }
 
     std::error_code error_code;
@@ -613,9 +773,8 @@ auto Asset_manager::get_or_load_container(const std::filesystem::path& path, std
     );
     m_containers.emplace(record->id, record);
     const auto [index_it, index_inserted] = m_path_index.try_emplace(canonical_path, record->id);
-    // The open-as-scene refusal above already returned for a path bound to
-    // a scene record, and an existing container record returned at the top,
-    // so the slot must be free here.
+    // Any record already bound to this path (scene identity or loaded
+    // container) returned at the top, so the slot must be free here.
     ERHE_VERIFY(index_inserted);
     return record;
 }
@@ -662,7 +821,7 @@ void Asset_manager::bind_record_path(Asset_container_record& record, const std::
     const auto [index_it, inserted] = m_path_index.try_emplace(record.canonical_path, record.id);
     if (!inserted && (index_it->second != record.id)) {
         log_asset->warn(
-            "path '{}' is already bound to container record {}; record {} keeps the path but not the index slot (two records share one path - the two-loader hazard, resolved by R5.5/R5.7)",
+            "path '{}' is already bound to container record {}; record {} keeps the path but not the index slot (two records share one path - the open-direction two-loader hazard, resolved by the R5.7 record adoption)",
             record.display_path, index_it->second, record.id
         );
     }
@@ -691,11 +850,41 @@ void Asset_manager::on_scene_registered(const std::shared_ptr<Scene_root>& scene
         scene_root->get_name(), record->id,
         record->canonical_path.empty() ? std::string{"session"} : record->display_path
     );
+
+    // R5.5 shadow registration: mirror the scene's already-present owning
+    // asset-typed library items into the record (a scene can register fully
+    // populated - e.g. redo of a scene open re-registers without
+    // re-importing), then arm the library's claim/release hooks for changes
+    // from here on.
+    const std::shared_ptr<Content_library> library = scene_root->get_content_library();
+    if (library) {
+        library->set_asset_manager(this);
+        if (library->root) {
+            erhe::Item_host* const owner = static_cast<erhe::Item_host*>(scene_root.get());
+            library->root->for_each<Content_library_node>(
+                [this, owner](Content_library_node& node) -> bool {
+                    if (node.item && !node.is_reference) {
+                        on_library_item_hosted(owner, node.item);
+                    }
+                    return true;
+                }
+            );
+        }
+    }
 }
 
 void Asset_manager::on_scene_unregistered(Scene_root* scene_root)
 {
     verify_main_thread();
+    // Disarm the library hooks (R5.5). Safe also mid-~Scene_root (the
+    // fallback unregistration path): the destructor body has not touched
+    // the members yet when it unregisters.
+    if (scene_root != nullptr) {
+        const std::shared_ptr<Content_library> library = scene_root->get_content_library();
+        if (library) {
+            library->set_asset_manager(nullptr);
+        }
+    }
     const std::shared_ptr<Asset_container_record> record = find_scene_record(scene_root);
     if (!record) {
         // Scenes registered before the Asset_manager existed have no record;
@@ -740,6 +929,126 @@ void Asset_manager::on_scene_source_path_changed(Scene_root& scene_root)
     }
 }
 
+void Asset_manager::on_close_scene(Scene_root* scene_root)
+{
+    verify_main_thread();
+    const std::shared_ptr<Asset_container_record> record = find_scene_record(scene_root);
+    if (!record) {
+        // The Editor's close handler unregisters the scene (removing the
+        // record); when it ran before this subscription there is nothing
+        // left to do.
+        return;
+    }
+    record->shadow_brushes.entries.clear();
+    record->shadow_materials.entries.clear();
+    record->shadow_animations.entries.clear();
+    log_asset->info("scene container record {} shadow entries dropped (scene closing)", record->id);
+}
+
+auto Asset_manager::find_record_by_owner(const erhe::Item_host* owner) const -> std::shared_ptr<Asset_container_record>
+{
+    if (owner == nullptr) {
+        return {};
+    }
+    for (const auto& [container_id, record] : m_containers) {
+        if (
+            (record->scene_root_identity != nullptr) &&
+            (static_cast<const erhe::Item_host*>(record->scene_root_identity) == owner)
+        ) {
+            return record;
+        }
+    }
+    return {};
+}
+
+void Asset_manager::on_library_item_hosted(erhe::Item_host* const owner, const std::shared_ptr<erhe::Item_base>& item)
+{
+    verify_main_thread();
+    if (!item) {
+        return;
+    }
+    const Asset_type type = asset_type_from_item(*item);
+    if (type == Asset_type::none) {
+        return;
+    }
+    const std::shared_ptr<Asset_container_record> record = find_record_by_owner(owner);
+    if (!record) {
+        return;
+    }
+    Asset_container_record::Shadow_type_entries* entries = record->get_shadow_entries(type);
+    if (entries == nullptr) {
+        return;
+    }
+    // Idempotent: handle_add_child claims whole subtrees and can re-claim an
+    // already-hosted item; one object is one entry.
+    for (const Asset_container_record::Shadow_entry& entry : entries->entries) {
+        if (entry.identity == item.get()) {
+            return;
+        }
+    }
+    entries->entries.push_back(Asset_container_record::Shadow_entry{item, item.get()});
+    log_asset->trace("scene container record {}: shadow-registered {} '{}'", record->id, c_str(type), item->get_name());
+}
+
+void Asset_manager::on_library_item_released(erhe::Item_host* const owner, const erhe::Item_base* const item)
+{
+    verify_main_thread();
+    if (item == nullptr) {
+        return;
+    }
+    const Asset_type type = asset_type_from_item(*item);
+    if (type == Asset_type::none) {
+        return;
+    }
+    const std::shared_ptr<Asset_container_record> record = find_record_by_owner(owner);
+    if (!record) {
+        return;
+    }
+    Asset_container_record::Shadow_type_entries* entries = record->get_shadow_entries(type);
+    if (entries == nullptr) {
+        return;
+    }
+    std::vector<Asset_container_record::Shadow_entry>& shadow_entries = entries->entries;
+    const auto i = std::remove_if(
+        shadow_entries.begin(), shadow_entries.end(),
+        [item](const Asset_container_record::Shadow_entry& entry) {
+            return entry.identity == item;
+        }
+    );
+    if (i != shadow_entries.end()) {
+        shadow_entries.erase(i, shadow_entries.end());
+        log_asset->trace("scene container record {}: shadow-unregistered {} '{}'", record->id, c_str(type), item->get_name());
+    }
+}
+
+void Asset_manager::register_created(const std::shared_ptr<erhe::Item_base>& item, Scene_root& defining_scene)
+{
+    verify_main_thread();
+    ERHE_VERIFY(item);
+    const Asset_type type = asset_type_from_item(*item);
+    if (type == Asset_type::none) {
+        log_asset->warn(
+            "Asset_manager::create() called for '{}' which is not a managed asset type",
+            item->get_name()
+        );
+        return;
+    }
+    const std::shared_ptr<Asset_container_record> record = find_scene_record(&defining_scene);
+    if (!record) {
+        // Scenes outside the App_scenes registry (previews, the tool scene)
+        // have no record; their assets stay invisible to the manager.
+        log_asset->debug(
+            "created {} '{}' in unregistered scene '{}'",
+            c_str(type), item->get_name(), defining_scene.get_name()
+        );
+        return;
+    }
+    log_asset->trace(
+        "created {} '{}' in scene '{}' (container record {})",
+        c_str(type), item->get_name(), defining_scene.get_name(), record->id
+    );
+}
+
 auto Asset_manager::inspect_assets() const -> std::vector<Asset_info>
 {
     std::vector<Asset_info> result;
@@ -767,6 +1076,34 @@ auto Asset_manager::inspect_assets() const -> std::vector<Asset_info>
         }
     }
     for (const auto& [container_id, record] : m_containers) {
+        if (record->is_open_as_scene()) {
+            // R5.5: scene records list their shadow entries. Path-bound
+            // records report file keys (acquirable through the record);
+            // session records have no path, so their objects are reported
+            // with the scene_local keys that resolve them.
+            for (const Asset_type_info& type_info : get_asset_type_infos()) {
+                const Asset_container_record::Shadow_type_entries* entries = record->get_shadow_entries(type_info.type);
+                if (entries == nullptr) {
+                    continue;
+                }
+                for (const Asset_container_record::Shadow_entry& entry : entries->entries) {
+                    const std::shared_ptr<erhe::Item_base> item = entry.item.lock();
+                    if (!item) {
+                        continue;
+                    }
+                    Asset_info info;
+                    info.key.scope   = record->canonical_path.empty() ? Asset_scope::scene_local : Asset_scope::file;
+                    info.key.type    = type_info.type;
+                    info.key.path    = record->display_path;
+                    info.key.uid     = item->get_gltf_uid();
+                    info.key.name    = item->get_name();
+                    info.user_labels = user_labels_of(item.get());
+                    covered.emplace(item.get(), true);
+                    result.push_back(std::move(info));
+                }
+            }
+            continue;
+        }
         for (const Asset_type_info& type_info : get_asset_type_infos()) {
             const Asset_container_record::Type_entries* entries = record->get_type_entries(type_info.type);
             if (entries == nullptr) {
@@ -808,8 +1145,15 @@ auto Asset_manager::inspect_containers() const -> std::vector<Asset_container_in
         Asset_container_info info;
         info.id              = record->id;
         info.path            = record->display_path;
-        info.material_count  = record->materials.items.size();
-        info.animation_count = record->animations.items.size();
+        if (record->is_open_as_scene()) {
+            // R5.5: scene records count their live shadow entries.
+            info.brush_count     = count_live_shadow_entries(record->shadow_brushes);
+            info.material_count  = count_live_shadow_entries(record->shadow_materials);
+            info.animation_count = count_live_shadow_entries(record->shadow_animations);
+        } else {
+            info.material_count  = record->materials.items.size();
+            info.animation_count = record->animations.items.size();
+        }
         info.errors          = record->errors;
         info.dirty           = record->dirty;
         info.open_as_scene   = record->is_open_as_scene();

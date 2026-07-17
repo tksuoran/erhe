@@ -1,5 +1,6 @@
 #include "content_library/content_library.hpp"
 
+#include "assets/asset_manager.hpp"
 #include "brushes/brush.hpp"
 #include "texture_graph/graph_texture.hpp"
 
@@ -38,15 +39,21 @@ namespace {
 // invariant - an owned item belongs to exactly one content library, so it
 // must not already be hosted elsewhere. Reference entries (is_reference) are
 // listings of items owned elsewhere (e.g. prefab template resources shared
-// across scenes) and never touch the item's host.
-void claim_host_for_subtree(Content_library_node& subtree_root, erhe::Item_host* const owner)
+// across scenes) and never touch the item's host. When the library belongs
+// to a registered scene (asset_manager set, R5.5), each claimed asset-typed
+// item is additionally shadow-registered into the owning scene's container
+// record - non-owning bookkeeping, ownership stays here.
+void claim_host_for_subtree(Content_library_node& subtree_root, erhe::Item_host* const owner, Asset_manager* const asset_manager)
 {
     subtree_root.for_each<Content_library_node>(
-        [owner](Content_library_node& node) -> bool {
+        [owner, asset_manager](Content_library_node& node) -> bool {
             if (node.item && !node.is_reference) {
                 erhe::Item_host* const current_host = node.item->get_item_host();
                 ERHE_VERIFY((current_host == nullptr) || (current_host == owner));
                 node.item->set_item_host(owner);
+                if (asset_manager != nullptr) {
+                    asset_manager->on_library_item_hosted(owner, node.item);
+                }
             }
             return true;
         }
@@ -54,14 +61,17 @@ void claim_host_for_subtree(Content_library_node& subtree_root, erhe::Item_host*
 }
 
 // Reverse of claim_host_for_subtree: detaches owned items from the given
-// owner. Items hosted by someone else (never expected) and reference entries
-// are left alone.
-void release_host_for_subtree(Content_library_node& subtree_root, erhe::Item_host* const owner)
+// owner (and drops their shadow entries, R5.5). Items hosted by someone
+// else (never expected) and reference entries are left alone.
+void release_host_for_subtree(Content_library_node& subtree_root, erhe::Item_host* const owner, Asset_manager* const asset_manager)
 {
     subtree_root.for_each<Content_library_node>(
-        [owner](Content_library_node& node) -> bool {
+        [owner, asset_manager](Content_library_node& node) -> bool {
             if (node.item && !node.is_reference && (node.item->get_item_host() == owner)) {
                 node.item->set_item_host(nullptr);
+                if (asset_manager != nullptr) {
+                    asset_manager->on_library_item_released(owner, node.item.get());
+                }
             }
             return true;
         }
@@ -93,7 +103,7 @@ void Content_library_node::handle_add_child(const std::shared_ptr<erhe::Hierarch
     if (owner != nullptr) {
         const std::shared_ptr<Content_library_node> child = std::dynamic_pointer_cast<Content_library_node>(child_node);
         if (child) {
-            claim_host_for_subtree(*child.get(), owner);
+            claim_host_for_subtree(*child.get(), owner, library->get_asset_manager());
         }
     }
 }
@@ -108,7 +118,7 @@ void Content_library_node::handle_remove_child(erhe::Hierarchy* child_node)
     if (owner != nullptr) {
         Content_library_node* const child = dynamic_cast<Content_library_node*>(child_node);
         if (child != nullptr) {
-            release_host_for_subtree(*child, owner);
+            release_host_for_subtree(*child, owner, library->get_asset_manager());
         }
     }
 }
@@ -167,9 +177,11 @@ Content_library::~Content_library() noexcept
 {
     // Library items can outlive the library (selection, clipboard, meshes
     // still holding a material); clear their host so no dangling Item_host
-    // pointer survives the owning scene's destruction.
+    // pointer survives the owning scene's destruction. The asset manager
+    // hook is normally already disarmed here (scene unregistration precedes
+    // library destruction in ~Scene_root).
     if ((m_owner != nullptr) && root) {
-        release_host_for_subtree(*root.get(), m_owner);
+        release_host_for_subtree(*root.get(), m_owner, m_asset_manager);
     }
 }
 
@@ -182,9 +194,9 @@ void Content_library::set_owner(erhe::Item_host* const owner)
     m_owner = owner;
     if (root) {
         if (owner != nullptr) {
-            claim_host_for_subtree(*root.get(), owner);
+            claim_host_for_subtree(*root.get(), owner, m_asset_manager);
         } else if (previous_owner != nullptr) {
-            release_host_for_subtree(*root.get(), previous_owner);
+            release_host_for_subtree(*root.get(), previous_owner, m_asset_manager);
         }
     }
 }
@@ -192,6 +204,16 @@ void Content_library::set_owner(erhe::Item_host* const owner)
 auto Content_library::get_owner() const -> erhe::Item_host*
 {
     return m_owner;
+}
+
+void Content_library::set_asset_manager(Asset_manager* const asset_manager)
+{
+    m_asset_manager = asset_manager;
+}
+
+auto Content_library::get_asset_manager() const -> Asset_manager*
+{
+    return m_asset_manager;
 }
 
 auto Content_library::texture_reference_combo(

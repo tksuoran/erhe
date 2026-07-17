@@ -76,6 +76,7 @@ auto Mcp_server::query_asset_manager(const json& args) -> std::string
         json entry = {
             {"id",              info.id},
             {"path",            info.path},
+            {"brush_count",     info.brush_count},
             {"material_count",  info.material_count},
             {"animation_count", info.animation_count},
             {"errors",          info.errors},

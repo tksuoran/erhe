@@ -3,6 +3,7 @@
 #include "app_context.hpp"
 #include "app_scenes.hpp"
 #include "app_settings.hpp"
+#include "assets/asset_manager.hpp"
 #include "items.hpp"
 #include "brushes/brush.hpp"
 #include "create/create_preview_settings.hpp"
@@ -275,7 +276,7 @@ void Create::window_imgui()
             //// source_geometry->compute_polygon_centroids();
             //// source_geometry->compute_point_normals(erhe::geometry::c_point_normals_smooth);
             std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
-            content_library->brushes->make<Brush>(brush_create_info);
+            content_library->brushes->add(m_context.asset_manager->create<Brush>(*scene_root, brush_create_info));
         }
     }
 }

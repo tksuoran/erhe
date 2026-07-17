@@ -9,6 +9,7 @@
 
 #include "app_context.hpp"
 #include "app_scenes.hpp"
+#include "assets/asset_manager.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "scene/scene_root.hpp"
@@ -625,12 +626,12 @@ void Texture_material_output_node::imgui()
         // Create a fresh material and select it (not undoable; a content-library
         // edit, like the geometry output node's assignment side effects).
         if (library && library->materials && ImGui::Button("New Material")) {
-            m_material_reference.adopt(
-                *m_context.asset_manager,
-                library->materials->make<erhe::primitive::Material>(
-                    erhe::primitive::Material_create_info{.name = m_base_name}
-                )
+            std::shared_ptr<erhe::primitive::Material> new_material = m_context.asset_manager->create<erhe::primitive::Material>(
+                *selection_root,
+                erhe::primitive::Material_create_info{.name = m_base_name}
             );
+            library->materials->add(new_material);
+            m_material_reference.adopt(*m_context.asset_manager, new_material);
             mark_dirty();
         }
     }

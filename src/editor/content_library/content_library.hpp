@@ -40,6 +40,7 @@ namespace erhe::scene {
 
 namespace editor {
 
+class Asset_manager;
 class Brush;
 class App_context;
 class Content_library;
@@ -193,6 +194,15 @@ public:
     void set_owner(erhe::Item_host* owner);
     [[nodiscard]] auto get_owner() const -> erhe::Item_host*;
 
+    // R5.5 shadow registration hook: set by Asset_manager::on_scene_registered
+    // (cleared at unregistration and at manager teardown) so the claim/
+    // release walks mirror owning asset-typed entries into the owning
+    // scene's container record. Null for libraries whose scene is not
+    // registered (previews, the tool scene, Scene_builder's template
+    // palette) - those walks touch only the items' hosts, as before.
+    void set_asset_manager(Asset_manager* asset_manager);
+    [[nodiscard]] auto get_asset_manager() const -> Asset_manager*;
+
     // One combo listing both plain textures and Graph Texture assets - the two
     // sources a Material_texture_sampler::texture_reference can hold. Both
     // erhe::graphics::Texture and Graph_texture derive from Texture_reference,
@@ -219,7 +229,8 @@ public:
     ERHE_PROFILE_MUTEX(std::mutex, mutex);
 
 private:
-    erhe::Item_host* m_owner{nullptr};
+    erhe::Item_host* m_owner        {nullptr};
+    Asset_manager*   m_asset_manager{nullptr};
 };
 
 // Recursively copies a content-library subtree into another library so that

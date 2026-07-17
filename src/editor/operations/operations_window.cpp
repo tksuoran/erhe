@@ -3,6 +3,7 @@
 #include "app_context.hpp"
 #include "app_scenes.hpp"
 #include "app_message_bus.hpp"
+#include "assets/asset_manager.hpp"
 #include "brushes/brush.hpp"
 #include "app_settings.hpp"
 #include "content_library/content_library.hpp"
@@ -2538,7 +2539,8 @@ void Operations::create_material()
     std::shared_ptr<Content_library>      content_library = scene_root->get_content_library();
     std::shared_ptr<Content_library_node> materials       = content_library->materials;
 
-    std::shared_ptr<erhe::primitive::Material> new_material = std::make_shared<erhe::primitive::Material>(
+    std::shared_ptr<erhe::primitive::Material> new_material = m_context.asset_manager->create<erhe::primitive::Material>(
+        *scene_root,
         erhe::primitive::Material_create_info{
             .name = "New Material",
             .data = {
@@ -2704,7 +2706,8 @@ void Operations::create_brush()
             }
         }
 
-        std::shared_ptr<Brush> new_brush = brushes->make<Brush>(
+        std::shared_ptr<Brush> new_brush = m_context.asset_manager->create<Brush>(
+            *scene_root,
             Brush_data{
                 .context      = m_context,
                 .app_settings = *m_context.app_settings,
@@ -2714,6 +2717,7 @@ void Operations::create_brush()
                 .geometry     = geometry
             }
         );
+        brushes->add(new_brush);
         if (first_primitive.material) {
             new_brush->set_material(first_primitive.material);
         }
