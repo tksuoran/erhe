@@ -190,7 +190,9 @@ auto Prefab_library::load_template(Prefab& prefab) -> bool
     // clones reproduce nested content. This runs while this path is still
     // on the active load stack, so reference cycles through the recursive
     // get_or_load are detected.
-    resolve_external_assets(*this, prefab.gltf_data, 0, nullptr);
+    // Nested prefab templates: the holding scene has no content library
+    // (templates host nothing), so no reference entries to add.
+    resolve_external_assets(*this, prefab.gltf_data, 0, nullptr, nullptr);
 
     m_active_load_stack.pop_back();
 
@@ -498,11 +500,16 @@ auto collect_prefab_external_assets(
     return result;
 }
 
+namespace {
+void add_prefab_reference_entries(Content_library& content_library, const Prefab& prefab); // defined below
+}
+
 void resolve_external_assets(
     Prefab_library&                                prefab_library,
     const erhe::gltf::Gltf_data&                   gltf_data,
     const erhe::scene::Layer_id                    content_layer_id,
-    std::vector<std::shared_ptr<erhe::Item_base>>* out_mesh_node_items
+    std::vector<std::shared_ptr<erhe::Item_base>>* out_mesh_node_items,
+    Content_library*                               content_library
 )
 {
     for (std::size_t node_index = 0, end = gltf_data.node_external_assets.size(); node_index < end; ++node_index) {
@@ -546,6 +553,16 @@ void resolve_external_assets(
                 external_asset.name, erhe::file::to_string(file.resolved_path)
             );
             continue;
+        }
+        // List the template's resources as reference entries BEFORE the
+        // instance subtree can register into the destination scene: without
+        // the listing, Scene_root::register_mesh would mis-adopt the
+        // unhosted template materials as scene-OWNED entries, and the
+        // scene-close watchdog would then report them as leaks (they stay
+        // alive with the template, correctly).
+        if (content_library != nullptr) {
+            std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
+            add_prefab_reference_entries(*content_library, *prefab);
         }
         attach_prefab_instance(prefab, carrier, content_layer_id, out_mesh_node_items);
     }
@@ -622,13 +639,14 @@ void remove_gltf_source_entries(const std::shared_ptr<Content_library_node>& fol
     }
 }
 
-void replace_content_library_entries(Content_library& content_library, const Prefab& prefab)
+// Lists the prefab template's textures and materials in the given content
+// library as REFERENCE entries (the template owns these objects and shares
+// them with every instancing scene); material entries carry their
+// file-scope asset key. Idempotent per item (add() dedups). The caller
+// must hold content_library.mutex.
+void add_prefab_reference_entries(Content_library& content_library, const Prefab& prefab)
 {
     const std::string gltf_path_str = prefab.source_path.generic_string();
-    remove_gltf_source_entries<erhe::graphics::Texture  >(content_library.textures,  gltf_path_str);
-    remove_gltf_source_entries<erhe::primitive::Material>(content_library.materials, gltf_path_str);
-    // Reference entries, like instantiate_prefab: the prefab template owns
-    // these objects and shares them with every instancing scene.
     for (std::size_t i = 0; i < prefab.gltf_data.images.size(); ++i) {
         const std::shared_ptr<erhe::graphics::Texture>& image = prefab.gltf_data.images[i];
         if (image) {
@@ -671,6 +689,14 @@ void replace_content_library_entries(Content_library& content_library, const Pre
             );
         }
     }
+}
+
+void replace_content_library_entries(Content_library& content_library, const Prefab& prefab)
+{
+    const std::string gltf_path_str = prefab.source_path.generic_string();
+    remove_gltf_source_entries<erhe::graphics::Texture  >(content_library.textures,  gltf_path_str);
+    remove_gltf_source_entries<erhe::primitive::Material>(content_library.materials, gltf_path_str);
+    add_prefab_reference_entries(content_library, prefab);
 }
 
 void refresh_instance_subtrees(

@@ -22,6 +22,7 @@ namespace erhe::scene {
 namespace editor {
 
 class App_context;
+class Content_library;
 class Scene_root;
 
 // A glTF file parsed once and kept as an instantiable template. The
@@ -143,14 +144,21 @@ void attach_prefab_instance(
 // glTF 2.1 spec) and clone its template under the carrier node, which is
 // marked with a Prefab_instance attachment. Cloned meshes are pointed at
 // content_layer_id and appended to out_mesh_node_items when non-null.
-// Used by import_gltf (with the destination scene's content layer) and by
-// Prefab_library itself when the loaded template contains nested external
-// assets (layer 0; instances retarget on instantiation).
+// content_library, when non-null, receives the template's textures and
+// materials as REFERENCE entries (same listing the interactive
+// instantiate_prefab creates) - without them, instance meshes registering
+// into the scene would mis-adopt the unhosted template materials as
+// scene-OWNED entries and the scene-close watchdog would report them.
+// Used by import_gltf / open_scene_gltf (destination scene's content layer
+// and library) and by Prefab_library itself when the loaded template
+// contains nested external assets (layer 0, null library; instances
+// retarget on instantiation).
 void resolve_external_assets(
     Prefab_library&                                prefab_library,
     const erhe::gltf::Gltf_data&                   gltf_data,
     erhe::scene::Layer_id                          content_layer_id,
-    std::vector<std::shared_ptr<erhe::Item_base>>* out_mesh_node_items
+    std::vector<std::shared_ptr<erhe::Item_base>>* out_mesh_node_items,
+    Content_library*                               content_library
 );
 
 }

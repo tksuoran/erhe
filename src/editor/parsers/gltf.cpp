@@ -345,9 +345,11 @@ auto make_import_gltf_operation(
     finalize_imported_meshes(context, build_info, gltf_data, &mesh_node_items);
 
     // glTF 2.1 external assets: instantiate each referenced asset under its
-    // carrier node (recursively resolved and cached by Prefab_library).
+    // carrier node (recursively resolved and cached by Prefab_library). The
+    // scene's content library receives the template resources as reference
+    // entries, like the interactive instantiate_prefab.
     if (context.prefab_library != nullptr) {
-        resolve_external_assets(*context.prefab_library, gltf_data, scene_root->layers().content()->id, &mesh_node_items);
+        resolve_external_assets(*context.prefab_library, gltf_data, scene_root->layers().content()->id, &mesh_node_items, scene_root->get_content_library().get());
     }
 
     for (const std::shared_ptr<erhe::scene::Node>& node : gltf_data.nodes) {
@@ -809,9 +811,13 @@ auto open_scene_gltf(
     finalize_imported_meshes(context, make_import_build_info(context), gltf_data, &mesh_node_items);
 
     // glTF 2.1 external assets: instantiate each referenced prefab under its
-    // carrier node.
+    // carrier node. The scene's content library receives the template
+    // resources as reference entries, like the interactive
+    // instantiate_prefab - without them, register_mesh would mis-adopt the
+    // unhosted template materials as scene-owned when the nodes move under
+    // the scene root below.
     if (context.prefab_library != nullptr) {
-        resolve_external_assets(*context.prefab_library, gltf_data, scene_root->layers().content()->id, &mesh_node_items);
+        resolve_external_assets(*context.prefab_library, gltf_data, scene_root->layers().content()->id, &mesh_node_items, content_library.get());
     }
 
     // Content-library attaches (textures / materials / skins / animations),
