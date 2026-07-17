@@ -59,6 +59,22 @@ Geometry_output_node::Geometry_output_node(App_context& context)
     , m_context          {context}
 {
     make_input_pin(Geometry_pin_key::geometry, "in");
+    m_material_reference.set_user_label("graph geometry output material");
+}
+
+void Geometry_output_node::resolve_reference()
+{
+    // Main thread only (the manager verifies). scene_local misses do not
+    // latch, so calls double as the retry. Deliberately does NOT mark the
+    // node dirty: apply_evaluated_to_scene() consumes the just-resolved
+    // material in the same call, and a lingering dirty flag would drag this
+    // node into unrelated evaluation runs. The imgui retry marks dirty
+    // itself on the resolve transition (a bake published before the
+    // reference resolved needs a re-publish).
+    if (m_material_reference.get() || m_material_reference.get_key().name.empty()) {
+        return;
+    }
+    m_material_reference.resolve(*m_context.asset_manager);
 }
 
 Geometry_output_node::~Geometry_output_node() noexcept
@@ -261,10 +277,11 @@ void Geometry_output_node::apply_evaluated_to_scene()
     // set for a node in a graph.
     const std::shared_ptr<Graph_mesh> owning_graph_mesh = get_owning_graph_mesh();
     if (owning_graph_mesh) {
+        resolve_reference(); // main thread; deferred key resolves here at the latest
         Graph_mesh_baked_products products;
         products.geometry            = std::move(m_evaluated_geometry);
         products.primitive           = std::move(m_evaluated_primitive);
-        products.material            = m_material;
+        products.material            = m_material_reference.get_as<erhe::primitive::Material>();
         products.collision_shape     = std::move(m_evaluated_collision_shape);
         products.physics_enabled     = m_physics_enabled;
         products.physics_motion_mode = m_physics_motion_mode;
@@ -289,6 +306,15 @@ void Geometry_output_node::imgui()
         mark_dirty();
     }
 
+    // Per-frame retry of a deferred / broken reference while the node is
+    // visible (the R2 slot-resolve cadence; scene_local misses do not latch).
+    const bool was_unresolved = (m_material_reference.get() == nullptr) && !m_material_reference.get_key().name.empty();
+    resolve_reference();
+    const std::shared_ptr<erhe::primitive::Material> current_material = m_material_reference.get_as<erhe::primitive::Material>();
+    if (was_unresolved && current_material) {
+        mark_dirty(); // re-publish a bake made while the reference was unresolved
+    }
+
     // Material selection, from the owning asset's scene content library
     // (the asset's Item_host is its owning scene; falls back to the single
     // scene root when the asset cannot say).
@@ -303,17 +329,23 @@ void Geometry_output_node::imgui()
             if (!materials.empty()) {
                 int material_index = 0;
                 for (std::size_t i = 0, end = materials.size(); i < end; ++i) {
-                    if (materials[i] == m_material) {
+                    if (materials[i] == current_material) {
                         material_index = static_cast<int>(i);
                         break;
                     }
                 }
                 if (imgui_index_stepper("material", material_index, static_cast<int>(materials.size()))) {
-                    m_material = materials.at(static_cast<std::size_t>(material_index));
+                    m_material_reference.adopt(*m_context.asset_manager, materials.at(static_cast<std::size_t>(material_index)));
                     mark_dirty();
                 }
                 ImGui::SameLine();
-                ImGui::TextUnformatted(m_material ? m_material->get_name().c_str() : "(no material)");
+                if (current_material) {
+                    ImGui::TextUnformatted(current_material->get_name().c_str());
+                } else if (!m_material_reference.get_key().name.empty()) {
+                    ImGui::Text("(unresolved: %s)", m_material_reference.get_key().name.c_str());
+                } else {
+                    ImGui::TextUnformatted("(no material)");
+                }
             }
         }
     }
@@ -348,8 +380,10 @@ void Geometry_output_node::imgui()
 void Geometry_output_node::write_parameters(nlohmann::json& out) const
 {
     out["name"] = m_name;
-    if (m_material) {
-        out["material"] = m_material->get_name();
+    // The key is written even while unresolved (R4: no silent loss).
+    const std::string& material_name = m_material_reference.get_key().name;
+    if (!material_name.empty()) {
+        out["material"] = material_name;
     }
     out["physics"] = m_physics_enabled;
     out["physics_motion"] = physics_motion_mode_to_string(m_physics_motion_mode);
@@ -361,23 +395,14 @@ void Geometry_output_node::read_parameters(const nlohmann::json& in)
     // output path targeted a scene); it is ignored - the consuming
     // Geometry_graph_mesh attachment decides where the bake lands.
     m_name = in.value("name", m_name);
-    const std::string material_name = in.value("material", "");
-    if (!material_name.empty()) {
-        // See imgui(): the owning asset's scene first, single scene fallback.
-        std::shared_ptr<Scene_root> scene_root = get_hosting_scene_root(get_owning_graph_mesh().get());
-        if (!scene_root) {
-            scene_root = m_context.app_scenes->get_single_scene_root();
-        }
-        const std::shared_ptr<Content_library> library = scene_root ? scene_root->get_content_library() : std::shared_ptr<Content_library>{};
-        if (library && library->materials) {
-            const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials = library->materials->get_all<erhe::primitive::Material>();
-            for (const std::shared_ptr<erhe::primitive::Material>& material : materials) {
-                if (material->get_name() == material_name) {
-                    m_material = material;
-                    break;
-                }
-            }
-        }
+    if (in.contains("material")) {
+        // Store the key only; resolution is deferred to the main thread
+        // (apply_evaluated_to_scene / imgui resolve through the manager).
+        Asset_key key;
+        key.scope = Asset_scope::scene_local;
+        key.type  = Asset_type::material;
+        key.name  = in.value("material", std::string{});
+        m_material_reference.set_key(key);
     }
     m_physics_enabled = in.value("physics", m_physics_enabled);
     m_physics_motion_mode = physics_motion_mode_from_string(in.value("physics_motion", ""), m_physics_motion_mode);

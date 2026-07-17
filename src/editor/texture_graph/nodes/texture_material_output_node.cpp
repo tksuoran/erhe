@@ -152,6 +152,7 @@ Texture_material_output_node::Texture_material_output_node(App_context& context)
     make_input_pin(Texture_pin_key::rgba,      "Occlusion rgba");
     make_input_pin(Texture_pin_key::rgb,       "Emissive");
     make_input_pin(Texture_pin_key::rgba,      "Emissive rgba");
+    m_material_reference.set_user_label("graph material output material");
 }
 
 Texture_material_output_node::~Texture_material_output_node() noexcept
@@ -162,14 +163,36 @@ Texture_material_output_node::~Texture_material_output_node() noexcept
     unregister_orm();
 }
 
+auto Texture_material_output_node::get_material() const -> std::shared_ptr<erhe::primitive::Material>
+{
+    return m_material_reference.get_as<erhe::primitive::Material>();
+}
+
+void Texture_material_output_node::resolve_reference()
+{
+    // Main thread only (the manager verifies). scene_local misses do not
+    // latch, so calls double as the retry. Deliberately does NOT mark the
+    // node dirty: the render / assignment path consumes the just-resolved
+    // material in the same pass, and a lingering dirty flag would cause a
+    // spurious extra bake. The imgui retry marks dirty itself on the
+    // resolve transition.
+    if (m_material_reference.get() || m_material_reference.get_key().name.empty()) {
+        return;
+    }
+    m_material_reference.resolve(*m_context.asset_manager);
+}
+
 void Texture_material_output_node::on_removed_from_graph()
 {
     for (Baked_texture& slot : m_separate) {
         unregister_texture(slot);
     }
     unregister_orm();
-    if (m_assign_to_material && m_material) {
-        erhe::primitive::Material_texture_samplers& samplers = m_material->data.texture_samplers;
+    // Only a resolved material can carry this node's assignments; an
+    // unresolved reference never assigned anything, so nothing to clear.
+    const std::shared_ptr<erhe::primitive::Material> material = get_material();
+    if (m_assign_to_material && material) {
+        erhe::primitive::Material_texture_samplers& samplers = material->data.texture_samplers;
         samplers.base_color.texture_reference.reset();
         samplers.base_color.sampler.reset();
         samplers.normal.texture_reference.reset();
@@ -180,9 +203,9 @@ void Texture_material_output_node::on_removed_from_graph()
         samplers.metallic_roughness.sampler.reset();
         samplers.occlusion.texture_reference.reset();
         samplers.occlusion.sampler.reset();
-        m_material->data.metallic  = 0.0f;
-        m_material->data.roughness = glm::vec2{0.5f, 0.5f};
-        m_material->data.emissive  = glm::vec3{0.0f, 0.0f, 0.0f};
+        material->data.metallic  = 0.0f;
+        material->data.roughness = glm::vec2{0.5f, 0.5f};
+        material->data.emissive  = glm::vec3{0.0f, 0.0f, 0.0f};
     }
 }
 
@@ -325,10 +348,11 @@ void Texture_material_output_node::render_separate_channel(
     const std::size_t channel_index = static_cast<std::size_t>(channel);
     Baked_texture&    slot          = m_separate[channel_index];
 
+    const std::shared_ptr<erhe::primitive::Material> material = get_material();
     erhe::primitive::Material_texture_sampler* sampler_slot = nullptr;
     const char*                                suffix       = "";
-    if (m_material) {
-        erhe::primitive::Material_texture_samplers& samplers = m_material->data.texture_samplers;
+    if (material) {
+        erhe::primitive::Material_texture_samplers& samplers = material->data.texture_samplers;
         switch (channel) {
             case Separate_channel::albedo:   sampler_slot = &samplers.base_color; suffix = "Albedo";   break;
             case Separate_channel::normal:   sampler_slot = &samplers.normal;     suffix = "Normal";   break;
@@ -356,7 +380,7 @@ void Texture_material_output_node::render_separate_channel(
             sampler_slot->texture_reference.reset();
             sampler_slot->sampler.reset();
             if (channel == Separate_channel::emissive) {
-                m_material->data.emissive = glm::vec3{0.0f, 0.0f, 0.0f};
+                material->data.emissive = glm::vec3{0.0f, 0.0f, 0.0f};
             }
         }
         return;
@@ -375,11 +399,11 @@ void Texture_material_output_node::render_separate_channel(
         sampler_slot->texture_reference = slot.target;
         sampler_slot->sampler = ensure_sampler();
         if (channel == Separate_channel::albedo) {
-            m_material->data.base_color = glm::vec3{1.0f, 1.0f, 1.0f};
+            material->data.base_color = glm::vec3{1.0f, 1.0f, 1.0f};
         } else if (channel == Separate_channel::normal) {
-            m_material->data.normal_texture_scale = 1.0f;
+            material->data.normal_texture_scale = 1.0f;
         } else if (channel == Separate_channel::emissive) {
-            m_material->data.emissive = glm::vec3{1.0f, 1.0f, 1.0f};
+            material->data.emissive = glm::vec3{1.0f, 1.0f, 1.0f};
         }
     }
 
@@ -397,20 +421,21 @@ void Texture_material_output_node::render_orm(
     const int              size
 )
 {
+    const std::shared_ptr<erhe::primitive::Material> material = get_material();
     std::string                        fragment;
     std::vector<erhe::texgen::Uniform> uniforms;
     const bool any = compose_orm(occlusion, roughness, metallic, fragment, uniforms);
     if (!any) {
         unregister_orm();
         m_orm_target.reset();
-        if (m_assign_to_material && m_material) {
-            erhe::primitive::Material_texture_samplers& samplers = m_material->data.texture_samplers;
+        if (m_assign_to_material && material) {
+            erhe::primitive::Material_texture_samplers& samplers = material->data.texture_samplers;
             samplers.metallic_roughness.texture_reference.reset();
             samplers.metallic_roughness.sampler.reset();
             samplers.occlusion.texture_reference.reset();
             samplers.occlusion.sampler.reset();
-            m_material->data.metallic  = 0.0f;
-            m_material->data.roughness = glm::vec2{0.5f, 0.5f};
+            material->data.metallic  = 0.0f;
+            material->data.roughness = glm::vec2{0.5f, 0.5f};
         }
         return;
     }
@@ -437,14 +462,14 @@ void Texture_material_output_node::render_orm(
         }
     }
 
-    if (m_assign_to_material && m_material && m_orm_target) {
-        erhe::primitive::Material_texture_samplers& samplers = m_material->data.texture_samplers;
+    if (m_assign_to_material && material && m_orm_target) {
+        erhe::primitive::Material_texture_samplers& samplers = material->data.texture_samplers;
         // Packed texture drives roughness (.g) and metallic (.b); the scalar
         // multipliers pass the baked values through unchanged.
         samplers.metallic_roughness.texture_reference = m_orm_target;
         samplers.metallic_roughness.sampler = ensure_sampler();
-        m_material->data.metallic  = 1.0f;
-        m_material->data.roughness = glm::vec2{1.0f, 1.0f};
+        material->data.metallic  = 1.0f;
+        material->data.roughness = glm::vec2{1.0f, 1.0f};
 
         // erhe samples occlusion from a separate slot (.r); assign the same
         // packed texture there only when occlusion is actually connected, else
@@ -452,7 +477,7 @@ void Texture_material_output_node::render_orm(
         if (occlusion.source_node != nullptr) {
             samplers.occlusion.texture_reference = m_orm_target;
             samplers.occlusion.sampler = ensure_sampler();
-            m_material->data.occlusion_texture_strength = 1.0f;
+            material->data.occlusion_texture_strength = 1.0f;
         } else {
             samplers.occlusion.texture_reference.reset();
             samplers.occlusion.sampler.reset();
@@ -466,6 +491,7 @@ void Texture_material_output_node::render_products(App_context& context, Texture
     if (m_context.current_command_buffer == nullptr) {
         return;
     }
+    resolve_reference(); // main thread; deferred material key resolves here at the latest
 
     const int size = render_target_size();
 
@@ -548,11 +574,20 @@ void Texture_material_output_node::imgui()
             unregister_orm();
             current_scene_root = scene_roots.at(static_cast<std::size_t>(scene_index));
             m_scene_root = current_scene_root;
-            m_material.reset();
+            m_material_reference.set_key(Asset_key{});
             mark_dirty();
         }
         ImGui::SameLine();
         ImGui::TextUnformatted(current_scene_root ? current_scene_root->get_name().c_str() : "(no scene)");
+    }
+
+    // Per-frame retry of a deferred / broken reference while the node is
+    // visible (the R2 slot-resolve cadence; scene_local misses do not latch).
+    const bool was_unresolved = (m_material_reference.get() == nullptr) && !m_material_reference.get_key().name.empty();
+    resolve_reference();
+    const std::shared_ptr<erhe::primitive::Material> current_material = get_material();
+    if (was_unresolved && current_material) {
+        mark_dirty(); // re-bake to apply the assignment the unresolved bake could not make
     }
 
     // Material selection.
@@ -567,25 +602,34 @@ void Texture_material_output_node::imgui()
             if (!materials.empty()) {
                 int material_index = 0;
                 for (std::size_t i = 0, end = materials.size(); i < end; ++i) {
-                    if (materials[i] == m_material) {
+                    if (materials[i] == current_material) {
                         material_index = static_cast<int>(i);
                         break;
                     }
                 }
                 if (imgui_index_stepper("material", material_index, static_cast<int>(materials.size()))) {
-                    m_material = materials.at(static_cast<std::size_t>(material_index));
+                    m_material_reference.adopt(*m_context.asset_manager, materials.at(static_cast<std::size_t>(material_index)));
                     mark_dirty();
                 }
                 ImGui::SameLine();
-                ImGui::TextUnformatted(m_material ? m_material->get_name().c_str() : "(no material)");
+                if (current_material) {
+                    ImGui::TextUnformatted(current_material->get_name().c_str());
+                } else if (!m_material_reference.get_key().name.empty()) {
+                    ImGui::Text("(unresolved: %s)", m_material_reference.get_key().name.c_str());
+                } else {
+                    ImGui::TextUnformatted("(no material)");
+                }
             }
         }
 
         // Create a fresh material and select it (not undoable; a content-library
         // edit, like the geometry output node's assignment side effects).
         if (library && library->materials && ImGui::Button("New Material")) {
-            m_material = library->materials->make<erhe::primitive::Material>(
-                erhe::primitive::Material_create_info{.name = m_base_name}
+            m_material_reference.adopt(
+                *m_context.asset_manager,
+                library->materials->make<erhe::primitive::Material>(
+                    erhe::primitive::Material_create_info{.name = m_base_name}
+                )
             );
             mark_dirty();
         }
@@ -605,8 +649,10 @@ void Texture_material_output_node::write_parameters(nlohmann::json& out) const
     if (scene_root) {
         out["scene"] = scene_root->get_name();
     }
-    if (m_material) {
-        out["material"] = m_material->get_name();
+    // The key is written even while unresolved (R4: no silent loss).
+    const std::string& material_name = m_material_reference.get_key().name;
+    if (!material_name.empty()) {
+        out["material"] = material_name;
     }
 }
 
@@ -633,23 +679,14 @@ void Texture_material_output_node::read_parameters(const nlohmann::json& in)
             }
         }
     }
-    const std::string material_name = in.value("material", "");
-    if (!material_name.empty()) {
-        std::shared_ptr<Scene_root> selection_root = m_scene_root.lock();
-        if (!selection_root) {
-            selection_root = m_context.app_scenes->get_single_scene_root();
-        }
-        if (selection_root) {
-            const std::shared_ptr<Content_library> library = selection_root->get_content_library();
-            if (library && library->materials) {
-                for (const std::shared_ptr<erhe::primitive::Material>& material : library->materials->get_all<erhe::primitive::Material>()) {
-                    if (material->get_name() == material_name) {
-                        m_material = material;
-                        break;
-                    }
-                }
-            }
-        }
+    if (in.contains("material")) {
+        // Store the key only; resolution is deferred to the main thread
+        // (render_products / imgui resolve through the manager).
+        Asset_key key;
+        key.scope = Asset_scope::scene_local;
+        key.type  = Asset_type::material;
+        key.name  = in.value("material", std::string{});
+        m_material_reference.set_key(key);
     }
     mark_dirty();
 }

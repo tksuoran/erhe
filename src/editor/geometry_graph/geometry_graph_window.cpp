@@ -607,10 +607,12 @@ void Geometry_graph_window::launch_evaluation(const std::shared_ptr<Graph_mesh>&
             run->live_node_ids.push_back(node->get_id());
             continue;
         }
+        node->prepare_for_evaluation();
         nlohmann::json parameters = nlohmann::json::object();
         node->write_parameters(parameters);
         shadow->read_parameters(parameters);
         shadow->set_log_source_id(node->get_id());
+        shadow->capture_evaluation_state(*node);
         const std::size_t input_count  = node->get_input_pins().size();
         const std::size_t output_count = node->get_output_pins().size();
         for (std::size_t slot = 0; slot < input_count; ++slot) {

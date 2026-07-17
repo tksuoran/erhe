@@ -1,5 +1,6 @@
 #pragma once
 
+#include "assets/asset_reference.hpp"
 #include "texture_graph/texture_graph_node.hpp"
 
 #include <memory>
@@ -63,6 +64,10 @@ private:
     // selection when set and still registered, else re-resolved through the
     // owning asset's host (single-scene fallback); stored back on resolve.
     [[nodiscard]] auto resolve_scene_root() -> std::shared_ptr<Scene_root>;
+    // Main-thread lazy resolution of the stored material key through the
+    // asset manager (R4: read_parameters only stores the key).
+    void resolve_reference();
+    [[nodiscard]] auto get_material() const -> std::shared_ptr<erhe::primitive::Material>;
 
     App_context&                               m_context;
     // weak: this node is owned (via its Graph_texture asset) by the scene's
@@ -70,8 +75,9 @@ private:
     // cycle Scene_root -> content library -> Graph_texture -> this node ->
     // Scene_root, keeping a closed scene alive forever (scene-close bug
     // class, see CLAUDE.md "Scene-hosted references in editor parts").
+    // The scene is not an asset; the material reference is (R4).
     std::weak_ptr<Scene_root>                  m_scene_root;
-    std::shared_ptr<erhe::primitive::Material> m_material;
+    Asset_reference                            m_material_reference;
     std::shared_ptr<erhe::graphics::Sampler>   m_sampler;
     std::shared_ptr<erhe::graphics::Texture>   m_registered_texture; // what is currently in the content library
     std::string                                m_texture_name{"Texture Graph"};

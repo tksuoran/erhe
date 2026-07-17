@@ -87,6 +87,20 @@ public:
     // the destructor.
     virtual void on_removed_from_graph();
 
+    // Evaluation-snapshot hooks (Geometry_graph_window::launch_evaluation).
+    // prepare_for_evaluation() runs on the LIVE node on the main thread just
+    // before its parameters are snapshotted: the place to resolve deferred
+    // asset references and capture worker-safe state (R4 - resolution is
+    // deferred past read_parameters, which can run off the main thread,
+    // e.g. group subgraph loading inside worker-side evaluate()).
+    virtual void prepare_for_evaluation() {}
+    // capture_evaluation_state() runs on the SHADOW clone right after its
+    // read_parameters during the snapshot: copy evaluation state that does
+    // not travel through JSON (captured source geometries). Shadows must not
+    // resolve assets or register asset userships - a shadow clone can be
+    // destroyed off the main thread.
+    virtual void capture_evaluation_state(const Geometry_graph_node&) {}
+
     // Shadow clones evaluated in the background log under the id of the
     // live node they mirror, so trace logs stay correlated with the ids
     // the UI and the MCP tools report. Unset (0) means "this node's own

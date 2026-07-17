@@ -1,5 +1,6 @@
 #pragma once
 
+#include "assets/asset_reference.hpp"
 #include "texture_graph/texture_graph_node.hpp"
 
 #include <array>
@@ -130,6 +131,10 @@ private:
     // or the library has no textures folder.
     [[nodiscard]] auto get_content_library() -> std::shared_ptr<Content_library>;
     [[nodiscard]] auto ensure_sampler() -> const std::shared_ptr<erhe::graphics::Sampler>&;
+    // Main-thread lazy resolution of the stored material key through the
+    // asset manager (R4: read_parameters only stores the key).
+    void resolve_reference();
+    [[nodiscard]] auto get_material() const -> std::shared_ptr<erhe::primitive::Material>;
 
     App_context&                                                        m_context;
     // weak: this node is owned (via its Graph_texture asset) by the scene's
@@ -137,8 +142,9 @@ private:
     // cycle Scene_root -> content library -> Graph_texture -> this node ->
     // Scene_root, keeping a closed scene alive forever (scene-close bug
     // class, see CLAUDE.md "Scene-hosted references in editor parts").
+    // The scene is not an asset; the material reference is (R4).
     std::weak_ptr<Scene_root>                                           m_scene_root;
-    std::shared_ptr<erhe::primitive::Material>                          m_material;
+    Asset_reference                                                     m_material_reference;
     std::shared_ptr<erhe::graphics::Sampler>                            m_sampler;
     std::array<Baked_texture, static_cast<std::size_t>(Separate_channel::count)> m_separate;
     std::shared_ptr<erhe::graphics::Texture>                            m_orm_target;

@@ -47,6 +47,7 @@ Texture_output_node::Texture_output_node(App_context& context)
     make_input_pin(Texture_pin_key::grayscale, "f");
     make_input_pin(Texture_pin_key::rgb,       "rgb");
     make_input_pin(Texture_pin_key::rgba,      "rgba");
+    m_material_reference.set_user_label("graph texture output material");
 }
 
 Texture_output_node::~Texture_output_node() noexcept
@@ -54,12 +55,34 @@ Texture_output_node::~Texture_output_node() noexcept
     unregister_texture();
 }
 
+auto Texture_output_node::get_material() const -> std::shared_ptr<erhe::primitive::Material>
+{
+    return m_material_reference.get_as<erhe::primitive::Material>();
+}
+
+void Texture_output_node::resolve_reference()
+{
+    // Main thread only (the manager verifies). scene_local misses do not
+    // latch, so calls double as the retry. Deliberately does NOT mark the
+    // node dirty: the render / assignment path consumes the just-resolved
+    // material in the same pass, and a lingering dirty flag would cause a
+    // spurious extra bake. The imgui retry marks dirty itself on the
+    // resolve transition.
+    if (m_material_reference.get() || m_material_reference.get_key().name.empty()) {
+        return;
+    }
+    m_material_reference.resolve(*m_context.asset_manager);
+}
+
 void Texture_output_node::on_removed_from_graph()
 {
     unregister_texture();
-    if (m_assign_to_material && m_material) {
-        m_material->data.texture_samplers.base_color.texture_reference.reset();
-        m_material->data.texture_samplers.base_color.sampler.reset();
+    // Only a resolved material can carry this node's assignments; an
+    // unresolved reference never assigned anything, so nothing to clear.
+    const std::shared_ptr<erhe::primitive::Material> material = get_material();
+    if (m_assign_to_material && material) {
+        material->data.texture_samplers.base_color.texture_reference.reset();
+        material->data.texture_samplers.base_color.sampler.reset();
     }
 }
 
@@ -97,6 +120,7 @@ void Texture_output_node::render_products(App_context& context, Texture_renderer
     if (context.current_command_buffer == nullptr) {
         return;
     }
+    resolve_reference(); // main thread; deferred material key resolves here at the latest
     const int input_index = connected_input_index();
     if (input_index < 0) {
         return; // disconnected - keep the last baked texture
@@ -185,7 +209,8 @@ auto Texture_output_node::resolve_scene_root() -> std::shared_ptr<Scene_root>
 
 void Texture_output_node::assign_to_material()
 {
-    if (!m_material) {
+    const std::shared_ptr<erhe::primitive::Material> material = get_material();
+    if (!material) {
         return;
     }
     const std::shared_ptr<erhe::graphics::Texture>& texture = get_preview_texture();
@@ -203,7 +228,7 @@ void Texture_output_node::assign_to_material()
             }
         );
     }
-    erhe::primitive::Material_texture_sampler& base_color = m_material->data.texture_samplers.base_color;
+    erhe::primitive::Material_texture_sampler& base_color = material->data.texture_samplers.base_color;
     base_color.sampler = m_sampler;
     // Bind the material to the owning content-library asset as a live
     // texture reference (the material samples the asset's baked output every
@@ -245,11 +270,20 @@ void Texture_output_node::imgui()
             unregister_texture();
             current_scene_root = scene_roots.at(static_cast<std::size_t>(scene_index));
             m_scene_root = current_scene_root;
-            m_material.reset();
+            m_material_reference.set_key(Asset_key{});
             mark_dirty();
         }
         ImGui::SameLine();
         ImGui::TextUnformatted(current_scene_root ? current_scene_root->get_name().c_str() : "(no scene)");
+    }
+
+    // Per-frame retry of a deferred / broken reference while the node is
+    // visible (the R2 slot-resolve cadence; scene_local misses do not latch).
+    const bool was_unresolved = (m_material_reference.get() == nullptr) && !m_material_reference.get_key().name.empty();
+    resolve_reference();
+    const std::shared_ptr<erhe::primitive::Material> current_material = get_material();
+    if (was_unresolved && current_material) {
+        mark_dirty(); // re-bake to apply the assignment the unresolved bake could not make
     }
 
     // Material selection.
@@ -264,17 +298,23 @@ void Texture_output_node::imgui()
             if (!materials.empty()) {
                 int material_index = 0;
                 for (std::size_t i = 0, end = materials.size(); i < end; ++i) {
-                    if (materials[i] == m_material) {
+                    if (materials[i] == current_material) {
                         material_index = static_cast<int>(i);
                         break;
                     }
                 }
                 if (imgui_index_stepper("material", material_index, static_cast<int>(materials.size()))) {
-                    m_material = materials.at(static_cast<std::size_t>(material_index));
+                    m_material_reference.adopt(*m_context.asset_manager, materials.at(static_cast<std::size_t>(material_index)));
                     mark_dirty();
                 }
                 ImGui::SameLine();
-                ImGui::TextUnformatted(m_material ? m_material->get_name().c_str() : "(no material)");
+                if (current_material) {
+                    ImGui::TextUnformatted(current_material->get_name().c_str());
+                } else if (!m_material_reference.get_key().name.empty()) {
+                    ImGui::Text("(unresolved: %s)", m_material_reference.get_key().name.c_str());
+                } else {
+                    ImGui::TextUnformatted("(no material)");
+                }
             }
         }
     }
@@ -293,8 +333,10 @@ void Texture_output_node::write_parameters(nlohmann::json& out) const
     if (scene_root) {
         out["scene"] = scene_root->get_name();
     }
-    if (m_material) {
-        out["material"] = m_material->get_name();
+    // The key is written even while unresolved (R4: no silent loss).
+    const std::string& material_name = m_material_reference.get_key().name;
+    if (!material_name.empty()) {
+        out["material"] = material_name;
     }
 }
 
@@ -321,23 +363,14 @@ void Texture_output_node::read_parameters(const nlohmann::json& in)
             }
         }
     }
-    const std::string material_name = in.value("material", "");
-    if (!material_name.empty()) {
-        std::shared_ptr<Scene_root> selection_root = m_scene_root.lock();
-        if (!selection_root) {
-            selection_root = m_context.app_scenes->get_single_scene_root();
-        }
-        if (selection_root) {
-            const std::shared_ptr<Content_library> library = selection_root->get_content_library();
-            if (library && library->materials) {
-                for (const std::shared_ptr<erhe::primitive::Material>& material : library->materials->get_all<erhe::primitive::Material>()) {
-                    if (material->get_name() == material_name) {
-                        m_material = material;
-                        break;
-                    }
-                }
-            }
-        }
+    if (in.contains("material")) {
+        // Store the key only; resolution is deferred to the main thread
+        // (render_products / imgui resolve through the manager).
+        Asset_key key;
+        key.scope = Asset_scope::scene_local;
+        key.type  = Asset_type::material;
+        key.name  = in.value("material", std::string{});
+        m_material_reference.set_key(key);
     }
     mark_dirty();
 }

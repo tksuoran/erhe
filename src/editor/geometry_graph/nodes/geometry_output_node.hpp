@@ -1,5 +1,6 @@
 #pragma once
 
+#include "assets/asset_reference.hpp"
 #include "geometry_graph/geometry_graph_node.hpp"
 
 #include "erhe_physics/irigid_body.hpp"
@@ -61,8 +62,12 @@ public:
     void take_evaluated(Geometry_output_node& from);
 
 private:
+    // Main-thread lazy resolution of the stored material key through the
+    // asset manager (R4: read_parameters only stores the key).
+    void resolve_reference();
+
     App_context&                               m_context;
-    std::shared_ptr<erhe::primitive::Material> m_material;
+    Asset_reference                            m_material_reference;
     std::string                                m_name{"Geometry Graph"};
     bool                                       m_physics_enabled{false};
     erhe::physics::Motion_mode                 m_physics_motion_mode{erhe::physics::Motion_mode::e_static};
