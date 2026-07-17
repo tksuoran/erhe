@@ -13,7 +13,11 @@ verification of doc/gltf-scene-roundtrip-plan.md:
 2. Saves the scene and validates every ERHE_* extension payload in the
    .glb against its JSON schema (doc/gltf_extensions/schema/), asserting
    full extension coverage (all 11 ERHE_* extensions present) and clean
-   extensionsUsed / extensionsRequired conventions.
+   extensionsUsed / extensionsRequired conventions. Then asserts the R5
+   data-loss tripwire (asset-manager plan step R5.1): every
+   library-DEFINED material / brush / animation appears in the file with
+   its FULL payload (parameter values, brush geometry, animation
+   samplers) - never as a name-only reference stub.
 3. Loads the saved scene back and diffs the MCP-visible state: node set
    (name / parent / TRS / tags / attachment types / locked), per-node
    physics and joint fields, materials, animations (channel-level), the
@@ -850,6 +854,93 @@ def section_save_and_validate():
           str(doc.get("extensionsUsed")))
 
 
+def section_definitions_full_data():
+    """R5 data-loss tripwire (asset-manager plan, step R5.1): every asset
+    the scene DEFINES must appear in the saved glTF with its full payload,
+    never as a name-only stub. Guards the R5 definition-vs-reference
+    classification cliff: a migration bug that classifies definitions as
+    references would save stubs instead of data - silent data loss on the
+    next load. Written pre-R5 (must be green before any R5 change lands);
+    stays green through R5/R6 because reference STUBS may only ever be
+    written for assets defined in OTHER containers, which this scene has
+    none of."""
+    S = "definitions-full-data"
+    doc = E2E_STATE.get("doc")
+    if doc is None or not E2E_GLB.is_file():
+        check(S, "prerequisites available", False, "save-validate failed")
+        return
+
+    accessors = doc.get("accessors", [])
+
+    def accessor_count(index):
+        if not isinstance(index, int) or not (0 <= index < len(accessors)):
+            return 0
+        return accessors[index].get("count", 0)
+
+    # Materials: every exported material entry is a full definition. A
+    # reference stub (R6 wire format, plan D5) is a name-only material
+    # carrying ERHE_asset_reference; a definition always writes its PBR
+    # block.
+    materials = doc.get("materials", [])
+    stub_like = [
+        m.get("name") for m in materials
+        if ("ERHE_asset_reference" in m.get("extensions", {})) or ("pbrMetallicRoughness" not in m)
+    ]
+    check(S, "every exported material is a full definition (no reference stubs)",
+          len(materials) > 0 and not stub_like, f"materials={len(materials)} stub-like={stub_like}")
+
+    # The material edited in build-scene: authored parameter VALUES are in
+    # the wire (roughness [0.3, 0.6] -> pbr roughnessFactor + ERHE_material
+    # roughness_y; bxdf_model anisotropic_brdf).
+    edited_name = E2E_STATE.get("material")
+    edited = next((m for m in materials if m.get("name") == edited_name), None)
+    edited_erhe = (edited or {}).get("extensions", {}).get("ERHE_material", {})
+    edited_pbr = (edited or {}).get("pbrMetallicRoughness", {})
+    check(S, "edited material carries its authored parameter values",
+          (edited is not None)
+          and (edited_erhe.get("bxdf_model") == "anisotropic_brdf")
+          and (abs(float(edited_pbr.get("roughnessFactor", -1.0)) - 0.3) < 1e-4)
+          and (abs(float(edited_erhe.get("roughness_y", -1.0)) - 0.6) < 1e-4),
+          f"material={edited_name!r} pbr={edited_pbr} erhe={edited_erhe}")
+
+    # Brushes: every ERHE_brushes entry points at an extra mesh whose
+    # geometry is actually present (primitives with POSITION data).
+    brush_payloads = [p for (name, _w, p) in collect_erhe_payloads(doc) if name == "ERHE_brushes"]
+    check(S, "ERHE_brushes payload present", len(brush_payloads) == 1, f"found {len(brush_payloads)}")
+    brush_entries = brush_payloads[0].get("brushes", []) if brush_payloads else []
+    meshes = doc.get("meshes", [])
+    geometry_less = []
+    for entry in brush_entries:
+        mesh_index = entry.get("mesh")
+        mesh = meshes[mesh_index] if isinstance(mesh_index, int) and (0 <= mesh_index < len(meshes)) else {}
+        primitives = mesh.get("primitives", [])
+        position_counts = [accessor_count(p.get("attributes", {}).get("POSITION")) for p in primitives]
+        if (not primitives) or (not all(count > 0 for count in position_counts)):
+            geometry_less.append(entry.get("name"))
+    check(S, "every brush definition carries real geometry (POSITION data on its mesh)",
+          len(brush_entries) > 0 and not geometry_less,
+          f"entries={len(brush_entries)} geometry-less={geometry_less}")
+    check(S, "authored brush 'P6 Brush' is among the brush definitions",
+          any(entry.get("name") == "P6 Brush" for entry in brush_entries),
+          str([entry.get("name") for entry in brush_entries]))
+
+    # Animations: full sampler data (input/output accessors with keys),
+    # not name-only entries.
+    animations = doc.get("animations", [])
+    hollow = []
+    for animation in animations:
+        samplers = animation.get("samplers", [])
+        channels = animation.get("channels", [])
+        samplers_have_data = all(
+            (accessor_count(sampler.get("input")) > 0) and (accessor_count(sampler.get("output")) > 0)
+            for sampler in samplers
+        )
+        if (not channels) or (not samplers) or (not samplers_have_data):
+            hollow.append(animation.get("name"))
+    check(S, "every animation definition carries sampler data",
+          len(animations) > 0 and not hollow, f"animations={len(animations)} hollow={hollow}")
+
+
 def section_reload_and_diff():
     S = "reload-diff"
     scene = E2E_STATE.get("scene")
@@ -1083,6 +1174,7 @@ def main():
     sections = [
         section_build_scene,
         section_save_and_validate,
+        section_definitions_full_data,
         section_reload_and_diff,
         section_prefab_scene,
         lambda: section_foreign_tools(arguments.gltf_validator, arguments.blender),
