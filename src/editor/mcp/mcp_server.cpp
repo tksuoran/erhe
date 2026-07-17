@@ -391,6 +391,7 @@ auto Mcp_server::process_queued_requests() -> int
             { "set_window_visibility",          &Mcp_server::action_set_window_visibility         },
             { "get_selection",                  &Mcp_server::query_selection                      },
             { "get_undo_redo_stack",            &Mcp_server::query_undo_redo_stack                },
+            { "clear_undo_history",             &Mcp_server::action_clear_undo_history            },
             { "get_async_status",               &Mcp_server::query_async_status                   },
             { "get_shadow_fit_debug",           &Mcp_server::query_shadow_fit_debug               },
             { "raycast",                        &Mcp_server::query_raycast                        },

@@ -24,6 +24,9 @@ namespace erhe::commands {
 namespace erhe {
     class Item_base;
 }
+namespace erhe::primitive {
+    class Material;
+}
 
 namespace editor {
 
@@ -90,6 +93,11 @@ private:
     // Query handlers (run on main thread)
     auto find_scene             (const std::string& name) -> Scene_root*;
     auto find_items_by_ids      (Scene_root& sr, const std::set<std::size_t>& target_ids) -> std::vector<std::shared_ptr<erhe::Item_base>>;
+    // Finds a material by unique item id across every registered scene's
+    // material library, then the asset manager's builtins and loaded
+    // containers - the id path lets tools address container materials,
+    // which live in no scene library (R5.4 verification surface).
+    auto find_material_by_id    (std::size_t material_id) -> std::shared_ptr<erhe::primitive::Material>;
     auto query_list_scenes      (const nlohmann::json& args) -> std::string;
     auto query_scene_nodes      (const nlohmann::json& args) -> std::string;
     auto query_node_details     (const nlohmann::json& args) -> std::string;
@@ -105,6 +113,7 @@ private:
     auto action_set_window_visibility(const nlohmann::json& args) -> std::string;
     auto query_selection        (const nlohmann::json& args) -> std::string;
     auto query_undo_redo_stack  (const nlohmann::json& args) -> std::string;
+    auto action_clear_undo_history(const nlohmann::json& args) -> std::string;
     auto query_async_status     (const nlohmann::json& args) -> std::string;
     auto query_shadow_fit_debug (const nlohmann::json& args) -> std::string;
     auto query_raycast          (const nlohmann::json& args) -> std::string;

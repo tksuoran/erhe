@@ -2,6 +2,11 @@
 
 namespace editor {
 
+void Operation::collect_item_references(std::unordered_set<const erhe::Item_base*>& out_items) const
+{
+    static_cast<void>(out_items);
+}
+
 void Operation::set_description(std::string&& description)
 {
     m_description = std::move(description);

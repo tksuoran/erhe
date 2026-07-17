@@ -31,11 +31,15 @@ Animation_edit_operation::Animation_edit_operation(
             m_after.size()
         )
     );
+    m_usership.set_user_label("undo stack: animation edit");
 }
 
 void Animation_edit_operation::execute(App_context& context)
 {
     log_operations->trace("Op Execute {}", describe());
+    if ((m_usership.get_state() == Asset_resolve_state::unresolved) && (context.asset_manager != nullptr)) {
+        m_usership.adopt(*context.asset_manager, m_animation);
+    }
     apply(context, m_after);
 }
 
@@ -75,11 +79,15 @@ Animation_structure_operation::Animation_structure_operation(
             m_after.channels.size()
         )
     );
+    m_usership.set_user_label("undo stack: animation keying");
 }
 
 void Animation_structure_operation::execute(App_context& context)
 {
     log_operations->trace("Op Execute {}", describe());
+    if ((m_usership.get_state() == Asset_resolve_state::unresolved) && (context.asset_manager != nullptr)) {
+        m_usership.adopt(*context.asset_manager, m_animation);
+    }
     apply(context, m_after);
 }
 

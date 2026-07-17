@@ -45,6 +45,11 @@ public:
     // Implements Operation
     void execute(App_context& context) override;
     void undo   (App_context& context) override;
+    // R5.4: the retained subtree's mesh primitives pin their materials for
+    // as long as this operation is recorded (most visibly a DELETED node
+    // kept for undo); report them so container unload refuses via the
+    // undo/redo-history label instead of unloading under a live pin.
+    void collect_item_references(std::unordered_set<const erhe::Item_base*>& out_items) const override;
 
 private:
     Mode                                                       m_mode;

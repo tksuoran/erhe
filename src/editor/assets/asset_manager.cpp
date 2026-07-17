@@ -5,6 +5,7 @@
 #include "assets/asset_paths.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
+#include "operations/operation_stack.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe_gltf/image_transfer.hpp"
@@ -353,6 +354,31 @@ auto Asset_manager::find_loaded(const Asset_key& key) const -> std::shared_ptr<e
     }
 }
 
+auto Asset_manager::find_loaded_by_id(const std::size_t item_id) const -> std::shared_ptr<erhe::Item_base>
+{
+    for (const auto& [type, by_name] : m_builtins) {
+        for (const auto& [name, item] : by_name) {
+            if (item->get_id() == item_id) {
+                return item;
+            }
+        }
+    }
+    for (const auto& [container_id, record] : m_containers) {
+        for (const Asset_type_info& type_info : get_asset_type_infos()) {
+            const Asset_container_record::Type_entries* entries = record->get_type_entries(type_info.type);
+            if (entries == nullptr) {
+                continue;
+            }
+            for (const std::shared_ptr<erhe::Item_base>& item : entries->items) {
+                if (item->get_id() == item_id) {
+                    return item;
+                }
+            }
+        }
+    }
+    return {};
+}
+
 auto Asset_manager::make_key(const erhe::Item_base& item) const -> Asset_key
 {
     Asset_key key;
@@ -443,6 +469,15 @@ auto Asset_manager::request_unload(const Asset_key& key) -> Unload_result
     }
 
     // Refuse while any asset of the container has users, naming them.
+    // Direct holders are declared users (Asset_reference); the undo/redo
+    // history's INDIRECT pins - retained node subtrees whose mesh
+    // primitives hold materials - are consulted through
+    // Operation_stack::collect_item_references (R5.4, resolution 7
+    // mechanism b) and refuse with a collective label.
+    std::unordered_set<const erhe::Item_base*> history_items;
+    if (m_context.operation_stack != nullptr) {
+        m_context.operation_stack->collect_item_references(history_items);
+    }
     std::vector<std::pair<std::weak_ptr<erhe::Item_base>, std::string>> weak_assets;
     for (const Asset_type_info& info : get_asset_type_infos()) {
         const Asset_container_record::Type_entries* entries = record->get_type_entries(info.type);
@@ -455,6 +490,9 @@ auto Asset_manager::request_unload(const Asset_key& key) -> Unload_result
                 for (const Asset_reference* reference : user_it->second) {
                     result.users.push_back(Asset_user_info{reference->get_user_label(), item->get_name()});
                 }
+            }
+            if (history_items.contains(item.get())) {
+                result.users.push_back(Asset_user_info{"undo/redo history (clear history to release)", item->get_name()});
             }
             weak_assets.emplace_back(item, fmt::format("{} '{}'", info.name, item->get_name()));
         }

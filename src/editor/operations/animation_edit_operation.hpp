@@ -1,5 +1,6 @@
 #pragma once
 
+#include "assets/asset_reference.hpp"
 #include "operations/operation.hpp"
 
 #include "animation/animation_edit.hpp"
@@ -38,6 +39,9 @@ private:
     std::shared_ptr<erhe::scene::Animation> m_animation;
     std::vector<Animation_sampler_state>    m_before;
     std::vector<Animation_sampler_state>    m_after;
+    // R5.4 declared usership (resolution 7 mechanism a); adopted at first
+    // execute, m_animation carries the pin from construction on.
+    Asset_reference                         m_usership;
 };
 
 // Undoable structural edit of an animation: full before/after snapshots of
@@ -65,6 +69,8 @@ private:
     std::shared_ptr<erhe::scene::Animation> m_animation;
     Animation_state                         m_before;
     Animation_state                         m_after;
+    // See Animation_edit_operation::m_usership.
+    Asset_reference                         m_usership;
 };
 
 }

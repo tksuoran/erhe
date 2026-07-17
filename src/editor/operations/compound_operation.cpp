@@ -50,4 +50,11 @@ void Compound_operation::undo(App_context& context)
     log_operations->trace("Op Undo End {}", describe());
 }
 
+void Compound_operation::collect_item_references(std::unordered_set<const erhe::Item_base*>& out_items) const
+{
+    for (const std::shared_ptr<Operation>& operation : m_parameters.operations) {
+        operation->collect_item_references(out_items);
+    }
+}
+
 }

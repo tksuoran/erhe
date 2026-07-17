@@ -3,6 +3,8 @@
 
 #include "mcp/mcp_server_shared.hpp"
 
+#include "assets/asset_manager.hpp"
+
 namespace editor {
 
 using namespace mcp_server_detail;
@@ -266,6 +268,27 @@ void apply_slot_edit(const Slot_edit& edit, erhe::primitive::Material_texture_sa
 
 } // anonymous namespace
 
+auto Mcp_server::find_material_by_id(const std::size_t material_id) -> std::shared_ptr<erhe::primitive::Material>
+{
+    if (m_context.app_scenes != nullptr) {
+        for (const std::shared_ptr<Scene_root>& scene_root : m_context.app_scenes->get_scene_roots()) {
+            const std::shared_ptr<Content_library> library = scene_root->get_content_library();
+            if (!library || !library->materials) {
+                continue;
+            }
+            for (const std::shared_ptr<erhe::primitive::Material>& mat : library->materials->get_all<erhe::primitive::Material>()) {
+                if (mat->get_id() == material_id) {
+                    return mat;
+                }
+            }
+        }
+    }
+    if (m_context.asset_manager != nullptr) {
+        return std::dynamic_pointer_cast<erhe::primitive::Material>(m_context.asset_manager->find_loaded_by_id(material_id));
+    }
+    return {};
+}
+
 auto Mcp_server::action_edit_material(const json& args) -> std::string
 {
     if (m_context.operation_stack == nullptr) {
@@ -276,48 +299,67 @@ auto Mcp_server::action_edit_material(const json& args) -> std::string
 
     const std::string scene_name    = args.value("scene_name", "");
     const std::string material_name = args.value("material_name", "");
-
-    Scene_root* sr = find_scene(scene_name);
-    if (sr == nullptr) {
-        json r = make_text_content("Scene not found: " + scene_name);
-        r["isError"] = true;
-        return r.dump();
-    }
-
-    auto library = sr->get_content_library();
-    if (!library || !library->materials) {
-        json r = make_text_content("No materials in scene: " + scene_name);
-        r["isError"] = true;
-        return r.dump();
-    }
+    const std::size_t material_id   = args.value("material_id", std::size_t{0});
 
     std::shared_ptr<erhe::primitive::Material> material;
-    const auto& mat_list = library->materials->get_all<erhe::primitive::Material>();
-    std::vector<std::size_t> matching_ids;
-    for (const auto& mat : mat_list) {
-        if (mat->get_name() == material_name) {
-            if (!material) {
-                material = mat;
-            }
-            matching_ids.push_back(mat->get_id());
+    std::shared_ptr<Content_library>           library;
+    if (material_id != 0) {
+        // The id path (unique item ids): reaches materials in any scene's
+        // library AND the asset manager's loaded containers, which live in
+        // no scene. Texture-sampler edits need a scene library for texture
+        // lookup, so they resolve against the material's hosting scene when
+        // it has one.
+        material = find_material_by_id(material_id);
+        if (!material) {
+            json r = make_text_content("Material not found with id: " + std::to_string(material_id));
+            r["isError"] = true;
+            return r.dump();
         }
-    }
-    if (!material) {
-        json r = make_text_content("Material not found: " + material_name);
-        r["isError"] = true;
-        return r.dump();
-    }
-    if (matching_ids.size() > 1) {
-        // Ambiguous: refuse to mutate. Return the candidate ids so the
-        // caller can re-issue with a disambiguating id (once the id
-        // path is added).
-        json r = make_text_content(
-            "Material name '" + material_name + "' matches " +
-            std::to_string(matching_ids.size()) + " materials"
-        );
-        r["isError"]      = true;
-        r["candidate_ids"] = matching_ids;
-        return r.dump();
+        erhe::Item_host* const item_host = material->get_item_host();
+        if ((m_context.app_scenes != nullptr) && (item_host != nullptr) && m_context.app_scenes->is_host_registered(item_host)) {
+            library = static_cast<Scene_root*>(item_host)->get_content_library();
+        }
+    } else {
+        Scene_root* sr = find_scene(scene_name);
+        if (sr == nullptr) {
+            json r = make_text_content("Scene not found: " + scene_name);
+            r["isError"] = true;
+            return r.dump();
+        }
+
+        library = sr->get_content_library();
+        if (!library || !library->materials) {
+            json r = make_text_content("No materials in scene: " + scene_name);
+            r["isError"] = true;
+            return r.dump();
+        }
+
+        const auto& mat_list = library->materials->get_all<erhe::primitive::Material>();
+        std::vector<std::size_t> matching_ids;
+        for (const auto& mat : mat_list) {
+            if (mat->get_name() == material_name) {
+                if (!material) {
+                    material = mat;
+                }
+                matching_ids.push_back(mat->get_id());
+            }
+        }
+        if (!material) {
+            json r = make_text_content("Material not found: " + material_name);
+            r["isError"] = true;
+            return r.dump();
+        }
+        if (matching_ids.size() > 1) {
+            // Ambiguous: refuse to mutate. Return the candidate ids so the
+            // caller can re-issue with a disambiguating material_id.
+            json r = make_text_content(
+                "Material name '" + material_name + "' matches " +
+                std::to_string(matching_ids.size()) + " materials"
+            );
+            r["isError"]      = true;
+            r["candidate_ids"] = matching_ids;
+            return r.dump();
+        }
     }
 
     if (material->is_lock_edit()) {
@@ -447,8 +489,8 @@ auto Mcp_server::action_edit_material(const json& args) -> std::string
             return r.dump();
         }
 
-        if (!library->textures) {
-            json r = make_text_content("Content library has no textures node");
+        if (!library || !library->textures) {
+            json r = make_text_content("Content library has no textures node (texture-sampler edits need a scene-hosted material)");
             r["isError"] = true;
             return r.dump();
         }

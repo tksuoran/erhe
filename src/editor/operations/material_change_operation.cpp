@@ -21,12 +21,16 @@ Material_change_operation::Material_change_operation(
     , m_after{after}
 {
     set_description(fmt::format("Material change {}", m_material->get_name()));
+    m_usership.set_user_label("undo stack: material change");
 }
 
 Material_change_operation::~Material_change_operation() noexcept = default;
 
-void Material_change_operation::execute(App_context&)
+void Material_change_operation::execute(App_context& context)
 {
+    if ((m_usership.get_state() == Asset_resolve_state::unresolved) && (context.asset_manager != nullptr)) {
+        m_usership.adopt(*context.asset_manager, m_material);
+    }
     // TODO Lock the item
     m_material->data = m_after;
 }

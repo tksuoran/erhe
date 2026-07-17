@@ -6,10 +6,12 @@
 
 #include <memory>
 #include <mutex>
+#include <unordered_set>
 #include <vector>
 
-namespace erhe::commands { class Commands; }
-namespace erhe::imgui    { class Imgui_windows; }
+namespace erhe            { class Item_base; }
+namespace erhe::commands  { class Commands; }
+namespace erhe::imgui     { class Imgui_windows; }
 
 namespace editor {
 
@@ -91,6 +93,13 @@ public:
     // objects alive -- and its viewport rendergraph nodes registered and
     // executing -- indefinitely.
     void clear_history();
+
+    // R5.4: union of Operation::collect_item_references over every recorded
+    // operation (undo + redo histories plus not-yet-executed queued ones).
+    // Asset_manager::request_unload consults this so a container whose asset
+    // is retained by the history refuses with the collective undo/redo-
+    // history label instead of unloading under a live pin.
+    void collect_item_references(std::unordered_set<const erhe::Item_base*>& out_items) const;
 
     void update();
 

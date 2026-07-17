@@ -6,6 +6,9 @@
 #include "editor_log.hpp"
 #include "tools/selection_tool.hpp"
 
+#include "erhe_primitive/material.hpp"
+#include "erhe_scene/mesh.hpp"
+
 #include <sstream>
 
 namespace editor {
@@ -132,6 +135,39 @@ void Item_insert_remove_operation::undo(App_context& context)
     }
 
     context.selection->set_selection(m_selection_before);
+}
+
+namespace {
+
+void collect_subtree_mesh_materials(const std::shared_ptr<erhe::Hierarchy>& hierarchy, std::unordered_set<const erhe::Item_base*>& out_items)
+{
+    if (!hierarchy) {
+        return;
+    }
+    const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(hierarchy);
+    if (node) {
+        for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : node->get_attachments()) {
+            const std::shared_ptr<erhe::scene::Mesh> mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(attachment);
+            if (!mesh) {
+                continue;
+            }
+            for (const erhe::scene::Mesh_primitive& primitive : mesh->get_primitives()) {
+                if (primitive.material) {
+                    out_items.insert(primitive.material.get());
+                }
+            }
+        }
+    }
+    for (const std::shared_ptr<erhe::Hierarchy>& child : hierarchy->get_children()) {
+        collect_subtree_mesh_materials(child, out_items);
+    }
+}
+
+}
+
+void Item_insert_remove_operation::collect_item_references(std::unordered_set<const erhe::Item_base*>& out_items) const
+{
+    collect_subtree_mesh_materials(m_item, out_items);
 }
 
 }

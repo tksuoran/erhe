@@ -155,6 +155,11 @@ public:
 
     // Identity
     [[nodiscard]] auto find_loaded(const Asset_key& key) const -> std::shared_ptr<erhe::Item_base>;
+    // Finds a loaded managed asset object by its unique item id (scans the
+    // builtins and every loaded container's entries). MCP id-addressed
+    // tools use this to reach container assets, which live in no scene
+    // library.
+    [[nodiscard]] auto find_loaded_by_id(std::size_t item_id) const -> std::shared_ptr<erhe::Item_base>;
     [[nodiscard]] auto make_key(const erhe::Item_base& item) const -> Asset_key;
 
     // Users / unload. v1 unload granularity is the container: the parsed

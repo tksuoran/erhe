@@ -40,6 +40,7 @@ void Mcp_server::refresh_tool_list()
     }});
     m_tool_infos.push_back({"get_selection",        "Get currently selected items",                          schema_no_args()});
     m_tool_infos.push_back({"get_undo_redo_stack", "Get undo/redo operation stacks",                       schema_no_args()});
+    m_tool_infos.push_back({"clear_undo_history",  "Drop the undo and redo histories (queued operations are kept). Recorded operations are declared users / indirect pins of the assets they retain, so container unload can refuse until the history is cleared (R5.4).", schema_no_args()});
     m_tool_infos.push_back({"get_async_status",   "Get pending/running async operation counts",          schema_no_args()});
     m_tool_infos.push_back({"get_shadow_fit_debug","Dump directional shadow frustum fit debug geometry per shadow node: F_shadow planes, their bounded face quads (the truncated view-frustum faces caster AABBs are tested against), and receiver frustum corners. Needs the Shadow Fit 'Collect Debug' setting enabled.", schema_no_args()});
     m_tool_infos.push_back({"raycast",             "Shoot a ray through a scene's raytrace world and report the closest hit (mesh, node, primitive index, distance, position, normal). Uses the same mask defaults as the interactive viewport hover ray, so it verifies hover / ray picking behavior headlessly.", {
@@ -104,6 +105,7 @@ void Mcp_server::refresh_tool_list()
             {"position",       {{"type", "array"},   {"items", {{"type", "number"}}},  {"minItems", 3}, {"maxItems", 3}, {"description", "World position [x, y, z] for the instance (default [0, 0, 0])"}}},
             {"parent_node_id", {{"type", "integer"}, {"description", "Parent node ID for the instance (default: scene root); the world position is preserved"}}},
             {"material_name",  {{"type", "string"},  {"description", "Material name (default: first available)"}}},
+            {"material_id",    {{"type", "integer"}, {"description", "Material by unique item id; reaches any scene's materials and the asset manager's loaded container materials (takes precedence over material_name)"}}},
             {"scale",          {{"type", "number"},  {"description", "Uniform scale factor for the instance (default 1.0)"}}},
             {"motion_mode",    {{"type", "string"},  {"description", "Physics motion mode for the instance: static, kinematic, dynamic (default dynamic)"}}},
             {"size",           {{"type", "array"},   {"items", {{"type", "number"}}},  {"minItems", 3}, {"maxItems", 3}, {"description", "box: size [x, y, z]"}}},
@@ -275,8 +277,9 @@ void Mcp_server::refresh_tool_list()
     m_tool_infos.push_back({"edit_material",      "Edit material properties including texture assignments (undoable). Only fields supplied are changed.", {
         {"type", "object"},
         {"properties", {
-            {"scene_name",                 {{"type", "string"},  {"description", "Name of the scene"}}},
+            {"scene_name",                 {{"type", "string"},  {"description", "Name of the scene (name path; not needed with material_id)"}}},
             {"material_name",              {{"type", "string"},  {"description", "Name of the material to edit"}}},
+            {"material_id",                {{"type", "integer"}, {"description", "Material by unique item id; reaches any scene's materials and the asset manager's loaded container materials (takes precedence over the name path)"}}},
             {"base_color",                 {{"type", "array"},   {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Linear RGB base color [r, g, b]"}}},
             {"opacity",                    {{"type", "number"},  {"description", "Opacity in [0, 1]"}}},
             {"roughness",                  {{"description", "Roughness; either [x, y] for anisotropic or a single number applied to both."}}},

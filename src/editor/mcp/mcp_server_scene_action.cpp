@@ -581,7 +581,20 @@ auto Mcp_server::action_create_shape(const json& args) -> std::string
     if (make_instance) {
         std::shared_ptr<erhe::primitive::Material> material;
         const std::string material_name = args.value("material_name", "");
-        if (!material_name.empty() && library && library->materials) {
+        const std::size_t material_id   = args.value("material_id", std::size_t{0});
+        if (material_id != 0) {
+            // The id path reaches materials in any scene's library AND the
+            // asset manager's loaded containers (which live in no scene) -
+            // the R5.4 verification surface for meshes using container
+            // materials.
+            material = find_material_by_id(material_id);
+            if (!material) {
+                json r = make_text_content("Material not found with id: " + std::to_string(material_id));
+                r["isError"] = true;
+                return r.dump();
+            }
+        }
+        if (!material && !material_name.empty() && library && library->materials) {
             const auto& mat_list = library->materials->get_all<erhe::primitive::Material>();
             for (const auto& mat : mat_list) {
                 if (mat->get_name() == material_name) {

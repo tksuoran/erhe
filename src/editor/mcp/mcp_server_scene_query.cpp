@@ -844,6 +844,25 @@ auto Mcp_server::query_undo_redo_stack(const json& args) -> std::string
     }).dump();
 }
 
+auto Mcp_server::action_clear_undo_history(const json& args) -> std::string
+{
+    static_cast<void>(args);
+
+    if (!m_context.operation_stack) {
+        json r = make_text_content("Operation stack not available");
+        r["isError"] = true;
+        return r.dump();
+    }
+    const std::size_t dropped =
+        m_context.operation_stack->get_undo_stack().size() +
+        m_context.operation_stack->get_redo_stack().size();
+    m_context.operation_stack->clear_history();
+    return make_json_content({
+        {"cleared",       true},
+        {"dropped_count", dropped}
+    }).dump();
+}
+
 auto Mcp_server::query_async_status(const json& args) -> std::string
 {
     static_cast<void>(args);

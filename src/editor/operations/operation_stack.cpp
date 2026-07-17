@@ -171,6 +171,20 @@ void Operation_stack::clear_history()
     m_undone.clear();
 }
 
+void Operation_stack::collect_item_references(std::unordered_set<const erhe::Item_base*>& out_items) const
+{
+    verify_main_thread();
+    for (const std::shared_ptr<Operation>& operation : m_executed) {
+        operation->collect_item_references(out_items);
+    }
+    for (const std::shared_ptr<Operation>& operation : m_undone) {
+        operation->collect_item_references(out_items);
+    }
+    for (const std::shared_ptr<Operation>& operation : m_queued) {
+        operation->collect_item_references(out_items);
+    }
+}
+
 void Operation_stack::redo()
 {
     verify_main_thread();
