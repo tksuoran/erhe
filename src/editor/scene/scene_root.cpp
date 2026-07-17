@@ -1237,6 +1237,13 @@ auto Scene_root::get_source_path() const -> const std::filesystem::path&
 void Scene_root::set_source_path(const std::filesystem::path& path)
 {
     m_source_path = path;
+    // R5.3: the scene's container record follows the source path (first
+    // save binds it, save-as re-homes it). The open paths call this before
+    // register_to_editor_scenes(); the record then picks the path up at
+    // registration instead.
+    if (m_is_registered && (m_app_scenes != nullptr)) {
+        m_app_scenes->notify_scene_source_path_changed(*this);
+    }
 }
 
 auto Scene_root::get_scene_settings() -> Scene_settings&

@@ -260,7 +260,8 @@ auto Asset_manager::resolve_scene_local(const Asset_key& key, std::string& out_e
             }
         }
     }
-    for (const auto& [path, record] : m_containers) {
+    for (const auto& [path, container_id] : m_path_index) {
+        const std::shared_ptr<Asset_container_record> record = m_containers.at(container_id);
         const Asset_container_record::Type_entries* entries = record->get_type_entries(key.type);
         if (entries == nullptr) {
             continue;
@@ -336,11 +337,11 @@ auto Asset_manager::find_loaded(const Asset_key& key) const -> std::shared_ptr<e
             return resolve_builtin(key, ignored_error);
         }
         case Asset_scope::file: {
-            const auto container_it = m_containers.find(normalize_asset_path(std::filesystem::path{key.path}));
-            if (container_it == m_containers.end()) {
+            const std::shared_ptr<Asset_container_record> record = find_record_by_path(normalize_asset_path(std::filesystem::path{key.path}));
+            if (!record) {
                 return {};
             }
-            return resolve_in_container(*container_it->second, key, ignored_error);
+            return resolve_in_container(*record, key, ignored_error);
         }
         case Asset_scope::scene_local: {
             return resolve_scene_local(key, ignored_error);
@@ -366,7 +367,7 @@ auto Asset_manager::make_key(const erhe::Item_base& item) const -> Asset_key
             }
         }
     }
-    for (const auto& [path, record] : m_containers) {
+    for (const auto& [container_id, record] : m_containers) {
         const Asset_container_record::Type_entries* entries = record->get_type_entries(key.type);
         if (entries == nullptr) {
             continue;
@@ -427,12 +428,19 @@ auto Asset_manager::request_unload(const Asset_key& key) -> Unload_result
         return result;
     }
     const std::filesystem::path canonical_path = normalize_asset_path(std::filesystem::path{key.path});
-    const auto container_it = m_containers.find(canonical_path);
-    if (container_it == m_containers.end()) {
+    std::shared_ptr<Asset_container_record> record = find_record_by_path(canonical_path);
+    if (!record) {
         result.message = fmt::format("container '{}' is not loaded", asset_path_to_string(canonical_path));
         return result;
     }
-    std::shared_ptr<Asset_container_record> record = container_it->second;
+    if (record->is_open_as_scene()) {
+        const std::shared_ptr<Scene_root> scene_root = record->scene_root.lock();
+        result.message = fmt::format(
+            "'{}' is open as scene '{}'; close the scene instead of unloading its identity record",
+            record->display_path, scene_root ? scene_root->get_name() : std::string{"?"}
+        );
+        return result;
+    }
 
     // Refuse while any asset of the container has users, naming them.
     std::vector<std::pair<std::weak_ptr<erhe::Item_base>, std::string>> weak_assets;
@@ -464,7 +472,8 @@ auto Asset_manager::request_unload(const Asset_key& key) -> Unload_result
     }
 
     const std::string display_path = record->display_path;
-    m_containers.erase(container_it);
+    m_path_index.erase(canonical_path);
+    m_containers.erase(record->id);
     record.reset(); // drop the last strong reference before verifying exclusivity
 
     // Exclusivity verification: a managed asset still lockable after the
@@ -491,10 +500,13 @@ auto Asset_manager::get_or_load_container(const std::filesystem::path& path, std
 {
     verify_main_thread();
     const std::filesystem::path canonical_path = normalize_asset_path(path);
-    const auto existing = m_containers.find(canonical_path);
-    if (existing != m_containers.end()) {
-        return existing->second;
+    const std::shared_ptr<Asset_container_record> existing = find_record_by_path(canonical_path);
+    if (existing && !existing->is_open_as_scene()) {
+        return existing;
     }
+    // A path-bound scene identity record (R5.3) is NOT served as an asset
+    // container - it holds no assets; fall through to the open-as-scene
+    // refusal below (unchanged behavior until the R5.7 adoption).
 
     // Until the R5 single-loader flip routes scene open through the
     // manager, loading a file that is open as a scene would create a second
@@ -561,8 +573,133 @@ auto Asset_manager::get_or_load_container(const std::filesystem::path& path, std
         "asset container loaded: '{}' ({} materials, {} animations, {} identifiability errors)",
         record->display_path, record->materials.items.size(), record->animations.items.size(), record->errors.size()
     );
-    m_containers.emplace(canonical_path, record);
+    m_containers.emplace(record->id, record);
+    const auto [index_it, index_inserted] = m_path_index.try_emplace(canonical_path, record->id);
+    // The open-as-scene refusal above already returned for a path bound to
+    // a scene record, and an existing container record returned at the top,
+    // so the slot must be free here.
+    ERHE_VERIFY(index_inserted);
     return record;
+}
+
+auto Asset_manager::find_record_by_path(const std::filesystem::path& canonical_path) const -> std::shared_ptr<Asset_container_record>
+{
+    const auto index_it = m_path_index.find(canonical_path);
+    if (index_it == m_path_index.end()) {
+        return {};
+    }
+    const auto record_it = m_containers.find(index_it->second);
+    ERHE_VERIFY(record_it != m_containers.end());
+    return record_it->second;
+}
+
+auto Asset_manager::find_scene_record(const Scene_root* scene_root) const -> std::shared_ptr<Asset_container_record>
+{
+    if (scene_root == nullptr) {
+        return {};
+    }
+    for (const auto& [container_id, record] : m_containers) {
+        if (record->scene_root_identity == scene_root) {
+            return record;
+        }
+    }
+    return {};
+}
+
+void Asset_manager::bind_record_path(Asset_container_record& record, const std::filesystem::path& path)
+{
+    if (!record.canonical_path.empty()) {
+        const auto index_it = m_path_index.find(record.canonical_path);
+        if ((index_it != m_path_index.end()) && (index_it->second == record.id)) {
+            m_path_index.erase(index_it);
+        }
+    }
+    record.canonical_path.clear();
+    record.display_path.clear();
+    if (path.empty()) {
+        return;
+    }
+    record.canonical_path = normalize_asset_path(path);
+    record.display_path   = asset_path_to_string(record.canonical_path);
+    const auto [index_it, inserted] = m_path_index.try_emplace(record.canonical_path, record.id);
+    if (!inserted && (index_it->second != record.id)) {
+        log_asset->warn(
+            "path '{}' is already bound to container record {}; record {} keeps the path but not the index slot (two records share one path - the two-loader hazard, resolved by R5.5/R5.7)",
+            record.display_path, index_it->second, record.id
+        );
+    }
+}
+
+void Asset_manager::on_scene_registered(const std::shared_ptr<Scene_root>& scene_root)
+{
+    verify_main_thread();
+    ERHE_VERIFY(scene_root);
+    const std::shared_ptr<Asset_container_record> existing = find_scene_record(scene_root.get());
+    if (existing) {
+        log_asset->warn("scene '{}' already has container record {}", scene_root->get_name(), existing->id);
+        return;
+    }
+    std::shared_ptr<Asset_container_record> record = std::make_shared<Asset_container_record>();
+    record->id                  = m_next_container_id++;
+    record->scene_root          = scene_root;
+    record->scene_root_identity = scene_root.get();
+    m_containers.emplace(record->id, record);
+    // An opened scene arrives with its source path already set (open paths
+    // call set_source_path before registering); a created scene is a
+    // session record (empty path) until its first save.
+    bind_record_path(*record, scene_root->get_source_path());
+    log_asset->info(
+        "scene '{}' registered as container record {} ({})",
+        scene_root->get_name(), record->id,
+        record->canonical_path.empty() ? std::string{"session"} : record->display_path
+    );
+}
+
+void Asset_manager::on_scene_unregistered(Scene_root* scene_root)
+{
+    verify_main_thread();
+    const std::shared_ptr<Asset_container_record> record = find_scene_record(scene_root);
+    if (!record) {
+        // Scenes registered before the Asset_manager existed have no record;
+        // in practice every registration happens at runtime (startup script
+        // or later), so this indicates a bookkeeping bug.
+        log_asset->warn("unregistered scene has no container record");
+        return;
+    }
+    if (!record->canonical_path.empty()) {
+        const auto index_it = m_path_index.find(record->canonical_path);
+        if ((index_it != m_path_index.end()) && (index_it->second == record->id)) {
+            m_path_index.erase(index_it);
+        }
+    }
+    log_asset->info(
+        "scene container record {} removed ({})",
+        record->id,
+        record->canonical_path.empty() ? std::string{"session"} : record->display_path
+    );
+    m_containers.erase(record->id);
+}
+
+void Asset_manager::on_scene_source_path_changed(Scene_root& scene_root)
+{
+    verify_main_thread();
+    const std::shared_ptr<Asset_container_record> record = find_scene_record(&scene_root);
+    if (!record) {
+        log_asset->warn("scene '{}' changed source path but has no container record", scene_root.get_name());
+        return;
+    }
+    const bool was_session = record->canonical_path.empty();
+    bind_record_path(*record, scene_root.get_source_path());
+    if (record->canonical_path.empty()) {
+        log_asset->info("scene '{}' container record {} unbound (session)", scene_root.get_name(), record->id);
+    } else {
+        log_asset->info(
+            "scene '{}' container record {} {} '{}'",
+            scene_root.get_name(), record->id,
+            was_session ? "bound to" : "re-homed to",
+            record->display_path
+        );
+    }
 }
 
 auto Asset_manager::inspect_assets() const -> std::vector<Asset_info>
@@ -591,7 +728,7 @@ auto Asset_manager::inspect_assets() const -> std::vector<Asset_info>
             result.push_back(std::move(info));
         }
     }
-    for (const auto& [path, record] : m_containers) {
+    for (const auto& [container_id, record] : m_containers) {
         for (const Asset_type_info& type_info : get_asset_type_infos()) {
             const Asset_container_record::Type_entries* entries = record->get_type_entries(type_info.type);
             if (entries == nullptr) {
@@ -629,7 +766,7 @@ auto Asset_manager::inspect_assets() const -> std::vector<Asset_info>
 auto Asset_manager::inspect_containers() const -> std::vector<Asset_container_info>
 {
     std::vector<Asset_container_info> result;
-    for (const auto& [path, record] : m_containers) {
+    for (const auto& [container_id, record] : m_containers) {
         Asset_container_info info;
         info.id              = record->id;
         info.path            = record->display_path;
@@ -637,6 +774,12 @@ auto Asset_manager::inspect_containers() const -> std::vector<Asset_container_in
         info.animation_count = record->animations.items.size();
         info.errors          = record->errors;
         info.dirty           = record->dirty;
+        info.open_as_scene   = record->is_open_as_scene();
+        info.session         = record->canonical_path.empty();
+        const std::shared_ptr<Scene_root> scene_root = record->scene_root.lock();
+        if (scene_root) {
+            info.scene_name = scene_root->get_name();
+        }
         result.push_back(std::move(info));
     }
     return result;
@@ -658,7 +801,7 @@ auto Asset_manager::is_pinned(const erhe::Item_base* item) const -> bool
             }
         }
     }
-    for (const auto& [path, record] : m_containers) {
+    for (const auto& [container_id, record] : m_containers) {
         for (const Asset_type_info& type_info : get_asset_type_infos()) {
             const Asset_container_record::Type_entries* entries = record->get_type_entries(type_info.type);
             if (entries == nullptr) {

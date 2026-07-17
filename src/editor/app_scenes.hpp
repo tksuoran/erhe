@@ -24,6 +24,10 @@ public:
 
     void register_scene_root                 (const std::shared_ptr<Scene_root>& scene_root);
     void unregister_scene_root               (Scene_root* scene_root);
+    // Forwards a scene's source-path change to the Asset_manager so the
+    // scene's container record follows (R5.3: first save binds, save-as
+    // re-homes). Called by Scene_root::set_source_path while registered.
+    void notify_scene_source_path_changed    (Scene_root& scene_root);
     void sanity_check                        ();
 
     void before_physics_simulation_steps     ();

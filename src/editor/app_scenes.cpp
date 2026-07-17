@@ -1,6 +1,7 @@
 #include "app_scenes.hpp"
 
 #include "app_context.hpp"
+#include "assets/asset_manager.hpp"
 #include "editor_log.hpp"
 #include "app_settings.hpp"
 #include "tools/tools.hpp"
@@ -45,30 +46,46 @@ App_scenes::~App_scenes() noexcept
 
 void App_scenes::register_scene_root(const std::shared_ptr<Scene_root>& scene_root)
 {
-    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+    {
+        const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
-    const auto i = std::find(m_scene_roots.begin(), m_scene_roots.end(), scene_root);
-    if (i != m_scene_roots.end()) {
-        log_scene->error("Scene '{}' is already in registered in App_scenes", scene_root->get_name());
-    } else {
+        const auto i = std::find(m_scene_roots.begin(), m_scene_roots.end(), scene_root);
+        if (i != m_scene_roots.end()) {
+            log_scene->error("Scene '{}' is already in registered in App_scenes", scene_root->get_name());
+            return;
+        }
         m_scene_roots.push_back(scene_root);
+    }
+
+    // R5.3: every registered scene gets an identity container record. The
+    // manager pointer is null only outside a full editor run (App_scenes is
+    // constructed before Asset_manager; scenes register at runtime, when
+    // App_context is populated).
+    if (m_context.asset_manager != nullptr) {
+        m_context.asset_manager->on_scene_registered(scene_root);
     }
 }
 
 void App_scenes::unregister_scene_root(Scene_root* scene_root)
 {
-    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+    {
+        const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
-    const auto i = std::remove_if(
-        m_scene_roots.begin(), m_scene_roots.end(),
-        [scene_root](const std::shared_ptr<Scene_root>& entry) {
-            return entry.get() == scene_root;
+        const auto i = std::remove_if(
+            m_scene_roots.begin(), m_scene_roots.end(),
+            [scene_root](const std::shared_ptr<Scene_root>& entry) {
+                return entry.get() == scene_root;
+            }
+        );
+        if (i == m_scene_roots.end()) {
+            log_scene->error("Scene '{}' not registered in App_scenes", scene_root->get_name());
+        } else {
+            m_scene_roots.erase(i, m_scene_roots.end());
         }
-    );
-    if (i == m_scene_roots.end()) {
-        log_scene->error("Scene '{}' not registered in App_scenes", scene_root->get_name());
-    } else {
-        m_scene_roots.erase(i, m_scene_roots.end());
+    }
+
+    if (m_context.asset_manager != nullptr) {
+        m_context.asset_manager->on_scene_unregistered(scene_root);
     }
 
     // If this scene's own item (issue #240) is currently selected, drop it from
@@ -77,6 +94,13 @@ void App_scenes::unregister_scene_root(Scene_root* scene_root)
     const std::shared_ptr<erhe::scene::Scene> scene_item = scene_root->get_scene_item();
     if ((m_context.selection != nullptr) && scene_item && scene_item->is_selected()) {
         m_context.selection->remove_from_selection(scene_item);
+    }
+}
+
+void App_scenes::notify_scene_source_path_changed(Scene_root& scene_root)
+{
+    if (m_context.asset_manager != nullptr) {
+        m_context.asset_manager->on_scene_source_path_changed(scene_root);
     }
 }
 

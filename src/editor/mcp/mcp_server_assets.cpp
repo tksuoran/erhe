@@ -73,14 +73,20 @@ auto Mcp_server::query_asset_manager(const json& args) -> std::string
 
     json containers = json::array();
     for (const Asset_container_info& info : asset_manager->inspect_containers()) {
-        containers.push_back({
+        json entry = {
             {"id",              info.id},
             {"path",            info.path},
             {"material_count",  info.material_count},
             {"animation_count", info.animation_count},
             {"errors",          info.errors},
-            {"dirty",           info.dirty}
-        });
+            {"dirty",           info.dirty},
+            {"open_as_scene",   info.open_as_scene},
+            {"session",         info.session}
+        };
+        if (info.open_as_scene) {
+            entry["scene_name"] = info.scene_name;
+        }
+        containers.push_back(std::move(entry));
     }
 
     json debug_holds = json::array();

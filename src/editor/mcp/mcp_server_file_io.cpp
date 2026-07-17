@@ -54,9 +54,13 @@ auto Mcp_server::action_save_scene(const json& args) -> std::string
         r["isError"] = true;
         return r.dump();
     }
-    if (path_str.empty() && sr->get_source_path().empty()) {
-        // Same writeback as File > Save Scene: the scene now lives in this
-        // file, further path-less saves write back to it.
+    // set_as_source gives the save "Save As" semantics: the scene (and its
+    // R5.3 container record, which follows set_source_path) now lives in
+    // this file. Without it an explicit-path save is an export that leaves
+    // the scene's source binding untouched; a path-less first save writes
+    // back like File > Save Scene always has.
+    const bool set_as_source = args.value("set_as_source", false);
+    if (set_as_source || (path_str.empty() && sr->get_source_path().empty())) {
         sr->set_source_path(path);
     }
     return make_json_content({

@@ -26,12 +26,19 @@ namespace editor {
 class App_context;
 class App_message_bus;
 class App_scenes;
+class Scene_root;
 
 // A glTF container file parsed once by the Asset_manager (plan D3). The
 // parsed Gltf_data keeps every contained object alive; the free root node
 // (no holding scene - container node trees are never rendered) keeps the
 // parsed node tree parented. Managed asset types get per-type resolution
 // maps built at load, with identifiability validated per plan decision 11.
+//
+// Since R5.3 every scene registered with App_scenes also has a record -
+// PURE IDENTITY ONLY: session id, the scene link below, and a path once
+// the scene has been saved (first save binds, save-as re-homes). A scene
+// record holds NO strong asset references and NO gltf_data; its type
+// entries stay empty until the R5.5 shadow registration.
 class Asset_container_record
 {
 public:
@@ -50,13 +57,25 @@ public:
     [[nodiscard]] auto get_type_entries(Asset_type type) -> Type_entries*;
     [[nodiscard]] auto get_type_entries(Asset_type type) const -> const Type_entries*;
 
+    // True for a record that belongs to an open scene (R5.3 scene identity
+    // records). Such records are created at scene registration and removed
+    // at unregistration, so a live record with a scene link IS open.
+    [[nodiscard]] auto is_open_as_scene() const -> bool { return scene_root_identity != nullptr; }
+
     std::uint64_t                      id{0};
-    std::filesystem::path              canonical_path;  // registry key (normalize_asset_path form)
-    std::string                        display_path;    // portable string for messages / MCP
+    std::filesystem::path              canonical_path;  // path-index key (normalize_asset_path form); empty for session (never-saved) scene records
+    std::string                        display_path;    // portable string for messages / MCP; empty for session scene records
     erhe::gltf::Gltf_data              gltf_data;
     std::shared_ptr<erhe::scene::Node> root_node;
     std::vector<std::string>           errors;          // decision-11 identifiability violations
     bool                               dirty{false};    // live asset edits not yet written back (used from R5 on)
+
+    // Scene identity link (R5.3): weak so the record never pins the scene;
+    // the raw pointer duplicates the identity for matching during
+    // unregistration paths where the weak_ptr can no longer lock
+    // (~Scene_root calls unregister while shared_from_this is gone).
+    std::weak_ptr<Scene_root>          scene_root;
+    Scene_root*                        scene_root_identity{nullptr};
 
     Type_entries                       materials;
     Type_entries                       animations;
@@ -90,11 +109,14 @@ class Asset_container_info
 {
 public:
     std::uint64_t            id{0};
-    std::string              path;
+    std::string              path;          // empty for session scene records
     std::size_t              material_count{0};
     std::size_t              animation_count{0};
     std::vector<std::string> errors;
     bool                     dirty{false};
+    bool                     open_as_scene{false}; // record belongs to an open scene (R5.3)
+    bool                     session{false};       // no bound path (scene never saved)
+    std::string              scene_name;           // when open_as_scene
 };
 
 // The asset registry and the only asset loader (plan D3, single-loader
@@ -151,6 +173,16 @@ public:
     // (see class comment).
     auto get_or_load_container(const std::filesystem::path& path, std::string& out_error) -> std::shared_ptr<Asset_container_record>;
 
+    // R5.3 scene identity records. Called by App_scenes when a Scene_root
+    // registers / unregisters, and (via App_scenes) whenever a scene's
+    // source path changes: registration creates an identity-only record
+    // (picking up the source path an opened scene already carries), the
+    // first save binds the record to the path, save-as re-homes it, and
+    // unregistration removes the record.
+    void on_scene_registered         (const std::shared_ptr<Scene_root>& scene_root);
+    void on_scene_unregistered       (Scene_root* scene_root);
+    void on_scene_source_path_changed(Scene_root& scene_root);
+
     // Observability (MCP query_asset_manager)
     [[nodiscard]] auto inspect_assets    () const -> std::vector<Asset_info>;
     [[nodiscard]] auto inspect_containers() const -> std::vector<Asset_container_info>;
@@ -180,6 +212,15 @@ private:
     auto resolve_in_container(const Asset_container_record& record, const Asset_key& key, std::string& out_error) const -> std::shared_ptr<erhe::Item_base>;
     auto resolve_scene_local (const Asset_key& key, std::string& out_error) const -> std::shared_ptr<erhe::Item_base>;
 
+    // Points the path index at the record's (possibly new) path: releases
+    // the slot the record held, then claims the new one. A path already
+    // bound to ANOTHER record logs a loud warning and is not re-claimed
+    // (two records sharing one path is the two-loader hazard surfacing;
+    // resolved properly by R5.5 / R5.7).
+    void bind_record_path(Asset_container_record& record, const std::filesystem::path& path);
+    [[nodiscard]] auto find_scene_record(const Scene_root* scene_root) const -> std::shared_ptr<Asset_container_record>;
+    [[nodiscard]] auto find_record_by_path(const std::filesystem::path& canonical_path) const -> std::shared_ptr<Asset_container_record>;
+
     App_context&     m_context;
     App_message_bus& m_app_message_bus; // reserved for later phases (R5 scene routing); unused in R1
     App_scenes&      m_app_scenes;
@@ -187,7 +228,11 @@ private:
     std::uint64_t m_next_container_id{1};
 
     std::map<Asset_type, std::map<std::string, std::shared_ptr<erhe::Item_base>>>  m_builtins;
-    std::map<std::filesystem::path, std::shared_ptr<Asset_container_record>>       m_containers;
+    // Registry re-keyed by session container id (R5.3); the path index maps
+    // a bound path to its record. Session (never-saved) scene records are
+    // only in the id map.
+    std::map<std::uint64_t, std::shared_ptr<Asset_container_record>>               m_containers;
+    std::map<std::filesystem::path, std::uint64_t>                                 m_path_index;
     // Declared users per live asset object (usership belongs to the object:
     // a name-keyed and a uid-keyed reference to the same asset are users of
     // one object). Entries are maintained by Asset_reference's special

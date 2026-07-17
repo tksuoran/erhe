@@ -333,8 +333,9 @@ void Mcp_server::refresh_tool_list()
     m_tool_infos.push_back({"save_scene",         "Save a scene as a single erhe-authored glTF file carrying FULL editor state (render content plus the ERHE_* extensions: scene settings, physics, layouts, brushes, node graphs, collections/tags; ERHE_scene in extensionsUsed marks the file), without a file dialog. Without 'path' the scene saves back to its own source file when it was opened/loaded from one, else to res/editor/scenes/<scene name>.glb. When the written file is a loaded prefab source, the prefab is reloaded so every instance in every scene reflects the edit (this subsumed the former save_prefab tool). This is the scene persistence path; export_gltf without editor_state is the plain interchange export.", {
         {"type", "object"},
         {"properties", {
-            {"scene_name", {{"type", "string"}, {"description", "Name of the scene"}}},
-            {"path",       {{"type", "string"}, {"description", "Destination file path (default: the scene's source file, else res/editor/scenes/<scene name>.glb); .glb is appended when the extension is neither .glb nor .gltf (.gltf selects the text form)"}}}
+            {"scene_name",    {{"type", "string"},  {"description", "Name of the scene"}}},
+            {"path",          {{"type", "string"},  {"description", "Destination file path (default: the scene's source file, else res/editor/scenes/<scene name>.glb); .glb is appended when the extension is neither .glb nor .gltf (.gltf selects the text form)"}}},
+            {"set_as_source", {{"type", "boolean"}, {"description", "Save As semantics: bind the scene (and its container record) to this path, so further saves write back to it. Default false: an explicit-path save is an export that leaves the scene's source binding untouched."}}}
         }},
         {"required", json::array({"scene_name"})}
     }});
@@ -394,7 +395,7 @@ void Mcp_server::refresh_tool_list()
     };
     json acquire_asset_properties = asset_key_properties;
     acquire_asset_properties["hold_name"] = {{"type", "string"}, {"description", "Name of the debug hold that keeps the asset acquired"}};
-    m_tool_infos.push_back({"query_asset_manager", "Inspect the asset manager (Phase R1): registered assets (builtins, loaded container assets, scene-local userships) with their declared users, loaded container files with per-type asset counts and identifiability errors, and the named debug holds.", schema_no_args()});
+    m_tool_infos.push_back({"query_asset_manager", "Inspect the asset manager (Phase R1): registered assets (builtins, loaded container assets, scene-local userships) with their declared users, container records - loaded container files with per-type asset counts and identifiability errors, plus every open scene's identity record (R5.3: open_as_scene true; session true until the scene's first save binds it to a path, save-as re-homes it) - and the named debug holds.", schema_no_args()});
     m_tool_infos.push_back({"acquire_asset",       "Acquire an asset through the asset manager and keep it held under a named debug hold (a declared user). Loads the container on first request (file scope); repeated acquires of the same key return the same object (compare item_id). Re-using a hold_name re-targets that hold.", {
         {"type", "object"},
         {"properties", acquire_asset_properties},
