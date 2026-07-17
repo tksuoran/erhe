@@ -427,6 +427,7 @@ auto Mcp_server::process_queued_requests() -> int
             { "acquire_asset",                  &Mcp_server::action_acquire_asset                 },
             { "release_asset",                  &Mcp_server::action_release_asset                 },
             { "unload_asset",                   &Mcp_server::action_unload_asset                  },
+            { "set_tool_asset",                 &Mcp_server::action_set_tool_asset                },
             { "instantiate_prefab",             &Mcp_server::action_instantiate_prefab            },
             { "reload_prefab",                  &Mcp_server::action_reload_prefab                 },
             { "get_prefabs",                    &Mcp_server::query_prefabs                        },

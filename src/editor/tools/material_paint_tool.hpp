@@ -1,6 +1,7 @@
 #pragma once
 
 #include "tools/tool.hpp"
+#include "assets/asset_reference.hpp"
 
 #include "erhe_commands/command.hpp"
 #include "app_message.hpp"
@@ -77,12 +78,21 @@ public:
 
     void from_drag_and_drop(const std::shared_ptr<erhe::primitive::Material>& material);
 
+    // Set / clear the paint material (records the tool as a declared asset
+    // user; null clears). Pick and the properties combo route through this;
+    // it is also the MCP set_tool_asset entry point.
+    void set_material(const std::shared_ptr<erhe::primitive::Material>& material);
+
 private:
     [[nodiscard]] auto get_hover_mesh() const -> const Hover_entry*;
 
     // Scene close: drop the paint material when the closing scene's content
     // library hosts it, so the tool does not keep a dead scene's material
-    // alive (and paint it into other scenes).
+    // alive (and paint it into other scenes). The material is an
+    // Asset_reference (declared usership, R3), so keeping it would only
+    // report as intentionally pinned - but transient tool state is not a
+    // persistence mechanism (the inventory is), so it is still cleared here
+    // as belt-and-braces.
     void on_close_scene(erhe::Item_host* closing_host);
 
     erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
@@ -96,7 +106,7 @@ private:
 
     int m_active_command{c_command_paint};
 
-    std::shared_ptr<erhe::primitive::Material> m_material;
+    Asset_reference m_material;
 };
 
 }

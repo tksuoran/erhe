@@ -396,6 +396,15 @@ void Mcp_server::refresh_tool_list()
         {"properties", asset_key_properties},
         {"required", json::array({"scope", "type", "path"})}
     }});
+    m_tool_infos.push_back({"set_tool_asset",      "Set or clear the asset a tool holds as an Asset_reference (Phase R3): the Brush Tool's active brush or the Material Paint Tool's material. The tool becomes a declared user of the asset (visible in query_asset_manager). Omit 'name' to clear.", {
+        {"type", "object"},
+        {"properties", {
+            {"tool",       {{"type", "string"}, {"enum", json::array({"brush", "material_paint"})}, {"description", "Which tool's asset to set"}}},
+            {"scene_name", {{"type", "string"}, {"description", "Scene whose content library is searched (required unless clearing)"}}},
+            {"name",       {{"type", "string"}, {"description", "Brush / material name in that scene's content library; omit or empty to clear the tool's asset"}}}
+        }},
+        {"required", json::array({"tool"})}
+    }});
     m_tool_infos.push_back({"instantiate_prefab", "Instantiate a glTF file as a prefab into a scene: the file is parsed once (cached app-wide) and inserted as a clone that stays a reference to the source file. Instances share GPU buffers; insertion is undoable.", {
         {"type", "object"},
         {"properties", {

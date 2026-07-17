@@ -114,6 +114,8 @@ Material_paint_tool::Material_paint_tool(
 
     set_active_command(c_command_both);
 
+    m_material.set_user_label("material paint tool material");
+
     m_paint_command.set_host(this);
     m_pick_command .set_host(this);
 
@@ -152,7 +154,7 @@ auto Material_paint_tool::get_hover_mesh() const -> const Hover_entry*
 
 auto Material_paint_tool::on_paint_ready() -> bool
 {
-    return (m_material != nullptr) && (get_hover_mesh() != nullptr);
+    return (m_material.get() != nullptr) && (get_hover_mesh() != nullptr);
 }
 
 auto Material_paint_tool::on_pick_ready() -> bool
@@ -177,16 +179,23 @@ void Material_paint_tool::from_drag_and_drop(const std::shared_ptr<erhe::primiti
     hover_primitive.material = material;
 }
 
+void Material_paint_tool::set_material(const std::shared_ptr<erhe::primitive::Material>& material)
+{
+    m_material.adopt(*m_context.asset_manager, material);
+}
+
 void Material_paint_tool::on_close_scene(erhe::Item_host* const closing_host)
 {
-    if (m_material && (m_material->get_item_host() == closing_host)) {
-        m_material.reset();
+    const std::shared_ptr<erhe::Item_base>& material = m_material.get();
+    if (material && (material->get_item_host() == closing_host)) {
+        m_material.set_key(Asset_key{});
     }
 }
 
 auto Material_paint_tool::on_paint() -> bool
 {
-    if (m_material == nullptr) {
+    const std::shared_ptr<erhe::primitive::Material> material = m_material.get_as<erhe::primitive::Material>();
+    if (!material) {
         return false;
     }
 
@@ -199,7 +208,7 @@ auto Material_paint_tool::on_paint() -> bool
         return false;
     }
     auto& hover_primitive = mesh->get_mutable_primitives().at(hover_entry->scene_mesh_primitive_index);
-    hover_primitive.material = m_material;
+    hover_primitive.material = material;
 
     return true;
 }
@@ -215,7 +224,7 @@ auto Material_paint_tool::on_pick() -> bool
         return false;
     }
     auto& hover_primitive = mesh->get_mutable_primitives().at(hover_entry->scene_mesh_primitive_index);
-    m_material = hover_primitive.material;
+    set_material(hover_primitive.material);
 
     return true;
 }
@@ -276,7 +285,10 @@ void Material_paint_tool::tool_properties(erhe::imgui::Imgui_window&)
         return;
     }
     const auto& material_library = scene_root->get_content_library()->materials;
-    material_library->combo(m_context, "Material", m_material, false);
+    std::shared_ptr<erhe::primitive::Material> material = m_material.get_as<erhe::primitive::Material>();
+    if (material_library->combo(m_context, "Material", material, false)) {
+        set_material(material);
+    }
 }
 
 }

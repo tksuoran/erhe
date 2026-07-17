@@ -1,6 +1,7 @@
 #pragma once
 
 #include "tools/tool.hpp"
+#include "assets/asset_reference.hpp"
 #include "brushes/reference_frame.hpp"
 #include "scene/scene_view.hpp"
 #include "erhe_commands/command.hpp"
@@ -118,7 +119,10 @@ private:
     // preview mesh/node parented into it (a close can arrive mid-hover). A
     // hotbar slot holding the same brush intentionally keeps it alive;
     // clicking the slot re-activates the now host-less orphan (brush payloads
-    // are self-contained).
+    // are self-contained). The active brush is an Asset_reference (declared
+    // usership, R3), so keeping it would only report as intentionally pinned -
+    // but transient tool state is not a persistence mechanism (the inventory
+    // is), so it is still cleared here as belt-and-braces.
     void on_close_scene                    (erhe::Item_host* closing_host);
     void update_preview_mesh               ();
     void do_insert_operation               (Brush& brush);
@@ -134,6 +138,10 @@ private:
     [[nodiscard]] auto get_placement_facet  () const -> GEO::index_t;
     [[nodiscard]] auto get_placement_corner0() const -> GEO::index_t;
 
+    // The brush the tool acts on: drag-and-drop preview wins, then the
+    // active (hotbar-selected) brush, then the last selected brush.
+    [[nodiscard]] auto get_effective_brush() const -> std::shared_ptr<Brush>;
+
     erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
     erhe::message_bus::Subscription<Hover_mesh_message>       m_hover_mesh_subscription;
     erhe::message_bus::Subscription<Close_scene_message>      m_close_scene_subscription;
@@ -146,7 +154,7 @@ private:
     erhe::commands::Float_threshold_command m_pick_using_float_input_command;
 
     ERHE_PROFILE_MUTEX(std::mutex,     m_brush_mutex);
-    std::shared_ptr<Brush>             m_active_brush          {};
+    Asset_reference                    m_active_brush          {};
     std::shared_ptr<Brush>             m_drag_and_drop_brush   {};
     float                              m_preview_hover_distance{0.001f};
     bool                               m_snap_to_hover_polygon {true};

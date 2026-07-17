@@ -1,7 +1,8 @@
 // Mcp_server asset-manager tools (Phase R1): query_asset_manager plus the
 // acquire_asset / release_asset / unload_asset test hooks that drive the
 // manager's debug holds, so usership bookkeeping and unload refusal /
-// exclusivity verification are exercisable headless.
+// exclusivity verification are exercisable headless. set_tool_asset (Phase
+// R3) drives the tool-held Asset_references the same way.
 // Split out of mcp_server.cpp; shares helpers via mcp_server_shared.hpp.
 
 #include "mcp/mcp_server_shared.hpp"
@@ -9,6 +10,8 @@
 #include "assets/asset_key.hpp"
 #include "assets/asset_manager.hpp"
 #include "assets/asset_reference.hpp"
+#include "brushes/brush_tool.hpp"
+#include "tools/material_paint_tool.hpp"
 
 namespace editor {
 
@@ -180,6 +183,86 @@ auto Mcp_server::action_unload_asset(const json& args) -> std::string
         r["isError"] = true;
         return r.dump();
     }
+    return make_json_content(result).dump();
+}
+
+// Phase R3 verification hook: set / clear the Brush_tool active brush or the
+// Material_paint_tool material, so the tools' Asset_reference userships are
+// exercisable headless (the interactive entry points - hotbar clicks,
+// material pick, the properties combo - all need mouse input).
+auto Mcp_server::action_set_tool_asset(const json& args) -> std::string
+{
+    const std::string tool_text  = args.value("tool", "");
+    const std::string scene_name = args.value("scene_name", "");
+    const std::string name       = args.value("name", "");
+
+    const bool is_brush_tool          = (tool_text == "brush");
+    const bool is_material_paint_tool = (tool_text == "material_paint");
+    if (!is_brush_tool && !is_material_paint_tool) {
+        return make_error_content("'tool' must be one of: brush, material_paint");
+    }
+    if (is_brush_tool && (m_context.brush_tool == nullptr)) {
+        return make_error_content("Brush tool not available");
+    }
+    if (is_material_paint_tool && (m_context.material_paint_tool == nullptr)) {
+        return make_error_content("Material paint tool not available");
+    }
+
+    if (name.empty()) {
+        if (is_brush_tool) {
+            m_context.brush_tool->clear_active_brush();
+            return make_text_content("cleared brush tool active brush").dump();
+        }
+        m_context.material_paint_tool->set_material({});
+        return make_text_content("cleared material paint tool material").dump();
+    }
+
+    auto* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::shared_ptr<Content_library>& library = sr->get_content_library();
+
+    if (is_brush_tool) {
+        std::shared_ptr<Brush> brush;
+        if (library && library->brushes) {
+            for (const std::shared_ptr<Brush>& b : library->brushes->get_all<Brush>()) {
+                if (b->get_name() == name) {
+                    brush = b;
+                    break;
+                }
+            }
+        }
+        if (!brush) {
+            return make_error_content("Brush not found: " + name);
+        }
+        m_context.brush_tool->set_active_brush(brush);
+        const json result = {
+            {"tool",     "brush"},
+            {"asset",    brush->get_name()},
+            {"asset_id", brush->get_id()}
+        };
+        return make_json_content(result).dump();
+    }
+
+    std::shared_ptr<erhe::primitive::Material> material;
+    if (library && library->materials) {
+        for (const std::shared_ptr<erhe::primitive::Material>& m : library->materials->get_all<erhe::primitive::Material>()) {
+            if (m->get_name() == name) {
+                material = m;
+                break;
+            }
+        }
+    }
+    if (!material) {
+        return make_error_content("Material not found: " + name);
+    }
+    m_context.material_paint_tool->set_material(material);
+    const json result = {
+        {"tool",     "material_paint"},
+        {"asset",    material->get_name()},
+        {"asset_id", material->get_id()}
+    };
     return make_json_content(result).dump();
 }
 
