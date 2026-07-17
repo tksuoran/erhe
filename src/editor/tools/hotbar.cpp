@@ -5,6 +5,7 @@
 #include "app_context.hpp"
 #include "brushes/brush.hpp"
 #include "brushes/brush_tool.hpp"
+#include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "app_message_bus.hpp"
 #include "app_settings.hpp"
@@ -514,6 +515,15 @@ void Hotbar::init_radial_menu(erhe::scene_renderer::Mesh_memory& mesh_memory, Sc
             }
         }
     );
+    {
+        // R5.2b explicit definition registration: the hotbar's home scene
+        // owns the disc material (the radial menu is rebuilt on re-home, so
+        // the material lives and dies with this scene); scenes the menu is
+        // shown in list it as a reference entry via register_mesh.
+        const std::shared_ptr<Content_library> content_library = scene_root.get_content_library();
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
+        content_library->materials->add(disc_material);
+    }
 
     GEO::Mesh disc_geo_mesh_shared;
     disc_geo_mesh_shared.vertices.set_single_precision();

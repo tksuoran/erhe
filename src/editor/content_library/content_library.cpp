@@ -113,6 +113,21 @@ void Content_library_node::handle_remove_child(erhe::Hierarchy* child_node)
     }
 }
 
+auto Content_library_node::has_item(const erhe::Item_base& queried_item) const -> bool
+{
+    bool found = false;
+    for_each_const<Content_library_node>(
+        [&found, &queried_item](const Content_library_node& node) -> bool {
+            if (node.item.get() == &queried_item) {
+                found = true;
+                return false; // in for_each() lambda - found, stop
+            }
+            return true; // in for_each() lambda - continue to children
+        }
+    );
+    return found;
+}
+
 auto Content_library_node::make_folder(const std::string_view folder_name) -> std::shared_ptr<Content_library_node>
 {
     auto new_folder_node = std::make_shared<Content_library_node>(folder_name, type_code, type_name);

@@ -408,6 +408,8 @@ auto Mcp_server::process_queued_requests() -> int
             { "add_node_attachment",            &Mcp_server::action_add_node_attachment           },
             { "remove_node_attachment",         &Mcp_server::action_remove_node_attachment        },
             { "reparent_node",                  &Mcp_server::action_reparent_node                 },
+            { "clipboard_copy_nodes",           &Mcp_server::action_clipboard_copy_nodes          },
+            { "clipboard_paste",                &Mcp_server::action_clipboard_paste               },
             { "lock_items",                     &Mcp_server::action_lock_items                    },
             { "unlock_items",                   &Mcp_server::action_unlock_items                  },
             { "add_tags",                       &Mcp_server::action_add_tags                      },

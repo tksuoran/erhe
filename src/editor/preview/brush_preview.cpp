@@ -104,6 +104,18 @@ void Brush_preview::make_preview_scene()
         }
     );
 
+    {
+        // R5.2b explicit definition registration: the preview scene's
+        // library owns the preview materials (this Scene_root is part-owned
+        // and never closes). Without this, the preview mesh registering
+        // would find unhosted, unlisted materials (loud register_mesh
+        // warning) instead of definitions.
+        const std::shared_ptr<Content_library> content_library = m_scene_root_shared->get_content_library();
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
+        content_library->materials->add(m_material);
+        content_library->materials->add(m_headlight_material);
+    }
+
     m_camera_node = std::make_shared<erhe::scene::Node>("Camera node");
     m_camera = std::make_shared<erhe::scene::Camera>("Camera");
     //m_camera_node->enable_flag_bits(erhe::Item_flags::content);

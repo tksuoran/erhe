@@ -26,6 +26,7 @@ namespace editor {
 
 class App_context;
 class App_message;
+class Content_library;
 class Forward_renderer;
 class Hand_tracker;
 class Render_context;
@@ -37,14 +38,21 @@ class Viewport_scene_view;
 class Rendertarget_mesh : public erhe::scene::Mesh
 {
 public:
+    // material_home: the content library that OWNS this mesh's material
+    // (R5.2b: ownership comes only from explicit registration, stated at
+    // creation). The material is registered at construction and the entry
+    // removed at destruction; scenes the mesh merely visits list it as a
+    // reference entry via register_mesh.
     Rendertarget_mesh(
-        erhe::graphics::Device&            graphics_device,
-        erhe::graphics::Command_buffer&    command_buffer,
-        erhe::scene_renderer::Mesh_memory& mesh_memory,
-        int                                width,
-        int                                height,
-        float                              pixels_per_meter
+        erhe::graphics::Device&                 graphics_device,
+        erhe::graphics::Command_buffer&         command_buffer,
+        erhe::scene_renderer::Mesh_memory&      mesh_memory,
+        const std::shared_ptr<Content_library>& material_home,
+        int                                     width,
+        int                                     height,
+        float                                   pixels_per_meter
     );
+    ~Rendertarget_mesh() noexcept override;
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Rendertarget_mesh"};
@@ -83,6 +91,10 @@ private:
     float                                        m_pixels_per_meter{0.0f};
     float                                        m_local_width     {0.0f};
     float                                        m_local_height    {0.0f};
+
+    // Locking fails during the home scene's own teardown, where the library
+    // dies with the scene and the entry needs no removal.
+    std::weak_ptr<Content_library>               m_material_home;
 
     std::shared_ptr<erhe::graphics::Texture>     m_texture;
     std::shared_ptr<erhe::graphics::Sampler>     m_sampler;

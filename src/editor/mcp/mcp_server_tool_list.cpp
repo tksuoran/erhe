@@ -212,6 +212,22 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"scene_name", "node_id"})}
     }});
+    m_tool_infos.push_back({"clipboard_copy_nodes", "Copy scene nodes (by ID) into the editor clipboard. Same semantics as the interactive Copy: the clipboard holds ownerless clones of the node subtrees, so the content survives closing the source scene and can be pasted into another scene with clipboard_paste.", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name", {{"type", "string"}, {"description", "Name of the source scene"}}},
+            {"node_ids",   {{"type", "array"}, {"items", {{"type", "integer"}}}, {"description", "IDs of the nodes to copy (each with its subtree)"}}}
+        }},
+        {"required", json::array({"scene_name", "node_ids"})}
+    }});
+    m_tool_infos.push_back({"clipboard_paste", "Paste the editor clipboard contents under a node of a scene (undoable, like Ctrl+V). Materials carried by the pasted meshes keep their owning scene when it is still open; when the source scene is gone they are explicitly re-registered into the target scene (R5.2b paste-site ownership decision).", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name",     {{"type", "string"},  {"description", "Name of the target scene"}}},
+            {"parent_node_id", {{"type", "integer"}, {"description", "ID of the node to paste under (0 or omitted for scene root)"}}}
+        }},
+        {"required", json::array({"scene_name"})}
+    }});
     m_tool_infos.push_back({"lock_items",         "Lock items by ID (prevents deletion/modification)",   {
         {"type", "object"},
         {"properties", {

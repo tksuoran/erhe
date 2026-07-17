@@ -138,6 +138,13 @@ void attach_prefab_instance(
     const std::filesystem::path& export_directory
 ) -> std::map<const erhe::scene::Node*, erhe::gltf::Gltf_export_external_asset>;
 
+// Lists the prefab template's textures and materials in the given content
+// library as REFERENCE entries (the template owns these objects and shares
+// them with every instancing scene); material entries carry their
+// file-scope asset key. Idempotent per item (add() dedups). The caller
+// must hold content_library.mutex.
+void add_prefab_reference_entries(Content_library& content_library, const Prefab& prefab);
+
 // Resolve glTF 2.1 external assets in freshly parsed gltf_data: for each
 // node that instantiates an external asset, load the referenced prefab
 // through the library (recursively; reference cycles are errors, per the

@@ -95,6 +95,13 @@ public:
     template <typename T>
     auto remove(const std::shared_ptr<T>& entry) -> bool;
 
+    // True when an entry (owning or reference) anywhere in this subtree wraps
+    // the given item. Used by register-time classification to distinguish an
+    // already-listed reference (e.g. a prefab template resource) from an item
+    // that arrived with no registration at all (R5.2b: loud warning, never
+    // adopt).
+    [[nodiscard]] auto has_item(const erhe::Item_base& item) const -> bool;
+
     // template <typename T>
     // [[nodiscard]] auto get_all() -> std::vector<std::shared_ptr<T>> {
     //     std::vector<std::shared_ptr<T>> result;

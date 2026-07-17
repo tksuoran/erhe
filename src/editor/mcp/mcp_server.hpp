@@ -122,6 +122,8 @@ private:
     auto action_add_node_attachment   (const nlohmann::json& args) -> std::string;
     auto action_remove_node_attachment(const nlohmann::json& args) -> std::string;
     auto action_reparent_node   (const nlohmann::json& args) -> std::string;
+    auto action_clipboard_copy_nodes(const nlohmann::json& args) -> std::string;
+    auto action_clipboard_paste (const nlohmann::json& args) -> std::string;
     auto action_lock_items      (const nlohmann::json& args) -> std::string;
     auto action_unlock_items    (const nlohmann::json& args) -> std::string;
     auto action_add_tags        (const nlohmann::json& args) -> std::string;

@@ -1008,10 +1008,13 @@ auto Scene_commands::create_new_rendertarget(erhe::scene::Node* parent) -> std::
     erhe::graphics::Command_buffer& command_buffer = *m_context.current_command_buffer;
 
     // Rendertarget_mesh is Mesh (can be rendered in 3D scene) with textured rectangle vertex data, provides Texture
+    // The target scene owns the rendertarget material (R5.2b explicit
+    // registration): this rendertarget lives in that scene only.
     auto mesh = std::make_shared<Rendertarget_mesh>(
         *m_context.graphics_device,
         command_buffer,
         *m_context.mesh_memory,
+        scene_root->get_content_library(),
         2048,
         2048,
         600.0f

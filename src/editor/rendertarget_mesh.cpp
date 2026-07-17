@@ -1,6 +1,7 @@
 ﻿#include "rendertarget_mesh.hpp"
 
 #include "app_context.hpp"
+#include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "scene/scene_view.hpp"
@@ -24,19 +25,37 @@
 namespace editor {
 
 Rendertarget_mesh::Rendertarget_mesh(
-    erhe::graphics::Device&            graphics_device,
-    erhe::graphics::Command_buffer&    command_buffer,
-    erhe::scene_renderer::Mesh_memory& mesh_memory,
-    const int                          width,
-    const int                          height,
-    const float                        pixels_per_meter
+    erhe::graphics::Device&                 graphics_device,
+    erhe::graphics::Command_buffer&         command_buffer,
+    erhe::scene_renderer::Mesh_memory&      mesh_memory,
+    const std::shared_ptr<Content_library>& material_home,
+    const int                               width,
+    const int                               height,
+    const float                             pixels_per_meter
 )
     : erhe::scene::Mesh {"Rendertarget Node"}
     , m_pixels_per_meter{pixels_per_meter}
+    , m_material_home   {material_home}
 {
+    ERHE_VERIFY(material_home);
+
     enable_flag_bits(erhe::Item_flags::rendertarget);
 
     resize_rendertarget(command_buffer, graphics_device, mesh_memory, width, height);
+}
+
+Rendertarget_mesh::~Rendertarget_mesh() noexcept
+{
+    // Symmetric to the registration in resize_rendertarget(): remove the
+    // owning entry so dead materials do not accumulate in the home library
+    // when the mesh is rebuilt (e.g. the Hotbar / Hud quad on re-home).
+    // Locking fails during the home scene's own teardown, where the library
+    // dies with the scene and no removal is needed.
+    const std::shared_ptr<Content_library> material_home = m_material_home.lock();
+    if (material_home && m_material) {
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{material_home->mutex};
+        material_home->materials->remove(m_material);
+    }
 }
 
 auto Rendertarget_mesh::get_type() const -> uint64_t
@@ -120,19 +139,31 @@ void Rendertarget_mesh::resize_rendertarget(
     render_pass_descriptor.debug_label                         = "Rendertarget Node";
     m_render_pass = std::make_shared<Render_pass>(graphics_device, render_pass_descriptor);
 
-    m_material = std::make_shared<erhe::primitive::Material>(
-        erhe::primitive::Material_create_info{
-            .name = "Rendertarget Node",
-            .data = {
-                .base_color = glm::vec3{1.0f, 1.0f, 1.0f},
-                .bxdf_model = erhe::primitive::Bxdf_model::unlit,
-                .blending_mode = erhe::primitive::Material_blending_mode::alpha_blend
+    if (!m_material) {
+        m_material = std::make_shared<erhe::primitive::Material>(
+            erhe::primitive::Material_create_info{
+                .name = "Rendertarget Node",
+                .data = {
+                    .base_color = glm::vec3{1.0f, 1.0f, 1.0f},
+                    .bxdf_model = erhe::primitive::Bxdf_model::unlit,
+                    .blending_mode = erhe::primitive::Material_blending_mode::alpha_blend
+                }
             }
-        }
-    );
+        );
+        m_material->disable_flag_bits(erhe::Item_flags::show_in_ui);
+        // R5.2b explicit definition registration: the home library stated at
+        // creation owns the material. Without this, the mesh registering
+        // into a scene would find an unhosted, unlisted material (loud
+        // register_mesh warning) instead of a definition.
+        const std::shared_ptr<Content_library> material_home = m_material_home.lock();
+        ERHE_VERIFY(material_home);
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{material_home->mutex};
+        material_home->materials->add(m_material);
+    }
+    // Resize recreates the texture and sampler; the material identity is
+    // stable across resizes, only its texture binding follows.
     m_material->data.texture_samplers.base_color.texture_reference = m_texture;
     m_material->data.texture_samplers.base_color.sampler = m_sampler;
-    m_material->disable_flag_bits(erhe::Item_flags::show_in_ui);
 
     m_local_width  = static_cast<float>(m_texture->get_width ()) / m_pixels_per_meter;
     m_local_height = static_cast<float>(m_texture->get_height()) / m_pixels_per_meter;

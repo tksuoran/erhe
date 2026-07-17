@@ -4,6 +4,7 @@
 #include "mcp/mcp_server_shared.hpp"
 
 #include "scene/generated/scene_settings_serialization.hpp"
+#include "tools/clipboard.hpp"
 
 #include <simdjson.h>
 
@@ -1095,6 +1096,97 @@ auto Mcp_server::action_reparent_node(const json& args) -> std::string
     return make_json_content({
         {"node",   child_node->get_name()},
         {"parent", new_parent->get_name()}
+    }).dump();
+}
+
+auto Mcp_server::action_clipboard_copy_nodes(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    const json ids_json = args.value("node_ids", json::array());
+    std::set<std::size_t> target_ids;
+    for (const auto& v : ids_json) {
+        if (v.is_number()) {
+            target_ids.insert(v.get<std::size_t>());
+        }
+    }
+    if (target_ids.empty()) {
+        json r = make_text_content("node_ids must name at least one node");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    // Same semantics as the interactive Copy (Selection::copy_selection):
+    // the clipboard holds ownerless CLONES; the clones transitively pin the
+    // shared resources (e.g. mesh materials), which the scene-close leak
+    // watchdog reports as intentional clipboard pins.
+    std::vector<std::shared_ptr<erhe::Item_base>> clones;
+    json copied = json::array();
+    for (const std::shared_ptr<erhe::scene::Node>& node : sr->get_scene().get_flat_nodes()) {
+        if (!target_ids.contains(node->get_id())) {
+            continue;
+        }
+        clones.push_back(node->clone());
+        copied.push_back(node->get_name());
+    }
+    if (clones.empty()) {
+        json r = make_text_content("No nodes found for the given node_ids");
+        r["isError"] = true;
+        return r.dump();
+    }
+    m_context.clipboard->set_contents(clones);
+
+    return make_json_content({
+        {"copied_count", static_cast<int>(clones.size())},
+        {"copied",       copied}
+    }).dump();
+}
+
+auto Mcp_server::action_clipboard_paste(const json& args) -> std::string
+{
+    const std::string scene_name     = args.value("scene_name", "");
+    const std::size_t parent_node_id = args.value("parent_node_id", std::size_t{0});
+
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    std::shared_ptr<erhe::scene::Node> parent_node;
+    if (parent_node_id == 0) {
+        parent_node = sr->get_scene().get_root_node();
+    } else {
+        for (const std::shared_ptr<erhe::scene::Node>& node : sr->get_scene().get_flat_nodes()) {
+            if (node->get_id() == parent_node_id) {
+                parent_node = node;
+                break;
+            }
+        }
+    }
+    if (!parent_node) {
+        json r = make_text_content("Parent node not found: " + std::to_string(parent_node_id));
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    const bool pasted = m_context.clipboard->try_paste(parent_node, parent_node->get_child_count());
+    if (!pasted) {
+        json r = make_text_content("Paste failed (empty clipboard or no paste target)");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    return make_json_content({
+        {"pasted_into_scene", sr->get_name()},
+        {"parent",            parent_node->get_name()}
     }).dump();
 }
 

@@ -2743,9 +2743,17 @@ public:
             if (m_inventory_window) {
                 m_inventory_window->collect_pinned_items(slot_pinned_items);
             }
+            // Items intentionally pinned by the clipboard: copied content
+            // (and what it transitively holds, e.g. mesh materials) stays
+            // alive so paste-after-source-scene-close works.
+            std::unordered_set<const erhe::Item_base*> clipboard_pinned_items;
+            if (m_app_context.clipboard != nullptr) {
+                m_app_context.clipboard->collect_pinned_items(clipboard_pinned_items);
+            }
             constexpr std::size_t max_reported = 16;
             std::size_t survivor_count = 0;
             std::size_t pinned_count   = 0;
+            std::size_t rehomed_count  = 0;
             const std::shared_ptr<Scene_root> pinned_scene_root = watch.scene_root.lock();
             if (pinned_scene_root) {
                 ++survivor_count;
@@ -2778,6 +2786,29 @@ public:
                         item->get_type_name(), item->get_name(), watch.scene_name
                     );
                     continue;
+                }
+                if (clipboard_pinned_items.contains(item.get())) {
+                    ++pinned_count;
+                    log_scene->info(
+                        "scene-close check: {} '{}' of closed scene '{}' intentionally pinned by the clipboard",
+                        item->get_type_name(), item->get_name(), watch.scene_name
+                    );
+                    continue;
+                }
+                // An item hosted by a REGISTERED live scene at check time was
+                // re-homed after the close (e.g. a clipboard paste explicitly
+                // re-registered a material into another scene): it is owned
+                // content of that scene now, not a leak of the closed one.
+                {
+                    erhe::Item_host* const item_host = item->get_item_host();
+                    if ((item_host != nullptr) && m_app_scenes->is_host_registered(item_host)) {
+                        ++rehomed_count;
+                        log_scene->info(
+                            "scene-close check: {} '{}' of closed scene '{}' re-homed into live scene host '{}'",
+                            item->get_type_name(), item->get_name(), watch.scene_name, item_host->get_host_name()
+                        );
+                        continue;
+                    }
                 }
                 ++survivor_count;
                 if (survivor_count <= max_reported) {

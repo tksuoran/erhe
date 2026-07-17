@@ -500,10 +500,6 @@ auto collect_prefab_external_assets(
     return result;
 }
 
-namespace {
-void add_prefab_reference_entries(Content_library& content_library, const Prefab& prefab); // defined below
-}
-
 void resolve_external_assets(
     Prefab_library&                                prefab_library,
     const erhe::gltf::Gltf_data&                   gltf_data,
@@ -639,11 +635,11 @@ void remove_gltf_source_entries(const std::shared_ptr<Content_library_node>& fol
     }
 }
 
-// Lists the prefab template's textures and materials in the given content
-// library as REFERENCE entries (the template owns these objects and shares
-// them with every instancing scene); material entries carry their
-// file-scope asset key. Idempotent per item (add() dedups). The caller
-// must hold content_library.mutex.
+} // namespace
+
+// Declared in prefab_library.hpp (R5.2b: the clipboard paste site lists a
+// pasted prefab-template material's container the same way scene load /
+// instantiate do).
 void add_prefab_reference_entries(Content_library& content_library, const Prefab& prefab)
 {
     const std::string gltf_path_str = prefab.source_path.generic_string();
@@ -690,6 +686,8 @@ void add_prefab_reference_entries(Content_library& content_library, const Prefab
         }
     }
 }
+
+namespace {
 
 void replace_content_library_entries(Content_library& content_library, const Prefab& prefab)
 {

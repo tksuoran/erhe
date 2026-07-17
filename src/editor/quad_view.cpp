@@ -76,11 +76,16 @@ Quad_view::Quad_view(
 #endif
 
     if (!m_uses_composition_layer) {
-        // Path A: scene-mesh rendertarget.
+        // Path A: scene-mesh rendertarget. The quad's home scene owns the
+        // rendertarget material (R5.2b explicit registration): the quad is
+        // rebuilt when its owner re-homes, so the material lives and dies
+        // with this scene; scenes the quad merely follows (e.g. the Hotbar
+        // tracking the hovered scene) list it as a reference entry.
         m_rendertarget_mesh = std::make_shared<Rendertarget_mesh>(
             graphics_device,
             command_buffer,
             mesh_memory,
+            scene_root.get_content_library(),
             width,
             height,
             pixels_per_meter

@@ -5,6 +5,7 @@
 #include "erhe_message_bus/message_bus.hpp"
 
 #include <memory>
+#include <unordered_set>
 #include <vector>
 
 namespace erhe {
@@ -54,6 +55,14 @@ public:
     void set_contents(const std::vector<std::shared_ptr<erhe::Item_base>>& items);
     void set_contents(const std::shared_ptr<erhe::Item_base>& item);
     auto get_contents() -> const std::vector<std::shared_ptr<erhe::Item_base>>&;
+
+    // Scene-close leak watchdog support: the items the clipboard contents
+    // keep alive on purpose - the held items themselves plus, transitively,
+    // their attachments, mesh materials and material textures - so that
+    // paste-after-source-scene-close works. The watchdog reports these as
+    // intentional pins, not leaks (same contract as the inventory / hotbar
+    // slot pins).
+    void collect_pinned_items(std::unordered_set<const erhe::Item_base*>& out_pinned) const;
 
 private:
     [[nodiscard]] auto resolve_paste_target() -> std::shared_ptr<erhe::Hierarchy>;
