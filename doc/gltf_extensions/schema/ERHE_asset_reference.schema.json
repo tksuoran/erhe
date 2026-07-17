@@ -1,0 +1,12 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "ERHE_asset_reference.schema.json",
+    "title": "ERHE_asset_reference glTF top-level object extension",
+    "type": "object",
+    "properties": {
+        "file": {"type": "integer", "minimum": 0},
+        "uid":  {"type": "string", "minLength": 1}
+    },
+    "required": ["file"],
+    "additionalProperties": false
+}
