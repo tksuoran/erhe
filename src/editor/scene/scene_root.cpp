@@ -877,8 +877,8 @@ void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
         m_rendertarget_meshes.push_back(std::dynamic_pointer_cast<Rendertarget_mesh>(mesh));
     }
 
-    // Make sure materials are in the material library. A material not yet in
-    // any library is claimed by this scene (owning entry); a material owned
+    // Make sure materials are in the material library. A material this scene
+    // defines (is_asset_definition) becomes an owning entry; a material owned
     // by ANOTHER scene's library - a mesh migrating between scenes, e.g. the
     // Hotbar rendertarget following the active scene - is listed as a
     // reference entry so membership stays with the owning scene.
@@ -887,13 +887,27 @@ void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
         if (!primitive.material) {
             continue;
         }
-        erhe::Item_host* const material_host = primitive.material->get_item_host();
-        if ((material_host == nullptr) || (material_host == this)) {
+        if (is_asset_definition(*primitive.material)) {
             material_library->add(primitive.material);
         } else {
             material_library->add_reference(primitive.material);
         }
     }
+}
+
+auto Scene_root::is_asset_definition(const erhe::Item_base& item) const -> bool
+{
+    // Pre-flip classification (asset-manager plan, R5 sub-plan resolution
+    // 2): an item not yet hosted anywhere is ADOPTED by this scene (null
+    // becomes this via add() -> claim_host_for_subtree); an item hosted by
+    // this scene is already ours. Hosted elsewhere = reference. The
+    // implicit-adoption branch is scheduled for removal in step R5.2b
+    // (explicit registration only); the R5.6 flip then replaces this body
+    // with the manager predicate (defining container == this scene's
+    // record). Keep every definition-vs-reference decision routed through
+    // here.
+    erhe::Item_host* const item_host = item.get_item_host();
+    return (item_host == nullptr) || (item_host == this);
 }
 
 void Scene_root::unregister_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)

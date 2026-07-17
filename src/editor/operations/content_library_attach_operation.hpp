@@ -27,7 +27,8 @@ public:
         std::shared_ptr<T>                             item,
         Gltf_source_reference                          gltf_source,
         std::shared_ptr<erhe::gltf::Gltf_image_source> image_source = {},
-        bool                                           is_reference = false
+        bool                                           is_reference = false,
+        std::optional<Asset_key>                       asset_key    = {}
     )
         : m_content_library{std::move(content_library)}
         , m_sublibrary     {std::move(sublibrary)}
@@ -35,6 +36,7 @@ public:
         , m_gltf_source    {std::move(gltf_source)}
         , m_image_source   {std::move(image_source)}
         , m_is_reference   {is_reference}
+        , m_asset_key      {std::move(asset_key)}
     {
         set_description(
             fmt::format(
@@ -49,7 +51,7 @@ public:
     void execute(App_context&) override
     {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_content_library->mutex};
-        m_sublibrary->add(m_item, m_gltf_source, m_image_source, m_is_reference);
+        m_sublibrary->add(m_item, m_gltf_source, m_image_source, m_is_reference, m_asset_key);
     }
 
     void undo(App_context&) override
@@ -65,6 +67,7 @@ private:
     Gltf_source_reference                          m_gltf_source;
     std::shared_ptr<erhe::gltf::Gltf_image_source> m_image_source;
     bool                                           m_is_reference{false};
+    std::optional<Asset_key>                       m_asset_key;
 };
 
 }

@@ -17,6 +17,9 @@
 
 class btCollisionShape;
 
+namespace erhe {
+    class Item_base;
+}
 namespace erhe::geometry {
     class Geometry;
 }
@@ -195,6 +198,16 @@ public:
     // is a loaded prefab source.
     [[nodiscard]] auto get_source_path   () const -> const std::filesystem::path&;
     void set_source_path(const std::filesystem::path& path);
+
+    // Definition-vs-reference classification for an asset-typed item
+    // entering this scene's content library (asset-manager plan, R5
+    // sub-plan resolution 2): true = definition (owning entry), false =
+    // reference entry (owned elsewhere). Pre-flip the decision derives
+    // from item hosting; the R5.6 single-loader flip re-implements
+    // exactly this predicate on the Asset_manager (defining container ==
+    // this scene's record). Deliberately the ONE site that changes at
+    // the flip - do not inline host comparisons for this purpose.
+    [[nodiscard]] auto is_asset_definition(const erhe::Item_base& item) const -> bool;
 
     // Per-scene setting overrides (issue #239). Each field is an optional; a
     // disengaged optional means "use the editor-global default". Effective values

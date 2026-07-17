@@ -398,7 +398,19 @@ auto instantiate_prefab(
                         .item_type  = "material",
                     },
                     std::shared_ptr<erhe::gltf::Gltf_image_source>{},
-                    true // is_reference
+                    true, // is_reference
+                    // Reference entries record their defining container
+                    // (asset-manager plan, R5 sub-plan step R5.2). Texture
+                    // entries above carry no asset_key yet: texture is not a
+                    // managed Asset_type in v1 (plan D6); their container is
+                    // already recorded in gltf_source.
+                    Asset_key{
+                        .scope = Asset_scope::file,
+                        .type  = Asset_type::material,
+                        .path  = gltf_path_str,
+                        .uid   = material->get_gltf_uid(),
+                        .name  = material->get_name(),
+                    }
                 )
             );
         }
@@ -645,7 +657,17 @@ void replace_content_library_entries(Content_library& content_library, const Pre
                     .item_type  = "material",
                 },
                 std::shared_ptr<erhe::gltf::Gltf_image_source>{},
-                true // is_reference
+                true, // is_reference
+                // See instantiate: reference entries record their defining
+                // container; texture entries carry no asset_key yet (no
+                // managed Asset_type for textures in v1).
+                Asset_key{
+                    .scope = Asset_scope::file,
+                    .type  = Asset_type::material,
+                    .path  = gltf_path_str,
+                    .uid   = material->get_gltf_uid(),
+                    .name  = material->get_name(),
+                }
             );
         }
     }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app_context.hpp"
+#include "assets/asset_key.hpp"
 #include "editor_log.hpp"
 #include "graphics/icon_set.hpp"
 #include "scene/generated/gltf_source_reference.hpp"
@@ -87,7 +88,8 @@ public:
         const std::shared_ptr<T>&                               entry,
         const Gltf_source_reference&                            gltf_source,
         const std::shared_ptr<erhe::gltf::Gltf_image_source>&   image_source = {},
-        bool                                                    is_reference = false
+        bool                                                    is_reference = false,
+        const std::optional<Asset_key>&                         asset_key    = {}
     );
 
     template <typename T>
@@ -142,6 +144,14 @@ public:
     // or releases the item's Item_host. An owning entry (the default) hosts
     // its item: item->get_item_host() == the library owner.
     bool                                      is_reference{false};
+    // Asset identity of the wrapped item when its defining container is
+    // known (asset-manager plan, R5 sub-plan resolution 2): today a
+    // file-scope key stamped on prefab-template material reference
+    // entries; the R5.6 single-loader flip generalizes this to every
+    // asset-typed entry (definitions record this scene's container,
+    // references the defining one). Inert metadata until then - nothing
+    // resolves through it.
+    std::optional<Asset_key>                  asset_key;
     std::optional<Gltf_source_reference>      gltf_source;
     // Texture entries only: the retained compressed source image stream, so
     // glTF export can re-embed the image byte-exact
@@ -371,7 +381,8 @@ void Content_library_node::add(
     const std::shared_ptr<T>&                             entry,
     const Gltf_source_reference&                          gltf_source,
     const std::shared_ptr<erhe::gltf::Gltf_image_source>& image_source,
-    const bool                                            is_reference
+    const bool                                            is_reference,
+    const std::optional<Asset_key>&                       asset_key
 )
 {
     ERHE_VERIFY(entry);
@@ -393,6 +404,9 @@ void Content_library_node::add(
             if (image_source) {
                 existing->image_source = image_source;
             }
+            if (asset_key.has_value()) {
+                existing->asset_key = asset_key;
+            }
         }
         return;
     }
@@ -402,6 +416,7 @@ void Content_library_node::add(
     node->is_reference = is_reference;
     node->gltf_source  = gltf_source;
     node->image_source = image_source;
+    node->asset_key    = asset_key;
     node->set_parent(this);
     invalidate_cache<T>();
 }
