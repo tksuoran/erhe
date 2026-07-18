@@ -11,6 +11,7 @@
 #include <glm/glm.hpp>
 
 #include <filesystem>
+#include <functional>
 #include <optional>
 #include <vector>
 
@@ -73,6 +74,11 @@ public:
     // only, no buffer data); filled by ensure_scanned(). Used for the
     // viewport drag-and-drop preview box and bottom-snap placement.
     std::optional<erhe::math::Aabb> bounding_box;
+    // Scanned material names with their glTF 2.1 uids (parallel vectors;
+    // empty uid when the file declares none), for the R7 "Reference
+    // Material into Scene" context menu on scanned sub-assets.
+    std::vector<std::string>        material_names;
+    std::vector<std::string>        material_uids;
 };
 
 // Lazily populate contents + bounding_box (scan_gltf); no-op when already
@@ -167,6 +173,16 @@ private:
     // menu items for any asset that has a source path (folders and all file-based
     // assets: gltf/glb, geogram, other).
     void add_copy_path_menu_items(const std::shared_ptr<erhe::Item_base>& item, bool& close);
+
+    // R7 reference-into-scene: a "Reference Material into Scene" submenu
+    // listing the file's scanned materials (per open scene when several are
+    // open); each entry lists the material in the scene's library as a
+    // reference entry (undoable attach) via reference_material_into_scene.
+    void add_reference_material_menu_items(
+        Asset_file_gltf&                    gltf,
+        std::vector<std::function<void()>>& deferred_operations,
+        bool&                               close
+    );
 
     App_context& m_context;
 

@@ -98,6 +98,13 @@ public:
     std::shared_ptr<erhe::scene::Node> root_node;
     std::vector<std::string>           errors;          // decision-11 identifiability violations
     bool                               dirty{false};    // live asset edits not yet written back (used from R5 on)
+    // R7 make-external: a record created around a LIVE object by
+    // rehome_definition_to_container - no parse, no gltf_data. Only such
+    // authored material containers may be rewritten by save_container: a
+    // container parsed from an arbitrary glTF may hold content the manager
+    // does not manage (nodes, meshes), which a materials-only rewrite would
+    // silently destroy.
+    bool                               authored_material_container{false};
 
     // Scene identity link (R5.3): weak so the record never pins the scene;
     // the raw pointer duplicates the identity for matching during
@@ -302,6 +309,17 @@ public:
     // returns the scene's record, whose strong entries serve the scene's
     // own objects - no second parse.
     auto get_or_load_container(const std::filesystem::path& path, std::string& out_error) -> std::shared_ptr<Asset_container_record>;
+
+    // R7 make-external primitives. can_bind_container_path: true when no
+    // record (scene or container) is bound to the path - checked BEFORE
+    // writing the container file. rehome_definition_to_container: move the
+    // asset's defining record from its scene to a fresh path-bound record
+    // built around THE live object (no re-parse; meshes keep pointing at
+    // the same object - single-loader axiom). The caller has already
+    // written the container file at `path` (the item carries the uid the
+    // export stamped). v1 scope: materials only.
+    [[nodiscard]] auto can_bind_container_path(const std::filesystem::path& path, std::string& out_error) const -> bool;
+    auto rehome_definition_to_container(const std::shared_ptr<erhe::Item_base>& item, const std::filesystem::path& path, std::string& out_error) -> bool;
 
     // R5.3 scene identity records. Called by App_scenes when a Scene_root
     // registers / unregisters, and (via App_scenes) whenever a scene's

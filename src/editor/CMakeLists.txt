@@ -118,6 +118,8 @@ erhe_target_sources_grouped(
     assets/asset_reference.hpp
     assets/asset_reference_config.cpp
     assets/asset_reference_config.hpp
+    assets/asset_workflow.cpp
+    assets/asset_workflow.hpp
     brushes/brush.cpp
     brushes/brush.hpp
     brushes/brush_placement.cpp

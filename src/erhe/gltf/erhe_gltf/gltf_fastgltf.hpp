@@ -315,6 +315,11 @@ public:
     std::unordered_set<const erhe::scene::Mesh*> excluded_meshes{};
     // Extra unreferenced meshes to export (see Gltf_export_extra_mesh).
     std::vector<Gltf_export_extra_mesh> extra_meshes{};
+    // Materials to export even when no exported mesh references them (the
+    // exporter is otherwise lazy: process_material only runs for referenced
+    // materials). R7 make-external writes single-material asset container
+    // files through this.
+    std::vector<std::shared_ptr<erhe::primitive::Material>> extra_materials{};
     // Called after all objects are emitted (glTF indices known); returns
     // (extension name, extension JSON value) pairs to attach to the asset
     // root, e.g. ("ERHE_brushes", "{\"brushes\":[...]}"). Each returned

@@ -4,6 +4,7 @@
 #include "app_message_bus.hpp"
 #include "app_scenes.hpp"
 #include "assets/asset_paths.hpp"
+#include "assets/asset_workflow.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "operations/operation_stack.hpp"
@@ -705,9 +706,57 @@ auto Asset_manager::save_container(const std::filesystem::path& path, std::strin
         }
         return ok;
     }
+    // R7 asset-file save. Rewritable containers: records authored by
+    // make-external (live objects, no parse), and parsed containers whose
+    // file holds ONLY material-domain content (materials + their textures -
+    // e.g. a make-external file reopened in a later session); a materials-only
+    // rewrite cannot destroy anything there. Containers with any other
+    // content (nodes, meshes, animations, skins, cameras, lights) stay
+    // read-only - the manager does not manage that content and a rewrite
+    // would silently drop it.
+    const erhe::gltf::Gltf_data& gltf_data = record->gltf_data;
+    const bool parsed_pure_material_container =
+        !record->authored_material_container &&
+        !record->materials.items.empty()     &&
+        gltf_data.nodes.empty()              &&
+        gltf_data.meshes.empty()             &&
+        gltf_data.animations.empty()         &&
+        gltf_data.skins.empty()              &&
+        gltf_data.cameras.empty()            &&
+        gltf_data.lights.empty();
+    if (record->authored_material_container || parsed_pure_material_container) {
+        std::vector<std::shared_ptr<erhe::primitive::Material>> materials;
+        for (const std::shared_ptr<erhe::Item_base>& item : record->materials.items) {
+            const std::shared_ptr<erhe::primitive::Material> material = std::dynamic_pointer_cast<erhe::primitive::Material>(item);
+            if (material) {
+                materials.push_back(material);
+            }
+        }
+        // Texture sources: a parsed container retained its encoded image
+        // streams; an authored record has none (its materials' textures are
+        // covered by the source-path fallback inside the exporter, and
+        // sources embedded in another glTF are skipped with a warning).
+        const bool ok = write_material_container_file(
+            materials,
+            record->canonical_path,
+            parsed_pure_material_container
+                ? make_gltf_data_image_source_provider(gltf_data)
+                : Gltf_image_source_provider{},
+            out_error
+        );
+        if (ok) {
+            record->dirty = false;
+            log_asset->info(
+                "{} container '{}' saved ({} materials)",
+                record->authored_material_container ? "authored" : "material",
+                record->display_path, materials.size()
+            );
+        }
+        return ok;
+    }
     out_error = record->dirty
-        ? fmt::format("dirty non-scene container '{}' cannot be written back until the R7 asset-file save; unload with discard to drop the edits", record->display_path)
-        : fmt::format("non-scene container '{}' has no save path yet (R7 asset-file save)", record->display_path);
+        ? fmt::format("dirty parsed container '{}' cannot be written back (its file holds unmanaged content); unload with discard to drop the edits", record->display_path)
+        : fmt::format("parsed container '{}' is read-only (its file holds content beyond materials)", record->display_path);
     return false;
 }
 
@@ -946,6 +995,79 @@ auto Asset_manager::get_or_load_container(const std::filesystem::path& path, std
     // container) returned at the top, so the slot must be free here.
     ERHE_VERIFY(index_inserted);
     return record;
+}
+
+auto Asset_manager::can_bind_container_path(const std::filesystem::path& path, std::string& out_error) const -> bool
+{
+    const std::filesystem::path canonical_path = normalize_asset_path(path);
+    const std::shared_ptr<Asset_container_record> existing = find_record_by_path(canonical_path);
+    if (existing) {
+        out_error = existing->is_open_as_scene()
+            ? fmt::format("'{}' is open as scene '{}'", existing->display_path, existing->scene_name)
+            : fmt::format("'{}' is already loaded as a container (record {})", existing->display_path, existing->id);
+        return false;
+    }
+    return true;
+}
+
+auto Asset_manager::rehome_definition_to_container(const std::shared_ptr<erhe::Item_base>& item, const std::filesystem::path& path, std::string& out_error) -> bool
+{
+    verify_main_thread();
+    ERHE_VERIFY(item);
+    const Asset_type type = asset_type_from_item(*item);
+    if (type != Asset_type::material) {
+        out_error = fmt::format("make-external supports materials only in v1 (got {})", c_str(type));
+        return false;
+    }
+    const std::string& uid = item->get_gltf_uid();
+    if (uid.empty()) {
+        out_error = fmt::format("{} '{}' has no glTF uid - write the container file first (export stamps one)", c_str(type), item->get_name());
+        return false;
+    }
+    if (!can_bind_container_path(path, out_error)) {
+        return false;
+    }
+    const std::filesystem::path canonical_path = normalize_asset_path(path);
+
+    // Remove the item from its defining scene record's strong entries: the
+    // scene stops being the definition site. The library node's usership
+    // (declared user) is untouched - the entry keeps the object alive and
+    // named in unload refusals, now as a reference.
+    const std::shared_ptr<Asset_container_record> defining = find_defining_record(*item);
+    if (defining) {
+        Asset_container_record::Scene_entries* entries = defining->get_scene_entries(type);
+        if (entries != nullptr) {
+            const auto i = std::remove(entries->items.begin(), entries->items.end(), item);
+            entries->items.erase(i, entries->items.end());
+        }
+    }
+
+    // Path-bound record around THE live object - no parse, no gltf_data.
+    // Meshes, slots and references keep pointing at the same object
+    // (single-loader axiom: the definition moved, the object did not).
+    std::shared_ptr<Asset_container_record> record = std::make_shared<Asset_container_record>();
+    record->id                          = m_next_container_id++;
+    record->canonical_path              = canonical_path;
+    record->display_path                = asset_path_to_string(canonical_path);
+    record->authored_material_container = true;
+    Asset_container_record::Type_entries* type_entries = record->get_type_entries(type);
+    ERHE_VERIFY(type_entries != nullptr);
+    ++type_entries->name_counts[item->get_name()];
+    type_entries->by_uid.emplace(uid, item);
+    if (!item->get_name().empty()) {
+        type_entries->by_unique_name.emplace(item->get_name(), item);
+    }
+    type_entries->items.push_back(item);
+    m_containers.emplace(record->id, record);
+    const auto [index_it, index_inserted] = m_path_index.try_emplace(canonical_path, record->id);
+    ERHE_VERIFY(index_inserted); // can_bind_container_path checked above
+    log_asset->info(
+        "make-external: {} '{}' (uid '{}') re-homed from {} to authored container '{}' (record {})",
+        c_str(type), item->get_name(), uid,
+        defining ? describe_scene_record(*defining) : std::string{"no defining record"},
+        record->display_path, record->id
+    );
+    return true;
 }
 
 auto Asset_manager::find_record_by_path(const std::filesystem::path& canonical_path) const -> std::shared_ptr<Asset_container_record>

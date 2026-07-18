@@ -97,6 +97,33 @@ void color_graph(
     }
 }
 
+// Substitutes THE managed object for a parsed material everywhere in the
+// parse: the materials vector (index-based consumers - ERHE_brushes,
+// ERHE_node_graphs - see the shared object too) and every mesh primitive.
+void substitute_material_in_parse(
+    erhe::gltf::Gltf_data&                            gltf_data,
+    const std::size_t                                 material_index,
+    const std::shared_ptr<erhe::primitive::Material>& parsed,
+    const std::shared_ptr<erhe::primitive::Material>& resolved
+)
+{
+    gltf_data.materials[material_index] = resolved;
+    for (const std::shared_ptr<erhe::scene::Node>& node : gltf_data.nodes) {
+        if (!node) {
+            continue;
+        }
+        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+        if (!mesh) {
+            continue;
+        }
+        for (erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_mutable_primitives()) {
+            if (mesh_primitive.material == parsed) {
+                mesh_primitive.material = resolved;
+            }
+        }
+    }
+}
+
 // ERHE_asset_reference import (asset-manager plan phase R6): materials
 // carrying the extension are proxies whose definition lives in another
 // container. Each proxy resolves through Asset_manager::acquire (uid first,
@@ -182,22 +209,7 @@ auto resolve_material_asset_references(
                 if (key.uid.empty() && !resolved_material->get_gltf_uid().empty()) {
                     key.uid = resolved_material->get_gltf_uid();
                 }
-                // Substitute THE managed object for the stub everywhere.
-                gltf_data.materials[i] = resolved_material;
-                for (const std::shared_ptr<erhe::scene::Node>& node : gltf_data.nodes) {
-                    if (!node) {
-                        continue;
-                    }
-                    const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
-                    if (!mesh) {
-                        continue;
-                    }
-                    for (erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_mutable_primitives()) {
-                        if (mesh_primitive.material == material) {
-                            mesh_primitive.material = resolved_material;
-                        }
-                    }
-                }
+                substitute_material_in_parse(gltf_data, i, material, resolved_material);
                 reference_keys.emplace(resolved_material.get(), key);
                 log_parsers->info(
                     "ERHE_asset_reference: material '{}' resolved to container '{}'",
@@ -219,6 +231,55 @@ auto resolve_material_asset_references(
         }
     }
     return reference_keys;
+}
+
+// R7 import-as-reference: route every parsed material that is not already a
+// resolved R6 reference through the manager. The import's own parse
+// provides the scene structure, but the material OBJECTS are acquired from
+// the source container - a later import or reference of the same file
+// shares them instead of duplicating definitions (import-as-copy stays the
+// default). A material that cannot be acquired (no uid and an ambiguous or
+// missing name - decision 11) keeps its parsed definition with a warning.
+void acquire_import_materials_as_references(
+    App_context&                 context,
+    erhe::gltf::Gltf_data&       gltf_data,
+    const std::filesystem::path& gltf_path,
+    std::unordered_map<const erhe::primitive::Material*, Asset_key>& reference_keys
+)
+{
+    if (context.asset_manager == nullptr) {
+        return;
+    }
+    const std::string container_path = asset_path_to_string(normalize_asset_path(gltf_path));
+    for (std::size_t i = 0; i < gltf_data.materials.size(); ++i) {
+        const std::shared_ptr<erhe::primitive::Material> material = gltf_data.materials[i];
+        if (!material || reference_keys.contains(material.get())) {
+            continue; // absent, or already substituted by the R6 resolver
+        }
+        const Asset_key key{
+            .scope = Asset_scope::file,
+            .type  = Asset_type::material,
+            .path  = container_path,
+            .uid   = material->get_gltf_uid(),
+            .name  = material->get_name(),
+        };
+        std::string error;
+        const std::shared_ptr<erhe::Item_base> resolved_item = context.asset_manager->acquire(key, error);
+        const std::shared_ptr<erhe::primitive::Material> resolved_material = std::dynamic_pointer_cast<erhe::primitive::Material>(resolved_item);
+        if (!resolved_material) {
+            log_parsers->warn(
+                "import-as-reference: material '{}' of '{}' could not be acquired ({}) - keeping the imported definition",
+                material->get_name(), container_path, error
+            );
+            continue;
+        }
+        substitute_material_in_parse(gltf_data, i, material, resolved_material);
+        reference_keys.emplace(resolved_material.get(), context.asset_manager->make_key(*resolved_material));
+        log_parsers->info(
+            "import-as-reference: material '{}' acquired from container '{}'",
+            resolved_material->get_name(), container_path
+        );
+    }
 }
 
 // Content-library attach operations for everything the parsed glTF carries
@@ -412,7 +473,8 @@ auto make_import_gltf_operation(
     App_context&                       context,
     erhe::primitive::Build_info        build_info,
     const std::shared_ptr<Scene_root>& scene_root,
-    const std::filesystem::path&       path
+    const std::filesystem::path&       path,
+    const bool                         materials_as_references
 ) -> std::shared_ptr<Operation>
 {
     ERHE_VERIFY(scene_root);
@@ -484,9 +546,13 @@ auto make_import_gltf_operation(
     // ERHE_asset_reference proxies (R6): substitute manager-acquired
     // objects for reference stubs before anything consumes the materials;
     // the returned keys make the library attach below list them as
-    // reference entries.
-    const std::unordered_map<const erhe::primitive::Material*, Asset_key> material_reference_keys =
+    // reference entries. Import-as-reference (R7) additionally routes the
+    // remaining parsed materials through the manager.
+    std::unordered_map<const erhe::primitive::Material*, Asset_key> material_reference_keys =
         resolve_material_asset_references(context, gltf_data);
+    if (materials_as_references) {
+        acquire_import_materials_as_references(context, gltf_data, path, material_reference_keys);
+    }
 
     // Color-graph computation (currently unused but preserved as in the
     // previous implementation; the wireframe-color application is commented
@@ -711,11 +777,12 @@ void import_gltf(
     App_context&                       context,
     erhe::primitive::Build_info        build_info,
     const std::shared_ptr<Scene_root>& scene_root,
-    const std::filesystem::path&       path
+    const std::filesystem::path&       path,
+    const bool                         materials_as_references
 )
 {
     context.operation_stack->queue(
-        make_import_gltf_operation(context, std::move(build_info), scene_root, path)
+        make_import_gltf_operation(context, std::move(build_info), scene_root, path, materials_as_references)
     );
 }
 
@@ -769,6 +836,8 @@ auto scan_gltf(const std::filesystem::path& path) -> Gltf_scan_summary
         out.push_back(fmt::format("size: {:.2f} x {:.2f} x {:.2f}", size.x, size.y, size.z));
     }
     summary.extensions_used = std::move(scan.extensions_used);
+    summary.material_names  = std::move(scan.materials);
+    summary.material_uids   = std::move(scan.material_uids);
     return summary;
 }
 

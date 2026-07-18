@@ -253,10 +253,12 @@ auto Mcp_server::action_import_gltf(const json& args) -> std::string
         return r.dump();
     }
 
-    editor::import_gltf(m_context, make_import_build_info(m_context), scene_root, path);
+    const bool materials_as_references = args.value("materials_as_references", false);
+    editor::import_gltf(m_context, make_import_build_info(m_context), scene_root, path, materials_as_references);
     return make_json_content({
-        {"imported", true},
-        {"path",     path_str}
+        {"imported",                true},
+        {"path",                    path_str},
+        {"materials_as_references", materials_as_references}
     }).dump();
 }
 

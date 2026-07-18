@@ -34,11 +34,16 @@ class Scene_root;
 // Operation_stack; Scene_open_operation executes it inline as part of its
 // own execute() so "Open scene" stays a single undo entry (an executing
 // operation must not call back into the Operation_stack except to queue()).
+// materials_as_references (R7 import-as-reference): parsed materials are
+// acquired from the source container through the Asset_manager and listed
+// as reference entries instead of copied definitions; the default keeps
+// import-as-copy semantics.
 [[nodiscard]] auto make_import_gltf_operation(
     App_context&                       context,
     erhe::primitive::Build_info        build_info,
     const std::shared_ptr<Scene_root>& scene_root,
-    const std::filesystem::path&       path
+    const std::filesystem::path&       path,
+    bool                               materials_as_references = false
 ) -> std::shared_ptr<Operation>;
 
 // Queues the import compound built by make_import_gltf_operation().
@@ -46,7 +51,8 @@ void import_gltf(
     App_context&                       context,
     erhe::primitive::Build_info        build_info,
     const std::shared_ptr<Scene_root>& scene_root,
-    const std::filesystem::path&       path
+    const std::filesystem::path&       path,
+    bool                               materials_as_references = false
 );
 
 // The Build_info every glTF import entry point uses (asset browser, MCP
@@ -80,6 +86,11 @@ public:
     std::vector<std::string>        contents;
     std::vector<std::string>        extensions_used;
     std::optional<erhe::math::Aabb> bounding_box;
+    // Material names + glTF 2.1 uids (parallel; empty uid when absent), so
+    // the asset browser can offer per-material actions on scanned files
+    // (R7 reference-into-scene).
+    std::vector<std::string>        material_names;
+    std::vector<std::string>        material_uids;
 };
 
 [[nodiscard]] auto scan_gltf(const std::filesystem::path& path) -> Gltf_scan_summary;

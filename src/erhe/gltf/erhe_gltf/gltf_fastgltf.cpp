@@ -5423,6 +5423,12 @@ private:
 
     void combine_buffers()
     {
+        // A material-only asset container can legitimately have no buffers
+        // at all; combining would emit an invalid zero-length buffer entry.
+        if (m_gltf_asset.buffers.empty()) {
+            return;
+        }
+
         validate_buffers();
 
         fastgltf::sources::Vector combined_buffer;
@@ -5521,6 +5527,15 @@ auto Gltf_exporter::export_gltf() -> std::string
     // (both add buffers).
     process_skins();
     process_animations();
+
+    // Unreferenced materials (R7 asset container files): before
+    // combine_buffers() and stamp_uids() - embedding texture sources adds
+    // buffers, and the materials must join the uid pass.
+    for (const std::shared_ptr<erhe::primitive::Material>& extra_material : m_arguments.extra_materials) {
+        if (extra_material) {
+            static_cast<void>(process_material(extra_material.get()));
+        }
+    }
 
     // glTF 2.1 features in use: loaders must understand the files array
     // (externalAsset instancing and/or ERHE_asset_reference proxies), so

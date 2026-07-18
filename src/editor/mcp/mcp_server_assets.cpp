@@ -10,6 +10,7 @@
 #include "assets/asset_key.hpp"
 #include "assets/asset_manager.hpp"
 #include "assets/asset_reference.hpp"
+#include "assets/asset_workflow.hpp"
 #include "brushes/brush_tool.hpp"
 #include "tools/material_paint_tool.hpp"
 #include "windows/inventory_window.hpp"
@@ -331,6 +332,169 @@ auto Mcp_server::action_set_inventory_slot(const json& args) -> std::string
         {"item_name",  item->get_name()},
         {"item_id",    item->get_id()},
         {"key",        asset_key_to_json(m_context.asset_manager->make_key(*item))}
+    }).dump();
+}
+
+// --- R7 asset workflow verbs ------------------------------------------------
+
+auto Mcp_server::action_load_asset_file(const json& args) -> std::string
+{
+    Asset_manager* asset_manager = m_context.asset_manager;
+    if (asset_manager == nullptr) {
+        return make_error_content("Asset manager not available");
+    }
+    const std::string path_str = args.value("path", "");
+    if (path_str.empty()) {
+        return make_error_content("'path' is required");
+    }
+    std::string error;
+    const std::shared_ptr<Asset_container_record> record = asset_manager->get_or_load_container(std::filesystem::path{path_str}, error);
+    if (!record) {
+        return make_error_content("load failed: " + error);
+    }
+    return make_json_content({
+        {"id",              record->id},
+        {"path",            record->display_path},
+        {"material_count",  record->materials.items.size()},
+        {"animation_count", record->animations.items.size()},
+        {"open_as_scene",   record->is_open_as_scene()},
+        {"errors",          record->errors}
+    }).dump();
+}
+
+auto Mcp_server::action_reference_asset_into_scene(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* scene_root = find_scene(scene_name);
+    if (scene_root == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::string path_str = args.value("path", "");
+    if (path_str.empty()) {
+        return make_error_content("'path' is required");
+    }
+    const Asset_key key{
+        .scope = Asset_scope::file,
+        .type  = Asset_type::material,
+        .path  = path_str,
+        .uid   = args.value("uid", ""),
+        .name  = args.value("name", ""),
+    };
+    std::string error;
+    const std::shared_ptr<erhe::primitive::Material> material = reference_material_into_scene(m_context, *scene_root, key, error);
+    if (!material) {
+        return make_error_content("reference failed: " + error);
+    }
+    return make_json_content({
+        {"scene_name",    scene_name},
+        {"material_name", material->get_name()},
+        {"material_id",   material->get_id()},
+        {"material_uid",  material->get_gltf_uid()},
+        {"key",           asset_key_to_json(m_context.asset_manager->make_key(*material))}
+    }).dump();
+}
+
+namespace {
+
+// Shared scene-library material lookup for the make-external /
+// make-internal verbs: material_id (the scene's library first, then any
+// manager-known material) takes precedence over material_name (searched in
+// the scene's library).
+auto find_verb_material(
+    App_context& context,
+    Scene_root&  scene_root,
+    const json&  args,
+    std::string& out_error
+) -> std::shared_ptr<erhe::primitive::Material>
+{
+    const std::shared_ptr<Content_library> library = scene_root.get_content_library();
+    if (args.contains("material_id")) {
+        const std::size_t material_id = args.value("material_id", std::size_t{0});
+        if (library && library->materials) {
+            std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{library->mutex};
+            for (const std::shared_ptr<erhe::primitive::Material>& material : library->materials->get_all<erhe::primitive::Material>()) {
+                if (material && (material->get_id() == material_id)) {
+                    return material;
+                }
+            }
+        }
+        if (context.asset_manager != nullptr) {
+            const std::shared_ptr<erhe::primitive::Material> material =
+                std::dynamic_pointer_cast<erhe::primitive::Material>(context.asset_manager->find_loaded_by_id(material_id));
+            if (material) {
+                return material;
+            }
+        }
+        out_error = fmt::format("no material with item id {}", material_id);
+        return {};
+    }
+    const std::string material_name = args.value("material_name", "");
+    if (material_name.empty()) {
+        out_error = "'material_id' or 'material_name' is required";
+        return {};
+    }
+    if (library && library->materials) {
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{library->mutex};
+        for (const std::shared_ptr<erhe::primitive::Material>& material : library->materials->get_all<erhe::primitive::Material>()) {
+            if (material && (material->get_name() == material_name)) {
+                return material;
+            }
+        }
+    }
+    out_error = fmt::format("scene '{}' has no library material named '{}'", scene_root.get_name(), material_name);
+    return {};
+}
+
+}
+
+auto Mcp_server::action_make_asset_external(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* scene_root = find_scene(scene_name);
+    if (scene_root == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::string path_str = args.value("path", "");
+    if (path_str.empty()) {
+        return make_error_content("'path' is required");
+    }
+    std::string error;
+    const std::shared_ptr<erhe::primitive::Material> material = find_verb_material(m_context, *scene_root, args, error);
+    if (!material) {
+        return make_error_content(error);
+    }
+    if (!make_material_external(m_context, *scene_root, material, std::filesystem::path{path_str}, error)) {
+        return make_error_content("make-external failed: " + error);
+    }
+    return make_json_content({
+        {"scene_name",    scene_name},
+        {"material_name", material->get_name()},
+        {"material_id",   material->get_id()},
+        {"key",           asset_key_to_json(m_context.asset_manager->make_key(*material))}
+    }).dump();
+}
+
+auto Mcp_server::action_make_asset_internal(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* scene_root = find_scene(scene_name);
+    if (scene_root == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    std::string error;
+    const std::shared_ptr<erhe::primitive::Material> material = find_verb_material(m_context, *scene_root, args, error);
+    if (!material) {
+        return make_error_content(error);
+    }
+    const std::shared_ptr<erhe::primitive::Material> copy = make_material_internal(m_context, *scene_root, material, error);
+    if (!copy) {
+        return make_error_content("make-internal failed: " + error);
+    }
+    return make_json_content({
+        {"scene_name",         scene_name},
+        {"material_name",      copy->get_name()},
+        {"material_id",        copy->get_id()},
+        {"shared_material_id", material->get_id()}
     }).dump();
 }
 

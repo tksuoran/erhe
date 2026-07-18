@@ -5,6 +5,8 @@
 #include "app_message.hpp"
 #include "app_message_bus.hpp"
 #include "app_settings.hpp"
+#include "assets/asset_key.hpp"
+#include "assets/asset_workflow.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "operations/operation.hpp"
@@ -26,7 +28,10 @@
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
 
+#include <fmt/format.h>
 #include <imgui/imgui.h>
+
+#include <functional>
 
 namespace editor {
 
@@ -156,7 +161,7 @@ Asset_browser::Asset_browser(
     m_node_tree_window->add_item_context_menu_callback(
         [this](
             const std::shared_ptr<erhe::Item_base>& item,
-            std::vector<std::function<void()>>&     /*deferred_operations*/,
+            std::vector<std::function<void()>>&     deferred_operations,
             bool&                                   close
         ) {
             // Primary type-specific actions.
@@ -183,6 +188,7 @@ Asset_browser::Asset_browser(
                 if (!erhe_scene && try_open(gltf)) {
                     close = true;
                 }
+                add_reference_material_menu_items(*gltf, deferred_operations, close);
             }
             // Copy-path items for every asset that has a source path: folders and
             // all file-based assets (gltf/glb, geogram, other).
@@ -274,6 +280,8 @@ void ensure_scanned(Asset_file_gltf& gltf)
     gltf.contents        = std::move(summary.contents);
     gltf.extensions_used = std::move(summary.extensions_used);
     gltf.bounding_box    = summary.bounding_box;
+    gltf.material_names  = std::move(summary.material_names);
+    gltf.material_uids   = std::move(summary.material_uids);
     gltf.is_scanned      = true;
 }
 
@@ -390,6 +398,67 @@ void Asset_browser::add_copy_path_menu_items(const std::shared_ptr<erhe::Item_ba
         ImGui::SetClipboardText(text.c_str());
         close = true;
     }
+}
+
+void Asset_browser::add_reference_material_menu_items(
+    Asset_file_gltf&                    gltf,
+    std::vector<std::function<void()>>& deferred_operations,
+    bool&                               close
+)
+{
+    if (gltf.material_names.empty() || (m_context.app_scenes == nullptr) || (m_context.asset_manager == nullptr)) {
+        return;
+    }
+    const std::filesystem::path* source_path = gltf.get_source_path();
+    if ((source_path == nullptr) || source_path->empty()) {
+        return;
+    }
+    const std::vector<std::shared_ptr<Scene_root>>& scene_roots = m_context.app_scenes->get_scene_roots();
+    if (scene_roots.empty()) {
+        return;
+    }
+    if (!ImGui::BeginMenu("Reference Material into Scene")) {
+        return;
+    }
+    App_context* const context = &m_context;
+    const auto add_entry = [&](const std::size_t material_index, const std::shared_ptr<Scene_root>& scene_root) {
+        const Asset_key key{
+            .scope = Asset_scope::file,
+            .type  = Asset_type::material,
+            .path  = source_path->generic_string(),
+            .uid   = gltf.material_uids[material_index],
+            .name  = gltf.material_names[material_index],
+        };
+        deferred_operations.push_back(
+            [context, key, scene_root]() {
+                std::string error;
+                if (!reference_material_into_scene(*context, *scene_root, key, error)) {
+                    log_asset_browser->warn("Reference Material into Scene failed: {}", error);
+                }
+            }
+        );
+        close = true;
+    };
+    for (std::size_t i = 0; i < gltf.material_names.size(); ++i) {
+        const std::string label = gltf.material_names[i].empty()
+            ? fmt::format("(unnamed material {})", i)
+            : gltf.material_names[i];
+        if (scene_roots.size() == 1) {
+            if (ImGui::MenuItem(label.c_str())) {
+                add_entry(i, scene_roots.front());
+            }
+            continue;
+        }
+        if (ImGui::BeginMenu(label.c_str())) {
+            for (const std::shared_ptr<Scene_root>& scene_root : scene_roots) {
+                if (scene_root && ImGui::MenuItem(scene_root->get_name().c_str())) {
+                    add_entry(i, scene_root);
+                }
+            }
+            ImGui::EndMenu();
+        }
+    }
+    ImGui::EndMenu();
 }
 
 auto Asset_browser::item_callback(const std::shared_ptr<erhe::Item_base>& item) -> bool

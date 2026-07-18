@@ -155,6 +155,11 @@ private:
     auto action_set_tool_asset  (const nlohmann::json& args) -> std::string;
     auto action_set_inventory_slot(const nlohmann::json& args) -> std::string;
     auto action_save_container  (const nlohmann::json& args) -> std::string;
+    // R7 asset workflow verbs
+    auto action_load_asset_file           (const nlohmann::json& args) -> std::string;
+    auto action_reference_asset_into_scene(const nlohmann::json& args) -> std::string;
+    auto action_make_asset_external       (const nlohmann::json& args) -> std::string;
+    auto action_make_asset_internal       (const nlohmann::json& args) -> std::string;
     auto action_instantiate_prefab(const nlohmann::json& args) -> std::string;
     auto action_reload_prefab   (const nlohmann::json& args) -> std::string;
     auto query_prefabs          (const nlohmann::json& args) -> std::string;

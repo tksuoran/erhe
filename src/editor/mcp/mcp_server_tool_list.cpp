@@ -374,11 +374,12 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"scene_name", "path"})}
     }});
-    m_tool_infos.push_back({"import_gltf",        "Import a glTF file into an existing scene", {
+    m_tool_infos.push_back({"import_gltf",        "Import a glTF file into an existing scene. With materials_as_references (R7 import-as-reference) the parsed materials are acquired from the source container through the asset manager and listed as reference entries instead of copied definitions.", {
         {"type", "object"},
         {"properties", {
-            {"scene_name", {{"type", "string"}, {"description", "Name of the destination scene"}}},
-            {"path",       {{"type", "string"}, {"description", "Source .gltf/.glb file path"}}}
+            {"scene_name",              {{"type", "string"},  {"description", "Name of the destination scene"}}},
+            {"path",                    {{"type", "string"},  {"description", "Source .gltf/.glb file path"}}},
+            {"materials_as_references", {{"type", "boolean"}, {"description", "Acquire materials from the source container and list them as reference entries (default false: import-as-copy)"}}}
         }},
         {"required", json::array({"scene_name", "path"})}
     }});
@@ -420,12 +421,48 @@ void Mcp_server::refresh_tool_list()
         }()},
         {"required", json::array({"scope", "type", "path"})}
     }});
-    m_tool_infos.push_back({"save_container",      "Write a loaded asset container back to its file. A container open as a scene delegates to the scene save (clears the record's dirty flag); a non-scene container cannot be written back until the R7 asset-file save and is refused with a reason (discard-unload drops its edits instead).", {
+    m_tool_infos.push_back({"save_container",      "Write a loaded asset container back to its file. A container open as a scene delegates to the scene save (clears the record's dirty flag); an authored material container (created by make_asset_external) is rewritten from its live materials (R7 asset-file save); a container parsed from an arbitrary glTF stays read-only (its file may hold unmanaged content) - discard-unload drops its edits instead.", {
         {"type", "object"},
         {"properties", {
             {"path", {{"type", "string"}, {"description", "Path of the loaded container to save"}}}
         }},
         {"required", json::array({"path"})}
+    }});
+    m_tool_infos.push_back({"load_asset_file",     "Load a glTF file as an asset container through the asset manager (one parse per container; a path open as a scene returns that scene's record). Returns the record id, per-type asset counts and identifiability errors.", {
+        {"type", "object"},
+        {"properties", {
+            {"path", {{"type", "string"}, {"description", "Container .gltf/.glb file path"}}}
+        }},
+        {"required", json::array({"path"})}
+    }});
+    m_tool_infos.push_back({"reference_asset_into_scene", "R7: acquire a material from a container file and list it in a scene's content library as a REFERENCE entry carrying its file-scope asset key (undoable attach). The scene save then writes an ERHE_asset_reference proxy instead of the material data. Accepted only when the defining container is path-bound (plan resolution 11).", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name", {{"type", "string"}, {"description", "Destination scene"}}},
+            {"path",       {{"type", "string"}, {"description", "Container file path holding the material definition"}}},
+            {"uid",        {{"type", "string"}, {"description", "glTF 2.1 unique ID of the material (preferred identity)"}}},
+            {"name",       {{"type", "string"}, {"description", "Material name (identity fallback; must be unique in the container)"}}}
+        }},
+        {"required", json::array({"scene_name", "path"})}
+    }});
+    m_tool_infos.push_back({"make_asset_external", "R7 MAKE EXTERNAL: move a scene-defined material into a fresh asset container file. The file is written (export stamps the uid), the manager re-homes THE live object (meshes keep pointing at it), and the scene's library entry flips definition -> reference carrying the file key - the next scene save writes an R6 proxy. Not undoable.", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name",    {{"type", "string"},  {"description", "Scene defining the material"}}},
+            {"material_id",   {{"type", "integer"}, {"description", "Material by unique item id (takes precedence over material_name)"}}},
+            {"material_name", {{"type", "string"},  {"description", "Material name in the scene's library"}}},
+            {"path",          {{"type", "string"},  {"description", "Container file path to create (.glb or .gltf; must not already be loaded or open as a scene)"}}}
+        }},
+        {"required", json::array({"scene_name", "path"})}
+    }});
+    m_tool_infos.push_back({"make_asset_internal", "R7 MAKE INTERNAL: copy a shared (referenced) material's data into a scene-owned definition and de-link - the scene's mesh primitives swap to the copy, the reference entry becomes an owning definition entry, and edits stop reaching other users of the shared object. The copy is a new asset (no uid until its first export). Not undoable.", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name",    {{"type", "string"},  {"description", "Scene holding the reference entry"}}},
+            {"material_id",   {{"type", "integer"}, {"description", "Shared material by unique item id (takes precedence over material_name)"}}},
+            {"material_name", {{"type", "string"},  {"description", "Shared material name in the scene's library"}}}
+        }},
+        {"required", json::array({"scene_name"})}
     }});
     m_tool_infos.push_back({"set_tool_asset",      "Set or clear the asset a tool holds as an Asset_reference (Phase R3): the Brush Tool's active brush or the Material Paint Tool's material. The tool becomes a declared user of the asset (visible in query_asset_manager). Omit 'name' to clear.", {
         {"type", "object"},

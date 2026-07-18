@@ -8,6 +8,7 @@
 
 #include "app_context.hpp"
 #include "assets/asset_manager.hpp"
+#include "assets/asset_workflow.hpp"
 #include "content_library/content_library.hpp"
 #include "geometry_graph/graph_mesh.hpp"
 #include "geometry_graph/geometry_graph_window.hpp"
@@ -615,6 +616,54 @@ auto Scene_root::make_browser_window(
                         }
                     );
                     close = true;
+                }
+            }
+            // R7 asset workflow verbs on material leaves: "Make External"
+            // moves a definition into a fresh asset container file (the
+            // entry flips to a reference; the next scene save writes an R6
+            // proxy); "Make Internal" copies a referenced material's data
+            // into a scene-owned definition and de-links. Neither is
+            // undoable (they alter container files / manager state).
+            {
+                const std::shared_ptr<erhe::primitive::Material> leaf_material =
+                    std::dynamic_pointer_cast<erhe::primitive::Material>(content_node->item);
+                if (leaf_material && (context.asset_manager != nullptr)) {
+                    App_context* context_ptr = &context;
+                    if (!content_node->is_reference && is_asset_definition(*leaf_material)) {
+                        if (ImGui::MenuItem("Make External")) {
+                            deferred_operations.push_back(
+                                [this, context_ptr, leaf_material]() {
+                                    // Default location; a name collision on disk gets
+                                    // a numeric suffix instead of overwriting.
+                                    const std::filesystem::path directory =
+                                        std::filesystem::path{"res"} / "editor" / "assets" / "materials";
+                                    std::filesystem::path path = directory / (leaf_material->get_name() + ".glb");
+                                    std::error_code error_code;
+                                    for (int suffix = 2; std::filesystem::exists(path, error_code) && (suffix < 100); ++suffix) {
+                                        path = directory / fmt::format("{} ({}).glb", leaf_material->get_name(), suffix);
+                                    }
+                                    std::string error;
+                                    if (!make_material_external(*context_ptr, *this, leaf_material, path, error)) {
+                                        log_scene->warn("Make External failed: {}", error);
+                                    }
+                                }
+                            );
+                            close = true;
+                        }
+                    }
+                    if (content_node->is_reference) {
+                        if (ImGui::MenuItem("Make Internal")) {
+                            deferred_operations.push_back(
+                                [this, context_ptr, leaf_material]() {
+                                    std::string error;
+                                    if (!make_material_internal(*context_ptr, *this, leaf_material, error)) {
+                                        log_scene->warn("Make Internal failed: {}", error);
+                                    }
+                                }
+                            );
+                            close = true;
+                        }
+                    }
                 }
             }
             // "Copy to Scene": copy a library item into another open scene's
