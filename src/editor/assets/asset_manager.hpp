@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -162,6 +163,16 @@ public:
     std::string              scene_name;           // when open_as_scene
 };
 
+// The parse a scene-open import adopts from an already-loaded container
+// record (R5.7, plan resolution 3): the record's structure pins, moved out
+// by take_adopted_parse so the nodes die with the scene that adopts them.
+class Adopted_container_parse
+{
+public:
+    erhe::gltf::Gltf_data              gltf_data;
+    std::shared_ptr<erhe::scene::Node> root_node;
+};
+
 // The asset registry and the only asset loader (plan D3, single-loader
 // axiom). Guarantees every asset is loaded at most once: two references to
 // the same asset always resolve to the same object. Loads on request
@@ -173,9 +184,10 @@ public:
 // scene's asset-typed content: scene records hold strong entries, library
 // entries are declared users, and scene close issues a courtesy unload
 // (resolution 4) at the watchdog arming point. A file-scope acquire of a
-// path open as a scene serves THE scene's object (no second parse). The
-// remaining pre-single-loader seam is the open direction (opening a scene
-// over an already-loaded container re-parses; R5.7 record adoption).
+// path open as a scene serves THE scene's object (no second parse), and
+// since R5.7 the open direction is single-loader too: opening a scene over
+// an already-loaded container ADOPTS the record (resolution 3) - the
+// record becomes the scene's record and the import reuses its parse.
 // save_container() / dirty tracking arrive with R5.8.
 class Asset_manager
 {
@@ -294,6 +306,27 @@ public:
     auto detach_scene_record     (Scene_root* scene_root) -> std::uint64_t;
     void courtesy_unload_container(std::uint64_t record_id);
 
+    // R5.7 record adoption (plan resolution 3). Scene open of a path whose
+    // container is already loaded reuses the record's parse instead of
+    // parsing again:
+    // - find_adoptable_container peeks at a loaded (non-scene, not open)
+    //   record bound to `path` that still carries its parse. The scene-open
+    //   path reads the record's gltf_data / root_node in place BEFORE the
+    //   Scene_root exists (open_scene_gltf needs the ERHE_scene payload to
+    //   construct it); registering the scene then adopts the record.
+    // - take_adopted_parse, called on the SCENE's record after registration,
+    //   moves the structure pins out - the parsed Gltf_data and the free
+    //   root node - and drops the parsed Type_entries (ownership of the
+    //   asset objects re-arrives through the library attach hooks as the
+    //   open attaches the SAME objects). Returns nullopt when there is
+    //   nothing to adopt (fresh open, re-import into an existing scene,
+    //   redo), in which case the caller parses the file as before. Callers
+    //   that already consumed the parse in place discard the return value -
+    //   the call then just severs the record's structure pins (nodes must
+    //   die with the adopting scene).
+    [[nodiscard]] auto find_adoptable_container(const std::filesystem::path& path) const -> std::shared_ptr<Asset_container_record>;
+    auto take_adopted_parse(const Scene_root& scene_root, const std::filesystem::path& path) -> std::optional<Adopted_container_parse>;
+
     // Observability (MCP query_asset_manager)
     [[nodiscard]] auto inspect_assets    () const -> std::vector<Asset_info>;
     [[nodiscard]] auto inspect_containers() const -> std::vector<Asset_container_info>;
@@ -322,6 +355,11 @@ private:
     // create<T>() bookkeeping (R5.5): validates the type and records the
     // creation against the defining scene's container record.
     void register_created(const std::shared_ptr<erhe::Item_base>& item, Scene_root& defining_scene);
+
+    // Registration tail shared by fresh registration, record adoption and
+    // re-registration (redo): sweeps present library entries into the
+    // scene's record and arms the library's claim/release hooks.
+    void arm_scene_library(const std::shared_ptr<Scene_root>& scene_root);
 
     // close_scene subscription: resolution 5 - resets every manager-known
     // animation channel target that points at a node of the closing scene

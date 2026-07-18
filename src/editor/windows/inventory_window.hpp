@@ -47,6 +47,12 @@ public:
     // Push current hotbar slot state to Hotbar
     void apply_hotbar();
 
+    // MCP hook (set_inventory_slot): adopt a brush / material into a grid
+    // slot exactly as a drag-drop would (Asset_reference::adopt), or clear
+    // the slot's asset references when item is null. Returns false for an
+    // out-of-range index or an unsupported item type.
+    auto adopt_into_grid_slot(int slot_index, const std::shared_ptr<erhe::Item_base>& item) -> bool;
+
 private:
     auto resolve_tool(const std::string& tool_name) const -> Tool*;
     auto render_slot(int id, Slot_entry& slot, bool is_source, bool is_target, int section, int slot_index) -> bool;

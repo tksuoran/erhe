@@ -425,6 +425,15 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"tool"})}
     }});
+    m_tool_infos.push_back({"set_inventory_slot",  "Adopt a manager-known brush / material into an Inventory grid slot exactly as a drag-drop would (Asset_reference::adopt; the slot becomes a declared user and its autosaved v4 key is the returned 'key'), or clear the slot's asset references with 'clear': true. Look up item ids via get_scene_materials / get_scene_brushes / query_asset_manager.", {
+        {"type", "object"},
+        {"properties", {
+            {"slot_index", {{"type", "integer"}, {"description", "Zero-based Inventory grid slot index"}}},
+            {"item_id",    {{"type", "integer"}, {"description", "Item id of a manager-known brush or material (required unless clearing)"}}},
+            {"clear",      {{"type", "boolean"}, {"description", "Clear the slot's brush / material references instead of adopting"}}}
+        }},
+        {"required", json::array({"slot_index"})}
+    }});
     m_tool_infos.push_back({"instantiate_prefab", "Instantiate a glTF file as a prefab into a scene: the file is parsed once (cached app-wide) and inserted as a clone that stays a reference to the source file. Instances share GPU buffers; insertion is undoable.", {
         {"type", "object"},
         {"properties", {

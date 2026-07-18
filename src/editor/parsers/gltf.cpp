@@ -10,6 +10,7 @@
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
 #include "app_scenes.hpp"
+#include "assets/asset_manager.hpp"
 #include "content_library/content_library.hpp"
 #include "scene/scene_root.hpp"
 #include "operations/async_raytrace_kickoff_operation.hpp"
@@ -287,24 +288,65 @@ auto make_import_gltf_operation(
     ERHE_VERIFY(context.current_command_buffer != nullptr);
     erhe::graphics::Command_buffer& command_buffer = *context.current_command_buffer;
 
-    erhe::scene::Scene temp_scene{"temp scene", nullptr};
-    const std::shared_ptr<erhe::scene::Node> temp_scene_root_node = temp_scene.get_root_node();
-    std::shared_ptr<erhe::scene::Node> root_node = std::make_shared<erhe::scene::Node>(erhe::file::to_string(path.filename()));
-    // import_root: implicit container, not file content; glTF export writes
-    // its children in its place so open/save cycles do not nest wrappers.
-    root_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui | erhe::Item_flags::import_root);
-    root_node->set_parent(temp_scene_root_node);
+    // R5.7 record adoption (plan resolution 3): when registering scene_root
+    // adopted a loaded container record for this path (the scene-open flow:
+    // Scene_open_operation registers before building this import), reuse the
+    // record's parse instead of parsing the file again - one parse, one set
+    // of asset objects, both directions.
+    std::shared_ptr<erhe::scene::Node> root_node;
+    erhe::gltf::Gltf_data              gltf_data;
+    std::optional<Adopted_container_parse> adopted_parse;
+    if (context.asset_manager != nullptr) {
+        adopted_parse = context.asset_manager->take_adopted_parse(*scene_root, path);
+    }
+    if (adopted_parse.has_value()) {
+        gltf_data = std::move(adopted_parse->gltf_data);
+        root_node = adopted_parse->root_node;
+        // The container's free root node becomes the import_root wrapper:
+        // implicit container, not file content; glTF export writes its
+        // children in its place so open/save cycles do not nest wrappers.
+        root_node->set_name(erhe::file::to_string(path.filename()));
+        root_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui | erhe::Item_flags::import_root);
+        // Container parses use mesh layer 0 (their node trees are never
+        // rendered); scene content draws the content layer. Walk the node
+        // attachments, not gltf_data.meshes: the parse clones the template
+        // mesh per instantiating node, and the clones are what enter the
+        // scene.
+        const erhe::scene::Layer_id content_layer_id = scene_root->layers().content()->id;
+        for (const std::shared_ptr<erhe::scene::Node>& node : gltf_data.nodes) {
+            if (!node) {
+                continue;
+            }
+            const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+            if (mesh) {
+                mesh->layer_id = content_layer_id;
+            }
+        }
+    } else {
+        erhe::scene::Scene temp_scene{"temp scene", nullptr};
+        const std::shared_ptr<erhe::scene::Node> temp_scene_root_node = temp_scene.get_root_node();
+        root_node = std::make_shared<erhe::scene::Node>(erhe::file::to_string(path.filename()));
+        // import_root: implicit container, not file content; glTF export writes
+        // its children in its place so open/save cycles do not nest wrappers.
+        root_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui | erhe::Item_flags::import_root);
+        root_node->set_parent(temp_scene_root_node);
 
-    erhe::gltf::Image_transfer image_transfer{graphics_device, command_buffer};
-    erhe::gltf::Gltf_parse_arguments parse_arguments{
-        .graphics_device = graphics_device,
-        .executor        = executor,
-        .image_transfer  = image_transfer,
-        .root_node       = root_node,
-        .mesh_layer_id   = scene_root->layers().content()->id,
-        .path            = path,
-    };
-    erhe::gltf::Gltf_data gltf_data = erhe::gltf::parse_gltf(parse_arguments);
+        erhe::gltf::Image_transfer image_transfer{graphics_device, command_buffer};
+        erhe::gltf::Gltf_parse_arguments parse_arguments{
+            .graphics_device = graphics_device,
+            .executor        = executor,
+            .image_transfer  = image_transfer,
+            .root_node       = root_node,
+            .mesh_layer_id   = scene_root->layers().content()->id,
+            .path            = path,
+        };
+        gltf_data = erhe::gltf::parse_gltf(parse_arguments);
+
+        // Detach root_node from temp_scene before it goes out of scope. The
+        // Item_insert_remove_operation sub-op below will attach root_node to
+        // scene_root_node on execute().
+        root_node->set_parent({});
+    }
 
     // Color-graph computation (currently unused but preserved as in the
     // previous implementation; the wireframe-color application is commented
@@ -440,11 +482,6 @@ auto make_import_gltf_operation(
         const glm::quat fill_quat{-0.353553444f, -0.8535534f, 0.146446645f, -0.353553325f};
         default_fill_light_node->set_parent_from_node(glm::mat4{fill_quat});
     }
-
-    // Detach root_node from temp_scene before letting temp_scene go out of
-    // scope. The Item_insert_remove_operation sub-op below will attach
-    // root_node to scene_root_node on execute().
-    root_node->set_parent({});
 
     std::vector<std::shared_ptr<Operation>> operations;
     append_content_library_attach_operations(scene_root->get_content_library(), gltf_data, path.generic_string(), operations);
@@ -738,25 +775,60 @@ auto open_scene_gltf(
 {
     ERHE_VERIFY(context.current_command_buffer != nullptr);
 
-    // Parse into a temporary container first: the ERHE_scene payload
-    // (enable_physics) must be known before the Scene_root can be
-    // constructed. Mesh layer ids are editor-wide constants (Mesh_layer_id),
-    // so parsing before the destination scene exists is safe.
-    erhe::scene::Scene temp_scene{"temp scene", nullptr};
-    const std::shared_ptr<erhe::scene::Node> temp_scene_root_node = temp_scene.get_root_node();
-    std::shared_ptr<erhe::scene::Node> container_node = std::make_shared<erhe::scene::Node>("open scene container");
-    container_node->set_parent(temp_scene_root_node);
+    // R5.7 record adoption (plan resolution 3): a container already loaded
+    // for this path lends its parse - read in place, because the ERHE_scene
+    // payload (enable_physics) must be known before the Scene_root can be
+    // constructed. Registering the scene below adopts the record; the
+    // take_adopted_parse call at the end severs the record's structure pins
+    // once the open succeeded. Until then the record stays intact, so a
+    // failed open leaves the loaded container exactly as it was.
+    std::shared_ptr<Asset_container_record> adoptable_record;
+    if (context.asset_manager != nullptr) {
+        adoptable_record = context.asset_manager->find_adoptable_container(path);
+    }
 
-    erhe::gltf::Image_transfer image_transfer{*context.graphics_device, *context.current_command_buffer};
-    erhe::gltf::Gltf_parse_arguments parse_arguments{
-        .graphics_device = *context.graphics_device,
-        .executor        = *context.executor,
-        .image_transfer  = image_transfer,
-        .root_node       = container_node,
-        .mesh_layer_id   = Mesh_layer_id::content,
-        .path            = path,
-    };
-    erhe::gltf::Gltf_data gltf_data = erhe::gltf::parse_gltf(parse_arguments);
+    // Parse into a temporary container when there is nothing to adopt. Mesh
+    // layer ids are editor-wide constants (Mesh_layer_id), so parsing before
+    // the destination scene exists is safe.
+    erhe::scene::Scene temp_scene{"temp scene", nullptr};
+    std::shared_ptr<erhe::scene::Node> container_node;
+    erhe::gltf::Gltf_data              parsed_gltf_data;
+    if (adoptable_record) {
+        container_node = adoptable_record->root_node;
+        log_parsers->info("open_scene_gltf: adopting loaded container record for '{}'", erhe::file::to_string(path));
+    } else {
+        const std::shared_ptr<erhe::scene::Node> temp_scene_root_node = temp_scene.get_root_node();
+        container_node = std::make_shared<erhe::scene::Node>("open scene container");
+        container_node->set_parent(temp_scene_root_node);
+
+        erhe::gltf::Image_transfer image_transfer{*context.graphics_device, *context.current_command_buffer};
+        erhe::gltf::Gltf_parse_arguments parse_arguments{
+            .graphics_device = *context.graphics_device,
+            .executor        = *context.executor,
+            .image_transfer  = image_transfer,
+            .root_node       = container_node,
+            .mesh_layer_id   = Mesh_layer_id::content,
+            .path            = path,
+        };
+        parsed_gltf_data = erhe::gltf::parse_gltf(parse_arguments);
+    }
+    const erhe::gltf::Gltf_data& gltf_data = adoptable_record ? adoptable_record->gltf_data : parsed_gltf_data;
+
+    // Container parses use mesh layer 0 (their node trees are never
+    // rendered); scene content draws the content layer. Walk the node
+    // attachments, not gltf_data.meshes: the parse clones the template mesh
+    // per instantiating node, and the clones are what enter the scene.
+    if (adoptable_record) {
+        for (const std::shared_ptr<erhe::scene::Node>& node : gltf_data.nodes) {
+            if (!node) {
+                continue;
+            }
+            const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+            if (mesh) {
+                mesh->layer_id = Mesh_layer_id::content;
+            }
+        }
+    }
 
     const std::optional<Gltf_scene_state> scene_state = parse_gltf_scene_state(gltf_data);
     if (!scene_state.has_value()) {
@@ -848,6 +920,13 @@ auto open_scene_gltf(
     // Raytrace kickoff, mirroring the import compound's final sub-operation.
     Async_raytrace_kickoff_operation raytrace_kickoff{scene_root, std::move(mesh_node_items)};
     raytrace_kickoff.execute(context);
+
+    // Adopted open succeeded: sever the record's structure pins (the parse
+    // was consumed in place; the nodes now live in - and must die with -
+    // this scene). The record became the scene's record at registration.
+    if (adoptable_record && (context.asset_manager != nullptr)) {
+        static_cast<void>(context.asset_manager->take_adopted_parse(*scene_root, path));
+    }
 
     log_parsers->info("open_scene_gltf: opened scene '{}' from '{}'", scene_root->get_name(), erhe::file::to_string(path));
     return scene_root;

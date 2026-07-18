@@ -513,6 +513,37 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
     return changed;
 }
 
+auto Inventory_window::adopt_into_grid_slot(const int slot_index, const std::shared_ptr<erhe::Item_base>& item) -> bool
+{
+    if ((slot_index < 0) || (slot_index >= static_cast<int>(m_grid_slots.size())) || (m_context.asset_manager == nullptr)) {
+        return false;
+    }
+    Slot_entry& slot = m_grid_slots.at(static_cast<std::size_t>(slot_index));
+    if (!item) {
+        slot.brush   .set_key(Asset_key{});
+        slot.material.set_key(Asset_key{});
+        set_slot_labels(slot, false, slot_index);
+        return true;
+    }
+    const std::shared_ptr<Brush> brush = std::dynamic_pointer_cast<Brush>(item);
+    if (brush) {
+        slot.brush.adopt(*m_context.asset_manager, brush);
+        slot.material.set_key(Asset_key{});
+        slot.tool = m_context.brush_tool;
+        set_slot_labels(slot, false, slot_index);
+        return true;
+    }
+    const std::shared_ptr<erhe::primitive::Material> material = std::dynamic_pointer_cast<erhe::primitive::Material>(item);
+    if (material) {
+        slot.material.adopt(*m_context.asset_manager, material);
+        slot.brush.set_key(Asset_key{});
+        slot.tool = m_context.material_paint_tool;
+        set_slot_labels(slot, false, slot_index);
+        return true;
+    }
+    return false;
+}
+
 auto Inventory_window::find_or_create_brush_with_material(
     const std::shared_ptr<Brush>&                     original_brush,
     const std::shared_ptr<erhe::primitive::Material>& material

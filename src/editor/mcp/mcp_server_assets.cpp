@@ -12,6 +12,7 @@
 #include "assets/asset_reference.hpp"
 #include "brushes/brush_tool.hpp"
 #include "tools/material_paint_tool.hpp"
+#include "windows/inventory_window.hpp"
 
 namespace editor {
 
@@ -271,6 +272,48 @@ auto Mcp_server::action_set_tool_asset(const json& args) -> std::string
         {"asset_id", material->get_id()}
     };
     return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_set_inventory_slot(const json& args) -> std::string
+{
+    if (m_context.inventory_window == nullptr) {
+        return make_error_content("Inventory window not available");
+    }
+    if (m_context.asset_manager == nullptr) {
+        return make_error_content("Asset manager not available");
+    }
+    if (!args.contains("slot_index") || !args["slot_index"].is_number_integer()) {
+        return make_error_content("Missing required 'slot_index'");
+    }
+    const int slot_index = args["slot_index"].get<int>();
+
+    if (args.value("clear", false)) {
+        if (!m_context.inventory_window->adopt_into_grid_slot(slot_index, {})) {
+            return make_error_content("slot_index out of range");
+        }
+        return make_json_content({{"slot_index", slot_index}, {"cleared", true}}).dump();
+    }
+
+    if (!args.contains("item_id") || !args["item_id"].is_number_integer()) {
+        return make_error_content("Missing required 'item_id' (or pass 'clear': true)");
+    }
+    const std::size_t item_id = static_cast<std::size_t>(args["item_id"].get<std::int64_t>());
+    const std::shared_ptr<erhe::Item_base> item = m_context.asset_manager->find_loaded_by_id(item_id);
+    if (!item) {
+        return make_error_content(fmt::format("No manager-known asset with item id {}", item_id));
+    }
+    if (!m_context.inventory_window->adopt_into_grid_slot(slot_index, item)) {
+        return make_error_content("slot_index out of range or item is not a brush / material");
+    }
+    // The written v4 slot key is exactly make_key of the adopted item -
+    // returned here so key-flip legs verify scope / path / uid without
+    // reading the autosaved config file.
+    return make_json_content({
+        {"slot_index", slot_index},
+        {"item_name",  item->get_name()},
+        {"item_id",    item->get_id()},
+        {"key",        asset_key_to_json(m_context.asset_manager->make_key(*item))}
+    }).dump();
 }
 
 }

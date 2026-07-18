@@ -549,17 +549,20 @@ auto Asset_manager::find_loaded_by_id(const std::size_t item_id) const -> std::s
             }
         }
     }
+    // visit_record_assets covers both the parsed container entries and the
+    // strong scene entries, so scene-defined assets are id-addressable too.
+    std::shared_ptr<erhe::Item_base> found;
     for (const auto& [container_id, record] : m_containers) {
-        for (const Asset_type_info& type_info : get_asset_type_infos()) {
-            const Asset_container_record::Type_entries* entries = record->get_type_entries(type_info.type);
-            if (entries == nullptr) {
-                continue;
-            }
-            for (const std::shared_ptr<erhe::Item_base>& item : entries->items) {
-                if (item->get_id() == item_id) {
-                    return item;
+        visit_record_assets(
+            *record,
+            [item_id, &found](const Asset_type_info&, const std::shared_ptr<erhe::Item_base>& item) {
+                if (!found && (item->get_id() == item_id)) {
+                    found = item;
                 }
             }
+        );
+        if (found) {
+            return found;
         }
     }
     return {};
@@ -579,20 +582,42 @@ auto Asset_manager::make_key(const erhe::Item_base& item) const -> Asset_key
             }
         }
     }
-    // Scene records' entries are deliberately NOT consulted: assets of a
-    // scene keep producing scene_local keys until the R5.7 key flip
-    // (file-scope keys for path-bound scene records need the
-    // reference-first record adoption to stay resolvable).
     for (const auto& [container_id, record] : m_containers) {
         const Asset_container_record::Type_entries* entries = record->get_type_entries(key.type);
-        if (entries == nullptr) {
-            continue;
+        if (entries != nullptr) {
+            for (const std::shared_ptr<erhe::Item_base>& container_item : entries->items) {
+                if (container_item.get() == &item) {
+                    key.scope = Asset_scope::file;
+                    key.path  = record->display_path;
+                    return key;
+                }
+            }
         }
-        for (const std::shared_ptr<erhe::Item_base>& container_item : entries->items) {
-            if (container_item.get() == &item) {
-                key.scope = Asset_scope::file;
-                key.path  = record->display_path;
-                return key;
+        // R5.7 key flip (resolution 8): assets DEFINED in a path-bound scene
+        // record produce durable file keys {path, uid, name} - exact
+        // identity, resolvable through record adoption whether the file is
+        // later loaded as a container or opened as a scene. Restricted to
+        // the types a loaded container can serve WITHOUT its scene open
+        // (materials, animations): brushes only materialize when the
+        // editor-state import consumes ERHE_brushes, so a brush file key
+        // could not resolve against a plain container load (a startup slot
+        // resolve would latch failed) - brushes keep scene_local keys until
+        // containers serve them (R5.9 / R7 territory). Session (never-saved)
+        // scene records have no path to serialize and stay scene_local too.
+        if (
+            record->is_scene_record()          &&
+            !record->canonical_path.empty()    &&
+            ((key.type == Asset_type::material) || (key.type == Asset_type::animation))
+        ) {
+            const Asset_container_record::Scene_entries* scene_entries = record->get_scene_entries(key.type);
+            if (scene_entries != nullptr) {
+                for (const std::shared_ptr<erhe::Item_base>& scene_item : scene_entries->items) {
+                    if (scene_item.get() == &item) {
+                        key.scope = Asset_scope::file;
+                        key.path  = record->display_path;
+                        return key;
+                    }
+                }
             }
         }
     }
@@ -867,8 +892,13 @@ void Asset_manager::bind_record_path(Asset_container_record& record, const std::
     record.display_path   = asset_path_to_string(record.canonical_path);
     const auto [index_it, inserted] = m_path_index.try_emplace(record.canonical_path, record.id);
     if (!inserted && (index_it->second != record.id)) {
+        // Scene open no longer collides here (R5.7 registration adopts the
+        // bound record or takes its slot); what remains is save-as onto a
+        // path some OTHER record already serves (a loaded container or
+        // another open scene) - two records then share one path and the
+        // established one keeps the index slot.
         log_asset->warn(
-            "path '{}' is already bound to container record {}; record {} keeps the path but not the index slot (two records share one path - the open-direction two-loader hazard, resolved by the R5.7 record adoption)",
+            "path '{}' is already bound to container record {}; record {} keeps the path but not the index slot (save-as onto an already-served path)",
             record.display_path, index_it->second, record.id
         );
     }
@@ -884,11 +914,25 @@ void Asset_manager::on_scene_registered(const std::shared_ptr<Scene_root>& scene
             log_asset->warn("scene '{}' already has container record {}", scene_root->get_name(), existing->id);
             return;
         }
+        if (existing->scene_root.lock() == scene_root) {
+            // The SAME living Scene_root re-registers (redo of a scene open /
+            // create re-registers without re-importing): re-open its record.
+            existing->scene_open = true;
+            existing->scene_name = scene_root->get_name();
+            log_asset->info(
+                "scene '{}' re-registered, container record {} re-opened ({})",
+                scene_root->get_name(), existing->id,
+                existing->canonical_path.empty() ? std::string{"session"} : existing->display_path
+            );
+            arm_scene_library(scene_root);
+            return;
+        }
         // A closed-but-surviving record whose identity pointer matches this
-        // scene's address: the address was reused after an unregistration
-        // that never reached the courtesy-unload detach (a teardown path).
-        // Sever the stale identity so the survivor cannot masquerade as the
-        // new scene, then register the new scene normally.
+        // scene's address but whose weak link is dead: the address was
+        // reused after an unregistration that never reached the
+        // courtesy-unload detach (a teardown path). Sever the stale identity
+        // so the survivor cannot masquerade as the new scene, then register
+        // the new scene normally.
         log_asset->warn(
             "container record {} held a stale scene identity matching new scene '{}'; severing it",
             existing->id, scene_root->get_name()
@@ -896,6 +940,40 @@ void Asset_manager::on_scene_registered(const std::shared_ptr<Scene_root>& scene
         existing->scene_root_identity = nullptr;
         existing->scene_root.reset();
     }
+
+    // R5.7 record adoption (plan resolution 3): a record already bound to
+    // this scene's source path becomes THE scene's record - one record, one
+    // parse, both directions. A loaded container record carries its parse
+    // for the import to take (take_adopted_parse); a surviving closed scene
+    // record (refused courtesy unload) has no parse to give, so it releases
+    // the path-index slot to the reopening scene instead and lives on as an
+    // unaddressable session survivor (its objects stay pinned for the
+    // slots / references that refused the unload).
+    const std::filesystem::path source_path = scene_root->get_source_path();
+    if (!source_path.empty()) {
+        const std::shared_ptr<Asset_container_record> bound = find_record_by_path(normalize_asset_path(source_path));
+        if (bound && !bound->is_open_as_scene()) {
+            if (!bound->is_scene_record()) {
+                bound->scene_record        = true;
+                bound->scene_open          = true;
+                bound->scene_name          = scene_root->get_name();
+                bound->scene_root          = scene_root;
+                bound->scene_root_identity = scene_root.get();
+                log_asset->info(
+                    "scene '{}' adopted loaded container record {} ('{}')",
+                    scene_root->get_name(), bound->id, bound->display_path
+                );
+                arm_scene_library(scene_root);
+                return;
+            }
+            log_asset->info(
+                "surviving scene record {} ('{}') released its path binding to reopening scene '{}'",
+                bound->id, bound->display_path, scene_root->get_name()
+            );
+            bind_record_path(*bound, std::filesystem::path{});
+        }
+    }
+
     std::shared_ptr<Asset_container_record> record = std::make_shared<Asset_container_record>();
     record->id                  = m_next_container_id++;
     record->scene_record        = true;
@@ -914,27 +992,87 @@ void Asset_manager::on_scene_registered(const std::shared_ptr<Scene_root>& scene
         record->canonical_path.empty() ? std::string{"session"} : record->display_path
     );
 
-    // Sweep the scene's already-present library entries into the record (a
-    // scene can register fully populated - e.g. redo of a scene open
-    // re-registers without re-importing), then arm the library's
-    // claim/release hooks for changes from here on. The hook gives owning
-    // entries their strong record entry and every asset-typed entry its
-    // usership.
+    arm_scene_library(scene_root);
+}
+
+// Sweep the scene's already-present library entries into its record (a
+// scene can register fully populated - e.g. redo of a scene open
+// re-registers without re-importing), then arm the library's claim/release
+// hooks for changes from here on. The hook gives owning entries their
+// strong record entry and every asset-typed entry its usership; both are
+// idempotent, so re-arming on re-registration is safe.
+void Asset_manager::arm_scene_library(const std::shared_ptr<Scene_root>& scene_root)
+{
     const std::shared_ptr<Content_library> library = scene_root->get_content_library();
-    if (library) {
-        library->set_asset_manager(this);
-        if (library->root) {
-            erhe::Item_host* const owner = static_cast<erhe::Item_host*>(scene_root.get());
-            library->root->for_each<Content_library_node>(
-                [this, owner](Content_library_node& node) -> bool {
-                    if (node.item) {
-                        on_library_node_attached(owner, node);
-                    }
-                    return true;
-                }
-            );
-        }
+    if (!library) {
+        return;
     }
+    library->set_asset_manager(this);
+    if (library->root) {
+        erhe::Item_host* const owner = static_cast<erhe::Item_host*>(scene_root.get());
+        library->root->for_each<Content_library_node>(
+            [this, owner](Content_library_node& node) -> bool {
+                if (node.item) {
+                    on_library_node_attached(owner, node);
+                }
+                return true;
+            }
+        );
+    }
+}
+
+auto Asset_manager::find_adoptable_container(const std::filesystem::path& path) const -> std::shared_ptr<Asset_container_record>
+{
+    if (path.empty()) {
+        return {};
+    }
+    const std::shared_ptr<Asset_container_record> record = find_record_by_path(normalize_asset_path(path));
+    if (!record || record->is_scene_record() || record->is_open_as_scene()) {
+        return {};
+    }
+    const bool has_parse =
+        !record->gltf_data.nodes.empty()     ||
+        !record->gltf_data.materials.empty() ||
+        !record->gltf_data.animations.empty();
+    if (!has_parse || !record->root_node) {
+        return {};
+    }
+    return record;
+}
+
+auto Asset_manager::take_adopted_parse(const Scene_root& scene_root, const std::filesystem::path& path) -> std::optional<Adopted_container_parse>
+{
+    verify_main_thread();
+    const std::shared_ptr<Asset_container_record> record = find_scene_record(&scene_root);
+    if (!record || record->canonical_path.empty()) {
+        return std::nullopt;
+    }
+    if (record->canonical_path != normalize_asset_path(path)) {
+        return std::nullopt;
+    }
+    const bool has_parse =
+        !record->gltf_data.nodes.empty()     ||
+        !record->gltf_data.materials.empty() ||
+        !record->gltf_data.animations.empty();
+    if (!has_parse || !record->root_node) {
+        return std::nullopt;
+    }
+    Adopted_container_parse parse;
+    parse.gltf_data = std::move(record->gltf_data);
+    parse.root_node = std::move(record->root_node);
+    // Structure pins are gone (resolution 3: adopted nodes must die with
+    // the scene). The parsed Type_entries go too: the import attaches the
+    // SAME asset objects to the scene's library, and the attach hooks hand
+    // the record its strong scene entries - keeping the Type_entries would
+    // pin objects the scene later deletes from its library.
+    record->gltf_data = erhe::gltf::Gltf_data{};
+    record->materials  = Asset_container_record::Type_entries{};
+    record->animations = Asset_container_record::Type_entries{};
+    log_asset->info(
+        "scene '{}' took adopted parse of container record {} ('{}')",
+        record->scene_name, record->id, record->display_path
+    );
+    return parse;
 }
 
 void Asset_manager::on_scene_unregistered(Scene_root* scene_root)
