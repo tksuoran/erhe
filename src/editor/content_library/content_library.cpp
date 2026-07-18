@@ -41,7 +41,9 @@ Content_library_node::Content_library_node(std::string_view folder_name, uint64_
     , type_code{type_code}
     , type_name{type_name}
 {
-    enable_flag_bits(erhe::Item_flags::expand);
+    // Folders default closed in the tree (recursively - type folders and
+    // their subfolders alike); only the library root opens by default, see
+    // Content_library::Content_library().
 }
 
 Content_library_node::Content_library_node(const std::shared_ptr<erhe::Item_base>& in_item)
@@ -181,6 +183,9 @@ Content_library::Content_library()
 {
     root       = std::make_shared<Content_library_node>("Content Library", erhe::Item_type::content_library_node, "Content_library");
     root->m_library = this;
+    // The root opens by default so the type folders are visible; the folders
+    // themselves default closed (see the folder constructor).
+    root->enable_flag_bits(erhe::Item_flags::expand);
 
     brushes           = std::make_shared<Content_library_node>("Brushes",           erhe::Item_type::brush,                  "Brush"                 );
     animations        = std::make_shared<Content_library_node>("Animations",        erhe::Item_type::animation,              "Animation"             );
@@ -403,7 +408,9 @@ void copy_content_library_folder(const Content_library_node& src_folder, Content
             if (!src_child->is_shown_in_ui()) {
                 dst_child->disable_flag_bits(erhe::Item_flags::show_in_ui);
             }
-            if ((src_child->get_flag_bits() & erhe::Item_flags::expand) == 0) {
+            if ((src_child->get_flag_bits() & erhe::Item_flags::expand) != 0) {
+                dst_child->enable_flag_bits(erhe::Item_flags::expand);
+            } else {
                 dst_child->disable_flag_bits(erhe::Item_flags::expand);
             }
             copy_content_library_folder(*src_child, *dst_child);

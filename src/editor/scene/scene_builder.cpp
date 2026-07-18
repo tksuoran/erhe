@@ -766,7 +766,6 @@ void Scene_builder::make_brushes(
     }
     if (make_johnson_solid_brushes) {
         sort_folder(*m_johnson_solids_folder.get());
-        m_johnson_solids_folder->disable_flag_bits(erhe::Item_flags::expand);
     }
 
     ERHE_VERIFY(m_context.current_command_buffer != nullptr);
