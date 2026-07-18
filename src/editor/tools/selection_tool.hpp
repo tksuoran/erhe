@@ -188,6 +188,12 @@ public:
     // Returns true when anything was removed.
     auto clear_selection(erhe::Item_host* host) -> bool;
 
+    // "Belongs to host" for selection scoping: structure/library hosting,
+    // extended (R5.6) with the asset manager's defining-container lookup -
+    // managed asset types are not hosted, but a selected material of a
+    // closing scene must still leave the selection with it.
+    [[nodiscard]] auto is_hosted_or_defined_by(const erhe::Item_base& item, const erhe::Item_host* host) const -> bool;
+
     // The items commands act on (operation scoping policy): the ACTIVE
     // scene's items plus non-hosted items. Selection in other scenes
     // persists but is never an invisible participant in a command.

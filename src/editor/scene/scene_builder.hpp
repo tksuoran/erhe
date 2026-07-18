@@ -100,17 +100,22 @@ public:
     // The Scene_root is created later (by the scene.create startup command,
     // not at editor init), so Scene_builder is constructed with only the
     // content library (brushes are built into it eagerly) and the scene_root
-    // is assigned here once it exists. The add_* methods require it to be set.
+    // is assigned here once it exists. Closing the target scene clears it
+    // again (editor.cpp on_close_scene). The add_* methods re-target the
+    // ACTIVE scene when one resolves (see resolve_scene_target) and refuse
+    // (warn + return false) when no target scene exists at all -- they are
+    // reachable at any time through the MCP scene.add_* commands and key
+    // bindings, not just the guarded startup script.
     void set_scene_root(const std::shared_ptr<Scene_root>& scene_root);
 
-    void add_cameras        (const Add_cameras_args& args);
-    void add_room           (const Add_room_args&    args);
-    void add_lights         (const Add_lights_args&  args);
-    void add_platonic_solids(const Make_mesh_config& config);
-    void add_johnson_solids (const Make_mesh_config& config);
-    void add_curved_shapes  (const Make_mesh_config& config);
-    void add_torus_chain    (const Make_mesh_config& config, bool connected);
-    void add_cubes          (glm::ivec3 shape, float scale, float gap);
+    auto add_cameras        (const Add_cameras_args& args) -> bool;
+    auto add_room           (const Add_room_args&    args) -> bool;
+    auto add_lights         (const Add_lights_args&  args) -> bool;
+    auto add_platonic_solids(const Make_mesh_config& config) -> bool;
+    auto add_johnson_solids (const Make_mesh_config& config) -> bool;
+    auto add_curved_shapes  (const Make_mesh_config& config) -> bool;
+    auto add_torus_chain    (const Make_mesh_config& config, bool connected) -> bool;
+    auto add_cubes          (glm::ivec3 shape, float scale, float gap) -> bool;
 
     // Resource registration / unregistration hooks driven by
     // Scene_builder_floor_resources_operation so undo of add_room()
@@ -137,6 +142,12 @@ public:
     [[nodiscard]] auto collision_shapes_size() const -> std::size_t;
 
 private:
+    // Target resolution + guard for the public add_* entry points:
+    // re-points m_scene_root at the active scene when one resolves, keeps
+    // the current target otherwise. Returns false (with a warning naming
+    // the refusing command) when no target scene exists at all.
+    [[nodiscard]] auto resolve_scene_target(const char* command_name) -> bool;
+
     auto make_camera(
         std::string_view name,
         glm::vec3        position,

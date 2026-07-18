@@ -321,6 +321,12 @@ auto Animation::evaluate(const float time_current, const std::size_t channel_ind
 void Animation::apply(float time_current)
 {
     for (auto& channel : channels) {
+        // A channel can lose its target node (the editor resets targets
+        // pointing into a closing scene); the sampler data stays, the
+        // channel just no longer applies anywhere.
+        if (!channel.target) {
+            continue;
+        }
         auto& sampler = samplers.at(channel.sampler_index);
         sampler.apply(channel, time_current);
     }

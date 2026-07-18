@@ -253,8 +253,8 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
         std::shared_ptr<Brush> brush = slot_brush;
         thumbnail_drawn = m_context.thumbnails->draw(
             brush,
-            [this, brush](const std::shared_ptr<erhe::graphics::Texture>& texture, unsigned int texture_layer, int64_t time) {
-                m_context.brush_preview->render_preview(texture, texture_layer, brush, time);
+            [&context = m_context, brush](const std::shared_ptr<erhe::graphics::Texture>& texture, unsigned int texture_layer, int64_t time) {
+                context.brush_preview->render_preview(texture, texture_layer, brush, time);
             },
             c_slot_size
         );
@@ -268,8 +268,8 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
         std::shared_ptr<erhe::primitive::Material> material = slot_material;
         thumbnail_drawn = m_context.thumbnails->draw(
             material,
-            [this, material](const std::shared_ptr<erhe::graphics::Texture>& texture, unsigned int /*texture_layer*/, int64_t) {
-                m_context.material_preview->render_preview(texture, material);
+            [&context = m_context, material](const std::shared_ptr<erhe::graphics::Texture>& texture, unsigned int /*texture_layer*/, int64_t) {
+                context.material_preview->render_preview(texture, material);
             },
             c_slot_size
         );
@@ -633,26 +633,6 @@ void Inventory_window::apply_hotbar()
     // slots before it are filled. Empty slots render as placeholder boxes in the
     // hotbar (see Hotbar::slot_button).
     m_context.hotbar->set_slots(m_hotbar_slots);
-}
-
-void Inventory_window::collect_pinned_items(std::unordered_set<const erhe::Item_base*>& out_pinned) const
-{
-    // The slot brushes / materials themselves are declared asset-manager
-    // users since R2 (Asset_reference userships; the watchdog covers them
-    // through Asset_manager::is_pinned). What the manager cannot see is the
-    // TRANSITIVE pin: a slot-held brush keeps its own material alive via
-    // the brush's shared_ptr, with no usership on the material - whitelist
-    // just that.
-    const auto collect = [&out_pinned](const std::vector<Slot_entry>& slots) {
-        for (const Slot_entry& slot : slots) {
-            const std::shared_ptr<Brush> brush = slot.get_brush();
-            if (brush && brush->get_material()) {
-                out_pinned.insert(brush->get_material().get());
-            }
-        }
-    };
-    collect(m_grid_slots);
-    collect(m_hotbar_slots);
 }
 
 void Inventory_window::write_config(Inventory_config& config) const

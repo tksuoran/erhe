@@ -82,4 +82,10 @@ public:
 // for items that are not managed asset types.
 [[nodiscard]] auto asset_type_from_item(const erhe::Item_base& item) -> Asset_type;
 
+// The R5.6 flip scope: asset types whose runtime ownership belongs to the
+// Asset_manager (scene container records hold them strongly) and which
+// never claim an Item_host. mesh is a scene_local resolution convenience
+// for graph source nodes, not a manager-owned type.
+[[nodiscard]] auto is_manager_owned_asset_type(Asset_type type) -> bool;
+
 }

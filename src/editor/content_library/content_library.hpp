@@ -41,6 +41,7 @@ namespace erhe::scene {
 namespace editor {
 
 class Asset_manager;
+class Asset_reference;
 class Brush;
 class App_context;
 class Content_library;
@@ -80,9 +81,12 @@ public:
 
     // Adds a REFERENCE entry: a listing of an item owned elsewhere (e.g. the
     // material preview scene listing the inspected material of another
-    // scene). Never claims or releases the item's Item_host.
+    // scene). Never claims or releases the item's Item_host. The optional
+    // asset_key records the defining container when the caller knows it
+    // (R5.6: register_mesh stamps file-scope keys on container-owned
+    // materials); an already-listed entry only gains a key it lacks.
     template <typename T>
-    void add_reference(const std::shared_ptr<T>& entry);
+    void add_reference(const std::shared_ptr<T>& entry, const std::optional<Asset_key>& asset_key = {});
 
     template <typename T>
     void add(
@@ -153,13 +157,18 @@ public:
     // its item: item->get_item_host() == the library owner.
     bool                                      is_reference{false};
     // Asset identity of the wrapped item when its defining container is
-    // known (asset-manager plan, R5 sub-plan resolution 2): today a
-    // file-scope key stamped on prefab-template material reference
-    // entries; the R5.6 single-loader flip generalizes this to every
-    // asset-typed entry (definitions record this scene's container,
-    // references the defining one). Inert metadata until then - nothing
-    // resolves through it.
+    // known (asset-manager plan, R5 sub-plan resolution 2): file-scope keys
+    // stamped on prefab-template and container-owned reference entries.
+    // Inert metadata until the R6 wire format - nothing resolves through
+    // it. (Scene-asset references stay key-less until the R5.7 key flip
+    // makes their keys durable.)
     std::optional<Asset_key>                  asset_key;
+    // Declared usership of an asset-typed entry (R5.6): the manager's
+    // library attach hook fills this for manager-owned asset types when
+    // the owning scene is registered, so the entry is a named user in
+    // unload refusals ("scene '<name>' library <type> '<item>'").
+    // Deliberately not copied with the node.
+    std::unique_ptr<Asset_reference>          asset_usership;
     std::optional<Gltf_source_reference>      gltf_source;
     // Texture entries only: the retained compressed source image stream, so
     // glTF export can re-embed the image byte-exact
@@ -369,7 +378,7 @@ void Content_library_node::add(const std::shared_ptr<T>& entry)
 }
 
 template <typename T>
-void Content_library_node::add_reference(const std::shared_ptr<T>& entry)
+void Content_library_node::add_reference(const std::shared_ptr<T>& entry, const std::optional<Asset_key>& asset_key)
 {
     ERHE_VERIFY(entry);
     const auto i = std::find_if(
@@ -384,12 +393,19 @@ void Content_library_node::add_reference(const std::shared_ptr<T>& entry)
         }
     );
     if (i != m_children.end()) {
+        if (asset_key.has_value()) {
+            std::shared_ptr<Content_library_node> existing = std::dynamic_pointer_cast<Content_library_node>(*i);
+            if (existing && !existing->asset_key.has_value()) {
+                existing->asset_key = asset_key;
+            }
+        }
         return;
     }
     auto node = std::make_shared<Content_library_node>(entry);
     // Must be set before set_parent(): handle_add_child() decides whether to
     // claim the item's host based on it.
     node->is_reference = true;
+    node->asset_key    = asset_key;
     node->set_parent(this);
     invalidate_cache<T>();
 }

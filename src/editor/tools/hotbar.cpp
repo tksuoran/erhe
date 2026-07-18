@@ -625,22 +625,6 @@ void Hotbar::rebuild_if_needed()
     }
 }
 
-void Hotbar::collect_pinned_items(std::unordered_set<const erhe::Item_base*>& out_pinned) const
-{
-    // The slot brushes / materials themselves are declared asset-manager
-    // users since R2 (Asset_reference userships; the watchdog covers them
-    // through Asset_manager::is_pinned). What the manager cannot see is the
-    // TRANSITIVE pin: a slot-held brush keeps its own material alive via
-    // the brush's shared_ptr, with no usership on the material - whitelist
-    // just that.
-    for (const Slot_entry& slot : m_slots) {
-        const std::shared_ptr<Brush> brush = slot.get_brush();
-        if (brush && brush->get_material()) {
-            out_pinned.insert(brush->get_material().get());
-        }
-    }
-}
-
 void Hotbar::on_hover_scene_view_message(Hover_scene_view_message& message)
 {
     Scene_view* const old_scene_view = get_hover_scene_view();
@@ -1016,8 +1000,8 @@ void Hotbar::slot_button(const uint32_t id, Slot_entry& entry)
         std::shared_ptr<Brush> brush = entry_brush;
         const bool thumbnail_drawn = m_context.thumbnails->draw(
             brush,
-            [this, brush](const std::shared_ptr<erhe::graphics::Texture>& texture, unsigned int texture_layer, int64_t time) {
-                m_context.brush_preview->render_preview(texture, texture_layer, brush, time);
+            [&context = m_context, brush](const std::shared_ptr<erhe::graphics::Texture>& texture, unsigned int texture_layer, int64_t time) {
+                context.brush_preview->render_preview(texture, texture_layer, brush, time);
             },
             icon_size
         );
@@ -1047,8 +1031,8 @@ void Hotbar::slot_button(const uint32_t id, Slot_entry& entry)
         std::shared_ptr<erhe::primitive::Material> material = entry_material;
         const bool thumbnail_drawn = m_context.thumbnails->draw(
             material,
-            [this, material](const std::shared_ptr<erhe::graphics::Texture>& texture, unsigned int /*texture_layer*/, int64_t) {
-                m_context.material_preview->render_preview(texture, material);
+            [&context = m_context, material](const std::shared_ptr<erhe::graphics::Texture>& texture, unsigned int /*texture_layer*/, int64_t) {
+                context.material_preview->render_preview(texture, material);
             },
             icon_size
         );

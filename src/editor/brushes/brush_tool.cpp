@@ -3,6 +3,7 @@
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
 #include "app_scenes.hpp"
+#include "assets/asset_manager.hpp"
 #include "brushes/brush.hpp"
 #include "brushes/brush_placement.hpp"
 #include "graphics/icon_set.hpp"
@@ -231,11 +232,16 @@ auto Brush_tool::get_effective_brush() const -> std::shared_ptr<Brush>
 
 void Brush_tool::on_close_scene(erhe::Item_host* const closing_host)
 {
+    // R5.6: brushes are not hosted; ask the manager whether the closing
+    // scene's container record defines them (transient tool state drops the
+    // asset when its defining scene closes - the R3 decision stands). The
+    // preview node is scene content and keeps the host comparison.
+    Asset_manager* const asset_manager = m_context.asset_manager;
     const std::shared_ptr<Brush> active_brush = m_active_brush.get_as<Brush>();
-    if (active_brush && (active_brush->get_item_host() == closing_host)) {
+    if (active_brush && (asset_manager != nullptr) && asset_manager->is_hosted_or_defined_by(*active_brush, closing_host)) {
         clear_active_brush();
     }
-    if (m_drag_and_drop_brush && (m_drag_and_drop_brush->get_item_host() == closing_host)) {
+    if (m_drag_and_drop_brush && (asset_manager != nullptr) && asset_manager->is_hosted_or_defined_by(*m_drag_and_drop_brush, closing_host)) {
         m_drag_and_drop_brush.reset();
     }
     if (m_preview_node && (m_preview_node->get_item_host() == closing_host)) {

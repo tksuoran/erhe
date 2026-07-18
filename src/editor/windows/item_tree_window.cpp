@@ -1377,10 +1377,13 @@ void Item_tree::imgui_row(const Flat_row& row)
         if (row.brush && m_context.thumbnails) {
             ImGui::SameLine();
             const std::shared_ptr<Brush>& brush = row.brush;
+            // Deferred callback (see Thumbnails::draw): must not capture
+            // this -- the Item_tree of a scene browser window is destroyed
+            // by scene close while the callback can still be pending.
             thumbnail_drawn = m_context.thumbnails->draw(
                 brush,
-                [this, brush](const std::shared_ptr<erhe::graphics::Texture>& texture, unsigned int texture_layer, int64_t time) {
-                    m_context.brush_preview->render_preview(texture, texture_layer, brush, time);
+                [&context = m_context, brush](const std::shared_ptr<erhe::graphics::Texture>& texture, unsigned int texture_layer, int64_t time) {
+                    context.brush_preview->render_preview(texture, texture_layer, brush, time);
                 },
                 m_cached_icon_font_size // keep row height identical to icon-only rows
             );

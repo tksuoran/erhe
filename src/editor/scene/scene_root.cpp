@@ -880,16 +880,18 @@ void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
     }
 
     // Make sure materials are in the material library. A material this scene
-    // defines (is_asset_definition: explicitly registered into this scene's
-    // library) resolves to its existing owning entry; any other material - a
-    // mesh migrating between scenes (e.g. the Hotbar rendertarget following
-    // the active scene), a prefab template resource - is listed as a
-    // reference entry so membership stays with the owner. An unhosted,
-    // unlisted material means a missing explicit registration at its
-    // creation site (R5.2b removed the implicit adoption): warn loudly and
-    // list it as a reference; rendering and the Materials panel keep
-    // working, but nothing claims ownership (a definition must never appear
-    // as a side effect of mesh registration).
+    // defines (is_asset_definition: this scene's container record is its
+    // defining container) resolves to its existing owning entry; any other
+    // material - a mesh migrating between scenes (e.g. the Hotbar
+    // rendertarget following the active scene), a prefab template resource,
+    // another scene's definition, a loaded container's asset - is listed as
+    // a reference entry so membership stays with the owner. A material with
+    // NO live home at all (not managed, not listed anywhere) means a missing
+    // explicit registration at its creation site (R5.2b removed the implicit
+    // adoption): warn loudly and list it as a reference; rendering and the
+    // Materials panel keep working, but nothing claims ownership (a
+    // definition must never appear as a side effect of mesh registration).
+    Asset_manager* const asset_manager = get_content_library()->get_asset_manager();
     auto& material_library = get_content_library()->materials;
     for (const auto& primitive : mesh->get_primitives()) {
         if (!primitive.material) {
@@ -898,9 +900,10 @@ void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
         if (is_asset_definition(*primitive.material)) {
             material_library->add(primitive.material);
         } else {
-            if ((primitive.material->get_item_host() == nullptr) && !material_library->has_item(*primitive.material)) {
+            const bool has_live_home = (asset_manager != nullptr) && asset_manager->is_managed(*primitive.material);
+            if (!has_live_home && !material_library->has_item(*primitive.material)) {
                 log_scene->warn(
-                    "Material '{}' on mesh '{}' entered scene '{}' unhosted and unregistered;"
+                    "Material '{}' on mesh '{}' entered scene '{}' unowned and unregistered;"
                     " listing it as a reference without ownership. Register the material explicitly"
                     " at its creation site (R5.2b: ownership never comes from mesh registration).",
                     primitive.material->get_name(),
@@ -908,23 +911,36 @@ void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
                     get_name()
                 );
             }
-            material_library->add_reference(primitive.material);
+            // Stamp the defining container on the reference when it is
+            // durable (file scope: a loaded container or a saved scene) -
+            // inert metadata until the R6 wire format.
+            std::optional<Asset_key> reference_key{};
+            if (asset_manager != nullptr) {
+                Asset_key key = asset_manager->make_key(*primitive.material);
+                if (key.scope == Asset_scope::file) {
+                    reference_key = std::move(key);
+                }
+            }
+            material_library->add_reference(primitive.material, reference_key);
         }
     }
 }
 
 auto Scene_root::is_asset_definition(const erhe::Item_base& item) const -> bool
 {
-    // Pre-flip classification (asset-manager plan, R5 sub-plan resolution
-    // 2): a definition is an item this scene's library explicitly hosts;
-    // anything else - hosted elsewhere or not hosted at all - is a
-    // reference. R5.2b removed the implicit adoption of unhosted items:
-    // ownership comes only from explicit registration (register_mesh warns
-    // loudly on unhosted, unlisted arrivals). The R5.6 flip replaces this
-    // body with the manager predicate (defining container == this scene's
-    // record). Keep every definition-vs-reference decision routed through
-    // here.
-    return item.get_item_host() == this;
+    // R5.6 classification (asset-manager plan, R5 sub-plan resolution 2):
+    // a definition is an asset whose defining container is this scene's
+    // record - recorded manager state, never derived from hosting (asset
+    // types are not hosted post-flip). Scenes without a record (previews,
+    // the tool scene; the manager hook is only armed for registered
+    // scenes) define nothing: their libraries hold entries whose lifetime
+    // is the node's item pointer. Keep every definition-vs-reference
+    // decision routed through here.
+    Asset_manager* const asset_manager = m_content_library ? m_content_library->get_asset_manager() : nullptr;
+    if (asset_manager == nullptr) {
+        return false;
+    }
+    return asset_manager->is_defined_by(item, static_cast<const erhe::Item_host*>(this));
 }
 
 void Scene_root::unregister_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)

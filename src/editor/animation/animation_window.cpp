@@ -91,7 +91,9 @@ Animation_window::Animation_window(
 
 void Animation_window::on_close_scene(erhe::Item_host* const closing_host)
 {
-    if (m_animation && (m_animation->get_item_host() == closing_host)) {
+    // R5.6: animations are not hosted; ask the manager whether the closing
+    // scene's container record defines this one.
+    if (m_animation && (m_context.asset_manager != nullptr) && m_context.asset_manager->is_hosted_or_defined_by(*m_animation, closing_host)) {
         set_animation({});
     }
 }

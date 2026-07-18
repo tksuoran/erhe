@@ -20,6 +20,7 @@
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "content_library/content_library.hpp"
 #include "scene/scene_root.hpp"
+#include "tools/selection_tool.hpp"
 
 #include "SkylineBinPack.h" // RectangleBinPack
 
@@ -150,8 +151,34 @@ auto Scene_builder::make_camera(std::string_view name, vec3 position, vec3 look_
     return node;
 }
 
-void Scene_builder::add_cameras(const Add_cameras_args& args)
+auto Scene_builder::resolve_scene_target(const char* command_name) -> bool
 {
+    // The add_* commands build into the ACTIVE scene when one resolves
+    // (MCP set_active_scene, viewport focus, or the single-open-scene
+    // fallback inside Selection::get_active_scene_root). The builder's
+    // own target -- assigned by the scene.create startup command -- is
+    // kept as the fallback so the startup script works before any scene
+    // view exists. When neither resolves (all scenes closed, or a
+    // --no-scene start before scene.create) the command refuses instead
+    // of dereferencing a null target.
+    if (m_context.selection != nullptr) {
+        const std::shared_ptr<Scene_root> active_scene_root = m_context.selection->get_active_scene_root();
+        if (active_scene_root) {
+            m_scene_root = active_scene_root;
+        }
+    }
+    if (m_scene_root) {
+        return true;
+    }
+    log_scene->warn("{}: no target scene (no active scene, and no scene.create scene); ignoring", command_name);
+    return false;
+}
+
+auto Scene_builder::add_cameras(const Add_cameras_args& args) -> bool
+{
+    if (!resolve_scene_target("scene.add_cameras")) {
+        return false;
+    }
     const float camera_distance  = args.camera_distance;
     const float camera_elevation = args.camera_elevation;
 
@@ -238,6 +265,7 @@ void Scene_builder::add_cameras(const Add_cameras_args& args)
             Compound_operation::Parameters{.operations = std::move(operations)}
         )
     );
+    return true;
 }
 
 auto Scene_builder::make_brush(Content_library_node& folder, Brush_data&& brush_create_info) -> std::shared_ptr<Brush>
@@ -745,12 +773,15 @@ void Scene_builder::make_brushes(
     mesh_memory.flush(*m_context.current_command_buffer);
 }
 
-void Scene_builder::add_room(const Add_room_args& args)
+auto Scene_builder::add_room(const Add_room_args& args) -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
+    if (!resolve_scene_target("scene.add_room")) {
+        return false;
+    }
     if (!args.floor) {
-        return;
+        return true;
     }
 
     const float floor_size   = args.floor_size;
@@ -858,6 +889,7 @@ void Scene_builder::add_room(const Add_room_args& args)
             Compound_operation::Parameters{.operations = std::move(operations)}
         )
     );
+    return true;
 }
 
 void Scene_builder::ensure_brushes(const float mass_scale, const int detail)
@@ -878,20 +910,31 @@ void Scene_builder::ensure_brushes(const float mass_scale, const int detail)
     }
 }
 
-void Scene_builder::add_platonic_solids(const Make_mesh_config& config)
+auto Scene_builder::add_platonic_solids(const Make_mesh_config& config) -> bool
 {
+    if (!resolve_scene_target("scene.add_platonic_solids")) {
+        return false;
+    }
     ensure_brushes(config.mass_scale, config.detail);
     make_mesh_nodes(config, m_platonic_solids);
+    return true;
 }
 
-void Scene_builder::add_johnson_solids(const Make_mesh_config& config)
+auto Scene_builder::add_johnson_solids(const Make_mesh_config& config) -> bool
 {
+    if (!resolve_scene_target("scene.add_johnson_solids")) {
+        return false;
+    }
     ensure_brushes(config.mass_scale, config.detail);
     make_mesh_nodes(config, m_johnson_solids);
+    return true;
 }
 
-void Scene_builder::add_curved_shapes(const Make_mesh_config& config)
+auto Scene_builder::add_curved_shapes(const Make_mesh_config& config) -> bool
 {
+    if (!resolve_scene_target("scene.add_curved_shapes")) {
+        return false;
+    }
     ensure_brushes(config.mass_scale, config.detail);
     std::vector<std::shared_ptr<Brush>> brushes;
     brushes.push_back(m_sphere_brush);
@@ -901,10 +944,14 @@ void Scene_builder::add_curved_shapes(const Make_mesh_config& config)
     brushes.push_back(m_capsule_brush);
     brushes.push_back(m_torus_brush);
     make_mesh_nodes(config, brushes);
+    return true;
 }
 
-void Scene_builder::add_torus_chain(const Make_mesh_config& config, bool connected)
+auto Scene_builder::add_torus_chain(const Make_mesh_config& config, bool connected) -> bool
 {
+    if (!resolve_scene_target("scene.add_chain / scene.add_toruses")) {
+        return false;
+    }
     ensure_brushes(config.mass_scale, config.detail);
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
 
@@ -966,6 +1013,7 @@ void Scene_builder::add_torus_chain(const Make_mesh_config& config, bool connect
             )
         );
     }
+    return true;
 }
 
 void Scene_builder::make_mesh_nodes(const Make_mesh_config& config, std::vector<std::shared_ptr<Brush>>& brushes)
@@ -1153,10 +1201,13 @@ void Scene_builder::make_mesh_nodes(const Make_mesh_config& config, std::vector<
     }
 }
 
-void Scene_builder::add_cubes(glm::ivec3 shape, float scale, float gap)
+auto Scene_builder::add_cubes(glm::ivec3 shape, float scale, float gap) -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
+    if (!resolve_scene_target("add_cubes")) {
+        return false;
+    }
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
 
     // See add_torus_chain: the material is created in the scene's own library.
@@ -1223,6 +1274,7 @@ void Scene_builder::add_cubes(glm::ivec3 shape, float scale, float gap)
         }
     }
     root->set_parent(m_scene_root->get_scene().get_root_node());
+    return true;
 }
 
 auto Scene_builder::make_directional_light(
@@ -1317,8 +1369,11 @@ auto Scene_builder::make_point_light(
     return node;
 }
 
-void Scene_builder::add_lights(const Add_lights_args& args)
+auto Scene_builder::add_lights(const Add_lights_args& args) -> bool
 {
+    if (!resolve_scene_target("scene.add_lights")) {
+        return false;
+    }
     const glm::vec4           target_ambient   {0.04f, 0.04f, 0.04f, 0.0f};
 
     const float directional_light_intensity         = args.directional_light_intensity;
@@ -1466,7 +1521,7 @@ void Scene_builder::add_lights(const Add_lights_args& args)
 
     erhe::scene::Scene& scene = m_scene_root->get_scene();
     if (light_nodes.empty() && (scene.ambient_light == target_ambient)) {
-        return;
+        return true;
     }
 
     const std::shared_ptr<erhe::scene::Node>& root_node = scene.get_root_node();
@@ -1491,6 +1546,7 @@ void Scene_builder::add_lights(const Add_lights_args& args)
             Compound_operation::Parameters{.operations = std::move(operations)}
         )
     );
+    return true;
 }
 
 void Scene_builder::animate_lights(const double time_d)

@@ -8,7 +8,9 @@
 #include "animation/animation_keying.hpp"
 #include "animation/animation_player.hpp"
 #include "animation/animation_window.hpp"
+#include "assets/asset_manager.hpp"
 #include "operations/animation_edit_operation.hpp"
+#include "operations/content_library_attach_operation.hpp"
 
 #include "erhe_scene/animation.hpp"
 
@@ -288,9 +290,31 @@ auto Mcp_server::action_animation_create_key(const json& args) -> std::string
         return make_error_content(error);
     }
 
-    const std::shared_ptr<erhe::scene::Animation> animation = window->get_animation();
+    // No animation targeted: create one in the keyed scene's content library
+    // and target it -- the same Unity-record-button behavior as the Animation
+    // window's "+ Key" button (Animation_window::create_key_for_selection).
+    std::shared_ptr<erhe::scene::Animation> animation = window->get_animation();
     if (!animation) {
-        return make_error_content("No animation targeted; call set_animation_target first");
+        erhe::scene::Scene* scene      = nodes.front()->get_scene();
+        Scene_root*         scene_root = (scene != nullptr) ? static_cast<Scene_root*>(scene->get_item_host()) : nullptr;
+        const std::shared_ptr<Content_library> library = (scene_root != nullptr) ? scene_root->get_content_library() : std::shared_ptr<Content_library>{};
+        if (!library || !library->animations || (m_context.asset_manager == nullptr)) {
+            return make_error_content("No animation targeted and the keyed scene cannot host a new one");
+        }
+        animation = m_context.asset_manager->create<erhe::scene::Animation>(*scene_root, "Animation");
+        animation->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+        m_context.operation_stack->execute_now(
+            std::make_shared<Content_library_attach_operation<erhe::scene::Animation>>(
+                library,
+                library->animations,
+                animation,
+                Gltf_source_reference{
+                    .item_name = animation->get_name(),
+                    .item_type = "animation"
+                }
+            )
+        );
+        window->set_animation(animation);
     }
 
     bool key_translation = true;

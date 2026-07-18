@@ -1,6 +1,7 @@
 #include "content_library/content_library.hpp"
 
 #include "assets/asset_manager.hpp"
+#include "assets/asset_reference.hpp"
 #include "brushes/brush.hpp"
 #include "texture_graph/graph_texture.hpp"
 
@@ -15,8 +16,25 @@ Content_library_node::Content_library_node(const Content_library_node& other)
     , item     {other.item ? other.item->clone() : std::shared_ptr<erhe::Item_base>{}}
 {
 }
-Content_library_node& Content_library_node::operator=(const Content_library_node&) = default;
-Content_library_node::~Content_library_node() noexcept                             = default;
+
+Content_library_node& Content_library_node::operator=(const Content_library_node& other)
+{
+    // Mirrors the copy constructor: the wrapped item is cloned and the
+    // usership is deliberately not copied (a clone is a new object; the
+    // manager's attach hook books a fresh usership when the node enters an
+    // armed library).
+    if (this == &other) {
+        return *this;
+    }
+    Item::operator=(other);
+    type_code = other.type_code;
+    type_name = other.type_name;
+    item      = other.item ? other.item->clone() : std::shared_ptr<erhe::Item_base>{};
+    asset_usership.reset();
+    return *this;
+}
+
+Content_library_node::~Content_library_node() noexcept = default;
 
 Content_library_node::Content_library_node(std::string_view folder_name, uint64_t type_code, std::string_view type_name)
     : Item     {folder_name}
@@ -39,21 +57,30 @@ namespace {
 // invariant - an owned item belongs to exactly one content library, so it
 // must not already be hosted elsewhere. Reference entries (is_reference) are
 // listings of items owned elsewhere (e.g. prefab template resources shared
-// across scenes) and never touch the item's host. When the library belongs
-// to a registered scene (asset_manager set, R5.5), each claimed asset-typed
-// item is additionally shadow-registered into the owning scene's container
-// record - non-owning bookkeeping, ownership stays here.
+// across scenes) and never touch the item's host.
+//
+// R5.6 flip: manager-owned asset types (brush, material, animation) never
+// claim an Item_host - their runtime ownership lives in the owning scene's
+// container record, maintained through the manager hook below, which also
+// books a declared usership on every asset-typed entry (owning and
+// reference alike). Libraries whose scene is not registered (previews, the
+// tool scene, the Scene_builder template palette) have no armed manager;
+// their asset-typed entries are pinned by the node's item pointer alone.
 void claim_host_for_subtree(Content_library_node& subtree_root, erhe::Item_host* const owner, Asset_manager* const asset_manager)
 {
     subtree_root.for_each<Content_library_node>(
         [owner, asset_manager](Content_library_node& node) -> bool {
-            if (node.item && !node.is_reference) {
+            if (!node.item) {
+                return true;
+            }
+            const bool manager_owned = is_manager_owned_asset_type(asset_type_from_item(*node.item));
+            if (!manager_owned && !node.is_reference) {
                 erhe::Item_host* const current_host = node.item->get_item_host();
                 ERHE_VERIFY((current_host == nullptr) || (current_host == owner));
                 node.item->set_item_host(owner);
-                if (asset_manager != nullptr) {
-                    asset_manager->on_library_item_hosted(owner, node.item);
-                }
+            }
+            if (manager_owned && (asset_manager != nullptr)) {
+                asset_manager->on_library_node_attached(owner, node);
             }
             return true;
         }
@@ -61,17 +88,22 @@ void claim_host_for_subtree(Content_library_node& subtree_root, erhe::Item_host*
 }
 
 // Reverse of claim_host_for_subtree: detaches owned items from the given
-// owner (and drops their shadow entries, R5.5). Items hosted by someone
-// else (never expected) and reference entries are left alone.
+// owner and (for manager-owned asset types) drops the record entry and the
+// entry usership. Items hosted by someone else (never expected) and
+// reference entries are left alone host-wise.
 void release_host_for_subtree(Content_library_node& subtree_root, erhe::Item_host* const owner, Asset_manager* const asset_manager)
 {
     subtree_root.for_each<Content_library_node>(
         [owner, asset_manager](Content_library_node& node) -> bool {
-            if (node.item && !node.is_reference && (node.item->get_item_host() == owner)) {
+            if (!node.item) {
+                return true;
+            }
+            const bool manager_owned = is_manager_owned_asset_type(asset_type_from_item(*node.item));
+            if (!manager_owned && !node.is_reference && (node.item->get_item_host() == owner)) {
                 node.item->set_item_host(nullptr);
-                if (asset_manager != nullptr) {
-                    asset_manager->on_library_item_released(owner, node.item.get());
-                }
+            }
+            if (manager_owned && (asset_manager != nullptr)) {
+                asset_manager->on_library_node_detached(owner, node);
             }
             return true;
         }

@@ -1,6 +1,7 @@
 #include "tools/clipboard.hpp"
 
 #include "app_context.hpp"
+#include "assets/asset_manager.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "app_message_bus.hpp"
@@ -33,10 +34,14 @@ namespace editor {
 namespace {
 
 // Collects, without duplicates, the materials of every mesh in the subtree
-// that are not hosted by any scene - the pasted content whose ownership the
-// paste site must decide (R5.2b: mesh registration never claims ownership).
-void collect_unhosted_materials(
+// that have NO live home - not known to the asset manager (no defining
+// scene record, no loaded container, not builtin) and not hosted - i.e. the
+// pasted content whose ownership the paste site must decide (R5.2b: mesh
+// registration never claims ownership). Materials with a live home keep it
+// and get a reference listing from register_mesh.
+void collect_orphan_materials(
     const std::shared_ptr<erhe::Hierarchy>&                  hierarchy,
+    Asset_manager* const                                     asset_manager,
     std::vector<std::shared_ptr<erhe::primitive::Material>>& out_materials
 )
 {
@@ -55,6 +60,9 @@ void collect_unhosted_materials(
                 if (!material || (material->get_item_host() != nullptr)) {
                     continue;
                 }
+                if ((asset_manager != nullptr) && asset_manager->is_managed(*material)) {
+                    continue;
+                }
                 if (std::find(out_materials.begin(), out_materials.end(), material) == out_materials.end()) {
                     out_materials.push_back(material);
                 }
@@ -62,7 +70,7 @@ void collect_unhosted_materials(
         }
     }
     for (const std::shared_ptr<erhe::Hierarchy>& child : hierarchy->get_children()) {
-        collect_unhosted_materials(child, out_materials);
+        collect_orphan_materials(child, asset_manager, out_materials);
     }
 }
 
@@ -106,6 +114,43 @@ void collect_clipboard_pins(const std::shared_ptr<erhe::Item_base>& item, std::u
     if (hierarchy) {
         for (const std::shared_ptr<erhe::Hierarchy>& child : hierarchy->get_children()) {
             collect_clipboard_pins(child, out_pinned);
+        }
+    }
+}
+
+// Collects, without duplicates, every manager-owned asset type reachable
+// from a clipboard item: the item itself when it is one, and the pasted
+// meshes' primitive materials. See Clipboard::update_asset_userships.
+void collect_managed_assets(const std::shared_ptr<erhe::Item_base>& item, std::vector<std::shared_ptr<erhe::Item_base>>& out_assets)
+{
+    if (!item) {
+        return;
+    }
+    const auto consider = [&out_assets](const std::shared_ptr<erhe::Item_base>& candidate) {
+        if (!candidate || !is_manager_owned_asset_type(asset_type_from_item(*candidate))) {
+            return;
+        }
+        if (std::find(out_assets.begin(), out_assets.end(), candidate) == out_assets.end()) {
+            out_assets.push_back(candidate);
+        }
+    };
+    consider(item);
+    const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+    if (node) {
+        for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : node->get_attachments()) {
+            const std::shared_ptr<erhe::scene::Mesh> mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(attachment);
+            if (!mesh) {
+                continue;
+            }
+            for (const erhe::scene::Mesh_primitive& primitive : mesh->get_primitives()) {
+                consider(primitive.material);
+            }
+        }
+    }
+    const std::shared_ptr<erhe::Hierarchy> hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
+    if (hierarchy) {
+        for (const std::shared_ptr<erhe::Hierarchy>& child : hierarchy->get_children()) {
+            collect_managed_assets(child, out_assets);
         }
     }
 }
@@ -279,8 +324,9 @@ auto Clipboard::try_paste(const std::shared_ptr<erhe::Hierarchy>& target_parent,
     }
 
     // Ownership of materials carried by the pasted meshes is decided HERE
-    // (R5.2b: mesh registration never claims ownership). Per unhosted
-    // material (a hosted one keeps its owner and gets a reference listing
+    // (R5.2b: mesh registration never claims ownership). Per ORPHAN
+    // material (one with a live home - a defining scene record, a loaded
+    // container, hosting - keeps its owner and gets a reference listing
     // from register_mesh):
     // - already listed in the target scene's library (e.g. a prefab template
     //   resource the scene already references): nothing to do;
@@ -288,19 +334,19 @@ auto Clipboard::try_paste(const std::shared_ptr<erhe::Hierarchy>& target_parent,
     //   list the template's resources as reference entries, exactly like
     //   scene load / instantiate do (direct, not undoable - matching
     //   replace_content_library_entries semantics);
-    // - otherwise the source scene is gone: the target scene claims the
-    //   definition, undoably with the paste itself and BEFORE the node
-    //   insert, so register_mesh sees a hosted material.
+    // - otherwise the source scene is gone AND its record was released: the
+    //   target scene claims the definition, undoably with the paste itself
+    //   and BEFORE the node insert, so register_mesh sees a definition.
     const std::shared_ptr<erhe::scene::Node> target_node = std::dynamic_pointer_cast<erhe::scene::Node>(target_parent);
     Scene_root* const target_scene_root = target_node ? static_cast<Scene_root*>(target_node->get_item_host()) : nullptr;
     if (target_scene_root != nullptr) {
-        std::vector<std::shared_ptr<erhe::primitive::Material>> unhosted_materials;
+        std::vector<std::shared_ptr<erhe::primitive::Material>> orphan_materials;
         for (const std::shared_ptr<erhe::Hierarchy>& pasted_hierarchy : pasted_hierarchies) {
-            collect_unhosted_materials(pasted_hierarchy, unhosted_materials);
+            collect_orphan_materials(pasted_hierarchy, m_context.asset_manager, orphan_materials);
         }
         const std::shared_ptr<Content_library> content_library = target_scene_root->get_content_library();
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
-        for (const std::shared_ptr<erhe::primitive::Material>& material : unhosted_materials) {
+        for (const std::shared_ptr<erhe::primitive::Material>& material : orphan_materials) {
             if (content_library->materials->has_item(*material)) {
                 continue;
             }
@@ -352,12 +398,31 @@ auto Clipboard::try_paste(const std::shared_ptr<erhe::Hierarchy>& target_parent,
 void Clipboard::set_contents(const std::vector<std::shared_ptr<erhe::Item_base>>& items)
 {
     m_contents = items;
+    update_asset_userships();
 }
 
 void Clipboard::set_contents(const std::shared_ptr<erhe::Item_base>& item)
 {
     m_contents.clear();
     m_contents.push_back(item);
+    update_asset_userships();
+}
+
+void Clipboard::update_asset_userships()
+{
+    m_asset_userships.clear();
+    if (m_context.asset_manager == nullptr) {
+        return;
+    }
+    std::vector<std::shared_ptr<erhe::Item_base>> assets;
+    for (const std::shared_ptr<erhe::Item_base>& item : m_contents) {
+        collect_managed_assets(item, assets);
+    }
+    for (const std::shared_ptr<erhe::Item_base>& asset : assets) {
+        Asset_reference& reference = m_asset_userships.emplace_back();
+        reference.set_user_label("clipboard");
+        reference.adopt(*m_context.asset_manager, asset);
+    }
 }
 
 auto Clipboard::get_contents() -> const std::vector<std::shared_ptr<erhe::Item_base>>&

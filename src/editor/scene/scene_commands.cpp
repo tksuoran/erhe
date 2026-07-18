@@ -8,6 +8,7 @@
 #include "app_scenes.hpp"
 #include "app_settings.hpp"
 #include "app_windows.hpp"
+#include "assets/asset_manager.hpp"
 #include "content_library/content_library.hpp"
 #include "content_library/material_library.hpp"
 #include "editor_log.hpp"
@@ -164,8 +165,7 @@ Add_cameras_command::Add_cameras_command(erhe::commands::Commands& commands, App
 
 auto Add_cameras_command::try_call() -> bool
 {
-    m_context.scene_builder->add_cameras(m_args);
-    return true;
+    return m_context.scene_builder->add_cameras(m_args);
 }
 
 void Add_cameras_command::apply_args(const Add_cameras_args& args)
@@ -181,8 +181,7 @@ Add_room_command::Add_room_command(erhe::commands::Commands& commands, App_conte
 
 auto Add_room_command::try_call() -> bool
 {
-    m_context.scene_builder->add_room(m_args);
-    return true;
+    return m_context.scene_builder->add_room(m_args);
 }
 
 void Add_room_command::apply_args(const Add_room_args& args)
@@ -198,8 +197,7 @@ Add_lights_command::Add_lights_command(erhe::commands::Commands& commands, App_c
 
 auto Add_lights_command::try_call() -> bool
 {
-    m_context.scene_builder->add_lights(m_args);
-    return true;
+    return m_context.scene_builder->add_lights(m_args);
 }
 
 void Add_lights_command::apply_args(const Add_lights_args& args)
@@ -219,8 +217,7 @@ Add_platonic_solids_command::Add_platonic_solids_command(erhe::commands::Command
 
 auto Add_platonic_solids_command::try_call() -> bool
 {
-    m_context.scene_builder->add_platonic_solids(m_make_mesh_config);
-    return true;
+    return m_context.scene_builder->add_platonic_solids(m_make_mesh_config);
 }
 
 void Add_platonic_solids_command::set_make_mesh_config(const Make_mesh_config& config)
@@ -246,8 +243,7 @@ Add_johnson_solids_command::Add_johnson_solids_command(erhe::commands::Commands&
 
 auto Add_johnson_solids_command::try_call() -> bool
 {
-    m_context.scene_builder->add_johnson_solids(m_make_mesh_config);
-    return true;
+    return m_context.scene_builder->add_johnson_solids(m_make_mesh_config);
 }
 
 void Add_johnson_solids_command::set_make_mesh_config(const Make_mesh_config& config)
@@ -273,8 +269,7 @@ Add_curved_shapes_command::Add_curved_shapes_command(erhe::commands::Commands& c
 
 auto Add_curved_shapes_command::try_call() -> bool
 {
-    m_context.scene_builder->add_curved_shapes(m_make_mesh_config);
-    return true;
+    return m_context.scene_builder->add_curved_shapes(m_make_mesh_config);
 }
 
 void Add_curved_shapes_command::set_make_mesh_config(const Make_mesh_config& config)
@@ -300,8 +295,7 @@ Add_chain_command::Add_chain_command(erhe::commands::Commands& commands, App_con
 
 auto Add_chain_command::try_call() -> bool
 {
-    m_context.scene_builder->add_torus_chain(m_make_mesh_config, true);
-    return true;
+    return m_context.scene_builder->add_torus_chain(m_make_mesh_config, true);
 }
 
 void Add_chain_command::set_make_mesh_config(const Make_mesh_config& config)
@@ -327,8 +321,7 @@ Add_toruses_command::Add_toruses_command(erhe::commands::Commands& commands, App
 
 auto Add_toruses_command::try_call() -> bool
 {
-    m_context.scene_builder->add_torus_chain(m_make_mesh_config, false);
-    return true;
+    return m_context.scene_builder->add_torus_chain(m_make_mesh_config, false);
 }
 
 void Add_toruses_command::set_make_mesh_config(const Make_mesh_config& config)
@@ -457,13 +450,16 @@ auto Scene_commands::get_scene_root(erhe::scene::Node* parent) const -> Scene_ro
 
 auto Scene_commands::get_scene_root(erhe::primitive::Material* material) const -> Scene_root*
 {
-    // The common path: a material in a scene's content library is hosted by
-    // that library's owning Scene_root. The active-scene fallback remains
-    // only for materials outside any library (not yet inserted, or shared
-    // prefab template resources, which are deliberately non-hosted).
-    erhe::Item_host* const item_host = (material != nullptr) ? material->get_item_host() : nullptr;
-    if (item_host != nullptr) {
-        return static_cast<Scene_root*>(item_host);
+    // The common path: a material in a scene's content library belongs to
+    // that scene's container record (R5.6: materials are not hosted; the
+    // manager records the defining scene). The active-scene fallback
+    // remains for materials without a defining record (not yet inserted,
+    // loaded containers' assets, shared prefab template resources).
+    if ((material != nullptr) && (m_context.asset_manager != nullptr)) {
+        const std::shared_ptr<Scene_root> defining_scene_root = m_context.asset_manager->get_defining_scene_root(*material);
+        if (defining_scene_root) {
+            return defining_scene_root.get();
+        }
     }
 
     // See the Node* overload above.

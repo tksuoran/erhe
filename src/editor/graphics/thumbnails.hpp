@@ -51,6 +51,12 @@ public:
     // This should be called once per frame, outside command encoder
     void update();
 
+    // The callback is NOT invoked from inside draw(): it is stored in a
+    // thumbnail slot and invoked later from update() -- typically on the
+    // next frame, after the message bus pump has run. Anything destroyed
+    // by then (an ImGui window torn down by scene close, any per-scene
+    // part) must not be captured. Capture only whole-app-lifetime state
+    // (App_context&) and shared ownership of the item being rendered.
     auto draw(
         const std::shared_ptr<erhe::Item_base>& item,
         std::function<void(

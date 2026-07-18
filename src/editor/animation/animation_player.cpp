@@ -2,6 +2,7 @@
 
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
+#include "assets/asset_manager.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe_scene/animation.hpp"
@@ -24,7 +25,10 @@ Animation_player::Animation_player(App_context& context, App_message_bus& app_me
 
 void Animation_player::on_close_scene(erhe::Item_host* const closing_host)
 {
-    if (m_animation && (m_animation->get_item_host() == closing_host)) {
+    // R5.6: animations are not hosted; ask the manager whether the closing
+    // scene's container record defines this one (transient tool state drops
+    // the asset when its defining scene closes - the R3 decision).
+    if (m_animation && (m_context.asset_manager != nullptr) && m_context.asset_manager->is_hosted_or_defined_by(*m_animation, closing_host)) {
         set_animation({});
     }
 }

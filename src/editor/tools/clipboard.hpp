@@ -1,5 +1,6 @@
 #pragma once
 
+#include "assets/asset_reference.hpp"
 #include "erhe_commands/command.hpp"
 #include "app_message.hpp"
 #include "erhe_message_bus/message_bus.hpp"
@@ -67,11 +68,20 @@ public:
 private:
     [[nodiscard]] auto resolve_paste_target() -> std::shared_ptr<erhe::Hierarchy>;
 
+    // R5.6: the clipboard is a DECLARED user of every manager-owned asset
+    // its contents reach (mesh primitive materials, directly copied
+    // assets), rebuilt on every set_contents. This makes copy -> close ->
+    // paste-elsewhere a named courtesy-unload refusal ("clipboard") instead
+    // of an undeclared-user warning; the defining record survives the
+    // close, so the pasted content keeps rendering the one shared object.
+    void update_asset_userships();
+
     erhe::message_bus::Subscription<Hover_scene_view_message>      m_hover_scene_view_subscription;
     erhe::message_bus::Subscription<Hover_scene_item_tree_message> m_hover_scene_item_tree_subscription;
     Clipboard_paste_command                       m_paste_command;
     App_context&                                  m_context;
     std::vector<std::shared_ptr<erhe::Item_base>> m_contents;
+    std::vector<Asset_reference>                  m_asset_userships;
 
     Scene_view*                                   m_hover_scene_view          {nullptr};
     Scene_view*                                   m_last_hover_scene_view     {nullptr};

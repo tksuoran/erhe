@@ -3,6 +3,7 @@
 #include "app_context.hpp"
 #include "app_message.hpp"
 #include "app_scenes.hpp"
+#include "assets/asset_manager.hpp"
 #include "items.hpp"
 #include "content_library/content_library.hpp"
 #include "scene/scene_root.hpp"
@@ -159,13 +160,18 @@ auto get_default_material(App_context& context, Scene_root& scene_root) -> std::
     }
     std::shared_ptr<erhe::primitive::Material> material = context.selection->get_last_selected<erhe::primitive::Material>();
     if (material) {
-        // Scene content references materials from its own scene's library:
-        // a selected material hosted by ANOTHER scene must not leak in here.
-        // Non-hosted materials (shared prefab template resources) are usable
-        // anywhere.
-        erhe::Item_host* const host = material->get_item_host();
-        if ((host != nullptr) && (host != &scene_root)) {
-            material.reset();
+        // Cross-scene use rule (R5.6, plan resolution 11): a selected
+        // material defined by ANOTHER scene is usable here only when its
+        // defining container is path-bound (a durable file-scope key
+        // exists); session-only scene assets must not leak in. Materials
+        // without a defining record (shared prefab template resources,
+        // loaded containers' assets, builtins) are usable anywhere.
+        Asset_manager* const asset_manager = context.asset_manager;
+        if (asset_manager != nullptr) {
+            const std::shared_ptr<Scene_root> defining_scene_root = asset_manager->get_defining_scene_root(*material);
+            if (defining_scene_root && (defining_scene_root.get() != &scene_root) && !asset_manager->is_cross_scene_referenceable(*material)) {
+                material.reset();
+            }
         }
     }
     if (!material) {

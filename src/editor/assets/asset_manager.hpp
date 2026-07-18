@@ -29,6 +29,7 @@ namespace editor {
 class App_context;
 class App_message_bus;
 class App_scenes;
+class Content_library_node;
 class Scene_root;
 
 // A glTF container file parsed once by the Asset_manager (plan D3). The
@@ -37,13 +38,17 @@ class Scene_root;
 // parsed node tree parented. Managed asset types get per-type resolution
 // maps built at load, with identifiability validated per plan decision 11.
 //
-// Since R5.3 every scene registered with App_scenes also has a record -
-// identity plus, since R5.5, non-owning SHADOW ENTRIES mirroring the
-// scene's owning asset-typed library items: session id, the scene link
-// below, and a path once the scene has been saved (first save binds,
-// save-as re-homes). A scene record holds NO strong asset references and
-// NO gltf_data; the scene's content library remains the owner until the
-// R5.6 flip.
+// Since R5.3 every scene registered with App_scenes also has a record.
+// Since the R5.6 single-loader flip the record's per-type SCENE ENTRIES
+// hold STRONG references: runtime ownership of a scene's asset-typed
+// content (brushes, materials, animations) belongs to the manager. The
+// scene's content-library nodes still hold the objects for UI and
+// serialization and declare per-entry userships; asset-typed items never
+// claim the scene as their Item_host. A scene record keeps its entries
+// until the courtesy unload at scene close (plan resolution 4) releases
+// them - or keeps the whole container loaded when declared users refuse
+// the unload, in which case the record survives the scene as a plain
+// loaded container.
 class Asset_container_record
 {
 public:
@@ -59,34 +64,31 @@ public:
         std::unordered_map<std::string, std::size_t>                      name_counts;    // for exact ambiguity errors
     };
 
-    // R5.5 shadow registration: one non-owning entry per OWNING asset-typed
-    // item of an open scene's content library. weak_ptr so the entries pin
-    // nothing (ownership stays with the library until the R5.6 flip); the
-    // identity pointer serves add/remove matching only and is never
-    // dereferenced. Unlike Type_entries there are no prebuilt name maps:
+    // R5.6 scene entries: one STRONG reference per owning asset-typed item
+    // of a scene's content library - the manager's runtime ownership of the
+    // scene's assets. Unlike Type_entries there are no prebuilt name maps:
     // scene content is mutable (items get renamed while listed), so
-    // resolution reads names live from the locked items.
-    class Shadow_entry
+    // resolution reads names live from the items.
+    class Scene_entries
     {
     public:
-        std::weak_ptr<erhe::Item_base> item;
-        const erhe::Item_base*         identity{nullptr};
-    };
-    class Shadow_type_entries
-    {
-    public:
-        std::vector<Shadow_entry> entries;
+        std::vector<std::shared_ptr<erhe::Item_base>> items;
     };
 
-    [[nodiscard]] auto get_type_entries(Asset_type type) -> Type_entries*;
-    [[nodiscard]] auto get_type_entries(Asset_type type) const -> const Type_entries*;
-    [[nodiscard]] auto get_shadow_entries(Asset_type type) -> Shadow_type_entries*;
-    [[nodiscard]] auto get_shadow_entries(Asset_type type) const -> const Shadow_type_entries*;
+    [[nodiscard]] auto get_type_entries (Asset_type type) -> Type_entries*;
+    [[nodiscard]] auto get_type_entries (Asset_type type) const -> const Type_entries*;
+    [[nodiscard]] auto get_scene_entries(Asset_type type) -> Scene_entries*;
+    [[nodiscard]] auto get_scene_entries(Asset_type type) const -> const Scene_entries*;
 
-    // True for a record that belongs to an open scene (R5.3 scene identity
-    // records). Such records are created at scene registration and removed
-    // at unregistration, so a live record with a scene link IS open.
-    [[nodiscard]] auto is_open_as_scene() const -> bool { return scene_root_identity != nullptr; }
+    // True for a record created for a registered scene. Such records resolve
+    // through their scene entries (live names) for their whole lifetime,
+    // including after the scene closed with a refused courtesy unload.
+    [[nodiscard]] auto is_scene_record() const -> bool { return scene_record; }
+    // True while the record's scene is registered (open). Cleared at scene
+    // unregistration; the identity pointers below survive until the courtesy
+    // unload point so close_scene subscribers can keep resolving "is this
+    // the closing scene's asset" regardless of subscription order.
+    [[nodiscard]] auto is_open_as_scene() const -> bool { return scene_open; }
 
     std::uint64_t                      id{0};
     std::filesystem::path              canonical_path;  // path-index key (normalize_asset_path form); empty for session (never-saved) scene records
@@ -99,22 +101,26 @@ public:
     // Scene identity link (R5.3): weak so the record never pins the scene;
     // the raw pointer duplicates the identity for matching during
     // unregistration paths where the weak_ptr can no longer lock
-    // (~Scene_root calls unregister while shared_from_this is gone).
+    // (~Scene_root calls unregister while shared_from_this is gone). The
+    // cached scene_name keeps messages readable after the scene is gone.
+    bool                               scene_record{false};
+    bool                               scene_open{false};
+    std::string                        scene_name;
     std::weak_ptr<Scene_root>          scene_root;
     Scene_root*                        scene_root_identity{nullptr};
 
     Type_entries                       materials;
     Type_entries                       animations;
 
-    // R5.5 shadow entries (open-scene records only; loaded containers keep
+    // R5.6 strong scene entries (scene records only; loaded containers keep
     // using Type_entries). Maintained by the content-library claim/release
-    // hooks through Asset_manager::on_library_item_hosted / _released,
-    // seeded by the registration sweep in on_scene_registered, and dropped
-    // by the manager's close_scene subscription (the library destructor
-    // fires no per-node remove hooks).
-    Shadow_type_entries                shadow_brushes;
-    Shadow_type_entries                shadow_materials;
-    Shadow_type_entries                shadow_animations;
+    // hooks through Asset_manager::on_library_node_attached / _detached and
+    // seeded by the registration sweep in on_scene_registered; released by
+    // the courtesy unload at scene close (or by explicit request_unload of
+    // a surviving path-bound record).
+    Scene_entries                      scene_brushes;
+    Scene_entries                      scene_materials;
+    Scene_entries                      scene_animations;
 };
 
 class Asset_user_info
@@ -163,14 +169,13 @@ public:
 // exist). Main-thread only in v1 (container parsing needs the frame command
 // buffer for texture upload).
 //
-// R1 scope: registry + usership bookkeeping + file-scope acquire for
-// externally-referenced containers (materials, animations) + builtin and
-// scene_local resolution. Scene open / import do NOT route through the
-// manager yet (that is the R5.6 flip), but since R5.5 the manager SEES
-// every open scene's assets through the scene record's shadow entries:
-// a file-scope acquire of a path open as a scene serves THE scene's
-// object (no second parse - the container-direction two-loader hazard,
-// plan risk 2, is resolved; the open direction waits for R5.7).
+// Since the R5.6 flip the manager OWNS the runtime lifetime of every
+// scene's asset-typed content: scene records hold strong entries, library
+// entries are declared users, and scene close issues a courtesy unload
+// (resolution 4) at the watchdog arming point. A file-scope acquire of a
+// path open as a scene serves THE scene's object (no second parse). The
+// remaining pre-single-loader seam is the open direction (opening a scene
+// over an already-loaded container re-parses; R5.7 record adoption).
 // save_container() / dirty tracking arrive with R5.8.
 class Asset_manager
 {
@@ -195,11 +200,10 @@ public:
     // The in-editor asset creation funnel (R5 sub-plan step R5.5): every
     // in-editor site that brings a new managed asset into existence
     // constructs it through the manager, naming the scene whose container
-    // record is the asset's defining container. Ownership is unchanged in
-    // R5.5 - the caller still adds the object to the scene's content
-    // library, which hosts it (and shadow-registers it into the record via
-    // the library attach hooks); the manager only records the creation.
-    // The R5.6 flip makes this the point where manager ownership begins.
+    // record is the asset's defining container. The caller adds the object
+    // to the scene's content library; the library attach hooks give the
+    // scene record its strong entry (manager ownership) and the library
+    // entry its usership.
     template <typename T, typename... Args>
     auto create(Scene_root& defining_scene, Args&&... args) -> std::shared_ptr<T>
     {
@@ -208,14 +212,15 @@ public:
         return item;
     }
 
-    // R5.5 shadow registration hooks, called by the content-library
-    // claim/release walks when an owning library entry's item gains/loses
-    // a scene as its Item_host (and by the on_scene_registered sweep).
-    // Non-owning bookkeeping: adds/removes the item in the owning scene
-    // record's shadow entries. No-ops for owners without a record (preview
-    // scenes, the tool scene) and for non-managed item types.
-    void on_library_item_hosted  (erhe::Item_host* owner, const std::shared_ptr<erhe::Item_base>& item);
-    void on_library_item_released(erhe::Item_host* owner, const erhe::Item_base* item);
+    // Library bookkeeping hooks (R5.6), called by the content-library
+    // claim/release walks for manager-owned asset types (and by the
+    // on_scene_registered sweep). An OWNING entry adds/removes the scene
+    // record's strong entry; every entry (owning and reference) holds a
+    // declared usership on its node ("scene '<name>' library <type>
+    // '<item>'"), so unload refusals name library entries. No-ops for
+    // owners without a record (preview scenes, the tool scene).
+    void on_library_node_attached(erhe::Item_host* owner, Content_library_node& node);
+    void on_library_node_detached(erhe::Item_host* owner, Content_library_node& node);
 
     // Identity
     [[nodiscard]] auto find_loaded(const Asset_key& key) const -> std::shared_ptr<erhe::Item_base>;
@@ -225,6 +230,28 @@ public:
     // library.
     [[nodiscard]] auto find_loaded_by_id(std::size_t item_id) const -> std::shared_ptr<erhe::Item_base>;
     [[nodiscard]] auto make_key(const erhe::Item_base& item) const -> Asset_key;
+
+    // Defining-scene lookups (R5.6, plan resolution 2): asset types are not
+    // hosted, so "the scene that owns this asset" is the manager's recorded
+    // fact - the scene whose container record holds the item.
+    [[nodiscard]] auto get_defining_scene_root(const erhe::Item_base& item) const -> std::shared_ptr<Scene_root>;
+    // True when the item's defining container record is the scene identified
+    // by host (identity compare - stays valid through the whole close_scene
+    // dispatch regardless of subscription order).
+    [[nodiscard]] auto is_defined_by(const erhe::Item_base& item, const erhe::Item_host* host) const -> bool;
+    // "Does this item belong to this host": items with a defining record
+    // compare against the record's scene identity; everything else falls
+    // back to Item_host comparison (structure and library hosting).
+    [[nodiscard]] auto is_hosted_or_defined_by(const erhe::Item_base& item, const erhe::Item_host* host) const -> bool;
+    // True when the item is known to the manager: a builtin, a loaded
+    // container's asset, or a scene record's entry.
+    [[nodiscard]] auto is_managed(const erhe::Item_base& item) const -> bool;
+    // Cross-scene use rule (plan resolution 11): referencing an asset
+    // defined in another scene is accepted when the defining container is
+    // path-bound - exactly the condition under which a durable file-scope
+    // key exists. Session-only scene assets are rejected; builtins and
+    // items without a defining record are trivially referenceable.
+    [[nodiscard]] auto is_cross_scene_referenceable(const erhe::Item_base& item) const -> bool;
 
     // Users / unload. v1 unload granularity is the container: the parsed
     // Gltf_data pins every contained object, so unloading a single asset of
@@ -239,19 +266,33 @@ public:
 
     // One parse per container. Refuses (with a clear error) a missing file
     // and a file that produces no content. A path currently open as a scene
-    // returns the scene's identity record, whose shadow entries serve the
-    // scene's own objects (R5.5) - no second parse.
+    // returns the scene's record, whose strong entries serve the scene's
+    // own objects - no second parse.
     auto get_or_load_container(const std::filesystem::path& path, std::string& out_error) -> std::shared_ptr<Asset_container_record>;
 
     // R5.3 scene identity records. Called by App_scenes when a Scene_root
     // registers / unregisters, and (via App_scenes) whenever a scene's
-    // source path changes: registration creates an identity-only record
-    // (picking up the source path an opened scene already carries), the
-    // first save binds the record to the path, save-as re-homes it, and
-    // unregistration removes the record.
+    // source path changes: registration creates the scene's record (picking
+    // up the source path an opened scene already carries), the first save
+    // binds the record to the path, save-as re-homes it. Since R5.6
+    // unregistration KEEPS the record (it owns the scene's assets); the
+    // Editor severs the scene link at the watchdog arming point via
+    // detach_scene_record and then issues the courtesy unload.
     void on_scene_registered         (const std::shared_ptr<Scene_root>& scene_root);
     void on_scene_unregistered       (Scene_root* scene_root);
     void on_scene_source_path_changed(Scene_root& scene_root);
+
+    // Scene-close teardown (R5.6, plan resolution 4), driven by the Editor
+    // at the update_scene_close_leak_watches arming point:
+    // detach_scene_record severs the record's scene identity (called while
+    // the closing Scene_root is still alive; returns the record id, 0 when
+    // the scene has no record), and courtesy_unload_container - called
+    // after the Scene_root's destruction released the library's entry
+    // userships - unloads the record unless declared users (slots, other
+    // scenes' reference entries, debug holds) refuse it, which is normal
+    // and keeps the container loaded.
+    auto detach_scene_record     (Scene_root* scene_root) -> std::uint64_t;
+    void courtesy_unload_container(std::uint64_t record_id);
 
     // Observability (MCP query_asset_manager)
     [[nodiscard]] auto inspect_assets    () const -> std::vector<Asset_info>;
@@ -282,13 +323,19 @@ private:
     // creation against the defining scene's container record.
     void register_created(const std::shared_ptr<erhe::Item_base>& item, Scene_root& defining_scene);
 
-    // close_scene subscription (R5.5): drops the closing scene's shadow
-    // entries. The library destructor fires no per-node remove hooks, and
-    // between the close and the scene's unregistration (which removes the
-    // whole record) nothing may keep resolving the dead scene's objects.
-    // Order against the Editor's close handler is irrelevant: whichever
-    // runs first leaves nothing for the other to do.
+    // close_scene subscription: resolution 5 - resets every manager-known
+    // animation channel target that points at a node of the closing scene
+    // (nodes must die with the scene; a surviving animation must not pin
+    // them). Channels keep their sampler data.
     void on_close_scene(Scene_root* scene_root);
+
+    // The unload core shared by request_unload and the courtesy unload:
+    // refuses (naming users) while any asset of the record has declared
+    // users or undo/redo history references, otherwise drops the record and
+    // weak-verifies exclusivity (undeclared-user detection).
+    auto unload_record(std::shared_ptr<Asset_container_record> record) -> Unload_result;
+
+    [[nodiscard]] auto find_defining_record(const erhe::Item_base& item) const -> std::shared_ptr<Asset_container_record>;
 
     auto resolve_builtin     (const Asset_key& key, std::string& out_error) const -> std::shared_ptr<erhe::Item_base>;
     auto resolve_in_container(const Asset_container_record& record, const Asset_key& key, std::string& out_error) const -> std::shared_ptr<erhe::Item_base>;

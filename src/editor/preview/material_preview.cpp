@@ -2,6 +2,7 @@
 
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
+#include "assets/asset_manager.hpp"
 #include "brushes/brush.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
@@ -173,7 +174,12 @@ void Material_preview::render_preview(
 
 void Material_preview::on_close_scene(erhe::Item_host* const closing_host)
 {
-    if (!m_last_material || (m_last_material->get_item_host() != closing_host)) {
+    // R5.6: materials are not hosted; ask the manager whether the closing
+    // scene's container record defines the inspected one.
+    if (!m_last_material ||
+        (m_context.asset_manager == nullptr) ||
+        !m_context.asset_manager->is_hosted_or_defined_by(*m_last_material, closing_host))
+    {
         return;
     }
     if (m_content_library && m_content_library->materials) {

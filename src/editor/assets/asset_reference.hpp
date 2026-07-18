@@ -79,7 +79,15 @@ public:
     void set_user_label(std::string_view user_label);
 
 private:
+    friend class Asset_manager;
+
     void release_usership();
+
+    // Called by ~Asset_manager on every registered reference: teardown order
+    // lets scene-owned holders (library entries, graph nodes) outlive the
+    // manager, and their destructors must not call back into a destroyed
+    // registry. The resolved object stays readable through get().
+    void on_manager_teardown();
 
     Asset_key                        m_key;
     std::shared_ptr<erhe::Item_base> m_resolved;

@@ -121,4 +121,9 @@ auto asset_type_from_item(const erhe::Item_base& item) -> Asset_type
     return Asset_type::none;
 }
 
+auto is_manager_owned_asset_type(const Asset_type type) -> bool
+{
+    return (type == Asset_type::brush) || (type == Asset_type::material) || (type == Asset_type::animation);
+}
+
 }

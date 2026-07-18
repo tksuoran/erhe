@@ -2,6 +2,7 @@
 
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
+#include "assets/asset_manager.hpp"
 #include "content_library/content_library.hpp"
 #include "graphics/icon_set.hpp"
 #include "scene/scene_root.hpp"
@@ -186,8 +187,11 @@ void Material_paint_tool::set_material(const std::shared_ptr<erhe::primitive::Ma
 
 void Material_paint_tool::on_close_scene(erhe::Item_host* const closing_host)
 {
+    // R5.6: materials are not hosted; ask the manager whether the closing
+    // scene's container record defines this one (the R3 decision stands:
+    // transient tool state drops the asset when its defining scene closes).
     const std::shared_ptr<erhe::Item_base>& material = m_material.get();
-    if (material && (material->get_item_host() == closing_host)) {
+    if (material && (m_context.asset_manager != nullptr) && m_context.asset_manager->is_hosted_or_defined_by(*material, closing_host)) {
         m_material.set_key(Asset_key{});
     }
 }

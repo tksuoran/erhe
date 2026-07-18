@@ -4,6 +4,7 @@
 
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
+#include "assets/asset_manager.hpp"
 #include "editor_log.hpp"
 #include "renderers/programs.hpp"
 #include "scene/scene_root.hpp"
@@ -153,8 +154,10 @@ Brdf_slice::Brdf_slice(
 
 void Brdf_slice::on_close_scene(erhe::Item_host* const closing_host)
 {
+    // R5.6: materials are not hosted; ask the manager whether the closing
+    // scene's container record defines this one.
     erhe::primitive::Material* const material = m_node ? m_node->get_material() : nullptr;
-    if ((material != nullptr) && (material->get_item_host() == closing_host)) {
+    if ((material != nullptr) && (m_context.asset_manager != nullptr) && m_context.asset_manager->is_hosted_or_defined_by(*material, closing_host)) {
         m_node->set_material({});
     }
 }

@@ -3,6 +3,7 @@
 #include "animation/animation_window.hpp"
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
+#include "assets/asset_manager.hpp"
 #include "brushes/brush.hpp"
 #include "brushes/brush_placement.hpp"
 #include "geometry_graph/geometry_graph_mesh.hpp"
@@ -110,12 +111,16 @@ Properties::Properties(
 
 void Properties::on_close_scene(erhe::Item_host* const closing_host)
 {
+    // The target can be scene content (host comparison) or a managed asset
+    // (not hosted since R5.6 - the manager's defining-container lookup
+    // covers both through is_hosted_or_defined_by).
+    Asset_manager* const asset_manager = m_context.asset_manager;
     const std::shared_ptr<erhe::Item_base> target = m_target.lock();
-    if (target && (target->get_item_host() == closing_host)) {
+    if (target && (asset_manager != nullptr) && asset_manager->is_hosted_or_defined_by(*target, closing_host)) {
         m_target.reset();
         m_target_items.clear();
     }
-    if (m_inspected_material && (m_inspected_material->get_item_host() == closing_host)) {
+    if (m_inspected_material && (asset_manager != nullptr) && asset_manager->is_hosted_or_defined_by(*m_inspected_material, closing_host)) {
         // The edit session dies with the scene: no Material_change_operation
         // is recorded (the close drops the undo history anyway).
         m_inspected_material.reset();

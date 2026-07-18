@@ -2701,6 +2701,7 @@ public:
     // as info, not warnings.
     void update_scene_close_leak_watches()
     {
+        std::vector<std::uint64_t> courtesy_unload_records;
         for (const std::shared_ptr<Scene_root>& scene_root : m_scene_roots_pending_close_watch) {
             Scene_close_leak_watch watch;
             watch.scene_name       = scene_root->get_name();
@@ -2724,8 +2725,29 @@ public:
                 watch.items.emplace_back(node);
             }
             m_scene_close_leak_watches.push_back(std::move(watch));
+
+            // R5.6: sever the record's scene identity while the Scene_root
+            // is still alive (the pointers must not dangle past the clear()
+            // below) and queue the courtesy unload (plan resolution 4).
+            if (m_asset_manager) {
+                const std::uint64_t record_id = m_asset_manager->detach_scene_record(scene_root.get());
+                if (record_id != 0) {
+                    courtesy_unload_records.push_back(record_id);
+                }
+            }
         }
+        // In the clean case this destroys the Scene_root: the content
+        // library's nodes release their entry userships here, so the
+        // courtesy unload below sees only EXTERNAL users.
         m_scene_roots_pending_close_watch.clear();
+        // Courtesy unload (R5.6, plan resolution 4): success means closing a
+        // scene frees its assets (memory behavior matches the pre-flip
+        // library ownership); refusal (slots, other scenes' reference
+        // entries, debug holds) is normal and keeps the container loaded -
+        // its assets then report below as manager-pinned info, not leaks.
+        for (const std::uint64_t record_id : courtesy_unload_records) {
+            m_asset_manager->courtesy_unload_container(record_id);
+        }
 
         for (std::size_t i = 0; i < m_scene_close_leak_watches.size(); ) {
             Scene_close_leak_watch& watch = m_scene_close_leak_watches[i];
@@ -2733,15 +2755,6 @@ public:
             if (watch.frames_remaining > 0) {
                 ++i;
                 continue;
-            }
-            // Items intentionally pinned by inventory / hotbar slots
-            // (persistent inventory survives scene close by design).
-            std::unordered_set<const erhe::Item_base*> slot_pinned_items;
-            if (m_hotbar) {
-                m_hotbar->collect_pinned_items(slot_pinned_items);
-            }
-            if (m_inventory_window) {
-                m_inventory_window->collect_pinned_items(slot_pinned_items);
             }
             // Items intentionally pinned by the clipboard: copied content
             // (and what it transitively holds, e.g. mesh materials) stays
@@ -2767,18 +2780,13 @@ public:
                 if (!item) {
                     continue;
                 }
-                if (slot_pinned_items.contains(item.get())) {
-                    ++pinned_count;
-                    log_scene->info(
-                        "scene-close check: {} '{}' of closed scene '{}' intentionally pinned by an inventory slot",
-                        item->get_type_name(), item->get_name(), watch.scene_name
-                    );
-                    continue;
-                }
                 // Items the asset manager keeps alive intentionally: a
-                // manager-owned strong reference or a declared usership (a
-                // registered Asset_reference, e.g. a debug hold). Replaced
-                // by full manager userships as R2..R5 land.
+                // manager-owned strong reference (builtin, loaded container,
+                // a surviving scene record after a refused courtesy unload -
+                // including its materials' record-transitive texture pins)
+                // or a declared usership (slots, tools, debug holds). The
+                // R2-era slot whitelist is gone: the surviving record's
+                // strong entries cover the former transitive pins.
                 if (m_asset_manager && m_asset_manager->is_pinned(item.get())) {
                     ++pinned_count;
                     log_scene->info(

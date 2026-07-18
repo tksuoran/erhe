@@ -112,6 +112,11 @@ void Asset_reference::release_usership()
     m_state   = Asset_resolve_state::unresolved;
 }
 
+void Asset_reference::on_manager_teardown()
+{
+    m_manager = nullptr;
+}
+
 auto Asset_reference::get_key() const -> const Asset_key&
 {
     return m_key;

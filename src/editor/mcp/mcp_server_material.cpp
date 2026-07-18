@@ -315,9 +315,14 @@ auto Mcp_server::action_edit_material(const json& args) -> std::string
             r["isError"] = true;
             return r.dump();
         }
-        erhe::Item_host* const item_host = material->get_item_host();
-        if ((m_context.app_scenes != nullptr) && (item_host != nullptr) && m_context.app_scenes->is_host_registered(item_host)) {
-            library = static_cast<Scene_root*>(item_host)->get_content_library();
+        // R5.6: materials are not hosted; the manager records the defining
+        // scene (null for loaded containers' materials, which live in no
+        // scene - sampler edits then have no library, as before).
+        if (m_context.asset_manager != nullptr) {
+            const std::shared_ptr<Scene_root> defining_scene_root = m_context.asset_manager->get_defining_scene_root(*material);
+            if (defining_scene_root) {
+                library = defining_scene_root->get_content_library();
+            }
         }
     } else {
         Scene_root* sr = find_scene(scene_name);

@@ -4,6 +4,7 @@
 #include "editor_log.hpp"
 #include "app_message_bus.hpp"
 #include "app_scenes.hpp"
+#include "assets/asset_manager.hpp"
 #include "input_state.hpp"
 #include "graphics/icon_set.hpp"
 #include "operations/compound_operation.hpp"
@@ -171,8 +172,8 @@ void Range_selection::reset()
 
 void Range_selection::reset(erhe::Item_host* host)
 {
-    const bool primary_hosted   = m_primary_terminator   && (m_primary_terminator  ->get_item_host() == host);
-    const bool secondary_hosted = m_secondary_terminator && (m_secondary_terminator->get_item_host() == host);
+    const bool primary_hosted   = m_primary_terminator   && m_selection.is_hosted_or_defined_by(*m_primary_terminator,   host);
+    const bool secondary_hosted = m_secondary_terminator && m_selection.is_hosted_or_defined_by(*m_secondary_terminator, host);
     if (!primary_hosted && !secondary_hosted) {
         return; // range (if any) belongs to another host - leave it alone
     }
@@ -186,8 +187,8 @@ void Range_selection::reset(erhe::Item_host* host)
 
 void Range_selection::reset_terminators_for_host(erhe::Item_host* host)
 {
-    const bool primary_hosted   = m_primary_terminator   && (m_primary_terminator  ->get_item_host() == host);
-    const bool secondary_hosted = m_secondary_terminator && (m_secondary_terminator->get_item_host() == host);
+    const bool primary_hosted   = m_primary_terminator   && m_selection.is_hosted_or_defined_by(*m_primary_terminator,   host);
+    const bool secondary_hosted = m_secondary_terminator && m_selection.is_hosted_or_defined_by(*m_secondary_terminator, host);
     if (!primary_hosted && !secondary_hosted) {
         return;
     }
@@ -408,7 +409,7 @@ auto Selection::clear_selection(erhe::Item_host* host) -> bool
     auto i = m_selection.begin();
     while (i != m_selection.end()) {
         const std::shared_ptr<erhe::Item_base>& item = *i;
-        if (item && (item->get_item_host() == host)) {
+        if (item && is_hosted_or_defined_by(*item, host)) {
             item->set_selected(false);
             i = m_selection.erase(i);
             removed_any = true;
@@ -429,6 +430,14 @@ auto Selection::clear_selection(erhe::Item_host* host) -> bool
 #endif
     }
     return removed_any;
+}
+
+auto Selection::is_hosted_or_defined_by(const erhe::Item_base& item, const erhe::Item_host* host) const -> bool
+{
+    if (m_context.asset_manager != nullptr) {
+        return m_context.asset_manager->is_hosted_or_defined_by(item, host);
+    }
+    return item.get_item_host() == host;
 }
 
 auto Selection::get_active_scene_root() -> std::shared_ptr<Scene_root>
