@@ -36,6 +36,7 @@
 #include "erhe_graphics/texture.hpp"
 #include "erhe_imgui/imgui_node_editor.h"
 #include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 
@@ -1166,13 +1167,33 @@ void Geometry_graph_window::canvas_drag_and_drop_target(const ImVec2& rect_min, 
     // tells the actual drop apart. The default whole-canvas highlight is
     // replaced by that ghost. A brush arrives either as a content-library
     // node (item tree drag) or inside an inventory / hotbar brush slot
-    // (Inventory window drag).
-    std::shared_ptr<Brush> brush{};
-    bool                   delivery = false;
+    // (Inventory window drag); a scene mesh arrives as a hierarchy drag of
+    // the mesh attachment ("Mesh") or of a node carrying one ("Node").
+    std::shared_ptr<Brush>             brush{};
+    std::shared_ptr<erhe::scene::Mesh> mesh{};
+    bool                               delivery = false;
     const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(
         "Content_library_node",
         ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect
     );
+    const ImGuiPayload* slot_payload = (payload == nullptr)
+        ? ImGui::AcceptDragDropPayload(
+            c_inventory_slot_payload_type,
+            ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect
+        )
+        : nullptr;
+    const ImGuiPayload* item_payload = ((payload == nullptr) && (slot_payload == nullptr))
+        ? ImGui::AcceptDragDropPayload(
+            erhe::scene::Node::static_type_name.data(),
+            ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect
+        )
+        : nullptr;
+    if ((payload == nullptr) && (slot_payload == nullptr) && (item_payload == nullptr)) {
+        item_payload = ImGui::AcceptDragDropPayload(
+            erhe::scene::Mesh::static_type_name.data(),
+            ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect
+        );
+    }
     if (payload != nullptr) {
         erhe::Item_base* const      item_base    = *(static_cast<erhe::Item_base**>(payload->Data));
         const Content_library_node* library_node = dynamic_cast<const Content_library_node*>(item_base);
@@ -1181,42 +1202,55 @@ void Geometry_graph_window::canvas_drag_and_drop_target(const ImVec2& rect_min, 
         }
         brush = std::dynamic_pointer_cast<Brush>(library_node->item);
         delivery = payload->IsDelivery();
-    } else {
-        const ImGuiPayload* slot_payload = ImGui::AcceptDragDropPayload(
-            c_inventory_slot_payload_type,
-            ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect
-        );
-        if (slot_payload == nullptr) {
-            return; // no brush-carrying payload dragged over the canvas
-        }
+    } else if (slot_payload != nullptr) {
         const Slot_drag_payload& slot = *static_cast<const Slot_drag_payload*>(slot_payload->Data);
         if (slot.brush != nullptr) {
             brush = std::dynamic_pointer_cast<Brush>(slot.brush->shared_from_this());
         }
         delivery = slot_payload->IsDelivery();
+    } else if (item_payload != nullptr) {
+        // Hierarchy drag: resolve the mesh from the dragged item (a Mesh
+        // directly, or a Node's mesh attachment).
+        erhe::Item_base* const item_base = *(static_cast<erhe::Item_base**>(item_payload->Data));
+        mesh = erhe::scene::get_mesh(item_base->shared_from_this());
+        delivery = item_payload->IsDelivery();
+    } else {
+        return; // no spawnable payload dragged over the canvas
     }
-    if (!brush) {
-        return; // only brushes make geometry source nodes
+    if (!brush && !mesh) {
+        return; // only brushes and scene meshes make geometry source nodes
     }
 
     if (!delivery) {
         // Still dragging: preview where the node would land, as a ghost of
-        // the typical Brush source node footprint (pin columns + center
-        // column + NodePadding wide; header, brush combo, preview image and
-        // stats tall - the real node is content-sized on spawn).
-        draw_canvas_drop_ghost(*m_node_editor.get(), rect_min, rect_max, brush->get_name().c_str(), ImVec2{306.0f, 250.0f});
+        // the typical source node footprint (pin columns + center column +
+        // NodePadding wide; header, picker, preview image and stats tall for
+        // a brush, no preview image for a scene mesh - the real node is
+        // content-sized on spawn).
+        const char*  label     = brush ? brush->get_name().c_str() : mesh->get_name().c_str();
+        const ImVec2 footprint = brush ? ImVec2{306.0f, 250.0f} : ImVec2{306.0f, 150.0f};
+        draw_canvas_drop_ghost(*m_node_editor.get(), rect_min, rect_max, label, footprint);
         return;
     }
 
     // The drop happens outside the canvas Begin/End (screen space), so
     // convert through the editor's stored view transform.
     const ImVec2 spawn_position = m_node_editor->ScreenToCanvas(ImGui::GetMousePos());
-    Geometry_graph_node* node = add_node_of_type("brush", &spawn_position);
-    Brush_geometry_node* brush_node = dynamic_cast<Brush_geometry_node*>(node);
-    if (brush_node != nullptr) {
-        // Undo of the drop removes the node object itself (the insert
-        // operation keeps it alive), so the brush binding survives redo.
-        brush_node->set_brush(brush);
+    if (brush) {
+        Geometry_graph_node* node = add_node_of_type("brush", &spawn_position);
+        Brush_geometry_node* brush_node = dynamic_cast<Brush_geometry_node*>(node);
+        if (brush_node != nullptr) {
+            // Undo of the drop removes the node object itself (the insert
+            // operation keeps it alive), so the brush binding survives redo.
+            brush_node->set_brush(brush);
+        }
+    } else {
+        Geometry_graph_node*      node      = add_node_of_type("scene_mesh", &spawn_position);
+        Scene_mesh_geometry_node* mesh_node = dynamic_cast<Scene_mesh_geometry_node*>(node);
+        if (mesh_node != nullptr) {
+            // Same undo note as the brush binding above.
+            mesh_node->set_mesh(mesh);
+        }
     }
 }
 
