@@ -11,6 +11,7 @@
 #include "app_message_bus.hpp"
 #include "app_scenes.hpp"
 #include "assets/asset_manager.hpp"
+#include "assets/asset_paths.hpp"
 #include "content_library/content_library.hpp"
 #include "scene/scene_root.hpp"
 #include "operations/async_raytrace_kickoff_operation.hpp"
@@ -96,16 +97,143 @@ void color_graph(
     }
 }
 
+// ERHE_asset_reference import (asset-manager plan phase R6): materials
+// carrying the extension are proxies whose definition lives in another
+// container. Each proxy resolves through Asset_manager::acquire (uid first,
+// unique conforming name fallback - plan decision 11); on success the
+// managed object substitutes the stub everywhere in the parse (materials
+// vector + every mesh primitive), so ERHE_brushes / ERHE_node_graphs
+// index-based consumers see the shared object too. On failure the stub is
+// KEPT (default-material appearance) with a warning - the returned key
+// makes the library list it as a reference entry either way, so the key is
+// re-emitted on every save and a broken reference is never silently
+// converted into a local definition or dropped.
+//
+// Nested references are not resolved transitively here by construction:
+// Asset_manager::get_or_load_container does not resolve its parse's
+// proxies (documented v1 restriction), so reference chains cannot recurse
+// and cycles cannot hang the import.
+auto resolve_material_asset_references(
+    App_context&           context,
+    erhe::gltf::Gltf_data& gltf_data
+) -> std::unordered_map<const erhe::primitive::Material*, Asset_key>
+{
+    std::unordered_map<const erhe::primitive::Material*, Asset_key> reference_keys;
+    if (context.asset_manager == nullptr) {
+        return reference_keys;
+    }
+    simdjson::dom::parser extension_parser;
+    for (std::size_t i = 0; i < gltf_data.material_extensions.size(); ++i) {
+        const std::shared_ptr<erhe::primitive::Material> material = (i < gltf_data.materials.size()) ? gltf_data.materials[i] : std::shared_ptr<erhe::primitive::Material>{};
+        if (!material) {
+            continue;
+        }
+        for (const auto& [extension_name, extension_json] : gltf_data.material_extensions[i].entries) {
+            if (extension_name != "ERHE_asset_reference") {
+                continue;
+            }
+            simdjson::dom::element extension_root;
+            simdjson::dom::object  extension_object;
+            if (
+                (extension_parser.parse(simdjson::padded_string{extension_json}).get(extension_root) != simdjson::SUCCESS) ||
+                (extension_root.get_object().get(extension_object) != simdjson::SUCCESS)
+            ) {
+                log_parsers->error("ERHE_asset_reference on material '{}': unparsable extension JSON", material->get_name());
+                continue;
+            }
+            std::uint64_t file_index{0};
+            if (extension_object.at_key("file").get_uint64().get(file_index) != simdjson::SUCCESS) {
+                log_parsers->error("ERHE_asset_reference on material '{}': missing required 'file' index", material->get_name());
+                continue;
+            }
+            if (file_index >= gltf_data.files.size()) {
+                log_parsers->error(
+                    "ERHE_asset_reference on material '{}': file index {} out of range ({} files entries)",
+                    material->get_name(), file_index, gltf_data.files.size()
+                );
+                continue;
+            }
+            const erhe::gltf::Gltf_file_reference& file = gltf_data.files[file_index];
+            if (file.embedded || file.resolved_path.empty()) {
+                log_parsers->error(
+                    "ERHE_asset_reference on material '{}': files entry {} is embedded or has no resolvable path",
+                    material->get_name(), file_index
+                );
+                continue;
+            }
+            std::string_view uid;
+            static_cast<void>(extension_object.at_key("uid").get_string().get(uid));
+
+            Asset_key key{
+                .scope = Asset_scope::file,
+                .type  = Asset_type::material,
+                .path  = asset_path_to_string(normalize_asset_path(file.resolved_path)),
+                .uid   = std::string{uid},
+                // The proxy's own name doubles as the 2.1 conforming-name
+                // fallback identifier (see the extension spec).
+                .name  = material->get_name(),
+            };
+
+            std::string error;
+            const std::shared_ptr<erhe::Item_base> resolved_item = context.asset_manager->acquire(key, error);
+            const std::shared_ptr<erhe::primitive::Material> resolved_material = std::dynamic_pointer_cast<erhe::primitive::Material>(resolved_item);
+            if (resolved_material) {
+                // Self-heal upward: a name-resolved key learns the uid.
+                if (key.uid.empty() && !resolved_material->get_gltf_uid().empty()) {
+                    key.uid = resolved_material->get_gltf_uid();
+                }
+                // Substitute THE managed object for the stub everywhere.
+                gltf_data.materials[i] = resolved_material;
+                for (const std::shared_ptr<erhe::scene::Node>& node : gltf_data.nodes) {
+                    if (!node) {
+                        continue;
+                    }
+                    const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+                    if (!mesh) {
+                        continue;
+                    }
+                    for (erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_mutable_primitives()) {
+                        if (mesh_primitive.material == material) {
+                            mesh_primitive.material = resolved_material;
+                        }
+                    }
+                }
+                reference_keys.emplace(resolved_material.get(), key);
+                log_parsers->info(
+                    "ERHE_asset_reference: material '{}' resolved to container '{}'",
+                    resolved_material->get_name(), key.path
+                );
+            } else if (resolved_item) {
+                log_parsers->error(
+                    "ERHE_asset_reference on material '{}': key {} resolved to an object of another kind - keeping the stub",
+                    material->get_name(), key.describe()
+                );
+                reference_keys.emplace(material.get(), key);
+            } else {
+                log_parsers->warn(
+                    "ERHE_asset_reference: material '{}' could not be resolved ({}) - keeping the stub; the key survives re-save",
+                    material->get_name(), error
+                );
+                reference_keys.emplace(material.get(), key);
+            }
+        }
+    }
+    return reference_keys;
+}
+
 // Content-library attach operations for everything the parsed glTF carries
 // besides the node tree: textures (with retained source image bytes),
 // materials, skins and animations, each tagged with a Gltf_source_reference.
 // Shared by the undoable import compound (make_import_gltf_operation) and
 // the not-undoable scene open path (open_scene_gltf), which executes them
-// inline and drops them.
+// inline and drops them. Materials listed in material_reference_keys (R6
+// asset references, resolved or stub-fallback) attach as REFERENCE entries
+// carrying their asset key instead of owning definition entries.
 void append_content_library_attach_operations(
     const std::shared_ptr<Content_library>&  content_library,
     const erhe::gltf::Gltf_data&             gltf_data,
     const std::string&                       gltf_path_str,
+    const std::unordered_map<const erhe::primitive::Material*, Asset_key>& material_reference_keys,
     std::vector<std::shared_ptr<Operation>>& operations
 )
 {
@@ -134,6 +262,8 @@ void append_content_library_attach_operations(
     for (size_t i = 0; i < gltf_data.materials.size(); ++i) {
         const std::shared_ptr<erhe::primitive::Material>& material = gltf_data.materials[i];
         if (material) {
+            const auto reference_it = material_reference_keys.find(material.get());
+            const bool is_reference = (reference_it != material_reference_keys.end());
             operations.push_back(
                 std::make_shared<Content_library_attach_operation<erhe::primitive::Material>>(
                     content_library,
@@ -144,7 +274,10 @@ void append_content_library_attach_operations(
                         .item_name  = material->get_name(),
                         .item_index = static_cast<int>(i),
                         .item_type  = "material",
-                    }
+                    },
+                    std::shared_ptr<erhe::gltf::Gltf_image_source>{},
+                    is_reference,
+                    is_reference ? std::optional<Asset_key>{reference_it->second} : std::optional<Asset_key>{}
                 )
             );
         }
@@ -348,6 +481,13 @@ auto make_import_gltf_operation(
         root_node->set_parent({});
     }
 
+    // ERHE_asset_reference proxies (R6): substitute manager-acquired
+    // objects for reference stubs before anything consumes the materials;
+    // the returned keys make the library attach below list them as
+    // reference entries.
+    const std::unordered_map<const erhe::primitive::Material*, Asset_key> material_reference_keys =
+        resolve_material_asset_references(context, gltf_data);
+
     // Color-graph computation (currently unused but preserved as in the
     // previous implementation; the wireframe-color application is commented
     // out below).
@@ -484,7 +624,7 @@ auto make_import_gltf_operation(
     }
 
     std::vector<std::shared_ptr<Operation>> operations;
-    append_content_library_attach_operations(scene_root->get_content_library(), gltf_data, path.generic_string(), operations);
+    append_content_library_attach_operations(scene_root->get_content_library(), gltf_data, path.generic_string(), material_reference_keys, operations);
 
     // KHR_physics_rigid_bodies / KHR_implicit_shapes: shared physics items go
     // through content-library attach operations; Node_physics / Node_joint
@@ -716,7 +856,7 @@ auto save_scene_gltf(Scene_root& scene_root, const std::filesystem::path& path) 
     // Editor-domain ERHE_* extensions + baked graph-mesh exclusion: this is
     // what makes the file a full scene save instead of an interchange export
     // (ERHE_scene in extensionsUsed is the erhe-authored marker).
-    add_gltf_editor_state(export_arguments, scene_root);
+    add_gltf_editor_state(export_arguments, scene_root, path);
     const std::string gltf = erhe::gltf::export_gltf(export_arguments);
     if (!erhe::file::write_file(path, gltf)) {
         log_parsers->error("save_scene_gltf: failed to write '{}'", erhe::file::to_string(path));
@@ -817,7 +957,11 @@ auto open_scene_gltf(
         };
         parsed_gltf_data = erhe::gltf::parse_gltf(parse_arguments);
     }
-    const erhe::gltf::Gltf_data& gltf_data = adoptable_record ? adoptable_record->gltf_data : parsed_gltf_data;
+    // Non-const: the R6 asset-reference resolution below substitutes
+    // manager-acquired materials into the parse (for the adopted case that
+    // mutates the record's data, which the successful open consumes anyway;
+    // a failed open bails out before the resolution runs).
+    erhe::gltf::Gltf_data& gltf_data = adoptable_record ? adoptable_record->gltf_data : parsed_gltf_data;
 
     // Container parses use mesh layer 0 (their node trees are never
     // rendered); scene content draws the content layer. Walk the node
@@ -884,6 +1028,14 @@ auto open_scene_gltf(
 
     scene_root->register_to_editor_scenes(*context.app_scenes);
 
+    // ERHE_asset_reference proxies (R6): substitute manager-acquired
+    // objects for reference stubs. After registration, so a self-referencing
+    // key (prohibited, hand-crafted) resolves against this scene's own
+    // still-empty record and falls back to the stub instead of re-parsing
+    // the file being opened.
+    const std::unordered_map<const erhe::primitive::Material*, Asset_key> material_reference_keys =
+        resolve_material_asset_references(context, gltf_data);
+
     std::vector<std::shared_ptr<erhe::Item_base>> mesh_node_items;
     finalize_imported_meshes(context, make_import_build_info(context), gltf_data, &mesh_node_items);
 
@@ -903,7 +1055,7 @@ auto open_scene_gltf(
     // dropped - opening a scene is not undoable. Same ordering as the import
     // compound: everything executes before the nodes enter the scene.
     std::vector<std::shared_ptr<Operation>> operations;
-    append_content_library_attach_operations(content_library, gltf_data, path.generic_string(), operations);
+    append_content_library_attach_operations(content_library, gltf_data, path.generic_string(), material_reference_keys, operations);
     import_gltf_physics(context, gltf_data, scene_root, path, operations);
     import_gltf_editor_state(context, gltf_data, scene_root, path, operations);
     for (const std::shared_ptr<Operation>& operation : operations) {

@@ -169,6 +169,14 @@ public:
     std::string name;
 };
 
+class Gltf_export_asset_reference
+{
+public:
+    std::string uri;
+    std::string mime_type;
+    std::string uid;
+};
+
 class Gltf_export_extension_payloads
 {
 public:
@@ -205,6 +213,7 @@ public:
     bool                     binary{true};
     const Gltf_physics_data* physics_data{nullptr};
     std::map<const erhe::scene::Node*, Gltf_export_external_asset> external_assets;
+    std::map<const erhe::primitive::Material*, Gltf_export_asset_reference> material_asset_references;
     std::function<std::shared_ptr<const Gltf_image_source>(const erhe::graphics::Texture*)> image_source_provider;
     std::vector<std::shared_ptr<erhe::scene::Animation>> animations;
     Gltf_export_extension_payloads extension_payloads;

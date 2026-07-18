@@ -36,7 +36,7 @@ importing it as an asset).
 | [`ERHE_brushes`](ERHE_brushes.md) | asset root | brush library (geometry via unreferenced meshes) |
 | [`ERHE_node_graphs`](ERHE_node_graphs.md) | asset root | procedural texture / mesh node graphs + bindings |
 | [`ERHE_collections`](ERHE_collections.md) | asset root | named node collections (item tags) |
-| [`ERHE_asset_reference`](ERHE_asset_reference.md) | top-level object (materials first) | DRAFT: proxy for a definition in another glTF file ({file, uid}) |
+| [`ERHE_asset_reference`](ERHE_asset_reference.md) | top-level object (materials first) | proxy for a definition in another glTF file ({file, uid}) |
 
 JSON schemas live in [`schema/`](schema/); each `*.schema.json` validates
 the extension's JSON value (the object stored under the extension name in

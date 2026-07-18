@@ -2256,6 +2256,14 @@ private:
 
         Primitive_entry primitive_entry;
         get_primitive_geometry(primitive, primitive_entry, tangent_frame_needed);
+        // get_primitive_geometry can produce no primitive (non-indexed
+        // primitives - valid glTF - and draco-compressed content are not
+        // supported): skip the primitive instead of adding a null one,
+        // which would crash the first primitive walk.
+        if (!primitive_entry.primitive) {
+            log_gltf->error("glTF mesh '{}' primitive {}: unsupported primitive (non-indexed or geometry build failed) - skipped", mesh.name.c_str(), primitive_index);
+            return;
+        }
         erhe_mesh.add_primitive(primitive_entry.primitive, erhe_material);
     }
     void parse_skin(const std::size_t skin_index)
@@ -3864,6 +3872,30 @@ private:
             return fi->second;
         }
 
+        // ERHE_asset_reference proxy (asset-manager plan phase R6): the
+        // material's definition lives in another container - emit a
+        // name-only stub carrying {file, uid} instead of full data. The
+        // stub degrades to a legal default material in loaders without the
+        // extension; no textures, no ERHE_material, no uid stamping (see
+        // Gltf_export_asset_reference).
+        const auto reference_it = m_arguments.material_asset_references.find(material);
+        if (reference_it != m_arguments.material_asset_references.end()) {
+            const Gltf_export_asset_reference& reference = reference_it->second;
+            fastgltf::Material stub_material{};
+            stub_material.name = FASTGLTF_STD_PMR_NS::string{material->get_name()};
+            const std::size_t stub_material_index = m_gltf_asset.materials.size();
+            m_gltf_asset.materials.push_back(std::move(stub_material));
+            const std::size_t file_index = get_file_index(reference.uri, reference.mime_type);
+            std::string extension_members = fmt::format("\"ERHE_asset_reference\":{{\"file\":{}", file_index);
+            if (!reference.uid.empty()) {
+                extension_members += fmt::format(",\"uid\":\"{}\"", reference.uid);
+            }
+            extension_members += "}";
+            m_asset_reference_material_extensions.emplace(stub_material_index, std::move(extension_members));
+            m_exported_materials.insert({material, stub_material_index});
+            return stub_material_index;
+        }
+
         const erhe::primitive::Material_data& data = material->data;
         const size_t gltf_material_index = m_gltf_asset.materials.size();
         {
@@ -4687,6 +4719,28 @@ private:
         return skin_index;
     }
 
+    // Emits a deduplicated glTF 2.1 "files" entry and returns its index.
+    // Shared by externalAsset instancing and ERHE_asset_reference proxies:
+    // one uri = one files entry, whichever mechanism (or both) uses it.
+    auto get_file_index(const std::string& uri, const std::string& mime_type) -> std::size_t
+    {
+        const auto existing = m_uri_to_file_index.find(uri);
+        if (existing != m_uri_to_file_index.end()) {
+            return existing->second;
+        }
+        fastgltf::File file{};
+        file.data = fastgltf::sources::URI{
+            .fileByteOffset = 0,
+            .uri            = fastgltf::URI{uri},
+            .mimeType       = fastgltf::MimeType::None
+        };
+        file.mimeType = mime_type;
+        const std::size_t file_index = m_gltf_asset.files.size();
+        m_gltf_asset.files.emplace_back(std::move(file));
+        m_uri_to_file_index.emplace(uri, file_index);
+        return file_index;
+    }
+
     // Emits the deduplicated glTF 2.1 "files" + "externalAssets" entries for
     // an external-asset reference and returns the externalAssets index.
     auto get_external_asset_index(const Gltf_export_external_asset& external_asset) -> std::size_t
@@ -4696,15 +4750,7 @@ private:
             return existing->second;
         }
 
-        fastgltf::File file{};
-        file.data = fastgltf::sources::URI{
-            .fileByteOffset = 0,
-            .uri            = fastgltf::URI{external_asset.uri},
-            .mimeType       = fastgltf::MimeType::None
-        };
-        file.mimeType = external_asset.mime_type;
-        const std::size_t file_index = m_gltf_asset.files.size();
-        m_gltf_asset.files.emplace_back(std::move(file));
+        const std::size_t file_index = get_file_index(external_asset.uri, external_asset.mime_type);
 
         fastgltf::ExternalAsset gltf_external_asset{};
         gltf_external_asset.fileIndex = file_index;
@@ -5301,7 +5347,19 @@ private:
         add_targets(m_gltf_asset.nodes,      m_erhe_node_to_gltf_node_index);
         add_targets(m_gltf_asset.meshes,     m_erhe_mesh_to_gltf_mesh_index);
         add_targets(m_gltf_asset.cameras,    m_erhe_camera_to_gltf_camera_index);
-        add_targets(m_gltf_asset.materials,  m_exported_materials);
+        // ERHE_asset_reference proxies are excluded: a proxy's identity
+        // lives in its defining container, and stamping would write a
+        // generated uid back onto the SHARED item - corrupting the identity
+        // every file key referencing it depends on.
+        {
+            std::unordered_map<const erhe::primitive::Material*, std::size_t> definition_materials;
+            for (const auto& [material, index] : m_exported_materials) {
+                if (!m_arguments.material_asset_references.contains(material)) {
+                    definition_materials.emplace(material, index);
+                }
+            }
+            add_targets(m_gltf_asset.materials, definition_materials);
+        }
         add_targets(m_gltf_asset.images,     m_exported_images);
         add_targets(m_gltf_asset.skins,      m_exported_skins);
         add_targets(m_gltf_asset.animations, m_exported_animations);
@@ -5404,6 +5462,12 @@ private:
 private:
     const Gltf_export_arguments& m_arguments;
     std::map<std::string, std::size_t> m_uri_to_external_asset_index;
+    std::map<std::string, std::size_t> m_uri_to_file_index;
+    // ERHE_asset_reference extension members per emitted proxy material
+    // (see process_material); kept separate from
+    // m_internal_material_extensions so each map declares its own
+    // extension name in extensionsUsed.
+    std::unordered_map<std::size_t, std::string> m_asset_reference_material_extensions;
     fastgltf::Asset          m_gltf_asset;
 
     std::unordered_map<const erhe::scene::Node*, std::size_t>  m_erhe_node_to_gltf_node_index;
@@ -5458,10 +5522,11 @@ auto Gltf_exporter::export_gltf() -> std::string
     process_skins();
     process_animations();
 
-    // glTF 2.1 features in use: loaders must understand files /
-    // externalAssets, so declare both the version and the minimum version.
-    // Plain exports keep writing glTF 2.0.
-    if (!m_gltf_asset.externalAssets.empty()) {
+    // glTF 2.1 features in use: loaders must understand the files array
+    // (externalAsset instancing and/or ERHE_asset_reference proxies), so
+    // declare both the version and the minimum version. Plain exports keep
+    // writing glTF 2.0.
+    if (!m_gltf_asset.files.empty()) {
         m_gltf_asset.assetInfo->gltfVersion = "2.1";
         m_gltf_asset.assetInfo->minVersion  = "2.1";
     }
@@ -5577,6 +5642,9 @@ auto Gltf_exporter::export_gltf() -> std::string
         for (const auto& [index, extension_members] : m_internal_material_extensions) {
             merge_extension_members(export_extras_context.material_extensions[index], extension_members);
         }
+        for (const auto& [index, extension_members] : m_asset_reference_material_extensions) {
+            merge_extension_members(export_extras_context.material_extensions[index], extension_members);
+        }
         // Asset-root extension payloads built against the now-known glTF
         // indices (doc/gltf-scene-roundtrip-plan.md phase 3: ERHE_brushes,
         // ERHE_node_graphs, ERHE_collections).
@@ -5609,6 +5677,9 @@ auto Gltf_exporter::export_gltf() -> std::string
         }
         if (!m_internal_material_extensions.empty()) {
             declare_extension_used("ERHE_material");
+        }
+        if (!m_asset_reference_material_extensions.empty()) {
+            declare_extension_used("ERHE_asset_reference");
         }
     }
 

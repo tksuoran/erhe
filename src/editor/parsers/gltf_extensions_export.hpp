@@ -2,6 +2,8 @@
 
 #include "erhe_gltf/gltf.hpp"
 
+#include <filesystem>
+
 namespace editor {
 
 class Scene_root;
@@ -28,9 +30,21 @@ class Scene_root;
 // - extra_meshes: brush geometry as unreferenced glTF meshes, plus an
 //   asset_extensions_builder emitting ERHE_brushes / ERHE_node_graphs /
 //   ERHE_collections against the exported glTF indices.
+// - material_asset_references (asset-manager plan phase R6): library
+//   material REFERENCE entries carrying a file-scope asset key export as
+//   ERHE_asset_reference proxies (name-only stub + {file, uid}) instead of
+//   full data - a reference is never embedded (plan decision 3). URIs are
+//   relativized against export_path's directory (the prefab externalAssets
+//   convention). Reference entries without a durable file key (and
+//   self-references, which the extension prohibits) fall back to full-data
+//   export with a warning.
 //
 // scene_root must outlive the export_gltf() call; the builder callback
 // captures its own copies of the collected payload data.
-void add_gltf_editor_state(erhe::gltf::Gltf_export_arguments& arguments, Scene_root& scene_root);
+void add_gltf_editor_state(
+    erhe::gltf::Gltf_export_arguments& arguments,
+    Scene_root&                        scene_root,
+    const std::filesystem::path&       export_path
+);
 
 }

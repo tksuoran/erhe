@@ -915,6 +915,22 @@ auto Asset_manager::get_or_load_container(const std::filesystem::path& path, std
         return {};
     }
 
+    // R6 documented v1 restriction: container loads do NOT resolve
+    // ERHE_asset_reference proxies transitively (which also makes reference
+    // cycles impossible by construction). A contained proxy is served with
+    // its stub fallback appearance; opening the file as a scene resolves
+    // its proxies properly.
+    for (std::size_t i = 0; i < record->gltf_data.material_extensions.size(); ++i) {
+        for (const auto& [extension_name, extension_json] : record->gltf_data.material_extensions[i].entries) {
+            if ((extension_name == "ERHE_asset_reference") && (i < record->gltf_data.materials.size()) && record->gltf_data.materials[i]) {
+                log_asset->warn(
+                    "asset container '{}': material '{}' is a cross-container reference proxy; nested reference resolution is not supported - serving the stub fallback",
+                    record->display_path, record->gltf_data.materials[i]->get_name()
+                );
+            }
+        }
+    }
+
     build_type_entries(*record, Asset_type::material,  record->gltf_data.materials);
     build_type_entries(*record, Asset_type::animation, record->gltf_data.animations);
     for (const std::string& error : record->errors) {

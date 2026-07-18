@@ -2,6 +2,8 @@
 
 #include "parsers/gltf_extensions_names.hpp"
 
+#include "assets/asset_key.hpp"
+#include "assets/asset_paths.hpp"
 #include "brushes/brush.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
@@ -153,8 +155,84 @@ public:
 
 } // anonymous namespace
 
-void add_gltf_editor_state(erhe::gltf::Gltf_export_arguments& arguments, Scene_root& scene_root)
+namespace {
+
+// ERHE_asset_reference proxies (asset-manager plan phase R6, plan decision
+// 3: a reference is never embedded): every library material REFERENCE entry
+// with a durable file-scope key exports as a name-only stub + {file, uid}.
+// Entries without such a key (scene_local, key-less legacy listings) fall
+// back to full-data export with a warning - no data is ever lost, but the
+// re-imported file then holds an independent definition. A key pointing at
+// the file being written would be a self-reference (prohibited by the
+// extension, extending the External Assets cycle rule) and falls back the
+// same way.
+void add_material_asset_references(
+    erhe::gltf::Gltf_export_arguments&      arguments,
+    const std::shared_ptr<Content_library>& content_library,
+    const std::filesystem::path&            export_path
+)
 {
+    if (!content_library || !content_library->materials) {
+        return;
+    }
+    const std::filesystem::path export_directory = export_path.parent_path();
+    const std::filesystem::path canonical_export_path = normalize_asset_path(export_path);
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
+    content_library->materials->for_each_const<Content_library_node>(
+        [&arguments, &export_directory, &canonical_export_path](const Content_library_node& node) -> bool {
+            const std::shared_ptr<erhe::primitive::Material> material = std::dynamic_pointer_cast<erhe::primitive::Material>(node.item);
+            if (!material || !node.is_reference) {
+                return true;
+            }
+            if (!node.asset_key.has_value() || (node.asset_key->scope != Asset_scope::file) || node.asset_key->path.empty()) {
+                log_parsers->warn(
+                    "glTF export: reference material '{}' has no file-scope asset key - exporting full data (an independent definition)",
+                    material->get_name()
+                );
+                return true;
+            }
+            const Asset_key& key = node.asset_key.value();
+            const std::filesystem::path container_path{key.path};
+            if (normalize_asset_path(container_path) == canonical_export_path) {
+                log_parsers->warn(
+                    "glTF export: reference material '{}' points at the file being written ('{}') - self-reference prohibited, exporting full data",
+                    material->get_name(), key.path
+                );
+                return true;
+            }
+            std::error_code error_code;
+            const std::filesystem::path relative_path = std::filesystem::relative(container_path, export_directory, error_code);
+            const std::string uri = (error_code || relative_path.empty())
+                ? container_path.generic_string()
+                : relative_path.generic_string();
+            const bool is_binary = container_path.extension() == std::filesystem::path{".glb"};
+            // Self-heal upward: prefer the live item's uid (learned at
+            // resolve) over the key's, so name-resolved references migrate
+            // to uid addressing on save.
+            const std::string& uid = !material->get_gltf_uid().empty() ? material->get_gltf_uid() : key.uid;
+            arguments.material_asset_references.emplace(
+                material.get(),
+                erhe::gltf::Gltf_export_asset_reference{
+                    .uri       = uri,
+                    .mime_type = is_binary ? "model/gltf-binary" : "model/gltf+json",
+                    .uid       = uid,
+                }
+            );
+            return true;
+        }
+    );
+}
+
+} // anonymous namespace
+
+void add_gltf_editor_state(
+    erhe::gltf::Gltf_export_arguments& arguments,
+    Scene_root&                        scene_root,
+    const std::filesystem::path&       export_path
+)
+{
+    add_material_asset_references(arguments, scene_root.get_content_library(), export_path);
+
     const erhe::scene::Scene& scene = scene_root.get_scene();
     const std::vector<std::shared_ptr<erhe::scene::Node>>& flat_nodes = scene.get_flat_nodes();
     const std::shared_ptr<Content_library> content_library = scene_root.get_content_library();

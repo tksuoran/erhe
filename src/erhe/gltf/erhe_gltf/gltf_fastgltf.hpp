@@ -212,6 +212,23 @@ public:
     std::string name;      // externalAssets entry name
 };
 
+// A cross-container asset reference to write on export
+// (doc/gltf_extensions/ERHE_asset_reference.md, asset-manager plan phase
+// R6): the mapped material exports as a name-only stub carrying an
+// ERHE_asset_reference extension {file: <files array index>, uid}, with the
+// defining container listed in the glTF 2.1 "files" array. The stub's own
+// name doubles as the 2.1 conforming-name fallback identifier, so no
+// name/type fields exist here. Proxy materials are NOT uid-stamped: their
+// identity lives in the defining container, and stamping would mutate the
+// shared item's uid.
+class Gltf_export_asset_reference
+{
+public:
+    std::string uri;       // written into the files array as-is
+    std::string mime_type; // "model/gltf+json" or "model/gltf-binary"
+    std::string uid;       // target uid within the container; empty = name fallback
+};
+
 // Raw JSON members to splice into exported objects' "extensions" objects
 // (doc/gltf-scene-roundtrip-plan.md phase 3). Each string holds one or more
 // comma-separated members, e.g. R"("ERHE_node":{"flags":["hidden"]})" - no
@@ -269,6 +286,12 @@ public:
     // is emitted, the asset is written with version + minVersion "2.1";
     // otherwise the exporter keeps writing plain glTF 2.0.
     std::map<const erhe::scene::Node*, Gltf_export_external_asset> external_assets{};
+    // Materials to export as ERHE_asset_reference proxies (stub + key)
+    // instead of full data (see Gltf_export_asset_reference above): library
+    // reference entries whose definition lives in another container.
+    // Emitting any proxy declares ERHE_asset_reference and, via the files
+    // array, glTF 2.1.
+    std::map<const erhe::primitive::Material*, Gltf_export_asset_reference> material_asset_references{};
     // Returns the retained encoded source stream for a texture (see
     // Gltf_image_source), or null when the texture has no exportable
     // source - such texture slots are skipped on export. When the provider

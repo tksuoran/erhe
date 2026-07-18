@@ -3,9 +3,13 @@
 ## Scope
 
 **Top-level object** extension, initially emitted on **materials** only.
-Optional (`extensionsUsed` only). Status: DRAFT - specified ahead of
-implementation (asset system plan, wire-format phase); not yet emitted or
-parsed by erhe.
+Optional (`extensionsUsed` only). Status: implemented (asset system plan,
+wire-format phase R6) - scene saves emit proxies for library material
+reference entries carrying a file-scope asset key; scene open / import
+resolves them through the Asset_manager. Loading a file as an asset
+container does NOT resolve its proxies transitively (documented v1
+restriction, which also rules out reference cycles by construction); the
+stub fallback is served with a warning.
 
 ## Overview
 

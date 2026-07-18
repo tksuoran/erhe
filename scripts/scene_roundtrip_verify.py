@@ -621,6 +621,11 @@ def compare_screenshots(section, before_path, after_path):
 E2E_GLB = pathlib.Path("res/editor/scenes/phase6_roundtrip.glb")
 FOREIGN_GLB = pathlib.Path("res/editor/scenes/phase6_foreign.glb")
 PREFAB_RESAVE_GLB = pathlib.Path("res/editor/scenes/phase6_prefab_resave.glb")
+# .glb: text .gltf saves do not write their external buffer payload (a
+# pre-existing exporter limitation unrelated to R6); read_glb_json gives the
+# same JSON view.
+R6_GLTF = pathlib.Path("res/editor/scenes/phase6_r6_reference.glb")
+R6_RESAVE_GLTF = pathlib.Path("res/editor/scenes/phase6_r6_reference_resave.glb")
 DECCER_GLB = "res/editor/assets/SM_Deccer_Cubes_Textured.glb"
 RIGGED_GLB = "res/editor/assets/RiggedFigure/RiggedFigure.glb"
 
@@ -972,6 +977,157 @@ def section_reload_and_diff():
 
 
 # --------------------------------------------------------------------------
+# Section 3b: R6 asset references (ERHE_asset_reference wire format)
+# --------------------------------------------------------------------------
+
+def wait_for_scene_gone(scene_name, tries=100):
+    for _ in range(tries):
+        scenes = call("list_scenes").get("scenes", [])
+        if not any(s.get("name") == scene_name for s in scenes):
+            return True
+        time.sleep(0.2)
+    return False
+
+
+def section_asset_references():
+    """R6 wire format (asset-manager plan phase R6 / design D5): a scene
+    using another container's material saves a name-only proxy carrying
+    ERHE_asset_reference {file, uid} plus a glTF 2.1 files entry; loading
+    resolves the proxy through the Asset_manager to THE container object
+    (open-scene and loaded-container directions both); a missing container
+    falls back to the stub while KEEPING the key across re-save, and
+    resolves again once the container returns."""
+    S = "asset-references"
+    if not E2E_GLB.is_file():
+        check(S, "container scene file available", False, "save-validate failed")
+        return
+    # reload-diff left the saved scene OPEN, path-bound to E2E_GLB - the
+    # cross-scene source whose make_key produces durable file-scope keys.
+    container_scene = E2E_GLB.stem
+    material_name = E2E_STATE.get("material")
+    materials = call("get_scene_materials", {"scene_name": container_scene}).get("materials", [])
+    source = next((m for m in materials if m.get("name") == material_name), None)
+    if not check(S, "container scene provides the source material", source is not None,
+                 f"scene={container_scene} material={material_name!r}"):
+        return
+    source_id = source["id"]
+
+    # Reference scene: a fresh scene whose only tie to the container is the
+    # cross-scene material on one shape (register_mesh lists it as a
+    # reference entry carrying a file-scope key).
+    scene = create_fresh_scene(S)
+    if scene is None:
+        return
+    created = mutate("create_shape", {
+        "scene_name": scene, "shape": "box", "name": "R6 Box",
+        "material_id": source_id, "motion_mode": "static",
+    })
+    check(S, "create_shape with the container material", created is None or bool(created), str(created))
+
+    saved = mutate("save_scene", {"scene_name": scene, "path": str(R6_GLTF)})
+    check(S, "save_scene", bool(saved) and saved.get("saved"), str(saved))
+    if not R6_GLTF.is_file():
+        check(S, "saved reference file exists", False, str(R6_GLTF))
+        return
+    doc = read_glb_json(R6_GLTF)
+    proxy = next(
+        (m for m in doc.get("materials", [])
+         if (m.get("name") == material_name) and ("ERHE_asset_reference" in m.get("extensions", {}))),
+        None,
+    )
+    check(S, "referenced material saved as an ERHE_asset_reference proxy", proxy is not None,
+          str([(m.get("name"), sorted(m.get("extensions", {}))) for m in doc.get("materials", [])]))
+    reference = (proxy or {}).get("extensions", {}).get("ERHE_asset_reference", {})
+    uid = reference.get("uid")
+    if proxy is not None:
+        # The serializer writes an empty pbrMetallicRoughness object for a
+        # default material - equivalent to absent; only real data fails.
+        check(S, "proxy is a name-only stub (no PBR data, no ERHE_material, no uid property)",
+              (not proxy.get("pbrMetallicRoughness")) and ("ERHE_material" not in proxy.get("extensions", {})) and ("uid" not in proxy),
+              str(proxy))
+        file_index = reference.get("file")
+        files = doc.get("files", [])
+        file_ok = isinstance(file_index, int) and (0 <= file_index < len(files))
+        check(S, "proxy file index resolves to a files entry", file_ok, str(reference))
+        if file_ok:
+            uri = files[file_index].get("uri", "")
+            check(S, "files entry names the container", pathlib.Path(uri).name == E2E_GLB.name, uri)
+        check(S, "proxy carries the target uid", isinstance(uid, str) and bool(uid), str(reference))
+        check(S, "asset declares glTF 2.1 (files array present)",
+              doc.get("asset", {}).get("version") == "2.1", str(doc.get("asset")))
+        check(S, "ERHE_asset_reference declared in extensionsUsed",
+              "ERHE_asset_reference" in doc.get("extensionsUsed", []), str(doc.get("extensionsUsed")))
+
+    # Resolve leg, open-scene direction: reload the reference scene while the
+    # container is OPEN as a scene - the proxy resolves to THE scene's object.
+    mutate("close_scene", {"scene_name": scene})
+    check(S, "reference scene closed", wait_for_scene_gone(scene))
+    mutate("load_scene", {"path": str(R6_GLTF)})
+    loaded_scene = R6_GLTF.stem
+    check(S, "reference scene reloaded", wait_for_scene(loaded_scene))
+    loaded_materials = call("get_scene_materials", {"scene_name": loaded_scene}).get("materials", [])
+    loaded = next((m for m in loaded_materials if m.get("name") == material_name), None)
+    check(S, "proxy resolved to THE open container scene's object (same item id)",
+          (loaded is not None) and (loaded.get("id") == source_id),
+          f"source id={source_id} loaded={loaded}")
+
+    # Missing-container negative: hide the container file - the stub is kept
+    # and the key survives a re-save (never silently dropped).
+    mutate("close_scene", {"scene_name": loaded_scene})
+    check(S, "loaded reference scene closed", wait_for_scene_gone(loaded_scene))
+    mutate("clear_undo_history")  # undo entries pin assets and would refuse the courtesy unload
+    mutate("close_scene", {"scene_name": container_scene})
+    check(S, "container scene closed", wait_for_scene_gone(container_scene))
+    hidden = E2E_GLB.with_suffix(".hidden")
+    E2E_GLB.rename(hidden)
+    try:
+        mutate("load_scene", {"path": str(R6_GLTF)})
+        check(S, "reference scene loads with the container missing", wait_for_scene(loaded_scene))
+        stub_materials = call("get_scene_materials", {"scene_name": loaded_scene}).get("materials", [])
+        stub = next((m for m in stub_materials if m.get("name") == material_name), None)
+        check(S, "stub fallback material present (a new object, not the container's)",
+              (stub is not None) and (stub.get("id") != source_id), f"source id={source_id} stub={stub}")
+        saved = mutate("save_scene", {"scene_name": loaded_scene, "path": str(R6_RESAVE_GLTF)})
+        check(S, "re-save with the container missing", bool(saved) and saved.get("saved"), str(saved))
+        re_doc = read_glb_json(R6_RESAVE_GLTF) if R6_RESAVE_GLTF.is_file() else {}
+        re_proxy = next(
+            (m for m in re_doc.get("materials", [])
+             if (m.get("name") == material_name) and ("ERHE_asset_reference" in m.get("extensions", {}))),
+            None,
+        )
+        re_reference = (re_proxy or {}).get("extensions", {}).get("ERHE_asset_reference", {})
+        check(S, "asset key survives the re-save (proxy + uid intact)",
+              (re_proxy is not None) and (re_reference.get("uid") == uid),
+              f"expected uid={uid!r} got={re_reference}")
+        mutate("close_scene", {"scene_name": loaded_scene})
+        check(S, "stub scene closed", wait_for_scene_gone(loaded_scene))
+    finally:
+        hidden.rename(E2E_GLB)
+
+    # Restore leg, loaded-container direction: with the container back (and
+    # no scene open on that path), the re-saved file resolves by LOADING the
+    # container; a direct acquire of the same key returns the same object.
+    mutate("load_scene", {"path": str(R6_RESAVE_GLTF)})
+    resaved_scene = R6_RESAVE_GLTF.stem
+    check(S, "re-saved reference scene loads after restore", wait_for_scene(resaved_scene))
+    resolved_materials = call("get_scene_materials", {"scene_name": resaved_scene}).get("materials", [])
+    resolved = next((m for m in resolved_materials if m.get("name") == material_name), None)
+    hold = None
+    if (resolved is not None) and uid:
+        hold = call("acquire_asset", {
+            "hold_name": "r6-verify", "scope": "file", "type": "material",
+            "path": str(E2E_GLB), "uid": uid,
+        })
+    check(S, "proxy resolves against the loaded container (same object as a direct acquire)",
+          (resolved is not None) and (hold is not None) and (hold.get("item_id") == resolved.get("id")),
+          f"resolved={resolved} hold={hold}")
+    if hold is not None:
+        call("release_asset", {"hold_name": "r6-verify"})
+    mutate("close_scene", {"scene_name": resaved_scene})
+    check(S, "restored reference scene closed", wait_for_scene_gone(resaved_scene))
+
+
+# --------------------------------------------------------------------------
 # Section 4: prefab scene round-trip (user scene, skipped when absent)
 # --------------------------------------------------------------------------
 
@@ -1176,6 +1332,7 @@ def main():
         section_save_and_validate,
         section_definitions_full_data,
         section_reload_and_diff,
+        section_asset_references,
         section_prefab_scene,
         lambda: section_foreign_tools(arguments.gltf_validator, arguments.blender),
     ]
@@ -1194,10 +1351,10 @@ def main():
         print(f"  FAIL {section}: {name} -- {detail}")
 
     if not failed and not arguments.keep_files:
-        for artifact in [E2E_GLB, FOREIGN_GLB, PREFAB_RESAVE_GLB]:
+        for artifact in [E2E_GLB, FOREIGN_GLB, PREFAB_RESAVE_GLB, R6_GLTF, R6_RESAVE_GLTF]:
             artifact.unlink(missing_ok=True)
     elif arguments.keep_files:
-        print(f"(kept {E2E_GLB}, {FOREIGN_GLB} and {PREFAB_RESAVE_GLB})")
+        print(f"(kept {E2E_GLB}, {FOREIGN_GLB}, {PREFAB_RESAVE_GLB}, {R6_GLTF} and {R6_RESAVE_GLTF})")
     return 1 if failed else 0
 
 
