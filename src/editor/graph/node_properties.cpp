@@ -351,6 +351,62 @@ void Node_properties_window::graph_editor_link_properties(Graph_editor_window_ba
         }
     });
 
+    // Pen-tool tangent handles per mid point (mode + explicit tangent
+    // offsets; also editable on the canvas by dragging the tangent dots of
+    // the selected link). Switching Auto -> manual captures the effective
+    // computed tangents so the curve does not jump; switching to Mirrored
+    // locks in = -out.
+    static const char* const c_mid_point_mode_names[4] = { "Auto", "Mirrored", "Aligned", "Free" };
+    const int mid_point_count = window.get_node_editor()->GetLinkMidPointCount(link_id);
+    for (int i = 0; i < mid_point_count; ++i) {
+        m_property_editor.add_entry(fmt::format("Point {}", i), [&window, link_id, i]() {
+            ax::NodeEditor::EditorContext* node_editor = window.get_node_editor();
+            const int mode = node_editor->GetLinkMidPointMode(link_id, i);
+            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+            if (ImGui::BeginCombo("##mode", c_mid_point_mode_names[std::clamp(mode, 0, 3)])) {
+                for (int new_mode = 0; new_mode < 4; ++new_mode) {
+                    bool selected = (new_mode == mode);
+                    ImGui::Selectable(c_mid_point_mode_names[new_mode], &selected, ImGuiSelectableFlags_None);
+                    if (selected && (new_mode != mode)) {
+                        ImVec2 tan_in {0.0f, 0.0f};
+                        ImVec2 tan_out{0.0f, 0.0f};
+                        node_editor->GetLinkMidPointTangents(link_id, i, &tan_in, &tan_out);
+                        if (new_mode == 1) {
+                            tan_in = ImVec2{-tan_out.x, -tan_out.y};
+                        }
+                        node_editor->SetLinkMidPointTangents(link_id, i, new_mode, tan_in, tan_out);
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            if (mode != 0) {
+                ImVec2 tan_in {0.0f, 0.0f};
+                ImVec2 tan_out{0.0f, 0.0f};
+                node_editor->GetLinkMidPointTangents(link_id, i, &tan_in, &tan_out);
+                float out_xy[2] = {tan_out.x, tan_out.y};
+                float in_xy [2] = {tan_in.x,  tan_in.y};
+                bool  changed_out = false;
+                bool  changed_in  = false;
+                ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+                changed_out = ImGui::DragFloat2("##out", out_xy, 1.0f, 0.0f, 0.0f, "out %.0f");
+                ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+                changed_in  = ImGui::DragFloat2("##in",  in_xy,  1.0f, 0.0f, 0.0f, "in %.0f");
+                if (changed_out || changed_in) {
+                    tan_out = ImVec2{out_xy[0], out_xy[1]};
+                    tan_in  = ImVec2{in_xy [0], in_xy [1]};
+                    if (mode == 1) { // Mirrored: the edited side is the master
+                        if (changed_out) {
+                            tan_in = ImVec2{-tan_out.x, -tan_out.y};
+                        } else {
+                            tan_out = ImVec2{-tan_in.x, -tan_in.y};
+                        }
+                    }
+                    node_editor->SetLinkMidPointTangents(link_id, i, mode, tan_in, tan_out);
+                }
+            }
+        });
+    }
+
     m_property_editor.pop_group();
 }
 

@@ -386,6 +386,47 @@ struct Node final: Object
     virtual Node* AsNode() override final { return this; }
 };
 
+// erhe: pen-tool tangent handle mode of a link routing mid point. Auto
+// tangents are computed (Kochanek-Bartels / pin directions); the other modes
+// use the mid point's stored tangents, edited by dragging the on-canvas
+// tangent dots of a selected link. Values are part of the public API
+// (EditorContext::Get/SetLinkMidPointTangents) and the serialized formats.
+enum class MidPointMode : int
+{
+    Auto     = 0, // tangents computed; stored tangents unused
+    Mirrored = 1, // in = -out, locked in direction and length
+    Aligned  = 2, // directions locked opposite, lengths independent
+    Free     = 3  // fully independent (corner)
+};
+
+// erhe: one user-editable routing control point of a link (canvas space).
+// m_TanIn / m_TanOut are offsets from m_Pos: TanOut points along the outgoing
+// segment (towards the end pin side), TanIn along the incoming segment
+// (towards the start pin side); meaningful only when m_Mode != Auto.
+struct MidPoint
+{
+    ImVec2       m_Pos;
+    MidPointMode m_Mode;
+    ImVec2       m_TanIn;
+    ImVec2       m_TanOut;
+
+    MidPoint()
+        : m_Pos(0.0f, 0.0f)
+        , m_Mode(MidPointMode::Auto)
+        , m_TanIn(0.0f, 0.0f)
+        , m_TanOut(0.0f, 0.0f)
+    {
+    }
+
+    explicit MidPoint(const ImVec2& pos)
+        : m_Pos(pos)
+        , m_Mode(MidPointMode::Auto)
+        , m_TanIn(0.0f, 0.0f)
+        , m_TanOut(0.0f, 0.0f)
+    {
+    }
+};
+
 struct Link final: Object
 {
     using IdType = LinkId;
@@ -402,10 +443,19 @@ struct Link final: Object
     // erhe: user-editable routing control points (canvas space, ordered from
     // start pin to end pin). The link is drawn as a chain of bezier segments
     // through them. Double-click on the link adds one, double-click on a
-    // handle removes it, dragging a handle moves it.
-    ImVector<ImVec2> m_MidPoints;
-    int              m_DraggedMidPoint;  // index while a handle drag is active, else -1
-    ImVec2           m_MidPointDragStart;
+    // handle removes it, dragging a handle moves it. On a selected link each
+    // mid point also shows pen-tool tangent dots (drag rotates / scales the
+    // tangent; grabbing an Auto point's dot captures the computed tangents
+    // and switches it to Mirrored; Alt-drag breaks it to Free; double-click
+    // on a dot resets the point to Auto).
+    ImVector<MidPoint> m_MidPoints;
+    int                m_DraggedMidPoint;      // index while a handle drag is active, else -1
+    ImVec2             m_MidPointDragStart;
+    int                m_DraggedTangent;       // mid point index while a tangent-dot drag is active, else -1
+    bool               m_DraggedTangentIsOut;  // which dot of that mid point is dragged
+    ImVec2             m_TangentDragStart;     // dragged tangent offset at drag start
+    ImVec2             m_TangentDragStartPos;  // dragged dot canvas position at drag start
+    ImVec2             m_TangentDragOtherStart;// the opposite tangent offset at drag start
 
     // erhe: per-link curve shape (Kochanek-Bartels style, each in [-1, 1];
     // 0 / 0 / 0 reproduces the default routing exactly). Tension scales the
@@ -426,6 +476,11 @@ struct Link final: Object
         , m_MidPoints()
         , m_DraggedMidPoint(-1)
         , m_MidPointDragStart(0.0f, 0.0f)
+        , m_DraggedTangent(-1)
+        , m_DraggedTangentIsOut(false)
+        , m_TangentDragStart(0.0f, 0.0f)
+        , m_TangentDragStartPos(0.0f, 0.0f)
+        , m_TangentDragOtherStart(0.0f, 0.0f)
         , m_CurveTension(0.0f)
         , m_CurveContinuity(0.0f)
         , m_CurveBias(0.0f)
@@ -442,7 +497,7 @@ struct Link final: Object
     bool AcceptDrag() override;
     void UpdateDrag(const ImVec2& offset) override;
     bool EndDrag() override;
-    ImVec2 DragStartLocation() override { return m_MidPointDragStart; }
+    ImVec2 DragStartLocation() override { return (m_DraggedTangent >= 0) ? m_TangentDragStartPos : m_MidPointDragStart; }
 
     virtual void Draw(ImDrawList* drawList, DrawFlags flags = None) override final;
     void Draw(ImDrawList* drawList, ImU32 color, float extraThickness = 0.0f) const;
@@ -466,6 +521,17 @@ struct Link final: Object
     // curve segment so the chain stays untangled.
     void InsertMidPoint(const ImVec2& canvasPoint);
     void RemoveMidPoint(int index);
+
+    // erhe: pen-tool tangent handles. GetMidPointTangents returns the
+    // EFFECTIVE tangent offsets of mid point 'index' (the stored ones when
+    // manual, the computed segment-curve tangents when Auto) - these are what
+    // the on-canvas dots show and what a grab captures. FindTangentAt hit
+    // tests the dots of every mid point (returns the mid point index and
+    // sets isOut); dots exist only while the link is selected.
+    void GetMidPointTangents(int index, ImVec2& tanIn, ImVec2& tanOut) const;
+    float GetTangentDotRadius() const;
+    float GetTangentDotGrabRadius() const;
+    int FindTangentAt(const ImVec2& point, float radius, bool& isOut) const;
 
     virtual bool TestHit(const ImVec2& point, float extraThickness = 0.0f) const override final;
     virtual bool TestHit(const ImRect& rect, bool allowIntersect = true) const override final;

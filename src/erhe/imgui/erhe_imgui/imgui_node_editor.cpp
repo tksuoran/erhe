@@ -880,6 +880,30 @@ void ed::Link::Draw(ImDrawList* drawList, DrawFlags flags)
         drawList->ChannelsSetCurrent(c_LinkChannel_Selection);
 
         Draw(drawList, borderColor, 4.5f);
+
+        // erhe: pen-tool tangent handles of the routing mid points, shown
+        // only while the link is selected (like anchor handles in vector
+        // editors). Each mid point draws its in / out tangent as a thin line
+        // ending in a grabbable dot; Auto points show their computed
+        // tangents (grabbing one captures them and switches to Mirrored).
+        if (!m_MidPoints.empty())
+        {
+            const float dotRadius     = Editor->DrawLen(GetTangentDotRadius());
+            const float lineThickness = Editor->DrawLen(1.0f);
+            const ImU32 lineColor     = (borderColor & 0x00FFFFFF) | 0x80000000; // half-alpha border color
+            for (int i = 0; i < m_MidPoints.size(); ++i)
+            {
+                ImVec2 tanIn, tanOut;
+                GetMidPointTangents(i, tanIn, tanOut);
+                const ImVec2 pos    = Editor->DrawPos(m_MidPoints[i].m_Pos);
+                const ImVec2 outDot = Editor->DrawPos(m_MidPoints[i].m_Pos + tanOut);
+                const ImVec2 inDot  = Editor->DrawPos(m_MidPoints[i].m_Pos + tanIn);
+                drawList->AddLine(pos, outDot, lineColor, lineThickness);
+                drawList->AddLine(pos, inDot,  lineColor, lineThickness);
+                drawList->AddCircleFilled(outDot, dotRadius, borderColor);
+                drawList->AddCircleFilled(inDot,  dotRadius, borderColor);
+            }
+        }
     }
     else if (flags & Hovered)
     {
@@ -936,7 +960,7 @@ void ed::Link::Draw(ImDrawList* drawList, ImU32 color, float extraThickness) con
     {
         const float radius = Editor->DrawLen(GetMidPointRadius() + extraThickness * 0.5f);
         for (int i = 0; i < m_MidPoints.size(); ++i)
-            drawList->AddCircleFilled(Editor->DrawPos(m_MidPoints[i]), radius, color);
+            drawList->AddCircleFilled(Editor->DrawPos(m_MidPoints[i].m_Pos), radius, color);
     }
 }
 
@@ -998,7 +1022,7 @@ ImCubicBezierPoints ed::Link::GetSegmentCurve(int segment) const
             return m_Start;
         if (index > m_MidPoints.size())
             return m_End;
-        return m_MidPoints[index - 1];
+        return m_MidPoints[index - 1].m_Pos;
     };
 
     const auto a = anchor(segment);
@@ -1034,38 +1058,43 @@ ImCubicBezierPoints ed::Link::GetSegmentCurve(int segment) const
         return ImNormalized(tangent);
     };
 
-    ImVec2 startDir;
-    float  startStrength;
+    // Control point offsets from the segment's anchors. A mid point in a
+    // manual mode (pen-tool tangent handles) contributes its stored tangent
+    // directly - the user controls the magnitude, so no easing applies.
+    ImVec2 startOffset;
     if (segment == 0)
     {
-        startDir      = m_StartPin->m_Dir;
-        startStrength = ImLink_EaseLinkStrength(a, b, m_StartPin->m_Strength * tensionScale);
+        startOffset = m_StartPin->m_Dir * ImLink_EaseLinkStrength(a, b, m_StartPin->m_Strength * tensionScale);
+    }
+    else if (m_MidPoints[segment - 1].m_Mode != MidPointMode::Auto)
+    {
+        startOffset = m_MidPoints[segment - 1].m_TanOut;
     }
     else
     {
-        startDir      = interiorTangent(segment, true);
-        startStrength = ImLink_EaseLinkStrength(a, b, interiorStrength);
+        startOffset = interiorTangent(segment, true) * ImLink_EaseLinkStrength(a, b, interiorStrength);
     }
 
-    ImVec2 endDir;
-    float  endStrength;
+    ImVec2 endOffset;
     if (segment == segmentCount - 1)
     {
-        endDir      = m_EndPin->m_Dir;
-        endStrength = ImLink_EaseLinkStrength(a, b, m_EndPin->m_Strength * tensionScale);
+        endOffset = m_EndPin->m_Dir * ImLink_EaseLinkStrength(a, b, m_EndPin->m_Strength * tensionScale);
+    }
+    else if (m_MidPoints[segment].m_Mode != MidPointMode::Auto)
+    {
+        endOffset = m_MidPoints[segment].m_TanIn;
     }
     else
     {
         // Points backwards along the chain, mirroring how the end pin's
         // direction points away from the link.
-        endDir      = interiorTangent(segment + 1, false) * -1.0f;
-        endStrength = ImLink_EaseLinkStrength(a, b, interiorStrength);
+        endOffset = interiorTangent(segment + 1, false) * -ImLink_EaseLinkStrength(a, b, interiorStrength);
     }
 
     ImCubicBezierPoints result;
     result.P0 = a;
-    result.P1 = a + startDir * startStrength;
-    result.P2 = b + endDir * endStrength;
+    result.P1 = a + startOffset;
+    result.P2 = b + endOffset;
     result.P3 = b;
 
     return result;
@@ -1085,9 +1114,60 @@ int ed::Link::FindMidPointAt(const ImVec2& point, float radius) const
 {
     for (int i = 0; i < m_MidPoints.size(); ++i)
     {
-        const auto delta = m_MidPoints[i] - point;
+        const auto delta = m_MidPoints[i].m_Pos - point;
         if ((delta.x * delta.x + delta.y * delta.y) <= (radius * radius))
             return i;
+    }
+    return -1;
+}
+
+void ed::Link::GetMidPointTangents(int index, ImVec2& tanIn, ImVec2& tanOut) const
+{
+    const MidPoint& midPoint = m_MidPoints[index];
+    if (midPoint.m_Mode != MidPointMode::Auto)
+    {
+        tanIn  = midPoint.m_TanIn;
+        tanOut = midPoint.m_TanOut;
+        return;
+    }
+    // Effective computed tangents: mid point 'index' is chain anchor
+    // 'index + 1', i.e. the end of segment 'index' and the start of segment
+    // 'index + 1'. These are what a pen-tool grab captures, so switching a
+    // point from Auto to Mirrored starts from the curve as drawn.
+    const ImCubicBezierPoints inCurve  = GetSegmentCurve(index);
+    const ImCubicBezierPoints outCurve = GetSegmentCurve(index + 1);
+    tanIn  = inCurve.P2  - inCurve.P3;
+    tanOut = outCurve.P1 - outCurve.P0;
+}
+
+float ed::Link::GetTangentDotRadius() const
+{
+    return ImMax(3.0f, m_Thickness * 1.5f);
+}
+
+float ed::Link::GetTangentDotGrabRadius() const
+{
+    return GetTangentDotRadius() + 5.0f;
+}
+
+int ed::Link::FindTangentAt(const ImVec2& point, float radius, bool& isOut) const
+{
+    for (int i = 0; i < m_MidPoints.size(); ++i)
+    {
+        ImVec2 tanIn, tanOut;
+        GetMidPointTangents(i, tanIn, tanOut);
+        const ImVec2 outDelta = (m_MidPoints[i].m_Pos + tanOut) - point;
+        if (ImLengthSqr(outDelta) <= (radius * radius))
+        {
+            isOut = true;
+            return i;
+        }
+        const ImVec2 inDelta = (m_MidPoints[i].m_Pos + tanIn) - point;
+        if (ImLengthSqr(inDelta) <= (radius * radius))
+        {
+            isOut = false;
+            return i;
+        }
     }
     return -1;
 }
@@ -1109,7 +1189,7 @@ void ed::Link::InsertMidPoint(const ImVec2& canvasPoint)
             bestSegment  = segment;
         }
     }
-    m_MidPoints.insert(m_MidPoints.Data + bestSegment, canvasPoint);
+    m_MidPoints.insert(m_MidPoints.Data + bestSegment, MidPoint(canvasPoint));
 }
 
 void ed::Link::RemoveMidPoint(int index)
@@ -1123,30 +1203,103 @@ bool ed::Link::AcceptDrag()
     // Hit-test the PRESS position, not the current one (cf. SizeAction):
     // this accept only runs once the drag threshold has tripped, i.e. after
     // the mouse has already moved off the small handle. A press that did not
-    // land on a mid-point handle is not a drag - the gesture falls through
-    // and links behave as before.
+    // land on a handle is not a drag - the gesture falls through and links
+    // behave as before.
     const auto pressPos = Editor->ToCanvas(ImGui_GetMouseClickPos(Editor->GetConfig().DragButtonIndex));
+
+    // Pen-tool tangent dots first (they only exist on a selected link and
+    // can overlap the mid point handle when the tangent is short).
+    if (m_IsSelected)
+    {
+        bool isOut = false;
+        m_DraggedTangent = FindTangentAt(pressPos, GetTangentDotGrabRadius(), isOut);
+        if (m_DraggedTangent >= 0)
+        {
+            MidPoint& midPoint = m_MidPoints[m_DraggedTangent];
+            ImVec2 tanIn, tanOut;
+            GetMidPointTangents(m_DraggedTangent, tanIn, tanOut);
+            if (midPoint.m_Mode == MidPointMode::Auto)
+            {
+                // First grab: capture the computed tangents so the curve
+                // starts from its current shape, then keep it smooth.
+                midPoint.m_TanIn  = tanIn;
+                midPoint.m_TanOut = tanOut;
+                midPoint.m_Mode   = MidPointMode::Mirrored;
+            }
+            m_DraggedTangentIsOut   = isOut;
+            m_TangentDragStart      = isOut ? midPoint.m_TanOut : midPoint.m_TanIn;
+            m_TangentDragOtherStart = isOut ? midPoint.m_TanIn  : midPoint.m_TanOut;
+            m_TangentDragStartPos   = midPoint.m_Pos + m_TangentDragStart;
+            return true;
+        }
+    }
+
     m_DraggedMidPoint = FindMidPointAt(pressPos, GetMidPointGrabRadius());
     if (m_DraggedMidPoint < 0)
         return false;
-    m_MidPointDragStart = m_MidPoints[m_DraggedMidPoint];
+    m_MidPointDragStart = m_MidPoints[m_DraggedMidPoint].m_Pos;
     return true;
 }
 
 void ed::Link::UpdateDrag(const ImVec2& offset)
 {
+    if (m_DraggedTangent >= 0 && m_DraggedTangent < m_MidPoints.size())
+    {
+        MidPoint& midPoint = m_MidPoints[m_DraggedTangent];
+
+        // Alt breaks the point into Free (a corner) - sticky for the rest of
+        // the drag and beyond, like the pen tool's Alt-drag.
+        if (ImGui::GetIO().KeyAlt)
+            midPoint.m_Mode = MidPointMode::Free;
+
+        const ImVec2 dragged = m_TangentDragStart + offset;
+        ImVec2 other = m_TangentDragOtherStart;
+        if (midPoint.m_Mode == MidPointMode::Mirrored)
+        {
+            other = dragged * -1.0f;
+        }
+        else if (midPoint.m_Mode == MidPointMode::Aligned)
+        {
+            const float otherLength = ImSqrt(ImLengthSqr(m_TangentDragOtherStart));
+            if (ImLengthSqr(dragged) > 1e-6f)
+                other = ImNormalized(dragged) * -otherLength;
+        }
+
+        if (m_DraggedTangentIsOut)
+        {
+            midPoint.m_TanOut = dragged;
+            midPoint.m_TanIn  = other;
+        }
+        else
+        {
+            midPoint.m_TanIn  = dragged;
+            midPoint.m_TanOut = other;
+        }
+        return;
+    }
+
     if (m_DraggedMidPoint >= 0 && m_DraggedMidPoint < m_MidPoints.size())
-        m_MidPoints[m_DraggedMidPoint] = m_MidPointDragStart + offset;
+        m_MidPoints[m_DraggedMidPoint].m_Pos = m_MidPointDragStart + offset;
 }
 
 bool ed::Link::EndDrag()
 {
+    if (m_DraggedTangent >= 0)
+    {
+        const bool changed =
+            (m_DraggedTangent < m_MidPoints.size()) &&
+            (((m_DraggedTangentIsOut ? m_MidPoints[m_DraggedTangent].m_TanOut : m_MidPoints[m_DraggedTangent].m_TanIn).x != m_TangentDragStart.x) ||
+             ((m_DraggedTangentIsOut ? m_MidPoints[m_DraggedTangent].m_TanOut : m_MidPoints[m_DraggedTangent].m_TanIn).y != m_TangentDragStart.y));
+        m_DraggedTangent = -1;
+        return changed;
+    }
+
     if (m_DraggedMidPoint < 0)
         return false;
     const bool changed =
         (m_DraggedMidPoint < m_MidPoints.size()) &&
-        ((m_MidPoints[m_DraggedMidPoint].x != m_MidPointDragStart.x) ||
-         (m_MidPoints[m_DraggedMidPoint].y != m_MidPointDragStart.y));
+        ((m_MidPoints[m_DraggedMidPoint].m_Pos.x != m_MidPointDragStart.x) ||
+         (m_MidPoints[m_DraggedMidPoint].m_Pos.y != m_MidPointDragStart.y));
     m_DraggedMidPoint = -1;
     return changed;
 }
@@ -1160,6 +1313,16 @@ bool ed::Link::TestHit(const ImVec2& point, float extraThickness) const
     // bounds), so test them before the bounds rejection.
     if (FindMidPointAt(point, GetMidPointGrabRadius() + extraThickness) >= 0)
         return true;
+
+    // erhe: pen-tool tangent dots (selected links only) can sit far off the
+    // curve; without this a press on a dot would not resolve to the link and
+    // the tangent drag could never start.
+    if (m_IsSelected)
+    {
+        bool isOut = false;
+        if (FindTangentAt(point, GetTangentDotGrabRadius() + extraThickness, isOut) >= 0)
+            return true;
+    }
 
     auto bounds = GetBounds();
     if (extraThickness > 0.0f)
@@ -1475,15 +1638,28 @@ void ed::EditorContext::End()
     m_HoveredPin              = control.HotPin  && m_CurrentAction == nullptr ? control.HotPin->m_ID  : 0;
     m_HoveredLink             = control.HotLink && m_CurrentAction == nullptr ? control.HotLink->m_ID : 0;
 
-    // erhe: double-click edits the link's mid points - on a handle it removes
-    // that mid point, elsewhere on the link it adds one at the click position.
-    // Consumed here, so the application never sees these as link double-clicks.
+    // erhe: double-click edits the link's mid points - on a pen-tool tangent
+    // dot it resets that mid point to Auto (recomputed tangents), on a handle
+    // it removes that mid point, elsewhere on the link it adds one at the
+    // click position. Consumed here, so the application never sees these as
+    // link double-clicks.
     if (control.DoubleClickedLink && m_CurrentAction == nullptr)
     {
         auto link = control.DoubleClickedLink;
         const auto clickPos = HitMouse();
+        bool tangentIsOut = false;
+        const int tangentIndex = link->m_IsSelected
+            ? link->FindTangentAt(clickPos, link->GetTangentDotGrabRadius(), tangentIsOut)
+            : -1;
         const int midPointIndex = link->FindMidPointAt(clickPos, link->GetMidPointGrabRadius());
-        if (midPointIndex >= 0)
+        if (tangentIndex >= 0)
+        {
+            MidPoint& midPoint = link->m_MidPoints[tangentIndex];
+            midPoint.m_Mode   = MidPointMode::Auto;
+            midPoint.m_TanIn  = ImVec2(0.0f, 0.0f);
+            midPoint.m_TanOut = ImVec2(0.0f, 0.0f);
+        }
+        else if (midPointIndex >= 0)
             link->RemoveMidPoint(midPointIndex);
         else
             link->InsertMidPoint(clickPos);

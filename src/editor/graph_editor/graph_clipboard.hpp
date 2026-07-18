@@ -3,6 +3,7 @@
 #include "app_context.hpp"
 #include "editor_log.hpp"
 #include "graph_editor/graph_editor_node.hpp"
+#include "graph_editor/graph_link_routing.hpp"
 #include "graph_editor/graph_operations.hpp"
 #include "graph_editor/node_edge.hpp"
 #include "operations/compound_operation.hpp"
@@ -128,12 +129,12 @@ auto paste_graph_nodes(
     }
     context.operation_stack->execute_now(std::make_shared<Compound_operation>(std::move(parameters)));
 
-    // Restore link routing mid points (translated with the pasted block) and
-    // per-link curve shape. The erhe link a Link_op created is found by its
-    // (freshly created, unique) source / sink pin pair.
+    // Restore link routing mid points (translated with the pasted block,
+    // pen-tool tangents preserved; see graph_link_routing.hpp) and per-link
+    // curve shape. The erhe link a Link_op created is found by its (freshly
+    // created, unique) source / sink pin pair.
     ax::NodeEditor::EditorContext* node_editor = window.get_node_editor();
     const ImVec2 translation{position.x - top_left.x, position.y - top_left.y};
-    std::vector<ImVec2> mid_points;
     for (const nlohmann::json& link_json : links_json) {
         const nlohmann::json mid_points_json = link_json.value("mid_points", nlohmann::json::array());
         const nlohmann::json curve_json      = link_json.value("curve",      nlohmann::json::array());
@@ -156,25 +157,8 @@ auto paste_graph_nodes(
         if (created_link == nullptr) {
             continue;
         }
-        mid_points.clear();
-        for (const nlohmann::json& point_json : mid_points_json) {
-            if (!point_json.is_array() || (point_json.size() != 2)) {
-                mid_points.clear();
-                break;
-            }
-            mid_points.push_back(
-                ImVec2{
-                    point_json.at(0).get<float>() + translation.x,
-                    point_json.at(1).get<float>() + translation.y
-                }
-            );
-        }
-        if (!mid_points.empty()) {
-            node_editor->SetLinkMidPoints(
-                ax::NodeEditor::LinkId{created_link},
-                mid_points.data(),
-                static_cast<int>(mid_points.size())
-            );
+        if (!mid_points_json.empty()) {
+            read_link_mid_points_json(*node_editor, ax::NodeEditor::LinkId{created_link}, mid_points_json, translation);
         }
         // Per-link curve shape ([tension, continuity, bias]); malformed
         // entries are ignored, keeping the defaults.

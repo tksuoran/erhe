@@ -925,14 +925,14 @@ void Mcp_server::refresh_tool_list()
             {"enabled", {{"type", "boolean"}, {"description", "true (default) to show previews, false to hide"}}}
         }}
     }});
-    m_tool_infos.push_back({"geometry_graph_set_link_mid_points", "Set (or clear) the canvas routing mid points of a geometry graph link. Mid points are canvas-space control points the link's wire is routed through (the on-canvas gestures: double-click a link to add one at the click position, double-click a handle to remove it, drag a handle to move it). The link is identified by its endpoint pins (see get_geometry_graph 'links'); the whole mid point list is replaced. Omitted / empty mid_points clears the routing (plain direct wire). Canvas-only state (like node positions): not undoable, not saved to the scene, but carried by canvas copy / paste. get_geometry_graph reports each link's current 'mid_points'.", {
+    m_tool_infos.push_back({"geometry_graph_set_link_mid_points", "Set (or clear) the canvas routing mid points of a geometry graph link, optionally with explicit pen-tool tangent handles per point. Mid points are canvas-space control points the link's wire is routed through (on-canvas gestures: double-click a link to add one, double-click a handle to remove it, drag a handle to move it; on a SELECTED link each point shows tangent dots - dragging one captures the computed tangents and switches the point to mirrored, Alt-drag breaks it to free, double-click on a dot resets to auto). The link is identified by its endpoint pins (see get_geometry_graph 'links'); the whole mid point list is replaced. Omitted / empty mid_points clears the routing (plain direct wire). Canvas-only state (like node positions): not undoable, not saved to the scene, but carried by canvas copy / paste. get_geometry_graph reports each link's current 'mid_points' in the same dual entry form.", {
         {"type", "object"},
         {"properties", {
             {"source_node_id", {{"type", "integer"}, {"description", "Id of the source (output) node"}}},
             {"source_slot",    {{"type", "integer"}, {"description", "Output pin slot on the source node (default 0)"}}},
             {"sink_node_id",   {{"type", "integer"}, {"description", "Id of the sink (input) node"}}},
             {"sink_slot",      {{"type", "integer"}, {"description", "Input pin slot on the sink node (default 0)"}}},
-            {"mid_points",     {{"type", "array"},   {"items", {{"type", "array"}, {"items", {{"type", "number"}}}}}, {"description", "Canvas-space [x, y] control points, ordered from source to sink; empty / omitted clears"}}}
+            {"mid_points",     {{"type", "array"},   {"description", "Control points ordered from source to sink; empty / omitted clears. Each entry is a canvas-space [x, y] pair (Auto tangents) or an object {pos:[x,y], mode:1|2|3, in:[x,y], out:[x,y]} with explicit pen-tool tangent offsets (mode 1 mirrored, 2 aligned, 3 free)"}}}
         }},
         {"required", json::array({"source_node_id", "sink_node_id"})}
     }});
@@ -956,10 +956,11 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"zoom"})}
     }});
-    m_tool_infos.push_back({"geometry_graph_select_nodes", "Set the Geometry Graph window's canvas node selection: clears the current canvas selection and selects the given node ids (empty / omitted node_ids just clears). Also shows the Geometry Graph and Node Properties windows so the selection and its properties are observable in the next capture_screenshot. Nodes must have rendered at least once (show the window first, e.g. geometry_graph_set_view).", {
+    m_tool_infos.push_back({"geometry_graph_select_nodes", "Set the Geometry Graph window's canvas selection: clears the current canvas selection and selects the given node ids (empty / omitted node_ids just clears) and optionally a link. A selected link shows its pen-tool tangent dots on the canvas and a link section in Node Properties. Also shows the Geometry Graph and Node Properties windows so the selection and its properties are observable in the next capture_screenshot. Nodes must have rendered at least once (show the window first, e.g. geometry_graph_set_view).", {
         {"type", "object"},
         {"properties", {
-            {"node_ids", {{"type", "array"}, {"items", {{"type", "integer"}}}, {"description", "Ids of the nodes to select (see get_geometry_graph); empty clears the selection"}}}
+            {"node_ids", {{"type", "array"}, {"items", {{"type", "integer"}}}, {"description", "Ids of the nodes to select (see get_geometry_graph); empty clears the selection"}}},
+            {"link",     {{"type", "object"}, {"description", "Link to select, identified by its endpoint pins: {source_node_id, source_slot, sink_node_id, sink_slot} (slots default 0)"}}}
         }}
     }});
     m_tool_infos.push_back({"texture_graph_select_nodes", "Set the Texture Graph window's canvas node selection: clears the current canvas selection and selects the given node ids (empty / omitted node_ids just clears). Also shows the Texture Graph and Node Properties windows so the selection and its properties are observable in the next capture_screenshot. Nodes must have rendered at least once (show the window first).", {

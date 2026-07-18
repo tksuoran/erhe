@@ -448,7 +448,20 @@ public:
     // and persistence (clipboard).
     int    GetLinkMidPointCount(LinkId linkId);
     ImVec2 GetLinkMidPoint(LinkId linkId, int index);
-    void   SetLinkMidPoints(LinkId linkId, const ImVec2* points, int count);
+    void   SetLinkMidPoints(LinkId linkId, const ImVec2* points, int count); // resets every point to Auto tangents
+
+    // erhe: pen-tool tangent handles per mid point. Mode: 0 = Auto (tangents
+    // computed; the getter returns the effective computed offsets), 1 =
+    // Mirrored, 2 = Aligned, 3 = Free. Tangents are canvas-space offsets from
+    // the mid point: tanOut along the outgoing segment, tanIn along the
+    // incoming one. Setting mode 0 clears the stored tangents; the setter is
+    // a no-op for an out-of-range index (size the list with SetLinkMidPoints
+    // first). Interactively: dots show on a selected link; dragging an Auto
+    // point's dot captures the computed tangents and switches it to Mirrored,
+    // Alt-drag breaks it to Free, double-click on a dot resets to Auto.
+    int  GetLinkMidPointMode(LinkId linkId, int index);
+    void GetLinkMidPointTangents(LinkId linkId, int index, ImVec2* tanIn, ImVec2* tanOut);
+    void SetLinkMidPointTangents(LinkId linkId, int index, int mode, const ImVec2& tanIn, const ImVec2& tanOut);
 
     // erhe: per-link curve shape parameters (Kochanek-Bartels tension /
     // continuity / bias, each clamped to [-1, 1]; all default 0, which is

@@ -5,6 +5,7 @@
 
 #include "geometry_graph/geometry_graph_operations.hpp"
 #include "graph/node_properties.hpp"
+#include "graph_editor/graph_link_routing.hpp"
 
 #include "erhe_imgui/imgui_node_editor.h"
 
@@ -203,17 +204,13 @@ auto Mcp_server::query_geometry_graph(const json& args) -> std::string
             {"sink_node_id",   link->get_sink()->get_owner_node()->get_id()},
             {"sink_slot",      link->get_sink()->get_slot()}
         };
-        // Canvas routing mid points (see geometry_graph_set_link_mid_points).
+        // Canvas routing mid points, [x, y] pairs or pen-tool tangent objects
+        // (see geometry_graph_set_link_mid_points / graph_link_routing.hpp).
         ax::NodeEditor::EditorContext* node_editor = window->get_node_editor();
         const ax::NodeEditor::LinkId link_id{link.get()};
-        const int mid_point_count = node_editor->GetLinkMidPointCount(link_id);
-        if (mid_point_count > 0) {
-            json mid_points = json::array();
-            for (int i = 0; i < mid_point_count; ++i) {
-                const ImVec2 mid_point = node_editor->GetLinkMidPoint(link_id, i);
-                mid_points.push_back({mid_point.x, mid_point.y});
-            }
-            link_json["mid_points"] = mid_points;
+        json mid_points = write_link_mid_points_json(*node_editor, link_id);
+        if (!mid_points.empty()) {
+            link_json["mid_points"] = std::move(mid_points);
         }
         // Per-link curve shape (see geometry_graph_set_link_curve); omitted
         // at the all-zero default.
@@ -499,28 +496,20 @@ auto Mcp_server::action_geometry_graph_set_link_mid_points(const json& args) -> 
         return make_error_content("No link between the given pins");
     }
 
-    std::vector<ImVec2> mid_points;
-    if (args.contains("mid_points")) {
-        if (!args["mid_points"].is_array()) {
-            return make_error_content("'mid_points' must be an array of [x, y] pairs");
-        }
-        for (const json& point_json : args["mid_points"]) {
-            if (!point_json.is_array() || (point_json.size() != 2) || !point_json.at(0).is_number() || !point_json.at(1).is_number()) {
-                return make_error_content("'mid_points' entries must be [x, y] number pairs");
-            }
-            mid_points.push_back(ImVec2{point_json.at(0).get<float>(), point_json.at(1).get<float>()});
-        }
-    }
-    window->get_node_editor()->SetLinkMidPoints(
+    const json mid_points_json = args.value("mid_points", json::array());
+    const bool applied = read_link_mid_points_json(
+        *window->get_node_editor(),
         ax::NodeEditor::LinkId{graph_link},
-        mid_points.data(),
-        static_cast<int>(mid_points.size())
+        mid_points_json
     );
+    if (!applied) {
+        return make_error_content("'mid_points' entries must be [x, y] pairs or {pos, mode, in, out} objects (see graph_link_routing.hpp)");
+    }
     // Make the routing observable in the next capture_screenshot.
     window->request_window_focus();
 
     json result;
-    result["mid_point_count"] = mid_points.size();
+    result["mid_point_count"] = mid_points_json.size();
     return make_json_content(result).dump();
 }
 
@@ -614,15 +603,53 @@ auto Mcp_server::action_geometry_graph_select_nodes(const json& args) -> std::st
         }
     }
     window->select_canvas_nodes(node_ids);
+
+    // Optional canvas link selection (a selected link shows its pen-tool
+    // tangent dots and a Node Properties section). The link is identified by
+    // its endpoint pins, like geometry_graph_set_link_mid_points.
+    std::size_t selected_link_count = 0;
+    if (args.contains("link") && args["link"].is_object()) {
+        const json&       link_args      = args["link"];
+        const std::size_t source_node_id = link_args.value("source_node_id", std::size_t{0});
+        const std::size_t source_slot    = link_args.value("source_slot",    std::size_t{0});
+        const std::size_t sink_node_id   = link_args.value("sink_node_id",   std::size_t{0});
+        const std::size_t sink_slot      = link_args.value("sink_slot",      std::size_t{0});
+        Geometry_graph_node* source_node = find_geometry_graph_node(window->get_nodes(), source_node_id);
+        Geometry_graph_node* sink_node   = find_geometry_graph_node(window->get_nodes(), sink_node_id);
+        if ((source_node == nullptr) || (sink_node == nullptr)) {
+            return make_error_content("Link node not found");
+        }
+        if ((source_slot >= source_node->get_output_pins().size()) || (sink_slot >= sink_node->get_input_pins().size())) {
+            return make_error_content("Link pin slot out of range");
+        }
+        erhe::graph::Pin* source_pin = &source_node->get_output_pins().at(source_slot);
+        erhe::graph::Pin* sink_pin   = &sink_node->get_input_pins().at(sink_slot);
+        erhe::graph::Link* graph_link = nullptr;
+        for (erhe::graph::Link* link : sink_pin->get_links()) {
+            if (link->get_source() == source_pin) {
+                graph_link = link;
+                break;
+            }
+        }
+        if (graph_link == nullptr) {
+            return make_error_content("No link between the given pins");
+        }
+        window->get_node_editor()->SelectLink(ax::NodeEditor::LinkId{graph_link}, !node_ids.empty());
+        selected_link_count = 1;
+    }
+
     // Make the result observable in a screenshot: the canvas showing the
     // selection (focus raises the window's tab when it is docked behind
-    // another) and the Node Properties window showing the selected nodes.
+    // another) and the Node Properties window showing the selected nodes /
+    // link (focus, not just show: its tab is docked behind Transform in the
+    // default layout).
     window->request_window_focus();
     if (m_context.node_properties_window != nullptr) {
-        m_context.node_properties_window->show_window();
+        m_context.node_properties_window->request_window_focus();
     }
     json result;
-    result["selected_count"] = node_ids.size();
+    result["selected_count"]      = node_ids.size();
+    result["selected_link_count"] = selected_link_count;
     return make_json_content(result).dump();
 }
 

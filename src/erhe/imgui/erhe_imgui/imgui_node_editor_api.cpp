@@ -734,7 +734,7 @@ ImVec2 EditorContext::GetLinkMidPoint(LinkId linkId, int index)
     if (!link || index < 0 || index >= link->m_MidPoints.size())
         return ImVec2(0.0f, 0.0f);
 
-    return link->m_MidPoints[index];
+    return link->m_MidPoints[index].m_Pos;
 }
 
 void EditorContext::SetLinkMidPoints(LinkId linkId, const ImVec2* points, int count)
@@ -751,8 +751,58 @@ void EditorContext::SetLinkMidPoints(LinkId linkId, const ImVec2* points, int co
 
     link->m_MidPoints.resize(0);
     for (int i = 0; i < count; ++i)
-        link->m_MidPoints.push_back(points[i]);
+        link->m_MidPoints.push_back(Detail::MidPoint(points[i]));
     link->m_DraggedMidPoint = -1;
+    link->m_DraggedTangent  = -1;
+}
+
+int EditorContext::GetLinkMidPointMode(LinkId linkId, int index)
+{
+    auto link = m_impl->FindLink(linkId);
+    if (!link || index < 0 || index >= link->m_MidPoints.size())
+        return 0;
+
+    return static_cast<int>(link->m_MidPoints[index].m_Mode);
+}
+
+void EditorContext::GetLinkMidPointTangents(LinkId linkId, int index, ImVec2* tanIn, ImVec2* tanOut)
+{
+    auto link = m_impl->FindLink(linkId);
+    if (!link || index < 0 || index >= link->m_MidPoints.size())
+    {
+        if (tanIn)
+            *tanIn = ImVec2(0.0f, 0.0f);
+        if (tanOut)
+            *tanOut = ImVec2(0.0f, 0.0f);
+        return;
+    }
+
+    ImVec2 in, out;
+    link->GetMidPointTangents(index, in, out);
+    if (tanIn)
+        *tanIn = in;
+    if (tanOut)
+        *tanOut = out;
+}
+
+void EditorContext::SetLinkMidPointTangents(LinkId linkId, int index, int mode, const ImVec2& tanIn, const ImVec2& tanOut)
+{
+    auto link = m_impl->FindLink(linkId);
+    if (!link || index < 0 || index >= link->m_MidPoints.size())
+        return;
+
+    Detail::MidPoint& midPoint = link->m_MidPoints[index];
+    if (mode <= 0 || mode > static_cast<int>(Detail::MidPointMode::Free))
+    {
+        midPoint.m_Mode   = Detail::MidPointMode::Auto;
+        midPoint.m_TanIn  = ImVec2(0.0f, 0.0f);
+        midPoint.m_TanOut = ImVec2(0.0f, 0.0f);
+        return;
+    }
+
+    midPoint.m_Mode   = static_cast<Detail::MidPointMode>(mode);
+    midPoint.m_TanIn  = tanIn;
+    midPoint.m_TanOut = tanOut;
 }
 
 void EditorContext::GetLinkCurveParams(LinkId linkId, float* tension, float* continuity, float* bias)

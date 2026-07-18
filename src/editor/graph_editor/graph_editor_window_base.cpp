@@ -1,5 +1,6 @@
 #include "graph_editor/graph_editor_window_base.hpp"
 #include "graph_editor/graph_editor_node.hpp"
+#include "graph_editor/graph_link_routing.hpp"
 #include "graph_editor/graph_node_drag_payload.hpp"
 #include "graph_editor/node_edge.hpp"
 
@@ -464,16 +465,12 @@ auto Graph_editor_window_base::serialize_nodes_json(const std::vector<std::share
             {"sink_slot",   link->get_sink()->get_slot()}
         };
         // Link routing mid points (absolute canvas positions, like the node
-        // "x" / "y" above - paste translates them with the block).
+        // "x" / "y" above - paste translates them with the block; pen-tool
+        // tangents ride along as offsets). Shared form: graph_link_routing.hpp.
         const ax::NodeEditor::LinkId link_id{link.get()};
-        const int mid_point_count = node_editor->GetLinkMidPointCount(link_id);
-        if (mid_point_count > 0) {
-            nlohmann::json mid_points_json = nlohmann::json::array();
-            for (int i = 0; i < mid_point_count; ++i) {
-                const ImVec2 mid_point = node_editor->GetLinkMidPoint(link_id, i);
-                mid_points_json.push_back({mid_point.x, mid_point.y});
-            }
-            link_json["mid_points"] = mid_points_json;
+        nlohmann::json mid_points_json = write_link_mid_points_json(*node_editor, link_id);
+        if (!mid_points_json.empty()) {
+            link_json["mid_points"] = std::move(mid_points_json);
         }
         // Per-link curve shape (tension / continuity / bias); omitted at the
         // all-zero default.
