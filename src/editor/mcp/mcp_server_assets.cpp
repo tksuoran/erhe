@@ -172,7 +172,7 @@ auto Mcp_server::action_unload_asset(const json& args) -> std::string
     if (!parse_asset_key_args(args, key, error)) {
         return make_error_content(error);
     }
-    const Unload_result unload_result = asset_manager->request_unload(key);
+    const Unload_result unload_result = asset_manager->request_unload(key, args.value("discard", false));
     json users = json::array();
     for (const Asset_user_info& user : unload_result.users) {
         users.push_back({
@@ -272,6 +272,24 @@ auto Mcp_server::action_set_tool_asset(const json& args) -> std::string
         {"asset_id", material->get_id()}
     };
     return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_save_container(const json& args) -> std::string
+{
+    Asset_manager* asset_manager = m_context.asset_manager;
+    if (asset_manager == nullptr) {
+        return make_error_content("Asset manager not available");
+    }
+    const std::string path = args.value("path", "");
+    if (path.empty()) {
+        return make_error_content("Missing required 'path'");
+    }
+    std::string error;
+    const bool ok = asset_manager->save_container(std::filesystem::path{path}, error);
+    if (!ok) {
+        return make_error_content(error);
+    }
+    return make_json_content({{"saved", true}, {"path", path}}).dump();
 }
 
 auto Mcp_server::action_set_inventory_slot(const json& args) -> std::string

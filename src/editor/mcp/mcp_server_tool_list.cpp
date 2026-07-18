@@ -411,10 +411,21 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"hold_name"})}
     }});
-    m_tool_infos.push_back({"unload_asset",        "Request unload of a file-scope asset's container. Refused while any asset of the container has users (the refusal names them). A successful unload verifies exclusivity: managed assets still alive afterwards are logged as undeclared users.", {
+    m_tool_infos.push_back({"unload_asset",        "Request unload of a file-scope asset's container. Refused while any asset of the container has users (the refusal names them) or the container is dirty (unsaved asset edits; pass 'discard': true to drop them). A successful unload verifies exclusivity: managed assets still alive afterwards are logged as undeclared users.", {
         {"type", "object"},
-        {"properties", asset_key_properties},
+        {"properties", [&asset_key_properties]() {
+            json properties = asset_key_properties;
+            properties["discard"] = {{"type", "boolean"}, {"description", "Unload a dirty container anyway, dropping its unsaved asset edits"}};
+            return properties;
+        }()},
         {"required", json::array({"scope", "type", "path"})}
+    }});
+    m_tool_infos.push_back({"save_container",      "Write a loaded asset container back to its file. A container open as a scene delegates to the scene save (clears the record's dirty flag); a non-scene container cannot be written back until the R7 asset-file save and is refused with a reason (discard-unload drops its edits instead).", {
+        {"type", "object"},
+        {"properties", {
+            {"path", {{"type", "string"}, {"description", "Path of the loaded container to save"}}}
+        }},
+        {"required", json::array({"path"})}
     }});
     m_tool_infos.push_back({"set_tool_asset",      "Set or clear the asset a tool holds as an Asset_reference (Phase R3): the Brush Tool's active brush or the Material Paint Tool's material. The tool becomes a declared user of the asset (visible in query_asset_manager). Omit 'name' to clear.", {
         {"type", "object"},

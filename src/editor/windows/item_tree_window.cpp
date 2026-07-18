@@ -8,6 +8,7 @@
 #include "app_scenes.hpp"
 #include "app_settings.hpp"
 #include "asset_browser/asset_browser.hpp"
+#include "assets/asset_manager.hpp"
 #include "brushes/brush.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
@@ -31,6 +32,7 @@
 #include "windows/editor_windows.hpp"
 
 #include "erhe_defer/defer.hpp"
+#include "erhe_file/file.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
@@ -43,10 +45,14 @@
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>
 
+#include <fmt/format.h>
+
 #include <algorithm>
+#include <filesystem>
 #include <limits>
 
 #define ICON_MDI_FILTER                                   "\xf3\xb0\x88\xb2" // U+F0232
+#define ICON_MDI_LINK                                     "\xf3\xb0\x8c\xb7" // U+F0337
 
 namespace editor {
 
@@ -1420,6 +1426,21 @@ void Item_tree::imgui_row(const Flat_row& row)
             (row.right_icon_count > 0) ? &label_clip : nullptr
         );
 
+        // R5.8 reference badge suffix: dim defining-container name after the
+        // label, sharing the label's clip so it never runs under the icons.
+        if (!row.reference_suffix.empty()) {
+            draw_list->AddText(
+                ImGui::GetFont(),
+                ImGui::GetFontSize(),
+                ImVec2{row_pos.x + row.label_x_offset + row.label_width + style.ItemInnerSpacing.x, row_pos.y + m_label_y_offset},
+                ImGui::GetColorU32(ImGuiCol_TextDisabled),
+                row.reference_suffix.data(),
+                row.reference_suffix.data() + row.reference_suffix.size(),
+                0.0f,
+                (row.right_icon_count > 0) ? &label_clip : nullptr
+            );
+        }
+
         for (std::size_t i = 0; i < row.right_icon_count; ++i) {
             const Row_icon& icon  = row.right_icons[i];
             const glm::vec4 color = (icon.live_color != nullptr) ? glm::vec4{*icon.live_color, 1.0f} : icon.color;
@@ -1579,6 +1600,38 @@ void Item_tree::flatten_visible_rows(const std::shared_ptr<erhe::Item_base>& ite
         }
         row.label_x_offset = m_icon_x_offset + primary_width + style.ItemInnerSpacing.x;
         row.label_width    = ImGui::CalcTextSize(row.label_text.data(), row.label_text.data() + row.label_text.size()).x;
+
+        // R5.8 reference badge: a content-library REFERENCE entry (a listing
+        // of an asset defined elsewhere) shows a link glyph and a dim suffix
+        // naming its defining container. The path comes from the entry's
+        // recorded asset_key / gltf_source; entries carrying neither fall
+        // back to the manager's key (file-scope for path-bound containers).
+        if (content_library_node && content_library_node->is_reference && content_library_node->item) {
+            std::string container_path;
+            if (content_library_node->asset_key.has_value() && !content_library_node->asset_key->path.empty()) {
+                container_path = content_library_node->asset_key->path;
+            } else if (content_library_node->gltf_source.has_value() && !content_library_node->gltf_source->gltf_path.empty()) {
+                container_path = content_library_node->gltf_source->gltf_path;
+            } else if (m_context.asset_manager != nullptr) {
+                const Asset_key key = m_context.asset_manager->make_key(*content_library_node->item);
+                if (key.scope == Asset_scope::file) {
+                    container_path = key.path;
+                }
+            }
+            row.reference_suffix = container_path.empty()
+                ? std::string{"(reference)"}
+                : fmt::format("({})", erhe::file::to_string(std::filesystem::path{container_path}.filename()));
+            row.reference_suffix_width = ImGui::CalcTextSize(row.reference_suffix.data(), row.reference_suffix.data() + row.reference_suffix.size()).x;
+            if (row.right_icon_count < Flat_row::max_right_icon_count) {
+                row.right_icons[row.right_icon_count] = Row_icon{
+                    .font  = icon_set.material_design,
+                    .code  = ICON_MDI_LINK,
+                    .color = glm::vec4{0.55f, 0.65f, 0.9f, 1.0f},
+                };
+                ++row.right_icon_count;
+                row.right_icons_width = icon_set.get_icon_width(Icon_set::Item_icon{.font = icon_set.material_design, .code = ICON_MDI_LINK});
+            }
+        }
 
         // Attachment icons, right-aligned at render time using these offsets
         if (node && !m_context.app_settings->node_tree_expand_attachments) {

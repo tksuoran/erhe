@@ -127,6 +127,12 @@ private:
         std::array<Row_icon, max_right_icon_count> right_icons;
         std::size_t                                right_icon_count {0};
         float                                      right_icons_width{0.0f};
+        // R5.8 reference badge: content-library REFERENCE entries show a dim
+        // suffix naming the defining container (filename) after the label,
+        // plus a link glyph in right_icons. Empty for every other row.
+        // Allocates only when the row cache is rebuilt, never per frame.
+        std::string                                reference_suffix;
+        float                                      reference_suffix_width{0.0f};
     };
 
     void imgui_row                    (const Flat_row& row);

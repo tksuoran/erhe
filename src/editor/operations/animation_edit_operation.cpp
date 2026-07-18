@@ -2,6 +2,7 @@
 
 #include "animation/animation_player.hpp"
 #include "app_context.hpp"
+#include "assets/asset_manager.hpp"
 #include "editor_log.hpp"
 
 #include "erhe_scene/animation.hpp"
@@ -57,6 +58,11 @@ void Animation_edit_operation::apply(App_context& context, const std::vector<Ani
     if (context.animation_player != nullptr) {
         context.animation_player->on_animation_edited(m_animation);
     }
+    // R5.8: the edit dirties the animation's defining container (apply runs
+    // for execute and undo alike - the file no longer matches either way).
+    if (context.asset_manager != nullptr) {
+        context.asset_manager->mark_item_dirty(*m_animation);
+    }
 }
 
 Animation_structure_operation::Animation_structure_operation(
@@ -102,6 +108,10 @@ void Animation_structure_operation::apply(App_context& context, const Animation_
     restore_animation_state(*m_animation.get(), state);
     if (context.animation_player != nullptr) {
         context.animation_player->on_animation_edited(m_animation);
+    }
+    // See Animation_edit_operation::apply.
+    if (context.asset_manager != nullptr) {
+        context.asset_manager->mark_item_dirty(*m_animation);
     }
 }
 

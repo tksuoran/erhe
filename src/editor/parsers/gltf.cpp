@@ -730,6 +730,11 @@ auto save_scene_gltf(App_context& context, Scene_root& scene_root, const std::fi
     if (!save_scene_gltf(scene_root, path)) {
         return false;
     }
+    // R5.8: a successful save clears the scene's container record dirty flag
+    // (the file now matches the live asset state).
+    if (context.asset_manager != nullptr) {
+        context.asset_manager->on_scene_saved(scene_root);
+    }
     // Rescan the asset browser so the freshly saved scene appears without a
     // manual Scan (#256).
     context.app_message_bus->scene_saved.send_message(Scene_saved_message{.path = path});

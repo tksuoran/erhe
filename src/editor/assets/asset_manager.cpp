@@ -7,6 +7,7 @@
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "operations/operation_stack.hpp"
+#include "parsers/gltf.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe_gltf/image_transfer.hpp"
@@ -642,7 +643,75 @@ auto Asset_manager::get_users(const Asset_key& key) const -> std::vector<Asset_u
     return result;
 }
 
-auto Asset_manager::request_unload(const Asset_key& key) -> Unload_result
+void Asset_manager::mark_item_dirty(const erhe::Item_base& item)
+{
+    verify_main_thread();
+    // Own scan instead of find_defining_record: that helper matches SCENE
+    // records only (the defining-scene lookups depend on it), while an edit
+    // can just as well hit a plain loaded container's asset (a slot-held or
+    // debug-held material edited while no scene has the file open).
+    for (const auto& [container_id, record] : m_containers) {
+        bool holds_item = false;
+        visit_record_assets(
+            *record,
+            [&item, &holds_item](const Asset_type_info&, const std::shared_ptr<erhe::Item_base>& entry) {
+                holds_item = holds_item || (entry.get() == &item);
+            }
+        );
+        if (!holds_item) {
+            continue;
+        }
+        if (!record->dirty) {
+            record->dirty = true;
+            log_asset->info(
+                "container record {} ({}) marked dirty by edit of {} '{}'",
+                record->id,
+                record->is_scene_record() ? describe_scene_record(*record) : record->display_path,
+                c_str(asset_type_from_item(item)), item.get_name()
+            );
+        }
+        return;
+    }
+}
+
+void Asset_manager::on_scene_saved(Scene_root& scene_root)
+{
+    verify_main_thread();
+    const std::shared_ptr<Asset_container_record> record = find_scene_record(&scene_root);
+    if (!record || !record->dirty) {
+        return;
+    }
+    record->dirty = false;
+    log_asset->info("scene '{}' saved; container record {} is clean", scene_root.get_name(), record->id);
+}
+
+auto Asset_manager::save_container(const std::filesystem::path& path, std::string& out_error) -> bool
+{
+    verify_main_thread();
+    const std::shared_ptr<Asset_container_record> record = find_record_by_path(normalize_asset_path(path));
+    if (!record) {
+        out_error = fmt::format("container '{}' is not loaded", asset_path_to_string(normalize_asset_path(path)));
+        return false;
+    }
+    if (record->is_open_as_scene()) {
+        const std::shared_ptr<Scene_root> scene_root = record->scene_root.lock();
+        if (!scene_root) {
+            out_error = fmt::format("record {} is open as scene '{}' but the scene is gone", record->id, record->scene_name);
+            return false;
+        }
+        const bool ok = save_scene_gltf(m_context, *scene_root, record->canonical_path);
+        if (!ok) {
+            out_error = fmt::format("scene save of '{}' failed", record->display_path);
+        }
+        return ok;
+    }
+    out_error = record->dirty
+        ? fmt::format("dirty non-scene container '{}' cannot be written back until the R7 asset-file save; unload with discard to drop the edits", record->display_path)
+        : fmt::format("non-scene container '{}' has no save path yet (R7 asset-file save)", record->display_path);
+    return false;
+}
+
+auto Asset_manager::request_unload(const Asset_key& key, const bool discard) -> Unload_result
 {
     verify_main_thread();
     Unload_result result;
@@ -678,6 +747,18 @@ auto Asset_manager::request_unload(const Asset_key& key) -> Unload_result
         result.message = fmt::format(
             "'{}' is open as scene '{}'; close the scene instead of unloading its identity record",
             record->display_path, record->scene_name
+        );
+        return result;
+    }
+    // R5.8 dirty-unload policy: unloading a dirty container silently drops
+    // live edits, so it is refused with a reason; discard=true is the
+    // explicit opt-in. The courtesy unload at scene close deliberately does
+    // NOT take this path - closing a scene discards its unsaved state by
+    // design (the close itself is the user's decision).
+    if (record->dirty && !discard) {
+        result.message = fmt::format(
+            "container '{}' has unsaved changes; save it first, or pass discard to drop the edits",
+            record->display_path
         );
         return result;
     }

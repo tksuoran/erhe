@@ -274,7 +274,28 @@ public:
     // means a raw shared_ptr bypassed Asset_reference - logged loudly as an
     // undeclared user.
     [[nodiscard]] auto get_users(const Asset_key& key) const -> std::vector<Asset_user_info>;
-    auto request_unload(const Asset_key& key) -> Unload_result;
+    // discard (R5.8): a dirty container - live asset edits not yet written
+    // back - refuses unload with "unsaved changes"; discard=true unloads it
+    // anyway, dropping the edits (the MCP / test escape hatch, and until
+    // R7's asset-file save the ONLY way to release a dirty non-scene
+    // container).
+    auto request_unload(const Asset_key& key, bool discard = false) -> Unload_result;
+
+    // R5.8 dirty tracking: asset-edit paths (Material_change_operation,
+    // Animation_edit_operation, Animation_structure_operation - every
+    // material / animation edit funnels through them) mark the edited
+    // asset's DEFINING container dirty. No-op for builtins and unmanaged
+    // items.
+    void mark_item_dirty(const erhe::Item_base& item);
+    // Scene save clears the scene's own record (called by save_scene_gltf
+    // after a successful write).
+    void on_scene_saved(Scene_root& scene_root);
+
+    // R5.8 save_container v1: a record open as a scene delegates to the
+    // scene save (clearing dirty via on_scene_saved); a non-scene container
+    // cannot be written back until R7's asset-file save and is refused with
+    // a reason (discard-unload is the escape hatch for dropping its edits).
+    auto save_container(const std::filesystem::path& path, std::string& out_error) -> bool;
 
     // One parse per container. Refuses (with a clear error) a missing file
     // and a file that produces no content. A path currently open as a scene

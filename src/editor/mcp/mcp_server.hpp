@@ -154,6 +154,7 @@ private:
     auto action_unload_asset    (const nlohmann::json& args) -> std::string;
     auto action_set_tool_asset  (const nlohmann::json& args) -> std::string;
     auto action_set_inventory_slot(const nlohmann::json& args) -> std::string;
+    auto action_save_container  (const nlohmann::json& args) -> std::string;
     auto action_instantiate_prefab(const nlohmann::json& args) -> std::string;
     auto action_reload_prefab   (const nlohmann::json& args) -> std::string;
     auto query_prefabs          (const nlohmann::json& args) -> std::string;

@@ -2,6 +2,7 @@
 
 #include "app_context.hpp"
 #include "app_scenes.hpp"
+#include "assets/asset_manager.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe_scene/mesh.hpp"
@@ -33,12 +34,20 @@ void Material_change_operation::execute(App_context& context)
     }
     // TODO Lock the item
     m_material->data = m_after;
+    // R5.8: the edit dirties the material's defining container (undo is an
+    // edit too - the file no longer matches the live state either way).
+    if (context.asset_manager != nullptr) {
+        context.asset_manager->mark_item_dirty(*m_material);
+    }
 }
 
-void Material_change_operation::undo(App_context&)
+void Material_change_operation::undo(App_context& context)
 {
     // TODO Lock the item
     m_material->data = m_before;
+    if (context.asset_manager != nullptr) {
+        context.asset_manager->mark_item_dirty(*m_material);
+    }
 }
 
 }
