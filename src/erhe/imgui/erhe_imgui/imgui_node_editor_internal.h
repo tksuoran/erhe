@@ -407,6 +407,15 @@ struct Link final: Object
     int              m_DraggedMidPoint;  // index while a handle drag is active, else -1
     ImVec2           m_MidPointDragStart;
 
+    // erhe: per-link curve shape (Kochanek-Bartels style, each in [-1, 1];
+    // 0 / 0 / 0 reproduces the default routing exactly). Tension scales the
+    // tangent lengths (+1 collapses the link to a polyline), continuity and
+    // bias reshape the tangents at the routing mid points (no effect on a
+    // link without mid points). See GetSegmentCurve().
+    float m_CurveTension;
+    float m_CurveContinuity;
+    float m_CurveBias;
+
     Link(EditorContext* editor, LinkId id)
         : Object(editor)
         , m_ID(id)
@@ -417,6 +426,9 @@ struct Link final: Object
         , m_MidPoints()
         , m_DraggedMidPoint(-1)
         , m_MidPointDragStart(0.0f, 0.0f)
+        , m_CurveTension(0.0f)
+        , m_CurveContinuity(0.0f)
+        , m_CurveBias(0.0f)
     {
     }
 

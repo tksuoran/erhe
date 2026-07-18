@@ -128,15 +128,16 @@ auto paste_graph_nodes(
     }
     context.operation_stack->execute_now(std::make_shared<Compound_operation>(std::move(parameters)));
 
-    // Restore link routing mid points, translated with the pasted block. The
-    // erhe link a Link_op created is found by its (freshly created, unique)
-    // source / sink pin pair.
+    // Restore link routing mid points (translated with the pasted block) and
+    // per-link curve shape. The erhe link a Link_op created is found by its
+    // (freshly created, unique) source / sink pin pair.
     ax::NodeEditor::EditorContext* node_editor = window.get_node_editor();
     const ImVec2 translation{position.x - top_left.x, position.y - top_left.y};
     std::vector<ImVec2> mid_points;
     for (const nlohmann::json& link_json : links_json) {
         const nlohmann::json mid_points_json = link_json.value("mid_points", nlohmann::json::array());
-        if (mid_points_json.empty()) {
+        const nlohmann::json curve_json      = link_json.value("curve",      nlohmann::json::array());
+        if (mid_points_json.empty() && curve_json.empty()) {
             continue;
         }
         const erhe::graph::Pin* source_pin =
@@ -173,6 +174,18 @@ auto paste_graph_nodes(
                 ax::NodeEditor::LinkId{created_link},
                 mid_points.data(),
                 static_cast<int>(mid_points.size())
+            );
+        }
+        // Per-link curve shape ([tension, continuity, bias]); malformed
+        // entries are ignored, keeping the defaults.
+        if (curve_json.is_array() && (curve_json.size() == 3) &&
+            curve_json.at(0).is_number() && curve_json.at(1).is_number() && curve_json.at(2).is_number())
+        {
+            node_editor->SetLinkCurveParams(
+                ax::NodeEditor::LinkId{created_link},
+                curve_json.at(0).get<float>(),
+                curve_json.at(1).get<float>(),
+                curve_json.at(2).get<float>()
             );
         }
     }

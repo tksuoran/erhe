@@ -936,6 +936,19 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"source_node_id", "sink_node_id"})}
     }});
+    m_tool_infos.push_back({"geometry_graph_set_link_curve", "Set a geometry graph link's per-link curve shape (Kochanek-Bartels tension / continuity / bias, each clamped to [-1, 1]; all 0 = the default routing). Tension scales tangent lengths (+1 makes the link a polyline, negative swings wider); continuity and bias reshape the tangents at the link's routing mid points (no visible effect on a link without mid points). Canvas-only state (like mid points): not undoable, not saved to the scene, but carried by canvas copy / paste. Also editable in the Node Properties window when the link is selected on the canvas. get_geometry_graph reports each link's non-default params as 'curve' [tension, continuity, bias].", {
+        {"type", "object"},
+        {"properties", {
+            {"source_node_id", {{"type", "integer"}, {"description", "Id of the source (output) node"}}},
+            {"source_slot",    {{"type", "integer"}, {"description", "Output pin slot on the source node (default 0)"}}},
+            {"sink_node_id",   {{"type", "integer"}, {"description", "Id of the sink (input) node"}}},
+            {"sink_slot",      {{"type", "integer"}, {"description", "Input pin slot on the sink node (default 0)"}}},
+            {"tension",        {{"type", "number"},  {"description", "Tangent length scale, -1..1 (default 0; +1 = polyline, negative = wider swing)"}}},
+            {"continuity",     {{"type", "number"},  {"description", "Tangent split at mid points, -1..1 (default 0; +/-1 = corners)"}}},
+            {"bias",           {{"type", "number"},  {"description", "Tangent lean at mid points, -1..1 (default 0; +1 leans towards the incoming chord)"}}}
+        }},
+        {"required", json::array({"source_node_id", "sink_node_id"})}
+    }});
     m_tool_infos.push_back({"geometry_graph_set_view", "Show the Geometry Graph window and set its node-editor zoom (view scale) immediately, centered on the graph content. zoom > 1 zooms in (content drawn larger), zoom < 1 zooms out. Deterministic (no animation / no mouse input) - intended for headless zoom-quality verification (capture_screenshot on the next frame). Requires the window to have a target Graph Mesh (create_graph_mesh / set_geometry_graph_target) for it to render nodes.", {
         {"type", "object"},
         {"properties", {

@@ -10,6 +10,10 @@
 #include "windows/editor_windows.hpp"
 
 #include "erhe_defer/defer.hpp"
+#include "erhe_graph/link.hpp"
+#include "erhe_graph/node.hpp"
+#include "erhe_graph/pin.hpp"
+#include "erhe_imgui/imgui_node_editor.h"
 #include "erhe_imgui/imgui_windows.hpp"
 
 #include "erhe_imgui/imgui_renderer.hpp"
@@ -179,6 +183,7 @@ void Node_properties_window::node_properties(Shader_graph_node& node)
 void Node_properties_window::collect_graph_editor_selection()
 {
     m_graph_editor_selection.clear();
+    m_graph_editor_link_selection.clear();
 
     const auto collect_from = [this](Graph_editor_window_base* window) {
         if (window == nullptr) {
@@ -199,6 +204,13 @@ void Node_properties_window::collect_graph_editor_selection()
             if (!already_present) {
                 m_graph_editor_selection.emplace_back(window, node);
             }
+        }
+        // Links are kept per window (no dedup): curve routing is canvas
+        // state, so each window's entry edits that window's own curve.
+        m_selected_links_scratch.clear();
+        window->collect_selected_links(m_selected_links_scratch);
+        for (erhe::graph::Link* link : m_selected_links_scratch) {
+            m_graph_editor_link_selection.emplace_back(window, link);
         }
     };
 
@@ -293,6 +305,55 @@ void Node_properties_window::graph_editor_node_properties(Graph_editor_window_ba
     m_property_editor.pop_group();
 }
 
+void Node_properties_window::graph_editor_link_properties(Graph_editor_window_base& window, erhe::graph::Link* link)
+{
+    m_property_editor.push_group(
+        fmt::format(
+            "Link {} -> {}",
+            link->get_source()->get_owner_node()->get_name(),
+            link->get_sink  ()->get_owner_node()->get_name()
+        ),
+        ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed,
+        0.0f
+    );
+
+    m_property_editor.add_entry("Source", [link]() {
+        const std::string label = fmt::format("{}.{}", link->get_source()->get_owner_node()->get_name(), link->get_source()->get_name());
+        ImGui::TextUnformatted(label.c_str());
+    });
+    m_property_editor.add_entry("Sink", [link]() {
+        const std::string label = fmt::format("{}.{}", link->get_sink()->get_owner_node()->get_name(), link->get_sink()->get_name());
+        ImGui::TextUnformatted(label.c_str());
+    });
+    m_property_editor.add_entry("Window", [&window]() { ImGui::TextUnformatted(window.get_title().c_str()); });
+
+    // Per-link curve shape (Kochanek-Bartels): the values live in the
+    // window's canvas (ax::NodeEditor link), like the routing mid points.
+    const ax::NodeEditor::LinkId link_id{link};
+    const auto curve_slider = [&window, link_id](const char* imgui_id, int component) {
+        ax::NodeEditor::EditorContext* node_editor = window.get_node_editor();
+        float params[3] = {0.0f, 0.0f, 0.0f};
+        node_editor->GetLinkCurveParams(link_id, &params[0], &params[1], &params[2]);
+        if (ImGui::SliderFloat(imgui_id, &params[component], -1.0f, 1.0f)) {
+            node_editor->SetLinkCurveParams(link_id, params[0], params[1], params[2]);
+        }
+    };
+    m_property_editor.add_entry("Tension",    [curve_slider]() { curve_slider("##tension",    0); });
+    m_property_editor.add_entry("Continuity", [curve_slider]() { curve_slider("##continuity", 1); });
+    m_property_editor.add_entry("Bias",       [curve_slider]() { curve_slider("##bias",       2); });
+    m_property_editor.add_entry("Mid points", [&window, link_id]() {
+        ax::NodeEditor::EditorContext* node_editor = window.get_node_editor();
+        ImGui::Text("%d", node_editor->GetLinkMidPointCount(link_id));
+        ImGui::SameLine();
+        if (ImGui::Button("Reset curve")) {
+            node_editor->SetLinkMidPoints(link_id, nullptr, 0);
+            node_editor->SetLinkCurveParams(link_id, 0.0f, 0.0f, 0.0f);
+        }
+    });
+
+    m_property_editor.pop_group();
+}
+
 void Node_properties_window::imgui()
 {
     ERHE_PROFILE_FUNCTION();
@@ -323,6 +384,11 @@ void Node_properties_window::imgui()
         ImGui::PushID(id++);
         ERHE_DEFER( ImGui::PopID(); );
         graph_editor_node_properties(*entry.first, entry.second);
+    }
+    for (const std::pair<Graph_editor_window_base*, erhe::graph::Link*>& entry : m_graph_editor_link_selection) {
+        ImGui::PushID(id++);
+        ERHE_DEFER( ImGui::PopID(); );
+        graph_editor_link_properties(*entry.first, entry.second);
     }
 
     m_property_editor.show_entries();

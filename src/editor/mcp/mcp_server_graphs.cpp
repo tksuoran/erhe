@@ -215,6 +215,15 @@ auto Mcp_server::query_geometry_graph(const json& args) -> std::string
             }
             link_json["mid_points"] = mid_points;
         }
+        // Per-link curve shape (see geometry_graph_set_link_curve); omitted
+        // at the all-zero default.
+        float tension    = 0.0f;
+        float continuity = 0.0f;
+        float bias       = 0.0f;
+        node_editor->GetLinkCurveParams(link_id, &tension, &continuity, &bias);
+        if ((tension != 0.0f) || (continuity != 0.0f) || (bias != 0.0f)) {
+            link_json["curve"] = {tension, continuity, bias};
+        }
         links.push_back(link_json);
     }
 
@@ -512,6 +521,57 @@ auto Mcp_server::action_geometry_graph_set_link_mid_points(const json& args) -> 
 
     json result;
     result["mid_point_count"] = mid_points.size();
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_geometry_graph_set_link_curve(const json& args) -> std::string
+{
+    Geometry_graph_window* window = m_context.geometry_graph_window;
+    if (window == nullptr) {
+        return make_error_content("Geometry graph window not available");
+    }
+    const std::size_t source_node_id = args.value("source_node_id", std::size_t{0});
+    const std::size_t source_slot    = args.value("source_slot",    std::size_t{0});
+    const std::size_t sink_node_id   = args.value("sink_node_id",   std::size_t{0});
+    const std::size_t sink_slot      = args.value("sink_slot",      std::size_t{0});
+
+    Geometry_graph_node* source_node = find_geometry_graph_node(window->get_nodes(), source_node_id);
+    Geometry_graph_node* sink_node   = find_geometry_graph_node(window->get_nodes(), sink_node_id);
+    if ((source_node == nullptr) || (sink_node == nullptr)) {
+        return make_error_content("Node not found");
+    }
+    if ((source_slot >= source_node->get_output_pins().size()) || (sink_slot >= sink_node->get_input_pins().size())) {
+        return make_error_content("Pin slot out of range");
+    }
+    erhe::graph::Pin* source_pin = &source_node->get_output_pins().at(source_slot);
+    erhe::graph::Pin* sink_pin   = &sink_node->get_input_pins().at(sink_slot);
+    erhe::graph::Link* graph_link = nullptr;
+    for (erhe::graph::Link* link : sink_pin->get_links()) {
+        if (link->get_source() == source_pin) {
+            graph_link = link;
+            break;
+        }
+    }
+    if (graph_link == nullptr) {
+        return make_error_content("No link between the given pins");
+    }
+
+    const float tension    = args.value("tension",    0.0f);
+    const float continuity = args.value("continuity", 0.0f);
+    const float bias       = args.value("bias",       0.0f);
+    ax::NodeEditor::EditorContext* node_editor = window->get_node_editor();
+    const ax::NodeEditor::LinkId link_id{graph_link};
+    node_editor->SetLinkCurveParams(link_id, tension, continuity, bias);
+    // Make the curve change observable in the next capture_screenshot.
+    window->request_window_focus();
+
+    // Echo back the applied (clamped) values.
+    float applied[3] = {0.0f, 0.0f, 0.0f};
+    node_editor->GetLinkCurveParams(link_id, &applied[0], &applied[1], &applied[2]);
+    json result;
+    result["tension"]    = applied[0];
+    result["continuity"] = applied[1];
+    result["bias"]       = applied[2];
     return make_json_content(result).dump();
 }
 

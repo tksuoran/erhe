@@ -450,6 +450,14 @@ public:
     ImVec2 GetLinkMidPoint(LinkId linkId, int index);
     void   SetLinkMidPoints(LinkId linkId, const ImVec2* points, int count);
 
+    // erhe: per-link curve shape parameters (Kochanek-Bartels tension /
+    // continuity / bias, each clamped to [-1, 1]; all default 0, which is
+    // the standard routing). Tension scales the tangent lengths (+1 makes
+    // the link a polyline), continuity and bias reshape the tangents at the
+    // routing mid points. Pass nullptr for outputs you do not need.
+    void GetLinkCurveParams(LinkId linkId, float* tension, float* continuity, float* bias);
+    void SetLinkCurveParams(LinkId linkId, float tension, float continuity, float bias);
+
     bool PinHadAnyLinks(PinId pinId);
 
     ImVec2 GetScreenSize();

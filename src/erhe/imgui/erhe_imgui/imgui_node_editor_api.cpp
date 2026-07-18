@@ -755,6 +755,34 @@ void EditorContext::SetLinkMidPoints(LinkId linkId, const ImVec2* points, int co
     link->m_DraggedMidPoint = -1;
 }
 
+void EditorContext::GetLinkCurveParams(LinkId linkId, float* tension, float* continuity, float* bias)
+{
+    auto link = m_impl->FindLink(linkId);
+    if (tension)
+        *tension = link ? link->m_CurveTension : 0.0f;
+    if (continuity)
+        *continuity = link ? link->m_CurveContinuity : 0.0f;
+    if (bias)
+        *bias = link ? link->m_CurveBias : 0.0f;
+}
+
+void EditorContext::SetLinkCurveParams(LinkId linkId, float tension, float continuity, float bias)
+{
+    // Mirror SetLinkMidPoints(): a link that has not been submitted yet is
+    // created on demand but kept not-live, so paste can shape links it just
+    // made.
+    auto link = m_impl->FindLink(linkId);
+    if (!link)
+    {
+        link = m_impl->GetLink(linkId);
+        link->m_IsLive = false;
+    }
+
+    link->m_CurveTension    = ImClamp(tension,    -1.0f, 1.0f);
+    link->m_CurveContinuity = ImClamp(continuity, -1.0f, 1.0f);
+    link->m_CurveBias       = ImClamp(bias,       -1.0f, 1.0f);
+}
+
 bool EditorContext::PinHadAnyLinks(PinId pinId)
 {
     return m_impl->PinHadAnyLinks(pinId);

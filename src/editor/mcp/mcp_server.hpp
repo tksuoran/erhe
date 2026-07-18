@@ -212,6 +212,7 @@ private:
     auto action_geometry_graph_connect        (const nlohmann::json& args) -> std::string;
     auto action_geometry_graph_disconnect     (const nlohmann::json& args) -> std::string;
     auto action_geometry_graph_set_link_mid_points(const nlohmann::json& args) -> std::string;
+    auto action_geometry_graph_set_link_curve (const nlohmann::json& args) -> std::string;
     auto action_geometry_graph_set_view       (const nlohmann::json& args) -> std::string;
     auto action_geometry_graph_select_nodes   (const nlohmann::json& args) -> std::string;
     auto action_geometry_graph_set_node_layout(const nlohmann::json& args) -> std::string;

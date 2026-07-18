@@ -12,7 +12,10 @@
 struct ImVec2;
 
 namespace ax::NodeEditor { class EditorContext; }
-namespace erhe::graph { class Graph; }
+namespace erhe::graph {
+    class Graph;
+    class Link;
+}
 
 namespace editor {
 
@@ -49,6 +52,11 @@ public:
     // every graph editor window for its canvas-selected nodes directly.
     // Appends this window's selected nodes to out.
     virtual void collect_selected_nodes(std::vector<std::shared_ptr<Graph_editor_node>>& out) = 0;
+
+    // Appends this window's canvas-selected links to out. Link selection -
+    // like node selection - lives in the window's ax::NodeEditor context;
+    // the returned pointers stay valid while the link exists in the graph.
+    void collect_selected_links(std::vector<erhe::graph::Link*>& out);
 
     // The node with the given item id in the currently edited graph, or null.
     [[nodiscard]] virtual auto find_graph_editor_node(std::size_t node_id) -> std::shared_ptr<Graph_editor_node> = 0;

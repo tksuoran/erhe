@@ -962,10 +962,18 @@ static float ImLink_EaseLinkStrength(const ImVec2& a, const ImVec2& b, float str
     return strength;
 }
 
+// erhe: tension scales every tangent length; +1 collapses the link to a
+// polyline, negative values make the curve swing wider.
+static float ImLink_TensionScale(float tension)
+{
+    return ImMax(0.0f, 1.0f - tension);
+}
+
 ImCubicBezierPoints ed::Link::GetCurve() const
 {
-    const auto startStrength = ImLink_EaseLinkStrength(m_Start, m_End, m_StartPin->m_Strength);
-    const auto   endStrength = ImLink_EaseLinkStrength(m_Start, m_End,   m_EndPin->m_Strength);
+    const auto  tensionScale = ImLink_TensionScale(m_CurveTension);
+    const auto startStrength = ImLink_EaseLinkStrength(m_Start, m_End, m_StartPin->m_Strength * tensionScale);
+    const auto   endStrength = ImLink_EaseLinkStrength(m_Start, m_End,   m_EndPin->m_Strength * tensionScale);
     const auto           cp0 = m_Start + m_StartPin->m_Dir * startStrength;
     const auto           cp1 =   m_End +   m_EndPin->m_Dir *   endStrength;
 
@@ -998,20 +1006,44 @@ ImCubicBezierPoints ed::Link::GetSegmentCurve(int segment) const
 
     // The pin ends keep the pin direction and strength, so a link without mid
     // points is identical to GetCurve(). Interior anchors take their tangent
-    // from the chain direction (previous anchor towards next anchor), which
-    // keeps the chain G1-smooth through each mid point.
-    const float interiorStrength = 0.25f * (m_StartPin->m_Strength + m_EndPin->m_Strength);
+    // from the chain direction, Kochanek-Bartels style: with continuity and
+    // bias both zero the tangent is the Catmull-Rom direction (previous
+    // anchor towards next anchor), which keeps the chain G1-smooth through
+    // each mid point. Bias leans the tangent towards the incoming (+1) or
+    // outgoing (-1) chord; continuity splits the incoming / outgoing tangents
+    // at each mid point (corners at +/-1). Tension scales all tangent lengths.
+    const float tensionScale     = ImLink_TensionScale(m_CurveTension);
+    const float interiorStrength = 0.25f * (m_StartPin->m_Strength + m_EndPin->m_Strength) * tensionScale;
+
+    // Kochanek-Bartels tangent direction at interior anchor 'index', built
+    // from the incoming (prev -> anchor) and outgoing (anchor -> next)
+    // chords. 'outgoing' selects the tangent leaving the anchor (segment
+    // start) versus the tangent arriving at it (segment end); they differ
+    // only when continuity is non-zero. Degenerate weights (|bias| and
+    // |continuity| both 1, cancelling both chords) fall back to Catmull-Rom.
+    auto interiorTangent = [this, &anchor](int index, bool outgoing) -> ImVec2
+    {
+        const ImVec2 chordIn  = anchor(index)     - anchor(index - 1);
+        const ImVec2 chordOut = anchor(index + 1) - anchor(index);
+        const float  c        = outgoing ? m_CurveContinuity : -m_CurveContinuity;
+        ImVec2 tangent =
+            chordIn  * ((1.0f + m_CurveBias) * (1.0f - c)) +
+            chordOut * ((1.0f - m_CurveBias) * (1.0f + c));
+        if (ImLengthSqr(tangent) < 1e-6f)
+            tangent = chordIn + chordOut;
+        return ImNormalized(tangent);
+    };
 
     ImVec2 startDir;
     float  startStrength;
     if (segment == 0)
     {
         startDir      = m_StartPin->m_Dir;
-        startStrength = ImLink_EaseLinkStrength(a, b, m_StartPin->m_Strength);
+        startStrength = ImLink_EaseLinkStrength(a, b, m_StartPin->m_Strength * tensionScale);
     }
     else
     {
-        startDir      = ImNormalized(anchor(segment + 1) - anchor(segment - 1));
+        startDir      = interiorTangent(segment, true);
         startStrength = ImLink_EaseLinkStrength(a, b, interiorStrength);
     }
 
@@ -1020,13 +1052,13 @@ ImCubicBezierPoints ed::Link::GetSegmentCurve(int segment) const
     if (segment == segmentCount - 1)
     {
         endDir      = m_EndPin->m_Dir;
-        endStrength = ImLink_EaseLinkStrength(a, b, m_EndPin->m_Strength);
+        endStrength = ImLink_EaseLinkStrength(a, b, m_EndPin->m_Strength * tensionScale);
     }
     else
     {
         // Points backwards along the chain, mirroring how the end pin's
         // direction points away from the link.
-        endDir      = ImNormalized(anchor(segment) - anchor(segment + 2));
+        endDir      = interiorTangent(segment + 1, false) * -1.0f;
         endStrength = ImLink_EaseLinkStrength(a, b, interiorStrength);
     }
 

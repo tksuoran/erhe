@@ -387,6 +387,20 @@ void Graph_editor_window_base::apply_pending_canvas_selection(ax::NodeEditor::Ed
     m_pending_canvas_selection.clear();
 }
 
+void Graph_editor_window_base::collect_selected_links(std::vector<erhe::graph::Link*>& out)
+{
+    erhe::graph::Graph* graph = get_current_graph();
+    ax::NodeEditor::EditorContext* node_editor = get_node_editor();
+    if ((graph == nullptr) || (node_editor == nullptr)) {
+        return;
+    }
+    for (const std::unique_ptr<erhe::graph::Link>& link : graph->get_links()) {
+        if (node_editor->IsLinkSelected(ax::NodeEditor::LinkId{link.get()})) {
+            out.push_back(link.get());
+        }
+    }
+}
+
 auto Graph_editor_window_base::serialize_nodes_json(const std::vector<std::shared_ptr<Graph_editor_node>>& nodes) -> nlohmann::json
 {
     // The clipboard format is the asset serialization format (see
@@ -460,6 +474,15 @@ auto Graph_editor_window_base::serialize_nodes_json(const std::vector<std::share
                 mid_points_json.push_back({mid_point.x, mid_point.y});
             }
             link_json["mid_points"] = mid_points_json;
+        }
+        // Per-link curve shape (tension / continuity / bias); omitted at the
+        // all-zero default.
+        float tension    = 0.0f;
+        float continuity = 0.0f;
+        float bias       = 0.0f;
+        node_editor->GetLinkCurveParams(link_id, &tension, &continuity, &bias);
+        if ((tension != 0.0f) || (continuity != 0.0f) || (bias != 0.0f)) {
+            link_json["curve"] = {tension, continuity, bias};
         }
         links_json.push_back(link_json);
     }

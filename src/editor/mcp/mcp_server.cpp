@@ -489,6 +489,7 @@ auto Mcp_server::process_queued_requests() -> int
             { "geometry_graph_connect",         &Mcp_server::action_geometry_graph_connect        },
             { "geometry_graph_disconnect",      &Mcp_server::action_geometry_graph_disconnect     },
             { "geometry_graph_set_link_mid_points", &Mcp_server::action_geometry_graph_set_link_mid_points },
+            { "geometry_graph_set_link_curve",  &Mcp_server::action_geometry_graph_set_link_curve },
             { "geometry_graph_set_view",        &Mcp_server::action_geometry_graph_set_view       },
             { "geometry_graph_select_nodes",    &Mcp_server::action_geometry_graph_select_nodes   },
             { "geometry_graph_set_node_layout", &Mcp_server::action_geometry_graph_set_node_layout},
