@@ -20,6 +20,8 @@
 #include <imgui/imgui.h>
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
+
 namespace editor {
 
 namespace {
@@ -199,6 +201,7 @@ Scene_mesh_geometry_node::Scene_mesh_geometry_node(App_context& context)
     : Geometry_graph_node{"Scene Mesh"}
     , m_context          {context}
 {
+    make_input_pin(Geometry_pin_key::int_value, "primitive");
     make_output_pin(Geometry_pin_key::geometry, "geometry");
     m_mesh_reference.set_user_label("graph scene mesh source node");
 }
@@ -212,25 +215,26 @@ void Scene_mesh_geometry_node::set_mesh(const std::shared_ptr<erhe::scene::Mesh>
 
 void Scene_mesh_geometry_node::capture_source_geometry()
 {
-    m_source_geometry.reset();
+    m_source_geometries.clear();
     const std::shared_ptr<erhe::scene::Mesh> mesh = m_mesh_reference.get_as<erhe::scene::Mesh>();
     if (!mesh) {
         return;
     }
-    // First primitive with a render-shape geometry. Main thread:
-    // get_geometry() may lazily build the geometry (e.g. from an
-    // imported triangle soup), which is not safe on the worker.
+    // One entry per mesh primitive (null where a primitive has no
+    // render-shape geometry), so the "primitive" input indexes the mesh's
+    // own primitive list. Main thread: get_geometry() may lazily build the
+    // geometry (e.g. from an imported triangle soup), which is not safe on
+    // the worker.
+    bool any_geometry = false;
     for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
-        if (!mesh_primitive.primitive || !mesh_primitive.primitive->render_shape) {
-            continue;
+        std::shared_ptr<erhe::geometry::Geometry> geometry{};
+        if (mesh_primitive.primitive && mesh_primitive.primitive->render_shape) {
+            geometry = mesh_primitive.primitive->render_shape->get_geometry();
         }
-        const std::shared_ptr<erhe::geometry::Geometry> geometry = mesh_primitive.primitive->render_shape->get_geometry();
-        if (geometry) {
-            m_source_geometry = geometry;
-            break;
-        }
+        any_geometry = any_geometry || (geometry != nullptr);
+        m_source_geometries.push_back(geometry);
     }
-    if (!m_source_geometry) {
+    if (!any_geometry) {
         log_graph_editor->warn("Scene_mesh_geometry_node: mesh '{}' has no primitive geometry", mesh->get_name());
     }
 }
@@ -240,7 +244,7 @@ void Scene_mesh_geometry_node::resolve_reference()
     // Main thread only (the manager verifies). A successful resolve marks
     // the node dirty so the next evaluation picks up the captured geometry.
     if (m_mesh_reference.get()) {
-        if (!m_source_geometry) {
+        if (m_source_geometries.empty()) {
             capture_source_geometry();
         }
         return;
@@ -270,17 +274,28 @@ void Scene_mesh_geometry_node::capture_evaluation_state(const Geometry_graph_nod
     // usership (it can be destroyed off the main thread).
     const Scene_mesh_geometry_node* live = dynamic_cast<const Scene_mesh_geometry_node*>(&live_node);
     if (live != nullptr) {
-        m_source_geometry = live->m_source_geometry;
+        m_source_geometries = live->m_source_geometries;
     }
 }
 
 void Scene_mesh_geometry_node::evaluate(Geometry_graph&)
 {
-    if (!m_source_geometry || (m_source_geometry->get_mesh().facets.nb() == 0)) {
+    pull_inputs();
+    if (m_source_geometries.empty()) {
         set_output(0, Geometry_payload{});
         return;
     }
-    set_output(0, Geometry_payload{.value = make_output_geometry(m_source_geometry)});
+    const int primitive_index = std::clamp(
+        get_input(0).get_int(m_primitive_index),
+        0,
+        static_cast<int>(m_source_geometries.size()) - 1
+    );
+    const std::shared_ptr<erhe::geometry::Geometry>& source = m_source_geometries.at(static_cast<std::size_t>(primitive_index));
+    if (!source || (source->get_mesh().facets.nb() == 0)) {
+        set_output(0, Geometry_payload{});
+        return;
+    }
+    set_output(0, Geometry_payload{.value = make_output_geometry(source)});
 }
 
 void Scene_mesh_geometry_node::imgui()
@@ -320,12 +335,27 @@ void Scene_mesh_geometry_node::imgui()
         }
     }
 
+    // Primitive selection: the output carries exactly one primitive's
+    // geometry. The stepper edits the fallback index; a linked "primitive"
+    // input overrides it at evaluation time.
+    std::shared_ptr<erhe::geometry::Geometry> selected_geometry{};
+    if (!m_source_geometries.empty()) {
+        const int primitive_count = static_cast<int>(m_source_geometries.size());
+        m_primitive_index = std::clamp(m_primitive_index, 0, primitive_count - 1);
+        if (imgui_index_stepper("primitive", m_primitive_index, primitive_count)) {
+            mark_dirty();
+        }
+        ImGui::SameLine();
+        ImGui::Text("Primitive %d / %d", m_primitive_index + 1, primitive_count);
+        selected_geometry = m_source_geometries.at(static_cast<std::size_t>(m_primitive_index));
+    }
+
     // The captured geometry is a snapshot; re-capture on demand (e.g. after
     // mesh edit operations).
     if (current_mesh && ImGui::Button("Refresh")) {
         set_mesh(current_mesh);
     }
-    show_geometry_stats(m_source_geometry);
+    show_geometry_stats(selected_geometry);
 }
 
 void Scene_mesh_geometry_node::write_parameters(nlohmann::json& out) const
@@ -335,6 +365,7 @@ void Scene_mesh_geometry_node::write_parameters(nlohmann::json& out) const
     if (!name.empty()) {
         out["mesh"] = name;
     }
+    out["primitive"] = m_primitive_index;
 }
 
 void Scene_mesh_geometry_node::read_parameters(const nlohmann::json& in)
@@ -346,8 +377,9 @@ void Scene_mesh_geometry_node::read_parameters(const nlohmann::json& in)
         key.type  = Asset_type::mesh;
         key.name  = in.value("mesh", std::string{});
         m_mesh_reference.set_key(key);
-        m_source_geometry.reset();
+        m_source_geometries.clear();
     }
+    m_primitive_index = in.value("primitive", m_primitive_index);
     mark_dirty();
 }
 

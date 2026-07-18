@@ -3,6 +3,8 @@
 #include "assets/asset_reference.hpp"
 #include "geometry_graph/geometry_graph_node.hpp"
 
+#include <vector>
+
 namespace erhe::scene { class Mesh; }
 
 namespace editor {
@@ -67,20 +69,24 @@ public:
     void prepare_for_evaluation() override;
     void capture_evaluation_state(const Geometry_graph_node& live_node) override;
 
-    // Binds the mesh and captures its first primitive's geometry (main
-    // thread). The geometry is the mesh's local-space shape; the scene
-    // node's transform is not applied.
+    // Binds the mesh and captures its primitives' geometries (main thread).
+    // The geometry is the mesh's local-space shape; the scene node's
+    // transform is not applied.
     void set_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh);
 
 private:
     // See Brush_geometry_node::resolve_reference().
     void resolve_reference();
-    // Captures the resolved mesh's first primitive geometry (main thread).
+    // Captures the resolved mesh's primitive geometries (main thread), one
+    // entry per mesh primitive (null where a primitive has no render-shape
+    // geometry), so evaluate() can index by the "primitive" input off the
+    // main thread.
     void capture_source_geometry();
 
-    App_context&                              m_context;
-    Asset_reference                           m_mesh_reference;
-    std::shared_ptr<erhe::geometry::Geometry> m_source_geometry;
+    App_context&                                           m_context;
+    Asset_reference                                        m_mesh_reference;
+    std::vector<std::shared_ptr<erhe::geometry::Geometry>> m_source_geometries;
+    int                                                    m_primitive_index{0}; // fallback when the "primitive" pin is unlinked
 };
 
 }
