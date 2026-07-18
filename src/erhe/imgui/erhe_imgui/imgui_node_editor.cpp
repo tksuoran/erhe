@@ -955,8 +955,10 @@ void ed::Link::Draw(ImDrawList* drawList, ImU32 color, float extraThickness) con
     }
 
     // erhe: mid-point handles on top of the curve, in the same color pass so
-    // the hover / selection halo passes enlarge them like the curve itself.
-    if (!m_MidPoints.empty())
+    // the selection halo pass enlarges them like the curve itself. Shown only
+    // while the link is selected (like the pen-tool tangent dots) - an
+    // unselected link renders as a clean wire.
+    if (m_IsSelected && !m_MidPoints.empty())
     {
         const float radius = Editor->DrawLen(GetMidPointRadius() + extraThickness * 0.5f);
         for (int i = 0; i < m_MidPoints.size(); ++i)
@@ -4450,7 +4452,17 @@ bool ed::DragAction::Process(const Control& control)
 
         auto alignedOffset  = Editor->AlignPointToGrid(draggedOrigin + dragOffset + alignPivot) - draggedOrigin - alignPivot;
 
-        if (!ImGui::GetIO().KeyAlt)
+        // erhe: link drags move routing control points (mid point handles /
+        // pen-tool tangent dots) - they are freehand by default and snap to
+        // the grid only while Ctrl is held (Alt is taken: it breaks a
+        // tangent to Free). Node drags keep the stock behavior: snapped
+        // unless Alt disables it.
+        if (m_DraggedObject->AsLink() != nullptr)
+        {
+            if (ImGui::GetIO().KeyCtrl)
+                dragOffset = alignedOffset;
+        }
+        else if (!ImGui::GetIO().KeyAlt)
             dragOffset = alignedOffset;
 
         for (auto object : m_Objects)
