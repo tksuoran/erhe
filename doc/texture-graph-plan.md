@@ -45,6 +45,7 @@ ported from it carry an attribution comment). Referred to below as
 | Backlog: Transform / UV warps (13 of ~25 nodes)              | DONE    | 3f185eae |
 | Backlog: Color / tone filters (14 nodes, new "Color" category)| DONE   | 55150bdf |
 | Backlog: Noise variants (6 of ~15 nodes)                     | DONE    | 8ac10467 |
+| Backlog: Deterministic patterns (11 of ~20 nodes)            | DONE    | b18cf4e1 |
 
 ---
 
@@ -53,13 +54,26 @@ ported from it carry an attribution comment). Referred to below as
 Snapshot 2026-07-19 against Material Maker master (392 `.mmg` node definitions
 under `addons/material_maker/nodes/` plus ~19 engine-level node types in
 `engine/nodes/gen_*.gd`: buffer, switch, image, text, graph/group, remote,
-comment, export, iterate_buffer, ...). erhe has 71 node types: 68 descriptors
+comment, export, iterate_buffer, ...). erhe has 82 node types: 79 descriptors
 in `src/editor/texture_graph/nodes/texture_node_descriptors.cpp` plus the
 descriptor-less `output`, `material_output`, and `buffer` nodes
 (`texture_graph_node_factory.cpp`). Note the 392 count includes internal
 companion sub-nodes of compound graphs (e.g. `edge_detect_1..3`,
 `fill_preprocess`), so the user-visible Material Maker library is somewhat
 smaller than the raw file count.
+
+**Vertical orientation differs from Material Maker.** erhe renders the texture
+graph y-up (flipped viewport), so an exported PNG's row 0 is `uv.y ~ 1`, the
+opposite of Godot / Material Maker. Ported GLSL that is asymmetric in y
+therefore exports vertically mirrored against Material Maker's preview - most
+visibly on the glyph nodes, where a `seven_segment` 2 reads as a 5 and
+`profile`'s Fill style fills the top rather than the bottom. This is a
+library-wide convention that predates the Deterministic patterns row (those
+nodes are simply the first whose output is legible enough to make it obvious),
+so it is asserted in `section_patterns` rather than worked around per node; a
+per-node y flip would only make the library disagree with itself about which
+way is up. Deciding whether to flip the convention (which changes every node's
+export and any baked material) is open.
 
 ### erhe nodes and their Material Maker counterparts
 
@@ -88,6 +102,17 @@ smaller than the raw file count.
 | `sine_wave`           | Patterns   | `sine_wave.mmg`              | Full. |
 | `truchet`             | Patterns   | `truchet.mmg`                | Line and circle tiles. MM also has `truchet_generic`. |
 | `weave`               | Patterns   | `weave.mmg`                  | Width map input dropped. MM also has `weave2`, `diagonal_weave`, `weave_random`. |
+| `pattern`             | Patterns   | `pattern.mmg`                | Full (6 waveforms x 6 combiners). `wave_*` / `mix_*` prefixed `pat_`. |
+| `beehive`             | Patterns   | `beehive.mmg`                | Full, including the random-color and per-cell UV map outputs. |
+| `cairo`               | Patterns   | `cairo.mmg`                  | Pattern output only; the `fill` output needs the Fill family's iterate-buffer machinery, so `cairo_bbox` is not carried over. |
+| `arc_pavement`        | Patterns   | `arc_pavement.mmg`           | Full, including the random-color and brick UV outputs. MM's `PI` spelled out; `pavement` prefixed `ap_`. |
+| `iching`              | Patterns   | `iching.mmg`                 | Full. Grid-size default taken from the .mmg instance (4); the shader_model default of 0 is below its own minimum of 2. |
+| `runes`               | Patterns   | `runes.mmg`                  | Full; sdline2's `sdLine` inlined as `rune_sd_line`. Grid-size default as for `iching`. |
+| `roman_numerals`      | Patterns   | `roman_numerals.mmg`         | Full; `sdLine` inlined as `rn_sd_line`. Two glslang fixes (int literals in `clamp`, brace-initialized `const int val[]`) and defaults taken from the .mmg instance - the shader_model `bevel` of 0.5 leaves a peak output of 0.03. |
+| `seven_segment`       | Patterns   | `seven_segment.mmg`          | Full (multi-digit). MM's `m` / `fs` / `ssd` / `ssd_multi` prefixed `ss_`. |
+| `scratches`           | Patterns   | `scratches.mmg`              | Full. |
+| `profile`             | Patterns   | `profile.mmg`                | Full (both styles), using the existing gradient parameter widget. |
+| `japanese_glyphs`     | Patterns   | `japanese_glyphs.mmg`        | Full (46 hiragana + 46 katakana, single glyph or grid). The largest port in the library; transcribed from the .mmg by a generator. `curve` / `sdline2` / `sdbox` includes inlined, every symbol prefixed `jg_` (MM's bare `s`, `l`, `box`, `grid`). |
 | `blend`               | Filters    | `blend.mmg`                  | 14 modes; mask input dropped (opacity parameter only); "Linear Light" mode dropped (MM ships no implementation). |
 | `colorize`            | Filters    | `colorize.mmg`               | Full, including gradient widget codegen. |
 | `curve`               | Filters    | `curve.mmg` (widget)         | Hermite tone curve per RGB channel, alpha pass-through. |
@@ -164,7 +189,7 @@ stays a complete record of the comparison.
 | Transform / UV warps         | 25     | `translate`, `rotate`, `scale`, `shear`, `skew`, `warp`, `directional_warp`, `multi_warp`, `warp_dilation*`, `swirl`, `twist`, `spherize`, `kaleidoscope`, `mirror`, `repeat`, `custom_uv`, `distort`, `refract`, `magnify` | 2 | 5 | 2.5 | **DONE (13 of ~25).** rotate, scale, shear, skew, mirror, repeat, swirl, spherize, magnify, kaleidoscope, warp, directional_warp, refract. Still missing: `multi_warp` (compound node), `distort` (needs a lattice widget type), `custom_uv` (tileset + variation machinery), `twist` (sdf3d, out of scope), `warp_dilation*` (multi-pass buffers). |
 | Color / tone filters         | 18     | `auto_tones`, `tonality`, `tones`, `tones_map/range/step`, `palettize`, `colormap`, `convert_colorspace`, `greyscale`, `ensure_greyscale`, `ensure_rgba`, `default_color`, `compare` | 2 | 4 | 2.0 | **DONE (14 nodes).** Still missing: `auto_tones` (no shader_model - needs a min/max reduction over the whole image, which the composer cannot express). `tones` needed no levels widget after all: it is five color parameters. |
 | Noise variants               | 15     | `voronoi2`, `voronoi_triangle`, `clouds_noise`, `wavelet_noise`, `noise_anisotropic`, `noise_white`, `directional_noise`, `perlin_color`, `crystal`, `shard_fbm`, `fbm2..4` | 2 | 3 | 1.5 | **DONE (6 nodes).** Deliberately not ported: `voronoi2` (byte-identical to `voronoi.mmg`, which the existing `voronoi` node already is - only its `fill` output differs, and that needs the Fill family's iterate-buffer machinery), `clouds_noise` / `directional_noise` / `crystal` (compound nodes, no shader_model), and `fbm2..4` (13-17 KB of near-duplicate basis libraries - their extra bases belong as added values on the existing `fbm` node's enum - recorded as a follow-up on the `fbm` row above). |
-| Deterministic patterns       | 20     | `pattern`, `arc_pavement`, `beehive`, `cairo`, `iching`, `runes`, `japanese_glyphs`, `roman_numerals`, `seven_segment`, `scratches`, `splines`, `polycurve`, `profile`, `dirt` | 2 | 3 | 1.5 | Missing; `cairo` named in Phase 4. Straight GLSL ports, each self-contained. |
+| Deterministic patterns       | 20     | `pattern`, `arc_pavement`, `beehive`, `cairo`, `iching`, `runes`, `japanese_glyphs`, `roman_numerals`, `seven_segment`, `scratches`, `splines`, `polycurve`, `profile`, `dirt` | 2 | 3 | 1.5 | **DONE (11 nodes).** Deliberately not ported: `splines` and `polycurve` (both driven by a Material Maker point-list parameter widget - "splines" / "polyline" - whose GLSL is generated per instance from the edited points; erhe has no such `Parameter_kind`, and adding one is a widget + parameter-codegen feature rather than a GLSL port), and `dirt` (a compound graph node, 26 sub-nodes, no `shader_model`). `cairo`'s `fill` output was dropped for the same reason as the Fill family generally. |
 | 2D SDF                       | 51     | `sdcircle`, `sdbox`, `sdline`, `sdpolygon`, `sdstar`, `sdboolean`, `sdsmoothboolean`, `sdrepeat`, `sdmorph`, `sdshow` | 3 | 4 | 1.3 | Missing; `sdf2d` type + shape/ops/stroke/fill nodes named in Phase 4. New value type up front, then many tiny nodes; crisp resolution-independent shape authoring. |
 | Height / normal / AO         | 12     | `normal2height`, `normal_blend`, `normal_map2`, `normal_map_convert`, `height_to_angle`, `height_to_offset`, `occlusion`, `hbao`, `slope`, `smooth_curvature` | 3 | 4 | 1.3 | Only `normal_map` covered. Key for PBR authoring; several need buffers (exist). |
 | Brick / weave variants       | 13     | `bricks2`, `bricks3`, `bricks_uneven*`, `skewed_bricks`, `weave2`, `diagonal_weave`, `weave_random` | 2 | 2 | 1.0 | Base `bricks`/`weave` covered; variants are straight ports with diminishing returns. |
@@ -560,7 +585,7 @@ material in the headless viewport screenshot; smoke script green.
 - **Headless end-to-end** (Phase 3+): `scripts/texture_graph_smoke_test.py`
   against the headless Vulkan editor build over the in-editor MCP server,
   including `texture_graph_export_png` pixel assertions and
-  `capture_screenshot` visual checks. 508 checks as of 2026-07-19; its
+  `capture_screenshot` visual checks. 600 checks as of 2026-07-19; its
   `NODE_SPECS` table must gain a row (pins + default parameters) for every new
   node type, which is what keeps the "all N node types present" check honest.
 - **Descriptor self-check**: `check_texture_node_descriptors()` composes every
