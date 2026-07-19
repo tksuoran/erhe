@@ -311,5 +311,5 @@ Shadow_render_node --(shadow_maps)--> Viewport_scene_view
 - `Render_target` handles MSAA resolve internally when `sample_count > 0`.
 - The `none` key (0) in `Texture_rendergraph_node_create_info` means "do not
   register an output pin". Used for nodes that conditionally produce output.
-- `automatic_layout()` positions nodes for the rendergraph visualization
-  window based on depth and column assignment.
+- `get_graph()` exposes the internal `erhe::graph::Graph` (node / link
+  topology) for the editor's rendergraph viewer window.

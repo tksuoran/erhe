@@ -36,15 +36,14 @@ public:
 
     [[nodiscard]] auto get_graphics_device() -> erhe::graphics::Device&;
 
-    void automatic_layout(float image_size);
+    // The internal erhe::graph holding the node / link topology. Used by the
+    // editor's rendergraph viewer (Graph_editor_window_base machinery).
+    [[nodiscard]] auto get_graph() -> erhe::graph::Graph&;
 
     // Defer resource destruction until after execute() completes.
     // Use this when a node replaces resources during execution that
     // may still be referenced by nodes executing later in the same frame.
     void defer_resource(std::shared_ptr<void> resource);
-
-    float x_gap{100.0f};
-    float y_gap{100.0f};
 
 private:
     erhe::graphics::Device&        m_graphics_device;

@@ -143,10 +143,6 @@ void Rendergraph::register_node(Rendergraph_node* node)
     m_graph->register_node(node);
     node->m_is_registered = true;
 
-    float x = static_cast<float>(m_nodes.size()) * 250.0f;
-    float y = 0.0f;
-    node->set_position(glm::vec2{x, y});
-
     log_tail->trace("Registered Rendergraph_node {}", node->get_name());
 }
 
@@ -185,79 +181,9 @@ auto Rendergraph::get_graphics_device() -> erhe::graphics::Device&
     return m_graphics_device;
 }
 
-void Rendergraph::automatic_layout(const float image_size)
+auto Rendergraph::get_graph() -> erhe::graph::Graph&
 {
-    if (m_nodes.empty()) {
-        return;
-    }
-
-    sort();
-
-    // First, count how many nodes are at each column (== depth)
-    std::vector<int> column_node_count(1);
-    int max_column_node_count{0};
-    int last_column{0};
-    for (const auto& node : m_nodes) {
-        const int column = node->get_depth();
-        last_column = std::max(column, last_column);
-        if (column_node_count.size() < static_cast<std::size_t>(column) + 1) {
-            column_node_count.resize(column + 1);
-        }
-        ++column_node_count[column];
-        max_column_node_count = std::max(max_column_node_count, column_node_count[column]);
-    }
-
-    // Figure out
-    //  - total height for each column (== depth)
-    //  - maximum column height
-    std::vector<float> column_height;
-    float max_column_height{0.0f};
-    column_height.resize(column_node_count.size());
-    for (const auto& node : m_nodes) {
-        const int   column         = node->get_depth();
-        const auto  node_size_opt  = node->get_size();
-        const auto  node_size      = node_size_opt.has_value() ? node_size_opt.value() : glm::vec2{400.0f, 100.0f};
-        const float aspect         = node_size.x / node_size.y;
-        const auto  effective_size = glm::vec2{aspect * image_size, image_size};
-
-        if (column_height[column] != 0.0f) {
-            column_height[column] += y_gap;
-        }
-        column_height[column] += effective_size.y;
-        max_column_height = std::max(column_height[column], max_column_height);
-    }
-
-    // Assign initial positions, not consider link crossings
-    float x_offset = 0.0f;
-    for (int column = 0; column <= last_column; ++column) {
-        int   row_count    = column_node_count[column];
-        float column_width = 0.0f;
-        float y_offset     = 0.0f;
-
-        std::vector<Rendergraph_node*> column_nodes;
-        for (Rendergraph_node* node : m_nodes) {
-            const int node_depth = node->get_depth();
-            if (node_depth != column) {
-                continue;
-            }
-
-            const auto  node_size_opt  = node->get_size();
-            const auto  node_size      = node_size_opt.has_value() ? node_size_opt.value() : glm::vec2{400.0f, 100.0f};
-            const float aspect         = node_size.x / node_size.y;
-            const auto  effective_size = glm::vec2{aspect * image_size, image_size};
-
-            column_width = std::max(column_width, effective_size.x);
-            if (row_count == 1) {
-                node->set_position(glm::vec2{x_offset, max_column_height * 0.5f - effective_size.y});
-            } else {
-                node->set_position(glm::vec2{x_offset, y_offset});
-            }
-            y_offset += effective_size.y + y_gap;
-        }
-        x_offset += column_width + x_gap;
-    }
-
-    // TODO: Sort column_nodes by average source Y position to reduce link crossings
+    return *m_graph.get();
 }
 
 auto Rendergraph::connect(const int key, Rendergraph_node* source, Rendergraph_node* sink) -> bool

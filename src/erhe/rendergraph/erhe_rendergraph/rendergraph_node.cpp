@@ -229,24 +229,4 @@ auto Rendergraph_node::get_depth() const -> int
     return m_depth;
 }
 
-void Rendergraph_node::set_position(glm::vec2 position)
-{
-    m_position = position;
-}
-
-auto Rendergraph_node::get_position() const -> glm::vec2
-{
-    return m_position;
-}
-
-void Rendergraph_node::set_selected(bool selected)
-{
-    m_selected = selected;
-}
-
-auto Rendergraph_node::get_selected() const -> bool
-{
-    return m_selected;
-}
-
 } // namespace erhe::rendergraph

@@ -57,12 +57,8 @@ public:
     [[nodiscard]] auto is_enabled      () const -> bool;
 
     [[nodiscard]] auto get_depth   () const -> int;
-    [[nodiscard]] auto get_position() const -> glm::vec2;
-    [[nodiscard]] auto get_selected() const -> bool;
 
     void set_depth        (int depth);
-    void set_position     (glm::vec2 position);
-    void set_selected     (bool selected);
     void set_enabled      (bool value);
     auto register_input   (erhe::utility::Debug_label label, int key) -> bool;
     auto register_output  (erhe::utility::Debug_label label, int key) -> bool;
@@ -87,10 +83,6 @@ protected:
     bool                                        m_is_registered{false};
     bool                                        m_enabled {true};
     int                                         m_depth   {0};
-
-    // For GUI
-    glm::vec2                                   m_position{};
-    bool                                        m_selected{false};
 };
 
 } // namespace erhe::rendergraph

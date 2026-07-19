@@ -1,34 +1,28 @@
-//#ifndef IMGUI_DEFINE_MATH_OPERATORS
-//#   define IMGUI_DEFINE_MATH_OPERATORS
-//#endif
-
 #include "developer/rendergraph_window.hpp"
 
 #include "app_context.hpp"
-#include "editor_log.hpp"
 
 #include "erhe_defer/defer.hpp"
+#include "erhe_graph/graph.hpp"
 #include "erhe_graph/link.hpp"
-#include "erhe_graph/node.hpp"
 #include "erhe_graph/pin.hpp"
+#include "erhe_graphics/texture.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_imgui/imgui_node_editor.h"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_rendergraph/rendergraph_node.hpp"
-#include "erhe_graphics/texture.hpp"
 
+#include <fmt/format.h>
 #include <imgui/imgui.h>
-#include <imgui/imgui_internal.h>
 
-//#include <vector>
 #include <string>
 
 namespace editor {
 
 Rendergraph_window::Rendergraph_window(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, App_context& app_context)
-    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Render Graph", "rendergraph", true}
-    , m_context                {app_context}
+    : Graph_editor_window_base{imgui_renderer, imgui_windows, "Render Graph", "rendergraph", true}
+    , m_context               {app_context}
 {
 }
 
@@ -41,127 +35,87 @@ auto Rendergraph_window::flags() -> ImGuiWindowFlags
     return ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
 }
 
-namespace {
-
-auto get_connection_color(const int key) -> ImVec4
+void Rendergraph_window::controls_imgui()
 {
-    switch (key) {
-        case erhe::rendergraph::Rendergraph_node_key::viewport_texture:    return ImVec4{0.4f, 0.5f, 0.8f, 1.0f};
-        case erhe::rendergraph::Rendergraph_node_key::shadow_maps:         return ImVec4{0.6f, 0.6f, 0.6f, 1.0f};
-        case erhe::rendergraph::Rendergraph_node_key::depth_visualization: return ImVec4{0.1f, 0.8f, 0.8f, 1.0f};
-        default: return ImVec4{1.0f, 0.0f, 1.0f, 1.0f};
-    }
+    // View-only window: no node palette.
 }
 
+void Rendergraph_window::collect_selected_nodes(std::vector<std::shared_ptr<Graph_editor_node>>&)
+{
+    // Rendergraph nodes are not Graph_editor_nodes.
+}
+
+auto Rendergraph_window::find_graph_editor_node(std::size_t) -> std::shared_ptr<Graph_editor_node>
+{
+    return {};
+}
+
+auto Rendergraph_window::get_node_position(const Graph_editor_node&) -> ImVec2
+{
+    return ImVec2{0.0f, 0.0f};
+}
+
+void Rendergraph_window::set_node_position(const Graph_editor_node&, const ImVec2&)
+{
+}
+
+auto Rendergraph_window::get_node_size(const Graph_editor_node&) -> ImVec2
+{
+    return ImVec2{0.0f, 0.0f};
+}
+
+auto Rendergraph_window::get_node_editor() -> ax::NodeEditor::EditorContext*
+{
+    return m_node_editor.get();
+}
+
+auto Rendergraph_window::clipboard_kind() const -> const char*
+{
+    return "rendergraph";
+}
+
+auto Rendergraph_window::get_current_graph() -> erhe::graph::Graph*
+{
+    return &m_context.rendergraph->get_graph();
+}
+
+auto Rendergraph_window::paste_nodes(const nlohmann::json&, const ImVec2&) -> std::vector<std::size_t>
+{
+    return {};
+}
+
+void Rendergraph_window::remove_nodes(const std::vector<std::shared_ptr<Graph_editor_node>>&)
+{
+    // The rendergraph is owned by the renderer, not editable from here.
+}
+
+void Rendergraph_window::build_palette()
+{
+    // View-only window: nothing spawnable.
+}
+
+void Rendergraph_window::add_node_from_palette(const std::string&, const ImVec2*)
+{
 }
 
 void Rendergraph_window::imgui()
 {
-    // log_frame->trace("Rendergraph_window::imgui()");
-
-#if 0
-    const ImGuiTreeNodeFlags parent_flags{
-        ImGuiTreeNodeFlags_OpenOnArrow       |
-        ImGuiTreeNodeFlags_OpenOnDoubleClick |
-        ImGuiTreeNodeFlags_SpanFullWidth
-    };
-    //const ImGuiTreeNodeFlags leaf_flags{
-    //    ImGuiTreeNodeFlags_SpanFullWidth    |
-    //    ImGuiTreeNodeFlags_NoTreePushOnOpen |
-    //    ImGuiTreeNodeFlags_Leaf
-    //};
-
-    if (ImGui::TreeNodeEx("Render Graph", parent_flags)) {
-        const auto& render_graph_nodes = m_render_graph->get_nodes();
-        for (const auto& node : render_graph_nodes) {
-            if (ImGui::TreeNodeEx(node->get_name().c_str(), parent_flags | ImGuiTreeNodeFlags_DefaultOpen)) {
-                const auto& inputs = node->get_inputs();
-                for (const auto& input : inputs) {
-                    const auto& producer_node = input.producer_node.lock();
-                    if (producer_node) {
-                        ImGui::Text(
-                            "Input '%s' Producer %s (%s)",
-                            input.key.c_str(),
-                            producer_node->get_name().c_str(),
-                            c_str(input.resource_routing)
-                        );
-                    }
-                }
-
-                const auto& outputs = node->get_outputs();
-                for (const auto& output : outputs) {
-                    const auto& consumer_node = output.consumer_node.lock();
-                    if (consumer_node) {
-                        ImGui::Text(
-                            "Output '%s' Consumer %s (%s)",
-                            output.key.c_str(),
-                            consumer_node->get_name().c_str(),
-                            c_str(output.resource_routing)
-                        );
-                    }
-                }
-
-                ImGui::TreePop();
-            }
-        }
-        ImGui::TreePop();
-    }
-
-    const auto& scene_roots = m_app_scenes->get_scene_roots();
-    if (ImGui::TreeNodeEx("Scenes", parent_flags)) {
-        for (const auto& scene_root : scene_roots) {
-            ImGui::Text("%s", scene_root->get_name().c_str());
-            //if (ImGui::TreeNodeEx(scene_root->name().c_str(), parent_flags)) {
-            //    ImGui::TreePop();
-            //}
-        }
-        ImGui::TreePop();
-    }
-#endif
     if (!m_node_editor) {
-        ax::NodeEditor::Config config;
         m_node_editor = std::make_unique<ax::NodeEditor::EditorContext>(nullptr);
     }
 
-    auto& rendergraph = *m_context.rendergraph;
+    erhe::rendergraph::Rendergraph& rendergraph = *m_context.rendergraph;
 
     ImGui::SetNextItemWidth(200.0f);
     ImGui::SliderFloat("Image Size", &m_image_size, 4.0f, 1000.0f);
-    ImGui::SetNextItemWidth(200.0f);
-    ImGui::SliderFloat("Curve Strength", &m_curve_strength, 0.0f, 100.0f);
-    ImGui::SetNextItemWidth(400.0f);
-    const bool x_gap_changed = ImGui::SliderFloat("X Gap", &rendergraph.x_gap, 0.0f, 200.0f);
-    ImGui::SetNextItemWidth(400.0f);
-    const bool y_gap_changed = ImGui::SliderFloat("Y Gap", &rendergraph.y_gap, 0.0f, 200.0f);
-    if (ImGui::Button("Automatic Layout") || x_gap_changed || y_gap_changed) {
-        rendergraph.automatic_layout(m_image_size);
-    }
 
     m_node_editor->Begin("Rendergraph", ImVec2{0.0f, 0.0f});
 
-    const float zoom = 1.0f; //m_node_editor->GetCurrentZoom();
-    const auto& render_graph_nodes = rendergraph.get_nodes();
+    const float zoom = 1.0f;
+    const std::vector<erhe::rendergraph::Rendergraph_node*>& render_graph_nodes = rendergraph.get_nodes();
 
-    for (auto* node : render_graph_nodes) {
-        if (node->is_enabled()) {
-            ImGui::Text("Execute render graph node '%s'", node->get_name().c_str());
-        } else {
-            ImGui::Text("Disabled render graph node '%s'", node->get_name().c_str());
-        }
-    }
-
-    //// m_imnodes_context->PushStyleVar(ImNodesStyleVar_CurveStrength, m_curve_strength);
-    for (auto* node : render_graph_nodes) {
-        log_graph_editor->trace("Node {}", node->get_id());
-
-        // Start rendering node
-        const auto   glm_position = node->get_position();
-        const ImVec2 start_position{glm_position.x, glm_position.y};
-        const bool   start_selected = node->get_selected();
-        ImVec2       position = start_position;
-        bool         selected = start_selected;
-        const std::string shortLabel = node->get_name().substr(0, 12);
-        const std::string fullLabel = fmt::format("{}: {} ", node->get_depth(), node->get_name());
+    for (erhe::rendergraph::Rendergraph_node* node : render_graph_nodes) {
+        const std::string label = fmt::format("{}: {}{}", node->get_depth(), node->get_name(), node->is_enabled() ? "" : " (disabled)");
         const etl::vector<erhe::graph::Pin, erhe::graph::max_pin_count>& inputs  = node->get_input_pins();
         const etl::vector<erhe::graph::Pin, erhe::graph::max_pin_count>& outputs = node->get_output_pins();
 
@@ -171,6 +125,8 @@ void Rendergraph_window::imgui()
 
         m_node_editor->BeginNode(node_id);
 
+        ImGui::TextUnformatted(label.c_str());
+
         ImVec2 pin_table_size{200.0f, 0.0f};
 
         // Input pins
@@ -178,8 +134,7 @@ void Rendergraph_window::imgui()
         ImGui::TableSetupColumn("InputPin",   ImGuiTableColumnFlags_WidthFixed, 20.0f);
         ImGui::TableSetupColumn("InputLabel", ImGuiTableColumnFlags_None);
         for (const erhe::graph::Pin& input : inputs) {
-            log_graph_editor->trace("  Input {} {}", input.get_id(), input.get_name());
-            const ax::NodeEditor::PinId pin_id{static_cast<uintptr_t>(input.get_id())};
+            const ax::NodeEditor::PinId pin_id{&input};
             ImGui::TableNextRow();
 
             ImGui::TableSetColumnIndex(0);
@@ -194,8 +149,7 @@ void Rendergraph_window::imgui()
 
         ImGui::SameLine();
 
-        // Content
-        ImGui::SameLine();
+        // Content: thumbnails of the node's producer output textures
         for (const erhe::graph::Pin& output : outputs) {
             const int key = static_cast<int>(output.get_key());
             const std::shared_ptr<erhe::graphics::Texture>& texture = node->get_producer_output_texture(key);
@@ -225,8 +179,7 @@ void Rendergraph_window::imgui()
         ImGui::TableSetupColumn("OutputLabel", ImGuiTableColumnFlags_None);
         ImGui::TableSetupColumn("OutputPin",   ImGuiTableColumnFlags_WidthFixed, 20.0f);
         for (const erhe::graph::Pin& output : outputs) {
-            log_graph_editor->trace("  Output {} {}", output.get_id(), output.get_name());
-            const ax::NodeEditor::PinId pin_id{static_cast<uintptr_t>(output.get_id())};
+            const ax::NodeEditor::PinId pin_id{&output};
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
             ImGui::TextUnformatted(output.get_name().data());
@@ -239,60 +192,16 @@ void Rendergraph_window::imgui()
         ImGui::EndTable(); // Outputs
 
         m_node_editor->EndNode();
-
-        if ((position.x != start_position.x) || (position.y != start_position.y)) {
-            node->set_position(glm::vec2{position.x, position.y});
-        }
-        if (selected != start_selected) {
-            node->set_selected(selected);
-        }
     }
 
-    // Links - iterate all links from the graph
-    for (auto* node : render_graph_nodes) {
-        for (const erhe::graph::Pin& output : node->get_output_pins()) {
-            for (erhe::graph::Link* link : output.get_links()) {
-                erhe::graph::Pin* sink_pin = link->get_sink();
-                if (sink_pin == nullptr) {
-                    continue;
-                }
-
-                const ax::NodeEditor::LinkId  link_id      {static_cast<uintptr_t>(link->get_id())};
-                const ax::NodeEditor::PinId   output_pin_id{static_cast<uintptr_t>(output.get_id())};
-                const ax::NodeEditor::PinId   input_pin_id {static_cast<uintptr_t>(sink_pin->get_id())};
-
-                log_graph_editor->trace("  Link {} to {}", output.get_id(), sink_pin->get_id());
-
-                const bool connection_ok = m_node_editor->Link(link_id, output_pin_id, input_pin_id);
-                if (!connection_ok) {
-                    log_scene->debug("Connection delete");
-                }
-            }
-        }
-    }
-
-    if (ImGui::IsMouseReleased(1) && ImGui::IsWindowHovered() && !ImGui::IsMouseDragging(1)) {
-        ImGui::FocusWindow(ImGui::GetCurrentWindow());
-        ImGui::OpenPopup("NodesContextMenu");
-    }
-
-    if (ImGui::BeginPopup("NodesContextMenu")) {
-        //// for (const auto& desc : available_nodes) {
-        ////     if (ImGui::MenuItem(desc.first.c_str())) {
-        ////         nodes.push_back(desc.second());
-        ////         ImNodes::AutoPositionNode(nodes.back());
-        ////     }
-        //// }
-
-        ImGui::Separator();
-        if (ImGui::MenuItem("Reset Zoom TODO")) {
-            // m_imnodes_context->GetCanvas().m_Zoom = 1;
-        }
-
-        if (ImGui::IsAnyMouseDown() && !ImGui::IsWindowHovered()) {
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::EndPopup();
+    // Links, identified by pointer like in the other graph editor windows
+    // (Graph_editor_window_base::collect_selected_links relies on this).
+    for (const std::unique_ptr<erhe::graph::Link>& link : rendergraph.get_graph().get_links()) {
+        m_node_editor->Link(
+            ax::NodeEditor::LinkId{link.get()},
+            ax::NodeEditor::PinId{link->get_source()},
+            ax::NodeEditor::PinId{link->get_sink()}
+        );
     }
 
     m_node_editor->End();
