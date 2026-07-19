@@ -214,6 +214,11 @@ Box3d_rigid_body::~Box3d_rigid_body() noexcept
     if (!m_is_valid) {
         return;
     }
+    // Box3D destroys a body's joints along with the body, so the world's
+    // filter-joint bookkeeping must be purged first; otherwise a later
+    // set_collision_enabled(..., true) would pass a dangling b3JointId.
+    m_world.forget_filter_joints_for_body(this);
+
     // Destroying the body destroys its shapes and any joints attached to it.
     // The derived hulls this body owns are released by m_derived_hulls.
     b3DestroyBody(m_body);

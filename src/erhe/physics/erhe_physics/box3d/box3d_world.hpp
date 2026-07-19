@@ -5,6 +5,8 @@
 
 #include <box3d/box3d.h>
 
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace erhe::physics {
@@ -84,16 +86,45 @@ public:
     [[nodiscard]] auto get_box3d_world  () const -> b3WorldId                    { return m_world; }
     [[nodiscard]] auto get_filter_table ()       -> Box3d_collision_filter_table& { return m_filter_table; }
 
+    // Box3D joints require two valid bodies (src/joint.c rejects b3_nullBodyId),
+    // so a six-DOF constraint with rigid_body_b == nullptr ("constrain to
+    // world") is anchored to this lazily created static, shapeless body at the
+    // origin. Joint frames are body-origin relative, so a world-space frame
+    // passes through it unchanged.
+    [[nodiscard]] auto get_or_create_world_anchor_body() -> b3BodyId;
+
+    // Drops any filter joints referencing this body. Box3D destroys a body's
+    // joints along with the body, so the bookkeeping must be purged BEFORE
+    // b3DestroyBody or a later re-enable would use a dangling b3JointId.
+    void forget_filter_joints_for_body(const Box3d_rigid_body* rigid_body);
+
 private:
     // Box3D's contact filter hook. Fires when either shape has custom
     // filtering enabled, and unlike the friction / restitution callbacks it
     // does take a context pointer.
     [[nodiscard]] static auto custom_filter_callback(b3ShapeId shape_id_a, b3ShapeId shape_id_b, void* context) -> bool;
 
+    // Ordered pair of body pointers, so a pair has one canonical key.
+    using Body_pair_key = std::pair<const Box3d_rigid_body*, const Box3d_rigid_body*>;
+
+    class Body_pair_hash
+    {
+    public:
+        [[nodiscard]] auto operator()(const Body_pair_key& key) const -> std::size_t;
+    };
+
     b3WorldId                    m_world      {};
+    b3BodyId                     m_world_anchor_body{};
+    bool                         m_has_world_anchor_body{false};
     std::vector<IRigid_body*>    m_rigid_bodies;
     std::vector<IConstraint*>    m_constraints;
     Box3d_collision_filter_table m_filter_table;
+
+    // Per-pair collision exclusion (joint enableCollision = false) uses Box3D
+    // filter joints, which exist precisely to disable collision between two
+    // bodies. Indexed by body as well so removal can purge them.
+    std::unordered_map<Body_pair_key, b3JointId, Body_pair_hash>                 m_filter_joints;
+    std::unordered_map<const Box3d_rigid_body*, std::vector<Body_pair_key>>      m_filter_joints_by_body;
 
     std::function<void(IRigid_body*)>         m_on_body_activated_callback;
     std::function<void(IRigid_body*)>         m_on_body_deactivated_callback;

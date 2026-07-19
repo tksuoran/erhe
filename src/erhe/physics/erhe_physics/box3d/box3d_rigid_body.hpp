@@ -62,6 +62,7 @@ public:
 
     // Box3D specific
     [[nodiscard]] auto get_box3d_body     () const -> b3BodyId                                { return m_body; }
+    [[nodiscard]] auto get_world          () const -> Box3d_world&                            { return m_world; }
     [[nodiscard]] auto get_shape_ids      () const -> const std::vector<b3ShapeId>&            { return m_shape_ids; }
     [[nodiscard]] auto get_primitives     () const -> const std::vector<Collision_primitive>&  { return m_primitives; }
     [[nodiscard]] auto get_filter_index   () const -> int                                      { return m_filter_index; }

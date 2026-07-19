@@ -226,12 +226,86 @@ void Box3d_world::set_on_trigger_exit(std::function<void(const Trigger_event&)> 
     m_on_trigger_exit_callback = callback;
 }
 
+auto Box3d_world::Body_pair_hash::operator()(const Body_pair_key& key) const -> std::size_t
+{
+    const std::size_t first  = std::hash<const void*>{}(key.first);
+    const std::size_t second = std::hash<const void*>{}(key.second);
+    return first ^ (second + 0x9e3779b9u + (first << 6) + (first >> 2));
+}
+
+auto Box3d_world::get_or_create_world_anchor_body() -> b3BodyId
+{
+    if (!m_has_world_anchor_body) {
+        b3BodyDef body_def = b3DefaultBodyDef();
+        body_def.type = b3_staticBody;
+        body_def.name = "erhe world anchor";
+        m_world_anchor_body     = b3CreateBody(m_world, &body_def);
+        m_has_world_anchor_body = true;
+    }
+    return m_world_anchor_body;
+}
+
+void Box3d_world::forget_filter_joints_for_body(const Box3d_rigid_body* rigid_body)
+{
+    const auto by_body = m_filter_joints_by_body.find(rigid_body);
+    if (by_body == m_filter_joints_by_body.end()) {
+        return;
+    }
+    for (const Body_pair_key& key : by_body->second) {
+        // Only erase the bookkeeping: Box3D destroys a body's joints along with
+        // the body, so the b3JointId is about to become (or already is) stale.
+        m_filter_joints.erase(key);
+        const Box3d_rigid_body* other = (key.first == rigid_body) ? key.second : key.first;
+        const auto other_entry = m_filter_joints_by_body.find(other);
+        if (other_entry != m_filter_joints_by_body.end()) {
+            std::vector<Body_pair_key>& keys = other_entry->second;
+            keys.erase(std::remove(keys.begin(), keys.end(), key), keys.end());
+        }
+    }
+    m_filter_joints_by_body.erase(by_body);
+}
+
 void Box3d_world::set_collision_enabled(IRigid_body* rigid_body_a, IRigid_body* rigid_body_b, const bool enabled)
 {
-    static_cast<void>(rigid_body_a);
-    static_cast<void>(rigid_body_b);
-    static_cast<void>(enabled);
-    log_physics->warn("box3d: set_collision_enabled() is not implemented yet");
+    Box3d_rigid_body* body_a = static_cast<Box3d_rigid_body*>(rigid_body_a);
+    Box3d_rigid_body* body_b = static_cast<Box3d_rigid_body*>(rigid_body_b);
+    if ((body_a == nullptr) || (body_b == nullptr) || !body_a->is_valid() || !body_b->is_valid()) {
+        return;
+    }
+    // Order the pair so it has one canonical key regardless of argument order.
+    const Body_pair_key key = (body_a < body_b)
+        ? Body_pair_key{body_a, body_b}
+        : Body_pair_key{body_b, body_a};
+
+    const auto existing = m_filter_joints.find(key);
+    if (enabled) {
+        if (existing != m_filter_joints.end()) {
+            b3DestroyJoint(existing->second, true);
+            m_filter_joints.erase(existing);
+            for (const Box3d_rigid_body* body : {key.first, key.second}) {
+                const auto entry = m_filter_joints_by_body.find(body);
+                if (entry != m_filter_joints_by_body.end()) {
+                    std::vector<Body_pair_key>& keys = entry->second;
+                    keys.erase(std::remove(keys.begin(), keys.end(), key), keys.end());
+                }
+            }
+        }
+        return;
+    }
+
+    if (existing != m_filter_joints.end()) {
+        return; // already excluded
+    }
+    // A filter joint exists precisely to disable collision between two bodies,
+    // so this is a direct mapping rather than the sub-group hack the Jolt
+    // backend needs.
+    b3FilterJointDef joint_def = b3DefaultFilterJointDef();
+    joint_def.base.bodyIdA = key.first->get_box3d_body();
+    joint_def.base.bodyIdB = key.second->get_box3d_body();
+    const b3JointId joint = b3CreateFilterJoint(m_world, &joint_def);
+    m_filter_joints.emplace(key, joint);
+    m_filter_joints_by_body[key.first ].push_back(key);
+    m_filter_joints_by_body[key.second].push_back(key);
 }
 
 auto Box3d_world::save_state() -> std::unique_ptr<IWorld::State>
