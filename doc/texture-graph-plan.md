@@ -41,6 +41,7 @@ ported from it carry an attribution comment). Referred to below as
 | Phase 5: buffer nodes, blur, reseed (async compile deferred) | DONE    | dac3a31a, 94668795 |
 | Phase 6: PBR material output, multi-channel bake, PNG export| DONE    | ac4d8045 |
 | Backlog: Gradients family (5 nodes, new "Gradients" category)| DONE   | 559e7c45 |
+| Backlog: Switch (one per value type; compile-time branch select) | DONE | 3bd1a45d |
 
 ---
 
@@ -49,7 +50,7 @@ ported from it carry an attribution comment). Referred to below as
 Snapshot 2026-07-19 against Material Maker master (392 `.mmg` node definitions
 under `addons/material_maker/nodes/` plus ~19 engine-level node types in
 `engine/nodes/gen_*.gd`: buffer, switch, image, text, graph/group, remote,
-comment, export, iterate_buffer, ...). erhe has 35 node types: 32 descriptors
+comment, export, iterate_buffer, ...). erhe has 38 node types: 35 descriptors
 in `src/editor/texture_graph/nodes/texture_node_descriptors.cpp` plus the
 descriptor-less `output`, `material_output`, and `buffer` nodes
 (`texture_graph_node_factory.cpp`). Note the 392 count includes internal
@@ -93,6 +94,7 @@ smaller than the raw file count.
 | `decompose`           | Channels   | `decompose.mmg`              | Full (4 grayscale outputs). |
 | `swap_channels`       | Channels   | `swap_channels.mmg`          | Full (10 sources per output channel). |
 | `reroute`             | Utility    | `gen_reroute.gd` (engine)    | Pass-through wiring helper, same concept. |
+| `switch` / `switch_grayscale` / `switch_rgb` | Utility | `gen_switch.gd` (engine) | Compile-time branch select, same semantics (the unselected branch emits no code). MM's node is dynamic-arity and typed "any"; erhe pins are static and per-type, so this is a fixed 4-choice switch registered once per value type. |
 | `buffer`              | Utility    | `gen_buffer.gd` (engine)     | Explicit RTT cut point, same semantics (size + format, dirty-driven re-render). |
 | `output`              | Output     | (none)                       | erhe-specific: bakes one texture into `Content_library`, optional assign-to-material. MM's nearest concept is the material node. |
 | `material_output`     | Output     | `material.mmg`               | PBR channel bake. MM also has `material_3d`, `material_unlit`, `material_dynamic`, `material_tesselated`, `material_raymarching` variants. |
@@ -121,7 +123,7 @@ stays a complete record of the comparison.
 | Material Maker family        | ~Count | Representative nodes | Cost | Benefit | Score | erhe status |
 |------------------------------|--------|----------------------|------|---------|-------|-------------|
 | Gradients                    | 5      | `gradient`, `circular_gradient`, `radial_gradient`, `spiral_gradient`, `multigradient` | 1 | 4 | 4.0 | **DONE.** All 5 ported as descriptors in a new "Gradients" palette category. |
-| Switch                       | 1      | `switch` (engine, `gen_switch.gd`) | 1 | 3 | 3.0 | Missing; named in Phase 4. Enum-parameter input selector; cheap A/B comparison workflow win. |
+| Switch                       | 1      | `switch` (engine, `gen_switch.gd`) | 1 | 3 | 3.0 | **DONE.** Registered once per value type (`switch`, `switch_grayscale`, `switch_rgb`) because erhe pins are type-strict; 4 choices each. |
 | Image / texture input        | 2      | `image`, `texture` (engine) | 2 | 5 | 2.5 | Missing. Sample an external bitmap as a graph source; the `buffer` node already proves `sampler2D`-backed expressions downstream. |
 | Transform / UV warps         | 25     | `translate`, `rotate`, `scale`, `shear`, `skew`, `warp`, `directional_warp`, `multi_warp`, `warp_dilation*`, `swirl`, `twist`, `spherize`, `kaleidoscope`, `mirror`, `repeat`, `custom_uv`, `distort`, `refract`, `magnify` | 2 | 5 | 2.5 | Only the combined `transform` covered. Warp is the heart of the noise -> warp -> colorize workflow; needs function-form inputs (supported) or buffers (exist). |
 | Color / tone filters         | 18     | `auto_tones`, `tonality`, `tones`, `tones_map/range/step`, `palettize`, `colormap`, `convert_colorspace`, `greyscale`, `ensure_greyscale`, `ensure_rgba`, `default_color`, `compare` | 2 | 4 | 2.0 | Missing. Mostly per-pixel one-liners; `auto_tones` needs a min/max reduction pass, `tones` a levels widget. |
@@ -522,14 +524,14 @@ material in the headless viewport screenshot; smoke script green.
 - **Headless end-to-end** (Phase 3+): `scripts/texture_graph_smoke_test.py`
   against the headless Vulkan editor build over the in-editor MCP server,
   including `texture_graph_export_png` pixel assertions and
-  `capture_screenshot` visual checks. 293 checks as of 2026-07-19; its
+  `capture_screenshot` visual checks. 315 checks as of 2026-07-19; its
   `NODE_SPECS` table must gain a row (pins + default parameters) for every new
   node type, which is what keeps the "all N node types present" check honest.
 - **Descriptor self-check**: `check_texture_node_descriptors()` composes every
   descriptor standalone at `Texture_graph_window` construction and logs
   "Texture graph: all N node descriptors compose cleanly" - the cheapest
   confirmation that a newly added descriptor's GLSL substitutes and assembles
-  (N = 32 as of 2026-07-19).
+  (N = 35 as of 2026-07-19).
 - **Process**: per step - edit, build (ninja MSVC), tests, independent diff
   review, fix, commit (per-topic commits). Restore
   `config/editor/desktop_window_imgui_host_imgui.ini` after editor runs.
