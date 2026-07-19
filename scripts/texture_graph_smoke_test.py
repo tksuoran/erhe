@@ -341,6 +341,12 @@ NODE_SPECS = {
     "decompose":           (["rgba"],                ["f", "f", "f", "f"], {}),
     "swap_channels":       (["rgba"],                ["rgba"], {"out_r": 2, "out_g": 4, "out_b": 6, "out_a": 8}),
     "reroute":             (["rgba"],                ["rgba"], {}),
+    "voronoi_triangle":    ([],                      ["f", "f", "rgb", "rgb", "rgb"], {"scale_x": 4.0, "randomness": 0.85}),
+    "wavelet_noise":       ([],                      ["f"],    {"type": 4, "scale_x": 4.0, "iterations": 3.0}),
+    "noise_anisotropic":   ([],                      ["f"],    {"scale_x": 4.0, "scale_y": 256.0, "smoothness": 1.0}),
+    "noise_white":         ([],                      ["f"],    {"size": 11}),
+    "perlin_color":        ([],                      ["rgb"],  {"scale_x": 4.0, "iterations": 3.0, "persistence": 0.5}),
+    "shard_fbm":           (["f", "f"],              ["f"],    {"sharp": 0.7, "sx": 7.0, "sy": 7.0, "iter": 4.0}),
     "uniform_greyscale":   ([],                      ["f"],    {"color": 0.5}),
     "greyscale":           (["rgba"],                ["f"],    {"mode": 2}),
     "tones":               (["rgba"],                ["rgba"], {"in_min": [0.0, 0.0, 0.0, 0.0], "in_max": [1.0, 1.0, 1.0, 1.0]}),
@@ -879,6 +885,83 @@ def section_multi_output_decompose():
     cx = pixel(w, ch, buf, w // 2, h // 2)
     check(S, "routed Blue channel bakes ~0.6 gray", abs(cx[0] - round(color[2] * 255)) <= 6,
           f"pixel={cx}")
+
+
+def section_noise_variants():
+    """Noise variants: generators with no inputs.
+
+    A generator that compiles but produces a constant is broken in a way an
+    export-succeeded check cannot see, so each is asserted to actually vary.
+    voronoi_triangle is additionally checked on every one of its five outputs,
+    since a wrong swizzle in any of them still compiles.
+    """
+    S = "noise-variants"
+    TMP_DIR.mkdir(parents=True, exist_ok=True)
+
+    def spread(node_id, name, output_slot=0, size=64):
+        path = TMP_DIR / f"noise_{name}_{output_slot}.png"
+        result = export_png(node_id, path, size=size, output_slot=output_slot)
+        if not (isinstance(result, dict) and result.get("width") == size):
+            return None
+        w, h, ch, buf = decode_png(path)
+        reds = [buf[(i * ch)] for i in range(w * h)]
+        return max(reds) - min(reds)
+
+    for type_name in ["wavelet_noise", "noise_anisotropic", "noise_white", "perlin_color"]:
+        fresh_graph()
+        node_id = add_node(type_name)["id"]
+        delta = spread(node_id, type_name)
+        check(S, f"{type_name} renders and varies", (delta is not None) and (delta > 16),
+              f"max-min={delta}")
+
+    # shard_fbm has two map inputs that default to their matching parameters, so
+    # it must render standalone as well as driven.
+    fresh_graph()
+    shard = add_node("shard_fbm")["id"]
+    delta = spread(shard, "shard_fbm_standalone")
+    check(S, "shard_fbm renders and varies with both inputs unconnected",
+          (delta is not None) and (delta > 16), f"max-min={delta}")
+    perlin = add_node("perlin")["id"]
+    connect(perlin, 0, shard, 0)
+    connect(perlin, 0, shard, 1)
+    delta = spread(shard, "shard_fbm_driven")
+    check(S, "shard_fbm renders and varies when driven by a height map",
+          (delta is not None) and (delta > 16), f"max-min={delta}")
+
+    # Every voronoi_triangle output must render (a bad swizzle still compiles).
+    fresh_graph()
+    tri = add_node("voronoi_triangle")["id"]
+    graph = get_graph()
+    node = node_by_id(graph, tri)
+    check(S, "voronoi_triangle exposes 5 outputs", len(node["outputs"]) == 5,
+          f"count={len(node['outputs'])}")
+    for slot in range(len(node["outputs"])):
+        delta = spread(tri, "voronoi_triangle", output_slot=slot)
+        check(S, f"voronoi_triangle output {slot} renders and varies",
+              (delta is not None) and (delta > 8), f"max-min={delta}")
+
+    # Coexistence: the renamed globals (shard_hash, tri_*) must not collide with
+    # each other or with the existing voronoi / perlin nodes in one shader.
+    fresh_graph()
+    blend = add_node("blend")["id"]
+    left = add_node("colorize")["id"]
+    right = add_node("colorize")["id"]
+    wavelet = add_node("wavelet_noise")["id"]
+    shard = add_node("shard_fbm")["id"]
+    voronoi = add_node("voronoi")["id"]
+    perlin = add_node("perlin")["id"]
+    tri = add_node("voronoi_triangle")["id"]
+    connect(wavelet, 0, left, 0)
+    connect(shard, 0, right, 0)
+    connect(left, 0, blend, 0)
+    connect(right, 0, blend, 1)
+    connect(voronoi, 0, shard, 0)
+    connect(perlin, 0, shard, 1)
+    connect(tri, 0, left, 0)
+    all_png = TMP_DIR / "noise_all_chained.png"
+    result = export_png(blend, all_png, size=64)
+    check(S, "new noise nodes coexist with voronoi/perlin in ONE shader",
+          isinstance(result, dict) and result.get("width") == 64, f"result={result}")
 
 
 def section_color_tone():
@@ -1595,6 +1678,7 @@ def main():
         section_gradient_curve,
         section_multi_output_decompose,
         section_new_filters,
+        section_noise_variants,
         section_color_tone,
         section_transform,
         section_switch,

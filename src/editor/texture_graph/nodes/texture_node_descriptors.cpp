@@ -1780,6 +1780,456 @@ auto build_palettize() -> Node_descriptor
 }
 
 // ---------------------------------------------------------------------------
+// Noise variants
+//
+// Ported from Material Maker voronoi_triangle.mmg, wavelet_noise.mmg,
+// noise_anisotropic.mmg, noise_white.mmg, perlin_color.mmg and shard_fbm.mmg
+// (MIT); shard_fbm's core is adapted from https://www.shadertoy.com/view/dlKyWw
+// by @ENDESGA.
+//
+// Symbols Material Maker gives generic names are prefixed here, because erhe
+// deduplicates globals by exact string match: a bare "hash", "vmax",
+// "cellPoint" or "s3" would sooner or later be defined by a second descriptor
+// and emitted twice, failing to link only when both nodes share a graph (see
+// the Transform family note). shard_fbm's hash -> shard_hash, and
+// voronoi_triangle's helpers -> tri_*.
+//
+// Not ported:
+// - voronoi2: its global, inline code and parameters are byte identical to
+//   voronoi.mmg, which the existing voronoi node already is. Its only
+//   difference is a "fill" output needing the Fill family's iterate-buffer
+//   machinery, so porting it would add a duplicate node and a
+//   double-definition hazard for no capability.
+// - clouds_noise, directional_noise, crystal: compound nodes with no
+//   shader_model of their own.
+// - fbm2 / fbm3 / fbm4: 13-17 KB of near-duplicate basis libraries. What is
+//   worth having is their extra bases (simplex, cellular3..8, voronoise,
+//   gabor), which belong as added values on the existing fbm node's enum
+//   rather than as three more nodes.
+// ---------------------------------------------------------------------------
+
+// Voronoi (triangle) - ported from Material Maker voronoi_triangle.mmg (MIT).
+// Triangular-cell Voronoi, with distance, border, cell-color, UV and normal
+// outputs.
+auto build_voronoi_triangle() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "voronoi_triangle";
+    d.label    = "Voronoi Triangle";
+    d.category = "Generators";
+    d.global =
+        "// Based on https://www.shadertoy.com/view/ss3fW4\n"
+        "const float tri_s3 = 0.866025;\n"
+        "\n"
+        "vec3 tri_sd_edges(vec2 p) {\n"
+        "    return vec3(\n"
+        "        dot(p, vec2(0,-1)),\n"
+        "        dot(p, vec2(tri_s3, 0.5)),\n"
+        "        dot(p, vec2(-tri_s3, 0.5))\n"
+        "    );\n"
+        "}\n"
+        "\n"
+        "float tri_sd(vec2 p) {\n"
+        "    vec3 t = tri_sd_edges(p);\n"
+        "    return max(t.x, max(t.y, t.z));\n"
+        "}\n"
+        "\n"
+        "vec3 tri_primary_axis(vec3 p) {\n"
+        "    vec3 a = abs(p);\n"
+        "    return (1.0-step(a.xyz, a.yzx))*step(a.zxy, a.xyz)*sign(p);\n"
+        "}\n"
+        "\n"
+        "vec3 tri_sdg_border(vec2 pt1, vec2 pt2) {\n"
+        "    vec3 tbRel = tri_sd_edges(pt2 - pt1);\n"
+        "    vec3 axis = tri_primary_axis(tbRel);\n"
+        "\n"
+        "    vec2 gA = vec2(0,-1);\n"
+        "    vec2 gB = vec2(tri_s3, 0.5);\n"
+        "    vec2 gC = vec2(-tri_s3, 0.5);\n"
+        "\n"
+        "    vec2 norA = gC * axis.x + gA * axis.y + gB * axis.z;\n"
+        "    vec2 norB = gB * -axis.x + gC * -axis.y + gA * -axis.z;\n"
+        "\n"
+        "    vec2 dir = gA * axis.x + gB * axis.y + gC * axis.z;\n"
+        "    vec2 corner = dir * dot(dir, pt1 - pt2) * 2.0/3.0;\n"
+        "\n"
+        "    mat2 r90 = mat2(vec2(0.0,-1.0),vec2(1.0,0.0));\n"
+        "\n"
+        "    bool isEdge = axis.x + axis.y + axis.z < 0.0;\n"
+        "\n"
+        "    if (isEdge) {\n"
+        "        corner = pt2 + corner;\n"
+        "        vec2 ca = corner + min(0.0, dot(corner, -norA)) * norA;\n"
+        "        vec2 cb = corner + max(0.0, dot(corner, -norB)) * norB;\n"
+        "        float side = step(dot(corner, dir * r90), 0.0);\n"
+        "        corner = mix(cb, ca, side);\n"
+        "    } else {\n"
+        "        corner = pt1 - corner;\n"
+        "        vec2 ca = corner + max(0.0, dot(corner, -norA)) * norA;\n"
+        "        vec2 cb = corner + min(0.0, dot(corner, -norB)) * norB;\n"
+        "        float side = step(dot(corner, dir * r90), 0.0);\n"
+        "        corner = mix(ca, cb, side);\n"
+        "    }\n"
+        "\n"
+        "    vec2 nor = normalize(corner);\n"
+        "    float d = length(corner);\n"
+        "    return vec3(abs(d), nor);\n"
+        "}\n"
+        "\n"
+        "float tri_vmax(vec3 v) { return max(v.x, max(v.y, v.z)); }\n"
+        "\n"
+        "vec4 tri_cell_point(vec2 n, vec2 f, vec2 cell, float r, float seed, vec2 s, vec2 st) {\n"
+        "    vec2 coord = n + cell;\n"
+        "    vec2 o = r*rand2(seed + mod(n + cell + s, s));\n"
+        "    vec2 point = cell + o - f;\n"
+        "    point *= st;\n"
+        "    return vec4(point, coord);\n"
+        "}\n"
+        "\n"
+        "vec2 tri_coord(vec2 x, vec2 s, vec2 st, float r, float seed) {\n"
+        "    vec2 n = floor(x);\n"
+        "    vec2 f = fract(x);\n"
+        "\n"
+        "    vec2 closestCoord;\n"
+        "\n"
+        "    const int reach = 2;\n"
+        "    float closestDist = 8.0;\n"
+        "    for( int j = -reach; j <= reach; j++ )\n"
+        "    for( int i = -reach; i <= reach; i++ )\n"
+        "    {\n"
+        "        vec2 cell = vec2(float(i), float(j));\n"
+        "        vec4 point = tri_cell_point(n,f,cell,r,seed,s,st);\n"
+        "\n"
+        "        float dist = tri_vmax(tri_sd_edges(point.xy));\n"
+        "\n"
+        "        if( tri_vmax(tri_sd_edges(point.xy)) < closestDist )\n"
+        "        {\n"
+        "            closestDist = dist;\n"
+        "            closestCoord = point.zw;\n"
+        "        }\n"
+        "    }\n"
+        "    return closestCoord;\n"
+        "}\n"
+        "\n"
+        "mat3 tri_voronoi( vec2 x, vec2 s, vec2 st, float r, float seed) {\n"
+        "    x *= s;\n"
+        "    vec2 n = floor(x);\n"
+        "    vec2 f = fract(x);\n"
+        "\n"
+        "    vec2 closestCell, closestPoint, nor;\n"
+        "\n"
+        "    const int reach = 3;\n"
+        "    float closestDist = 8.0;\n"
+        "\n"
+        "    for( int j = -reach; j <= reach; j++ )\n"
+        "    for( int i = -reach; i <= reach; i++ )\n"
+        "    {\n"
+        "        vec2 cell = vec2(float(i), float(j));\n"
+        "        vec2 point = tri_cell_point(n,f,cell,r,seed,s,st).xy;\n"
+        "\n"
+        "        float dist = tri_sd(point);\n"
+        "\n"
+        "        if( dist < closestDist )\n"
+        "        {\n"
+        "            closestDist = dist;\n"
+        "            closestPoint = point;\n"
+        "            closestCell = cell;\n"
+        "        }\n"
+        "    }\n"
+        "\n"
+        "    closestDist = 8.0;\n"
+        "    for( int j = -reach-1; j <= reach+1; j++ )\n"
+        "    for( int i = -reach-1; i <= reach+1; i++ )\n"
+        "    {\n"
+        "        vec2 cell = closestCell + vec2(float(i), float(j));\n"
+        "        vec2 coord = n + cell;\n"
+        "            vec2 o = r*rand2(seed + mod(n + cell + s, s));\n"
+        "            vec2 point = cell + o - f;\n"
+        "        point *= st;\n"
+        "\n"
+        "        float dist = tri_sd(closestPoint - point);\n"
+        "\n"
+        "        if( dist > 0.00001 ) {\n"
+        "            vec3 sdg = tri_sdg_border(closestPoint, point);\n"
+        "            if (sdg.x < closestDist) {\n"
+        "                closestDist = sdg.x;\n"
+        "                nor = sdg.zy;\n"
+        "            }\n"
+        "        }\n"
+        "    }\n"
+        "\n"
+        "    return mat3(\n"
+        "        vec3(closestDist,closestPoint),\n"
+        "        vec3(nor,0),\n"
+        "        vec3(tri_coord(x,s,st,r,seed),0));\n"
+        "}\n";
+    add_float(d, "scale_x",    "Scale X",    4.0f,  1.0f, 32.0f, 1.0f);
+    add_float(d, "scale_y",    "Scale Y",    4.0f,  1.0f, 32.0f, 1.0f);
+    add_float(d, "stretch_x",  "Stretch X",  1.0f,  0.0f,  1.0f, 0.01f);
+    add_float(d, "stretch_y",  "Stretch Y",  1.0f,  0.0f,  1.0f, 0.01f);
+    add_float(d, "randomness", "Randomness", 0.85f, 0.0f,  1.0f, 0.01f);
+    d.code =
+        "mat3 $(name_uv)_m3 = tri_voronoi($uv, vec2($scale_x, $scale_y), vec2($stretch_y,$stretch_x), $randomness, $seed);\n";
+    add_output(d, Value_type::grayscale, "length($(name_uv)_m3[0].yz)");
+    add_output(d, Value_type::grayscale, "$(name_uv)_m3[0].x");
+    add_output(d, Value_type::rgb,       "rand3(floor(fract($(name_uv)_m3[2].xy/vec2($scale_x,$scale_y))*vec2($scale_x,$scale_y)))");
+    add_output(d, Value_type::rgb,       "vec3(-$(name_uv)_m3[0].yz*0.5+0.5,rand(fract($(name_uv)_m3[2].xy/vec2($scale_x,$scale_y))))");
+    add_output(d, Value_type::rgb,       "vec3(0.5)+0.5*normalize(vec3(vec2(-$(name_uv)_m3[1].y,-$(name_uv)_m3[1].x), -1.0))");
+    return d;
+}
+
+// Wavelet noise - ported from Material Maker wavelet_noise.mmg (MIT). The
+// "type" enum substitutes an int literal choosing how octaves combine
+// (positive additive, negative multiplicative).
+auto build_wavelet_noise() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "wavelet_noise";
+    d.label    = "Wavelet Noise";
+    d.category = "Generators";
+    d.global =
+        "float wavelet(vec2 uv, vec2 size, float s, float frequency, float offset) {\n"
+        "    uv = mod(uv, size);\n"
+        "    vec2 seed = fract(floor(uv)*0.1236754+vec2(s));\n"
+        "    uv = fract(uv);\n"
+        "    vec2 ruv = uv-0.5;\n"
+        "    float a = rand(seed)*6.28;\n"
+        "    float ca = cos(a);\n"
+        "    float sa = sin(a);\n"
+        "    ruv = vec2(ca*ruv.x + sa*ruv.y, -sa*ruv.x + ca*ruv.y);\n"
+        "    return (0.5*sin(ruv.x*6.28*frequency+offset)+0.5)*max(0.0, 1.0-2.0*length(uv-vec2(0.5)));\n"
+        "}\n"
+        "\n"
+        "float wavelet_noise(vec2 uv, vec2 size, int iterations, float persistence, float seed, float frequency, float offset, float type) {\n"
+        "    float rv = 0.0;\n"
+        "    float acc = 0.0;\n"
+        "    vec2 seed2 = rand2(vec2(seed));\n"
+        "    vec2 local_uv = uv * size;\n"
+        "    float q = 1.0;\n"
+        "    for (int i = 0; i < iterations; ++i) {\n"
+        "        rv += q*wavelet(local_uv, size, seed, frequency, offset);\n"
+        "        rv += q*wavelet(local_uv+vec2(0.5), size, seed+0.1, frequency, offset);\n"
+        "        acc += q;\n"
+        "        if (type > 0.0) {\n"
+        "            local_uv += type*uv;\n"
+        "            size += vec2(type);\n"
+        "        } else {\n"
+        "            local_uv *= -type;\n"
+        "            size *= -type;\n"
+        "        }\n"
+        "        local_uv += seed2;\n"
+        "        seed2 = rand2(seed2);\n"
+        "        q *= persistence;\n"
+        "        seed += 0.1;\n"
+        "    }\n"
+        "    return rv / acc;\n"
+        "}\n";
+    add_enum(
+        d, "type", "Type",
+        {
+            Enum_value{.label = "Add 1",  .code = "1"},
+            Enum_value{.label = "Add 2",  .code = "2"},
+            Enum_value{.label = "Add 3",  .code = "3"},
+            Enum_value{.label = "Mult 2", .code = "-2"},
+            Enum_value{.label = "Mult 3", .code = "-3"}
+        },
+        4
+    );
+    add_float(d, "scale_x",     "Scale X",     4.0f,  1.0f, 32.0f, 1.0f);
+    add_float(d, "scale_y",     "Scale Y",     4.0f,  1.0f, 32.0f, 1.0f);
+    add_float(d, "iterations",  "Octaves",     3.0f,  1.0f, 10.0f, 1.0f);
+    add_float(d, "persistence", "Persistence", 0.5f,  0.0f,  1.0f, 0.01f);
+    add_float(d, "frequency",   "Frequency",   1.0f,  0.0f,  2.0f, 0.01f);
+    add_float(d, "offset",      "Offset",      0.0f, -1.0f,  1.0f, 0.01f);
+    add_output(
+        d, Value_type::grayscale,
+        "wavelet_noise($uv, vec2($scale_x, $scale_y), int($iterations), $persistence, $seed, $frequency, $offset, $type)"
+    );
+    return d;
+}
+
+// Anisotropic noise - ported from Material Maker noise_anisotropic.mmg (MIT).
+// Rows of value noise stretched along x, for brushed-metal style looks.
+auto build_noise_anisotropic() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "noise_anisotropic";
+    d.label    = "Anisotropic Noise";
+    d.category = "Generators";
+    d.global =
+        "float anisotropic(vec2 uv, vec2 size, float seed, float smoothness, float interpolation) {\n"
+        "    vec2 seed2 = rand2(vec2(seed, 1.0-seed));\n"
+        "\n"
+        "    vec2 xy = floor(uv*size);\n"
+        "    vec2 offset = vec2(rand(seed2 + xy.y), 0.0);\n"
+        "    vec2 xy_offset = floor(uv * size + offset );\n"
+        "    float f0 = rand(seed2+mod(xy_offset, size));\n"
+        "    float f1 = rand(seed2+mod(xy_offset+vec2(1.0, 0.0), size));\n"
+        "    float mixer = clamp( (fract(uv.x*size.x+offset.x) -.5) / smoothness + 0.5, 0.0, 1.0 );\n"
+        "    float smooth_mix = smoothstep(0.0, 1.0, mixer);\n"
+        "    float linear = mix(f0, f1, mixer);\n"
+        "    float smoothed = mix(f0, f1, smooth_mix);\n"
+        "\n"
+        "    return mix(linear, smoothed, interpolation);\n"
+        "}\n";
+    add_float(d, "scale_x",       "Scale X",         4.0f, 1.0f,   32.0f, 1.0f);
+    add_float(d, "scale_y",       "Scale Y",       256.0f, 1.0f, 1024.0f, 1.0f);
+    add_float(d, "smoothness",    "Smoothness",      1.0f, 0.0f,    1.0f, 0.01f);
+    add_float(d, "interpolation", "Interpolation",   1.0f, 0.0f,    1.0f, 0.01f);
+    add_output(
+        d, Value_type::grayscale,
+        "anisotropic($uv, vec2($scale_x, $scale_y), $seed, $smoothness, $interpolation)"
+    );
+    return d;
+}
+
+// White noise - ported from Material Maker noise_white.mmg (MIT). Material
+// Maker wraps the call in a per-node instance helper; with one call site the
+// wrapper carries no benefit, so the call is written directly.
+auto build_noise_white() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "noise_white";
+    d.label    = "White Noise";
+    d.category = "Generators";
+    d.global =
+        "float white_noise(vec2 uv, float size, float seed) {\n"
+        "    vec2 seed2 = rand2(vec2(seed, 1.0-seed));\n"
+        "    uv /= size;\n"
+        "    vec2 point_pos = floor(uv)+vec2(0.5);\n"
+        "    float color = rand(seed2+point_pos);\n"
+        "    return color;\n"
+        "}\n";
+    add_size(d, "size", "Grid Size", 2, 12, 11);
+    add_output(d, Value_type::grayscale, "white_noise($uv, 1.0/$size, $seed)");
+    return d;
+}
+
+// Perlin color - ported from Material Maker perlin_color.mmg (MIT). The rgb
+// sibling of the existing perlin node (it interpolates rand3 instead of rand),
+// filling the gap noted against `perlin` in the node comparison table.
+auto build_perlin_color() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "perlin_color";
+    d.label    = "Perlin Color";
+    d.category = "Generators";
+    d.global =
+        "vec3 perlin_color(vec2 uv, vec2 size, int iterations, float persistence, float seed) {\n"
+        "    vec2 seed2 = rand2(vec2(seed, 1.0-seed));\n"
+        "    vec3 rv = vec3(0.0);\n"
+        "    float coef = 1.0;\n"
+        "    float acc = 0.0;\n"
+        "    for (int i = 0; i < iterations; ++i) {\n"
+        "        vec2 step = vec2(1.0)/size;\n"
+        "        vec2 xy = floor(uv*size);\n"
+        "        vec3 f0 = rand3(seed2+mod(xy, size));\n"
+        "        vec3 f1 = rand3(seed2+mod(xy+vec2(1.0, 0.0), size));\n"
+        "        vec3 f2 = rand3(seed2+mod(xy+vec2(0.0, 1.0), size));\n"
+        "        vec3 f3 = rand3(seed2+mod(xy+vec2(1.0, 1.0), size));\n"
+        "        vec2 mixval = smoothstep(0.0, 1.0, fract(uv*size));\n"
+        "        rv += coef * mix(mix(f0, f1, mixval.x), mix(f2, f3, mixval.x), mixval.y);\n"
+        "        acc += coef;\n"
+        "        size *= 2.0;\n"
+        "        coef *= persistence;\n"
+        "    }\n"
+        "\n"
+        "    return rv / acc;\n"
+        "}\n";
+    add_float(d, "scale_x",     "Scale X",     4.0f, 1.0f, 32.0f, 1.0f);
+    add_float(d, "scale_y",     "Scale Y",     4.0f, 1.0f, 32.0f, 1.0f);
+    add_float(d, "iterations",  "Octaves",     3.0f, 1.0f, 10.0f, 1.0f);
+    add_float(d, "persistence", "Persistence", 0.5f, 0.0f,  1.0f, 0.05f);
+    add_output(
+        d, Value_type::rgb,
+        "perlin_color($uv, vec2($scale_x, $scale_y), int($iterations), $persistence, $seed)"
+    );
+    return d;
+}
+
+// Shard FBM - ported from Material Maker shard_fbm.mmg (MIT), whose core is
+// adapted from https://www.shadertoy.com/view/dlKyWw by @ENDESGA. Both map
+// inputs default to their matching parameter, as in Material Maker.
+//
+// One fix against the .mmg: its output calls pow(2, ...) with an int literal.
+// Godot's compiler accepts that; glslang is stricter about pow's genType
+// arguments, so it is written pow(2.0, ...).
+auto build_shard_fbm() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "shard_fbm";
+    d.label    = "Shard FBM";
+    d.category = "Generators";
+    d.global =
+        "// Adapted from https://www.shadertoy.com/view/dlKyWw by @ENDESGA\n"
+        "\n"
+        "vec3 shard_hash(vec3 p)\n"
+        "{\n"
+        "    p = vec3(dot(p, vec3(127.1, 311.7, 74.7)), dot(p, vec3(269.5,183.3,246.1)), dot(p, vec3(113.5, 271.9, 124.6)));\n"
+        "    p = fract(sin(p) * 43758.5453123);\n"
+        "    return p;\n"
+        "}\n"
+        "\n"
+        "float shard_noise(vec3 p, vec3 size, float sharpness, float seed) {\n"
+        "    vec3 ip = floor(p);\n"
+        "    vec3 fp = fract(p);\n"
+        "\n"
+        "    float v = 0.0, t = 0.0;\n"
+        "\n"
+        "    for (int z = -1; z <= 1; z++) {\n"
+        "        for (int y = -2; y <= 2; y++) {\n"
+        "            for (int x = -2; x <= 2; x++) {\n"
+        "\n"
+        "                vec3 o = vec3(float(x), float(y), float(z));\n"
+        "                vec3 io = mod(ip + o, size);\n"
+        "                vec3 h = shard_hash(io + seed);\n"
+        "                vec3 r = fp - (o + h);\n"
+        "\n"
+        "                float w = exp2(-6.283185*dot(r, r));\n"
+        "                // tanh deconstruction and optimization by @Xor\n"
+        "                float s = sharpness * dot(r, shard_hash(io + vec3(11, 31, 47)) - 0.5);\n"
+        "                v += w * s*inversesqrt(1.0+s*s);\n"
+        "                t += w;\n"
+        "            }\n"
+        "        }\n"
+        "    }\n"
+        "    return ((v / t) * 0.5) + 0.5;\n"
+        "}\n"
+        "\n"
+        "float fbm_shard(vec3 coord, vec3 size, int folds, int octaves, float persistence, float sharpness, float seed) {\n"
+        "    float normalize_factor = 0.0;\n"
+        "    float value = 0.0;\n"
+        "    float scale = 1.0;\n"
+        "    for (int i = 0; i < octaves; i++) {\n"
+        "        float noise = shard_noise(coord*size, size, sharpness, seed);\n"
+        "        for (int f = 0; f < folds; ++f) {\n"
+        "            noise = abs(2.0*noise-1.0);\n"
+        "        }\n"
+        "        value += noise * scale;\n"
+        "        normalize_factor += scale;\n"
+        "        size *= 2.0;\n"
+        "        scale *= persistence;\n"
+        "    }\n"
+        "    return value / normalize_factor;\n"
+        "}\n";
+    add_input(d, "sharp_in",  Value_type::grayscale, "$sharp");
+    add_input(d, "offset_in", Value_type::grayscale, "$off");
+    add_float(d, "sharp",  "Sharpness",   0.7f, 0.0f,  1.0f, 0.01f);
+    add_float(d, "sx",     "Scale X",     7.0f, 1.0f, 32.0f, 1.0f);
+    add_float(d, "sy",     "Scale Y",     7.0f, 1.0f, 32.0f, 1.0f);
+    add_float(d, "folds",  "Folds",       0.0f, 0.0f,  5.0f, 1.0f);
+    add_float(d, "iter",   "Octaves",     4.0f, 1.0f,  8.0f, 1.0f);
+    add_float(d, "per",    "Persistence", 0.5f, 0.0f,  1.0f, 0.01f);
+    add_float(d, "off",    "Offset",      0.0f, 0.0f,  1.0f, 0.01f);
+    add_output(
+        d, Value_type::grayscale,
+        "fbm_shard(vec3($uv, $offset_in($uv)), vec3($sx, $sy, 1.0), int($folds), int($iter), $per, "
+        "pow(2.0, $sharp_in($uv)*$sharp*8.0), $seed)"
+    );
+    return d;
+}
+
+// ---------------------------------------------------------------------------
 // Phase 4b patterns
 // ---------------------------------------------------------------------------
 
@@ -2159,6 +2609,12 @@ struct Descriptor_registry
         descriptors.push_back(build_combine());
         descriptors.push_back(build_decompose());
         descriptors.push_back(build_swap_channels());
+        descriptors.push_back(build_voronoi_triangle());
+        descriptors.push_back(build_wavelet_noise());
+        descriptors.push_back(build_noise_anisotropic());
+        descriptors.push_back(build_noise_white());
+        descriptors.push_back(build_perlin_color());
+        descriptors.push_back(build_shard_fbm());
         descriptors.push_back(build_uniform_greyscale());
         descriptors.push_back(build_greyscale());
         descriptors.push_back(build_tones());
