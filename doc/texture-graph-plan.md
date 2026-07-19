@@ -43,6 +43,7 @@ ported from it carry an attribution comment). Referred to below as
 | Backlog: Gradients family (5 nodes, new "Gradients" category)| DONE   | 559e7c45 |
 | Backlog: Switch (one per value type; compile-time branch select) | DONE | 3bd1a45d |
 | Backlog: Transform / UV warps (13 of ~25 nodes)              | DONE    | 3f185eae |
+| Backlog: Color / tone filters (14 nodes, new "Color" category)| DONE   | 55150bdf |
 
 ---
 
@@ -51,7 +52,7 @@ ported from it carry an attribution comment). Referred to below as
 Snapshot 2026-07-19 against Material Maker master (392 `.mmg` node definitions
 under `addons/material_maker/nodes/` plus ~19 engine-level node types in
 `engine/nodes/gen_*.gd`: buffer, switch, image, text, graph/group, remote,
-comment, export, iterate_buffer, ...). erhe has 51 node types: 48 descriptors
+comment, export, iterate_buffer, ...). erhe has 65 node types: 62 descriptors
 in `src/editor/texture_graph/nodes/texture_node_descriptors.cpp` plus the
 descriptor-less `output`, `material_output`, and `buffer` nodes
 (`texture_graph_node_factory.cpp`). Note the 392 count includes internal
@@ -63,7 +64,8 @@ smaller than the raw file count.
 
 | erhe node             | Category   | Material Maker source        | Coverage notes |
 |-----------------------|------------|------------------------------|----------------|
-| `uniform`             | Generators | `uniform.mmg`                | Full. MM also has `uniform_greyscale`. |
+| `uniform`             | Generators | `uniform.mmg`                | Full. |
+| `uniform_greyscale`   | Generators | `uniform_greyscale.mmg`      | Full. |
 | `perlin`              | Generators | `perlin.mmg`                 | Full grayscale port. MM also has `perlin_color`. |
 | `voronoi`             | Generators | `voronoi.mmg`                | 3 of 4 outputs (nodes, borders, random color); the companion-node "Fill" output is dropped. |
 | `bricks`              | Generators | `bricks.mmg`                 | Grayscale pattern output only; per-brick random-color / UV / corner outputs and mortar/bevel/round map inputs dropped. 5 bond patterns. |
@@ -107,6 +109,19 @@ smaller than the raw file count.
 | `combine`             | Channels   | `combine.mmg`                | Full. |
 | `decompose`           | Channels   | `decompose.mmg`              | Full (4 grayscale outputs). |
 | `swap_channels`       | Channels   | `swap_channels.mmg`          | Full (10 sources per output channel). |
+| `greyscale`           | Color      | `greyscale.mmg`              | Full (5 weightings). Input typed rgba, not MM's rgb: pins are type-strict here and rgba is what the color producers emit. |
+| `tones`               | Color      | `tones.mmg`                  | Full levels control (in black/mid/white, out black/white). |
+| `tones_map`           | Color      | `tones_map.mmg`              | Full. |
+| `tones_range`         | Color      | `tones_range.mmg`            | Full. |
+| `tones_step`          | Color      | `tones_step.mmg`             | Full. |
+| `tonality`            | Color      | `tonality.mmg`               | Full (grayscale tone curve; `curve` is the per-RGB-channel sibling). |
+| `convert_colorspace`  | Color      | `convert_colorspace.mmg`     | Full (RGB / HSV / YUV, both directions). |
+| `colormap`            | Color      | `colormap.mmg`               | Full. |
+| `palettize`           | Color      | `palettize.mmg`              | Full; MM's instance helper inlined as for `warp`. |
+| `default_color`       | Color      | `default_color.mmg`          | Full. |
+| `compare`             | Color      | `compare.mmg`                | Full. |
+| `ensure_greyscale`    | Channels   | `ensure_greyscale.mmg`       | Re-purposed: MM's is a no-op coercion, this is the explicit rgb -> f bridge type-strict pins need. |
+| `ensure_rgba`         | Channels   | `ensure_rgba.mmg`            | Re-purposed likewise as the f -> rgba bridge. |
 | `reroute`             | Utility    | `gen_reroute.gd` (engine)    | Pass-through wiring helper, same concept. |
 | `switch` / `switch_grayscale` / `switch_rgb` | Utility | `gen_switch.gd` (engine) | Compile-time branch select, same semantics (the unselected branch emits no code). MM's node is dynamic-arity and typed "any"; erhe pins are static and per-type, so this is a fixed 4-choice switch registered once per value type. |
 | `buffer`              | Utility    | `gen_buffer.gd` (engine)     | Explicit RTT cut point, same semantics (size + format, dirty-driven re-render). |
@@ -140,7 +155,7 @@ stays a complete record of the comparison.
 | Switch                       | 1      | `switch` (engine, `gen_switch.gd`) | 1 | 3 | 3.0 | **DONE.** Registered once per value type (`switch`, `switch_grayscale`, `switch_rgb`) because erhe pins are type-strict; 4 choices each. |
 | Image / texture input        | 2      | `image`, `texture` (engine) | 2 | 5 | 2.5 | Missing. Sample an external bitmap as a graph source; the `buffer` node already proves `sampler2D`-backed expressions downstream. |
 | Transform / UV warps         | 25     | `translate`, `rotate`, `scale`, `shear`, `skew`, `warp`, `directional_warp`, `multi_warp`, `warp_dilation*`, `swirl`, `twist`, `spherize`, `kaleidoscope`, `mirror`, `repeat`, `custom_uv`, `distort`, `refract`, `magnify` | 2 | 5 | 2.5 | **DONE (13 of ~25).** rotate, scale, shear, skew, mirror, repeat, swirl, spherize, magnify, kaleidoscope, warp, directional_warp, refract. Still missing: `multi_warp` (compound node), `distort` (needs a lattice widget type), `custom_uv` (tileset + variation machinery), `twist` (sdf3d, out of scope), `warp_dilation*` (multi-pass buffers). |
-| Color / tone filters         | 18     | `auto_tones`, `tonality`, `tones`, `tones_map/range/step`, `palettize`, `colormap`, `convert_colorspace`, `greyscale`, `ensure_greyscale`, `ensure_rgba`, `default_color`, `compare` | 2 | 4 | 2.0 | Missing. Mostly per-pixel one-liners; `auto_tones` needs a min/max reduction pass, `tones` a levels widget. |
+| Color / tone filters         | 18     | `auto_tones`, `tonality`, `tones`, `tones_map/range/step`, `palettize`, `colormap`, `convert_colorspace`, `greyscale`, `ensure_greyscale`, `ensure_rgba`, `default_color`, `compare` | 2 | 4 | 2.0 | **DONE (14 nodes).** Still missing: `auto_tones` (no shader_model - needs a min/max reduction over the whole image, which the composer cannot express). `tones` needed no levels widget after all: it is five color parameters. |
 | Noise variants               | 15     | `voronoi2`, `voronoi_triangle`, `clouds_noise`, `wavelet_noise`, `noise_anisotropic`, `noise_white`, `directional_noise`, `perlin_color`, `crystal`, `shard_fbm`, `fbm2..4` | 2 | 3 | 1.5 | Base `perlin`/`voronoi`/`fbm`/`noise` covered; variants are straight GLSL ports adding looks, not capability. |
 | Deterministic patterns       | 20     | `pattern`, `arc_pavement`, `beehive`, `cairo`, `iching`, `runes`, `japanese_glyphs`, `roman_numerals`, `seven_segment`, `scratches`, `splines`, `polycurve`, `profile`, `dirt` | 2 | 3 | 1.5 | Missing; `cairo` named in Phase 4. Straight GLSL ports, each self-contained. |
 | 2D SDF                       | 51     | `sdcircle`, `sdbox`, `sdline`, `sdpolygon`, `sdstar`, `sdboolean`, `sdsmoothboolean`, `sdrepeat`, `sdmorph`, `sdshow` | 3 | 4 | 1.3 | Missing; `sdf2d` type + shape/ops/stroke/fill nodes named in Phase 4. New value type up front, then many tiny nodes; crisp resolution-independent shape authoring. |
@@ -538,14 +553,14 @@ material in the headless viewport screenshot; smoke script green.
 - **Headless end-to-end** (Phase 3+): `scripts/texture_graph_smoke_test.py`
   against the headless Vulkan editor build over the in-editor MCP server,
   including `texture_graph_export_png` pixel assertions and
-  `capture_screenshot` visual checks. 386 checks as of 2026-07-19; its
+  `capture_screenshot` visual checks. 465 checks as of 2026-07-19; its
   `NODE_SPECS` table must gain a row (pins + default parameters) for every new
   node type, which is what keeps the "all N node types present" check honest.
 - **Descriptor self-check**: `check_texture_node_descriptors()` composes every
   descriptor standalone at `Texture_graph_window` construction and logs
   "Texture graph: all N node descriptors compose cleanly" - the cheapest
   confirmation that a newly added descriptor's GLSL substitutes and assembles
-  (N = 48 as of 2026-07-19).
+  (N = 62 as of 2026-07-19).
 - **Process**: per step - edit, build (ninja MSVC), tests, independent diff
   review, fix, commit (per-topic commits). Restore
   `config/editor/desktop_window_imgui_host_imgui.ini` after editor runs.
