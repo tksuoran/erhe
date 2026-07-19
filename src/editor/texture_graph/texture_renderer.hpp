@@ -139,6 +139,9 @@ private:
     static constexpr std::size_t s_frame_ring = 4; // safely more than frames in flight
 
     erhe::graphics::Device&                                          m_device;
+    // Fullscreen-triangle vertex shader, built once from the device's
+    // texture-origin convention (see make_vertex_source).
+    std::string                                                      m_vertex_source;
     std::unique_ptr<erhe::graphics::Bind_group_layout>              m_empty_layout;
     std::unique_ptr<erhe::graphics::Bind_group_layout>              m_ubo_layout;
     std::unique_ptr<erhe::graphics::Fragment_outputs>              m_fragment_outputs;

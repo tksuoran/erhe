@@ -18,6 +18,9 @@
 #include "erhe_graphics/texture.hpp"
 
 #include "erhe_texgen/shader_code.hpp"
+#include "erhe_math/math_util.hpp"
+
+#include <fmt/format.h>
 
 #include <glm/glm.hpp>
 
@@ -32,17 +35,45 @@ namespace editor {
 namespace {
 
 // Fullscreen-triangle vertex shader emitting a [0,1] v_uv varying, matching
-// erhe::texgen's uv_source_expression "v_uv" (identical to the proven recipe in
-// src/erhe/graphics/test/test_texgen_render.cpp).
-constexpr const char* c_vertex_source = R"glsl(
-layout(location = 0) out vec2 v_uv;
-void main()
+// erhe::texgen's uv_source_expression "v_uv".
+//
+// The uv derivation must follow the device's texture-origin convention, like
+// all application code (see the Y_SIGN note in erhe::graphics test_topology):
+// which NDC y ends up in framebuffer row 0 differs per backend. With a
+// bottom_left origin (OpenGL) row 0 is NDC y = -1; with top_left (Vulkan,
+// Metal) it is NDC y = +1, because the Vulkan backend sets a negative-height
+// viewport to match the GL convention and Metal's transform is (1 - y_ndc).
+//
+// Taking uv straight from the NDC position - as this did - hardcodes the
+// bottom_left case. On Vulkan and Metal every composed texture was therefore
+// stored vertically mirrored against its own shader uv space: row 0 held the
+// uv.y = 1 row, so node previews and PNG exports came out upside down (an
+// erhe-composed image disagreed with Material Maker, whose GLSL these nodes are
+// ported from, about which way is up). The sign restores "row 0 is uv.y = 0" on
+// every backend.
+//
+// Note the Buffer path was NOT affected: a buffer render and the downstream
+// sample of it shared the same flipped mapping, so it round-tripped
+// consistently before this change and still does after it (measured, both
+// ways - the obvious "a buffer must have mirrored the image too" guess is
+// wrong).
+[[nodiscard]] auto make_vertex_source(const erhe::graphics::Device& device) -> std::string
 {
-    vec2 positions[3] = vec2[3](vec2(-1.0, -1.0), vec2(3.0, -1.0), vec2(-1.0, 3.0));
-    gl_Position = vec4(positions[gl_VertexID], 0.0, 1.0);
-    v_uv = (positions[gl_VertexID] * 0.5) + vec2(0.5);
+    const bool top_left =
+        (device.get_info().coordinate_conventions.texture_origin == erhe::math::Texture_origin::top_left);
+    const char* const v_sign = top_left ? "-1.0" : "1.0";
+    return
+        std::string{
+            "layout(location = 0) out vec2 v_uv;\n"
+            "void main()\n"
+            "{\n"
+            "    vec2 positions[3] = vec2[3](vec2(-1.0, -1.0), vec2(3.0, -1.0), vec2(-1.0, 3.0));\n"
+            "    vec2 p = positions[gl_VertexID];\n"
+            "    gl_Position = vec4(p, 0.0, 1.0);\n"
+            "    v_uv = (vec2(p.x, p.y * "
+        } + v_sign + ") * 0.5) + vec2(0.5);\n"
+        "}\n";
 }
-)glsl";
 
 // The assembled fragment body reads the "v_uv" varying; erhe injects only
 // fragment outputs, so the input declaration is prepended to the body.
@@ -51,7 +82,8 @@ constexpr const char* c_fragment_varying = "layout(location = 0) in vec2 v_uv;\n
 } // namespace
 
 Texture_renderer::Texture_renderer(erhe::graphics::Device& device)
-    : m_device{device}
+    : m_device       {device}
+    , m_vertex_source{make_vertex_source(device)}
 {
     m_empty_layout = std::make_unique<erhe::graphics::Bind_group_layout>(
         device,
@@ -217,7 +249,7 @@ auto Texture_renderer::get_compiled(
         .fragment_outputs = m_fragment_outputs.get(),
         .no_vertex_input  = true,
         .shaders = {
-            { erhe::graphics::Shader_type::vertex_shader,   std::string_view{c_vertex_source} },
+            { erhe::graphics::Shader_type::vertex_shader,   std::string_view{m_vertex_source} },
             { erhe::graphics::Shader_type::fragment_shader, std::string_view{full_fragment_source} }
         },
         .bind_group_layout = &layout

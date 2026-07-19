@@ -1044,14 +1044,13 @@ def section_deterministic_patterns():
               monotone and (row[0] < 32) and (row[-1] > 200),
               f"first={row[0]} last={row[-1]} monotone={monotone}")
 
-    # Pins down the uv.y <-> image row mapping, which these nodes are the first
-    # to make legible: erhe renders y-up (flipped viewport), so exported row 0
-    # is uv.y ~ 1, the opposite of Godot / Material Maker. Ported GLSL that is
-    # asymmetric in y therefore exports vertically mirrored against Material
-    # Maker's preview - a seven_segment 2 reads as a 5. That is a library-wide
-    # convention, not a property of these ports, so it is asserted rather than
-    # worked around per node; if the convention is ever changed, this fails
-    # first and on purpose.
+    # Pins down the uv.y <-> image row mapping. A composed texture must store
+    # its own shader uv space the right way up: row 0 is uv.y = 0, so sampling
+    # the result at v reproduces the shader's uv.y = v. The texgen fullscreen
+    # triangle used to derive uv straight from the NDC position, which hardcodes
+    # the bottom_left (OpenGL) texture origin - on Vulkan / Metal that stored
+    # every image mirrored, and a seven_segment 2 read as a 5. These nodes are
+    # the first whose output is legible enough to make that obvious.
     set_param(pattern, {"mix": 0, "x_wave": 4, "x_scale": 1.0, "y_wave": 3, "y_scale": 1.0})
     got = image(pattern, "orientation", size=8)
     if got is None:
@@ -1059,10 +1058,26 @@ def section_deterministic_patterns():
     else:
         reds, w, h = got
         column = [reds[y * w] for y in range(h)]
-        check(S, "exported row 0 is uv.y ~ 1 (erhe renders y-up, unlike Material Maker)",
-              (column[0] > 200) and (column[-1] < 48) and
-              all(column[y] >= column[y + 1] for y in range(h - 1)),
+        check(S, "exported row 0 is uv.y ~ 0 (image stored the right way up)",
+              (column[0] < 48) and (column[-1] > 200) and
+              all(column[y] <= column[y + 1] for y in range(h - 1)),
               f"column={column}")
+
+    # The same image through a Buffer node must come out identical. The buffer
+    # render and the downstream sample of it share the uv mapping, so this held
+    # before the orientation fix as well - it is asserted so a future change to
+    # one side of that pair cannot silently mirror buffered subtrees.
+    buffered = add_node("buffer")["id"]
+    connect(pattern, 0, buffered, 0)
+    time.sleep(1.0)
+    got_buffered = image(buffered, "orientation_buffered", size=8)
+    if (got is None) or (got_buffered is None):
+        check(S, "buffered y-ramp exports", False)
+    else:
+        direct_column   = [got[0][y * got[1]] for y in range(got[2])]
+        buffered_column = [got_buffered[0][y * got_buffered[1]] for y in range(got_buffered[2])]
+        check(S, "a Buffer node preserves orientation", direct_column == buffered_column,
+              f"direct={direct_column} buffered={buffered_column}")
 
     for combine in range(6):  # every mix_* combiner must compile and render
         set_param(pattern, {"mix": combine, "x_wave": 0, "y_wave": 0, "x_scale": 4.0, "y_scale": 4.0})
