@@ -62,18 +62,18 @@ companion sub-nodes of compound graphs (e.g. `edge_detect_1..3`,
 `fill_preprocess`), so the user-visible Material Maker library is somewhat
 smaller than the raw file count.
 
-**Vertical orientation differs from Material Maker.** erhe renders the texture
-graph y-up (flipped viewport), so an exported PNG's row 0 is `uv.y ~ 1`, the
-opposite of Godot / Material Maker. Ported GLSL that is asymmetric in y
-therefore exports vertically mirrored against Material Maker's preview - most
-visibly on the glyph nodes, where a `seven_segment` 2 reads as a 5 and
-`profile`'s Fill style fills the top rather than the bottom. This is a
-library-wide convention that predates the Deterministic patterns row (those
-nodes are simply the first whose output is legible enough to make it obvious),
-so it is asserted in `section_patterns` rather than worked around per node; a
-per-node y flip would only make the library disagree with itself about which
-way is up. Deciding whether to flip the convention (which changes every node's
-export and any baked material) is open.
+**Vertical orientation (fixed).** Composed textures were stored vertically
+mirrored against their own shader uv space on Vulkan and Metal: the texgen
+fullscreen triangle derived `v_uv` straight from the NDC position, which
+hardcodes the `bottom_left` (OpenGL) texture origin, so row 0 held the
+`uv.y = 1` row. Node previews and PNG exports came out upside down - a
+`seven_segment` 2 read as a 5, and `profile`'s Fill style filled the top. The
+vertex shader now takes the sign from
+`device.get_info().coordinate_conventions.texture_origin`, as all application
+code must (see the `Y_SIGN` note in `erhe::graphics` `test_topology`), so row 0
+is `uv.y = 0` on every backend and an erhe-composed image agrees with Material
+Maker, whose GLSL these nodes are ported from. `section_patterns` asserts the
+mapping, and that a Buffer node round-trips it unchanged.
 
 ### erhe nodes and their Material Maker counterparts
 
