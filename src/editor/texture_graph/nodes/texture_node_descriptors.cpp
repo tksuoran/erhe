@@ -969,6 +969,59 @@ auto build_multigradient() -> Node_descriptor
     return d;
 }
 
+// Switch - ported from Material Maker's engine-level switch node
+// (engine/nodes/gen_switch.gd, MIT): an input selector for A/B comparison.
+//
+// The selection is a COMPILE-TIME choice, matching Material Maker, whose
+// _get_shader_code() delegates straight to the selected source and never looks
+// at the others. Here the "source" parameter is an enum whose code fragment is
+// the sample expression for one input ("$in2($uv)"), and the output expression
+// is just "$source": the composer substitutes right-to-left and re-scans what
+// it substituted, so the fragment expands to that input's sampling and only
+// the selected branch's subtree is ever composed. The unselected branches
+// contribute no globals, no uniforms and no code - which is the whole point of
+// the node, since an A/B switch that still paid for B would not be a win.
+//
+// Consequences worth knowing: changing "source" recompiles the shader (enum
+// semantics), exactly as it does in Material Maker; and a "source" pointing at
+// an unconnected input yields that input's default (opaque black / 0.0) rather
+// than an error.
+//
+// Two deviations from Material Maker, both forced by erhe's static, type-safe
+// pins:
+//
+// - gen_switch.gd builds its pins dynamically (1-5 output groups x 2-5
+//   choices); descriptors cannot, so this is a fixed 4-choice, single-output
+//   switch.
+// - gen_switch.gd types its pins "any". erhe's pin keys are per Value_type and
+//   Graph::connect() rejects a key mismatch (Texture_pin_key), so a single
+//   rgba switch could not A/B two grayscale generators - the most likely use.
+//   One switch per value type is registered instead; they differ only in pin
+//   type, so they share this builder.
+auto build_switch(const char* name, const char* label, const Value_type type, const char* default_expression) -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = name;
+    d.label    = label;
+    d.category = "Utility";
+    add_input(d, "in1", type, default_expression);
+    add_input(d, "in2", type, default_expression);
+    add_input(d, "in3", type, default_expression);
+    add_input(d, "in4", type, default_expression);
+    add_enum(
+        d, "source", "Source",
+        {
+            Enum_value{.label = "Input 1", .code = "$in1($uv)"},
+            Enum_value{.label = "Input 2", .code = "$in2($uv)"},
+            Enum_value{.label = "Input 3", .code = "$in3($uv)"},
+            Enum_value{.label = "Input 4", .code = "$in4($uv)"}
+        },
+        0
+    );
+    add_output(d, type, "$source");
+    return d;
+}
+
 // ---------------------------------------------------------------------------
 // Phase 4b patterns
 // ---------------------------------------------------------------------------
@@ -1349,6 +1402,9 @@ struct Descriptor_registry
         descriptors.push_back(build_combine());
         descriptors.push_back(build_decompose());
         descriptors.push_back(build_swap_channels());
+        descriptors.push_back(build_switch("switch",           "Switch (Color)",     Value_type::rgba,      "vec4(vec3(0.0), 1.0)"));
+        descriptors.push_back(build_switch("switch_grayscale", "Switch (Grayscale)", Value_type::grayscale, "0.0"));
+        descriptors.push_back(build_switch("switch_rgb",       "Switch (RGB)",       Value_type::rgb,       "vec3(0.0)"));
         descriptors.push_back(build_reroute());
         ordered.reserve(descriptors.size());
         for (const Node_descriptor& descriptor : descriptors) {

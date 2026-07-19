@@ -341,6 +341,9 @@ NODE_SPECS = {
     "decompose":           (["rgba"],                ["f", "f", "f", "f"], {}),
     "swap_channels":       (["rgba"],                ["rgba"], {"out_r": 2, "out_g": 4, "out_b": 6, "out_a": 8}),
     "reroute":             (["rgba"],                ["rgba"], {}),
+    "switch":              (["rgba"]*4,              ["rgba"], {"source": 0}),
+    "switch_grayscale":    (["f"]*4,                 ["f"],    {"source": 0}),
+    "switch_rgb":          (["rgb"]*4,               ["rgb"],  {"source": 0}),
     "buffer":              (["f", "rgb", "rgba"],    ["f", "rgb", "rgba"], {"size": 512, "pause": False}),
     "output":              (["f", "rgb", "rgba"],    [],       {"name": "Texture Graph", "size": 1024, "assign": False}),
     "material_output":     (["rgba", "rgb", "f", "rgba", "f", "rgba", "rgb", "rgba", "f", "rgba", "rgb", "rgba"],
@@ -851,6 +854,63 @@ def section_multi_output_decompose():
           f"pixel={cx}")
 
 
+def section_switch():
+    """Switch selects a branch at COMPOSE time (Material Maker gen_switch.gd).
+
+    The point of the node is that the unselected branch contributes nothing to
+    the shader, so the assertions are on rendered pixels per selection rather
+    than on the node merely existing.
+    """
+    S = "switch"
+    TMP_DIR.mkdir(parents=True, exist_ok=True)
+    fresh_graph()
+
+    sw = add_node("switch")["id"]
+    red = add_node("uniform")["id"]
+    blue = add_node("uniform")["id"]
+    set_param(red,  {"color": [1.0, 0.0, 0.0, 1.0]})
+    set_param(blue, {"color": [0.0, 0.0, 1.0, 1.0]})
+    connect(red, 0, sw, 0)
+    connect(blue, 0, sw, 1)
+
+    def center(selection, name):
+        set_param(sw, {"source": selection})
+        path = TMP_DIR / f"switch_{name}.png"
+        export_png(sw, path, size=16)
+        w, h, ch, buf = decode_png(path)
+        return pixel(w, ch, buf, 8, 8)
+
+    px1 = center(0, "in1_red")
+    check(S, "source=0 selects in1 (red)", px1[0] > 200 and px1[2] < 55, f"pixel={px1}")
+    px2 = center(1, "in2_blue")
+    check(S, "source=1 selects in2 (blue)", px2[2] > 200 and px2[0] < 55, f"pixel={px2}")
+    check(S, "changing source changes the rendered result", px1 != px2, f"{px1} vs {px2}")
+
+    # An unconnected selection falls back to the input default (opaque black)
+    # rather than erroring or keeping the previous branch.
+    px3 = center(2, "in3_unconnected")
+    check(S, "source=2 (unconnected) renders the default, opaque black",
+          all(v < 12 for v in px3[:3]) and px3[3] > 200, f"pixel={px3}")
+
+    # The grayscale variant exists precisely because pin keys are per value
+    # type: connecting a grayscale generator to the rgba switch must be
+    # refused, and must be accepted by switch_grayscale.
+    fresh_graph()
+    sw_rgba = add_node("switch")["id"]
+    sw_gray = add_node("switch_grayscale")["id"]
+    perlin = add_node("perlin")["id"]
+    err = connect_expect_error(perlin, 0, sw_rgba, 0)
+    check(S, "grayscale source refused by the rgba switch (pin key mismatch)", bool(err), f"err={err}")
+    check(S, "grayscale source accepted by switch_grayscale",
+          connect(perlin, 0, sw_gray, 0) is not None)
+
+    # switch_rgb likewise takes rgb sources (color_noise is rgb).
+    fresh_graph()
+    sw_rgb = add_node("switch_rgb")["id"]
+    cnoise = add_node("color_noise")["id"]
+    check(S, "rgb source accepted by switch_rgb", connect(cnoise, 0, sw_rgb, 0) is not None)
+
+
 def section_new_filters():
     """A few Phase 4b filters proven end-to-end: invert flips a color, the math
     op enum switches behavior (A*0 -> flat black), and remap collapses a varying
@@ -1284,6 +1344,7 @@ def main():
         section_gradient_curve,
         section_multi_output_decompose,
         section_new_filters,
+        section_switch,
         section_buffer,
         section_blur,
         section_reseed,

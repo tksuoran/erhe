@@ -24,7 +24,8 @@ namespace editor {
 // radial_gradient, spiral_gradient, multigradient, sine_wave, truchet, weave,
 // blend, colorize, curve, transform, brightness_contrast, normal_map, blur,
 // math, invert, quantize, adjust_hsv, remap, combine, decompose, swap_channels,
-// reroute), or nullptr for an unknown name. The "output" / "material_output"
+// reroute, switch, switch_grayscale, switch_rgb), or nullptr for an unknown
+// name. The "output" / "material_output"
 // sink nodes and the "buffer" node have no descriptor and are created directly
 // by the factory.
 [[nodiscard]] auto get_texture_node_descriptor(std::string_view type_name) -> const erhe::texgen::Node_descriptor*;
