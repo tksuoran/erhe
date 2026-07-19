@@ -341,6 +341,19 @@ NODE_SPECS = {
     "decompose":           (["rgba"],                ["f", "f", "f", "f"], {}),
     "swap_channels":       (["rgba"],                ["rgba"], {"out_r": 2, "out_g": 4, "out_b": 6, "out_a": 8}),
     "reroute":             (["rgba"],                ["rgba"], {}),
+    "rotate":              (["rgba"],                ["rgba"], {"cx": 0.0, "cy": 0.0, "rotate": 0.0}),
+    "scale":               (["rgba"],                ["rgba"], {"scale_x": 1.0, "scale_y": 1.0}),
+    "shear":               (["rgba"],                ["rgba"], {"direction": 1, "amount": 0.0, "center": 0.0}),
+    "skew":                (["rgba"],                ["rgba"], {"direction": 0, "amount": 0.0}),
+    "mirror":              (["rgba"],                ["rgba"], {"direction": 0, "offset": 0.0, "flip_sides": False}),
+    "repeat":              (["rgba"],                ["rgba"], {}),
+    "swirl":               (["rgba"],                ["rgba"], {"angle": 0.0, "radius": 0.5, "tile": False}),
+    "spherize":            (["rgba"],                ["rgba", "f", "f"], {"r": 0.9, "a": 1.0}),
+    "magnify":             (["rgba", "f"],           ["rgba"], {"scale": 1.0}),
+    "kaleidoscope":        (["rgba"],                ["rgba"], {"count": 4.0, "offset": 0.0}),
+    "warp":                (["rgba", "f", "f"],      ["rgba"], {"mode": 0, "amount": 0.0, "eps": 0.05}),
+    "directional_warp":    (["rgba", "f", "f"],      ["rgba"], {"angle": 0.0, "strength": 0.1}),
+    "refract":             (["rgba", "f"],           ["rgba"], {"refract": 1.0}),
     "switch":              (["rgba"]*4,              ["rgba"], {"source": 0}),
     "switch_grayscale":    (["f"]*4,                 ["f"],    {"source": 0}),
     "switch_rgb":          (["rgb"]*4,               ["rgb"],  {"source": 0}),
@@ -854,6 +867,92 @@ def section_multi_output_decompose():
           f"pixel={cx}")
 
 
+def section_transform():
+    """Transform / UV warp family: nodes that resample the input at a rewritten
+    coordinate.
+
+    Two things are worth asserting beyond "the node exists". First, that the
+    coordinate rewrite is actually applied - checked on a horizontal ramp,
+    where the expected pixel mapping is exact. Second, that all of these nodes
+    can coexist in ONE composed shader: each carries its own GLSL global, and
+    erhe deduplicates globals by exact string match, so a helper embedded in
+    two different globals would be emitted twice and fail to link - a failure
+    that only appears when both nodes are in one graph and that the standalone
+    descriptor self-check cannot see.
+    """
+    S = "transform"
+    TMP_DIR.mkdir(parents=True, exist_ok=True)
+
+    def ramp_row(node_id, name, size=64):
+        """Export a node and return the middle row of its red channel."""
+        path = TMP_DIR / f"transform_{name}.png"
+        export_png(node_id, path, size=size)
+        w, h, ch, buf = decode_png(path)
+        row = h // 2
+        return [buf[((row * w) + x) * ch] for x in range(w)]
+
+    # A horizontal black->white ramp: the source for the exact-mapping checks.
+    fresh_graph()
+    src = add_node("gradient")["id"]
+    base = ramp_row(src, "ramp_source")
+    check(S, "gradient source is a rising ramp", base[0] < 16 and base[-1] > 239 and base[0] < base[-1],
+          f"first={base[0]} last={base[-1]}")
+
+    # mirror (horizontal, offset 0) maps x -> abs(x-0.5)+0.5, so the row must be
+    # symmetric about the center and brightest at BOTH edges.
+    fresh_graph()
+    grad = add_node("gradient")["id"]
+    mir = add_node("mirror")["id"]
+    connect(grad, 0, mir, 0)
+    row = ramp_row(mir, "mirror")
+    n = len(row)
+    symmetric = all(abs(row[i] - row[n - 1 - i]) <= 4 for i in range(n // 2))
+    check(S, "mirror output is symmetric about the center", symmetric,
+          f"left={row[:4]} right={row[-4:]}")
+    check(S, "mirror is brightest at both edges, darkest at the center",
+          row[0] > 239 and row[-1] > 239 and row[n // 2] < row[0] - 64,
+          f"edges=({row[0]},{row[-1]}) center={row[n // 2]}")
+
+    # repeat wraps the coordinate: scaling x2 then repeating yields two ramps
+    # across the row, so the row must fall at least once (a reset).
+    fresh_graph()
+    grad = add_node("gradient")["id"]
+    sc = add_node("scale")["id"]
+    rep = add_node("repeat")["id"]
+    set_param(sc, {"scale_x": 0.5, "scale_y": 1.0})
+    connect(grad, 0, sc, 0)
+    connect(sc, 0, rep, 0)
+    row = ramp_row(rep, "repeat")
+    resets = sum(1 for i in range(1, len(row)) if row[i] + 32 < row[i - 1])
+    check(S, "repeat wraps the coordinate (ramp restarts)", resets >= 1, f"resets={resets}")
+
+    # The coexistence / global-collision regression: every transform node in one
+    # chain, composed into a single shader.
+    fresh_graph()
+    bricks = add_node("bricks")["id"]
+    colorize = add_node("colorize")["id"]
+    perlin = add_node("perlin")["id"]
+    connect(bricks, 0, colorize, 0)
+    gray_inputs = {"warp": [1, 2], "magnify": [1], "refract": [1], "directional_warp": [1, 2]}
+    chain = ["rotate", "scale", "shear", "skew", "mirror", "repeat", "swirl", "spherize",
+             "magnify", "kaleidoscope", "warp", "directional_warp", "refract"]
+    prev = colorize
+    for type_name in chain:
+        node_id = add_node(type_name)["id"]
+        connect(prev, 0, node_id, 0)
+        for slot in gray_inputs.get(type_name, []):
+            connect(perlin, 0, node_id, slot)
+        prev = node_id
+    all_png = TMP_DIR / "transform_all_chained.png"
+    result = export_png(prev, all_png, size=64)
+    check(S, f"all {len(chain)} transform nodes compose+compile in ONE shader",
+          isinstance(result, dict) and result.get("width") == 64, f"result={result}")
+    w, h, ch, buf = decode_png(all_png)
+    reds = [buf[(i * ch)] for i in range(w * h)]
+    check(S, "the chained result renders actual content (not flat)",
+          (max(reds) - min(reds)) > 16, f"min={min(reds)} max={max(reds)}")
+
+
 def section_switch():
     """Switch selects a branch at COMPOSE time (Material Maker gen_switch.gd).
 
@@ -1344,6 +1443,7 @@ def main():
         section_gradient_curve,
         section_multi_output_decompose,
         section_new_filters,
+        section_transform,
         section_switch,
         section_buffer,
         section_blur,

@@ -1023,6 +1023,373 @@ auto build_switch(const char* name, const char* label, const Value_type type, co
 }
 
 // ---------------------------------------------------------------------------
+// Transform / UV warps
+//
+// Every node in this family is the same shape: sample the input at a rewritten
+// coordinate, "$in(<f(uv)>)". The composer inlines the upstream subtree with
+// $uv rebound to that expression, so no engine support beyond what already
+// exists is needed; the two warp nodes additionally use a function-form input
+// (one emitted helper, sampled several times) so the height map's subtree is
+// not duplicated per sample.
+//
+// Ported from Material Maker rotate.mmg, scale.mmg, shear.mmg, skew.mmg,
+// mirror.mmg, repeat.mmg, swirl.mmg, spherize.mmg, magnify.mmg,
+// kaleidoscope.mmg, warp.mmg, directional_warp.mmg and refract.mmg (MIT).
+//
+// Globals here are deliberately SELF-CONTAINED, even where Material Maker
+// shares one helper between nodes (its swirl calls the same rotate() as its
+// rotate node). erhe deduplicates globals by exact string match, so two
+// descriptors that each embedded a copy of the same helper inside a larger
+// global would emit that helper twice and fail to link - and only when both
+// nodes happen to be in one graph, which the standalone descriptor self-check
+// cannot see. Keeping each global free of shared symbols avoids the trap.
+// ---------------------------------------------------------------------------
+
+// Rotate - ported from Material Maker rotate.mmg (MIT).
+auto build_rotate() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "rotate";
+    d.label    = "Rotate";
+    d.category = "Transform";
+    d.global =
+        "vec2 mm_uv_rotate(vec2 uv, float rotate) {\n"
+        "    vec2 rv;\n"
+        "    rv.x = cos(rotate)*uv.x + sin(rotate)*uv.y;\n"
+        "    rv.y = -sin(rotate)*uv.x + cos(rotate)*uv.y;\n"
+        "    return rv;\n"
+        "}\n";
+    add_input(d, "in", Value_type::rgba, "vec4($uv, 0.0, 1.0)");
+    add_float(d, "cx",     "Center X",  0.0f,   -1.0f,   1.0f, 0.005f);
+    add_float(d, "cy",     "Center Y",  0.0f,   -1.0f,   1.0f, 0.005f);
+    add_float(d, "rotate", "Rotate",    0.0f, -720.0f, 720.0f, 0.005f);
+    d.code = "vec2 $(name_uv)_c = vec2(0.5+$cx, 0.5+$cy);\n";
+    add_output(d, Value_type::rgba, "$in(mm_uv_rotate($uv-$(name_uv)_c, $rotate*0.01745329251)+$(name_uv)_c)");
+    return d;
+}
+
+// Scale - ported from Material Maker scale.mmg (MIT).
+auto build_scale() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "scale";
+    d.label    = "Scale";
+    d.category = "Transform";
+    d.global =
+        "vec2 mm_uv_scale(vec2 uv, vec2 center, vec2 scale) {\n"
+        "    uv -= center;\n"
+        "    uv /= scale;\n"
+        "    uv += center;\n"
+        "    return uv;\n"
+        "}\n";
+    add_input(d, "in", Value_type::rgba, "vec4($uv, 0.0, 1.0)");
+    add_float(d, "cx",      "Center X", 0.0f, -1.0f,  1.0f, 0.005f);
+    add_float(d, "cy",      "Center Y", 0.0f, -1.0f,  1.0f, 0.005f);
+    add_float(d, "scale_x", "Scale X",  1.0f,  0.0f, 50.0f, 0.005f);
+    add_float(d, "scale_y", "Scale Y",  1.0f,  0.0f, 50.0f, 0.005f);
+    add_output(d, Value_type::rgba, "$in(mm_uv_scale($uv, vec2(0.5+$cx, 0.5+$cy), vec2($scale_x, $scale_y)))");
+    return d;
+}
+
+// Shear - ported from Material Maker shear.mmg (MIT). The direction enum
+// substitutes the two components of a vec2 mask, as it does in Material Maker.
+auto build_shear() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "shear";
+    d.label    = "Shear";
+    d.category = "Transform";
+    add_input(d, "in", Value_type::rgba, "vec4(1.0)");
+    add_enum(
+        d, "direction", "Direction",
+        {
+            Enum_value{.label = "Horizontal", .code = "1.0, 0.0"},
+            Enum_value{.label = "Vertical",   .code = "0.0, 1.0"}
+        },
+        1
+    );
+    add_float(d, "amount", "Amount", 0.0f, -1.0f, 1.0f, 0.01f);
+    add_float(d, "center", "Center", 0.0f,  0.0f, 1.0f, 0.01f);
+    add_output(d, Value_type::rgba, "$in($uv+$amount*($uv.yx-vec2($center))*vec2($direction))");
+    return d;
+}
+
+// Skew - ported from Material Maker skew.mmg (MIT). The direction enum picks
+// the helper suffix (Material Maker's "uvskew_$direction" idiom).
+auto build_skew() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "skew";
+    d.label    = "Skew";
+    d.category = "Transform";
+    d.global =
+        "vec2 mm_uv_skew_h(vec2 uv, float amount) {\n"
+        "    return vec2(uv.x+amount*(uv.y-0.5), uv.y);\n"
+        "}\n"
+        "\n"
+        "vec2 mm_uv_skew_v(vec2 uv, float amount) {\n"
+        "    return vec2(uv.x, uv.y+amount*(uv.x-0.5));\n"
+        "}\n";
+    add_input(d, "in", Value_type::rgba, "vec4($uv, 0.0, 1.0)");
+    add_enum(
+        d, "direction", "Direction",
+        {
+            Enum_value{.label = "Horizontal", .code = "h"},
+            Enum_value{.label = "Vertical",   .code = "v"}
+        },
+        0
+    );
+    add_float(d, "amount", "Amount", 0.0f, -3.0f, 3.0f, 0.005f);
+    add_output(d, Value_type::rgba, "$in(mm_uv_skew_$direction($uv, $amount))");
+    return d;
+}
+
+// Mirror - ported from Material Maker mirror.mmg (MIT).
+auto build_mirror() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "mirror";
+    d.label    = "Mirror";
+    d.category = "Transform";
+    d.global =
+        "vec2 mm_uv_mirror_h(vec2 uv, float offset, float flip_sides) {\n"
+        "    return vec2(flip_sides*max(0.0, (abs(uv.x-0.5)-0.5*offset))+0.5, uv.y);\n"
+        "}\n"
+        "\n"
+        "vec2 mm_uv_mirror_v(vec2 uv, float offset, float flip_sides) {\n"
+        "    return vec2(uv.x, flip_sides*max(0.0, (abs(uv.y-0.5)-0.5*offset))+0.5);\n"
+        "}\n";
+    add_input(d, "in", Value_type::rgba, "vec4($uv, 0.0, 1.0)");
+    add_enum(
+        d, "direction", "Direction",
+        {
+            Enum_value{.label = "Horizontal", .code = "h"},
+            Enum_value{.label = "Vertical",   .code = "v"}
+        },
+        0
+    );
+    add_float(d, "offset",     "Offset",     0.0f, 0.0f, 1.0f, 0.005f);
+    add_bool (d, "flip_sides", "Flip Sides", false);
+    add_output(d, Value_type::rgba, "$in(mm_uv_mirror_$direction($uv, $offset, $flip_sides ? -1.0 : 1.0))");
+    return d;
+}
+
+// Repeat - ported from Material Maker repeat.mmg (MIT). Tiles the input by
+// wrapping the coordinate; the scale itself comes from an upstream transform.
+auto build_repeat() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "repeat";
+    d.label    = "Repeat";
+    d.category = "Transform";
+    add_input(d, "in", Value_type::rgba, "vec4($uv, 0.0, 1.0)");
+    add_output(d, Value_type::rgba, "$in(fract($uv))");
+    return d;
+}
+
+// Swirl - ported from Material Maker swirl.mmg (MIT). The rotation is written
+// out inside the helper rather than calling a shared rotate(): see the
+// self-contained-globals note above.
+auto build_swirl() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "swirl";
+    d.label    = "Swirl";
+    d.category = "Transform";
+    d.global =
+        "vec2 mm_uv_swirl_tile_false(vec2 uv, vec2 center, float radius, float angle) {\n"
+        "    vec2 v = uv-center;\n"
+        "    float l = length(v);\n"
+        "    if (l > radius) {\n"
+        "        return uv;\n"
+        "    }\n"
+        "    float a = angle*(1.0-l/radius)*(1.0-l/radius);\n"
+        "    return vec2(cos(a)*v.x + sin(a)*v.y, -sin(a)*v.x + cos(a)*v.y)+center;\n"
+        "}\n"
+        "\n"
+        "vec2 mm_uv_swirl_tile_true(vec2 uv, vec2 center, float radius, float angle) {\n"
+        "    center = fract(center);\n"
+        "    vec2 tile_offset = 2.0*(step(vec2(0.5), uv)-vec2(0.5));\n"
+        "    uv = mm_uv_swirl_tile_false(uv, center, radius, angle);\n"
+        "    uv = mm_uv_swirl_tile_false(uv, center+tile_offset, radius, angle);\n"
+        "    uv = mm_uv_swirl_tile_false(uv, center+vec2(tile_offset.x, 0.0), radius, angle);\n"
+        "    return mm_uv_swirl_tile_false(uv, center+vec2(0.0, tile_offset.y), radius, angle);\n"
+        "}\n";
+    add_input(d, "in", Value_type::rgba, "vec4($uv, 0.0, 1.0)");
+    add_float(d, "cx",     "Center X", 0.0f,   -0.5f,   0.5f, 0.005f);
+    add_float(d, "cy",     "Center Y", 0.0f,   -0.5f,   0.5f, 0.005f);
+    add_float(d, "angle",  "Angle",    0.0f, -360.0f, 360.0f, 0.005f);
+    add_float(d, "radius", "Radius",   0.5f,    0.0f,   0.5f, 0.01f);
+    add_bool (d, "tile",   "Tile",     false);
+    add_output(
+        d, Value_type::rgba,
+        "$in(mm_uv_swirl_tile_$tile($uv, vec2(0.5+$cx, 0.5+$cy), $radius, $angle*0.01745329251))"
+    );
+    return d;
+}
+
+// Spherize - ported from Material Maker spherize.mmg (MIT). Material Maker's
+// two extra outputs (the inside mask and the raw r-f field) are kept.
+auto build_spherize() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "spherize";
+    d.label    = "Spherize";
+    d.category = "Transform";
+    add_input(d, "in", Value_type::rgba, "vec4($uv, 0.0, 1.0)");
+    add_float(d, "r",  "Radius",   0.9f,  0.0f, 1.0f, 0.01f);
+    add_float(d, "a",  "Amount",   1.0f,  0.0f, 1.0f, 0.01f);
+    add_float(d, "cx", "Center X", 0.0f, -1.0f, 1.0f, 0.01f);
+    add_float(d, "cy", "Center Y", 0.0f, -1.0f, 1.0f, 0.01f);
+    d.code =
+        "vec2 $(name_uv)_co = vec2($cx+0.5, $cy+0.5);\n"
+        "float $(name_uv)_f = dot(2.0*($uv - $(name_uv)_co), 2.0*($uv - $(name_uv)_co));\n";
+    add_output(
+        d, Value_type::rgba,
+        "mix($in($(name_uv)_co-($(name_uv)_co-$uv)/(sqrt(abs($r-$(name_uv)_f))*max($a, 0.0)+1.0)), $in($uv), step($r, $(name_uv)_f))"
+    );
+    add_output(d, Value_type::grayscale, "step($(name_uv)_f, $r)");
+    add_output(d, Value_type::grayscale, "$r-$(name_uv)_f");
+    return d;
+}
+
+// Magnify - ported from Material Maker magnify.mmg (MIT). The grayscale "s"
+// input modulates the magnification per pixel.
+auto build_magnify() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "magnify";
+    d.label    = "Magnify";
+    d.category = "Transform";
+    add_input(d, "in", Value_type::rgba,      "vec4($uv, 0.0, 1.0)");
+    add_input(d, "s",  Value_type::grayscale, "max(1.0-2.0*length($uv-vec2(0.5)), 0.0)");
+    add_float(d, "cx",    "Center X", 0.0f, -1.0f,  1.0f, 0.01f);
+    add_float(d, "cy",    "Center Y", 0.0f, -1.0f,  1.0f, 0.01f);
+    add_float(d, "scale", "Scale",    1.0f,  0.0f, 10.0f, 0.01f);
+    add_output(
+        d, Value_type::rgba,
+        "$in(vec2($cx+0.5, $cy+0.5)+($uv-vec2($cx+0.5, $cy+0.5))/mix(1.0, $scale, $s($uv-vec2($cx, $cy))))"
+    );
+    return d;
+}
+
+// Kaleidoscope - ported from Material Maker kaleidoscope.mmg (MIT). Material
+// Maker's "variations" option is dropped: it feeds the per-sector index into
+// its input-variation machinery, which erhe's composer has no equivalent for.
+// The helper still returns the sector index in .z so it can be revisited.
+auto build_kaleidoscope() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "kaleidoscope";
+    d.label    = "Kaleidoscope";
+    d.category = "Transform";
+    d.global =
+        "vec3 mm_uv_kaleidoscope(vec2 uv, float count, float offset, float seed) {\n"
+        "    float pi = 3.14159265359;\n"
+        "    offset *= pi/180.0;\n"
+        "    offset += pi*(1.0/count+0.5);\n"
+        "    uv -= vec2(0.5);\n"
+        "    float l = length(uv);\n"
+        "    float angle = atan(uv.y, uv.x)+offset;\n"
+        "    angle += (1.0-sign(angle))*pi;\n"
+        "    float a = mod(angle, 2.0*pi/count)-offset;\n"
+        "    return vec3(vec2(0.5)+l*vec2(cos(a), sin(a)), rand(vec2(seed))+floor(0.5*angle*count/pi));\n"
+        "}\n";
+    add_input(d, "in", Value_type::rgba, "vec4($uv, 0.0, 1.0)", true);
+    add_float(d, "count",  "Count",  4.0f,    2.0f,  10.0f, 1.0f);
+    add_float(d, "offset", "Offset", 0.0f, -180.0f, 180.0f, 0.1f);
+    d.code = "vec3 $(name_uv)_kal = mm_uv_kaleidoscope($uv, $count, $offset, $seed);\n";
+    add_output(d, Value_type::rgba, "$in($(name_uv)_kal.xy)");
+    return d;
+}
+
+// Warp - ported from Material Maker warp.mmg (MIT). Displaces the input along
+// the slope of a height map: the noise -> warp -> colorize workflow.
+//
+// Material Maker emits the slope as a per-node "instance" helper
+// ($(name)_slope); erhe descriptors have no instance stanza, so the same
+// central-difference body is written inline in the code stanza. It is
+// evaluated once per (node, uv) variant, which is where the helper's only
+// benefit lay. The height map input is function-form so its subtree is emitted
+// once and called four times rather than being inlined four times.
+auto build_warp() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "warp";
+    d.label    = "Warp";
+    d.category = "Transform";
+    add_input(d, "in",           Value_type::rgba,      "vec4(sin($uv.x*20.0)*0.5+0.5, sin($uv.y*20.0)*0.5+0.5, 0.0, 1.0)");
+    add_input(d, "d",            Value_type::grayscale, "0.0", true);
+    add_input(d, "strength_map", Value_type::grayscale, "1.0");
+    add_enum(
+        d, "mode", "Mode",
+        {
+            Enum_value{.label = "Slope",           .code = "$(name_uv)_slope"},
+            Enum_value{.label = "Distance to top", .code = "$(name_uv)_slope*(1.0-$d($uv))"}
+        },
+        0
+    );
+    add_float(d, "amount", "Amount",  0.0f, 0.0f,  1.0f, 0.005f);
+    add_float(d, "eps",    "Epsilon", 0.05f, 0.005f, 0.2f, 0.005f);
+    d.code =
+        "vec2 $(name_uv)_slope = vec2("
+        "$d(fract($uv+vec2($eps, 0.0)))-$d(fract($uv-vec2($eps, 0.0))), "
+        "$d(fract($uv+vec2(0.0, $eps)))-$d(fract($uv-vec2(0.0, $eps))));\n"
+        "vec2 $(name_uv)_warp = $mode;\n";
+    add_output(d, Value_type::rgba, "$in($uv+$amount*$strength_map($uv)*$(name_uv)_warp)");
+    return d;
+}
+
+// Directional warp - ported from Material Maker directional_warp.mmg (MIT).
+// Displaces along a fixed angle, modulated by two grayscale maps.
+auto build_directional_warp() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "directional_warp";
+    d.label    = "Directional Warp";
+    d.category = "Transform";
+    add_input(d, "in",          Value_type::rgba,      "vec4($uv, 0.0, 1.0)");
+    add_input(d, "anglemap",    Value_type::grayscale, "1.0");
+    add_input(d, "strengthmap", Value_type::grayscale, "1.0");
+    add_float(d, "angle",    "Angle",    0.0f, -180.0f, 180.0f, 0.1f);
+    add_float(d, "strength", "Strength", 0.1f,   -1.0f,   1.0f, 0.005f);
+    add_output(
+        d, Value_type::rgba,
+        "$in($uv + vec2(cos($angle*$anglemap($uv)*0.01745329251), sin($angle*$anglemap($uv)*0.01745329251))"
+        "*($strengthmap($uv)-0.5)*$strength)"
+    );
+    return d;
+}
+
+// Refract - ported from Material Maker refract.mmg (MIT). Offsets the input as
+// if seen through a surface whose height is the "s" map. As with warp,
+// Material Maker's per-node instance helper is written inline instead.
+auto build_refract() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "refract";
+    d.label    = "Refract";
+    d.category = "Transform";
+    add_input(d, "in", Value_type::rgba,      "vec4($uv, 0.0, 1.0)");
+    add_input(d, "s",  Value_type::grayscale, "max(1.0-2.0*length($uv-vec2(0.5)), 0.0)", true);
+    add_float(d, "refract", "Refraction", 1.0f, 0.0f, 2.0f, 0.01f);
+    d.code =
+        "vec2 $(name_uv)_eps = vec2(0.001, 0.0);\n"
+        "vec3 $(name_uv)_n = normalize(vec3("
+        "$s($uv+$(name_uv)_eps)-$s($uv-$(name_uv)_eps), "
+        "$s($uv+$(name_uv)_eps.yx)-$s($uv-$(name_uv)_eps.yx), "
+        "-10.0*$(name_uv)_eps.x));\n"
+        "float $(name_uv)_h = $s($uv);\n"
+        "vec3 $(name_uv)_i = vec3(0.0, 0.0, -1.0);\n"
+        "float $(name_uv)_mu = 1.0/max($refract, 0.0001);\n"
+        "float $(name_uv)_dot = dot($(name_uv)_n, $(name_uv)_i);\n"
+        "vec3 $(name_uv)_t = sqrt(max(0.0, 1.0-$(name_uv)_mu*$(name_uv)_mu*(1.0-$(name_uv)_dot*$(name_uv)_dot)))"
+        "*$(name_uv)_n+$(name_uv)_mu*($(name_uv)_i-$(name_uv)_dot*$(name_uv)_n);\n";
+    add_output(d, Value_type::rgba, "$in($uv+$(name_uv)_h*$(name_uv)_t.xy/$(name_uv)_t.z)");
+    return d;
+}
+
+// ---------------------------------------------------------------------------
 // Phase 4b patterns
 // ---------------------------------------------------------------------------
 
@@ -1402,6 +1769,19 @@ struct Descriptor_registry
         descriptors.push_back(build_combine());
         descriptors.push_back(build_decompose());
         descriptors.push_back(build_swap_channels());
+        descriptors.push_back(build_rotate());
+        descriptors.push_back(build_scale());
+        descriptors.push_back(build_shear());
+        descriptors.push_back(build_skew());
+        descriptors.push_back(build_mirror());
+        descriptors.push_back(build_repeat());
+        descriptors.push_back(build_swirl());
+        descriptors.push_back(build_spherize());
+        descriptors.push_back(build_magnify());
+        descriptors.push_back(build_kaleidoscope());
+        descriptors.push_back(build_warp());
+        descriptors.push_back(build_directional_warp());
+        descriptors.push_back(build_refract());
         descriptors.push_back(build_switch("switch",           "Switch (Color)",     Value_type::rgba,      "vec4(vec3(0.0), 1.0)"));
         descriptors.push_back(build_switch("switch_grayscale", "Switch (Grayscale)", Value_type::grayscale, "0.0"));
         descriptors.push_back(build_switch("switch_rgb",       "Switch (RGB)",       Value_type::rgb,       "vec3(0.0)"));
