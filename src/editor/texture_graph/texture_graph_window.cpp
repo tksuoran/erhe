@@ -519,7 +519,7 @@ void Texture_graph_window::build_palette()
     // Fixed display order; any descriptor whose category is not in this list is
     // appended under its own header (or "Other" when the category is empty), so
     // a newly registered node type always appears without touching this code.
-    const char* const category_order[] = { "Generators", "Patterns", "Filters", "Channels", "Utility" };
+    const char* const category_order[] = { "Generators", "Gradients", "Patterns", "Filters", "Channels", "Utility" };
 
     const auto find_or_add_category = [this](const std::string& name) -> Palette_category& {
         for (Palette_category& category : m_palette_categories) {

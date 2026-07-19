@@ -20,7 +20,8 @@ namespace editor {
 // instance of the type.
 
 // Returns the descriptor for the given factory type name (uniform, perlin,
-// voronoi, bricks, shape, fbm, noise, color_noise, sine_wave, truchet, weave,
+// voronoi, bricks, shape, fbm, noise, color_noise, gradient, circular_gradient,
+// radial_gradient, spiral_gradient, multigradient, sine_wave, truchet, weave,
 // blend, colorize, curve, transform, brightness_contrast, normal_map, blur,
 // math, invert, quantize, adjust_hsv, remap, combine, decompose, swap_channels,
 // reroute), or nullptr for an unknown name. The "output" / "material_output"

@@ -823,6 +823,153 @@ auto build_color_noise() -> Node_descriptor
 }
 
 // ---------------------------------------------------------------------------
+// Gradients
+//
+// The five gradient generators map a scalar sweep of the uv plane (linear,
+// angular, radial, spiral) through a gradient widget, plus multigradient's
+// randomized half-plane minimum. Ported from Material Maker gradient.mmg,
+// circular_gradient.mmg, radial_gradient.mmg, spiral_gradient.mmg and
+// multigradient.mmg (MIT). Default parameter values follow each .mmg's stored
+// instance parameters, which is what Material Maker gives a freshly added node.
+// ---------------------------------------------------------------------------
+
+// The black@0 -> white@1 linear ramp every gradient node defaults to (the same
+// default gradient colorize uses).
+void add_default_gradient(Node_descriptor& descriptor)
+{
+    add_gradient(
+        descriptor, "gradient", "Gradient",
+        {
+            Gradient_stop{.position = 0.0f, .color = {0.0f, 0.0f, 0.0f, 1.0f}},
+            Gradient_stop{.position = 1.0f, .color = {1.0f, 1.0f, 1.0f, 1.0f}}
+        },
+        Gradient_interpolation::linear
+    );
+}
+
+// Linear gradient - ported from Material Maker gradient.mmg (MIT). The inline
+// code projects uv onto the rotated axis, normalized so the sweep still spans
+// [0,1] across the unit square at any angle.
+auto build_gradient() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "gradient";
+    d.label    = "Gradient";
+    d.category = "Gradients";
+    add_float(d, "repeat", "Repeat",  1.0f,    1.0f,  32.0f, 1.0f);
+    add_float(d, "rotate", "Rotate",  0.0f, -180.0f, 180.0f, 0.1f);
+    add_bool (d, "mirror", "Mirror", false);
+    add_default_gradient(d);
+    d.code =
+        "float $(name_uv)_r = 0.5+(cos($rotate*0.01745329251)*($uv.x-0.5)+sin($rotate*0.01745329251)*($uv.y-0.5))"
+        "/(cos(abs(mod($rotate, 90.0)-45.0)*0.01745329251)*1.41421356237);\n";
+    add_output(
+        d, Value_type::rgba,
+        "$gradient($mirror ? 2.0*(0.5-abs(fract($(name_uv)_r*$repeat)-0.5)) : fract($(name_uv)_r*$repeat))"
+    );
+    return d;
+}
+
+// Circular gradient - ported from Material Maker circular_gradient.mmg (MIT).
+// The gradient sweeps with the angle around the image center.
+auto build_circular_gradient() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "circular_gradient";
+    d.label    = "Circular Gradient";
+    d.category = "Gradients";
+    add_float(d, "repeat", "Repeat",  1.0f, 1.0f, 32.0f, 1.0f);
+    add_bool (d, "mirror", "Mirror", false);
+    add_default_gradient(d);
+    add_output(
+        d, Value_type::rgba,
+        "$gradient($mirror "
+        "? 2.0*(0.5-abs(fract($repeat*0.15915494309*atan($uv.y-0.5, $uv.x-0.5))-0.5)) "
+        ": fract($repeat*0.15915494309*atan($uv.y-0.5, $uv.x-0.5)))"
+    );
+    return d;
+}
+
+// Radial gradient - ported from Material Maker radial_gradient.mmg (MIT). The
+// gradient sweeps with the distance from the tile center.
+auto build_radial_gradient() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "radial_gradient";
+    d.label    = "Radial Gradient";
+    d.category = "Gradients";
+    add_float(d, "repeat", "Repeat",  1.0f, 1.0f, 32.0f, 1.0f);
+    add_bool (d, "mirror", "Mirror", false);
+    add_default_gradient(d);
+    add_output(
+        d, Value_type::rgba,
+        "$gradient($mirror "
+        "? 2.0*(0.5-abs(fract(1.41421356237*length(fract($uv)-vec2(0.5, 0.5))*$repeat)-0.5)) "
+        ": fract($repeat*1.41421356237*length(fract($uv)-vec2(0.5, 0.5))))"
+    );
+    return d;
+}
+
+// Spiral gradient - ported from Material Maker spiral_gradient.mmg (MIT). The
+// helper is renamed from Material Maker's bare "circular_gradient" to
+// mm_spiral_angle so it cannot collide with a future global of that name.
+auto build_spiral_gradient() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "spiral_gradient";
+    d.label    = "Spiral Gradient";
+    d.category = "Gradients";
+    d.global =
+        "float mm_spiral_angle(vec2 uv) {\n"
+        "    return fract(0.15915494309 * atan(uv.x, uv.y));\n"
+        "}\n";
+    add_float(d, "amount",          "Repeat",       1.0f, 0.0f, 20.0f, 1.0f);
+    add_float(d, "perspective",     "Zoom",         0.3f, 0.0f, 10.0f, 0.01f);
+    add_bool (d, "use_perspective", "Perspective", true);
+    add_bool (d, "mirror",          "Mirror",      false);
+    add_default_gradient(d);
+    d.code =
+        "vec2 $(name_uv)_position = $uv - 0.5;\n"
+        "float $(name_uv)_length = length($(name_uv)_position);\n"
+        "float $(name_uv)_spiral = (1.0 + sin("
+        "($use_perspective ? (($perspective * 6.0) / $(name_uv)_length) : ($(name_uv)_length / ($perspective / 6.0)))"
+        " + (mm_spiral_angle($(name_uv)_position) * 6.28318530718 * $amount))) / 2.0;\n";
+    add_output(
+        d, Value_type::rgba,
+        "$gradient($mirror ? 2.0*(0.5-abs($(name_uv)_spiral-0.5)) : $(name_uv)_spiral)"
+    );
+    return d;
+}
+
+// Multigradient - ported from Material Maker multigradient.mmg (MIT). Takes the
+// minimum of "count" randomly rotated linear gradients, giving a faceted
+// grayscale field; the rgb input warps the sample position (xy) and offsets the
+// seed (z), so it can be driven by another generator.
+auto build_multigradient() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "multigradient";
+    d.label    = "MultiGradient";
+    d.category = "Gradients";
+    d.global =
+        "float multigradient(vec2 uv, int count, float seed) {\n"
+        "    float rv = 1.0;\n"
+        "    float angle = 0.0;\n"
+        "    for (int i = 0; i < count; ++i) {\n"
+        "        angle = rand(vec2(seed, angle))*6.28;\n"
+        "        float v = 0.5+(cos(angle)*(uv.x-0.5)+sin(angle)*(uv.y-0.5))"
+        "/(cos(abs(mod(angle, 0.5*3.141592)-0.25*3.141592))*1.41421356237);\n"
+        "        rv = min(rv, v);\n"
+        "    }\n"
+        "    return rv;\n"
+        "}\n";
+    add_input(d, "in", Value_type::rgb, "vec3($uv, 0.0)");
+    add_float(d, "count", "Count", 10.0f, 1.0f, 32.0f, 1.0f);
+    add_output(d, Value_type::grayscale, "multigradient($in($uv).xy, int($count), float($seed)+$in($uv).z)");
+    return d;
+}
+
+// ---------------------------------------------------------------------------
 // Phase 4b patterns
 // ---------------------------------------------------------------------------
 
@@ -1179,6 +1326,11 @@ struct Descriptor_registry
         descriptors.push_back(build_fbm());
         descriptors.push_back(build_noise());
         descriptors.push_back(build_color_noise());
+        descriptors.push_back(build_gradient());
+        descriptors.push_back(build_circular_gradient());
+        descriptors.push_back(build_radial_gradient());
+        descriptors.push_back(build_spiral_gradient());
+        descriptors.push_back(build_multigradient());
         descriptors.push_back(build_sine_wave());
         descriptors.push_back(build_truchet());
         descriptors.push_back(build_weave());

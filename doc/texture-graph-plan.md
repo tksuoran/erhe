@@ -39,6 +39,7 @@ carry an attribution comment).
 | Phase 4b: node library expansion + searchable palette       | DONE    | b54e0060, e20f2a0c |
 | Phase 5: buffer nodes, blur, reseed (async compile deferred) | DONE    | dac3a31a, 94668795 |
 | Phase 6: PBR material output, multi-channel bake, PNG export| DONE    | ac4d8045 |
+| Backlog: Gradients family (5 nodes, new "Gradients" category)| DONE   | 2026-07-19 |
 
 ---
 
@@ -53,7 +54,9 @@ descriptor-less `output`, `material_output`, and `buffer` nodes
 (`texture_graph_node_factory.cpp`). Note the 392 count includes internal
 companion sub-nodes of compound graphs (e.g. `edge_detect_1..3`,
 `fill_preprocess`), so the user-visible Material Maker library is somewhat
-smaller than the raw file count.
+smaller than the raw file count. (Updated 2026-07-19: the Gradients family added
+5 descriptors, so erhe now has 35 node types - 32 descriptors plus the 3
+descriptor-less ones.)
 
 ### erhe nodes and their Material Maker counterparts
 
@@ -67,6 +70,11 @@ smaller than the raw file count.
 | `fbm`                 | Generators | `fbm.mmg`                    | 4 bases (value, perlin, cellular, cellular2); octave loop inlined instead of per-instance helper function. |
 | `noise`               | Generators | `noise.mmg`                  | Density map input dropped (parameter only). |
 | `color_noise`         | Generators | `color_noise.mmg`            | Full. |
+| `gradient`            | Gradients  | `gradient.mmg`               | Full (repeat / rotate / mirror + gradient widget). |
+| `circular_gradient`   | Gradients  | `circular_gradient.mmg`      | Full. |
+| `radial_gradient`     | Gradients  | `radial_gradient.mmg`        | Full. |
+| `spiral_gradient`     | Gradients  | `spiral_gradient.mmg`        | Full; MM's bare `circular_gradient` helper renamed `mm_spiral_angle`. |
+| `multigradient`       | Gradients  | `multigradient.mmg`          | Full (rgb input warps uv and offsets the seed). |
 | `sine_wave`           | Patterns   | `sine_wave.mmg`              | Full. |
 | `truchet`             | Patterns   | `truchet.mmg`                | Line and circle tiles. MM also has `truchet_generic`. |
 | `weave`               | Patterns   | `weave.mmg`                  | Width map input dropped. MM also has `weave2`, `diagonal_weave`, `weave_random`. |
@@ -107,7 +115,7 @@ for prioritization and the table is sorted by score, highest first:
 
 | Material Maker family        | ~Count | Representative nodes | Cost | Benefit | Score | erhe status |
 |------------------------------|--------|----------------------|------|---------|-------|-------------|
-| Gradients                    | 5      | `gradient`, `circular_gradient`, `radial_gradient`, `spiral_gradient`, `multigradient` | 1 | 4 | 4.0 | Missing. Trivial descriptor ports; the gradient widget already exists (`colorize`). Core building block for masks and ramps. |
+| Gradients                    | 5      | `gradient`, `circular_gradient`, `radial_gradient`, `spiral_gradient`, `multigradient` | 1 | 4 | 4.0 | **DONE.** All 5 ported as descriptors in a new "Gradients" palette category. |
 | Switch                       | 1      | `switch` (engine, `gen_switch.gd`) | 1 | 3 | 3.0 | Missing; named in Phase 4. Enum-parameter input selector; cheap A/B comparison workflow win. |
 | Image / texture input        | 2      | `image`, `texture` (engine) | 2 | 5 | 2.5 | Missing. Sample an external bitmap as a graph source; the `buffer` node already proves `sampler2D`-backed expressions downstream. |
 | Transform / UV warps         | 25     | `translate`, `rotate`, `scale`, `shear`, `skew`, `warp`, `directional_warp`, `multi_warp`, `warp_dilation*`, `swirl`, `twist`, `spherize`, `kaleidoscope`, `mirror`, `repeat`, `custom_uv`, `distort`, `refract`, `magnify` | 2 | 5 | 2.5 | Only the combined `transform` covered. Warp is the heart of the noise -> warp -> colorize workflow; needs function-form inputs (supported) or buffers (exist). |
