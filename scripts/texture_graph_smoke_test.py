@@ -1176,6 +1176,56 @@ def section_deterministic_patterns():
           isinstance(result, dict) and result.get("width") == 64, f"result={result}")
 
 
+def section_add_all():
+    """"Add all": one node of every palette type, grid-laid, one undo step.
+
+    Same path as the canvas background context menu item. The node count is
+    asserted against NODE_SPECS, so a node type registered without a smoke-test
+    row (or vice versa) fails here rather than silently drifting. The undo /
+    redo assertions are the point of the compound operation: backing the batch
+    out must take ONE undo, not one per node.
+    """
+    S = "add-all"
+    fresh_graph()
+    check(S, "graph starts empty", len(get_graph()["nodes"]) == 0)
+
+    result = call("texture_graph_add_all")
+    expected = len(NODE_SPECS)
+    check(S, f"add_all reports {expected} nodes added",
+          isinstance(result, dict) and (result.get("added") == expected),
+          f"result={result} expected={expected}")
+    check(S, "every palette type is on the canvas", len(get_graph()["nodes"]) == expected,
+          f"count={len(get_graph()['nodes'])}")
+
+    types_present = {node["type"] for node in get_graph()["nodes"]}
+    missing = sorted(set(NODE_SPECS) - types_present)
+    extra   = sorted(types_present - set(NODE_SPECS))
+    check(S, "canvas node types match NODE_SPECS exactly", (not missing) and (not extra),
+          f"missing={missing} extra={extra}")
+
+    undo_before = undo_depth()
+    undo()
+    check(S, "one undo removes the whole batch", len(get_graph()["nodes"]) == 0,
+          f"count={len(get_graph()['nodes'])}")
+    check(S, "undo stack shrank by exactly one entry", undo_depth() == (undo_before - 1),
+          f"before={undo_before} after={undo_depth()}")
+    redo()
+    check(S, "one redo restores the whole batch", len(get_graph()["nodes"]) == expected,
+          f"count={len(get_graph()['nodes'])}")
+
+    # Called twice it must add a second full set, not a partial one - the batch
+    # builds its nodes up front and commits them in one operation, so a bug
+    # there would show as a short second batch.
+    result = call("texture_graph_add_all")
+    check(S, "a second add_all adds the full set again",
+          isinstance(result, dict) and (result.get("added") == expected), f"result={result}")
+    check(S, "canvas now holds two of every type", len(get_graph()["nodes"]) == (2 * expected),
+          f"count={len(get_graph()['nodes'])}")
+    undo()
+    check(S, "and one undo backs the second batch out", len(get_graph()["nodes"]) == expected,
+          f"count={len(get_graph()['nodes'])}")
+
+
 def section_color_tone():
     """Color / tone filters.
 
@@ -1892,6 +1942,7 @@ def main():
         section_new_filters,
         section_noise_variants,
         section_deterministic_patterns,
+        section_add_all,
         section_color_tone,
         section_transform,
         section_switch,

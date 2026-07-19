@@ -164,6 +164,10 @@ private:
     // undoable insert.
     void build_palette   () override;
     void add_node_from_palette(const std::string& type_name, const ImVec2* spawn_position) override;
+    // One compound undo entry for the whole batch (see the base declaration).
+    void add_nodes_from_palette(const std::vector<std::string>& type_names) override;
+    // Adds the "Add all" item to the canvas background context menu.
+    void background_context_menu_extra_items() override;
     // Implements the Graph_editor_window_base clipboard hooks (Cut / Copy /
     // Paste / Duplicate in the canvas context menus and shortcuts).
     [[nodiscard]] auto clipboard_kind() const -> const char* override;

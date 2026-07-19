@@ -511,6 +511,53 @@ void Texture_graph_window::add_node_from_palette(const std::string& type_name, c
     add_node_of_type(type_name, spawn_position);
 }
 
+void Texture_graph_window::add_nodes_from_palette(const std::vector<std::string>& type_names)
+{
+    const std::shared_ptr<Graph_texture>& graph_texture = get_current_graph_texture();
+    if (!graph_texture) {
+        return; // empty state - no asset selected
+    }
+    // One Compound_operation, so the whole batch backs out with a single undo
+    // instead of one per node. The nodes are created first (make_node has no
+    // side effect on the graph); the compound's execute() inserts them all.
+    std::vector<std::shared_ptr<Operation>>          operations;
+    std::vector<std::shared_ptr<Texture_graph_node>> new_nodes;
+    operations.reserve(type_names.size());
+    new_nodes.reserve(type_names.size());
+    for (const std::string& type_name : type_names) {
+        const std::shared_ptr<Texture_graph_node> node = make_node(type_name);
+        if (!node) {
+            continue; // unknown type - skip rather than abort the batch
+        }
+        new_nodes.push_back(node);
+        operations.push_back(
+            std::make_shared<Texture_graph_node_insert_remove_operation>(
+                *this, graph_texture, node, Texture_graph_node_insert_remove_operation::Mode::insert
+            )
+        );
+    }
+    if (operations.empty()) {
+        return;
+    }
+    m_app_context.operation_stack->execute_now(
+        std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = std::move(operations)})
+    );
+    // Provisional distinct positions; the pending grid layout replaces them
+    // once the canvas has measured every node.
+    for (const std::shared_ptr<Texture_graph_node>& node : new_nodes) {
+        set_node_position(*node.get(), next_node_spawn_position());
+    }
+}
+
+void Texture_graph_window::background_context_menu_extra_items()
+{
+    ImGui::Separator();
+    if (ImGui::MenuItem("Add all", nullptr, false, get_current_graph_texture() != nullptr)) {
+        add_all_palette_nodes();
+    }
+    ImGui::SetItemTooltip("Add one node of every type, laid out in a grid (for visual verification)");
+}
+
 void Texture_graph_window::build_palette()
 {
     if (!m_palette_categories.empty()) {

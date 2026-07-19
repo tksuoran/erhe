@@ -957,6 +957,10 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"zoom"})}
     }});
+    m_tool_infos.push_back({"texture_graph_add_all", "Add one node of every texture graph node type to the selected Graph Texture, laid out in a grid. Same action as the canvas background context menu's \"Add all\"; adds as a single compound undo entry. Intended for visual verification - it puts the whole node library on the canvas at once, where a node that fails to compose, renders black or mis-lays-out its widgets is obvious. The grid layout applies once the canvas has measured every node, so render a few frames (or texture_graph_set_view + capture_screenshot) before judging positions.", {
+        {"type", "object"},
+        {"properties", json::object()}
+    }});
     m_tool_infos.push_back({"texture_graph_set_view", "Show the Texture Graph window and set its node-editor zoom (view scale) immediately, centered on the graph content. zoom > 1 zooms in (content drawn larger), zoom < 1 zooms out. Deterministic (no animation / no mouse input) - intended for headless zoom-quality verification (capture_screenshot on the next frame), e.g. checking that in-node widgets (gradient bar, curve box) scale with the zoom. Requires the window to have a target Graph Texture (create_graph_texture) for it to render nodes.", {
         {"type", "object"},
         {"properties", {

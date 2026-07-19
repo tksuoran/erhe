@@ -98,6 +98,24 @@ public:
     // appears, e.g. when a preview thumbnail arrives).
     void request_automatic_layout();
 
+    // Requests a plain grid layout instead of the DAG layout: nodes in graph
+    // order, row-major, each cell sized to the widest / tallest node so nothing
+    // overlaps. Used by "Add all" (below), where every node is unconnected and
+    // the DAG layout would degenerate to one node per connected component and
+    // stack them in a single tall column. Shares the deferred-size machinery of
+    // request_automatic_layout(): the layout waits for measured sizes.
+    void request_grid_layout();
+
+    // Spawns one node of every palette type and grid-lays the result
+    // (request_grid_layout). Payload-blind, like node_palette() - it walks
+    // m_palette_categories and spawns through add_nodes_from_palette(), so a
+    // newly registered node type is included without touching this code.
+    // Intended for visual verification: it puts the whole node library on the
+    // canvas at once, where a node that fails to compose, renders black or
+    // mis-lays-out its widgets is obvious at a glance. Public so the canvas
+    // context menu, and the texture_graph_add_all MCP tool, share one path.
+    void add_all_palette_nodes();
+
 protected:
     // One selectable palette entry (a spawnable node type).
     class Palette_entry
@@ -223,6 +241,18 @@ protected:
     // where the right-click opened the menu; the palette list passes nullptr).
     virtual void add_node_from_palette(const std::string& type_name, const ImVec2* spawn_position) = 0;
 
+    // Spawns one node per given type. The default loops add_node_from_palette(),
+    // i.e. one undo entry per node; an editor that can batch overrides this to
+    // push a single compound undo entry (adding the whole library one node at a
+    // time would otherwise take one Ctrl+Z per node to back out).
+    virtual void add_nodes_from_palette(const std::vector<std::string>& type_names);
+
+    // Extra items appended to the canvas background context menu, after the
+    // palette submenus. Empty by default; an editor overrides it to offer
+    // actions that only make sense there. Runs inside the open popup, with the
+    // node editor suspended (screen space).
+    virtual void background_context_menu_extra_items();
+
     std::vector<Palette_category> m_palette_categories; // built lazily by build_palette()
     std::string                   m_palette_filter;     // node-palette search text
     int                           m_instance_slot{1};   // primary singletons are slot 1
@@ -238,6 +268,8 @@ private:
     // Automatic layout request state (apply_automatic_layout()): the layout
     // waits for every node's measured size to be stable across two frames
     // before applying, then frames the content one frame later.
+    enum class Layout_mode : unsigned int { dag = 0, grid = 1 };
+    Layout_mode                                     m_layout_mode{Layout_mode::dag};
     bool                                            m_automatic_layout_pending {false};
     bool                                            m_navigate_to_content_pending{false};
     float                                           m_layout_size_sum{-1.0f};

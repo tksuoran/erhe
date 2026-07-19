@@ -590,6 +590,27 @@ auto Mcp_server::action_geometry_graph_set_view(const json& args) -> std::string
     return make_json_content(result).dump();
 }
 
+auto Mcp_server::action_texture_graph_add_all(const json&) -> std::string
+{
+    Texture_graph_window* window = m_context.texture_graph_window;
+    if (window == nullptr) {
+        return make_error_content("Texture graph window not available");
+    }
+    if (!window->get_target()) {
+        return make_error_content("No target Graph Texture (create_graph_texture first)");
+    }
+    // Same path as the canvas background context menu's "Add all": one node of
+    // every palette type, one compound undo entry, grid-laid once the canvas
+    // has measured them (so the positions settle a few frames later).
+    const std::size_t before = window->get_nodes().size();
+    window->add_all_palette_nodes();
+
+    json result;
+    result["added"] = window->get_nodes().size() - before;
+    result["total"] = window->get_nodes().size();
+    return make_json_content(result).dump();
+}
+
 auto Mcp_server::action_texture_graph_set_view(const json& args) -> std::string
 {
     Texture_graph_window* window = m_context.texture_graph_window;

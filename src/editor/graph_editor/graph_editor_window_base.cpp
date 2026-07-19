@@ -21,6 +21,7 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <cctype>
 #include <cfloat>
 #include <cstdio>
@@ -76,8 +77,46 @@ auto Graph_editor_window_base::get_layout_node_id(const erhe::graph::Node& node)
 
 void Graph_editor_window_base::request_automatic_layout()
 {
+    m_layout_mode = Layout_mode::dag;
     m_automatic_layout_pending = true;
     m_layout_size_sum = -1.0f;
+}
+
+void Graph_editor_window_base::request_grid_layout()
+{
+    m_layout_mode = Layout_mode::grid;
+    m_automatic_layout_pending = true;
+    m_layout_size_sum = -1.0f;
+}
+
+void Graph_editor_window_base::add_nodes_from_palette(const std::vector<std::string>& type_names)
+{
+    // Spawn on the window's own auto-advancing grid (nullptr position): the
+    // provisional positions only have to be distinct, since the grid layout
+    // overwrites them all once the real sizes are known.
+    for (const std::string& type_name : type_names) {
+        add_node_from_palette(type_name, nullptr);
+    }
+}
+
+void Graph_editor_window_base::background_context_menu_extra_items()
+{
+}
+
+void Graph_editor_window_base::add_all_palette_nodes()
+{
+    build_palette();
+    std::vector<std::string> type_names;
+    for (const Palette_category& category : m_palette_categories) {
+        for (const Palette_entry& entry : category.entries) {
+            type_names.push_back(entry.type_name);
+        }
+    }
+    if (type_names.empty()) {
+        return;
+    }
+    add_nodes_from_palette(type_names);
+    request_grid_layout();
 }
 
 void Graph_editor_window_base::apply_automatic_layout()
@@ -125,6 +164,40 @@ void Graph_editor_window_base::apply_automatic_layout()
         return; // sizes still settling - retry next frame
     }
     m_automatic_layout_pending = false;
+
+    const auto node_size_for = [this, node_editor](const erhe::graph::Node& node) -> ImVec2 {
+        return node_editor->GetNodeSize(ax::NodeEditor::NodeId{get_layout_node_id(node)});
+    };
+
+    if (m_layout_mode == Layout_mode::grid) {
+        // Uniform cells sized to the largest node, so the grid stays aligned
+        // and nothing overlaps whatever mix of node heights is present (a
+        // Gradient node is several times taller than an Invert). Roughly
+        // square: as many columns as rows.
+        constexpr float cell_gap = 40.0f; // canvas units
+        ImVec2 cell{0.0f, 0.0f};
+        for (const erhe::graph::Node* node : nodes) {
+            const ImVec2 size = node_size_for(*node);
+            cell.x = std::max(cell.x, size.x);
+            cell.y = std::max(cell.y, size.y);
+        }
+        const std::size_t columns = static_cast<std::size_t>(
+            std::max(1.0, std::ceil(std::sqrt(static_cast<double>(nodes.size()))))
+        );
+        for (std::size_t i = 0, end = nodes.size(); i < end; ++i) {
+            const std::size_t column = i % columns;
+            const std::size_t row    = i / columns;
+            node_editor->SetNodePosition(
+                ax::NodeEditor::NodeId{get_layout_node_id(*nodes[i])},
+                ImVec2{
+                    static_cast<float>(column) * (cell.x + cell_gap),
+                    static_cast<float>(row)    * (cell.y + cell_gap)
+                }
+            );
+        }
+        m_navigate_to_content_pending = true;
+        return;
+    }
 
     // Rare, request-driven path - local allocations are fine here.
     const std::size_t count = nodes.size();
@@ -509,6 +582,7 @@ void Graph_editor_window_base::node_background_context_menu(ax::NodeEditor::Edit
                 ImGui::EndMenu();
             }
         }
+        background_context_menu_extra_items();
         ImGui::EndPopup();
     }
     node_editor.Resume();

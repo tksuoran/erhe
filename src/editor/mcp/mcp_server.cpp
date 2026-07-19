@@ -492,6 +492,7 @@ auto Mcp_server::process_queued_requests() -> int
             { "geometry_graph_set_link_curve",  &Mcp_server::action_geometry_graph_set_link_curve },
             { "geometry_graph_set_view",        &Mcp_server::action_geometry_graph_set_view       },
             { "texture_graph_set_view",         &Mcp_server::action_texture_graph_set_view        },
+            { "texture_graph_add_all",          &Mcp_server::action_texture_graph_add_all         },
             { "geometry_graph_select_nodes",    &Mcp_server::action_geometry_graph_select_nodes   },
             { "geometry_graph_set_node_layout", &Mcp_server::action_geometry_graph_set_node_layout},
             { "create_graph_texture",           &Mcp_server::action_create_graph_texture          },
