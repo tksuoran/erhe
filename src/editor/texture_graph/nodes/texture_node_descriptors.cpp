@@ -1390,6 +1390,392 @@ auto build_refract() -> Node_descriptor
 }
 
 // ---------------------------------------------------------------------------
+// Color / tone filters
+//
+// Ported from Material Maker greyscale.mmg, tones.mmg, tones_map.mmg,
+// tones_range.mmg, tones_step.mmg, tonality.mmg, convert_colorspace.mmg,
+// colormap.mmg, palettize.mmg, default_color.mmg, compare.mmg,
+// ensure_greyscale.mmg, ensure_rgba.mmg and uniform_greyscale.mmg (MIT).
+//
+// Input types differ from Material Maker in one systematic way. Material Maker
+// relies on automatic conversion at connection time, so it can type an input
+// "rgb" and still accept anything; erhe's pin keys are per Value_type and
+// Graph::connect() refuses a mismatch, so an input's declared type is exactly
+// what it accepts. Inputs here are therefore typed to the value type their
+// producers actually emit (usually rgba), with the conversion written into the
+// expression. The two "ensure" nodes are re-purposed accordingly: in Material
+// Maker they are no-op coercions, and here they are the explicit bridges that
+// type-strict pins make necessary (rgba -> f and f -> rgba), using the same
+// conversion expressions as erhe::texgen::convert().
+//
+// Not ported: auto_tones (it has no shader_model of its own - it needs a
+// min/max reduction pass over the whole image, which the composer cannot
+// express) and colorspace_roundtrip (a test fixture).
+// ---------------------------------------------------------------------------
+
+// Greyscale - ported from Material Maker greyscale.mmg (MIT). Five weightings,
+// picked by an enum that names the helper (Material Maker's "gs_$mode" idiom).
+auto build_greyscale() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "greyscale";
+    d.label    = "Greyscale";
+    d.category = "Color";
+    d.global =
+        "float gs_min(vec3 c) {\n"
+        "    return min(c.r, min(c.g, c.b));\n"
+        "}\n"
+        "\n"
+        "float gs_max(vec3 c) {\n"
+        "    return max(c.r, max(c.g, c.b));\n"
+        "}\n"
+        "\n"
+        "float gs_lightness(vec3 c) {\n"
+        "    return 0.5*(max(c.r, max(c.g, c.b)) + min(c.r, min(c.g, c.b)));\n"
+        "}\n"
+        "\n"
+        "float gs_average(vec3 c) {\n"
+        "    return 0.333333333333*(c.r + c.g + c.b);\n"
+        "}\n"
+        "\n"
+        "float gs_luminosity(vec3 c) {\n"
+        "    return 0.21 * c.r + 0.72 * c.g + 0.07 * c.b;\n"
+        "}\n";
+    // Material Maker types this input "rgb" and relies on automatic conversion
+    // at connection time. erhe pins are type-strict, and nearly every color
+    // producer here emits rgba (uniform, colorize, blend, the gradients, the
+    // tone filters), so an rgb input would refuse the very sources this node
+    // exists to desaturate. It takes rgba and uses .rgb; ensure_greyscale is
+    // the rgb -> f bridge for the few rgb producers (color_noise, voronoi's
+    // color output, normal_map).
+    add_input(d, "in", Value_type::rgba, "vec4(vec3($uv.x), 1.0)");
+    add_enum(
+        d, "mode", "Mode",
+        {
+            Enum_value{.label = "Lightness",  .code = "lightness"},
+            Enum_value{.label = "Average",    .code = "average"},
+            Enum_value{.label = "Luminosity", .code = "luminosity"},
+            Enum_value{.label = "Min",        .code = "min"},
+            Enum_value{.label = "Max",        .code = "max"}
+        },
+        2
+    );
+    add_output(d, Value_type::grayscale, "gs_$mode(($in($uv)).rgb)");
+    return d;
+}
+
+// Ensure Greyscale - Material Maker's ensure_greyscale.mmg (MIT) is a no-op
+// coercion relying on automatic conversion. Here it is the explicit rgb -> f
+// bridge that type-strict pins require, for the rgb producers that greyscale
+// (rgba) cannot take: color_noise, voronoi's color output, normal_map. The
+// expression is the same average erhe::texgen::convert() uses for rgb -> f.
+auto build_ensure_greyscale() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "ensure_greyscale";
+    d.label    = "RGB To Greyscale";
+    d.category = "Channels";
+    add_input(d, "in", Value_type::rgb, "vec3($uv.x)");
+    add_output(d, Value_type::grayscale, "(dot($in($uv), vec3(1.0))/3.0)");
+    return d;
+}
+
+// Ensure RGBA - the f -> rgba counterpart of the above (Material Maker's
+// ensure_rgba.mmg is likewise a no-op coercion).
+auto build_ensure_rgba() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "ensure_rgba";
+    d.label    = "To RGBA";
+    d.category = "Channels";
+    add_input(d, "in", Value_type::grayscale, "$uv.x");
+    add_output(d, Value_type::rgba, "vec4(vec3($in($uv)), 1.0)");
+    return d;
+}
+
+// Uniform Greyscale - ported from Material Maker uniform_greyscale.mmg (MIT).
+// The grayscale counterpart of the existing uniform color node.
+auto build_uniform_greyscale() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "uniform_greyscale";
+    d.label    = "Uniform Greyscale";
+    d.category = "Generators";
+    add_float(d, "color", "Value", 0.5f, 0.0f, 1.0f, 0.01f);
+    add_output(d, Value_type::grayscale, "$color");
+    return d;
+}
+
+// Default Color - ported from Material Maker default_color.mmg (MIT). Passes
+// its input through, substituting a chosen color while it is unconnected.
+auto build_default_color() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "default_color";
+    d.label    = "Default Color";
+    d.category = "Color";
+    add_input(d, "in", Value_type::rgba, "$default");
+    add_color(d, "default", "Default", 1.0f, 1.0f, 1.0f, 1.0f);
+    add_output(d, Value_type::rgba, "$in($uv)");
+    return d;
+}
+
+// Compare - ported from Material Maker compare.mmg (MIT). Absolute difference
+// of two inputs, summed over the channels; the A/B diff companion to Switch.
+auto build_compare() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "compare";
+    d.label    = "Compare";
+    d.category = "Color";
+    add_input(d, "in1", Value_type::rgba, "vec4(0.0)");
+    add_input(d, "in2", Value_type::rgba, "vec4(0.0)");
+    add_output(d, Value_type::grayscale, "dot(abs($in1($uv)-$in2($uv)), vec4(1.0))");
+    return d;
+}
+
+// Tones (levels) - ported from Material Maker tones.mmg (MIT). A full levels
+// control: per-channel input black / mid / white and output black / white.
+auto build_tones() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "tones";
+    d.label    = "Tones (Levels)";
+    d.category = "Color";
+    d.global =
+        "vec4 adjust_levels(vec4 color, vec4 in_min, vec4 in_mid, vec4 in_max, vec4 out_min, vec4 out_max) {\n"
+        "    color = clamp((color-in_min)/(in_max-in_min), 0.0, 1.0);\n"
+        "    in_mid = (in_mid-in_min)/(in_max-in_min);\n"
+        "    vec4 dark = step(in_mid, color);\n"
+        "    color = 0.5*mix(color/(in_mid), 1.0+(color-in_mid)/(1.0-in_mid), dark);\n"
+        "    return out_min+color*(out_max-out_min);\n"
+        "}\n";
+    add_input(d, "in", Value_type::rgba, "vec4(vec3($uv.x), 1.0)");
+    add_color(d, "in_min",  "In Black",  0.0f,      0.0f,      0.0f,      0.0f);
+    add_color(d, "in_mid",  "In Mid",    0.498039f, 0.498039f, 0.498039f, 0.498039f);
+    add_color(d, "in_max",  "In White",  1.0f,      1.0f,      1.0f,      1.0f);
+    add_color(d, "out_min", "Out Black", 0.0f,      0.0f,      0.0f,      1.0f);
+    add_color(d, "out_max", "Out White", 1.0f,      1.0f,      1.0f,      1.0f);
+    add_output(d, Value_type::rgba, "adjust_levels($in($uv), $in_min, $in_mid, $in_max, $out_min, $out_max)");
+    return d;
+}
+
+// Tones Map - ported from Material Maker tones_map.mmg (MIT). Linear remap of
+// one input range onto an output range; alpha passes through.
+auto build_tones_map() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "tones_map";
+    d.label    = "Tones Map";
+    d.category = "Color";
+    add_input(d, "in", Value_type::rgba, "vec4(0.5, 0.5, 0.5, 1.0)");
+    add_float(d, "in_min",  "In Min",  0.0f, 0.0f, 1.0f, 0.01f);
+    add_float(d, "in_max",  "In Max",  1.0f, 0.0f, 1.0f, 0.01f);
+    add_float(d, "out_min", "Out Min", 0.0f, 0.0f, 1.0f, 0.01f);
+    add_float(d, "out_max", "Out Max", 1.0f, 0.0f, 1.0f, 0.01f);
+    d.code = "vec4 $(name_uv)_c = $in($uv);\n";
+    add_output(
+        d, Value_type::rgba,
+        "vec4(vec3($out_min)+($(name_uv)_c.rgb-vec3($in_min))*vec3(($out_max-($out_min))/max(0.0001, $in_max-($in_min))), $(name_uv)_c.a)"
+    );
+    return d;
+}
+
+// Tones Range - ported from Material Maker tones_range.mmg (MIT). Isolates a
+// band of values into a mask. The invert boolean selects between two locals by
+// name ("$(name_uv)_$invert"), Material Maker's idiom for a branch-free toggle.
+auto build_tones_range() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "tones_range";
+    d.label    = "Tones Range";
+    d.category = "Color";
+    add_input(d, "in", Value_type::grayscale, "($uv.x + $uv.y) / 2.0");
+    add_float(d, "value",    "Value",    0.5f,  0.0f, 1.0f, 0.01f);
+    add_float(d, "width",    "Width",    0.25f, 0.0f, 1.0f, 0.01f);
+    add_float(d, "contrast", "Contrast", 0.5f,  0.0f, 1.0f, 0.01f);
+    add_bool (d, "invert",   "Invert",   false);
+    d.code =
+        "float $(name_uv)_step = clamp(($in($uv) - ($value))/max(0.0001, $width)+0.5, 0.0, 1.0);\n"
+        "float $(name_uv)_false = clamp((min($(name_uv)_step, 1.0-$(name_uv)_step) * 2.0) / max(0.0001, 1.0 - $contrast), 0.0, 1.0);\n"
+        "float $(name_uv)_true = 1.0-$(name_uv)_false;\n";
+    add_output(d, Value_type::grayscale, "$(name_uv)_$invert");
+    return d;
+}
+
+// Tones Step - ported from Material Maker tones_step.mmg (MIT). A soft
+// threshold; same name-selected-local idiom as tones_range.
+auto build_tones_step() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "tones_step";
+    d.label    = "Tones Step";
+    d.category = "Color";
+    add_input(d, "in", Value_type::rgba, "vec4(0.5, 0.5, 0.5, 1.0)");
+    add_float(d, "value",  "Value",  0.5f, 0.0f, 1.0f, 0.01f);
+    add_float(d, "width",  "Width",  1.0f, 0.0f, 1.0f, 0.01f);
+    add_bool (d, "invert", "Invert", false);
+    d.code =
+        "vec4 $(name_uv)_in = $in($uv);\n"
+        "vec3 $(name_uv)_false = clamp(($(name_uv)_in.rgb-vec3($value))/max(0.0001, $width)+vec3(0.5), vec3(0.0), vec3(1.0));\n"
+        "vec3 $(name_uv)_true = vec3(1.0)-$(name_uv)_false;\n";
+    add_output(d, Value_type::rgba, "vec4($(name_uv)_$invert, $(name_uv)_in.a)");
+    return d;
+}
+
+// Tonality - ported from Material Maker tonality.mmg (MIT). A tone curve on a
+// grayscale input (the existing "curve" node is its per-RGB-channel sibling).
+auto build_tonality() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "tonality";
+    d.label    = "Tonality";
+    d.category = "Color";
+    add_input(d, "in", Value_type::grayscale, "$uv.x");
+    add_curve(
+        d, "curve", "Curve",
+        {
+            Curve_point{.x = 0.0f, .y = 0.0f, .left_slope = 0.0f, .right_slope = 1.0f},
+            Curve_point{.x = 1.0f, .y = 1.0f, .left_slope = 1.0f, .right_slope = 0.0f}
+        }
+    );
+    add_output(d, Value_type::grayscale, "$curve($in($uv))");
+    return d;
+}
+
+// Convert Colorspace - ported from Material Maker convert_colorspace.mmg (MIT).
+// The two enums together name the conversion helper ("$(direction)_$(colorspace)").
+// The helper names are Material Maker's and are distinct from adjust_hsv's
+// rgb_to_hsv / hsv_to_rgb, so the two nodes' globals cannot collide.
+auto build_convert_colorspace() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "convert_colorspace";
+    d.label    = "Convert Colorspace";
+    d.category = "Color";
+    d.global =
+        "vec3 from_rgb_to_rgb(vec3 c) { return c; }\n"
+        "vec3 to_rgb_from_rgb(vec3 c) { return c; }\n"
+        "\n"
+        "vec3 from_rgb_to_hsv(vec3 c) {\n"
+        "    vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);\n"
+        "    vec4 p = c.g < c.b ? vec4(c.bg, K.wz) : vec4(c.gb, K.xy);\n"
+        "    vec4 q = c.r < p.x ? vec4(p.xyw, c.r) : vec4(c.r, p.yzx);\n"
+        "    float d = q.x - min(q.w, q.y);\n"
+        "    float e = 1.0e-10;\n"
+        "    return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);\n"
+        "}\n"
+        "\n"
+        "vec3 to_rgb_from_hsv(vec3 c) {\n"
+        "    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);\n"
+        "    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);\n"
+        "    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);\n"
+        "}\n"
+        "\n"
+        "// Matrix coefficients taken from https://en.wikipedia.org/wiki/YCbCr#ITU-R_BT.709_conversion\n"
+        "vec3 from_rgb_to_yuv(vec3 c) {\n"
+        "    return c * mat3(\n"
+        "        vec3( 0.2126,  0.7152,  0.0722),\n"
+        "        vec3(-0.1146, -0.3854,  0.5),\n"
+        "        vec3( 0.5,    -0.4542, -0.0458)\n"
+        "    );\n"
+        "}\n"
+        "\n"
+        "vec3 to_rgb_from_yuv(vec3 c) {\n"
+        "    return c * mat3(\n"
+        "        vec3(1.0,  0.0,     1.5748),\n"
+        "        vec3(1.0, -0.1873, -0.4681),\n"
+        "        vec3(1.0,  1.8556,  0.0)\n"
+        "    );\n"
+        "}\n";
+    add_input(d, "in", Value_type::rgba, "vec4(1.0)");
+    add_enum(
+        d, "direction", "Direction",
+        {
+            Enum_value{.label = "Convert from RGB to", .code = "from_rgb_to"},
+            Enum_value{.label = "Convert to RGB from", .code = "to_rgb_from"}
+        },
+        0
+    );
+    add_enum(
+        d, "colorspace", "Colorspace",
+        {
+            Enum_value{.label = "RGB (no-op)", .code = "rgb"},
+            Enum_value{.label = "HSV",         .code = "hsv"},
+            Enum_value{.label = "YUV",         .code = "yuv"}
+        },
+        1
+    );
+    d.code = "vec4 $(name_uv)_c = $in($uv);\n";
+    add_output(d, Value_type::rgba, "vec4($(direction)_$(colorspace)($(name_uv)_c.rgb), $(name_uv)_c.a)");
+    return d;
+}
+
+// Colormap - ported from Material Maker colormap.mmg (MIT). Uses a grayscale
+// input as a lookup coordinate into a second (2D) input, sampling it along a
+// row or a column. The direction enum supplies the whole lookup coordinate
+// expression, which the composer re-scans - so "$input" and "$offset" inside
+// the enum fragment resolve normally.
+auto build_colormap() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "colormap";
+    d.label    = "Colormap";
+    d.category = "Color";
+    add_input(d, "in",       Value_type::grayscale, "$uv.x");
+    add_input(d, "colormap", Value_type::rgba,      "vec4(vec3($uv.x), 1.0)");
+    add_enum(
+        d, "direction", "Direction",
+        {
+            Enum_value{.label = "Horizontal", .code = "vec2($in($uv), $offset)"},
+            Enum_value{.label = "Vertical",   .code = "vec2($offset, $in($uv))"}
+        },
+        0
+    );
+    add_float(d, "offset", "Offset", 0.5f, 0.0f, 1.0f, 0.01f);
+    add_output(d, Value_type::rgba, "$colormap($direction)");
+    return d;
+}
+
+// Palettize - ported from Material Maker palettize.mmg (MIT). Snaps each pixel
+// to the nearest color found in a size x size sampling of the palette input.
+//
+// Material Maker emits the search as a per-node "instance" helper; erhe
+// descriptors have no instance stanza, so the loop is written into the code
+// stanza (the same approach warp and refract use). The palette input is
+// function-form, so its subtree is emitted once and called from inside the
+// loop rather than being inlined size*size times.
+auto build_palettize() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "palettize";
+    d.label    = "Palettize";
+    d.category = "Color";
+    add_input(d, "in",      Value_type::rgba, "vec4(vec3($uv.x), 1.0)");
+    add_input(d, "palette", Value_type::rgba, "vec4($uv.x, $uv.y, 0.0, 1.0)", true);
+    add_float(d, "size", "Palette Size", 8.0f, 1.0f, 32.0f, 1.0f);
+    d.code =
+        "vec4 $(name_uv)_in = $in($uv);\n"
+        "int $(name_uv)_size = int(clamp($size, 1.0, 32.0));\n"
+        "float $(name_uv)_min_dist = 10.0;\n"
+        "vec3 $(name_uv)_best = vec3(0.0);\n"
+        "for (int i = 0; i < $(name_uv)_size; ++i) {\n"
+        "    float px = (float(i)+0.5)/float($(name_uv)_size);\n"
+        "    for (int j = 0; j < $(name_uv)_size; ++j) {\n"
+        "        float py = (float(j)+0.5)/float($(name_uv)_size);\n"
+        "        vec3 pc = ($palette(vec2(px, py))).rgb;\n"
+        "        float pl = length($(name_uv)_in.rgb - pc);\n"
+        "        if (pl < $(name_uv)_min_dist) {\n"
+        "            $(name_uv)_min_dist = pl;\n"
+        "            $(name_uv)_best = pc;\n"
+        "        }\n"
+        "    }\n"
+        "}\n";
+    add_output(d, Value_type::rgba, "vec4($(name_uv)_best, $(name_uv)_in.a)");
+    return d;
+}
+
+// ---------------------------------------------------------------------------
 // Phase 4b patterns
 // ---------------------------------------------------------------------------
 
@@ -1769,6 +2155,20 @@ struct Descriptor_registry
         descriptors.push_back(build_combine());
         descriptors.push_back(build_decompose());
         descriptors.push_back(build_swap_channels());
+        descriptors.push_back(build_uniform_greyscale());
+        descriptors.push_back(build_greyscale());
+        descriptors.push_back(build_tones());
+        descriptors.push_back(build_tones_map());
+        descriptors.push_back(build_tones_range());
+        descriptors.push_back(build_tones_step());
+        descriptors.push_back(build_tonality());
+        descriptors.push_back(build_convert_colorspace());
+        descriptors.push_back(build_colormap());
+        descriptors.push_back(build_palettize());
+        descriptors.push_back(build_default_color());
+        descriptors.push_back(build_compare());
+        descriptors.push_back(build_ensure_greyscale());
+        descriptors.push_back(build_ensure_rgba());
         descriptors.push_back(build_rotate());
         descriptors.push_back(build_scale());
         descriptors.push_back(build_shear());

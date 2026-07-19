@@ -341,6 +341,20 @@ NODE_SPECS = {
     "decompose":           (["rgba"],                ["f", "f", "f", "f"], {}),
     "swap_channels":       (["rgba"],                ["rgba"], {"out_r": 2, "out_g": 4, "out_b": 6, "out_a": 8}),
     "reroute":             (["rgba"],                ["rgba"], {}),
+    "uniform_greyscale":   ([],                      ["f"],    {"color": 0.5}),
+    "greyscale":           (["rgba"],                ["f"],    {"mode": 2}),
+    "tones":               (["rgba"],                ["rgba"], {"in_min": [0.0, 0.0, 0.0, 0.0], "in_max": [1.0, 1.0, 1.0, 1.0]}),
+    "tones_map":           (["rgba"],                ["rgba"], {"in_min": 0.0, "in_max": 1.0, "out_min": 0.0, "out_max": 1.0}),
+    "tones_range":         (["f"],                   ["f"],    {"value": 0.5, "width": 0.25, "contrast": 0.5, "invert": False}),
+    "tones_step":          (["rgba"],                ["rgba"], {"value": 0.5, "width": 1.0, "invert": False}),
+    "tonality":            (["f"],                   ["f"],    {"curve": "CURVE"}),
+    "convert_colorspace":  (["rgba"],                ["rgba"], {"direction": 0, "colorspace": 1}),
+    "colormap":            (["f", "rgba"],           ["rgba"], {"direction": 0, "offset": 0.5}),
+    "palettize":           (["rgba", "rgba"],        ["rgba"], {"size": 8.0}),
+    "default_color":       (["rgba"],                ["rgba"], {"default": [1.0, 1.0, 1.0, 1.0]}),
+    "compare":             (["rgba", "rgba"],        ["f"],    {}),
+    "ensure_greyscale":    (["rgb"],                 ["f"],    {}),
+    "ensure_rgba":         (["f"],                   ["rgba"], {}),
     "rotate":              (["rgba"],                ["rgba"], {"cx": 0.0, "cy": 0.0, "rotate": 0.0}),
     "scale":               (["rgba"],                ["rgba"], {"scale_x": 1.0, "scale_y": 1.0}),
     "shear":               (["rgba"],                ["rgba"], {"direction": 1, "amount": 0.0, "center": 0.0}),
@@ -865,6 +879,144 @@ def section_multi_output_decompose():
     cx = pixel(w, ch, buf, w // 2, h // 2)
     check(S, "routed Blue channel bakes ~0.6 gray", abs(cx[0] - round(color[2] * 255)) <= 6,
           f"pixel={cx}")
+
+
+def section_color_tone():
+    """Color / tone filters.
+
+    These nodes have exactly predictable outputs, so the assertions are on
+    computed values rather than on "something rendered": a known luminosity, a
+    colorspace round trip returning its source color, a self-comparison being
+    zero. Anything weaker would pass on a node that compiles but computes the
+    wrong thing.
+    """
+    S = "color"
+    TMP_DIR.mkdir(parents=True, exist_ok=True)
+
+    def center_px(node_id, name, size=16):
+        path = TMP_DIR / f"color_{name}.png"
+        export_png(node_id, path, size=size)
+        w, h, ch, buf = decode_png(path)
+        base = (((h // 2) * w) + (w // 2)) * ch
+        return [buf[base + i] for i in range(4)]
+
+    # greyscale / Luminosity is 0.21r + 0.72g + 0.07b; for (0.2, 0.6, 0.9) that
+    # is 0.537 -> 137.
+    fresh_graph()
+    uni = add_node("uniform")["id"]
+    grey = add_node("greyscale")["id"]
+    set_param(uni, {"color": [0.2, 0.6, 0.9, 1.0]})
+    set_param(grey, {"mode": 2})
+    connect(uni, 0, grey, 0)
+    px = center_px(grey, "greyscale_luminosity")
+    check(S, "greyscale/Luminosity computes 0.21r+0.72g+0.07b", abs(px[0] - 137) <= 3,
+          f"got={px[0]} expected~137")
+
+    # Each colorspace must round trip: RGB -> X -> RGB returns the source color.
+    for space_index, space in ((1, "hsv"), (2, "yuv")):
+        fresh_graph()
+        uni = add_node("uniform")["id"]
+        fwd = add_node("convert_colorspace")["id"]
+        back = add_node("convert_colorspace")["id"]
+        set_param(uni, {"color": [0.2, 0.6, 0.9, 1.0]})
+        set_param(fwd, {"direction": 0, "colorspace": space_index})
+        set_param(back, {"direction": 1, "colorspace": space_index})
+        connect(uni, 0, fwd, 0)
+        connect(fwd, 0, back, 0)
+        px = center_px(back, f"{space}_roundtrip")
+        expected = [51, 153, 230]
+        ok = all(abs(px[i] - expected[i]) <= 4 for i in range(3))
+        check(S, f"convert_colorspace RGB->{space.upper()}->RGB round trips", ok,
+              f"got={px[:3]} expected~{expected}")
+
+    # compare() of an input with itself is zero everywhere.
+    fresh_graph()
+    uni = add_node("uniform")["id"]
+    cmp_node = add_node("compare")["id"]
+    set_param(uni, {"color": [0.3, 0.4, 0.5, 1.0]})
+    connect(uni, 0, cmp_node, 0)
+    connect(uni, 0, cmp_node, 1)
+    px = center_px(cmp_node, "compare_identical")
+    check(S, "compare of identical inputs is zero", px[0] <= 2, f"got={px[0]}")
+
+    # ensure_rgba turns 0.5 grey into opaque mid grey.
+    fresh_graph()
+    ugrey = add_node("uniform_greyscale")["id"]
+    to_rgba = add_node("ensure_rgba")["id"]
+    connect(ugrey, 0, to_rgba, 0)
+    px = center_px(to_rgba, "ensure_rgba")
+    check(S, "ensure_rgba(0.5) is opaque mid grey", abs(px[0] - 128) <= 3 and px[3] > 250, f"got={px}")
+
+    # default_color supplies its color while the input is unconnected.
+    fresh_graph()
+    dcol = add_node("default_color")["id"]
+    set_param(dcol, {"default": [1.0, 0.0, 0.0, 1.0]})
+    px = center_px(dcol, "default_color")
+    check(S, "default_color renders its color when unconnected", px[0] > 250 and px[1] < 8, f"got={px[:3]}")
+
+    # colormap looks its (grayscale) input up in the second input: feeding a
+    # ramp through a ramp colormap must reproduce the ramp exactly.
+    fresh_graph()
+    ramp_src = add_node("gradient")["id"]
+    to_f = add_node("greyscale")["id"]
+    ramp_map = add_node("gradient")["id"]
+    cmap = add_node("colormap")["id"]
+    connect(ramp_src, 0, to_f, 0)
+    connect(to_f, 0, cmap, 0)
+    connect(ramp_map, 0, cmap, 1)
+    src_path = TMP_DIR / "color_colormap_src.png"
+    out_path = TMP_DIR / "color_colormap_out.png"
+    export_png(to_f, src_path, size=64)
+    export_png(cmap, out_path, size=64)
+    w, h, ch, src_buf = decode_png(src_path)
+    _, _, _, out_buf = decode_png(out_path)
+    row = h // 2
+    src_row = [src_buf[((row * w) + x) * ch] for x in range(w)]
+    out_row = [out_buf[((row * w) + x) * ch] for x in range(w)]
+    check(S, "colormap(ramp, ramp) reproduces the ramp",
+          all(abs(src_row[i] - out_row[i]) <= 6 for i in range(w)),
+          f"src={src_row[:3]}..{src_row[-3:]} out={out_row[:3]}..{out_row[-3:]}")
+
+    # The "$(name_uv)_$invert" idiom (a boolean selecting a local BY NAME) must
+    # actually toggle: inverted output is the complement of the plain one.
+    fresh_graph()
+    uni = add_node("uniform")["id"]
+    step_plain = add_node("tones_step")["id"]
+    set_param(uni, {"color": [0.75, 0.75, 0.75, 1.0]})
+    connect(uni, 0, step_plain, 0)
+    px_plain = center_px(step_plain, "tones_step_plain")
+    set_param(step_plain, {"invert": True})
+    px_inv = center_px(step_plain, "tones_step_inverted")
+    check(S, "tones_step invert selects the complementary local",
+          abs((255 - px_plain[0]) - px_inv[0]) <= 3, f"plain={px_plain[0]} inverted={px_inv[0]}")
+
+    # Coexistence: every color/tone node in one composed shader (globals are
+    # deduplicated by exact string, see section_transform).
+    fresh_graph()
+    bricks = add_node("bricks")["id"]
+    colorize = add_node("colorize")["id"]
+    connect(bricks, 0, colorize, 0)
+    chain = ["tones", "tones_map", "tones_step", "convert_colorspace", "default_color"]
+    prev = colorize
+    for type_name in chain:
+        node_id = add_node(type_name)["id"]
+        connect(prev, 0, node_id, 0)
+        prev = node_id
+    grey2 = add_node("greyscale")["id"]
+    connect(prev, 0, grey2, 0)
+    for type_name in ["tones_range", "tonality"]:
+        node_id = add_node(type_name)["id"]
+        connect(grey2, 0, node_id, 0)
+        grey2 = node_id
+    final = add_node("ensure_rgba")["id"]
+    connect(grey2, 0, final, 0)
+    pal = add_node("palettize")["id"]
+    connect(final, 0, pal, 0)
+    connect(colorize, 0, pal, 1)
+    all_png = TMP_DIR / "color_all_chained.png"
+    result = export_png(pal, all_png, size=64)
+    check(S, "all color/tone nodes compose+compile in ONE shader",
+          isinstance(result, dict) and result.get("width") == 64, f"result={result}")
 
 
 def section_transform():
@@ -1443,6 +1595,7 @@ def main():
         section_gradient_curve,
         section_multi_output_decompose,
         section_new_filters,
+        section_color_tone,
         section_transform,
         section_switch,
         section_buffer,
