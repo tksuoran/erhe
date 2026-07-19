@@ -1037,6 +1037,9 @@ void Geometry_graph_window::controls_imgui()
         return;
     }
     ImGui::Text("Editing: %s", m_graph_mesh->get_name().c_str());
+    if (ImGui::Button("Automatic Layout")) {
+        request_automatic_layout();
+    }
     // Per-node mesh preview thumbnails on the canvas; editor-global and
     // persistent (Editor_settings_config::graph_node_previews), on by
     // default. Auto-rotate spins a hovered node's preview (paused while
@@ -1123,6 +1126,10 @@ void Geometry_graph_window::imgui()
     // Interactive node resizing (edge / corner drags): adopt the dragged
     // size into the node's requested extent.
     apply_node_resize(*m_node_editor.get());
+
+    // Pending automatic layout (palette "Automatic Layout" button); waits
+    // for stable measured node sizes, then frames the result.
+    apply_automatic_layout();
 
     // Dropping a content-library brush on the canvas creates a Brush source
     // node at the drop position.

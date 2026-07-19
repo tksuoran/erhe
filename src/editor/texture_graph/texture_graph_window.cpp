@@ -600,6 +600,10 @@ void Texture_graph_window::controls_imgui()
     if (ImGui::Button("Reseed all")) {
         reseed_all();
     }
+    ImGui::SameLine();
+    if (ImGui::Button("Automatic Layout")) {
+        request_automatic_layout();
+    }
     ImGui::Separator();
     node_palette();
 }
@@ -663,6 +667,10 @@ void Texture_graph_window::imgui()
     // Interactive node resizing (edge / corner drags): adopt the dragged
     // size into the node's requested extent.
     apply_node_resize(*m_node_editor.get());
+
+    // Pending automatic layout (palette "Automatic Layout" button); waits
+    // for stable measured node sizes, then frames the result.
+    apply_automatic_layout();
 
     // Node types dragged from this editor's palette spawn at the drop
     // position (with a ghost preview while the drag is in flight).

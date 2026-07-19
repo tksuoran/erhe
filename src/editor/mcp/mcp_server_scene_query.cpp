@@ -565,16 +565,25 @@ auto Mcp_server::action_set_window_visibility(const json& args) -> std::string
     }
     const std::string title   = args.value("title", "");
     const bool        visible = args.value("visible", true);
+    const bool        focus   = args.value("focus", false);
     for (erhe::imgui::Imgui_window* window : m_context.imgui_windows->get_windows()) {
         if ((window != nullptr) && (window->get_title() == title)) {
             if (visible) {
-                window->show_window();
+                if (focus) {
+                    // Also selects the window's dock tab and brings it to the
+                    // front - a merely visible window can sit behind another
+                    // tab of the same dock node, invisible in screenshots.
+                    window->request_window_focus();
+                } else {
+                    window->show_window();
+                }
             } else {
                 window->hide_window();
             }
             return make_json_content({
                 {"title",   title},
-                {"visible", visible}
+                {"visible", visible},
+                {"focus",   focus}
             }).dump();
         }
     }

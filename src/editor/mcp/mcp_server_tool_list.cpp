@@ -34,7 +34,8 @@ void Mcp_server::refresh_tool_list()
         {"type", "object"},
         {"properties", {
             {"title",   {{"type", "string"},  {"description", "Window title, e.g. \"Inventory\""}}},
-            {"visible", {{"type", "boolean"}, {"description", "true shows the window (default), false hides it"}}}
+            {"visible", {{"type", "boolean"}, {"description", "true shows the window (default), false hides it"}}},
+            {"focus",   {{"type", "boolean"}, {"description", "With visible=true, also select the window's dock tab and bring it to the front (default false). A merely visible window can sit behind another tab of the same dock node, invisible in screenshots."}}}
         }},
         {"required", {"title"}}
     }});

@@ -11,6 +11,7 @@
 
 #include "erhe_graph/graph.hpp"
 #include "erhe_graph/link.hpp"
+#include "erhe_graph/node.hpp"
 #include "erhe_graph/pin.hpp"
 #include "erhe_imgui/imgui_node_editor.h"
 
@@ -25,6 +26,7 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <unordered_map>
 
 namespace editor {
 
@@ -65,6 +67,232 @@ void Graph_editor_window_base::apply_node_resize(ax::NodeEditor::EditorContext& 
     if ((current_position.x != position.x) || (current_position.y != position.y)) {
         node_editor.SetNodePosition(node_id, position);
     }
+}
+
+auto Graph_editor_window_base::get_layout_node_id(const erhe::graph::Node& node) const -> std::size_t
+{
+    return node.get_id();
+}
+
+void Graph_editor_window_base::request_automatic_layout()
+{
+    m_automatic_layout_pending = true;
+    m_layout_size_sum = -1.0f;
+}
+
+void Graph_editor_window_base::apply_automatic_layout()
+{
+    // Frame the content the frame after the layout applied: NavigateToContent
+    // uses the content bounds End() computed, which reflect the new positions
+    // only after the nodes have been drawn there once.
+    if (m_navigate_to_content_pending && !m_automatic_layout_pending) {
+        m_navigate_to_content_pending = false;
+        ax::NodeEditor::EditorContext* node_editor = get_node_editor();
+        if (node_editor != nullptr) {
+            node_editor->NavigateToContent(0.0f);
+        }
+        return;
+    }
+    if (!m_automatic_layout_pending) {
+        return;
+    }
+    erhe::graph::Graph* graph = get_current_graph();
+    ax::NodeEditor::EditorContext* node_editor = get_node_editor();
+    if ((graph == nullptr) || (node_editor == nullptr)) {
+        m_automatic_layout_pending = false;
+        return;
+    }
+    const std::vector<erhe::graph::Node*>& nodes = graph->get_nodes();
+    if (nodes.empty()) {
+        m_automatic_layout_pending = false;
+        return;
+    }
+
+    // Wait until every node has been drawn (nonzero measured size) and the
+    // sizes are stable across two consecutive frames - a node can grow a
+    // frame after it first appears (preview thumbnail arriving).
+    float size_sum = 0.0f;
+    for (const erhe::graph::Node* node : nodes) {
+        const ImVec2 size = node_editor->GetNodeSize(ax::NodeEditor::NodeId{get_layout_node_id(*node)});
+        if ((size.x <= 0.0f) || (size.y <= 0.0f)) {
+            m_layout_size_sum = -1.0f;
+            return; // not drawn yet - retry next frame
+        }
+        size_sum += size.x + size.y;
+    }
+    if (size_sum != m_layout_size_sum) {
+        m_layout_size_sum = size_sum;
+        return; // sizes still settling - retry next frame
+    }
+    m_automatic_layout_pending = false;
+
+    // Rare, request-driven path - local allocations are fine here.
+    const std::size_t count = nodes.size();
+    std::unordered_map<const erhe::graph::Node*, std::size_t> index_of;
+    index_of.reserve(count);
+    for (std::size_t i = 0; i < count; ++i) {
+        index_of.emplace(nodes[i], i);
+    }
+
+    // Directed successors (link source node -> sink node) and undirected
+    // neighbors (for the connected components).
+    std::vector<std::vector<std::size_t>> successors(count);
+    std::vector<std::vector<std::size_t>> neighbors(count);
+    for (const std::unique_ptr<erhe::graph::Link>& link : graph->get_links()) {
+        const auto source = index_of.find(link->get_source()->get_owner_node());
+        const auto sink   = index_of.find(link->get_sink  ()->get_owner_node());
+        if ((source == index_of.end()) || (sink == index_of.end())) {
+            continue;
+        }
+        successors[source->second].push_back(sink->second);
+        neighbors [source->second].push_back(sink->second);
+        neighbors [sink->second  ].push_back(source->second);
+    }
+
+    // Longest link distance from each node to a sink of its subgraph (the
+    // deepest node downstream). Iterative DFS; the graphs are acyclic by
+    // construction (erhe::graph::Graph::connect refuses cycles), the visit
+    // state just keeps an unexpected cycle from hanging the walk.
+    std::vector<int>  distance(count, -1);
+    std::vector<char> visit_state(count, 0); // 0 = unvisited, 1 = in progress, 2 = done
+    for (std::size_t root = 0; root < count; ++root) {
+        if (visit_state[root] == 2) {
+            continue;
+        }
+        std::vector<std::size_t> stack{root};
+        while (!stack.empty()) {
+            const std::size_t node = stack.back();
+            if (visit_state[node] == 0) {
+                visit_state[node] = 1;
+                for (const std::size_t successor : successors[node]) {
+                    if (visit_state[successor] == 0) {
+                        stack.push_back(successor);
+                    }
+                }
+            } else {
+                stack.pop_back();
+                if (visit_state[node] == 2) {
+                    continue;
+                }
+                visit_state[node] = 2;
+                int longest = 0;
+                for (const std::size_t successor : successors[node]) {
+                    if (distance[successor] >= 0) {
+                        longest = std::max(longest, distance[successor] + 1);
+                    }
+                }
+                distance[node] = longest;
+            }
+        }
+    }
+
+    // Disjoint subgraphs (connected components), in discovery order.
+    std::vector<int>                      component_of(count, -1);
+    std::vector<std::vector<std::size_t>> components;
+    for (std::size_t root = 0; root < count; ++root) {
+        if (component_of[root] >= 0) {
+            continue;
+        }
+        const int component_index = static_cast<int>(components.size());
+        components.emplace_back();
+        std::vector<std::size_t> stack{root};
+        component_of[root] = component_index;
+        while (!stack.empty()) {
+            const std::size_t node = stack.back();
+            stack.pop_back();
+            components[component_index].push_back(node);
+            for (const std::size_t neighbor : neighbors[node]) {
+                if (component_of[neighbor] < 0) {
+                    component_of[neighbor] = component_index;
+                    stack.push_back(neighbor);
+                }
+            }
+        }
+    }
+
+    // Largest subgraph first, then smaller ones below it one by one.
+    std::stable_sort(
+        components.begin(),
+        components.end(),
+        [](const std::vector<std::size_t>& lhs, const std::vector<std::size_t>& rhs) {
+            return lhs.size() > rhs.size();
+        }
+    );
+
+    constexpr float column_gap    =  60.0f; // canvas units
+    constexpr float row_gap       =  40.0f;
+    constexpr float component_gap =  80.0f;
+
+    const auto node_size_of = [this, node_editor, &nodes](const std::size_t index) -> ImVec2 {
+        return node_editor->GetNodeSize(ax::NodeEditor::NodeId{get_layout_node_id(*nodes[index])});
+    };
+
+    float component_top = 0.0f;
+    for (const std::vector<std::size_t>& component : components) {
+        int max_distance = 0;
+        for (const std::size_t node : component) {
+            max_distance = std::max(max_distance, distance[node]);
+        }
+        const std::size_t column_count = static_cast<std::size_t>(max_distance) + 1;
+
+        // One (longest) path laid on a single horizontal line: start from a
+        // node at the maximum distance and follow successors one distance
+        // step at a time. The path visits every distance value once, so
+        // every column gets exactly one spine node at the component's top.
+        std::vector<char> is_spine(count, 0);
+        std::size_t spine_node = component.front();
+        for (const std::size_t node : component) {
+            if (distance[node] == max_distance) {
+                spine_node = node;
+                break;
+            }
+        }
+        is_spine[spine_node] = 1;
+        while (distance[spine_node] > 0) {
+            bool advanced = false;
+            for (const std::size_t successor : successors[spine_node]) {
+                if (distance[successor] == (distance[spine_node] - 1)) {
+                    spine_node = successor;
+                    is_spine[spine_node] = 1;
+                    advanced = true;
+                    break;
+                }
+            }
+            if (!advanced) {
+                break; // only possible when the cycle guard degraded distances
+            }
+        }
+
+        // Column membership: distance to the deepest node, sinks right-aligned.
+        // The spine node leads its column; the rest follow in graph order.
+        std::vector<std::vector<std::size_t>> columns(column_count);
+        for (const std::size_t node : component) {
+            const std::size_t column = static_cast<std::size_t>(max_distance - distance[node]);
+            if (is_spine[node] != 0) {
+                columns[column].insert(columns[column].begin(), node);
+            } else {
+                columns[column].push_back(node);
+            }
+        }
+
+        float x = 0.0f;
+        float component_bottom = component_top;
+        for (const std::vector<std::size_t>& column : columns) {
+            float column_width = 0.0f;
+            float y = component_top;
+            for (const std::size_t node : column) {
+                const ImVec2 size = node_size_of(node);
+                node_editor->SetNodePosition(ax::NodeEditor::NodeId{get_layout_node_id(*nodes[node])}, ImVec2{x, y});
+                y += size.y + row_gap;
+                column_width = std::max(column_width, size.x);
+            }
+            component_bottom = std::max(component_bottom, y - row_gap);
+            x += column_width + column_gap;
+        }
+        component_top = component_bottom + component_gap;
+    }
+
+    m_navigate_to_content_pending = true;
 }
 
 void Graph_editor_window_base::spawn_node_from_slot(const std::string& type_name)

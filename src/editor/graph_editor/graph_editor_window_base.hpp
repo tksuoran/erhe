@@ -15,6 +15,7 @@ namespace ax::NodeEditor { class EditorContext; }
 namespace erhe::graph {
     class Graph;
     class Link;
+    class Node;
 }
 
 namespace editor {
@@ -83,6 +84,20 @@ public:
     // palette payloads to the right editor).
     [[nodiscard]] static auto find_window_by_kind(App_context& context, const char* kind) -> Graph_editor_window_base*;
 
+    // Shared automatic layout (all graph editors). Nodes flow left to right:
+    // sources on the left, sinks on the right, one column per depth, a
+    // node's column chosen by its longest link distance to the deepest node
+    // of its subgraph (so sinks right-align). One longest path is laid on a
+    // single horizontal line; the other nodes of each column stack below it.
+    // The graph need not be connected: each disjoint subgraph is laid out
+    // separately, largest first, stacked top to bottom.
+    //
+    // The layout is applied deferred by apply_automatic_layout(): node sizes
+    // are measured canvas extents, so it waits until every node has been
+    // drawn with a stable size (a node can grow a frame after it first
+    // appears, e.g. when a preview thumbnail arrives).
+    void request_automatic_layout();
+
 protected:
     // One selectable palette entry (a spawnable node type).
     class Palette_entry
@@ -141,6 +156,16 @@ protected:
     // "Size") and the reported position (left / top edges move the node).
     // Call right after the canvas End().
     void apply_node_resize(ax::NodeEditor::EditorContext& node_editor);
+
+    // Applies a pending request_automatic_layout() once every canvas node
+    // has a stable measured size, then frames the result on the next frame
+    // (NavigateToContent). Call right after the canvas End().
+    void apply_automatic_layout();
+
+    // Canvas node id for a graph node. The graph editors draw graph nodes
+    // directly, so the canvas id is the node's item id (default); the
+    // rendergraph viewer draws proxy nodes and overrides this to map to them.
+    [[nodiscard]] virtual auto get_layout_node_id(const erhe::graph::Node& node) const -> std::size_t;
 
     // Cut / Copy / Paste / Duplicate for canvas nodes. The clipboard is
     // editor-global (one per process, tagged with clipboard_kind()), so nodes
@@ -210,6 +235,12 @@ private:
     // Node ids to select once they have been drawn (paste / duplicate),
     // applied by apply_pending_canvas_selection().
     std::vector<std::size_t>                        m_pending_canvas_selection;
+    // Automatic layout request state (apply_automatic_layout()): the layout
+    // waits for every node's measured size to be stable across two frames
+    // before applying, then frames the content one frame later.
+    bool                                            m_automatic_layout_pending {false};
+    bool                                            m_navigate_to_content_pending{false};
+    float                                           m_layout_size_sum{-1.0f};
     // Reused scratch for the context menu / shortcut selection queries
     // (cleared at point of use, capacity kept).
     std::vector<std::shared_ptr<Graph_editor_node>> m_selected_nodes_scratch;
