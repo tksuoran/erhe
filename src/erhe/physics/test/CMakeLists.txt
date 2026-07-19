@@ -14,6 +14,7 @@ add_executable(${_target}
     test_body_activation.cpp
     test_collision_filter_table.cpp
     test_hull_builder.cpp
+    test_shape_descriptor.cpp
     test_six_dof_classifier.cpp
 )
 

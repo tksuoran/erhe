@@ -35,6 +35,16 @@ if (${ERHE_PHYSICS_LIBRARY} STREQUAL "box3d")
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
         erhe_physics/box3d/box3d_collision_filter_table.cpp
         erhe_physics/box3d/box3d_collision_filter_table.hpp
+        erhe_physics/box3d/box3d_collision_shape.cpp
+        erhe_physics/box3d/box3d_collision_shape.hpp
+        erhe_physics/box3d/box3d_compound_shape.cpp
+        erhe_physics/box3d/box3d_compound_shape.hpp
+        erhe_physics/box3d/box3d_convex_hull_collision_shape.cpp
+        erhe_physics/box3d/box3d_convex_hull_collision_shape.hpp
+        erhe_physics/box3d/box3d_mesh_shape.cpp
+        erhe_physics/box3d/box3d_mesh_shape.hpp
+        erhe_physics/box3d/box3d_wrapper_shapes.cpp
+        erhe_physics/box3d/box3d_wrapper_shapes.hpp
         erhe_physics/box3d/box3d_hull_builder.cpp
         erhe_physics/box3d/box3d_hull_builder.hpp
         erhe_physics/box3d/box3d_six_dof_classifier.cpp
