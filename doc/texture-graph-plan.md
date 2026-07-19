@@ -42,6 +42,7 @@ ported from it carry an attribution comment). Referred to below as
 | Phase 6: PBR material output, multi-channel bake, PNG export| DONE    | ac4d8045 |
 | Backlog: Gradients family (5 nodes, new "Gradients" category)| DONE   | 559e7c45 |
 | Backlog: Switch (one per value type; compile-time branch select) | DONE | 3bd1a45d |
+| Backlog: Transform / UV warps (13 of ~25 nodes)              | DONE    | 3f185eae |
 
 ---
 
@@ -50,7 +51,7 @@ ported from it carry an attribution comment). Referred to below as
 Snapshot 2026-07-19 against Material Maker master (392 `.mmg` node definitions
 under `addons/material_maker/nodes/` plus ~19 engine-level node types in
 `engine/nodes/gen_*.gd`: buffer, switch, image, text, graph/group, remote,
-comment, export, iterate_buffer, ...). erhe has 38 node types: 35 descriptors
+comment, export, iterate_buffer, ...). erhe has 51 node types: 48 descriptors
 in `src/editor/texture_graph/nodes/texture_node_descriptors.cpp` plus the
 descriptor-less `output`, `material_output`, and `buffer` nodes
 (`texture_graph_node_factory.cpp`). Note the 392 count includes internal
@@ -82,6 +83,19 @@ smaller than the raw file count.
 | `colorize`            | Filters    | `colorize.mmg`               | Full, including gradient widget codegen. |
 | `curve`               | Filters    | `curve.mmg` (widget)         | Hermite tone curve per RGB channel, alpha pass-through. |
 | `transform`           | Filters    | `transform.mmg`              | Per-channel map inputs (tx/ty/r/sx/sy) dropped; scalar parameters only. |
+| `rotate`              | Transform  | `rotate.mmg`                 | Full. |
+| `scale`               | Transform  | `scale.mmg`                  | Full. |
+| `shear`               | Transform  | `shear.mmg`                  | Full. |
+| `skew`                | Transform  | `skew.mmg`                   | Full. |
+| `mirror`              | Transform  | `mirror.mmg`                 | Full. |
+| `repeat`              | Transform  | `repeat.mmg`                 | Full. |
+| `swirl`               | Transform  | `swirl.mmg`                  | Full; the rotation is written into the helper instead of calling a shared `rotate()` (globals dedup by exact string, so a shared symbol inside two globals would double-define). |
+| `spherize`            | Transform  | `spherize.mmg`               | Full, including the mask and field outputs. |
+| `magnify`             | Transform  | `magnify.mmg`                | Full. |
+| `kaleidoscope`        | Transform  | `kaleidoscope.mmg`           | "Variations" dropped (needs MM's input-variation machinery); the helper still returns the sector index. |
+| `warp`                | Transform  | `warp.mmg`                   | Full (both modes). MM's `$(name)_slope` instance helper is written inline - erhe descriptors have no instance stanza. |
+| `directional_warp`    | Transform  | `directional_warp.mmg`       | Full. |
+| `refract`             | Transform  | `refract.mmg`                | Full; instance helper inlined as for `warp`. |
 | `brightness_contrast` | Filters    | `brightness_contrast.mmg`    | Full. |
 | `normal_map`          | Filters    | `normal_map.mmg`             | MM's compound graph (buffer + switch + edge detect) flattened to the edge-detect core; "Default" output format only. |
 | `blur`                | Filters    | `gaussian_blur_x/_y.mmg`     | Self-contained 2D 13x13 kernel instead of MM's separable X/Y pair around buffers; composes without a buffer (expensively). |
@@ -125,7 +139,7 @@ stays a complete record of the comparison.
 | Gradients                    | 5      | `gradient`, `circular_gradient`, `radial_gradient`, `spiral_gradient`, `multigradient` | 1 | 4 | 4.0 | **DONE.** All 5 ported as descriptors in a new "Gradients" palette category. |
 | Switch                       | 1      | `switch` (engine, `gen_switch.gd`) | 1 | 3 | 3.0 | **DONE.** Registered once per value type (`switch`, `switch_grayscale`, `switch_rgb`) because erhe pins are type-strict; 4 choices each. |
 | Image / texture input        | 2      | `image`, `texture` (engine) | 2 | 5 | 2.5 | Missing. Sample an external bitmap as a graph source; the `buffer` node already proves `sampler2D`-backed expressions downstream. |
-| Transform / UV warps         | 25     | `translate`, `rotate`, `scale`, `shear`, `skew`, `warp`, `directional_warp`, `multi_warp`, `warp_dilation*`, `swirl`, `twist`, `spherize`, `kaleidoscope`, `mirror`, `repeat`, `custom_uv`, `distort`, `refract`, `magnify` | 2 | 5 | 2.5 | Only the combined `transform` covered. Warp is the heart of the noise -> warp -> colorize workflow; needs function-form inputs (supported) or buffers (exist). |
+| Transform / UV warps         | 25     | `translate`, `rotate`, `scale`, `shear`, `skew`, `warp`, `directional_warp`, `multi_warp`, `warp_dilation*`, `swirl`, `twist`, `spherize`, `kaleidoscope`, `mirror`, `repeat`, `custom_uv`, `distort`, `refract`, `magnify` | 2 | 5 | 2.5 | **DONE (13 of ~25).** rotate, scale, shear, skew, mirror, repeat, swirl, spherize, magnify, kaleidoscope, warp, directional_warp, refract. Still missing: `multi_warp` (compound node), `distort` (needs a lattice widget type), `custom_uv` (tileset + variation machinery), `twist` (sdf3d, out of scope), `warp_dilation*` (multi-pass buffers). |
 | Color / tone filters         | 18     | `auto_tones`, `tonality`, `tones`, `tones_map/range/step`, `palettize`, `colormap`, `convert_colorspace`, `greyscale`, `ensure_greyscale`, `ensure_rgba`, `default_color`, `compare` | 2 | 4 | 2.0 | Missing. Mostly per-pixel one-liners; `auto_tones` needs a min/max reduction pass, `tones` a levels widget. |
 | Noise variants               | 15     | `voronoi2`, `voronoi_triangle`, `clouds_noise`, `wavelet_noise`, `noise_anisotropic`, `noise_white`, `directional_noise`, `perlin_color`, `crystal`, `shard_fbm`, `fbm2..4` | 2 | 3 | 1.5 | Base `perlin`/`voronoi`/`fbm`/`noise` covered; variants are straight GLSL ports adding looks, not capability. |
 | Deterministic patterns       | 20     | `pattern`, `arc_pavement`, `beehive`, `cairo`, `iching`, `runes`, `japanese_glyphs`, `roman_numerals`, `seven_segment`, `scratches`, `splines`, `polycurve`, `profile`, `dirt` | 2 | 3 | 1.5 | Missing; `cairo` named in Phase 4. Straight GLSL ports, each self-contained. |
@@ -524,14 +538,14 @@ material in the headless viewport screenshot; smoke script green.
 - **Headless end-to-end** (Phase 3+): `scripts/texture_graph_smoke_test.py`
   against the headless Vulkan editor build over the in-editor MCP server,
   including `texture_graph_export_png` pixel assertions and
-  `capture_screenshot` visual checks. 315 checks as of 2026-07-19; its
+  `capture_screenshot` visual checks. 386 checks as of 2026-07-19; its
   `NODE_SPECS` table must gain a row (pins + default parameters) for every new
   node type, which is what keeps the "all N node types present" check honest.
 - **Descriptor self-check**: `check_texture_node_descriptors()` composes every
   descriptor standalone at `Texture_graph_window` construction and logs
   "Texture graph: all N node descriptors compose cleanly" - the cheapest
   confirmation that a newly added descriptor's GLSL substitutes and assembles
-  (N = 35 as of 2026-07-19).
+  (N = 48 as of 2026-07-19).
 - **Process**: per step - edit, build (ninja MSVC), tests, independent diff
   review, fix, commit (per-topic commits). Restore
   `config/editor/desktop_window_imgui_host_imgui.ini` after editor runs.
