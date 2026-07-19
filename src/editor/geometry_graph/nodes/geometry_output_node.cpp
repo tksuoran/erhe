@@ -359,7 +359,7 @@ void Geometry_output_node::imgui()
         int motion_index =
             (m_physics_motion_mode == erhe::physics::Motion_mode::e_dynamic            ) ? 2 :
             (m_physics_motion_mode == erhe::physics::Motion_mode::e_kinematic_physical ) ? 1 : 0;
-        if (imgui_enum_stepper("physics_motion", motion_index, c_physics_motion_names, 3)) {
+        if (imgui_enum_combo("physics_motion", motion_index, c_physics_motion_names, 3, content_scale())) {
             m_physics_motion_mode =
                 (motion_index == 2) ? erhe::physics::Motion_mode::e_dynamic :
                 (motion_index == 1) ? erhe::physics::Motion_mode::e_kinematic_physical :

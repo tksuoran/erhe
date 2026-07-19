@@ -95,14 +95,10 @@ void Texture_descriptor_node::imgui()
             }
             case erhe::texgen::Parameter_kind::color_parameter: {
                 ImGui::TextUnformatted(label);
-                // ColorButton is a display-only swatch (it does not open a
-                // picker popup, which is forbidden inside the ax::NodeEditor
-                // canvas); DragFloat4 does the editing.
-                const ImVec4 preview{value.color_value[0], value.color_value[1], value.color_value[2], value.color_value[3]};
-                ImGui::ColorButton("##swatch", preview, ImGuiColorEditFlags_NoTooltip);
-                ImGui::SameLine();
-                ImGui::SetNextItemWidth(140.0f * content_scale());
-                if (ImGui::DragFloat4("##color", value.color_value.data(), 0.005f, 0.0f, 1.0f)) {
+                // A swatch that opens a real color picker. The picker is a
+                // popup, illegal between BeginNode / EndNode, so the widget
+                // defers it (see graph_editor_widgets.hpp).
+                if (imgui_color_edit("##color", value.color_value.data(), content_scale())) {
                     mark_dirty();
                 }
                 break;
@@ -114,7 +110,7 @@ void Texture_descriptor_node::imgui()
                     names.push_back(enum_value.label.c_str());
                 }
                 int index = static_cast<int>(value.enum_index);
-                if (imgui_enum_stepper(label, index, names.data(), static_cast<int>(names.size()))) {
+                if (imgui_enum_combo(label, index, names.data(), static_cast<int>(names.size()), content_scale())) {
                     value.enum_index = static_cast<std::size_t>(index);
                     mark_dirty();
                 }

@@ -4,7 +4,7 @@
 
 #include "texture_graph/texture_graph_widgets.hpp"
 
-#include "graph_editor/graph_editor_widgets.hpp" // imgui_enum_stepper
+#include "graph_editor/graph_editor_widgets.hpp" // imgui_enum_combo, imgui_color_edit
 
 #include <imgui/imgui.h>
 
@@ -230,7 +230,7 @@ auto texture_gradient_editor(
     // Interpolation stepper.
     static const char* const interpolation_names[] = {"Constant", "Linear", "Smoothstep", "Cubic"};
     int interpolation_index = static_cast<int>(interpolation);
-    if (imgui_enum_stepper("Interp", interpolation_index, interpolation_names, 4)) {
+    if (imgui_enum_combo("Interp", interpolation_index, interpolation_names, 4, scale)) {
         interpolation = static_cast<Gradient_interpolation>(interpolation_index);
         changed = true;
     }
@@ -238,11 +238,8 @@ auto texture_gradient_editor(
     // Selected stop color + delete.
     if ((selected >= 0) && (selected < static_cast<int>(stops.size()))) {
         Gradient_stop& stop = stops[static_cast<std::size_t>(selected)];
-        const ImVec4 preview{stop.color[0], stop.color[1], stop.color[2], stop.color[3]};
-        ImGui::ColorButton("##swatch", preview, ImGuiColorEditFlags_NoTooltip);
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(120.0f * scale);
-        if (ImGui::DragFloat4("##stop_color", stop.color.data(), 0.005f, 0.0f, 1.0f)) {
+        // Swatch opening the deferred color picker, as for a color parameter.
+        if (imgui_color_edit("##stop_color", stop.color.data(), scale)) {
             changed = true;
         }
         if ((stops.size() > 1) && ImGui::SmallButton("Delete stop")) {

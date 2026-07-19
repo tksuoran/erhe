@@ -45,7 +45,7 @@ void Boolean_node::imgui()
 {
     const char* operation_names[] = { "Union", "Intersection", "Difference" };
     int operation = static_cast<int>(m_operation);
-    if (imgui_enum_stepper("operation", operation, operation_names, IM_ARRAYSIZE(operation_names))) {
+    if (imgui_enum_combo("operation", operation, operation_names, IM_ARRAYSIZE(operation_names), content_scale())) {
         m_operation = static_cast<Boolean_operation>(operation);
         mark_dirty();
     }

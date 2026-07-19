@@ -116,7 +116,7 @@ void Texture_buffer_node::render_products(App_context& context, Texture_renderer
 void Texture_buffer_node::imgui()
 {
     ImGui::TextUnformatted("Resolution");
-    if (imgui_enum_stepper("size", m_size_index, c_size_names, c_size_count)) {
+    if (imgui_enum_combo("size", m_size_index, c_size_names, c_size_count, content_scale())) {
         mark_dirty();
     }
     if (ImGui::Checkbox("Pause", &m_pause)) {
