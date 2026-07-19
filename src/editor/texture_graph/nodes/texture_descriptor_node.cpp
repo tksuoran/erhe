@@ -138,14 +138,14 @@ void Texture_descriptor_node::imgui()
             }
             case erhe::texgen::Parameter_kind::gradient_parameter: {
                 ImGui::TextUnformatted(label);
-                if (texture_gradient_editor("##gradient", value.gradient_stops, value.gradient_interpolation)) {
+                if (texture_gradient_editor("##gradient", value.gradient_stops, value.gradient_interpolation, content_scale())) {
                     mark_dirty();
                 }
                 break;
             }
             case erhe::texgen::Parameter_kind::curve_parameter: {
                 ImGui::TextUnformatted(label);
-                if (texture_curve_editor("##curve", value.curve_points)) {
+                if (texture_curve_editor("##curve", value.curve_points, content_scale())) {
                     mark_dirty();
                 }
                 break;

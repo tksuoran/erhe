@@ -128,7 +128,8 @@ void recompute_curve_slopes(std::vector<Curve_point>& points)
 auto texture_gradient_editor(
     const char*                  id,
     std::vector<Gradient_stop>&  stops,
-    Gradient_interpolation&      interpolation
+    Gradient_interpolation&      interpolation,
+    const float                  scale
 ) -> bool
 {
     bool changed = false;
@@ -140,9 +141,9 @@ auto texture_gradient_editor(
     const ImGuiID drag_key  = ImGui::GetID("##drag");
     int selected = storage->GetInt(sel_key, 0);
 
-    const float  width    = 150.0f;
-    const float  bar_h    = 18.0f;
-    const float  handle_h = 8.0f;
+    const float  width    = 150.0f * scale;
+    const float  bar_h    = 18.0f  * scale;
+    const float  handle_h = 8.0f   * scale;
     const ImVec2 bar_p0   = ImGui::GetCursorScreenPos();
 
     // Ramp.
@@ -177,7 +178,7 @@ auto texture_gradient_editor(
         draw_list->AddLine(
             ImVec2{hx, bar_p0.y}, ImVec2{hx, bar_p0.y + bar_h},
             is_selected ? IM_COL32(255, 220, 0, 255) : IM_COL32(20, 20, 20, 255),
-            is_selected ? 2.0f : 1.0f
+            (is_selected ? 2.0f : 1.0f) * scale
         );
     }
 
@@ -185,7 +186,7 @@ auto texture_gradient_editor(
     // nearest stop (kept in ImGuiStorage across frames so a drag stays on one
     // stop even as the mouse crosses others).
     const ImVec2 strip_p0 = ImGui::GetCursorScreenPos();
-    ImGui::InvisibleButton("##handles", ImVec2{width, handle_h + 2.0f});
+    ImGui::InvisibleButton("##handles", ImVec2{width, handle_h + (2.0f * scale)});
     const bool strip_active = ImGui::IsItemActive();
     if (ImGui::IsItemActivated() && !stops.empty()) {
         const float mx = (ImGui::GetIO().MousePos.x - strip_p0.x) / width;
@@ -217,10 +218,11 @@ auto texture_gradient_editor(
         const float hx = strip_p0.x + (clamp01(stops[i].position) * width);
         const bool  is_selected = (static_cast<int>(i) == selected);
         const ImU32 handle_color = is_selected ? IM_COL32(255, 220, 0, 255) : IM_COL32(180, 180, 180, 255);
+        const float half_width = 4.0f * scale;
         draw_list->AddTriangleFilled(
-            ImVec2{hx - 4.0f, strip_p0.y + handle_h},
-            ImVec2{hx + 4.0f, strip_p0.y + handle_h},
-            ImVec2{hx,        strip_p0.y},
+            ImVec2{hx - half_width, strip_p0.y + handle_h},
+            ImVec2{hx + half_width, strip_p0.y + handle_h},
+            ImVec2{hx,              strip_p0.y},
             handle_color
         );
     }
@@ -239,7 +241,7 @@ auto texture_gradient_editor(
         const ImVec4 preview{stop.color[0], stop.color[1], stop.color[2], stop.color[3]};
         ImGui::ColorButton("##swatch", preview, ImGuiColorEditFlags_NoTooltip);
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(120.0f);
+        ImGui::SetNextItemWidth(120.0f * scale);
         if (ImGui::DragFloat4("##stop_color", stop.color.data(), 0.005f, 0.0f, 1.0f)) {
             changed = true;
         }
@@ -257,7 +259,8 @@ auto texture_gradient_editor(
 
 auto texture_curve_editor(
     const char*               id,
-    std::vector<Curve_point>& points
+    std::vector<Curve_point>& points,
+    const float               scale
 ) -> bool
 {
     bool changed = false;
@@ -269,8 +272,8 @@ auto texture_curve_editor(
     const ImGuiID drag_key  = ImGui::GetID("##drag");
     int selected = storage->GetInt(sel_key, -1);
 
-    const float  width  = 150.0f;
-    const float  height = 90.0f;
+    const float  width  = 150.0f * scale;
+    const float  height = 90.0f  * scale;
     const ImVec2 p0     = ImGui::GetCursorScreenPos();
 
     // Box + quarter grid.
@@ -293,7 +296,7 @@ auto texture_curve_editor(
         const float cx = static_cast<float>(i) / static_cast<float>(polyline_samples);
         const ImVec2 screen = to_screen(cx, evaluate_curve(points, cx));
         if (i > 0) {
-            draw_list->AddLine(previous, screen, IM_COL32(120, 205, 255, 255), 1.5f);
+            draw_list->AddLine(previous, screen, IM_COL32(120, 205, 255, 255), 1.5f * scale);
         }
         previous = screen;
     }
@@ -315,7 +318,7 @@ auto texture_curve_editor(
             }
         }
         const bool is_interior = (nearest > 0) && (nearest < (static_cast<int>(points.size()) - 1));
-        if ((best_distance < 10.0f) && is_interior) {
+        if ((best_distance < (10.0f * scale)) && is_interior) {
             points.erase(points.begin() + nearest);
             recompute_curve_slopes(points);
             selected = -1;
@@ -348,7 +351,7 @@ auto texture_curve_editor(
                 nearest       = static_cast<int>(i);
             }
         }
-        selected = (best_distance < 16.0f) ? nearest : -1;
+        selected = (best_distance < (16.0f * scale)) ? nearest : -1;
         storage->SetInt(drag_key, selected);
     }
     const int dragging = storage->GetInt(drag_key, -1);
@@ -377,7 +380,11 @@ auto texture_curve_editor(
     for (std::size_t i = 0; i < points.size(); ++i) {
         const ImVec2 sp = to_screen(points[i].x, points[i].y);
         const bool   is_selected = (static_cast<int>(i) == selected);
-        draw_list->AddCircleFilled(sp, is_selected ? 4.5f : 3.5f, is_selected ? IM_COL32(255, 220, 0, 255) : IM_COL32(230, 230, 230, 255));
+        draw_list->AddCircleFilled(
+            sp,
+            (is_selected ? 4.5f : 3.5f) * scale,
+            is_selected ? IM_COL32(255, 220, 0, 255) : IM_COL32(230, 230, 230, 255)
+        );
     }
 
     storage->SetInt(sel_key, selected);

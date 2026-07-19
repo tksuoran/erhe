@@ -957,6 +957,13 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"zoom"})}
     }});
+    m_tool_infos.push_back({"texture_graph_set_view", "Show the Texture Graph window and set its node-editor zoom (view scale) immediately, centered on the graph content. zoom > 1 zooms in (content drawn larger), zoom < 1 zooms out. Deterministic (no animation / no mouse input) - intended for headless zoom-quality verification (capture_screenshot on the next frame), e.g. checking that in-node widgets (gradient bar, curve box) scale with the zoom. Requires the window to have a target Graph Texture (create_graph_texture) for it to render nodes.", {
+        {"type", "object"},
+        {"properties", {
+            {"zoom", {{"type", "number"}, {"description", "View scale (> 0). 1.0 = native, 2.0 = 2x zoom in, 0.5 = 2x zoom out."}}}
+        }},
+        {"required", json::array({"zoom"})}
+    }});
     m_tool_infos.push_back({"geometry_graph_select_nodes", "Set the Geometry Graph window's canvas selection: clears the current canvas selection and selects the given node ids (empty / omitted node_ids just clears) and optionally a link. A selected link shows its pen-tool tangent dots on the canvas and a link section in Node Properties. Also shows the Geometry Graph and Node Properties windows so the selection and its properties are observable in the next capture_screenshot. Nodes must have rendered at least once (show the window first, e.g. geometry_graph_set_view).", {
         {"type", "object"},
         {"properties", {

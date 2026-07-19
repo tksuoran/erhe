@@ -608,8 +608,24 @@ void Texture_graph_window::controls_imgui()
     node_palette();
 }
 
+void Texture_graph_window::set_node_editor_zoom(const float zoom)
+{
+    show_window();            // ensure the window is visible so it renders for a capture
+    m_focus_requested = true; // and bring it to the front of its dock tab
+    if (m_node_editor) {
+        m_node_editor->SetZoom(zoom);
+    }
+}
+
 void Texture_graph_window::imgui()
 {
+    // One-shot focus request (set by set_node_editor_zoom): bring this window
+    // to the front of its dock tab so headless zoom captures show the graph.
+    if (m_focus_requested) {
+        ImGui::SetWindowFocus();
+        m_focus_requested = false;
+    }
+
     // Issue #252: the target-item selector at the top of the window. Drawn
     // before resolve_target() so a pick / clear takes effect this frame.
     target_selector_imgui();

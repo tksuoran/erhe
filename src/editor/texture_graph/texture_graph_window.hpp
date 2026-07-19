@@ -119,6 +119,14 @@ public:
     // Used by the in-editor MCP server's texture_graph_export_png tool.
     [[nodiscard]] auto get_renderer() -> Texture_renderer*;
 
+    // Shows the window, brings it to the front of its dock tab and sets the
+    // node-editor zoom immediately (no animation). Drives the
+    // texture_graph_set_view MCP tool, so in-node widget scaling can be
+    // verified headlessly. Mirrors Geometry_graph_window::set_node_editor_zoom;
+    // the two windows own their own EditorContext, so this is not on the
+    // shared Graph_editor_window_base.
+    void set_node_editor_zoom(float zoom);
+
     // Assigns every seeded node a fresh deterministic seed (each an individually
     // undoable parameter change). Bound to the palette "Reseed all" button.
     void reseed_all();
@@ -201,6 +209,9 @@ private:
     std::shared_ptr<Graph_texture>                   m_graph_texture;
     std::unique_ptr<Texture_renderer>                m_renderer;
     std::unique_ptr<ax::NodeEditor::EditorContext>   m_node_editor;
+    // One-shot "bring this window to the front of its dock tab" request, set by
+    // set_node_editor_zoom() so a headless zoom capture actually shows the graph.
+    bool                                             m_focus_requested{false};
     int                                              m_spawn_count{0};
     // Reused scratch for the target selector's picker (cleared + refilled each frame).
     std::vector<std::shared_ptr<erhe::Item_base>>    m_target_candidates;
