@@ -73,6 +73,12 @@ public:
     // puts a body in the world the moment b3CreateBody returns.
     void set_enabled_in_world(bool enabled);
 
+    // Awake state as last reported to the activation callbacks. Box3D has no
+    // activation listener, so Box3d_world synthesizes activate / deactivate by
+    // diffing this against the per-step b3BodyMoveEvent stream.
+    [[nodiscard]] auto get_reported_awake() const -> bool { return m_reported_awake; }
+    void set_reported_awake(bool value) { m_reported_awake = value; }
+
 private:
     void attach_shapes  (b3ShapeDef& shape_def);
     void apply_mass     (const IRigid_body_create_info& create_info);
@@ -89,6 +95,7 @@ private:
     bool                              m_is_sensor       {false};
     bool                              m_enable_collisions{true};
     bool                              m_is_valid        {false};
+    bool                              m_reported_awake  {false};
     int                               m_filter_index    {-1};
 
     // Box3D resources owned by this body.

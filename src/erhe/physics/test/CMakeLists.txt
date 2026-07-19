@@ -16,6 +16,7 @@ add_executable(${_target}
     test_hull_builder.cpp
     test_shape_descriptor.cpp
     test_six_dof_classifier.cpp
+    test_world_events.cpp
 )
 
 target_link_libraries(${_target}

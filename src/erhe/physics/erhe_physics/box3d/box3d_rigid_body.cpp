@@ -219,6 +219,11 @@ Box3d_rigid_body::~Box3d_rigid_body() noexcept
     // set_collision_enabled(..., true) would pass a dangling b3JointId.
     m_world.forget_filter_joints_for_body(this);
 
+    // Likewise the sensor overlap bookkeeping: the end events Box3D reports
+    // for the destroyed body arrive on the next step, when this pointer is no
+    // longer a body. remove_rigid_body() emitted the trigger exits already.
+    m_world.forget_sensor_overlaps_for_body(this);
+
     // Destroying the body destroys its shapes and any joints attached to it.
     // The derived hulls this body owns are released by m_derived_hulls.
     b3DestroyBody(m_body);

@@ -105,6 +105,92 @@ auto Box3d_world::create_rigid_body_shared(const IRigid_body_create_info& create
 void Box3d_world::update_fixed_step(const double dt)
 {
     b3World_Step(m_world, static_cast<float>(dt), world_sub_step_count);
+
+    // Box3D buffers its events in the world until the next step, so they are
+    // read back here, on the stepping thread, right after the step.
+    dispatch_body_events();
+    dispatch_sensor_events();
+}
+
+auto Box3d_world::resolve_body(const b3ShapeId shape_id) -> Box3d_rigid_body*
+{
+    if (!b3Shape_IsValid(shape_id)) {
+        return nullptr;
+    }
+    return static_cast<Box3d_rigid_body*>(b3Body_GetUserData(b3Shape_GetBody(shape_id)));
+}
+
+void Box3d_world::dispatch_body_events()
+{
+    // Box3D has no activation listener, so activation is synthesized from the
+    // move event stream: only bodies that MOVED this step are reported, and
+    // each carries whether it fell asleep during it. Diffing that against the
+    // awake state last reported per body turns the stream into edges.
+    //
+    // A body woken WITHOUT moving (b3Body_SetAwake, or a neighbour's contact
+    // that does not displace it) is therefore reported on its first moving
+    // step rather than the step it woke on.
+    const b3BodyEvents events = b3World_GetBodyEvents(m_world);
+    for (int i = 0; i < events.moveCount; ++i) {
+        const b3BodyMoveEvent& move_event = events.moveEvents[i];
+        Box3d_rigid_body* body = static_cast<Box3d_rigid_body*>(move_event.userData);
+        if ((body == nullptr) || !body->is_valid()) {
+            continue;
+        }
+        const bool was_awake = body->get_reported_awake();
+        if (move_event.fellAsleep) {
+            if (was_awake) {
+                body->set_reported_awake(false);
+                if (m_on_body_deactivated_callback) {
+                    m_on_body_deactivated_callback(body);
+                }
+            }
+        } else if (!was_awake) {
+            body->set_reported_awake(true);
+            if (m_on_body_activated_callback) {
+                m_on_body_activated_callback(body);
+            }
+        }
+    }
+}
+
+void Box3d_world::dispatch_sensor_events()
+{
+    const b3SensorEvents events = b3World_GetSensorEvents(m_world);
+
+    for (int i = 0; i < events.beginCount; ++i) {
+        const b3SensorBeginTouchEvent& begin_event = events.beginEvents[i];
+        Box3d_rigid_body* sensor = resolve_body(begin_event.sensorShapeId);
+        Box3d_rigid_body* other  = resolve_body(begin_event.visitorShapeId);
+        if ((sensor == nullptr) || (other == nullptr)) {
+            continue;
+        }
+        const int overlap_count = ++m_sensor_overlaps[Sensor_pair_key{sensor, other}];
+        if ((overlap_count == 1) && m_on_trigger_enter_callback) {
+            m_on_trigger_enter_callback(Trigger_event{.sensor = sensor, .other = other});
+        }
+    }
+
+    for (int i = 0; i < events.endCount; ++i) {
+        const b3SensorEndTouchEvent& end_event = events.endEvents[i];
+        // Either shape may already have been destroyed; resolve_body() checks.
+        Box3d_rigid_body* sensor = resolve_body(end_event.sensorShapeId);
+        Box3d_rigid_body* other  = resolve_body(end_event.visitorShapeId);
+        if ((sensor == nullptr) || (other == nullptr)) {
+            continue;
+        }
+        const auto entry = m_sensor_overlaps.find(Sensor_pair_key{sensor, other});
+        if (entry == m_sensor_overlaps.end()) {
+            continue; // purged by remove_rigid_body(), which already emitted the exit
+        }
+        --entry->second;
+        if (entry->second <= 0) {
+            m_sensor_overlaps.erase(entry);
+            if (m_on_trigger_exit_callback) {
+                m_on_trigger_exit_callback(Trigger_event{.sensor = sensor, .other = other});
+            }
+        }
+    }
 }
 
 void Box3d_world::add_rigid_body(IRigid_body* rigid_body)
@@ -121,11 +207,33 @@ void Box3d_world::remove_rigid_body(IRigid_body* rigid_body)
     if (rigid_body == nullptr) {
         return;
     }
-    static_cast<Box3d_rigid_body*>(rigid_body)->set_enabled_in_world(false);
+    Box3d_rigid_body* body = static_cast<Box3d_rigid_body*>(rigid_body);
+    body->set_enabled_in_world(false);
     m_rigid_bodies.erase(
         std::remove(m_rigid_bodies.begin(), m_rigid_bodies.end(), rigid_body),
         m_rigid_bodies.end()
     );
+
+    // Disabling the body ends its sensor overlaps, but Box3D only reports that
+    // on the next step -- by which time the wrapper may be destroyed. Emit the
+    // exits here instead and drop the entries, so the late end events (which
+    // find no entry) are ignored.
+    for (auto entry = m_sensor_overlaps.begin(); entry != m_sensor_overlaps.end();) {
+        const Sensor_pair_key& key = entry->first;
+        if ((key.first == body) || (key.second == body)) {
+            if (m_on_trigger_exit_callback) {
+                m_on_trigger_exit_callback(Trigger_event{.sensor = key.first, .other = key.second});
+            }
+            entry = m_sensor_overlaps.erase(entry);
+        } else {
+            ++entry;
+        }
+    }
+
+    // A removed body no longer reports move events, so its next activation
+    // edge must be measured from "asleep" rather than from whatever it was
+    // when it left the simulation.
+    body->set_reported_awake(false);
 }
 
 void Box3d_world::add_constraint(IConstraint* constraint)
@@ -226,11 +334,25 @@ void Box3d_world::set_on_trigger_exit(std::function<void(const Trigger_event&)> 
     m_on_trigger_exit_callback = callback;
 }
 
+namespace {
+
+[[nodiscard]] auto hash_pointer_pair(const void* a, const void* b) -> std::size_t
+{
+    const std::size_t first  = std::hash<const void*>{}(a);
+    const std::size_t second = std::hash<const void*>{}(b);
+    return first ^ (second + 0x9e3779b9u + (first << 6) + (first >> 2));
+}
+
+} // anonymous namespace
+
 auto Box3d_world::Body_pair_hash::operator()(const Body_pair_key& key) const -> std::size_t
 {
-    const std::size_t first  = std::hash<const void*>{}(key.first);
-    const std::size_t second = std::hash<const void*>{}(key.second);
-    return first ^ (second + 0x9e3779b9u + (first << 6) + (first >> 2));
+    return hash_pointer_pair(key.first, key.second);
+}
+
+auto Box3d_world::Body_pair_hash::operator()(const Sensor_pair_key& key) const -> std::size_t
+{
+    return hash_pointer_pair(key.first, key.second);
 }
 
 auto Box3d_world::get_or_create_world_anchor_body() -> b3BodyId
@@ -263,6 +385,18 @@ void Box3d_world::forget_filter_joints_for_body(const Box3d_rigid_body* rigid_bo
         }
     }
     m_filter_joints_by_body.erase(by_body);
+}
+
+void Box3d_world::forget_sensor_overlaps_for_body(const Box3d_rigid_body* rigid_body)
+{
+    for (auto entry = m_sensor_overlaps.begin(); entry != m_sensor_overlaps.end();) {
+        const Sensor_pair_key& key = entry->first;
+        if ((key.first == rigid_body) || (key.second == rigid_body)) {
+            entry = m_sensor_overlaps.erase(entry);
+        } else {
+            ++entry;
+        }
+    }
 }
 
 void Box3d_world::set_collision_enabled(IRigid_body* rigid_body_a, IRigid_body* rigid_body_b, const bool enabled)

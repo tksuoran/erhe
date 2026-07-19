@@ -98,19 +98,44 @@ public:
     // b3DestroyBody or a later re-enable would use a dangling b3JointId.
     void forget_filter_joints_for_body(const Box3d_rigid_body* rigid_body);
 
+    // Drops sensor overlap bookkeeping referencing this body, silently. Called
+    // from the body destructor: the sensor end events Box3D reports for the
+    // destroyed body arrive on the next step, by which time the wrapper the
+    // Trigger_event would name is gone. remove_rigid_body() is the ordered
+    // path and does emit the exits.
+    void forget_sensor_overlaps_for_body(const Box3d_rigid_body* rigid_body);
+
 private:
     // Box3D's contact filter hook. Fires when either shape has custom
     // filtering enabled, and unlike the friction / restitution callbacks it
     // does take a context pointer.
     [[nodiscard]] static auto custom_filter_callback(b3ShapeId shape_id_a, b3ShapeId shape_id_b, void* context) -> bool;
 
+    // Per-step event pump, run at the end of update_fixed_step(). Box3D
+    // buffers its events in the world and single-threads the step, so the
+    // callbacks are invoked straight out of Box3D's arrays: unlike the Jolt
+    // backend there is nothing to marshal off a worker thread, and so no
+    // pending / dispatch scratch buffers are needed.
+    void dispatch_body_events  ();
+    void dispatch_sensor_events();
+
+    // Resolves a shape back to the erhe body wrapping it. Returns nullptr for
+    // a shape that is already destroyed or is not owned by an erhe body (the
+    // world anchor body carries no user data).
+    [[nodiscard]] static auto resolve_body(b3ShapeId shape_id) -> Box3d_rigid_body*;
+
     // Ordered pair of body pointers, so a pair has one canonical key.
     using Body_pair_key = std::pair<const Box3d_rigid_body*, const Box3d_rigid_body*>;
+
+    // (sensor, other) pair. Non-const because the pointers are handed back out
+    // through Trigger_event, and the roles make the order meaningful.
+    using Sensor_pair_key = std::pair<Box3d_rigid_body*, Box3d_rigid_body*>;
 
     class Body_pair_hash
     {
     public:
-        [[nodiscard]] auto operator()(const Body_pair_key& key) const -> std::size_t;
+        [[nodiscard]] auto operator()(const Body_pair_key&   key) const -> std::size_t;
+        [[nodiscard]] auto operator()(const Sensor_pair_key& key) const -> std::size_t;
     };
 
     b3WorldId                    m_world      {};
@@ -125,6 +150,13 @@ private:
     // bodies. Indexed by body as well so removal can purge them.
     std::unordered_map<Body_pair_key, b3JointId, Body_pair_hash>                 m_filter_joints;
     std::unordered_map<const Box3d_rigid_body*, std::vector<Body_pair_key>>      m_filter_joints_by_body;
+
+    // Sensor overlap counts, keyed (sensor, other) -- the roles are asymmetric,
+    // so this key is NOT canonically ordered like the filter joint one. Box3D
+    // reports sensor touches per SHAPE pair, so a compound-shaped visitor would
+    // otherwise produce one enter per child shape; counting per body pair and
+    // emitting enter on 0 -> 1 and exit on 1 -> 0 matches the Jolt backend.
+    std::unordered_map<Sensor_pair_key, int, Body_pair_hash> m_sensor_overlaps;
 
     std::function<void(IRigid_body*)>         m_on_body_activated_callback;
     std::function<void(IRigid_body*)>         m_on_body_deactivated_callback;
