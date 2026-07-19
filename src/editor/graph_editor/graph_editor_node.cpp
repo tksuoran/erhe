@@ -83,6 +83,16 @@ void Graph_editor_node::set_ui_size(const float width, const float height)
     m_ui_height = std::clamp(height, 0.0f, 4096.0f);
 }
 
+auto Graph_editor_node::get_pin_label_width() const -> float
+{
+    return m_pin_label_width;
+}
+
+void Graph_editor_node::set_pin_label_width(const float width)
+{
+    m_pin_label_width = std::clamp(width, 20.0f, 400.0f);
+}
+
 auto Graph_editor_node::get_input_pin_edge() const -> int
 {
     return m_input_pin_edge;
@@ -185,7 +195,7 @@ void Graph_editor_node::node_editor(App_context& app_context, ax::NodeEditor::Ed
     // (or less, down to a minimum) room. NodePadding is part of the node's
     // outer extent, so subtract it to hit the requested canvas-unit width.
     const ImVec4 node_padding    = node_editor.GetStyle().NodePadding; // canvas units: left, top, right, bottom
-    const float  pin_label_width = 70.0f  * m_content_scale;
+    const float  pin_label_width = m_pin_label_width * m_content_scale;
     float        center_width    = 150.0f * m_content_scale;
     if (m_ui_width > 0.0f) {
         const float padding_width = (node_padding.x + node_padding.z) * m_content_scale;

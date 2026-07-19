@@ -55,6 +55,11 @@ public:
         for (const erhe::graph::Pin& pin : rendergraph_node.get_output_pins()) {
             base_make_output_pin(pin.get_key(), pin.get_name());
         }
+        // Rendergraph pin names are long ("rendertarget texture", "depth
+        // visualization"), so reserve wider pin label columns and a wider
+        // node than the graph editors' defaults.
+        set_pin_label_width(150.0f);
+        set_ui_size(520.0f, 0.0f);
     }
 
     [[nodiscard]] auto get_rendergraph_node() const -> erhe::rendergraph::Rendergraph_node* { return m_rendergraph_node; }

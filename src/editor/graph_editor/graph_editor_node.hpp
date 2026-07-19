@@ -65,6 +65,15 @@ public:
     [[nodiscard]] auto get_ui_height() const -> float;
     void set_ui_size(float width, float height);
 
+    // Pin label column width in canvas units: the space reserved on each pin
+    // edge for the pin labels (labels wider than this clip). Editors whose
+    // pins carry longer names raise it (the rendergraph viewer). Adjusted
+    // from the Node Properties window "Pin labels" row; persisted in the
+    // graph JSON next to the node size.
+    static constexpr float default_pin_label_width = 70.0f;
+    [[nodiscard]] auto get_pin_label_width() const -> float;
+    void set_pin_label_width(float width);
+
     // Pin layout: which node edge the input / output pins are laid out on
     // (Node_edge::left / right; the renderer implements only those two, so
     // the setters clamp anything else back to the default edge). Adjusted
@@ -128,6 +137,7 @@ protected:
     float       m_content_scale{1.0f};
     float       m_ui_width {0.0f}; // canvas units; <= 0 = automatic
     float       m_ui_height{0.0f}; // canvas units; <= 0 = automatic
+    float       m_pin_label_width{default_pin_label_width}; // canvas units
     // Bottom of the requested node content extent in screen space (0 = no
     // requested height); set per frame by node_editor(), consumed by the
     // height pad and by get_preview_fit_size().

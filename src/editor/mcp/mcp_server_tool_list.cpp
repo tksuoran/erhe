@@ -977,6 +977,7 @@ void Mcp_server::refresh_tool_list()
             {"position",    {{"type", "array"},   {"items", {{"type", "number"}}}, {"description", "Canvas position [x, y]"}}},
             {"width",       {{"type", "number"},  {"description", "Requested node width in canvas units; 0 = automatic (content-derived)"}}},
             {"height",      {{"type", "number"},  {"description", "Requested node height in canvas units; 0 = automatic (content-derived)"}}},
+            {"pin_label_width", {{"type", "number"}, {"description", "Pin label column width in canvas units (default 70; clamped to 20..400)"}}},
             {"input_edge",  {{"type", "string"},  {"description", "Edge for input pins: left (default) or right"}}},
             {"output_edge", {{"type", "string"},  {"description", "Edge for output pins: left or right (default)"}}}
         }},
@@ -989,6 +990,7 @@ void Mcp_server::refresh_tool_list()
             {"position",    {{"type", "array"},   {"items", {{"type", "number"}}}, {"description", "Canvas position [x, y]"}}},
             {"width",       {{"type", "number"},  {"description", "Requested node width in canvas units; 0 = automatic (content-derived)"}}},
             {"height",      {{"type", "number"},  {"description", "Requested node height in canvas units; 0 = automatic (content-derived)"}}},
+            {"pin_label_width", {{"type", "number"}, {"description", "Pin label column width in canvas units (default 70; clamped to 20..400)"}}},
             {"input_edge",  {{"type", "string"},  {"description", "Edge for input pins: left (default) or right"}}},
             {"output_edge", {{"type", "string"},  {"description", "Edge for output pins: left or right (default)"}}}
         }},

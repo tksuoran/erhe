@@ -72,6 +72,7 @@ auto paste_graph_nodes(
             node->read_parameters(node_json["parameters"]);
         }
         node->set_ui_size(node_json.value("width", 0.0f), node_json.value("height", 0.0f));
+        node->set_pin_label_width(node_json.value("pin_label_width", Graph_editor_node::default_pin_label_width));
         node->set_input_pin_edge (node_json.value("input_edge",  Node_edge::left));
         node->set_output_pin_edge(node_json.value("output_edge", Node_edge::right));
         const ImVec2 node_position{node_json.value("x", 0.0f), node_json.value("y", 0.0f)};

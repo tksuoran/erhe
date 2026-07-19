@@ -277,6 +277,14 @@ void Node_properties_window::graph_editor_node_properties(Graph_editor_window_ba
         }
         ImGui::EndDisabled();
     });
+    m_property_editor.add_entry("Pin labels", [node]() {
+        // Width of the pin label columns on the node edges (canvas units);
+        // labels wider than this clip.
+        float width = node->get_pin_label_width();
+        if (ImGui::DragFloat("##pin_label_width", &width, 1.0f, 20.0f, 400.0f, "%.0f")) {
+            node->set_pin_label_width(width);
+        }
+    });
     // Pin layout: only left / right are implemented by the node renderer, so
     // the combos offer just those two edges (unlike the shader graph's).
     m_property_editor.add_entry("Inputs", [node]() {

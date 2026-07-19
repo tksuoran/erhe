@@ -657,6 +657,9 @@ auto Graph_editor_window_base::serialize_nodes_json(const std::vector<std::share
         if (node->get_ui_height() > 0.0f) {
             node_json["height"] = node->get_ui_height();
         }
+        if (node->get_pin_label_width() != Graph_editor_node::default_pin_label_width) {
+            node_json["pin_label_width"] = node->get_pin_label_width();
+        }
         if (node->get_input_pin_edge() != Node_edge::left) {
             node_json["input_edge"] = node->get_input_pin_edge();
         }

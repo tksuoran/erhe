@@ -141,6 +141,12 @@ namespace {
         const float height = args.contains("height") ? args["height"].get<float>() : node.get_ui_height();
         node.set_ui_size(width, height);
     }
+    if (args.contains("pin_label_width")) {
+        if (!args["pin_label_width"].is_number()) {
+            return make_error_content("'pin_label_width' must be a number (canvas units)");
+        }
+        node.set_pin_label_width(args["pin_label_width"].get<float>());
+    }
     int edge = 0;
     if (args.contains("input_edge")) {
         if (!parse_node_edge(args["input_edge"], edge)) {
@@ -158,8 +164,9 @@ namespace {
     json result;
     result["node_id"]     = node.get_id();
     result["position"]    = json::array({position.x, position.y});
-    result["width"]       = node.get_ui_width();  // 0 = automatic
-    result["height"]      = node.get_ui_height(); // 0 = automatic
+    result["width"]           = node.get_ui_width();  // 0 = automatic
+    result["height"]          = node.get_ui_height(); // 0 = automatic
+    result["pin_label_width"] = node.get_pin_label_width();
     result["input_edge"]  = (node.get_input_pin_edge()  == Node_edge::right) ? "right" : "left";
     result["output_edge"] = (node.get_output_pin_edge() == Node_edge::right) ? "right" : "left";
     return make_json_content(result).dump();
