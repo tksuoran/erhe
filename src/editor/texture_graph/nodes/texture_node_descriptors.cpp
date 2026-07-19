@@ -1222,7 +1222,7 @@ auto build_swirl() -> Node_descriptor
     add_input(d, "in", Value_type::rgba, "vec4($uv, 0.0, 1.0)");
     add_float(d, "cx",     "Center X", 0.0f,   -0.5f,   0.5f, 0.005f);
     add_float(d, "cy",     "Center Y", 0.0f,   -0.5f,   0.5f, 0.005f);
-    add_float(d, "angle",  "Angle",    0.0f, -720.0f, 720.0f, 0.005f);
+    add_float(d, "angle",  "Angle",    0.0f, -720.0f, 720.0f, 0.2f);
     add_float(d, "radius", "Radius",   0.5f,    0.0f,   0.5f, 0.01f);
     add_bool (d, "tile",   "Tile",     false);
     add_output(
