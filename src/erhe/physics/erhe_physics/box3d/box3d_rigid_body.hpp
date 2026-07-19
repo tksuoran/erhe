@@ -73,7 +73,7 @@ public:
     void set_enabled_in_world(bool enabled);
 
 private:
-    void attach_shapes  (const IRigid_body_create_info& create_info, b3ShapeDef& shape_def);
+    void attach_shapes  (b3ShapeDef& shape_def);
     void apply_mass     (const IRigid_body_create_info& create_info);
 
     Box3d_world&                      m_world;
@@ -86,6 +86,7 @@ private:
     void*                             m_owner           {nullptr};
     bool                              m_allow_sleeping  {true};
     bool                              m_is_sensor       {false};
+    bool                              m_enable_collisions{true};
     bool                              m_is_valid        {false};
     int                               m_filter_index    {-1};
 

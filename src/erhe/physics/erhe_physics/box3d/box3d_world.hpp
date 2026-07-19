@@ -85,6 +85,11 @@ public:
     [[nodiscard]] auto get_filter_table ()       -> Box3d_collision_filter_table& { return m_filter_table; }
 
 private:
+    // Box3D's contact filter hook. Fires when either shape has custom
+    // filtering enabled, and unlike the friction / restitution callbacks it
+    // does take a context pointer.
+    [[nodiscard]] static auto custom_filter_callback(b3ShapeId shape_id_a, b3ShapeId shape_id_b, void* context) -> bool;
+
     b3WorldId                    m_world      {};
     std::vector<IRigid_body*>    m_rigid_bodies;
     std::vector<IConstraint*>    m_constraints;

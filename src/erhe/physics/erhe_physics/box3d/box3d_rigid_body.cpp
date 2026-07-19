@@ -1,4 +1,5 @@
 #include "erhe_physics/box3d/box3d_rigid_body.hpp"
+#include "erhe_physics/box3d/box3d_material_registry.hpp"
 #include "erhe_physics/box3d/box3d_world.hpp"
 #include "erhe_physics/box3d/glm_conversions.hpp"
 #include "erhe_physics/physics_log.hpp"
@@ -30,6 +31,25 @@ namespace {
 // over. This mirrors the Jolt backend, which passes a fixed 1/30 to
 // MoveKinematic for the same reason: the caller does not supply a step here.
 constexpr float kinematic_target_time_step = 1.0f / 30.0f;
+
+// The actual collision-system decision is made by the world's custom filter
+// callback, so Box3D's own category/mask test must never reject a pair the
+// callback would accept: every body accepts everyone (maskBits all ones).
+//
+// categoryBits is not merely decorative though. b3Shape_SetFilter early-returns
+// when the bits are unchanged (box3d src/shape.c), and only a real change
+// resets the shape proxy and re-evaluates existing contact pairs. Encoding the
+// compiled filter's identity in categoryBits therefore makes assigning a
+// different filter to a live body actually take effect, instead of leaving
+// bodies stuck in whatever contacts they had formed before.
+[[nodiscard]] auto make_box3d_filter(const int filter_index, const bool enable_collisions) -> b3Filter
+{
+    b3Filter filter = b3DefaultFilter();
+    filter.categoryBits = uint64_t{1} << (static_cast<unsigned int>(filter_index + 1) % 64u);
+    filter.maskBits     = enable_collisions ? ~uint64_t{0} : uint64_t{0};
+    filter.groupIndex   = 0;
+    return filter;
+}
 
 } // anonymous namespace
 
@@ -83,22 +103,43 @@ Box3d_rigid_body::Box3d_rigid_body(Box3d_world& world, const IRigid_body_create_
     m_body     = b3CreateBody(m_world.get_box3d_world(), &body_def);
     m_is_valid = true;
 
+    // A body's collision filter is compiled once into interned bitsets; the
+    // custom filter callback resolves pairs from the two bodies' indices.
+    m_filter_index = m_world.get_filter_table().get_or_compile(m_collision_filter);
+
     b3ShapeDef shape_def = b3DefaultShapeDef();
     shape_def.density                = create_info.density.value_or(1.0f);
     shape_def.baseMaterial.friction  = create_info.friction;
     shape_def.baseMaterial.restitution = create_info.restitution;
+    // The mixing callbacks look the erhe material up by this id; 0 means "no
+    // erhe material", in which case Box3D's own mixing rules apply.
+    shape_def.baseMaterial.userMaterialId = Box3d_material_registry::get().register_material(m_physics_material);
+    if (m_physics_material) {
+        // Box3D carries a single friction per surface, so the dynamic one acts.
+        shape_def.baseMaterial.friction    = m_physics_material->dynamic_friction;
+        shape_def.baseMaterial.restitution = m_physics_material->restitution;
+    }
     shape_def.isSensor               = m_is_sensor;
+    // Enabled unconditionally, not just for bodies that already carry a
+    // filter: enableCustomFiltering is a creation-time shape flag with no
+    // runtime setter, so a body created without it could never be given a
+    // collision filter later without destroying and recreating its shapes.
+    // set_collision_filter() is a normal editor operation, so every shape opts
+    // in. The callback early-outs when neither body has a filter.
+    shape_def.enableCustomFiltering  = true;
+    shape_def.filter                 = make_box3d_filter(m_filter_index, create_info.enable_collisions);
+    m_enable_collisions              = create_info.enable_collisions;
     // Box3D only reports sensor overlaps when the flag is set on BOTH shapes
     // (src/sensor.c), and it defaults to false even for sensors, so every shape
     // opts in or triggers silently never fire.
     shape_def.enableSensorEvents     = true;
     shape_def.updateBodyMass         = false; // mass is applied once, after all shapes are attached
 
-    attach_shapes(create_info, shape_def);
+    attach_shapes(shape_def);
     apply_mass(create_info);
 }
 
-void Box3d_rigid_body::attach_shapes(const IRigid_body_create_info& create_info, b3ShapeDef& shape_def)
+void Box3d_rigid_body::attach_shapes(b3ShapeDef& shape_def)
 {
     const Box3d_collision_shape* shape = static_cast<const Box3d_collision_shape*>(m_collision_shape.get());
 
@@ -121,16 +162,6 @@ void Box3d_rigid_body::attach_shapes(const IRigid_body_create_info& create_info,
         b3Body_SetMassData(m_body, mass_data);
     }
 
-    if (!create_info.enable_collisions) {
-        // A body that must not collide with anything is expressed as a filter
-        // that matches nothing, rather than by removing its shapes (which would
-        // also remove its mass and make it invisible to queries).
-        b3Filter filter = b3DefaultFilter();
-        filter.maskBits = 0;
-        for (const b3ShapeId shape_id : m_shape_ids) {
-            b3Shape_SetFilter(shape_id, filter, false);
-        }
-    }
 }
 
 void Box3d_rigid_body::apply_mass(const IRigid_body_create_info& create_info)
@@ -456,11 +487,41 @@ void Box3d_rigid_body::set_owner(void* owner)
 void Box3d_rigid_body::set_physics_material(const std::shared_ptr<Physics_material>& material)
 {
     m_physics_material = material;
+
+    // Snapshots are immutable once registered, so assigning a material
+    // allocates a new id rather than mutating an existing snapshot. That keeps
+    // the mixing callbacks (which run on Box3D worker threads) reading data
+    // that never changes underneath them.
+    const uint64_t material_id = Box3d_material_registry::get().register_material(material);
+    for (const b3ShapeId shape_id : m_shape_ids) {
+        b3SurfaceMaterial surface_material = b3Shape_GetSurfaceMaterial(shape_id);
+        surface_material.userMaterialId = material_id;
+        if (material) {
+            surface_material.friction    = material->dynamic_friction;
+            surface_material.restitution = material->restitution;
+        }
+        b3Shape_SetSurfaceMaterial(shape_id, surface_material);
+    }
 }
 
 void Box3d_rigid_body::set_collision_filter(const std::shared_ptr<Collision_filter>& filter)
 {
     m_collision_filter = filter;
+
+    // recompile() rather than get_or_compile(): re-assigning a filter is the
+    // documented way to pick up edits made to it since it was first compiled.
+    m_filter_index = m_world.get_filter_table().recompile(filter);
+
+    // The new filter identity changes categoryBits, which is what makes
+    // b3Shape_SetFilter do real work: it early-returns on unchanged bits, and
+    // only a change resets the shape proxy and re-evaluates contact pairs that
+    // already exist. invokeContacts = true also wakes the touching bodies,
+    // which matters because Box3D consults the custom filter callback only for
+    // awake dynamic bodies.
+    const b3Filter box3d_filter = make_box3d_filter(m_filter_index, m_enable_collisions);
+    for (const b3ShapeId shape_id : m_shape_ids) {
+        b3Shape_SetFilter(shape_id, box3d_filter, true);
+    }
 }
 
 } // namespace erhe::physics

@@ -1,4 +1,5 @@
 #include "erhe_physics/box3d/box3d_world.hpp"
+#include "erhe_physics/box3d/box3d_material_registry.hpp"
 #include "erhe_physics/box3d/box3d_rigid_body.hpp"
 #include "erhe_physics/box3d/glm_conversions.hpp"
 #include "erhe_physics/physics_log.hpp"
@@ -36,6 +37,29 @@ Box3d_world::Box3d_world()
     world_def.userData    = this;
 
     m_world = b3CreateWorld(&world_def);
+
+    // erhe's Combine_mode is a pair property, so friction and restitution must
+    // be resolved at contact time rather than precombined per shape.
+    Box3d_material_registry::install_callbacks(m_world);
+
+    // erhe's collision-system filters cannot be expressed with Box3D's
+    // category/mask bits (see Box3d_collision_filter_table), so they run
+    // through the custom filter callback, which does take a context pointer.
+    b3World_SetCustomFilterCallback(m_world, &Box3d_world::custom_filter_callback, this);
+}
+
+auto Box3d_world::custom_filter_callback(const b3ShapeId shape_id_a, const b3ShapeId shape_id_b, void* context) -> bool
+{
+    const Box3d_world* world = static_cast<const Box3d_world*>(context);
+    if (world == nullptr) {
+        return true;
+    }
+    const Box3d_rigid_body* body_a = static_cast<const Box3d_rigid_body*>(b3Body_GetUserData(b3Shape_GetBody(shape_id_a)));
+    const Box3d_rigid_body* body_b = static_cast<const Box3d_rigid_body*>(b3Body_GetUserData(b3Shape_GetBody(shape_id_b)));
+    if ((body_a == nullptr) || (body_b == nullptr)) {
+        return true;
+    }
+    return world->m_filter_table.should_collide(body_a->get_filter_index(), body_b->get_filter_index());
 }
 
 Box3d_world::~Box3d_world() noexcept
