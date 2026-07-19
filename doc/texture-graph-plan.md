@@ -44,6 +44,7 @@ ported from it carry an attribution comment). Referred to below as
 | Backlog: Switch (one per value type; compile-time branch select) | DONE | 3bd1a45d |
 | Backlog: Transform / UV warps (13 of ~25 nodes)              | DONE    | 3f185eae |
 | Backlog: Color / tone filters (14 nodes, new "Color" category)| DONE   | 55150bdf |
+| Backlog: Noise variants (6 of ~15 nodes)                     | DONE    | 8ac10467 |
 
 ---
 
@@ -52,7 +53,7 @@ ported from it carry an attribution comment). Referred to below as
 Snapshot 2026-07-19 against Material Maker master (392 `.mmg` node definitions
 under `addons/material_maker/nodes/` plus ~19 engine-level node types in
 `engine/nodes/gen_*.gd`: buffer, switch, image, text, graph/group, remote,
-comment, export, iterate_buffer, ...). erhe has 65 node types: 62 descriptors
+comment, export, iterate_buffer, ...). erhe has 71 node types: 68 descriptors
 in `src/editor/texture_graph/nodes/texture_node_descriptors.cpp` plus the
 descriptor-less `output`, `material_output`, and `buffer` nodes
 (`texture_graph_node_factory.cpp`). Note the 392 count includes internal
@@ -70,9 +71,15 @@ smaller than the raw file count.
 | `voronoi`             | Generators | `voronoi.mmg`                | 3 of 4 outputs (nodes, borders, random color); the companion-node "Fill" output is dropped. |
 | `bricks`              | Generators | `bricks.mmg`                 | Grayscale pattern output only; per-brick random-color / UV / corner outputs and mortar/bevel/round map inputs dropped. 5 bond patterns. |
 | `shape`               | Generators | `shape.mmg`                  | 3 of 5 shapes (circle, polygon, star); curved-star and rays shapes plus size/edge map inputs dropped. |
-| `fbm`                 | Generators | `fbm.mmg`                    | 4 bases (value, perlin, cellular, cellular2); octave loop inlined instead of per-instance helper function. |
+| `fbm`                 | Generators | `fbm.mmg`                    | 4 bases (value, perlin, cellular, cellular2); octave loop inlined instead of per-instance helper function. **Follow-up:** MM's `fbm2`/`fbm3`/`fbm4` are the same node with larger basis libraries (simplex, cellular3..8, voronoise, gabor) - those bases are worth appending to this node's enum (appending keeps existing indices, so saved graphs stay valid) rather than adding three near-duplicate nodes. |
 | `noise`               | Generators | `noise.mmg`                  | Density map input dropped (parameter only). |
 | `color_noise`         | Generators | `color_noise.mmg`            | Full. |
+| `perlin_color`        | Generators | `perlin_color.mmg`           | Full. |
+| `voronoi_triangle`    | Generators | `voronoi_triangle.mmg`       | Full (all 5 outputs). Helpers prefixed `tri_*` to keep generic names out of the shared global namespace. |
+| `wavelet_noise`       | Generators | `wavelet_noise.mmg`          | Full (5 combine modes). |
+| `noise_anisotropic`   | Generators | `noise_anisotropic.mmg`      | Full. |
+| `noise_white`         | Generators | `noise_white.mmg`            | Full; MM's instance wrapper written directly (one call site). |
+| `shard_fbm`           | Generators | `shard_fbm.mmg`              | Full; `hash` renamed `shard_hash`, and `pow(2, ...)` corrected to `pow(2.0, ...)` for glslang. |
 | `gradient`            | Gradients  | `gradient.mmg`               | Full (repeat / rotate / mirror + gradient widget). |
 | `circular_gradient`   | Gradients  | `circular_gradient.mmg`      | Full. |
 | `radial_gradient`     | Gradients  | `radial_gradient.mmg`        | Full. |
@@ -156,7 +163,7 @@ stays a complete record of the comparison.
 | Image / texture input        | 2      | `image`, `texture` (engine) | 2 | 5 | 2.5 | Missing. Sample an external bitmap as a graph source; the `buffer` node already proves `sampler2D`-backed expressions downstream. |
 | Transform / UV warps         | 25     | `translate`, `rotate`, `scale`, `shear`, `skew`, `warp`, `directional_warp`, `multi_warp`, `warp_dilation*`, `swirl`, `twist`, `spherize`, `kaleidoscope`, `mirror`, `repeat`, `custom_uv`, `distort`, `refract`, `magnify` | 2 | 5 | 2.5 | **DONE (13 of ~25).** rotate, scale, shear, skew, mirror, repeat, swirl, spherize, magnify, kaleidoscope, warp, directional_warp, refract. Still missing: `multi_warp` (compound node), `distort` (needs a lattice widget type), `custom_uv` (tileset + variation machinery), `twist` (sdf3d, out of scope), `warp_dilation*` (multi-pass buffers). |
 | Color / tone filters         | 18     | `auto_tones`, `tonality`, `tones`, `tones_map/range/step`, `palettize`, `colormap`, `convert_colorspace`, `greyscale`, `ensure_greyscale`, `ensure_rgba`, `default_color`, `compare` | 2 | 4 | 2.0 | **DONE (14 nodes).** Still missing: `auto_tones` (no shader_model - needs a min/max reduction over the whole image, which the composer cannot express). `tones` needed no levels widget after all: it is five color parameters. |
-| Noise variants               | 15     | `voronoi2`, `voronoi_triangle`, `clouds_noise`, `wavelet_noise`, `noise_anisotropic`, `noise_white`, `directional_noise`, `perlin_color`, `crystal`, `shard_fbm`, `fbm2..4` | 2 | 3 | 1.5 | Base `perlin`/`voronoi`/`fbm`/`noise` covered; variants are straight GLSL ports adding looks, not capability. |
+| Noise variants               | 15     | `voronoi2`, `voronoi_triangle`, `clouds_noise`, `wavelet_noise`, `noise_anisotropic`, `noise_white`, `directional_noise`, `perlin_color`, `crystal`, `shard_fbm`, `fbm2..4` | 2 | 3 | 1.5 | **DONE (6 nodes).** Deliberately not ported: `voronoi2` (byte-identical to `voronoi.mmg`, which the existing `voronoi` node already is - only its `fill` output differs, and that needs the Fill family's iterate-buffer machinery), `clouds_noise` / `directional_noise` / `crystal` (compound nodes, no shader_model), and `fbm2..4` (13-17 KB of near-duplicate basis libraries - their extra bases belong as added values on the existing `fbm` node's enum - recorded as a follow-up on the `fbm` row above). |
 | Deterministic patterns       | 20     | `pattern`, `arc_pavement`, `beehive`, `cairo`, `iching`, `runes`, `japanese_glyphs`, `roman_numerals`, `seven_segment`, `scratches`, `splines`, `polycurve`, `profile`, `dirt` | 2 | 3 | 1.5 | Missing; `cairo` named in Phase 4. Straight GLSL ports, each self-contained. |
 | 2D SDF                       | 51     | `sdcircle`, `sdbox`, `sdline`, `sdpolygon`, `sdstar`, `sdboolean`, `sdsmoothboolean`, `sdrepeat`, `sdmorph`, `sdshow` | 3 | 4 | 1.3 | Missing; `sdf2d` type + shape/ops/stroke/fill nodes named in Phase 4. New value type up front, then many tiny nodes; crisp resolution-independent shape authoring. |
 | Height / normal / AO         | 12     | `normal2height`, `normal_blend`, `normal_map2`, `normal_map_convert`, `height_to_angle`, `height_to_offset`, `occlusion`, `hbao`, `slope`, `smooth_curvature` | 3 | 4 | 1.3 | Only `normal_map` covered. Key for PBR authoring; several need buffers (exist). |
@@ -553,14 +560,14 @@ material in the headless viewport screenshot; smoke script green.
 - **Headless end-to-end** (Phase 3+): `scripts/texture_graph_smoke_test.py`
   against the headless Vulkan editor build over the in-editor MCP server,
   including `texture_graph_export_png` pixel assertions and
-  `capture_screenshot` visual checks. 465 checks as of 2026-07-19; its
+  `capture_screenshot` visual checks. 508 checks as of 2026-07-19; its
   `NODE_SPECS` table must gain a row (pins + default parameters) for every new
   node type, which is what keeps the "all N node types present" check honest.
 - **Descriptor self-check**: `check_texture_node_descriptors()` composes every
   descriptor standalone at `Texture_graph_window` construction and logs
   "Texture graph: all N node descriptors compose cleanly" - the cheapest
   confirmation that a newly added descriptor's GLSL substitutes and assembles
-  (N = 62 as of 2026-07-19).
+  (N = 68 as of 2026-07-19).
 - **Process**: per step - edit, build (ninja MSVC), tests, independent diff
   review, fix, commit (per-topic commits). Restore
   `config/editor/desktop_window_imgui_host_imgui.ini` after editor runs.
