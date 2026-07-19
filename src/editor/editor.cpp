@@ -2377,6 +2377,7 @@ public:
         m_app_context.editor_windows           = m_editor_windows        .get();
         m_app_context.fly_camera_tool          = m_fly_camera_tool       .get();
         m_app_context.geometry_graph_window    = m_geometry_graph_window .get();
+        m_app_context.rendergraph_window       = m_rendergraph_window    .get();
         m_app_context.texture_graph_window     = m_texture_graph_window  .get();
         m_app_context.navigation_gizmo_tool    = m_navigation_gizmo_tool .get();
         m_app_context.grid_tool                = m_grid_tool             .get();

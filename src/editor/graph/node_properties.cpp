@@ -2,6 +2,7 @@
 #include "graph/shader_graph_node.hpp"
 
 #include "app_context.hpp"
+#include "developer/rendergraph_window.hpp"
 #include "geometry_graph/geometry_graph_window.hpp"
 #include "graph_editor/graph_editor_node.hpp"
 #include "items.hpp"
@@ -216,6 +217,10 @@ void Node_properties_window::collect_graph_editor_selection()
 
     collect_from(m_context.geometry_graph_window);
     collect_from(m_context.texture_graph_window);
+    // The rendergraph viewer's canvas selection holds its proxy nodes; the
+    // generic rows (name / position / size / pin edges) act on the proxy,
+    // links are real rendergraph links with canvas-side curve state.
+    collect_from(m_context.rendergraph_window);
     if (m_context.editor_windows != nullptr) {
         for (const std::shared_ptr<Geometry_graph_window>& window : m_context.editor_windows->get_extra_geometry_graph_windows()) {
             collect_from(window.get());

@@ -91,6 +91,7 @@ class Physics_tool;
 class Post_processing;
 class Prefab_library;
 class Programs;
+class Rendergraph_window;
 class Rotate_tool;
 class Scale_tool;
 class Scene_builder;
@@ -208,6 +209,7 @@ public:
     Post_processing*                   post_processing      {nullptr};
     Prefab_library*                    prefab_library       {nullptr};
     Programs*                          programs             {nullptr};
+    Rendergraph_window*                rendergraph_window   {nullptr};
     Rotate_tool*                       rotate_tool          {nullptr};
     Scale_tool*                        scale_tool           {nullptr};
     Scene_builder*                     scene_builder        {nullptr};
