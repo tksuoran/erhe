@@ -6,8 +6,9 @@ and a phased implementation plan for a procedural texture node graph in the
 erhe editor.
 
 Reference implementation: https://github.com/RodZill4/material-maker
-(local clone: `D:\material-maker`, MIT license - GLSL snippets ported from it
-carry an attribution comment).
+(clone it locally to read the node definitions; MIT license - GLSL snippets
+ported from it carry an attribution comment). Referred to below as
+`<material-maker>`; record your own clone location in `memory-bank/local/`.
 
 ## Table of Contents
 
@@ -39,24 +40,22 @@ carry an attribution comment).
 | Phase 4b: node library expansion + searchable palette       | DONE    | b54e0060, e20f2a0c |
 | Phase 5: buffer nodes, blur, reseed (async compile deferred) | DONE    | dac3a31a, 94668795 |
 | Phase 6: PBR material output, multi-channel bake, PNG export| DONE    | ac4d8045 |
-| Backlog: Gradients family (5 nodes, new "Gradients" category)| DONE   | 2026-07-19 |
+| Backlog: Gradients family (5 nodes, new "Gradients" category)| DONE   | 559e7c45 |
 
 ---
 
 ## Node Library Comparison (erhe vs Material Maker)
 
-Snapshot 2026-07-16 against Material Maker master (392 `.mmg` node definitions
+Snapshot 2026-07-19 against Material Maker master (392 `.mmg` node definitions
 under `addons/material_maker/nodes/` plus ~19 engine-level node types in
 `engine/nodes/gen_*.gd`: buffer, switch, image, text, graph/group, remote,
-comment, export, iterate_buffer, ...). erhe has 30 node types: 27 descriptors
+comment, export, iterate_buffer, ...). erhe has 35 node types: 32 descriptors
 in `src/editor/texture_graph/nodes/texture_node_descriptors.cpp` plus the
 descriptor-less `output`, `material_output`, and `buffer` nodes
 (`texture_graph_node_factory.cpp`). Note the 392 count includes internal
 companion sub-nodes of compound graphs (e.g. `edge_detect_1..3`,
 `fill_preprocess`), so the user-visible Material Maker library is somewhat
-smaller than the raw file count. (Updated 2026-07-19: the Gradients family added
-5 descriptors, so erhe now has 35 node types - 32 descriptors plus the 3
-descriptor-less ones.)
+smaller than the raw file count.
 
 ### erhe nodes and their Material Maker counterparts
 
@@ -98,7 +97,7 @@ descriptor-less ones.)
 | `output`              | Output     | (none)                       | erhe-specific: bakes one texture into `Content_library`, optional assign-to-material. MM's nearest concept is the material node. |
 | `material_output`     | Output     | `material.mmg`               | PBR channel bake. MM also has `material_3d`, `material_unlit`, `material_dynamic`, `material_tesselated`, `material_raymarching` variants. |
 
-### Material Maker families not (yet) in erhe
+### Material Maker family backlog (families beyond erhe's original node set)
 
 Counts are approximate `.mmg` file counts per family. Each family is scored
 for prioritization and the table is sorted by score, highest first:
@@ -108,10 +107,16 @@ for prioritization and the table is sorted by score, highest first:
   3 = a new value type or a family of many small nodes; 5 = new engine
   machinery (iterate buffers, paint pipeline) or a scope change.
 - **Benefit** (1-5): material-authoring value added in erhe, given what the
-  existing 30 nodes already cover.
+  existing nodes already cover.
 - **Score** = Benefit / Cost. Coarse estimates for ordering the backlog, not
   commitments; "named in Phase N" cites the phase of this plan that already
   claims the family.
+
+Cost / benefit scores are the estimates made when the family was first ranked
+and are deliberately not restated afterwards, so a completed family shows what
+it was predicted to take. A family that has since been implemented keeps its
+row (marked DONE in the status column) rather than being deleted, so the table
+stays a complete record of the comparison.
 
 | Material Maker family        | ~Count | Representative nodes | Cost | Benefit | Score | erhe status |
 |------------------------------|--------|----------------------|------|---------|-------|-------------|
@@ -141,7 +146,7 @@ for prioritization and the table is sorted by score, highest first:
 ## Material Maker Architecture
 
 Material Maker (Godot 4, GDScript) is the reference. The load-bearing facts
-for the port, established by reading `D:\material-maker`:
+for the port, established by reading `<material-maker>`:
 
 ### GLSL source composition, not per-node render-to-texture
 
@@ -517,7 +522,14 @@ material in the headless viewport screenshot; smoke script green.
 - **Headless end-to-end** (Phase 3+): `scripts/texture_graph_smoke_test.py`
   against the headless Vulkan editor build over the in-editor MCP server,
   including `texture_graph_export_png` pixel assertions and
-  `capture_screenshot` visual checks.
+  `capture_screenshot` visual checks. 293 checks as of 2026-07-19; its
+  `NODE_SPECS` table must gain a row (pins + default parameters) for every new
+  node type, which is what keeps the "all N node types present" check honest.
+- **Descriptor self-check**: `check_texture_node_descriptors()` composes every
+  descriptor standalone at `Texture_graph_window` construction and logs
+  "Texture graph: all N node descriptors compose cleanly" - the cheapest
+  confirmation that a newly added descriptor's GLSL substitutes and assembles
+  (N = 32 as of 2026-07-19).
 - **Process**: per step - edit, build (ninja MSVC), tests, independent diff
   review, fix, commit (per-topic commits). Restore
   `config/editor/desktop_window_imgui_host_imgui.ini` after editor runs.
@@ -526,7 +538,7 @@ material in the headless viewport screenshot; smoke script green.
 
 ## Key Files Reference
 
-Material Maker (reference, `D:\material-maker`):
+Material Maker (reference, paths relative to `<material-maker>`):
 
 - `addons/material_maker/engine/nodes/gen_base.gd` - ShaderCode + helpers
 - `addons/material_maker/engine/nodes/gen_shader.gd` - composition +
