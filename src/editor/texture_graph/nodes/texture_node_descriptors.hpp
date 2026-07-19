@@ -28,7 +28,9 @@ namespace editor {
 // mirror, repeat, swirl, spherize, magnify, kaleidoscope, warp,
 // directional_warp, refract, uniform_greyscale, greyscale, tones, tones_map,
 // tones_range, tones_step, tonality, convert_colorspace, colormap, palettize,
-// default_color, compare, ensure_greyscale, ensure_rgba), or nullptr for an
+// default_color, compare, ensure_greyscale, ensure_rgba, pattern, beehive,
+// cairo, arc_pavement, iching, runes, roman_numerals, seven_segment,
+// scratches, profile, japanese_glyphs), or nullptr for an
 // unknown name. The "output" / "material_output"
 // sink nodes and the "buffer" node have no descriptor and are created directly
 // by the factory.

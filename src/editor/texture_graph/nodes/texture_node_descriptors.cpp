@@ -2510,6 +2510,1542 @@ auto build_swap_channels() -> Node_descriptor
 }
 
 // ---------------------------------------------------------------------------
+// Deterministic patterns
+//
+// Ported from Material Maker pattern.mmg, beehive.mmg, cairo.mmg,
+// arc_pavement.mmg, iching.mmg, runes.mmg, roman_numerals.mmg,
+// seven_segment.mmg, scratches.mmg, profile.mmg and japanese_glyphs.mmg (MIT).
+// Each is a self-contained procedural generator: same uv in, same value out,
+// no buffers and no iteration state.
+//
+// Every symbol is prefixed, because erhe deduplicates globals by exact string
+// match: Material Maker's bare "s", "l", "m", "fs", "box", "grid", "line",
+// "pavement" and "wave_sine" would sooner or later be defined by a second
+// descriptor and emitted twice, failing to link only when both nodes share a
+// graph. Prefixes here: pat_, ap_, iching_, rune_, rn_, ss_, jg_.
+//
+// Material Maker resolves an "includes" list against shared snippet nodes;
+// erhe has no include mechanism, so the pulled-in helpers are inlined into the
+// descriptor that needs them, under that descriptor's prefix (sdline2's sdLine
+// -> rune_sd_line / rn_sd_line / jg_sdLine, curve's sdBezier -> jg_sdBezier,
+// sdbox's sd_box -> jg_sd_box). Three copies of a four-line segment distance
+// is the cost of keeping each global self-contained.
+//
+// Not ported:
+// - splines, polycurve: both are driven by a Material Maker point-list
+//   parameter widget ("splines" / "polyline") whose GLSL - the per-instance
+//   $(name)_splines / bezier_uv_$name function - is generated from the edited
+//   points. erhe has no such Parameter_kind, and adding one is a widget +
+//   parameter-codegen feature, not a GLSL port. Their distance-to-bezier
+//   globals are worth revisiting if that widget is ever added.
+// - dirt: a compound graph node (26 sub-nodes, "type": "graph") with no
+//   shader_model of its own.
+//
+// Two fixes against the .mmg, both places where Godot's GLSL is laxer than
+// glslang: roman_numerals calls clamp(x, 0, 1) with int literals (-> 0.0, 1.0)
+// and initializes const int val[] with a C-style brace list (-> int[6](...)).
+// ---------------------------------------------------------------------------
+
+// Pattern - ported from Material Maker pattern.mmg (MIT). Combines a
+// horizontal and a vertical waveform with a selectable operator; both the
+// waveform and the combiner enums substitute a function name suffix.
+auto build_pattern() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "pattern";
+    d.label    = "Pattern";
+    d.category = "Patterns";
+    d.global =
+        "float pat_wave_constant(float x) {\n"
+        "    return 1.0;\n"
+        "}\n"
+        "\n"
+        "float pat_wave_sine(float x) {\n"
+        "    return 0.5-0.5*cos(3.14159265359*2.0*x);\n"
+        "}\n"
+        "\n"
+        "float pat_wave_triangle(float x) {\n"
+        "    x = fract(x);\n"
+        "    return min(2.0*x, 2.0-2.0*x);\n"
+        "}\n"
+        "\n"
+        "float pat_wave_sawtooth(float x) {\n"
+        "    return fract(x);\n"
+        "}\n"
+        "\n"
+        "float pat_wave_square(float x) {\n"
+        "    return (fract(x) < 0.5) ? 0.0 : 1.0;\n"
+        "}\n"
+        "\n"
+        "float pat_wave_bounce(float x) {\n"
+        "    x = 2.0*(fract(x)-0.5);\n"
+        "    return sqrt(1.0-x*x);\n"
+        "}\n"
+        "\n"
+        "float pat_mix_mul(float x, float y) {\n"
+        "    return x*y;\n"
+        "}\n"
+        "\n"
+        "float pat_mix_add(float x, float y) {\n"
+        "    return min(x+y, 1.0);\n"
+        "}\n"
+        "\n"
+        "float pat_mix_max(float x, float y) {\n"
+        "    return max(x, y);\n"
+        "}\n"
+        "\n"
+        "float pat_mix_min(float x, float y) {\n"
+        "    return min(x, y);\n"
+        "}\n"
+        "\n"
+        "float pat_mix_xor(float x, float y) {\n"
+        "    return min(x+y, 2.0-x-y);\n"
+        "}\n"
+        "\n"
+        "float pat_mix_pow(float x, float y) {\n"
+        "    return pow(x, y);\n"
+        "}\n";
+    const std::vector<Enum_value> wave_values{
+        Enum_value{"Sine",     "sine"},
+        Enum_value{"Triangle", "triangle"},
+        Enum_value{"Square",   "square"},
+        Enum_value{"Sawtooth", "sawtooth"},
+        Enum_value{"Constant", "constant"},
+        Enum_value{"Bounce",   "bounce"}
+    };
+    add_enum(
+        d, "mix", "Combine",
+        {
+            Enum_value{"Multiply", "mul"},
+            Enum_value{"Add",      "add"},
+            Enum_value{"Max",      "max"},
+            Enum_value{"Min",      "min"},
+            Enum_value{"Xor",      "xor"},
+            Enum_value{"Pow",      "pow"}
+        },
+        0
+    );
+    add_enum (d, "x_wave",  "X Pattern", wave_values, 0);
+    add_float(d, "x_scale", "X Repeat",  4.0f, 0.0f, 32.0f, 1.0f);
+    add_enum (d, "y_wave",  "Y Pattern", wave_values, 0);
+    add_float(d, "y_scale", "Y Repeat",  4.0f, 0.0f, 32.0f, 1.0f);
+    add_output(
+        d, Value_type::grayscale,
+        "pat_mix_$(mix)(pat_wave_$(x_wave)($x_scale*$uv.x), pat_wave_$(y_wave)($y_scale*$uv.y))"
+    );
+    return d;
+}
+
+// Beehive - ported from Material Maker beehive.mmg (MIT). Hexagonal tiling
+// with a pattern, a per-cell random color and a per-cell UV map output.
+auto build_beehive() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "beehive";
+    d.label    = "Beehive";
+    d.category = "Patterns";
+    d.global =
+        "float beehive_dist(vec2 p) {\n"
+        "    vec2 s = vec2(1.0, 1.73205080757);\n"
+        "    p = abs(p);\n"
+        "    return max(dot(p, s*0.5), p.x);\n"
+        "}\n"
+        "\n"
+        "vec4 beehive_center(vec2 p) {\n"
+        "    vec2 s = vec2(1.0, 1.73205080757);\n"
+        "    vec4 hC = floor(vec4(p, p - vec2(0.5, 1.0))/vec4(s, s)) + 0.5;\n"
+        "    vec4 h = vec4(p - hC.xy*s, p - (hC.zw + 0.5)*s);\n"
+        "    return dot(h.xy, h.xy) < dot(h.zw, h.zw) ? vec4(h.xy, hC.xy) : vec4(h.zw, hC.zw + 9.73);\n"
+        "}\n";
+    add_float(d, "sx", "Size X", 4.0f, 1.0f, 64.0f, 1.0f);
+    add_float(d, "sy", "Size Y", 4.0f, 1.0f, 64.0f, 1.0f);
+    d.code =
+        "vec2 $(name_uv)_bh_uv = $uv*vec2($sx, $sy*1.73205080757);\n"
+        "vec4 $(name_uv)_bh_center = beehive_center($(name_uv)_bh_uv);\n";
+    add_output(d, Value_type::grayscale, "1.0-2.0*beehive_dist($(name_uv)_bh_center.xy)");
+    add_output(d, Value_type::rgb,       "rand3(fract($(name_uv)_bh_center.zw/vec2($sx, $sy))+vec2(float($seed)))");
+    add_output(
+        d, Value_type::rgb,
+        "vec3(vec2(0.5)+$(name_uv)_bh_center.xy, rand(fract($(name_uv)_bh_center.zw/vec2($sx, $sy))+vec2(float($seed))))"
+    );
+    return d;
+}
+
+// Cairo - ported from Material Maker cairo.mmg (MIT). Cairo pentagonal tiling.
+// Material Maker's second output is a "fill" bounding box for its Fill
+// companion node, which needs the Fill family's iterate-buffer machinery; only
+// the pattern output is ported, so cairo_bbox is not carried over either.
+auto build_cairo() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "cairo";
+    d.label    = "Cairo";
+    d.category = "Patterns";
+    d.global =
+        "float cairo_round(vec2 uv, float angle, float k) {\n"
+        "    vec2 cell = floor(uv);\n"
+        "    float ca = cos(angle);\n"
+        "    float sa = sin(angle);\n"
+        "    vec2 corner = fract(uv)-0.5;\n"
+        "    uv = 0.5-abs(corner);\n"
+        "    uv = mix(uv, uv.yx, mod(cell.x+cell.y, 2.0));\n"
+        "    float side = dot(vec2(-sa, ca), uv);\n"
+        "    float d1 = abs(side);\n"
+        "    float d2 = abs(dot(vec2(-sa, ca), mix(vec2(uv.x, 1.0-uv.y), vec2(1.0-uv.x, uv.y), step(side, 0.0))));\n"
+        "    float d3 = abs(dot(vec2(ca, sa), uv));\n"
+        "    float d4 = mix(0.5-uv.x, 0.5-uv.y, step(side, 0.0));\n"
+        "    return clamp(-log2(exp2(-k*d1)+exp2(-k*d2)+exp2(-k*d3)+exp2(-k*d4))/k, 0.0, 1.0);\n"
+        "}\n";
+    add_float(d, "sx",    "Size X", 4.0f,  1.0f, 64.0f, 1.0f);
+    add_float(d, "sy",    "Size Y", 4.0f,  1.0f, 64.0f, 1.0f);
+    add_float(d, "angle", "Angle", 30.0f,  0.0f, 90.0f, 0.01f);
+    add_float(d, "round", "Round",  0.0f,  0.0f,  1.0f, 0.01f);
+    add_output(
+        d, Value_type::grayscale,
+        "cairo_round($uv*vec2($sx, $sy), $angle*0.01745329251, 200.0-190.0*$round)"
+    );
+    return d;
+}
+
+// Arc pavement - ported from Material Maker arc_pavement.mmg (MIT). Fan-shaped
+// cobblestone arcs, with a bricks pattern, a per-brick random color and a
+// per-brick UV map output. Material Maker's PI constant comes from its shader
+// preamble; erhe has none, so it is spelled out.
+auto build_arc_pavement() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "arc_pavement";
+    d.label    = "Arc Pavement";
+    d.category = "Patterns";
+    d.global =
+        "const float ap_pi = 3.14159265359;\n"
+        "\n"
+        "float ap_pavement(vec2 uv, float bevel, float mortar) {\n"
+        "    uv = abs(uv-vec2(0.5));\n"
+        "    return clamp((0.5*(1.0-mortar)-max(uv.x, uv.y))/max(0.0001, bevel), 0.0, 1.0);\n"
+        "}\n"
+        "\n"
+        "vec4 arc_pavement(vec2 uv, float acount, float lcount, out vec2 seed) {\n"
+        "    float radius = (0.5/sqrt(2.0));\n"
+        "    float uvx = uv.x;\n"
+        "    uv.x = 0.5*fract(uv.x+0.5)+0.25;\n"
+        "    float center = (uv.x-0.5)/radius;\n"
+        "    center *= center;\n"
+        "    center = floor(acount*(uv.y-radius*sqrt(1.0-center))+0.5)/acount;\n"
+        "    vec2 v = uv-vec2(0.5, center);\n"
+        "    float cornerangle = 0.85/acount+0.25*ap_pi;\n"
+        "    float acountangle = (ap_pi-2.0*cornerangle)/(lcount+floor(mod(center*acount, 2.0)));\n"
+        "    float angle = mod(atan(v.y, v.x), 2.0*ap_pi);\n"
+        "    float base_angle;\n"
+        "    float local_uvy = 0.5+acount*(length(v)-radius)*(1.66-0.71*cos(1.44*(angle-ap_pi*0.5)));\n"
+        "    vec2 local_uv;\n"
+        "    if (angle < cornerangle) {\n"
+        "        base_angle = 0.25*ap_pi;\n"
+        "        local_uv = vec2((angle-0.25*ap_pi)/cornerangle*0.4*acount+0.55, 1.0-local_uvy);\n"
+        "        seed = vec2(fract(center), 0.0);\n"
+        "    } else if (angle > ap_pi-cornerangle) {\n"
+        "        base_angle = 0.75*ap_pi;\n"
+        "        local_uv = vec2(local_uvy, 0.45-(0.75*ap_pi-angle)/cornerangle*0.4*acount);\n"
+        "        seed = vec2(fract(center), 0.0);\n"
+        "    } else {\n"
+        "        base_angle = cornerangle+(floor((angle-cornerangle)/acountangle)+0.5)*acountangle;\n"
+        "        local_uv = vec2((angle-base_angle)/acountangle+0.5, 1.0-local_uvy);\n"
+        "        seed = vec2(fract(center), base_angle);\n"
+        "    }\n"
+        "    vec2 brick_center = vec2(0.5, center)+radius*vec2(cos(base_angle), sin(base_angle));\n"
+        "    return vec4(brick_center.x+uvx-uv.x, brick_center.y, local_uv);\n"
+        "}\n";
+    add_float(d, "repeat", "Repeat", 2.0f, 1.0f,  4.0f, 1.0f);
+    add_float(d, "rows",   "Rows",   8.0f, 4.0f, 16.0f, 1.0f);
+    add_float(d, "bricks", "Bricks", 8.0f, 4.0f, 16.0f, 1.0f);
+    add_float(d, "mortar", "Mortar", 0.1f, 0.0f,  0.5f, 0.01f);
+    add_float(d, "bevel",  "Bevel",  0.1f, 0.0f,  0.5f, 0.01f);
+    d.code =
+        "vec2 $(name_uv)_ap_uv = fract($uv)*vec2($repeat, -1.0);\n"
+        "vec2 $(name_uv)_ap_seed;\n"
+        "vec4 $(name_uv)_ap = arc_pavement($(name_uv)_ap_uv, $rows, $bricks, $(name_uv)_ap_seed);\n";
+    add_output(d, Value_type::grayscale, "ap_pavement($(name_uv)_ap.zw, $bevel, 2.0*$mortar)");
+    add_output(d, Value_type::rgb,       "rand3($(name_uv)_ap_seed)");
+    add_output(d, Value_type::rgb,       "vec3($(name_uv)_ap.zw, 0.0)");
+    return d;
+}
+
+// I Ching - ported from Material Maker iching.mmg (MIT). A grid of random
+// I Ching hexagrams. Material Maker's shader_model default for the grid size
+// is 0, below its own minimum of 2; the .mmg instance value (4) is used here.
+auto build_iching() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "iching";
+    d.label    = "I Ching";
+    d.category = "Patterns";
+    d.global =
+        "float iching_hexagram(vec2 uv, float seed) {\n"
+        "    int value = int(32.0*rand(floor(uv)+vec2(seed)));\n"
+        "    float base = step(0.5, fract(fract(uv.y)*6.5))*step(0.04, fract(uv.y+0.02))*step(0.2, fract(uv.x+0.1));\n"
+        "    int bit = int(fract(uv.y)*6.5);\n"
+        "    return base*step(0.1*step(float(bit & value), 0.5), fract(uv.x+0.55));\n"
+        "}\n";
+    add_float(d, "columns", "Size X", 4.0f, 2.0f, 32.0f, 1.0f);
+    add_float(d, "rows",    "Size Y", 4.0f, 2.0f, 32.0f, 1.0f);
+    add_output(d, Value_type::grayscale, "iching_hexagram(vec2($columns, $rows)*$uv, float($seed))");
+    return d;
+}
+
+// Runes - ported from Material Maker runes.mmg (MIT). A grid of random
+// four-stroke runes, each stroke snapped to a 2x3 grid and touching one edge
+// of its cell. sdLine comes from Material Maker's sdline2 include.
+auto build_runes() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "runes";
+    d.label    = "Runes";
+    d.category = "Patterns";
+    d.global =
+        "vec2 rune_sd_line(vec2 p, vec2 a, vec2 b) {\n"
+        "    vec2 pa = p-a, ba = b-a;\n"
+        "    float h = clamp(dot(pa, ba)/dot(ba, ba), 0.0, 1.0);\n"
+        "    return vec2(length(pa-ba*h), h);\n"
+        "}\n"
+        "\n"
+        "float rune_thick_line(vec2 uv, vec2 posA, vec2 posB) {\n"
+        "    return clamp(1.1-20.0*rune_sd_line(uv, posA, posB).x, 0.0, 1.0);\n"
+        "}\n"
+        "\n"
+        "// Makes a rune in the 0..1 uv space; s selects which rune to draw.\n"
+        "float rune_glyph(vec2 uv, float s) {\n"
+        "    float finalLine = 0.0;\n"
+        "    vec2 seed = floor(uv)-rand2(vec2(s));\n"
+        "    uv = fract(uv);\n"
+        "    for (int i = 0; i < 4; i++) { // number of strokes\n"
+        "        vec2 posA = rand2(floor(seed+0.5));\n"
+        "        vec2 posB = rand2(floor(seed+1.5));\n"
+        "        seed += 2.0;\n"
+        "        // Expand the range and mod it to get a nicely distributed random number.\n"
+        "        posA = fract(posA * 128.0);\n"
+        "        posB = fract(posB * 128.0);\n"
+        "        // Each rune touches the edge of its box on all 4 sides.\n"
+        "        if (i == 0) posA.y = 0.0;\n"
+        "        if (i == 1) posA.x = 0.999;\n"
+        "        if (i == 2) posA.x = 0.0;\n"
+        "        if (i == 3) posA.y = 0.999;\n"
+        "        // Snap the random line endpoints to a 2x3 grid (+0.5 centers in a cell).\n"
+        "        vec2 snaps = vec2(2.0, 3.0);\n"
+        "        posA = (floor(posA * snaps) + 0.5) / snaps;\n"
+        "        posB = (floor(posB * snaps) + 0.5) / snaps;\n"
+        "        // Dots (degenerate lines) are not cross-GPU safe without the 0.001 offset.\n"
+        "        finalLine = max(finalLine, rune_thick_line(uv, posA, posB + 0.001));\n"
+        "    }\n"
+        "    return finalLine;\n"
+        "}\n";
+    add_float(d, "columns", "Size X", 4.0f, 2.0f, 32.0f, 1.0f);
+    add_float(d, "rows",    "Size Y", 4.0f, 2.0f, 32.0f, 1.0f);
+    add_output(d, Value_type::grayscale, "rune_glyph(vec2($columns, $rows)*$uv, float($seed))");
+    return d;
+}
+
+// Roman numerals - ported from Material Maker roman_numerals.mmg (MIT). Draws
+// a number 1..40 as I / V / X / L strokes. sdLine comes from Material Maker's
+// sdline2 include. Two Godot-isms are fixed for glslang: clamp(x, 0, 1) takes
+// float literals, and the C-style brace initializer for the value table is
+// written as an explicit array constructor.
+auto build_roman_numerals() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "roman_numerals";
+    d.label    = "Roman Numerals";
+    d.category = "Patterns";
+    d.global =
+        "vec2 rn_sd_line(vec2 p, vec2 a, vec2 b) {\n"
+        "    vec2 pa = p-a, ba = b-a;\n"
+        "    float h = clamp(dot(pa, ba)/dot(ba, ba), 0.0, 1.0);\n"
+        "    return vec2(length(pa-ba*h), h);\n"
+        "}\n"
+        "\n"
+        "float rn_line(vec2 p, vec4 l) { return rn_sd_line(p, l.xy, l.zw).x; }\n"
+        "\n"
+        "float rn_i(vec2 p, float w, float h) {\n"
+        "    float d = rn_line(abs(p), vec4(w*1.7, h, 0.0, h));\n"
+        "    return min(d, rn_line(vec2(p.x, abs(p.y)), vec4(0.0, h, 0.0, 0.0)));\n"
+        "}\n"
+        "\n"
+        "float rn_v(vec2 p, float w, float h) {\n"
+        "    p.x = abs(p.x);\n"
+        "    float d = rn_line(p, vec4(0.0, h, w, -h));\n"
+        "    return min(d, rn_line(vec2(abs(p.x-w), p.y+h), vec4(w*0.8, 0.0, 0.0, 0.0)));\n"
+        "}\n"
+        "\n"
+        "float rn_x(vec2 p, float w, float h) {\n"
+        "    p = abs(p);\n"
+        "    float d = rn_line(p, vec4(w, h, 0.0, 0.0));\n"
+        "    return min(d, rn_line(abs(p-vec2(w, h)), vec4(w*0.8, 0.0, 0.0, 0.0)));\n"
+        "}\n"
+        "\n"
+        "float rn_l(vec2 p, float w, float h) {\n"
+        "    float w2 = w*1.5;\n"
+        "    float d = rn_line(p, vec4(-w2, h, -w2, -h));\n"
+        "    return min(d, rn_line(p, vec4(-w2, h, w2, h)));\n"
+        "}\n"
+        "\n"
+        "float rn_num(vec2 p, float w, float h, float s, int n) {\n"
+        "    vec2 s0 = vec2(s, 0.0);\n"
+        "    float rn[6] = float[6](\n"
+        "        min(rn_x(p, w, h), rn_l(p-s0, w, h)),\n"
+        "        rn_x(p, w, h),\n"
+        "        min(rn_i(p, w, h), rn_x(p-s0, w, h)),\n"
+        "        rn_v(p, w, h),\n"
+        "        min(rn_i(p, w, h), rn_v(p-s0, w, h)),\n"
+        "        rn_i(p, w, h));\n"
+        "    return rn[n];\n"
+        "}\n"
+        "\n"
+        "float rn_roman(vec2 p, float w, float h, int n, float bevel, float r, float s) {\n"
+        "    p -= 0.5;\n"
+        "    h *= 0.5;\n"
+        "    w *= 0.25;\n"
+        "    const int val[6] = int[6](40, 10, 9, 5, 4, 1);\n"
+        "    float res = 1.0;\n"
+        "    n = clamp(n, 0, 40);\n"
+        "    for (int i = 0; i < 6; ++i) {\n"
+        "        while (n - val[i] >= 0) {\n"
+        "            float no = rn_num(p, w, h, s, i);\n"
+        "            res = min(res, no);\n"
+        "            p -= vec2(s, 0.0);\n"
+        "            n -= val[i];\n"
+        "        }\n"
+        "    }\n"
+        "    return clamp(0.0-(res-r*0.03)/max(bevel, 1e-4), 0.0, 1.0);\n"
+        "}\n";
+    add_input(d, "bevel_map", Value_type::grayscale, "1.0");
+    // Defaults are the .mmg instance values, not the shader_model ones: the
+    // latter set bevel to 0.5, which divides the 0.015-wide stroke by a 0.5
+    // ramp and leaves a peak output of 0.03 - a glyph too faint to see.
+    add_float(d, "w",     "Glyph Width",     0.5f,  0.0f,  1.0f, 0.01f);
+    add_float(d, "h",     "Glyph Height",    0.75f, 0.0f,  1.0f, 0.01f);
+    add_float(d, "r",     "Glyph Thickness", 0.4f,  0.0f,  1.0f, 0.01f);
+    add_float(d, "n",     "Number",          5.0f,  1.0f, 40.0f, 1.0f);
+    add_float(d, "bevel", "Bevel",           0.0f,  0.0f,  1.0f, 0.01f);
+    add_float(d, "s",     "Spacing",         0.5f,  0.0f,  1.0f, 0.01f);
+    add_output(
+        d, Value_type::grayscale,
+        "rn_roman($uv, $w, $h, int($n), $bevel*$bevel_map($uv), $r, $s)"
+    );
+    return d;
+}
+
+// Seven segment display - ported from Material Maker seven_segment.mmg (MIT).
+// Draws a multi-digit seven-segment number. Material Maker names the helpers
+// m / fs / ssd / ssd_multi; they are prefixed ss_ here.
+auto build_seven_segment() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "seven_segment";
+    d.label    = "Seven Segment";
+    d.category = "Patterns";
+    d.global =
+        "float ss_max8(vec4 a, vec4 b) {\n"
+        "    return max(max(max(a.x, a.y), max(a.z, a.w)), max(max(b.x, b.y), max(b.z, b.w)));\n"
+        "}\n"
+        "\n"
+        "vec4 ss_segments(vec2 p, float s, float st, float sl, bool is_top) {\n"
+        "    sl = (1.0 - sl)/2.0;\n"
+        "    st /= 2.0;\n"
+        "    sl = clamp(sl, 0.0, 1.0);\n"
+        "\n"
+        "    p = 2.5*(1.0/s)*(p - 0.5)-vec2(0.0, is_top ? -0.5 : 0.5);\n"
+        "    vec2 p1 = p;\n"
+        "    vec2 p2 = p;\n"
+        "\n"
+        "    p = abs(p)-0.5;\n"
+        "    vec4 d = vec4(min(st - abs(max(p.x, p.y) * -1.0),\n"
+        "        min(-dot(p, normalize(vec2(1.0, 1.0))),\n"
+        "        abs(dot(p, normalize(vec2(1.0, -1.0))))) - sl));\n"
+        "\n"
+        "    p1.x = abs(p1.x);\n"
+        "    p2.y = abs(p2.y);\n"
+        "\n"
+        "    float q1 = -dot(p1, vec2(1.0, 1.0));\n"
+        "    float q2 = -dot(p2, vec2(-1.0, 1.0));\n"
+        "    float q3 = dot(p1, vec2(-1.0, 1.0));\n"
+        "    float q4 = -dot(p2, vec2(1.0, 1.0));\n"
+        "\n"
+        "    return min(d, vec4(q1, q2, q3, q4));\n"
+        "}\n"
+        "\n"
+        "float ss_digit(vec2 p, float s, float st, float sl, float bevel, int num) {\n"
+        "    vec4 a = ss_segments(p, s, st, sl, true);\n"
+        "    vec4 b = ss_segments(p, s, st, sl, false);\n"
+        "\n"
+        "    float d = 0.0;\n"
+        "    vec4 x = vec4(0.0);\n"
+        "\n"
+        "    if (num == 0) d = ss_max8(vec4(a.xyw, b.y), vec4(b.zw, x.xx));\n"
+        "    if (num == 1) d = ss_max8(vec4(a.y, b.y, x.xx), x);\n"
+        "    if (num == 2) d = ss_max8(vec4(a.xyz, b.w), vec4(b.z, x.xxx));\n"
+        "    if (num == 3) d = ss_max8(vec4(a.xyz, b.y), vec4(b.z, x.xxx));\n"
+        "    if (num == 4) d = ss_max8(vec4(a.yzw, b.y), x);\n"
+        "    if (num == 5) d = ss_max8(vec4(a.xwz, b.y), vec4(b.z, x.xxx));\n"
+        "    if (num == 6) d = ss_max8(vec4(a.xwz, b.y), vec4(b.zw, x.xx));\n"
+        "    if (num == 7) d = ss_max8(vec4(a.xy, b.y, x.x), x);\n"
+        "    if (num == 8) d = ss_max8(a, b);\n"
+        "    if (num == 9) d = ss_max8(a, vec4(b.yz, x.xx));\n"
+        "\n"
+        "    return clamp(d/max(bevel, 0.00001), 0.0, 1.0);\n"
+        "}\n"
+        "\n"
+        "float ss_number(vec2 p, float s, float st, float sl, float bevel, int num, int digits, float spacing) {\n"
+        "    float v = 0.0;\n"
+        "    while (num > 0 || digits > 0) {\n"
+        "        v = max(v, ss_digit(p, s, st, sl, bevel, num % 10));\n"
+        "        num /= 10;\n"
+        "        p.x += (spacing+0.5)*s;\n"
+        "        digits -= 1;\n"
+        "    }\n"
+        "    return v;\n"
+        "}\n";
+    add_input(d, "bevel_map", Value_type::grayscale, "1.0");
+    add_float(d, "st",      "Thickness", 0.3f, 0.0f,   1.0f, 0.01f);
+    add_float(d, "sl",      "Length",    0.9f, 0.0f,   1.0f, 0.01f);
+    add_float(d, "n",       "Number",    8.0f, 0.0f, 100.0f, 1.0f);
+    add_float(d, "digits",  "Digits",    1.0f, 1.0f,   9.0f, 1.0f);
+    add_float(d, "s",       "Scale",     1.0f, 0.0f,   1.0f, 0.01f);
+    add_float(d, "bevel",   "Bevel",     0.0f, 0.0f,   1.0f, 0.01f);
+    add_float(d, "spacing", "Spacing",   0.0f, 0.0f,   0.5f, 0.01f);
+    add_output(
+        d, Value_type::grayscale,
+        "ss_number($uv, $s, $st, $sl, $bevel*$bevel_map($uv), int($n), int($digits), $spacing)"
+    );
+    return d;
+}
+
+// Scratches - ported from Material Maker scratches.mmg (MIT). Layered thin
+// wavy strokes, each layer offset by a chained rand2 of the seed.
+auto build_scratches() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "scratches";
+    d.label    = "Scratches";
+    d.category = "Patterns";
+    d.global =
+        "float scratch_one(vec2 uv, vec2 size, float waviness, float angle, float randomness, vec2 seed) {\n"
+        "    float subdivide = floor(1.0/size.x);\n"
+        "    float cut = size.x*subdivide;\n"
+        "    uv *= subdivide;\n"
+        "    vec2 r1 = rand2(floor(uv)+seed);\n"
+        "    vec2 r2 = rand2(r1);\n"
+        "    uv = fract(uv);\n"
+        "    vec2 border = 10.0*min(fract(uv), 1.0-fract(uv));\n"
+        "    uv = 2.0*uv-vec2(1.0);\n"
+        "    float a = 6.28318530718*(angle+(r1.x-0.5)*randomness);\n"
+        "    float c = cos(a);\n"
+        "    float s = sin(a);\n"
+        "    uv = vec2(c*uv.x+s*uv.y, s*uv.x-c*uv.y);\n"
+        "    uv.y += 2.0*r1.y-1.0;\n"
+        "    uv.y += 0.5*waviness*cos(2.0*uv.x+6.28318530718*r2.y);\n"
+        "    uv.x /= cut;\n"
+        "    uv.y /= subdivide*size.y;\n"
+        "    return min(border.x, border.y)*(1.0-uv.x*uv.x)*max(0.0, 1.0-1000.0*uv.y*uv.y);\n"
+        "}\n"
+        "\n"
+        "float scratch_layers(vec2 uv, int layers, vec2 size, float waviness, float angle, float randomness, vec2 seed) {\n"
+        "    float v = 0.0;\n"
+        "    for (int i = 0; i < layers; ++i) {\n"
+        "        seed = rand2(seed);\n"
+        "        v = max(v, scratch_one(fract(uv+seed), size, waviness, angle/360.0, randomness, seed));\n"
+        "    }\n"
+        "    return v;\n"
+        "}\n";
+    add_float(d, "length",     "Length",     0.25f,   0.1f,   1.0f, 0.01f);
+    add_float(d, "width",      "Width",      0.5f,    0.1f,   1.0f, 0.01f);
+    add_float(d, "layers",     "Layers",     4.0f,    1.0f,  10.0f, 1.0f);
+    add_float(d, "waviness",   "Waviness",   0.5f,    0.0f,   1.0f, 0.01f);
+    add_float(d, "angle",      "Angle",      0.0f, -180.0f, 180.0f, 1.0f);
+    add_float(d, "randomness", "Randomness", 0.5f,    0.0f,   1.0f, 0.01f);
+    add_output(
+        d, Value_type::grayscale,
+        "scratch_layers($uv, int($layers), vec2($length, $width), $waviness, $angle, $randomness, vec2(float($seed), 0.0))"
+    );
+    return d;
+}
+
+// Profile - ported from Material Maker profile.mmg (MIT). Renders a gradient
+// as a height profile, either as a filled area under the curve or as a curve
+// of the given width. The "in" input defaults to the gradient's own luminance,
+// so an unconnected node shows the edited gradient's profile.
+auto build_profile() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "profile";
+    d.label    = "Profile";
+    d.category = "Patterns";
+    d.global =
+        "float draw_profile_fill(vec2 uv, float y, float dy, float w) {\n"
+        "    return 1.0-clamp(sin(1.57079632679-atan(dy))*(1.0-uv.y-y)/w, 0.0, 1.0);\n"
+        "}\n"
+        "\n"
+        "float draw_profile_curve(vec2 uv, float y, float dy, float w) {\n"
+        "    return 1.0-clamp(sin(1.57079632679-atan(dy))*abs(1.0-uv.y-y)/w, 0.0, 1.0);\n"
+        "}\n";
+    add_input(d, "in", Value_type::grayscale, "dot($gradient($uv.x).xyz, vec3(1.0/3.0))");
+    add_enum(
+        d, "style", "Style",
+        {
+            Enum_value{"Curve", "curve"},
+            Enum_value{"Fill",  "fill"}
+        },
+        0
+    );
+    add_gradient(
+        d, "gradient", "Gradient",
+        {
+            Gradient_stop{.position = 0.0f, .color = {0.0f, 0.0f, 0.0f, 1.0f}},
+            Gradient_stop{.position = 1.0f, .color = {1.0f, 1.0f, 1.0f, 1.0f}}
+        },
+        Gradient_interpolation::linear
+    );
+    add_float(d, "width", "Width", 0.05f, 0.0f, 1.0f, 0.01f);
+    add_output(
+        d, Value_type::grayscale,
+        "draw_profile_$(style)($uv, $in($uv), "
+        "(dot($gradient($uv.x+0.001).xyz, vec3(1.0/3.0))-dot($gradient($uv.x-0.001).xyz, vec3(1.0/3.0)))/0.002, "
+        "max(0.0001, $width))"
+    );
+    return d;
+}
+
+// Japanese glyphs - ported from Material Maker japanese_glyphs.mmg (MIT).
+// Draws one hiragana / katakana glyph, or a grid of them, as quadratic bezier
+// and line strokes. This is the largest port in the library: 46 glyphs per
+// syllabary, each a hand-digitized stroke list. The GLSL was transcribed
+// mechanically from the .mmg by a generator rather than by hand - a single
+// mistyped control point would be invisible in review and would silently
+// deform one glyph.
+//
+// Material Maker resolves its "includes" list (curve, sdline2, sdbox) against
+// shared snippet nodes; those three helpers are inlined here, and every symbol
+// - including Material Maker's one-letter s / l and the generic box / grid -
+// carries the jg_ prefix, since erhe deduplicates globals by exact string
+// match.
+auto build_japanese_glyphs() -> Node_descriptor
+{
+    Node_descriptor d{};
+    d.name     = "japanese_glyphs";
+    d.label    = "Japanese Glyphs";
+    d.category = "Patterns";
+    d.global =
+        "float jg_cross2( in vec2 a, in vec2 b ) { return a.x*b.y - a.y*b.x; }\n"
+        "\n"
+        "// signed distance to a quadratic bezier\n"
+        "vec2 jg_sdBezier( in vec2 pos, in vec2 A, in vec2 B, in vec2 C ) {\n"
+        "    vec2 a = B - A;\n"
+        "    vec2 b = A - 2.0*B + C;\n"
+        "    vec2 c = a * 2.0;\n"
+        "    vec2 d = A - pos;\n"
+        "\n"
+        "    float kk = 1.0/dot(b,b);\n"
+        "    float kx = kk * dot(a,b);\n"
+        "    float ky = kk * (2.0*dot(a,a)+dot(d,b))/3.0;\n"
+        "    float kz = kk * dot(d,a);\n"
+        "\n"
+        "    float res = 0.0;\n"
+        "    float sgn = 0.0;\n"
+        "\n"
+        "    float p = ky - kx*kx;\n"
+        "    float p3 = p*p*p;\n"
+        "    float q = kx*(2.0*kx*kx - 3.0*ky) + kz;\n"
+        "    float h = q*q + 4.0*p3;\n"
+        "    float rvx;\n"
+        "\n"
+        "    if( h>=0.0 ) { // 1 root\n"
+        "        h = sqrt(h);\n"
+        "        vec2 x = (vec2(h,-h)-q)/2.0;\n"
+        "        vec2 uv = sign(x)*pow(abs(x), vec2(1.0/3.0));\n"
+        "        rvx = uv.x+uv.y-kx;\n"
+        "        float t = clamp(rvx, 0.0, 1.0);\n"
+        "        vec2 q2 = d+(c+b*t)*t;\n"
+        "        res = dot(q2, q2);\n"
+        "        sgn = jg_cross2(c+2.0*b*t, q2);\n"
+        "    } else {   // 3 roots\n"
+        "        float z = sqrt(-p);\n"
+        "        float v = acos(q/(p*z*2.0))/3.0;\n"
+        "        float m = cos(v);\n"
+        "        float n = sin(v)*1.732050808;\n"
+        "        vec3  t = clamp(vec3(m+m,-n-m,n-m)*z-kx, 0.0, 1.0);\n"
+        "        vec2  qx=d+(c+b*t.x)*t.x; float dx=dot(qx, qx), sx = jg_cross2(c+2.0*b*t.x,qx);\n"
+        "        vec2  qy=d+(c+b*t.y)*t.y; float dy=dot(qy, qy), sy = jg_cross2(c+2.0*b*t.y,qy);\n"
+        "        if( dx<dy ) { res=dx; sgn=sx; rvx = t.x; } else { res=dy; sgn=sy; rvx = t.y; }\n"
+        "    }\n"
+        "\n"
+        "    return vec2(rvx, sqrt(res)*sign(sgn));\n"
+        "}\n"
+        "\n"
+        "vec2 jg_sdLine(vec2 p, vec2 a, vec2 b) {\n"
+        "    vec2 pa = p-a, ba = b-a;\n"
+        "    float h = clamp(dot(pa,ba)/dot(ba,ba), 0.0, 1.0);\n"
+        "    return vec2(length(pa-ba*h), h);\n"
+        "}\n"
+        "\n"
+        "float jg_sd_box(vec2 uv, vec2 size) {\n"
+        "    vec2 d = abs(uv)-size;\n"
+        "    return length(max(d, vec2(0)))+min(max(d.x, d.y), 0.0);\n"
+        "}\n"
+        "float jg_s(vec2 uv, vec2 A, vec2 B, vec2 C) { return abs(jg_sdBezier(uv, A, B, C).y); }\n"
+        "float jg_l(vec2 uv, vec2 A, vec2 B) { return jg_sdLine(uv, A, B).x; }\n"
+        "float jg_box(vec2 p, float r) { p = abs(p) - r; return step(max(p.x,p.y),0.0); }\n"
+        "\n"
+        "vec3 jg_grid(vec2 p, int gs) {\n"
+        "    float g = float(gs);\n"
+        "    p += 0.5;\n"
+        "    vec2 a = floor(p*g)/vec2(g);\n"
+        "    p = fract(p*g) - 0.5;\n"
+        "    float c = g*(a.x+floor(1.0/g)) + a.y*g*g;\n"
+        "    return vec3(p,c);\n"
+        "}\n"
+        "\n"
+        "// Katakana\n"
+        "\n"
+        "float jg_k1(vec2 uv) { // a\n"
+        "    float d = jg_s(uv, vec2(0.084, -0.004), vec2(0.399, -0.195),vec2(0.26, -0.28));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.278, 0.318), vec2(-0.009, 0.227),vec2(-0.021, -0.133)));\n"
+        "    return min(d, jg_l(uv, vec2(-0.31, -0.28), vec2(0.26, -0.28)));\n"
+        "}\n"
+        "\n"
+        "float jg_k2(vec2 uv) { // i\n"
+        "    float d = jg_s(uv, vec2(0.264, -0.319), vec2(0, -0.051),vec2(-0.309, 0.045));\n"
+        "    return min(d, jg_l(uv, vec2(0.0385, 0.3155), vec2(0.0385, -0.126)));\n"
+        "}\n"
+        "\n"
+        "float jg_k3(vec2 uv) { // u\n"
+        "    float d = jg_s(uv, vec2(0.289, -0.21), vec2(0.297, 0.234),vec2(-0.117, 0.324));\n"
+        "    d = min(d, jg_l(uv, vec2(0, -0.21), vec2(0, -0.3281)));\n"
+        "    d = min(d, jg_l(uv, vec2(-0.28, -0.21), vec2(0.289, -0.21)));\n"
+        "    return min(d, jg_l(uv, vec2(-0.28, 0), vec2(-0.28, -0.21)));\n"
+        "}\n"
+        "\n"
+        "float jg_k4(vec2 uv) { // e\n"
+        "    float d = jg_l(uv, vec2(0.28, -0.25), vec2(-0.28, -0.25));\n"
+        "    d = min(d, jg_l(uv, vec2(0, -0.25), vec2(0, 0.25)));\n"
+        "    return min(d, jg_l(uv, vec2(0.34, 0.25), vec2(-0.34, 0.25)));\n"
+        "}\n"
+        "\n"
+        "float jg_k5(vec2 uv) { // o\n"
+        "    float d = jg_s(uv, vec2(0.09, -0.19), vec2(-0.013, 0.065),vec2(-0.325, 0.228));\n"
+        "    d = min(d, jg_l(uv, vec2(0.12, -0.33), vec2(0.12, 0.33)));\n"
+        "    return min(d, jg_l(uv, vec2(-0.31, -0.19), vec2(0.31, -0.19)));\n"
+        "}\n"
+        "\n"
+        "float jg_k6(vec2 uv) { // ka\n"
+        "    float d = jg_s(uv, vec2(-0.039, -0.334136), vec2(0.006, 0.105),vec2(-0.319, 0.302));\n"
+        "    d = min(d, jg_l(uv, vec2(-0.29, -0.19), vec2(0.28, -0.19)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.246, 0.217), vec2(0.231, 0.325),vec2(0.054, 0.28)));\n"
+        "    return min(d, jg_l(uv, vec2(0.2469, 0.2153), vec2(0.28, -0.19)));\n"
+        "}\n"
+        "\n"
+        "float jg_k7(vec2 uv) { // ki\n"
+        "    float d = jg_l(uv, vec2(0.07, 0.33), vec2(-0.07, -0.33));\n"
+        "    d = min(d, jg_l(uv, vec2(0.25, -0.23), vec2(-0.31, -0.14)));\n"
+        "    return min(d, jg_l(uv, vec2(0.31, 0), vec2(-0.33, 0.1)));\n"
+        "}\n"
+        "\n"
+        "float jg_k8(vec2 uv) { // ku\n"
+        "    float d = jg_s(uv, vec2(-0.212, 0.319), vec2(0.281, 0.158),vec2(0.259, -0.22));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.053, -0.328), vec2(-0.141, -0.11),vec2(-0.295, -0.023)));\n"
+        "    return min(d, jg_l(uv, vec2(0.2566, -0.22), vec2(-0.105, -0.2193)));\n"
+        "}\n"
+        "\n"
+        "float jg_k9(vec2 uv) { // ke\n"
+        "    float d = jg_s(uv, vec2(-0.192, 0.319), vec2(0.136, 0.167),vec2(0.128, -0.189));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.124, -0.332), vec2(-0.198, -0.131),vec2(-0.336, -0.01)));\n"
+        "    return min(d, jg_l(uv, vec2(0.3279, -0.19), vec2(-0.19, -0.19)));\n"
+        "}\n"
+        "\n"
+        "float jg_k10(vec2 uv) { // ko\n"
+        "    float d = jg_l(uv, vec2(0.25, -0.24), vec2(-0.27, -0.24));\n"
+        "    d = min(d, jg_l(uv, vec2(0.25, -0.24), vec2(0.25, 0.25)));\n"
+        "    return min(d, jg_l(uv, vec2(-0.28, 0.25), vec2(0.25, 0.25)));\n"
+        "}\n"
+        "\n"
+        "float jg_k11(vec2 uv) { // sa\n"
+        "    float d = jg_l(uv, vec2(-0.342, -0.1604), vec2(0.34, -0.16));\n"
+        "    d = min(d, jg_l(uv, vec2(-0.17, -0.33), vec2(-0.17, 0.0844)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.17, -0.068), vec2(0.176, 0.287),vec2(-0.11, 0.315)));\n"
+        "    return min(d, jg_l(uv, vec2(0.17, -0.33), vec2(0.17, -0.03)));\n"
+        "}\n"
+        "\n"
+        "float jg_k12(vec2 uv) { // shi\n"
+        "    float d = jg_s(uv, vec2(-0.22, -0.306), vec2(-0.117, -0.267),vec2(-0.03, -0.204));\n"
+        "    d = min(d, jg_s(uv, vec2(0.313, -0.153), vec2(0.177, 0.267),vec2(-0.273, 0.299)));\n"
+        "    return min(d, jg_s(uv, vec2(-0.289, -0.098), vec2(-0.154, -0.05),vec2(-0.087, 0.013)));\n"
+        "}\n"
+        "\n"
+        "float jg_k13(vec2 uv) { // su\n"
+        "    float d = jg_s(uv, vec2(0.057, 0.044), vec2(0.195, 0.126),vec2(0.314, 0.286));\n"
+        "    d = min(d, jg_s(uv, vec2(0.221, -0.269), vec2(0.1, 0.14),vec2(-0.316, 0.288)));\n"
+        "    return min(d, jg_l(uv, vec2(-0.27, -0.27), vec2(0.22, -0.27)));\n"
+        "}\n"
+        "\n"
+        "float jg_k14(vec2 uv) { // se\n"
+        "    float d = jg_s(uv, vec2(0.252, -0.182), vec2(0.41, -0.176),vec2(0.119, 0.078));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.137, 0.15), vec2(-0.142, 0.352),vec2(0.278, 0.269)));\n"
+        "    d = min(d, jg_l(uv, vec2(-0.1353, -0.3247), vec2(-0.1373, 0.1509)));\n"
+        "    return min(d, jg_l(uv, vec2(-0.3301, -0.0978), vec2(0.2521, -0.1818)));\n"
+        "}\n"
+        "\n"
+        "float jg_k15(vec2 uv) { // so\n"
+        "    float d = jg_s(uv, vec2(0.265, -0.28), vec2(0.257, 0.135),vec2(-0.194, 0.309));\n"
+        "    return min(d, jg_s(uv, vec2(-0.276, -0.285), vec2(-0.199, -0.188),vec2(-0.148, -0.033)));\n"
+        "}\n"
+        "\n"
+        "float jg_k16(vec2 uv) { // ta\n"
+        "    float d = jg_s(uv, vec2(-0.212, 0.319), vec2(0.281, 0.158),vec2(0.259, -0.22));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.053, -0.328), vec2(-0.141, -0.11),vec2(-0.295, -0.023)));\n"
+        "    d = min(d, jg_l(uv, vec2(0.2575, -0.22), vec2(-0.1038, -0.2193)));\n"
+        "    return min(d, jg_s(uv, vec2(-0.102, -0.058), vec2(0.028, 0.025),vec2(0.126, 0.132)));\n"
+        "}\n"
+        "\n"
+        "float jg_k17(vec2 uv) { // chi\n"
+        "    float d = jg_s(uv, vec2(-0.269, -0.23), vec2(0.044, -0.237),vec2(0.265, -0.316));\n"
+        "    d = min(d, jg_l(uv, vec2(0.338, -0.04), vec2(-0.3238, -0.04)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.213, 0.324), vec2(0.044, 0.229),vec2(0.04, -0.038)));\n"
+        "    return min(d, jg_l(uv, vec2(0.04, -0.258), vec2(0.04, -0.0363)));\n"
+        "}\n"
+        "\n"
+        "float jg_k18(vec2 uv) { // tsu\n"
+        "    float d = jg_s(uv, vec2(-0.175, 0.296), vec2(0.228, 0.222),vec2(0.292, -0.271));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.071, -0.297), vec2(0, -0.144),vec2(0.013, -0.068)));\n"
+        "    return min(d, jg_s(uv, vec2(-0.29, -0.253), vec2(-0.222, -0.11),vec2(-0.204, -0.032)));\n"
+        "}\n"
+        "\n"
+        "float jg_k19(vec2 uv) { // te\n"
+        "    float d = jg_l(uv, vec2(-0.25, -0.29), vec2(0.25, -0.29));\n"
+        "    d = min(d, jg_l(uv, vec2(-0.33, -0.0704), vec2(0.33, -0.07)));\n"
+        "    return min(d, jg_s(uv, vec2(-0.225, 0.32), vec2(0.029, 0.261),vec2(0.03, -0.068)));\n"
+        "}\n"
+        "\n"
+        "float jg_k20(vec2 uv) { // to\n"
+        "    float d = jg_s(uv, vec2(-0.159, -0.093), vec2(0.104, -0.02),vec2(0.294, 0.08));\n"
+        "    return min(d, jg_l(uv, vec2(-0.16, -0.3254), vec2(-0.16, 0.32)));\n"
+        "}\n"
+        "\n"
+        "float jg_k21(vec2 uv) { // na\n"
+        "    float d = jg_s(uv, vec2(-0.252, 0.32), vec2(0.045, 0.253),vec2(0.039, -0.118));\n"
+        "    d = min(d, jg_l(uv, vec2(0.039, -0.1141), vec2(0.0393, -0.33)));\n"
+        "    d = min(d, jg_l(uv, vec2(-0.32, -0.12), vec2(0.33, -0.12)));\n"
+        "    return d;\n"
+        "}\n"
+        "\n"
+        "float jg_k22(vec2 uv) { // ni\n"
+        "    float d = jg_l(uv, vec2(-0.24, -0.23), vec2(0.25, -0.23));\n"
+        "    d = min(d, jg_l(uv, vec2(-0.33, 0.24), vec2(0.33, 0.24)));\n"
+        "    return d;\n"
+        "}\n"
+        "\n"
+        "float jg_k23(vec2 uv) { // nu\n"
+        "    float d = jg_s(uv, vec2(-0.268, 0.311), vec2(0.178, 0.145),vec2(0.266, -0.28));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.143, -0.092), vec2(0.125, 0.079),vec2(0.253, 0.23)));\n"
+        "    return min(d, jg_l(uv, vec2(-0.2553, -0.28), vec2(0.2661, -0.28)));\n"
+        "}\n"
+        "\n"
+        "float jg_k24(vec2 uv) { // ne\n"
+        "    float d = jg_l(uv, vec2(0, -0.2201), vec2(0, -0.35));\n"
+        "    d = min(d, jg_l(uv, vec2(0, 0.0031), vec2(0, 0.34)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.327, 0.144), vec2(0.134, -0.013),vec2(0.25, -0.219)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.333, 0.161), vec2(0.125, 0.041),vec2(0, 0.005)));\n"
+        "    return min(d, jg_l(uv, vec2(-0.27, -0.22), vec2(0.25, -0.22)));\n"
+        "}\n"
+        "\n"
+        "float jg_k25(vec2 uv) { // no\n"
+        "    return jg_s(uv, vec2(-0.284, 0.284), vec2(0.19, 0.094),vec2(0.24, -0.294));\n"
+        "}\n"
+        "\n"
+        "float jg_k26(vec2 uv) { // ha\n"
+        "    uv.x = -abs(uv.x);\n"
+        "    return jg_s(uv, vec2(-0.329, 0.271), vec2(-0.178, 0.12946),vec2(-0.148, -0.283));\n"
+        "}\n"
+        "\n"
+        "float jg_k27(vec2 uv) { // hi\n"
+        "    float d = jg_s(uv, vec2(0.269, 0.262), vec2(-0.208, 0.326),vec2(-0.21, 0.18));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.212, -0.049), vec2(0.057, -0.09),vec2(0.235, -0.186)));\n"
+        "    return min(d, jg_l(uv, vec2(-0.2159, -0.3062), vec2(-0.21, 0.18)));\n"
+        "}\n"
+        "\n"
+        "float jg_k28(vec2 uv) { // fu\n"
+        "    float d = jg_s(uv, vec2(-0.193, 0.302), vec2(0.298, 0.141),vec2(0.28, -0.27));\n"
+        "    return min(d, jg_l(uv, vec2(-0.28, -0.27), vec2(0.28, -0.27)));\n"
+        "}\n"
+        "\n"
+        "float jg_k29(vec2 uv) { // he\n"
+        "    float d = jg_l(uv, vec2(-0.0793, -0.222), vec2(0.3384, 0.2195));\n"
+        "    return min(d, jg_l(uv, vec2(-0.0793, -0.222), vec2(-0.3366, 0.0766)));\n"
+        "}\n"
+        "\n"
+        "float jg_k30(vec2 uv) { // ho\n"
+        "    float d = jg_l(uv, vec2(0, -0.33), vec2(0, 0.32));\n"
+        "    d = min(d, jg_l(uv, vec2(-0.33, -0.21), vec2(0.33, -0.21)));\n"
+        "    uv.x = -abs(uv.x);\n"
+        "    return min(d, jg_s(uv, vec2(-0.328, 0.249), vec2(-0.215, 0.059),vec2(-0.208, -0.047)));\n"
+        "}\n"
+        "\n"
+        "float jg_k31(vec2 uv) { // ma\n"
+        "    float d = jg_s(uv, vec2(0.31, -0.25), vec2(0.311, -0.135),vec2(-0.024, 0.136));\n"
+        "    d = min(d, jg_s(uv, vec2(0.115, 0.314), vec2(-0.009, 0.136),vec2(-0.208, -0.047)));\n"
+        "    return min(d, jg_l(uv, vec2(-0.32, -0.25), vec2(0.31, -0.25)));\n"
+        "}\n"
+        "\n"
+        "float jg_k32(vec2 uv) { // mi\n"
+        "    float d = jg_s(uv, vec2(-0.211, -0.303), vec2(0.055, -0.276),vec2(0.249, -0.215));\n"
+        "    d = min(d, jg_s(uv, vec2(0.219, 0.019), vec2(-0.017, -0.05),vec2(-0.228, -0.072)));\n"
+        "    return min(d, jg_s(uv, vec2(0.27, 0.309), vec2(-0.017, 0.211),vec2(-0.288, 0.174)));\n"
+        "}\n"
+        "\n"
+        "float jg_k33(vec2 uv) { // mu\n"
+        "    float d = jg_s(uv, vec2(-0.335, 0.265), vec2(0.068, 0.262),vec2(0.287, 0.198));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.244, 0.264), vec2(-0.139, 0.064),vec2(-0.021, -0.331)));\n"
+        "    return min(d, jg_s(uv, vec2(0.33, 0.304), vec2(0.253, 0.09),vec2(0.128, -0.094)));\n"
+        "}\n"
+        "\n"
+        "float jg_k34(vec2 uv) { // me\n"
+        "    float d = jg_s(uv, vec2(-0.283, 0.293), vec2(0.069, 0.165),vec2(0.219, -0.315));\n"
+        "    return min(d, jg_s(uv, vec2(-0.19, -0.191), vec2(0.076, -0.021),vec2(0.258, 0.211)));\n"
+        "}\n"
+        "\n"
+        "float jg_k35(vec2 uv) { // mo\n"
+        "    float d = jg_l(uv, vec2(-0.28, -0.28), vec2(0.28, -0.28));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.07, 0.171), vec2(-0.077, 0.351),vec2(0.32, 0.267)));\n"
+        "    d = min(d, jg_l(uv, vec2(-0.07, -0.28), vec2(-0.07, 0.17)));\n"
+        "    return min(d, jg_l(uv, vec2(-0.32, -0.04), vec2(0.33, -0.04)));\n"
+        "}\n"
+        "\n"
+        "float jg_k36(vec2 uv) { // ya\n"
+        "    float d = jg_l(uv, vec2(-0.1546, -0.3368), vec2(-0.0156, 0.3389));\n"
+        "    d = min(d, jg_s(uv, vec2(0.107, 0.07), vec2(0.41, -0.144),vec2(0.265, -0.222)));\n"
+        "    return min(d,jg_l(uv, vec2(-0.325, -0.1285), vec2(0.2631, -0.2219)));\n"
+        "}\n"
+        "\n"
+        "float jg_k37(vec2 uv) { // yu\n"
+        "    float d = jg_s(uv, vec2(0.103, 0.239), vec2(0.216, -0.251),vec2(0.143, -0.248));\n"
+        "    d = min(d, jg_l(uv, vec2(-0.26, -0.25), vec2(0.1425, -0.248)));\n"
+        "    return min(d, jg_l(uv, vec2(-0.33, 0.24), vec2(0.34, 0.24)));\n"
+        "}\n"
+        "\n"
+        "float jg_k38(vec2 p) { // yo\n"
+        "    const vec2 a = vec2(0);\n"
+        "    const float b = 0.25;\n"
+        "    float c = abs(p.y)-0.25;\n"
+        "\n"
+        "    float d = length(max(vec2(abs(c),p.x-b),a));\n"
+        "    float d1 = min(d, length(max(vec2(abs(p.y),p.x-b),a)));\n"
+        "    d = min(d, length(max(vec2(abs(p.x-b),c),a)));\n"
+        "    d = length(max(vec2(d,-p.x-0.25),a));\n"
+        "    return min(d,length(max(vec2(d1,-p.x-0.22),a)));\n"
+        "}\n"
+        "\n"
+        "float jg_k39(vec2 uv) { // ra\n"
+        "    float d = jg_s(uv, vec2(0.27, -0.1), vec2(0.264, 0.221),vec2(-0.159, 0.319));\n"
+        "    d = min(d, jg_l(uv, vec2(-0.3, -0.1), vec2(0.27, -0.1)));\n"
+        "    return min(d, jg_l(uv, vec2(-0.23, -0.3), vec2(0.23, -0.3)));\n"
+        "}\n"
+        "\n"
+        "float jg_k40(vec2 uv) { // ri\n"
+        "    float d = jg_l(uv, vec2(-0.21, -0.31), vec2(-0.21, 0.06));\n"
+        "    d = min(d, jg_s(uv, vec2(0.21, -0.07), vec2(0.218, 0.254),vec2(-0.148, 0.317)));\n"
+        "    return min(d, jg_l(uv, vec2(0.21, -0.31), vec2(0.21, -0.07)));\n"
+        "}\n"
+        "\n"
+        "float jg_k41(vec2 uv) { // ru\n"
+        "    float d = jg_s(uv, vec2(0.05, 0.237), vec2(0.109, 0.416),vec2(0.354, 0.052));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.169, -0.301), vec2(-0.144, 0.2),vec2(-0.322, 0.317)));\n"
+        "    return min(d, jg_l(uv, vec2(0.05, -0.31), vec2(0.05, 0.2371)));\n"
+        "}\n"
+        "\n"
+        "float jg_k42(vec2 uv) { // re\n"
+        "    float d = jg_s(uv, vec2(-0.21, 0.237), vec2(-0.216, 0.348),vec2(0.003, 0.26));\n"
+        "    d = min(d, jg_s(uv, vec2(0, 0.261), vec2(0.171, 0.192),vec2(0.322, -0.021)));\n"
+        "    return min(d, jg_l(uv, vec2(-0.21, -0.31), vec2(-0.21, 0.2371)));\n"
+        "}\n"
+        "\n"
+        "float jg_k43(vec2 uv) { // ro\n"
+        "    return abs(jg_sd_box(uv ,vec2(0.25,0.25)));\n"
+        "}\n"
+        "\n"
+        "float jg_k44(vec2 uv) { // wa\n"
+        "    float d = jg_l(uv, vec2(-0.271, -0.28), vec2(-0.271, -0.04));\n"
+        "    d = min(d, jg_s(uv, vec2(0.28, -0.28), vec2(0.303, 0.193),vec2(-0.115, 0.313)));\n"
+        "    return min(d, jg_l(uv, vec2(-0.271, -0.28), vec2(0.28, -0.28)));\n"
+        "}\n"
+        "\n"
+        "float jg_k45(vec2 uv) { // wo\n"
+        "    return min(jg_l(uv, vec2(-0.255, -0.058), vec2(0.25, -0.058)),jg_k28(uv));\n"
+        "}\n"
+        "\n"
+        "float jg_k46(vec2 uv) { // n\n"
+        "    float d = jg_s(uv, vec2(0.313, -0.196), vec2(0.221, 0.217),vec2(-0.267, 0.279));\n"
+        "    return min(d, jg_s(uv, vec2(-0.078, -0.099), vec2(-0.14, -0.181),vec2(-0.273, -0.268)));\n"
+        "}\n"
+        "\n"
+        "// Hiragana\n"
+        "\n"
+        "float jg_h1(vec2 uv) { // a\n"
+        "    float d = jg_s(uv, vec2(-0.175, 0.287), vec2(-0.318, 0.318),vec2(-0.306, 0.19));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.306, 0.189), vec2(-0.266, -0.062),vec2(0.044, -0.082)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.044, -0.082), vec2(0.264, -0.083),vec2(0.297, 0.071)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.175, 0.287), vec2(0.013, 0.225),vec2(0.105, -0.135)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.292, -0.237), vec2(0.022, -0.228),vec2(0.243, -0.266)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.097, -0.348), vec2(-0.131, 0.113),vec2(-0.035, 0.28)));\n"
+        "    return min(d, jg_s(uv, vec2(0.033, 0.333), vec2(0.333, 0.299),vec2(0.297, 0.071)));\n"
+        "}\n"
+        "\n"
+        "float jg_h2(vec2 uv) { // i\n"
+        "    float d = jg_s(uv, vec2(-0.121, 0.271), vec2(-0.309, 0.317),vec2(-0.292, -0.274));\n"
+        "    d = min(d, jg_s(uv, vec2(0.319, 0.198), vec2(0.304, -0.062),vec2(0.175, -0.231)));\n"
+        "    return min(d, jg_s(uv, vec2(-0.121, 0.271), vec2(-0.037, 0.246),vec2(-0.028, 0.084)));\n"
+        "}\n"
+        "\n"
+        "float jg_h3(vec2 uv) { // u\n"
+        "    float d = jg_s(uv, vec2(0.217, 0.143), vec2(0.12, 0.291),vec2(-0.129, 0.314));\n"
+        "    d = min(d, jg_s(uv, vec2(0.198, -0.084), vec2(0.306, -0.01),vec2(0.218, 0.141)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.195, -0.327), vec2(-0.037, -0.298),vec2(0.175, -0.283)));\n"
+        "    return min(d, jg_s(uv, vec2(0.197, -0.085), vec2(0.072, -0.162),vec2(-0.274, -0.065)));\n"
+        "}\n"
+        "\n"
+        "float jg_h4(vec2 uv) { // e\n"
+        "    float d = jg_s(uv, vec2(0.093, 0.171), vec2(0.101, 0.386),vec2(0.345, 0.277));\n"
+        "    d = min(d, jg_s(uv, vec2(0.093, 0.17), vec2(0.081, -0.032),vec2(-0.311, 0.298)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.173, -0.337), vec2(-0.037, -0.298),vec2(0.175, -0.283)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.165, -0.151), vec2(0.065, -0.14),vec2(-0.253, -0.119)));\n"
+        "    return min(d, jg_l(uv, vec2(0.1651, -0.1503), vec2(-0.3101, 0.2973)));\n"
+        "}\n"
+        "\n"
+        "float jg_h5(vec2 uv) { // o\n"
+        "    float d = jg_s(uv, vec2(-0.103, 0.022), vec2(0.111, -0.047),vec2(0.23, 0.027));\n"
+        "    d = min(d, jg_s(uv, vec2(0.23, 0.027), vec2(0.357, 0.119),vec2(0.263, 0.249)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.286, 0.265), vec2(-0.414, 0.155),vec2(-0.104, 0.022)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.12, 0.192), vec2(-0.121, 0.383),vec2(-0.286, 0.265)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.262, 0.25), vec2(0.158, 0.376),vec2(0.033, 0.244)));\n"
+        "    d = min(d,jg_s(uv, vec2(-0.305, -0.181), vec2(-0.074, -0.182),vec2(0.073, -0.214)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.337, -0.131), vec2(0.27, -0.219),vec2(0.169, -0.277)));\n"
+        "    return min(d, jg_l(uv, vec2(-0.12, -0.3504), vec2(-0.12, 0.19)));\n"
+        "}\n"
+        "\n"
+        "float jg_h6(vec2 uv) { // ka\n"
+        "    float d = jg_s(uv, vec2(-0.342, -0.13), vec2(-0.206, -0.147),vec2(-0.112, -0.156));\n"
+        "    d = min(d, jg_s(uv, vec2(0.094, -0.046), vec2(0.082, -0.181),vec2(-0.11, -0.156)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.06, 0.239), vec2(0.107, 0.114),vec2(0.094, -0.045)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.06, 0.239), vec2(0.02, 0.345),vec2(-0.145, 0.271)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.34, 0.083), vec2(0.274, -0.103),vec2(0.176, -0.235)));\n"
+        "    return min(d, jg_s(uv, vec2(-0.104, -0.341), vec2(-0.184, 0.092),vec2(-0.326, 0.304)));\n"
+        "}\n"
+        "\n"
+        "float jg_h7(vec2 uv) { // ki\n"
+        "    float d = jg_s(uv, vec2(-0.048, -0.349), vec2(0.091, -0.023),vec2(0.239, 0.124));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.149, 0.087), vec2(0.033, 0.036),vec2(0.239, 0.124)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.241, 0.176), vec2(-0.237, 0.116),vec2(-0.149, 0.087)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.291, -0.051), vec2(-0.031, -0.05),vec2(0.294, -0.127)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.29, -0.209), vec2(0.027, -0.217),vec2(0.239, -0.278)));\n"
+        "    return min(d, jg_s(uv, vec2(0.201, 0.288), vec2(-0.252, 0.38),vec2(-0.241, 0.176)));\n"
+        "}\n"
+        "\n"
+        "float jg_h8(vec2 uv) { // ku\n"
+        "    float d = jg_s(uv, vec2(0.147, -0.329), vec2(0.018, -0.207),vec2(-0.186, -0.07));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.186, -0.07), vec2(-0.254, -0.02),vec2(-0.191, 0.025)));\n"
+        "    return min(d, jg_s(uv, vec2(-0.19, 0.026), vec2(0.028947, 0.168335),vec2(0.183612, 0.325139)));\n"
+        "}\n"
+        "\n"
+        "float jg_h9(vec2 uv) { // ke\n"
+        "    float d = jg_s(uv, vec2(0.183, -0.332), vec2(0.265, 0.268),vec2(-0.009, 0.328));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.099, -0.136), vec2(0.076, -0.12),vec2(0.332, -0.158)));\n"
+        "    return min(d, jg_s(uv, vec2(-0.229, -0.323), vec2(-0.309, 0.089),vec2(-0.235, 0.298)));\n"
+        "}\n"
+        "\n"
+        "float jg_h10(vec2 uv) { // ko\n"
+        "    float d = jg_s(uv, vec2(-0.225, -0.272), vec2(0.00429, -0.252796),vec2(0.208268, -0.268477));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.002435, -0.145273), vec2(0.093951, -0.205755),vec2(0.208268, -0.266237)));\n"
+        "    return min(d, jg_s(uv, vec2(0.266548, 0.255698), vec2(-0.452981, 0.36098),vec2(-0.195206, 0.009291)));\n"
+        "}\n"
+        "\n"
+        "float jg_h11(vec2 uv) { // sa\n"
+        "    float d = jg_s(uv, vec2(-0.048, -0.349), vec2(0.091, -0.023),vec2(0.239, 0.124));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.149, 0.087), vec2(0.033, 0.036),vec2(0.239, 0.124)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.241, 0.176), vec2(-0.237, 0.116),vec2(-0.149, 0.087)));\n"
+        "    d = min(d,jg_s(uv, vec2(-0.300558, -0.165434), vec2(-0.011401, -0.149753),vec2(0.275514, -0.234876)));\n"
+        "    return min(d, jg_s(uv, vec2(0.201, 0.288), vec2(-0.252, 0.38),vec2(-0.241, 0.176)));\n"
+        "}\n"
+        "\n"
+        "float jg_h12(vec2 uv) { // shi\n"
+        "    float d = jg_s(uv, vec2(-0.068, 0.306), vec2(-0.201, 0.289),vec2(-0.2, 0.072));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.065, 0.306), vec2(0.201, 0.343),vec2(0.306895, 0.038412)));\n"
+        "    return min(d, jg_l(uv, vec2(-0.2, 0.07), vec2(-0.19, -0.33)));\n"
+        "}\n"
+        "\n"
+        "float jg_h13(vec2 uv) { // su\n"
+        "    float d = jg_s(uv, vec2(0.08, -0.056), vec2(0.076019, 0.125774),vec2(-0.051748, 0.136974));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.053, 0.137), vec2(-0.191, 0.142),vec2(-0.18, 0.004)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.18, 0.004), vec2(-0.172, -0.057),vec2(-0.126, -0.082)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.044, -0.048), vec2(-0.038, -0.126),vec2(-0.124, -0.083)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.04, -0.052), vec2(0.124, 0.039),vec2(0.088, 0.146)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.087226, 0.148175), vec2(0.046, 0.276),vec2(-0.149, 0.316)));\n"
+        "    d = min(d,jg_s(uv, vec2(0.336035, -0.230396), vec2(-0.002435, -0.234876),vec2(-0.340905, -0.214715)));\n"
+        "    return min(d, jg_l(uv, vec2(0.08, -0.0559), vec2(0.08, -0.35)));\n"
+        "}\n"
+        "\n"
+        "float jg_h14(vec2 uv) { // se\n"
+        "    float d = jg_s(uv, vec2(0.353967, -0.147513), vec2(0.015497, -0.136313),vec2(-0.352113, -0.113912));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.18, 0.163), vec2(-0.179515, 0.3565),vec2(0.282239, 0.264658)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.146, 0.08), vec2(0.188095, 0.027211),vec2(0.179129, -0.328958)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.146, 0.08), vec2(0.097, 0.135),vec2(-0.018126, 0.072013)));\n"
+        "    return min(d, jg_l(uv, vec2(-0.18, -0.31), vec2(-0.18, 0.16)));\n"
+        "}\n"
+        "\n"
+        "float jg_h15(vec2 uv) { // so\n"
+        "    float d = jg_s(uv, vec2(0.174646, -0.31), vec2(-0.015884, -0.291),vec2(-0.215, -0.299));\n"
+        "    d = min(d, jg_s(uv, vec2(0.174646, -0.31), vec2(-0.097, -0.062),vec2(-0.332, -0.006)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.33, -0.062), vec2(0.042, -0.057),vec2(-0.332, -0.006)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.209, 0.309459), vec2(-0.077, 0.313),vec2(-0.068, 0.163)));\n"
+        "    return min(d, jg_s(uv, vec2(-0.068, 0.162), vec2(-0.056231, 0.013771),vec2(0.33, -0.062)));\n"
+        "}\n"
+        "\n"
+        "float jg_h16(vec2 uv) { // ta\n"
+        "    float d = jg_s(uv, vec2(0.067052, -0.223675), vec2(-0.139168, -0.190074),vec2(-0.331939, -0.194555));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.309524, 0.296019), vec2(-0.192964, 0.058572),vec2(-0.114511, -0.353599)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.291205, -0.104952), vec2(0.129815, -0.111672),vec2(0.008773, -0.087032)));\n"
+        "    return min(d, jg_s(uv, vec2(-0.015884, 0.103373), vec2(-0.177274, 0.36098),vec2(0.322586, 0.289298)));\n"
+        "}\n"
+        "\n"
+        "float jg_h17(vec2 uv) { // chi\n"
+        "    float d = jg_s(uv, vec2(-0.237155, 0.111585), vec2(-0.124465, -0.108956),vec2(-0.054034, -0.343574));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.305239, -0.205149), vec2(-0.082206, -0.193419),vec2(0.255865, -0.226265)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.241779, 0.048238), vec2(0.061, -0.086),vec2(-0.236, 0.111)));\n"
+        "    d = min(d,jg_s(uv, vec2(0.243, 0.23), vec2(0.139, 0.362),vec2(-0.194, 0.278164)));\n"
+        "    return min(d, jg_s(uv, vec2(0.243, 0.23), vec2(0.323, 0.113),vec2(0.243, 0.049)));\n"
+        "}\n"
+        "\n"
+        "float jg_h18(vec2 uv) { // tsu\n"
+        "    float d = jg_s(uv, vec2(0.3, -0.072), vec2(0.237, -0.307),vec2(-0.324021, -0.165264));\n"
+        "    d = min(d, jg_s(uv, vec2(0.188, 0.182), vec2(0.324, 0.099),vec2(0.300471, -0.066725)));\n"
+        "    return min(d, jg_s(uv, vec2(-0.145594, 0.251), vec2(0.047, 0.253),vec2(0.186, 0.183)));\n"
+        "}\n"
+        "\n"
+        "float jg_h19(vec2 uv) { // te\n"
+        "    float d = jg_s(uv, vec2(0.326296, -0.275535), vec2(0.190129, -0.280227),vec2(-0.316978, -0.233304));\n"
+        "    d = min(d, jg_s(uv, vec2(0.324, -0.274), vec2(-0.063424, -0.179),vec2(-0.071, 0.045)));\n"
+        "    return min(d, jg_s(uv, vec2(-0.071, 0.048), vec2(-0.077, 0.259),vec2(0.227692, 0.292241)));\n"
+        "}\n"
+        "\n"
+        "float jg_h20(vec2 uv) { // to\n"
+        "    float d = jg_s(uv, vec2(-0.256, 0.164), vec2(-0.26298, -0.045609),vec2(0.234735, -0.160572));\n"
+        "    d = min(d, jg_s(uv, vec2(0.255, 0.274), vec2(-0.235, 0.353242),vec2(-0.256, 0.166)));\n"
+        "    return min(d, jg_s(uv, vec2(-0.132, -0.336536), vec2(-0.099, -0.158226),vec2(-0.062, -0.066)));\n"
+        "}\n"
+        "\n"
+        "float jg_h21(vec2 uv) { // na\n"
+        "    float d = jg_s(uv, vec2(-0.333, -0.191072), vec2(-0.183158, -0.193419),vec2(0.011702, -0.212188));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.325, 0.195), vec2(-0.205, 0.013),vec2(-0.118, -0.355)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.131436, -0.233304), vec2(0.248822, -0.188726),vec2(0.323949, -0.132418)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.028209, 0.315703), vec2(0.161956, 0.357934),vec2(0.161956, 0.20074)));\n"
+        "    d = min(d,jg_s(uv, vec2(-0.032, 0.315), vec2(-0.162, 0.274),vec2(-0.098, 0.164)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.333, 0.259395), vec2(0.251, 0.171),vec2(0.128, 0.129)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.096292, 0.160855), vec2(-0.041, 0.079),vec2(0.128, 0.129)));\n"
+        "    return min(d, jg_l(uv, vec2(0.161956, 0.198394), vec2(0.143175, -0.083148)));\n"
+        "}\n"
+        "\n"
+        "float jg_h22(vec2 uv) { // ni\n"
+        "    float d = jg_s(uv, vec2(-0.251242, 0.322742), vec2(-0.312282, 0.02243),vec2(-0.23246, -0.327151));\n"
+        "    d = min(d, jg_s(uv, vec2(0.288733, -0.230957), vec2(0.086829, -0.207496),vec2(-0.063424, -0.219227)));\n"
+        "    return min(d, jg_s(uv, vec2(0.324, 0.24), vec2(-0.25, 0.329),vec2(-0.032, 0.024)));\n"
+        "}\n"
+        "\n"
+        "float jg_h23(vec2 uv) { // nu\n"
+        "    float d = jg_s(uv, vec2(-0.071, 0.214817), vec2(-0.214, -0.052648),vec2(-0.230112, -0.294304));\n"
+        "    d = min(d, jg_s(uv, vec2(0.070395, -0.33419), vec2(0.025789, 0.010699),vec2(-0.151, 0.224)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.284, 0.239), vec2(-0.212, 0.285),vec2(-0.152, 0.225)));\n"
+        "    d = min(d,jg_s(uv, vec2(-0.04, -0.194), vec2(-0.171, -0.165264),vec2(-0.241, -0.081)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.284037, -0.073763), vec2(0.187781, -0.233304),vec2(-0.04, -0.194)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.268, 0.214), vec2(0.354, 0.082),vec2(0.285, -0.072)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.268, 0.214), vec2(0.163, 0.35),vec2(0.058, 0.261)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.056, 0.144), vec2(0.004, 0.199),vec2(0.058, 0.261)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.057, 0.143), vec2(0.173, 0.043),vec2(0.367, 0.271)));\n"
+        "    return min(d, jg_s(uv, vec2(-0.284, 0.239), vec2(-0.415, 0.138),vec2(-0.242, -0.08)));\n"
+        "}\n"
+        "\n"
+        "float jg_h24(vec2 uv) { // ne\n"
+        "    float d = jg_s(uv, vec2(-0.183158, -0.34592), vec2(-0.20194, 0.076392),vec2(-0.194896, 0.334473));\n"
+        "    d = min(d, jg_s(uv, vec2(0.183, -0.196), vec2(0.011, -0.27),vec2(-0.354, 0.189)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.028137, 0.287549), vec2(0.24, 0.369),vec2(0.283, 0.132)));\n"
+        "    d = min(d,jg_s(uv, vec2(-0.006, 0.173), vec2(-0.043, 0.25),vec2(0.027, 0.287)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.153, 0.123), vec2(0.032, 0.099),vec2(-0.006, 0.173)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.183, -0.196), vec2(0.32, -0.135),vec2(0.283, 0.132)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.376, 0.28), vec2(0.301, 0.16),vec2(0.153, 0.123)));\n"
+        "    d = min(d, jg_l(uv, vec2(-0.157333, -0.193419), vec2(-0.1908, -0.1535)));\n"
+        "    return min(d, jg_l(uv, vec2(-0.157333, -0.193419), vec2(-0.340455, -0.174649)));\n"
+        "}\n"
+        "\n"
+        "float jg_h25(vec2 uv) { // no\n"
+        "    float d = jg_s(uv, vec2(0.008, -0.284), vec2(-0.042536, 0.308529),vec2(-0.225215, 0.238869));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.31, -0.036), vec2(-0.361, 0.174012),vec2(-0.225215, 0.238869)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.008, -0.284), vec2(-0.226, -0.28),vec2(-0.31, -0.036)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.313, -0.032), vec2(0.338, 0.241),vec2(0.021, 0.298)));\n"
+        "    return min(d, jg_s(uv, vec2(0.008, -0.284), vec2(0.289169, -0.275179),vec2(0.313, -0.032)));\n"
+        "}\n"
+        "\n"
+        "float jg_h26(vec2 uv) { // ha\n"
+        "    float d = jg_s(uv, vec2(-0.256402, 0.326023), vec2(-0.338065, 0.035291),vec2(-0.239389, -0.335351));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.113493, -0.165332), vec2(0.196145, -0.167032),vec2(0.328846, -0.184034)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.042, 0.125), vec2(0.105975, 0.042091),vec2(0.350963, 0.247815)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.066, 0.27), vec2(-0.128, 0.18),vec2(-0.042, 0.125)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.066, 0.27), vec2(0, 0.336),vec2(0.097, 0.298)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.179132, 0.174706), vec2(0.180833, 0.264817),vec2(0.097, 0.298)));\n"
+        "    return min(d, jg_l(uv, vec2(0.16, -0.338752), vec2(0.179132, 0.174706)));\n"
+        "}\n"
+        "\n"
+        "float jg_h27(vec2 uv) { // hi\n"
+        "    float d = jg_s(uv, vec2(-0.322753, -0.262243), vec2(-0.20196, -0.255442),vec2(-0.050544, -0.297947));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.050544, -0.297947), vec2(-0.397, 0.085),vec2(-0.215571, 0.261416)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.215571, 0.261416), vec2(-0.142, 0.334),vec2(0.002, 0.299)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.128, -0.295), vec2(0.253989, -0.031017),vec2(0.354366, 0.013188)));\n"
+        "    return min(d, jg_s(uv, vec2(0.002, 0.299), vec2(0.274404, 0.222),vec2(0.128, -0.295)));\n"
+        "}\n"
+        "\n"
+        "float jg_h28(vec2 uv) { // fu\n"
+        "    float d = jg_s(uv, vec2(-0.336363, 0.275018), vec2(-0.252999, 0.076095),vec2(-0.244493, -0.010615));\n"
+        "    d = min(d, jg_s(uv, vec2(0.167222, -0.255442), vec2(-0.026726, -0.255442),vec2(-0.198558, -0.314949)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.167222, -0.255442), vec2(-0.166233, -0.14323),vec2(-0.009713, 0.009788)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.009713, 0.009788), vec2(0.235274, 0.241014),vec2(0, 0.310722)));\n"
+        "    d = min(d, jg_s(uv, vec2(0, 0.310722), vec2(-0.125402, 0.334524),vec2(-0.181545, 0.237613)));\n"
+        "    return min(d, jg_s(uv, vec2(0.342457, 0.261416), vec2(0.311833, 0.106699),vec2(0.219963, -0.017415)));\n"
+        "}\n"
+        "\n"
+        "float jg_h29(vec2 uv) { // he\n"
+        "    float d = jg_s(uv, vec2(-0.030129, -0.173833), vec2(-0.101583, -0.267344),vec2(-0.171337, -0.163632));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.030129, -0.173833), vec2(0.175729, 0.084596),vec2(0.35947, 0.225712)));\n"
+        "    return min(d, jg_l(uv, vec2(-0.351675, 0.081196), vec2(-0.171337, -0.163632)));\n"
+        "}\n"
+        "\n"
+        "float jg_h30(vec2 uv) { // ho\n"
+        "    float d = jg_s(uv, vec2(-0.256402, 0.326023), vec2(-0.338065, 0.035291),vec2(-0.239389, -0.335351));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.042, 0.125), vec2(0.105975, 0.042091),vec2(0.350963, 0.247815)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.066, 0.27), vec2(-0.128, 0.18),vec2(-0.042, 0.125)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.066, 0.27), vec2(0, 0.336),vec2(0.097, 0.298)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.179132, 0.174706), vec2(0.180833, 0.264817),vec2(0.097, 0.298)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.310132, -0.301347), vec2(0.078755, -0.272444),vec2(-0.087973, -0.284346)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.093077, -0.085423), vec2(0.100872, -0.073522),vec2(0.318638, -0.102425)));\n"
+        "    return min(d, jg_l(uv, vec2(0.16, -0.285), vec2(0.179132, 0.174706)));\n"
+        "}\n"
+        "\n"
+        "float jg_h31(vec2 uv) { // ma\n"
+        "    float d = jg_s(uv, vec2(-0.289987, -0.236059), vec2(0.088339, -0.219379),vec2(0.290021, -0.254129));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.281642, -0.066479), vec2(0.022967, -0.055359),vec2(0.291412, -0.088719)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.301148, 0.27685), vec2(0.032703, 0.053061),vec2(-0.200969, 0.121171)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.200969, 0.121171), vec2(-0.288596, 0.15592),vec2(-0.26356, 0.23237)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.26356, 0.23237), vec2(-0.214757, 0.327384),vec2(-0.076284, 0.311293)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.076284, 0.311293), vec2(0.039647, 0.283938),vec2(0.027139, 0.16426)));\n"
+        "    return min(d, jg_l(uv, vec2(0.01184, -0.348649), vec2(0.027139, 0.16426)));\n"
+        "}\n"
+        "\n"
+        "float jg_h32(vec2 uv) { // mi\n"
+        "    float d = jg_s(uv, vec2(-0.05, -0.31), vec2(0.010664, -0.313037),vec2(-0.008658, -0.232582));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.008658, -0.232582), vec2(-0.079504, 0.081192),vec2(-0.16, 0.19061)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.16, 0.19061), vec2(-0.27, 0.309),vec2(-0.321026, 0.176129)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.321026, 0.176129), vec2(-0.36, 0.07),vec2(-0.25179, -0.005699)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.25179, -0.005699), vec2(-0.005438, -0.1473),vec2(0.353625, 0.143947)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.239305, -0.190745), vec2(0.242525, 0.235665),vec2(0.012274, 0.322556)));\n"
+        "    return min(d, jg_l(uv, vec2(-0.27, -0.3), vec2(-0.05, -0.31)));\n"
+        "}\n"
+        "\n"
+        "float jg_h33(vec2 uv) { // mu\n"
+        "    float d = jg_s(uv, vec2(-0.303541, -0.22891), vec2(-0.141159, -0.225933),vec2(0.062935, -0.243798));\n"
+        "    d = min(d, jg_s(uv, vec2(0.189563, -0.267618), vec2(0.261071, -0.212534),vec2(0.334068, -0.10832)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.140402, 0.302581), vec2(0.337048, 0.251962),vec2(0.222338, 0.048001)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.140402, 0.302581), vec2(0.003346, 0.32789),vec2(-0.13818, 0.305558)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.13818, 0.305558), vec2(-0.240972, 0.26685),vec2(-0.157547, 0.131372)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.157547, 0.131372), vec2(-0.036, -0.081522),vec2(-0.211177, -0.0845)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.211177, -0.0845), vec2(-0.332589, -0.069282),vec2(-0.316597, 0.06841)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.316597, 0.06841), vec2(-0.301834, 0.175368),vec2(-0.209569, 0.147092)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.209569, 0.147092), vec2(-0.154, 0.129),vec2(-0.126, 0.06841)));\n"
+        "    return min(d, jg_l(uv, vec2(-0.133711, -0.066), vec2(-0.130731, -0.343545)));\n"
+        "}\n"
+        "\n"
+        "float jg_h34(vec2 uv) { // me\n"
+        "    float d = jg_s(uv, vec2(-0.031688, 0.203557), vec2(-0.129642, 0.119877),vec2(-0.205478, -0.312734));\n"
+        "    d = min(d, jg_s(uv, vec2(0.101024, -0.341154), vec2(0.00465, 0.197241),vec2(-0.197578, 0.247765)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.197578, 0.247765), vec2(-0.32397, 0.261975),vec2(-0.319231, 0.108824)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.319231, 0.108824), vec2(-0.317651, -0.056957),vec2(-0.15966, -0.15169)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.15966, -0.15169), vec2(0.097864, -0.27642),vec2(0.262174, -0.121691)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.262174, -0.121691), vec2(0.377507, 0.006198),vec2(0.279553, 0.160927)));\n"
+        "    return min(d, jg_s(uv, vec2(0.279553, 0.160927), vec2(0.198978, 0.280922),vec2(0.00623, 0.307762)));\n"
+        "}\n"
+        "\n"
+        "float jg_h35(vec2 uv) { // mo\n"
+        "    float d = jg_s(uv, vec2(-0.284473, -0.214844), vec2(-0.071186, -0.183267),vec2(0.131042, -0.202213));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.311331, -0.008012), vec2(-0.112263, 0.026723),vec2(0.115243, 0.012513)));\n"
+        "    d = min(d, jg_l(uv, vec2(-0.072766, -0.341154), vec2(-0.143861, 0.081984)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.143861, 0.081984), vec2(-0.1723, 0.329867),vec2(0.037828, 0.320393)));\n"
+        "    return min(d, jg_s(uv, vec2(0.037828, 0.320393), vec2(0.402785, 0.315657),vec2(0.230576, -0.017485)));\n"
+        "\n"
+        "}\n"
+        "\n"
+        "float jg_h36(vec2 uv) { // ya\n"
+        "    float d = jg_s(uv, vec2(-0.230756, -0.317471), vec2(-0.082245, 0.113561),vec2(-0.044327, 0.340919));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.33187, -0.069588), vec2(-0.012729, -0.227475),vec2(0.184, -0.211687)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.32063, -0.058536), vec2(0.344329, -0.188004),vec2(0.184, -0.211687)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.32063, -0.058536), vec2(0.279553, 0.148296),vec2(0.028348, 0.066195)));\n"
+        "    return min(d, jg_l(uv, vec2(0.061526, -0.352206), vec2(0.069426, -0.210108)));\n"
+        "}\n"
+        "\n"
+        "float jg_h37(vec2 uv) { // yu\n"
+        "    float d = jg_s(uv, vec2(-0.287633, 0.19882), vec2(-0.320811, 0.020408),vec2(-0.270254, -0.295367));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.287633, 0.19882), vec2(-0.200738, -0.257474),vec2(0.131, -0.229)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.131, -0.229), vec2(0.344329, -0.199056),vec2(0.319051, 0.00304)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.319051, 0.00304), vec2(0.300092, 0.151454),vec2(0.132, 0.203)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.132, 0.203), vec2(-0.044327, 0.24145),vec2(-0.134382, 0.067774)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.104364, 0.342498), vec2(0.151581, 0.238292),vec2(0.052047, -0.353785)));\n"
+        "    return d;\n"
+        "}\n"
+        "\n"
+        "float jg_h38(vec2 uv) { // yo\n"
+        "    float d = jg_s(uv, vec2(0.035258, 0.165025), vec2(0.004476, -0.077452),vec2(0.000854, -0.343454));\n"
+        "    d = min(d, jg_s(uv, vec2(0.035258, 0.165025), vec2(0.046122, 0.284454),vec2(-0.037171, 0.298931)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.037171, 0.298931), vec2(-0.22, 0.34),vec2(-0.274375, 0.253692)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.274375, 0.253692), vec2(-0.344, 0.121),vec2(-0.13676, 0.090834)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.13676, 0.090834), vec2(0.125, 0.06),vec2(0.286947, 0.273597)));\n"
+        "    return min(d, jg_s(uv, vec2(0.288758, -0.187834), vec2(0.142, -0.155),vec2(0.00666, -0.163)));\n"
+        "}\n"
+        "\n"
+        "float jg_h39(vec2 uv) { // ra\n"
+        "    float d = jg_s(uv, vec2(-0.154067, -0.319705), vec2(0.029707, -0.278893),vec2(0.181924, -0.256632));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.256163, 0.099545), vec2(-0.241313, -0.063703),vec2(-0.209756, -0.165733)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.256163, 0.099545), vec2(-0.085383, -0.048862),vec2(0.096534, -0.028456)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.096534, -0.028456), vec2(0.328, -0.001),vec2(0.263601, 0.181169)));\n"
+        "    return min(d, jg_s(uv, vec2(0.263601, 0.181169), vec2(0.196, 0.344837),vec2(-0.196054, 0.288222)));\n"
+        "}\n"
+        "\n"
+        "float jg_h40(vec2 uv) { // ri\n"
+        "    float d = jg_s(uv, vec2(-0.208931, 0.109127), vec2(-0.260077, -0.097026),vec2(-0.171424, -0.345772));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.208931, 0.109127), vec2(-0.127098, -0.28103),vec2(0.041683, -0.279326)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.041683, -0.279326), vec2(0.166137, -0.279326),vec2(0.207054, -0.153249)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.207054, -0.153249), vec2(0.259904, 0.046088),vec2(0.174661, 0.175573)));\n"
+        "    return min(d, jg_s(uv, vec2(0.174661, 0.175573), vec2(0.099648, 0.303353),vec2(-0.120278, 0.330613)));\n"
+        "}\n"
+        "\n"
+        "float jg_h41(vec2 uv) { // ru\n"
+        "    float d = jg_s(uv, vec2(0.179776, -0.309994), vec2(-0.014578, -0.291252),vec2(-0.21916, -0.298067));\n"
+        "    d = min(d, jg_s(uv, vec2(0.179776, -0.309994), vec2(0.033158, -0.141323),vec2(-0.309517, 0.081867)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.309517, 0.081867), vec2(0.123516, -0.132804),vec2(0.25479, 0.022236)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.25479, 0.022236), vec2(0.331508, 0.109127),vec2(0.249675, 0.221574)));\n"
+        "    d= min(d, jg_s(uv, vec2(0.249675, 0.221574), vec2(0.150793, 0.330613),vec2(-0.038445, 0.31528)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.038445, 0.31528), vec2(-0.209385, 0.293077),vec2(-0.168507, 0.176974)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.168507, 0.176974), vec2(-0.134084, 0.121072),vec2(-0.041571, 0.136123)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.25479, 0.022236), vec2(0.331508, 0.109127),vec2(0.249675, 0.221574)));\n"
+        "    return min(d, jg_s(uv, vec2(-0.041571, 0.136123), vec2(0.088, 0.169),vec2(0.074607, 0.312)));\n"
+        "}\n"
+        "\n"
+        "float jg_h42(vec2 uv) { // re\n"
+        "    float d = jg_s(uv, vec2(-0.183158, -0.34592), vec2(-0.20194, 0.076392),vec2(-0.194896, 0.334473));\n"
+        "    d = min(d,  jg_s(uv, vec2(0.152, -0.219), vec2(0.011, -0.27),vec2(-0.354, 0.189)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.152, -0.219), vec2(0.247138, -0.197006),vec2(0.203037, -0.049533)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.203037, -0.049533), vec2(0.158936, 0.121671),vec2(0.177594, 0.243718)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.177594, 0.243718), vec2(0.201, 0.318),vec2(0.267493, 0.279315)));\n"
+        "    d = min(d, jg_l(uv, vec2(-0.157333, -0.193419), vec2(-0.1908, -0.1535)));\n"
+        "    return min(d, jg_l(uv, vec2(-0.157333, -0.193419), vec2(-0.340455, -0.174649)));\n"
+        "}\n"
+        "\n"
+        "float jg_h43(vec2 uv) { // ro\n"
+        "    float d = jg_s(uv, vec2(0.17433, -0.296286), vec2(-0.09899, -0.280485),vec2(-0.214191, -0.287257));\n"
+        "    d = min(d, jg_s(uv, vec2(0.17433, -0.296286), vec2(-0.026707, -0.086351),vec2(-0.306803, 0.098753)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.306803, 0.098753), vec2(-0.159979, 0.008458),vec2(0.036541, -0.027659)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.036541, -0.027659), vec2(0.251131, -0.057005),vec2(0.29179, 0.085209)));\n"
+        "    return min(d, jg_s(uv, vec2(0.29179, 0.085209), vec2(0.321155, 0.36738),vec2(-0.184826, 0.286115)));\n"
+        "}\n"
+        "\n"
+        "float jg_h44(vec2 uv) { // wa\n"
+        "    float d = jg_s(uv, vec2(0.041058, -0.163101), vec2(-0.159979, -0.097638),vec2(-0.345204, 0.180018));\n"
+        "    d = min(d, jg_s(uv, vec2(0.041058, -0.163101), vec2(0.287272, -0.228565),vec2(0.318896, 0.012973)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.318896, 0.012973), vec2(0.343743, 0.23871),vec2(0.034282, 0.279343)));\n"
+        "    d = min(d, jg_l(uv, vec2(-0.19, 0.34), vec2(-0.18, -0.35)));\n"
+        "    d = min(d, jg_l(uv, vec2(-0.342945, -0.176646), vec2(-0.144167, -0.196962)));\n"
+        "    return min(d, jg_l(uv, vec2(-0.1833, -0.12), vec2(-0.144167, -0.196962)));\n"
+        "}\n"
+        "\n"
+        "float jg_h45(vec2 uv) { // wo\n"
+        "    float d = jg_s(uv, vec2(0.236574, -0.261088), vec2(-0.012916, -0.21905),vec2(-0.305921, -0.234996));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.034674, -0.348063), vec2(-0.095596, -0.169765),vec2(-0.317526, 0.073764)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.317526, 0.073764), vec2(0.136488, -0.303126),vec2(0.075566, 0.175234)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.098497, 0.296999), vec2(-0.326229, 0.127398),vec2(0.330858, -0.059597)));\n"
+        "    return min(d, jg_s(uv, vec2(-0.098497, 0.296999), vec2(0.009, 0.362),vec2(0.288793, 0.305696)));\n"
+        "}\n"
+        "\n"
+        "float jg_h46(vec2 uv) { // n\n"
+        "    float d = jg_s(uv, vec2(-0.32093, 0.31), vec2(-0.171901, -0.1093),vec2(-0.083194, -0.33));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.32093, 0.31), vec2(-0.145289, -0.068),vec2(-0.002, -0.027)));\n"
+        "    d = min(d, jg_s(uv, vec2(-0.002, -0.027), vec2(0.066, -0.011),vec2(0.060512, 0.18679)));\n"
+        "    d = min(d, jg_s(uv, vec2(0.146704, 0.305019), vec2(0.300997, 0.314903),vec2(0.332647, 0.081638)));\n"
+        "    return min(d, jg_s(uv, vec2(0.060512, 0.18679), vec2(0.0605, 0.303042),vec2(0.146704, 0.305019)));\n"
+        "}\n"
+        "\n"
+        "float jg_hiragana(vec2 p, int c, float scale, int gs, float bevel, float rad)\n"
+        "{\n"
+        "    c = int(fract(float(gs > 1 ? c: c - 1)/46.0)*47.0)+1;\n"
+        "\n"
+        "    float s = 1.0/scale;\n"
+        "    p *= s;\n"
+        "\n"
+        "    float d = 1.0;\n"
+        "\n"
+        "    if (c == 1) d = jg_h1(p);\n"
+        "    if (c == 2) d = jg_h2(p);\n"
+        "    if (c == 3) d = jg_h3(p);\n"
+        "    if (c == 4) d = jg_h4(p);\n"
+        "    if (c == 5) d = jg_h5(p);\n"
+        "    if (c == 6) d = jg_h6(p);\n"
+        "    if (c == 7) d = jg_h7(p);\n"
+        "    if (c == 8) d = jg_h8(p);\n"
+        "    if (c == 9) d = jg_h9(p);\n"
+        "    if (c == 10) d = jg_h10(p);\n"
+        "    if (c == 11) d = jg_h11(p);\n"
+        "    if (c == 12) d = jg_h12(p);\n"
+        "    if (c == 13) d = jg_h13(p);\n"
+        "    if (c == 14) d = jg_h14(p);\n"
+        "    if (c == 15) d = jg_h15(p);\n"
+        "    if (c == 16) d = jg_h16(p);\n"
+        "    if (c == 17) d = jg_h17(p);\n"
+        "    if (c == 18) d = jg_h18(p);\n"
+        "    if (c == 19) d = jg_h19(p);\n"
+        "    if (c == 20) d = jg_h20(p);\n"
+        "    if (c == 21) d = jg_h21(p);\n"
+        "    if (c == 22) d = jg_h22(p);\n"
+        "    if (c == 23) d = jg_h23(p);\n"
+        "    if (c == 24) d = jg_h24(p);\n"
+        "    if (c == 25) d = jg_h25(p);\n"
+        "    if (c == 26) d = jg_h26(p);\n"
+        "    if (c == 27) d = jg_h27(p);\n"
+        "    if (c == 28) d = jg_h28(p);\n"
+        "    if (c == 29) d = jg_h29(p);\n"
+        "    if (c == 30) d = jg_h30(p);\n"
+        "    if (c == 31) d = jg_h31(p);\n"
+        "    if (c == 32) d = jg_h32(p);\n"
+        "    if (c == 33) d = jg_h33(p);\n"
+        "    if (c == 34) d = jg_h34(p);\n"
+        "    if (c == 35) d = jg_h35(p);\n"
+        "    if (c == 36) d = jg_h36(p);\n"
+        "    if (c == 37) d = jg_h37(p);\n"
+        "    if (c == 38) d = jg_h38(p);\n"
+        "    if (c == 39) d = jg_h39(p);\n"
+        "    if (c == 40) d = jg_h40(p);\n"
+        "    if (c == 41) d = jg_h41(p);\n"
+        "    if (c == 42) d = jg_h42(p);\n"
+        "    if (c == 43) d = jg_h43(p);\n"
+        "    if (c == 44) d = jg_h44(p);\n"
+        "    if (c == 45) d = jg_h45(p);\n"
+        "    if (c == 46) d = jg_h46(p);\n"
+        "\n"
+        "    return 1.0-clamp(0.0-(d-rad)/max(bevel, 0.00001), 0.0, 1.0);\n"
+        "}\n"
+        "\n"
+        "float jg_c_h(vec2 p, int c, float scale, int gs, float bevel, float rad) {\n"
+        "    if(gs > 1) {\n"
+        "        if(jg_box(p,0.5) > 0.0) {\n"
+        "            vec3 gr = jg_grid(p,gs);\n"
+        "            return jg_hiragana(gr.xy,int(gr.z),scale,gs,bevel,rad);\n"
+        "        }\n"
+        "        return 1.0;\n"
+        "    }\n"
+        "    if (jg_box(p,0.5*scale) > 0.0)\n"
+        "        return jg_hiragana(p,c,scale,gs,bevel,rad);\n"
+        "    return 1.0;\n"
+        "}\n"
+        "\n"
+        "float jg_katakana(vec2 p, int c, float scale, int gs, float bevel, float rad)\n"
+        "{\n"
+        "    c = int(fract(float(gs > 1 ? c: c - 1)/46.0)*47.0)+1;\n"
+        "\n"
+        "    float s = 1.0/scale;\n"
+        "    p *= s;\n"
+        "\n"
+        "    float d = 1.0;\n"
+        "\n"
+        "    if (c == 1) d = jg_k1(p);\n"
+        "    if (c == 2) d = jg_k2(p);\n"
+        "    if (c == 3) d = jg_k3(p);\n"
+        "    if (c == 4) d = jg_k4(p);\n"
+        "    if (c == 5) d = jg_k5(p);\n"
+        "    if (c == 6) d = jg_k6(p);\n"
+        "    if (c == 7) d = jg_k7(p);\n"
+        "    if (c == 8) d = jg_k8(p);\n"
+        "    if (c == 9) d = jg_k9(p);\n"
+        "    if (c == 10) d = jg_k10(p);\n"
+        "    if (c == 11) d = jg_k11(p);\n"
+        "    if (c == 12) d = jg_k12(p);\n"
+        "    if (c == 13) d = jg_k13(p);\n"
+        "    if (c == 14) d = jg_k14(p);\n"
+        "    if (c == 15) d = jg_k15(p);\n"
+        "    if (c == 16) d = jg_k16(p);\n"
+        "    if (c == 17) d = jg_k17(p);\n"
+        "    if (c == 18) d = jg_k18(p);\n"
+        "    if (c == 19) d = jg_k19(p);\n"
+        "    if (c == 20) d = jg_k20(p);\n"
+        "    if (c == 21) d = jg_k21(p);\n"
+        "    if (c == 22) d = jg_k22(p);\n"
+        "    if (c == 23) d = jg_k23(p);\n"
+        "    if (c == 24) d = jg_k24(p);\n"
+        "    if (c == 25) d = jg_k25(p);\n"
+        "    if (c == 26) d = jg_k26(p);\n"
+        "    if (c == 27) d = jg_k27(p);\n"
+        "    if (c == 28) d = jg_k28(p);\n"
+        "    if (c == 29) d = jg_k29(p);\n"
+        "    if (c == 30) d = jg_k30(p);\n"
+        "    if (c == 31) d = jg_k31(p);\n"
+        "    if (c == 32) d = jg_k32(p);\n"
+        "    if (c == 33) d = jg_k33(p);\n"
+        "    if (c == 34) d = jg_k34(p);\n"
+        "    if (c == 35) d = jg_k35(p);\n"
+        "    if (c == 36) d = jg_k36(p);\n"
+        "    if (c == 37) d = jg_k37(p);\n"
+        "    if (c == 38) d = jg_k38(p);\n"
+        "    if (c == 39) d = jg_k39(p);\n"
+        "    if (c == 40) d = jg_k40(p);\n"
+        "    if (c == 41) d = jg_k41(p);\n"
+        "    if (c == 42) d = jg_k42(p);\n"
+        "    if (c == 43) d = jg_k43(p);\n"
+        "    if (c == 44) d = jg_k44(p);\n"
+        "    if (c == 45) d = jg_k45(p);\n"
+        "    if (c == 46) d = jg_k46(p);\n"
+        "\n"
+        "    return 1.0-clamp(0.0-(d-rad)/max(bevel, 0.00001), 0.0, 1.0);\n"
+        "}\n"
+        "\n"
+        "float jg_c_k(vec2 p, int c, float scale, int gs, float bevel, float rad) {\n"
+        "    if(gs > 1) {\n"
+        "        if(jg_box(p,0.5) > 0.0) {\n"
+        "            vec3 gr = jg_grid(p,gs);\n"
+        "            return jg_katakana(gr.xy,int(gr.z),scale,gs,bevel,rad);\n"
+        "        }\n"
+        "        return 1.0;\n"
+        "    }\n"
+        "    if (jg_box(p,0.5*scale) > 0.0)\n"
+        "        return jg_katakana(p,c,scale,gs,bevel,rad);\n"
+        "    return 1.0;\n"
+        "}\n";
+    add_input(d, "bevel_map", Value_type::grayscale, "1.0");
+    add_enum(
+        d, "sys", "System",
+        {
+            Enum_value{"Hiragana", "h"},
+            Enum_value{"Katakana", "k"}
+        },
+        0
+    );
+    add_float(d, "char",  "Character", 1.0f,   1.0f, 46.0f, 1.0f);
+    add_float(d, "scale", "Scale",     1.0f,   0.0f,  1.0f, 0.001f);
+    add_float(d, "rad",   "Radius",    0.025f, 0.0f,  1.0f, 0.001f);
+    add_float(d, "gs",    "Grid Size", 1.0f,   1.0f, 32.0f, 1.0f);
+    add_float(d, "bevel", "Bevel",     0.01f,  0.0f,  1.0f, 0.001f);
+    add_output(
+        d, Value_type::grayscale,
+        "1.0 - jg_c_$(sys)($uv-0.5, int($char), $scale, int($gs), $bevel*$bevel_map($uv), $rad)"
+    );
+    return d;
+}
+
+// ---------------------------------------------------------------------------
 // Phase 4b utility
 // ---------------------------------------------------------------------------
 
@@ -2645,6 +4181,17 @@ struct Descriptor_registry
         descriptors.push_back(build_switch("switch",           "Switch (Color)",     Value_type::rgba,      "vec4(vec3(0.0), 1.0)"));
         descriptors.push_back(build_switch("switch_grayscale", "Switch (Grayscale)", Value_type::grayscale, "0.0"));
         descriptors.push_back(build_switch("switch_rgb",       "Switch (RGB)",       Value_type::rgb,       "vec3(0.0)"));
+        descriptors.push_back(build_pattern());
+        descriptors.push_back(build_beehive());
+        descriptors.push_back(build_cairo());
+        descriptors.push_back(build_arc_pavement());
+        descriptors.push_back(build_iching());
+        descriptors.push_back(build_runes());
+        descriptors.push_back(build_roman_numerals());
+        descriptors.push_back(build_seven_segment());
+        descriptors.push_back(build_scratches());
+        descriptors.push_back(build_profile());
+        descriptors.push_back(build_japanese_glyphs());
         descriptors.push_back(build_reroute());
         ordered.reserve(descriptors.size());
         for (const Node_descriptor& descriptor : descriptors) {

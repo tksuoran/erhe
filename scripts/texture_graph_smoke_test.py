@@ -377,6 +377,17 @@ NODE_SPECS = {
     "switch":              (["rgba"]*4,              ["rgba"], {"source": 0}),
     "switch_grayscale":    (["f"]*4,                 ["f"],    {"source": 0}),
     "switch_rgb":          (["rgb"]*4,               ["rgb"],  {"source": 0}),
+    "pattern":             ([],                      ["f"],    {"mix": 0, "x_wave": 0, "x_scale": 4.0, "y_wave": 0, "y_scale": 4.0}),
+    "beehive":             ([],                      ["f", "rgb", "rgb"], {"sx": 4.0, "sy": 4.0}),
+    "cairo":               ([],                      ["f"],    {"sx": 4.0, "sy": 4.0, "angle": 30.0, "round": 0.0}),
+    "arc_pavement":        ([],                      ["f", "rgb", "rgb"], {"repeat": 2.0, "rows": 8.0, "bricks": 8.0, "mortar": 0.1, "bevel": 0.1}),
+    "iching":              ([],                      ["f"],    {"columns": 4.0, "rows": 4.0}),
+    "runes":               ([],                      ["f"],    {"columns": 4.0, "rows": 4.0}),
+    "roman_numerals":      (["f"],                   ["f"],    {"w": 0.5, "h": 0.75, "r": 0.4, "n": 5.0, "bevel": 0.0, "s": 0.5}),
+    "seven_segment":       (["f"],                   ["f"],    {"st": 0.3, "sl": 0.9, "n": 8.0, "digits": 1.0, "s": 1.0, "spacing": 0.0}),
+    "scratches":           ([],                      ["f"],    {"length": 0.25, "width": 0.5, "layers": 4.0, "waviness": 0.5, "randomness": 0.5}),
+    "profile":             (["f"],                   ["f"],    {"style": 0, "gradient": "GRADIENT", "width": 0.05}),
+    "japanese_glyphs":     (["f"],                   ["f"],    {"sys": 0, "char": 1.0, "scale": 1.0, "rad": 0.025, "gs": 1.0, "bevel": 0.01}),
     "buffer":              (["f", "rgb", "rgba"],    ["f", "rgb", "rgba"], {"size": 512, "pause": False}),
     "output":              (["f", "rgb", "rgba"],    [],       {"name": "Texture Graph", "size": 1024, "assign": False}),
     "material_output":     (["rgba", "rgb", "f", "rgba", "f", "rgba", "rgb", "rgba", "f", "rgba", "rgb", "rgba"],
@@ -961,6 +972,207 @@ def section_noise_variants():
     all_png = TMP_DIR / "noise_all_chained.png"
     result = export_png(blend, all_png, size=64)
     check(S, "new noise nodes coexist with voronoi/perlin in ONE shader",
+          isinstance(result, dict) and result.get("width") == 64, f"result={result}")
+
+
+def section_deterministic_patterns():
+    """Deterministic patterns.
+
+    These are pure uv -> value generators, so most of them can be asserted on a
+    computed result rather than on "something rendered":
+
+    - pattern is checked against its own definition. Every waveform is swept and
+      only "constant" is allowed to be flat; the sawtooth-times-constant case
+      must reproduce a left-to-right ramp, which pins down that the two enums
+      substitute into the right argument slots (a swapped pair still compiles).
+    - profile with the default black-to-white gradient in Fill style must get
+      brighter towards the right, because the filled area under the profile
+      grows with the gradient.
+    - the glyph nodes are checked to CHANGE with the parameter that selects what
+      is drawn (roman_numerals I vs XL, seven_segment 8 vs 1, japanese_glyphs
+      hiragana vs katakana). A node stuck on one glyph renders and varies just
+      as convincingly as a correct one.
+    - the rest are asserted to vary, since a generator that compiles to a
+      constant is broken in a way an export-succeeded check cannot see.
+
+    The final block chains all eleven into ONE shader: globals deduplicate by
+    exact string match, so a symbol clash between two of them (or with an older
+    node) only fails to link when they share a graph.
+    """
+    S = "patterns"
+    TMP_DIR.mkdir(parents=True, exist_ok=True)
+
+    def image(node_id, name, output_slot=0, size=64):
+        path = TMP_DIR / f"pattern_{name}_{output_slot}.png"
+        result = export_png(node_id, path, size=size, output_slot=output_slot)
+        if not (isinstance(result, dict) and result.get("width") == size):
+            return None
+        w, h, ch, buf = decode_png(path)
+        return [buf[i * ch] for i in range(w * h)], w, h
+
+    def spread(node_id, name, output_slot=0, size=64):
+        got = image(node_id, name, output_slot, size)
+        if got is None:
+            return None
+        reds, _, _ = got
+        return max(reds) - min(reds)
+
+    # -- pattern: swept against its own waveform definitions -----------------
+    fresh_graph()
+    pattern = add_node("pattern")["id"]
+    # y = constant, mix = multiply, so the output is exactly wave_<x_wave>(x).
+    set_param(pattern, {"mix": 0, "y_wave": 4, "x_scale": 1.0, "y_scale": 1.0})
+    waves = ["sine", "triangle", "square", "sawtooth", "constant", "bounce"]
+    for index, wave in enumerate(waves):
+        set_param(pattern, {"x_wave": index})
+        delta = spread(pattern, f"wave_{wave}")
+        if wave == "constant":
+            check(S, "pattern constant waveform is flat", delta == 0, f"max-min={delta}")
+        else:
+            check(S, f"pattern {wave} waveform varies", (delta is not None) and (delta > 16),
+                  f"max-min={delta}")
+
+    set_param(pattern, {"x_wave": 3})  # sawtooth(x) over one repeat = a ramp in x
+    got = image(pattern, "ramp")
+    if got is None:
+        check(S, "pattern sawtooth exports", False)
+    else:
+        reds, w, h = got
+        row = [reds[(h // 2) * w + x] for x in range(w)]
+        monotone = all(row[x] <= row[x + 1] for x in range(w - 1))
+        check(S, "pattern sawtooth is a left-to-right ramp",
+              monotone and (row[0] < 32) and (row[-1] > 200),
+              f"first={row[0]} last={row[-1]} monotone={monotone}")
+
+    # Pins down the uv.y <-> image row mapping, which these nodes are the first
+    # to make legible: erhe renders y-up (flipped viewport), so exported row 0
+    # is uv.y ~ 1, the opposite of Godot / Material Maker. Ported GLSL that is
+    # asymmetric in y therefore exports vertically mirrored against Material
+    # Maker's preview - a seven_segment 2 reads as a 5. That is a library-wide
+    # convention, not a property of these ports, so it is asserted rather than
+    # worked around per node; if the convention is ever changed, this fails
+    # first and on purpose.
+    set_param(pattern, {"mix": 0, "x_wave": 4, "x_scale": 1.0, "y_wave": 3, "y_scale": 1.0})
+    got = image(pattern, "orientation", size=8)
+    if got is None:
+        check(S, "pattern y-ramp exports", False)
+    else:
+        reds, w, h = got
+        column = [reds[y * w] for y in range(h)]
+        check(S, "exported row 0 is uv.y ~ 1 (erhe renders y-up, unlike Material Maker)",
+              (column[0] > 200) and (column[-1] < 48) and
+              all(column[y] >= column[y + 1] for y in range(h - 1)),
+              f"column={column}")
+
+    for combine in range(6):  # every mix_* combiner must compile and render
+        set_param(pattern, {"mix": combine, "x_wave": 0, "y_wave": 0, "x_scale": 4.0, "y_scale": 4.0})
+        delta = spread(pattern, f"mix_{combine}")
+        check(S, f"pattern combiner {combine} renders and varies",
+              (delta is not None) and (delta > 8), f"max-min={delta}")
+
+    # -- generators asserted to vary -----------------------------------------
+    for type_name in ["cairo", "iching", "runes", "scratches"]:
+        fresh_graph()
+        node_id = add_node(type_name)["id"]
+        delta = spread(node_id, type_name)
+        check(S, f"{type_name} renders and varies", (delta is not None) and (delta > 16),
+              f"max-min={delta}")
+
+    # -- multi-output generators: every output separately --------------------
+    for type_name in ["beehive", "arc_pavement"]:
+        fresh_graph()
+        node_id = add_node(type_name)["id"]
+        node = node_by_id(get_graph(), node_id)
+        check(S, f"{type_name} exposes 3 outputs", len(node["outputs"]) == 3,
+              f"count={len(node['outputs'])}")
+        for slot in range(len(node["outputs"])):
+            delta = spread(node_id, type_name, output_slot=slot)
+            check(S, f"{type_name} output {slot} renders and varies",
+                  (delta is not None) and (delta > 8), f"max-min={delta}")
+
+    # -- profile: brighter to the right under a black-to-white gradient ------
+    fresh_graph()
+    profile = add_node("profile")["id"]
+    set_param(profile, {"style": 1})  # Fill
+    got = image(profile, "profile_fill")
+    if got is None:
+        check(S, "profile exports", False)
+    else:
+        reds, w, h = got
+        left = sum(reds[y * w + 0] for y in range(h)) / h
+        right = sum(reds[y * w + (w - 1)] for y in range(h)) / h
+        check(S, "profile fill grows with the gradient", right > left + 32,
+              f"left_mean={left:.1f} right_mean={right:.1f}")
+    set_param(profile, {"style": 0})  # Curve
+    delta = spread(profile, "profile_curve")
+    check(S, "profile curve style renders and varies", (delta is not None) and (delta > 16),
+          f"max-min={delta}")
+
+    # -- glyph nodes: the drawn glyph must follow its selector ---------------
+    def differs(node_id, name, first, second, threshold=64):
+        set_param(node_id, first)
+        a = image(node_id, f"{name}_a")
+        set_param(node_id, second)
+        b = image(node_id, f"{name}_b")
+        if (a is None) or (b is None):
+            return None
+        return sum(abs(x - y) for x, y in zip(a[0], b[0])) / len(a[0])
+
+    fresh_graph()
+    roman = add_node("roman_numerals")["id"]
+    delta = spread(roman, "roman_default")
+    check(S, "roman_numerals renders and varies", (delta is not None) and (delta > 16),
+          f"max-min={delta}")
+    diff = differs(roman, "roman", {"n": 1.0}, {"n": 40.0})
+    check(S, "roman_numerals I and XL draw different glyphs", (diff is not None) and (diff > 2.0),
+          f"mean-abs-diff={diff}")
+
+    fresh_graph()
+    seven = add_node("seven_segment")["id"]
+    delta = spread(seven, "seven_default")
+    check(S, "seven_segment renders and varies", (delta is not None) and (delta > 16),
+          f"max-min={delta}")
+    diff = differs(seven, "seven", {"n": 8.0}, {"n": 1.0})
+    check(S, "seven_segment 8 and 1 light different segments", (diff is not None) and (diff > 2.0),
+          f"mean-abs-diff={diff}")
+
+    fresh_graph()
+    glyphs = add_node("japanese_glyphs")["id"]
+    delta = spread(glyphs, "glyphs_default")
+    check(S, "japanese_glyphs renders and varies", (delta is not None) and (delta > 16),
+          f"max-min={delta}")
+    diff = differs(glyphs, "glyphs_sys", {"sys": 0}, {"sys": 1})
+    check(S, "japanese_glyphs hiragana and katakana differ", (diff is not None) and (diff > 2.0),
+          f"mean-abs-diff={diff}")
+    diff = differs(glyphs, "glyphs_char", {"sys": 1, "char": 1.0}, {"sys": 1, "char": 30.0})
+    check(S, "japanese_glyphs draws the selected character", (diff is not None) and (diff > 2.0),
+          f"mean-abs-diff={diff}")
+    set_param(glyphs, {"sys": 0, "char": 1.0, "gs": 4.0})  # grid mode takes a different branch
+    delta = spread(glyphs, "glyphs_grid")
+    check(S, "japanese_glyphs grid mode renders and varies", (delta is not None) and (delta > 16),
+          f"max-min={delta}")
+
+    # -- all eleven in ONE shader: the globals-dedup / symbol-clash check ----
+    fresh_graph()
+    blend = add_node("blend")["id"]
+    left_mix = add_node("colorize")["id"]
+    right_mix = add_node("colorize")["id"]
+    connect(left_mix, 0, blend, 0)
+    connect(right_mix, 0, blend, 1)
+    family = ["pattern", "beehive", "cairo", "arc_pavement", "iching", "runes",
+              "roman_numerals", "seven_segment", "scratches", "profile", "japanese_glyphs"]
+    for index, type_name in enumerate(family):
+        node_id = add_node(type_name)["id"]
+        connect(node_id, 0, left_mix if (index % 2 == 0) else right_mix, 0)
+    # The existing generators share the shader too: pattern's wave_*, runes' and
+    # roman_numerals' inlined sdLine, and japanese_glyphs' jg_* must not collide
+    # with voronoi / perlin / voronoi_triangle / shard_fbm.
+    for type_name in ["voronoi", "perlin", "voronoi_triangle", "shard_fbm"]:
+        node_id = add_node(type_name)["id"]
+        connect(node_id, 0, left_mix, 0)
+    chained = TMP_DIR / "pattern_all_chained.png"
+    result = export_png(blend, chained, size=64)
+    check(S, "all deterministic pattern nodes coexist in ONE shader",
           isinstance(result, dict) and result.get("width") == 64, f"result={result}")
 
 
@@ -1679,6 +1891,7 @@ def main():
         section_multi_output_decompose,
         section_new_filters,
         section_noise_variants,
+        section_deterministic_patterns,
         section_color_tone,
         section_transform,
         section_switch,
