@@ -148,7 +148,6 @@ void Box3d_rigid_body::attach_shapes(b3ShapeDef& shape_def)
     context.shape_def     = &shape_def;
     context.shape_ids     = &m_shape_ids;
     context.derived_hulls = &m_derived_hulls;
-    context.primitives    = &m_primitives;
     context.debug_label   = m_debug_label.empty() ? "<unnamed>" : m_debug_label.c_str();
 
     shape->attach_to_body(context, b3Transform_identity, glm::vec3{1.0f});

@@ -64,7 +64,6 @@ public:
     [[nodiscard]] auto get_box3d_body     () const -> b3BodyId                                { return m_body; }
     [[nodiscard]] auto get_world          () const -> Box3d_world&                            { return m_world; }
     [[nodiscard]] auto get_shape_ids      () const -> const std::vector<b3ShapeId>&            { return m_shape_ids; }
-    [[nodiscard]] auto get_primitives     () const -> const std::vector<Collision_primitive>&  { return m_primitives; }
     [[nodiscard]] auto get_filter_index   () const -> int                                      { return m_filter_index; }
     [[nodiscard]] auto is_valid           () const -> bool                                     { return m_is_valid; }
 
@@ -101,7 +100,6 @@ private:
     // Box3D resources owned by this body.
     std::vector<b3ShapeId>            m_shape_ids       {};
     std::vector<Box3d_hull>           m_derived_hulls   {};
-    std::vector<Collision_primitive>  m_primitives      {};
 };
 
 } // namespace erhe::physics

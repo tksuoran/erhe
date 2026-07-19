@@ -1,5 +1,6 @@
 #include "erhe_physics/box3d/box3d_world.hpp"
 #include "erhe_physics/box3d/box3d_material_registry.hpp"
+#include "erhe_physics/box3d/box3d_overlap_query.hpp"
 #include "erhe_physics/box3d/box3d_rigid_body.hpp"
 #include "erhe_physics/box3d/glm_conversions.hpp"
 #include "erhe_physics/physics_log.hpp"
@@ -7,6 +8,7 @@
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <cfloat>
 
 namespace erhe::physics {
 
@@ -461,19 +463,57 @@ void Box3d_world::restore_state(IWorld::State& state)
     log_physics->warn("box3d: restore_state() is not supported; Box3D exposes no world snapshot API");
 }
 
+auto Box3d_world::bodies_intersect_at(
+    const Box3d_rigid_body& body_a, const b3Transform& transform_a,
+    const Box3d_rigid_body& body_b, const b3Transform& transform_b,
+    const float             penetration_tolerance
+) -> bool
+{
+    // Shape geometry is body-origin local (Box3D bakes the creation transform
+    // and scale into the shape), so one transform covers every shape pair.
+    const b3Transform b_to_a = b3InvMulTransforms(transform_a, transform_b);
+
+    for (const b3ShapeId shape_id_a : body_a.get_shape_ids()) {
+        const Body_shape_geometry geometry_a = get_body_shape_geometry(shape_id_a);
+        for (const b3ShapeId shape_id_b : body_b.get_shape_ids()) {
+            const Body_shape_geometry geometry_b = get_body_shape_geometry(shape_id_b);
+            if (shapes_intersect(geometry_a, geometry_b, b_to_a, penetration_tolerance)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+auto Box3d_world::get_world_aabb_at(const Box3d_rigid_body& body, const b3Transform& transform) -> b3AABB
+{
+    b3AABB aabb{
+        b3Vec3{ FLT_MAX,  FLT_MAX,  FLT_MAX},
+        b3Vec3{-FLT_MAX, -FLT_MAX, -FLT_MAX}
+    };
+    for (const b3ShapeId shape_id : body.get_shape_ids()) {
+        const b3AABB shape_aabb = get_local_aabb(get_body_shape_geometry(shape_id));
+        aabb = b3AABB_Union(aabb, b3AABB_Transform(transform, shape_aabb));
+    }
+    return aabb;
+}
+
 auto Box3d_world::would_bodies_intersect(
     const IRigid_body& body_a, const Transform& transform_a,
     const IRigid_body& body_b, const Transform& transform_b,
     const float        penetration_tolerance
 ) const -> bool
 {
-    static_cast<void>(body_a);
-    static_cast<void>(transform_a);
-    static_cast<void>(body_b);
-    static_cast<void>(transform_b);
-    static_cast<void>(penetration_tolerance);
-    log_physics->warn("box3d: would_bodies_intersect() is not implemented yet");
-    return false;
+    const Box3d_rigid_body& box3d_body_a = static_cast<const Box3d_rigid_body&>(body_a);
+    const Box3d_rigid_body& box3d_body_b = static_cast<const Box3d_rigid_body&>(body_b);
+    if (!box3d_body_a.is_valid() || !box3d_body_b.is_valid()) {
+        return false;
+    }
+    return bodies_intersect_at(
+        box3d_body_a, to_box3d(transform_a),
+        box3d_body_b, to_box3d(transform_b),
+        penetration_tolerance
+    );
 }
 
 auto Box3d_world::would_body_intersect_world(
@@ -482,11 +522,62 @@ auto Box3d_world::would_body_intersect_world(
     const float        penetration_tolerance
 ) const -> bool
 {
-    static_cast<void>(body);
-    static_cast<void>(transform);
-    static_cast<void>(penetration_tolerance);
-    log_physics->warn("box3d: would_body_intersect_world() is not implemented yet");
+    const Box3d_rigid_body& box3d_body = static_cast<const Box3d_rigid_body&>(body);
+    if (!box3d_body.is_valid()) {
+        return false;
+    }
+    const b3Transform trial_transform = to_box3d(transform);
+
+    // Broad phase: everything whose fat AABB touches the body's AABB at the
+    // trial transform. b3World_OverlapAABB reports potential overlaps only, so
+    // each candidate still gets the exact pairwise test below.
+    //
+    // The filter is all-bits because these are documented pure geometric
+    // queries: trial placement asks "is there room here", which collision
+    // filtering has no say in (see iworld.hpp).
+    b3QueryFilter query_filter = b3DefaultQueryFilter();
+    query_filter.categoryBits = UINT64_MAX;
+    query_filter.maskBits     = UINT64_MAX;
+
+    // Persistent scratch: cleared at point of use, capacity kept.
+    m_overlap_candidates.clear();
+
+    Overlap_query_context context{.world = this, .tested_body = &box3d_body};
+    b3World_OverlapAABB(
+        m_world,
+        get_world_aabb_at(box3d_body, trial_transform),
+        query_filter,
+        &Box3d_world::overlap_candidate_callback,
+        &context
+    );
+
+    for (const Box3d_rigid_body* candidate : m_overlap_candidates) {
+        if (bodies_intersect_at(
+                box3d_body, trial_transform,
+                *candidate,  b3Body_GetTransform(candidate->get_box3d_body()),
+                penetration_tolerance
+            )
+        ) {
+            return true;
+        }
+    }
     return false;
+}
+
+auto Box3d_world::overlap_candidate_callback(const b3ShapeId shape_id, void* context) -> bool
+{
+    Overlap_query_context* query_context = static_cast<Overlap_query_context*>(context);
+    Box3d_rigid_body*      candidate     = resolve_body(shape_id);
+    if ((candidate == nullptr) || (candidate == query_context->tested_body)) {
+        return true; // keep going; the tested body cannot intersect itself
+    }
+    // A body reaches the callback once per shape, so dedupe. The candidate
+    // count is small (one broad-phase hit list), so a linear scan beats a set.
+    std::vector<const Box3d_rigid_body*>& candidates = query_context->world->m_overlap_candidates;
+    if (std::find(candidates.begin(), candidates.end(), candidate) == candidates.end()) {
+        candidates.push_back(candidate);
+    }
+    return true;
 }
 
 } // namespace erhe::physics

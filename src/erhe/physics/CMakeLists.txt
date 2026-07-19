@@ -47,6 +47,8 @@ if (${ERHE_PHYSICS_LIBRARY} STREQUAL "box3d")
         erhe_physics/box3d/box3d_material_registry.hpp
         erhe_physics/box3d/box3d_mesh_shape.cpp
         erhe_physics/box3d/box3d_mesh_shape.hpp
+        erhe_physics/box3d/box3d_overlap_query.cpp
+        erhe_physics/box3d/box3d_overlap_query.hpp
         erhe_physics/box3d/box3d_rigid_body.cpp
         erhe_physics/box3d/box3d_rigid_body.hpp
         erhe_physics/box3d/box3d_world.cpp

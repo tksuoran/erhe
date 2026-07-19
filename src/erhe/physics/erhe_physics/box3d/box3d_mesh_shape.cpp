@@ -101,13 +101,6 @@ void Box3d_mesh_shape::attach_to_body(
 
     const b3ShapeId shape_id = b3CreateMeshShape(context.body, context.shape_def, m_mesh, to_box3d(scale));
     context.shape_ids->push_back(shape_id);
-
-    Collision_primitive primitive{};
-    primitive.kind      = Collision_primitive::Kind::mesh;
-    primitive.mesh      = m_mesh;
-    primitive.transform = b3Transform_identity;
-    primitive.scale     = scale;
-    context.primitives->push_back(primitive);
 }
 
 auto Box3d_mesh_shape::is_convex() const -> bool

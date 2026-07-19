@@ -23,29 +23,6 @@ namespace erhe::physics {
 // simply attaches each of its children to the same body, which is exactly what
 // Box3D's own documentation recommends for runtime compounds.
 
-// One materialized convex primitive of a body, expressed in body local space.
-// Collected during attach so the trial-placement overlap queries can run
-// pairwise narrow-phase tests at a hypothetical transform without touching the
-// world.
-class Collision_primitive
-{
-public:
-    enum class Kind : int {
-        sphere,
-        capsule,
-        hull,
-        mesh
-    };
-
-    Kind              kind     {Kind::sphere};
-    b3Sphere          sphere   {};
-    b3Capsule         capsule  {};
-    const b3HullData* hull     {nullptr};
-    const b3MeshData* mesh     {nullptr};
-    b3Transform       transform{};            // shape local -> body local
-    glm::vec3         scale    {1.0f};        // applied to the shape's own geometry before transform
-};
-
 // Everything attach_to_body() needs, and everything it reports back. The out
 // vectors are owned by the rigid body being built.
 class Shape_attach_context
@@ -55,7 +32,6 @@ public:
     const b3ShapeDef*                 shape_def                {nullptr};
     std::vector<b3ShapeId>*           shape_ids                {nullptr};
     std::vector<Box3d_hull>*          derived_hulls            {nullptr};
-    std::vector<Collision_primitive>* primitives               {nullptr};
     const char*                       debug_label              {"<unnamed>"};
 
     // Reported back to the body after all shapes have been attached.

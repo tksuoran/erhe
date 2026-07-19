@@ -124,6 +124,26 @@ private:
     // world anchor body carries no user data).
     [[nodiscard]] static auto resolve_body(b3ShapeId shape_id) -> Box3d_rigid_body*;
 
+    // Trial-placement helpers. Both take bodies at hypothetical transforms and
+    // never touch the simulation; see box3d_overlap_query.hpp for why the
+    // manifold functions rather than Box3D's boolean overlap queries.
+    [[nodiscard]] static auto bodies_intersect_at(
+        const Box3d_rigid_body& body_a, const b3Transform& transform_a,
+        const Box3d_rigid_body& body_b, const b3Transform& transform_b,
+        float                   penetration_tolerance
+    ) -> bool;
+
+    [[nodiscard]] static auto get_world_aabb_at(const Box3d_rigid_body& body, const b3Transform& transform) -> b3AABB;
+
+    class Overlap_query_context
+    {
+    public:
+        const Box3d_world*      world      {nullptr};
+        const Box3d_rigid_body* tested_body{nullptr};
+    };
+
+    [[nodiscard]] static auto overlap_candidate_callback(b3ShapeId shape_id, void* context) -> bool;
+
     // Ordered pair of body pointers, so a pair has one canonical key.
     using Body_pair_key = std::pair<const Box3d_rigid_body*, const Box3d_rigid_body*>;
 
@@ -157,6 +177,11 @@ private:
     // otherwise produce one enter per child shape; counting per body pair and
     // emitting enter on 0 -> 1 and exit on 1 -> 0 matches the Jolt backend.
     std::unordered_map<Sensor_pair_key, int, Body_pair_hash> m_sensor_overlaps;
+
+    // Broad-phase hit list of would_body_intersect_world(), which is const.
+    // Persistent so the trial-placement loop does not allocate per call;
+    // cleared at point of use, keeping its capacity.
+    mutable std::vector<const Box3d_rigid_body*> m_overlap_candidates;
 
     std::function<void(IRigid_body*)>         m_on_body_activated_callback;
     std::function<void(IRigid_body*)>         m_on_body_deactivated_callback;

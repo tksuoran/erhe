@@ -138,13 +138,6 @@ void attach_hull_to_body(
         to_box3d(scale)
     );
     context.shape_ids->push_back(shape_id);
-
-    Collision_primitive primitive{};
-    primitive.kind      = Collision_primitive::Kind::hull;
-    primitive.hull      = hull;
-    primitive.transform = local_transform;
-    primitive.scale     = scale;
-    context.primitives->push_back(primitive);
 }
 
 // -----------------------------------------------------------------------------
@@ -216,12 +209,6 @@ void Box3d_sphere_shape::attach_to_body(
 
         const b3ShapeId shape_id = b3CreateSphereShape(context.body, context.shape_def, &sphere);
         context.shape_ids->push_back(shape_id);
-
-        Collision_primitive primitive{};
-        primitive.kind      = Collision_primitive::Kind::sphere;
-        primitive.sphere    = sphere;
-        primitive.transform = b3Transform_identity;
-        context.primitives->push_back(primitive);
         return;
     }
 
@@ -286,12 +273,6 @@ void Box3d_capsule_shape::attach_to_body(
 
         const b3ShapeId shape_id = b3CreateCapsuleShape(context.body, context.shape_def, &capsule);
         context.shape_ids->push_back(shape_id);
-
-        Collision_primitive primitive{};
-        primitive.kind      = Collision_primitive::Kind::capsule;
-        primitive.capsule   = capsule;
-        primitive.transform = b3Transform_identity;
-        context.primitives->push_back(primitive);
         return;
     }
 
