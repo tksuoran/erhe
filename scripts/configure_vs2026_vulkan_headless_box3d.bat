@@ -1,0 +1,26 @@
+@echo off
+
+setlocal
+
+cmake ^
+ -G "Visual Studio 18 2026" ^
+ -A x64 ^
+ -B build_vs2026_vulkan_headless_box3d ^
+ -S . ^
+ -Wno-dev ^
+ %* ^
+ -DERHE_USE_PRECOMPILED_HEADERS=ON ^
+ -DERHE_FONT_RASTERIZATION_LIBRARY=freetype ^
+ -DERHE_GLTF_LIBRARY=fastgltf ^
+ -DERHE_GUI_LIBRARY=imgui ^
+ -DERHE_GRAPHICS_API=vulkan ^
+ -DERHE_NAVIGATION_LIBRARY=none ^
+ -DERHE_PHYSICS_LIBRARY=box3d ^
+ -DERHE_PROFILE_LIBRARY=tracy ^
+ -DERHE_RAYTRACE_LIBRARY=bvh ^
+ -DERHE_SVG_LIBRARY=plutosvg ^
+ -DERHE_TEXT_LAYOUT_LIBRARY=harfbuzz ^
+ -DERHE_WINDOW_LIBRARY=none ^
+ -DERHE_XR_LIBRARY=none ^
+ -DERHE_USE_ASAN:BOOL=OFF ^
+ -DERHE_SPIRV=ON

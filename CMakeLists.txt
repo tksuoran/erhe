@@ -53,7 +53,7 @@ set_option(ERHE_GLTF_LIBRARY               "GLTF library. Either fastgltf or non
 set_option(ERHE_GUI_LIBRARY                "GUI library. Either imgui or none"                                          "imgui"    "imgui;none")
 set_option(ERHE_GRAPHICS_API               "Graphics library to use with erhe. Either vulkan, opengl, metal or none"    "vulkan"   "opengl;vulkan;metal;none")
 set_option(ERHE_NAVIGATION_LIBRARY         "Navigation mesh library. Either recastnavigation or none"                   "none"     "recastnavigation;none")
-set_option(ERHE_PHYSICS_LIBRARY            "Physics library to use with erhe. Either jolt or none"                      "jolt"     "jolt;none")
+set_option(ERHE_PHYSICS_LIBRARY            "Physics library to use with erhe. Either jolt, box3d or none"               "jolt"     "jolt;box3d;none")
 set_option(ERHE_PROFILE_LIBRARY            "Profile library to use with erhe. Either nvtx, superluminal, tracy or none" "none"     "nvtx;superluminal;tracy;none")
 set_option(ERHE_RAYTRACE_LIBRARY           "Raytrace library to use with erhe. Either embree, bvh, tinybvh or none"     "bvh"      "embree;bvh;tinybvh;none")
 set_option(ERHE_SVG_LIBRARY                "SVG loading library. Either plutosvg or none"                               "plutosvg" "plutosvg;none")
@@ -1165,9 +1165,31 @@ if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
     endif ()
     message(STATUS "Erhe configured to use jolt for physics.")
     add_definitions(-DERHE_PHYSICS_LIBRARY_JOLT)
-else ()
+elseif (${ERHE_PHYSICS_LIBRARY} STREQUAL "box3d")
+    CPMAddPackage(
+        NAME              box3d
+        GIT_TAG           c37cfe4cd78f555fcea4a10c7aed2ecf883a3271
+        GITHUB_REPOSITORY erincatto/box3d
+        DOWNLOAD_ONLY     YES
+    )
+    if (box3d_ADDED)
+        # Box3D gates its samples, unit tests, benchmarks and docs behind
+        # PROJECT_IS_TOP_LEVEL, so add_subdirectory() here builds only the
+        # box3d library target. These options are declared before that gate,
+        # so they must be forced into the cache ahead of add_subdirectory().
+        set(BOX3D_DISABLE_SIMD             OFF CACHE BOOL "" FORCE)
+        set(BOX3D_COMPILE_WARNING_AS_ERROR OFF CACHE BOOL "" FORCE)
+        set(BOX3D_DOUBLE_PRECISION         OFF CACHE BOOL "" FORCE)
+        set(BOX3D_SANITIZE                 OFF CACHE BOOL "" FORCE)
+        add_subdirectory(${box3d_SOURCE_DIR} ${box3d_BINARY_DIR})
+    endif ()
+    message(STATUS "Erhe configured to use box3d for physics.")
+    add_definitions(-DERHE_PHYSICS_LIBRARY_BOX3D)
+elseif (${ERHE_PHYSICS_LIBRARY} STREQUAL "none")
     message(STATUS "Erhe configured to disable physics.")
     add_definitions(-DERHE_PHYSICS_LIBRARY_NONE)
+else ()
+    message(FATAL_ERROR "Unknown ERHE_PHYSICS_LIBRARY: ${ERHE_PHYSICS_LIBRARY}")
 endif ()
 
 if (${ERHE_XR_LIBRARY} STREQUAL "openxr")

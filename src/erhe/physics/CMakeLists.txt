@@ -30,6 +30,13 @@ if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
     )
     set(impl_link_libraries Jolt)
 endif ()
+if (${ERHE_PHYSICS_LIBRARY} STREQUAL "box3d")
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        erhe_physics/box3d/glm_conversions.hpp
+    )
+    set(impl_link_libraries box3d::box3d)
+endif ()
 if (${ERHE_PHYSICS_LIBRARY} STREQUAL "none")
     erhe_target_sources_grouped(
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
