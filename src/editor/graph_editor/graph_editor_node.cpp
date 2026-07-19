@@ -354,8 +354,13 @@ void Graph_editor_node::show_pins(
         node_editor.PinRect(node_editor.ScreenToCanvas(min), node_editor.ScreenToCanvas(max));
         node_editor.EndPin();
 
+        // The socket square deliberately straddles the node border, outside
+        // the pin column's table cell - so it must not depend on the cell's
+        // clip rect being active. Override the clip for the socket draw.
+        draw_list.PushClipRect(min, max, false);
         draw_list.AddRectFilled(min, max, pin_key_color(pin.get_key()), 4.0f * m_content_scale, ImDrawFlags_RoundCornersAll);
         draw_list.AddRect      (min, max, 0xffcccccc, 4.0f * m_content_scale, ImDrawFlags_RoundCornersAll, 2.0f * m_content_scale);
+        draw_list.PopClipRect();
     }
 }
 

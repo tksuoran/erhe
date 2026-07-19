@@ -98,11 +98,16 @@ protected:
             }
             const float aspect = static_cast<float>(texture->get_width()) / static_cast<float>(texture->get_height());
             const float width  = get_preview_fit_size();
+            // Render-to-texture UV orientation (get_rtt_uv0/1), like the
+            // texture graph previews - without it the thumbnails show
+            // upside down on Vulkan.
             app_context.imgui_renderer->image(
                 erhe::imgui::Draw_texture_parameters{
                     .texture_reference = std::static_pointer_cast<erhe::graphics::Texture_reference>(texture),
                     .width             = static_cast<int>(width),
                     .height            = static_cast<int>(width / aspect),
+                    .uv0               = app_context.imgui_renderer->get_rtt_uv0(),
+                    .uv1               = app_context.imgui_renderer->get_rtt_uv1(),
                     .debug_label       = erhe::utility::Debug_label{"Rendergraph_editor_node preview"}
                 }
             );
@@ -234,10 +239,18 @@ void Rendergraph_window::sync_proxy_nodes(erhe::rendergraph::Rendergraph& render
     bool changed = false;
 
     // Drop proxies of unregistered nodes. The item id check catches a new
-    // node allocated at a destroyed node's address between frames.
+    // node allocated at a destroyed node's address between frames, and the
+    // pin count check catches pins registered after the proxy mirrored them
+    // (e.g. the depth visualization window adds an input to the window
+    // imgui host at runtime) - pins are append-only, so a count mismatch is
+    // the complete drift signal; the proxy is then rebuilt below.
     for (auto i = m_proxy_nodes.begin(); i != m_proxy_nodes.end(); ) {
         const bool registered = std::find(nodes.begin(), nodes.end(), i->first) != nodes.end();
-        const bool same_node  = registered && (i->second->get_rendergraph_node_id() == i->first->get_id());
+        const bool same_node  =
+            registered &&
+            (i->second->get_rendergraph_node_id() == i->first->get_id()) &&
+            (i->second->get_input_pins ().size() == i->first->get_input_pins ().size()) &&
+            (i->second->get_output_pins().size() == i->first->get_output_pins().size());
         if (!same_node) {
             i = m_proxy_nodes.erase(i);
             changed = true;
