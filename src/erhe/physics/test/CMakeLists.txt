@@ -12,6 +12,9 @@ set(_target "erhe_physics_tests")
 add_executable(${_target}
     main.cpp
     test_body_activation.cpp
+    test_collision_filter_table.cpp
+    test_hull_builder.cpp
+    test_six_dof_classifier.cpp
 )
 
 target_link_libraries(${_target}
@@ -20,6 +23,8 @@ target_link_libraries(${_target}
         erhe::file
         erhe::item
         erhe::log
+        erhe::physics
+        erhe::profile
         erhe::verify
         glm::glm-header-only
         GTest::gtest

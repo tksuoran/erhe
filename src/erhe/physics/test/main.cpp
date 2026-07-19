@@ -20,7 +20,9 @@ int main(int argc, char** argv)
     //    log_file->warn() while log_file is still nullptr (circular dependency).
     erhe::file::log_file = spdlog::stdout_color_mt("erhe.file.bootstrap");
 
-    // 3. Now safe to initialize the loggers of the libraries under test
+    // 3. Now safe to initialize item and physics logging. The backend reports
+    //    degenerate shapes and exhausted collision-system budgets through
+    //    log_physics, so it must exist before any of that is exercised.
     erhe::item::initialize_logging();
     erhe::physics::initialize_logging();
 
