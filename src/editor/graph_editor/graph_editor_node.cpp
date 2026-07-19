@@ -330,6 +330,14 @@ void Graph_editor_node::show_pins(
     // screen rect is mapped back with ScreenToCanvas.
     const float half_extent = 10.0f * m_content_scale;
 
+    // The socket squares escape their table cell's clip rect (see the draw
+    // below), so they must be clipped to the canvas explicitly - otherwise a
+    // pin scrolled past the canvas edge keeps drawing over the surrounding UI,
+    // while the nodes and links (drawn inside the canvas clip) stop correctly.
+    ImVec2 canvas_min{};
+    ImVec2 canvas_max{};
+    node_editor.GetCanvasScreenRect(canvas_min, canvas_max);
+
     // Pin labels use a slightly smaller font than the node body so they read as
     // secondary text and leave more clearance from the socket squares. The node
     // content pushed its own font at (base * zoom), so scale that pushed base.
@@ -366,8 +374,16 @@ void Graph_editor_node::show_pins(
 
         // The socket square deliberately straddles the node border, outside
         // the pin column's table cell - so it must not depend on the cell's
-        // clip rect being active. Override the clip for the socket draw.
-        draw_list.PushClipRect(min, max, false);
+        // clip rect being active. Override the clip for the socket draw, but
+        // intersect with the canvas: replacing the whole clip stack (the
+        // previous "false" with the bare pin rect) also discarded the canvas
+        // clip, letting off-screen pins draw outside the graph editor.
+        const ImVec2 clip_min{std::max(min.x, canvas_min.x), std::max(min.y, canvas_min.y)};
+        const ImVec2 clip_max{std::min(max.x, canvas_max.x), std::min(max.y, canvas_max.y)};
+        if ((clip_min.x >= clip_max.x) || (clip_min.y >= clip_max.y)) {
+            continue; // fully outside the canvas - nothing to draw
+        }
+        draw_list.PushClipRect(clip_min, clip_max, false);
         draw_list.AddRectFilled(min, max, pin_key_color(pin.get_key()), 4.0f * m_content_scale, ImDrawFlags_RoundCornersAll);
         draw_list.AddRect      (min, max, 0xffcccccc, 4.0f * m_content_scale, ImDrawFlags_RoundCornersAll, 2.0f * m_content_scale);
         draw_list.PopClipRect();

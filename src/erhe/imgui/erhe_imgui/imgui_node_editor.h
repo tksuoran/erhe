@@ -477,6 +477,12 @@ public:
     ImVec2 ScreenToCanvas(const ImVec2& pos);
     ImVec2 CanvasToScreen(const ImVec2& pos);
 
+    // The canvas widget rectangle in SCREEN space. Node content that draws
+    // outside its own ImGui item - and therefore has to escape that item's clip
+    // rect - must clip to this instead, or it draws over whatever surrounds the
+    // canvas (erhe: the pin sockets straddle the node border).
+    void GetCanvasScreenRect(ImVec2& min, ImVec2& max);
+
     int GetNodeCount();                                // Returns number of submitted nodes since Begin() call
     int GetOrderedNodeIds(NodeId* nodes, int size);    // Fills an array with node id's in order they're drawn; up to 'size` elements are set. Returns actual size of filled id's.
 

@@ -853,6 +853,13 @@ ImVec2 EditorContext::CanvasToScreen(const ImVec2& pos)
     return m_impl->ToScreen(pos);
 }
 
+void EditorContext::GetCanvasScreenRect(ImVec2& min, ImVec2& max)
+{
+    const ImRect& rect = m_impl->GetRect();
+    min = rect.Min;
+    max = rect.Max;
+}
+
 int EditorContext::GetNodeCount()
 {
     return m_impl->CountLiveNodes();
