@@ -39,10 +39,16 @@ if (${ERHE_PHYSICS_LIBRARY} STREQUAL "box3d")
         erhe_physics/box3d/box3d_collision_shape.hpp
         erhe_physics/box3d/box3d_compound_shape.cpp
         erhe_physics/box3d/box3d_compound_shape.hpp
+        erhe_physics/box3d/box3d_constraint.cpp
+        erhe_physics/box3d/box3d_constraint.hpp
         erhe_physics/box3d/box3d_convex_hull_collision_shape.cpp
         erhe_physics/box3d/box3d_convex_hull_collision_shape.hpp
         erhe_physics/box3d/box3d_mesh_shape.cpp
         erhe_physics/box3d/box3d_mesh_shape.hpp
+        erhe_physics/box3d/box3d_rigid_body.cpp
+        erhe_physics/box3d/box3d_rigid_body.hpp
+        erhe_physics/box3d/box3d_world.cpp
+        erhe_physics/box3d/box3d_world.hpp
         erhe_physics/box3d/box3d_wrapper_shapes.cpp
         erhe_physics/box3d/box3d_wrapper_shapes.hpp
         erhe_physics/box3d/box3d_hull_builder.cpp
