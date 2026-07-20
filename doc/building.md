@@ -130,7 +130,7 @@ attempt and the launch must be retried.
 | :--- | :--- | :--- | :--- |
 | `ERHE_GRAPHICS_API` | Graphics backend | `opengl` (not on Apple platforms), `vulkan`, `metal` (macOS only), `none` (headless) | `vulkan` |
 | `ERHE_WINDOW_LIBRARY` | Window library | `sdl`, `glfw` (deprecated), `none` (headless) | `sdl` |
-| `ERHE_PHYSICS_LIBRARY` | Physics library | `jolt`, `none` | `jolt` |
+| `ERHE_PHYSICS_LIBRARY` | Physics library | `jolt`, `box3d`, `none` | `jolt` |
 | `ERHE_RAYTRACE_LIBRARY` | Raytrace library | `bvh`, `tinybvh`, `embree`, `none` | `bvh` |
 | `ERHE_NAVIGATION_LIBRARY` | Navigation mesh library | `recastnavigation`, `none` | `none` |
 | `ERHE_PROFILE_LIBRARY` | Profiler integration | `nvtx`, `superluminal`, `tracy`, `none` | `none` |
@@ -159,7 +159,9 @@ disabling unused features and selecting different backends.
 
 **ERHE_BUILD_TESTS** -- Builds the gtest suites (see "Testing" in `AGENTS.md`). Every configure wrapper passes extra arguments through to cmake, so `scripts\configure_vs2026_opengl.bat -DERHE_BUILD_TESTS=ON` (or `bash scripts/configure_ninja_linux_vulkan.sh -DERHE_BUILD_TESTS=ON`) enables them in a regular build tree. The `erhe_tests` target then builds every test executable, and `ctest --test-dir <build_dir> -C <config>` runs them; `--label-exclude "gpu|editor"` leaves out the tests that need a graphics device or a running editor, which is what CI runs.
 
-**ERHE_PHYSICS_LIBRARY** -- The main backend is `jolt`. Set to `none` to disable physics.
+**ERHE_PHYSICS_LIBRARY** -- The main backend is `jolt`. `box3d` selects the Box3D
+backend, which the editor also runs on; its deferred and unsupported features are
+tabulated in `src/erhe/physics/notes.md`. Set to `none` to disable physics.
 
 **ERHE_RAYTRACE_LIBRARY** -- The main backend is `bvh`, used for mouse picking in 3D viewports. When set to `none`, mouse picking uses GPU ID buffer rendering instead.
 

@@ -1,7 +1,7 @@
 # erhe_physics
 
 ## Purpose
-Thin abstraction layer over physics engines (currently Jolt Physics, with a null
+Thin abstraction layer over physics engines (Jolt Physics and Box3D, plus a null
 backend). Provides interfaces for worlds, rigid bodies, collision shapes, constraints,
 and debug drawing, allowing the rest of erhe to use physics without depending on
 a specific engine.
@@ -51,11 +51,13 @@ a specific engine.
 - `initialize_physics_system()` -- one-time initialization
 
 ## Dependencies
-- External: glm, Jolt Physics (when `ERHE_PHYSICS_LIBRARY=jolt`)
+- External: glm, Jolt Physics (when `ERHE_PHYSICS_LIBRARY=jolt`), Box3D (when
+  `ERHE_PHYSICS_LIBRARY=box3d`)
 - `erhe::renderer` -- for `Jolt_debug_renderer` (debug draw)
 
 ## Notes
-- Backend selected at CMake time: `jolt/` directory has Jolt implementations, `null/` has no-op stubs.
+- Backend selected at CMake time: `jolt/` directory has Jolt implementations, `box3d/` has
+  Box3D implementations, `null/` has no-op stubs.
 - All interfaces use virtual dispatch with static factory methods returning raw/shared/unique pointers.
 - `Transform` uses `mat3 basis + vec3 origin` (not quaternion) to match Jolt's internal representation.
 - `set_world_transform()` vs `teleport()`: `set_world_transform()` is motion-mode aware -- for
@@ -76,8 +78,64 @@ a specific engine.
   wakes it (Jolt's `BodyInterface` does this itself). The null backend never simulates and has no
   activation state: its `is_active()` is always false.
 - The `IMotion_state` header appears to be an empty/placeholder file.
+- Unit tests live in `test/` (`-DERHE_BUILD_TESTS=ON` -> `erhe_physics_tests`). They are
+  written against the Box3D backend, and cover both pure logic (hull builder, shape
+  descriptors, collision filter table, six-DOF classifier) and world-level behavior that
+  steps a real world (activation / sensor events, trial-placement overlap queries).
 - KHR_physics_rigid_bodies support status, design and known limitations are tracked in
   `doc/khr_physics_rigid_bodies_support.md`. Jolt-imposed limits: triangle mesh shapes are
   static/kinematic only; sensors must be non-static to detect static bodies (callers create
   static triggers as kinematic non-physical); six-DOF angular soft limits fall back to hard
-  limits; acceleration-mode drives run as force mode.
+  limits; acceleration-mode drives run as force mode. Box3D's own limits are in the table
+  below.
+
+## Box3D backend
+
+Selected with `ERHE_PHYSICS_LIBRARY=box3d`; sources in `box3d/`. The authoritative
+deferred/unsupported list is the header comment block in `box3d_world.hpp` -- reproduced
+here, and to be kept in sync with it.
+
+| Feature                              | Status                    | Why |
+| ------------------------------------ | ------------------------- | --- |
+| `IWorld::debug_draw`                 | no-op                     | the signature names `erhe::renderer::Jolt_debug_renderer`; neutralizing it is deferred (Box3D does have `b3World_Draw`, so this is a wiring gap, not a capability gap) |
+| `save_state` / `restore_state`       | not implemented, warns    | Box3D exposes no world snapshot API |
+| static friction                      | ignored, dynamic used     | `b3SurfaceMaterial` carries a single friction |
+| independent 6-DOF joints             | approximated              | Box3D has no generic six-DOF joint |
+| universal joints (2 rotational DOF)  | approximated by spherical | no equivalent; the third axis stays free |
+| multi-axis translation limits        | unsupported, warns        | no equivalent |
+| rotation limits beyond +/-0.99 pi    | clamped                   | Box3D range limit |
+| nested offset-center-of-mass         | ignored, errors           | Box3D carries the center of mass on the body |
+| rotated mesh inside a compound       | rotation ignored, warns   | `b3CreateMeshShape` takes a scale but no transform |
+| mesh on a dynamic body               | forced static, errors     | Box3D has no `b3ComputeMeshMass` |
+| penetration tolerance versus meshes  | ignored (boolean overlap) | no public hull-versus-mesh manifold |
+| non-uniform scale on sphere/capsule  | inscribed hull            | an ellipsoid is not representable |
+| non-uniform scale over a rotation    | approximated, warns       | the exact result is a shear; same as Jolt |
+| collision systems per world          | 64                        | interned into a uint64 bitset |
+| body woken without moving            | reported on first move    | synthesized from `b3BodyMoveEvent` |
+| height fields                        | not exposed               | erhe has no height field shape type |
+
+Backend-specific design notes:
+- **Collision shapes are descriptors.** Box3D has no standalone shape object -- shapes are
+  created onto a body -- while an erhe `ICollision_shape` exists before any body and is shared
+  between bodies. So `Box3d_collision_shape` owns what Box3D resources it can (`b3HullData`,
+  `b3MeshData`) and materializes shapes onto a body on demand via `attach_to_body()`. A
+  compound attaches each child to the same body, which is what Box3D recommends for runtime
+  compounds.
+- **Events are synthesized per step.** Box3D buffers events in the world rather than calling
+  listeners, so `update_fixed_step()` reads them back after the step. Activation has no
+  listener at all and is diffed out of the `b3BodyMoveEvent` stream; sensor touches are
+  reported per shape pair and are counted per body pair so a compound visitor produces one
+  enter and one exit, as with Jolt.
+- **Collision filtering runs through the custom filter callback**, not Box3D category/mask
+  bits, since erhe's collision-system allow/deny lists cannot be expressed as bits. Per-pair
+  collision exclusion (joint `enableCollision = false`) uses Box3D filter joints, which exist
+  for exactly that.
+- **Trial-placement queries use the pairwise manifold functions.** Box3D's overlap queries are
+  boolean and `b3ShapeDistance` reports 0 for any overlap, so neither can express a penetration
+  tolerance; `b3ManifoldPoint::separation` can. See `box3d_overlap_query.hpp`.
+- **Shape geometry is read back from the live shapes** (`b3Shape_GetHull` and friends) rather
+  than kept alongside: Box3D bakes a shape's creation transform and scale into the shape, so
+  the getters return geometry already in the body frame.
+- KHR_physics_rigid_bodies six-DOF constraints are mapped onto Box3D's concrete joint types by
+  `box3d_six_dof_classifier.{hpp,cpp}` (weld / revolute / prismatic / spherical / filter),
+  which is pure logic and unit tested.

@@ -4,7 +4,7 @@ This file provides guidance to AI coding agents working with this repository.
 
 ## Project Overview
 
-**erhe** is a C++ graphics library and editor for Vulkan, OpenGL and Metal (Vulkan is the default backend). It features a render graph system, full 3D scene graph, physics (Jolt), geometry manipulation (Catmull-Clark, Conway operators via Geogram), and an ImGui-based editor application.
+**erhe** is a C++ graphics library and editor for Vulkan, OpenGL and Metal (Vulkan is the default backend). It features a render graph system, full 3D scene graph, physics (Jolt or Box3D), geometry manipulation (Catmull-Clark, Conway operators via Geogram), and an ImGui-based editor application.
 
 ## Session handoff: `prompt_queue.txt`
 
@@ -138,7 +138,7 @@ Required packages: `libwayland-dev libxkbcommon-dev xorg-dev` (Ubuntu) or equiva
 |--------|---------|-------|
 | `ERHE_GRAPHICS_API` | `vulkan` | `vulkan`, `opengl` (not on Apple platforms), `metal` (macOS), or `none` (headless) |
 | `ERHE_NAVIGATION_LIBRARY` | `none` | `recastnavigation` or `none` |
-| `ERHE_PHYSICS_LIBRARY` | `jolt` | `jolt` or `none` |
+| `ERHE_PHYSICS_LIBRARY` | `jolt` | `jolt`, `box3d`, or `none` |
 | `ERHE_RAYTRACE_LIBRARY` | `bvh` | `bvh`, `tinybvh`, `embree`, or `none` (none uses GPU ID-buffer picking) |
 | `ERHE_PROFILE_LIBRARY` | `none` | `tracy`, `nvtx`, `superluminal`, or `none`; the configure wrappers pass `tracy` |
 | `ERHE_WINDOW_LIBRARY` | `sdl` | `sdl`, `glfw` (deprecated), or `none` (headless) |
@@ -154,8 +154,8 @@ Several `erhe::*` libraries have gtest suites under `src/erhe/<name>/test/`
 (circular_ring_buffer, codegen, dataformat, geometry, graphics, item, math,
 physics, primitive, raytrace, usd), plus `mcp_server_tests` for the editor's
 MCP server. `erhe_usd_tests` additionally needs `-DERHE_USD_LIBRARY=lightusd`,
-and `erhe_physics_tests` needs `-DERHE_PHYSICS_LIBRARY=jolt` (the default),
-since it drives a simulation. Each
+and `erhe_physics_tests` is written against the Box3D backend, so it needs a
+build tree configured with `-DERHE_PHYSICS_LIBRARY=box3d`. Each
 builds an `erhe_<name>_tests` executable, gated behind `-DERHE_BUILD_TESTS=ON`
 (default OFF).
 
@@ -257,7 +257,7 @@ Each subdirectory is a separate CMake target (`erhe_<name>`). **Each library has
 - **`erhe::item`** - Base `Item` (name, id, flags) and `Hierarchy` (parent/child tree) classes.
 - **`erhe::renderer`** - GPU ring buffer, `Line_renderer` (debug lines), `Text_renderer` (2D labels in 3D viewports).
 - **`erhe::imgui`** - Custom ImGui backend and window management helpers.
-- **`erhe::physics`** - Thin abstraction over Jolt physics.
+- **`erhe::physics`** - Thin abstraction over Jolt and Box3D physics (backend chosen at configure time; see `src/erhe/physics/notes.md`).
 - **`erhe::window`** - SDL/GLFW windowing abstraction.
 - **`erhe::commands`** - Input command system.
 - **`erhe::log`** - spdlog wrappers.

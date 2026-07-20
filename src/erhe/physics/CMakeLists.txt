@@ -126,10 +126,11 @@ target_link_libraries(
 
 erhe_target_settings(${_target} "erhe")
 
-# The test suite covers the box3d backend's pure-logic pieces (collision filter
-# interning, hull point generation, six-DOF joint classification), so it exists
-# only for that backend. The jolt and null backends have no equivalent
-# standalone logic to test.
+# The test suite covers the box3d backend: its pure-logic pieces (collision
+# filter interning, hull point generation, six-DOF joint classification) and its
+# world-level behavior (activation and sensor events, trial-placement overlap
+# queries), which step a real Box3d_world. It exists only for that backend --
+# the jolt and null backends have no equivalent standalone logic to test.
 if ((${ERHE_BUILD_TESTS} STREQUAL "ON") AND (${ERHE_PHYSICS_LIBRARY} STREQUAL "box3d"))
     add_subdirectory(test)
 endif ()
