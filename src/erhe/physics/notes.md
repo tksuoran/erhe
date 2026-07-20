@@ -95,6 +95,11 @@ Selected with `ERHE_PHYSICS_LIBRARY=box3d`; sources in `box3d/`. The authoritati
 deferred/unsupported list is the header comment block in `box3d_world.hpp` -- reproduced
 here, and to be kept in sync with it.
 
+`doc/box3d_physics.md` carries the working record for this backend: per-phase status,
+the verification work still outstanding, and the Box3D behaviors that were expensive to
+discover (hull edge budgets, the baked shape transform, the joint def cookie, filter
+change detection, the event model). Read it before doing anything non-trivial here.
+
 | Feature                              | Status                    | Why |
 | ------------------------------------ | ------------------------- | --- |
 | `IWorld::debug_draw`                 | no-op                     | the signature names `erhe::renderer::Jolt_debug_renderer`; neutralizing it is deferred (Box3D does have `b3World_Draw`, so this is a wiring gap, not a capability gap) |
