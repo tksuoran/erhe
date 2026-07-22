@@ -292,9 +292,9 @@ void Graph_editor_window_base::apply_automatic_layout()
         }
     );
 
-    constexpr float column_gap    =  60.0f; // canvas units
-    constexpr float row_gap       =  40.0f;
-    constexpr float component_gap =  80.0f;
+    constexpr float column_gap    = 150.0f; // canvas units
+    constexpr float row_gap       = 100.0f;
+    constexpr float component_gap = 200.0f;
 
     const auto node_size_of = [this, node_editor, &nodes](const std::size_t index) -> ImVec2 {
         return node_editor->GetNodeSize(ax::NodeEditor::NodeId{get_layout_node_id(*nodes[index])});
