@@ -349,7 +349,7 @@ private:
         // normal skinned_only frame on which the async result is resolved. Resolving
         // against this self-contained snapshot keeps each scan correct regardless of
         // intervening frames. Cleared-and-refilled (capacity kept) to avoid per-scan
-        // allocation churn (CLAUDE.md run-time allocation discipline).
+        // allocation churn (AGENTS.md run-time allocation discipline).
         std::vector<erhe::scene_renderer::Primitive_buffer::Id_range> id_ranges{};
     };
     std::optional<Scan_request>                    m_pending_scan;

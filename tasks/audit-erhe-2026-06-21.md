@@ -61,7 +61,7 @@ fixable foundation gaps.
 | Duplication Found | Where | Impact | Recommended Action | Priority |
 |-------------------|-------|--------|--------------------|----------|
 | Per-library logging boilerplate (`<lib>_log.cpp` + `initialize_logging()` + category fields) replicated in ~20 libraries | `src/erhe/*/erhe_*/*_log.cpp` | Low -- this is *intentional, beneficial* duplication (each library owns its log categories; no shared coupling). | **Keep.** This is DRY-vs-coupling done right. | -- |
-| Duplicated shaders + `cell_*.cpp` between editor and `rendering_test` | `res/rendering_test/shaders/`, `src/rendering_test/` | Known/accepted. CLAUDE.md declares `rendering_test` "rotten" and slated for rewrite. | **Do not fix** -- coherent partial fixes there are wasted work (per project policy). | -- |
+| Duplicated shaders + `cell_*.cpp` between editor and `rendering_test` | `res/rendering_test/shaders/`, `src/rendering_test/` | Known/accepted. AGENTS.md declares `rendering_test` "rotten" and slated for rewrite. | **Do not fix** -- coherent partial fixes there are wasted work (per project policy). | -- |
 | `_SILENCE_CXX20_*` / `NOMINMAX` / `_CRT_SECURE_NO_WARNINGS` definitions repeated per-compiler-file | `cmake/msvc.cmake`, `cmake/Clang.cmake`, `cmake/GNU.cmake` | Trivial. | Optional: hoist common defs to `common_options.cmake`. | Low |
 | x86 SIMD baseline (`-msse4.1 -mpclmul`) block duplicated verbatim in `Clang.cmake` and `GNU.cmake` (identical comment + guard) | `cmake/Clang.cmake:38`, `cmake/GNU.cmake:26` | Trivial maintenance drift risk. | Extract to a shared cmake include. | Low |
 | `googletest` `CPMAddPackage` repeated in every `*/test/CMakeLists.txt` | `src/erhe/*/test/CMakeLists.txt` (8 files) | Low -- but version pin (1.16.0) is now in 8 places; a bump touches 8 files, violating the project's own "one place pins versions" principle. | Move the GoogleTest `CPMAddPackage` to the top-level dependency block, guarded by `ERHE_BUILD_TESTS`. | Medium |
@@ -97,7 +97,7 @@ they are still intended.
 - **Architecture vs team size**: This is the genuine risk. The codebase is large
   (34 erhe libraries + a large editor) and effectively single-author. The backend
   `#ifdef` matrix, 6 forks, and Quest/XR specifics demand specialized, hard-to-replace
-  knowledge. The extensive CLAUDE.md + Memory Bank + per-library `notes.md` are a
+  knowledge. The extensive AGENTS.md + Memory Bank + per-library `notes.md` are a
   deliberate, effective mitigation -- onboarding documentation is well above average.
 - **Process vs speed**: CI is well-tuned (9-config matrix, CPM caching, concurrency
   cancellation, doc-only skip). Build-only CI keeps it fast; the trade-off is no test
@@ -126,7 +126,7 @@ good internal documentation.
 | 4 | Structured error handling | **Partial** | LSAI search for `expected`: **zero** `std::expected`/`tl::expected` in own code (only `fastgltf::Expected`). Internal failures use `VERIFY`/`FATAL` (abort, `erhe::verify`) or exceptions. The fail-fast path is well-built: `ERHE_FATAL` (`erhe_verify/verify.hpp`) emits `std::source_location` + callstack dump + `DebugBreak`/`__builtin_trap` + `abort` -- a deliberate engine choice, not a defect. Positive: the MCP boundary returns typed JSON-RPC error codes (-32700/-32601/-32602/-32001). No typed value-error type for library APIs. | **High** |
 | 5 | Test configuration (fast/slow) | **Missing** | Tests use `gtest_discover_tests` with **no `LABELS`/`set_tests_properties`** (grep over all `src/**/CMakeLists.txt`: 0 matches). No fast/slow split. Compounding: `ERHE_BUILD_TESTS` defaults `OFF` and **CI runs no `ctest` step** (`.github/workflows/build.yml` builds `--target editor` only). | **Medium** |
 | 6 | Immutable DTOs | **Partial** | Domain is a mutable real-time scene graph (`erhe::scene::Node`/`Mesh` mutate by design), so the immutable-DTO pattern applies weakly. `erhe_codegen` produces serializable structs with accessors. No systematic `const`-member/value-equality DTO discipline, but largely N/A for this domain. | **Low** |
-| 7 | DI with proper registration | **Present** | `editor::App_context` (`app_context.hpp:101`) is the shared-resource holder; constructor injection via explicit `Part&`/resource refs is documented and enforced (CLAUDE.md "Part construction" rule: ctor must not read `App_context`). `main()` is the composition root. No DI framework. | -- |
+| 7 | DI with proper registration | **Present** | `editor::App_context` (`app_context.hpp:101`) is the shared-resource holder; constructor injection via explicit `Part&`/resource refs is documented and enforced (AGENTS.md "Part construction" rule: ctor must not read `App_context`). `main()` is the composition root. No DI framework. | -- |
 | 8 | Centralized config with validation | **Present** | All tunables in `config/<app>/*.json` (editor has 14 files: graphics, windows, renderer, logging, ...), loaded by `erhe_codegen`-generated loaders. Per-app isolation (`config/editor`, `config/hextiles`, ...). (Validation/fail-fast on missing keys assumed via codegen loaders -- not exhaustively verified.) | **High** (mostly satisfied) |
 | 9 | Structured file logging | **Present (exemplary)** | `erhe::log::make_logger` / `Log_sinks` (`log.cpp:271,431`) wrap spdlog to a file sink (`logs/log.txt`). Each library owns categories via `<lib>_log.cpp`/`initialize_logging()`. `config/editor/logging.json` exposes ~140 per-category levels, runtime-configurable. No `std::cout`/`printf` logging. | -- |
 | 10 | Zero-dependency core module | **Partial** | No single "core contracts" target. Foundational low-dep libs (`log`, `utility`, `item`) are built first (`src/erhe/CMakeLists.txt:13-15`), and contracts are distributed (per-subsystem `I*` interfaces + `erhe::item` base). Works, but there is no one dependency-free module holding all interfaces/DTOs. | **Medium** |
@@ -158,7 +158,7 @@ cluster in `erhe::net` and the MCP server. The actionable ones:
 | `socket.cpp:402` | `-Wunsafe-buffer-usage`: unsafe pointer arithmetic | Memory-safety smell in packet handling. |
 | `socket.cpp:207` | `-Wcast-qual`: cast drops `const` (`const int*` -> `char*`) | Const-correctness violation on a socket buffer. |
 | `socket.cpp:421` | `-Wswitch-enum`: `CONNECTED` not explicitly handled | Missing state handling. |
-| `src/editor/mcp/mcp_server.cpp:2426,2440` | `-Wfloat-equal`: float compared with `==`/`!=` (material edit) | Correctness; also contradicts CLAUDE.md's own float-handling guidance. |
+| `src/editor/mcp/mcp_server.cpp:2426,2440` | `-Wfloat-equal`: float compared with `==`/`!=` (material edit) | Correctness; also contradicts AGENTS.md's own float-handling guidance. |
 | `mcp_server.cpp:2120` | `-Wunsafe-buffer-usage`: unsafe buffer access | Memory-safety smell. |
 | `mcp_server.cpp:267` | `-Wswitch-enum`: `e_invalid` not handled | Missing case. |
 | `mcp_server.cpp:1663` | `-Wshadow-uncaptured-local`: declaration shadows a local | Silent-bug risk. |
@@ -189,7 +189,7 @@ images, fonts).
 
 | Risk | Status | Evidence |
 |------|--------|----------|
-| A01 Broken Access Control | **Risk (low)** | MCP server (`editor::Mcp_server`) supports bearer-token auth but it is **optional**: when no `~/.claude/erhe_mcp_token` is present, "any request is accepted" (`setup_routes`, `mcp_server.cpp:670`). Mitigated by **loopback-only bind** (see A05) and a loud startup warning. |
+| A01 Broken Access Control | **Risk (low)** | MCP server (`editor::Mcp_server`) supports bearer-token auth but it is **optional**: when no `~/.agents/erhe_mcp_token` is present, "any request is accepted" (`setup_routes`, `mcp_server.cpp:670`). Mitigated by **loopback-only bind** (see A05) and a loud startup warning. |
 | A02 Cryptographic Failures | **OK** | Token comparison uses `constant_time_equal` (timing-safe). No TLS, but traffic never leaves `127.0.0.1`. No secrets logged. |
 | A03 Injection | **OK / Risk (low)** | JSON via nlohmann/simdjson; MCP request body parsed inside `try/catch(json::parse_error)` -> -32700, no crash. No SQL. Path inputs exist (MCP `import/export gltf`, `save_scene`) -- potential path traversal **iff** the server were exposed; loopback + optional auth bound the risk. |
 | A04 Insecure Design | **Risk (low)** | Auth-optional-by-default is a deliberate, documented usability trade-off for a local dev tool. Reasonable, but defaulting to "deny without token" would be safer. |
@@ -210,7 +210,7 @@ images, fonts).
   (e.g. `~/.claude/`).
 - No `.env` files committed. No passwords/connection strings in tracked config. The
   `.vscode/settings.json` `"stop_token": "cpp"` hit is a false positive (clangd setting).
-- MCP bearer token correctly stored outside the repo (`~/.claude/erhe_mcp_token`, 0600).
+- MCP bearer token correctly stored outside the repo (`~/.agents/erhe_mcp_token`, 0600).
 
 ### 6.3 Input Validation
 - MCP: JSON parse guarded; missing `params.name` -> -32602; unknown method -> -32601;
@@ -276,7 +276,7 @@ There is no cloud spend. The meaningful cost is **developer maintenance time and
 | `-Werror` only on MSVC | Warnings accumulate on Clang/GCC/Android unseen | "Hundreds of fixes later" when someone finally enables it | Enable `-Werror` incrementally per-library on Clang |
 | `Mcp_server` 4.4k-line god-class | Hard to navigate/test; merge-conflict magnet | Slows MCP feature work; raises contributor bar | Split transport/dispatch/actions |
 | ~27 deps, no vuln monitoring | Manual tracking of upstream CVEs | Vulnerable component ships | Dependabot for Actions + periodic pin review |
-| Single-author bus factor | Specialized XR/Vulkan/forks knowledge | Project stalls if author unavailable | Already mitigated by strong docs (CLAUDE.md, notes.md, Memory Bank) |
+| Single-author bus factor | Specialized XR/Vulkan/forks knowledge | Project stalls if author unavailable | Already mitigated by strong docs (AGENTS.md, notes.md, Memory Bank) |
 
 ---
 

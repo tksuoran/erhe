@@ -32,11 +32,11 @@ say so explicitly and restart from STEP 0.
 - Skip the BASE_RULE and I will kick your honest ass straight back to STEP 0. Stop, reset your head, and do it right -- anything you produce otherwise is invalid.
 
 ## Prerequisites
-- Read `.claude/commands/mind-sets/tddab-planner.md` (the base TDDAB methodology -- single source of truth for plan structure)
-- Read `.claude/commands/mind-sets/cpp-tddab-overlay.md` (C++ specifics: Catch2/CTest, expected/optional, sanitizers in VERIFY)
-- Read `.claude/commands/mind-sets/project-foundations-cpp.md` (the foundations the plan must respect)
+- Read `.agents/commands/mind-sets/tddab-planner.md` (the base TDDAB methodology -- single source of truth for plan structure)
+- Read `.agents/commands/mind-sets/cpp-tddab-overlay.md` (C++ specifics: Catch2/CTest, expected/optional, sanitizers in VERIFY)
+- Read `.agents/commands/mind-sets/project-foundations-cpp.md` (the foundations the plan must respect)
 - If a Memory Bank exists, read it for context; otherwise skip
-- **Optional project settings:** if `.claude/commands/cpp-project.md` exists, read it and use its `@build` / `@test` / `@asan` values in the VERIFY steps of the plan
+- **Optional project settings:** if `.agents/commands/cpp-project.md` exists, read it and use its `@build` / `@test` / `@asan` values in the VERIFY steps of the plan
 
 ## Purpose
 
@@ -47,7 +47,7 @@ context -- no dependency on a later block.
 
 ## Steps
 
-1. **Clarify the feature** -- use AskUserQuestion for anything ambiguous (scope,
+1. **Clarify the feature** -- ask the user about anything ambiguous (scope,
    target API, where it plugs into the existing code).
 2. **Decompose bottom-up** -- list the smallest provable units. For C++ that is
    usually: value types/DTOs -> domain functions -> the service/composition.

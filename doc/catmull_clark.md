@@ -239,7 +239,7 @@ Applying provenance over destination elements is embarrassingly parallel
 vertices/corners/facets could scale near-linearly on big meshes. Caveats that
 make this high-risk: the build / `Source_table::add` phase is not thread-safe as
 written; the op already runs on a worker thread and multiple meshes already run
-concurrently (intra-op parallelism competes with that); and CLAUDE.md forbids
+concurrently (intra-op parallelism competes with that); and AGENTS.md forbids
 lock-free/atomics without explicit sign-off. Pursue only after #1/#2/#4, and only
 for the read-only interpolation half.
 

@@ -384,7 +384,7 @@ Documented in `doc/usd_compatibility.md`, implemented after the switchover:
   - Asset browser `.erhescene` directory handling,
   - legacy extras writers (`erhe_flags`, material extras) once the
     `ERHE_node` / `ERHE_material` transition period ends.
-- Update `src/editor/scene/notes.md`, `src/erhe/gltf/notes.md`, CLAUDE.md
+- Update `src/editor/scene/notes.md`, `src/erhe/gltf/notes.md`, AGENTS.md
   references, memory-bank.
 
 ## Phase 6 - Verification

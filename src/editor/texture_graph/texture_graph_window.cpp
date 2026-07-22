@@ -110,7 +110,7 @@ void Texture_graph_window::resolve_target()
     // Issue #252: the window edits an explicit target, not the global
     // selection. Lock the weak_ptr; a deleted asset resolves to null.
     std::shared_ptr<Graph_texture> target = m_target.lock();
-    // Self-healing against the scene-close bug class (see CLAUDE.md
+    // Self-healing against the scene-close bug class (see AGENTS.md
     // "Scene-hosted references in editor parts"): weak_ptr expiry can
     // never signal a scene close, because this window's own
     // m_graph_texture shared_ptr keeps the asset alive. Drop a target

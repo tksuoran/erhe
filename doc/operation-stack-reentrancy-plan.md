@@ -175,7 +175,7 @@ behavior and works; there is no need to redesign it.
 3. Optional commit C (verification infra): MCP tool `open_scene(path)` that
    constructs + queues `Scene_open_operation` (requires exporting the class
    from asset_browser.cpp or moving it to its own file). Makes this whole
-   area headless-verifiable; CLAUDE.md policy is to grow the MCP surface for
+   area headless-verifiable; AGENTS.md policy is to grow the MCP surface for
    debugging needs.
 
 ## Verification

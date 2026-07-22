@@ -225,5 +225,5 @@ rect) settle it without any CPU-readback ambiguity.
   pre-tonemap) -- read the **stats**, do not judge brightness by the PNG. The ID
   textures are RGBA8/UNORM, so their PNGs are literal.
 - `save_texture` path: forward slashes, parent dir must exist, `overwrite:true`.
-- The proxy leaves `qrenderdoc` running across Claude Code sessions;
+- The proxy leaves `qrenderdoc` running across AI client sessions;
   `renderdoc_shutdown` only kills an instance the proxy itself launched.

@@ -387,7 +387,7 @@ pre-existing bad index / heap corruption.
   install-timeout guard.
 - Temporary validators: `Primitive_builder::build_polygon_fill` guard + iteration
   cap, and the `Scene_builder::make_brushes` post-join validator.
-- `CLAUDE.md` -- how to disable the mobile Auto Blocker / Play Protect install
+- `AGENTS.md` -- how to disable the mobile Auto Blocker / Play Protect install
   dialog (or use `--no-reinstall`).
 
 ## Symptom

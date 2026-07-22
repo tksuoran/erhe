@@ -42,7 +42,7 @@ public:
     // that cache scene-hosted items across frames (window targets, tool
     // state) use this to self-heal when the hosting scene is closed: the
     // cached shared_ptr keeps the item alive, so weak_ptr expiry can never
-    // signal the close (see CLAUDE.md "Scene-hosted references").
+    // signal the close (see AGENTS.md "Scene-hosted references").
     [[nodiscard]] auto is_host_registered(const erhe::Item_host* item_host) -> bool;
 
     // Returns the sole registered scene root when exactly one is registered,

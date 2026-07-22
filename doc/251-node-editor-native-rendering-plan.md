@@ -221,7 +221,7 @@ headless VS build), headless-verify, independent diff review, own commit.
 - **Multi-viewport / imgui_host interplay**: erhe uses its own ImGui backend
   and hosts; removing the viewport faking must be verified in both the
   desktop window host and viewport-window hosts.
-- `src/rendering_test/` breakage is acceptable per CLAUDE.md (it does not use
+- `src/rendering_test/` breakage is acceptable per AGENTS.md (it does not use
   the node editor anyway).
 
 ## Estimated shape

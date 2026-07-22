@@ -239,7 +239,7 @@ Each step: build clean (`scripts\build_ninja_win_vulkan.bat editor` **and**
 `cmake --build build_vs2026_vulkan_headless --target editor --config Debug`),
 headless MCP verification where applicable, independent diff review, commit.
 `src/rendering_test/` may break when shared infrastructure changes - acceptable
-(see CLAUDE.md). Restore `desktop_window_imgui_host_imgui.ini` after editor runs;
+(see AGENTS.md). Restore `desktop_window_imgui_host_imgui.ini` after editor runs;
 never commit `config/editor/*.json`.
 
 ### A1 - Item type + `Material` texture-source seam (foundation, no behavior change)

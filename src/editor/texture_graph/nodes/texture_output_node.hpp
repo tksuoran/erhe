@@ -74,7 +74,7 @@ private:
     // content library, so a shared_ptr here would be a strong ownership
     // cycle Scene_root -> content library -> Graph_texture -> this node ->
     // Scene_root, keeping a closed scene alive forever (scene-close bug
-    // class, see CLAUDE.md "Scene-hosted references in editor parts").
+    // class, see AGENTS.md "Scene-hosted references in editor parts").
     // The scene is not an asset; the material reference is (R4).
     std::weak_ptr<Scene_root>                  m_scene_root;
     Asset_reference                            m_material_reference;

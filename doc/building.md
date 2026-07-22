@@ -188,7 +188,7 @@ From an x64 Native Tools Command Prompt:
 
 For command-line builds without a Visual Studio solution, the Ninja wrappers
 locate VS 2026's bundled cmake/ninja and set up the MSVC environment
-themselves (see CLAUDE.md "Windows CLI builds"):
+themselves (see AGENTS.md "Windows CLI builds"):
 
 -   `scripts\configure_ninja_win_vulkan.bat` / `scripts\build_ninja_win_vulkan.bat <target>` -- MSVC `cl`
 -   `scripts\configure_ninja_win_clang.bat` / `scripts\build_ninja_win_clang.bat <target>` -- clang-cl (also regenerates `compile_commands.json` for clangd)

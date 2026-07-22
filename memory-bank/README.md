@@ -238,7 +238,7 @@ AINative :: MachineFirst¬HumanComfort
 ## Machine-Scope Rule
 
 MemoryBank::git-committed+public-repo→MachineNeutralOnly!
-@scope::ALL-committed-files{sources+docs+CLAUDE.md+memory-bank}¬just-memory-bank!{see-CLAUDE.md-"Machine-Neutral Committed Files"}
+@scope::ALL-committed-files{sources+docs+AGENTS.md+memory-bank}¬just-memory-bank!{see-AGENTS.md-"Machine-Neutral Committed Files"}
 @rationale::SharedSingleSourceOfTruth{per-machine-facts=wrong-on-other-machines+go-stale+information-exposure}
 
 [Forbidden-in-committed-files]

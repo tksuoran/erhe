@@ -17,7 +17,7 @@ git status --porcelain
 
 If the output is non-empty, STOP. Tell the user to commit, stash, or discard their pending edits first. A dirty tree would mix uncommitted work into the collapse and there is no clean way to un-mix afterwards. Do not improvise an auto-stash; the user may not want those edits in the regrouped history.
 
-## Step 1 -- Claude context must be clean
+## Step 1 -- agent context must be clean
 
 This task reads every commit message between `origin/main` and `HEAD`, plus the full accumulated diff, plus the per-file change set. That is heavy and benefits from a fresh context window so nothing important gets truncated mid-analysis.
 
@@ -127,10 +127,10 @@ Then, for each topic in order:
    git diff             # should show everything still pending for later topics
    ```
 
-3. Commit using the project's style. For erhe (see CLAUDE.md "Committing changes with git"):
+3. Commit using the project's style. For erhe (see AGENTS.md "Git Workflow"):
    - Short subject, ideally under ~70 chars, focused on the *why*.
    - Optional body for context.
-   - Trailer `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>` when Claude drafted the message.
+   - Add an AI co-author trailer only when the user or repository policy explicitly requires one; do not invent a model-specific identity.
    - Use a HEREDOC for multi-line messages.
 
 4. Move on to the next topic.

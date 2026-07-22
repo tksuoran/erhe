@@ -42,7 +42,7 @@ post-init phase is held to a TIGHT window, and a post-init stall is flagged in
 seconds, not minutes. The watchdog's "Main loop STALLED" line remains the
 authoritative CPU-spin detector and trips in ~6 s independently of the windows.
 
-Run from the repo root on Windows with `py -3` (per CLAUDE.md).
+Run from the repo root on Windows with `py -3` (per AGENTS.md).
 """
 
 import argparse

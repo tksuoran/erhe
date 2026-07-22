@@ -32,13 +32,13 @@ say so explicitly and restart from STEP 0.
 
 ## Your task
 
-- Read `.claude/commands/mind-sets/audit.md` (the audit methodology)
-- Read `.claude/commands/mind-sets/project-foundations-cpp.md` (the 16 C++ foundations the audit checks against -- it `$include`s `project-foundations.md`, read that too if referenced)
+- Read `.agents/commands/mind-sets/audit.md` (the audit methodology)
+- Read `.agents/commands/mind-sets/project-foundations-cpp.md` (the 16 C++ foundations the audit checks against -- it `$include`s `project-foundations.md`, read that too if referenced)
 - If a Memory Bank exists in this repo, read it first for project context; if not, skip -- this command does not require one
-- **Optional project settings:** if `.claude/commands/cpp-project.md` exists, read it and use its `@build` / `@test` / `@lint` / `@code-nav` values instead of the generic CMake/CTest commands
+- **Optional project settings:** if `.agents/commands/cpp-project.md` exists, read it and use its `@build` / `@test` / `@lint` / `@code-nav` values instead of the generic CMake/CTest commands
 - **Evidence Discipline (no false negatives):** follow the "Evidence Discipline" section of audit.md -- use the language server / code intelligence (LSAI, clangd) not a single grep; scope to OWN code (exclude vendored / `_deps` / `.cpm_cache` / generated trees -- they inflate counts); NEVER emit a `Missing`/`Absent` verdict without running and quoting the targeted negative check (tests: `ctest -N`, `gtest_discover_tests` / `catch_discover_tests`, `enable_testing` + `*/test*/` targets); report a have/total ratio (e.g. "8/36 libs have tests") as `Partial`, never `Missing`
 - **Code-level diagnostics (use LSAI to find problems IN the code, not just the build):** run `mcp__lsai__lsai_diagnostics` (minSeverity warning) and scope the result to OWN code (exclude vendored / SDK / generated / known-rotten trees). Discard the `-Wc++98-compat` / `-Wpre-c++NN-compat` pedantry the analyzer emits under its near-`-Weverything` profile, then report the SUBSTANTIVE warnings -- sign/signedness conversion, field/local shadowing, float `==`/`!=`, unsafe-buffer-usage / pointer arithmetic, unhandled `switch` enums, `const`-dropping casts, unused includes -- as a "Code-Level Diagnostics" finding with `file:line`. Tie any defect the real build hides (warnings-as-errors not on that compiler) back to Foundation #1.
-- Use AskUserQuestion to gather project context if not provided (what the project is, primary build system, target platforms, what worries the user)
+- Ask the user for project context if not provided (what the project is, primary build system, target platforms, what worries the user)
 - Confirm activation with "# Architecture Audit active (C++)"
 
 ## Scope reminder (C++ specifics)

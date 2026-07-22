@@ -32,9 +32,9 @@ say so explicitly and restart from STEP 0.
 - Skip the BASE_RULE and I will kick your honest ass straight back to STEP 0. Stop, reset your head, and do it right -- anything you produce otherwise is invalid.
 
 ## Prerequisites
-- Read `.claude/commands/mind-sets/debug-protocol.md` (Protocol D -- the methodology, single source of truth for the rules)
+- Read `.agents/commands/mind-sets/debug-protocol.md` (Protocol D -- the methodology, single source of truth for the rules)
 - If a Memory Bank exists, read it for context; otherwise skip (not required)
-- **Optional project settings:** if `.claude/commands/cpp-project.md` exists, read it and use its `@build` / `@test` / `@asan` / `@code-nav` / `@logs` / `@platform` values instead of the generic commands below
+- **Optional project settings:** if `.agents/commands/cpp-project.md` exists, read it and use its `@build` / `@test` / `@asan` / `@code-nav` / `@logs` / `@platform` values instead of the generic commands below
 
 ## Purpose
 

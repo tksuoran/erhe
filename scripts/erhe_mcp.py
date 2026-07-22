@@ -18,7 +18,7 @@ class McpClient:
         self.url = f"http://127.0.0.1:{port}/mcp"
         self.next_id = 0
         self.headers = {"Content-Type": "application/json"}
-        token_path = os.path.join(os.path.expanduser("~"), ".claude", "erhe_mcp_token")
+        token_path = os.path.join(os.path.expanduser("~"), ".agents", "erhe_mcp_token")
         if os.path.isfile(token_path):
             with open(token_path, "r", encoding="utf-8") as f:
                 token = f.read().strip()

@@ -32,12 +32,12 @@ say so explicitly and restart from STEP 0.
 - Skip the BASE_RULE and I will kick your honest ass straight back to STEP 0. Stop, reset your head, and do it right -- anything you produce otherwise is invalid.
 
 ## Prerequisites
-- Read `.claude/commands/mind-sets/cpp-senior.md` (the C++ senior mindset -- the rules you code by)
-- Read `.claude/commands/mind-sets/common-coding-style.md` (cross-language rules: immutability, KISS/DRY/YAGNI, file limits)
-- Read `.claude/commands/mind-sets/project-foundations-cpp.md` (the foundations the code must satisfy)
-- If the methodology is TDDAB: read `.claude/commands/mind-sets/cpp-tddab-overlay.md`
+- Read `.agents/commands/mind-sets/cpp-senior.md` (the C++ senior mindset -- the rules you code by)
+- Read `.agents/commands/mind-sets/common-coding-style.md` (cross-language rules: immutability, KISS/DRY/YAGNI, file limits)
+- Read `.agents/commands/mind-sets/project-foundations-cpp.md` (the foundations the code must satisfy)
+- If the methodology is TDDAB: read `.agents/commands/mind-sets/cpp-tddab-overlay.md`
 - If a Memory Bank / plan file exists, read it for context; otherwise work from the plan the user points you to
-- **Optional project settings:** if `.claude/commands/cpp-project.md` exists, read it and use its `@build` / `@configure` / `@test` / `@lint` / `@asan` values in the per-block VERIFY loop instead of the generic CMake/CTest commands
+- **Optional project settings:** if `.agents/commands/cpp-project.md` exists, read it and use its `@build` / `@configure` / `@test` / `@lint` / `@asan` values in the per-block VERIFY loop instead of the generic CMake/CTest commands
 
 ## Purpose
 
@@ -84,4 +84,4 @@ non-trivial.
 - **Follow existing patterns and naming** in the target codebase
 - **Fix the cause, not the symptom** -- a defensive check that hides the root is rejected
 - **One block at a time** -- never batch blocks past a red build
-- **Ask when unsure** -- use AskUserQuestion rather than guessing the intent
+- **Ask when unsure** -- ask the user rather than guessing the intent

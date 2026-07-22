@@ -1,6 +1,6 @@
 ---
 name: erhe-cpp-debugging
-description: Debug an erhe C++ crash, abort, VERIFY/ERHE_FATAL, thrown exception, hang or deadlock at the source level with a real callstack and live variable values, instead of guessing from logs/log.txt and a stripped backtrace. On macOS drive lldb from the Bash tool (preferred: the embedded Python SB API emitting JSON); on Windows drive the live Visual Studio via the visualstudio MCP server (breakpoints, launch-under-debugger, step, callstack, locals). Use this for "editor.exe exited non-zero / [crash] unhandled exception / a minidump appeared / a VERIFY or FATAL fired / a C++ exception 0xe06d7363 / it deadlocked or hung" -- the minidump and log are a starting hypothesis, the live callstack + locals are the diagnosis. For GPU "renders wrong" bugs use erhe-renderdoc-gpu-debug instead; this skill is for CPU-side control flow and state.
+description: Debug an erhe C++ crash, abort, VERIFY/ERHE_FATAL, thrown exception, hang or deadlock at the source level with a real callstack and live variable values, instead of guessing from logs/log.txt and a stripped backtrace. On macOS drive lldb from a shell (preferred: the embedded Python SB API emitting JSON); on Windows drive the live Visual Studio via the visualstudio MCP server (breakpoints, launch-under-debugger, step, callstack, locals). Use this for "editor.exe exited non-zero / [crash] unhandled exception / a minidump appeared / a VERIFY or FATAL fired / a C++ exception 0xe06d7363 / it deadlocked or hung" -- the minidump and log are a starting hypothesis, the live callstack + locals are the diagnosis. For GPU "renders wrong" bugs use erhe-renderdoc-gpu-debug instead; this skill is for CPU-side control flow and state.
 ---
 
 # erhe C++ debugging (lldb on macOS / Linux, Visual Studio MCP on Windows)
@@ -11,12 +11,12 @@ variable values at the fault site. Do NOT try to reason a crash out from
 `logs/editor_crash_*.dmp` minidump -- they are a hypothesis, not the diagnosis.
 
 This is the authoritative macOS/Linux lldb run-book. The Windows VS-MCP prose
-(full tool list, typical flow, gotchas) lives in CLAUDE.md under "Debugging on
+(full tool list, typical flow, gotchas) lives in AGENTS.md under "Debugging on
 Windows / MSVC (Visual Studio MCP server)".
 
 ## Pick the platform path
 
-- **macOS / Linux -> lldb via the Bash tool.** `/usr/bin/lldb` ships with the
+- **macOS / Linux -> lldb via a shell.** `/usr/bin/lldb` ships with the
   Command Line Tools (no install). All three Debug builds have full symbols:
   `build_xcode_{metal,opengl,vulkan}/src/editor/Debug/editor`.
 - **Windows -> the `visualstudio` MCP server** (`mcp__visualstudio__*`). It drives a
@@ -24,7 +24,7 @@ Windows / MSVC (Visual Studio MCP server)".
   `debugger_status` until it breaks -> `debugger_get_callstack` /
   `debugger_get_locals` / `debugger_evaluate` -> `debugger_stop`. Always
   `solution_info` first to confirm which solution is loaded; for headless-only
-  repros open `build_vs2026_vulkan_headless/erhe.slnx`. (CLAUDE.md has the full
+  repros open `build_vs2026_vulkan_headless/erhe.slnx`. (AGENTS.md has the full
   tool list and flow.) `lldb-mi`/GDB-MI do not exist here; on Windows use VS-MCP.
 
 ## macOS: which lldb interface (most efficient first)

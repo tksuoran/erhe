@@ -32,10 +32,10 @@ say so explicitly and restart from STEP 0.
 - Skip the BASE_RULE and I will kick your honest ass straight back to STEP 0. Stop, reset your head, and do it right -- anything you produce otherwise is invalid.
 
 ## Prerequisites
-- Read `.claude/commands/mind-sets/tddab-planner.md` + `.claude/commands/mind-sets/cpp-tddab-overlay.md` (the rules the plan must satisfy)
-- Read `.claude/commands/mind-sets/project-foundations-cpp.md` (project conformity)
+- Read `.agents/commands/mind-sets/tddab-planner.md` + `.agents/commands/mind-sets/cpp-tddab-overlay.md` (the rules the plan must satisfy)
+- Read `.agents/commands/mind-sets/project-foundations-cpp.md` (project conformity)
 - If a Memory Bank exists, read it for context; otherwise skip
-- **Optional project settings:** if `.claude/commands/cpp-project.md` exists, read it and use its `@code-nav` / `@build` / `@test` values where relevant
+- **Optional project settings:** if `.agents/commands/cpp-project.md` exists, read it and use its `@code-nav` / `@build` / `@test` values where relevant
 
 ## Steps
 

@@ -348,7 +348,7 @@ Assign a score from 1 (critical) to 5 (excellent) for each area:
 
 ## Workflow
 
-1. **Gather context** -- Use AskUserQuestion to collect missing project information
+1. **Gather context** -- ask the user to provide missing project information
 2. **Read documentation** -- Analyze all provided files and configurations
 3. **Load foundations** -- Read `project-foundations-{language}.md` for the project's primary language
 4. **Execute audit** -- Follow the 9-section structure systematically

@@ -39,7 +39,7 @@
 [2026-07-02]
 ✓geometry-nodes::phases1-5+MCP-tools+undo-redo+serialization{branch:geometry_nodes,713eb22d..d812547c,live-verified-headless-MCP,plan-doc-updated,phase6→prompt_queue.txt}
 ✓#240-selectable-scene::archived{done-2026-07-01,see-git}
-✓session-tooling::mcp_call.py+erhe-headless-verify-skill+CLAUDE.md{cli-builds+testing+gotchas}+renderdoc-skill-verify-wording+.mcp.json-recreated
+✓session-tooling::mcp_call.py+erhe-headless-verify-skill+AGENTS.md{cli-builds+testing+gotchas}+renderdoc-skill-verify-wording+.mcp.json-recreated
 ✓geometry-nodes-phase6::6a-incremental+6b-CoW+param-undo+MCP-set_parameter+spawn-grid+output-name{a11abd21..0881e107}
 ✓geometry-nodes-phase6-completion::output-physics+6d-instances+6e-groups+6c-design+CSG-fix+CC-quadratic-fix+smoke-sweep-65/65{ff414965..a2a36dd5}
 ✓catmull-clark-performance::harness+items-11-12-1-3-2{0171c8c4..650dc354,editor-x6-25.1→17.8s-Debug,Release-chain-689→570ms,doc/catmull_clark.md}
@@ -146,7 +146,7 @@ lesson::user's-live-editor{build_vs2026_vulkan}held-8080+shares-logs/config→al
 ✓raycast-MCP-tool{c3ee16ce}::headless-raytrace-hit-query{pickable_static-default}
 ✓mcp-port-exclusive{a32dbbde}::Windows-SO_REUSEADDR-shadow-bind→SO_EXCLUSIVEADDRUSE{fallback-scan-now-works}
 ✓close-scene-clears-graph-targets{dd9022bc}::geometry+texture-windows{primaries+extras}
-✓scene-close-defenses{37807545}::leak-watchdog{60-frames,"scene-close leak"-warnings}+App_scenes::is_host_registered+resolve_target-self-heal+CLAUDE.md-rule+systemPatterns-line
+✓scene-close-defenses{37807545}::leak-watchdog{60-frames,"scene-close leak"-warnings}+App_scenes::is_host_registered+resolve_target-self-heal+AGENTS.md-rule+systemPatterns-line
 ✓texture-node-Scene_root-cycle{ba23b612}::Texture_material_output_node+Texture_output_node-weak_ptr+resolve_scene_root{cycle-kept-whole-scene-alive}
 ✓audit{Explore-agent}::remaining-findings→prompt_queue-ITEM2{clipboard-copy-pins-originals+animation-player/window+hotbar/inventory-slots+brush/paint-tool-state+trivial-caches}
 >handoff::prompt_queue-ITEM1{PLAN-asset-reference+asset-manager}

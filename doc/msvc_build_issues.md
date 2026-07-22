@@ -119,7 +119,7 @@ Contributing conditions:
    `editor.cpp`). A mixed-layout exe then dies at launch with a clear
    message instead of an undebuggable crash. Both incident crashes went
    through this struct.
-3. **Workflow rule** (candidate for CLAUDE.md): after changing widely
+3. **Workflow rule** (candidate for AGENTS.md): after changing widely
    included editor headers, or after git operations with VS open, do not
    trust the VS IDE incremental build -- use the cmake CLI build or rebuild.
 4. Rejected: dropping `/MP` (build-time cost far exceeds the risk removed);

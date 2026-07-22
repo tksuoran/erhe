@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Call a tool on the in-editor MCP server (see CLAUDE.md "In-editor MCP server").
+"""Call a tool on the in-editor MCP server (see AGENTS.md "In-editor MCP server").
 
 Usage:
     py -3 scripts/mcp_call.py <tool> [json-arguments] [--port N]
@@ -16,7 +16,7 @@ PowerShell example (base64 sidesteps PowerShell 5.1 quote mangling):
 
 The editor binds 127.0.0.1:8080 by default and scans [8080, 8100) when the
 port is taken; grep logs/log.txt for "MCP server: listening" to find the
-actual port and pass it with --port. If ~/.claude/erhe_mcp_token exists its
+actual port and pass it with --port. If ~/.agents/erhe_mcp_token exists its
 contents are sent as a bearer token (matches the server's auth behavior).
 """
 
@@ -32,7 +32,7 @@ import urllib.request
 def rpc(port, method, params):
     body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode("utf-8")
     headers = {"Content-Type": "application/json"}
-    token_path = pathlib.Path.home() / ".claude" / "erhe_mcp_token"
+    token_path = pathlib.Path.home() / ".agents" / "erhe_mcp_token"
     if token_path.is_file():
         headers["Authorization"] = "Bearer " + token_path.read_text(encoding="utf-8").strip()
     request = urllib.request.Request(f"http://127.0.0.1:{port}/mcp", data=body, headers=headers)

@@ -1,6 +1,6 @@
-# cppskills -- C++ commands for Claude Code (a gift kit)
+# cppskills -- C++ commands for AI coding agents
 
-A small, self-contained set of Claude Code slash-commands for C++ projects,
+A small, self-contained set of AI coding-agent commands for C++ projects,
 plus the mindset files they depend on. Drop-in: no external apparatus, no
 Memory Bank, no settings required (one optional settings stub if you want it).
 
@@ -9,11 +9,11 @@ field-test lessons from the erhe / clangd work.
 
 ## Install
 
-Copy the `commands/` folder into your project's `.claude/`:
+Copy the `commands/` folder into your project's `.agents/`:
 
 ```
 your-project/
-+-- .claude/
++-- .agents/
     +-- commands/        <- copy the contents of cppskills/commands/ here
         +-- x-audit.md
         +-- x-debug.md
@@ -24,7 +24,8 @@ your-project/
         +-- mind-sets/              (the files the commands read)
 ```
 
-Then invoke a command in Claude Code by name, e.g. `/x-debug`, `/x-audit`.
+Then invoke a command by name using the syntax supported by your AI client,
+for example `/x-debug` or `/x-audit` when slash commands are supported.
 
 ## Commands
 

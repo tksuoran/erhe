@@ -57,7 +57,7 @@ Capture files land in `logs/quest_<YYYYMMDD>_<HHMMSS>.log` (gitignored) and are 
 The script enforces these invariants -- understand them before changing it:
 
 - **One extra process, ever.** The single backgrounded `adb logcat` is the only process owned by this workflow. Re-running `quest_logcat.sh` kills the previous streamer before starting a new one; `stop` kills without starting a replacement. The shared `adb` server daemon is not "ours" -- it persists across sessions regardless.
-- **No leaks across Claude Code sessions.** The PID is tracked in `logs/.logcat.pid` (a real file in the repo, gitignored), so even a fresh shell finds and stops the prior capture.
+- **No leaks across AI client sessions.** The PID is tracked in `logs/.logcat.pid` (a real file in the repo, gitignored), so even a fresh shell finds and stops the prior capture.
 - **No PID-recycle hazard.** Before killing, the script confirms the recorded PID still points at an `adb` process via `ps -p PID`; if the PID was recycled to something unrelated, it leaves the new owner alone and just removes the stale PID file. Git Bash's `ps` reports the executable path only (no argv), so it matches on `adb` -- fine because every other adb call in this workflow is short-lived.
 
 ## Filtering a capture to erhe-only lines

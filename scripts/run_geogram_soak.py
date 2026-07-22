@@ -9,7 +9,7 @@ corruption is ARM-only, so the useful runs are on-device -- but it is a plain
 CLI program, so it runs via `adb shell` with NO headset / controllers /
 immersive gate (a Samsung phone or a powered Quest both work).
 
-Usage (run from the repo root with `py -3`, per CLAUDE.md):
+Usage (run from the repo root with `py -3`, per AGENTS.md):
 
     py -3 scripts/run_geogram_soak.py [options] -- [harness args]
 

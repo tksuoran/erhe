@@ -121,7 +121,7 @@ private:
 
     void end_material_inspect();
 
-    // Scene-hosted references (see CLAUDE.md "Scene-hosted references in
+    // Scene-hosted references (see AGENTS.md "Scene-hosted references in
     // editor parts"): drop the pinned target and the material-edit latch
     // when their host scene closes - the window's own strong references
     // would otherwise keep the closed scene's items alive (a weak_ptr

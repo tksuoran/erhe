@@ -7,7 +7,7 @@ wrapper picks a random seed if --seed is not supplied, sets the env vars,
 and always prints the seed so a failing run can be reproduced via
 --seed <N>.
 
-Usage (Windows; remember `py -3`, not `python` -- see CLAUDE.md):
+Usage (Windows; remember `py -3`, not `python` -- see AGENTS.md):
     py -3 scripts\\run_circular_ring_buffer_smoke_test.py [--seconds N] [--seed N]
 
 On macOS / Linux:

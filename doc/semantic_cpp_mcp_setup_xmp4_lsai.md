@@ -122,7 +122,7 @@ cmake -G Ninja -B <build_dir> -S . -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ...
 In this repo the wrapper `scripts\configure_ninja_win_clang.bat` does exactly
 this (clang-cl + `CMAKE_EXPORT_COMPILE_COMMANDS`, output in
 `build_ninja_win_clang/`) and is the canonical way to (re)generate the
-compilation database; see CLAUDE.md "Windows CLI builds".
+compilation database; see AGENTS.md "Windows CLI builds".
 
 Then a `.clangd` in the repo root pointing at that build dir (so clangd finds
 the DB even if the dir name is non-standard):

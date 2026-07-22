@@ -306,7 +306,7 @@ if (ERHE_SPIRV)
         #      1.4.350); now emits column 0 like every other DebugInfo instruction.
         # The fork (rather than a CPM PATCHES patch) keeps the build free of any host
         # `patch` invocation - see the "Do not use CPM's PATCHES keyword" note in
-        # CLAUDE.md. Move back to KhronosGroup/glslang and bump the tag once upstream
+        # AGENTS.md. Move back to KhronosGroup/glslang and bump the tag once upstream
         # ships both fixes.
         GIT_TAG           6ee8c2531efcf16e1531d7a1259dd7100c1db020
         GITHUB_REPOSITORY tksuoran/glslang
@@ -855,7 +855,7 @@ if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
     # fatal" debug callback escalates to an abort. Not present upstream. The
     # fork (rather than a CPM PATCHES patch) keeps the build free of any host
     # `patch` invocation - see the "Do not use CPM's PATCHES keyword" note in
-    # CLAUDE.md. Move back to KhronosGroup/OpenXR-SDK-Source and bump the tag
+    # AGENTS.md. Move back to KhronosGroup/OpenXR-SDK-Source and bump the tag
     # once upstream carries the fix.
     CPMAddPackage(
         NAME              OpenXR-SDK

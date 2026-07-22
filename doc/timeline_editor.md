@@ -209,7 +209,7 @@ owned by `editor.cpp` like other parts, pointer in `App_context`.
   affected scene (collect distinct scenes from channel targets; guard null
   targets / empty channels).
 - Scrubbing (`set_time(t)`) applies immediately even when paused.
-- Per-frame `update` must not allocate (CLAUDE.md allocation discipline):
+- Per-frame `update` must not allocate (AGENTS.md allocation discipline):
   the active list and the distinct-scene scratch are persistent members
   cleared with `clear()`.
 - `Timeline_window` becomes a pure view over `Animation_player` (its
@@ -309,7 +309,7 @@ gtests for: STEP/LINEAR/CUBICSPLINE evaluation (including the Phase 0 STEP
 fix and quat normalization), insert/remove/move keeping sortedness and
 triplet layout, interpolation-mode conversion round-trip, cursor reset, and
 copy-on-shared-edit. This is exactly the "pure-logic code in an `erhe::*`
-library" case CLAUDE.md calls for.
+library" case AGENTS.md calls for.
 
 ### D5. Undo/redo model
 

@@ -581,7 +581,7 @@ material in the headless viewport screenshot; smoke script green.
 - **Unit tests** (every phase): `erhe_graph_tests` (Phase 0),
   `erhe_texgen_tests` (Phase 1+, pure string logic), composed-shader GPU
   tests in `erhe_graphics_tests` (Phase 2+, headless Vulkan). Run via ctest /
-  direct exe from `build_tests*` trees per `CLAUDE.md` Testing section.
+  direct exe from `build_tests*` trees per `AGENTS.md` Testing section.
 - **Headless end-to-end** (Phase 3+): `scripts/texture_graph_smoke_test.py`
   against the headless Vulkan editor build over the in-editor MCP server,
   including `texture_graph_export_png` pixel assertions and

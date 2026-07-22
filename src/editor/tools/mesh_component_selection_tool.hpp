@@ -354,7 +354,7 @@ private:
     // app_context.editor_settings and edits happen in the Settings window.
 
     // Per-frame scratch (cleared each frame, capacity retained). tool_render
-    // is hot-path, so it must not allocate transient containers (see CLAUDE.md
+    // is hot-path, so it must not allocate transient containers (see AGENTS.md
     // run-time allocation discipline).
     std::vector<glm::vec3>            m_scratch_positions;
     std::vector<uint32_t>             m_scratch_indices;

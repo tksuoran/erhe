@@ -1,8 +1,10 @@
-# Ignore local Claude Code state (settings, sessions, plans, ...) but
-# track project-scoped skills so the team gets them with the repo.
+# Ignore local AI agent state (settings, sessions, plans, ...) but
+# track project-scoped skills and commands so the team gets them with the repo.
+.agents/*
+!.agents/skills/
+!.agents/commands/
+# Keep legacy client-local state private too.
 .claude/*
-!.claude/skills/
-!.claude/commands/
 claude.sh
 .idea/*
 !.idea/runConfigurations

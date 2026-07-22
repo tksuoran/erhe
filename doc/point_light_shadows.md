@@ -85,7 +85,7 @@ the wrong value:
 
 ### What was verified empirically (headless + in-editor MCP)
 
-A new headless workflow was used (now documented in `CLAUDE.md` ->
+A new headless workflow was used (now documented in `AGENTS.md` ->
 "In-editor MCP server"): build `build_vs2026_vulkan_headless`
 (`scripts/configure_vs2026_vulkan_headless.bat`), run the editor (it auto-runs
 `config/editor/commands.json`, which now stands up a point-shadow test scene: one

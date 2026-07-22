@@ -54,7 +54,7 @@ editor-run::repo-root-cwd{config/+res/+logs/}
 →fix::git -C <cache> submodule update --init --force <paths>+RE-configure{sources-needed-pre-configure}
 
 [VS_MCP]
-symbol_workspace::¬cpp-index{C#-oriented,0-matches}→goto_definition/find_references-from-open-documents+Grep{CLAUDE.md-VS-MCP-section=canonical-debug/build-flow}
+symbol_workspace::¬cpp-index{C#-oriented,0-matches}→goto_definition/find_references-from-open-documents+Grep{AGENTS.md-VS-MCP-section=canonical-debug/build-flow}
 ¬attach-tool{debugger_launch-only}→hung-external-process::ASK-user-attach-manually{Debug>Attach}→debugger_break/get_callstack/evaluate-then-work{proven-2026-07-12-geogram-wedge}
 get_callstack::current-thread-only→multi-thread-hang::ask-user-switch-thread-in-Threads-window-between-reads
 

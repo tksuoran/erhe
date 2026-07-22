@@ -158,7 +158,7 @@ The tool draws, for the active mesh:
 
 `tool_render` clears and refills persistent scratch buffers each frame
 (positions / indices / lines), so steady-state frames do not allocate (see the
-run-time allocation discipline in `CLAUDE.md`).
+run-time allocation discipline in `AGENTS.md`).
 
 ## 6. Multiview / headset limitation
 
