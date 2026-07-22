@@ -8,6 +8,7 @@
     "editor.draw": "info",
     "editor.fly_camera": "info",
     "editor.frame": "info",
+    "editor.frame_pacing": "info",
     "editor.framebuffer": "info",
     "editor.graph_editor": "info",
     "editor.headset": "info",

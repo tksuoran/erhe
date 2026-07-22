@@ -92,6 +92,11 @@ public:
     void on_thread_enter           ();
 
     [[nodiscard]] auto get_surface                        () -> Surface*;
+    // Present-wait clamp (frame pacing FR5): no present-wait path on GL.
+    [[nodiscard]] auto wait_for_displayed_frame           (std::int64_t frame_id, uint64_t timeout_ns) -> Present_wait_result;
+    [[nodiscard]] auto get_frame_pacing_tier              () const -> Frame_pacing_tier;
+    // Target present time (frame pacing FR3): no present-timing path on GL.
+    void               set_present_target_time            (std::int64_t frame_id, double target_time_seconds, double hold_until_seconds);
     [[nodiscard]] auto get_native_handles                 () const -> Native_device_handles;
     [[nodiscard]] auto get_handle                         (const Texture& texture, const Sampler& sampler) const -> uint64_t;
     [[nodiscard]] auto create_dummy_texture               (Command_buffer& init_command_buffer, erhe::dataformat::Format format) -> std::shared_ptr<Texture>;

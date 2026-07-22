@@ -111,6 +111,11 @@ private:
     auto query_viewports        (const nlohmann::json& args) -> std::string;
     auto query_server_info      (const nlohmann::json& args) -> std::string;
     auto action_set_window_visibility(const nlohmann::json& args) -> std::string;
+    auto query_frame_pacing_status  (const nlohmann::json& args) -> std::string;
+    auto query_frame_pacing_frames  (const nlohmann::json& args) -> std::string;
+    auto action_set_frame_pacing_min_vsyncs(const nlohmann::json& args) -> std::string;
+    auto action_set_frame_pacing_workload  (const nlohmann::json& args) -> std::string;
+    auto action_set_frame_pacing_capture   (const nlohmann::json& args) -> std::string;
     auto query_selection        (const nlohmann::json& args) -> std::string;
     auto query_undo_redo_stack  (const nlohmann::json& args) -> std::string;
     auto action_clear_undo_history(const nlohmann::json& args) -> std::string;
@@ -259,7 +264,7 @@ private:
     std::thread                      m_server_thread;
     std::atomic<bool>                m_running{false};
 
-    // Bearer token loaded from $HOME/.claude/erhe_mcp_token (file
+    // Bearer token loaded from $HOME/.agents/erhe_mcp_token (file
     // mode 0600 on POSIX). Empty when auth is disabled (the token
     // file is missing). When set, every /mcp request must present
     // Authorization: Bearer <m_auth_token>.

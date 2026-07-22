@@ -31,6 +31,16 @@
 #include "erhe_window/renderdoc_capture.hpp"
 #include "erhe_window/window.hpp"
 
+#if defined(_WIN32)
+#   ifndef WIN32_LEAN_AND_MEAN
+#       define WIN32_LEAN_AND_MEAN
+#   endif
+#   ifndef NOMINMAX
+#       define NOMINMAX
+#   endif
+#   include <windows.h>
+#endif
+
 #include "volk.h"
 #include "vk_mem_alloc.h"
 
@@ -79,6 +89,45 @@ auto Device_impl::get_device_frame_in_flight(size_t index) -> Device_frame_in_fl
     return m_device_submit_history[index];
 }
 
+auto Device_impl::get_frame_time_recorder() -> erhe::frame_pacing::Frame_time_recorder&
+{
+    return m_device.get_frame_time_recorder();
+}
+
+auto Device_impl::wait_for_displayed_frame(const std::int64_t frame_id, const uint64_t timeout_ns) -> Present_wait_result
+{
+    if (m_surface == nullptr) {
+        return Present_wait_result::unsupported;
+    }
+    Swapchain* const swapchain = m_surface->get_swapchain();
+    if (swapchain == nullptr) {
+        return Present_wait_result::unsupported; // headless: emulated swapchain, nothing is displayed
+    }
+    return swapchain->get_impl().wait_for_displayed_frame(frame_id, timeout_ns);
+}
+
+void Device_impl::set_present_target_time(const std::int64_t frame_id, const double target_time_seconds, const double hold_until_seconds)
+{
+    m_present_target_frame_id           = frame_id;
+    m_present_target_time_seconds       = target_time_seconds;
+    m_present_target_hold_until_seconds = hold_until_seconds;
+}
+
+auto Device_impl::get_present_target_time(const std::int64_t frame_id) const -> double
+{
+    return (frame_id == m_present_target_frame_id) ? m_present_target_time_seconds : 0.0;
+}
+
+auto Device_impl::get_frame_pacing_tier() const -> Frame_pacing_tier
+{
+    return m_frame_pacing_tier;
+}
+
+auto Device_impl::get_context_window() const -> erhe::window::Context_window*
+{
+    return m_context_window;
+}
+
 void Device_impl::ensure_device_frame_slot(size_t index)
 {
     // Extracted from Swapchain_impl::setup_frame's device-scope block:
@@ -89,10 +138,14 @@ void Device_impl::ensure_device_frame_slot(size_t index)
     ERHE_VERIFY(index < m_device_submit_history.size());
     Device_frame_in_flight& df = m_device_submit_history[index];
     if (df.submit_fence != VK_NULL_HANDLE) {
+        const double fence_wait_begin = erhe::frame_pacing::Frame_time_recorder::now();
         const VkResult result = vkWaitForFences(m_vulkan_device, 1, &df.submit_fence, true, UINT64_MAX);
         if (result != VK_SUCCESS) {
             log_context->critical("vkWaitForFences() failed with {} {}", static_cast<int32_t>(result), c_str(result));
             abort();
+        }
+        if (erhe::frame_pacing::Frame_time_record* record = m_device.get_frame_time_recorder().find(static_cast<std::int64_t>(m_frame_index))) {
+            record->fence_wait_duration += erhe::frame_pacing::Frame_time_recorder::now() - fence_wait_begin;
         }
         m_sync_pool->recycle_fence(df.submit_fence);
         reset_device_frame_command_pool(index);
@@ -188,6 +241,10 @@ Device_impl::~Device_impl() noexcept
     if (m_gpu_timer_query_pool != VK_NULL_HANDLE) {
         vkDestroyQueryPool(m_vulkan_device, m_gpu_timer_query_pool, nullptr);
         m_gpu_timer_query_pool = VK_NULL_HANDLE;
+    }
+    if (m_frame_bracket_query_pool != VK_NULL_HANDLE) {
+        vkDestroyQueryPool(m_vulkan_device, m_frame_bracket_query_pool, nullptr);
+        m_frame_bracket_query_pool = VK_NULL_HANDLE;
     }
 
     for (auto& [hash, pipeline] : m_pipeline_map) {
@@ -944,6 +1001,26 @@ auto Device_impl::query_device_extensions(
     if (!headless && !device_extensions_out.m_VK_KHR_present_mode_fifo_latest_ready) {
         check_device_extension(VK_EXT_PRESENT_MODE_FIFO_LATEST_READY_EXTENSION_NAME, device_extensions_out.m_VK_EXT_present_mode_fifo_latest_ready, 3.0f);
     }
+
+    // Frame pacing capability probes (doc/frame_pacing_capability_tiers.md,
+    // implementation plan step P0.1). Present id/wait and present timing are
+    // surface-dependent; calibrated timestamps is not.
+    if (!headless) {
+        check_device_extension(VK_KHR_PRESENT_ID_EXTENSION_NAME,     device_extensions_out.m_VK_KHR_present_id,     1.0f);
+        check_device_extension(VK_KHR_PRESENT_WAIT_EXTENSION_NAME,   device_extensions_out.m_VK_KHR_present_wait,   1.0f);
+        check_device_extension(VK_KHR_PRESENT_ID_2_EXTENSION_NAME,   device_extensions_out.m_VK_KHR_present_id2,    1.0f);
+        check_device_extension(VK_KHR_PRESENT_WAIT_2_EXTENSION_NAME, device_extensions_out.m_VK_KHR_present_wait2,  1.0f);
+        check_device_extension(VK_EXT_PRESENT_TIMING_EXTENSION_NAME, device_extensions_out.m_VK_EXT_present_timing, 3.0f);
+#if defined(VK_USE_PLATFORM_WIN32_KHR)
+        // Exclusive fullscreen (Window_configuration::exclusive_fullscreen):
+        // bypasses DWM composition; useful for frame pacing testing.
+        check_device_extension(VK_EXT_FULL_SCREEN_EXCLUSIVE_EXTENSION_NAME, device_extensions_out.m_VK_EXT_full_screen_exclusive, 1.0f);
+#endif
+    }
+    check_device_extension(VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME, device_extensions_out.m_VK_KHR_calibrated_timestamps, 1.0f);
+    if (!device_extensions_out.m_VK_KHR_calibrated_timestamps) {
+        check_device_extension(VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME, device_extensions_out.m_VK_EXT_calibrated_timestamps, 1.0f);
+    }
     return total_score;
 }
 
@@ -1033,6 +1110,11 @@ auto Device_impl::get_present_queue() const -> VkQueue
 auto Device_impl::get_capabilities() const -> const Capabilities&
 {
     return m_capabilities;
+}
+
+auto Device_impl::get_device_extensions() const -> const Device_extensions&
+{
+    return m_device_extensions;
 }
 
 auto Device_impl::get_driver_properties() const -> const VkPhysicalDeviceDriverProperties&
@@ -1218,6 +1300,9 @@ void Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
         reinterpret_cast<std::uintptr_t>(submit_fence),
         submit_info_aggregate.swapchains_to_present.size()
     );
+    if (erhe::frame_pacing::Frame_time_record* record = m_device.get_frame_time_recorder().find(static_cast<std::int64_t>(m_frame_index))) {
+        record->submit_time = erhe::frame_pacing::Frame_time_recorder::now();
+    }
     const VkResult result = vkQueueSubmit2(m_vulkan_graphics_queue, 1, &submit_info, submit_fence);
     if (result != VK_SUCCESS) {
         log_context->critical(
@@ -1231,11 +1316,73 @@ void Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
     // begin_swapchain has already had the swapchain's present_semaphore
     // routed into the signal list above. Now drive vkQueuePresentKHR
     // on each so callers don't have to manage a separate present step.
+    //
+    // Present-request holdback (frame pacing claim C15): the presentation
+    // engine on the development machine accepts but does not honor target
+    // present times (doc/frame_pacing_present_timing_driver_report.md), so
+    // an image that is ready early displays a refresh period before its
+    // target. Delaying the REQUEST until one period before the target makes
+    // the earliest feasible vsync BE the target. The GPU work is already
+    // submitted above - only the present is delayed - and the wait is
+    // stamped as an involuntary wait (excluded from CPU service time).
+    if (!submit_info_aggregate.swapchains_to_present.empty()) {
+        const double target_seconds = get_present_target_time(static_cast<std::int64_t>(m_frame_index));
+        // The holdback deadline comes from the pacer (decision.hold_until):
+        // it is derived from the TRACKED grid period, because the queried
+        // refreshDuration can be grossly wrong (4.2% measured after an
+        // app-driven fullscreen mode set, driver report issue #2) - a
+        // holdback interval derived from it can release the request before
+        // the previous vblank's deadline, defeating the mitigation.
+        const double release_time = (m_present_target_frame_id == static_cast<std::int64_t>(m_frame_index))
+            ? m_present_target_hold_until_seconds
+            : 0.0;
+        if ((target_seconds > 0.0) && (release_time > 0.0) && get_graphics_config().frame_pacing_present_holdback) {
+            double wait_seconds = release_time - erhe::frame_pacing::Frame_time_recorder::now();
+            // Runaway sanity cap only (in the spirit of the release-gate
+            // and clamp caps). A LEGITIMATE hold spans up to ~N*T of the
+            // DISPLAY period: a frame whose chain finishes early at a high
+            // cadence waits budget-minus-service here (~120 ms at 23.976 Hz
+            // N=3). The previous 1.5-refresh-period cap silently truncated
+            // those holds, re-admitting one-to-four-slot-early displays at
+            // 120 Hz N=6 under a high-variance workload (540 capped holds
+            // observed live; the visible-duration oscillation).
+            constexpr double s_max_holdback_wait_s = 0.2;
+            if (wait_seconds > s_max_holdback_wait_s) {
+                log_context->warn(
+                    "present holdback capped: frame {} release {:.1f} ms ahead",
+                    m_frame_index, wait_seconds * 1000.0
+                );
+                wait_seconds = s_max_holdback_wait_s;
+            }
+            if (wait_seconds > 0.0) {
+                erhe::frame_pacing::Frame_time_record* const record =
+                    m_device.get_frame_time_recorder().find(static_cast<std::int64_t>(m_frame_index));
+                if (record != nullptr) {
+                    record->present_holdback_begin = erhe::frame_pacing::Frame_time_recorder::now();
+                }
+                m_present_holdback_timer.wait_for(wait_seconds);
+                if (record != nullptr) {
+                    record->present_holdback_end = erhe::frame_pacing::Frame_time_recorder::now();
+                }
+            }
+        }
+        if (erhe::frame_pacing::Frame_time_record* record = m_device.get_frame_time_recorder().find(static_cast<std::int64_t>(m_frame_index))) {
+            record->present_request_time = erhe::frame_pacing::Frame_time_recorder::now();
+        }
+    }
     for (Swapchain_impl* swapchain : submit_info_aggregate.swapchains_to_present) {
         ERHE_VERIFY(swapchain != nullptr);
         const bool present_ok = swapchain->present();
         ERHE_VULKAN_TRACE("submit_command_buffers: implicit present ok={}", present_ok);
         static_cast<void>(present_ok);
+    }
+    if (!submit_info_aggregate.swapchains_to_present.empty()) {
+        // FIFO backpressure can block inside vkQueuePresentKHR; the span
+        // present_request..present_return is an involuntary wait excluded
+        // from the CPU service time (doc/frame_pacing_inputs.md 3.2).
+        if (erhe::frame_pacing::Frame_time_record* record = m_device.get_frame_time_recorder().find(static_cast<std::int64_t>(m_frame_index))) {
+            record->present_return_time = erhe::frame_pacing::Frame_time_recorder::now();
+        }
     }
 }
 
@@ -1272,6 +1419,28 @@ auto Device_impl::wait_frame() -> bool
 {
     ERHE_VERIFY(m_state == Device_frame_state::idle);
 
+    // CPU slot begin (frame pacing data requirements): wait_frame is the
+    // first per-frame device call on the app's frame path.
+    m_device.get_frame_time_recorder().begin_frame(static_cast<std::int64_t>(m_frame_index)).cpu_slot_begin =
+        erhe::frame_pacing::Frame_time_recorder::now();
+
+    // GPU frame bracket (step P0.3): refresh calibration, harvest completed
+    // brackets non-blocking, and host-reset this frame's query pair.
+    update_gpu_calibration();
+    poll_frame_bracket_results();
+    if (m_frame_bracket_query_pool != VK_NULL_HANDLE) {
+        const std::size_t bracket_slot = static_cast<std::size_t>(m_frame_index % s_frame_bracket_ring);
+        vkResetQueryPool(
+            m_vulkan_device,
+            m_frame_bracket_query_pool,
+            static_cast<uint32_t>(bracket_slot * 2u),
+            2
+        );
+        m_frame_bracket_frame_id[bracket_slot] = static_cast<std::int64_t>(m_frame_index);
+        m_frame_bracket_begun = false;
+        m_frame_bracket_ended = false;
+    }
+
     // Per-(frame_in_flight, thread) command pool reset, gated on the
     // device's timeline semaphore. update_frame_completion (called from
     // end_frame) signals m_vulkan_frame_end_semaphore at value
@@ -1297,7 +1466,11 @@ auto Device_impl::wait_frame() -> bool
             .pSemaphores    = &m_vulkan_frame_end_semaphore,
             .pValues        = &wait_value,
         };
+        const double semaphore_wait_begin = erhe::frame_pacing::Frame_time_recorder::now();
         const VkResult result = vkWaitSemaphores(m_vulkan_device, &wait_info, UINT64_MAX);
+        if (erhe::frame_pacing::Frame_time_record* record = m_device.get_frame_time_recorder().find(static_cast<std::int64_t>(m_frame_index))) {
+            record->fence_wait_duration += erhe::frame_pacing::Frame_time_recorder::now() - semaphore_wait_begin;
+        }
         if (result != VK_SUCCESS) {
             log_context->critical(
                 "vkWaitSemaphores() in wait_frame failed with {} {}",
@@ -1411,6 +1584,13 @@ auto Device_impl::begin_frame() -> bool
     ERHE_VERIFY(m_state == Device_frame_state::waited);
     ERHE_VULKAN_SYNC_TRACE("[FRAME_BEGIN] frame_index={}", m_frame_index);
 
+    // CPU slot begin fallback for callers that skip wait_frame; the normal
+    // frame path opened the record there (do not wipe its wait stamps).
+    if (m_device.get_frame_time_recorder().find(static_cast<std::int64_t>(m_frame_index)) == nullptr) {
+        m_device.get_frame_time_recorder().begin_frame(static_cast<std::int64_t>(m_frame_index)).cpu_slot_begin =
+            erhe::frame_pacing::Frame_time_recorder::now();
+    }
+
     // Open a device frame for recording with no swapchain involvement.
     // Reset the per-frame descriptor pool, open the slot's primary
     // command buffer for recording, and flip state. The caller may then
@@ -1486,6 +1666,26 @@ auto Device_impl::end_frame() -> bool
     );
 
     m_had_swapchain_frame = false;
+    if (erhe::frame_pacing::Frame_time_record* record = m_device.get_frame_time_recorder().find(static_cast<std::int64_t>(m_frame_index))) {
+        record->cpu_slot_end = erhe::frame_pacing::Frame_time_recorder::now();
+    }
+    if (m_frame_index == 240) {
+        // One-shot sanity line for the frame time records (P0.2 acceptance).
+        const erhe::frame_pacing::Frame_time_record* sample = m_device.get_frame_time_recorder().find(238);
+        if (sample != nullptr) {
+            log_debug->info(
+                "frame time record sample (frame 238): cpu_slot_span={:.3f} ms cpu_service={:.3f} ms fence_wait={:.3f} ms acquire={:.3f} ms submit={} present_request={} gpu_span={:.3f} ms gpu_end_to_present={:.3f} ms",
+                sample->cpu_slot_span() * 1000.0,
+                sample->cpu_service_time() * 1000.0,
+                sample->fence_wait_duration * 1000.0,
+                (sample->acquire_end > sample->acquire_begin) ? (sample->acquire_end - sample->acquire_begin) * 1000.0 : 0.0,
+                sample->submit_time > 0.0,
+                sample->present_request_time > 0.0,
+                (sample->gpu_frame_end > sample->gpu_frame_begin) ? (sample->gpu_frame_end - sample->gpu_frame_begin) * 1000.0 : 0.0,
+                ((sample->achieved_present_time > 0.0) && (sample->gpu_frame_end > 0.0)) ? (sample->achieved_present_time - sample->gpu_frame_end) * 1000.0 : 0.0
+            );
+        }
+    }
     update_frame_completion();
 
     ERHE_VULKAN_SYNC_TRACE("[FRAME_END] frame_index={}", m_frame_index);
@@ -2099,6 +2299,165 @@ void Device_impl::record_gpu_timer_end_query(VkCommandBuffer cb, int slot)
         m_gpu_timer_query_pool,
         static_cast<uint32_t>(query_idx)
     );
+}
+
+namespace {
+
+// Converts a calibrated host-domain timestamp (QPC ticks on Windows,
+// CLOCK_MONOTONIC nanoseconds elsewhere) to the reference clock of
+// Frame_time_recorder::now() (std::chrono::steady_clock seconds, which is
+// QPC-backed on MSVC and CLOCK_MONOTONIC-backed on libstdc++).
+[[nodiscard]] auto host_calibrated_ticks_to_seconds(const uint64_t ticks) -> double
+{
+#if defined(_WIN32)
+    static const double s_frequency = []() {
+        LARGE_INTEGER frequency{};
+        QueryPerformanceFrequency(&frequency);
+        return static_cast<double>(frequency.QuadPart);
+    }();
+    return static_cast<double>(ticks) / s_frequency;
+#else
+    return static_cast<double>(ticks) * 1e-9;
+#endif
+}
+
+// Inverse of host_calibrated_ticks_to_seconds (frame pacing FR3, step
+// P2.3): reference-clock seconds to a host-domain calibrated value.
+[[nodiscard]] auto seconds_to_host_calibrated_ticks(const double seconds) -> uint64_t
+{
+#if defined(_WIN32)
+    static const double s_frequency = []() {
+        LARGE_INTEGER frequency{};
+        QueryPerformanceFrequency(&frequency);
+        return static_cast<double>(frequency.QuadPart);
+    }();
+    return static_cast<uint64_t>(seconds * s_frequency);
+#else
+    return static_cast<uint64_t>(seconds * 1e9);
+#endif
+}
+
+} // anonymous namespace
+
+void Device_impl::update_gpu_calibration()
+{
+    if (!m_capabilities.m_calibrated_timestamps || !m_gpu_timers_supported) {
+        return;
+    }
+    if (m_gpu_calibration_valid && ((m_frame_index - m_gpu_calibration_frame) < 120)) {
+        return;
+    }
+    const PFN_vkGetCalibratedTimestampsKHR get_calibrated_timestamps =
+        (vkGetCalibratedTimestampsKHR != nullptr) ? vkGetCalibratedTimestampsKHR : vkGetCalibratedTimestampsEXT;
+    if (get_calibrated_timestamps == nullptr) {
+        return;
+    }
+#if defined(_WIN32)
+    constexpr VkTimeDomainKHR host_domain = VK_TIME_DOMAIN_QUERY_PERFORMANCE_COUNTER_KHR;
+#else
+    constexpr VkTimeDomainKHR host_domain = VK_TIME_DOMAIN_CLOCK_MONOTONIC_KHR;
+#endif
+    const VkCalibratedTimestampInfoKHR infos[2] = {
+        {
+            .sType      = VK_STRUCTURE_TYPE_CALIBRATED_TIMESTAMP_INFO_KHR,
+            .pNext      = nullptr,
+            .timeDomain = VK_TIME_DOMAIN_DEVICE_KHR
+        },
+        {
+            .sType      = VK_STRUCTURE_TYPE_CALIBRATED_TIMESTAMP_INFO_KHR,
+            .pNext      = nullptr,
+            .timeDomain = host_domain
+        }
+    };
+    uint64_t timestamps[2] = {0, 0};
+    uint64_t max_deviation = 0;
+    const VkResult result = get_calibrated_timestamps(m_vulkan_device, 2, infos, timestamps, &max_deviation);
+    if (result != VK_SUCCESS) {
+        log_context->warn("vkGetCalibratedTimestamps() failed with {} {}", static_cast<int32_t>(result), c_str(result));
+        return;
+    }
+    m_gpu_calibration_device_ticks = timestamps[0];
+    m_gpu_calibration_host_seconds = host_calibrated_ticks_to_seconds(timestamps[1]);
+    m_gpu_calibration_frame        = m_frame_index;
+    m_gpu_calibration_valid        = true;
+}
+
+auto Device_impl::gpu_ticks_to_reference_seconds(const uint64_t ticks) const -> double
+{
+    const double delta_ticks = static_cast<double>(
+        static_cast<int64_t>(ticks - m_gpu_calibration_device_ticks)
+    );
+    return m_gpu_calibration_host_seconds + (delta_ticks * m_gpu_timer_timestamp_period * 1e-9);
+}
+
+auto Device_impl::host_calibrated_value_to_seconds(const uint64_t value) const -> double
+{
+    return host_calibrated_ticks_to_seconds(value);
+}
+
+auto Device_impl::reference_seconds_to_host_calibrated_value(const double seconds) const -> uint64_t
+{
+    return seconds_to_host_calibrated_ticks(seconds);
+}
+
+void Device_impl::record_frame_bracket_begin(VkCommandBuffer cb)
+{
+    if ((m_frame_bracket_query_pool == VK_NULL_HANDLE) || m_frame_bracket_begun) {
+        return;
+    }
+    const uint32_t base = static_cast<uint32_t>(2u * (m_frame_index % s_frame_bracket_ring));
+    // Bottom-of-pipe begin: fires when previously submitted work has drained,
+    // i.e. when the GPU actually becomes free to start this frame (execution
+    // span, not queued span). See doc/frame_pacing_inputs.md section 3.3.
+    vkCmdWriteTimestamp(cb, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_frame_bracket_query_pool, base);
+    m_frame_bracket_begun = true;
+}
+
+void Device_impl::record_frame_bracket_end(VkCommandBuffer cb)
+{
+    if ((m_frame_bracket_query_pool == VK_NULL_HANDLE) || !m_frame_bracket_begun || m_frame_bracket_ended) {
+        return;
+    }
+    const uint32_t base = static_cast<uint32_t>(2u * (m_frame_index % s_frame_bracket_ring));
+    vkCmdWriteTimestamp(cb, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_frame_bracket_query_pool, base + 1u);
+    m_frame_bracket_ended = true;
+}
+
+void Device_impl::poll_frame_bracket_results()
+{
+    if ((m_frame_bracket_query_pool == VK_NULL_HANDLE) || !m_gpu_calibration_valid) {
+        return;
+    }
+    for (std::size_t slot = 0; slot < s_frame_bracket_ring; ++slot) {
+        const std::int64_t frame_id = m_frame_bracket_frame_id[slot];
+        if ((frame_id < 0) || (frame_id == static_cast<std::int64_t>(m_frame_index))) {
+            continue;
+        }
+        uint64_t data[4] = {0, 0, 0, 0}; // (value, availability) x 2
+        const VkResult result = vkGetQueryPoolResults(
+            m_vulkan_device,
+            m_frame_bracket_query_pool,
+            static_cast<uint32_t>(slot * 2u),
+            2,
+            sizeof(data),
+            data,
+            2u * sizeof(uint64_t),
+            VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WITH_AVAILABILITY_BIT
+        );
+        if ((result != VK_SUCCESS) && (result != VK_NOT_READY)) {
+            continue;
+        }
+        if ((data[1] == 0) || (data[3] == 0)) {
+            continue; // not yet available - poll again next frame
+        }
+        const uint64_t begin_ticks = data[0] & m_gpu_timer_valid_mask;
+        const uint64_t end_ticks   = data[2] & m_gpu_timer_valid_mask;
+        if (erhe::frame_pacing::Frame_time_record* record = m_device.get_frame_time_recorder().find(frame_id)) {
+            record->gpu_frame_begin = gpu_ticks_to_reference_seconds(begin_ticks);
+            record->gpu_frame_end   = gpu_ticks_to_reference_seconds(end_ticks);
+        }
+        m_frame_bracket_frame_id[slot] = -1;
+    }
 }
 
 void Device_impl::maybe_reset_gpu_timer_slice(VkCommandBuffer cb)

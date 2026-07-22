@@ -138,11 +138,16 @@ public:
     // Window activity state, queried from SDL_GetWindowFlags() each call so it
     // is always authoritative and self-healing (no event bookkeeping). Used by
     // the main loop to render at a reduced frequency when the window is idle.
-    [[nodiscard]] auto is_focused  () const -> bool; // has keyboard input focus
-    [[nodiscard]] auto is_minimized() const -> bool;
-    [[nodiscard]] auto is_occluded () const -> bool; // fully covered by other windows
-    [[nodiscard]] auto is_hidden   () const -> bool;
-    [[nodiscard]] auto is_visible  () const -> bool; // !minimized && !occluded && !hidden
+    [[nodiscard]] auto is_focused   () const -> bool; // has keyboard input focus
+    [[nodiscard]] auto is_minimized () const -> bool;
+    [[nodiscard]] auto is_occluded  () const -> bool; // fully covered by other windows
+    [[nodiscard]] auto is_hidden    () const -> bool;
+    [[nodiscard]] auto is_visible   () const -> bool; // !minimized && !occluded && !hidden
+    [[nodiscard]] auto is_fullscreen() const -> bool;
+    // Current display mode refresh rate in Hz for the display the window is
+    // on; 0.0 when unknown. Fallback refresh source for frame pacing tier S
+    // (P4.2), where present timing (and its refreshDuration query) is off.
+    [[nodiscard]] auto get_display_refresh_rate() const -> float;
 
 private:
 #if defined(ERHE_GRAPHICS_API_OPENGL)

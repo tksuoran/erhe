@@ -53,6 +53,8 @@ target_link_libraries(
         erhe::time
     PRIVATE
         erhe::log
+        erhe::dataformat
+        erhe::defer
         erhe::profile
         erhe::utility
         erhe::verify

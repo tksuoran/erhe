@@ -12,6 +12,7 @@ std::shared_ptr<spdlog::logger> log_debug_visualization;
 std::shared_ptr<spdlog::logger> log_draw;
 std::shared_ptr<spdlog::logger> log_fly_camera;
 std::shared_ptr<spdlog::logger> log_frame;
+std::shared_ptr<spdlog::logger> log_frame_pacing;
 std::shared_ptr<spdlog::logger> log_framebuffer;
 std::shared_ptr<spdlog::logger> log_headset;
 std::shared_ptr<spdlog::logger> log_hud;
@@ -62,6 +63,7 @@ void initialize_logging()
     log_fly_camera                 = make_logger      ("editor.fly_camera"                );
     log_input_frame                = make_frame_logger("editor.input_frame"               );
     log_frame                      = make_frame_logger("editor.frame"                     );
+    log_frame_pacing               = make_logger      ("editor.frame_pacing"              );
     log_framebuffer                = make_frame_logger("editor.framebuffer"               );
     log_headset                    = make_logger      ("editor.headset"                   );
     log_hud                        = make_logger      ("editor.hud"                       );

@@ -1,7 +1,9 @@
-{
-    "_version": 2,
+﻿{
+    "_version": 3,
     "show": true,
-    "fullscreen": false,
+    "fullscreen": true,
+    "exclusive_fullscreen": true,
+    "refreshrate": 23.976,
     "use_transparency": false,
     "gl_major": 4,
     "gl_minor": 6,
@@ -13,7 +15,7 @@
     "sleep_margin": 0,
     "swap_interval": 0,
     "enable_joystick": true,
-    "power_save": true,
+    "power_save": false,
     "unfocused_fps": 30,
     "hidden_fps": 10
 }

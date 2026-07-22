@@ -30,6 +30,7 @@ namespace erhe::scene_renderer {
     class Texel_renderer;
 }
 namespace erhe::commands { class Commands; }
+namespace erhe::frame_pacing { class Frame_pacing_observer; }
 namespace erhe::window { class Context_window; }
 
 namespace tf {
@@ -63,6 +64,7 @@ class App_settings;
 class App_windows;
 class Editor_windows;
 class Fly_camera_tool;
+class Frame_pacing_window;
 class Geometry_graph_window;
 class Grid_tool;
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -153,6 +155,12 @@ public:
     erhe::imgui::Imgui_renderer*            imgui_renderer        {nullptr};
     erhe::imgui::Imgui_windows*             imgui_windows         {nullptr};
     erhe::imgui::Performance_window*        performance_window    {nullptr};
+    // Frame pacing introspection for the MCP server (get_frame_pacing_*):
+    // the observer wraps the pacer (decisions, estimates); the window owns
+    // the persistent capture of per-frame samples. Both live for the whole
+    // editor lifetime once set.
+    Frame_pacing_window*                    frame_pacing_window   {nullptr};
+    erhe::frame_pacing::Frame_pacing_observer* frame_pacing_observer{nullptr};
 #if defined(ERHE_PHYSICS_LIBRARY_JOLT)
     erhe::renderer::Jolt_debug_renderer*    jolt_debug_renderer   {nullptr};
 #endif

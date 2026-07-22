@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to AI coding agents working with this repository.
 
 ## Project Overview
 
@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Session handoff: `prompt_queue.txt`
 
-When an untracked `prompt_queue.txt` exists in the repo root, it is a handoff written by an older Claude Code session so that work can continue with fresh context: read it first and continue the work it describes. It may hold a queue of sequential handoffs (do the first item, and only write the next when the current one is done and verified). Once an item has been read and its work is done, remove that item; when the file holds nothing outstanding, delete it - do not keep a stale file around. Notes about the work done must already be in the commit messages for that work, so no information is lost by deleting it. (Writing a new `prompt_queue.txt` is only warranted when handing off still-unfinished work to a future session.)
+When an untracked `prompt_queue.txt` exists in the repo root, it is a handoff written by an older AI coding session so that work can continue with fresh context: read it first and continue the work it describes. It may hold a queue of sequential handoffs (do the first item, and only write the next when the current one is done and verified). Once an item has been read and its work is done, remove that item; when the file holds nothing outstanding, delete it - do not keep a stale file around. Notes about the work done must already be in the commit messages for that work, so no information is lost by deleting it. (Writing a new `prompt_queue.txt` is only warranted when handing off still-unfinished work to a future session.)
 
 ## `src/rendering_test/` is rotten
 
@@ -216,13 +216,13 @@ Many systems have swappable backends selected at CMake configure time via `#ifde
 
 **Skill:** for any C++ crash / abort / `VERIFY` / `ERHE_FATAL` / thrown exception / hang, invoke the **`erhe-cpp-debugging`** skill -- Windows VS-MCP (this section) plus the complete macOS/Linux lldb run-book. For GPU "renders wrong" bugs use **`erhe-renderdoc-gpu-debug`** instead.
 
-On Windows, prefer the **`visualstudio` MCP server** ([CodingWithCalvin/VS-MCPServer](https://github.com/CodingWithCalvin/VS-MCPServer)) for interactive debugging and build/diagnostic queries over ad-hoc print debugging. It lets Claude Code drive a *live* Visual Studio instance: set breakpoints, launch under the debugger, step, and inspect program state, all without leaving the conversation.
+On Windows, prefer the **`visualstudio` MCP server** ([CodingWithCalvin/VS-MCPServer](https://github.com/CodingWithCalvin/VS-MCPServer)) for interactive debugging and build/diagnostic queries over ad-hoc print debugging. It lets an AI coding agent drive a *live* Visual Studio instance: set breakpoints, launch under the debugger, step, and inspect program state, all without leaving the conversation.
 
 **Prerequisites (one-time, done by the user):**
 - Visual Studio 2022 or 2026 with the "MCP Server" extension installed (Extensions > Manage Extensions, search "MCP Server"; requires the .NET 10 SDK).
 - The server started inside VS: Tools > MCP Server > Start Server (listens on `http://localhost:5050`; can be set to auto-start in Tools > Options > MCP Server).
 - The erhe solution open in that VS instance (e.g. `build_vs2026_vulkan/erhe.slnx`). The tools act on whatever solution is currently loaded -- always call `mcp__visualstudio__solution_info` first to confirm which one.
-- Permission: the whole server is allow-listed via `mcp__visualstudio` in `.claude/settings.local.json`, so these tools never prompt (and keep working even when the `auto`-mode safety classifier is temporarily unavailable).
+- Permission: configure the active AI client to allow the `mcp__visualstudio` server without per-call prompts.
 
 **Tool groups** (all prefixed `mcp__visualstudio__`):
 - Solution/project: `solution_info`, `solution_open/close`, `project_list`, `project_info`, `startup_project_get/set`.
@@ -257,7 +257,7 @@ and it cannot launch or drive the editor (use the in-editor MCP server). If no
 Xcode window is open, fall back to `scripts/configure_xcode_*.sh` +
 `cmake --build`.
 
-## Debugging on macOS (lldb, for Claude Code)
+## Debugging on macOS (lldb, for AI coding agents)
 
 **Skill:** invoke **`erhe-cpp-debugging`** -- it is the complete macOS/Linux lldb
 run-book (Python SB API emitting JSON preferred; recipes for crash capture,
@@ -267,6 +267,30 @@ Two constraints that always apply: the windowed editor needs a live, awake
 display (attaching to an already-running editor is unaffected), and building +
 launching the editor to verify changes is self-serve -- do not ask first. For
 GPU "renders wrong" bugs use `erhe-renderdoc-gpu-debug` instead.
+
+## Vulkan validation cleanliness (IMPORTANT)
+
+**erhe should be kept free of Vulkan validation errors at all times.** When
+touching Vulkan code, run the editor with the validation layer enabled
+(`"vulkan_validation_layers": true` in `config/editor/erhe_graphics.json`)
+and fix every VUID before committing - the editor's device-error callback
+treats validation errors as fatal, so a single error aborts the run. Do not
+suppress, filter, or downgrade validation messages to make a run pass.
+
+## AI-driven editor runs (`ERHE_AI_DRIVER=1`)
+
+When an AI coding agent launches the editor, set `ERHE_AI_DRIVER=1` in the
+process environment. In this mode the editor routes error artifacts to files
+the agent can read instead of the clipboard (which assumed a human pastes the
+message into an AI chat):
+
+- Device / validation errors: full message + callstack appended to
+  `logs/device_error.txt` (truncated at each run's first error).
+- Shader compile/link errors: `logs/shader_error.txt` (error, source,
+  callstack).
+- Fatal behavior is unchanged (errors still abort); the log line names the
+  file to read. After any crashed or aborted run, grep `logs/log.txt` and
+  read these files before theorizing.
 
 ## Runtime logs
 
@@ -308,7 +332,7 @@ or when you resume iterating on a fresh change.
 loop (build headless -> launch -> wait for the MCP server -> drive tools ->
 screenshot -> clean up); the prose below is the full reference.
 
-The `editor` executable embeds its own MCP server (`src/editor/mcp/mcp_server.{hpp,cpp}`), auto-started at launch on `http://127.0.0.1:8080/mcp` (JSON-RPC 2.0 over `POST`; methods `initialize`, `tools/list`, `tools/call`). If `8080` is taken it falls back to the next free port, scanning `[8080, 8100)`; grep `logs/log.txt` (or logcat on Quest) for `MCP server: listening on 127.0.0.1:<port>` to learn the bound port. It runs on a background thread and dispatches each call to the main thread (`process_queued_requests()` once per frame), so it is safe to drive a *running* editor. Auth is **off** unless `~/.claude/erhe_mcp_token` exists (mode 0600); when present, every request needs `Authorization: Bearer <token>`. This server is usually NOT registered as native `mcp__*` tools in a Claude Code session (it only exists while the editor is running), so drive it over plain HTTP, e.g.:
+The `editor` executable embeds its own MCP server (`src/editor/mcp/mcp_server.{hpp,cpp}`), auto-started at launch on `http://127.0.0.1:8080/mcp` (JSON-RPC 2.0 over `POST`; methods `initialize`, `tools/list`, `tools/call`). If `8080` is taken it falls back to the next free port, scanning `[8080, 8100)`; grep `logs/log.txt` (or logcat on Quest) for `MCP server: listening on 127.0.0.1:<port>` to learn the bound port. It runs on a background thread and dispatches each call to the main thread (`process_queued_requests()` once per frame), so it is safe to drive a *running* editor. Auth is **off** unless `~/.agents/erhe_mcp_token` exists (mode 0600); when present, every request needs `Authorization: Bearer <token>`. This server is usually NOT registered as native `mcp__*` tools in the active AI client (it only exists while the editor is running), so drive it over plain HTTP, e.g.:
 
 ```bash
 py -3 scripts/mcp_call.py --list                  # list tool names (optionally: --list <substring>)
@@ -344,7 +368,7 @@ inline JSON containing spaces. Raw HTTP works too (`POST` the JSON-RPC body to
 
 For **windowed Vulkan GPU debugging** -- inspecting a captured frame's pipeline state, render targets, texture statistics (min/max/mean, NaN/Inf/zero counts), pixel history, constant-buffer contents, post-VS geometry, and saving textures -- use the **RenderDoc fork MCP server** ([`tksuoran/renderdoc`](https://github.com/tksuoran/renderdoc), branch `mcp-server`, cloned and built locally), an MCP server embedded in `qrenderdoc` that connects to the running editor (which loads the fork's in-app `renderdoc.dll`) and reads back the captured frame programmatically. This is the tool for "renders nothing / renders wrong" bugs that the headless `capture_screenshot` and the in-editor MCP cannot diagnose (they show *what* is wrong, not *why* at the GPU level). It needs a **live display** (real WSI swapchain) -- it does not work against the headless emulated swapchain. The full tested recipe, gotchas, and a worked example (the "black atmosphere sky" bug) are in [`doc/renderdoc_fork.md`](doc/renderdoc_fork.md); the fork's own tool reference is its [`docs/mcp.md`](https://github.com/tksuoran/renderdoc/blob/mcp-server/docs/mcp.md) (the `D:\renderdoc\...` paths in that doc are just this machine's clone/build location of the fork).
 
-**On-demand launch via the stdio proxy.** Claude Code connects every MCP server at session start and the model cannot reconnect one mid-session, so a raw http registration pointing at `qrenderdoc` only works if it was already running at startup. Instead, register the **stdio proxy** `scripts/renderdoc_mcp_proxy.py` in `.mcp.json` (`"renderdoc": { "command": "py", "args": ["-3", "D:/alt/erhe/scripts/renderdoc_mcp_proxy.py"] }`). A stdio server is always spawned at startup, so its tools are always registered; the proxy serves the fork's tool schema from the committed `scripts/renderdoc_tools.json` and **launches `qrenderdoc --mcp-server` lazily on the first tool call** (or eagerly via its `renderdoc_launch` tool), proxying JSON-RPC over POST to `127.0.0.1:7398`. It **leaves `qrenderdoc` running** when Claude Code exits; the `renderdoc_shutdown` tool only tears down an instance the proxy itself launched (an externally started `qrenderdoc` is never touched). Other management tools: `renderdoc_status` (is the backend reachable, did the proxy launch it). This means Claude can launch RenderDoc itself on demand -- no manual pre-start or `/mcp` reconnect needed.
+**On-demand launch via the stdio proxy.** AI clients commonly connect MCP servers at session start and may not reconnect one mid-session, so a raw HTTP registration pointing at `qrenderdoc` only works if it was already running at startup. Instead, register the **stdio proxy** `scripts/renderdoc_mcp_proxy.py` in `.mcp.json` (`"renderdoc": { "command": "py", "args": ["-3", "<repo>/scripts/renderdoc_mcp_proxy.py"] }`). A stdio server is spawned at client startup, so its tools are registered immediately; the proxy serves the fork's tool schema from the committed `scripts/renderdoc_tools.json` and **launches `qrenderdoc --mcp-server` lazily on the first tool call** (or eagerly via its `renderdoc_launch` tool), proxying JSON-RPC over POST to `127.0.0.1:7398`. It **leaves `qrenderdoc` running** when the AI client exits; the `renderdoc_shutdown` tool only tears down an instance the proxy itself launched (an externally started `qrenderdoc` is never touched). Other management tools: `renderdoc_status` (is the backend reachable, did the proxy launch it). This lets the agent launch RenderDoc on demand without a manual pre-start or MCP reconnect.
 
 **One-shot setup:** `py -3 scripts/setup_renderdoc_mcp.py` clones+builds the fork, configures erhe, registers the proxy in `.mcp.json`, and generates the schema (re-run with `--skip-build` to just rewire an existing build; `--help` for options). The pieces it wires up:
 
@@ -415,7 +439,7 @@ See [`doc/editor_improvements.md`](doc/editor_improvements.md) for the prioritiz
 
 ## Machine-Neutral Committed Files
 
-**Never write machine-dependent information into files that are committed / pushed to the repo** - this applies to ALL committed files (sources, docs, CLAUDE.md, memory-bank), not just the Memory Bank (whose README "Machine-Scope Rule" defines the same policy). Forbidden: absolute per-machine paths (`C:\Users\<name>\...`, `C:\git\...`, `D:\...`), usernames, hostnames, per-machine install state. Phrase facts as capabilities or with placeholders (`%USERPROFILE%`, `<your clone>`), and record the actual per-machine values (clone locations, tool install paths) in `memory-bank/local/*.md`, which is gitignored.
+**Never write machine-dependent information into files that are committed / pushed to the repo** - this applies to ALL committed files (sources, docs, AGENTS.md, memory-bank), not just the Memory Bank (whose README "Machine-Scope Rule" defines the same policy). Forbidden: absolute per-machine paths (`C:\Users\<name>\...`, `C:\git\...`, `D:\...`), usernames, hostnames, per-machine install state. Phrase facts as capabilities or with placeholders (`%USERPROFILE%`, `<your clone>`), and record the actual per-machine values (clone locations, tool install paths) in `memory-bank/local/*.md`, which is gitignored.
 
 ## Text Encoding
 
@@ -537,7 +561,7 @@ Applies to JSON files consumed by `erhe_codegen`-generated loaders (the hand-aut
 ### How Memory Bank Works
 
 1. **User triggers**: Type `mb`, `update memory bank`, or `check memory bank`
-2. **Claude's process**:
+2. **Agent process**:
    - Reads `memory-bank/README.md` and follows its instructions
 
 ### Important Rules

@@ -558,6 +558,8 @@ erhe_target_sources_grouped(
     windows/config_ui.hpp
     windows/editor_windows.cpp
     windows/editor_windows.hpp
+    windows/frame_pacing_window.cpp
+    windows/frame_pacing_window.hpp
     windows/window_placement.cpp
     windows/window_placement.hpp
     windows/inventory_slot_payload.hpp

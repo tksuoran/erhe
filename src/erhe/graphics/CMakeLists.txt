@@ -405,6 +405,7 @@ target_link_libraries(${_target}
         concurrentqueue
         erhe::circular_ring_buffer
         erhe::dataformat
+        erhe::frame_pacing
         erhe::item
         erhe::math
         erhe::window
@@ -417,6 +418,7 @@ target_link_libraries(${_target}
         erhe::file
         erhe::log
         erhe::profile
+        erhe::time
         erhe::utility
         erhe::verify
 )

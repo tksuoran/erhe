@@ -37,7 +37,7 @@ Mcp_server::Mcp_server(
     m_auth_token = load_auth_token();
     if (m_auth_token.empty()) {
         log_mcp->warn(
-            "MCP server: no bearer token loaded (write a secret to ~/.claude/erhe_mcp_token "
+            "MCP server: no bearer token loaded (write a secret to ~/.agents/erhe_mcp_token "
             "with mode 0600 to require Authorization: Bearer)"
         );
     } else {
@@ -389,6 +389,11 @@ auto Mcp_server::process_queued_requests() -> int
             { "get_viewports",                  &Mcp_server::query_viewports                      },
             { "get_server_info",                &Mcp_server::query_server_info                    },
             { "set_window_visibility",          &Mcp_server::action_set_window_visibility         },
+            { "get_frame_pacing_status",        &Mcp_server::query_frame_pacing_status            },
+            { "get_frame_pacing_frames",        &Mcp_server::query_frame_pacing_frames            },
+            { "set_frame_pacing_min_vsyncs",    &Mcp_server::action_set_frame_pacing_min_vsyncs   },
+            { "set_frame_pacing_workload",      &Mcp_server::action_set_frame_pacing_workload     },
+            { "set_frame_pacing_capture",       &Mcp_server::action_set_frame_pacing_capture      },
             { "get_selection",                  &Mcp_server::query_selection                      },
             { "get_undo_redo_stack",            &Mcp_server::query_undo_redo_stack                },
             { "clear_undo_history",             &Mcp_server::action_clear_undo_history            },

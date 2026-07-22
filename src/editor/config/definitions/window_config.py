@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Window_config",
-    version=2,
+    version=3,
     short_desc="",
     long_desc="",
     developer=False,
@@ -23,6 +23,26 @@ struct("Window_config",
             default="false",
             short_desc="",
             long_desc="",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "exclusive_fullscreen",
+            Bool,
+            added_in=2,
+            default="false",
+            short_desc="Exclusive Fullscreen",
+            long_desc="Request exclusive fullscreen mode (Windows Vulkan, VK_EXT_full_screen_exclusive, application controlled). Used only when fullscreen is also true; ignored otherwise and on platforms/drivers without the extension. Bypasses DWM composition, which changes presentation timing behavior - useful for frame pacing testing (windowed vs fullscreen comparison).",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "refreshrate",
+            Float,
+            added_in=3,
+            default="0.0f",
+            short_desc="Fullscreen Refresh Rate",
+            long_desc="Requested display refresh rate in Hz for fullscreen mode (0 = keep the desktop default). Used only when fullscreen is true. The closest available fullscreen mode at the desktop resolution is selected; the available modes and rates are listed in the log at window creation (frame pacing testing: pick e.g. 23.976, 60 or 120 Hz without touching OS display settings).",
             visible=True,
             developer=False
         ),

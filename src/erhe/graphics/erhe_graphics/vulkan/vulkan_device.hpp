@@ -4,7 +4,9 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
 #include "erhe_dataformat/dataformat.hpp"
+#include "erhe_frame_pacing/frame_time_recorder.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_time/sleep.hpp"
 
 #include "volk.h"
 // vma forward declaration
@@ -59,6 +61,14 @@ public:
     bool m_VK_KHR_swapchain_maintenance1        {false};
     bool m_VK_KHR_present_mode_fifo_latest_ready{false};
     bool m_VK_EXT_present_mode_fifo_latest_ready{false};
+    bool m_VK_KHR_present_id                    {false};
+    bool m_VK_KHR_present_wait                  {false};
+    bool m_VK_KHR_present_id2                   {false};
+    bool m_VK_KHR_present_wait2                 {false};
+    bool m_VK_EXT_present_timing                {false};
+    bool m_VK_EXT_full_screen_exclusive         {false};
+    bool m_VK_KHR_calibrated_timestamps         {false};
+    bool m_VK_EXT_calibrated_timestamps         {false};
     bool m_VK_EXT_device_address_binding_report {false};
     bool m_VK_KHR_load_store_op_none            {false};
     bool m_VK_EXT_load_store_op_none            {false};
@@ -74,6 +84,21 @@ public:
     bool m_surface_capabilities2         {false};
     bool m_surface_maintenance1          {false};
     bool m_swapchain_maintenance1        {false};
+
+    // Frame pacing capabilities (doc/frame_pacing_capability_tiers.md).
+    // Feature-confirmed, not merely extension-present.
+    bool m_present_id           {false};
+    bool m_present_wait         {false};
+    bool m_present_timing       {false};
+    // Device features for the FR3 target-time request modes (step P2.3).
+    // The surface can still veto either mode per swapchain
+    // (VkPresentTimingSurfaceCapabilitiesEXT, see Swapchain_impl).
+    bool m_present_at_absolute_time{false};
+    bool m_present_at_relative_time{false};
+    bool m_calibrated_timestamps{false};
+    // Tier W: all of the above available; the frame pacer may run.
+    // Anything less is off mode (FR6: no middle tier).
+    bool m_frame_pacing_tier_w  {false};
 };
 
 class Frame_begin_info;
@@ -213,11 +238,31 @@ public:
     [[nodiscard]] auto get_info                           () const -> const Device_info&;
     [[nodiscard]] auto get_graphics_config                () const -> const Graphics_config&;
     [[nodiscard]] auto get_allocator                      () -> VmaAllocator&;
+    [[nodiscard]] auto get_context_window                 () const -> erhe::window::Context_window*;
 
     void set_debug_label(VkObjectType object_type, uint64_t object_handle, const char* label);
     void set_debug_label(VkObjectType object_type, uint64_t object_handle, const std::string& label);
 
     [[nodiscard]] auto get_sync_pool() -> Device_sync_pool&;
+
+    // Frame time records (implementation plan step P0.2): storage lives on
+    // the backend-neutral Device; this forwards for backend-internal sites.
+    [[nodiscard]] auto get_frame_time_recorder() -> erhe::frame_pacing::Frame_time_recorder&;
+
+    // Present-wait clamp (frame pacing FR5, step P2.2): routed to the
+    // window surface's swapchain; unsupported when headless / no swapchain.
+    [[nodiscard]] auto wait_for_displayed_frame(std::int64_t frame_id, uint64_t timeout_ns) -> Present_wait_result;
+
+    // Target present time (frame pacing FR3, step P2.3): stored here, read
+    // by Swapchain_impl::present_image for the matching frame id. Reference-
+    // clock seconds; 0.0 = no request.
+    void               set_present_target_time(std::int64_t frame_id, double target_time_seconds, double hold_until_seconds);
+    [[nodiscard]] auto get_present_target_time(std::int64_t frame_id) const -> double;
+
+    // Resolved frame pacing tier (P4.2): capability probes + the
+    // frame_pacing_tier graphics config, resolved in the constructor BEFORE
+    // the surface picks its present mode (the tier owns that decision).
+    [[nodiscard]] auto get_frame_pacing_tier() const -> Frame_pacing_tier;
 
     // GPU timer infrastructure. Backed by a single shared VkQueryPool sized
     // for s_max_gpu_timers timestamps per frame in flight. Slots are
@@ -232,6 +277,26 @@ public:
                   void maybe_reset_gpu_timer_slice  (VkCommandBuffer cb);
     [[nodiscard]] auto get_gpu_timer_timestamp_period() const -> double;
     [[nodiscard]] auto are_gpu_timers_supported      () const -> bool;
+
+    // Frame-spanning GPU timestamp bracket (implementation plan step P0.3):
+    // one begin/end timestamp pair per frame, host-reset in wait_frame,
+    // polled non-blocking every frame, calibrated into the reference clock.
+    // The bracket covers the frame's FIRST command buffer (begin at its
+    // vkBeginCommandBuffer, end at its vkEndCommandBuffer); the editor
+    // records one primary cb per frame, so this is the whole frame span.
+    // Multi-cb frames cover only the first cb - refine when that matters.
+    void               record_frame_bracket_begin   (VkCommandBuffer cb);
+    void               record_frame_bracket_end     (VkCommandBuffer cb);
+    void               poll_frame_bracket_results   ();
+    void               update_gpu_calibration       ();
+    [[nodiscard]] auto gpu_ticks_to_reference_seconds(uint64_t ticks) const -> double;
+    // Converts a value from the calibrated host time domain (QPC ticks on
+    // Windows, CLOCK_MONOTONIC nanoseconds elsewhere) to reference-clock
+    // seconds. Used for present-timing feedback (step P0.4).
+    [[nodiscard]] auto host_calibrated_value_to_seconds(uint64_t value) const -> double;
+    // Inverse: reference-clock seconds to a host-domain calibrated value.
+    // Used for the FR3 absolute target present time (step P2.3).
+    [[nodiscard]] auto reference_seconds_to_host_calibrated_value(double seconds) const -> uint64_t;
 
     [[nodiscard]] auto get_device                       () -> Device&;
     [[nodiscard]] auto get_surface                      () -> Surface*;
@@ -253,6 +318,7 @@ public:
     [[nodiscard]] auto get_tracy_vk_ctx                 () const -> TracyVkCtx { return m_tracy_vk_ctx; }
 #endif
     [[nodiscard]] auto get_capabilities                 () const -> const Capabilities&;
+    [[nodiscard]] auto get_device_extensions            () const -> const Device_extensions&;
     [[nodiscard]] auto get_driver_properties            () const -> const VkPhysicalDeviceDriverProperties&;
     [[nodiscard]] auto get_portability_subset_features  () const -> const VkPhysicalDevicePortabilitySubsetFeaturesKHR&;
     [[nodiscard]] auto get_portability_subset_properties() const -> const VkPhysicalDevicePortabilitySubsetPropertiesKHR&;
@@ -407,6 +473,15 @@ private:
     uint64_t                 m_latest_completed_frame     {0}; // GPU
     uint64_t                 m_frame_index                {1}; // CPU
 
+    // Target present time request (frame pacing FR3, step P2.3) plus the
+    // pacer-computed present-request holdback deadline (claim C15; derived
+    // from the tracked grid, deviation 12).
+    std::int64_t             m_present_target_frame_id    {-1};
+    double                   m_present_target_time_seconds{0.0};
+    double                   m_present_target_hold_until_seconds{0.0};
+    // Present-request holdback timer (claim C15 mitigation).
+    erhe::time::Waitable_timer m_present_holdback_timer;
+
     // Current device-frame lifecycle state. Drives the assertions in
     // wait_frame / begin_frame / begin_swapchain_frame / end_swapchain_frame
     // / end_frame and backs is_in_device_frame / is_in_swapchain_frame.
@@ -434,6 +509,7 @@ private:
     Instance_extensions      m_instance_extensions{};
     Device_extensions        m_device_extensions  {};
     Capabilities             m_capabilities       {};
+    Frame_pacing_tier        m_frame_pacing_tier  {Frame_pacing_tier::off};
 
     VkPhysicalDeviceDriverProperties               m_driver_properties{};
     VkPhysicalDeviceDepthStencilResolveProperties  m_depth_stencil_resolve_properties{};
@@ -469,6 +545,18 @@ private:
     // fired-bitmap mutations from any thread that touches a Gpu_timer
     // (ctor/dtor, write_begin/write_end, wait_frame result-read).
     VkQueryPool m_gpu_timer_query_pool      {VK_NULL_HANDLE};
+
+    // Frame-spanning GPU timestamp bracket state (step P0.3).
+    static constexpr std::size_t s_frame_bracket_ring = 16;
+    VkQueryPool  m_frame_bracket_query_pool{VK_NULL_HANDLE};
+    std::array<std::int64_t, s_frame_bracket_ring> m_frame_bracket_frame_id{};
+    bool         m_frame_bracket_begun{false};
+    bool         m_frame_bracket_ended{false};
+    bool         m_host_query_reset   {false};
+    bool         m_gpu_calibration_valid       {false};
+    double       m_gpu_calibration_host_seconds{0.0};
+    uint64_t     m_gpu_calibration_device_ticks{0};
+    uint64_t     m_gpu_calibration_frame       {0};
     double      m_gpu_timer_timestamp_period{0.0};
     uint64_t    m_gpu_timer_valid_mask      {0};
     bool        m_gpu_timers_supported      {false};

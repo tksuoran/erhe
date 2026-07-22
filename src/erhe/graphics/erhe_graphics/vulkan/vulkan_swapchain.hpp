@@ -141,6 +141,13 @@ public:
     // setup_frame()/begin_frame() and the present in end_frame().
     [[nodiscard]] auto get_active_acquire_semaphore() const -> VkSemaphore;
     [[nodiscard]] auto get_active_present_semaphore() const -> VkSemaphore;
+    // Present-wait clamp (frame pacing FR5, implementation plan step P2.2):
+    // block until the present with id (frame_id + 1), as chained by
+    // present_image(), has been displayed. Only ids already submitted on
+    // the CURRENT VkSwapchainKHR are waited on -- right after recreation
+    // the old swapchain's ids can no longer be waited, so unsupported is
+    // returned until this swapchain has presented past the requested id.
+    [[nodiscard]] auto wait_for_displayed_frame(std::int64_t frame_id, uint64_t timeout_ns) -> Present_wait_result;
     [[nodiscard]] auto has_depth            () const -> bool;
     [[nodiscard]] auto has_stencil          () const -> bool;
     [[nodiscard]] auto get_color_format     () const -> erhe::dataformat::Format;
@@ -183,6 +190,18 @@ private:
     void add_present_to_history                (uint32_t index, VkFence present_fence);
     void associate_fence_with_present_history  (uint32_t index, VkFence acquire_fence);
     void schedule_old_swapchain_for_destruction(VkSwapchainKHR old_swapchain);
+    // Present timing (implementation plan step P0.4): opt in to
+    // VK_EXT_present_timing on this swapchain, query refresh duration and
+    // time domains, and pick the present stage to query. Called after every
+    // (re)creation so the refresh period is re-queried per swapchain.
+    void init_present_timing                   (const Vulkan_swapchain_create_info& swapchain_create_info);
+    // Drains available past-presentation timings into the device's frame
+    // time recorder (achieved present time per frame id).
+    void poll_present_timing                   ();
+    // Calibrates the swapchain's present-stage-local time domain against the
+    // host clock (VkSwapchainCalibratedTimestampInfoEXT chained into
+    // vkGetCalibratedTimestamps). No-op for host time domains.
+    void update_present_timing_calibration     ();
 
     Device_impl&          m_device_impl;
     Surface_impl&         m_surface_impl;
@@ -209,6 +228,46 @@ private:
 
     /// The present operation history. This is used to clean up present semaphores and old swapchains.
     std::deque<Present_history_entry>        m_present_history;
+
+    // Present timing state (implementation plan step P0.4). Requires the
+    // swapchain to be created with VK_SWAPCHAIN_CREATE_PRESENT_TIMING_BIT_EXT
+    // (vulkan_surface.cpp) - presenting timing requests against a swapchain
+    // without that flag crashes inside the driver.
+    bool                   m_present_timing_active  {false};
+    uint64_t               m_timing_time_domain_id  {0};
+    VkTimeDomainKHR        m_timing_time_domain     {VK_TIME_DOMAIN_DEVICE_KHR};
+    VkPresentStageFlagsEXT m_present_stage_queries  {0};
+    // All surface-supported stages, requested per present so feedback
+    // carries every stage; m_present_stage_queries stays the PRIMARY
+    // (scanout-near) stage used for achieved_present_time, calibration and
+    // the pacer grid. QUEUE_OPERATIONS_END feedback (when supported) lands
+    // in achieved_queue_ops_time as a queue-vs-scanout diagnostic.
+    VkPresentStageFlagsEXT m_present_stage_queries_mask{0};
+    uint64_t               m_refresh_duration_ns    {0};
+    bool                   m_present_feedback_logged{false};
+    // FR3 target-time request modes (step P2.3): device feature AND surface
+    // capability. The development machine reports absolute unsupported on
+    // the surface while the device feature is TRUE - the relative path is
+    // the one actually exercised there.
+    bool                   m_present_at_absolute_time{false};
+    bool                   m_present_at_relative_time{false};
+    bool                   m_timing_calibration_valid       {false};
+    uint64_t               m_timing_calibration_domain_value{0};
+    double                 m_timing_calibration_host_seconds{0.0};
+    uint64_t               m_timing_calibration_frame       {0};
+    // Per-stage clocks: the stage-local domain's epoch differs per stage,
+    // so QUEUE_OPERATIONS_END feedback needs its own calibration pair.
+    bool                   m_timing_calibration_queue_ops_valid{false};
+    uint64_t               m_timing_calibration_queue_ops_value{0};
+    std::array<VkPastPresentationTimingEXT, 8>          m_past_timings{};
+    std::array<std::array<VkPresentStageTimeEXT, 4>, 8> m_past_timing_stages{};
+
+    // Highest present id actually submitted (vkQueuePresentKHR succeeded)
+    // on m_vulkan_swapchain. Reset when a new VkSwapchainKHR is created:
+    // present ids are per swapchain object, so waiting on an id from a
+    // previous swapchain would only ever time out. Guards
+    // wait_for_displayed_frame (step P2.2).
+    uint64_t               m_max_present_id_submitted{0};
 
      // The previous swapchain which needs to be scheduled for destruction when
      // appropriate. This will be done when the first image of the current swapchain is

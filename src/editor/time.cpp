@@ -13,7 +13,7 @@ auto Time::get_frame_time_average_ms() const -> float
     return m_frame_time_average_ms;
 }
 
-void Time::prepare_update(bool advance_simulation)
+void Time::prepare_update(bool advance_simulation, int64_t simulation_advance_ns)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -22,7 +22,7 @@ void Time::prepare_update(bool advance_simulation)
     ++m_frame_number;
     int64_t host_system_frame_start_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
     int64_t host_system_frame_duration_ns   = host_system_frame_start_time_ns - m_host_system_last_frame_start_time;
-    int64_t simulation_frame_duration_ns    = host_system_frame_duration_ns;
+    int64_t simulation_frame_duration_ns    = (simulation_advance_ns >= 0) ? simulation_advance_ns : host_system_frame_duration_ns;
 
     constexpr std::size_t frame_time_window_size = 200;
     if (!m_frame_start_times.empty()) {

@@ -38,6 +38,15 @@ public:
     Surface& surface;
 };
 
+// Result of Device::wait_for_displayed_frame (frame pacing FR5 present-wait
+// clamp, implementation plan step P2.2).
+enum class Present_wait_result : unsigned int {
+    displayed   = 0, // the frame is known to have reached the display
+    timeout     = 1, // not displayed within the bounded timeout
+    unsupported = 2  // no present-wait path: capability tier OFF, headless,
+                     // GL backend, or the id predates the current swapchain
+};
+
 class Swapchain_impl;
 class Swapchain
 {

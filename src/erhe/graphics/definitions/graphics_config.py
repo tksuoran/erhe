@@ -86,6 +86,36 @@ struct("Graphics_config",
             visible=True,
             developer=False
         ),
+        field(
+            "frame_pacing_enforce",
+            Bool,
+            added_in=1,
+            default="true",
+            short_desc="Enforce Frame Pacing Decisions",
+            long_desc="When true, the frame pacer's decisions are enforced where the integration supports it; currently the present-wait clamp (FR5): before per-frame work the CPU blocks until the frame from Q*+1 frames ago has been displayed, bounding presented-image queueing and input latency. When false the pacer runs in observer mode only (computes and logs, enforces nothing) - the kill switch required by the frame pacing implementation plan. Effective only on capability tier W (Vulkan present id/wait/timing all available); otherwise pacing is off regardless.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "frame_pacing_present_holdback",
+            Bool,
+            added_in=1,
+            default="true",
+            short_desc="Hold Present Requests to the Pacer Target",
+            long_desc="Mitigation for presentation engines that accept but do not honor target present times (measured on NVIDIA 596.83, see doc/frame_pacing_present_timing_driver_report.md): delay each frame's vkQueuePresentKHR until one refresh period before the pacer's target present time, so the earliest feasible vsync IS the target (claim C15). No effect when frame_pacing_enforce is false or no target is scheduled. Disable for A/B measurements of the mitigation itself.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "frame_pacing_tier",
+            String,
+            added_in=1,
+            default='"auto"',
+            short_desc="Frame Pacing Capability Tier",
+            long_desc="Which frame pacing method to use (doc/frame_pacing_capability_tiers.md). 'auto' resolves the best available tier: W (full pacer; needs present id + wait + timing + calibrated timestamps, Vulkan) else S (slop-servo fallback; needs only plain-FIFO backpressure). 'w' forces tier W (downgrades with a warning if the capabilities are missing), 's' forces the slop-servo fallback, 'off' disables pacing. The resolved tier owns the swapchain configuration: tier W selects fifo_latest_ready, tier S selects plain FIFO with minimum image count (the servo needs backpressure; on latest_ready superseded images drop instead of blocking and the servo winds to nothing, claim C21a). Change requires restart (the swapchain is created from the resolved tier).",
+            visible=True,
+            developer=False
+        ),
         field("opengl", StructRef("Opengl_config"), added_in=1),
         field("vulkan", StructRef("Vulkan_config"), added_in=1),
     ],

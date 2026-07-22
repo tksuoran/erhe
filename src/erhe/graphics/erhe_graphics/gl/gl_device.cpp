@@ -1133,6 +1133,27 @@ auto Device_impl::get_surface() -> Surface*
     return m_surface.get();
 }
 
+auto Device_impl::wait_for_displayed_frame(const std::int64_t frame_id, const uint64_t timeout_ns) -> Present_wait_result
+{
+    static_cast<void>(frame_id);
+    static_cast<void>(timeout_ns);
+    return Present_wait_result::unsupported;
+}
+
+auto Device_impl::get_frame_pacing_tier() const -> Frame_pacing_tier
+{
+    // Vsynced SwapBuffers has backpressure, so tier S is possible here in
+    // principle; not wired yet - focus is the Vulkan backend (P4.2).
+    return Frame_pacing_tier::off;
+}
+
+void Device_impl::set_present_target_time(const std::int64_t frame_id, const double target_time_seconds, const double hold_until_seconds)
+{
+    static_cast<void>(frame_id);
+    static_cast<void>(target_time_seconds);
+    static_cast<void>(hold_until_seconds);
+}
+
 auto Device_impl::get_native_handles() const -> Native_device_handles
 {
     Native_device_handles handles{};

@@ -260,7 +260,12 @@ auto Surface_impl::use_physical_device(VkPhysicalDevice physical_device) -> bool
         }
         case VK_PRESENT_MODE_MAILBOX_KHR:
         case VK_PRESENT_MODE_FIFO_KHR: {
-            m_image_count = 3; // one displayed, one queued, one rendering
+            // Tier S (P4.2): minimum image count - the slop servo wants the
+            // tightest possible queue so backpressure binds early and the
+            // sensed slop maps directly to latency headroom.
+            m_image_count = (m_device_impl.get_frame_pacing_tier() == Frame_pacing_tier::slop_servo)
+                ? 2
+                : 3; // one displayed, one queued, one rendering
             break;
         }
         case VK_PRESENT_MODE_FIFO_RELAXED_KHR: {
@@ -640,6 +645,17 @@ void Surface_impl::choose_present_mode()
             }
         }
         log_context->warn("force_disable_vsync is set but VK_PRESENT_MODE_IMMEDIATE_KHR is not available");
+    }
+
+    // The resolved frame pacing tier owns the present mode (P4.2). Tier S
+    // (slop servo) REQUIRES plain FIFO: it senses queue-full backpressure,
+    // and on fifo_latest_ready superseded images drop instead of blocking -
+    // slop reads ~0 and the servo winds to nothing (claim C21a). Plain FIFO
+    // is mandatory in Vulkan, so no availability check is needed.
+    if (m_device_impl.get_frame_pacing_tier() == Frame_pacing_tier::slop_servo) {
+        m_present_mode = VK_PRESENT_MODE_FIFO_KHR;
+        log_context->info("Selected present mode VK_PRESENT_MODE_FIFO_KHR (frame pacing tier S needs backpressure)");
+        return;
     }
 
     float best_score = std::numeric_limits<float>::lowest();
@@ -1034,10 +1050,59 @@ auto Surface_impl::update_swapchain(Vulkan_swapchain_create_info& out_swapchain_
         pNext = &out_swapchain_create_info.swapchain_present_modes_create_info;
     }
 
+#if defined(VK_USE_PLATFORM_WIN32_KHR)
+    // Exclusive fullscreen (VK_EXT_full_screen_exclusive, application
+    // controlled): requested by Window_configuration::exclusive_fullscreen,
+    // honored only when the window is actually fullscreen and the device
+    // extension is available. Bypasses DWM composition - the presentation
+    // path frame pacing tier documents care about. The exclusive mode
+    // itself is acquired by Swapchain_impl::init_swapchain after
+    // vkCreateSwapchainKHR (use_full_screen_exclusive below); losing it at
+    // runtime surfaces as VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT,
+    // handled like OUT_OF_DATE (recreate + re-acquire).
+    out_swapchain_create_info.use_full_screen_exclusive = false;
+    log_context->debug(
+        "fullscreen-exclusive gate: window={} fullscreen={} exclusive_fullscreen={} extension={}",
+        fmt::ptr(m_surface_create_info.context_window),
+        (m_surface_create_info.context_window != nullptr) ? m_surface_create_info.context_window->get_window_configuration().fullscreen : false,
+        (m_surface_create_info.context_window != nullptr) ? m_surface_create_info.context_window->get_window_configuration().exclusive_fullscreen : false,
+        m_device_impl.get_device_extensions().m_VK_EXT_full_screen_exclusive
+    );
+    if ((m_surface_create_info.context_window != nullptr) &&
+        m_surface_create_info.context_window->get_window_configuration().fullscreen &&
+        m_surface_create_info.context_window->get_window_configuration().exclusive_fullscreen)
+    {
+        if (m_device_impl.get_device_extensions().m_VK_EXT_full_screen_exclusive) {
+            const HWND hwnd = m_surface_create_info.context_window->get_hwnd();
+            out_swapchain_create_info.full_screen_exclusive_win32_info = VkSurfaceFullScreenExclusiveWin32InfoEXT{
+                .sType    = VK_STRUCTURE_TYPE_SURFACE_FULL_SCREEN_EXCLUSIVE_WIN32_INFO_EXT,
+                .pNext    = pNext,
+                .hmonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST)
+            };
+            out_swapchain_create_info.full_screen_exclusive_info = VkSurfaceFullScreenExclusiveInfoEXT{
+                .sType               = VK_STRUCTURE_TYPE_SURFACE_FULL_SCREEN_EXCLUSIVE_INFO_EXT,
+                .pNext               = &out_swapchain_create_info.full_screen_exclusive_win32_info,
+                .fullScreenExclusive = VK_FULL_SCREEN_EXCLUSIVE_APPLICATION_CONTROLLED_EXT
+            };
+            pNext = &out_swapchain_create_info.full_screen_exclusive_info;
+            out_swapchain_create_info.use_full_screen_exclusive = true;
+        } else {
+            log_context->warn("exclusive_fullscreen requested but VK_EXT_full_screen_exclusive is not available; using normal fullscreen");
+        }
+    }
+#endif
+
+    // Present timing (frame pacing step P0.4) requires opting in at swapchain
+    // creation (VUID-vkSetSwapchainPresentTimingQueueSizeEXT-swapchain-12229).
+    const VkSwapchainCreateFlagsKHR swapchain_create_flags =
+        m_device_impl.get_capabilities().m_present_timing
+            ? VK_SWAPCHAIN_CREATE_PRESENT_TIMING_BIT_EXT
+            : 0u;
+
     out_swapchain_create_info.swapchain_create_info = VkSwapchainCreateInfoKHR{
         .sType                 = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,   // VkStructureType
         .pNext                 = pNext,                                         // const void*
-        .flags                 = 0,                                             // VkSwapchainCreateFlagsKHR
+        .flags                 = swapchain_create_flags,                        // VkSwapchainCreateFlagsKHR
         .surface               = m_surface,                                     // VkSurfaceKHR
         .minImageCount         = m_image_count,                                 // uint32_t
         .imageFormat           = m_surface_format.format,                       // VkFormat

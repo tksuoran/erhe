@@ -19,6 +19,17 @@ public:
 
     bool            show                    {true};
     bool            fullscreen              {false};
+    // Request exclusive fullscreen (Windows Vulkan,
+    // VK_EXT_full_screen_exclusive, application controlled). Only
+    // meaningful when fullscreen is also true; consumers must ignore it
+    // otherwise. Falls back to normal (borderless) fullscreen when the
+    // extension is unavailable.
+    bool            exclusive_fullscreen    {false};
+    // Requested display refresh rate in Hz for fullscreen (0 = keep the
+    // desktop default). The closest available fullscreen mode at the
+    // desktop resolution is selected; only meaningful when fullscreen is
+    // true.
+    float           refreshrate             {0.0f};
     bool            framebuffer_transparency{false};
     bool            high_pixel_density      {false};
     bool            enable_joystick         {true};

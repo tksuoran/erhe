@@ -757,6 +757,67 @@ Device_impl::Device_impl(
         query_features_chain_last        = query_features_chain_last->pNext;
     }
 
+    // Frame pacing feature queries (implementation plan step P0.1).
+    VkPhysicalDevicePresentIdFeaturesKHR query_present_id_features{
+        .sType     = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_FEATURES_KHR,
+        .pNext     = nullptr,
+        .presentId = VK_FALSE
+    };
+    if (m_device_extensions.m_VK_KHR_present_id) {
+        query_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&query_present_id_features);
+        query_features_chain_last        = query_features_chain_last->pNext;
+    }
+    VkPhysicalDevicePresentWaitFeaturesKHR query_present_wait_features{
+        .sType       = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_FEATURES_KHR,
+        .pNext       = nullptr,
+        .presentWait = VK_FALSE
+    };
+    if (m_device_extensions.m_VK_KHR_present_wait) {
+        query_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&query_present_wait_features);
+        query_features_chain_last        = query_features_chain_last->pNext;
+    }
+    VkPhysicalDevicePresentId2FeaturesKHR query_present_id2_features{
+        .sType      = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_2_FEATURES_KHR,
+        .pNext      = nullptr,
+        .presentId2 = VK_FALSE
+    };
+    if (m_device_extensions.m_VK_KHR_present_id2) {
+        query_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&query_present_id2_features);
+        query_features_chain_last        = query_features_chain_last->pNext;
+    }
+    VkPhysicalDevicePresentWait2FeaturesKHR query_present_wait2_features{
+        .sType        = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_2_FEATURES_KHR,
+        .pNext        = nullptr,
+        .presentWait2 = VK_FALSE
+    };
+    if (m_device_extensions.m_VK_KHR_present_wait2) {
+        query_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&query_present_wait2_features);
+        query_features_chain_last        = query_features_chain_last->pNext;
+    }
+    VkPhysicalDevicePresentTimingFeaturesEXT query_present_timing_features{
+        .sType                 = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_TIMING_FEATURES_EXT,
+        .pNext                 = nullptr,
+        .presentTiming         = VK_FALSE,
+        .presentAtAbsoluteTime = VK_FALSE,
+        .presentAtRelativeTime = VK_FALSE
+    };
+    if (m_device_extensions.m_VK_EXT_present_timing) {
+        query_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&query_present_timing_features);
+        query_features_chain_last        = query_features_chain_last->pNext;
+    }
+    // Host query reset (core 1.2): backs the frame-bracket query ring
+    // (implementation plan step P0.3) - reset from the CPU in wait_frame
+    // without needing a command buffer.
+    VkPhysicalDeviceHostQueryResetFeatures query_host_query_reset_features{
+        .sType          = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_QUERY_RESET_FEATURES,
+        .pNext          = nullptr,
+        .hostQueryReset = VK_FALSE
+    };
+    {
+        query_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&query_host_query_reset_features);
+        query_features_chain_last        = query_features_chain_last->pNext;
+    }
+
     m_capabilities.m_surface_maintenance1 =
         m_instance_extensions.m_VK_KHR_surface_maintenance1 ||
         m_instance_extensions.m_VK_EXT_surface_maintenance1;
@@ -937,6 +998,72 @@ Device_impl::Device_impl(
     }
 
     vkGetPhysicalDeviceFeatures2(m_vulkan_physical_device, &query_device_features);
+
+    // Frame pacing capability tier resolution
+    // (doc/frame_pacing_capability_tiers.md section 2). Feature-confirmed:
+    // extension presence alone is not enough.
+    m_capabilities.m_present_id =
+        (query_present_id_features.presentId   == VK_TRUE) ||
+        (query_present_id2_features.presentId2 == VK_TRUE);
+    m_capabilities.m_present_wait =
+        (query_present_wait_features.presentWait   == VK_TRUE) ||
+        (query_present_wait2_features.presentWait2 == VK_TRUE);
+    m_capabilities.m_present_timing =
+        (query_present_timing_features.presentTiming == VK_TRUE) &&
+        (query_present_timing_features.presentAtAbsoluteTime == VK_TRUE);
+    m_capabilities.m_present_at_absolute_time = query_present_timing_features.presentAtAbsoluteTime == VK_TRUE;
+    m_capabilities.m_present_at_relative_time = query_present_timing_features.presentAtRelativeTime == VK_TRUE;
+    m_capabilities.m_calibrated_timestamps =
+        m_device_extensions.m_VK_KHR_calibrated_timestamps ||
+        m_device_extensions.m_VK_EXT_calibrated_timestamps;
+    m_host_query_reset = query_host_query_reset_features.hostQueryReset == VK_TRUE;
+    m_capabilities.m_frame_pacing_tier_w =
+        m_capabilities.m_present_id            &&
+        m_capabilities.m_present_wait          &&
+        m_capabilities.m_present_timing        &&
+        m_capabilities.m_calibrated_timestamps;
+    log_context->info("Frame pacing capabilities:");
+    log_context->info("  present_id            = {}", m_capabilities.m_present_id);
+    log_context->info("  present_wait          = {}", m_capabilities.m_present_wait);
+    log_context->info("  present_timing        = {}", m_capabilities.m_present_timing);
+    log_context->info("  calibrated_timestamps = {}", m_capabilities.m_calibrated_timestamps);
+
+    // Tier resolution (P4.2): capabilities + the frame_pacing_tier config.
+    // Must happen HERE, before the surface picks its present mode below
+    // (use_physical_device -> choose_present_mode): the resolved tier owns
+    // that decision - tier W wants fifo_latest_ready + present timing,
+    // tier S wants plain FIFO + minimum image count (backpressure for the
+    // slop servo, claim C21a).
+    {
+        const std::string& requested = get_graphics_config().frame_pacing_tier;
+        if (requested == "off") {
+            m_frame_pacing_tier = Frame_pacing_tier::off;
+        } else if (requested == "s") {
+            m_frame_pacing_tier = Frame_pacing_tier::slop_servo;
+        } else if (requested == "w") {
+            if (m_capabilities.m_frame_pacing_tier_w) {
+                m_frame_pacing_tier = Frame_pacing_tier::full;
+            } else {
+                log_context->warn("frame_pacing_tier 'w' forced but tier W capabilities are missing; using tier S");
+                m_frame_pacing_tier = Frame_pacing_tier::slop_servo;
+            }
+        } else {
+            if (requested != "auto") {
+                log_context->warn("frame_pacing_tier '{}' not recognized; using 'auto'", requested);
+            }
+            // Plain FIFO is mandatory in Vulkan, so tier S is always
+            // available as the fallback.
+            m_frame_pacing_tier = m_capabilities.m_frame_pacing_tier_w
+                ? Frame_pacing_tier::full
+                : Frame_pacing_tier::slop_servo;
+        }
+    }
+    log_context->info(
+        "  frame pacing tier     = {}",
+        (m_frame_pacing_tier == Frame_pacing_tier::full)       ? "W (full pacing)" :
+        (m_frame_pacing_tier == Frame_pacing_tier::slop_servo) ? "S (slop-servo fallback)" :
+                                                                 "OFF"
+    );
 
     // Detach m_portability_subset_features from the local feature chain so
     // its pNext doesn't dangle after locals here go out of scope.
@@ -1176,6 +1303,68 @@ Device_impl::Device_impl(
         if (query_present_mode_fifo_latest_ready_features.presentModeFifoLatestReady == VK_TRUE) {
             log_debug->debug("Enabled feature present mode fifo latest ready");
         }
+    }
+
+    // Frame pacing feature enables (implementation plan step P0.1): enable
+    // exactly what the query reported for each probed extension.
+    VkPhysicalDevicePresentIdFeaturesKHR set_present_id_features{
+        .sType     = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_FEATURES_KHR,
+        .pNext     = nullptr,
+        .presentId = query_present_id_features.presentId
+    };
+    if (m_device_extensions.m_VK_KHR_present_id) {
+        set_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&set_present_id_features);
+        set_features_chain_last        = set_features_chain_last->pNext;
+    }
+    VkPhysicalDevicePresentWaitFeaturesKHR set_present_wait_features{
+        .sType       = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_FEATURES_KHR,
+        .pNext       = nullptr,
+        .presentWait = query_present_wait_features.presentWait
+    };
+    if (m_device_extensions.m_VK_KHR_present_wait) {
+        set_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&set_present_wait_features);
+        set_features_chain_last        = set_features_chain_last->pNext;
+    }
+    VkPhysicalDevicePresentId2FeaturesKHR set_present_id2_features{
+        .sType      = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_2_FEATURES_KHR,
+        .pNext      = nullptr,
+        .presentId2 = query_present_id2_features.presentId2
+    };
+    if (m_device_extensions.m_VK_KHR_present_id2) {
+        set_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&set_present_id2_features);
+        set_features_chain_last        = set_features_chain_last->pNext;
+    }
+    VkPhysicalDevicePresentWait2FeaturesKHR set_present_wait2_features{
+        .sType        = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_2_FEATURES_KHR,
+        .pNext        = nullptr,
+        .presentWait2 = query_present_wait2_features.presentWait2
+    };
+    if (m_device_extensions.m_VK_KHR_present_wait2) {
+        set_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&set_present_wait2_features);
+        set_features_chain_last        = set_features_chain_last->pNext;
+    }
+    VkPhysicalDevicePresentTimingFeaturesEXT set_present_timing_features{
+        .sType                 = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_TIMING_FEATURES_EXT,
+        .pNext                 = nullptr,
+        .presentTiming         = query_present_timing_features.presentTiming,
+        .presentAtAbsoluteTime = query_present_timing_features.presentAtAbsoluteTime,
+        .presentAtRelativeTime = query_present_timing_features.presentAtRelativeTime
+    };
+    if (m_device_extensions.m_VK_EXT_present_timing) {
+        set_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&set_present_timing_features);
+        set_features_chain_last        = set_features_chain_last->pNext;
+        if (set_present_timing_features.presentTiming == VK_TRUE) {
+            log_debug->debug("Enabled feature present timing");
+        }
+    }
+    VkPhysicalDeviceHostQueryResetFeatures set_host_query_reset_features{
+        .sType          = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_QUERY_RESET_FEATURES,
+        .pNext          = nullptr,
+        .hostQueryReset = query_host_query_reset_features.hostQueryReset
+    };
+    if (m_host_query_reset) {
+        set_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&set_host_query_reset_features);
+        set_features_chain_last        = set_features_chain_last->pNext;
     }
 
     VkPhysicalDeviceDescriptorIndexingFeatures set_descriptor_indexing_features{
@@ -1858,6 +2047,45 @@ Device_impl::Device_impl(
                     "GPU timers enabled: timestampValidBits={} timestampPeriod={} max_timers={}",
                     timestamp_valid_bits, m_gpu_timer_timestamp_period, s_max_gpu_timers
                 );
+                // Frame-spanning GPU timestamp bracket ring (step P0.3):
+                // needs host query reset so wait_frame can recycle pairs
+                // without a command buffer.
+                if (m_host_query_reset) {
+                    const VkQueryPoolCreateInfo bracket_pool_create_info{
+                        .sType              = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+                        .pNext              = nullptr,
+                        .flags              = 0,
+                        .queryType          = VK_QUERY_TYPE_TIMESTAMP,
+                        .queryCount         = static_cast<uint32_t>(s_frame_bracket_ring * 2u),
+                        .pipelineStatistics = 0
+                    };
+                    const VkResult bracket_result = vkCreateQueryPool(
+                        m_vulkan_device, &bracket_pool_create_info, nullptr, &m_frame_bracket_query_pool
+                    );
+                    if (bracket_result != VK_SUCCESS) {
+                        log_context->warn(
+                            "vkCreateQueryPool() for the frame bracket failed with {} {}; frame GPU spans disabled",
+                            static_cast<int32_t>(bracket_result), c_str(bracket_result)
+                        );
+                        m_frame_bracket_query_pool = VK_NULL_HANDLE;
+                    } else {
+                        set_debug_label(
+                            VK_OBJECT_TYPE_QUERY_POOL,
+                            reinterpret_cast<uint64_t>(m_frame_bracket_query_pool),
+                            "Frame bracket query pool"
+                        );
+                        vkResetQueryPool(
+                            m_vulkan_device,
+                            m_frame_bracket_query_pool,
+                            0,
+                            static_cast<uint32_t>(s_frame_bracket_ring * 2u)
+                        );
+                        m_frame_bracket_frame_id.fill(-1);
+                        log_startup->info("Frame GPU timestamp bracket enabled (ring of {})", s_frame_bracket_ring);
+                    }
+                } else {
+                    log_startup->info("Frame GPU timestamp bracket disabled: hostQueryReset not supported");
+                }
 #if defined(ERHE_PROFILE_LIBRARY_TRACY) && defined(TRACY_ENABLE)
                 // Tracy GPU (Vulkan) profiling context. Tracy records a
                 // calibration into a one-shot command buffer and submits +
@@ -1866,10 +2094,15 @@ Device_impl::Device_impl(
                 // the per-frame TracyVkCollect and the shutdown TracyVkDestroy
                 // live in vulkan_device.cpp.
                 if (m_vulkan_graphics_queue != VK_NULL_HANDLE) {
+                    // Tracy's VkCtx constructor begins/submits/waits the cb
+                    // MORE than once (its calibration sequence); the second
+                    // vkBeginCommandBuffer is an implicit reset, which
+                    // requires the pool's RESET_COMMAND_BUFFER bit
+                    // (VUID-vkBeginCommandBuffer-commandBuffer-00050).
                     const VkCommandPoolCreateInfo tracy_pool_create_info{
                         .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
                         .pNext            = nullptr,
-                        .flags            = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
+                        .flags            = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
                         .queueFamilyIndex = m_graphics_queue_family_index
                     };
                     VkCommandPool tracy_command_pool = VK_NULL_HANDLE;

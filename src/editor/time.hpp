@@ -53,7 +53,14 @@ public:
     // fly-camera and headset fixed updates) without losing wall-clock time:
     // no fixed steps are produced this frame and the accumulator is frozen, so
     // resuming does not replay a catch-up burst.
-    void prepare_update     (bool advance_simulation = true);
+    //
+    // simulation_advance_ns >= 0 advances the simulation by exactly that
+    // duration instead of the sampled wall-clock frame delta (FR4 routing,
+    // frame pacing step P2.4: the caller passes the delta between successive
+    // predicted display times, so simulated state is sampled at the time each
+    // frame is shown rather than the time it is produced). Negative keeps the
+    // wall-clock path. The 25 ms dilation cap applies to both sources.
+    void prepare_update     (bool advance_simulation = true, int64_t simulation_advance_ns = -1);
     void for_each_fixed_step(std::function<void(const Time_context&)> callback);
 
     void update_transform_animations(App_message_bus& app_message_bus);

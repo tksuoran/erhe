@@ -119,4 +119,63 @@ void sleep_for_100ns(int64_t time_to_sleep_in_100ns)
 
 #endif
 
+#if defined(_WIN32)
+
+Waitable_timer::Waitable_timer()
+{
+    // Falls back to a regular waitable timer when the high-resolution kind
+    // is unavailable (pre-1803 Windows 10); wait_for() falls back to
+    // sleep_for() when neither can be created.
+    m_timer_handle = CreateWaitableTimerExW(
+        nullptr,
+        nullptr,
+        CREATE_WAITABLE_TIMER_MANUAL_RESET | CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,
+        TIMER_ALL_ACCESS
+    );
+    if (m_timer_handle == nullptr) {
+        m_timer_handle = CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_MANUAL_RESET, TIMER_ALL_ACCESS);
+    }
+}
+
+Waitable_timer::~Waitable_timer() noexcept
+{
+    if (m_timer_handle != nullptr) {
+        CloseHandle(m_timer_handle);
+    }
+}
+
+void Waitable_timer::wait_for(const double duration_seconds)
+{
+    if (!(duration_seconds > 0.0)) {
+        return;
+    }
+    if (m_timer_handle == nullptr) {
+        sleep_for(std::chrono::duration<float, std::milli>{static_cast<float>(duration_seconds * 1000.0)});
+        return;
+    }
+    LARGE_INTEGER due_time;
+    due_time.QuadPart = -static_cast<LONGLONG>(duration_seconds * 1e7); // negative = relative, 100 ns units
+    if (SetWaitableTimer(m_timer_handle, &due_time, 0, nullptr, nullptr, FALSE) == 0) {
+        sleep_for(std::chrono::duration<float, std::milli>{static_cast<float>(duration_seconds * 1000.0)});
+        return;
+    }
+    WaitForSingleObject(m_timer_handle, INFINITE);
+}
+
+#else
+
+Waitable_timer::Waitable_timer() = default;
+
+Waitable_timer::~Waitable_timer() noexcept = default;
+
+void Waitable_timer::wait_for(const double duration_seconds)
+{
+    if (!(duration_seconds > 0.0)) {
+        return;
+    }
+    std::this_thread::sleep_for(std::chrono::duration<double>{duration_seconds});
+}
+
+#endif
+
 }

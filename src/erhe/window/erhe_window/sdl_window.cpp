@@ -4,6 +4,8 @@
 # include "erhe_gl/dynamic_load.hpp"
 # include "erhe_gl/wrapper_functions.hpp"
 #endif
+#include "erhe_dataformat/dataformat.hpp"
+#include "erhe_defer/defer.hpp"
 #include "erhe_window/renderdoc_capture.hpp"
 #include "erhe_window/window_log.hpp"
 #include "erhe_profile/profile.hpp"
@@ -31,6 +33,7 @@
 # include "volk.h"
 #endif
 
+#include <cmath>
 #include <cstdlib>
 #include <ctime>
 #include <stdexcept>
@@ -207,6 +210,72 @@ auto sdl_mouse_button_to_erhe(const int sdl_mouse_button) -> Mouse_button
     }
 }
 
+auto sdl_pixel_format_to_erhe(const SDL_PixelFormat sdl_pixel_format)
+{
+    switch (sdl_pixel_format) {
+
+        case SDL_PIXELFORMAT_UNKNOWN:
+            return erhe::dataformat::Format::format_undefined;
+
+        case SDL_PIXELFORMAT_INDEX8:
+            return erhe::dataformat::Format::format_8_scalar_uint;
+
+        case SDL_PIXELFORMAT_RGB24:
+        case SDL_PIXELFORMAT_BGR24:
+            return erhe::dataformat::Format::format_8_vec3_unorm; // TODO or format_8_vec3_srgb ?
+
+        case SDL_PIXELFORMAT_XRGB8888:
+        case SDL_PIXELFORMAT_RGBX8888:
+        case SDL_PIXELFORMAT_XBGR8888:
+        case SDL_PIXELFORMAT_BGRX8888:
+        case SDL_PIXELFORMAT_ARGB8888:
+        case SDL_PIXELFORMAT_RGBA8888:
+        case SDL_PIXELFORMAT_ABGR8888:
+        case SDL_PIXELFORMAT_BGRA8888:
+            return erhe::dataformat::Format::format_8_vec4_unorm; // TODO or format_8_vec3_srgb ?
+
+        case SDL_PIXELFORMAT_XRGB2101010:
+        case SDL_PIXELFORMAT_XBGR2101010:
+        case SDL_PIXELFORMAT_ARGB2101010:
+        case SDL_PIXELFORMAT_ABGR2101010:
+            return erhe::dataformat::Format::format_packed1010102_vec4_unorm;
+
+        case SDL_PIXELFORMAT_RGB48:
+        case SDL_PIXELFORMAT_BGR48:
+            return erhe::dataformat::Format::format_16_vec3_uint;
+
+        case SDL_PIXELFORMAT_RGBA64:
+        case SDL_PIXELFORMAT_ARGB64:
+        case SDL_PIXELFORMAT_BGRA64:
+        case SDL_PIXELFORMAT_ABGR64:
+            return erhe::dataformat::Format::format_16_vec4_uint;
+
+        case SDL_PIXELFORMAT_RGB48_FLOAT:
+        case SDL_PIXELFORMAT_BGR48_FLOAT:
+            return erhe::dataformat::Format::format_16_vec3_float;
+
+        case SDL_PIXELFORMAT_RGBA64_FLOAT:
+        case SDL_PIXELFORMAT_ARGB64_FLOAT:
+        case SDL_PIXELFORMAT_BGRA64_FLOAT:
+        case SDL_PIXELFORMAT_ABGR64_FLOAT:
+            return erhe::dataformat::Format::format_16_vec4_float;
+
+        case SDL_PIXELFORMAT_RGB96_FLOAT:
+        case SDL_PIXELFORMAT_BGR96_FLOAT:
+            return erhe::dataformat::Format::format_32_vec3_float;
+
+        case SDL_PIXELFORMAT_RGBA128_FLOAT:
+        case SDL_PIXELFORMAT_ARGB128_FLOAT:
+        case SDL_PIXELFORMAT_BGRA128_FLOAT:
+        case SDL_PIXELFORMAT_ABGR128_FLOAT:
+            return erhe::dataformat::Format::format_32_vec4_float;
+        default: {
+            // TODO
+            return erhe::dataformat::Format::format_undefined;
+        }
+    }
+}
+
 [[nodiscard]] auto sdl_key_to_modifier(int key) -> int
 {
     if (key == SDLK_LCTRL || key == SDLK_RCTRL) {
@@ -353,6 +422,32 @@ auto Context_window::is_visible() const -> bool
     return (flags & (SDL_WINDOW_MINIMIZED | SDL_WINDOW_OCCLUDED | SDL_WINDOW_HIDDEN)) == 0;
 }
 
+auto Context_window::is_fullscreen() const -> bool
+{
+    auto* const window = reinterpret_cast<SDL_Window*>(m_sdl_window);
+    if (window == nullptr) {
+        return false;
+    }
+    return (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) != 0;
+}
+
+auto Context_window::get_display_refresh_rate() const -> float
+{
+    auto* const window = reinterpret_cast<SDL_Window*>(m_sdl_window);
+    if (window == nullptr) {
+        return 0.0f;
+    }
+    const SDL_DisplayID display = SDL_GetDisplayForWindow(window);
+    if (display == 0) {
+        return 0.0f;
+    }
+    const SDL_DisplayMode* const mode = SDL_GetCurrentDisplayMode(display);
+    if (mode == nullptr) {
+        return 0.0f;
+    }
+    return mode->refresh_rate;
+}
+
 void Context_window::register_redraw_callback(std::function<void()> callback)
 {
     m_redraw_callback = callback;
@@ -398,7 +493,7 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
             SDL_DisplayID* displays = SDL_GetDisplays(&num_displays);
             for (int i = 0; i < num_displays; i++) {
                 SDL_PropertiesID prop_id = SDL_GetDisplayProperties(displays[i]);
-                if(!SDL_GetBooleanProperty(prop_id, SDL_PROP_DISPLAY_HDR_ENABLED_BOOLEAN, false)) {
+                if (!SDL_GetBooleanProperty(prop_id, SDL_PROP_DISPLAY_HDR_ENABLED_BOOLEAN, false)) {
                     log_window->info("Display with ID {} does not have HDR enabled.", displays[i]);
                 } else {
                     log_window->info("Display with ID {} has HDR enabled.", displays[i]);
@@ -475,6 +570,45 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
 #endif
     if (configuration.fullscreen) {
         window_flags |= SDL_WINDOW_FULLSCREEN;
+
+        int display_count = 0;
+        SDL_DisplayID* display_ids = SDL_GetDisplays(&display_count);
+        SDL_DisplayID primary_display = SDL_GetPrimaryDisplay();
+        for (int i = 0; i < display_count; ++i) {
+            const SDL_DisplayID display_id = display_ids[i];
+            int display_mode_count = 0;
+            SDL_DisplayMode** display_modes = SDL_GetFullscreenDisplayModes(display_id, &display_mode_count);
+            if (display_modes == nullptr) {
+                log_window->error("SDL_GetFullscreenDisplayModes() failed: {}", SDL_GetError());
+                continue;
+            }
+            ERHE_DEFER( SDL_free(display_modes); );
+            const SDL_DisplayMode* desktop_display_mode = SDL_GetDesktopDisplayMode(display_id);
+            log_window->info(
+                "Display '{}' [{:08x}] {}:",
+                SDL_GetDisplayName(display_id),
+                display_id,
+                (display_id == primary_display) ? " (primary display)" : "",
+                display_mode_count
+            );
+            for (int j = 0; j < display_mode_count; ++j) {
+                SDL_DisplayMode& m = *display_modes[j];
+                if ((m.w != desktop_display_mode->w) || (m.h != desktop_display_mode->h)) {
+                    continue;
+                }
+                log_window->info(
+                    "  format = {}, width = {}, height = {}, refreshrate = {} ({}/{})",
+                    SDL_GetPixelFormatName(m.format),
+                    m.w,
+                    m.h,
+                    m.refresh_rate,
+                    m.refresh_rate_numerator,
+                    m.refresh_rate_denominator
+                );
+            }
+        }
+        ERHE_DEFER( SDL_free(display_ids); );
+        
     }
 #if defined(ERHE_OS_ANDROID)
     // On Android the activity always covers the whole display, and
@@ -542,6 +676,57 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
             SDL_Quit();
         }
         return false;
+    }
+
+    // Requested fullscreen refresh rate (frame pacing testing): pick the
+    // fullscreen mode at the desktop resolution whose refresh rate is
+    // closest to the request. The available modes are listed in the log
+    // above; 0 keeps the desktop default (borderless fullscreen).
+    if (configuration.fullscreen && (configuration.refreshrate > 0.0f)) {
+        const SDL_DisplayID window_display = SDL_GetDisplayForWindow(sdl_window);
+        int display_mode_count = 0;
+        SDL_DisplayMode** display_modes = SDL_GetFullscreenDisplayModes(window_display, &display_mode_count);
+        if (display_modes == nullptr) {
+            log_window->error("refreshrate: SDL_GetFullscreenDisplayModes() failed: {}", SDL_GetError());
+        } else {
+            ERHE_DEFER( SDL_free(display_modes); );
+            const SDL_DisplayMode* desktop_display_mode = SDL_GetDesktopDisplayMode(window_display);
+            const SDL_DisplayMode* best_mode            = nullptr;
+            for (int j = 0; j < display_mode_count; ++j) {
+                const SDL_DisplayMode* mode = display_modes[j];
+                if (
+                    (desktop_display_mode != nullptr) &&
+                    ((mode->w != desktop_display_mode->w) || (mode->h != desktop_display_mode->h))
+                ) {
+                    continue;
+                }
+                if (
+                    (best_mode == nullptr) ||
+                    (std::abs(mode->refresh_rate - configuration.refreshrate) <
+                     std::abs(best_mode->refresh_rate - configuration.refreshrate))
+                ) {
+                    best_mode = mode;
+                }
+            }
+            if (best_mode == nullptr) {
+                log_window->error(
+                    "refreshrate: no fullscreen mode at the desktop resolution found; keeping desktop default"
+                );
+            } else if (!SDL_SetWindowFullscreenMode(sdl_window, best_mode)) {
+                log_window->error("refreshrate: SDL_SetWindowFullscreenMode() failed: {}", SDL_GetError());
+            } else {
+                SDL_SyncWindow(sdl_window);
+                log_window->info(
+                    "refreshrate: requested {} Hz -> selected fullscreen mode {}x{} @ {} Hz ({}/{})",
+                    configuration.refreshrate,
+                    best_mode->w,
+                    best_mode->h,
+                    best_mode->refresh_rate,
+                    best_mode->refresh_rate_numerator,
+                    best_mode->refresh_rate_denominator
+                );
+            }
+        }
     }
 
 #if defined(ERHE_GRAPHICS_API_OPENGL)

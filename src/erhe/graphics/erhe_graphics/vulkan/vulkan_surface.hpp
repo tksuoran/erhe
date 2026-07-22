@@ -24,6 +24,16 @@ public:
     VkSwapchainPresentScalingCreateInfoKHR swapchain_present_scaling_create_info;
     VkSwapchainPresentModesCreateInfoKHR   swapchain_present_modes_create_info;
     std::vector<VkPresentModeKHR>          present_modes;
+    // Exclusive fullscreen (VK_EXT_full_screen_exclusive, application
+    // controlled). When use_full_screen_exclusive is set the two structs
+    // below are chained into swapchain_create_info.pNext and the caller
+    // (Swapchain_impl::init_swapchain) must acquire the exclusive mode
+    // after creating the swapchain.
+    bool                                   use_full_screen_exclusive{false};
+#if defined(VK_USE_PLATFORM_WIN32_KHR)
+    VkSurfaceFullScreenExclusiveInfoEXT      full_screen_exclusive_info{};
+    VkSurfaceFullScreenExclusiveWin32InfoEXT full_screen_exclusive_win32_info{};
+#endif
 };
 
 class Surface_impl final

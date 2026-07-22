@@ -39,6 +39,36 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", {"title"}}
     }});
+    m_tool_infos.push_back({"get_frame_pacing_status", "Frame pacing snapshot: display refresh period, pacer state (cadence N, margin, vsync grid phase), latest schedule decision, enforcement flag, simulated workload knob, and capture bounds (first/latest frame id). All times are seconds in the frame-record reference clock unless suffixed _ms.", schema_no_args()});
+    m_tool_infos.push_back({"get_frame_pacing_frames", "Per-frame samples from the Frame Pacing window's persistent capture (decision + frame time record joined). Times are absolute reference-clock seconds; 0 = not (yet) recorded. Use for offline analysis: achieved present deltas vs refresh period, grid residuals, latency, clamp waits.", {
+        {"type", "object"},
+        {"properties", {
+            {"first_frame_id", {{"type", "integer"}, {"description", "First frame id to return (default: latest - count + 1)"}}},
+            {"count",          {{"type", "integer"}, {"description", "Number of frames (default 120, max 2000)"}}}
+        }}
+    }});
+    m_tool_infos.push_back({"set_frame_pacing_min_vsyncs", "Set the frame pacer's application-commanded cadence floor N_min (FR1 set_min_vsyncs, behavior doc scenario 9). Raising above the current cadence downshifts immediately; lowering lets the normal upshift path (dwell + headroom) bring the cadence back down. Clamped to [1, 8]; applied at the next frame tick.", {
+        {"type", "object"},
+        {"properties", {
+            {"min_vsyncs", {{"type", "integer"}, {"description", "Minimum display refresh periods per frame (1 = uncapped, default 1)"}}}
+        }},
+        {"required", {"min_vsyncs"}}
+    }});
+    m_tool_infos.push_back({"set_frame_pacing_workload", "Set the Frame Pacing window's simulated CPU workload (U2 sliders, headless twin): each frame busy-waits a duration drawn uniformly from [min_ms, max_ms] inside the measured CPU slot, so the pacer sees it as real load. Clamped to [0, 60] ms, min <= max. 0/0 disables. Use for induced-load scenarios (P3.1) and W-response checks.", {
+        {"type", "object"},
+        {"properties", {
+            {"min_ms", {{"type", "number"}, {"description", "Minimum extra CPU time per frame in milliseconds (default 0)"}}},
+            {"max_ms", {{"type", "number"}, {"description", "Maximum extra CPU time per frame in milliseconds (default min_ms)"}}}
+        }},
+        {"required", {"min_ms"}}
+    }});
+    m_tool_infos.push_back({"set_frame_pacing_capture", "Configure the Frame Pacing capture: max_frames caps how many frames are recorded (recording stops at the cap; 0 = unbounded) bounding memory and the capture-size-dependent UI draw cost; clear=true drops the capture. Set the cap and clear together for a bounded 'record a run' capture, then read it back with get_frame_pacing_frames.", {
+        {"type", "object"},
+        {"properties", {
+            {"max_frames", {{"type", "integer"}, {"description", "Capture size cap in frames (0 = unbounded); recording stops when the capture reaches it"}}},
+            {"clear",      {{"type", "boolean"}, {"description", "Drop the current capture (default false); recording restarts immediately"}}}
+        }}
+    }});
     m_tool_infos.push_back({"get_selection",        "Get currently selected items",                          schema_no_args()});
     m_tool_infos.push_back({"get_undo_redo_stack", "Get undo/redo operation stacks",                       schema_no_args()});
     m_tool_infos.push_back({"clear_undo_history",  "Drop the undo and redo histories (queued operations are kept). Recorded operations are declared users / indirect pins of the assets they retain, so container unload can refuse until the history is cleared (R5.4).", schema_no_args()});

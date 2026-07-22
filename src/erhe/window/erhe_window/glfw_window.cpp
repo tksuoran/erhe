@@ -1052,6 +1052,8 @@ auto Context_window::is_minimized() const -> bool { return false; }
 auto Context_window::is_occluded () const -> bool { return false; }
 auto Context_window::is_hidden   () const -> bool { return false; }
 auto Context_window::is_visible  () const -> bool { return true;  }
+auto Context_window::is_fullscreen() const -> bool { return false; }
+auto Context_window::get_display_refresh_rate() const -> float { return 0.0f; }
 
 void Context_window::get_extensions()
 {

@@ -140,6 +140,7 @@ void Command_buffer_impl::begin()
     // pass. Subsequent cbs in the same frame find the flag already cleared
     // and skip the reset. See Device_impl::maybe_reset_gpu_timer_slice.
     m_device_impl->maybe_reset_gpu_timer_slice(m_vk_command_buffer);
+    m_device_impl->record_frame_bracket_begin(m_vk_command_buffer);
     ERHE_VULKAN_TRACE(
         "Command_buffer_impl::begin() vk_cb=0x{:x} label='{}'",
         reinterpret_cast<std::uintptr_t>(m_vk_command_buffer),
@@ -151,6 +152,7 @@ void Command_buffer_impl::end()
 {
     ERHE_VERIFY(m_vk_command_buffer != VK_NULL_HANDLE);
 
+    m_device_impl->record_frame_bracket_end(m_vk_command_buffer);
     const VkResult result = vkEndCommandBuffer(m_vk_command_buffer);
     if (result != VK_SUCCESS) {
         log_context->critical(
@@ -225,6 +227,7 @@ void Command_buffer_impl::pre_submit_wait()
         if (fence == VK_NULL_HANDLE) {
             continue;
         }
+        const double fence_wait_begin = erhe::frame_pacing::Frame_time_recorder::now();
         const VkResult result = vkWaitForFences(vulkan_device, 1, &fence, VK_TRUE, UINT64_MAX);
         if (result != VK_SUCCESS) {
             log_context->critical(
@@ -232,6 +235,10 @@ void Command_buffer_impl::pre_submit_wait()
                 static_cast<int32_t>(result), c_str(result)
             );
             std::abort();
+        }
+        erhe::frame_pacing::Frame_time_recorder& recorder = m_device_impl->get_frame_time_recorder();
+        if (erhe::frame_pacing::Frame_time_record* record = recorder.find(static_cast<std::int64_t>(m_device_impl->get_frame_index()))) {
+            record->fence_wait_duration += erhe::frame_pacing::Frame_time_recorder::now() - fence_wait_begin;
         }
     }
     m_wait_for_cpu_list.clear();

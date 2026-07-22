@@ -654,7 +654,7 @@ inline auto schema_scene_and_item(const char* item_key, const char* item_desc) -
     };
 }
 
-// Returns $HOME/.claude/erhe_mcp_token (or %USERPROFILE%\.claude\... on
+// Returns $HOME/.agents/erhe_mcp_token (or %USERPROFILE%\.agents\... on
 // Windows). The directory is not created here; the file is optional.
 inline auto auth_token_path() -> std::filesystem::path
 {
@@ -666,7 +666,7 @@ inline auto auth_token_path() -> std::filesystem::path
     if (base == nullptr || base[0] == '\0') {
         return {};
     }
-    return std::filesystem::path{base} / ".claude" / "erhe_mcp_token";
+    return std::filesystem::path{base} / ".agents" / "erhe_mcp_token";
 }
 
 // Returns the trimmed file contents, or an empty string if the file
@@ -693,7 +693,7 @@ inline auto load_auth_token() -> std::string
     const mode_t mode_bits = st.st_mode & 0777;
     if (mode_bits != 0600) {
         log_mcp->warn(
-            "MCP server: token file {} has mode {:o}; require 0600 (chmod 600 ~/.claude/erhe_mcp_token)",
+            "MCP server: token file {} has mode {:o}; require 0600 (chmod 600 ~/.agents/erhe_mcp_token)",
             path.string(), mode_bits
         );
         return {};

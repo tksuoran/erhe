@@ -7,7 +7,9 @@
 #   include "erhe_graphics/spirv_cache.hpp"
 #endif
 #include "erhe_graphics/surface.hpp"
+#include "erhe_graphics/swapchain.hpp"
 #include "erhe_graphics/generated/graphics_config.hpp"
+#include "erhe_frame_pacing/frame_time_recorder.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_utility/debug_label.hpp"
 
@@ -107,6 +109,15 @@ static constexpr unsigned int format_flag_prefer_accuracy   = 0x04u;
 static constexpr unsigned int format_flag_prefer_filterable = 0x08u;
 
 // Image_layout is defined in enums.hpp
+
+// Frame pacing capability tier (doc/frame_pacing_capability_tiers.md,
+// implementation plan P4.2). Resolved once at device init; see
+// Device::get_frame_pacing_tier.
+enum class Frame_pacing_tier : unsigned int {
+    off        = 0, // no pacing (forced off, or no usable method)
+    slop_servo = 1, // tier S: backpressure slop servo, plain FIFO required
+    full       = 2  // tier W: full pacer (present id + wait + timing)
+};
 
 enum class Texture_heap_path : unsigned int {
     opengl_bindless_textures,   // GL_ARB_bindless_texture: sampler2D(uvec2_handle)
@@ -500,6 +511,40 @@ public:
     [[nodiscard]] auto get_active_render_pass             () const -> Render_pass*;
     void               set_active_render_pass             (Render_pass* render_pass);
 
+    // Frame time records (frame pacing step P0.2): per-frame event
+    // timestamps for the frame pacer and profiling tools, backend-neutral
+    // storage filled by the backend and read by the app (observer mode,
+    // step P2.1). Driven from the main/render thread only.
+    [[nodiscard]] auto get_frame_time_recorder            () -> erhe::frame_pacing::Frame_time_recorder&;
+    // Display refresh duration from the swapchain timing query (seconds);
+    // 0.0 while unknown / unsupported. Set by the backend swapchain.
+    void               set_display_refresh_duration_seconds(double seconds);
+    [[nodiscard]] auto get_display_refresh_duration_seconds() const -> double;
+    // Present-wait clamp (frame pacing FR5, implementation plan step P2.2):
+    // block until the frame with the given device frame index has been
+    // displayed, bounded by timeout_ns. Safe to call speculatively: returns
+    // unsupported (immediately) when no present-wait path exists.
+    [[nodiscard]] auto wait_for_displayed_frame             (std::int64_t frame_id, uint64_t timeout_ns) -> Present_wait_result;
+    // Target present time (frame pacing FR3, implementation plan step P2.3):
+    // request that the given frame's present is displayed at target_time
+    // (reference-clock seconds, the Frame_time_recorder clock). Consumed by
+    // the backend at the frame's vkQueuePresentKHR; ignored when present
+    // timing is unavailable or the frame id does not match the presented
+    // frame. 0.0 clears the request. hold_until_seconds is the pacer's
+    // present-request holdback deadline (claim C15 mitigation): the backend
+    // delays vkQueuePresentKHR until this reference-clock time. Computed by
+    // the pacer from the TRACKED grid (deviation 12: the queried
+    // refreshDuration can be grossly wrong); 0.0 = no holdback.
+    void               set_present_target_time              (std::int64_t frame_id, double target_time_seconds, double hold_until_seconds = 0.0);
+    // Resolved frame pacing tier (doc/frame_pacing_capability_tiers.md,
+    // implementation plan P4.2). Resolved once at device init from the
+    // capability probes and the frame_pacing_tier graphics config; the
+    // resolved tier owns the swapchain present mode and image count (tier W
+    // wants fifo_latest_ready + present timing, tier S wants plain FIFO +
+    // minimum image count for backpressure), so it cannot change without a
+    // swapchain-owning restart.
+    [[nodiscard]] auto get_frame_pacing_tier                () const -> Frame_pacing_tier;
+
     // Returns the underlying GPU and OS-platform handles needed to populate
     // XrGraphicsBinding*KHR structs. Backend-neutral: Vulkan backend fills
     // vk_*, OpenGL backend fills gl_* (HDC/HGLRC on Win32, wl_display on
@@ -509,6 +554,8 @@ public:
 private:
     Device_message_callback      m_device_message_callback{};
     std::unique_ptr<Device_impl> m_impl;
+    erhe::frame_pacing::Frame_time_recorder m_frame_time_recorder{};
+    double                       m_display_refresh_duration_seconds{0.0};
 #if defined(ERHE_SPIRV)
     Spirv_cache                  m_spirv_cache;
 #endif

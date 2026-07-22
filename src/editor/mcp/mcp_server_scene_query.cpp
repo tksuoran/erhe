@@ -4,6 +4,9 @@
 #include "mcp/mcp_server_shared.hpp"
 
 #include "assets/asset_manager.hpp"
+#include "windows/frame_pacing_window.hpp"
+#include "erhe_frame_pacing/frame_pacing_observer.hpp"
+#include "erhe_graphics/device.hpp"
 #include "scene/node_raytrace_mask.hpp"
 #include "scene/viewport_scene_view.hpp"
 #include "scene/viewport_scene_views.hpp"
@@ -947,6 +950,183 @@ auto Mcp_server::find_items_by_ids(Scene_root& sr, const std::set<std::size_t>& 
         }
     }
     return result;
+}
+
+// --- Frame pacing introspection (doc/frame_pacing_user_interface.md; the
+// MCP twins of the Frame Pacing window, for headless verification) ---
+
+auto Mcp_server::query_frame_pacing_status(const json& args) -> std::string
+{
+    static_cast<void>(args);
+    json result;
+    if (m_context.graphics_device != nullptr) {
+        result["display_refresh_period_ms"] = m_context.graphics_device->get_display_refresh_duration_seconds() * 1000.0;
+        const erhe::graphics::Frame_pacing_tier tier = m_context.graphics_device->get_frame_pacing_tier();
+        result["tier"] =
+            (tier == erhe::graphics::Frame_pacing_tier::full)       ? "W" :
+            (tier == erhe::graphics::Frame_pacing_tier::slop_servo) ? "S" :
+                                                                      "OFF";
+    }
+    if (m_context.graphics_config != nullptr) {
+        result["frame_pacing_enforce"] = m_context.graphics_config->frame_pacing_enforce;
+    }
+    if (m_context.frame_pacing_observer != nullptr) {
+        const erhe::frame_pacing::Frame_pacer* const pacer = m_context.frame_pacing_observer->get_pacer();
+        if (pacer != nullptr) {
+            result["pacer"] = {
+                {"vsyncs_per_frame", pacer->get_vsyncs_per_frame()},
+                {"min_vsyncs",       m_context.frame_pacing_observer->get_min_vsyncs()},
+                {"margin_ms",        pacer->get_margin() * 1000.0},
+                // Dynamic vsync grid (deviation 10): boundaries at
+                // grid_phase + n * grid_period; the tracked period deviates
+                // from the queried refresh period on real displays.
+                {"grid_phase",       pacer->get_grid_phase()},
+                {"grid_period",      pacer->get_grid_period()}
+            };
+        }
+        const erhe::frame_pacing::Schedule_decision& decision = m_context.frame_pacing_observer->get_last_decision();
+        result["last_decision"] = {
+            {"frame_id",           decision.frame_id},
+            {"release_time",       decision.release_time},
+            {"target_slot",        decision.target_slot},
+            {"target_time",        decision.target_time},
+            {"predicted_display",  decision.predicted_display},
+            {"predicted_duration", decision.predicted_duration},
+            {"vsyncs_per_frame",   decision.vsyncs_per_frame},
+            {"wait_id",            decision.wait_id}
+        };
+    }
+    if (m_context.frame_pacing_window != nullptr) {
+        result["capture"] = {
+            {"frame_count",     m_context.frame_pacing_window->get_capture_frame_count()},
+            {"first_frame_id",  m_context.frame_pacing_window->get_capture_first_frame_id()},
+            {"latest_frame_id", m_context.frame_pacing_window->get_capture_latest_frame_id()},
+            {"max_frames",      m_context.frame_pacing_window->get_max_capture_frames()}
+        };
+        const std::pair<float, float> workload = m_context.frame_pacing_window->get_workload_range_ms();
+        result["workload_ms"] = {{"min", workload.first}, {"max", workload.second}};
+    }
+    result["now"] = erhe::frame_pacing::Frame_time_recorder::now();
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_set_frame_pacing_min_vsyncs(const json& args) -> std::string
+{
+    if (m_context.frame_pacing_observer == nullptr) {
+        json r = make_text_content("Frame pacing observer not available");
+        r["isError"] = true;
+        return r.dump();
+    }
+    const int min_vsyncs = args.value("min_vsyncs", 1);
+    m_context.frame_pacing_observer->request_min_vsyncs(min_vsyncs);
+    json result;
+    result["min_vsyncs"] = m_context.frame_pacing_observer->get_min_vsyncs();
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_set_frame_pacing_workload(const json& args) -> std::string
+{
+    if (m_context.frame_pacing_window == nullptr) {
+        json r = make_text_content("Frame pacing window not available");
+        r["isError"] = true;
+        return r.dump();
+    }
+    const float min_ms = args.value("min_ms", 0.0f);
+    const float max_ms = args.value("max_ms", min_ms);
+    m_context.frame_pacing_window->set_workload_range_ms(min_ms, max_ms);
+    const std::pair<float, float> workload = m_context.frame_pacing_window->get_workload_range_ms();
+    json result;
+    result["workload_ms"] = {{"min", workload.first}, {"max", workload.second}};
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_set_frame_pacing_capture(const json& args) -> std::string
+{
+    Frame_pacing_window* const window = m_context.frame_pacing_window;
+    if (window == nullptr) {
+        json r = make_text_content("Frame pacing window not available");
+        r["isError"] = true;
+        return r.dump();
+    }
+    if (args.contains("max_frames")) {
+        window->set_max_capture_frames(static_cast<std::size_t>(std::max(0, args.value("max_frames", 0))));
+    }
+    if (args.value("clear", false)) {
+        window->clear_capture();
+    }
+    json result;
+    result["capture"] = {
+        {"frame_count",     window->get_capture_frame_count()},
+        {"first_frame_id",  window->get_capture_first_frame_id()},
+        {"latest_frame_id", window->get_capture_latest_frame_id()},
+        {"max_frames",      window->get_max_capture_frames()}
+    };
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::query_frame_pacing_frames(const json& args) -> std::string
+{
+    Frame_pacing_window* const window = m_context.frame_pacing_window;
+    if ((window == nullptr) || (window->get_capture_frame_count() == 0)) {
+        json r = make_text_content("No frame pacing capture available (pacer dormant or window not yet collecting)");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    const std::int64_t latest = window->get_capture_latest_frame_id();
+    const std::int64_t count  = std::clamp<std::int64_t>(args.value("count", 120), 1, 2000);
+    std::int64_t first = args.value("first_frame_id", latest - count + 1);
+    first = std::max(first, window->get_capture_first_frame_id());
+    const std::int64_t last = std::min(latest, first + count - 1);
+
+    json frames = json::array();
+    for (std::int64_t frame_id = first; frame_id <= last; ++frame_id) {
+        const Frame_pacing_window::Frame_sample* const sample = window->get_capture_sample(frame_id);
+        if (sample == nullptr) {
+            continue;
+        }
+        const erhe::frame_pacing::Frame_time_record& r = sample->record;
+        json frame = {
+            {"frame_id",              frame_id},
+            {"planned_vsyncs",        sample->planned_vsyncs},
+            {"actual_vsyncs",         window->actual_vsyncs(*sample)},
+            {"wait_id",               sample->wait_id},
+            {"release_time",          sample->release_time},
+            {"predicted_display",     sample->predicted_display},
+            {"cpu_slot_begin",        r.cpu_slot_begin},
+            {"cpu_slot_end",          r.cpu_slot_end},
+            {"cpu_service_ms",        r.cpu_service_time() * 1000.0},
+            {"pacer_wait_begin",      r.pacer_wait_begin},
+            {"pacer_wait_end",        r.pacer_wait_end},
+            {"fence_wait_ms",         r.fence_wait_duration * 1000.0},
+            {"acquire_begin",         r.acquire_begin},
+            {"acquire_end",           r.acquire_end},
+            {"submit_time",           r.submit_time},
+            {"present_holdback_begin", r.present_holdback_begin},
+            {"present_holdback_end",  r.present_holdback_end},
+            {"present_request_time",  r.present_request_time},
+            {"present_return_time",   r.present_return_time},
+            {"gpu_begin",             r.gpu_frame_begin},
+            {"gpu_end",               r.gpu_frame_end},
+            {"achieved_present_time", r.achieved_present_time},
+            {"achieved_queue_ops_time", r.achieved_queue_ops_time},
+            {"grid_phase",            sample->grid_phase},
+            {"grid_period",           sample->grid_period}
+        };
+        if (sample->stats_valid) {
+            frame["slack_ms"]  = sample->slack * 1000.0;
+            frame["self_miss"] = sample->self_miss;
+        }
+        frames.push_back(std::move(frame));
+    }
+
+    const json result = {
+        {"first_frame_id",    first},
+        {"count",             frames.size()},
+        {"refresh_period",    window->get_refresh_period()},
+        {"frames",            std::move(frames)}
+    };
+    return make_json_content(result).dump();
 }
 
 

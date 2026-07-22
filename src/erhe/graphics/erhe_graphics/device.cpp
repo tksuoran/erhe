@@ -293,6 +293,37 @@ void Device::set_active_render_pass(Render_pass* render_pass)
 {
     m_active_render_pass = render_pass;
 }
+
+auto Device::get_frame_time_recorder() -> erhe::frame_pacing::Frame_time_recorder&
+{
+    return m_frame_time_recorder;
+}
+
+void Device::set_display_refresh_duration_seconds(const double seconds)
+{
+    m_display_refresh_duration_seconds = seconds;
+}
+
+auto Device::get_display_refresh_duration_seconds() const -> double
+{
+    return m_display_refresh_duration_seconds;
+}
+
+auto Device::wait_for_displayed_frame(const std::int64_t frame_id, const uint64_t timeout_ns) -> Present_wait_result
+{
+    return m_impl->wait_for_displayed_frame(frame_id, timeout_ns);
+}
+
+void Device::set_present_target_time(const std::int64_t frame_id, const double target_time_seconds, const double hold_until_seconds)
+{
+    m_impl->set_present_target_time(frame_id, target_time_seconds, hold_until_seconds);
+}
+
+auto Device::get_frame_pacing_tier() const -> Frame_pacing_tier
+{
+    return m_impl->get_frame_pacing_tier();
+}
+
 auto Device::get_native_handles() const -> Native_device_handles
 {
     return m_impl->get_native_handles();

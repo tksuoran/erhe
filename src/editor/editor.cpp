@@ -19,6 +19,8 @@
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/editor_settings_config_serialization.hpp"
 #include "crash_handler.hpp"
+#include "erhe_frame_pacing/frame_pacing_observer.hpp"
+#include "erhe_frame_pacing/slop_servo_pacer.hpp"
 #include "erhe_scene_renderer/generated/mesh_memory_config.hpp"
 #include "erhe_scene_renderer/generated/mesh_memory_config_serialization.hpp"
 #include "config/generated/renderer_config.hpp"
@@ -100,6 +102,7 @@
 #include "transform/rotate_tool.hpp"
 #include "transform/scale_tool.hpp"
 #include "windows/editor_windows.hpp"
+#include "windows/frame_pacing_window.hpp"
 #include "windows/inventory_window.hpp"
 #include "windows/properties.hpp"
 #include "windows/settings_window.hpp"
@@ -208,6 +211,8 @@
 #include <atomic>
 #include <condition_variable>
 #include <cstdlib>
+#include <fstream>
+#include <set>
 #include <filesystem>
 #include <stdexcept>
 #include <thread>
@@ -218,6 +223,36 @@
 #endif
 
 namespace editor {
+
+namespace {
+
+// AI-driven editor runs (see AGENTS.md): when an AI coding agent launches
+// the editor it sets ERHE_AI_DRIVER=1. Error artifacts then go to files
+// under logs/ that the agent can read, instead of the clipboard (which
+// assumed a human pastes the prepared message into an AI chat).
+[[nodiscard]] auto is_ai_driver() -> bool
+{
+    static const bool s_ai_driver = []() {
+        const char* const value = std::getenv("ERHE_AI_DRIVER");
+        return (value != nullptr) && (value[0] == '1');
+    }();
+    return s_ai_driver;
+}
+
+// Appends a report to the given file; the file is truncated on the first
+// write of each run so an agent always reads the current run's errors.
+void write_ai_error_report(const char* const path, const std::string& title, const std::string& content)
+{
+    static std::set<std::string> s_truncated_paths;
+    const bool first_write = s_truncated_paths.insert(path).second;
+    std::ofstream stream{path, first_write ? std::ios::trunc : std::ios::app};
+    if (!stream.is_open()) {
+        return;
+    }
+    stream << "=== " << title << " ===\n" << content << "\n";
+}
+
+} // anonymous namespace
 
 #if defined(ERHE_PROFILE_LIBRARY_TRACY)
 class Tracy_observer : public tf::ObserverInterface {
@@ -312,6 +347,177 @@ public:
         const bool wait_ok = m_graphics_device->wait_frame();
         ERHE_VERIFY(wait_ok);
 
+        // Frame pacing observer (P2.1): feed the pacer with the frame time
+        // records and log its would-be decisions. Enforces nothing.
+        m_frame_pacing_observer.tick(
+            m_graphics_device->get_frame_time_recorder(),
+            erhe::frame_pacing::Frame_time_recorder::now(),
+            m_graphics_device->get_display_refresh_duration_seconds()
+        );
+        {
+            std::string pacing_log_line;
+            while (m_frame_pacing_observer.consume_log_line(pacing_log_line)) {
+                log_frame_pacing->info("{}", pacing_log_line);
+            }
+        }
+
+        // Frame pacing actuation (steps P2.2 + P2.3): before per-frame work,
+        // 1. present-wait clamp (FR5): block until frame (frame_id - 1 - Q*)
+        //    has been displayed, bounding pending presented images to Q* + F;
+        // 2. release gating (FR2): high-resolution timer wait until the
+        //    pacer's release time (P0.5: the waitable timer is the only wait
+        //    mode with usable wake error; its p99 0.59 ms sits inside the
+        //    pacer's 1 ms guard);
+        // 3. target present time (FR3): hand the pacer's target to the
+        //    backend for this frame's vkQueuePresentKHR timing chain.
+        // One pacer_wait record pair spans clamp + timer: both are
+        // involuntary waits, and cpu_service_time subtracts the span.
+        // Graphics config frame_pacing_enforce=false falls back to pure
+        // observer mode (the kill switch). Skipped when nothing is being
+        // presented (hidden window, OpenXR without desktop swapchain):
+        // presents stop, so the waits could only time out.
+        int64_t display_advance_ns = -1; // FR4 routing (P2.4); < 0 = wall-clock fallback
+        const erhe::graphics::Frame_pacing_tier frame_pacing_tier = m_graphics_device->get_frame_pacing_tier();
+        if (m_graphics_device->get_graphics_config().frame_pacing_enforce &&
+            !m_app_context.OpenXR &&
+            (m_frame_activity != Frame_activity::hidden) &&
+            (frame_pacing_tier == erhe::graphics::Frame_pacing_tier::full))
+        {
+            const erhe::frame_pacing::Schedule_decision& pacing_decision = m_frame_pacing_observer.get_last_decision();
+            const double release_lead_s =
+                pacing_decision.release_time - erhe::frame_pacing::Frame_time_recorder::now();
+            if ((pacing_decision.wait_id >= 0) || (release_lead_s > 0.0)) {
+                erhe::frame_pacing::Frame_time_record* const pacing_record =
+                    m_graphics_device->get_frame_time_recorder().find(pacing_decision.frame_id);
+                if (pacing_record != nullptr) {
+                    pacing_record->pacer_wait_begin = erhe::frame_pacing::Frame_time_recorder::now();
+                }
+                if (pacing_decision.wait_id >= 0) {
+                    const erhe::graphics::Present_wait_result wait_result = m_graphics_device->wait_for_displayed_frame(
+                        pacing_decision.wait_id,
+                        100'000'000 // 100 ms bound; a timeout is a logged no-op, not an error
+                    );
+                    if (wait_result == erhe::graphics::Present_wait_result::timeout) {
+                        log_frame_pacing->warn(
+                            "present-wait clamp timed out: frame {} wait_id {}",
+                            pacing_decision.frame_id, pacing_decision.wait_id
+                        );
+                    }
+                }
+                double release_wait_s =
+                    pacing_decision.release_time - erhe::frame_pacing::Frame_time_recorder::now();
+                // A sane release sits at most one latency budget ahead (C14
+                // measured max ~15 ms); a wait this long means the schedule
+                // lost contact with reality - cap it so the app never stalls
+                // on a broken schedule (mirrors the clamp's 100 ms bound).
+                constexpr double s_max_release_wait_s = 0.1;
+                if (release_wait_s > s_max_release_wait_s) {
+                    log_frame_pacing->warn(
+                        "release gate capped: frame {} release {:.1f} ms ahead",
+                        pacing_decision.frame_id, release_wait_s * 1000.0
+                    );
+                    release_wait_s = s_max_release_wait_s;
+                }
+                m_pacer_release_timer.wait_for(release_wait_s);
+                if (pacing_record != nullptr) {
+                    pacing_record->pacer_wait_end = erhe::frame_pacing::Frame_time_recorder::now();
+                }
+            }
+            if (pacing_decision.target_time > 0.0) {
+                m_graphics_device->set_present_target_time(
+                    pacing_decision.frame_id,
+                    pacing_decision.target_time,
+                    pacing_decision.hold_until
+                );
+            }
+            // FR4 routing (P2.4): advance the simulation clock by the delta
+            // between successive predicted display times, so the state
+            // rendered into this frame is sampled at the time the frame will
+            // be SHOWN, not the (jittery) time it is produced. Predicted
+            // display slots are strictly increasing; a delta outside
+            // (0, 0.25 s) means the schedule re-anchored across a gap
+            // (cadence change, swapchain recreation) - fall back to wall
+            // clock for that frame. FR4 prediction accuracy is tracked by
+            // the observer summary (achieved vs predicted, median 23 us
+            // steady state).
+            if (pacing_decision.predicted_display > 0.0) {
+                if (m_last_predicted_display_time > 0.0) {
+                    const double display_delta_s = pacing_decision.predicted_display - m_last_predicted_display_time;
+                    if ((display_delta_s > 0.0) && (display_delta_s < 0.25)) {
+                        display_advance_ns = static_cast<int64_t>(std::llround(display_delta_s * 1e9));
+                    }
+                }
+                m_last_predicted_display_time = pacing_decision.predicted_display;
+            } else {
+                m_last_predicted_display_time = 0.0;
+            }
+        } else if (
+            m_graphics_device->get_graphics_config().frame_pacing_enforce &&
+            !m_app_context.OpenXR &&
+            (m_frame_activity != Frame_activity::hidden) &&
+            (frame_pacing_tier == erhe::graphics::Frame_pacing_tier::slop_servo))
+        {
+            // Tier S (P4.1/P4.2): slop-servo fallback. No display-time
+            // sensing, no grid, no cadence - measure the involuntary
+            // blocking ("slop") the loop experienced since the previous
+            // tick (this frame's device-fence wait, plus the previous
+            // frame's swapchain acquire and present-call blocking - plain
+            // FIFO backpressure blocks inside vkQueuePresentKHR /
+            // vkAcquireNextImageKHR), servo a sleep before input polling,
+            // and let the plain-FIFO queue do the rest. The Frame_pacer
+            // observer still ticks above for records/telemetry, but its
+            // decisions are not enforced in this tier.
+            const double now_seconds = erhe::frame_pacing::Frame_time_recorder::now();
+            const double refresh_period = m_graphics_device->get_display_refresh_duration_seconds();
+            if (refresh_period > 0.0) {
+                m_slop_servo.set_refresh_period(refresh_period);
+            }
+            erhe::frame_pacing::Frame_time_recorder& recorder = m_graphics_device->get_frame_time_recorder();
+            const std::int64_t current_frame_id = recorder.get_latest_frame_id();
+            erhe::frame_pacing::Frame_time_record* const current_record  = recorder.find(current_frame_id);
+            erhe::frame_pacing::Frame_time_record* const previous_record = recorder.find(current_frame_id - 1);
+            double slop = 0.0;
+            if (current_record != nullptr) {
+                slop += current_record->fence_wait_duration;
+            }
+            if (previous_record != nullptr) {
+                slop += std::max(0.0, previous_record->acquire_end - previous_record->acquire_begin);
+                slop += std::max(0.0, previous_record->present_return_time - previous_record->present_request_time);
+            }
+            if (m_slop_servo_last_tick_time > 0.0) {
+                m_slop_servo.update(slop, now_seconds - m_slop_servo_last_tick_time);
+            }
+            m_slop_servo_last_tick_time = now_seconds;
+            const double sleep_seconds = m_slop_servo.get_sleep();
+            if (sleep_seconds > 0.0) {
+                if (current_record != nullptr) {
+                    current_record->pacer_wait_begin = erhe::frame_pacing::Frame_time_recorder::now();
+                }
+                m_pacer_release_timer.wait_for(sleep_seconds);
+                if (current_record != nullptr) {
+                    current_record->pacer_wait_end = erhe::frame_pacing::Frame_time_recorder::now();
+                }
+            }
+            m_last_predicted_display_time = 0.0;
+        } else {
+            m_slop_servo_last_tick_time   = 0.0;
+            m_last_predicted_display_time = 0.0;
+        }
+
+        // Frame pacing verification UI (doc/frame_pacing_user_interface.md):
+        // collect this frame's decision and records into the window's
+        // history, then run the simulated workload knob. The workload runs
+        // here so it lands inside the measured CPU slot after the pacer
+        // waits - the records count it as CPU service time and the pacer
+        // sees it as real load (U2).
+        m_frame_pacing_window->collect(
+            m_graphics_device->get_frame_time_recorder(),
+            m_frame_pacing_observer,
+            m_graphics_device->get_display_refresh_duration_seconds(),
+            erhe::frame_pacing::Frame_time_recorder::now()
+        );
+        m_frame_pacing_window->run_simulated_workload();
+
         // Allocate this frame's command buffer.
         erhe::graphics::Command_buffer& command_buffer = m_graphics_device->get_command_buffer(0);
         m_app_context.current_command_buffer = &command_buffer;
@@ -356,9 +562,13 @@ public:
 
         std::vector<erhe::window::Input_event>& input_events = m_window->get_input_events();
 
-        m_time->prepare_update(m_frame_activity != Frame_activity::hidden);
+        m_time->prepare_update(m_frame_activity != Frame_activity::hidden, display_advance_ns);
         m_time->update_transform_animations(*m_app_message_bus.get());
-        m_animation_player->update(static_cast<float>(m_time->get_host_system_last_frame_duration_ns()) * 1.0e-9f);
+        // Scene animations advance on the same clock as the simulation:
+        // predicted display delta when pacing is active (P2.4), wall clock
+        // otherwise.
+        const int64_t animation_advance_ns = (display_advance_ns >= 0) ? display_advance_ns : m_time->get_host_system_last_frame_duration_ns();
+        m_animation_player->update(static_cast<float>(animation_advance_ns) * 1.0e-9f);
         m_fly_camera_tool->on_frame_begin();
 
         // Updating pointer is probably sufficient to be done once per frame
@@ -766,6 +976,8 @@ public:
 
         configuration.show                     = window_config.show;
         configuration.fullscreen               = window_config.fullscreen;
+        configuration.exclusive_fullscreen     = window_config.exclusive_fullscreen;
+        configuration.refreshrate              = window_config.refreshrate;
         configuration.high_pixel_density       = window_config.high_pixel_density;
         configuration.framebuffer_transparency = window_config.use_transparency;
 #if defined(ERHE_GRAPHICS_API_OPENGL)
@@ -921,8 +1133,17 @@ public:
                 },
                 m_graphics_config,
                 [](erhe::graphics::Message_severity severity, const std::string& error_message, const std::string& callstack) {
-                    std::string clipboard_text = error_message + "\n=== Callstack ===\n" + callstack;
-                    erhe::utility::copy_to_clipboard(clipboard_text);
+                    const std::string report_text = error_message + "\n=== Callstack ===\n" + callstack;
+                    if (is_ai_driver()) {
+                        write_ai_error_report("logs/device_error.txt", "Device error", report_text);
+                        if (severity == erhe::graphics::Message_severity::error) {
+                            ERHE_FATAL("Device error (see logs/device_error.txt): %s", error_message.c_str());
+                        } else {
+                            log_render->warn("Device message (captured to logs/device_error.txt): {}", error_message);
+                        }
+                        return;
+                    }
+                    erhe::utility::copy_to_clipboard(report_text);
                     if (severity == erhe::graphics::Message_severity::error) {
                         ERHE_FATAL("Device error (copied to clipboard): %s", error_message.c_str());
                     } else {
@@ -938,19 +1159,29 @@ public:
 
             m_graphics_device->set_shader_error_callback(
                 [](const std::string& error_log, const std::string& shader_source, const std::string& callstack) {
-                    std::string clipboard_text = "=== Shader Error ===\n" + error_log + "\n=== Shader Source ===\n" + shader_source + "\n=== Callstack ===\n" + callstack;
-                    erhe::utility::copy_to_clipboard(clipboard_text);
+                    std::string report_text = "=== Shader Error ===\n" + error_log + "\n=== Shader Source ===\n" + shader_source + "\n=== Callstack ===\n" + callstack;
+                    if (is_ai_driver()) {
+                        write_ai_error_report("logs/shader_error.txt", "Shader error", report_text);
+                        ERHE_FATAL("Shader compilation/linking failed (see logs/shader_error.txt)");
+                    }
+                    erhe::utility::copy_to_clipboard(report_text);
                     ERHE_FATAL("Shader compilation/linking failed (error and source copied to clipboard)");
                 }
             );
             m_graphics_device->set_trace_callback(
                 [](const std::string& message) {
+                    if (is_ai_driver()) {
+                        log_render->info("{}", message);
+                        return;
+                    }
                     erhe::utility::copy_to_clipboard(message);
                 }
             );
             m_graphics_device->set_state_dump_callback(
                 [](const std::string& state_dump) {
-                    erhe::utility::copy_to_clipboard(state_dump);
+                    if (!is_ai_driver()) {
+                        erhe::utility::copy_to_clipboard(state_dump);
+                    }
                     log_render->info("{}", state_dump);
                 }
             );
@@ -1548,6 +1779,9 @@ public:
                 m_post_processing_window = std::make_unique<Post_processing_window          >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_properties             = std::make_unique<Properties                      >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
                 m_editor_windows         = std::make_unique<Editor_windows                  >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
+                m_frame_pacing_window    = std::make_unique<Frame_pacing_window             >(*m_imgui_renderer.get(), *m_imgui_windows.get());
+                m_app_context.frame_pacing_window   = m_frame_pacing_window.get();
+                m_app_context.frame_pacing_observer = &m_frame_pacing_observer;
                 m_rendergraph_window     = std::make_unique<Rendergraph_window              >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_tool_properties_window = std::make_unique<Tool_properties_window          >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_logs                   = std::make_unique<erhe::imgui::Logs               >(*m_commands.get(),       *m_imgui_renderer.get(), "config/editor/logging.json");
@@ -2617,7 +2851,7 @@ public:
         // subscribe to close_scene themselves and drop their own hosted
         // references (Brush_tool, Material_paint_tool, Material_preview,
         // Brdf_slice, Physics_tool, Operations, Animation_player /
-        // Animation_window; see CLAUDE.md "Scene-hosted references").
+        // Animation_window; see AGENTS.md "Scene-hosted references").
         {
             erhe::Item_host* const closing_host = static_cast<erhe::Item_host*>(scene_root.get());
             const auto clear_geometry_target_if_hosted = [closing_host](Geometry_graph_window& window) {
@@ -2696,7 +2930,7 @@ public:
     // survivors exist (e.g. a prefab template whose instances in other
     // scenes keep resources alive). Anything reported is an instance of the
     // scene-close bug class: a subsystem cached a shared_ptr to scene-hosted
-    // content and did not enroll in close cleanup (see CLAUDE.md
+    // content and did not enroll in close cleanup (see AGENTS.md
     // "Scene-hosted references in editor parts"). Items intentionally kept
     // alive by inventory / hotbar slots (persistent inventory) are reported
     // as info, not warnings.
@@ -3102,7 +3336,19 @@ public:
             // desktop window is only a mirror), so never throttle under OpenXR.
             float wait_time = 0.0f;
             m_frame_activity = Frame_activity::active;
-            if (m_app_context.power_save && !m_app_context.OpenXR) {
+            if (!m_app_context.OpenXR && m_window->is_fullscreen() && !m_window->is_focused()) {
+                // Fullscreen without input focus (alt-tabbed away): treat as
+                // hidden REGARDLESS of power_save. An exclusive-fullscreen
+                // swapchain cannot reach the display in this state; presenting
+                // into it stops draining present-timing feedback until the
+                // timing queue fills and vkQueuePresentKHR dies with
+                // VK_ERROR_PRESENT_TIMING_QUEUE_FULL_EXT (observed live on
+                // alt-tab). Skipping rendering also releases the GPU to the
+                // foreground application.
+                m_frame_activity = Frame_activity::hidden;
+                const int fps = (m_app_context.hidden_fps > 0) ? m_app_context.hidden_fps : 1;
+                wait_time = 1.0f / static_cast<float>(fps);
+            } else if (m_app_context.power_save && !m_app_context.OpenXR) {
                 if (!m_window->is_visible()) {
                     m_frame_activity = Frame_activity::hidden;
                     const int fps = (m_app_context.hidden_fps > 0) ? m_app_context.hidden_fps : 1;
@@ -3273,6 +3519,21 @@ public:
     std::unique_ptr<Clipboard                              > m_clipboard;
     std::unique_ptr<erhe::window::Context_window           > m_window;
     std::unique_ptr<erhe::graphics::Device                 > m_graphics_device;
+    // Frame pacing observer mode (implementation plan step P2.1): the pacer
+    // fed by real inputs, enforcing nothing; decisions go to log_frame_pacing.
+    erhe::frame_pacing::Frame_pacing_observer                m_frame_pacing_observer;
+    // Release gating (FR2, step P2.3): high-resolution timer for the pacer
+    // wait at the tick.
+    erhe::time::Waitable_timer                               m_pacer_release_timer;
+    // FR4 routing (P2.4): previous frame's predicted display time; the delta
+    // to the current prediction advances the simulation clock. 0 = invalid
+    // (pacing inactive last frame; next valid prediction re-seeds).
+    double                                                   m_last_predicted_display_time{0.0};
+    // Tier S slop-servo fallback (P4.1/P4.2): pre-input sleep servoed from
+    // measured backpressure blocking. Period corrected each tick from the
+    // swapchain timing query.
+    erhe::frame_pacing::Slop_servo_pacer                     m_slop_servo{erhe::frame_pacing::Slop_servo_tunables{}, 1.0 / 60.0};
+    double                                                   m_slop_servo_last_tick_time{0.0};
     std::unique_ptr<erhe::imgui::Imgui_renderer            > m_imgui_renderer;
     std::unique_ptr<erhe::renderer::Debug_renderer         > m_debug_renderer;
     std::unique_ptr<erhe::scene_renderer::Program_interface> m_program_interface;
@@ -3334,6 +3595,7 @@ public:
     std::unique_ptr<Post_processing_window          >        m_post_processing_window;
     std::unique_ptr<Properties                      >        m_properties;
     std::unique_ptr<Editor_windows                  >        m_editor_windows;
+    std::unique_ptr<Frame_pacing_window             >        m_frame_pacing_window;
     std::unique_ptr<Rendergraph_window              >        m_rendergraph_window;
     std::unique_ptr<Animation_player                >        m_animation_player;
     std::unique_ptr<Animation_window                >        m_animation_window;
