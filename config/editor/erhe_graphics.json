@@ -1,6 +1,6 @@
 {
     "initial_clear": true,
-    "renderdoc_capture_support": true,
+    "renderdoc_capture_support": false,
     "renderdoc_library_path_override_enable": false,
     "renderdoc_library_path_override": "",
     "shader_monitor_enabled": false,

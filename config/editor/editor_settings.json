@@ -1,5 +1,5 @@
 {
-    "_version": 13,
+    "_version": 15,
     "camera_controls": {
         "invert_x": false,
         "invert_y": false,
@@ -200,69 +200,69 @@
     },
     "inventory": {
         "grid_slots": [
-            { "_version": 2 },
-            { "_version": 2 },
-            { "_version": 2 },
-            { "_version": 2 },
-            { "_version": 2 },
-            { "_version": 2 },
-            { "_version": 2 },
-            { "_version": 2 },
-            { "_version": 2 },
-            { "_version": 2 },
-            { "_version": 2 },
-            { "_version": 2 },
-            { "_version": 2 },
-            { "_version": 2 },
-            { "_version": 2 },
-            { "_version": 2 },
-            { "_version": 2 },
-            { "_version": 2 },
-            { "_version": 2 },
-            { "_version": 2 },
-            { "_version": 2 },
-            { "_version": 2 },
-            { "_version": 2 },
-            { "_version": 2 },
-            { "_version": 2 },
-            { "_version": 2 },
-            { "_version": 2 }
+            { "_version": 4 },
+            { "_version": 4 },
+            { "_version": 4 },
+            { "_version": 4 },
+            { "_version": 4 },
+            { "_version": 4 },
+            { "_version": 4 },
+            { "_version": 4 },
+            { "_version": 4 },
+            { "_version": 4 },
+            { "_version": 4 },
+            { "_version": 4 },
+            { "_version": 4 },
+            { "_version": 4 },
+            { "_version": 4 },
+            { "_version": 4 },
+            { "_version": 4 },
+            { "_version": 4 },
+            { "_version": 4 },
+            { "_version": 4 },
+            { "_version": 4 },
+            { "_version": 4 },
+            { "_version": 4 },
+            { "_version": 4 },
+            { "_version": 4 },
+            { "_version": 4 },
+            { "_version": 4 }
         ],
         "hotbar_slots": [
             {
-                "_version": 2,
+                "_version": 4,
                 "tool_name": "Move Tool"
             },
             {
-                "_version": 2,
+                "_version": 4,
                 "tool_name": "Rotate"
             },
             {
-                "_version": 2,
+                "_version": 4,
                 "tool_name": "Scale"
             },
             {
-                "_version": 2,
+                "_version": 4,
                 "tool_name": "Brush Tool"
             },
             {
-                "_version": 2,
+                "_version": 4,
                 "tool_name": "Material Paint Tool (command host)"
             },
             {
-                "_version": 2,
+                "_version": 4,
                 "tool_name": "Paint Tool"
             },
             {
-                "_version": 2,
+                "_version": 4,
                 "tool_name": "Physics Tool"
             },
             {
-                "_version": 2,
+                "_version": 4,
                 "tool_name": "Selection Tool"
             },
-            { "_version": 2 },
-            { "_version": 2 }
+            { "_version": 4 },
+            { "_version": 4 }
         ]
     },
     "network": {
