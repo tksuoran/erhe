@@ -233,6 +233,12 @@ private:
         bool                                              done{false};   // guarded by mutex
     };
 
+    // Calls Geometry_graph_node::update_live() on every live node of every
+    // Graph_mesh asset (and the possibly-orphaned edited graph), so nodes
+    // tracking external state (lattice transform driver) can mark themselves
+    // dirty. Called once per frame from update_evaluation().
+    void update_live_nodes();
+
     // The next graph that needs evaluation: the currently edited graph
     // first (it may be a library orphan), then the Graph_mesh assets of
     // every scene's content library. Null when all are idle.

@@ -1146,20 +1146,32 @@ void Transform_tool::tool_render(const Render_context& context)
 
 void Transform_tool::update_for_view(Scene_view* scene_view)
 {
-    // Keep the gizmo anchor tracking the live mesh component selection while idle.
-    // Skipped during an active gizmo drag or numeric component edit so the captured
+    // Keep the gizmo anchor tracking the live mesh component selection (or a
+    // designated lattice node's selected control point) while idle. Skipped
+    // during an active gizmo drag or numeric component edit so the captured
     // initial anchor is not stomped mid-edit.
-    if (!is_transform_tool_active() && !m_component_transform.is_active()) {
+    if (!is_transform_tool_active() && !m_component_transform.is_active() && !m_lattice_point_transform.is_active()) {
         Mesh_component_selection* mesh_component_selection = m_context.mesh_component_selection;
         const bool want_component =
             (mesh_component_selection != nullptr) &&
             (mesh_component_selection->get_mode() != Mesh_component_mode::object);
         if (want_component) {
-            m_component_transform.update_anchor(m_context, shared);
+            m_component_source = m_component_transform.update_anchor(m_context, shared)
+                ? Component_source::mesh_components
+                : Component_source::none;
+        } else if (m_lattice_point_transform.update_anchor(m_context, shared)) {
+            // A display/ghost designated Lattice_node is bound into the active
+            // scene: its selected control point owns the gizmo (viewport lattice
+            // editing). Clearing the designation returns the gizmo to the node
+            // selection below.
+            m_component_source = Component_source::lattice_point;
         } else if (shared.component_mode) {
-            // Left component mode (back to object mode): restore the node gizmo.
+            // Left component / lattice mode: restore the node gizmo.
+            m_component_source = Component_source::none;
             shared.component_mode = false;
             update_target_nodes(nullptr);
+        } else {
+            m_component_source = Component_source::none;
         }
     }
 
@@ -1211,25 +1223,38 @@ void Transform_tool::update_transforms()
 void Transform_tool::apply_component_transform(const glm::mat4& updated_world_from_anchor)
 {
     // Note: the component path does not use shared.touched (which gates the node
-    // record path); commit is driven by Mesh_component_transform::is_active().
-    m_component_transform.apply(m_context, shared, updated_world_from_anchor);
+    // record path); commit is driven by the producer's is_active().
+    if (m_component_source == Component_source::lattice_point) {
+        m_lattice_point_transform.apply(m_context, shared, updated_world_from_anchor);
+    } else {
+        m_component_transform.apply(m_context, shared, updated_world_from_anchor);
+    }
     shared.world_from_anchor.set(updated_world_from_anchor);
     update_transforms();
 }
 
 void Transform_tool::begin_component_edit()
 {
-    m_component_transform.begin(m_context);
+    if (m_component_source == Component_source::lattice_point) {
+        m_lattice_point_transform.begin(m_context);
+    } else {
+        m_component_transform.begin(m_context);
+    }
 }
 
 void Transform_tool::commit_component_edit()
 {
-    m_component_transform.commit(m_context);
+    if (m_lattice_point_transform.is_active()) {
+        m_lattice_point_transform.commit(m_context);
+    }
+    if (m_component_transform.is_active()) {
+        m_component_transform.commit(m_context);
+    }
 }
 
 auto Transform_tool::is_component_edit_active() const -> bool
 {
-    return m_component_transform.is_active();
+    return m_component_transform.is_active() || m_lattice_point_transform.is_active();
 }
 
 void Transform_tool::touch()

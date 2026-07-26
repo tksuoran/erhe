@@ -93,8 +93,8 @@ Common to both the geometry and texture graph windows:
 Geometry-graph-specific:
 
 - Node categories: **Primitives** (box, sphere, torus, cone, disc),
-  **Operations** (subdivide, conway, transform, triangulate, normalize, reverse,
-  repair), **Points** (distribute, instance, realize), **Combine** (join,
+  **Operations** (subdivide, conway, transform, lattice, triangulate, normalize,
+  reverse, repair), **Points** (distribute, instance, realize), **Combine** (join,
   boolean), **Values** (float, integer, vector, math), **Groups** (group_input,
   group_output, group), **Output**.
 - The output node can attach the baked mesh to a scene `Node` and optionally give

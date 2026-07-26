@@ -481,6 +481,7 @@ void Geometry_graph_window::build_palette()
             .entries = {
                 Palette_entry{.type_name = "subdivide",   .label = "Subdivide"},
                 Palette_entry{.type_name = "transform",   .label = "Transform"},
+                Palette_entry{.type_name = "lattice",     .label = "Lattice"},
                 Palette_entry{.type_name = "triangulate", .label = "Triangulate"},
                 Palette_entry{.type_name = "normalize",   .label = "Normalize"},
                 Palette_entry{.type_name = "reverse",     .label = "Reverse"},
@@ -769,12 +770,40 @@ void Geometry_graph_window::apply_baked_products_to_attachments(const std::share
     }
 }
 
+void Geometry_graph_window::update_live_nodes()
+{
+    const auto update_graph = [](const std::shared_ptr<Graph_mesh>& graph_mesh) {
+        for (const std::shared_ptr<Geometry_graph_node>& node : graph_mesh->nodes()) {
+            node->update_live();
+        }
+    };
+    if (m_graph_mesh) {
+        update_graph(m_graph_mesh); // may be a library orphan, unreachable below
+    }
+    if (m_app_context.app_scenes == nullptr) {
+        return;
+    }
+    for (const std::shared_ptr<Scene_root>& scene_root : m_app_context.app_scenes->get_scene_roots()) {
+        const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
+        if (!content_library || !content_library->graph_meshes) {
+            continue;
+        }
+        for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->graph_meshes->get_all<Graph_mesh>()) {
+            if (graph_mesh != m_graph_mesh) {
+                update_graph(graph_mesh);
+            }
+        }
+    }
+}
+
 void Geometry_graph_window::update_evaluation()
 {
     // Once-per-frame refresh (the template's Texture_graph_window::update()
     // parity): keeps m_graph_mesh tracking the selection even when the
     // window is closed, so MCP reads never see a stale graph.
     resolve_target();
+
+    update_live_nodes();
 
     process_attachment_push_requests();
 

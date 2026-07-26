@@ -289,11 +289,11 @@ def section_every_node_type():
     check(S, "output publishes a bake to the asset", current_graph_has_bake())
 
     # Operation chain: box -> passthrough -> subdivide -> conway ->
-    # transform -> triangulate -> normalize -> reverse -> repair -> output
+    # transform -> lattice -> triangulate -> normalize -> reverse -> repair -> output
     fresh_graph()
     box = add_node("box")["id"]
     ops = {}
-    for type_name in ("passthrough", "subdivide", "conway", "transform", "triangulate", "normalize", "reverse", "repair"):
+    for type_name in ("passthrough", "subdivide", "conway", "transform", "lattice", "triangulate", "normalize", "reverse", "repair"):
         ops[type_name] = add_node(type_name)["id"]
     output = add_node("output")["id"]
     chain = [box] + list(ops.values()) + [output]
@@ -306,9 +306,28 @@ def section_every_node_type():
     check(S, "passthrough forwards geometry unchanged", pass_counts == box_counts, f"counts={pass_counts}")
     sub_counts = geometry_counts(ops["subdivide"])
     check(S, "subdivide grows mesh", sub_counts is not None and sub_counts[0] > box_counts[0], f"counts={sub_counts}")
-    for type_name in ("conway", "transform", "triangulate", "normalize", "reverse", "repair"):
+    for type_name in ("conway", "transform", "lattice", "triangulate", "normalize", "reverse", "repair"):
         counts = geometry_counts(ops[type_name])
         check(S, f"{type_name} produces geometry", counts is not None and counts[0] > 0, f"counts={counts}")
+
+    # Lattice deform: identity passes counts through; a corner control point
+    # offset deforms positions without changing topology.
+    fresh_graph()
+    box = add_node("box")["id"]
+    lattice = add_node("lattice")["id"]
+    output = add_node("output")["id"]
+    connect(box, 0, lattice, 0)
+    connect(lattice, 0, output, 0)
+    box_counts = geometry_counts(box)
+    lattice_counts = geometry_counts(lattice)
+    check(S, "lattice identity preserves counts", lattice_counts == box_counts,
+          f"box={box_counts} lattice={lattice_counts}")
+    corner_offsets = [0.0] * 24  # 1x1x1 lattice: 8 control points
+    corner_offsets[0:3] = [0.5, 0.5, 0.5]
+    set_param(lattice, {"divisions": [1, 1, 1], "offsets": corner_offsets})
+    lattice_counts = geometry_counts(lattice)
+    check(S, "lattice deform preserves counts", lattice_counts == box_counts,
+          f"box={box_counts} lattice={lattice_counts}")
 
     # Value nodes and math into a primitive parameter pin.
     fresh_graph()

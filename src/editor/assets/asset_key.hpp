@@ -34,7 +34,8 @@ enum class Asset_type : int {
     brush     = 1,
     material  = 2,
     animation = 3,
-    mesh      = 4  // scene_local-only (graph source nodes); later: texture, graph_texture, graph_mesh, skin
+    mesh      = 4, // scene_local-only (graph source nodes); later: texture, graph_texture, graph_mesh, skin
+    node      = 5  // scene_local-only (graph transform-driver references, e.g. Lattice_node)
 };
 
 [[nodiscard]] auto c_str(Asset_scope scope) -> const char*;

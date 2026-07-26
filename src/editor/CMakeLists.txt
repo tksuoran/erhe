@@ -220,6 +220,8 @@ erhe_target_sources_grouped(
     geometry_graph/nodes/instance_nodes.hpp
     geometry_graph/nodes/join_geometry_node.cpp
     geometry_graph/nodes/join_geometry_node.hpp
+    geometry_graph/nodes/lattice_node.cpp
+    geometry_graph/nodes/lattice_node.hpp
     geometry_graph/nodes/math_node.cpp
     geometry_graph/nodes/math_node.hpp
     geometry_graph/nodes/mesh_box_node.cpp
@@ -510,6 +512,8 @@ erhe_target_sources_grouped(
     tools/hover_tool.hpp
     tools/hud.cpp
     tools/hud.hpp
+    tools/lattice_tool.cpp
+    tools/lattice_tool.hpp
     tools/material_paint_tool.cpp
     tools/material_paint_tool.hpp
     tools/mesh_component_selection.cpp
@@ -534,6 +538,8 @@ erhe_target_sources_grouped(
     transform/handle_visualizations.hpp
     transform/mesh_component_extrude.cpp
     transform/mesh_component_extrude.hpp
+    transform/lattice_point_transform.cpp
+    transform/lattice_point_transform.hpp
     transform/mesh_component_transform.cpp
     transform/mesh_component_transform.hpp
     transform/move_tool.cpp

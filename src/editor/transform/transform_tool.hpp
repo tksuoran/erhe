@@ -2,6 +2,7 @@
 
 #include "transform/handle_enums.hpp"
 #include "transform/handle_visualizations.hpp"
+#include "transform/lattice_point_transform.hpp"
 #include "transform/mesh_component_transform.hpp"
 #include "transform/rotation_inspector.hpp"
 #include "tools/tool.hpp"
@@ -306,7 +307,14 @@ private:
 
     Edit_state m_edit_state;
 
+    // Which producer owns the gizmo when shared.component_mode is set: the mesh
+    // component selection or a designated lattice node's control point. Decided
+    // each idle frame in update_for_view; the façade methods dispatch on it.
+    enum class Component_source { none, mesh_components, lattice_point };
+    Component_source m_component_source{Component_source::none};
+
     Mesh_component_transform m_component_transform;
+    Lattice_point_transform  m_lattice_point_transform;
 
     // Reused scratch for the Reference node picker popup (cleared + refilled each frame).
     std::vector<std::shared_ptr<erhe::Item_base>> m_reference_candidates;

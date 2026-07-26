@@ -95,6 +95,7 @@
 #include "texture_graph/texture_graph_window.hpp"
 #include "tools/clipboard.hpp"
 #include "tools/mesh_component_selection.hpp"
+#include "tools/lattice_tool.hpp"
 #include "tools/mesh_component_selection_tool.hpp"
 #include "tools/navigation_gizmo_tool.hpp"
 #include "tools/tools.hpp"
@@ -2109,6 +2110,12 @@ public:
                     *m_mesh_component_selection.get(),
                     *m_tools.get()
                 );
+                m_lattice_tool = std::make_unique<Lattice_tool>(
+                    *m_commands.get(),
+                    m_app_context,
+                    *m_app_message_bus.get(),
+                    *m_tools.get()
+                );
             }
             ERHE_TASK_FOOTER(
                 .name("Group 2")
@@ -2625,6 +2632,7 @@ public:
         m_app_context.id_renderer              = m_id_renderer           .get();
         m_app_context.input_state              = m_input_state           .get();
         m_app_context.inventory_window         = m_inventory_window      .get();
+        m_app_context.lattice_tool             = m_lattice_tool          .get();
         m_app_context.material_paint_tool      = m_material_paint_tool   .get();
         m_app_context.material_preview         = m_material_preview      .get();
         m_app_context.brush_preview            = m_brush_preview         .get();
@@ -3643,6 +3651,7 @@ public:
     std::unique_ptr<Grid_tool          >                     m_grid_tool;
     std::unique_ptr<Material_paint_tool>                     m_material_paint_tool;
     std::unique_ptr<Mesh_component_selection_tool>           m_mesh_component_selection_tool;
+    std::unique_ptr<Lattice_tool>                            m_lattice_tool;
     std::unique_ptr<Paint_tool         >                     m_paint_tool;
     std::unique_ptr<Physics_tool       >                     m_physics_tool;
     std::unique_ptr<Selection_tool     >                     m_selection_tool;

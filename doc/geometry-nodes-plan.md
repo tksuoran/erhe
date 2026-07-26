@@ -44,6 +44,7 @@ remain future work. All code lives in `src/editor/geometry_graph/`.
 | Phase 6e: node groups                                | DONE   | e953ce5f |
 | Comprehensive smoke test sweep (all 120 checks pass) | DONE   | a2a36dd5, bdc71123 (script) |
 | Phase 6c: field system                               | designed, awaiting review (see 6c below) | - |
+| Lattice deform node (see doc/lattice_deform_geometry_node.md) | DONE | - |
 
 Verified end to end in the headless Vulkan build driven over the in-editor MCP
 server: box -> output and box -> conway dual -> output chains render in the

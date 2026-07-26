@@ -8,6 +8,7 @@
 #include "geometry_graph/nodes/group_nodes.hpp"
 #include "geometry_graph/nodes/instance_nodes.hpp"
 #include "geometry_graph/nodes/join_geometry_node.hpp"
+#include "geometry_graph/nodes/lattice_node.hpp"
 #include "geometry_graph/nodes/math_node.hpp"
 #include "geometry_graph/nodes/mesh_box_node.hpp"
 #include "geometry_graph/nodes/mesh_cone_node.hpp"
@@ -39,6 +40,7 @@ auto make_geometry_graph_node(App_context& context, const std::string& type_name
     else if (type_name == "subdivide")    { node = std::make_shared<Subdivide_node  >(); }
     else if (type_name == "conway")       { node = std::make_shared<Conway_node     >(); } // legacy combo node: read_parameters adopts the saved operation
     else if (type_name == "transform")    { node = std::make_shared<Transform_node  >(); }
+    else if (type_name == "lattice")      { node = std::make_shared<Lattice_node    >(context); }
     else if (type_name == "triangulate")  { node = std::make_shared<Geometry_unary_operation_node>("Triangulate", &erhe::geometry::operation::triangulate); }
     else if (type_name == "normalize")    { node = std::make_shared<Geometry_unary_operation_node>("Normalize",   &erhe::geometry::operation::normalize); }
     else if (type_name == "reverse")      { node = std::make_shared<Geometry_unary_operation_node>("Reverse",     &erhe::geometry::operation::reverse); }

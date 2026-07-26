@@ -58,6 +58,8 @@ erhe_target_sources_grouped(
     erhe_geometry/operation/generate_tangents.hpp
     erhe_geometry/operation/geometry_operation.cpp
     erhe_geometry/operation/geometry_operation.hpp
+    erhe_geometry/operation/lattice_deform.cpp
+    erhe_geometry/operation/lattice_deform.hpp
     erhe_geometry/operation/make_atlas.cpp
     erhe_geometry/operation/make_atlas.hpp
     erhe_geometry/operation/merge_faces.cpp

@@ -29,6 +29,7 @@ auto c_str(const Asset_type type) -> const char*
         case Asset_type::material:  return "material";
         case Asset_type::animation: return "animation";
         case Asset_type::mesh:      return "mesh";
+        case Asset_type::node:      return "node";
         case Asset_type::none:
         default:                    return "none";
     }
@@ -48,6 +49,7 @@ auto parse_asset_type(const std::string_view text) -> Asset_type
     if (text == "material")  { return Asset_type::material; }
     if (text == "animation") { return Asset_type::animation; }
     if (text == "mesh")      { return Asset_type::mesh; }
+    if (text == "node")      { return Asset_type::node; }
     return Asset_type::none;
 }
 
@@ -86,11 +88,12 @@ auto Asset_key_hash::operator()(const Asset_key& key) const -> std::size_t
 
 namespace {
 
-const std::array<Asset_type_info, 4> c_asset_type_infos{
+const std::array<Asset_type_info, 5> c_asset_type_infos{
     Asset_type_info{Asset_type::brush,     "brush",     erhe::Item_type::brush,     &Content_library::brushes   },
     Asset_type_info{Asset_type::material,  "material",  erhe::Item_type::material,  &Content_library::materials },
     Asset_type_info{Asset_type::animation, "animation", erhe::Item_type::animation, &Content_library::animations},
-    Asset_type_info{Asset_type::mesh,      "mesh",      erhe::Item_type::mesh,      nullptr                     }
+    Asset_type_info{Asset_type::mesh,      "mesh",      erhe::Item_type::mesh,      nullptr                     },
+    Asset_type_info{Asset_type::node,      "node",      erhe::Item_type::node,      nullptr                     }
 };
 
 }

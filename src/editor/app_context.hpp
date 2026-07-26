@@ -79,6 +79,7 @@ class Imgui_window_scene_views;
 class Inventory_window;
 class Input_state;
 class Jolt_debug_renderer;
+class Lattice_tool;
 class Material_paint_tool;
 class Material_preview;
 class Mesh_component_selection;
@@ -201,6 +202,7 @@ public:
     Id_renderer*                       id_renderer          {nullptr};
     Input_state*                       input_state          {nullptr};
     Inventory_window*                  inventory_window     {nullptr};
+    Lattice_tool*                      lattice_tool         {nullptr};
     Material_paint_tool*               material_paint_tool  {nullptr};
     Material_preview*                  material_preview     {nullptr};
     Brush_preview*                     brush_preview        {nullptr};

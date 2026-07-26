@@ -87,6 +87,13 @@ public:
     // the destructor.
     virtual void on_removed_from_graph();
 
+    // Once-per-frame main-thread hook on LIVE nodes (called from
+    // Geometry_graph_window::update_evaluation for every Graph_mesh asset),
+    // for nodes that track external mutable state - e.g. the lattice node
+    // re-captures its transform-driver scene node's transform and marks
+    // itself dirty when the node moved. Must be cheap; default no-op.
+    virtual void update_live() {}
+
     // Evaluation-snapshot hooks (Geometry_graph_window::launch_evaluation).
     // prepare_for_evaluation() runs on the LIVE node on the main thread just
     // before its parameters are snapshotted: the place to resolve deferred
