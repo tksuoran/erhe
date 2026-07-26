@@ -12,6 +12,9 @@
 
 #include <glm/gtc/constants.hpp>
 
+#include <algorithm>
+#include <cmath>
+
 namespace erhe::scene {
 
 auto Light::get_texture_from_clip(const erhe::math::Depth_range depth_range, const erhe::math::Coordinate_conventions& conventions) -> glm::mat4
@@ -77,12 +80,66 @@ Light::Light(const Light& src, erhe::for_clone)
     , type            {src.type            }
     , color           {src.color           }
     , intensity       {src.intensity       }
+    , temperature     {src.temperature     }
     , range           {src.range           }
     , inner_spot_angle{src.inner_spot_angle}
     , outer_spot_angle{src.outer_spot_angle}
     , cast_shadow     {src.cast_shadow     }
     , layer_id        {src.layer_id        }
 {
+}
+
+auto Light::get_effective_color() const -> glm::vec3
+{
+    return (temperature > 0.0f) ? color * blackbody_color(temperature) : color;
+}
+
+auto Light::blackbody_color(const float temperature_kelvin) -> glm::vec3
+{
+    // Planckian locus in CIE 1960 UCS via the Krystek (1985) rational
+    // approximation, valid for 1000 K .. 15000 K.
+    const float t  = std::clamp(temperature_kelvin, 1000.0f, 15000.0f);
+    const float t2 = t * t;
+    const float u  = (0.860117757f + 1.54118254e-4f * t + 1.28641212e-7f * t2) / (1.0f + 8.42420235e-4f * t + 7.08145163e-7f * t2);
+    const float v  = (0.317398726f + 4.22806245e-5f * t + 4.20481691e-8f * t2) / (1.0f - 2.89741816e-5f * t + 1.61456053e-7f * t2);
+
+    // CIE 1960 UCS -> CIE 1931 xy -> XYZ with Y = 1
+    const float d = 2.0f * u - 8.0f * v + 4.0f;
+    const float x = 3.0f * u / d;
+    const float y = 2.0f * v / d;
+    const float X = x / y;
+    const float Z = (1.0f - x - y) / y;
+
+    // XYZ -> linear sRGB (D65); Y contributes its column times 1
+    glm::vec3 rgb{
+         3.2404542f * X - 1.5371385f - 0.4985314f * Z,
+        -0.9692660f * X + 1.8760108f + 0.0415560f * Z,
+         0.0556434f * X - 0.2040259f + 1.0572252f * Z
+    };
+    rgb = glm::max(rgb, glm::vec3{0.0f});
+    const float max_component = std::max(rgb.r, std::max(rgb.g, rgb.b));
+    return (max_component > 0.0f) ? rgb / max_component : glm::vec3{1.0f};
+}
+
+auto Light::get_solid_angle() const -> float
+{
+    switch (type) {
+        case Type::point: return 4.0f * glm::pi<float>();
+        case Type::spot:  return 2.0f * glm::pi<float>() * (1.0f - std::cos(outer_spot_angle * 0.5f));
+        default:          return 0.0f;
+    }
+}
+
+auto Light::get_luminous_flux() const -> float
+{
+    const float solid_angle = get_solid_angle();
+    return (solid_angle > 0.0f) ? intensity * solid_angle : intensity;
+}
+
+void Light::set_luminous_flux(const float lumens)
+{
+    const float solid_angle = get_solid_angle();
+    intensity = (solid_angle > 0.0f) ? lumens / solid_angle : lumens;
 }
 
 void Light::handle_item_host_update(erhe::Item_host* const old_item_host, erhe::Item_host* const new_item_host)

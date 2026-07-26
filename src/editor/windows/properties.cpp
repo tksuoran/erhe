@@ -339,8 +339,35 @@ void Properties::light_properties(erhe::scene::Light& light)
             ImGui::PopStyleColor();
         });
     }
-    add_entry("Intensity", [&](){ ImGui::SliderFloat("##", &light.intensity, 0.01f, 20000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
+    // Intensity units follow KHR_lights_punctual: lux for directional lights,
+    // candela for point and spot lights (see erhe::scene::Light::intensity).
+    const bool is_directional = light.type == erhe::scene::Light::Type::directional;
+    add_entry(is_directional ? "Intensity (lx)" : "Intensity (cd)", [&](){
+        ImGui::SliderFloat("##", &light.intensity, 0.01f, 20000.0f, "%.3f", ImGuiSliderFlags_Logarithmic);
+    });
+    if (!is_directional) {
+        add_entry("Flux (lm)", [&](){
+            float lumens = light.get_luminous_flux();
+            if (ImGui::SliderFloat("##", &lumens, 0.01f, 200000.0f, "%.3f", ImGuiSliderFlags_Logarithmic)) {
+                light.set_luminous_flux(lumens);
+            }
+        });
+    }
     add_entry("Color",     [&](){ ImGui::ColorEdit3 ("##", &light.color.x,   ImGuiColorEditFlags_Float); });
+    add_entry("Temperature", [&light]() {
+        bool use_temperature = light.temperature > 0.0f;
+        if (ImGui::Checkbox("##use_temperature", &use_temperature)) {
+            light.temperature = use_temperature ? 6500.0f : 0.0f;
+        }
+        if (light.temperature > 0.0f) {
+            const glm::vec3 blackbody = erhe::scene::Light::blackbody_color(light.temperature);
+            ImGui::SameLine();
+            ImGui::ColorButton("##blackbody_color", ImVec4{blackbody.r, blackbody.g, blackbody.b, 1.0f}, ImGuiColorEditFlags_NoTooltip);
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            ImGui::SliderFloat("##temperature", &light.temperature, 1000.0f, 12000.0f, "%.0f K");
+        }
+    });
 
     // Ambient light color is a scene property now (issues #237 / #240); it is
     // shown in Scene properties (Properties::scene_properties), not per light.

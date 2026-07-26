@@ -155,9 +155,41 @@ public:
         return is_active() && cast_shadow;
     }
 
+    // The color the renderer illuminates with: color (acting as tint) modulated
+    // by the blackbody chromaticity of `temperature` when temperature > 0,
+    // plain `color` otherwise.
+    [[nodiscard]] auto get_effective_color() const -> glm::vec3;
+
+    // Chromaticity of a blackbody radiator at the given correlated color
+    // temperature (Kelvin), as linear sRGB normalized so the brightest channel
+    // is 1 (temperature controls hue only; `intensity` stays the single
+    // brightness control). Input is clamped to [1000 K, 15000 K].
+    [[nodiscard]] static auto blackbody_color(float temperature_kelvin) -> glm::vec3;
+
+    // Solid angle the light emits into: 4*pi for point lights,
+    // 2*pi*(1 - cos(outer_spot_angle/2)) for spot lights, 0 for directional
+    // lights (parallel light has no meaningful emission solid angle).
+    [[nodiscard]] auto get_solid_angle() const -> float;
+
+    // Photometric flux (lumens) <-> intensity (candela) conversions for point
+    // and spot lights: flux = intensity * solid angle. Note that a spot
+    // light's flux therefore changes with outer_spot_angle at constant
+    // intensity. For directional lights these pass `intensity` (lux) through
+    // unconverted.
+    [[nodiscard]] auto get_luminous_flux() const -> float;
+    void set_luminous_flux(float lumens);
+
     Type        type             {Type::directional};
     glm::vec3   color            {1.0f, 1.0f, 1.0f};
+    // Photometric intensity, matching glTF KHR_lights_punctual units:
+    // lux (lm/m^2, illuminance) for directional lights, candela (lm/sr) for
+    // point and spot lights. Scenes authored with arbitrary units keep
+    // working; the units only give imported/exported content and the
+    // photometric helpers a consistent meaning.
     float       intensity        {1.0f};
+    // Correlated color temperature in Kelvin; 0 disables the temperature
+    // contribution (get_effective_color() then returns `color` unmodified).
+    float       temperature      {0.0f};
     float       range            {100.0f}; // TODO projection far?
     float       inner_spot_angle {glm::pi<float>() * 0.4f};
     float       outer_spot_angle {glm::pi<float>() * 0.5f};

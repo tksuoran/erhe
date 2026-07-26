@@ -4808,7 +4808,10 @@ private:
         // Qualified: Gltf_exporter's from_erhe(Trs_transform) member hides
         // the namespace-scope overload set.
         gltf_light.type      = erhe::gltf::from_erhe(erhe_light->type);
-        gltf_light.color     = fastgltf::math::nvec3{erhe_light->color.x, erhe_light->color.y, erhe_light->color.z};
+        // KHR_lights_punctual has no color temperature, so bake the blackbody
+        // contribution into the exported color to preserve appearance.
+        const glm::vec3 effective_color = erhe_light->get_effective_color();
+        gltf_light.color     = fastgltf::math::nvec3{effective_color.x, effective_color.y, effective_color.z};
         gltf_light.intensity = erhe_light->intensity;
         // KHR_lights_punctual: range is not allowed on directional lights;
         // erhe uses range 0 to mean infinite.

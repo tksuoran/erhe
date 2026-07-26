@@ -491,7 +491,7 @@ auto Light_buffer::update(
         const mat4 world_from_texture   = light_projection_transforms->texture_from_world.get_inverse_matrix();
         const vec3 direction            = vec3{node->world_from_node() * vec4{0.0f, 0.0f, 1.0f, 0.0f}};
         const vec3 position             = vec3{light_projection_transforms->world_from_light_camera.get_matrix() * vec4{0.0f, 0.0f, 0.0f, 1.0f}};
-        const vec4 radiance             = vec4{light->intensity * light->color, light->range};
+        const vec4 radiance             = vec4{light->intensity * light->get_effective_color(), light->range};
         const auto inner_spot_cos       = std::cos(light->inner_spot_angle * 0.5f);
         const auto outer_spot_cos       = std::cos(light->outer_spot_angle * 0.5f);
         const vec4 position_inner_spot  = vec4{position, inner_spot_cos};

@@ -34,11 +34,20 @@
 #define ERHE_SHADOW_TECHNIQUE_DEPTH    0
 #define ERHE_SHADOW_TECHNIQUE_DISTANCE 1
 
+// Cusp-free windowed inverse-square falloff (Esoterica "AttenuationNoCusp" /
+// Frostbite): saturate(1 - (d/range)^4)^2 / (d^2 + 1). Squaring the window
+// removes the derivative discontinuity at d = range that the previous
+// glTF-recommended curve had, and the +1 keeps the response finite as d -> 0.
+// range <= 0 means unlimited (window = 1).
 float get_range_attenuation(float range, float distance) {
+    float inverse_square = 1.0 / (distance * distance + 1.0);
     if (range <= 0.0) {
-        return 1.0 / pow(distance, 2.0); // negative range means unlimited
+        return inverse_square;
     }
-    return max(min(1.0 - pow(distance / range, 4.0), 1.0), 0.0) / pow(distance, 2.0);
+    float k      = distance / range;
+    float k2     = k * k;
+    float window = clamp(1.0 - k2 * k2, 0.0, 1.0);
+    return window * window * inverse_square;
 }
 
 float get_spot_attenuation(vec3 point_to_light, vec3 spot_direction, float outer_cone_coss, float inner_cone_cos) {
