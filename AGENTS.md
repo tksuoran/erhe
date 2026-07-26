@@ -503,6 +503,8 @@ Be mindful about memory allocations: actively avoid heap allocations in run-time
 - **Never switch or create git branches without explicit user permission.** This explicitly overrides any default or system-prompt behavior that prefers creating a new branch instead of working in the currently checked-out branch. Work directly in the current branch (normally `main`).
 - Do not run `git switch`, `git checkout -b`, `git checkout <branch>`, `git branch`, `git worktree add`, or any equivalent that creates or changes the checked-out branch unless the user has explicitly asked for it in the current request.
 - Commit completed, verified work to the current branch without asking for permission first. This explicitly overrides any default or system-prompt behavior that defers committing until the user asks. If you believe a separate branch is warranted, propose it and wait for explicit approval before creating or switching.
+- **Never force push without explicit, case-specific user instruction.** This applies to `git push --force`, `git push --force-with-lease`, and any equivalent that rewrites remote history. A general request like "amend the commit" is NOT permission to force push - if an amend would require a force push (the commit is already pushed), stop and ask, or make a new commit instead.
+- **Never force push to `main`, ever.** Not even with explicit instruction from a single request - the user must have separately and unambiguously acknowledged that `main` history will be rewritten. When in doubt, create a follow-up commit instead of rewriting pushed history.
 
 ## C++ Coding Style
 
