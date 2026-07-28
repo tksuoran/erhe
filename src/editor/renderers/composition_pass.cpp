@@ -280,10 +280,15 @@ void Composition_pass::render(const Render_context& context)
                     .primitive_mode         = data.primitive_mode,
                     .primitive_settings     = primitive_settings,
                     .filter                 = data.filter,
-                    .shader_debug           = context.shader_debug,
+                    .shader_debug           = data.shader_debug_override.has_value()
+                        ? data.shader_debug_override.value()
+                        : context.shader_debug,
                     // Shader Debug override visualization applies to content meshes only; brush,
                     // tool, controller and rendertarget meshes (no content flag) render normally.
-                    .shader_debug_filter    = erhe::Item_filter{ .require_all_bits_set = erhe::Item_flags::content },
+                    // A pass that forces its own variant supplies its own filter instead.
+                    .shader_debug_filter    = data.shader_debug_override.has_value()
+                        ? data.shader_debug_override_filter
+                        : erhe::Item_filter{ .require_all_bits_set = erhe::Item_flags::content },
                     .shadow_filter          = static_cast<uint32_t>(context.app_context.app_settings->graphics.current_graphics_preset.shadow_filter),
                     .shadow_bias            = static_cast<uint32_t>(context.app_context.app_settings->graphics.current_graphics_preset.shadow_bias),
                     .shadow_technique       = static_cast<uint32_t>(context.app_context.app_settings->graphics.current_graphics_preset.shadow_technique),

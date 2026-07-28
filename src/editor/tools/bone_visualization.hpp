@@ -70,6 +70,13 @@ public:
     void set_width_scale(float width_scale);
     [[nodiscard]] auto get_width_scale() const -> float;
 
+    // Solid display style: draw the proxies as N.V shaded octahedra instead of
+    // the default line bones. Pushed from Debug_visualizations_settings; read by
+    // the editor tick to decide whether proxies need to be visible even outside
+    // bone selection mode.
+    void set_solid(bool solid);
+    [[nodiscard]] auto get_solid() const -> bool;
+
 private:
     class Proxy
     {
@@ -80,6 +87,7 @@ private:
         glm::vec3                          tail_local{0.0f}; // shape the transform was built from
         float                              width_scale{0.0f};
         bool                               alive     {false};
+        bool                               selected  {false}; // material currently applied
     };
 
     void ensure_primitive();
@@ -90,8 +98,10 @@ private:
     App_context&                               m_context;
     erhe::scene_renderer::Mesh_memory&         m_mesh_memory;
     std::shared_ptr<erhe::primitive::Primitive> m_bone_primitive{};
-    std::shared_ptr<erhe::primitive::Material>  m_material      {};
+    std::shared_ptr<erhe::primitive::Material>  m_material         {};
+    std::shared_ptr<erhe::primitive::Material>  m_selected_material{};
     float                                      m_width_scale{0.1f};
+    bool                                       m_solid      {false};
 
     // Keyed by joint node pointer; the entry holds a weak ref so a dropped joint
     // is detected on the next sweep.

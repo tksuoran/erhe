@@ -8,7 +8,7 @@ from erhe_codegen import *
 # read live by tools/debug_visualizations.cpp. Negative line widths are in
 # pixels and do not scale by distance.
 struct("Debug_visualizations_style",
-    version=1,
+    version=2,
     short_desc="Debug Visualizations Style",
     long_desc="Editor-global colors and line widths for the debug visualizations",
     developer=False,
@@ -63,6 +63,8 @@ struct("Debug_visualizations_style",
         field("skin_bone_color_a",                 Vec4,  added_in=1, default="0.0f, 1.0f, 1.0f, 1.0f", short_desc="Skin Bone Color A", long_desc="Color for joints at even hierarchy depth; alternates with Skin Bone Color B"),
         field("skin_bone_color_b",                 Vec4,  added_in=1, default="1.0f, 0.0f, 1.0f, 1.0f", short_desc="Skin Bone Color B", long_desc="Color for joints at odd hierarchy depth; alternates with Skin Bone Color A"),
         field("skin_bone_width",                   Float, added_in=1, default="2.0f",   short_desc="Skin Bone Width"),
+        field("bone_selected_color",               Vec4,  added_in=2, default="1.0f, 0.6f, 0.0f, 1.0f", short_desc="Bone Selected Color", long_desc="Color for a selected bone, in both the line and the solid style"),
+        field("bone_hover_color",                  Vec4,  added_in=2, default="1.0f, 1.0f, 0.4f, 1.0f", short_desc="Bone Hover Color",    long_desc="Color for the bone under the pointer in bone selection mode"),
         field("skin_bone_xray",                    Bool,  added_in=1, default="true",   short_desc="Skin Bone X-Ray", long_desc="Draw bones occluded by geometry at full strength instead of the dim hidden-line look; bone visibility is then the bone colors' alpha"),
 
         field("vertex_label_text_color",           Vec4,  added_in=1, default="0.3f, 1.0f, 0.3f, 1.0f", short_desc="Vertex Label Text Color"),

@@ -2,6 +2,7 @@
 
 #include "app_context.hpp"
 #include "app_scenes.hpp"
+#include "app_settings.hpp"
 #include "scene/node_raytrace_mask.hpp"
 #include "scene/scene_root.hpp"
 
@@ -152,6 +153,16 @@ auto Bone_visualization::get_width_scale() const -> float
     return m_width_scale;
 }
 
+void Bone_visualization::set_solid(const bool solid)
+{
+    m_solid = solid;
+}
+
+auto Bone_visualization::get_solid() const -> bool
+{
+    return m_solid;
+}
+
 void Bone_visualization::ensure_primitive()
 {
     if (m_bone_primitive) {
@@ -183,11 +194,25 @@ void Bone_visualization::ensure_primitive()
     const bool raytrace_ok = m_bone_primitive->make_raytrace();
     ERHE_VERIFY(raytrace_ok);
 
+    const Debug_visualizations_style& style = m_context.editor_settings->debug_visualizations_style;
     m_material = std::make_shared<erhe::primitive::Material>(
         erhe::primitive::Material_create_info{
             .name = "bone",
             .data = {
-                .base_color = glm::vec4{0.7f, 0.7f, 0.8f, 1.0f},
+                .base_color = style.skin_bone_color_a,
+                .bxdf_model = erhe::primitive::Bxdf_model::unlit
+            }
+        }
+    );
+    // Selected bones read as a different color in the solid style. The vdotn
+    // pass overrides the fragment color outright, so this only shows through in
+    // the plain-material path; the solid pass gets its selected tint from the
+    // same style entry.
+    m_selected_material = std::make_shared<erhe::primitive::Material>(
+        erhe::primitive::Material_create_info{
+            .name = "bone selected",
+            .data = {
+                .base_color = style.bone_selected_color,
                 .bxdf_model = erhe::primitive::Bxdf_model::unlit
             }
         }
@@ -296,6 +321,24 @@ void Bone_visualization::update_scene(Scene_root& scene_root, const bool visible
 
             Proxy& proxy = found->second;
             proxy.alive = true;
+
+            // Selected bones render in a distinct color. Swap only on change:
+            // set_primitives() rebuilds the raytrace primitives.
+            // Mirror the joint's selection onto the proxy mesh. The flag is what
+            // splits the two bone composition passes: unselected bones take the
+            // vdotn (N.V) variant, selected ones render with their plain unlit
+            // material so the selected color actually survives - vdotn overrides
+            // the fragment color outright and would swallow it.
+            const bool selected = joint->is_selected();
+            if (selected != proxy.selected) {
+                proxy.mesh->get_mutable_primitives().front().material = selected ? m_selected_material : m_material;
+                if (selected) {
+                    proxy.mesh->enable_flag_bits(erhe::Item_flags::selected);
+                } else {
+                    proxy.mesh->disable_flag_bits(erhe::Item_flags::selected);
+                }
+                proxy.selected = selected;
+            }
             proxy.mesh->set_visible(visible);
             if (pickable) {
                 proxy.mesh->enable_flag_bits(erhe::Item_flags::id);

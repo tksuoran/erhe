@@ -19,6 +19,7 @@
 #include "scene/scene_settings_resolve.hpp"
 #include "scene/scene_view.hpp"
 #include "scene/viewport_scene_view.hpp"
+#include "tools/bone_visualization.hpp"
 #include "tools/selection_tool.hpp"
 #include "transform/transform_tool.hpp"
 
@@ -294,7 +295,13 @@ void Debug_visualizations::skin_visualization(const Render_context& render_conte
         }
         const mat4 world_from_joint = joint->world_from_node();
 
-        line_renderer.set_line_color(((joint->get_depth() % 2) == 0) ? style.skin_bone_color_a : style.skin_bone_color_b);
+        // A selected bone reads in its own color in the line style too, so bone
+        // selection is legible without switching to solid bones.
+        line_renderer.set_line_color(
+            joint->is_selected()
+                ? style.bone_selected_color
+                : (((joint->get_depth() % 2) == 0) ? style.skin_bone_color_a : style.skin_bone_color_b)
+        );
         vec3 a = joint->position_in_world();
         vec3 b = a + vec3{0.2f, 0.0f, 0.0f};
 
@@ -1943,6 +1950,14 @@ void Debug_visualizations::render(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 
+    // Bone display settings are owned here but consumed by Bone_visualization,
+    // which runs in the editor tick. Pushed before any early return below, so a
+    // hidden-tool or encoder-phase frame cannot strand a stale width / style.
+    if (context.app_context.bone_visualization != nullptr) {
+        context.app_context.bone_visualization->set_width_scale(m_settings.bone_width_scale);
+        context.app_context.bone_visualization->set_solid(m_settings.bone_solid);
+    }
+
     // render_viewport_renderables() runs twice per viewport: first the CPU
     // phase (no encoder) where debug lines / labels are generated, then the
     // encoder phase for renderables that issue draw calls. Everything below
@@ -2036,7 +2051,9 @@ void Debug_visualizations::render(const Render_context& context)
 
     // Skins can be shared by multiple meshes.
     // Visualize each skin only once.
-    if (m_settings.skins != Visualization_mode::off) {
+    // In the solid style the pickable bone proxies ARE the bone display, so the
+    // line drawing would just double up on them.
+    if ((m_settings.skins != Visualization_mode::off) && !m_settings.bone_solid) {
         std::set<erhe::scene::Skin*> skins;
         for (erhe::scene::Mesh_layer* layer : scene_root->layers().mesh_layers()) {
             for (const auto& mesh : layer->meshes) {

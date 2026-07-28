@@ -76,6 +76,14 @@ public:
     // pass, since Texel_renderer samples the shadow map in the vertex stage.
     [[nodiscard]] auto is_shadow_debug_enabled() const -> bool { return m_settings.shadow_debug; }
 
+    // Bone display settings, read by the editor tick to drive Bone_visualization
+    // and by the bone composition pass. bone_solid selects the N.V shaded solid
+    // proxies over the default line drawing; bone_width_scale is the bone
+    // half-width as a fraction of its length, which is also the click target
+    // size in bone selection mode.
+    [[nodiscard]] auto is_bone_solid      () const -> bool  { return m_settings.bone_solid; }
+    [[nodiscard]] auto get_bone_width_scale() const -> float { return m_settings.bone_width_scale; }
+
 private:
     [[nodiscard]] auto get_selected_camera(const Render_context& render_context) -> std::shared_ptr<erhe::scene::Camera>;
 

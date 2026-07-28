@@ -671,7 +671,9 @@ public:
         if (m_bone_visualization) {
             const bool bone_mode = (m_mesh_component_selection != nullptr) &&
                 (m_mesh_component_selection->get_mode() == Mesh_component_mode::bone);
-            m_bone_visualization->update(bone_mode, bone_mode);
+            // Visible for the solid display style OR whenever bone mode is on
+            // (you cannot click what you cannot see); pickable only in bone mode.
+            m_bone_visualization->update(bone_mode || m_bone_visualization->get_solid(), bone_mode);
         }
 
         // Geometry graph background evaluation: apply results of a

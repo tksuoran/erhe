@@ -70,6 +70,15 @@ public:
     uint32_t                                                               shader_key_force_enable_mask{0};
     uint32_t                                                               shader_key_force_disable_mask{0};
     erhe::graphics::Shader_stages*                                         shader_stages{nullptr};
+    // Force a SHADER_DEBUG variant for this pass's own meshes, instead of taking
+    // the scene view's debug mode. The default path can only ever DROP the view's
+    // mode per mesh (its filter is content-only), never turn one on - which is
+    // what a pass needs when the variant IS the intended look rather than a debug
+    // view. Used by the bone pass: Shader_debug::vdotn is exactly the N.V shading
+    // solid bones want, so no new shader or Shader_key axis is needed.
+    // When set, shader_debug_override_filter selects which meshes it applies to.
+    std::optional<erhe::scene_renderer::Shader_debug>                      shader_debug_override{};
+    erhe::Item_filter                                                      shader_debug_override_filter{};
     // Grid settings (cell sizes, line widths, per-level colors, axis
     // label settings) forwarded to the camera UBO; read by grid.frag.
     erhe::scene_renderer::Grid_parameters                                  grid_parameters{};

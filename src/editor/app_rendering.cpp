@@ -335,6 +335,53 @@ App_rendering::App_rendering(
         selected
     );
 
+    // Solid bone style: the pickable bone proxies rendered as N.V shaded
+    // octahedra. Reuses the existing Shader_debug::vdotn variant - standard.frag
+    // already emits vec3(max(dot(V, N), 0.0)) for it - so this needs no new
+    // shader and no new Shader_key axis, only the per-pass shader_debug override.
+    // Enabled by the Solid Bones setting; proxies are only visible then (or in
+    // bone selection mode), so an empty layer costs nothing.
+    make_composition_pass(
+        "Bone solid (N.V)",
+        Composition_pass_data{
+            .mesh_layers                  {Mesh_layer_id::bone},
+            .blending_mode_policy         {Blending_mode_policy::opaque_primitives_only},
+            .primitive_mode               {Primitive_mode::polygon_fill},
+            .filter{
+                .require_all_bits_set         = erhe::Item_flags::visible | erhe::Item_flags::bone_proxy,
+                .require_at_least_one_bit_set = 0,
+                .require_all_bits_clear       = erhe::Item_flags::selected
+            },
+            .shader_debug_override        {erhe::scene_renderer::Shader_debug::vdotn},
+            .shader_debug_override_filter {
+                .require_all_bits_set         = erhe::Item_flags::bone_proxy,
+                .require_at_least_one_bit_set = 0,
+                .require_all_bits_clear       = 0
+            }
+        },
+        not_selected
+    );
+
+    // Selected bones, same geometry but WITHOUT the vdotn override: that variant
+    // replaces the fragment color outright, so a selected bone rendered through
+    // it would be indistinguishable. These take their unlit material color
+    // (Debug_visualizations_style::bone_selected_color) instead.
+    // Bone_visualization mirrors the joint's selection onto the proxy mesh flag.
+    make_composition_pass(
+        "Bone solid selected",
+        Composition_pass_data{
+            .mesh_layers          {Mesh_layer_id::bone},
+            .blending_mode_policy {Blending_mode_policy::opaque_primitives_only},
+            .primitive_mode       {Primitive_mode::polygon_fill},
+            .filter{
+                .require_all_bits_set         = erhe::Item_flags::visible | erhe::Item_flags::bone_proxy | erhe::Item_flags::selected,
+                .require_at_least_one_bit_set = 0,
+                .require_all_bits_clear       = 0
+            }
+        },
+        selected
+    );
+
     edge_lines_not_selected = make_composition_pass(
         "Content edge lines not selected",
         Composition_pass_data{
