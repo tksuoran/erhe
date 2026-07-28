@@ -99,6 +99,7 @@ class Rotate_tool;
 class Scale_tool;
 class Scene_builder;
 class Scene_commands;
+class Bone_visualization;
 class Selection;
 class Selection_tool;
 class Settings_window;
@@ -221,6 +222,7 @@ public:
     Programs*                          programs             {nullptr};
     Rendergraph_window*                rendergraph_window   {nullptr};
     Rotate_tool*                       rotate_tool          {nullptr};
+    Bone_visualization*                bone_visualization   {nullptr};
     Scale_tool*                        scale_tool           {nullptr};
     Scene_builder*                     scene_builder        {nullptr};
     Scene_commands*                    scene_commands       {nullptr};

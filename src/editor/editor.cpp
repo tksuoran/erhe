@@ -93,6 +93,7 @@
 #include "scene/viewport_scene_views.hpp"
 #include "texture_graph/graph_texture.hpp"
 #include "texture_graph/texture_graph_window.hpp"
+#include "tools/bone_visualization.hpp"
 #include "tools/clipboard.hpp"
 #include "tools/mesh_component_selection.hpp"
 #include "tools/lattice_tool.hpp"
@@ -663,6 +664,15 @@ public:
         }
 
         m_operation_stack->update();
+
+        // Bone proxies: reconcile one pick/display proxy per skin joint with the
+        // current scenes. After the operation stack so this frame's scene edits
+        // (and any joint added/removed by undo) are already visible.
+        if (m_bone_visualization) {
+            const bool bone_mode = (m_mesh_component_selection != nullptr) &&
+                (m_mesh_component_selection->get_mode() == Mesh_component_mode::bone);
+            m_bone_visualization->update(bone_mode, bone_mode);
+        }
 
         // Geometry graph background evaluation: apply results of a
         // completed run and launch a new one when the graph is dirty
@@ -1864,6 +1874,12 @@ public:
                 );
                 // The scene_root is assigned to Scene_builder later, by
                 // create_default_scene() (the scene.create startup command).
+
+                // Bone pick/display proxies. Constructed here because this is
+                // where Mesh_memory is available; it builds its shared bone
+                // primitive lazily on first update().
+                m_bone_visualization = std::make_unique<Bone_visualization>(m_app_context, *m_mesh_memory.get());
+                m_app_context.bone_visualization = m_bone_visualization.get();
             }
             ERHE_TASK_FOOTER(
                 .name("Scene_builder")
@@ -3582,6 +3598,7 @@ public:
     std::unique_ptr<App_rendering                   >        m_app_rendering;
     std::unique_ptr<Selection                       >        m_selection;
     std::unique_ptr<Mesh_component_selection        >        m_mesh_component_selection;
+    std::unique_ptr<Bone_visualization              >        m_bone_visualization;
     std::unique_ptr<Operation_stack                 >        m_operation_stack;
     std::unique_ptr<Scene_commands                  >        m_scene_commands;
     std::unique_ptr<Clipboard_window                >        m_clipboard_window;

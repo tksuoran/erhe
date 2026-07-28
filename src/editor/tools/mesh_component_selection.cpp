@@ -19,6 +19,7 @@ auto c_str(const Mesh_component_mode mode) -> const char*
         case Mesh_component_mode::vertex: return "Vertex";
         case Mesh_component_mode::edge:   return "Edge";
         case Mesh_component_mode::face:   return "Face";
+        case Mesh_component_mode::bone:   return "Bone";
         default:                          return "?";
     }
 }

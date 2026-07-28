@@ -500,6 +500,8 @@ erhe_target_sources_grouped(
     texture_graph/nodes/texture_output_node.hpp
     time.cpp
     time.hpp
+    tools/bone_visualization.cpp
+    tools/bone_visualization.hpp
     tools/clipboard.cpp
     tools/clipboard.hpp
     tools/debug_visualizations.cpp

@@ -29,7 +29,12 @@ enum class Mesh_component_mode {
     object = 0,
     vertex = 1,
     edge   = 2,
-    face   = 3
+    face   = 3,
+    // Skeleton bones. Not a mesh sub-component at all, but it shares this enum
+    // so exactly one selection granularity is active at a time and a viewport
+    // click has a single unambiguous owner. Mesh_component_selection_tool
+    // ignores it; Bone_visualization and the object Selection handle it.
+    bone   = 4
 };
 
 [[nodiscard]] auto c_str(Mesh_component_mode mode) -> const char*;
