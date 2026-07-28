@@ -47,6 +47,7 @@ public:
     void get_mesh_info                  ();
     void get_vertex_attributes          ();
     void calculate_bounding_volume      ();
+    void calculate_joint_bounding_volumes(erhe::geometry::Mesh_attributes& mesh_attributes);
     void allocate_vertex_buffers        ();
     void allocate_edge_line_vertex_buffer();
     void allocate_edge_line_joint_buffer ();

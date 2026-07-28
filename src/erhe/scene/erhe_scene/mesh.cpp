@@ -8,7 +8,10 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene_host.hpp"
 #include "erhe_scene/scene_log.hpp"
+#include "erhe_scene/skin.hpp"
 #include "erhe_verify/verify.hpp"
+
+#include <algorithm>
 
 namespace erhe::scene {
 
@@ -190,8 +193,68 @@ void Mesh::handle_node_transform_update()
     }
 }
 
+auto Mesh::get_skinned_aabb_world() const -> erhe::math::Aabb
+{
+    if (!skin) {
+        return erhe::math::Aabb{};
+    }
+    const Skin_data& skin_data = skin->skin_data;
+
+    erhe::math::Aabb aabb;
+    for (const Mesh_primitive& mesh_primitive : m_primitives) {
+        if (!mesh_primitive.primitive) {
+            continue;
+        }
+        const erhe::primitive::Primitive_render_shape* shape = mesh_primitive.primitive->render_shape.get();
+        if (shape == nullptr) {
+            continue;
+        }
+        const std::vector<erhe::math::Aabb>& joint_boxes = shape->get_renderable_mesh().joint_bounding_boxes;
+        const std::size_t end = std::min(joint_boxes.size(), skin_data.joints.size());
+        for (std::size_t i = 0; i < end; ++i) {
+            const erhe::math::Aabb& joint_box = joint_boxes[i];
+            if (!joint_box.is_valid()) {
+                continue; // joint influences no vertex of this primitive
+            }
+            const std::shared_ptr<Node>& joint = skin_data.joints[i];
+            if (!joint) {
+                continue;
+            }
+            // Same matrix the renderer poses vertices with (Joint_buffer).
+            const glm::mat4 joint_from_bind = (i < skin_data.inverse_bind_matrices.size())
+                ? skin_data.inverse_bind_matrices[i]
+                : glm::mat4{1.0f};
+            const glm::mat4 world_from_bind = joint->world_from_node() * joint_from_bind;
+            aabb.include(joint_box.transformed_by(world_from_bind));
+        }
+    }
+    return aabb;
+}
+
 auto Mesh::get_aabb_world() const -> erhe::math::Aabb
 {
+    // A GPU-skinned mesh is posed entirely by its joints: glTF 2.0 requires the
+    // skinned mesh node's transform to be ignored, and erhe honors that
+    // (Joint_buffer + the skinning branch in standard.vert). Bounding it by the
+    // rest-pose box under the node transform - as the unskinned path below does
+    // - is therefore wrong twice over. Bound it from the joints instead.
+    //
+    // Recomputed on every call rather than cached: joints move every frame under
+    // animation, and primitives can be rebuilt behind the Mesh's back (through
+    // get_mutable_primitives() and Primitive::make_renderable_mesh()), so there
+    // is no reliable invalidation signal. Cost is one box transform per joint
+    // that actually influences the mesh.
+    if (skin) {
+        const erhe::math::Aabb skinned_aabb = get_skinned_aabb_world();
+        if (skinned_aabb.is_valid()) {
+            return skinned_aabb;
+        }
+        // Fall through when the primitives carry no per-joint bounds (geometry
+        // built without joint attributes). The result is wrong in the ways
+        // described above, but it is what the caller got before, and it beats
+        // returning an empty box that silently culls the mesh.
+    }
+
     const erhe::scene::Node* node = get_node();
     const glm::mat4 world_from_local = (node != nullptr) ? node->world_from_node() : glm::mat4{1.0f};
     erhe::math::Aabb aabb;

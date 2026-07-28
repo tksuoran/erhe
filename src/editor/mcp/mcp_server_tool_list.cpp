@@ -15,7 +15,7 @@ void Mcp_server::refresh_tool_list()
     // Query tools
     m_tool_infos.push_back({"list_scenes",         "List all scenes in the editor",                          schema_no_args()});
     m_tool_infos.push_back({"get_scene_nodes",     "List all nodes in a scene",                              schema_scene_name()});
-    m_tool_infos.push_back({"get_node_details",    "Get detailed info for a node (transform, attachments)",  schema_scene_and_item("node_name", "Name of the node")});
+    m_tool_infos.push_back({"get_node_details",    "Get detailed info for a node (transform, attachments). A Mesh attachment reports world_aabb (world-space min/max) and skinned; for a skinned mesh the AABB is the POSED bounds derived from the joint transforms, unaffected by the mesh node's own transform (glTF requires skinning to ignore it).",  schema_scene_and_item("node_name", "Name of the node")});
     m_tool_infos.push_back({"get_scene_cameras",   "List all cameras in a scene",                            schema_scene_name()});
     m_tool_infos.push_back({"get_scene_lights",    "List all lights in a scene",                             schema_scene_name()});
     m_tool_infos.push_back({"get_scene_materials", "List all materials in a scene's content library",        schema_scene_name()});

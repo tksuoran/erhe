@@ -300,6 +300,52 @@ void Build_context_root::calculate_bounding_volume()
     erhe::math::calculate_bounding_volume(point_source, buffer_mesh.bounding_box, buffer_mesh.bounding_sphere);
 }
 
+void Build_context_root::calculate_joint_bounding_volumes(erhe::geometry::Mesh_attributes& mesh_attributes)
+{
+    // Rest-pose bounds per joint, so a GPU-skinned mesh can be bounded in world
+    // space from the joint transforms alone (see Buffer_mesh::joint_bounding_boxes).
+    // A vertex is included in the box of every joint that influences it; the
+    // posed vertex is then a convex combination of its per-joint images, hence
+    // inside the union of the transformed boxes.
+    buffer_mesh.joint_bounding_boxes.clear();
+
+    // Same guard as allocate_edge_line_joint_buffer(): skip the per-vertex walk
+    // entirely for the (common) unskinned mesh.
+    const GEO::AttributesManager& vertex_attrs = mesh.vertices.attributes();
+    if (
+        !vertex_attrs.is_defined(erhe::geometry::c_joint_indices_0) ||
+        !vertex_attrs.is_defined(erhe::geometry::c_joint_weights_0)
+    ) {
+        return;
+    }
+
+    const auto include = [this](const uint32_t joint_index, const glm::vec3 position) {
+        if (joint_index >= buffer_mesh.joint_bounding_boxes.size()) {
+            buffer_mesh.joint_bounding_boxes.resize(joint_index + 1);
+        }
+        buffer_mesh.joint_bounding_boxes[joint_index].include(position);
+    };
+
+    for (GEO::index_t vertex : mesh.vertices) {
+        const glm::vec3 position = to_glm_vec3(get_pointf(mesh.vertices, vertex));
+        for (std::size_t usage_index = 0; usage_index < 2; ++usage_index) {
+            const std::optional<GEO::vec4u> joint_indices = mesh_attributes.vertex_joint_indices(usage_index).try_get(vertex);
+            const std::optional<GEO::vec4f> joint_weights = mesh_attributes.vertex_joint_weights(usage_index).try_get(vertex);
+            if (!joint_indices.has_value() || !joint_weights.has_value()) {
+                continue;
+            }
+            for (std::size_t i = 0; i < 4; ++i) {
+                // A zero weight contributes nothing to the posed position, so
+                // that joint must not be allowed to inflate the bound.
+                if (joint_weights.value()[static_cast<GEO::index_t>(i)] == 0.0f) {
+                    continue;
+                }
+                include(joint_indices.value()[static_cast<GEO::index_t>(i)], position);
+            }
+        }
+    }
+}
+
 Primitive_builder::Primitive_builder(
     Buffer_mesh&       buffer_mesh,
     const GEO::Mesh&   mesh,
@@ -422,6 +468,7 @@ Build_context::Build_context(
     attribute_writers.valency_edge_count = get_attribute_writer(Vertex_attribute_usage::custom, custom_attribute_valency_edge_count);
 
     root.calculate_bounding_volume();
+    root.calculate_joint_bounding_volumes(mesh_attributes);
 }
 
 Build_context::~Build_context() noexcept

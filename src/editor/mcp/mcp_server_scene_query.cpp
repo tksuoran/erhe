@@ -174,6 +174,17 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
             att_json["materials"]     = mat_names;
             att_json["vertex_count"]  = total_vertices;
             att_json["facet_count"]   = total_facets;
+            // World-space bounds. For a skinned mesh these are the POSED bounds
+            // computed from the joint transforms - the mesh node's own transform
+            // does not affect them, because skinning ignores it.
+            const erhe::math::Aabb aabb_world = mesh->get_aabb_world();
+            if (aabb_world.is_valid()) {
+                att_json["world_aabb"] = {
+                    {"min", json::array({aabb_world.min.x, aabb_world.min.y, aabb_world.min.z})},
+                    {"max", json::array({aabb_world.max.x, aabb_world.max.y, aabb_world.max.z})}
+                };
+                att_json["skinned"] = static_cast<bool>(mesh->skin);
+            }
             // Layer diagnostics: layer_id is the mesh's target layer;
             // in_layer_id is the layer that actually contains it (they
             // diverge when the mesh was registered into the scene before

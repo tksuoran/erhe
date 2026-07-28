@@ -70,7 +70,13 @@ public:
     [[nodiscard]] auto get_primitives        () const -> const std::vector<Mesh_primitive>&;
     [[nodiscard]] auto get_rt_scene          () const -> erhe::raytrace::IScene*;
     [[nodiscard]] auto get_rt_primitives     () const -> const std::vector<std::unique_ptr<Raytrace_primitive>>&;
+    // World-space bounds. For a skinned mesh these are the POSED bounds, derived
+    // from the joint transforms and the primitives' per-joint rest boxes; the
+    // mesh node's own transform is not applied, because skinning ignores it.
     [[nodiscard]] auto get_aabb_world        () const -> erhe::math::Aabb;
+    // Posed bounds from the skin alone. Returns an invalid Aabb when the mesh is
+    // not skinned, or when the primitives carry no per-joint rest bounds.
+    [[nodiscard]] auto get_skinned_aabb_world() const -> erhe::math::Aabb;
 
     Layer_id              layer_id{0xff};
     std::shared_ptr<Skin> skin; // TODO Make this a separate node attachment

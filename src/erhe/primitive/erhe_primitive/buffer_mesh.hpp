@@ -31,6 +31,21 @@ public:
     erhe::math::Aabb          bounding_box;
     erhe::math::Sphere        bounding_sphere;
 
+    // Per-joint rest-pose bounds, indexed by joint index (the same index space
+    // as the JOINTS_n vertex attribute and erhe::scene::Skin_data::joints).
+    // Entry i bounds every vertex that joint i influences with a non-zero
+    // weight; entries for joints that influence nothing stay invalid.
+    //
+    // Used to bound a GPU-skinned mesh in world space: a skinned position is
+    // sum(w_i * world_from_bind_i * p) with sum(w_i) == 1, i.e. a convex
+    // combination of the per-joint transformed points, so it lies inside the
+    // union of the per-joint boxes transformed by their world_from_bind. The
+    // whole-mesh bounding_box above is the REST pose and (per glTF) is not
+    // transformed by the mesh node, so it cannot bound a skinned mesh.
+    //
+    // Empty when the source geometry has no joint attributes.
+    std::vector<erhe::math::Aabb> joint_bounding_boxes;
+
     Index_range               triangle_fill_indices   {};
     Index_range               edge_line_indices       {};
     Index_range               corner_point_indices    {};

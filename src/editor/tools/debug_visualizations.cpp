@@ -171,6 +171,31 @@ void Debug_visualizations::mesh_visualization(const Render_context& render_conte
         ? used_camera_node->world_from_node_transform()
         : Trs_transform{};
 
+    // A skinned mesh is posed entirely by its joints and glTF requires its own
+    // node transform to be ignored, so the per-primitive rest-pose volumes drawn
+    // below - in node space, under world_from_node() - bound nothing that is on
+    // screen. Draw the posed world box for the whole mesh instead. There is no
+    // posed equivalent of the bounding sphere, so the box is always used here.
+    // Falls through to the legacy path when the primitives carry no per-joint
+    // rest bounds and no posed box can be derived.
+    if (mesh->skin) {
+        const erhe::math::Aabb skinned_aabb = mesh->get_skinned_aabb_world();
+        if (skinned_aabb.is_valid()) {
+            const glm::vec3 gap{m_settings.gap};
+            m_selection_bounding_volume.add_box(glm::mat4{1.0f}, skinned_aabb.min, skinned_aabb.max);
+            if (m_settings.selection_parts) {
+                line_renderer.set_thickness(style.selection_major_width);
+                line_renderer.add_cube(
+                    glm::mat4{1.0f},
+                    style.selection_major_color,
+                    skinned_aabb.min - gap,
+                    skinned_aabb.max + gap
+                );
+            }
+            return;
+        }
+    }
+
     for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
         const erhe::primitive::Primitive& primitive = *mesh_primitive.primitive.get();
         if (!primitive.render_shape) {
