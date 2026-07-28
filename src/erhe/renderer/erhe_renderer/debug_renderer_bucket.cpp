@@ -94,6 +94,16 @@ auto Debug_renderer_bucket::Debug_renderer_bucket::make_pipeline(const bool visi
 
     const Compare_operation depth_compare_op0 = visible ? Compare_operation::less : Compare_operation::greater_or_equal;
     const Compare_operation depth_compare_op  = reverse_depth ? reverse(depth_compare_op0) : depth_compare_op0;
+
+    // Bit 7 is the selection silhouette mask, written by the "Polygon Fill
+    // Selected" composition pass (app_rendering.cpp) over every pixel of a
+    // selected mesh. It is not part of the debug renderer's own layering --
+    // the write mask has always excluded it -- so the test must exclude it
+    // too. The hidden pass used to test with 0xff, which made the comparison
+    // stencil_reference (2..11) > 128 fail for every fragment inside a
+    // selected mesh: hidden debug lines (skin bones in particular) vanished
+    // exactly over the selected object and nowhere else.
+    constexpr unsigned int stencil_mask = 0b01111111u;
     return Base_render_pipeline{
         m_graphics_device,
         Base_render_pipeline_create_info{
@@ -111,8 +121,8 @@ auto Debug_renderer_bucket::Debug_renderer_bucket::make_pipeline(const bool visi
                     .z_pass_op       = Stencil_op::replace,
                     .function        = Compare_operation::greater, //gequal,
                     .reference       = m_config.stencil_reference,
-                    .test_mask       = visible ? 0b01111111u : 0b11111111u,
-                    .write_mask      = 0b01111111u
+                    .test_mask       = stencil_mask,
+                    .write_mask      = stencil_mask
                 },
                 .stencil_back = {
                     .stencil_fail_op = Stencil_op::keep,
@@ -120,8 +130,8 @@ auto Debug_renderer_bucket::Debug_renderer_bucket::make_pipeline(const bool visi
                     .z_pass_op       = Stencil_op::replace,
                     .function        = Compare_operation::greater, //gequal,
                     .reference       = m_config.stencil_reference,
-                    .test_mask       = visible ? 0b01111111u : 0b11111111u,
-                    .write_mask      = 0b01111111u
+                    .test_mask       = stencil_mask,
+                    .write_mask      = stencil_mask
                 },
             },
         }
