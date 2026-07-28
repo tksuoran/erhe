@@ -1,5 +1,8 @@
 #include "tools/selection_tool.hpp"
 
+#include "tools/bone_visualization.hpp"
+#include "tools/mesh_component_selection.hpp"
+
 #include "app_context.hpp"
 #include "editor_log.hpp"
 #include "app_message_bus.hpp"
@@ -833,6 +836,19 @@ auto Selection::on_viewport_select_try_ready() -> bool
     m_hover_content = content.valid;
     m_hover_tool    = tool.valid;
 
+    // Bone mode owns the viewport click outright: a hovered bone selects its
+    // joint, and empty space clears. Resolving the joint here (rather than at
+    // click time) keeps the click path free of the proxy -> joint lookup.
+    m_hover_bone_joint.reset();
+    if (is_bone_mode()) {
+        const auto& bone = m_hover_scene_view->get_hover(Hover_entry::bone_slot);
+        const std::shared_ptr<erhe::scene::Mesh> bone_mesh = bone.scene_mesh_weak.lock();
+        if (bone.valid && bone_mesh && (m_context.bone_visualization != nullptr)) {
+            m_hover_bone_joint = m_context.bone_visualization->get_joint_for_proxy(bone_mesh.get());
+        }
+        return !m_hover_tool && !rendertarget.valid;
+    }
+
     if (m_hover_content && !m_hover_tool && !rendertarget.valid) {
         log_selection->trace("Can select");
         return true;
@@ -850,8 +866,55 @@ auto Selection::on_viewport_select_try_ready() -> bool
     return false;
 }
 
+auto Selection::is_bone_mode() const -> bool
+{
+    return (m_context.mesh_component_selection != nullptr) &&
+           (m_context.mesh_component_selection->get_mode() == Mesh_component_mode::bone);
+}
+
+auto Selection::on_viewport_select_bone(const bool toggle) -> bool
+{
+    Scoped_selection_change selection_change{*this};
+
+    const std::shared_ptr<erhe::scene::Node> joint = m_hover_bone_joint.lock();
+    if (!joint) {
+        if (!toggle) {
+            // Empty space: clear within the hovered scene only, like the object
+            // path - other scenes keep their selection.
+            Scene_root* const hover_scene_root = (m_hover_scene_view != nullptr) ? m_hover_scene_view->get_scene_root().get() : nullptr;
+            if (hover_scene_root != nullptr) {
+                clear_selection(static_cast<erhe::Item_host*>(hover_scene_root));
+            } else {
+                clear_selection();
+            }
+        }
+        return true;
+    }
+
+    const std::shared_ptr<erhe::Item_base> item = joint;
+    const bool was_selected = is_in_selection(item);
+    if (toggle) {
+        if (was_selected) {
+            remove_from_selection(item);
+        } else {
+            add_to_selection(item);
+        }
+        return true;
+    }
+
+    clear_selection(joint->get_item_host());
+    if (!was_selected) {
+        add_to_selection(item);
+    }
+    return true;
+}
+
 auto Selection::on_viewport_select() -> bool
 {
+    if (is_bone_mode()) {
+        return on_viewport_select_bone(m_context.input_state->control);
+    }
+
     auto shared_hover_mesh = m_hover_mesh.lock();
     if (!shared_hover_mesh) {
         return false;
@@ -887,6 +950,10 @@ auto Selection::on_viewport_select() -> bool
 
 auto Selection::on_viewport_select_toggle() -> bool
 {
+    if (is_bone_mode()) {
+        return on_viewport_select_bone(true);
+    }
+
     auto shared_hover_mesh = m_hover_mesh.lock();
     if (!shared_hover_mesh) {
         return false;

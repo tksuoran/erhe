@@ -24,6 +24,13 @@ auto c_str(const Mesh_component_mode mode) -> const char*
     }
 }
 
+auto is_mesh_component_mode(const Mesh_component_mode mode) -> bool
+{
+    return (mode == Mesh_component_mode::vertex) ||
+           (mode == Mesh_component_mode::edge)   ||
+           (mode == Mesh_component_mode::face);
+}
+
 auto make_edge_key(const GEO::index_t a, const GEO::index_t b) -> Mesh_edge_key
 {
     return (a <= b) ? Mesh_edge_key{a, b} : Mesh_edge_key{b, a};
@@ -288,7 +295,7 @@ void shrink_vertices(const erhe::geometry::Geometry& geometry, Mesh_component_en
 
 void Mesh_component_selection::grow()
 {
-    if (m_mode == Mesh_component_mode::object) {
+    if (!is_mesh_component_mode(m_mode)) {
         return;
     }
     for (Mesh_component_entry& entry : m_entries) {
@@ -311,7 +318,7 @@ void Mesh_component_selection::grow()
 
 void Mesh_component_selection::shrink()
 {
-    if (m_mode == Mesh_component_mode::object) {
+    if (!is_mesh_component_mode(m_mode)) {
         return;
     }
     for (Mesh_component_entry& entry : m_entries) {

@@ -289,6 +289,7 @@ inline auto parse_mesh_component_mode(const std::string& mode, const Mesh_compon
     if (mode == "vertex") { return Mesh_component_mode::vertex; }
     if (mode == "edge")   { return Mesh_component_mode::edge;   }
     if (mode == "face")   { return Mesh_component_mode::face;   }
+    if (mode == "bone")   { return Mesh_component_mode::bone;   }
     return fallback;
 }
 
@@ -298,6 +299,7 @@ inline auto mesh_component_mode_lc(const Mesh_component_mode mode) -> const char
         case Mesh_component_mode::vertex: return "vertex";
         case Mesh_component_mode::edge:   return "edge";
         case Mesh_component_mode::face:   return "face";
+        case Mesh_component_mode::bone:   return "bone";
         case Mesh_component_mode::object:
         default:                          return "object";
     }
@@ -305,7 +307,7 @@ inline auto mesh_component_mode_lc(const Mesh_component_mode mode) -> const char
 
 inline auto is_valid_mesh_component_mode(const std::string& mode) -> bool
 {
-    return (mode == "object") || (mode == "vertex") || (mode == "edge") || (mode == "face");
+    return (mode == "object") || (mode == "vertex") || (mode == "edge") || (mode == "face") || (mode == "bone");
 }
 
 inline auto transform_reference_mode_lc(const Transform_reference_mode mode) -> const char*

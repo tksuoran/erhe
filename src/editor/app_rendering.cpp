@@ -1413,7 +1413,11 @@ void App_rendering::render_id(const Render_context& context)
             .command_buffer     = *context.command_buffer,
             .viewport           = context.viewport,
             .camera             = *context.camera,
-            .content_mesh_spans = { layers.content()->meshes, layers.rendertarget()->meshes },
+            // Bone proxies ride in the content spans (not the tool spans): they
+            // belong to this scene, not the global tool scene. They only carry
+            // Item_flags::id while bone mode is active, so outside it they are
+            // rasterized into no id at all.
+            .content_mesh_spans = { layers.content()->meshes, layers.rendertarget()->meshes, layers.bone()->meshes },
             .tool_mesh_spans    = { tool_layers.tool()->meshes },
             .x                  = static_cast<int>(position.x),
             .y                  = static_cast<int>(position.y),

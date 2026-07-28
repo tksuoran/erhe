@@ -713,9 +713,9 @@ void Mcp_server::refresh_tool_list()
 
     // Mesh component (vertex / edge / face) selection, used by Align and Add Joint.
     const json component_mode_property = {
-        {"mode", {{"type", "string"}, {"enum", json::array({"object", "vertex", "edge", "face"})}, {"description", "Component granularity: object, vertex, edge or face"}}}
+        {"mode", {{"type", "string"}, {"enum", json::array({"object", "vertex", "edge", "face", "bone"})}, {"description", "Selection granularity: object, vertex, edge, face, or bone (skeleton bones)"}}}
     };
-    m_tool_infos.push_back({"set_mesh_component_mode", "Set the mesh-component selection granularity (object / vertex / edge / face). vertex/edge/face are required before select_mesh_components and Align / Add Joint.", {
+    m_tool_infos.push_back({"set_mesh_component_mode", "Set the selection granularity (object / vertex / edge / face / bone). vertex/edge/face are required before select_mesh_components and Align / Add Joint. bone makes skeleton bones pickable in the viewport: a click selects the joint Node the bone stands for, through the ordinary selection.", {
         {"type", "object"},
         {"properties", component_mode_property},
         {"required", json::array({"mode"})}

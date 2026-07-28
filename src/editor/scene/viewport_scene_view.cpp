@@ -1071,6 +1071,10 @@ void Viewport_scene_view::update_hover_with_id_render()
     const bool hover_tool         = id_query.mesh && test_bit_set(flags, erhe::Item_flags::tool        );
     const bool hover_brush        = id_query.mesh && test_bit_set(flags, erhe::Item_flags::brush       );
     const bool hover_rendertarget = id_query.mesh && test_bit_set(flags, erhe::Item_flags::rendertarget);
+    // Bone pick proxy. Its own slot, so a bone hit never displaces the content
+    // hit behind it - the bone selection path reads the bone slot and the object
+    // path keeps reading content, whichever is nearer.
+    const bool hover_bone         = id_query.mesh && test_bit_set(flags, erhe::Item_flags::bone_proxy);
     std::shared_ptr<erhe::scene::Mesh> entry_scene_mesh = entry.scene_mesh_weak.lock();
     // log_controller_ray->debug(
     //     "hover mesh = {} primitive index = {} facet {} {}{}{}{}",
@@ -1092,6 +1096,7 @@ void Viewport_scene_view::update_hover_with_id_render()
     if (hover_tool        ) { merge_hover(Hover_entry::tool_slot        , entry); }
     if (hover_brush       ) { merge_hover(Hover_entry::brush_slot       , entry); }
     if (hover_rendertarget) { merge_hover(Hover_entry::rendertarget_slot, entry); }
+    if (hover_bone        ) { merge_hover(Hover_entry::bone_slot        , entry); }
 }
 
 auto Viewport_scene_view::get_position_in_viewport() const -> std::optional<glm::vec2>

@@ -39,6 +39,13 @@ enum class Mesh_component_mode {
 
 [[nodiscard]] auto c_str(Mesh_component_mode mode) -> const char*;
 
+// True only for the granularities that address mesh sub-components
+// (vertex / edge / face). Object and bone are both "not a mesh component mode":
+// object is handled by the object Selection, bone by the bone selection path.
+// Guards must test this rather than `== object`, or bone would fall through into
+// the mesh-component machinery.
+[[nodiscard]] auto is_mesh_component_mode(Mesh_component_mode mode) -> bool;
+
 // Canonical undirected edge key: (min vertex, max vertex), so the same edge
 // reached from either adjacent facet maps to a single entry.
 using Mesh_edge_key = std::pair<GEO::index_t, GEO::index_t>;

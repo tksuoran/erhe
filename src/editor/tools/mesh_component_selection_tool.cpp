@@ -588,7 +588,7 @@ auto Mesh_component_selection_tool::edge_world_normal(
 
 auto Mesh_component_selection_tool::try_ready() const -> bool
 {
-    if (m_mesh_component_selection.get_mode() == Mesh_component_mode::object) {
+    if (!is_mesh_component_mode(m_mesh_component_selection.get_mode())) {
         return false;
     }
     // In Paint gesture sub-mode the paint command handles clicks (one dab); the
@@ -606,7 +606,7 @@ auto Mesh_component_selection_tool::try_ready() const -> bool
 
 auto Mesh_component_selection_tool::on_select() -> bool
 {
-    if (m_mesh_component_selection.get_mode() == Mesh_component_mode::object) {
+    if (!is_mesh_component_mode(m_mesh_component_selection.get_mode())) {
         return false;
     }
     Scene_view* scene_view = get_hover_scene_view();
@@ -717,7 +717,7 @@ void Mesh_component_selection_tool::tool_render(const Render_context& context)
     if (context.viewport_scene_view == nullptr) {
         return;
     }
-    if (m_mesh_component_selection.get_mode() == Mesh_component_mode::object) {
+    if (!is_mesh_component_mode(m_mesh_component_selection.get_mode())) {
         return;
     }
 
@@ -938,10 +938,10 @@ void Mesh_component_selection_tool::viewport_toolbar()
 
     Mesh_component_selection& selection = m_mesh_component_selection;
 
-    // Mode combo (Object / Vertex / Edge / Face). In a menu bar successive
+    // Mode combo (Object / Vertex / Edge / Face / Bone). In a menu bar successive
     // widgets flow horizontally, so the Clear button lands to the right.
     int               mode_index = static_cast<int>(selection.get_mode());
-    const char* const items[]    = {"Object", "Vertex", "Edge", "Face"};
+    const char* const items[]    = {"Object", "Vertex", "Edge", "Face", "Bone"};
     if (erhe::imgui::combo_fit_width("##mesh_component_mode", &mode_index, items, IM_ARRAYSIZE(items))) {
         selection.set_mode(static_cast<Mesh_component_mode>(mode_index));
     }
@@ -1221,7 +1221,7 @@ auto Mesh_component_selection_tool::grow_selection() -> bool
 {
     // Only act (and consume the key) while a component mode is active; in Object
     // mode the key falls through to other bindings.
-    if (m_mesh_component_selection.get_mode() == Mesh_component_mode::object) {
+    if (!is_mesh_component_mode(m_mesh_component_selection.get_mode())) {
         return false;
     }
     m_mesh_component_selection.grow();
@@ -1230,7 +1230,7 @@ auto Mesh_component_selection_tool::grow_selection() -> bool
 
 auto Mesh_component_selection_tool::shrink_selection() -> bool
 {
-    if (m_mesh_component_selection.get_mode() == Mesh_component_mode::object) {
+    if (!is_mesh_component_mode(m_mesh_component_selection.get_mode())) {
         return false;
     }
     m_mesh_component_selection.shrink();

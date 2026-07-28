@@ -245,6 +245,14 @@ public:
 private:
     void toggle_mesh_selection(const std::shared_ptr<erhe::scene::Mesh>& mesh, bool was_selected, bool clear_others);
 
+    // Bone selection mode: the click acts on the JOINT NODE a hovered bone
+    // proxy stands for, through the ordinary selection, so Properties, undo and
+    // the transform gizmo all work on it unchanged. `toggle` is the Ctrl
+    // variant; without it a plain click replaces the scene's selection and an
+    // empty-space click clears it.
+    [[nodiscard]] auto is_bone_mode           () const -> bool;
+    auto               on_viewport_select_bone(bool toggle) -> bool;
+
     erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
     App_context&                   m_context;
 
@@ -262,6 +270,9 @@ private:
     std::weak_ptr<Scene_root>                     m_active_scene_root;
     Range_selection                               m_range_selection;
     std::weak_ptr<erhe::scene::Mesh>              m_hover_mesh   {};
+    // Joint node behind the hovered bone proxy; resolved in try_ready while bone
+    // mode is active, empty otherwise.
+    std::weak_ptr<erhe::scene::Node>              m_hover_bone_joint{};
     bool                                          m_hover_content{false};
     bool                                          m_hover_tool   {false};
 
