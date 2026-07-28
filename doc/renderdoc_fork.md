@@ -38,6 +38,23 @@ py -3 scripts/setup_renderdoc_mcp.py --skip-build   # rewire an already-built fo
 py -3 scripts/setup_renderdoc_mcp.py --help         # options (paths, port, skips)
 ```
 
+**`--renderdoc-dir` is the flag you almost always need.** It defaults to
+`D:\renderdoc` on Windows (`<erhe>/../renderdoc` elsewhere) -- one machine's
+checkout location, not a convention. Point it at your own clone, or every step
+below silently wires up a path that does not exist:
+
+```sh
+py -3 scripts/setup_renderdoc_mcp.py --skip-clone --skip-build \
+    --renderdoc-dir C:\git\tksuoran\renderdoc
+```
+
+That one command does steps 1, 3 and the schema capture: it writes
+`renderdoc_library_path_override` (+ the enable flag) into
+`config/editor/erhe_graphics.json`, registers the stdio proxy in `.mcp.json`
+with `ERHE_RENDERDOC_QRENDERDOC` pointing at *your* `qrenderdoc.exe`, and
+regenerates `scripts/renderdoc_tools.json`. Re-run it (same flags) after every
+fork rebuild -- see [section 4](#4-after-every-fork-rebuild) for why.
+
 The manual steps are documented below for reference and for doing them piecemeal.
 
 ### 1. Point erhe at the fork's `renderdoc.dll`
@@ -62,9 +79,30 @@ layer and the connecting `qrenderdoc` have to be the **same build**.
 This path is machine-specific -- an absolute path into your local clone/build of
 the fork ([`tksuoran/renderdoc`](https://github.com/tksuoran/renderdoc)). The
 `D:\renderdoc\...` paths throughout this doc are just this machine's checkout
-location; substitute your own. Keep `renderdoc_library_path_override` (and the
-enable toggle) as a **local, uncommitted** working-tree change, not something
-pushed to the repo. The setup script writes both for you.
+location; substitute your own. The setup script writes both for you.
+
+> **`config/editor/erhe_graphics.json` is a temporary local change -- keep it out
+> of commits.**
+>
+> Unlike `.mcp.json`, this file **is tracked**, so nothing stops it from being
+> staged by a `git add -A` / "commit everything" reflex. The three RenderDoc keys
+> above are a debugging toggle pointing at one machine's checkout: committing them
+> breaks the build for everyone else (the override DLL does not exist on their
+> disk) and silently turns capture support on in everyone's editor.
+>
+> When committing RenderDoc work, stage paths explicitly and leave this file
+> behind:
+>
+> ```sh
+> git add doc/renderdoc_fork.md scripts/renderdoc_tools.json src/erhe/window/...
+> git status --short          # confirm config/editor/erhe_graphics.json is still ' M'
+> ```
+>
+> Revert it with `git checkout -- config/editor/erhe_graphics.json` when you are
+> done debugging. If you want a hard guard rather than discipline,
+> `git update-index --skip-worktree config/editor/erhe_graphics.json` hides local
+> edits from `git add` -- but remember you set it, because it also hides *incoming*
+> changes to that file on pull.
 
 `initialize_frame_capture()` in
 `src/erhe/window/erhe_window/renderdoc_capture.cpp` reads the override and, on
@@ -73,30 +111,43 @@ capture layer* win over the stock install (see the next section). Confirm it too
 effect in `logs/log.txt`:
 
 ```
-[erhe.window.renderdoc] RenderDoc: override library 'D:\renderdoc\x64\Development\renderdoc.dll' active, VK_ADD_IMPLICIT_LAYER_PATH='D:\renderdoc\x64\Development'
+[erhe.window.renderdoc] RenderDoc: override library 'D:\renderdoc\x64\Development\renderdoc.dll' active, VK_IMPLICIT_LAYER_PATH='D:\renderdoc\x64\Development'
 ```
 
-### 2. Layer coexistence (fork 1.45 vs stock 1.44) -- why it doesn't `__debugbreak`
+### 2. Layer coexistence (fork 1.46 vs stock 1.45) -- why it doesn't `__debugbreak`
 
 A stock RenderDoc install registers an implicit Vulkan layer system-wide. If the
 editor loaded **two** RenderDoc copies it would hit RenderDoc's multi-instance
-`__debugbreak()`. erhe avoids this entirely in
-`apply_renderdoc_override_env()`:
+`__debugbreak()`. erhe avoids this in `apply_renderdoc_override_env()`. Note that
+both manifests declare the **same layer name** (`VK_LAYER_RENDERDOC_Capture`) and
+the **same version-less enable key**, so `ENABLE_VULKAN_RENDERDOC_CAPTURE` alone
+cannot separate them -- it enables *both*. Two independent mechanisms are used:
 
 | env var | value | effect |
 |---|---|---|
-| `DISABLE_VULKAN_RENDERDOC_CAPTURE_1_44` | `1` | disables the stock 1.44 layer |
+| `VK_IMPLICIT_LAYER_PATH` | fork dir | **override**: loader scans *only* this dir for implicit layers, so the stock layer is excluded whatever its version |
+| `VK_ADD_IMPLICIT_LAYER_PATH` | fork dir | additive; set to the same dir so the fork layer is found on loaders that honor only this one |
+| `DISABLE_VULKAN_RENDERDOC_CAPTURE_1_45` | `1` | disables the stock 1.45 layer |
+| `DISABLE_VULKAN_RENDERDOC_CAPTURE_1_44` | `1` | disables a 1.44 layer if present |
 | `DISABLE_VULKAN_RENDERDOC_CAPTURE_1_41` | `1` | disables a 1.41 layer if present |
-| `VK_ADD_IMPLICIT_LAYER_PATH` | fork dir | lets the loader find the fork layer |
 | `ENABLE_VULKAN_RENDERDOC_CAPTURE` | `1` | enables the (now only) fork layer |
 
-The version numbers come from each `renderdoc.json`'s `disable_environment` key:
-the stock build is RenderDoc **1.44** (`..._1_44`), the fork is **1.45**
-(`..._1_45`). erhe disables 1.44/1.41 but **not** 1.45, so exactly the fork layer
-loads. If you upgrade either install, re-check those numbers.
+`VK_IMPLICIT_LAYER_PATH` is the version-proof mechanism and needs no maintenance
+across upgrades; it requires a Vulkan loader >= 1.3.234. It also excludes *other*
+implicit layers (Nsight, overlays) while capture support is on, which is normally
+what you want during a capture. The `DISABLE_..._1_NN` keys are the fallback for
+an older loader.
 
-You can leave the stock `qrenderdoc.exe` open at the same time -- it's 1.44 and
-cannot connect to the 1.45 editor layer, so it won't grab the target; only the
+Those version numbers come from each `renderdoc.json`'s `disable_environment`
+key: the stock build is RenderDoc **1.45** (`..._1_45`), the fork is **1.46**
+(`..._1_46`). erhe disables 1.45/1.44/1.41 but **never** the fork's own version.
+If you upgrade either install, re-check those numbers -- and note that if the
+fork and the stock install ever land on the *same* version, the `DISABLE_` keys
+become useless (one key would disable both) and `VK_IMPLICIT_LAYER_PATH` is the
+only thing keeping them apart.
+
+You can leave the stock `qrenderdoc.exe` open at the same time -- it's 1.45 and
+cannot connect to the 1.46 editor layer, so it won't grab the target; only the
 fork's MCP `qrenderdoc` connects.
 
 ### 3. Register the renderdoc MCP server with Claude Code (stdio proxy)
@@ -146,6 +197,38 @@ The proxy honors these environment overrides (defaults shown):
 
 After editing `.mcp.json`, **restart Claude Code** (the proxy is spawned per
 session at startup).
+
+### 4. After every fork rebuild
+
+Rebasing/rebuilding the fork changes things the erhe side has cached, so re-do
+this checklist (or just re-run the setup script with `--skip-clone --skip-build`):
+
+- **Re-capture the tool schema.** `py -3 scripts/capture_renderdoc_tools.py`.
+  The proxy serves `scripts/renderdoc_tools.json` from disk, so a stale file
+  advertises tools the new build no longer has (they fail at call time) and hides
+  ones it gained. Tools *do* disappear: the 1.45 -> 1.46 rebase dropped
+  `save_texture_region`, which turned out to exist only in an uncommitted local
+  build and is in no fork commit at all.
+- **Re-check the layer versions.** Compare `implementation_version` /
+  `disable_environment` in the fork's `x64/Development/renderdoc.json` against the
+  stock install's `C:\Program Files\RenderDoc\renderdoc.json`, and reconcile with
+  the `DISABLE_..._1_NN` list in `apply_renderdoc_override_env()`
+  ([section 2](#2-layer-coexistence-fork-146-vs-stock-145----why-it-doesnt-__debugbreak)).
+  A quick check:
+
+  ```powershell
+  Get-Item C:\git\tksuoran\renderdoc\x64\Development\renderdoc.dll,
+           "C:\Program Files\RenderDoc\renderdoc.dll" |
+      Select-Object FullName, @{n='Ver';e={$_.VersionInfo.FileVersion}}
+  ```
+
+- **Kill any old `qrenderdoc`.** `renderdoc_status` will happily talk to a *stale*
+  instance of the previous build still listening on 7398; the editor then loads the
+  new 1.46 in-app layer while the replay UI is the old build, and the
+  target-control connection is version-sensitive. `renderdoc_shutdown` only kills
+  an instance the proxy itself launched -- otherwise stop it by pid.
+- **The erhe config path does not need updating** as long as the fork is rebuilt in
+  place: `renderdoc_library_path_override` points at the file, not the version.
 
 #### Driving the server without the proxy (HTTP fallback)
 

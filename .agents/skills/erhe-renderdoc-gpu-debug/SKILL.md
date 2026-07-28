@@ -39,10 +39,20 @@ This skill is the condensed, cross-platform run-book.
   registered in the repo-local `.mcp.json` (machine-specific, untracked) for
   the `mcp__renderdoc__*` tools to exist. **Check first**: if the tools are
   absent from this session, look for `.mcp.json` in the repo root; if it is
-  missing, wire it with `py -3 scripts/setup_renderdoc_mcp.py --skip-build`
-  (or create `.mcp.json` registering `py -3 <repo>/scripts/renderdoc_mcp_proxy.py`
-  as a stdio server). MCP servers connect only at session start, so after
-  wiring, the session must be restarted before the tools appear.
+  missing, wire it with
+  `py -3 scripts/setup_renderdoc_mcp.py --skip-clone --skip-build --renderdoc-dir <your fork checkout>`
+  (`--renderdoc-dir` defaults to `D:\renderdoc`, which is one machine's location,
+  not a convention -- always pass it). Or create `.mcp.json` by hand registering
+  `py -3 <repo>/scripts/renderdoc_mcp_proxy.py` as a stdio server with
+  `env.ERHE_RENDERDOC_QRENDERDOC` set to your `qrenderdoc` binary (the proxy's
+  baked default is the same `D:\renderdoc` path). MCP servers connect only at
+  session start, so after wiring, the session must be restarted before the tools
+  appear.
+- **After a fork rebuild**, re-run `py -3 scripts/capture_renderdoc_tools.py` --
+  the proxy serves a schema cached in `scripts/renderdoc_tools.json`, so a stale
+  one advertises removed tools and hides new ones. Also kill any `qrenderdoc`
+  left running from the previous build; target-control is version-sensitive.
+  See `doc/renderdoc_fork.md` section 4.
 - When registered, the proxy launches `qrenderdoc --mcp-server` lazily on the
   first tool call. `renderdoc_launch` pre-warms it; `renderdoc_status` confirms.
 - `config/editor/erhe_graphics.json` already sets

@@ -48,16 +48,39 @@ void set_env_or_warn(const char* key, const char* value)
 // a custom location) instead of the system-installed RenderDoc layer. Must run
 // before vkCreateInstance. The layer search path is derived from the override
 // library's own directory so it stays in sync with the override library path.
+//
+// Loading two RenderDoc copies into one process trips RenderDoc's multi-instance
+// __debugbreak(), so the stock install's layer must be kept out. Both manifests
+// declare the same layer name (VK_LAYER_RENDERDOC_Capture) and the same
+// version-less enable key (ENABLE_VULKAN_RENDERDOC_CAPTURE), so the enable knob
+// alone cannot separate them. Two independent mechanisms are used:
+//
+//  1. VK_IMPLICIT_LAYER_PATH (an override, unlike the additive
+//     VK_ADD_IMPLICIT_LAYER_PATH) makes the loader scan ONLY the override
+//     library's directory for implicit layers, so the stock layer is excluded
+//     whatever its version. This is the version-proof mechanism and needs no
+//     maintenance when either install is upgraded. VK_ADD_IMPLICIT_LAYER_PATH is
+//     set to the same directory as well, so the fork layer is found regardless
+//     of which of the two variables a given loader build honors.
+//  2. The per-version DISABLE_VULKAN_RENDERDOC_CAPTURE_1_NN keys, as a fallback
+//     for a loader too old for VK_IMPLICIT_LAYER_PATH (< 1.3.234). Each
+//     renderdoc.json names its own key via "disable_environment"; these are the
+//     stock-install versions seen so far. The fork's OWN version must never be
+//     listed here - as of this writing the fork is 1.46 and the stock install
+//     1.45. Re-check both after upgrading either side; mechanism 1 covers the
+//     case where this list has gone stale.
 void apply_renderdoc_override_env(std::string_view library_path_override)
 {
     const std::filesystem::path library_path{library_path_override};
     const std::string layer_directory = library_path.parent_path().string();
+    set_env_or_warn("DISABLE_VULKAN_RENDERDOC_CAPTURE_1_45", "1");
     set_env_or_warn("DISABLE_VULKAN_RENDERDOC_CAPTURE_1_44", "1");
     set_env_or_warn("DISABLE_VULKAN_RENDERDOC_CAPTURE_1_41", "1");
+    set_env_or_warn("VK_IMPLICIT_LAYER_PATH", layer_directory.c_str());
     set_env_or_warn("VK_ADD_IMPLICIT_LAYER_PATH", layer_directory.c_str());
     set_env_or_warn("ENABLE_VULKAN_RENDERDOC_CAPTURE", "1");
     log_renderdoc->info(
-        "RenderDoc: override library '{}' active, VK_ADD_IMPLICIT_LAYER_PATH='{}'",
+        "RenderDoc: override library '{}' active, VK_IMPLICIT_LAYER_PATH='{}'",
         library_path_override, layer_directory
     );
 }
