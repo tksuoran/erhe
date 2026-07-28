@@ -2292,6 +2292,16 @@ private:
             erhe_skin->skin_data.joints[i] = erhe_joint_node;
         }
 
+        // glTF `skin.skeleton` is optional and carries no skinning semantics -
+        // per spec it is the closest common root of the joints hierarchy (or a
+        // parent of it), offered as a "pivot point" for the skinned geometry.
+        // erhe uses it as the transform target when a skinned mesh is selected,
+        // because the mesh node's own transform is ignored by skinning.
+        if (skin.skeleton.has_value()) {
+            const std::size_t skeleton_node_index = skin.skeleton.value();
+            erhe_skin->skin_data.skeleton = m_data_out.nodes.at(skeleton_node_index);
+        }
+
         if (skin.inverseBindMatrices.has_value()) {
             const fastgltf::Accessor& inverseBindMatrixAccessor = m_asset->accessors[skin.inverseBindMatrices.value()];
             fastgltf::iterateAccessorWithIndex<fastgltf::math::fmat4x4>(
@@ -4651,8 +4661,8 @@ private:
     // --- Skins (doc/gltf-scene-roundtrip-plan.md phase 0) ---
     // Recorded during the node pass (a skin's joint nodes may come later in
     // traversal order), emitted after it when every node index is known.
-    // Skin_data::skeleton is never populated on import, so the optional glTF
-    // skeleton field is omitted.
+    // Skin_data::skeleton round-trips when it is set and its node is inside the
+    // exported subtree; otherwise the optional glTF skeleton field is omitted.
 
     std::vector<std::pair<std::size_t, const erhe::scene::Skin*>>       m_pending_node_skins; // gltf node index -> skin
     std::unordered_map<const erhe::scene::Skin*, std::optional<std::size_t>> m_exported_skins;
@@ -4695,6 +4705,19 @@ private:
             log_gltf->warn("glTF export: skin '{}' has no joints - skipping skin", skin->get_name());
             m_exported_skins.insert({skin, std::nullopt});
             return std::nullopt;
+        }
+        // Optional pivot hint; a skeleton node outside the exported subtree is
+        // simply dropped - it is not needed to compute skinning.
+        if (skin_data.skeleton) {
+            const std::optional<std::size_t> skeleton_index = find_gltf_node_index(skin_data.skeleton);
+            if (skeleton_index.has_value()) {
+                gltf_skin.skeleton = skeleton_index.value();
+            } else {
+                log_gltf->warn(
+                    "glTF export: skin '{}' skeleton '{}' is outside the exported subtree - omitting skeleton",
+                    skin->get_name(), skin_data.skeleton->get_name()
+                );
+            }
         }
         if (!skin_data.inverse_bind_matrices.empty()) {
             if (skin_data.inverse_bind_matrices.size() != skin_data.joints.size()) {

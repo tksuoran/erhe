@@ -36,6 +36,7 @@
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene/skin.hpp"
 #include "erhe_utility/bit_helpers.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -46,6 +47,9 @@
 
 #include <imgui/imgui.h>
 
+#include <fmt/format.h>
+
+#include <algorithm>
 #include <cmath>
 #include <limits>
 
@@ -309,6 +313,14 @@ void Transform_tool::window_imgui()
             }
         }
     };
+    // The note is produced by the node-selection path; in component mode the
+    // gizmo is driven by the mesh component selection and the note is stale.
+    if (!shared.component_mode && !m_transform_target_note.empty()) {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{1.0f, 0.8f, 0.4f, 1.0f});
+        ImGui::TextWrapped("%s", m_transform_target_note.c_str());
+        ImGui::PopStyleColor();
+    }
+
     reference_mode_button("Global",    Transform_reference_mode::global);
     ImGui::SameLine();
     reference_mode_button("Local",     Transform_reference_mode::local);
@@ -443,6 +455,38 @@ void Transform_tool::on_reference_settings_changed()
     update_target_nodes(nullptr);
 }
 
+auto Transform_tool::resolve_transform_target(
+    const std::shared_ptr<erhe::scene::Node>& node
+) -> std::shared_ptr<erhe::scene::Node>
+{
+    const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+    if (!mesh || !mesh->skin) {
+        return node;
+    }
+
+    // Skinning ignores the mesh node's transform (glTF 2.0 Specification
+    // "Joint Hierarchy": "Only the joint transforms are applied to the skinned
+    // mesh; the transform of the skinned mesh node MUST be ignored"). erhe
+    // implements exactly that - Joint_buffer builds world_from_bind from the
+    // joint nodes and standard.vert substitutes it for world_from_node - so
+    // dragging the host node would move the gizmo and leave the mesh in place.
+    // Drive the skin's transform root instead: it is an ancestor of every
+    // joint, so moving it moves the posed result rigidly.
+    const std::shared_ptr<erhe::scene::Node> skin_root = erhe::scene::get_skin_transform_root(*mesh->skin);
+    if (!skin_root) {
+        return node; // no joints, or joints in disjoint trees - nothing better to offer
+    }
+
+    // Joints inside the mesh node's own subtree are the one case where the host
+    // node does drive the skinned result (it transforms the joints with it), so
+    // leave those alone.
+    if ((skin_root == node) || skin_root->is_ancestor(node.get())) {
+        return node;
+    }
+
+    return skin_root;
+}
+
 void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
 {
     // The gizmo operates on one scene at a time: the ACTIVE scene
@@ -461,16 +505,52 @@ void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
     vec3 cumulative_world_scale      {0.0f, 0.0f, 0.0f};
     std::size_t node_count{0};
 
+    // Resolve the selection to the nodes the gizmo actually drives. This is
+    // identity for everything except skinned meshes, which redirect to their
+    // skin transform root (see resolve_transform_target). Duplicates must be
+    // collapsed: several skinned meshes sharing one skin resolve to the same
+    // root, and a drag would otherwise apply its delta once per mesh. The same
+    // resolution runs on both the rebuild and the node_filter refresh path, so
+    // shared.entries stays index-aligned between them.
+    m_target_nodes.clear();
+    m_transform_target_note.clear();
+    std::size_t redirect_count{0};
+    for (const auto& item : selection) {
+        const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+        if (!node) {
+            continue;
+        }
+        std::shared_ptr<erhe::scene::Node> target = resolve_transform_target(node);
+        if (!target) {
+            continue;
+        }
+        if (target != node) {
+            // A redirected gizmo sits somewhere other than the selected node,
+            // which reads as a bug unless it is explained. Report the first
+            // redirection (and how many more there are) in the Transform window.
+            if (redirect_count == 0) {
+                m_transform_target_note = fmt::format(
+                    "Gizmo drives '{}': skinning ignores the transform of skinned mesh node '{}'.",
+                    target->get_name(), node->get_name()
+                );
+            }
+            ++redirect_count;
+        }
+        if (std::find(m_target_nodes.begin(), m_target_nodes.end(), target) != m_target_nodes.end()) {
+            continue;
+        }
+        m_target_nodes.push_back(std::move(target));
+    }
+    if (redirect_count > 1) {
+        m_transform_target_note += fmt::format(" (+{} more)", redirect_count - 1);
+    }
+
     if (node_filter == nullptr) {
         shared.entries.clear();
     }
     std::size_t i = 0;
 
-    for (const auto& item : selection) {
-        std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
-        if (!node) {
-            continue;
-        }
+    for (const std::shared_ptr<erhe::scene::Node>& node : m_target_nodes) {
         const Trs_transform& world_from_node = node->world_from_node_transform();
 
         cumulative_world_translation += world_from_node.get_translation();

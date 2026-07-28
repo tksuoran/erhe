@@ -1,7 +1,45 @@
 #include "erhe_scene/skin.hpp"
+#include "erhe_scene/node.hpp"
 #include "erhe_utility/bit_helpers.hpp"
 
 namespace erhe::scene {
+
+namespace {
+
+// Lowest common ancestor of two nodes, counting each node as an ancestor of
+// itself (lca(n, n) == n, and lca(parent, child) == parent). Returns nullptr
+// when the two nodes are in different trees.
+[[nodiscard]] auto lowest_common_ancestor(
+    std::shared_ptr<Node> lhs,
+    std::shared_ptr<Node> rhs
+) -> std::shared_ptr<Node>
+{
+    if (!lhs || !rhs) {
+        return {};
+    }
+    while (lhs->get_depth() > rhs->get_depth()) {
+        lhs = lhs->get_parent_node();
+        if (!lhs) {
+            return {};
+        }
+    }
+    while (rhs->get_depth() > lhs->get_depth()) {
+        rhs = rhs->get_parent_node();
+        if (!rhs) {
+            return {};
+        }
+    }
+    while (lhs != rhs) {
+        lhs = lhs->get_parent_node();
+        rhs = rhs->get_parent_node();
+        if (!lhs || !rhs) {
+            return {};
+        }
+    }
+    return lhs;
+}
+
+} // anonymous namespace
 
 Skin::Skin()                       = default;
 Skin::Skin(const Skin&)            = default;
@@ -16,6 +54,30 @@ Skin::Skin(const std::string_view name)
 auto operator<(const Skin& lhs, const Skin& rhs) -> bool
 {
     return lhs.get_id() < rhs.get_id();
+}
+
+auto get_skin_transform_root(const Skin& skin) -> std::shared_ptr<Node>
+{
+    const Skin_data& skin_data = skin.skin_data;
+    if (skin_data.skeleton) {
+        return skin_data.skeleton;
+    }
+
+    std::shared_ptr<Node> root{};
+    for (const std::shared_ptr<Node>& joint : skin_data.joints) {
+        if (!joint) {
+            continue;
+        }
+        if (!root) {
+            root = joint;
+            continue;
+        }
+        root = lowest_common_ancestor(root, joint);
+        if (!root) {
+            return {}; // joints span disjoint trees
+        }
+    }
+    return root;
 }
 
 using namespace erhe::utility;

@@ -23,6 +23,7 @@
 #include <atomic>
 #include <memory>
 #include <optional>
+#include <string>
 #include <string_view>
 
 namespace erhe::imgui {
@@ -223,6 +224,15 @@ public:
     // Exposed for Node_transform_operation
     void update_target_nodes(erhe::scene::Node* node_filter);
 
+    // The node the gizmo drives for a given selected node. Identity except for
+    // a skinned mesh whose skin is posed by joints outside its own subtree:
+    // skinning ignores the mesh node's transform, so the skin's transform root
+    // is driven instead. Public so the Transform window can report when the
+    // gizmo is not acting on the node the user selected.
+    [[nodiscard]] static auto resolve_transform_target(
+        const std::shared_ptr<erhe::scene::Node>& node
+    ) -> std::shared_ptr<erhe::scene::Node>;
+
     // Re-derive the gizmo anchor after a reference-frame setting (mode or
     // reference node) is changed from the UI. The mesh-component path already
     // re-derives the anchor every idle frame, so only the node-selection path
@@ -318,6 +328,14 @@ private:
 
     // Reused scratch for the Reference node picker popup (cleared + refilled each frame).
     std::vector<std::shared_ptr<erhe::Item_base>> m_reference_candidates;
+
+    // Reused scratch for update_target_nodes: the selection resolved to gizmo
+    // target nodes and de-duplicated (cleared + refilled on each update).
+    std::vector<std::shared_ptr<erhe::scene::Node>> m_target_nodes;
+
+    // Non-empty while the gizmo drives a node other than the selected one
+    // (skinned mesh -> skin transform root); shown in the Transform window.
+    std::string m_transform_target_note;
 };
 
 }

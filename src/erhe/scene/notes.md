@@ -16,7 +16,7 @@ A glTF-like 3D scene graph providing hierarchical transforms, node attachments (
 - `Transform` -- Matrix + inverse matrix pair with factory methods for projection setups.
 - `Trs_transform` -- Extends `Transform` with decomposed translation, rotation, scale, and skew. Supports interpolation.
 - `Animation` / `Animation_sampler` / `Animation_channel` -- Keyframe animation system supporting step, linear, and cubic spline interpolation for translation, rotation, scale, and weights.
-- `Skin` -- Skeletal skinning data (joint nodes + inverse bind matrices).
+- `Skin` -- Skeletal skinning data (joint nodes + inverse bind matrices, plus the optional glTF `skeleton` pivot node). `get_skin_transform_root()` returns the node an editor should transform to move a skinned mesh: skinning ignores the mesh node's own transform (glTF 2.0 requires it), so only a common ancestor of the joints moves the posed result. Uses `Skin_data::skeleton` when set, else the closest common ancestor of the joints.
 - `Mesh_layer` / `Light_layer` -- Organize meshes and lights into layers with flags and IDs.
 - `Scene_host` -- Abstract interface for registering/unregistering scene objects.
 

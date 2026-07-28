@@ -27,6 +27,7 @@ Transform gizmo system for interactive translate, rotate, and scale operations.
 ## Public API / Integration Points
 
 - `Transform_tool` is registered as a tool and activated from the hotbar
+- `Transform_tool::update_target_nodes()` resolves the selection to the nodes the gizmo actually drives, via `resolve_transform_target()`. This is identity for everything except a skinned mesh whose joints live outside its own subtree: glTF 2.0 requires skinning to ignore the mesh node's transform (and erhe's `Joint_buffer` / `standard.vert` do), so dragging the host node would move the gizmo and leave the mesh in place. Such a selection redirects to `erhe::scene::get_skin_transform_root()`, and the Transform window shows a note naming the driven node. Targets are de-duplicated, so several meshes sharing one skin produce a single entry (otherwise a drag would apply its delta once per mesh). Selection itself is untouched - the host node stays selected, so delete / duplicate / Properties keep acting on what the user picked.
 - Creates `Node_transform_operation` entries on the operation stack for undo/redo
 - Uses `Time::begin_transform_animation()` for animated transform transitions
 

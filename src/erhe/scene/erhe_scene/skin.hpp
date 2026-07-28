@@ -38,6 +38,23 @@ public:
 
 [[nodiscard]] auto operator<(const Skin& lhs, const Skin& rhs) -> bool;
 
+// The node an editor should transform in order to move a skinned mesh.
+//
+// Skinning ignores the mesh node's own transform entirely (glTF 2.0: "Only the
+// joint transforms are applied to the skinned mesh; the transform of the
+// skinned mesh node MUST be ignored"), so moving the host node has no visible
+// effect. Moving any node that is an ancestor of every joint does move the
+// skinned result rigidly - that node is what this returns.
+//
+// Uses Skin_data::skeleton when set (glTF's optional pivot-point hint), and
+// otherwise computes the closest common ancestor of Skin_data::joints. Returns
+// nullptr when there are no joints, or when the joints have no common ancestor
+// (they belong to different trees - malformed, but not worth asserting on).
+//
+// Not cached: the walk is O(joints * depth) and callers are selection / gizmo
+// updates, not per-primitive render code.
+[[nodiscard]] auto get_skin_transform_root(const Skin& skin) -> std::shared_ptr<Node>;
+
 [[nodiscard]] auto is_bone(const Item_base* const item) -> bool;
 [[nodiscard]] auto is_bone(const std::shared_ptr<Item_base>& item) -> bool;
 
