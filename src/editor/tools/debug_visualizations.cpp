@@ -2325,6 +2325,9 @@ void Debug_visualizations::imgui(Scene_view& scene_view, App_context& app_contex
     p.add_entry("Layouts",           [this](){ make_combo("##", m_settings.layouts); });
 
     p.add_entry("Skins",          [this](){ make_combo("##", m_settings.skins); });
+    // Bone display. Both only have an effect while Skins is showing something.
+    p.add_entry("Solid Bones",    [this](){ ImGui::Checkbox ("##", &m_settings.bone_solid); });
+    p.add_entry("Bone Width",     [this](){ ImGui::DragFloat("##", &m_settings.bone_width_scale, 0.005f, 0.005f, 2.0f, "%.3f"); });
 
     p.push_group("Annotiations", ImGuiTreeNodeFlags_DefaultOpen); //ImGuiTreeNodeFlags_DefaultOpen);
     p.add_entry("Max Labels", [this](){ ImGui::SliderInt("##", &m_settings.max_labels, 0, 2000); });
