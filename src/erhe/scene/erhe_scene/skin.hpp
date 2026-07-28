@@ -58,4 +58,10 @@ public:
 [[nodiscard]] auto is_bone(const Item_base* const item) -> bool;
 [[nodiscard]] auto is_bone(const std::shared_ptr<Item_base>& item) -> bool;
 
+// Set Item_flags::bone on every node the skin lists as a joint, so a joint is
+// identifiable without walking every skin. Idempotent; call when a skin enters
+// a scene. Joint-ness is a per-instance flag rather than an Item_type because a
+// joint is an ordinary Node (see is_bone).
+void mark_skin_joints(const Skin& skin);
+
 } // namespace erhe::scene

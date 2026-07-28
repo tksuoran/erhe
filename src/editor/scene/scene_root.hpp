@@ -82,6 +82,7 @@ public:
     static constexpr erhe::scene::Layer_id controller   = 3;
     static constexpr erhe::scene::Layer_id tool         = 4;
     static constexpr erhe::scene::Layer_id rendertarget = 5;
+    static constexpr erhe::scene::Layer_id bone         = 6;
 };
 
 class Scene_layers
@@ -96,8 +97,12 @@ public:
     [[nodiscard]] auto controller  () const -> erhe::scene::Mesh_layer*;
     [[nodiscard]] auto tool        () const -> erhe::scene::Mesh_layer*;
     [[nodiscard]] auto rendertarget() const -> erhe::scene::Mesh_layer*;
+    // Editor-generated bone pick/display proxies (see Item_flags::bone_proxy).
+    // A separate layer so they can be rendered, id-rendered and raytraced as a
+    // group without ever being mistaken for scene content.
+    [[nodiscard]] auto bone        () const -> erhe::scene::Mesh_layer*;
     [[nodiscard]] auto light       () const -> erhe::scene::Light_layer*;
-    [[nodiscard]] auto mesh_layers () const -> std::array<erhe::scene::Mesh_layer*, 5>;
+    [[nodiscard]] auto mesh_layers () const -> std::array<erhe::scene::Mesh_layer*, 6>;
 
 private:
     std::shared_ptr<erhe::scene::Mesh_layer>  m_content;
@@ -105,6 +110,7 @@ private:
     std::shared_ptr<erhe::scene::Mesh_layer>  m_tool;
     std::shared_ptr<erhe::scene::Mesh_layer>  m_brush;
     std::shared_ptr<erhe::scene::Mesh_layer>  m_rendertarget;
+    std::shared_ptr<erhe::scene::Mesh_layer>  m_bone;
     std::shared_ptr<erhe::scene::Light_layer> m_light;
 };
 

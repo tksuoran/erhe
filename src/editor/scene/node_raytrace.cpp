@@ -40,6 +40,11 @@ auto raytrace_node_mask(erhe::Item_base& item) -> uint32_t
     if ((flags & Item_flags::brush       ) != 0) result |= Raytrace_node_mask::brush       ;
     if ((flags & Item_flags::rendertarget) != 0) result |= Raytrace_node_mask::rendertarget;
     if ((flags & Item_flags::controller  ) != 0) result |= Raytrace_node_mask::controller  ;
+    // Bone proxies carry only this bit (never a role bit), so they are picked
+    // exclusively by rays that ask for bones. Bone_visualization clears the flag
+    // outside bone selection mode, which drops the mask to 0 and makes the
+    // instance unhittable - clicks then pass through to the mesh as before.
+    if ((flags & Item_flags::bone_proxy  ) != 0) result |= Raytrace_node_mask::bone        ;
     return result;
 }
 

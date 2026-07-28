@@ -87,12 +87,25 @@ auto is_bone(const Item_base* const item) -> bool
     if (item == nullptr) {
         return false;
     }
-    return test_bit_set(item->get_type(), Item_type::bone);
+    // Item_flags, not Item_type: Item_type is per-class (Item<>::get_type()
+    // returns Self::get_static_type()), and a joint is an ordinary Node - there
+    // is no Bone class for it to report. Item_flags::bone is set on the nodes a
+    // Skin lists in skin_data.joints (see mark_skin_joints).
+    return test_bit_set(item->get_flag_bits(), Item_flags::bone);
 }
 
 auto is_bone(const std::shared_ptr<Item_base>& item) -> bool
 {
     return is_bone(item.get());
+}
+
+void mark_skin_joints(const Skin& skin)
+{
+    for (const std::shared_ptr<Node>& joint : skin.skin_data.joints) {
+        if (joint) {
+            joint->enable_flag_bits(Item_flags::bone);
+        }
+    }
 }
 
 } // namespace erhe::scene

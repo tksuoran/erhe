@@ -48,12 +48,17 @@ public:
     static constexpr uint32_t brush_slot        = 2;
     static constexpr uint32_t rendertarget_slot = 3;
     static constexpr uint32_t grid_slot         = 4;
-    static constexpr uint32_t slot_count        = 5;
+    // Bone pick proxies. Its own slot so a bone hit never displaces the content
+    // hit under it: in bone selection mode the bone slot is consulted, in object
+    // mode it stays empty (the proxies carry no pick mask).
+    static constexpr uint32_t bone_slot         = 5;
+    static constexpr uint32_t slot_count        = 6;
     static constexpr uint32_t content_bit       = (1 << 0u);
     static constexpr uint32_t tool_bit          = (1 << 1u);
     static constexpr uint32_t brush_bit         = (1 << 2u);
     static constexpr uint32_t rendertarget_bit  = (1 << 3u);
     static constexpr uint32_t grid_bit          = (1 << 4u);
+    static constexpr uint32_t bone_bit          = (1 << 5u);
     static constexpr uint32_t all_bits          = 0xffffffffu;
 
     static constexpr std::array<uint32_t, slot_count> raytrace_slot_masks = {
@@ -61,7 +66,8 @@ public:
         Raytrace_node_mask::tool,
         Raytrace_node_mask::brush,
         Raytrace_node_mask::rendertarget,
-        Raytrace_node_mask::grid
+        Raytrace_node_mask::grid,
+        Raytrace_node_mask::bone
     };
 
     static constexpr std::array<const char*, slot_count> slot_names = {
@@ -69,7 +75,8 @@ public:
         "tool",
         "brush",
         "rendertarget",
-        "grid"
+        "grid",
+        "bone"
     };
 
     [[nodiscard]] auto get_name() const -> const std::string&;

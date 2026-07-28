@@ -65,6 +65,7 @@ Scene_layers::Scene_layers()
     m_controller   = std::make_shared<Mesh_layer>("controller",   erhe::Item_flags::controller,   Mesh_layer_id::controller);
     m_rendertarget = std::make_shared<Mesh_layer>("rendertarget", erhe::Item_flags::rendertarget, Mesh_layer_id::rendertarget);
     m_tool         = std::make_shared<Mesh_layer>("tool",         erhe::Item_flags::tool,         Mesh_layer_id::tool);
+    m_bone         = std::make_shared<Mesh_layer>("bone",         erhe::Item_flags::bone_proxy,   Mesh_layer_id::bone);
 
     m_light        = std::make_shared<Light_layer>("lights", 0);
 }
@@ -76,6 +77,7 @@ void Scene_layers::add_layers_to_scene(erhe::scene::Scene& scene)
     scene.add_mesh_layer(m_controller);
     scene.add_mesh_layer(m_rendertarget);
     scene.add_mesh_layer(m_tool);
+    scene.add_mesh_layer(m_bone);
 
     scene.add_light_layer(m_light);
 }
@@ -105,19 +107,25 @@ auto Scene_layers::rendertarget() const -> erhe::scene::Mesh_layer*
     return m_rendertarget.get();
 }
 
+auto Scene_layers::bone() const -> erhe::scene::Mesh_layer*
+{
+    return m_bone.get();
+}
+
 auto Scene_layers::light() const -> erhe::scene::Light_layer*
 {
     return m_light.get();
 }
 
-auto Scene_layers::mesh_layers() const -> std::array<erhe::scene::Mesh_layer*, 5>
+auto Scene_layers::mesh_layers() const -> std::array<erhe::scene::Mesh_layer*, 6>
 {
-    return std::array<erhe::scene::Mesh_layer*, 5>{
+    return std::array<erhe::scene::Mesh_layer*, 6>{
         content(),
         controller(),
         tool(),
         brush(),
-        rendertarget()
+        rendertarget(),
+        bone()
     };
 };
 
@@ -1028,6 +1036,11 @@ void Scene_root::register_skin(const std::shared_ptr<erhe::scene::Skin>& skin)
 {
     if (m_scene) {
         m_scene->register_skin(skin);
+    }
+    // Flag the joint nodes so a bone is identifiable without walking every skin
+    // (item tree icon, bone selection mode, bone proxies).
+    if (skin) {
+        erhe::scene::mark_skin_joints(*skin);
     }
 }
 

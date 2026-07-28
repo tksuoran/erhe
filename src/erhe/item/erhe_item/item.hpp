@@ -60,7 +60,17 @@ public:
     // and import re-creates it -- so open/save cycles do not nest one more
     // wrapper node per cycle.
     static constexpr uint64_t import_root               = (1u << 27);
-    static constexpr uint64_t count                     = 28;
+    // Skeleton bone: set on a Node that a Skin lists in skin_data.joints.
+    // Item_type is per-CLASS (Item<>::get_type() returns Self::get_static_type()),
+    // so a plain Node can never report Item_type::bone - joint-ness has to be a
+    // per-instance flag. Drives the item tree's bone icon and is_bone().
+    static constexpr uint64_t bone                      = (1u << 28);
+    // Editor-generated pick/display proxy for a bone: a Mesh in the scene's bone
+    // layer, parented under the joint node it represents. Content-adjacent but
+    // not content - excluded from the item tree, save, export and prefabs, and
+    // never selectable as itself (picking it resolves to the joint Node).
+    static constexpr uint64_t bone_proxy                = (1u << 29);
+    static constexpr uint64_t count                     = 30;
 
     // High-frequency presentation-state bits (selection, hover, per-frame debug
     // visualization, transform-derived state) that never affect item tree row
@@ -99,6 +109,8 @@ public:
         "Affects Shadow",
         "Exclude From Prefab",
         "Import Root",
+        "Bone",
+        "Bone Proxy",
     };
 
     [[nodiscard]] static auto to_string(uint64_t mask) -> std::string;
