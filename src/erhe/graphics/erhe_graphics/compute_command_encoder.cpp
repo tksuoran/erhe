@@ -44,6 +44,10 @@ void Compute_command_encoder::set_sampled_image(uint32_t binding_point, const Te
 {
     m_impl->set_sampled_image(binding_point, texture, sampler);
 }
+void Compute_command_encoder::set_acceleration_structure(uint32_t binding_point, const Acceleration_structure& acceleration_structure)
+{
+    m_impl->set_acceleration_structure(binding_point, acceleration_structure);
+}
 void Compute_command_encoder::set_compute_pipeline_state(const Compute_pipeline_state& pipeline)
 {
     m_impl->set_compute_pipeline_state(pipeline);

@@ -17,6 +17,7 @@
 #include "renderers/programs.hpp"
 #include "renderers/render_style.hpp"
 #include "renderers/render_context.hpp"
+#include "renderers/ray_trace_renderer.hpp"
 #include "renderers/sky_renderer.hpp"
 #include "rendergraph/post_processing.hpp"
 #include "rendergraph/shadow_render_node.hpp"
@@ -582,6 +583,21 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
             : m_context.editor_settings->sky.mode;
         if (sky_mode == 1) {
             m_context.sky_renderer->ensure_luts(graphics_device, command_buffer);
+        }
+    }
+
+    // GPU ray tracing (issue #233): acceleration structure builds + the
+    // primary-ray compute dispatch record outside the render pass, mirroring
+    // the LUT/compute pre-passes above. The renderer no-ops unless the Ray
+    // Trace window enabled it and the device supports ray queries.
+    if ((m_context.ray_trace_renderer != nullptr) && (context.camera != nullptr)) {
+        const std::shared_ptr<Scene_root> ray_trace_scene_root = get_scene_root();
+        if (ray_trace_scene_root) {
+            // Light projections come from this view's shadow render node
+            // (already executed this frame); may be null, in which case the
+            // ray tracer shades with ambient light only. The viewport gives
+            // the ray generation the same projection as the raster view.
+            m_context.ray_trace_renderer->render(command_buffer, *ray_trace_scene_root, *context.camera, context.viewport, get_light_projections());
         }
     }
 

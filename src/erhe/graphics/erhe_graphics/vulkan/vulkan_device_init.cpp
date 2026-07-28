@@ -681,6 +681,25 @@ Device_impl::Device_impl(
         m_portability_subset_properties.pNext = m_driver_properties.pNext;
         m_driver_properties.pNext             = &m_portability_subset_properties;
     }
+    // Acceleration structure limits (scratch buffer offset alignment, max
+    // instance/primitive counts). Chained only when the extension is present;
+    // the conservative 256 default keeps call sites unconditional.
+    m_acceleration_structure_properties = VkPhysicalDeviceAccelerationStructurePropertiesKHR{
+        .sType                                                      = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR,
+        .pNext                                                      = nullptr,
+        .maxGeometryCount                                           = 0,
+        .maxInstanceCount                                           = 0,
+        .maxPrimitiveCount                                          = 0,
+        .maxPerStageDescriptorAccelerationStructures                = 0,
+        .maxPerStageDescriptorUpdateAfterBindAccelerationStructures = 0,
+        .maxDescriptorSetAccelerationStructures                     = 0,
+        .maxDescriptorSetUpdateAfterBindAccelerationStructures      = 0,
+        .minAccelerationStructureScratchOffsetAlignment             = 256u
+    };
+    if (m_device_extensions.m_VK_KHR_acceleration_structure) {
+        m_acceleration_structure_properties.pNext = m_driver_properties.pNext;
+        m_driver_properties.pNext                 = &m_acceleration_structure_properties;
+    }
     // VkPhysicalDeviceMultiviewProperties is core in Vulkan 1.1; chain
     // unconditionally on a 1.1+ device. Kept local: spliced into the local
     // physical_device_properties2.pNext, not into the m_driver_properties
@@ -716,9 +735,11 @@ Device_impl::Device_impl(
     log_context->info("  Device name         = {}",          properties.deviceName);
     log_context->info("  maxMultiviewViewCount     = {}",    query_multiview_properties.maxMultiviewViewCount);
     log_context->info("  maxMultiviewInstanceIndex = {}",    query_multiview_properties.maxMultiviewInstanceIndex);
-    // Detach m_portability_subset_properties from the local property chain
-    // so it stays a self-contained struct for downstream queries.
-    m_portability_subset_properties.pNext = nullptr;
+    // Detach m_portability_subset_properties / m_acceleration_structure_properties
+    // from the local property chain so they stay self-contained structs for
+    // downstream queries.
+    m_portability_subset_properties.pNext     = nullptr;
+    m_acceleration_structure_properties.pNext = nullptr;
     if (m_device_extensions.m_VK_KHR_portability_subset) {
         log_context->info("Vulkan portability subset properties:");
         log_context->info(
@@ -967,6 +988,54 @@ Device_impl::Device_impl(
     if (m_device_extensions.m_VK_EXT_fragment_density_map) {
         query_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&query_fragment_density_map_features);
         query_features_chain_last        = query_features_chain_last->pNext;
+    }
+
+    // GPU ray tracing: VK_KHR_acceleration_structure + VK_KHR_ray_query,
+    // plus bufferDeviceAddress (core 1.2; acceleration structure builds
+    // consume buffer device addresses). Queried only when the extensions are
+    // advertised -- any device advertising VK_KHR_acceleration_structure is
+    // 1.1+ and recognizes VkPhysicalDeviceBufferDeviceAddressFeatures.
+    const bool has_ray_query_extensions =
+        m_device_extensions.m_VK_KHR_acceleration_structure &&
+        m_device_extensions.m_VK_KHR_ray_query &&
+        m_device_extensions.m_VK_KHR_deferred_host_operations;
+    VkPhysicalDeviceAccelerationStructureFeaturesKHR query_acceleration_structure_features{
+        .sType                                                 = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR,
+        .pNext                                                 = nullptr,
+        .accelerationStructure                                 = VK_FALSE,
+        .accelerationStructureCaptureReplay                    = VK_FALSE,
+        .accelerationStructureIndirectBuild                    = VK_FALSE,
+        .accelerationStructureHostCommands                     = VK_FALSE,
+        .descriptorBindingAccelerationStructureUpdateAfterBind = VK_FALSE,
+    };
+    VkPhysicalDeviceRayQueryFeaturesKHR query_ray_query_features{
+        .sType    = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR,
+        .pNext    = nullptr,
+        .rayQuery = VK_FALSE,
+    };
+    VkPhysicalDeviceBufferDeviceAddressFeatures query_buffer_device_address_features{
+        .sType                            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES,
+        .pNext                            = nullptr,
+        .bufferDeviceAddress              = VK_FALSE,
+        .bufferDeviceAddressCaptureReplay = VK_FALSE,
+        .bufferDeviceAddressMultiDevice   = VK_FALSE,
+    };
+    VkPhysicalDeviceRayTracingPositionFetchFeaturesKHR query_ray_tracing_position_fetch_features{
+        .sType                   = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_POSITION_FETCH_FEATURES_KHR,
+        .pNext                   = nullptr,
+        .rayTracingPositionFetch = VK_FALSE,
+    };
+    if (has_ray_query_extensions) {
+        query_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&query_acceleration_structure_features);
+        query_features_chain_last        = query_features_chain_last->pNext;
+        query_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&query_ray_query_features);
+        query_features_chain_last        = query_features_chain_last->pNext;
+        query_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&query_buffer_device_address_features);
+        query_features_chain_last        = query_features_chain_last->pNext;
+        if (m_device_extensions.m_VK_KHR_ray_tracing_position_fetch) {
+            query_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&query_ray_tracing_position_fetch_features);
+            query_features_chain_last        = query_features_chain_last->pNext;
+        }
     }
 
     // When VK_KHR_portability_subset is NOT advertised the device is fully
@@ -1524,6 +1593,64 @@ Device_impl::Device_impl(
     log_startup->info("  fragmentDensityMapDynamic             = {}", query_fragment_density_map_features.fragmentDensityMapDynamic             == VK_TRUE);
     log_startup->info("  fragmentDensityMapNonSubsampledImages = {}", query_fragment_density_map_features.fragmentDensityMapNonSubsampledImages == VK_TRUE);
 
+    // GPU ray tracing: enable exactly the three features the ray-query path
+    // needs (acceleration structure builds, ray queries in shaders, buffer
+    // device addresses for build inputs and scratch). Optional bits such as
+    // host commands and capture replay stay off.
+    const bool enable_ray_query =
+        has_ray_query_extensions &&
+        (query_acceleration_structure_features.accelerationStructure == VK_TRUE) &&
+        (query_ray_query_features.rayQuery                           == VK_TRUE) &&
+        (query_buffer_device_address_features.bufferDeviceAddress    == VK_TRUE);
+    VkPhysicalDeviceAccelerationStructureFeaturesKHR set_acceleration_structure_features{
+        .sType                                                 = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR,
+        .pNext                                                 = nullptr,
+        .accelerationStructure                                 = VK_TRUE,
+        .accelerationStructureCaptureReplay                    = VK_FALSE,
+        .accelerationStructureIndirectBuild                    = VK_FALSE,
+        .accelerationStructureHostCommands                     = VK_FALSE,
+        .descriptorBindingAccelerationStructureUpdateAfterBind = VK_FALSE,
+    };
+    VkPhysicalDeviceRayQueryFeaturesKHR set_ray_query_features{
+        .sType    = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR,
+        .pNext    = nullptr,
+        .rayQuery = VK_TRUE,
+    };
+    VkPhysicalDeviceBufferDeviceAddressFeatures set_buffer_device_address_features{
+        .sType                            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES,
+        .pNext                            = nullptr,
+        .bufferDeviceAddress              = VK_TRUE,
+        .bufferDeviceAddressCaptureReplay = VK_FALSE,
+        .bufferDeviceAddressMultiDevice   = VK_FALSE,
+    };
+    const bool enable_ray_tracing_position_fetch =
+        enable_ray_query &&
+        m_device_extensions.m_VK_KHR_ray_tracing_position_fetch &&
+        (query_ray_tracing_position_fetch_features.rayTracingPositionFetch == VK_TRUE);
+    VkPhysicalDeviceRayTracingPositionFetchFeaturesKHR set_ray_tracing_position_fetch_features{
+        .sType                   = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_POSITION_FETCH_FEATURES_KHR,
+        .pNext                   = nullptr,
+        .rayTracingPositionFetch = VK_TRUE,
+    };
+    if (enable_ray_query) {
+        set_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&set_acceleration_structure_features);
+        set_features_chain_last        = set_features_chain_last->pNext;
+        set_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&set_ray_query_features);
+        set_features_chain_last        = set_features_chain_last->pNext;
+        set_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&set_buffer_device_address_features);
+        set_features_chain_last        = set_features_chain_last->pNext;
+        log_debug->debug("Enabled features accelerationStructure + rayQuery + bufferDeviceAddress");
+        if (enable_ray_tracing_position_fetch) {
+            set_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&set_ray_tracing_position_fetch_features);
+            set_features_chain_last        = set_features_chain_last->pNext;
+            log_debug->debug("Enabled feature rayTracingPositionFetch");
+        }
+    }
+    log_startup->info("  accelerationStructure          = {}", query_acceleration_structure_features.accelerationStructure           == VK_TRUE);
+    log_startup->info("  rayQuery                       = {}", query_ray_query_features.rayQuery                                     == VK_TRUE);
+    log_startup->info("  bufferDeviceAddress            = {}", query_buffer_device_address_features.bufferDeviceAddress              == VK_TRUE);
+    log_startup->info("  rayTracingPositionFetch        = {}", query_ray_tracing_position_fetch_features.rayTracingPositionFetch     == VK_TRUE);
+
     // 16bit storage and multiview feature flags are folded into
     // set_vulkan_11_features above; the granular VkPhysicalDevice16BitStorageFeatures
     // and VkPhysicalDeviceMultiviewFeatures structs would alias the same
@@ -1568,7 +1695,12 @@ Device_impl::Device_impl(
     m_surface = std::make_unique<Surface>(std::move(surface_impl));
 
     VmaAllocatorCreateInfo vma_create_info{
-        .flags                          = 0,                        // VmaAllocatorCreateFlags flags;
+        // Buffers created with Buffer_usage::shader_device_address (ray
+        // tracing build inputs / scratch) need their backing memory allocated
+        // with VK_MEMORY_ALLOCATE_FLAG_DEVICE_ADDRESS; VMA only does that
+        // when this allocator-level flag is set (valid only when the
+        // bufferDeviceAddress feature was enabled on the device).
+        .flags                          = enable_ray_query ? VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT : VmaAllocatorCreateFlags{0},
         .physicalDevice                 = m_vulkan_physical_device, // VkPhysicalDevice VMA_NOT_NULL physicalDevice;
         .device                         = m_vulkan_device,          // VkDevice VMA_NOT_NULL device;
         .preferredLargeHeapBlockSize    = 0,
@@ -1726,6 +1858,13 @@ Device_impl::Device_impl(
     m_info.use_multi_draw_indirect_arb = false;
     m_info.use_compute_shader          = true;
     m_info.use_shader_storage_buffers  = true;
+    m_info.use_ray_query                    = enable_ray_query;
+    m_info.use_ray_tracing_position_fetch   = enable_ray_tracing_position_fetch;
+    log_startup->info(
+        "Ray query (GPU ray tracing): {}, position fetch: {}",
+        enable_ray_query                 ? "enabled" : "not available",
+        enable_ray_tracing_position_fetch ? "enabled" : "not available"
+    );
     m_info.use_clear_texture           = true;
     m_info.use_texture_view            = true;
     m_info.use_persistent_buffers      = true;

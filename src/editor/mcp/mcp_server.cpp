@@ -3,6 +3,21 @@
 
 #include "mcp/mcp_server_shared.hpp"
 
+#include "config/generated/editor_settings_config.hpp"
+#include "config/generated/ray_trace_config.hpp"
+#include "renderers/ray_trace_renderer.hpp"
+
+#include "erhe_graphics/image_writer.hpp"
+#include "erhe_graphics/texture.hpp"
+#include "erhe_imgui/imgui_window.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <filesystem>
+#include <span>
+
 namespace editor {
 
 using namespace mcp_server_detail;
@@ -528,6 +543,7 @@ auto Mcp_server::process_queued_requests() -> int
             { "animation_edit_keyframe",        &Mcp_server::action_animation_edit_keyframe       },
             { "animation_create_key",           &Mcp_server::action_animation_create_key          },
             { "animation_delete_key",           &Mcp_server::action_animation_delete_key          },
+            { "set_ray_trace",                  &Mcp_server::action_set_ray_trace                 },
         };
         Tool_handler handler = nullptr;
         for (const Tool_dispatch_entry& entry : c_tool_dispatch) {
@@ -552,6 +568,90 @@ auto Mcp_server::process_queued_requests() -> int
     }
 
     return count;
+}
+
+auto Mcp_server::action_set_ray_trace(const json& args) -> std::string
+{
+    // GPU ray tracing (issue #233): toggle Ray_trace_renderer without the
+    // ImGui checkbox so the headless verify loop can exercise it; optionally
+    // show the Ray Trace window so capture_screenshot sees the output.
+    Ray_trace_renderer* renderer = m_context.ray_trace_renderer;
+    if (renderer == nullptr) {
+        return make_error_content("Ray trace renderer not available");
+    }
+    if (args.contains("enabled")) {
+        renderer->set_enabled(args.value("enabled", false));
+    }
+    // Optional Ray_trace_config edits (same knobs as the Ray Trace window;
+    // autosaved with the editor settings).
+    if (m_context.editor_settings != nullptr) {
+        Ray_trace_config& config = m_context.editor_settings->ray_trace;
+        if (args.contains("downscale")) {
+            config.downscale = std::clamp(args.value("downscale", 1.0f), 1.0f, 8.0f);
+        }
+        if (args.contains("max_rays")) {
+            config.max_rays = std::clamp(args.value("max_rays", 24), 1, 1024);
+        }
+        if (args.contains("max_bounces")) {
+            config.max_bounces = std::clamp(args.value("max_bounces", 8), 0, 12);
+        }
+    }
+    if (args.value("show_window", false) && (m_context.imgui_windows != nullptr)) {
+        for (erhe::imgui::Imgui_window* window : m_context.imgui_windows->get_windows()) {
+            if (window->get_ini_label() == "ray_trace") {
+                window->show_window();
+            }
+        }
+    }
+    json result{
+        {"supported",      renderer->is_supported()},
+        {"enabled",        renderer->is_enabled()},
+        {"instance_count", renderer->get_instance_count()}
+    };
+    if (m_context.editor_settings != nullptr) {
+        const Ray_trace_config& config = m_context.editor_settings->ray_trace;
+        result["downscale"]   = config.downscale;
+        result["max_rays"]    = config.max_rays;
+        result["max_bounces"] = config.max_bounces;
+    }
+    const std::string save_path = args.value("save_path", "");
+    if (!save_path.empty()) {
+        std::vector<uint8_t> pixels;
+        if (!renderer->read_output_rgba8(pixels)) {
+            return make_error_content("Ray trace output readback failed (renderer not supported, or no output texture)");
+        }
+        // The output texture stores LINEAR tonemapped color (the in-editor
+        // display path encodes at swapchain write, like every viewport
+        // texture). Encode to sRGB here so the diagnostic PNG is viewable
+        // in external tools.
+        {
+            std::array<uint8_t, 256> linear_to_srgb_lut{};
+            for (std::size_t i = 0; i < linear_to_srgb_lut.size(); ++i) {
+                const float x = static_cast<float>(i) / 255.0f;
+                const float y = (x <= 0.0031308f) ? (12.92f * x) : (1.055f * std::pow(x, 1.0f / 2.4f) - 0.055f);
+                linear_to_srgb_lut[i] = static_cast<uint8_t>(std::lround(std::clamp(y, 0.0f, 1.0f) * 255.0f));
+            }
+            for (std::size_t i = 0, end = pixels.size(); i + 3 < end; i += 4) {
+                pixels[i + 0] = linear_to_srgb_lut[pixels[i + 0]];
+                pixels[i + 1] = linear_to_srgb_lut[pixels[i + 1]];
+                pixels[i + 2] = linear_to_srgb_lut[pixels[i + 2]];
+                // alpha unchanged
+            }
+        }
+        const std::shared_ptr<erhe::graphics::Texture> texture = renderer->get_output_texture();
+        const int width      = texture->get_width();
+        const int height     = texture->get_height();
+        const int row_stride = width * 4;
+        std::unique_ptr<erhe::graphics::Image_writer> writer = erhe::graphics::Image_writer::create();
+        const std::span<const std::byte> data{reinterpret_cast<const std::byte*>(pixels.data()), pixels.size()};
+        if (!writer->write_png(std::filesystem::path{save_path}, width, height, row_stride, texture->get_pixelformat(), data)) {
+            return make_error_content("Failed to write PNG '" + save_path + "' (image writer backend may be disabled)");
+        }
+        result["saved_path"] = save_path;
+        result["width"]      = width;
+        result["height"]     = height;
+    }
+    return make_json_content(result).dump();
 }
 
 auto Mcp_server::find_scene(const std::string& name) -> Scene_root*

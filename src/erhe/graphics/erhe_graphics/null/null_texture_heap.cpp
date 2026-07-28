@@ -41,6 +41,11 @@ auto Texture_heap_impl::bind(Render_command_encoder& /*encoder*/) -> std::size_t
     return m_used_slot_count;
 }
 
+auto Texture_heap_impl::bind(Compute_command_encoder& /*encoder*/) -> std::size_t
+{
+    return m_used_slot_count;
+}
+
 void Texture_heap_impl::unbind(Command_buffer& /*command_buffer*/)
 {
 }

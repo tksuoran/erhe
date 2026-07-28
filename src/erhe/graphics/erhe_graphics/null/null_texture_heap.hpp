@@ -23,6 +23,7 @@ public:
     auto allocate         (const Texture* texture, const Sampler* sampler) -> uint64_t;
     auto get_shader_handle(const Texture* texture, const Sampler* sampler) -> uint64_t;
     auto bind             (Render_command_encoder& encoder) -> std::size_t;
+    auto bind             (Compute_command_encoder& encoder) -> std::size_t;
     void unbind           (Command_buffer& command_buffer);
 
 protected:

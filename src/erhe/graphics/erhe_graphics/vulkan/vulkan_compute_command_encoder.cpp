@@ -1,4 +1,5 @@
 #include "erhe_graphics/vulkan/vulkan_compute_command_encoder.hpp"
+#include "erhe_graphics/vulkan/vulkan_acceleration_structure.hpp"
 #include "erhe_graphics/vulkan/vulkan_bind_group_layout.hpp"
 #include "erhe_graphics/vulkan/vulkan_command_buffer.hpp"
 #include "erhe_graphics/vulkan/vulkan_compute_pipeline.hpp"
@@ -211,6 +212,56 @@ void Compute_command_encoder_impl::set_sampled_image(const uint32_t binding_poin
         .descriptorCount  = 1,
         .descriptorType   = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
         .pImageInfo       = &image_info,
+        .pBufferInfo      = nullptr,
+        .pTexelBufferView = nullptr
+    };
+
+    vkCmdPushDescriptorSetKHR(
+        command_buffer,
+        VK_PIPELINE_BIND_POINT_COMPUTE,
+        m_pipeline_layout,
+        0, // set index
+        1,
+        &write
+    );
+}
+
+void Compute_command_encoder_impl::set_acceleration_structure(const uint32_t binding_point, const Acceleration_structure& acceleration_structure)
+{
+    VkCommandBuffer command_buffer = get_active_vk_command_buffer();
+    if (command_buffer == VK_NULL_HANDLE) {
+        return;
+    }
+
+    Device_impl& device_impl = m_device.get_impl();
+    ERHE_VERIFY(device_impl.has_push_descriptor()); // todo: descriptor-set fallback
+    ERHE_VERIFY(m_pipeline_layout != VK_NULL_HANDLE);
+
+    VkAccelerationStructureKHR vk_acceleration_structure = acceleration_structure.get_impl().get_vk_acceleration_structure();
+    if (vk_acceleration_structure == VK_NULL_HANDLE) {
+        return;
+    }
+
+    // Acceleration structures are bound at their raw binding point (no
+    // sampler-binding offset), like storage images. The handle rides in a
+    // pNext extension struct; descriptorCount comes from the extension
+    // struct's accelerationStructureCount.
+    const VkWriteDescriptorSetAccelerationStructureKHR acceleration_structure_write{
+        .sType                      = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR,
+        .pNext                      = nullptr,
+        .accelerationStructureCount = 1,
+        .pAccelerationStructures    = &vk_acceleration_structure
+    };
+
+    const VkWriteDescriptorSet write{
+        .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .pNext            = &acceleration_structure_write,
+        .dstSet           = VK_NULL_HANDLE, // ignored for push descriptors
+        .dstBinding       = binding_point,
+        .dstArrayElement  = 0,
+        .descriptorCount  = 1,
+        .descriptorType   = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
+        .pImageInfo       = nullptr,
         .pBufferInfo      = nullptr,
         .pTexelBufferView = nullptr
     };

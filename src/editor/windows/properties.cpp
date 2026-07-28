@@ -1772,6 +1772,10 @@ void Properties::material_properties(const std::vector<std::shared_ptr<erhe::Ite
     add_entry("Base Color",  [&](){ ImGui::ColorEdit4 ("##", &data.base_color.x, ImGuiColorEditFlags_Float); });
     add_entry("Emissive",    [&](){ ImGui::ColorEdit4 ("##", &data.emissive.x,   ImGuiColorEditFlags_Float); });
     add_entry("Opacity",     [&](){ ImGui::SliderFloat("##", &data.opacity,      0.0f,  1.0f); });
+    // Consumed by the GPU ray tracer (glass refraction / reflection);
+    // the raster path currently ignores both.
+    add_entry("IOR",          [&](){ ImGui::SliderFloat("##", &data.ior,          1.0f,  3.0f); });
+    add_entry("Transmission", [&](){ ImGui::SliderFloat("##", &data.transmission, 0.0f,  1.0f); });
 
     Scene_root* scene_root = m_context.scene_commands->get_scene_root(selected_material);
     if (scene_root != nullptr) {

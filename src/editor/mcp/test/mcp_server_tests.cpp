@@ -364,6 +364,8 @@ TEST_F(Mcp_test, get_material_details_has_full_structure)
     EXPECT_TRUE(d.contains("metallic"));
     EXPECT_TRUE(d.contains("reflectance"));
     EXPECT_TRUE(d.contains("emissive"));
+    EXPECT_TRUE(d.contains("ior"));
+    EXPECT_TRUE(d.contains("transmission"));
     EXPECT_TRUE(d.contains("normal_texture_scale"));
     EXPECT_TRUE(d.contains("occlusion_texture_strength"));
     EXPECT_TRUE(d.contains("bxdf_model"));
@@ -450,6 +452,32 @@ TEST_F(Mcp_test, edit_material_reflectance_round_trip)
     edit_and_wait(
         json{{"reflectance", original}},
         [original](const json& d) { return approx_equal(d["reflectance"].get<double>(), original); }
+    );
+}
+
+TEST_F(Mcp_test, edit_material_ior_and_transmission_round_trip)
+{
+    json before = material_details();
+    const double original_ior          = before["ior"].get<double>();
+    const double original_transmission = before["transmission"].get<double>();
+    const double target_ior            = approx_equal(original_ior, 1.3) ? 1.7 : 1.3;
+    const double target_transmission   = approx_equal(original_transmission, 0.8) ? 0.5 : 0.8;
+
+    edit_and_wait(
+        json{{"ior", target_ior}, {"transmission", target_transmission}},
+        [target_ior, target_transmission](const json& d) {
+            return
+                approx_equal(d["ior"].get<double>(), target_ior) &&
+                approx_equal(d["transmission"].get<double>(), target_transmission);
+        }
+    );
+    edit_and_wait(
+        json{{"ior", original_ior}, {"transmission", original_transmission}},
+        [original_ior, original_transmission](const json& d) {
+            return
+                approx_equal(d["ior"].get<double>(), original_ior) &&
+                approx_equal(d["transmission"].get<double>(), original_transmission);
+        }
     );
 }
 
@@ -852,7 +880,7 @@ public:
         json restore = json::object();
         restore["scene_name"]    = env.scene_name();
         restore["material_name"] = env.material_name();
-        for (const char* key : {"base_color", "opacity", "roughness", "metallic", "reflectance", "emissive", "normal_texture_scale", "occlusion_texture_strength"}) {
+        for (const char* key : {"base_color", "opacity", "roughness", "metallic", "reflectance", "emissive", "ior", "transmission", "normal_texture_scale", "occlusion_texture_strength"}) {
             if (m_baseline.contains(key)) {
                 restore[key] = m_baseline[key];
             }

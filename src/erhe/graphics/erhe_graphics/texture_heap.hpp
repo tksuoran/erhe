@@ -8,6 +8,7 @@ namespace erhe::graphics {
 
 class Bind_group_layout;
 class Command_buffer;
+class Compute_command_encoder;
 class Device;
 class Render_command_encoder;
 class Sampler;
@@ -39,6 +40,10 @@ public:
     auto allocate         (const Texture* texture, const Sampler* sample) -> uint64_t;
     auto get_shader_handle(const Texture* texture, const Sampler* sample) -> uint64_t; // bindless ? handle : slot
     auto bind             (Render_command_encoder& encoder) -> std::size_t;
+    // Compute variant: binds the heap for compute dispatches (Vulkan binds
+    // descriptor set 1 at the compute pipeline bind point). Used by the ray
+    // trace compute shader to sample material textures at hit points.
+    auto bind             (Compute_command_encoder& encoder) -> std::size_t;
     void unbind           (Command_buffer& command_buffer);
 
 private:

@@ -24,6 +24,7 @@ public:
     void set_buffer                (Buffer_target buffer_target, const Buffer* buffer);
     void set_storage_image         (uint32_t binding_point, const Texture& texture);
     void set_sampled_image         (uint32_t binding_point, const Texture& texture, const Sampler& sampler);
+    void set_acceleration_structure(uint32_t binding_point, const Acceleration_structure& acceleration_structure);
     void set_compute_pipeline_state(const Compute_pipeline_state& pipeline);
     void set_compute_pipeline      (const Compute_pipeline& pipeline);
     void dispatch_compute          (std::uintptr_t x_size, std::uintptr_t y_size, std::uintptr_t z_size);

@@ -203,6 +203,21 @@ public:
     bool emulate_multi_draw_indirect {false};
     bool use_compute_shader          {false};
     bool use_shader_storage_buffers  {false};
+
+    // GPU ray tracing via ray queries: Acceleration_structure creation/builds
+    // and Binding_type::acceleration_structure /
+    // Compute_command_encoder::set_acceleration_structure are functional.
+    // Vulkan sets this when VK_KHR_acceleration_structure + VK_KHR_ray_query
+    // (+ bufferDeviceAddress) were enabled on the device; false on other
+    // backends until they implement the abstraction (Metal is designed for).
+    bool use_ray_query               {false};
+
+    // VK_KHR_ray_tracing_position_fetch on top of use_ray_query: ray query
+    // shaders can read the committed triangle's object-space vertex positions
+    // (GL_EXT_ray_tracing_position_fetch), and bottom level acceleration
+    // structures are built with the data-access flag. Never true without
+    // use_ray_query.
+    bool use_ray_tracing_position_fetch{false};
     bool use_base_instance           {false};
     bool use_clear_texture           {false};
     bool use_texture_view            {false};

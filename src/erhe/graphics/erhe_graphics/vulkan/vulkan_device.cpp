@@ -985,6 +985,19 @@ auto Device_impl::query_device_extensions(
     // not chain VkPhysicalDeviceFragmentDensityMap2FeaturesEXT.
     check_device_extension(VK_EXT_FRAGMENT_DENSITY_MAP_2_EXTENSION_NAME,         device_extensions_out.m_VK_EXT_fragment_density_map2         , 2.0f);
 
+    // GPU ray tracing (ray query in compute). VK_KHR_deferred_host_operations
+    // is a hard dependency of VK_KHR_acceleration_structure and must be
+    // enabled alongside it. The feature structs are queried/enabled in
+    // Device_impl's constructor; Device_info::use_ray_query is set only when
+    // all three extensions AND their features are available.
+    check_device_extension(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,         device_extensions_out.m_VK_KHR_acceleration_structure        , 2.0f);
+    check_device_extension(VK_KHR_RAY_QUERY_EXTENSION_NAME,                      device_extensions_out.m_VK_KHR_ray_query                     , 2.0f);
+    check_device_extension(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,       device_extensions_out.m_VK_KHR_deferred_host_operations      , 0.0f);
+    // Optional on top of ray query: lets ray query shaders read the committed
+    // triangle's object-space vertex positions (used for geometric normals
+    // without binding every mesh vertex buffer to the shader).
+    check_device_extension(VK_KHR_RAY_TRACING_POSITION_FETCH_EXTENSION_NAME,     device_extensions_out.m_VK_KHR_ray_tracing_position_fetch    , 1.0f);
+
     // VK_KHR_portability_subset must be enabled whenever the physical device
     // advertises it (Vulkan spec VUID-VkDeviceCreateInfo-pProperties-04451).
     // MoltenVK always does, because it is a portability implementation.
@@ -1130,6 +1143,11 @@ auto Device_impl::get_portability_subset_features() const -> const VkPhysicalDev
 auto Device_impl::get_portability_subset_properties() const -> const VkPhysicalDevicePortabilitySubsetPropertiesKHR&
 {
     return m_portability_subset_properties;
+}
+
+auto Device_impl::get_acceleration_structure_properties() const -> const VkPhysicalDeviceAccelerationStructurePropertiesKHR&
+{
+    return m_acceleration_structure_properties;
 }
 
 auto Device_impl::get_memory_type(uint32_t memory_type_index) const -> const VkMemoryType&

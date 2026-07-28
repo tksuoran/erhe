@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Editor_settings_config",
-    version=15,
+    version=16,
     short_desc="Editor settings",
     long_desc="Runtime-editable settings saved to editor_settings.json.",
     developer=False,
@@ -49,6 +49,7 @@ struct("Editor_settings_config",
         field("hotbar",               StructRef("Hotbar_config"),          added_in=1),
         field("hud",                  StructRef("Hud_config"),             added_in=1),
         field("id_renderer",          StructRef("Id_renderer_config"),     added_in=1),
+        field("ray_trace",            StructRef("Ray_trace_config"),       added_in=16),
         field("inventory",            StructRef("Inventory_config"),       added_in=1),
         field("network",              StructRef("Network_config"),         added_in=1),
         field("physics",              StructRef("Physics_config"),         added_in=1),

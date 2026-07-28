@@ -164,6 +164,8 @@ erhe_target_sources_grouped(
     developer/layers_window.hpp
     developer/post_processing_window.cpp
     developer/post_processing_window.hpp
+    developer/ray_trace_window.cpp
+    developer/ray_trace_window.hpp
     developer/rendergraph_window.cpp
     developer/rendergraph_window.hpp
     developer/selection_window.cpp
@@ -413,6 +415,8 @@ erhe_target_sources_grouped(
     renderers/render_context.hpp
     renderers/render_style.cpp
     renderers/render_style.hpp
+    renderers/ray_trace_renderer.cpp
+    renderers/ray_trace_renderer.hpp
     renderers/sky_renderer.cpp
     renderers/sky_renderer.hpp
     renderers/viewport_config.cpp
@@ -694,6 +698,7 @@ erhe_codegen_generate(
         "${_config_defs}/inventory_config.py"
         "${_config_defs}/hud_config.py"
         "${_config_defs}/id_renderer_config.py"
+        "${_config_defs}/ray_trace_config.py"
         "${_config_defs}/network_config.py"
         "${_config_defs}/physics_config.py"
         "${_config_defs}/renderer_config.py"
@@ -772,6 +777,9 @@ set(_config_sources
     ${_config_out}/id_renderer_config.hpp
     ${_config_out}/id_renderer_config_serialization.hpp
     ${_config_out}/id_renderer_config.cpp
+    ${_config_out}/ray_trace_config.hpp
+    ${_config_out}/ray_trace_config_serialization.hpp
+    ${_config_out}/ray_trace_config.cpp
     ${_config_out}/network_config.hpp
     ${_config_out}/network_config_serialization.hpp
     ${_config_out}/network_config.cpp

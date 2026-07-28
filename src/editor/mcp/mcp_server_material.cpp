@@ -440,6 +440,18 @@ auto Mcp_server::action_edit_material(const json& args) -> std::string
         case Field_status::Invalid:    return reject(field_err);
         case Field_status::NotPresent: break;
     }
+    switch (try_read_float(args, "ior", f, field_err)) {
+        // Physically meaningful IORs sit in [1, 3] (vacuum .. diamond-ish);
+        // clamp to that range, matching the Properties window slider.
+        case Field_status::Ok:         after.ior = std::clamp(f, 1.0f, 3.0f); applied["ior"] = after.ior; break;
+        case Field_status::Invalid:    return reject(field_err);
+        case Field_status::NotPresent: break;
+    }
+    switch (try_read_float(args, "transmission", f, field_err)) {
+        case Field_status::Ok:         after.transmission = clamp01(f); applied["transmission"] = after.transmission; break;
+        case Field_status::Invalid:    return reject(field_err);
+        case Field_status::NotPresent: break;
+    }
     switch (try_read_float(args, "normal_texture_scale", f, field_err)) {
         case Field_status::Ok:         after.normal_texture_scale = f; applied["normal_texture_scale"] = f; break;
         case Field_status::Invalid:    return reject(field_err);

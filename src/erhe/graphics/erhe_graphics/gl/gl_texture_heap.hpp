@@ -23,6 +23,7 @@ public:
     auto allocate         (const Texture* texture, const Sampler* sample) -> uint64_t;
     auto get_shader_handle(const Texture* texture, const Sampler* sample) -> uint64_t; // bindless ? handle : slot
     auto bind             (Render_command_encoder& encoder) -> std::size_t;
+    auto bind             (Compute_command_encoder& encoder) -> std::size_t;
     void unbind           (Command_buffer& command_buffer);
 
 private:
@@ -30,6 +31,11 @@ private:
     // and by the public reset_heap(cb) wrapper that bookends it with a
     // Scoped_debug_group.
     void reset_heap_state();
+
+    // Shared body of both bind() overloads; GL binding is global state, so
+    // render and compute binds are identical (the cb only scopes the debug
+    // group).
+    auto bind_common(Command_buffer& command_buffer) -> std::size_t;
 
 protected:
     Device&                     m_device;

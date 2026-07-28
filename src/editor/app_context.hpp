@@ -94,6 +94,7 @@ class Physics_tool;
 class Post_processing;
 class Prefab_library;
 class Programs;
+class Ray_trace_renderer;
 class Rendergraph_window;
 class Rotate_tool;
 class Scale_tool;
@@ -220,6 +221,7 @@ public:
     Post_processing*                   post_processing      {nullptr};
     Prefab_library*                    prefab_library       {nullptr};
     Programs*                          programs             {nullptr};
+    Ray_trace_renderer*                ray_trace_renderer   {nullptr};
     Rendergraph_window*                rendergraph_window   {nullptr};
     Rotate_tool*                       rotate_tool          {nullptr};
     Bone_visualization*                bone_visualization   {nullptr};

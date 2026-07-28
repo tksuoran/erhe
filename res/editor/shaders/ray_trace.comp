@@ -1,0 +1,460 @@
+#include "erhe_camera_view.glsl"
+#include "erhe_bxdf.glsl"
+#include "erhe_light.glsl"
+#include "erhe_texture.glsl"
+
+// Material-aware GPU ray tracing (issue #233, milestone 2). One primary ray
+// per output pixel against the scene top level acceleration structure. Hits
+// fetch interpolated vertex attributes (smooth normal, texcoord, color) from
+// the mesh memory pools via buffer device addresses stored in per-instance
+// records, look up the hit material in the shared material buffer, and shade
+// with the isotropic BRDF against the scene lights (runtime counts from the
+// light buffer) with ray traced shadows. Transmissive materials
+// (material.transmission > 0) run a bounded refraction loop with a traced
+// single-bounce reflection at each interface; total internal reflection
+// continues the main path along the reflected direction.
+//
+// The camera / material / light / instance-record blocks and the output
+// storage image (i_out) are declared by the bind group layout + interface
+// blocks; the acceleration structure binding number and the stream-1
+// attribute offsets (in uints, derived from the Mesh_memory vertex format)
+// come in through ERHE_* defines so they stay in sync with the C++ side.
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(binding = ERHE_TLAS_BINDING) uniform accelerationStructureEXT s_tlas;
+
+// Raw uint view of a mesh memory pool, reached via the per-instance buffer
+// device address (GL_EXT_buffer_reference + _uvec2). Addresses are stored
+// pre-offset: index_address points at the instance's first triangle index,
+// vertex_address at the start of its stream-1 vertex range.
+layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer Uint_data {
+    uint data[];
+};
+
+const float c_t_min      = 0.001;
+const float c_t_far      = 1.0e30;
+// World-space origin offset along the geometric normal for continuation /
+// shadow rays, to escape self-intersection with the surface just hit.
+const float c_ray_offset = 1.0e-3;
+
+// Instance mask bits (must match Ray_trace_renderer):
+// bit 0 = every instance, bit 1 = non-transmissive instances only.
+// Shadow rays use ERHE_RT_MASK_OPAQUE so glass does not cast shadows.
+const uint c_mask_all    = 0x01u;
+const uint c_mask_opaque = 0x02u;
+
+vec3 background_color(vec3 direction)
+{
+    return vec3(0.05, 0.05, 0.08);
+}
+
+// Everything shading needs about a committed triangle hit.
+struct Hit_surface {
+    vec3  position;         // world space
+    vec3  shading_normal;   // world space, flipped to face the incoming ray
+    vec3  geometric_normal; // world space, flipped to face the incoming ray
+    bool  backface;         // ray hit the triangle from behind (inside a volume)
+    vec4  tangent;          // world space xyz + handedness w (anisotropic BxDFs)
+    vec2  texcoord;
+    vec4  vertex_color;
+    uint  material_index;
+    float hit_t;
+};
+
+vec3 fetch_vec3(Uint_data vertices, uint base)
+{
+    return vec3(
+        uintBitsToFloat(vertices.data[base + 0u]),
+        uintBitsToFloat(vertices.data[base + 1u]),
+        uintBitsToFloat(vertices.data[base + 2u])
+    );
+}
+
+vec2 fetch_vec2(Uint_data vertices, uint base)
+{
+    return vec2(
+        uintBitsToFloat(vertices.data[base + 0u]),
+        uintBitsToFloat(vertices.data[base + 1u])
+    );
+}
+
+vec4 fetch_vec4(Uint_data vertices, uint base)
+{
+    return vec4(
+        uintBitsToFloat(vertices.data[base + 0u]),
+        uintBitsToFloat(vertices.data[base + 1u]),
+        uintBitsToFloat(vertices.data[base + 2u]),
+        uintBitsToFloat(vertices.data[base + 3u])
+    );
+}
+
+// Closest-hit trace + attribute/material fetch. Returns false on miss.
+bool trace_closest(vec3 origin, vec3 direction, float t_max, out Hit_surface surface)
+{
+    rayQueryEXT ray_query;
+    rayQueryInitializeEXT(ray_query, s_tlas, gl_RayFlagsOpaqueEXT, c_mask_all, origin, c_t_min, direction, t_max);
+    while (rayQueryProceedEXT(ray_query)) {
+        // All BLAS geometry is opaque; candidates are committed automatically.
+        // Transparency is handled by continuation rays, not any-hit filtering.
+    }
+    if (rayQueryGetIntersectionTypeEXT(ray_query, true) != gl_RayQueryCommittedIntersectionTriangleEXT) {
+        return false;
+    }
+
+    // Geometric normal from the committed triangle's fetched object-space
+    // positions (GL_EXT_ray_tracing_position_fetch), as in milestone 1.
+    vec3 positions[3];
+    rayQueryGetIntersectionTriangleVertexPositionsEXT(ray_query, true, positions);
+    mat4x3 world_from_object = rayQueryGetIntersectionObjectToWorldEXT(ray_query, true);
+    vec3 p0 = world_from_object * vec4(positions[0], 1.0);
+    vec3 p1 = world_from_object * vec4(positions[1], 1.0);
+    vec3 p2 = world_from_object * vec4(positions[2], 1.0);
+    vec3 geometric_normal = normalize(cross(p1 - p0, p2 - p0));
+
+    uint  instance_index = uint(rayQueryGetIntersectionInstanceCustomIndexEXT(ray_query, true));
+    uint  primitive      = uint(rayQueryGetIntersectionPrimitiveIndexEXT(ray_query, true));
+    vec2  barycentrics   = rayQueryGetIntersectionBarycentricsEXT(ray_query, true);
+    float hit_t          = rayQueryGetIntersectionTEXT(ray_query, true);
+
+    Instance_record record = instance.instances[instance_index];
+
+    // Index values are relative to the instance's vertex range start (draws
+    // use base_vertex the same way), so they index stream 1 directly.
+    Uint_data indices  = Uint_data(record.index_address);
+    Uint_data vertices = Uint_data(record.vertex_address);
+    uint i0 = indices.data[3u * primitive + 0u];
+    uint i1 = indices.data[3u * primitive + 1u];
+    uint i2 = indices.data[3u * primitive + 2u];
+    uint v0 = i0 * record.vertex_stride_uints;
+    uint v1 = i1 * record.vertex_stride_uints;
+    uint v2 = i2 * record.vertex_stride_uints;
+
+    float w1 = barycentrics.x;
+    float w2 = barycentrics.y;
+    float w0 = 1.0 - w1 - w2;
+
+    vec3 object_normal =
+        w0 * fetch_vec3(vertices, v0 + uint(ERHE_RT_NORMAL_OFFSET)) +
+        w1 * fetch_vec3(vertices, v1 + uint(ERHE_RT_NORMAL_OFFSET)) +
+        w2 * fetch_vec3(vertices, v2 + uint(ERHE_RT_NORMAL_OFFSET));
+    vec4 object_tangent =
+        w0 * fetch_vec4(vertices, v0 + uint(ERHE_RT_TANGENT_OFFSET)) +
+        w1 * fetch_vec4(vertices, v1 + uint(ERHE_RT_TANGENT_OFFSET)) +
+        w2 * fetch_vec4(vertices, v2 + uint(ERHE_RT_TANGENT_OFFSET));
+    vec2 texcoord =
+        w0 * fetch_vec2(vertices, v0 + uint(ERHE_RT_TEXCOORD0_OFFSET)) +
+        w1 * fetch_vec2(vertices, v1 + uint(ERHE_RT_TEXCOORD0_OFFSET)) +
+        w2 * fetch_vec2(vertices, v2 + uint(ERHE_RT_TEXCOORD0_OFFSET));
+    vec4 vertex_color =
+        w0 * fetch_vec4(vertices, v0 + uint(ERHE_RT_COLOR0_OFFSET)) +
+        w1 * fetch_vec4(vertices, v1 + uint(ERHE_RT_COLOR0_OFFSET)) +
+        w2 * fetch_vec4(vertices, v2 + uint(ERHE_RT_COLOR0_OFFSET));
+
+    // Normals transform with the inverse transpose: row-vector multiply by
+    // world_to_object is the transpose multiply. Tangents transform like
+    // directions (object-to-world linear part); handedness passes through.
+    mat4x3 world_to_object = rayQueryGetIntersectionWorldToObjectEXT(ray_query, true);
+    vec3 shading_normal = normalize(vec3(object_normal * world_to_object));
+    vec3 world_tangent  = normalize(world_from_object * vec4(object_tangent.xyz, 0.0));
+
+    // Two-sided: instances are built with facing cull disabled, so the ray
+    // can hit either side. Flip both normals to face the incoming ray; the
+    // backface flag preserves which side was hit (used for refraction eta).
+    bool backface = dot(geometric_normal, direction) > 0.0;
+    if (backface) {
+        geometric_normal = -geometric_normal;
+    }
+    if (dot(shading_normal, direction) > 0.0) {
+        shading_normal = -shading_normal;
+    }
+
+    surface.position         = origin + hit_t * direction;
+    surface.shading_normal   = shading_normal;
+    surface.geometric_normal = geometric_normal;
+    surface.backface         = backface;
+    surface.tangent          = vec4(world_tangent, object_tangent.w);
+    surface.texcoord         = texcoord;
+    surface.vertex_color     = vertex_color;
+    surface.material_index   = record.material_index;
+    surface.hit_t            = hit_t;
+    return true;
+}
+
+// True when nothing opaque lies between the (offset) surface point and the
+// light. Mask excludes transmissive instances so glass does not shadow.
+bool light_visible(vec3 position, vec3 offset_normal, vec3 L, float t_max)
+{
+    rayQueryEXT ray_query;
+    rayQueryInitializeEXT(
+        ray_query,
+        s_tlas,
+        gl_RayFlagsOpaqueEXT | gl_RayFlagsTerminateOnFirstHitEXT,
+        c_mask_opaque,
+        position + offset_normal * c_ray_offset,
+        c_t_min,
+        L,
+        t_max
+    );
+    while (rayQueryProceedEXT(ray_query)) {
+    }
+    return rayQueryGetIntersectionTypeEXT(ray_query, true) == gl_RayQueryCommittedIntersectionNoneEXT;
+}
+
+vec3 surface_base_color(Hit_surface surface, Material m)
+{
+    vec3 base_color = m.base_color.rgb * surface.vertex_color.rgb;
+    base_color *= sample_texture_lod0(
+        m.base_color_texture,
+        surface.texcoord,
+        m.base_color_rotation_scale,
+        m.base_color_offset
+    ).rgb;
+    return base_color;
+}
+
+// Per-light BxDF, dispatched at runtime from material.bxdf_model (the
+// raster path bakes the same selection compile-time via its variant axis;
+// values match erhe::primitive::Bxdf_model / erhe_standard_variant.glsl).
+vec3 evaluate_bxdf(Hit_surface surface, Material m, vec3 base_color, float roughness_x, float roughness_y, float metallic, vec3 L, vec3 V, vec3 N)
+{
+    if ((m.bxdf_model == 2u) || (m.bxdf_model == 4u)) { // anisotropic_brdf / anisotropic_engine_ready
+        vec3 T = normalize(surface.tangent.xyz);
+        vec3 B = normalize(cross(N, T)) * surface.tangent.w;
+        return anisotropic_brdf(base_color, roughness_x, roughness_y, metallic, m.reflectance, L, V, T, B, N);
+    }
+    if (m.bxdf_model == 3u) { // anisotropic_slope
+        vec3 T     = normalize(surface.tangent.xyz);
+        vec3 B     = normalize(cross(N, T)) * surface.tangent.w;
+        mat3 TBN_t = transpose(mat3(T, B, N));
+        return slope_brdf(base_color, roughness_x, roughness_y, metallic, m.reflectance, TBN_t, L, V, T, B, N);
+    }
+    return isotropic_brdf(base_color, roughness_x, metallic, m.reflectance, L, V, N);
+}
+
+// Direct lighting at an opaque surface: ambient + emissive + per-light BxDF
+// with ray traced shadows. Runtime light counts; the light buffer packs
+// lights type-major (directional, spot, point).
+vec3 shade_surface(Hit_surface surface, vec3 V)
+{
+    Material m          = material.materials[surface.material_index];
+    vec3     base_color = surface_base_color(surface, m);
+
+    if (m.bxdf_model == 0u) { // unlit
+        return base_color;
+    }
+
+    vec3  N           = surface.shading_normal;
+    float metallic    = m.metallic;
+    float roughness_x = max(m.roughness.x, 1e-4);
+    float roughness_y = max(m.roughness.y, 1e-4);
+
+    vec3 metallic_roughness = sample_texture_lod0(
+        m.metallic_roughness_texture,
+        surface.texcoord,
+        m.metallic_roughness_rotation_scale,
+        m.metallic_roughness_offset
+    ).rgb;
+    metallic    = metallic * metallic_roughness.b;
+    roughness_x = max(roughness_x * metallic_roughness.g, 1e-4);
+    roughness_y = max(roughness_y * metallic_roughness.g, 1e-4);
+
+    vec3 color = light_block.ambient_light.rgb * base_color;
+    color += m.emissive.rgb;
+
+    uint light_offset = 0u;
+
+    for (uint i = 0u; i < light_block.directional_light_count; ++i) {
+        Light light   = light_block.lights[light_offset + i];
+        vec3  L       = normalize(light.direction_and_outer_spot_cos.xyz);
+        float N_dot_L = dot(N, L);
+        if ((N_dot_L > 0.0) && light_visible(surface.position, surface.geometric_normal, L, c_t_far)) {
+            color += light.radiance_and_range.rgb * evaluate_bxdf(surface, m, base_color, roughness_x, roughness_y, metallic, L, V, N);
+        }
+    }
+    light_offset += light_block.directional_light_count;
+
+    for (uint i = 0u; i < light_block.spot_light_count; ++i) {
+        Light light          = light_block.lights[light_offset + i];
+        vec3  point_to_light = light.position_and_inner_spot_cos.xyz - surface.position;
+        float light_distance = length(point_to_light);
+        vec3  L              = point_to_light / light_distance;
+        float N_dot_L        = dot(N, L);
+        if (N_dot_L > 0.0) {
+            float range_attenuation = get_range_attenuation(light.radiance_and_range.w, light_distance);
+            float spot_attenuation  = get_spot_attenuation(-point_to_light, light.direction_and_outer_spot_cos.xyz, light.direction_and_outer_spot_cos.w, light.position_and_inner_spot_cos.w);
+            float attenuation       = range_attenuation * spot_attenuation;
+            if ((attenuation > 0.0) && light_visible(surface.position, surface.geometric_normal, L, light_distance)) {
+                color += attenuation * light.radiance_and_range.rgb * evaluate_bxdf(surface, m, base_color, roughness_x, roughness_y, metallic, L, V, N);
+            }
+        }
+    }
+    light_offset += light_block.spot_light_count;
+
+    for (uint i = 0u; i < light_block.point_light_count; ++i) {
+        Light light          = light_block.lights[light_offset + i];
+        vec3  point_to_light = light.position_and_inner_spot_cos.xyz - surface.position;
+        float light_distance = length(point_to_light);
+        vec3  L              = point_to_light / light_distance;
+        float N_dot_L        = dot(N, L);
+        if (N_dot_L > 0.0) {
+            float attenuation = get_range_attenuation(light.radiance_and_range.w, light_distance);
+            if ((attenuation > 0.0) && light_visible(surface.position, surface.geometric_normal, L, light_distance)) {
+                color += attenuation * light.radiance_and_range.rgb * evaluate_bxdf(surface, m, base_color, roughness_x, roughness_y, metallic, L, V, N);
+            }
+        }
+    }
+
+    return color;
+}
+
+// Whitted branching state. A full binary tree of depth D is 2^D rays, so
+// three separate caps bound the cost: the per-path depth
+// (ray_trace_control.max_bounces transmissive interactions along one
+// branch's history; the C++ side clamps it to the compile-time
+// ERHE_RT_MAX_BOUNCES stack bound), a per-pixel traced-ray budget
+// (ray_trace_control.max_rays; LIFO order with the refraction pushed last,
+// so the visually dominant transmission chain is spent first when the
+// budget runs out), and a throughput cutoff that drops negligible
+// branches. DFS over a depth-capped binary tree keeps at most depth+1
+// entries live, so c_max_stack = ERHE_RT_MAX_BOUNCES + 2 can never
+// overflow (the push guards protect regardless).
+const int   c_max_stack         = ERHE_RT_MAX_BOUNCES + 2;
+const float c_throughput_cutoff = 0.005;
+
+struct Pending_ray {
+    vec3  origin;
+    vec3  direction;
+    float t_max;
+    vec3  throughput;
+    uint  depth;      // transmissive interface interactions so far
+};
+
+// Display transform: the raster viewport stores exposed LINEAR color in a
+// float16 target and post-processing applies tonemap_log (compose.frag) -
+// still linear - before the shared present path encodes for the swapchain.
+// Match it: exposed linear color -> the same tonemap_log, stored linearly
+// in the rgba8 output (no manual sRGB encode; the display path handles it
+// like every other viewport texture). Bloom is not replicated.
+vec3 tonemap_log(vec3 x)
+{
+    float D_max       =  1.0;
+    float D_min       =  0.0;
+    float tau         =  1.0;
+    float small_value =  0.5 / 65536.0;
+    float Y_in        =  0.2126 * x.r + 0.7152 * x.g + 0.0722 * x.b; // bt.709
+    float Y_max       =  1.5;
+    float Y_min       =  0.0;
+    float nominator   = log(Y_in  + tau) - log(Y_min + tau);
+    float denominator = log(Y_max + tau) - log(Y_min + tau);
+    float Y_out       = (D_max - D_min) * (nominator / denominator) + D_min;
+    float scale       = Y_out / max(Y_in, small_value);
+    return x * scale;
+}
+
+void main()
+{
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size  = imageSize(i_out);
+    if ((pixel.x >= size.x) || (pixel.y >= size.y)) {
+        return;
+    }
+
+    // NDC at the pixel center. world_from_clip unprojects with NDC y up
+    // (verified against the rendered scene: without the flip the output is
+    // upside down), so pixel row 0 (top) maps to NDC y +1.
+    vec2 uv  = (vec2(pixel) + vec2(0.5)) / vec2(size);
+    vec2 ndc = vec2((uv.x * 2.0) - 1.0, 1.0 - (uv.y * 2.0));
+
+    // Reconstruct the world-space ray through this pixel: unproject the
+    // far-plane point (depth convention aware) and start from the camera
+    // position (same mechanism as sky_atmosphere.vert).
+    highp mat4  world_from_clip = camera.cameras[c_view_index].world_from_clip;
+    highp float far_clip_z      = (camera.cameras[c_view_index].clip_depth_direction < 0.0) ? 0.0 : 1.0;
+    highp vec4  world_far       = world_from_clip * vec4(ndc, far_clip_z, 1.0);
+    highp vec3  world_far_pos   = world_far.xyz / world_far.w;
+    highp vec3  camera_origin   = vec3(
+        camera.cameras[c_view_index].world_from_node[3][0],
+        camera.cameras[c_view_index].world_from_node[3][1],
+        camera.cameras[c_view_index].world_from_node[3][2]
+    );
+    highp vec3  to_far          = world_far_pos - camera_origin;
+    highp float primary_t_max   = length(to_far);
+
+    vec3 color = vec3(0.0);
+
+    // Iterative Whitted-style tracing with an explicit ray stack (ray
+    // queries cannot recurse). Every transmissive interface BRANCHES: the
+    // reflection is pushed with the Fresnel weight and the refraction with
+    // (1 - Fresnel) times the glass tint, and each branch may branch again
+    // up to ERHE_RT_MAX_BOUNCES interface interactions along its history.
+    // Total internal reflection pushes the reflection only.
+    Pending_ray stack[c_max_stack];
+    int         stack_size = 0;
+
+    stack[stack_size++] = Pending_ray(camera_origin, to_far / primary_t_max, primary_t_max, vec3(1.0), 0u);
+
+    for (int rays_traced = 0; (stack_size > 0) && (rays_traced < int(ray_trace_control.max_rays)); ++rays_traced) {
+        Pending_ray ray = stack[--stack_size];
+
+        Hit_surface surface;
+        if (!trace_closest(ray.origin, ray.direction, ray.t_max, surface)) {
+            color += ray.throughput * background_color(ray.direction);
+            continue;
+        }
+
+        Material m = material.materials[surface.material_index];
+        if ((m.transmission <= 0.0) || (ray.depth >= ray_trace_control.max_bounces)) {
+            // Opaque hit, or the branch's depth budget is spent: shade as
+            // opaque so every branch terminates with a contribution.
+            color += ray.throughput * shade_surface(surface, -ray.direction);
+            continue;
+        }
+
+        // Transmissive interface. Normals face the incoming ray; backface
+        // means the ray is exiting the volume.
+        bool  entering  = !surface.backface;
+        float eta       = entering ? (1.0 / m.ior) : m.ior;
+        vec3  N         = surface.shading_normal;
+        float cos_i     = clamp(dot(-ray.direction, N), 0.0, 1.0);
+        vec3  refracted = refract(ray.direction, N, eta);
+        vec3  reflected = reflect(ray.direction, N);
+        bool  tir       = dot(refracted, refracted) < 1e-6;
+
+        float f0_sqrt = (m.ior - 1.0) / (m.ior + 1.0);
+        float f0      = f0_sqrt * f0_sqrt;
+        float fresnel = tir ? 1.0 : (f0 + (1.0 - f0) * pow(1.0 - cos_i, 5.0));
+
+        // Reflection branch (the whole path on total internal reflection).
+        // Pushed first so the refraction ends on top of the LIFO stack.
+        vec3 reflect_throughput = ray.throughput * fresnel;
+        if ((max(reflect_throughput.r, max(reflect_throughput.g, reflect_throughput.b)) > c_throughput_cutoff) && (stack_size < c_max_stack)) {
+            stack[stack_size++] = Pending_ray(
+                surface.position + surface.geometric_normal * c_ray_offset,
+                reflected,
+                c_t_far,
+                reflect_throughput,
+                ray.depth + 1u
+            );
+        }
+
+        if (!tir) {
+            // Refraction branch, tinted by the glass color.
+            vec3 glass_tint          = mix(vec3(1.0), surface_base_color(surface, m), m.transmission);
+            vec3 refract_throughput = ray.throughput * (1.0 - fresnel) * glass_tint;
+            if ((max(refract_throughput.r, max(refract_throughput.g, refract_throughput.b)) > c_throughput_cutoff) && (stack_size < c_max_stack)) {
+                stack[stack_size++] = Pending_ray(
+                    surface.position - surface.geometric_normal * c_ray_offset,
+                    refracted,
+                    c_t_far,
+                    refract_throughput,
+                    ray.depth + 1u
+                );
+            }
+        }
+    }
+
+    float exposure = camera.cameras[c_view_index].exposure;
+    vec3  display  = tonemap_log(max(vec3(0.0), color * exposure));
+    imageStore(i_out, pixel, vec4(display, 1.0));
+}

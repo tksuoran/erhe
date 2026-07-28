@@ -41,6 +41,11 @@ public:
     [[nodiscard]] auto get_map                () const -> std::span<std::byte>;
     [[nodiscard]] auto get_capacity_byte_count() const noexcept -> std::size_t;
 
+    // GPU device address for GL_EXT_buffer_reference access from shaders.
+    // Non-zero only on the Vulkan backend for buffers created with
+    // Buffer_usage::shader_device_address; other backends return 0.
+    [[nodiscard]] auto get_device_address     () const noexcept -> uint64_t;
+
     void unmap                () noexcept;
     void invalidate           (std::size_t byte_offset, std::size_t byte_count) noexcept;
     void flush_bytes          (std::size_t byte_offset, std::size_t byte_count) noexcept;

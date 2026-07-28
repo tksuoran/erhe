@@ -254,6 +254,13 @@ auto Mesh_memory::allocate_vertex_buffer_range(
         "Creating new vertex buffer pool for stream {}",
         vertex_stream.to_string()
     );
+    // GPU ray tracing reads vertex/index pools in place as acceleration
+    // structure build input, which additionally requires the device-address
+    // usage. Only valid when the bufferDeviceAddress feature was enabled
+    // (VUID-VkBufferCreateInfo-usage-04ddd), hence gated on use_ray_query.
+    const erhe::graphics::Buffer_usage ray_trace_usage = m_graphics_device.get_info().use_ray_query
+        ? (erhe::graphics::Buffer_usage::acceleration_structure_build_input | erhe::graphics::Buffer_usage::shader_device_address)
+        : erhe::graphics::Buffer_usage::none;
     m_vertex_pools.emplace_back(
         m_graphics_device,
         m_vertex_pools.size(),
@@ -264,7 +271,7 @@ auto Mesh_memory::allocate_vertex_buffer_range(
             // it Vulkan validation fires VUID-VkWriteDescriptorSet-descriptorType-00331
             // ("buffer was created with VK_BUFFER_USAGE_VERTEX_BUFFER_BIT but
             // descriptorType is VK_DESCRIPTOR_TYPE_STORAGE_BUFFER").
-            .usage                              = erhe::graphics::Buffer_usage::vertex | erhe::graphics::Buffer_usage::storage,
+            .usage                              = erhe::graphics::Buffer_usage::vertex | erhe::graphics::Buffer_usage::storage | ray_trace_usage,
             .required_memory_property_bit_mask  = erhe::graphics::Memory_property_flag_bit_mask::device_local,
             .preferred_memory_property_bit_mask = erhe::graphics::Memory_property_flag_bit_mask::none,
             .block_size_bytes                   = static_cast<std::size_t>(m_mesh_memory_config.vertex_pool_block_size_mb) * mega,
@@ -319,12 +326,17 @@ auto Mesh_memory::allocate_index_buffer_range(
             return pool.allocate(index_count);
         }
     }
+    // See the vertex pool above: build-input + device-address usage for GPU
+    // ray tracing, gated on the feature being enabled.
+    const erhe::graphics::Buffer_usage ray_trace_usage = m_graphics_device.get_info().use_ray_query
+        ? (erhe::graphics::Buffer_usage::acceleration_structure_build_input | erhe::graphics::Buffer_usage::shader_device_address)
+        : erhe::graphics::Buffer_usage::none;
     m_index_pools.emplace_back(
         m_graphics_device,
         m_index_pools.size(),
         index_format,
         Buffer_pool_block_create_info{
-            .usage                              = erhe::graphics::Buffer_usage::index,
+            .usage                              = erhe::graphics::Buffer_usage::index | ray_trace_usage,
             .required_memory_property_bit_mask  = erhe::graphics::Memory_property_flag_bit_mask::device_local,
             .preferred_memory_property_bit_mask = erhe::graphics::Memory_property_flag_bit_mask::none,
             .block_size_bytes                   = static_cast<std::size_t>(m_mesh_memory_config.index_pool_block_size_mb) * mega,

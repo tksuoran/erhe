@@ -60,6 +60,13 @@ Material_interface::Material_interface(erhe::graphics::Device& graphics_device, 
         .emissive_offset                   = material_struct.add_vec2("emissive_offset"                  )->get_offset_in_parent(),
 
         .occlusion_texture_strength = material_struct.add_float("occlusion_texture_strength")->get_offset_in_parent(),
+
+        // occlusion_texture_strength leaves the struct at a vec2-aligned
+        // tail; ior + transmission + bxdf_model fill it to the next
+        // 16-byte boundary.
+        .ior                        = material_struct.add_float("ior"                       )->get_offset_in_parent(),
+        .transmission               = material_struct.add_float("transmission"              )->get_offset_in_parent(),
+        .bxdf_model                 = material_struct.add_uint ("bxdf_model"                )->get_offset_in_parent(),
     }
     , max_material_count{static_cast<std::size_t>(max_material_count)}
 {
@@ -221,6 +228,10 @@ auto Material_buffer::update(
 
         write(gpu_data, write_offset + offsets.emissive_offset,                   as_span(emissive          .offset));         // uvec2
         write(gpu_data, write_offset + offsets.occlusion_texture_strength,        as_span(material_data.occlusion_texture_strength));
+        write(gpu_data, write_offset + offsets.ior,                               as_span(material_data.ior));
+        write(gpu_data, write_offset + offsets.transmission,                      as_span(material_data.transmission));
+        const uint32_t bxdf_model = static_cast<uint32_t>(material_data.bxdf_model);
+        write(gpu_data, write_offset + offsets.bxdf_model,                        as_span(bxdf_model));
 
         write_offset += entry_size;
         ++material_index;

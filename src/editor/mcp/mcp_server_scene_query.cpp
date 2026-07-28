@@ -851,6 +851,8 @@ auto Mcp_server::query_material_details(const json& args) -> std::string
                 {"metallic",                   d.metallic},
                 {"reflectance",                d.reflectance},
                 {"emissive",                   {d.emissive.x, d.emissive.y, d.emissive.z}},
+                {"ior",                        d.ior},
+                {"transmission",               d.transmission},
                 {"normal_texture_scale",       d.normal_texture_scale},
                 {"occlusion_texture_strength", d.occlusion_texture_strength},
                 {"bxdf_model",

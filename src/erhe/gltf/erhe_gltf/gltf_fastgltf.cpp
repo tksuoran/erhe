@@ -1619,6 +1619,15 @@ private:
             create_data.metallic    = pbr_data.metallicFactor;
             create_data.roughness.x = std::max(pbr_data.roughnessFactor, 0.001f);
             create_data.roughness.y = std::max(pbr_data.roughnessFactor, 0.001f);
+
+            // KHR_materials_ior: fastgltf always provides the scalar (spec
+            // default 1.5 when the extension is absent).
+            create_data.ior = material.ior;
+            // KHR_materials_transmission: factor only for now
+            // (transmissionTexture is not imported yet).
+            if (material.transmission) {
+                create_data.transmission = material.transmission->transmissionFactor;
+            }
             log_gltf->trace(
                 "Material PBR metallic roughness base color factor = {}, {}, {}, {}",
                 pbr_data.baseColorFactor[0],
@@ -3949,6 +3958,17 @@ private:
             // erhe-specific and round-trip via the ERHE_material extension
             // (see record_material_extensions below).
             gltf_material.unlit = (data.bxdf_model == erhe::primitive::Bxdf_model::unlit);
+
+            // KHR_materials_ior / KHR_materials_transmission: the exporter
+            // emits the extension objects (and extensionsUsed entries) when
+            // ior differs from the 1.5 spec default / when the transmission
+            // pointer is set. Editor scene save/load rides this export, so
+            // this IS the persistence path for both fields.
+            gltf_material.ior = data.ior;
+            if (data.transmission > 0.0f) {
+                gltf_material.transmission = std::make_unique<fastgltf::MaterialTransmission>();
+                gltf_material.transmission->transmissionFactor = data.transmission;
+            }
 
             // Material_blending_mode -> alphaMode (+ alphaCutoff for
             // MASK). erhe-specific modes (multiply / add / subtract /

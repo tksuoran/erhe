@@ -29,6 +29,9 @@ auto to_string(Buffer_usage usage) -> std::string
     process_flag(Buffer_usage::storage_texel, "storage_texel");
     process_flag(Buffer_usage::transfer_src,  "transfer_src");
     process_flag(Buffer_usage::transfer_dst,  "transfer_dst");
+    process_flag(Buffer_usage::acceleration_structure_storage,     "acceleration_structure_storage");
+    process_flag(Buffer_usage::acceleration_structure_build_input, "acceleration_structure_build_input");
+    process_flag(Buffer_usage::shader_device_address,              "shader_device_address");
     return ss.str();
 }
 auto c_str(Memory_usage memory_usage) -> const char*

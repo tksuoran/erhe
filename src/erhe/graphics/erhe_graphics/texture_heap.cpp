@@ -54,5 +54,10 @@ auto Texture_heap::bind(Render_command_encoder& encoder) -> std::size_t
     return m_impl->bind(encoder);
 }
 
+auto Texture_heap::bind(Compute_command_encoder& encoder) -> std::size_t
+{
+    return m_impl->bind(encoder);
+}
+
 
 } // namespace erhe::graphics

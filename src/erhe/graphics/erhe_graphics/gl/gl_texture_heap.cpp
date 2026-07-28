@@ -4,6 +4,7 @@
 #include "erhe_graphics/gl/gl_sampler.hpp"
 #include "erhe_graphics/gl/gl_texture.hpp"
 #include "erhe_graphics/bind_group_layout.hpp"
+#include "erhe_graphics/compute_command_encoder.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/scoped_debug_group.hpp"
@@ -289,7 +290,17 @@ auto get_binding_p_name(const gl::Texture_target gl_target) -> gl::Get_p_name
 
 auto Texture_heap_impl::bind(Render_command_encoder& encoder) -> std::size_t
 {
-    Scoped_debug_group debug_group{encoder.get_command_buffer(), "Texture_heap_impl::bind()"};
+    return bind_common(encoder.get_command_buffer());
+}
+
+auto Texture_heap_impl::bind(Compute_command_encoder& encoder) -> std::size_t
+{
+    return bind_common(encoder.get_command_buffer());
+}
+
+auto Texture_heap_impl::bind_common(Command_buffer& command_buffer) -> std::size_t
+{
+    Scoped_debug_group debug_group{command_buffer, "Texture_heap_impl::bind()"};
 
 #if ERHE_TEXTURE_HEAP_LOG
     log_texture_heap->trace(

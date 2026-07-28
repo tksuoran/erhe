@@ -42,6 +42,29 @@ vec4 sample_texture(uvec2 texture_handle, vec2 texcoord, vec4 rotation_scale, ve
     return v;
 }
 
+// Explicit base-level sample for stages without implicit derivatives
+// (compute; used by the ray trace shader at hit points). Applies the same
+// rotation/scale/offset transform as the sample_texture overload above.
+vec4 sample_texture_lod0(uvec2 texture_handle, vec2 texcoord, vec4 rotation_scale, vec2 offset) {
+    if (texture_handle.x == max_u32) {
+        return vec4(1.0, 1.0, 1.0, 1.0);
+    }
+    vec2 transformed_texcoord = mat2(rotation_scale.xy, rotation_scale.zw) * texcoord + offset;
+#if defined(ERHE_TEXTURE_HEAP_OPENGL_BINDLESS)
+    sampler2D s_texture = sampler2D(texture_handle);
+    vec4 v = textureLod(s_texture, transformed_texcoord, 0.0);
+#elif defined(ERHE_TEXTURE_HEAP_VULKAN_DESCRIPTOR_INDEXING)
+    vec4 v = textureLod(erhe_texture_heap[texture_handle.x], transformed_texcoord, 0.0);
+#elif defined(ERHE_TEXTURE_HEAP_METAL_ARGUMENT_BUFFER)
+    vec4 v = textureLod(s_texture[texture_handle.x], transformed_texcoord, 0.0);
+#elif defined(ERHE_TEXTURE_HEAP_OPENGL_SAMPLER_ARRAY)
+    vec4 v = textureLod(s_texture[texture_handle.x], transformed_texcoord, 0.0);
+#else
+    vec4 v = vec4(1.0, 0.0, 1.0, 1.0);
+#endif
+    return v;
+}
+
 vec4 sample_texture_lod_bias(uvec2 texture_handle, vec2 texcoord, float lod_bias) {
     if (texture_handle.x == max_u32) {
         return vec4(1.0, 1.0, 1.0, 1.0);

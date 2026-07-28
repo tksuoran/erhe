@@ -227,7 +227,11 @@ auto Glslang_shader_stages::compile_shader(Device& device, const Shader_stage& s
 
 #if defined(ERHE_GRAPHICS_API_METAL) || defined(ERHE_GRAPHICS_API_VULKAN)
     glslang_shader.setEnvInput(glslang::EShSource::EShSourceGlsl, language, glslang::EShClient::EShClientVulkan, 100);
-    glslang_shader.setEnvClient(glslang::EShClient::EShClientVulkan, glslang::EshTargetClientVersion::EShTargetVulkan_1_1);
+    // Vulkan 1.3 client: the instance/device are created with
+    // VK_API_VERSION_1_3, and GL_EXT_ray_query requires SPIR-V 1.4+ semantics
+    // which glslang only emits for a Vulkan 1.2+ client (the SPIR-V target
+    // below is already 1.6).
+    glslang_shader.setEnvClient(glslang::EShClient::EShClientVulkan, glslang::EshTargetClientVersion::EShTargetVulkan_1_3);
 #else
     glslang_shader.setEnvInput(glslang::EShSource::EShSourceGlsl, language, glslang::EShClient::EShClientOpenGL, 100);
     glslang_shader.setEnvClient(glslang::EShClient::EShClientOpenGL, glslang::EshTargetClientVersion::EShTargetOpenGL_450);

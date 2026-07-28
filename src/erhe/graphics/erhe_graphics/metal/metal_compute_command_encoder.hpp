@@ -27,6 +27,7 @@ public:
     void set_buffer(Buffer_target buffer_target, const Buffer* buffer);
     void set_storage_image         (uint32_t binding_point, const Texture& texture);
     void set_sampled_image         (uint32_t binding_point, const Texture& texture, const Sampler& sampler);
+    void set_acceleration_structure(uint32_t binding_point, const Acceleration_structure& acceleration_structure);
 
     void set_bind_group_layout     (const Bind_group_layout* bind_group_layout);
     void set_compute_pipeline_state(const Compute_pipeline_state& pipeline);

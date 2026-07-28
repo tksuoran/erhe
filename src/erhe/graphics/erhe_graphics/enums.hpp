@@ -311,7 +311,18 @@ enum class Buffer_usage : unsigned int {
     storage_texel = 0x0040u,
     transfer_src  = 0x0100u,
     transfer_dst  = 0x0200u,
-    transfer      = 0x0300u
+    transfer      = 0x0300u,
+
+    // GPU ray tracing (Vulkan VK_KHR_acceleration_structure; only meaningful
+    // when Device_info::use_ray_query is true, ignored by other backends).
+    // acceleration_structure_storage backs an Acceleration_structure;
+    // acceleration_structure_build_input marks vertex/index/instance buffers
+    // read by acceleration structure builds; shader_device_address is required
+    // on every buffer whose device address the build consumes (build inputs
+    // and scratch).
+    acceleration_structure_storage     = 0x0400u,
+    acceleration_structure_build_input = 0x0800u,
+    shader_device_address              = 0x1000u
 };
 
 enum class Memory_usage : unsigned int {

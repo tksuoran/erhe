@@ -76,6 +76,10 @@ public:
     bool m_VK_KHR_portability_subset            {false};
     bool m_VK_EXT_fragment_density_map          {false};
     bool m_VK_EXT_fragment_density_map2         {false};
+    bool m_VK_KHR_acceleration_structure        {false};
+    bool m_VK_KHR_ray_query                     {false};
+    bool m_VK_KHR_deferred_host_operations      {false};
+    bool m_VK_KHR_ray_tracing_position_fetch    {false};
 };
 class Capabilities
 {
@@ -322,6 +326,7 @@ public:
     [[nodiscard]] auto get_driver_properties            () const -> const VkPhysicalDeviceDriverProperties&;
     [[nodiscard]] auto get_portability_subset_features  () const -> const VkPhysicalDevicePortabilitySubsetFeaturesKHR&;
     [[nodiscard]] auto get_portability_subset_properties() const -> const VkPhysicalDevicePortabilitySubsetPropertiesKHR&;
+    [[nodiscard]] auto get_acceleration_structure_properties() const -> const VkPhysicalDeviceAccelerationStructurePropertiesKHR&;
     [[nodiscard]] auto get_memory_type                  (uint32_t memory_type_index) const -> const VkMemoryType&;
     [[nodiscard]] auto get_memory_heap                  (uint32_t memory_heap_index) const -> const VkMemoryHeap&;
     [[nodiscard]] auto get_pipeline_cache               () const -> VkPipelineCache;
@@ -522,6 +527,11 @@ private:
     // instead of repeating the extension check at every call site.
     VkPhysicalDevicePortabilitySubsetFeaturesKHR   m_portability_subset_features{};
     VkPhysicalDevicePortabilitySubsetPropertiesKHR m_portability_subset_properties{};
+
+    // Acceleration structure limits. Chained into the properties2 query only
+    // when VK_KHR_acceleration_structure is advertised; otherwise stays at
+    // conservative defaults so call sites can read it unconditionally.
+    VkPhysicalDeviceAccelerationStructurePropertiesKHR m_acceleration_structure_properties{};
 
     // Pipeline infrastructure
     VkPipelineCache                               m_pipeline_cache           {VK_NULL_HANDLE};

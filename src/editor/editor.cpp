@@ -60,6 +60,7 @@
 #include "developer/icon_browser.hpp"
 #include "developer/layers_window.hpp"
 #include "developer/post_processing_window.hpp"
+#include "developer/ray_trace_window.hpp"
 #include "developer/rendergraph_window.hpp"
 #include "developer/selection_window.hpp"
 #include "developer/tool_properties_window.hpp"
@@ -82,6 +83,7 @@
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "renderers/prewarm.hpp"
 #include "renderers/programs.hpp"
+#include "renderers/ray_trace_renderer.hpp"
 #include "renderers/sky_renderer.hpp"
 #include "rendergraph/post_processing.hpp"
 #include "rendertarget_imgui_host.hpp"
@@ -1736,6 +1738,14 @@ public:
                     *m_program_interface.get(),
                     xr_view_count
                 );
+                m_ray_trace_renderer = std::make_unique<Ray_trace_renderer>(
+                    *m_graphics_device.get(),
+                    *m_app_context.current_command_buffer,
+                    m_app_context,
+                    *m_program_interface.get(),
+                    *m_mesh_memory.get(),
+                    m_editor_settings.ray_trace
+                );
             }
             ERHE_TASK_FOOTER( .name("Post_processing") );
 
@@ -1791,6 +1801,7 @@ public:
                 m_operations             = std::make_unique<Operations                      >(m_editor_settings.scene, *m_commands.get(),       *m_imgui_renderer.get(), *m_imgui_windows.get(), m_app_context, *m_app_message_bus.get());
                 m_physics_window         = std::make_unique<Physics_window                  >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_post_processing_window = std::make_unique<Post_processing_window          >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
+                m_ray_trace_window       = std::make_unique<Ray_trace_window                >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_properties             = std::make_unique<Properties                      >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
                 m_editor_windows         = std::make_unique<Editor_windows                  >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_frame_pacing_window    = std::make_unique<Frame_pacing_window             >(*m_imgui_renderer.get(), *m_imgui_windows.get());
@@ -2668,6 +2679,7 @@ public:
         m_app_context.post_processing          = m_post_processing       .get();
         m_app_context.prefab_library           = m_prefab_library        .get();
         m_app_context.sky_renderer             = m_sky_renderer          .get();
+        m_app_context.ray_trace_renderer       = m_ray_trace_renderer    .get();
         m_app_context.programs                 = m_programs              .get();
         m_app_context.rotate_tool              = m_rotate_tool           .get();
         m_app_context.scale_tool               = m_scale_tool            .get();
@@ -3598,6 +3610,7 @@ public:
     std::unique_ptr<Icon_set                        >        m_icon_set;
     std::unique_ptr<Post_processing                 >        m_post_processing;
     std::unique_ptr<Sky_renderer                    >        m_sky_renderer;
+    std::unique_ptr<Ray_trace_renderer              >        m_ray_trace_renderer;
     std::unique_ptr<Id_renderer                     >        m_id_renderer;
     std::unique_ptr<Composer_window                 >        m_composer_window;
     std::unique_ptr<Selection_window                >        m_selection_window;
@@ -3626,6 +3639,7 @@ public:
     std::unique_ptr<Operations                      >        m_operations;
     std::unique_ptr<Physics_window                  >        m_physics_window;
     std::unique_ptr<Post_processing_window          >        m_post_processing_window;
+    std::unique_ptr<Ray_trace_window                >        m_ray_trace_window;
     std::unique_ptr<Properties                      >        m_properties;
     std::unique_ptr<Editor_windows                  >        m_editor_windows;
     std::unique_ptr<Frame_pacing_window             >        m_frame_pacing_window;

@@ -251,6 +251,7 @@ private:
     auto action_animation_edit_keyframe       (const nlohmann::json& args) -> std::string;
     auto action_animation_create_key          (const nlohmann::json& args) -> std::string;
     auto action_animation_delete_key          (const nlohmann::json& args) -> std::string;
+    auto action_set_ray_trace                 (const nlohmann::json& args) -> std::string;
     auto execute_command        (const std::string& tool_name) -> std::string;
 
     erhe::commands::Commands& m_commands;

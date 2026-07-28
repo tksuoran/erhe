@@ -1168,6 +1168,15 @@ auto to_vulkan_buffer_usage(const Buffer_usage buffer_usage) -> VkBufferUsageFla
     if (test_bit_set(buffer_usage, Buffer_usage::transfer_dst)) {
         vk_flags |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     }
+    if (test_bit_set(buffer_usage, Buffer_usage::acceleration_structure_storage)) {
+        vk_flags |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
+    }
+    if (test_bit_set(buffer_usage, Buffer_usage::acceleration_structure_build_input)) {
+        vk_flags |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
+    }
+    if (test_bit_set(buffer_usage, Buffer_usage::shader_device_address)) {
+        vk_flags |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    }
     return vk_flags;
 };
 

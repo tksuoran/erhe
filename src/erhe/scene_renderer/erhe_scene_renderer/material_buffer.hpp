@@ -53,6 +53,12 @@ public:
 
     std::size_t emissive_offset;                   // uvec2
     std::size_t occlusion_texture_strength;        // float
+
+    std::size_t ior;                               // float
+    std::size_t transmission;                      // float
+    // Bxdf_model as uint, for shaders that select the BxDF at runtime (the
+    // ray tracer); the raster path keeps its compile-time variant axis.
+    std::size_t bxdf_model;                        // uint
 };
 
 class Material_interface

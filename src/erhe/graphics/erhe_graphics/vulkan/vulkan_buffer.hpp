@@ -25,6 +25,7 @@ public:
     auto operator=      (Buffer_impl&& old) noexcept -> Buffer_impl&;
 
     [[nodiscard]] auto get_capacity_byte_count () const noexcept -> std::size_t;
+    [[nodiscard]] auto get_device_address      () const noexcept -> uint64_t;
     [[nodiscard]] auto get_debug_label         () const noexcept -> erhe::utility::Debug_label;
     [[nodiscard]] auto get_map                 () const -> std::span<std::byte>;
     void unmap                () noexcept;

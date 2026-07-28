@@ -25,9 +25,12 @@ public:
     auto allocate         (const Texture* texture, const Sampler* sample) -> uint64_t;
     auto get_shader_handle(const Texture* texture, const Sampler* sample) -> uint64_t;
     auto bind             (Render_command_encoder& encoder) -> std::size_t;
+    auto bind             (Compute_command_encoder& encoder) -> std::size_t;
     void unbind           (Command_buffer& command_buffer);
 
 protected:
+    auto bind_descriptor_set(Command_buffer& command_buffer, VkPipelineBindPoint bind_point) -> std::size_t;
+
     // Per-pass descriptor set snapshot. Draws are only recorded into command
     // buffers and all command buffers of a frame execute after the frame's
     // single end-of-frame submit, so slot descriptors written by a later pass

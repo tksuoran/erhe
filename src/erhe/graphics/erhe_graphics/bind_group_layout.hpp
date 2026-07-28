@@ -21,7 +21,15 @@ enum class Binding_type : unsigned int {
     // Load/store storage image (compute read/write). Uses the raw
     // binding_point (no sampler-binding offset). glsl_type names the image
     // type (e.g. image_2d) and image_format the GLSL format qualifier.
-    storage_image
+    storage_image,
+    // Ray query top level acceleration structure (Vulkan
+    // VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR). Uses the raw
+    // binding_point like storage_image. The shader declares the resource
+    // explicitly ("layout(binding = N) uniform accelerationStructureEXT
+    // name;") -- no preamble synthesis. Only valid when
+    // Device_info::use_ray_query is true; bind at draw/dispatch time via
+    // Compute_command_encoder::set_acceleration_structure().
+    acceleration_structure
 };
 
 class Bind_group_layout_binding

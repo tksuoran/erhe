@@ -54,6 +54,8 @@ Material::Material(const Material_create_info& create_info)
         (lhs.metallic                   == rhs.metallic                  ) &&
         (lhs.reflectance                == rhs.reflectance               ) &&
         (lhs.emissive                   == rhs.emissive                  ) &&
+        (lhs.ior                        == rhs.ior                       ) &&
+        (lhs.transmission               == rhs.transmission              ) &&
         (lhs.normal_texture_scale       == rhs.normal_texture_scale      ) &&
         (lhs.occlusion_texture_strength == rhs.occlusion_texture_strength) &&
         (lhs.bxdf_model                 == rhs.bxdf_model                ) &&

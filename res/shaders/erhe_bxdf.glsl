@@ -9,30 +9,6 @@ vec3 fresnel_schlick(float cos_theta, vec3 f0) {
     return f0 + (1.0 - f0) * pow(1.0 - cos_theta, 5.0);
 }
 
-// https://www.shadertoy.com/view/WssyR7
-// 2016 - Filtering Distributions of Normals for Shading Antialiasing
-//        by A. Kaplanyan, S. Hill, A. Patney, A. Lefohn (HPG 2016)
-//        project page : https://research.nvidia.com/publication/filtering-distributions-normals-shading-antialiasing
-//        demo : https://blog.selfshadow.com/sandbox/specaa.html
-// 2017 - Error Reduction and Simplification for Shading Anti-Aliasing
-//        by Y. Tokuyoshi (technical report)
-//        project page : http://www.jp.square-enix.com/tech/publications.html
-//-----------------------------------------------------------------------------
-//-- Specular AA --------------------------------------------------------------
-//-- Snippet code for specular antialiasing
-//-- Based on A. Kaplanyan & Y. Tokuyoshi work
-//-----------------------------------------------------------------------------
-void specular_anti_aliasing(in vec3 half_vector, inout float alpha_x, inout float alpha_y) {
-    float sigma                  = 0.50; //- screen space variance
-    float Kappa                  = 0.18; //- clamping treshold
-    vec2  H                      = half_vector.xy;
-    vec2  footprint_bounding_box = fwidth(H);//- abs(dfdx(slope_h)) + abs(dfdy(slope_h))
-    vec2  variance               = sigma * sigma * footprint_bounding_box * footprint_bounding_box;
-    vec2  kernel_roughness       = min(vec2(Kappa), 2.0 * variance); 
-    alpha_x = sqrt(alpha_x * alpha_x + kernel_roughness.x);
-    alpha_y = sqrt(alpha_y * alpha_y + kernel_roughness.y);
-}
-
 // Based on https://www.shadertoy.com/view/flsyWX by Arthur Cavalier
 vec3 isotropic_brdf(
     vec3  base_color,

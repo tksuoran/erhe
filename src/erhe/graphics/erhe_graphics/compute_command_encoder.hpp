@@ -8,6 +8,7 @@
 
 namespace erhe::graphics {
 
+class Acceleration_structure;
 class Bind_group_layout;
 class Buffer;
 class Command_buffer;
@@ -43,6 +44,12 @@ public:
     // only; GL / Metal / Null are no-ops (only the KosmicKrisp storage-image
     // read workaround uses this - those backends read the image directly).
     void set_sampled_image         (uint32_t binding_point, const Texture& texture, const Sampler& sampler);
+    // Bind a top level acceleration structure to the given binding point (must
+    // be an acceleration_structure binding in the active Bind_group_layout;
+    // raw binding point, like set_storage_image). Only valid when
+    // Device_info::use_ray_query is true; Vulkan backend only, GL / Metal /
+    // Null are no-ops.
+    void set_acceleration_structure(uint32_t binding_point, const Acceleration_structure& acceleration_structure);
     void set_compute_pipeline_state(const Compute_pipeline_state& pipeline);
     void set_compute_pipeline      (const Compute_pipeline& pipeline);
     void dispatch_compute          (std::uintptr_t x_size, std::uintptr_t y_size, std::uintptr_t z_size);

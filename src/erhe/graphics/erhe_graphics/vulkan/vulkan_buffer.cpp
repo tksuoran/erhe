@@ -385,6 +385,24 @@ auto Buffer_impl::get_capacity_byte_count() const noexcept -> std::size_t
     return m_capacity_byte_count;
 }
 
+auto Buffer_impl::get_device_address() const noexcept -> uint64_t
+{
+    // Querying the address of a buffer created without the device-address
+    // usage is a validation error (VUID-VkBufferDeviceAddressInfo-buffer-02601).
+    if (!erhe::utility::test_bit_set(m_usage, Buffer_usage::shader_device_address)) {
+        return 0;
+    }
+    if (m_vk_buffer == VK_NULL_HANDLE) {
+        return 0;
+    }
+    const VkBufferDeviceAddressInfo address_info{
+        .sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+        .pNext  = nullptr,
+        .buffer = m_vk_buffer
+    };
+    return static_cast<uint64_t>(vkGetBufferDeviceAddress(m_device_impl.get_vulkan_device(), &address_info));
+}
+
 auto Buffer_impl::get_vma_allocation() const -> VmaAllocation
 {
     return m_vma_allocation;

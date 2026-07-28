@@ -9,6 +9,7 @@
 #include "erhe_graphics/vulkan/vulkan_sampler.hpp"
 #include "erhe_graphics/vulkan/vulkan_texture.hpp"
 #include "erhe_graphics/command_buffer.hpp"
+#include "erhe_graphics/compute_command_encoder.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/scoped_debug_group.hpp"
@@ -380,7 +381,7 @@ void Texture_heap_impl::unbind(Command_buffer& command_buffer)
     // No-op for descriptor sets
 }
 
-auto Texture_heap_impl::bind(Render_command_encoder& encoder) -> std::size_t
+auto Texture_heap_impl::bind_descriptor_set(Command_buffer& command_buffer_wrapper, VkPipelineBindPoint bind_point) -> std::size_t
 {
     // Covers a bind() before the first reset_heap(); normal passes have a
     // current set acquired by reset_heap().
@@ -392,7 +393,7 @@ auto Texture_heap_impl::bind(Render_command_encoder& encoder) -> std::size_t
     }
     const Set_entry& current_entry = m_set_entries[m_current_set_index];
 
-    const VkCommandBuffer command_buffer = encoder.get_command_buffer().get_impl().get_vulkan_command_buffer();
+    const VkCommandBuffer command_buffer = command_buffer_wrapper.get_impl().get_vulkan_command_buffer();
     if (command_buffer == VK_NULL_HANDLE) {
         return 0;
     }
@@ -403,7 +404,7 @@ auto Texture_heap_impl::bind(Render_command_encoder& encoder) -> std::size_t
     // Bind the texture descriptor set at set index 1
     vkCmdBindDescriptorSets(
         command_buffer,
-        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        bind_point,
         pipeline_layout,
         1, // set index 1 for textures
         1,
@@ -420,6 +421,16 @@ auto Texture_heap_impl::bind(Render_command_encoder& encoder) -> std::size_t
     // Render_command_encoder::set_sampled_image() before the draw, not by
     // the texture heap. Texture_heap is purely the bindless color array.
     return m_used_slot_count;
+}
+
+auto Texture_heap_impl::bind(Render_command_encoder& encoder) -> std::size_t
+{
+    return bind_descriptor_set(encoder.get_command_buffer(), VK_PIPELINE_BIND_POINT_GRAPHICS);
+}
+
+auto Texture_heap_impl::bind(Compute_command_encoder& encoder) -> std::size_t
+{
+    return bind_descriptor_set(encoder.get_command_buffer(), VK_PIPELINE_BIND_POINT_COMPUTE);
 }
 
 } // namespace erhe::graphics

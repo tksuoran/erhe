@@ -20,6 +20,7 @@ auto to_vulkan_descriptor_type(const Binding_type type) -> VkDescriptorType
         case Binding_type::storage_buffer:         return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         case Binding_type::combined_image_sampler: return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         case Binding_type::storage_image:          return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        case Binding_type::acceleration_structure: return VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
         default:                                   return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     }
 }

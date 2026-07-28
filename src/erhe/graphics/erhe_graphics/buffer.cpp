@@ -65,6 +65,10 @@ auto Buffer::get_capacity_byte_count() const noexcept -> std::size_t
 {
     return m_impl->get_capacity_byte_count();
 }
+auto Buffer::get_device_address() const noexcept -> uint64_t
+{
+    return m_impl->get_device_address();
+}
 auto Buffer::get_map() const -> std::span<std::byte>
 {
     return m_impl->get_map();

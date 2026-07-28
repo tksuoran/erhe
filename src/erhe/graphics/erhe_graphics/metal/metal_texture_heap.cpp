@@ -313,6 +313,13 @@ auto Texture_heap_impl::bind(Render_command_encoder& /*encoder*/) -> std::size_t
     return m_used_slot_count;
 }
 
+auto Texture_heap_impl::bind(Compute_command_encoder& /*encoder*/) -> std::size_t
+{
+    // Compute-dispatch texture heap access is not implemented on Metal yet;
+    // the only consumer (GPU ray tracing) is gated on Vulkan ray query.
+    return m_used_slot_count;
+}
+
 void Texture_heap_impl::unbind(Command_buffer& command_buffer)
 {
     Scoped_debug_group debug_group{command_buffer, "Texture_heap_impl::unbind()"};

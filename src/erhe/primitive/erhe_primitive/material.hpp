@@ -80,6 +80,12 @@ public:
     float                     metallic                  {0.0f};
     float                     reflectance               {0.5f};
     glm::vec3                 emissive                  {0.0f, 0.0f, 0.0f};
+    // Index of refraction (glTF KHR_materials_ior; dielectric default 1.5).
+    float                     ior                       {1.5f};
+    // Transmission factor (glTF KHR_materials_transmission): 0 = opaque
+    // surface, 1 = fully transmissive (glass). Consumed by the GPU ray
+    // tracer (refraction + traced reflection); the raster path ignores it.
+    float                     transmission              {0.0f};
     float                     normal_texture_scale      {1.0f};
     float                     occlusion_texture_strength{1.0f};
     Bxdf_model                bxdf_model                {Bxdf_model::isotropic_brdf};

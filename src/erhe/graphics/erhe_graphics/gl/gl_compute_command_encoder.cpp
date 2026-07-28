@@ -59,6 +59,14 @@ void Compute_command_encoder_impl::set_sampled_image(uint32_t binding_point, con
     static_cast<void>(sampler);
 }
 
+void Compute_command_encoder_impl::set_acceleration_structure(uint32_t binding_point, const Acceleration_structure& acceleration_structure)
+{
+    // No-op: the GL backend has no GPU ray tracing support
+    // (Device_info::use_ray_query is false).
+    static_cast<void>(binding_point);
+    static_cast<void>(acceleration_structure);
+}
+
 void Compute_command_encoder_impl::set_compute_pipeline_state(const Compute_pipeline_state& pipeline)
 {
     m_device.get_impl().m_gl_state_tracker.execute_(pipeline);

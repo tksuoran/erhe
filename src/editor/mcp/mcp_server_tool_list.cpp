@@ -327,6 +327,8 @@ void Mcp_server::refresh_tool_list()
             {"metallic",                   {{"type", "number"},  {"description", "Metallic factor in [0, 1]"}}},
             {"reflectance",                {{"type", "number"},  {"description", "Dielectric reflectance in [0, 1]"}}},
             {"emissive",                   {{"type", "array"},   {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Linear RGB emissive [r, g, b]"}}},
+            {"ior",                        {{"type", "number"},  {"description", "Index of refraction in [1, 3] (KHR_materials_ior; default 1.5)"}}},
+            {"transmission",               {{"type", "number"},  {"description", "Transmission factor in [0, 1] (KHR_materials_transmission); > 0 makes the GPU ray tracer refract through the surface"}}},
             {"normal_texture_scale",       {{"type", "number"},  {"description", "Normal map scale"}}},
             {"occlusion_texture_strength", {{"type", "number"},  {"description", "Occlusion map strength"}}},
             {"bxdf_model",                 {{"type", "string"},  {"enum", json::array({"unlit", "isotropic_brdf", "anisotropic_brdf", "anisotropic_slope", "anisotropic_engine_ready"})}, {"description", "Selects which BxDF the standard shader applies"}}},
@@ -544,6 +546,17 @@ void Mcp_server::refresh_tool_list()
         {"type", "object"},
         {"properties", {
             {"path", {{"type", "string"}, {"description", "Output PNG path (default logs/mcp_screenshot.png)"}}}
+        }}
+    }});
+    m_tool_infos.push_back({"set_ray_trace", "Enable/disable the GPU ray tracing renderer (issue #233: material-aware ray query compute shader with lights, traced shadows and glass, rendered into the texture shown in the Ray Trace window) and optionally show that window / adjust its settings. Returns supported/enabled state and the instance count gathered on the last traced frame. Requires a Vulkan device with ray query + position fetch support.", {
+        {"type", "object"},
+        {"properties", {
+            {"enabled",          {{"type", "boolean"}, {"description", "Enable (true) or disable (false) the renderer; omit to leave unchanged"}}},
+            {"show_window",      {{"type", "boolean"}, {"description", "Also show the Ray Trace window so the output is visible in screenshots (default false)"}}},
+            {"save_path",        {{"type", "string"},  {"description", "When set, read the ray traced output texture back and write it to this PNG path (sRGB-encoded for viewing)"}}},
+            {"downscale",        {{"type", "number"},  {"description", "Output downscale factor, [1.0, 8.0]: 1 = one ray per viewport pixel, 2 = each traced pixel covers 2x2 viewport pixels; integer values display with nearest magnification, fractional with linear; omit to leave unchanged"}}},
+            {"max_rays",         {{"type", "integer"}, {"description", "Per-pixel traced-ray budget for the Whitted branching loop, [1, 1024]; omit to leave unchanged"}}},
+            {"max_bounces",      {{"type", "integer"}, {"description", "Max transmissive interactions along one branch, [0, 12]; omit to leave unchanged"}}}
         }}
     }});
     m_tool_infos.push_back({"wake_physics_bodies", "Activate all dynamic rigid bodies in a scene (bodies enter the world deactivated)", schema_scene_name()});
