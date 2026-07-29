@@ -101,6 +101,9 @@ private:
     void mesh_visualization(const Render_context& render_context, erhe::scene::Mesh* mesh);
     void skin_visualization(const Render_context& render_context, erhe::scene::Skin& skin);
 
+    void mesh_primitive_boxes_visualization(const Render_context& context);
+    void bone_boxes_visualization          (const Render_context& context);
+
     void light_visualization(
         const Render_context&                render_context,
         std::shared_ptr<erhe::scene::Camera> selected_camera,

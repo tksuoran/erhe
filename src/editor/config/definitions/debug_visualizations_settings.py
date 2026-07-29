@@ -8,7 +8,7 @@ from erhe_codegen import *
 # Debug_visualizations_config, the per-viewport light/camera visualization
 # modes in Viewport_config_data.
 struct("Debug_visualizations_settings",
-    version=10,
+    version=11,
     short_desc="Debug Visualizations",
     long_desc="Settings for the Debug Visualizations window",
     developer=False,
@@ -57,6 +57,9 @@ struct("Debug_visualizations_settings",
         field("frustum_box",                       Bool,  added_in=1, default="false",  short_desc="Frustum Box"),
         field("frustum_planes",                    Bool,  added_in=1, default="false",  short_desc="Frustum Planes"),
         field("camera_cull_test",                  Bool,  added_in=1, default="false",  short_desc="Camera Cull Test"),
+
+        field("mesh_primitive_boxes",              Bool,  added_in=11, default="false", short_desc="Primitive Boxes", long_desc="Per-primitive bounding boxes of every mesh, drawn under the mesh node's world transform. For a skinned mesh the box is posed from the primitive's per-joint rest bounds (skinning ignores the node transform), falling back to the rest-pose box when no joint bounds exist"),
+        field("bone_boxes",                        Bool,  added_in=11, default="false", short_desc="Bone Boxes",      long_desc="Per-joint rest-pose bounding boxes of every skinned mesh, posed by the joints' current world transforms (the boxes GPU skinning is bounded by)"),
 
         field("max_labels",                        Int,   added_in=1, default="400",    short_desc="Max Labels"),
         field("vertex_positions",                  Bool,  added_in=1, default="false",  short_desc="Vertex Positions"),

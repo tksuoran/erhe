@@ -362,6 +362,103 @@ void Debug_visualizations::skin_visualization(const Render_context& render_conte
     }
 }
 
+void Debug_visualizations::mesh_primitive_boxes_visualization(const Render_context& context)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    const Debug_visualizations_style& style = context.app_context.editor_settings->debug_visualizations_style;
+    const std::shared_ptr<Scene_root>& scene_root = context.scene_view.get_scene_root();
+    if (!scene_root) {
+        return;
+    }
+
+    erhe::renderer::Primitive_renderer line_renderer = context.get({erhe::graphics::Primitive_type::line, 2, true, true});
+    line_renderer.set_thickness(style.mesh_primitive_box_width);
+
+    for (erhe::scene::Mesh_layer* layer : scene_root->layers().mesh_layers()) {
+        for (const std::shared_ptr<erhe::scene::Mesh>& mesh : layer->meshes) {
+            if (!mesh) {
+                continue;
+            }
+            const erhe::scene::Node* node = mesh->get_node();
+            if (node == nullptr) {
+                continue;
+            }
+            for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
+                const erhe::primitive::Primitive& primitive = *mesh_primitive.primitive.get();
+                if (!primitive.render_shape) {
+                    continue;
+                }
+                // A skinned mesh is posed entirely by its joints (glTF ignores the
+                // mesh node's transform), so the rest-pose box drawn below would
+                // sit frozen in the bind pose while animation plays. Draw the
+                // posed per-primitive box instead - the same bounds the shadow
+                // caster culling sees through Mesh::get_aabb_world(). Falls
+                // through to the rest-pose box when the primitive carries no
+                // joint bounds.
+                if (mesh->skin) {
+                    const erhe::math::Aabb posed_box = mesh->get_skinned_primitive_aabb_world(primitive);
+                    if (posed_box.is_valid()) {
+                        line_renderer.add_cube(glm::mat4{1.0f}, style.mesh_primitive_box_color, posed_box.min, posed_box.max);
+                        continue;
+                    }
+                }
+
+                const erhe::math::Aabb& box = primitive.render_shape->get_renderable_mesh().bounding_box;
+                if (!box.is_valid()) {
+                    continue;
+                }
+                line_renderer.add_cube(node->world_from_node(), style.mesh_primitive_box_color, box.min, box.max);
+            }
+        }
+    }
+}
+
+void Debug_visualizations::bone_boxes_visualization(const Render_context& context)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    const Debug_visualizations_style& style = context.app_context.editor_settings->debug_visualizations_style;
+    const std::shared_ptr<Scene_root>& scene_root = context.scene_view.get_scene_root();
+    if (!scene_root) {
+        return;
+    }
+
+    erhe::renderer::Primitive_renderer line_renderer = context.get({erhe::graphics::Primitive_type::line, 2, true, true});
+    line_renderer.set_thickness(style.bone_box_width);
+
+    // Per-joint rest-pose bounds posed by the joints' current world transforms -
+    // the same boxes get_skinned_aabb_world() bounds a GPU-skinned mesh with.
+    for (erhe::scene::Mesh_layer* layer : scene_root->layers().mesh_layers()) {
+        for (const std::shared_ptr<erhe::scene::Mesh>& mesh : layer->meshes) {
+            if (!mesh || !mesh->skin) {
+                continue;
+            }
+            const erhe::scene::Skin_data& skin_data = mesh->skin->skin_data;
+            for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
+                const erhe::primitive::Primitive& primitive = *mesh_primitive.primitive.get();
+                if (!primitive.render_shape) {
+                    continue;
+                }
+                const std::vector<erhe::math::Aabb>& joint_boxes = primitive.render_shape->get_renderable_mesh().joint_bounding_boxes;
+                const std::size_t end = std::min(joint_boxes.size(), skin_data.joints.size());
+                for (std::size_t i = 0; i < end; ++i) {
+                    const erhe::math::Aabb& joint_box = joint_boxes[i];
+                    if (!joint_box.is_valid()) {
+                        continue; // joint influences no vertex of this primitive
+                    }
+                    // Same matrix the renderer poses vertices with (Joint_buffer).
+                    const std::optional<glm::mat4> world_from_bind = skin_data.get_world_from_bind(i);
+                    if (!world_from_bind.has_value()) {
+                        continue;
+                    }
+                    line_renderer.add_cube(world_from_bind.value(), style.bone_box_color, joint_box.min, joint_box.max);
+                }
+            }
+        }
+    }
+}
+
 void Debug_visualizations::light_visualization(
     const Render_context&                render_context,
     std::shared_ptr<erhe::scene::Camera> selected_camera,
@@ -2081,6 +2178,14 @@ void Debug_visualizations::render(const Render_context& context)
         }
     }
 
+    if (m_settings.mesh_primitive_boxes) {
+        mesh_primitive_boxes_visualization(context);
+    }
+
+    if (m_settings.bone_boxes) {
+        bone_boxes_visualization(context);
+    }
+
     physics_nodes_visualization(context);
 
     raytrace_nodes_visualization(context);
@@ -2169,6 +2274,8 @@ void Debug_visualizations::style_imgui(Property_editor& p, App_context& context,
     p.add_entry("Camera Line Color", [&style](){ ImGui::ColorEdit4 ("##", &style.camera_line_color.x,  ImGuiColorEditFlags_Float); });
     p.add_entry("Layout Line Width", [&style](){ ImGui::SliderFloat("##", &style.layout_line_width,    0.1f, 100.0f); });
     p.add_entry("Layout Line Color", [&style](){ ImGui::ColorEdit4 ("##", &style.layout_line_color.x,  ImGuiColorEditFlags_Float); });
+    p.add_entry("Primitive Boxes",   [style_row, &style](){ style_row(&style.mesh_primitive_box_color, &style.mesh_primitive_box_width); });
+    p.add_entry("Bone Boxes",        [style_row, &style](){ style_row(&style.bone_box_color,           &style.bone_box_width); });
     // Skin bone visualization: colors alternate by joint hierarchy depth (A = even, B = odd) + line width.
     p.add_entry("Skin Bones", [&style, &context]() {
         // Color A also feeds the unselected bone proxy material.
@@ -2384,6 +2491,9 @@ void Debug_visualizations::imgui(Scene_view& scene_view, App_context& app_contex
     }
 
     p.add_entry("Layouts",           [this](){ make_combo("##", m_settings.layouts); });
+
+    p.add_entry("Primitive Boxes", [this](){ ImGui::Checkbox("##", &m_settings.mesh_primitive_boxes); });
+    p.add_entry("Bone Boxes",      [this](){ ImGui::Checkbox("##", &m_settings.bone_boxes); });
 
     p.add_entry("Skins",          [this](){ make_combo("##", m_settings.skins); });
     // Bone display. Both only have an effect while Skins is showing something.
