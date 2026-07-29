@@ -107,20 +107,22 @@ void draw_ray_hit(
     const Ray_hit_style&                style
 )
 {
-    erhe::scene::Node* node = get_hit_node(hit);
-    if (node == nullptr) {
+    // Null-node guard stays ahead of get_hit_normal(), which VERIFYs the node
+    // instead of returning empty.
+    if (get_hit_node(hit) == nullptr) {
         return;
     }
 
-    const auto local_normal_opt = get_hit_normal(hit);
-    if (!local_normal_opt.has_value()) {
+    // get_hit_normal() returns a WORLD-space normal (it applies the adjugate
+    // transform itself); only normalize here - the adjugate does not preserve
+    // length under scale, and N's length is used for the marker offsets below.
+    const auto world_normal_opt = get_hit_normal(hit);
+    if (!world_normal_opt.has_value()) {
         return;
     }
 
-    const glm::vec3 position        = ray.origin + ray.t_far * ray.direction;
-    const glm::vec3 local_normal    = local_normal_opt.value();
-    const glm::mat4 world_from_node = node->world_from_node();
-    const glm::vec3 N{world_from_node * glm::vec4{local_normal, 0.0f}};
+    const glm::vec3 position = ray.origin + ray.t_far * ray.direction;
+    const glm::vec3 N = glm::normalize(world_normal_opt.value());
     const glm::vec3 T = erhe::math::safe_normalize_cross<float>(N, ray.direction);
     const glm::vec3 B = erhe::math::safe_normalize_cross<float>(T, N);
 
