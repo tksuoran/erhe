@@ -59,6 +59,7 @@
 #include "erhe_graphics/generated/vulkan_config_serialization.hpp"
 
 #include "erhe_codegen/field_info.hpp"
+#include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 
@@ -105,9 +106,42 @@ auto Settings_window::get_graphics_preset() -> Graphics_preset_entry&
     return graphics_preset;
 }
 
+void Settings_window::on_graphics_preset_edited()
+{
+    Graphics_settings& graphics = m_context.app_settings->graphics;
+    // A rename edits the active preset's identity; adopt the new name so
+    // apply_active_preset() still matches it (and the collect callback
+    // persists it as editor_settings.graphics_preset_name).
+    graphics.current_graphics_preset.name = get_graphics_preset().name;
+    graphics.apply_active_preset(*m_context.app_message_bus);
+    graphics.mark_presets_dirty();
+    m_context.app_settings->settings_store().touch();
+}
+
+void Settings_window::on_graphics_preset_selected()
+{
+    // The preset selected in the "Edit" combo is the active preset (there is
+    // no separate "Use" step). Selection does not change the preset list, so
+    // the preset file is not marked dirty - only the active-preset name in
+    // editor_settings.json.
+    Graphics_settings& graphics = m_context.app_settings->graphics;
+    graphics.current_graphics_preset.name = get_graphics_preset().name;
+    graphics.apply_active_preset(*m_context.app_message_bus);
+    m_context.app_settings->settings_store().touch();
+}
+
 void Settings_window::imgui()
 {
     reset();
+
+    // Change detection for everything this window edits that autosaves into
+    // editor_settings.json (reflected config sections, fonts, icon sizes,
+    // debug-visualization style, ...): an edit anywhere in the window marks
+    // the settings store dirty. Sampled before/after so only this window's
+    // widgets count (an edit earlier in the frame gives a harmless false
+    // positive - the store compares before writing). Graphics preset edits
+    // additionally notify explicitly below (apply + preset file save).
+    const bool item_edited_before_window = erhe::imgui::any_item_edited_this_frame();
 
     // Sync developer_mode from developer_config each frame so toggling the
     // checkbox in the Startup Configuration section takes effect immediately.
@@ -171,12 +205,15 @@ void Settings_window::imgui()
         }
 
         add_entry("Edit", [this](){
-            ImGui::Combo(
+            const bool selection_changed = ImGui::Combo(
                 "##edit_preset",
                 &m_graphics_preset_index,
                 m_graphics_preset_names.data(),
                 static_cast<int>(m_graphics_preset_names.size())
             );
+            if (selection_changed) {
+                on_graphics_preset_selected();
+            }
         });
         //// show_settings(graphics_presets.at(m_graphics_preset_index));
     }
@@ -185,21 +222,22 @@ void Settings_window::imgui()
 
     if (!graphics_presets.empty()) {
         // The preset selected in the "Edit" combo above is the active preset:
-        // editing any of its fields auto-applies and auto-saves through
-        // App_settings::update(), so there is no separate "Use" / "Save
-        // Presets" step. Keep the edit index in range (Remove may have shrunk
-        // the list) before adopting its name as the active preset.
+        // editing any of its fields applies it and schedules the preset file
+        // save (on_graphics_preset_edited), so there is no separate "Use" /
+        // "Save Presets" step. Keep the edit index in range (Remove may have
+        // shrunk the list).
         if (m_graphics_preset_index < 0) {
             m_graphics_preset_index = 0;
         }
         if (m_graphics_preset_index >= static_cast<int>(graphics_presets.size())) {
             m_graphics_preset_index = static_cast<int>(graphics_presets.size()) - 1;
         }
-        graphics.current_graphics_preset.name = graphics_presets.at(m_graphics_preset_index).name;
 
         add_entry("Preset Name", [this](){
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
-            ImGui::InputText("##", &graphics_preset.name);
+            if (ImGui::InputText("##", &graphics_preset.name)) {
+                on_graphics_preset_edited();
+            }
         });
 
         add_entry("MSAA Sample Count", [this](){
@@ -228,12 +266,15 @@ void Settings_window::imgui()
             );
             if (msaa_changed) {
                 graphics_preset.msaa_sample_count = msaa_sample_count_entry_values[m_msaa_sample_count_entry_index];
+                on_graphics_preset_edited();
             }
         });
 
         add_entry("Shadows Enabled", [this]() {
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
-            ImGui::Checkbox("##", &graphics_preset.shadow_enable);
+            if (ImGui::Checkbox("##", &graphics_preset.shadow_enable)) {
+                on_graphics_preset_edited();
+            }
         });
         add_entry("Shadow Filtering", [this]() {
             Graphics_preset_entry&          graphics_preset = get_graphics_preset();
@@ -245,6 +286,7 @@ void Settings_window::imgui()
                     const bool               selected = (mode == current);
                     if (ImGui::Selectable(value_info.name, selected)) {
                         graphics_preset.shadow_filter = mode;
+                        on_graphics_preset_edited();
                     }
                     if (selected) {
                         ImGui::SetItemDefaultFocus();
@@ -263,6 +305,7 @@ void Settings_window::imgui()
                     const bool             selected = (mode == current);
                     if (ImGui::Selectable(value_info.name, selected)) {
                         graphics_preset.shadow_bias = mode;
+                        on_graphics_preset_edited();
                     }
                     if (selected) {
                         ImGui::SetItemDefaultFocus();
@@ -281,6 +324,7 @@ void Settings_window::imgui()
                     const bool             selected = (mode == current);
                     if (ImGui::Selectable(value_info.name, selected)) {
                         graphics_preset.shadow_cull_mode = mode;
+                        on_graphics_preset_edited();
                     }
                     if (selected) {
                         ImGui::SetItemDefaultFocus();
@@ -299,6 +343,7 @@ void Settings_window::imgui()
                     const bool                  selected = (mode == current);
                     if (ImGui::Selectable(value_info.name, selected)) {
                         graphics_preset.shadow_technique = mode;
+                        on_graphics_preset_edited();
                     }
                     if (selected) {
                         ImGui::SetItemDefaultFocus();
@@ -309,11 +354,15 @@ void Settings_window::imgui()
         });
         add_entry("Shadow Depth Bias (constant)", [this]() {
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
-            ImGui::DragFloat("##", &graphics_preset.shadow_depth_bias_constant, 0.05f, -16.0f, 16.0f, "%.2f");
+            if (ImGui::DragFloat("##", &graphics_preset.shadow_depth_bias_constant, 0.05f, -16.0f, 16.0f, "%.2f")) {
+                on_graphics_preset_edited();
+            }
         });
         add_entry("Shadow Depth Bias (slope)", [this]() {
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
-            ImGui::DragFloat("##", &graphics_preset.shadow_depth_bias_slope, 0.05f, -16.0f, 16.0f, "%.2f");
+            if (ImGui::DragFloat("##", &graphics_preset.shadow_depth_bias_slope, 0.05f, -16.0f, 16.0f, "%.2f")) {
+                on_graphics_preset_edited();
+            }
         });
         add_entry("Shadow Resolution", [this](){
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
@@ -336,6 +385,7 @@ void Settings_window::imgui()
                 IM_ARRAYSIZE(shadow_resolution_items)
             )) {
                 graphics_preset.shadow_resolution = shadow_resolution_values[m_shadow_resolution_index];
+                on_graphics_preset_edited();
             }
         });
         {
@@ -373,6 +423,7 @@ void Settings_window::imgui()
                             if (ImGui::Selectable(option_label.c_str(), m_shadow_depth_bits_index == static_cast<int>(i))) {
                                 m_shadow_depth_bits_index = static_cast<int>(i);
                                 graphics_preset.shadow_depth_bits = depth_sizes.at(i);
+                                on_graphics_preset_edited();
                             }
                         }
                         ImGui::EndCombo();
@@ -385,18 +436,24 @@ void Settings_window::imgui()
         add_entry("Shadow Light Count", [this](){
             Graphics_preset_entry&   graphics_preset = get_graphics_preset();
             Graphics_settings& graphics        = m_context.app_settings->graphics;
-            ImGui::SliderInt("##", &graphics_preset.shadow_light_count, 1, std::min(graphics.max_depth_layers, 32));
+            if (ImGui::SliderInt("##", &graphics_preset.shadow_light_count, 1, std::min(graphics.max_depth_layers, 32))) {
+                on_graphics_preset_edited();
+            }
         });
         // Point lights use a separate R32F cube-map array for omnidirectional
         // shadows; these size that array independently of the 2D shadow map.
         add_entry("Point Shadow Resolution", [this](){
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
             Graphics_settings&     graphics        = m_context.app_settings->graphics;
-            ImGui::SliderInt("##", &graphics_preset.point_shadow_resolution, 1, std::min(graphics.max_shadow_resolution, 4096));
+            if (ImGui::SliderInt("##", &graphics_preset.point_shadow_resolution, 1, std::min(graphics.max_shadow_resolution, 4096))) {
+                on_graphics_preset_edited();
+            }
         });
         add_entry("Point Shadow Count", [this](){
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
-            ImGui::SliderInt("##", &graphics_preset.point_shadow_light_count, 0, 8);
+            if (ImGui::SliderInt("##", &graphics_preset.point_shadow_light_count, 0, 8)) {
+                on_graphics_preset_edited();
+            }
         });
     }
 
@@ -410,22 +467,32 @@ void Settings_window::imgui()
             };
             graphics_presets.push_back(new_graphics_preset);
             m_graphics_preset_index = static_cast<int>(graphics_presets.size() - 1);
+            on_graphics_preset_edited();
         }
         ImGui::SameLine();
         if (ImGui::Button("Remove", button_size)) {
             graphics_presets.erase(graphics_presets.begin() + m_graphics_preset_index);
+            if (!graphics_presets.empty()) {
+                m_graphics_preset_index = std::min(m_graphics_preset_index, static_cast<int>(graphics_presets.size()) - 1);
+                on_graphics_preset_selected();
+            }
+            m_context.app_settings->graphics.mark_presets_dirty();
+            m_context.app_settings->settings_store().touch();
         }
-        // No "Use" button: the edited preset is the active preset and is
-        // applied automatically by App_settings::update().
+        // No "Use" button: the edited preset is the active preset, applied
+        // from the edit site (on_graphics_preset_edited / _selected).
     });
     pop_group();
 
-    // The graphics preset list (graphics_presets.json) auto-applies and
-    // auto-saves through App_settings::update(), like editor_settings.json.
-    // "Load Presets" remains for re-reading the file from disk on demand.
+    // The graphics preset list (graphics_presets.json) is applied and saved
+    // from the edit sites above, like editor_settings.json. "Load Presets"
+    // remains for re-reading the file from disk on demand.
     add_entry("", [this, button_size](){
         if (ImGui::Button("Load Presets", button_size)) {
             m_context.app_settings->read(m_context.OpenXR);
+            // read() only loads; apply the (possibly changed) active preset so
+            // subscribers react now that there is no per-frame auto-apply.
+            m_context.app_settings->graphics.apply_active_preset(*m_context.app_message_bus);
         }
     });
 
@@ -556,6 +623,15 @@ void Settings_window::imgui()
     }
 
     show_entries("Settings", ImVec2{1.0f, 1.0f});
+
+    // See the sample at the top of this function. Covers every autosaved
+    // widget in this window without per-widget notification; the graphics
+    // preset widgets above notified precisely already (extra touch is
+    // harmless). Startup Configuration edits also land here - they are not
+    // part of editor_settings.json, so the store's compare finds no change.
+    if (!item_edited_before_window && erhe::imgui::any_item_edited_this_frame()) {
+        m_context.app_settings->settings_store().touch();
+    }
 }
 
 }

@@ -44,6 +44,10 @@ public:
     // Write current state into Inventory_config for serialization
     void write_config(Inventory_config& config) const;
 
+    // Schedules the settings autosave; slot contents persist into
+    // editor_settings.json through write_config (collect callback).
+    void touch_settings() const;
+
     // Push current hotbar slot state to Hotbar
     void apply_hotbar();
 

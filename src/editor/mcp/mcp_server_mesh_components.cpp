@@ -761,6 +761,9 @@ auto Mcp_server::action_set_transform_mode(const json& args) -> std::string
         return make_error_content("Invalid mode: " + mode_str + " (move, extrude, extrude_group_normal, extrude_vertex_normal)");
     }
     m_context.editor_settings->transform_mode = mode;
+    if (m_context.app_settings != nullptr) {
+        m_context.app_settings->settings_store().touch();
+    }
     return make_json_content(json{{"mode", std::string{::to_string(mode)}}}).dump();
 }
 

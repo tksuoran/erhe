@@ -3,6 +3,7 @@
 
 #include "app_context.hpp"
 #include "app_scenes.hpp"
+#include "app_settings.hpp"
 #include "assets/asset_manager.hpp"
 #include "assets/asset_reference_config.hpp"
 #include "brushes/brush.hpp"
@@ -590,9 +591,12 @@ auto Inventory_window::find_or_create_brush_with_material(
 void Inventory_window::imgui()
 {
     // Retry brush / material references whose content library was not loaded
-    // yet at collect_tools() time (asynchronously loading scenes).
+    // yet at collect_tools() time (asynchronously loading scenes). Resolution
+    // self-heals the persisted slot keys (see write_config), so it also
+    // schedules the settings autosave.
     if (resolve_slot_references()) {
         apply_hotbar();
+        touch_settings();
     }
 
     int next_id = 0;
@@ -650,6 +654,16 @@ void Inventory_window::imgui()
     // affect the hotbar. apply_hotbar() is cheap (sets a dirty flag), so always call.
     if (any_changed || grid_changed) {
         apply_hotbar();
+        // Slot contents persist into editor_settings.json (write_config via
+        // the collect callback registered in editor.cpp).
+        touch_settings();
+    }
+}
+
+void Inventory_window::touch_settings() const
+{
+    if (m_context.app_settings != nullptr) {
+        m_context.app_settings->settings_store().touch();
     }
 }
 

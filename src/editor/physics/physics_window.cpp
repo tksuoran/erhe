@@ -38,6 +38,7 @@ void Physics_window::viewport_toolbar(bool& hovered)
 
     if (pressed && m_context.editor_settings->physics.static_enable) {
         m_context.editor_settings->physics.dynamic_enable = !m_context.editor_settings->physics.dynamic_enable;
+        m_context.app_settings->settings_store().touch();
     }
 }
 
@@ -48,8 +49,12 @@ void Physics_window::imgui()
     if (!m_context.editor_settings->physics.static_enable) {
         ImGui::BeginDisabled();
     }
-    ImGui::Checkbox("Physics enabled", &m_context.editor_settings->physics.dynamic_enable);
-    ImGui::Checkbox("Debug draw", &m_context.editor_settings->physics.debug_draw);
+    bool changed = false;
+    changed |= ImGui::Checkbox("Physics enabled", &m_context.editor_settings->physics.dynamic_enable);
+    changed |= ImGui::Checkbox("Debug draw", &m_context.editor_settings->physics.debug_draw);
+    if (changed) {
+        m_context.app_settings->settings_store().touch();
+    }
     if (!m_context.editor_settings->physics.static_enable) {
         ImGui::EndDisabled();
         if (ImGui::IsItemHovered()) {

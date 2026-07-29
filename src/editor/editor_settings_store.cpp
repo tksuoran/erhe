@@ -66,21 +66,42 @@ void Editor_settings_store::collect()
     }
 }
 
+void Editor_settings_store::touch()
+{
+    m_dirty = true;
+}
+
 void Editor_settings_store::update(const bool allow_save)
 {
-    collect();
-    std::string serialized = serialize(m_settings, 0);
     if (!m_baseline_initialized) {
         // First evaluation after startup: take the current state as the
         // baseline so launching the editor does not rewrite the file.
-        m_last_saved_state     = std::move(serialized);
+        collect();
+        m_last_saved_state     = serialize(m_settings, 0);
         m_baseline_initialized = true;
         return;
     }
-    if (allow_save && (serialized != m_last_saved_state)) {
+    if (!m_dirty || !allow_save) {
+        return;
+    }
+    collect();
+    std::string serialized = serialize(m_settings, 0);
+    if (serialized != m_last_saved_state) {
         erhe::codegen::save_config(m_settings, c_editor_settings_file_path);
         m_last_saved_state = std::move(serialized);
     }
+    m_dirty = false;
+}
+
+void Editor_settings_store::flush()
+{
+    collect();
+    std::string serialized = serialize(m_settings, 0);
+    if (m_baseline_initialized && (serialized != m_last_saved_state)) {
+        erhe::codegen::save_config(m_settings, c_editor_settings_file_path);
+    }
+    m_last_saved_state = std::move(serialized);
+    m_dirty = false;
 }
 
 void Editor_settings_store::save()
@@ -89,6 +110,7 @@ void Editor_settings_store::save()
     erhe::codegen::save_config(m_settings, c_editor_settings_file_path);
     m_last_saved_state     = serialize(m_settings, 0);
     m_baseline_initialized = true;
+    m_dirty                = false;
 }
 
 }

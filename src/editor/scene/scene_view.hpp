@@ -204,6 +204,12 @@ public:
     [[nodiscard]] auto get_pickable_slot_mask                   (uint32_t slot_mask) const -> uint32_t;
 
 protected:
+    // Schedules the settings autosave for a persisted view (no-op otherwise).
+    // Call from every site that changes state written by this view's collect
+    // callback: scene / camera / renderer selection setters and the toolbar
+    // popups (Visual Style, Debug Visualization, Scene and Camera).
+    void touch_settings() const;
+
     void set_hover  (std::size_t slot, const Hover_entry& entry);
     // Set the slot to `candidate` only when it is closer (smaller ray-t)
     // than what is already there, or when there is no valid hit yet.

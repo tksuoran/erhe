@@ -649,16 +649,17 @@ public:
         m_imgui_windows->draw_imgui_windows();
         m_imgui_windows->end_frame();
 
-        // Autosave editor settings when they have changed. Defer while a
-        // mouse button is held so dragging a slider results in a single
+        // Autosave editor settings when an edit site marked them dirty
+        // (Editor_settings_store::touch() / Graphics_settings::
+        // mark_presets_dirty()); a bool test per file otherwise. Defer while
+        // a mouse button is held so dragging a slider results in a single
         // write when the drag ends.
         {
-            ERHE_PROFILE_SCOPE("Settings update");
             bool any_mouse_button_down = false;
             for (const bool button_down : m_input_state->mouse_button) {
                 any_mouse_button_down = any_mouse_button_down || button_down;
             }
-            m_app_settings.update(*m_app_message_bus.get(), !any_mouse_button_down);
+            m_app_settings.update(!any_mouse_button_down);
         }
 
         // - Apply all command bindings (OpenXR bindings were already executed above)
@@ -3444,6 +3445,11 @@ public:
 
             ERHE_PROFILE_FRAME_END
         }
+        // Settings are autosaved from edit sites (touch()); this final flush
+        // compares and writes regardless of the dirty marks, catching an edit
+        // still deferred by a held mouse button and any change site that
+        // failed to notify.
+        m_app_settings.flush();
         m_run_stopped = true;
     }
 

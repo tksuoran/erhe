@@ -55,7 +55,9 @@ public:
     [[nodiscard]] auto get_cell_size      () const -> float;
 
     void render          (const Render_context& context);
-    void imgui           (App_context& context);
+    // Returns true when any widget edited the grid, so the caller can
+    // schedule the settings autosave.
+    auto imgui           (App_context& context) -> bool;
     void read_config     (const Grid_config& config);
     void write_config    (Grid_config& config) const;
     void set_snap_enabled(bool snap_enabled) { m_snap_enabled = snap_enabled; }

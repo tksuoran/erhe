@@ -249,6 +249,14 @@ auto begin_popup_with_title_and_open(ImGuiID id, const char* name, bool* open, I
     return is_open;
 }
 
+auto any_item_edited_this_frame() -> bool
+{
+    // Set by ImGui::MarkItemEdited(), which every value widget calls on edit
+    // (including Selectable, so combos count); plain Button presses do not.
+    ImGuiContext& g = *GImGui;
+    return g.ActiveIdHasBeenEditedThisFrame;
+}
+
 auto combo_fit_width(const char* label, int* current_item, const char* const items[], int items_count) -> bool
 {
     const char* const preview = ((*current_item >= 0) && (*current_item < items_count)) ? items[*current_item] : "";

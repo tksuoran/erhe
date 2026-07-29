@@ -27,13 +27,20 @@ public:
     void apply_limits                 (Graphics_preset_entry& graphics_preset);
     void select_active_graphics_preset(App_message_bus& app_message_bus);
 
-    // Per-frame: auto-apply the active preset (sync it into
-    // current_graphics_preset and broadcast a Graphics_settings_message on
-    // change) and auto-save the preset file when the list changes. allow_save
-    // is false while a mouse button is held so a slider drag coalesces into a
-    // single write. Mirrors Editor_settings_store::update(); the first call
-    // records the baseline without writing.
-    void update                       (App_message_bus& app_message_bus, bool openxr, bool allow_save);
+    // Applies the active preset (matched by name): syncs it into
+    // current_graphics_preset and broadcasts a Graphics_settings_message when
+    // it actually changed, so subscribers (shadow map reconfigure, MSAA, ...)
+    // react. Called from the change site (Settings window preset edits);
+    // replaces the former per-frame auto-apply.
+    void apply_active_preset          (App_message_bus& app_message_bus);
+
+    // Marks the preset list as changed so save_presets_if_dirty() writes it.
+    void mark_presets_dirty           ();
+
+    // Per-frame: writes the preset file when marked dirty. allow_save is
+    // false while a mouse button is held so a slider drag coalesces into a
+    // single write. Steady-state (not dirty) cost is a bool test.
+    void save_presets_if_dirty        (bool openxr, bool allow_save);
 
     Graphics_preset_entry              current_graphics_preset;
     std::vector<Graphics_preset_entry> graphics_presets;
@@ -44,10 +51,9 @@ public:
     int                                max_depth_layers{1};
 
 private:
-    // Auto-save bookkeeping for graphics_presets.json (mirrors
-    // Editor_settings_store's last-saved-state comparison).
-    bool                               m_presets_baseline_initialized{false};
-    std::string                        m_last_saved_presets;
+    // Set by Settings window preset edits; cleared when the preset file is
+    // written by save_presets_if_dirty().
+    bool                               m_presets_dirty{false};
 };
 
 // The editor's settings root: owns Editor_settings_store (which owns the
@@ -67,10 +73,16 @@ public:
 
     void apply_limits(erhe::graphics::Device& instance, App_message_bus& message_bus, float window_scale_factor);
 
-    // Per-frame settings tick: autosaves editor_settings.json (via the store)
-    // and auto-applies + auto-saves the graphics presets. allow_save is false
+    // Per-frame settings tick: autosaves editor_settings.json and the graphics
+    // preset file when their dirty flags are set (touch() /
+    // mark_presets_dirty(), called from the edit sites). allow_save is false
     // while a mouse button is held so drags coalesce into a single write.
-    void update(App_message_bus& app_message_bus, bool allow_save);
+    // Steady-state cost is two bool tests.
+    void update(bool allow_save);
+
+    // Shutdown flush: writes both files if changed, even without a dirty
+    // mark - the safety net for change sites that failed to notify.
+    void flush();
 
     // Hydrates live state from the loaded config and the graphics presets
     // file. Called once at startup (after the headset.openxr override

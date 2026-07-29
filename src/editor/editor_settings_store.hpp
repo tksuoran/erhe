@@ -2,6 +2,7 @@
 
 #include "config/generated/editor_settings_config.hpp"
 
+#include <atomic>
 #include <cstddef>
 #include <functional>
 #include <mutex>
@@ -46,12 +47,23 @@ public:
     [[nodiscard]] auto get_settings()       ->       Editor_settings_config&;
     [[nodiscard]] auto get_settings() const -> const Editor_settings_config&;
 
-    // Once per frame: collect, compare against the last saved state and
-    // autosave when changed. allow_save should be false while the user is
-    // interacting (e.g. mouse button held dragging a slider) so a drag
-    // results in a single write when it ends. The first call establishes
-    // the baseline without writing.
+    // Marks the settings as possibly changed. Called from the change site
+    // (typically the ImGui widget edit that mutated settings or live state);
+    // spurious calls are harmless - update() still compares against the last
+    // saved state before writing.
+    void touch();
+
+    // Once per frame: when touched, collect, compare against the last saved
+    // state and autosave when changed. allow_save should be false while the
+    // user is interacting (e.g. mouse button held dragging a slider) so a
+    // drag results in a single write when it ends. Steady-state cost (not
+    // touched) is a bool test; the first call establishes the baseline
+    // without writing.
     void update(bool allow_save);
+
+    // Shutdown flush: collect, compare, and write if changed - even without
+    // touch(), as a safety net for change sites that failed to notify.
+    void flush();
 
     // Collects and writes the settings file unconditionally.
     void save();
@@ -74,6 +86,10 @@ private:
     std::size_t                 m_next_callback_id{1};
     std::string                 m_last_saved_state;
     bool                        m_baseline_initialized{false};
+    // atomic: touch() may run from parallel init tasks (e.g. a Scene_view
+    // constructor registering its first settings entry); update() runs on
+    // the main thread per frame.
+    std::atomic<bool>           m_dirty               {false};
 };
 
 }

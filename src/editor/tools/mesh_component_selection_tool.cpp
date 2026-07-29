@@ -4,6 +4,7 @@
 
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
+#include "app_settings.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/viewport_config.hpp"
 #include "graphics/gradients.hpp"
@@ -979,6 +980,7 @@ void Mesh_component_selection_tool::viewport_toolbar()
         const char* const edit_items[]  = {"Shared", "Fork"};
         if (erhe::imgui::combo_fit_width("##geometry_edit_mode", &edit_index, edit_items, IM_ARRAYSIZE(edit_items))) {
             m_context.editor_settings->geometry_edit_mode = static_cast<Geometry_edit_mode>(edit_index);
+            m_context.app_settings->settings_store().touch();
         }
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("Shared: edit shared geometry (all instances change). Fork: copy geometry on edit (only this instance changes).");
@@ -995,6 +997,7 @@ void Mesh_component_selection_tool::viewport_toolbar()
         const char* const transform_items[] = {"Move", "Extrude", "Extrude (Group Normal)", "Extrude (Vertex Normal)"};
         if (erhe::imgui::combo_fit_width("##mesh_transform_mode", &transform_index, transform_items, IM_ARRAYSIZE(transform_items))) {
             m_context.editor_settings->transform_mode = static_cast<Mesh_transform_mode>(transform_index);
+            m_context.app_settings->settings_store().touch();
         }
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("Move: drag moves the selected components. Extrude: drag extrudes them (new faces) then moves. Extrude (Group Normal): extrudes, then each disjoint subset slides along its own average normal by the drag amount. Extrude (Vertex Normal): extrudes, then each vertex slides along its own normal.");

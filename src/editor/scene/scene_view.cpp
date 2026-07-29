@@ -135,6 +135,12 @@ Scene_view::Scene_view(
             write_scene_and_camera_settings(j->scene_and_camera);
         }
     );
+
+    // A view whose settings entry does not exist yet adds one via the collect
+    // callback above - that is a settings change, so schedule a save.
+    if (i == settings.scene_views.end()) {
+        m_editor_settings_store->touch();
+    }
 }
 
 Scene_view::~Scene_view() noexcept
@@ -147,6 +153,19 @@ Scene_view::~Scene_view() noexcept
 void Scene_view::set_scene_root(const std::shared_ptr<Scene_root>& scene_root)
 {
     m_scene_root = scene_root;
+    touch_settings();
+}
+
+void Scene_view::touch_settings() const
+{
+    // The scene / camera / visual-style selections of a persisted view are
+    // saved in editor_settings.json (see the collect callback registered in
+    // the constructor); notify the store from each change site. Calls during
+    // scene/camera restore just re-produce the saved state - the store's
+    // compare then finds no change.
+    if ((m_editor_settings_store != nullptr) && !m_settings_key.empty()) {
+        m_editor_settings_store->touch();
+    }
 }
 
 auto Scene_view::get_scene_root() const -> std::shared_ptr<Scene_root>
@@ -162,6 +181,7 @@ void Scene_view::render_debug_visualizations(const Render_context& context)
 void Scene_view::set_shadow_fit_override_camera(const std::weak_ptr<erhe::scene::Camera>& camera)
 {
     m_shadow_fit_override_camera = camera;
+    touch_settings();
 }
 
 auto Scene_view::get_shadow_fit_override_camera() const -> std::weak_ptr<erhe::scene::Camera>
@@ -731,7 +751,16 @@ void Scene_view::popup_button(
         ImGui::OpenPopup(popup_id, ImGuiPopupFlags_None);
     }
     if (erhe::imgui::begin_popup_with_title_and_open(popup_id, title, &is_open, ImGuiWindowFlags_AlwaysAutoResize)) {
+        // The toolbar popups (Visual Style, Scene and Camera, Debug
+        // Visualization) edit per-view state persisted by this view's collect
+        // callback; a widget edit inside the popup schedules the settings
+        // autosave (see any_item_edited_this_frame for false-positive
+        // caveats - a spurious touch is harmless).
+        const bool item_edited_before_popup = erhe::imgui::any_item_edited_this_frame();
         content_fn();
+        if (!item_edited_before_popup && erhe::imgui::any_item_edited_this_frame()) {
+            touch_settings();
+        }
         ImGui::EndPopup();
     }
 }

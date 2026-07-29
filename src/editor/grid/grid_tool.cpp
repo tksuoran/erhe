@@ -123,18 +123,23 @@ void Grid_tool::window_imgui()
 
     //ImGui::Checkbox("Enable All", &m_enable);
 
+    // The selected grid persists into editor_settings.json (write_config via
+    // the collect callback registered in editor.cpp); each edit below
+    // schedules the settings autosave.
+    bool changed = false;
+
     ImGui::NewLine();
 
     std::vector<const char*> grid_names;
     for (auto& grid : m_grids) {
         grid_names.push_back(grid->get_name().c_str());
     }
-    ImGui::Combo("Grid", &m_grid_index, grid_names.data(), static_cast<int>(grid_names.size()));
+    changed |= ImGui::Combo("Grid", &m_grid_index, grid_names.data(), static_cast<int>(grid_names.size()));
     ImGui::NewLine();
 
     if (!m_grids.empty()) {
         m_grid_index = std::min(m_grid_index, static_cast<int>(grid_names.size() - 1));
-        m_grids[m_grid_index]->imgui(m_context);
+        changed |= m_grids[m_grid_index]->imgui(m_context);
     }
 
     ImGui::NewLine();
@@ -146,10 +151,16 @@ void Grid_tool::window_imgui()
         std::shared_ptr<Grid> new_grid = std::make_shared<Grid>();
         //new_grid->name = "new grid"; TODO
         m_grids.push_back(new_grid);
+        changed = true;
     }
 
     if (ImGui::Button("Remove Grid", button_size)) {
         m_grids.erase(m_grids.begin() + m_grid_index);
+        changed = true;
+    }
+
+    if (changed && (m_context.app_settings != nullptr)) {
+        m_context.app_settings->settings_store().touch();
     }
 }
 

@@ -230,45 +230,48 @@ void Grid::update()
     }
 }
 
-void Grid::imgui(App_context& context)
+auto Grid::imgui(App_context& context) -> bool
 {
-    ImGui::InputText  ("Name",     &m_name);
+    bool changed = false;
+
+    changed |= ImGui::InputText  ("Name",     &m_name);
     ImGui::Separator();
     bool visible = is_visible();
     if (ImGui::Checkbox("Visible", &visible)) {
         set_visible(visible);
+        changed = true;
     }
-    
-    ImGui::Checkbox   ("Intersect enable", &m_intersect_enable);
-    ImGui::Checkbox   ("Snap enable",      &m_snap_enabled);
-    ImGui::SliderFloat("Cell Size",        &m_cell_size,       0.01f, 10.0f, "%.3f", ImGuiSliderFlags_Logarithmic);
-    ImGui::SliderInt  ("Cell Div",         &m_cell_div,        1,     10);
-    ImGui::ColorEdit4 ("Level 0 Color",    &m_level_colors[0].x, ImGuiColorEditFlags_Float);
-    ImGui::ColorEdit4 ("Level 1 Color",    &m_level_colors[1].x, ImGuiColorEditFlags_Float);
-    ImGui::ColorEdit4 ("Level 2 Color",    &m_level_colors[2].x, ImGuiColorEditFlags_Float);
-    ImGui::ColorEdit4 ("Level 3 Color",    &m_level_colors[3].x, ImGuiColorEditFlags_Float);
+
+    changed |= ImGui::Checkbox   ("Intersect enable", &m_intersect_enable);
+    changed |= ImGui::Checkbox   ("Snap enable",      &m_snap_enabled);
+    changed |= ImGui::SliderFloat("Cell Size",        &m_cell_size,       0.01f, 10.0f, "%.3f", ImGuiSliderFlags_Logarithmic);
+    changed |= ImGui::SliderInt  ("Cell Div",         &m_cell_div,        1,     10);
+    changed |= ImGui::ColorEdit4 ("Level 0 Color",    &m_level_colors[0].x, ImGuiColorEditFlags_Float);
+    changed |= ImGui::ColorEdit4 ("Level 1 Color",    &m_level_colors[1].x, ImGuiColorEditFlags_Float);
+    changed |= ImGui::ColorEdit4 ("Level 2 Color",    &m_level_colors[2].x, ImGuiColorEditFlags_Float);
+    changed |= ImGui::ColorEdit4 ("Level 3 Color",    &m_level_colors[3].x, ImGuiColorEditFlags_Float);
     // Line width is a fraction of the level cell size (grid.frag
     // PristineGrid line width).
-    ImGui::SliderFloat("Level 0 Width",    &m_level_widths[0], 0.0f, 0.5f, "%.4f", ImGuiSliderFlags_Logarithmic);
-    ImGui::SliderFloat("Level 1 Width",    &m_level_widths[1], 0.0f, 0.5f, "%.4f", ImGuiSliderFlags_Logarithmic);
-    ImGui::SliderFloat("Level 2 Width",    &m_level_widths[2], 0.0f, 0.5f, "%.4f", ImGuiSliderFlags_Logarithmic);
-    ImGui::SliderFloat("Level 3 Width",    &m_level_widths[3], 0.0f, 0.5f, "%.4f", ImGuiSliderFlags_Logarithmic);
-    ImGui::Checkbox   ("Axis Labels",      &m_label_enable);
-    ImGui::SliderFloat("Label Size",       &m_label_text_fraction, 0.05f, 0.5f);
-    ImGui::SliderFloat("Label Spacing",    &m_label_spacing,       1.0f,  100.0f, "%.0f");
-    ImGui::SliderFloat("Label Fade",       &m_label_fade,          0.5f,  24.0f);
+    changed |= ImGui::SliderFloat("Level 0 Width",    &m_level_widths[0], 0.0f, 0.5f, "%.4f", ImGuiSliderFlags_Logarithmic);
+    changed |= ImGui::SliderFloat("Level 1 Width",    &m_level_widths[1], 0.0f, 0.5f, "%.4f", ImGuiSliderFlags_Logarithmic);
+    changed |= ImGui::SliderFloat("Level 2 Width",    &m_level_widths[2], 0.0f, 0.5f, "%.4f", ImGuiSliderFlags_Logarithmic);
+    changed |= ImGui::SliderFloat("Level 3 Width",    &m_level_widths[3], 0.0f, 0.5f, "%.4f", ImGuiSliderFlags_Logarithmic);
+    changed |= ImGui::Checkbox   ("Axis Labels",      &m_label_enable);
+    changed |= ImGui::SliderFloat("Label Size",       &m_label_text_fraction, 0.05f, 0.5f);
+    changed |= ImGui::SliderFloat("Label Spacing",    &m_label_spacing,       1.0f,  100.0f, "%.0f");
+    changed |= ImGui::SliderFloat("Label Fade",       &m_label_fade,          0.5f,  24.0f);
     if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Glyph size in pixels at which labels are fully visible.\nSmaller values keep labels visible further away.");
     }
-    ImGui::ColorEdit4 ("Label Color",      &m_label_color.x, ImGuiColorEditFlags_Float);
+    changed |= ImGui::ColorEdit4 ("Label Color",      &m_label_color.x, ImGuiColorEditFlags_Float);
 
-    erhe::imgui::make_combo("Plane", m_plane_type, grid_plane_type_strings, IM_ARRAYSIZE(grid_plane_type_strings));
+    changed |= erhe::imgui::make_combo("Plane", m_plane_type, grid_plane_type_strings, IM_ARRAYSIZE(grid_plane_type_strings));
 
     if (m_plane_type != Grid_plane_type::Node) {
-        ImGui::DragScalarN("Offset", ImGuiDataType_Float, &m_center.x, 3, 0.01f);
+        changed |= ImGui::DragScalarN("Offset", ImGuiDataType_Float, &m_center.x, 3, 0.01f);
         const float min_rotation = -180.0;
         const float max_rotation =  180.0;
-        ImGui::DragScalarN("Rotation", ImGuiDataType_Float, &m_rotation, 1, 0.05f, &min_rotation, &max_rotation);
+        changed |= ImGui::DragScalarN("Rotation", ImGuiDataType_Float, &m_rotation, 1, 0.05f, &min_rotation, &max_rotation);
         update();
     } else {
         {
@@ -279,6 +282,7 @@ void Grid::imgui(App_context& context)
                 ImGui::TextUnformatted(label.c_str());
                 if (ImGui::Button(detach_label.c_str())) {
                     host_node->detach(this);
+                    changed = true;
                 }
             }
         }
@@ -289,9 +293,12 @@ void Grid::imgui(App_context& context)
                 host_node->attach(
                     std::static_pointer_cast<Grid>(shared_from_this())
                 );
+                changed = true;
             }
         }
     }
+
+    return changed;
 }
 
 auto Grid::normal_in_world() const -> glm::vec3

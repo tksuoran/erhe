@@ -824,6 +824,7 @@ void Viewport_scene_view::set_camera(const std::shared_ptr<erhe::scene::Camera>&
 {
     // TODO Add validation
     m_camera = camera;
+    touch_settings();
 }
 
 auto Viewport_scene_view::is_scene_view_hovered() const -> bool
@@ -1240,6 +1241,7 @@ void Viewport_scene_view::viewport_toolbar()
 void Viewport_scene_view::set_shader_debug(erhe::scene_renderer::Shader_debug shader_debug)
 {
     m_shader_debug = shader_debug;
+    touch_settings();
 }
 
 auto Viewport_scene_view::get_shader_debug() const -> erhe::scene_renderer::Shader_debug
@@ -1250,6 +1252,7 @@ auto Viewport_scene_view::get_shader_debug() const -> erhe::scene_renderer::Shad
 void Viewport_scene_view::set_renderer_choice(Renderer_choice choice)
 {
     m_renderer_choice = choice;
+    touch_settings();
 }
 
 auto Viewport_scene_view::get_renderer_choice() const -> Renderer_choice

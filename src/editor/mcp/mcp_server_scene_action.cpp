@@ -1044,6 +1044,7 @@ auto Mcp_server::action_toggle_physics(const json& args) -> std::string
     }
 
     m_context.editor_settings->physics.dynamic_enable = !m_context.editor_settings->physics.dynamic_enable;
+    m_context.app_settings->settings_store().touch();
     const bool enabled = m_context.editor_settings->physics.dynamic_enable;
 
     return make_json_content({

@@ -87,4 +87,13 @@ auto make_angle_button(
 
 auto begin_popup_with_title_and_open(ImGuiID id, const char* name, bool* open, ImGuiWindowFlags extra_window_flags) -> bool;
 
+// True once any value widget (checkbox, slider, drag, input text, color edit,
+// combo selectable, ...) has been edited during the current ImGui frame - plain
+// buttons do not count. Sample before and after a UI region to detect "an edit
+// happened inside this region" (false -> true); used to drive settings-autosave
+// notification from the edit itself instead of per-frame change polling. The
+// flag is frame-global, so an edit earlier in the same frame makes the region
+// test a false positive - callers must treat a positive as "maybe edited".
+auto any_item_edited_this_frame() -> bool;
+
 } // namespace erhe::imgui

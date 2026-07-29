@@ -970,6 +970,7 @@ void Hotbar::set_position(glm::vec3 position)
     if (m_context.editor_settings != nullptr) {
         m_context.editor_settings->hotbar.x = position.x;
         m_context.editor_settings->hotbar.z = position.z;
+        m_context.app_settings->settings_store().touch();
     }
 }
 

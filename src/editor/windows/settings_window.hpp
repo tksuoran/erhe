@@ -34,6 +34,13 @@ private:
     [[nodiscard]] auto get_graphics_preset() -> Graphics_preset_entry&;
     void update_preset_names();
 
+    // Change-site handlers for the graphics preset section (replace the former
+    // per-frame auto-apply): a field edit of the active preset applies it +
+    // schedules the preset file save; a selection change (Edit combo, Add /
+    // Remove) also adopts the selected preset as the active one.
+    void on_graphics_preset_edited  ();
+    void on_graphics_preset_selected();
+
     erhe::message_bus::Subscription<Graphics_settings_message> m_graphics_settings_subscription;
     App_context&             m_context;
     int                      m_msaa_sample_count_entry_index{0};
