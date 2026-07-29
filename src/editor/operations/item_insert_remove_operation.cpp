@@ -42,6 +42,16 @@ Item_insert_remove_operation::Item_insert_remove_operation(const Parameters& par
         const auto& children = parameters.item->get_children();
         const auto parent = parameters.item->get_parent().lock();
         for (const auto& child : children) {
+            // Editor-generated bone proxies are not content and must not be
+            // recorded: Bone_visualization detaches them when their skin
+            // unregisters, so a recorded parent change would replay against a
+            // proxy that is no longer where the record says (undo's parent
+            // VERIFY), and undo would resurrect a proxy next to the fresh one
+            // the re-registered skin creates. Selection::delete_items skips
+            // them the same way.
+            if ((child->get_flag_bits() & erhe::Item_flags::bone_proxy) != 0) {
+                continue;
+            }
             m_parent_changes.push_back(
                 std::make_shared<Item_parent_change_operation>(
                     parent,
@@ -95,6 +105,10 @@ void Item_insert_remove_operation::execute(App_context& context)
         const auto& children = m_item->get_children();
         m_parent_changes.clear();
         for (const auto& child : children) {
+            // See the constructor: bone proxies are never recorded.
+            if ((child->get_flag_bits() & erhe::Item_flags::bone_proxy) != 0) {
+                continue;
+            }
             log_operations->trace("  child -> parent {}", child->get_name(), m_before_parent->get_name());
             m_parent_changes.push_back(
                 std::make_shared<Item_parent_change_operation>(

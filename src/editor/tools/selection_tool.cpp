@@ -520,6 +520,14 @@ auto Selection::delete_items(const std::vector<std::shared_ptr<erhe::Item_base>>
         if (!inside_prefab_instance && item.is_lock_edit()) {
             return; // Skip locked items and their children
         }
+        // Editor-generated bone proxies are not content; Bone_visualization
+        // owns their lifetime through skin register/unregister. Recording one
+        // in a delete would make undo resurrect it NEXT TO the fresh proxy the
+        // re-registered skin creates, duplicating proxies on every
+        // delete+undo cycle.
+        if ((item.get_flag_bits() & erhe::Item_flags::bone_proxy) != 0) {
+            return;
+        }
         recursive_selection.push_back(item.shared_from_this());
         bool collect_subtree_unconditionally = inside_prefab_instance;
         erhe::scene::Node* const node = dynamic_cast<erhe::scene::Node*>(&item);
