@@ -335,53 +335,6 @@ App_rendering::App_rendering(
         selected
     );
 
-    // Solid bone style: the pickable bone proxies rendered as N.V shaded
-    // octahedra. Reuses the existing Shader_debug::vdotn variant - standard.frag
-    // already emits vec3(max(dot(V, N), 0.0)) for it - so this needs no new
-    // shader and no new Shader_key axis, only the per-pass shader_debug override.
-    // Enabled by the Solid Bones setting; proxies are only visible then (or in
-    // bone selection mode), so an empty layer costs nothing.
-    make_composition_pass(
-        "Bone solid (N.V)",
-        Composition_pass_data{
-            .mesh_layers                  {Mesh_layer_id::bone},
-            .blending_mode_policy         {Blending_mode_policy::opaque_primitives_only},
-            .primitive_mode               {Primitive_mode::polygon_fill},
-            .filter{
-                .require_all_bits_set         = erhe::Item_flags::visible | erhe::Item_flags::bone_proxy,
-                .require_at_least_one_bit_set = 0,
-                .require_all_bits_clear       = erhe::Item_flags::selected
-            },
-            .shader_debug_override        {erhe::scene_renderer::Shader_debug::vdotn},
-            .shader_debug_override_filter {
-                .require_all_bits_set         = erhe::Item_flags::bone_proxy,
-                .require_at_least_one_bit_set = 0,
-                .require_all_bits_clear       = 0
-            }
-        },
-        not_selected
-    );
-
-    // Selected bones, same geometry but WITHOUT the vdotn override: that variant
-    // replaces the fragment color outright, so a selected bone rendered through
-    // it would be indistinguishable. These take their unlit material color
-    // (Debug_visualizations_style::bone_selected_color) instead.
-    // Bone_visualization mirrors the joint's selection onto the proxy mesh flag.
-    make_composition_pass(
-        "Bone solid selected",
-        Composition_pass_data{
-            .mesh_layers          {Mesh_layer_id::bone},
-            .blending_mode_policy {Blending_mode_policy::opaque_primitives_only},
-            .primitive_mode       {Primitive_mode::polygon_fill},
-            .filter{
-                .require_all_bits_set         = erhe::Item_flags::visible | erhe::Item_flags::bone_proxy | erhe::Item_flags::selected,
-                .require_at_least_one_bit_set = 0,
-                .require_all_bits_clear       = 0
-            }
-        },
-        selected
-    );
-
     edge_lines_not_selected = make_composition_pass(
         "Content edge lines not selected",
         Composition_pass_data{
@@ -615,6 +568,65 @@ App_rendering::App_rendering(
         {
             &m_pipeline_passes.brush_back,
             &m_pipeline_passes.brush_front
+        }
+    );
+
+    // Solid bone style: the pickable bone proxies rendered as N.V shaded
+    // octahedra, using the stencil-assisted multi-pass method of the tool
+    // handles (see the bone1..bone6 pipelines) so a bone reads as solid where it
+    // is in front of content and dimmed where it is inside it. Before that, a
+    // bone inside a skinned mesh was drawn but lost the depth test against the
+    // mesh's own fill and looked simply missing.
+    //
+    // The N.V shading reuses the existing Shader_debug::vdotn variant -
+    // standard.frag already emits vec3(max(dot(V, N), 0.0)) for it - so this
+    // needs no new shader and no new Shader_key axis, only the per-pass
+    // shader_debug override. The override's own filter excludes the selected and
+    // hovered proxies, because vdotn replaces the fragment color outright and
+    // would swallow their color; those fall back to their plain unlit material
+    // (Bone_visualization swaps in the selected / hover material and mirrors the
+    // joint's flags onto the proxy mesh). One pass therefore covers all three
+    // appearances - the earlier split into three passes existed only to drop the
+    // override, which the filter now does per mesh.
+    //
+    // Ordered after every other content pass on purpose: passes one and two
+    // leave their stencil tags behind in bits 0..6, and the edge-line pipelines
+    // draw only where the stencil is 0 there. The selection bit (7) is preserved
+    // by the write masks.
+    make_composition_pass(
+        "Bone solid (N.V)",
+        Composition_pass_data{
+            .mesh_layers                  {Mesh_layer_id::bone},
+            .blending_mode_policy         {Blending_mode_policy::opaque_primitives_only},
+            .primitive_mode               {Primitive_mode::polygon_fill},
+            .filter{
+                .require_all_bits_set         = Item_flags::visible | Item_flags::bone_proxy,
+                .require_at_least_one_bit_set = 0,
+                .require_all_bits_clear       = 0
+            },
+            .shader_debug_override        {erhe::scene_renderer::Shader_debug::vdotn},
+            .shader_debug_override_filter {
+                .require_all_bits_set         = Item_flags::bone_proxy,
+                .require_at_least_one_bit_set = 0,
+                .require_all_bits_clear       = Item_flags::selected | Item_flags::hovered_in_viewport
+            },
+            // Proxy visibility cannot gate this: in bone selection mode the
+            // proxies must stay visible to be pickable whether or not the solid
+            // style is on. Without this the solid bones drew in bone mode
+            // regardless of the setting, so the toggle looked dead.
+            .is_enabled                   {
+                [](const Render_context& context) -> bool {
+                    return context.app_context.editor_settings->debug_visualizations_style.bone_solid;
+                }
+            }
+        },
+        {
+            &m_pipeline_passes.bone1_hidden_stencil,  // tag_depth_hidden_with_stencil
+            &m_pipeline_passes.bone2_visible_stencil, // tag_depth_visible_with_stencil
+            &m_pipeline_passes.bone3_depth_clear,     // clear_depth
+            &m_pipeline_passes.bone4_depth,           // depth_only
+            &m_pipeline_passes.bone5_visible_color,   // require_stencil_tag_depth_visible
+            &m_pipeline_passes.bone6_hidden_color     // require_stencil_tag_depth_hidden_and_blend
         }
     );
 
@@ -1150,6 +1162,213 @@ Pipeline_renderpasses::Pipeline_renderpasses(
                 }
             },
             .color_blend    = &Color_blend_state::color_blend_premultiplied
+        }
+    }
+
+    // Solid bones, six pipelines mirroring the tool-handle method in
+    // Tools_pipeline_renderpasses. Differences from the tool pipelines, both
+    // forced by the bone pass running in the content phase rather than as a
+    // late overlay:
+    //  - the stencil write / test masks exclude bit 7, the selection silhouette
+    //    mask written by "Polygon Fill Selected" and read by the outline pass.
+    //  - the tag values are the bone-specific s_stencil_bone_mesh_* ones.
+    // The tags themselves are left behind in bits 0..6; the bone pass is
+    // therefore ordered after every content pass that requires a zero stencil
+    // there (the edge-line pipelines test `stencil == 0` with mask 0x7f).
+
+    // Bone pass one: tag the parts of a bone that are BEHIND content with
+    // s_stencil_bone_mesh_hidden. Reads depth, writes stencil only.
+    , bone1_hidden_stencil{
+        graphics_device,
+        erhe::graphics::Base_render_pipeline_create_info{
+            .debug_label             = erhe::utility::Debug_label{"Bone pass 1: Tag depth hidden `s_stencil_bone_mesh_hidden`"},
+            .input_assembly          = Input_assembly_state::triangle,
+            .rasterization           = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
+            .depth_stencil = {
+                .depth_test_enable   = true,
+                .depth_write_enable  = false,
+                .depth_compare_op    = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::greater, reverse_depth),
+                .stencil_test_enable = true,
+                .stencil_front = {
+                    .stencil_fail_op = erhe::graphics::Stencil_op::keep,
+                    .z_fail_op       = erhe::graphics::Stencil_op::keep,
+                    .z_pass_op       = erhe::graphics::Stencil_op::replace,
+                    .function        = erhe::graphics::Compare_operation::always,
+                    .reference       = s_stencil_bone_mesh_hidden,
+                    .test_mask       = 0b00000000u,
+                    .write_mask      = 0b01111111u // ignore high bit (selection)
+                },
+                .stencil_back = {
+                    .stencil_fail_op = erhe::graphics::Stencil_op::keep,
+                    .z_fail_op       = erhe::graphics::Stencil_op::keep,
+                    .z_pass_op       = erhe::graphics::Stencil_op::replace,
+                    .function        = erhe::graphics::Compare_operation::always,
+                    .reference       = s_stencil_bone_mesh_hidden,
+                    .test_mask       = 0b00000000u,
+                    .write_mask      = 0b01111111u // ignore high bit (selection)
+                },
+            },
+            .color_blend             = &Color_blend_state::color_writes_disabled
+        }
+    }
+
+    // Bone pass two: tag the parts of a bone that are IN FRONT of content with
+    // s_stencil_bone_mesh_visible. Reads depth, writes stencil only.
+    , bone2_visible_stencil{
+        graphics_device,
+        erhe::graphics::Base_render_pipeline_create_info{
+            .debug_label             = erhe::utility::Debug_label{"Bone pass 2: Tag depth visible `s_stencil_bone_mesh_visible`"},
+            .input_assembly          = Input_assembly_state::triangle,
+            .rasterization           = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
+            .depth_stencil = {
+                .depth_test_enable   = true,
+                .depth_write_enable  = false,
+                .depth_compare_op    = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::less_or_equal, reverse_depth),
+                .stencil_test_enable = true,
+                .stencil_front = {
+                    .stencil_fail_op = erhe::graphics::Stencil_op::keep,
+                    .z_fail_op       = erhe::graphics::Stencil_op::keep,
+                    .z_pass_op       = erhe::graphics::Stencil_op::replace,
+                    .function        = erhe::graphics::Compare_operation::always,
+                    .reference       = s_stencil_bone_mesh_visible,
+                    .test_mask       = 0b00000000u,
+                    .write_mask      = 0b01111111u // ignore high bit (selection)
+                },
+                .stencil_back = {
+                    .stencil_fail_op = erhe::graphics::Stencil_op::keep,
+                    .z_fail_op       = erhe::graphics::Stencil_op::keep,
+                    .z_pass_op       = erhe::graphics::Stencil_op::replace,
+                    .function        = erhe::graphics::Compare_operation::always,
+                    .reference       = s_stencil_bone_mesh_visible,
+                    .test_mask       = 0b00000000u,
+                    .write_mask      = 0b01111111u // ignore high bit (selection)
+                },
+            },
+            .color_blend             = &Color_blend_state::color_writes_disabled
+        }
+    }
+
+    // Bone pass three: push depth to the far plane under the bones. Without
+    // this the hidden colour pass (six) has nothing to draw against - its
+    // fragments are behind content by construction and would fail the depth
+    // test. Depth only, no colour.
+    , bone3_depth_clear{
+        graphics_device,
+        erhe::graphics::Base_render_pipeline_create_info{
+            .debug_label          = erhe::utility::Debug_label{"Bone pass 3: Set depth to fixed value"},
+            .input_assembly       = Input_assembly_state::triangle,
+            .viewport_depth_range = Viewport_depth_range_state{
+                // Fixed depth at the far plane: 0.0 reverse-Z, 1.0 forward-Z.
+                .min_depth = reverse_depth ? 0.0f : 1.0f,
+                .max_depth = reverse_depth ? 0.0f : 1.0f
+            },
+            .rasterization        = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
+            .depth_stencil        = Depth_stencil_state::depth_test_always_stencil_test_disabled,
+            .color_blend          = &Color_blend_state::color_writes_disabled
+        }
+    }
+
+    // Bone pass four: lay down the bones' own depth over the cleared range, so
+    // passes five and six sort bone against bone correctly (a skeleton is a
+    // pile of overlapping proxies) while the stencil tags from passes one and
+    // two still say what is inside content and what is not.
+    , bone4_depth{
+        graphics_device,
+        erhe::graphics::Base_render_pipeline_create_info{
+            .debug_label    = erhe::utility::Debug_label{"Bone pass 4: Set depth to proper bone depth"},
+            .input_assembly = Input_assembly_state::triangle,
+            .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
+            .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
+            .color_blend    = &Color_blend_state::color_writes_disabled
+        }
+    }
+
+    // Bone pass five: the unoccluded part of each bone, drawn solid.
+    , bone5_visible_color{
+        graphics_device,
+        erhe::graphics::Base_render_pipeline_create_info{
+            .debug_label             = erhe::utility::Debug_label{"Bone pass 5: Render visible bone parts, require `s_stencil_bone_mesh_visible`"},
+            .input_assembly          = Input_assembly_state::triangle,
+            .rasterization           = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
+            .depth_stencil = {
+                .depth_test_enable   = true,
+                .depth_write_enable  = true,
+                .depth_compare_op    = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::less_or_equal, reverse_depth),
+                .stencil_test_enable = true,
+                .stencil_front = {
+                    .stencil_fail_op = erhe::graphics::Stencil_op::keep,
+                    .z_fail_op       = erhe::graphics::Stencil_op::keep,
+                    .z_pass_op       = erhe::graphics::Stencil_op::keep,
+                    .function        = erhe::graphics::Compare_operation::equal,
+                    .reference       = s_stencil_bone_mesh_visible,
+                    .test_mask       = 0b01111111u, // ignore high bit (selection)
+                    .write_mask      = 0b01111111u
+                },
+                .stencil_back = {
+                    .stencil_fail_op = erhe::graphics::Stencil_op::keep,
+                    .z_fail_op       = erhe::graphics::Stencil_op::keep,
+                    .z_pass_op       = erhe::graphics::Stencil_op::keep,
+                    .function        = erhe::graphics::Compare_operation::equal,
+                    .reference       = s_stencil_bone_mesh_visible,
+                    .test_mask       = 0b01111111u,
+                    .write_mask      = 0b01111111u
+                }
+            }
+        }
+    }
+
+    // Bone pass six: the part of each bone that is inside content, blended at
+    // the same constant the tool handles use so the two read alike.
+    // RGB factors use CONSTANT_COLOR rather than CONSTANT_ALPHA because
+    // VK_KHR_portability_subset on MoltenVK rejects CONSTANT_ALPHA in the
+    // color channel (VUID-...-04454). Blend constant's RGB is set equal to its
+    // alpha so CONSTANT_COLOR yields the same result as CONSTANT_ALPHA.
+    , bone6_hidden_color_blend{
+        .enabled                = true,
+        .rgb = {
+            .equation_mode      = erhe::graphics::Blend_equation_mode::func_add,
+            .source_factor      = erhe::graphics::Blending_factor::constant_color,
+            .destination_factor = erhe::graphics::Blending_factor::one_minus_constant_color
+        },
+        .alpha = {
+            .equation_mode      = erhe::graphics::Blend_equation_mode::func_add,
+            .source_factor      = erhe::graphics::Blending_factor::constant_alpha,
+            .destination_factor = erhe::graphics::Blending_factor::one_minus_constant_alpha
+        },
+        .constant               = { 0.6f, 0.6f, 0.6f, 0.6f }
+    }
+
+    , bone6_hidden_color{
+        graphics_device,
+        erhe::graphics::Base_render_pipeline_create_info{
+            .debug_label             = erhe::utility::Debug_label{"Bone pass 6: Render hidden bone parts, require `s_stencil_bone_mesh_hidden`"},
+            .input_assembly          = Input_assembly_state::triangle,
+            .rasterization           = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
+            .depth_stencil = {
+                .depth_test_enable   = true,
+                .depth_write_enable  = true,
+                .depth_compare_op    = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::less_or_equal, reverse_depth),
+                .stencil_test_enable = true,
+                .stencil_front = {
+                    .stencil_fail_op = erhe::graphics::Stencil_op::keep,
+                    .z_fail_op       = erhe::graphics::Stencil_op::keep,
+                    .z_pass_op       = erhe::graphics::Stencil_op::keep,
+                    .function        = erhe::graphics::Compare_operation::equal,
+                    .reference       = s_stencil_bone_mesh_hidden,
+                    .test_mask       = 0b01111111u, // ignore high bit (selection)
+                    .write_mask      = 0b01111111u
+                },
+                .stencil_back = {
+                    .stencil_fail_op = erhe::graphics::Stencil_op::keep,
+                    .z_fail_op       = erhe::graphics::Stencil_op::keep,
+                    .z_pass_op       = erhe::graphics::Stencil_op::keep,
+                    .function        = erhe::graphics::Compare_operation::equal,
+                    .reference       = s_stencil_bone_mesh_hidden,
+                    .test_mask       = 0b01111111u,
+                    .write_mask      = 0b01111111u
+                }
+            },
+            .color_blend = &bone6_hidden_color_blend
         }
     }
 {
