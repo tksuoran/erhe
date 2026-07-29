@@ -144,6 +144,13 @@ void Hover_tool::on_hover_mesh(Hover_mesh_message& message)
             log_pointer->debug("no new hovered mesh / node");
         }
         m_hovered_node_in_viewport = hovered_node;
+        // Direct call rather than a hover_mesh subscription in
+        // Bone_visualization: a subscriber registered before this one would
+        // read the hovered flags before the flips above. Here both flags are
+        // final.
+        if (m_context.bone_visualization != nullptr) {
+            m_context.bone_visualization->update_hover(old_hovered_node.get(), hovered_node.get());
+        }
     }
 }
 

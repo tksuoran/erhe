@@ -1,11 +1,14 @@
 #include "tools/bone_visualization.hpp"
 
 #include "app_context.hpp"
+#include "app_message_bus.hpp"
 #include "app_scenes.hpp"
+#include "assets/asset_manager.hpp"
 #include "content_library/content_library.hpp"
 #include "app_settings.hpp"
 #include "scene/node_raytrace_mask.hpp"
 #include "scene/scene_root.hpp"
+#include "tools/mesh_component_selection.hpp"
 
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_primitive/build_info.hpp"
@@ -142,10 +145,34 @@ auto bone_tail_in_joint_space(const erhe::scene::Skin& skin, const std::size_t j
     return glm::vec3{0.2f, 0.0f, 0.0f};
 }
 
-Bone_visualization::Bone_visualization(App_context& context, erhe::scene_renderer::Mesh_memory& mesh_memory)
+Bone_visualization::Bone_visualization(App_context& context, App_message_bus& app_message_bus, erhe::scene_renderer::Mesh_memory& mesh_memory)
     : m_context    {context}
     , m_mesh_memory{mesh_memory}
 {
+    // No initial style / mode read here: this runs inside the init taskflow,
+    // before App_context is filled. The style is read at first use
+    // (ensure_primitive), the mode starts at its Mesh_component_selection
+    // default (object) and every later change arrives as a message. No scene
+    // sweep either: no scene exists yet, and skin messages queued before the
+    // first pump are delivered to these subscriptions regardless of order.
+    m_skin_registered_subscription = app_message_bus.skin_registered.subscribe(
+        [this](Skin_registered_message& message) { on_skin_registered(message); }
+    );
+    m_close_scene_subscription = app_message_bus.close_scene.subscribe(
+        [this](Close_scene_message& message) { on_close_scene(message); }
+    );
+    m_selection_subscription = app_message_bus.selection.subscribe(
+        [this](Selection_message& message) { on_selection(message); }
+    );
+    m_node_touched_subscription = app_message_bus.node_touched.subscribe(
+        [this](Node_touched_message& message) { on_node_touched(message.node); }
+    );
+    m_animation_update_subscription = app_message_bus.animation_update.subscribe(
+        [this](Animation_update_message&) { on_animation_update(); }
+    );
+    m_mode_changed_subscription = app_message_bus.mesh_component_mode_changed.subscribe(
+        [this](Mesh_component_mode_changed_message&) { on_mode_changed(); }
+    );
 }
 
 Bone_visualization::~Bone_visualization() noexcept = default;
@@ -155,6 +182,15 @@ void Bone_visualization::ensure_primitive()
 {
     if (m_bone_primitive) {
         return;
+    }
+
+    // First real work also snaps up the initial style values (the constructor
+    // runs before App_context is filled and cannot). Later changes arrive via
+    // apply_style_shape(), called from the settings UI at the edit.
+    {
+        const Debug_visualizations_style& style = m_context.editor_settings->debug_visualizations_style;
+        m_width_scale = style.bone_width_scale;
+        m_solid       = style.bone_solid;
     }
 
     auto render_geometry   = std::make_shared<erhe::geometry::Geometry>();
@@ -212,6 +248,18 @@ void Bone_visualization::ensure_primitive()
         }
     );
     apply_style_colors();
+
+    // Builtin-scope assets ({builtin, material, <name>}): the three materials
+    // are editor-owned and outlive every scene on purpose (they are shared by
+    // the proxies of all scenes). Without this, closing a scene whose content
+    // library lists them makes the scene-close leak watchdog report them as
+    // leaked; as builtins they are "intentionally pinned by the asset
+    // manager" instead.
+    if (m_context.asset_manager != nullptr) {
+        m_context.asset_manager->register_builtin(Asset_type::material, m_material);
+        m_context.asset_manager->register_builtin(Asset_type::material, m_selected_material);
+        m_context.asset_manager->register_builtin(Asset_type::material, m_hover_material);
+    }
 }
 
 void Bone_visualization::apply_style_colors()
@@ -242,8 +290,9 @@ auto Bone_visualization::make_proxy(const std::shared_ptr<erhe::scene::Node>& jo
     proxy.mesh->layer_id = Mesh_layer_id::bone;
 
     // bone_proxy is what keeps this out of the item tree, save, export and
-    // prefabs; id is added/removed by update() to gate picking. Deliberately no
-    // `content` bit - a proxy must never be mistaken for scene content.
+    // prefabs; id is added/removed by apply_proxy_flags() to gate picking.
+    // Deliberately no `content` bit - a proxy must never be mistaken for scene
+    // content.
     proxy.mesh->enable_flag_bits(erhe::Item_flags::bone_proxy | erhe::Item_flags::visible);
     proxy.node->enable_flag_bits(erhe::Item_flags::bone_proxy | erhe::Item_flags::visible);
 
@@ -269,31 +318,151 @@ void Bone_visualization::set_proxy_transform(Proxy& proxy, const glm::vec3 tail_
     proxy.width_scale = m_width_scale;
 }
 
-void Bone_visualization::update(const bool bone_mode)
+void Bone_visualization::refresh_proxy_shape(Proxy& proxy)
 {
-    ensure_primitive();
+    const std::shared_ptr<erhe::scene::Skin> skin = proxy.skin.lock();
+    if (!skin) {
+        return;
+    }
+    // Only rebuild the transform when the bone shape actually changed. Under a
+    // rotation-only animation - the common case - the child's local translation
+    // is constant, so this is a compare and nothing else; the joint's own
+    // animation reaches the proxy through the parent link.
+    const glm::vec3 tail_local = bone_tail_in_joint_space(*skin, proxy.joint_index);
+    if ((tail_local != proxy.tail_local) || (m_width_scale != proxy.width_scale)) {
+        set_proxy_transform(proxy, tail_local);
+    }
+}
 
-    const Debug_visualizations_style& style = m_context.editor_settings->debug_visualizations_style;
-    m_width_scale = style.bone_width_scale;
+void Bone_visualization::apply_proxy_flags(Proxy& proxy)
+{
     // Visible for the solid display style OR whenever bone mode is on (you
     // cannot click what you cannot see); pickable only in bone mode.
-    const bool visible  = bone_mode || style.bone_solid;
-    const bool pickable = bone_mode;
-
-    for (auto& [joint_ptr, proxy] : m_proxies) {
-        proxy.alive = false;
+    const bool visible  = m_bone_mode || m_solid;
+    const bool pickable = m_bone_mode;
+    proxy.mesh->set_visible(visible);
+    if (pickable) {
+        proxy.mesh->enable_flag_bits(erhe::Item_flags::id);
+    } else {
+        proxy.mesh->disable_flag_bits(erhe::Item_flags::id);
     }
+    // Raytrace: set the instance mask directly rather than deriving it from the
+    // flags, because bone_proxy must stay set (it is the proxy's identity)
+    // while pickability toggles. Mask 0 = unhittable, so in object mode a ray
+    // passes straight through to the mesh.
+    proxy.mesh->set_rt_mask(pickable ? Raytrace_node_mask::bone : Raytrace_node_mask::none);
+}
 
-    const std::vector<std::shared_ptr<Scene_root>>& scene_roots = m_context.app_scenes->get_scene_roots();
-    for (const std::shared_ptr<Scene_root>& scene_root : scene_roots) {
-        if (scene_root) {
-            update_scene(*scene_root, visible, pickable);
+void Bone_visualization::update_proxy_material(Proxy& proxy)
+{
+    const std::shared_ptr<erhe::scene::Node> joint = proxy.joint.lock();
+    if (!joint) {
+        return;
+    }
+    // Selected bones render in a distinct color. Swap only on change:
+    // set_primitives() rebuilds the raytrace primitives.
+    // Mirror the joint's selection onto the proxy mesh. The flag is what splits
+    // the two bone composition passes: unselected bones take the vdotn (N.V)
+    // variant, selected ones render with their plain unlit material so the
+    // selected color actually survives - vdotn overrides the fragment color
+    // outright and would swallow it.
+    // Hover wins over selection, matching the content mesh convention.
+    // Hover_tool sets hovered_in_viewport on the JOINT (get_hover_node resolves
+    // a hovered proxy to its joint), so it is read from there.
+    const bool selected = joint->is_selected();
+    const bool hovered  = joint->is_hovered();
+    if ((selected == proxy.selected) && (hovered == proxy.hovered)) {
+        return;
+    }
+    proxy.mesh->get_mutable_primitives().front().material =
+        hovered  ? m_hover_material    :
+        selected ? m_selected_material : m_material;
+    if (selected) {
+        proxy.mesh->enable_flag_bits(erhe::Item_flags::selected);
+    } else {
+        proxy.mesh->disable_flag_bits(erhe::Item_flags::selected);
+    }
+    if (hovered) {
+        proxy.mesh->enable_flag_bits(erhe::Item_flags::hovered_in_viewport);
+    } else {
+        proxy.mesh->disable_flag_bits(erhe::Item_flags::hovered_in_viewport);
+    }
+    proxy.selected = selected;
+    proxy.hovered  = hovered;
+}
+
+void Bone_visualization::add_skin_proxies(Scene_root& scene_root, const std::shared_ptr<erhe::scene::Skin>& skin)
+{
+    ensure_primitive();
+    register_materials(scene_root);
+
+    const std::vector<std::shared_ptr<erhe::scene::Node>>& joints = skin->skin_data.joints;
+    for (std::size_t i = 0, end = joints.size(); i < end; ++i) {
+        const std::shared_ptr<erhe::scene::Node>& joint = joints[i];
+        if (!joint) {
+            continue;
         }
+        auto found = m_proxies.find(joint.get());
+        if (found == m_proxies.end()) {
+            Proxy proxy = make_proxy(joint);
+            m_joint_by_proxy_mesh[proxy.mesh.get()] = joint;
+            found = m_proxies.emplace(joint.get(), std::move(proxy)).first;
+        }
+        // (Re)bind the shape source: a joint shared between skins keeps one
+        // proxy, owned by whichever skin registered last.
+        Proxy& proxy = found->second;
+        proxy.skin        = skin;
+        proxy.skin_key    = skin.get();
+        proxy.joint_index = i;
+        refresh_proxy_shape(proxy);
+        apply_proxy_flags(proxy);
+        update_proxy_material(proxy);
     }
+}
 
-    // Drop proxies whose joint or skin went away.
+void Bone_visualization::remove_skin_proxies(const erhe::scene::Skin* skin)
+{
     for (auto i = m_proxies.begin(); i != m_proxies.end(); ) {
-        if (i->second.alive) {
+        Proxy& proxy = i->second;
+        if (proxy.skin_key != skin) {
+            ++i;
+            continue;
+        }
+        if (proxy.mesh) {
+            m_joint_by_proxy_mesh.erase(proxy.mesh.get());
+        }
+        if (proxy.node) {
+            proxy.node->set_node_parent(nullptr);
+        }
+        i = m_proxies.erase(i);
+    }
+}
+
+void Bone_visualization::on_skin_registered(Skin_registered_message& message)
+{
+    if (!message.skin) {
+        return;
+    }
+    if (message.registered) {
+        if (message.scene_root) {
+            add_skin_proxies(*message.scene_root, message.skin);
+        }
+    } else {
+        remove_skin_proxies(message.skin.get());
+    }
+}
+
+void Bone_visualization::on_close_scene(Close_scene_message& message)
+{
+    // Skin unregistration normally precedes this, but a teardown that skips it
+    // (or a joint freed with the scene) must not leave proxies keeping items of
+    // the closed scene alive - the scene-close leak watchdog would flag them.
+    Scene_root* const scene_root = message.scene_root.get();
+    m_material_scene_roots.erase(scene_root);
+    for (auto i = m_proxies.begin(); i != m_proxies.end(); ) {
+        const std::shared_ptr<erhe::scene::Node> joint = i->second.joint.lock();
+        const bool drop = !joint || (joint->get_item_host() == scene_root) || (joint->get_item_host() == nullptr);
+        if (!drop) {
             ++i;
             continue;
         }
@@ -304,6 +473,101 @@ void Bone_visualization::update(const bool bone_mode)
             i->second.node->set_node_parent(nullptr);
         }
         i = m_proxies.erase(i);
+    }
+}
+
+void Bone_visualization::on_selection(Selection_message& message)
+{
+    // The selected flags are already set when the message fires
+    // (Selection::end_selection_change), so the changed items can be
+    // reconciled directly.
+    const auto reconcile = [this](const std::vector<std::shared_ptr<erhe::Item_base>>& items) {
+        for (const std::shared_ptr<erhe::Item_base>& item : items) {
+            const erhe::scene::Node* const node = dynamic_cast<const erhe::scene::Node*>(item.get());
+            if (node == nullptr) {
+                continue;
+            }
+            const auto i = m_proxies.find(node);
+            if (i != m_proxies.end()) {
+                update_proxy_material(i->second);
+            }
+        }
+    };
+    reconcile(message.selection_change.no_longer_selected);
+    reconcile(message.selection_change.newly_selected);
+}
+
+void Bone_visualization::on_node_touched(erhe::scene::Node* node)
+{
+    if (node == nullptr) {
+        return;
+    }
+    // A node's local translation feeds two bone shapes: its own proxy (a leaf
+    // bone's length is the joint's offset from its parent) and its parent
+    // joint's proxy (a parent bone's tail is the first child's translation).
+    const auto self = m_proxies.find(node);
+    if (self != m_proxies.end()) {
+        refresh_proxy_shape(self->second);
+    }
+    const std::shared_ptr<erhe::scene::Node> parent = node->get_parent_node();
+    if (parent) {
+        const auto parent_proxy = m_proxies.find(parent.get());
+        if (parent_proxy != m_proxies.end()) {
+            refresh_proxy_shape(parent_proxy->second);
+        }
+    }
+}
+
+void Bone_visualization::on_animation_update()
+{
+    // The animation message does not say which nodes it moved, so every proxy
+    // is compared; refresh_proxy_shape rebuilds only those whose tail actually
+    // changed (translation-animated joints - rotation-only channels never do).
+    for (auto& [joint_ptr, proxy] : m_proxies) {
+        refresh_proxy_shape(proxy);
+    }
+}
+
+void Bone_visualization::on_mode_changed()
+{
+    const bool bone_mode = (m_context.mesh_component_selection != nullptr) &&
+        (m_context.mesh_component_selection->get_mode() == Mesh_component_mode::bone);
+    if (bone_mode == m_bone_mode) {
+        return;
+    }
+    m_bone_mode = bone_mode;
+    for (auto& [joint_ptr, proxy] : m_proxies) {
+        apply_proxy_flags(proxy);
+    }
+}
+
+void Bone_visualization::apply_style_shape()
+{
+    const Debug_visualizations_style& style = m_context.editor_settings->debug_visualizations_style;
+    if (style.bone_width_scale != m_width_scale) {
+        m_width_scale = style.bone_width_scale;
+        for (auto& [joint_ptr, proxy] : m_proxies) {
+            refresh_proxy_shape(proxy);
+        }
+    }
+    if (style.bone_solid != m_solid) {
+        m_solid = style.bone_solid;
+        for (auto& [joint_ptr, proxy] : m_proxies) {
+            apply_proxy_flags(proxy);
+        }
+    }
+}
+
+void Bone_visualization::update_hover(const erhe::scene::Node* old_joint, const erhe::scene::Node* new_joint)
+{
+    for (const erhe::scene::Node* joint : { old_joint, new_joint }) {
+        if (joint == nullptr) {
+            continue;
+        }
+        const auto i = m_proxies.find(joint);
+        if (i != m_proxies.end()) {
+            update_proxy_material(i->second);
+        }
     }
 }
 
@@ -323,88 +587,6 @@ void Bone_visualization::register_materials(Scene_root& scene_root)
         content_library->materials->add(m_hover_material);
     }
     m_material_scene_roots.insert(&scene_root);
-}
-
-void Bone_visualization::update_scene(Scene_root& scene_root, const bool visible, const bool pickable)
-{
-    const std::vector<std::shared_ptr<erhe::scene::Skin>>& skins = scene_root.get_scene().get_skins();
-    if (!skins.empty()) {
-        register_materials(scene_root);
-    }
-    for (const std::shared_ptr<erhe::scene::Skin>& skin : skins) {
-        if (!skin) {
-            continue;
-        }
-        const std::vector<std::shared_ptr<erhe::scene::Node>>& joints = skin->skin_data.joints;
-        for (std::size_t i = 0, end = joints.size(); i < end; ++i) {
-            const std::shared_ptr<erhe::scene::Node>& joint = joints[i];
-            if (!joint) {
-                continue;
-            }
-
-            auto found = m_proxies.find(joint.get());
-            if (found == m_proxies.end()) {
-                Proxy proxy = make_proxy(joint);
-                m_joint_by_proxy_mesh[proxy.mesh.get()] = joint;
-                found = m_proxies.emplace(joint.get(), std::move(proxy)).first;
-                set_proxy_transform(found->second, bone_tail_in_joint_space(*skin, i));
-            } else {
-                // Only rebuild the transform when the bone shape actually
-                // changed. Under a rotation-only animation - the common case -
-                // the child's local translation is constant, so this is a
-                // compare and nothing else; the joint's own animation reaches
-                // the proxy through the parent link.
-                const glm::vec3 tail_local = bone_tail_in_joint_space(*skin, i);
-                if ((tail_local != found->second.tail_local) || (m_width_scale != found->second.width_scale)) {
-                    set_proxy_transform(found->second, tail_local);
-                }
-            }
-
-            Proxy& proxy = found->second;
-            proxy.alive = true;
-
-            // Selected bones render in a distinct color. Swap only on change:
-            // set_primitives() rebuilds the raytrace primitives.
-            // Mirror the joint's selection onto the proxy mesh. The flag is what
-            // splits the two bone composition passes: unselected bones take the
-            // vdotn (N.V) variant, selected ones render with their plain unlit
-            // material so the selected color actually survives - vdotn overrides
-            // the fragment color outright and would swallow it.
-            // Hover wins over selection, matching the content mesh convention.
-            // Hover_tool sets hovered_in_viewport on the JOINT (get_hover_node
-            // resolves a hovered proxy to its joint), so it is read from there.
-            const bool selected = joint->is_selected();
-            const bool hovered  = joint->is_hovered();
-            if ((selected != proxy.selected) || (hovered != proxy.hovered)) {
-                proxy.mesh->get_mutable_primitives().front().material =
-                    hovered  ? m_hover_material    :
-                    selected ? m_selected_material : m_material;
-                if (selected) {
-                    proxy.mesh->enable_flag_bits(erhe::Item_flags::selected);
-                } else {
-                    proxy.mesh->disable_flag_bits(erhe::Item_flags::selected);
-                }
-                if (hovered) {
-                    proxy.mesh->enable_flag_bits(erhe::Item_flags::hovered_in_viewport);
-                } else {
-                    proxy.mesh->disable_flag_bits(erhe::Item_flags::hovered_in_viewport);
-                }
-                proxy.selected = selected;
-                proxy.hovered  = hovered;
-            }
-            proxy.mesh->set_visible(visible);
-            if (pickable) {
-                proxy.mesh->enable_flag_bits(erhe::Item_flags::id);
-            } else {
-                proxy.mesh->disable_flag_bits(erhe::Item_flags::id);
-            }
-            // Raytrace: set the instance mask directly rather than deriving it
-            // from the flags, because bone_proxy must stay set (it is the
-            // proxy's identity) while pickability toggles. Mask 0 = unhittable,
-            // so in object mode a ray passes straight through to the mesh.
-            proxy.mesh->set_rt_mask(pickable ? Raytrace_node_mask::bone : Raytrace_node_mask::none);
-        }
-    }
 }
 
 auto Bone_visualization::get_joint_for_proxy(const erhe::scene::Mesh* mesh) const -> std::shared_ptr<erhe::scene::Node>

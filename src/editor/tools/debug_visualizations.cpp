@@ -2191,8 +2191,15 @@ void Debug_visualizations::style_imgui(Property_editor& p, App_context& context,
             }
         }
     });
-    p.add_entry("Solid Bones", [&style]() {
-        ImGui::Checkbox("##", &style.bone_solid);
+    // Solid style and width are pushed into Bone_visualization at the edit,
+    // like the colors above: solid re-derives proxy visibility, width rebuilds
+    // the proxy transforms.
+    p.add_entry("Solid Bones", [&style, &context]() {
+        if (ImGui::Checkbox("##", &style.bone_solid)) {
+            if (context.bone_visualization != nullptr) {
+                context.bone_visualization->apply_style_shape();
+            }
+        }
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip(
                 "Draw skeleton bones as N.V shaded solid octahedra (the pickable bone\n"
@@ -2201,8 +2208,12 @@ void Debug_visualizations::style_imgui(Property_editor& p, App_context& context,
             );
         }
     });
-    p.add_entry("Bone Width", [&style]() {
-        ImGui::DragFloat("##", &style.bone_width_scale, 0.005f, 0.005f, 2.0f, "%.3f");
+    p.add_entry("Bone Width", [&style, &context]() {
+        if (ImGui::DragFloat("##", &style.bone_width_scale, 0.005f, 0.005f, 2.0f, "%.3f")) {
+            if (context.bone_visualization != nullptr) {
+                context.bone_visualization->apply_style_shape();
+            }
+        }
     });
 
     p.push_group("Annotations", ImGuiTreeNodeFlags_None);

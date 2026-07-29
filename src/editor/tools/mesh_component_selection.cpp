@@ -88,6 +88,7 @@ void Mesh_component_entry::toggle_edge(const GEO::index_t a, const GEO::index_t 
 #pragma endregion Mesh_component_entry
 
 Mesh_component_selection::Mesh_component_selection(App_message_bus& app_message_bus)
+    : m_app_message_bus{app_message_bus}
 {
     // Kept as an eager-housekeeping safety net: when an operation announces a
     // geometry swap, prune entries that can no longer become live. Correctness
@@ -115,7 +116,13 @@ auto Mesh_component_selection::get_mode() const -> Mesh_component_mode
 
 void Mesh_component_selection::set_mode(const Mesh_component_mode mode)
 {
+    if (m_mode == mode) {
+        return;
+    }
     m_mode = mode;
+    // Announce after the assignment: the message carries no payload, so
+    // subscribers read the new mode back through get_mode().
+    m_app_message_bus.mesh_component_mode_changed.send_message(Mesh_component_mode_changed_message{});
 }
 
 auto Mesh_component_selection::find_entry(

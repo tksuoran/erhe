@@ -1,5 +1,9 @@
 #pragma once
 
+#include "app_message.hpp"
+
+#include "erhe_message_bus/message_bus.hpp"
+
 #include <glm/glm.hpp>
 
 #include <cstddef>
@@ -24,6 +28,7 @@ namespace erhe::scene_renderer {
 namespace editor {
 
 class App_context;
+class App_message_bus;
 class Scene_root;
 
 // Where a bone's tail sits, expressed in its joint node's LOCAL space (the head
@@ -50,37 +55,48 @@ class Scene_root;
 // Proxies live in the content scene (so they inherit joint transforms for free)
 // but are flagged Item_flags::bone_proxy, which keeps them out of the item tree,
 // save, export and prefabs, and out of picking unless bone mode asks for them.
+//
+// Every input drives its own part of the state; there is no per-frame update:
+//   - Skin_registered_message (Scene_root::register_skin / unregister_skin)
+//     creates and drops the proxy set.
+//   - Close_scene_message drops the closed scene's proxies and its material
+//     registration.
+//   - Node_touched_message and Animation_update_message refresh the bone shape
+//     (tail offset / length).
+//   - Selection_message and a direct call from Hover_tool (update_hover) swap
+//     the selected / hovered materials.
+//   - Mesh_component_mode_changed_message gates visibility and pickability on
+//     bone selection mode.
+//   - The settings UI calls apply_style_colors / apply_style_shape at the edit.
 class Bone_visualization
 {
 public:
-    Bone_visualization(App_context& context, erhe::scene_renderer::Mesh_memory& mesh_memory);
+    // The message bus is passed explicitly: construction happens inside the
+    // init taskflow, before fill_app_context() populates the App_context
+    // pointers. Everything else read through m_context is only touched at
+    // runtime, after they are set.
+    Bone_visualization(App_context& context, App_message_bus& app_message_bus, erhe::scene_renderer::Mesh_memory& mesh_memory);
     ~Bone_visualization() noexcept;
-
-    // Reconcile proxies with the skins of every open scene: create one per joint,
-    // drop those whose joint or skin is gone, and refresh transforms whose bone
-    // shape changed. In bone selection mode the proxies are pickable
-    // (Item_flags::id and the raytrace mask) and visible whether or not the
-    // solid style is on - you cannot click what you cannot see; outside it they
-    // are visible only for the solid style and a click passes straight through
-    // to the mesh. The bone width and solid style come from
-    // Debug_visualizations_style, read here rather than pushed in by each scene
-    // view's Debug_visualizations.
-    //
-    // TODO This is still driven once per frame from the editor tick, which is
-    // the "update each frame" anti-pattern (see AGENTS.md). Every input has a
-    // reachable change notification and should drive its own part instead:
-    // scene_created / close_scene / register_skin / node_touched for the proxy
-    // set, node_touched + animation_update for the bone shape, the selection and
-    // hover_mesh messages for the selected / hovered material, and a direct call
-    // from the settings UI for width and solid style (as apply_style_colors
-    // already does for the colors). Mesh_component_selection::set_mode publishes
-    // nothing today and needs a message for the mode change.
-    void update(bool bone_mode);
 
     // Push the current Debug_visualizations_style bone colors into the two bone
     // materials. Called at material creation and from the settings UI at the
     // moment a bone color is edited - not polled per frame.
     void apply_style_colors();
+
+    // Re-read Debug_visualizations_style bone width and solid style. Called
+    // from the settings UI at the moment either value is edited (the same
+    // pattern as apply_style_colors). Width rebuilds the proxy transforms;
+    // solid re-derives visibility. In bone selection mode the proxies are
+    // pickable and visible whether or not the solid style is on - you cannot
+    // click what you cannot see; outside it they are visible only for the
+    // solid style and a click passes straight through to the mesh.
+    void apply_style_shape();
+
+    // Hover material swap, called directly by Hover_tool::on_hover_mesh at the
+    // moment the hovered node changes. A hover_mesh subscription here could run
+    // before Hover_tool's own (subscriber order is registration order), reading
+    // the joint's hovered flag before it was set - the direct call cannot.
+    void update_hover(const erhe::scene::Node* old_joint, const erhe::scene::Node* new_joint);
 
     // The joint a proxy mesh stands for; null when the mesh is not a bone proxy.
     [[nodiscard]] auto get_joint_for_proxy(const erhe::scene::Mesh* mesh) const -> std::shared_ptr<erhe::scene::Node>;
@@ -90,18 +106,24 @@ private:
     class Proxy
     {
     public:
-        std::weak_ptr<erhe::scene::Node> joint      {};
-        std::shared_ptr<erhe::scene::Node> node     {};
-        std::shared_ptr<erhe::scene::Mesh> mesh     {};
+        std::weak_ptr<erhe::scene::Node>   joint     {};
+        // The skin this proxy was created for: the weak ref feeds
+        // bone_tail_in_joint_space on shape refresh, the raw key matches the
+        // unregister message without locking.
+        std::weak_ptr<erhe::scene::Skin>   skin      {};
+        const erhe::scene::Skin*           skin_key  {nullptr};
+        std::size_t                        joint_index{0};
+        std::shared_ptr<erhe::scene::Node> node      {};
+        std::shared_ptr<erhe::scene::Mesh> mesh      {};
         glm::vec3                          tail_local{0.0f}; // shape the transform was built from
-        float                              width_scale{0.0f};
-        bool                               alive     {false};
+        // Negative sentinel: width is never negative, so a fresh proxy always
+        // fails the "shape unchanged" compare and gets its first transform.
+        float                              width_scale{-1.0f};
         bool                               selected  {false}; // material currently applied
         bool                               hovered   {false}; // material currently applied
     };
 
     void ensure_primitive();
-    void update_scene(Scene_root& scene_root, bool visible, bool pickable);
     // R5.2b explicit registration: the bone materials are created here, so they
     // must be listed in the content library of every scene whose proxies use
     // them. Without it a proxy carries a material with no buffer slot and the
@@ -112,6 +134,21 @@ private:
     auto make_proxy(const std::shared_ptr<erhe::scene::Node>& joint) -> Proxy;
     void set_proxy_transform(Proxy& proxy, glm::vec3 tail_local);
 
+    // Message / call targets. Each updates exactly the state that depends on
+    // the change it announces.
+    void on_skin_registered  (Skin_registered_message& message);
+    void on_close_scene      (Close_scene_message& message);
+    void on_selection        (Selection_message& message);
+    void on_node_touched     (erhe::scene::Node* node);
+    void on_animation_update ();
+    void on_mode_changed     ();
+
+    void add_skin_proxies    (Scene_root& scene_root, const std::shared_ptr<erhe::scene::Skin>& skin);
+    void remove_skin_proxies (const erhe::scene::Skin* skin);
+    void refresh_proxy_shape (Proxy& proxy);
+    void apply_proxy_flags   (Proxy& proxy);
+    void update_proxy_material(Proxy& proxy);
+
     App_context&                               m_context;
     erhe::scene_renderer::Mesh_memory&         m_mesh_memory;
     std::shared_ptr<erhe::primitive::Primitive> m_bone_primitive{};
@@ -120,9 +157,17 @@ private:
     std::shared_ptr<erhe::primitive::Material>  m_hover_material   {};
     float                                      m_width_scale{0.1f};
     bool                                       m_solid      {false};
+    bool                                       m_bone_mode  {false};
+
+    erhe::message_bus::Subscription<Skin_registered_message>             m_skin_registered_subscription;
+    erhe::message_bus::Subscription<Close_scene_message>                 m_close_scene_subscription;
+    erhe::message_bus::Subscription<Selection_message>                   m_selection_subscription;
+    erhe::message_bus::Subscription<Node_touched_message>                m_node_touched_subscription;
+    erhe::message_bus::Subscription<Animation_update_message>            m_animation_update_subscription;
+    erhe::message_bus::Subscription<Mesh_component_mode_changed_message> m_mode_changed_subscription;
 
     // Keyed by joint node pointer; the entry holds a weak ref so a dropped joint
-    // is detected on the next sweep.
+    // is detected when its skin unregisters or its scene closes.
     std::unordered_map<const erhe::scene::Node*, Proxy> m_proxies;
     // Reverse lookup for picking: proxy mesh -> joint node.
     std::unordered_map<const erhe::scene::Mesh*, std::weak_ptr<erhe::scene::Node>> m_joint_by_proxy_mesh;

@@ -13,6 +13,7 @@ void App_message_bus::update()
     load_scene_file.update();
     create_scene.update();
     close_scene.update();
+    skin_registered.update();
 }
 
 }

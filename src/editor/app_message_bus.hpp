@@ -31,6 +31,8 @@ public:
     erhe::message_bus::Message_bus<Create_scene_message,           queue> create_scene;
     erhe::message_bus::Message_bus<Close_scene_message,            queue> close_scene;
     erhe::message_bus::Message_bus<Tool_select_message,           sync>  tool_select;
+    erhe::message_bus::Message_bus<Skin_registered_message,       queue> skin_registered;
+    erhe::message_bus::Message_bus<Mesh_component_mode_changed_message, sync> mesh_component_mode_changed;
     erhe::message_bus::Message_bus<Render_scene_view_message,     sync>  render_scene_view;
     erhe::message_bus::Message_bus<Animation_update_message,      sync>  animation_update;
 };

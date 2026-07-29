@@ -135,7 +135,8 @@ Scene_root::Scene_root(
     const std::string_view                  name,
     bool                                    enable_physics
 )
-    : m_content_library{content_library}
+    : m_app_message_bus{app_message_bus}
+    , m_content_library{content_library}
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -1042,12 +1043,39 @@ void Scene_root::register_skin(const std::shared_ptr<erhe::scene::Skin>& skin)
     if (skin) {
         erhe::scene::mark_skin_joints(*skin);
     }
+    // Bone_visualization creates the bone proxies for this skin's joints on
+    // this message. Queued (see Skin_registered_message) so proxy nodes are
+    // not attached mid node-attach traversal. weak_from_this() rather than
+    // shared_from_this(): skins can (un)register from inside ~Scene_root
+    // (scene close teardown), where shared_from_this() throws bad_weak_ptr.
+    // A scene tearing down needs no proxies, and the handler skips a null
+    // scene_root.
+    if ((m_app_message_bus != nullptr) && skin) {
+        m_app_message_bus->skin_registered.queue_message(
+            Skin_registered_message{
+                .scene_root = weak_from_this().lock(),
+                .skin       = skin,
+                .registered = true
+            }
+        );
+    }
 }
 
 void Scene_root::unregister_skin(const std::shared_ptr<erhe::scene::Skin>& skin)
 {
     if (m_scene) {
         m_scene->unregister_skin(skin);
+    }
+    // weak_from_this(), not shared_from_this(): see register_skin. The
+    // unregister handler only needs the skin.
+    if ((m_app_message_bus != nullptr) && skin) {
+        m_app_message_bus->skin_registered.queue_message(
+            Skin_registered_message{
+                .scene_root = weak_from_this().lock(),
+                .skin       = skin,
+                .registered = false
+            }
+        );
     }
 }
 

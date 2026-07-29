@@ -95,6 +95,8 @@ public:
     explicit Mesh_component_selection(App_message_bus& app_message_bus);
 
     [[nodiscard]] auto get_mode() const -> Mesh_component_mode;
+    // Publishes Mesh_component_mode_changed_message when the mode actually
+    // changes (Bone_visualization gates proxy visibility / pickability on it).
     void               set_mode(Mesh_component_mode mode);
 
     // Entry lookup keyed by (mesh, primitive_index, geometry).
@@ -154,6 +156,7 @@ private:
     void on_mesh_geometry_changed(Mesh_geometry_changed_message& message);
 
     erhe::message_bus::Subscription<Mesh_geometry_changed_message> m_mesh_geometry_changed_subscription;
+    App_message_bus&                  m_app_message_bus;
     Mesh_component_mode               m_mode   {Mesh_component_mode::object};
     std::vector<Mesh_component_entry> m_entries{};
 };

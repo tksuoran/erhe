@@ -7,6 +7,7 @@
 namespace erhe        { class Item_base; }
 namespace erhe::scene { class Mesh; }
 namespace erhe::scene { class Node; }
+namespace erhe::scene { class Skin; }
 
 struct Graphics_preset_entry;
 
@@ -135,6 +136,30 @@ struct Close_scene_message
 };
 
 struct Tool_select_message
+{
+};
+
+// Published by Scene_root::register_skin / unregister_skin (a skinned mesh
+// entered or left the scene). Queue-only on purpose: registration fires from
+// inside node-attach traversal (e.g. while a glTF load walks the hierarchy),
+// where a sync subscriber that attaches its own nodes - Bone_visualization
+// creating bone proxies under the joints - would mutate child lists mid-walk.
+// The shared_ptrs keep both alive until the pump, so a scene closed in between
+// cannot dangle. scene_root is null when the skin (un)registers from inside
+// ~Scene_root (scene close teardown, where no owning shared_ptr exists);
+// handlers must skip work that needs the scene in that case.
+struct Skin_registered_message
+{
+    std::shared_ptr<Scene_root>        scene_root{};
+    std::shared_ptr<erhe::scene::Skin> skin      {};
+    bool                               registered{true};
+};
+
+// Published by Mesh_component_selection::set_mode() when the mode actually
+// changes. Carries no payload (the enum lives in mesh_component_selection.hpp,
+// which includes this header); the mode is already updated when this fires, so
+// subscribers read it back via App_context::mesh_component_selection.
+struct Mesh_component_mode_changed_message
 {
 };
 

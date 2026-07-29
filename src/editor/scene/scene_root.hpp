@@ -250,6 +250,9 @@ private:
     mutable ERHE_PROFILE_MUTEX(std::mutex, m_mutex);
     ERHE_PROFILE_MUTEX        (std::mutex, m_rendertarget_meshes_mutex);
 
+    // Publisher for Skin_registered_message; nullptr for scenes that do not
+    // take part in editor messaging (previews, the tool scene).
+    App_message_bus*                                m_app_message_bus{nullptr};
     App_scenes*                                     m_app_scenes{nullptr};
     std::shared_ptr<Content_library>                m_content_library;
     std::filesystem::path                           m_source_path;
