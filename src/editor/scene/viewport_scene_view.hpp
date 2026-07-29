@@ -161,6 +161,12 @@ public:
     void set_camera                  (const std::shared_ptr<erhe::scene::Camera>& camera);
     void update_pointer_2d_position  (glm::vec2 position_in_viewport);
     void update_hover                (bool ray_only = false);
+    // Force the ID pass to render for the next `frame_count` frames even
+    // though no real pointer hovers the viewport. The MCP pick_at probe needs
+    // this: it arms a pointer position, but the per-frame ImGui draw resets
+    // the hovered flag before rendering, so without the override the ID pass
+    // (the only correct pick source for skinned meshes) never runs headlessly.
+    void arm_pick_probe              (int frame_count);
     void request_cursor_relative_hold(bool relative_hold_enable);
     
     void viewport_toolbar            () override;
@@ -218,6 +224,7 @@ private:
     erhe::scene_renderer::Shader_debug m_shader_debug                   {erhe::scene_renderer::Shader_debug::none};
     Renderer_choice                    m_renderer_choice                {Renderer_choice::forward};
     bool                               m_is_scene_view_hovered          {false};
+    int                                m_pick_probe_frames              {0}; // see arm_pick_probe()
     bool                               m_show_navigation_gizmo          {true};
     bool                               m_relative_hold_enable           {false};
     std::unique_ptr<ImViewGuizmo::Context> m_navigation_gizmo;

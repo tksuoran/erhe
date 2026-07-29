@@ -388,6 +388,7 @@ auto Mcp_server::process_queued_requests() -> int
             { "get_scene_settings",             &Mcp_server::query_scene_settings                 },
             { "get_material_details",           &Mcp_server::query_material_details               },
             { "get_viewports",                  &Mcp_server::query_viewports                      },
+            { "pick_at",                        &Mcp_server::query_pick_at                        },
             { "get_server_info",                &Mcp_server::query_server_info                    },
             { "set_window_visibility",          &Mcp_server::action_set_window_visibility         },
             { "get_frame_pacing_status",        &Mcp_server::query_frame_pacing_status            },

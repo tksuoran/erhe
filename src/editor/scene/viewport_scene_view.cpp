@@ -250,7 +250,13 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
     // It also runs when a region selection scan is pending, so a programmatic
     // (non-hovered) scan still renders the ID pass it reads back.
     const bool scan_pending = (m_context.id_renderer != nullptr) && m_context.id_renderer->has_pending_scan();
-    if (do_render && (m_is_scene_view_hovered || scan_pending)) {
+    // pick_probe: an armed MCP pick_at probe (see arm_pick_probe) - renders the
+    // ID pass at the armed pointer position without a real hover.
+    const bool pick_probe = m_pick_probe_frames > 0;
+    if (pick_probe) {
+        --m_pick_probe_frames;
+    }
+    if (do_render && (m_is_scene_view_hovered || scan_pending || pick_probe)) {
         m_context.app_rendering->render_id(context);
     }
 
@@ -936,6 +942,11 @@ void Viewport_scene_view::update_pointer_2d_position(const glm::vec2 position_in
     ERHE_PROFILE_FUNCTION();
 
     m_position_in_viewport = position_in_viewport;
+}
+
+void Viewport_scene_view::arm_pick_probe(const int frame_count)
+{
+    m_pick_probe_frames = std::max(m_pick_probe_frames, frame_count);
 }
 
 void Viewport_scene_view::request_cursor_relative_hold(bool relative_hold_enable)

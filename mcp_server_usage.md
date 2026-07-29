@@ -141,6 +141,29 @@ curl -X POST http://127.0.0.1:8080/mcp \
 
 Returns: `{brushes: [{name, id}]}`
 
+### pick_at
+
+Headless pick probe: arm the pointer at viewport pixel coordinates and run
+the same hover update a real pointer runs. Reports every hover slot
+(content / tool / brush / rendertarget / grid / bone) plus `nearest` - the
+hit resolved by the same slot-ownership rule a viewport click uses (in bone
+selection mode the bone slot replaces content, and a bone hit reports the
+`joint` a click would select).
+
+The id-render readback is asynchronous: the first call at a position returns
+raytrace hits only (which never include skinned meshes). The armed position
+keeps the id pass rendering there for a few frames, so call again shortly
+after for the merged result that includes id-picked (e.g. skinned) meshes.
+
+```bash
+py -3 scripts/mcp_call.py pick_at b64:eyJ4IjogNjU2LCAieSI6IDI4Mn0=   # {"x": 656, "y": 282}
+```
+
+Arguments: `x`, `y` (viewport pixels, origin bottom-left), optional
+`viewport` (window title from `get_viewports`; default: first viewport).
+
+Returns: `{x, y, slots: [{slot, valid, mesh?, node?, joint?, grid?, position?, normal?, facet?}], nearest}`
+
 ### get_selection
 
 Get currently selected items.

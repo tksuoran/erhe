@@ -9,9 +9,11 @@
 #include "windows/frame_pacing_window.hpp"
 #include "erhe_frame_pacing/frame_pacing_observer.hpp"
 #include "erhe_graphics/device.hpp"
+#include "grid/grid.hpp"
 #include "scene/node_raytrace_mask.hpp"
 #include "scene/viewport_scene_view.hpp"
 #include "scene/viewport_scene_views.hpp"
+#include "tools/bone_visualization.hpp"
 #include "windows/viewport_window.hpp"
 
 #include "erhe_raytrace/iinstance.hpp"
@@ -409,6 +411,127 @@ auto Mcp_server::query_viewports(const json& args) -> std::string
     }
 
     return make_json_content({{"viewports", viewports}}).dump();
+}
+
+// Headless pick probe: arm the pointer on a viewport, run the same hover
+// update the interactive pointer path runs (raytrace + id-render merge), and
+// report every hover slot plus the nearest pickable hit - resolved through
+// get_pickable_slot_mask(), i.e. the same slot-ownership rule a viewport
+// click uses (in bone selection mode the bone slot replaces content).
+//
+// The id-render readback is asynchronous: the id pass renders at the armed
+// pointer position and its CPU copy settles a few frames later, so the FIRST
+// call at a position reports raytrace hits only. The armed position persists,
+// which keeps the id pass rendering there - call again after a few frames for
+// the merged result that includes the id path (skinned meshes).
+auto Mcp_server::query_pick_at(const json& args) -> std::string
+{
+    if (m_context.scene_views == nullptr) {
+        json r = make_text_content("No scene views available");
+        r["isError"] = true;
+        return r.dump();
+    }
+    if (!args.contains("x") || !args.contains("y")) {
+        json r = make_text_content("Missing required arguments: x, y (viewport pixel coordinates, origin at bottom-left)");
+        r["isError"] = true;
+        return r.dump();
+    }
+    const float       x              = args.value("x", 0.0f);
+    const float       y              = args.value("y", 0.0f);
+    const std::string viewport_title = args.value("viewport", "");
+
+    std::shared_ptr<Viewport_scene_view> scene_view{};
+    for (const std::shared_ptr<Viewport_window>& viewport_window : m_context.scene_views->get_viewport_windows()) {
+        const std::shared_ptr<Viewport_scene_view> candidate = viewport_window->viewport_scene_view();
+        if (!candidate) {
+            continue;
+        }
+        if (viewport_title.empty() || (viewport_window->get_title() == viewport_title)) {
+            scene_view = candidate;
+            break;
+        }
+    }
+    if (!scene_view) {
+        json r = make_text_content(
+            viewport_title.empty()
+                ? "No viewport with a scene view found"
+                : "Viewport not found: " + viewport_title + " (see get_viewports)"
+        );
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    // The same state the interactive path feeds from ImGui hover; update_hover
+    // requires both. The per-frame ImGui draw resets the hovered flag when no
+    // real pointer is over the window, but the position persists - that is
+    // what keeps App_rendering::render_id() rendering at it between calls.
+    scene_view->update_pointer_2d_position(glm::vec2{x, y});
+    scene_view->set_is_scene_view_hovered(true);
+    // Render the ID pass at the armed position for the next few frames: the
+    // per-frame ImGui draw resets the hovered flag before rendering, so
+    // without this the ID pass never runs headlessly and its async readback
+    // would never settle for the second call.
+    scene_view->arm_pick_probe(8);
+    scene_view->update_hover();
+
+    const auto entry_to_json = [this](const Hover_entry& entry) -> json {
+        json j{
+            {"slot",  Hover_entry::slot_names[entry.slot]},
+            {"valid", entry.valid}
+        };
+        if (!entry.valid) {
+            return j;
+        }
+        const std::shared_ptr<erhe::scene::Mesh> mesh = entry.scene_mesh_weak.lock();
+        if (mesh) {
+            j["mesh"] = mesh->get_name();
+            const erhe::scene::Node* node = mesh->get_node();
+            j["node"] = (node != nullptr) ? node->get_name() : "";
+            // A bone-slot hit selects the JOINT, not the proxy; report what a
+            // click would actually select.
+            if ((entry.slot == Hover_entry::bone_slot) && (m_context.bone_visualization != nullptr)) {
+                const std::shared_ptr<erhe::scene::Node> joint = m_context.bone_visualization->get_joint_for_proxy(mesh.get());
+                j["joint"] = joint ? joint->get_name() : "";
+            }
+        }
+        const std::shared_ptr<Grid> grid = entry.grid_weak.lock();
+        if (grid) {
+            j["grid"] = grid->get_name();
+        }
+        if (entry.position.has_value()) {
+            const glm::vec3& p = entry.position.value();
+            j["position"] = {p.x, p.y, p.z};
+        }
+        if (entry.normal.has_value()) {
+            const glm::vec3& n = entry.normal.value();
+            j["normal"] = {n.x, n.y, n.z};
+        }
+        if (entry.facet != GEO::NO_INDEX) {
+            j["facet"] = entry.facet;
+        }
+        return j;
+    };
+
+    json slots = json::array();
+    for (std::size_t slot = 0; slot < Hover_entry::slot_count; ++slot) {
+        slots.push_back(entry_to_json(scene_view->get_hover(slot)));
+    }
+
+    // Same mask Hover_tool::get_hover_node() uses for the pick target.
+    const Hover_entry* nearest = scene_view->get_nearest_hover(
+        scene_view->get_pickable_slot_mask(Hover_entry::content_bit | Hover_entry::rendertarget_bit)
+    );
+    json nearest_json{};
+    if ((nearest != nullptr) && nearest->valid) {
+        nearest_json = entry_to_json(*nearest);
+    }
+
+    return make_json_content({
+        {"x",       x},
+        {"y",       y},
+        {"slots",   slots},
+        {"nearest", nearest_json}
+    }).dump();
 }
 
 auto Mcp_server::query_scene_settings(const json& args) -> std::string

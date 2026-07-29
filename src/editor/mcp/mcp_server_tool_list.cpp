@@ -30,6 +30,15 @@ void Mcp_server::refresh_tool_list()
         }}
     }});
     m_tool_infos.push_back({"get_viewports",        "List viewport windows: window title, bound scene name, and camera name. Use to verify which scene/camera each viewport shows (e.g. that opening a scene did not rebind pre-existing viewports).", schema_no_args()});
+    m_tool_infos.push_back({"pick_at",              "Headless pick probe: arm the pointer at viewport pixel (x, y) and run the same hover update a real pointer runs, reporting every hover slot (content/tool/brush/rendertarget/grid/bone) plus 'nearest' - the hit resolved by the same slot-ownership rule a viewport click uses (bone slot replaces content in bone selection mode; a bone hit reports the joint a click would select). The id-render readback is ASYNC: the first call at a position returns raytrace hits only; the armed position keeps the id pass rendering there, so call again after a few frames for the merged result that includes id-picked (e.g. skinned) meshes.", {
+        {"type", "object"},
+        {"properties", {
+            {"x",        {{"type", "number"}, {"description", "Viewport pixel x (origin bottom-left)"}}},
+            {"y",        {{"type", "number"}, {"description", "Viewport pixel y (origin bottom-left)"}}},
+            {"viewport", {{"type", "string"}, {"description", "Viewport window title (see get_viewports); default: first viewport with a scene view"}}}
+        }},
+        {"required", {"x", "y"}}
+    }});
     m_tool_infos.push_back({"get_server_info",      "Get this editor MCP server's identity: name, version, process id (pid), build timestamp (compile time of the server), and bound port. Use it to detect a STALE editor: if the pid/build does not match the editor you just launched, another editor.exe is holding the port and your calls are hitting the wrong process.", schema_no_args()});
     m_tool_infos.push_back({"set_window_visibility", "Show or hide an editor ImGui window by its title (e.g. \"Inventory\"). Windows do per-frame work only while visible, so headless verification uses this to open windows the default layout leaves closed. On an unknown title the error payload lists all window titles.", {
         {"type", "object"},
