@@ -195,38 +195,40 @@ void Mesh::handle_node_transform_update()
 
 auto Mesh::get_skinned_aabb_world() const -> erhe::math::Aabb
 {
-    if (!skin) {
-        return erhe::math::Aabb{};
-    }
-    const Skin_data& skin_data = skin->skin_data;
-
     erhe::math::Aabb aabb;
     for (const Mesh_primitive& mesh_primitive : m_primitives) {
         if (!mesh_primitive.primitive) {
             continue;
         }
-        const erhe::primitive::Primitive_render_shape* shape = mesh_primitive.primitive->render_shape.get();
-        if (shape == nullptr) {
+        aabb.include(get_skinned_primitive_aabb_world(*mesh_primitive.primitive.get()));
+    }
+    return aabb;
+}
+
+auto Mesh::get_skinned_primitive_aabb_world(const erhe::primitive::Primitive& primitive) const -> erhe::math::Aabb
+{
+    erhe::math::Aabb aabb;
+    if (!skin) {
+        return aabb;
+    }
+    const Skin_data& skin_data = skin->skin_data;
+
+    const erhe::primitive::Primitive_render_shape* shape = primitive.render_shape.get();
+    if (shape == nullptr) {
+        return aabb;
+    }
+    const std::vector<erhe::math::Aabb>& joint_boxes = shape->get_renderable_mesh().joint_bounding_boxes;
+    const std::size_t end = std::min(joint_boxes.size(), skin_data.joints.size());
+    for (std::size_t i = 0; i < end; ++i) {
+        const erhe::math::Aabb& joint_box = joint_boxes[i];
+        if (!joint_box.is_valid()) {
+            continue; // joint influences no vertex of this primitive
+        }
+        const std::optional<glm::mat4> world_from_bind = skin_data.get_world_from_bind(i);
+        if (!world_from_bind.has_value()) {
             continue;
         }
-        const std::vector<erhe::math::Aabb>& joint_boxes = shape->get_renderable_mesh().joint_bounding_boxes;
-        const std::size_t end = std::min(joint_boxes.size(), skin_data.joints.size());
-        for (std::size_t i = 0; i < end; ++i) {
-            const erhe::math::Aabb& joint_box = joint_boxes[i];
-            if (!joint_box.is_valid()) {
-                continue; // joint influences no vertex of this primitive
-            }
-            const std::shared_ptr<Node>& joint = skin_data.joints[i];
-            if (!joint) {
-                continue;
-            }
-            // Same matrix the renderer poses vertices with (Joint_buffer).
-            const glm::mat4 joint_from_bind = (i < skin_data.inverse_bind_matrices.size())
-                ? skin_data.inverse_bind_matrices[i]
-                : glm::mat4{1.0f};
-            const glm::mat4 world_from_bind = joint->world_from_node() * joint_from_bind;
-            aabb.include(joint_box.transformed_by(world_from_bind));
-        }
+        aabb.include(joint_box.transformed_by(world_from_bind.value()));
     }
     return aabb;
 }

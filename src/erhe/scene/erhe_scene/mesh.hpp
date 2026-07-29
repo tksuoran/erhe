@@ -77,6 +77,13 @@ public:
     // Posed bounds from the skin alone. Returns an invalid Aabb when the mesh is
     // not skinned, or when the primitives carry no per-joint rest bounds.
     [[nodiscard]] auto get_skinned_aabb_world() const -> erhe::math::Aabb;
+    // Posed world bounds of a single primitive of this mesh: the union of the
+    // primitive's per-joint rest boxes transformed by the joints' current
+    // world-from-bind matrices - the boxes GPU skinning is bounded by. Returns
+    // an invalid Aabb when the mesh is not skinned or the primitive carries no
+    // joint bounds. Shared by everything that needs posed skinned bounds
+    // (shadow caster culling via get_aabb_world, debug visualizations).
+    [[nodiscard]] auto get_skinned_primitive_aabb_world(const erhe::primitive::Primitive& primitive) const -> erhe::math::Aabb;
 
     Layer_id              layer_id{0xff};
     std::shared_ptr<Skin> skin; // TODO Make this a separate node attachment

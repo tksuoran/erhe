@@ -4,6 +4,8 @@
 
 #include <glm/glm.hpp>
 
+#include <cstddef>
+#include <optional>
 #include <vector>
 
 namespace erhe::scene {
@@ -13,6 +15,13 @@ class Node;
 class Skin_data
 {
 public:
+    // World-from-bind matrix for joint i - the matrix GPU skinning poses
+    // vertices with (Joint_buffer): world_from_joint * inverse_bind. Falls back
+    // to an identity inverse-bind when the skin carries fewer inverse bind
+    // matrices than joints. Returns nullopt when the joint index is out of
+    // range or the joint node is missing.
+    [[nodiscard]] auto get_world_from_bind(std::size_t joint_index) const -> std::optional<glm::mat4>;
+
     uint32_t                                        joint_buffer_index{0}; // updated by Joint_buffer::update()
     std::vector<std::shared_ptr<erhe::scene::Node>> joints;
     std::vector<glm::mat4>                          inverse_bind_matrices;

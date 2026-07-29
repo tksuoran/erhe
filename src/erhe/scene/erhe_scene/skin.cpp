@@ -4,6 +4,21 @@
 
 namespace erhe::scene {
 
+auto Skin_data::get_world_from_bind(const std::size_t joint_index) const -> std::optional<glm::mat4>
+{
+    if (joint_index >= joints.size()) {
+        return std::nullopt;
+    }
+    const std::shared_ptr<Node>& joint = joints[joint_index];
+    if (!joint) {
+        return std::nullopt;
+    }
+    const glm::mat4 joint_from_bind = (joint_index < inverse_bind_matrices.size())
+        ? inverse_bind_matrices[joint_index]
+        : glm::mat4{1.0f};
+    return joint->world_from_node() * joint_from_bind;
+}
+
 namespace {
 
 // Lowest common ancestor of two nodes, counting each node as an ancestor of
