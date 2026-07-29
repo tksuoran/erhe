@@ -101,14 +101,16 @@ constexpr vec3 axis_z         { 0.0f,  0.0f, 1.0f};
     return false;
 }
 
+// Node_attachment mirrors the node's selected / hovered flags onto its
+// attachments, so these read correctly for both nodes and attachments.
 [[nodiscard]] auto should_visualize(const Visualization_mode mode, const std::shared_ptr<erhe::Item_base>& item)
 {
-    return should_visualize(mode, item->is_selected(), false);
+    return should_visualize(mode, item->is_selected(), item->is_hovered());
 }
 
 [[nodiscard]] auto should_visualize(const Visualization_mode mode, const erhe::Item_base* const item)
 {
-    return should_visualize(mode, item->is_selected(), false);
+    return should_visualize(mode, item->is_selected(), item->is_hovered());
 }
 
 }
@@ -2053,7 +2055,23 @@ void Debug_visualizations::render(const Render_context& context)
         std::set<erhe::scene::Skin*> skins;
         for (erhe::scene::Mesh_layer* layer : scene_root->layers().mesh_layers()) {
             for (const auto& mesh : layer->meshes) {
-                if (mesh->skin && should_visualize(m_settings.skins, mesh)) {
+                if (!mesh->skin) {
+                    continue;
+                }
+                // In bone selection mode, selection and hover land on the
+                // JOINT nodes, never on the skinned mesh - so a skin also
+                // counts as selected / hovered when any of its joints is.
+                // Without this, skins=Selected shows no skeleton lines
+                // exactly when working with bones in the line style.
+                bool selected = mesh->is_selected();
+                bool hovered  = mesh->is_hovered();
+                for (const std::shared_ptr<erhe::scene::Node>& joint : mesh->skin->skin_data.joints) {
+                    if (joint) {
+                        selected = selected || joint->is_selected();
+                        hovered  = hovered  || joint->is_hovered();
+                    }
+                }
+                if (should_visualize(m_settings.skins, selected, hovered)) {
                     skins.insert(mesh->skin.get());
                 }
             }
