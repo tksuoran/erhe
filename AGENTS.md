@@ -487,6 +487,32 @@ Every proposed solution must be evaluated with the question: "is this just a ban
 
 Never prompt the user with a choice where one of the options is to pause, stop, or wrap up the current investigation/task (e.g. "continue digging, or pause here?"). When the work is mid-flight and the path forward is clear, just continue it. Only ask the user a question when there is a genuine decision *between substantive alternatives* that changes what gets done - and "stop working" is not one of those alternatives. If a natural checkpoint is reached, report progress and proceed with the obvious next step rather than asking for permission to keep going.
 
+## No "update each frame" patterns
+
+Do not keep derived state in sync by recomputing or re-pushing it every frame.
+Per-frame polling burns time in the steady state proportional to the scene
+rather than to the number of actual changes, and it hides the real dependency:
+nothing in the code says *what* the derived state depends on, so the next reader
+cannot tell why the poll exists or when it may be dropped.
+
+Drive the update from the change instead:
+
+- Subscribe to the relevant `App_message_bus` message and update on it
+  (precedent: `Editor::on_close_scene()`, the hover / selection messages).
+- Or, simpler and often better, have the code that performs the change call the
+  owner of the derived state directly. **The immediate-mode UI is the change
+  site**: an ImGui widget knows exactly when its value was edited
+  (`ImGui::ColorEdit4(...)` returns true, `ImGui::IsItemDeactivatedAfterEdit()`),
+  so it can call into the owner right there. No message, no poll - the update
+  happens once, at the edit, on the frame it happened.
+- A "changed?" comparison against a cached copy every frame is the same
+  anti-pattern wearing a cheaper hat. It is acceptable only where no change
+  notification is reachable at all; say so in a comment when you use it.
+
+The bug this prevents: derived state that silently goes stale (a setting edited
+in the UI that does not take effect until restart), or a poll added "to be safe"
+that then has to run forever because nobody can prove what it was for.
+
 ## Run-time Memory Allocation Discipline
 
 Be mindful about memory allocations: actively avoid heap allocations in run-time (per-frame / hot path) code whenever possible. Steady-state frames should perform no allocations.
