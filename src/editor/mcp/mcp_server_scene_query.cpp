@@ -3,7 +3,9 @@
 
 #include "mcp/mcp_server_shared.hpp"
 
+#include "app_rendering.hpp"
 #include "assets/asset_manager.hpp"
+#include "renderers/composition_pass.hpp"
 #include "windows/frame_pacing_window.hpp"
 #include "erhe_frame_pacing/frame_pacing_observer.hpp"
 #include "erhe_graphics/device.hpp"
@@ -24,6 +26,57 @@ namespace editor {
 using namespace mcp_server_detail;
 
 // --- Query implementations ---
+
+// Why a composition pass drew or did not draw. A pass that returns early emits
+// no debug marker, so a GPU frame capture shows nothing at all for it and a
+// mis-gated pass is indistinguishable from missing geometry - this reports the
+// gate that actually rejected it.
+auto Mcp_server::query_composition_passes(const json& args) -> std::string
+{
+    static_cast<void>(args);
+
+    if (m_context.app_rendering == nullptr) {
+        json r = make_text_content("App_rendering not available");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    json passes = json::array();
+    for (const auto& pass : m_context.app_rendering->composition_passes()) {
+        if (!pass) {
+            continue;
+        }
+        const Composition_pass_data& data = pass->data;
+
+        json mesh_layers = json::array();
+        for (const erhe::scene::Layer_id id : data.mesh_layers) {
+            mesh_layers.push_back(static_cast<uint64_t>(id));
+        }
+
+        passes.push_back({
+            {"name",                 pass->get_name()},
+            {"enabled",              data.enabled},
+            {"has_is_enabled",       static_cast<bool>(data.is_enabled)},
+            {"mesh_layers",          mesh_layers},
+            {"primitive_mode",       static_cast<int>(data.primitive_mode)},
+            {"filter_require_all_bits_set",         data.filter.require_all_bits_set},
+            {"filter_require_at_least_one_bit_set", data.filter.require_at_least_one_bit_set},
+            {"filter_require_all_bits_clear",       data.filter.require_all_bits_clear},
+            {"has_shader_debug_override", data.shader_debug_override.has_value()},
+            // Outcome of this pass's most recent render() call. "submitted"
+            // means it reached draw submission - the meshes may still all have
+            // been rejected by the item filter, which is not visible here.
+            {"last_result",          c_str(pass->get_last_result())},
+            {"last_scene_view",      pass->get_last_scene_view_name()},
+            {"last_mesh_count",      pass->get_last_mesh_count()}
+        });
+    }
+
+    json result;
+    result["count"]  = passes.size();
+    result["passes"] = passes;
+    return make_text_content(result.dump(2)).dump();
+}
 
 auto Mcp_server::query_list_scenes(const json& args) -> std::string
 {

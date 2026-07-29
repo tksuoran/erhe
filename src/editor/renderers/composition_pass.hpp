@@ -103,6 +103,23 @@ public:
     std::function<bool(const Render_context& context)>                     is_enabled{};
 };
 
+// Why a pass did or did not draw on its last render() call. Recorded so the
+// composition pass state can be inspected after the fact (Composition Passes
+// window, MCP get_composition_passes) - a pass that returns early emits no
+// debug marker at all, so a frame capture cannot distinguish "skipped" from
+// "drew nothing", which makes a mis-gated pass look like missing geometry.
+enum class Composition_pass_result : unsigned int {
+    never_rendered = 0,      // render() has not been called yet
+    disabled,                // data.enabled is false
+    is_enabled_false,        // the is_enabled(context) predicate returned false
+    no_scene_root,           // no scene root to render
+    primitive_mode_disabled, // the render style has this primitive_mode off
+    no_mesh_layers,          // none of data.mesh_layers resolved in the scene
+    submitted                // reached the draw submission
+};
+
+[[nodiscard]] auto c_str(Composition_pass_result result) -> const char*;
+
 class Composition_pass : public erhe::Item<erhe::Item_base, erhe::Item_base, Composition_pass>
 {
 public:
@@ -121,8 +138,17 @@ public:
 
     Composition_pass_data data;
 
+    // Outcome of the most recent render() call, and the scene view it was for.
+    // Written once per render() (a plain store, not a per-frame sync).
+    [[nodiscard]] auto get_last_result          () const -> Composition_pass_result { return m_last_result; }
+    [[nodiscard]] auto get_last_scene_view_name () const -> const std::string&      { return m_last_scene_view_name; }
+    [[nodiscard]] auto get_last_mesh_count      () const -> std::size_t             { return m_last_mesh_count; }
+
 private:
     std::vector<std::span<const std::shared_ptr<erhe::scene::Mesh>>> m_mesh_spans;
+    Composition_pass_result                                         m_last_result{Composition_pass_result::never_rendered};
+    std::string                                                     m_last_scene_view_name{};
+    std::size_t                                                     m_last_mesh_count{0};
 };
 
 }

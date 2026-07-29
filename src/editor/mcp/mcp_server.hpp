@@ -100,6 +100,7 @@ private:
     auto find_material_by_id    (std::size_t material_id) -> std::shared_ptr<erhe::primitive::Material>;
     auto query_list_scenes      (const nlohmann::json& args) -> std::string;
     auto query_scene_nodes      (const nlohmann::json& args) -> std::string;
+    auto query_composition_passes(const nlohmann::json& args) -> std::string;
     auto query_node_details     (const nlohmann::json& args) -> std::string;
     auto query_scene_cameras    (const nlohmann::json& args) -> std::string;
     auto query_scene_lights     (const nlohmann::json& args) -> std::string;

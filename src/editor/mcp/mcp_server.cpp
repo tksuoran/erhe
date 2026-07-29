@@ -378,6 +378,7 @@ auto Mcp_server::process_queued_requests() -> int
         static constexpr Tool_dispatch_entry c_tool_dispatch[] = {
             { "list_scenes",                    &Mcp_server::query_list_scenes                    },
             { "get_scene_nodes",                &Mcp_server::query_scene_nodes                    },
+            { "get_composition_passes",         &Mcp_server::query_composition_passes             },
             { "get_node_details",               &Mcp_server::query_node_details                   },
             { "get_scene_cameras",              &Mcp_server::query_scene_cameras                  },
             { "get_scene_lights",               &Mcp_server::query_scene_lights                   },

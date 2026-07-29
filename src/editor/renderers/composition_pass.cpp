@@ -49,17 +49,36 @@ auto triangle_wave(float t, float p) -> float
     return 2.0f * std::abs(2.0f * (t / p - std::floor(t / p + 0.5f))) - 1.0f;
 }
 
+auto c_str(const Composition_pass_result result) -> const char*
+{
+    switch (result) {
+        case Composition_pass_result::never_rendered:          return "never_rendered";
+        case Composition_pass_result::disabled:                return "disabled";
+        case Composition_pass_result::is_enabled_false:        return "is_enabled_false";
+        case Composition_pass_result::no_scene_root:           return "no_scene_root";
+        case Composition_pass_result::primitive_mode_disabled: return "primitive_mode_disabled";
+        case Composition_pass_result::no_mesh_layers:          return "no_mesh_layers";
+        case Composition_pass_result::submitted:               return "submitted";
+        default:                                               return "?";
+    }
+}
+
 void Composition_pass::render(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 
+    m_last_scene_view_name = context.scene_view.get_settings_key();
+    m_last_mesh_count      = 0;
+
     if (!data.enabled) {
+        m_last_result = Composition_pass_result::disabled;
         return;
     }
 
     // Render-time activation predicate (e.g. the selection stencil-mask pass is
     // active only when selection polygon fill is disabled).
     if (data.is_enabled && !data.is_enabled(context)) {
+        m_last_result = Composition_pass_result::is_enabled_false;
         return;
     }
 
@@ -96,6 +115,7 @@ void Composition_pass::render(const Render_context& context)
         : context.scene_view.get_scene_root();
     if (!scene_root) {
         log_composer->error("Missing scene root - cannot render");
+        m_last_result = Composition_pass_result::no_scene_root;
         return;
     }
 
@@ -117,6 +137,7 @@ void Composition_pass::render(const Render_context& context)
         !is_primitive_mode_enabled(*render_style, data.primitive_mode)
     ) {
         // log_composer->trace("primitive mode is not enabled - skipping");
+        m_last_result = Composition_pass_result::primitive_mode_disabled;
         return;
     }
 
@@ -185,7 +206,11 @@ void Composition_pass::render(const Render_context& context)
             }
         }
         if (m_mesh_spans.empty()) {
+            m_last_result = Composition_pass_result::no_mesh_layers;
             return;
+        }
+        for (const auto& span : m_mesh_spans) {
+            m_last_mesh_count += span.size();
         }
 
         // log_composer->trace("calling render with {} render pipelines", data.base_render_pipelines.size());
@@ -301,6 +326,8 @@ void Composition_pass::render(const Render_context& context)
             );
         }
     }
+
+    m_last_result = Composition_pass_result::submitted;
 }
 
 void Composition_pass::imgui()
