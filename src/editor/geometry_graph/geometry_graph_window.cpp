@@ -36,6 +36,7 @@
 #include "erhe_graphics/texture.hpp"
 #include "erhe_imgui/imgui_node_editor.h"
 #include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
@@ -798,6 +799,8 @@ void Geometry_graph_window::update_live_nodes()
 
 void Geometry_graph_window::update_evaluation()
 {
+    ERHE_PROFILE_FUNCTION();
+
     // Once-per-frame refresh (the template's Texture_graph_window::update()
     // parity): keeps m_graph_mesh tracking the selection even when the
     // window is closed, so MCP reads never see a stale graph.

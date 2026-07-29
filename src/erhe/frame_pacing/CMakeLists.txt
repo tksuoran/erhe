@@ -16,6 +16,11 @@ erhe_target_sources_grouped(
 
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
+target_link_libraries(${_target}
+    PRIVATE
+        erhe::profile
+)
+
 erhe_target_settings(${_target} "erhe")
 
 if (${ERHE_BUILD_TESTS} STREQUAL "ON")

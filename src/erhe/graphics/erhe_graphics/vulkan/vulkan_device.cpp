@@ -1248,6 +1248,8 @@ auto Device_impl::get_buffer_alignment(const Buffer_target target) -> std::size_
 
 void Device_impl::submit_command_buffers(std::span<Command_buffer* const> command_buffers)
 {
+    ERHE_PROFILE_SCOPE("submit_command_buffers");
+
     if (command_buffers.empty()) {
         return;
     }

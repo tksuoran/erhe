@@ -332,6 +332,8 @@ void Tools::register_tool(Tool* tool)
 
 void Tools::update_transforms()
 {
+    ERHE_PROFILE_FUNCTION();
+
     erhe::scene::Scene& scene = m_scene_root->get_scene();
     scene.update_node_transforms();
 }

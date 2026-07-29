@@ -28,6 +28,7 @@
 #include "erhe_imgui/imgui_node_editor.h"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_graphics/command_buffer.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_texgen/node_descriptor.hpp"
 
 #include <imgui/imgui.h>
@@ -145,6 +146,8 @@ auto Texture_graph_window::get_target() -> std::shared_ptr<Graph_texture>
 
 void Texture_graph_window::update()
 {
+    ERHE_PROFILE_FUNCTION();
+
     // The graphics device does not exist during construction (the part ctor
     // must not touch App_context), so create the render helper on first use.
     if (!m_renderer && (m_app_context.graphics_device != nullptr)) {

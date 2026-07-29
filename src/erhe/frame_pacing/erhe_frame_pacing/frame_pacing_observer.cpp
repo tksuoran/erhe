@@ -1,4 +1,5 @@
 #include "erhe_frame_pacing/frame_pacing_observer.hpp"
+#include "erhe_profile/profile.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -25,6 +26,8 @@ constexpr std::int64_t s_summary_interval_frames = 600;
 
 void Frame_pacing_observer::tick(Frame_time_recorder& recorder, const double now, const double refresh_period)
 {
+    ERHE_PROFILE_FUNCTION();
+
     if (refresh_period <= 0.0) {
         return; // display refresh not known yet
     }

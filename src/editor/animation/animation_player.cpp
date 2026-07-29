@@ -5,6 +5,7 @@
 #include "assets/asset_manager.hpp"
 #include "scene/scene_root.hpp"
 
+#include "erhe_profile/profile.hpp"
 #include "erhe_scene/animation.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
@@ -35,6 +36,8 @@ void Animation_player::on_close_scene(erhe::Item_host* const closing_host)
 
 void Animation_player::update(const float dt_s)
 {
+    ERHE_PROFILE_FUNCTION();
+
     if (!m_animation) {
         return;
     }
