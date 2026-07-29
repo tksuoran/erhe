@@ -7,6 +7,8 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <glm/gtx/matrix_operation.hpp>
+
 #include "tiny_bvh.h"
 
 namespace erhe::raytrace {
@@ -276,7 +278,10 @@ auto Tinybvh_scene::intersect_tlas(Ray& ray, Hit& hit) -> bool
             ray.t_far       = tinybvh_ray.hit.t;
             hit.triangle_id = prim_id;
             hit.uv          = glm::vec2{tinybvh_ray.hit.u, tinybvh_ray.hit.v};
-            hit.normal      = glm::vec3{transform * glm::vec4{local_normal, 0.0f}};
+            // Cofactor matrix, not the instance transform: see the note in
+            // Tinybvh_geometry::intersect. A non-uniformly scaled instance
+            // (a bone proxy, say) otherwise reports a sheared normal.
+            hit.normal      = glm::vec3{glm::transpose(glm::adjugate(transform)) * glm::vec4{local_normal, 0.0f}};
             hit.instance    = erhe_instance;
             hit.geometry    = erhe_geometry;
             return true;

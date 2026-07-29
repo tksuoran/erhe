@@ -18,6 +18,8 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_time/timer.hpp"
 
+#include <glm/gtx/matrix_operation.hpp>
+
 #include <bvh/v2/bvh.h>
 #include <bvh/v2/default_builder.h>
 #include <bvh/v2/executor.h>
@@ -367,7 +369,10 @@ auto Bvh_geometry::intersect_instance(Ray& ray, Hit& hit, Bvh_instance* instance
         ray.t_far       = bvh_ray.tmax;
         hit.triangle_id = static_cast<unsigned int>(m_bvh.prim_ids[prim_id]);
         hit.uv          = glm::vec2{u, v};
-        hit.normal      = glm::vec3{transform * glm::vec4{from_bvh(triangle.n), 0.0f}};
+        // Cofactor matrix, not the instance transform: a normal transformed by
+        // M is sheared toward the longest axis whenever the scale is
+        // non-uniform (a bone proxy, say).
+        hit.normal      = glm::vec3{glm::transpose(glm::adjugate(transform)) * glm::vec4{from_bvh(triangle.n), 0.0f}};
         hit.instance    = instance;
         hit.geometry    = this;
         return true;

@@ -14,6 +14,8 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_time/timer.hpp"
 
+#include <glm/gtx/matrix_operation.hpp>
+
 #include <fstream>
 
 namespace erhe::raytrace {
@@ -276,7 +278,11 @@ auto Tinybvh_geometry::intersect_instance(Ray& ray, Hit& hit, Tinybvh_instance* 
         ray.t_far       = t_original_space;
         hit.triangle_id = prim_id;
         hit.uv          = glm::vec2{tinybvh_ray.hit.u, tinybvh_ray.hit.v};
-        hit.normal      = glm::vec3{transform * glm::vec4{local_normal, 0.0f}};
+        // A normal is a covector: transforming it by the instance transform
+        // shears it whenever the scale is non-uniform, tilting it toward the
+        // longest axis. transpose(adjugate(M)) is the cofactor matrix, the
+        // same normal transform used throughout the renderer.
+        hit.normal      = glm::vec3{glm::transpose(glm::adjugate(transform)) * glm::vec4{local_normal, 0.0f}};
         hit.instance    = instance;
         hit.geometry    = this;
         return true;
