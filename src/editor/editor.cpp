@@ -669,11 +669,10 @@ public:
         // current scenes. After the operation stack so this frame's scene edits
         // (and any joint added/removed by undo) are already visible.
         if (m_bone_visualization) {
+            ERHE_PROFILE_SCOPE("Bone visualization update");
             const bool bone_mode = (m_mesh_component_selection != nullptr) &&
                 (m_mesh_component_selection->get_mode() == Mesh_component_mode::bone);
-            // Visible for the solid display style OR whenever bone mode is on
-            // (you cannot click what you cannot see); pickable only in bone mode.
-            m_bone_visualization->update(bone_mode || m_bone_visualization->get_solid(), bone_mode);
+            m_bone_visualization->update(bone_mode);
         }
 
         // Geometry graph background evaluation: apply results of a

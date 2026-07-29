@@ -524,7 +524,7 @@ void Settings_window::imgui()
         // toggles stay in the scene-view Debug Visualization popup. Rendered
         // with the hand-grouped layout (Shadow Fit / Selection / Annotations)
         // rather than the flat reflection list.
-        Debug_visualizations::style_imgui(*this, settings.debug_visualizations_style);
+        Debug_visualizations::style_imgui(*this, m_context, settings.debug_visualizations_style);
         add_config_section(settings.developer);
         add_config_section(settings.grid);
         add_config_section(settings.headset);

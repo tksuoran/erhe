@@ -816,10 +816,13 @@ auto Selection::on_viewport_select_try_ready() -> bool
     // Defer to the mesh component selection tool while a component mode
     // (Vertex / Edge / Face) is active: in those modes a viewport click
     // selects mesh sub-components instead of whole objects. Object mode
-    // leaves object selection untouched.
+    // leaves object selection untouched, and bone mode is handled below --
+    // hence is_mesh_component_mode() rather than a test against object,
+    // which would make the bone branch unreachable and leave the click
+    // with no owner at all (Mesh_component_selection_tool declines bone).
     if (
         (m_context.mesh_component_selection != nullptr) &&
-        (m_context.mesh_component_selection->get_mode() != Mesh_component_mode::object)
+        is_mesh_component_mode(m_context.mesh_component_selection->get_mode())
     ) {
         return false;
     }

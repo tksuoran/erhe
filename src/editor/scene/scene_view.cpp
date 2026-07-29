@@ -14,6 +14,7 @@
 #include "grid/grid_tool.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "scene/scene_root.hpp"
+#include "tools/mesh_component_selection.hpp"
 #include "tools/tools.hpp"
 #include "windows/scene_view_config_window.hpp"
 #include "windows/viewport_config_window.hpp"
@@ -304,6 +305,20 @@ auto Scene_view::get_hover(size_t slot) const -> const Hover_entry&
     return m_hover_entries.at(slot);
 }
 
+auto Scene_view::get_pickable_slot_mask(const uint32_t slot_mask) const -> uint32_t
+{
+    if ((slot_mask & Hover_entry::content_bit) == 0) {
+        return slot_mask;
+    }
+    if (
+        (m_context.mesh_component_selection == nullptr) ||
+        (m_context.mesh_component_selection->get_mode() != Mesh_component_mode::bone)
+    ) {
+        return slot_mask;
+    }
+    return (slot_mask & ~Hover_entry::content_bit) | Hover_entry::bone_bit;
+}
+
 auto Scene_view::get_nearest_hover(uint32_t slot_mask) const -> const Hover_entry*
 {
     std::optional<std::size_t> nearest_slot;
@@ -492,7 +507,12 @@ void Scene_view::update_hover_with_raytrace()
             ERHE_VERIFY(raytrace_primitive != nullptr);
             entry.uv                         = hit.uv;
             entry.position                   = ray.origin + ray.t_far * ray.direction;
-            entry.normal                     = hit.normal;
+            // The raytrace hit normal is an untransformed triangle cross
+            // product, so its length carries the triangle's area and the
+            // instance scale. Hover_entry::normal is a unit direction - the
+            // facet override below normalizes too - so consumers can scale it
+            // by a world-space length of their own.
+            entry.normal                     = (glm::length(hit.normal) > 0.0f) ? glm::normalize(hit.normal) : hit.normal;
             entry.triangle                   = std::numeric_limits<uint32_t>::max();
             SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit position: {}", Hover_entry::slot_names[slot], entry.position.value());
             SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit normal: {}", Hover_entry::slot_names[slot], hit.normal);

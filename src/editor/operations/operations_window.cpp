@@ -576,7 +576,7 @@ auto Operations::is_component_selection_active() const -> bool
 {
     const Mesh_component_selection* mesh_component_selection = m_context.mesh_component_selection;
     return (mesh_component_selection != nullptr) &&
-           (mesh_component_selection->get_mode() != Mesh_component_mode::object) &&
+           is_mesh_component_mode(mesh_component_selection->get_mode()) &&
            !mesh_component_selection->is_empty();
 }
 

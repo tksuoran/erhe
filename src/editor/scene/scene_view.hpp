@@ -126,6 +126,11 @@ public:
     [[nodiscard]] virtual auto as_viewport_scene_view() -> Viewport_scene_view*;
     [[nodiscard]] virtual auto as_viewport_scene_view() const -> const Viewport_scene_view*;
 
+    // The stable name this view persists its settings under ("Default Viewport",
+    // "Headset", ...); empty for views that do not persist (previews). Used to
+    // label per-view diagnostics.
+    [[nodiscard]] auto get_settings_key() const -> const std::string& { return m_settings_key; }
+
     void set_scene_root    (const std::shared_ptr<Scene_root>& scene_root);
     [[nodiscard]] auto get_scene_root        () const -> std::shared_ptr<Scene_root>;
     [[nodiscard]] auto get_reverse_depth     () const -> bool;
@@ -186,6 +191,17 @@ public:
     [[nodiscard]] auto get_control_position_in_world_at_distance(float distance) const -> std::optional<glm::vec3>;
     [[nodiscard]] auto get_hover                                (std::size_t slot) const -> const Hover_entry&;
     [[nodiscard]] auto get_nearest_hover                        (uint32_t slot_mask) const -> const Hover_entry*;
+
+    // Adjusts a caller's get_nearest_hover() mask for the active selection
+    // mode. Pass the slots the caller wants in ordinary object mode; in bone
+    // selection mode content is replaced by bone, because there a viewport
+    // click selects the hovered bone's joint and nothing else. Everything that
+    // resolves "what is the pointer on" - the hovered-node highlight, the hover
+    // ray indicator's position and normal, the camera orbit anchor - must then
+    // land on the bone rather than on the mesh surface in front of it, or they
+    // disagree with each other and with the click. Masks without content_bit,
+    // and every other mode, pass through unchanged.
+    [[nodiscard]] auto get_pickable_slot_mask                   (uint32_t slot_mask) const -> uint32_t;
 
 protected:
     void set_hover  (std::size_t slot, const Hover_entry& entry);

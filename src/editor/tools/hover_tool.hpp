@@ -44,6 +44,10 @@ private:
     void on_hover_tree_node (Hover_tree_node_message& message);
     [[nodiscard]] auto get_hover_node() const -> std::shared_ptr<erhe::scene::Node>;
 
+    // The joint node behind a hovered bone proxy, or null when the bone slot
+    // holds no hit (every mode other than bone selection).
+    [[nodiscard]] auto get_hovered_bone_joint() const -> std::shared_ptr<erhe::scene::Node>;
+
     Tool_window              m_window;
     erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
     erhe::message_bus::Subscription<Hover_mesh_message>       m_hover_mesh_subscription;
@@ -51,7 +55,6 @@ private:
     bool                     m_show_hover_normal              {true};
     bool                     m_show_snapped_grid_position     {false};
     bool                     m_geometry_debug_hover_facet_only{true};
-    float                    m_normal_length                  {0.5f};
     std::vector<std::string> m_text_lines;
 
     std::weak_ptr<erhe::scene::Node> m_hovered_node_in_viewport;

@@ -2,6 +2,7 @@
 
 #include "app_context.hpp"
 #include "app_scenes.hpp"
+#include "content_library/content_library.hpp"
 #include "app_settings.hpp"
 #include "scene/node_raytrace_mask.hpp"
 #include "scene/scene_root.hpp"
@@ -16,6 +17,8 @@
 #include "erhe_scene/skin.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_verify/verify.hpp"
+
+#include <fmt/format.h>
 
 #include <geogram/mesh/mesh.h>
 
@@ -63,10 +66,14 @@ void make_bone(GEO::Mesh& mesh)
     }
     {
         // Counter-clockwise seen from outside: 4 facets from the head down to
-        // the ring, 4 from the ring up to the tail.
+        // the ring, 4 from the ring up to the tail. Check against the head
+        // facet {0, 2, 3}: (v2 - v0) x (v3 - v0) = (0.1, -1, 0.1), pointing out
+        // of and below the head cone in the +x +z quadrant, which is outward.
+        // The reverse order normals the whole shape inward - it renders inside
+        // out, and the raytrace hover normal comes back negated with it.
         const std::array<GEO::index_t, 3> facets[] = {
-            { 0, 3, 2 }, { 0, 4, 3 }, { 0, 5, 4 }, { 0, 2, 5 },
-            { 1, 2, 3 }, { 1, 3, 4 }, { 1, 4, 5 }, { 1, 5, 2 }
+            { 0, 2, 3 }, { 0, 3, 4 }, { 0, 4, 5 }, { 0, 5, 2 },
+            { 1, 3, 2 }, { 1, 4, 3 }, { 1, 5, 4 }, { 1, 2, 5 }
         };
         const GEO::index_t facet_count = sizeof(facets) / sizeof(facets[0]);
         const GEO::index_t base_facet  = mesh.facets.create_facets(facet_count, 3);
@@ -143,25 +150,6 @@ Bone_visualization::Bone_visualization(App_context& context, erhe::scene_rendere
 
 Bone_visualization::~Bone_visualization() noexcept = default;
 
-void Bone_visualization::set_width_scale(const float width_scale)
-{
-    m_width_scale = width_scale;
-}
-
-auto Bone_visualization::get_width_scale() const -> float
-{
-    return m_width_scale;
-}
-
-void Bone_visualization::set_solid(const bool solid)
-{
-    m_solid = solid;
-}
-
-auto Bone_visualization::get_solid() const -> bool
-{
-    return m_solid;
-}
 
 void Bone_visualization::ensure_primitive()
 {
@@ -194,12 +182,10 @@ void Bone_visualization::ensure_primitive()
     const bool raytrace_ok = m_bone_primitive->make_raytrace();
     ERHE_VERIFY(raytrace_ok);
 
-    const Debug_visualizations_style& style = m_context.editor_settings->debug_visualizations_style;
     m_material = std::make_shared<erhe::primitive::Material>(
         erhe::primitive::Material_create_info{
             .name = "bone",
             .data = {
-                .base_color = style.skin_bone_color_a,
                 .bxdf_model = erhe::primitive::Bxdf_model::unlit
             }
         }
@@ -212,19 +198,46 @@ void Bone_visualization::ensure_primitive()
         erhe::primitive::Material_create_info{
             .name = "bone selected",
             .data = {
-                .base_color = style.bone_selected_color,
                 .bxdf_model = erhe::primitive::Bxdf_model::unlit
             }
         }
     );
+    // The bone under the pointer, same idea as the selected material.
+    m_hover_material = std::make_shared<erhe::primitive::Material>(
+        erhe::primitive::Material_create_info{
+            .name = "bone hover",
+            .data = {
+                .bxdf_model = erhe::primitive::Bxdf_model::unlit
+            }
+        }
+    );
+    apply_style_colors();
+}
+
+void Bone_visualization::apply_style_colors()
+{
+    if (!m_material || !m_selected_material || !m_hover_material) {
+        return;
+    }
+    const Debug_visualizations_style& style = m_context.editor_settings->debug_visualizations_style;
+    m_material         ->data.base_color = style.skin_bone_color_a;
+    m_selected_material->data.base_color = style.bone_selected_color;
+    m_hover_material   ->data.base_color = style.bone_hover_color;
 }
 
 auto Bone_visualization::make_proxy(const std::shared_ptr<erhe::scene::Node>& joint) -> Proxy
 {
     Proxy proxy;
     proxy.joint = joint;
-    proxy.node  = std::make_shared<erhe::scene::Node>("bone proxy");
-    proxy.mesh  = std::make_shared<erhe::scene::Mesh>("bone proxy");
+    // Named after the joint the bone stands for: the proxy mesh's name is what
+    // every hover / pick readout displays, and "bone proxy" told the user
+    // nothing about which bone they were pointing at. The node keeps the
+    // "bone proxy" prefix so the two stay distinguishable in scene dumps.
+    // A joint renamed later keeps the old name here until the proxies are
+    // rebuilt; the Hover tool's Bone: line reads the joint's live name.
+    const std::string& joint_name = joint->get_name();
+    proxy.node  = std::make_shared<erhe::scene::Node>(fmt::format("bone proxy {}", joint_name));
+    proxy.mesh  = std::make_shared<erhe::scene::Mesh>(joint_name);
     proxy.mesh->add_primitive(m_bone_primitive, m_material);
     proxy.mesh->layer_id = Mesh_layer_id::bone;
 
@@ -256,9 +269,16 @@ void Bone_visualization::set_proxy_transform(Proxy& proxy, const glm::vec3 tail_
     proxy.width_scale = m_width_scale;
 }
 
-void Bone_visualization::update(const bool visible, const bool pickable)
+void Bone_visualization::update(const bool bone_mode)
 {
     ensure_primitive();
+
+    const Debug_visualizations_style& style = m_context.editor_settings->debug_visualizations_style;
+    m_width_scale = style.bone_width_scale;
+    // Visible for the solid display style OR whenever bone mode is on (you
+    // cannot click what you cannot see); pickable only in bone mode.
+    const bool visible  = bone_mode || style.bone_solid;
+    const bool pickable = bone_mode;
 
     for (auto& [joint_ptr, proxy] : m_proxies) {
         proxy.alive = false;
@@ -287,9 +307,30 @@ void Bone_visualization::update(const bool visible, const bool pickable)
     }
 }
 
+void Bone_visualization::register_materials(Scene_root& scene_root)
+{
+    if (m_material_scene_roots.find(&scene_root) != m_material_scene_roots.end()) {
+        return;
+    }
+    const std::shared_ptr<Content_library> content_library = scene_root.get_content_library();
+    if (!content_library) {
+        return;
+    }
+    {
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
+        content_library->materials->add(m_material);
+        content_library->materials->add(m_selected_material);
+        content_library->materials->add(m_hover_material);
+    }
+    m_material_scene_roots.insert(&scene_root);
+}
+
 void Bone_visualization::update_scene(Scene_root& scene_root, const bool visible, const bool pickable)
 {
     const std::vector<std::shared_ptr<erhe::scene::Skin>>& skins = scene_root.get_scene().get_skins();
+    if (!skins.empty()) {
+        register_materials(scene_root);
+    }
     for (const std::shared_ptr<erhe::scene::Skin>& skin : skins) {
         if (!skin) {
             continue;
@@ -329,15 +370,27 @@ void Bone_visualization::update_scene(Scene_root& scene_root, const bool visible
             // vdotn (N.V) variant, selected ones render with their plain unlit
             // material so the selected color actually survives - vdotn overrides
             // the fragment color outright and would swallow it.
+            // Hover wins over selection, matching the content mesh convention.
+            // Hover_tool sets hovered_in_viewport on the JOINT (get_hover_node
+            // resolves a hovered proxy to its joint), so it is read from there.
             const bool selected = joint->is_selected();
-            if (selected != proxy.selected) {
-                proxy.mesh->get_mutable_primitives().front().material = selected ? m_selected_material : m_material;
+            const bool hovered  = joint->is_hovered();
+            if ((selected != proxy.selected) || (hovered != proxy.hovered)) {
+                proxy.mesh->get_mutable_primitives().front().material =
+                    hovered  ? m_hover_material    :
+                    selected ? m_selected_material : m_material;
                 if (selected) {
                     proxy.mesh->enable_flag_bits(erhe::Item_flags::selected);
                 } else {
                     proxy.mesh->disable_flag_bits(erhe::Item_flags::selected);
                 }
+                if (hovered) {
+                    proxy.mesh->enable_flag_bits(erhe::Item_flags::hovered_in_viewport);
+                } else {
+                    proxy.mesh->disable_flag_bits(erhe::Item_flags::hovered_in_viewport);
+                }
                 proxy.selected = selected;
+                proxy.hovered  = hovered;
             }
             proxy.mesh->set_visible(visible);
             if (pickable) {

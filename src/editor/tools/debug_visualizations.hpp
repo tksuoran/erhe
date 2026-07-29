@@ -63,7 +63,9 @@ public:
     // push_group/add_entry/pop_group (no reset / show_entries) so it composes into a
     // caller-owned Property_editor. Called from the Settings window; the per-view
     // toggles stay in the scene-view Debug Visualization popup (imgui() above).
-    static void style_imgui(Property_editor& property_editor, Debug_visualizations_style& style);
+    // `context` is needed so an edit can be pushed straight into the part that
+    // owns the affected derived state (the bone proxy materials).
+    static void style_imgui(Property_editor& property_editor, App_context& context, Debug_visualizations_style& style);
 
     // Whole-struct copy in / out of m_settings. Persistence is owned by
     // Scene_view, whose collect callback (registered with
@@ -76,13 +78,9 @@ public:
     // pass, since Texel_renderer samples the shadow map in the vertex stage.
     [[nodiscard]] auto is_shadow_debug_enabled() const -> bool { return m_settings.shadow_debug; }
 
-    // Bone display settings, read by the editor tick to drive Bone_visualization
-    // and by the bone composition pass. bone_solid selects the N.V shaded solid
-    // proxies over the default line drawing; bone_width_scale is the bone
-    // half-width as a fraction of its length, which is also the click target
-    // size in bone selection mode.
-    [[nodiscard]] auto is_bone_solid      () const -> bool  { return m_settings.bone_solid; }
-    [[nodiscard]] auto get_bone_width_scale() const -> float { return m_settings.bone_width_scale; }
+    // Bone display settings (solid style, bone width) live in the editor-global
+    // Debug_visualizations_style, not here: they drive Bone_visualization, whose
+    // proxies are shared by every scene view.
 
 private:
     [[nodiscard]] auto get_selected_camera(const Render_context& render_context) -> std::shared_ptr<erhe::scene::Camera>;

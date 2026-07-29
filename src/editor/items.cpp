@@ -125,7 +125,7 @@ void async_for_nodes_with_mesh(
     std::unordered_map<const erhe::geometry::Geometry*, erhe::geometry::operation::Geometry_component_selection> component_selection;
     if (context.mesh_component_selection != nullptr) {
         const Mesh_component_mode mode = context.mesh_component_selection->get_mode();
-        if (mode != Mesh_component_mode::object) {
+        if (is_mesh_component_mode(mode)) {
             for (const Mesh_component_entry& entry : context.mesh_component_selection->get_entries()) {
                 if (!context.mesh_component_selection->is_live(entry)) {
                     continue;

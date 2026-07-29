@@ -1232,9 +1232,12 @@ void Transform_tool::update_for_view(Scene_view* scene_view)
     // initial anchor is not stomped mid-edit.
     if (!is_transform_tool_active() && !m_component_transform.is_active() && !m_lattice_point_transform.is_active()) {
         Mesh_component_selection* mesh_component_selection = m_context.mesh_component_selection;
+        // Bone mode is not a mesh component mode: a selected bone is an
+        // ordinary joint Node, so the gizmo must fall through to the node
+        // selection below rather than look for mesh components.
         const bool want_component =
             (mesh_component_selection != nullptr) &&
-            (mesh_component_selection->get_mode() != Mesh_component_mode::object);
+            is_mesh_component_mode(mesh_component_selection->get_mode());
         if (want_component) {
             m_component_source = m_component_transform.update_anchor(m_context, shared)
                 ? Component_source::mesh_components

@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <set>
 #include <unordered_map>
 #include <vector>
 
@@ -57,25 +58,33 @@ public:
 
     // Reconcile proxies with the skins of every open scene: create one per joint,
     // drop those whose joint or skin is gone, and refresh transforms whose bone
-    // shape changed. `visible` shows/hides them; `pickable` toggles
-    // Item_flags::id and the raytrace mask, so outside bone mode a click passes
-    // straight through to the mesh. Called once per frame from the editor tick.
-    void update(bool visible, bool pickable);
+    // shape changed. In bone selection mode the proxies are pickable
+    // (Item_flags::id and the raytrace mask) and visible whether or not the
+    // solid style is on - you cannot click what you cannot see; outside it they
+    // are visible only for the solid style and a click passes straight through
+    // to the mesh. The bone width and solid style come from
+    // Debug_visualizations_style, read here rather than pushed in by each scene
+    // view's Debug_visualizations.
+    //
+    // TODO This is still driven once per frame from the editor tick, which is
+    // the "update each frame" anti-pattern (see AGENTS.md). Every input has a
+    // reachable change notification and should drive its own part instead:
+    // scene_created / close_scene / register_skin / node_touched for the proxy
+    // set, node_touched + animation_update for the bone shape, the selection and
+    // hover_mesh messages for the selected / hovered material, and a direct call
+    // from the settings UI for width and solid style (as apply_style_colors
+    // already does for the colors). Mesh_component_selection::set_mode publishes
+    // nothing today and needs a message for the mode change.
+    void update(bool bone_mode);
+
+    // Push the current Debug_visualizations_style bone colors into the two bone
+    // materials. Called at material creation and from the settings UI at the
+    // moment a bone color is edited - not polled per frame.
+    void apply_style_colors();
 
     // The joint a proxy mesh stands for; null when the mesh is not a bone proxy.
     [[nodiscard]] auto get_joint_for_proxy(const erhe::scene::Mesh* mesh) const -> std::shared_ptr<erhe::scene::Node>;
 
-    // Width of a bone as a fraction of its length, and the absolute floor that
-    // keeps a degenerate (zero-length) bone pickable.
-    void set_width_scale(float width_scale);
-    [[nodiscard]] auto get_width_scale() const -> float;
-
-    // Solid display style: draw the proxies as N.V shaded octahedra instead of
-    // the default line bones. Pushed from Debug_visualizations_settings; read by
-    // the editor tick to decide whether proxies need to be visible even outside
-    // bone selection mode.
-    void set_solid(bool solid);
-    [[nodiscard]] auto get_solid() const -> bool;
 
 private:
     class Proxy
@@ -88,10 +97,18 @@ private:
         float                              width_scale{0.0f};
         bool                               alive     {false};
         bool                               selected  {false}; // material currently applied
+        bool                               hovered   {false}; // material currently applied
     };
 
     void ensure_primitive();
     void update_scene(Scene_root& scene_root, bool visible, bool pickable);
+    // R5.2b explicit registration: the bone materials are created here, so they
+    // must be listed in the content library of every scene whose proxies use
+    // them. Without it a proxy carries a material with no buffer slot and the
+    // shader falls back to a default - which is only visible on the selected
+    // bones, since the unselected ones are drawn through the vdotn override
+    // that replaces the fragment color anyway. Idempotent per scene root.
+    void register_materials(Scene_root& scene_root);
     auto make_proxy(const std::shared_ptr<erhe::scene::Node>& joint) -> Proxy;
     void set_proxy_transform(Proxy& proxy, glm::vec3 tail_local);
 
@@ -100,6 +117,7 @@ private:
     std::shared_ptr<erhe::primitive::Primitive> m_bone_primitive{};
     std::shared_ptr<erhe::primitive::Material>  m_material         {};
     std::shared_ptr<erhe::primitive::Material>  m_selected_material{};
+    std::shared_ptr<erhe::primitive::Material>  m_hover_material   {};
     float                                      m_width_scale{0.1f};
     bool                                       m_solid      {false};
 
@@ -108,6 +126,8 @@ private:
     std::unordered_map<const erhe::scene::Node*, Proxy> m_proxies;
     // Reverse lookup for picking: proxy mesh -> joint node.
     std::unordered_map<const erhe::scene::Mesh*, std::weak_ptr<erhe::scene::Node>> m_joint_by_proxy_mesh;
+    // Scene roots the bone materials have been registered with.
+    std::set<const Scene_root*> m_material_scene_roots;
 };
 
 }

@@ -4,10 +4,15 @@
 
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
+#include "app_settings.hpp"
+#include "config/generated/debug_visualizations_style.hpp"
+#include "config/generated/editor_settings_config.hpp"
 #include "grid/grid.hpp"
 #include "renderers/render_context.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/viewport_scene_view.hpp"
+#include "tools/bone_visualization.hpp"
+#include "tools/mesh_component_selection.hpp"
 #include "tools/tools.hpp"
 #include "windows/viewport_window.hpp"
 
@@ -55,6 +60,23 @@ Hover_tool::Hover_tool(
     );
 }
 
+auto Hover_tool::get_hovered_bone_joint() const -> std::shared_ptr<erhe::scene::Node>
+{
+    Scene_view* scene_view = get_hover_scene_view();
+    if ((scene_view == nullptr) || (m_context.bone_visualization == nullptr)) {
+        return {};
+    }
+    const Hover_entry& bone = scene_view->get_hover(Hover_entry::bone_slot);
+    if (!bone.valid) {
+        return {};
+    }
+    const std::shared_ptr<erhe::scene::Mesh> proxy_mesh = bone.scene_mesh_weak.lock();
+    if (!proxy_mesh) {
+        return {};
+    }
+    return m_context.bone_visualization->get_joint_for_proxy(proxy_mesh.get());
+}
+
 auto Hover_tool::get_hover_node() const -> std::shared_ptr<erhe::scene::Node>
 {
     Scene_view* scene_view = get_hover_scene_view();
@@ -63,11 +85,19 @@ auto Hover_tool::get_hover_node() const -> std::shared_ptr<erhe::scene::Node>
     }
 
     const Hover_entry* nearest_hover = scene_view->get_nearest_hover(
-        Hover_entry::content_bit |
-        Hover_entry::rendertarget_bit
+        scene_view->get_pickable_slot_mask(
+            Hover_entry::content_bit |
+            Hover_entry::rendertarget_bit
+        )
     );
     if ((nearest_hover == nullptr) || (nearest_hover->slot == Hover_entry::rendertarget_slot)) {
         return {};
+    }
+
+    // The hovered node for a bone is the joint, not the proxy - matching what
+    // a click selects.
+    if (nearest_hover->slot == Hover_entry::bone_slot) {
+        return get_hovered_bone_joint();
     }
 
     std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = nearest_hover->scene_mesh_weak.lock();
@@ -195,6 +225,13 @@ void Hover_tool::window_imgui()
     ImGui::Text("Content: %s",      (hover       .valid && hover_scene_mesh       ) ? hover_scene_mesh       ->get_name().c_str() : "");
     ImGui::Text("Tool: %s",         (tool        .valid && tool_scene_mesh        ) ? tool_scene_mesh        ->get_name().c_str() : "");
     ImGui::Text("Rendertarget: %s", (rendertarget.valid && rendertarget_scene_mesh) ? rendertarget_scene_mesh->get_name().c_str() : "");
+
+    // Bone proxies are only pickable in bone selection mode, so this line stays
+    // empty otherwise. The joint's own name is authoritative - the proxy is
+    // named after it, but keeps that name until the proxies are rebuilt.
+    std::shared_ptr<erhe::scene::Node> bone_joint = get_hovered_bone_joint();
+    ImGui::Text("Bone: %s", bone_joint ? bone_joint->get_name().c_str() : "");
+
     if (grid.valid && grid.position.has_value()) {
         const std::string text = fmt::format("Grid: {}", grid.position.value());
         ImGui::TextUnformatted(text.c_str());
@@ -251,6 +288,7 @@ void Hover_tool::window_imgui()
         case Hover_entry::content_slot: return white;
         case Hover_entry::tool_slot:    return blue;
         case Hover_entry::grid_slot:    return green;
+        case Hover_entry::bone_slot:    return green;
         default: return red;
     }
 }
@@ -266,6 +304,7 @@ void Hover_tool::window_imgui()
         case Hover_entry::content_slot: return red;
         case Hover_entry::tool_slot: return blue;
         case Hover_entry::grid_slot: return green;
+        case Hover_entry::bone_slot: return green;
         default: return white;
     }
 }
@@ -288,7 +327,9 @@ void Hover_tool::tool_render(const Render_context& context)
     }
 
     const auto* entry = context.scene_view.get_nearest_hover(
-        Hover_entry::content_bit | Hover_entry::grid_bit | Hover_entry::rendertarget_bit
+        context.scene_view.get_pickable_slot_mask(
+            Hover_entry::content_bit | Hover_entry::grid_bit | Hover_entry::rendertarget_bit
+        )
     );
 
     if ((entry == nullptr) || !entry->valid || !entry->position.has_value()) {
@@ -301,8 +342,11 @@ void Hover_tool::tool_render(const Render_context& context)
 
     if (m_show_hover_normal && entry->normal.has_value()) {
         erhe::renderer::Primitive_renderer line_renderer = context.get({erhe::graphics::Primitive_type::line, 2, true, true});
+        // Hover_entry::normal is a unit direction, so the drawn length is the
+        // configured world-space length whatever the hit geometry's scale.
+        const float normal_length = m_context.editor_settings->debug_visualizations_style.hover_normal_length;
         const auto p0 = entry->position.value();
-        const auto p1 = entry->position.value() + m_normal_length * entry->normal.value();
+        const auto p1 = entry->position.value() + normal_length * entry->normal.value();
         line_renderer.set_thickness(3.0f);
         line_renderer.add_lines(
             get_line_color_from_slot(entry->slot),
@@ -311,7 +355,7 @@ void Hover_tool::tool_render(const Render_context& context)
         std::shared_ptr<Grid> grid = entry->grid_weak.lock();
         if (m_show_snapped_grid_position && grid) {
             const auto sp0 = grid->snap_world_position(p0);
-            const auto sp1 = sp0 + m_normal_length * entry->normal.value();
+            const auto sp1 = sp0 + normal_length * entry->normal.value();
             line_renderer.add_lines(
                 glm::vec4{1.0f, 1.0f, 0.0f, 1.0},
                 {{ glm::vec3{sp0}, glm::vec3{sp1} }}

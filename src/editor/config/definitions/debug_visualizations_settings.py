@@ -8,7 +8,7 @@ from erhe_codegen import *
 # Debug_visualizations_config, the per-viewport light/camera visualization
 # modes in Viewport_config_data.
 struct("Debug_visualizations_settings",
-    version=9,
+    version=10,
     short_desc="Debug Visualizations",
     long_desc="Settings for the Debug Visualizations window",
     developer=False,
@@ -61,9 +61,9 @@ struct("Debug_visualizations_settings",
         field("max_labels",                        Int,   added_in=1, default="400",    short_desc="Max Labels"),
         field("vertex_positions",                  Bool,  added_in=1, default="false",  short_desc="Vertex Positions"),
 
-        # Skeleton bones. The line visualization stays the default; the solid
-        # style renders the pickable bone proxies with Shader_debug::vdotn.
-        field("bone_solid",                        Bool,  added_in=9, default="false",  short_desc="Solid Bones",     long_desc="Draw skeleton bones as N.V shaded solid octahedra (the pickable bone proxies) instead of lines"),
-        field("bone_width_scale",                  Float, added_in=9, default="0.1f",   short_desc="Bone Width",      long_desc="Bone half-width as a fraction of bone length; also the click target size in bone selection mode"),
+        # Removed in version 10: bone_solid and bone_width_scale moved to
+        # Debug_visualizations_style. They drive Bone_visualization, which is
+        # editor-global (one set of proxies shared by every scene view), so a
+        # per-view copy meant the last view to render won.
     ],
 )

@@ -295,12 +295,13 @@ void Debug_visualizations::skin_visualization(const Render_context& render_conte
         }
         const mat4 world_from_joint = joint->world_from_node();
 
-        // A selected bone reads in its own color in the line style too, so bone
-        // selection is legible without switching to solid bones.
+        // A hovered / selected bone reads in its own color in the line style
+        // too, so bone selection is legible without switching to solid bones.
+        // Hover wins over selection, as it does for content meshes.
         line_renderer.set_line_color(
-            joint->is_selected()
-                ? style.bone_selected_color
-                : (((joint->get_depth() % 2) == 0) ? style.skin_bone_color_a : style.skin_bone_color_b)
+            joint->is_hovered()  ? style.bone_hover_color    :
+            joint->is_selected() ? style.bone_selected_color :
+            (((joint->get_depth() % 2) == 0) ? style.skin_bone_color_a : style.skin_bone_color_b)
         );
         vec3 a = joint->position_in_world();
         vec3 b = a + vec3{0.2f, 0.0f, 0.0f};
@@ -1950,14 +1951,6 @@ void Debug_visualizations::render(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 
-    // Bone display settings are owned here but consumed by Bone_visualization,
-    // which runs in the editor tick. Pushed before any early return below, so a
-    // hidden-tool or encoder-phase frame cannot strand a stale width / style.
-    if (context.app_context.bone_visualization != nullptr) {
-        context.app_context.bone_visualization->set_width_scale(m_settings.bone_width_scale);
-        context.app_context.bone_visualization->set_solid(m_settings.bone_solid);
-    }
-
     // render_viewport_renderables() runs twice per viewport: first the CPU
     // phase (no encoder) where debug lines / labels are generated, then the
     // encoder phase for renderables that issue draw calls. Everything below
@@ -2053,7 +2046,10 @@ void Debug_visualizations::render(const Render_context& context)
     // Visualize each skin only once.
     // In the solid style the pickable bone proxies ARE the bone display, so the
     // line drawing would just double up on them.
-    if ((m_settings.skins != Visualization_mode::off) && !m_settings.bone_solid) {
+    if (
+        (m_settings.skins != Visualization_mode::off) &&
+        !context.app_context.editor_settings->debug_visualizations_style.bone_solid
+    ) {
         std::set<erhe::scene::Skin*> skins;
         for (erhe::scene::Mesh_layer* layer : scene_root->layers().mesh_layers()) {
             for (const auto& mesh : layer->meshes) {
@@ -2082,7 +2078,7 @@ void Debug_visualizations::make_combo(const char* label, Visualization_mode& vis
     );
 }
 
-void Debug_visualizations::style_imgui(Property_editor& p, Debug_visualizations_style& style)
+void Debug_visualizations::style_imgui(Property_editor& p, App_context& context, Debug_visualizations_style& style)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -2156,8 +2152,13 @@ void Debug_visualizations::style_imgui(Property_editor& p, Debug_visualizations_
     p.add_entry("Layout Line Width", [&style](){ ImGui::SliderFloat("##", &style.layout_line_width,    0.1f, 100.0f); });
     p.add_entry("Layout Line Color", [&style](){ ImGui::ColorEdit4 ("##", &style.layout_line_color.x,  ImGuiColorEditFlags_Float); });
     // Skin bone visualization: colors alternate by joint hierarchy depth (A = even, B = odd) + line width.
-    p.add_entry("Skin Bones", [&style]() {
-        ImGui::ColorEdit4("##a", &style.skin_bone_color_a.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
+    p.add_entry("Skin Bones", [&style, &context]() {
+        // Color A also feeds the unselected bone proxy material.
+        if (ImGui::ColorEdit4("##a", &style.skin_bone_color_a.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float)) {
+            if (context.bone_visualization != nullptr) {
+                context.bone_visualization->apply_style_colors();
+            }
+        }
         ImGui::SameLine();
         ImGui::ColorEdit4("##b", &style.skin_bone_color_b.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
         ImGui::SameLine();
@@ -2171,6 +2172,37 @@ void Debug_visualizations::style_imgui(Property_editor& p, Debug_visualizations_
                 "Bone visibility is then controlled by the bone colors' alpha."
             );
         }
+    });
+
+    // Bone selection colors. The solid bone style draws these through the bone
+    // proxy materials, which Bone_visualization owns - so the edit is pushed
+    // into it here, on the frame the color actually changed, rather than
+    // re-applied every frame. Color A above feeds the same materials.
+    p.add_entry("Bone Selected Color", [&style, &context]() {
+        const bool changed = ImGui::ColorEdit4("##", &style.bone_selected_color.x, ImGuiColorEditFlags_Float);
+        if (changed && (context.bone_visualization != nullptr)) {
+            context.bone_visualization->apply_style_colors();
+        }
+    });
+    p.add_entry("Bone Hover Color", [&style, &context]() {
+        if (ImGui::ColorEdit4("##", &style.bone_hover_color.x, ImGuiColorEditFlags_Float)) {
+            if (context.bone_visualization != nullptr) {
+                context.bone_visualization->apply_style_colors();
+            }
+        }
+    });
+    p.add_entry("Solid Bones", [&style]() {
+        ImGui::Checkbox("##", &style.bone_solid);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "Draw skeleton bones as N.V shaded solid octahedra (the pickable bone\n"
+                "proxies) instead of lines. The bones sit inside the skinned mesh, so\n"
+                "at small bone widths they are hidden by it."
+            );
+        }
+    });
+    p.add_entry("Bone Width", [&style]() {
+        ImGui::DragFloat("##", &style.bone_width_scale, 0.005f, 0.005f, 2.0f, "%.3f");
     });
 
     p.push_group("Annotations", ImGuiTreeNodeFlags_None);
@@ -2326,8 +2358,6 @@ void Debug_visualizations::imgui(Scene_view& scene_view, App_context& app_contex
 
     p.add_entry("Skins",          [this](){ make_combo("##", m_settings.skins); });
     // Bone display. Both only have an effect while Skins is showing something.
-    p.add_entry("Solid Bones",    [this](){ ImGui::Checkbox ("##", &m_settings.bone_solid); });
-    p.add_entry("Bone Width",     [this](){ ImGui::DragFloat("##", &m_settings.bone_width_scale, 0.005f, 0.005f, 2.0f, "%.3f"); });
 
     p.push_group("Annotiations", ImGuiTreeNodeFlags_DefaultOpen); //ImGuiTreeNodeFlags_DefaultOpen);
     p.add_entry("Max Labels", [this](){ ImGui::SliderInt("##", &m_settings.max_labels, 0, 2000); });

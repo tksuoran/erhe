@@ -1084,7 +1084,9 @@ auto Fly_camera_tool::try_start_tumble() -> bool
         return false;
     }
 
-    const Hover_entry* hover = scene_view->get_nearest_hover(Hover_entry::content_bit | Hover_entry::grid_bit);
+    const Hover_entry* hover = scene_view->get_nearest_hover(
+        scene_view->get_pickable_slot_mask(Hover_entry::content_bit | Hover_entry::grid_bit)
+    );
     if (hover == nullptr) {
         return false;
     }
@@ -1124,7 +1126,9 @@ auto Fly_camera_tool::try_start_track() -> bool
         return false;
     }
 
-    const Hover_entry* hover = scene_view->get_nearest_hover(Hover_entry::content_bit | Hover_entry::grid_bit);
+    const Hover_entry* hover = scene_view->get_nearest_hover(
+        scene_view->get_pickable_slot_mask(Hover_entry::content_bit | Hover_entry::grid_bit)
+    );
     if (hover == nullptr) {
         return false;
     }
