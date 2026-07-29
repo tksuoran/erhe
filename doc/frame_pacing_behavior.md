@@ -58,6 +58,8 @@ Each scenario gives: the trigger, the required behavior (*shall*-statements — 
 
 **Record signature:** `N` flat at the value above the boundary; per-frame stage times straddling `(N−1)·T − H`; dwell repeatedly resetting before reaching `T_up`.
 
+**Measured (sim, uniform workload `U(0,X)` at 120 Hz, sweep over `X`):** cadence selection is robust at *any* variance — it is the quantile's position, not the spread, that decides. `N` parks at `ceil(q95/T)` and flaps only when `q95` sits ON a cadence-bucket boundary (`U(0,20)`, `U(0,55)`); a mid-bucket distribution such as `U(0,43)` holds a stable `N=6` regardless of how wide it is. The inherent cost of variance is therefore not cadence churn but *slip transients*: draws above `q95 + margin` — 3–5 % of frames by the `p = 0.95` design — slip one slot, each disturbing 2–3 gaps as the in-flight frames re-anchor.
+
 ## 6. Missed present
 
 Two distinct cases, distinguished by the miss taxonomy (design §4):

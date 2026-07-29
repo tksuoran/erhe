@@ -32,3 +32,7 @@ Geogram), and primitive shape generators.
 - All mesh data lives in Geogram's `GEO::Mesh`; erhe wraps it with typed accessors.
 - Conversion helpers exist between `glm` and `GEO` vector/matrix types.
 - Attribute interpolation during operations uses weighted source tracking per destination element.
+- **Hand-building a `GEO::Mesh`** (rather than producing one through the geometry operations) has two requirements that are easy to miss, both of which fail far from the cause:
+  - End with `mesh.vertices.set_single_precision()`. The primitive builder reads points through `get_pointf()`, and leaving the mesh in double precision trips a geogram assertion.
+  - A hand-built mesh carries NO normal attribute, and the primitive builder writes vertex normals from `facet_normal`. Call `compute_facet_normals()`, or anything shading with `dot(V, N)` renders flat black.
+- Facet winding is counter-clockwise seen from outside. Check a facet with the cross product rather than trusting a comment: for facet `{a, b, c}`, `(v_b − v_a) × (v_c − v_a)` must point away from the interior. Reversed winding normals a closed shape inward -- it renders inside out *and* the raytrace hit normal comes back negated.

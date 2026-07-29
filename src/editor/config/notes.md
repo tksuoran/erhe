@@ -20,6 +20,16 @@ in the `config/` directory (e.g. `config/<app_name/erhe_graphics.json`, `config/
 - Individual config structs are stored in the `Editor` class and pointers placed in `App_context`
 - Individual config structs are passed to subsystem constructors
 
+## Notes
+
+- `editor_settings.json` is written by the running editor, and settings only materialize
+  into it after the editor has run **with a scene open**. To exercise a stored setting
+  headlessly: run once with a scene open, kill the editor, edit the JSON, run again. The
+  file is user experiment state -- treat edits to it as destructive.
+- A stored value always beats a changed default. Lowering a default in
+  `config/definitions/` has no effect on a machine whose JSON already holds the old value;
+  bump the struct's `_version` (with the codegen migration) if the new default must win.
+
 ## Dependencies
 
 - erhe_codegen (generates the config structs)
