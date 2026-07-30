@@ -437,6 +437,18 @@ auto Context_window::is_fullscreen() const -> bool
 auto Context_window::is_session_locked() const -> bool
 {
 #if defined(ERHE_OS_WINDOWS)
+    // Debug aid: simulate a locked session for the first N seconds of
+    // runtime, so launch-while-locked behavior (frame lifecycle without any
+    // swapchain engagement, deferred swapchain creation, hidden-tick GPU
+    // recording) is reproducible without locking the desktop and waiting
+    // for a manual unlock: ERHE_SIMULATE_SESSION_LOCK_SECONDS=30. Kept as a
+    // permanent hook because this class of bug has bitten twice (invisible
+    // meshes from a locked init, hidden-tick recording into a never-begun
+    // command buffer) and real-lock testing cannot be automated.
+    static const char* const simulate_env = std::getenv("ERHE_SIMULATE_SESSION_LOCK_SECONDS");
+    if (simulate_env != nullptr) {
+        return SDL_GetTicks() < static_cast<Uint64>(std::atof(simulate_env) * 1000.0);
+    }
     // Poll the authoritative source (same philosophy as the
     // SDL_GetWindowFlags queries above) instead of registering for
     // WM_WTSSESSION_CHANGE, which needs a wndproc subclass and misses the

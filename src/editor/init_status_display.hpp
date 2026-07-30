@@ -60,6 +60,10 @@ private:
 
     void render_present_desktop();
     void render_present_xr     ();
+    // Session locked: end + submit the init cb and reopen a fresh one -
+    // the device-frame lifecycle render_present_desktop drives - without
+    // engaging the swapchain (presents cannot reach a locked display).
+    void advance_device_frame_without_present();
 
     // Records a render pass that clears `color_texture` (and optionally
     // `depth_stencil_texture`) to m_clear_color and, when `draw_text` is

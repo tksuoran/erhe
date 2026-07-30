@@ -562,9 +562,17 @@ public:
             }
         }
 
-        if (should_render) {
-            command_buffer.begin();
-        }
+        // The cb must be recording for the WHOLE tick even when nothing is
+        // rendered this frame (hidden window / locked session): tick paths
+        // outside the rendergraph record GPU work - Hotbar's deferred
+        // init_hotbar (rendertarget mesh uploads), MCP-queued actions,
+        // operations - and recording into a never-begun cb is a driver
+        // crash (observed live: launch-while-locked, first hidden tick,
+        // Hotbar::init_hotbar -> Mesh_memory::flush -> null-deref inside
+        // vkCmdCopyBuffer). Mirrors the OpenXR path, which also begins the
+        // cb without engaging the swapchain; the matching end + device-only
+        // submit happens at the end of tick whenever the cb is recording.
+        command_buffer.begin();
 
         // log_input_frame->trace("----------------------- Editor::tick() -----------------------");
 
@@ -716,9 +724,10 @@ public:
         m_app_rendering->process_start_capture();
         m_graphics_device->get_shader_monitor().update_once_per_frame();
 
-        if (should_render) {
-            m_mesh_memory->flush(command_buffer);
-        }
+        // Unconditional: uploads enqueued during a hidden tick (deferred
+        // hotbar init, MCP-driven edits while the session is locked) must
+        // not sit in the queue until the next rendered frame.
+        m_mesh_memory->flush(command_buffer);
 
         const erhe::graphics::Frame_begin_info frame_begin_info{
             .resize_width   = static_cast<uint32_t>(m_last_window_width),
@@ -780,15 +789,18 @@ public:
         // submit. If render_frame did not run (headset disconnected,
         // shouldRender == false, etc.) the cb is still recording and we
         // submit here as for the non-XR case.
-        if (should_render && command_buffer.is_recording()) {
+        if (command_buffer.is_recording()) {
             ERHE_PROFILE_SCOPE("end command buffer, swapchain, submit");
 
             command_buffer.end();
-            if (!m_app_context.OpenXR) {
+            if (should_render && !m_app_context.OpenXR) {
                 ERHE_PROFILE_SCOPE("end_swapchain");
                 command_buffer.end_swapchain(frame_end_info);
             }
             // Submit + implicit present (when a swapchain was engaged).
+            // Hidden ticks arrive here with no swapchain engaged; this is
+            // then a device-only submit (same shape as the init pump), so
+            // work recorded during the hidden tick still executes.
             erhe::graphics::Command_buffer* cbs[] = { &command_buffer };
             m_graphics_device->submit_command_buffers(std::span<erhe::graphics::Command_buffer* const>{cbs});
         }

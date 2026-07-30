@@ -241,14 +241,46 @@ void Init_status_display::pump()
 #endif
 
     // Session locked (launch-while-locked case): presents cannot reach the
-    // display, so skip driving swapchain frames deliberately - same policy
-    // as the activity classification in Editor::run(). The next set_line
-    // marks the state dirty again, so the display repaints after unlock.
+    // display, so skip the swapchain frame deliberately - same policy as
+    // the activity classification in Editor::run(). The device-frame
+    // lifecycle must still advance, though: init-time GPU uploads are
+    // built around the pump's submit cadence (command buffers, completion
+    // handlers and staging reclamation all cycle on device frames).
+    // Returning without submitting left the whole init recorded into one
+    // giant never-advancing device frame, and every pre-existing mesh came
+    // up invisible after a launch-while-locked (verified live 2026-07-30
+    // and reproduced with a simulated lock).
     if (m_window.is_session_locked()) {
+        advance_device_frame_without_present();
         return;
     }
 
     render_present_desktop();
+}
+
+void Init_status_display::advance_device_frame_without_present()
+{
+    // Steps 1 + 3 of render_present_desktop without the swapchain frame in
+    // between: end + submit the open init cb, close the device frame, and
+    // reopen a fresh init cb for the rest of init to record into. Mirrors
+    // the main loop's hidden path (device frames open and close cleanly,
+    // the swapchain is not engaged at all).
+    ERHE_VERIFY(m_init_command_buffer != nullptr);
+    {
+        erhe::graphics::Command_buffer* const init_cb = m_init_command_buffer;
+        init_cb->end();
+        erhe::graphics::Command_buffer* init_cbs[] = { init_cb };
+        m_graphics_device.submit_command_buffers(std::span<erhe::graphics::Command_buffer* const>{init_cbs});
+        const bool init_end_ok = m_graphics_device.end_frame();
+        ERHE_VERIFY(init_end_ok);
+    }
+    m_init_command_buffer = nullptr;
+
+    const bool reopen_wait_ok = m_graphics_device.wait_frame();
+    ERHE_VERIFY(reopen_wait_ok);
+    erhe::graphics::Command_buffer& new_init_cb = m_graphics_device.get_command_buffer(0);
+    new_init_cb.begin();
+    m_init_command_buffer = &new_init_cb;
 }
 
 void Init_status_display::render_present_desktop()
