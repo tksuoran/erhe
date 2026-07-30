@@ -11,7 +11,7 @@
         "turn_speed": 1
     },
     "debug_visualizations_style": {
-        "_version": 3,
+        "_version": 4,
         "shadow_fit_casters_color": [0.2,1,0.3,0.6],
         "shadow_fit_casters_culled_color": [1,0.2,0.2,0.4],
         "shadow_fit_casters_width": 1,
@@ -63,6 +63,10 @@
         "bone_solid": true,
         "bone_width_scale": 0.1,
         "skin_bone_xray": true,
+        "mesh_primitive_box_color": [0,0.8,1,1],
+        "mesh_primitive_box_width": 1,
+        "bone_box_color": [1,0.6,0.1,1],
+        "bone_box_width": 1,
         "hover_normal_length": 0.5,
         "vertex_label_text_color": [0.3,1,0.3,1],
         "vertex_label_line_color": [0,0.8,0,1],
