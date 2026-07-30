@@ -1305,7 +1305,7 @@ void Transform_tool::render_hover_preview(const Render_context& context)
         const int   axis_index       = static_cast<int>(get_handle_axis(handle)) - 1; // e_handle_axis_x == 1
         const vec3  axis             = basis[axis_index];
         const float axis_half_length = 100.0f * radius;
-        line_renderer.set_thickness(-2.0f); // negative = constant screen-space pixels
+        line_renderer.set_thickness(-1.0f); // negative = constant screen-space pixels
         line_renderer.add_lines(color, {{center - axis_half_length * axis, center + axis_half_length * axis}});
     }
 
@@ -1322,6 +1322,8 @@ void Transform_tool::render_hover_preview(const Render_context& context)
         const vec3  v = basis[v_index];
         const float h = radius; // half-extent: match the rotate-ring footprint
 
+        // Kept subtle: the preview is orientation context, not a handle - thin
+        // lines and low alpha so it never competes with the gizmo itself.
         constexpr int cell_count = 8;
         std::vector<erhe::renderer::Line> grid_lines;
         grid_lines.reserve(2 * (cell_count - 1));
@@ -1330,13 +1332,13 @@ void Transform_tool::render_hover_preview(const Render_context& context)
             grid_lines.push_back({center + t * u - h * v, center + t * u + h * v});
             grid_lines.push_back({center - h * u + t * v, center + h * u + t * v});
         }
-        line_renderer.set_thickness(-1.0f);
-        line_renderer.set_line_color(vec4{0.5f * vec3{color}, 0.5f});
+        line_renderer.set_thickness(-0.375f);
+        line_renderer.set_line_color(vec4{0.5f * vec3{color}, 0.35f});
         line_renderer.add_lines(grid_lines);
 
-        line_renderer.set_thickness(-2.0f);
+        line_renderer.set_thickness(-0.75f);
+        line_renderer.set_line_color(vec4{vec3{color}, 0.75f});
         line_renderer.add_lines(
-            color,
             {
                 {center - h * u - h * v, center + h * u - h * v},
                 {center + h * u - h * v, center + h * u + h * v},
@@ -1353,7 +1355,7 @@ void Transform_tool::render_hover_preview(const Render_context& context)
             center - h * u + h * v
         };
         const uint32_t indices[6] = {0, 1, 2, 0, 2, 3};
-        triangle_renderer.add_triangles(mat4{1.0f}, vec4{vec3{color}, 0.10f}, corners, indices);
+        triangle_renderer.add_triangles(mat4{1.0f}, vec4{vec3{color}, 0.07f}, corners, indices);
     }
 
     if (rotate) {

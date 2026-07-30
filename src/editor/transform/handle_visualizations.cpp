@@ -44,7 +44,8 @@ namespace {
 // them to world units so the gizmo keeps a constant on-screen size.
 constexpr float arrow_shaft_length     = 2.75f;
 constexpr float arrow_cone_length      = 0.6f;
-constexpr float arrow_cone_radius      = 0.15f;
+constexpr float arrow_cone_radius      = 0.15f;                     // scale-axis tip cones
+constexpr float translate_cone_radius  = 2.0f * arrow_cone_radius;  // translate arrows: wider base, thinner shaft (below)
 constexpr float arrow_tip              = arrow_shaft_length + arrow_cone_length;
 constexpr float arrow_shaft_pick_radius= 0.12f;
 constexpr float arrow_head_pick_end    = arrow_shaft_length + 2.0f * arrow_cone_length;
@@ -52,14 +53,24 @@ constexpr float arrow_head_pick_radius = 0.45f;
 
 constexpr float plane_half_extent      = 0.6f;
 constexpr float plane_pick_half_extent = 0.78f;
-// Positive-only translate mode: the plane quad moves out into the quadrant
-// between the positive arrows, its outer corner touching the max corner of
-// the box spanned by the arrow tips.
-constexpr float plane_positive_offset  = arrow_tip - plane_half_extent;
 
 constexpr float rotate_ring_major_radius = 4.0f;
 constexpr float ring_pick_radius         = 0.2f;
 constexpr int   ring_arc_sample_count    = 128;
+
+// Positive-only translate mode: the plane quads sit at the gizmo center
+// with their min corner ON the center, so the three quads share edges
+// along the positive axes. Being deep inside the rotate sphere, they read
+// as a distinct inner cluster instead of fighting the rings for space;
+// the axis arrows move OUTSIDE the rotate sphere instead (arrow_start
+// below), so translate handles and rings never contest the same radius.
+constexpr float plane_positive_offset = plane_half_extent;
+
+// Axis arrows start outside the rotate sphere (3D radius; the arrows are
+// radial, so only a view nearly along the axis foreshortens one into the
+// projected sphere - and that arrow is degenerate for translation anyway).
+constexpr float arrow_ring_gap = 0.25f;
+constexpr float arrow_start    = rotate_ring_major_radius + arrow_ring_gap;
 
 constexpr float center_cube_half_length  = 0.25f;
 constexpr float center_cube_pick_radius  = 0.5f;
@@ -71,7 +82,13 @@ constexpr int   cone_side_count          = 16;
 
 constexpr float line_width_normal   = -3.0f; // negative = constant screen-space pixels
 constexpr float line_width_hot      = -4.5f;
-constexpr float ring_hidden_width   = -1.0f;
+// Translate arrow shafts: half the shared handle width - the thin stem plus
+// the wide cone base (translate_cone_radius) reads as a pointer, not a bar.
+constexpr float arrow_shaft_width_normal = 0.5f * line_width_normal;
+constexpr float arrow_shaft_width_hot    = 0.5f * line_width_hot;
+// Rotate ring arcs: slightly thinner than the shared handle width.
+constexpr float ring_width_normal   = 0.75f * line_width_normal;
+constexpr float ring_width_hot      = 0.75f * line_width_hot;
 constexpr float plane_outline_width = -2.0f;
 constexpr float plane_fill_alpha    = 0.5f;
 
@@ -129,24 +146,26 @@ constexpr Handle box_scale_neg_handles[3] = {
     Handle::e_handle_box_scale_neg_x, Handle::e_handle_box_scale_neg_y, Handle::e_handle_box_scale_neg_z
 };
 
-// Rotation-ring arc visibility (rotate_visible_arcs_only): the three rings
-// are treated as a ball of three mutually perpendicular discs. A point on
-// one ring is occluded - drawn as a thin reference line and not pickable -
-// when the sight line from the eye to it passes through the disc of one of
-// the other two rings first.
+// Rotation-ring arc visibility (rotate_visible_arcs_only): the shown rings
+// are treated as a ball of mutually perpendicular discs. A point on one
+// ring is occluded - not drawn and not pickable - when the sight line from
+// the eye to it passes through the disc of another SHOWN ring first; a
+// hidden ring's disc covers nothing, so with a single ring shown the whole
+// ring is visible.
 auto is_ring_point_occluded(
     const vec3&  eye,
     const vec3&  point,
     const vec3&  center,
     const mat3&  basis,
     const float  radius,
-    const int    axis
+    const int    axis,
+    const bool   ring_shown[3]
 ) -> bool
 {
     const vec3  eye_to_point = point - eye;
     const float sight_length = glm::length(eye_to_point);
     for (int other = 0; other < 3; ++other) {
-        if (other == axis) {
+        if ((other == axis) || !ring_shown[other]) {
             continue;
         }
         const vec3  n     = basis[other];
@@ -394,17 +413,10 @@ auto Handle_visualizations::is_handle_shown(const Handle handle) const -> bool
         return false;
     }
 
-    // Positive-only translate mode hides the negative-direction axis handles.
-    if (
-        !m_context.editor_settings->transform_tool.translate_negative_handles &&
-        (
-            (handle == Handle::e_handle_translate_neg_x) ||
-            (handle == Handle::e_handle_translate_neg_y) ||
-            (handle == Handle::e_handle_translate_neg_z)
-        )
-    ) {
-        return false;
-    }
+    // Single-arrow translate mode (translate_negative_handles off) shows one
+    // direction arrow per axis - the camera-facing one. That choice is
+    // view-dependent, so it is made in render() and pick() (which know the
+    // eye), not here; both direction handles count as shown at this level.
 
     // While a drag is active, show only the handles whose constraint exactly
     // matches the dragged one: an axis drag keeps both direction arrows of
@@ -454,85 +466,104 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
 
     const bool positive_only = !m_context.editor_settings->transform_tool.translate_negative_handles;
 
-    // Translate arrows
-    for (int axis = 0; axis < 3; ++axis) {
-        const vec3 d     = basis[axis];
-        const vec3 side1 = basis[(axis + 1) % 3];
-        const vec3 side2 = basis[(axis + 2) % 3];
-        const Handle directional_handles[2] = {translate_pos_handles[axis], translate_neg_handles[axis]};
-        for (int sign = 0; sign < 2; ++sign) {
-            const Handle handle = directional_handles[sign];
-            if (!is_handle_shown(handle)) {
-                continue;
-            }
-            const vec3 dir   = (sign == 0) ? d : -d;
-            const vec4 color = handle_color(handle, axis_colors[axis]);
-            line_renderer.set_thickness(is_hot(handle) ? line_width_hot : line_width_normal);
-            line_renderer.add_lines(color, {{c, c + (s * arrow_shaft_length) * dir}});
-            draw_cone_fill(triangle_renderer, color, c + (s * arrow_shaft_length) * dir, dir, side1, side2, s * arrow_cone_length, s * arrow_cone_radius);
-        }
-    }
-
     // Translate planes
     for (int perp = 0; perp < 3; ++perp) {
         const Handle handle = translate_plane_handles[perp];
         if (!is_handle_shown(handle)) {
             continue;
         }
+        // Camera-facing quadrant: like the single-arrow choice above, each
+        // in-plane axis flips toward the eye, so the quad extends on the
+        // near side of the gizmo and stays clear of the visible rotation
+        // arcs (which hug the far reaches of the projected sphere).
+        const float offset = positive_only ? plane_positive_offset : 0.0f;
         const vec3  u      = basis[(perp + 1) % 3];
         const vec3  v      = basis[(perp + 2) % 3];
-        const float offset = positive_only ? plane_positive_offset : 0.0f;
-        const vec3  center = c + (s * offset) * (u + v);
-        draw_quad(line_renderer, triangle_renderer, handle_color(handle, axis_colors[perp]), center, (s * plane_half_extent) * u, (s * plane_half_extent) * v);
+        const vec3  su     = (dot(u, eye - c) >= 0.0f) ? u : -u;
+        const vec3  sv     = (dot(v, eye - c) >= 0.0f) ? v : -v;
+        const vec3  center = c + (s * offset) * (su + sv);
+        draw_quad(line_renderer, triangle_renderer, handle_color(handle, axis_colors[perp]), center, (s * plane_half_extent) * su, (s * plane_half_extent) * sv);
     }
 
-    // Rotate rings
+    // Rotate rings. Occluded arc segments (arcs_only mode) are not drawn at
+    // all - matching pick(), where they are not pickable. Only SHOWN rings
+    // act as occluders, so a single shown ring renders as the full circle.
     {
         const bool  arcs_only = m_context.editor_settings->transform_tool.rotate_visible_arcs_only;
         const float radius    = s * rotate_ring_major_radius;
+        const bool  ring_shown[3] = {
+            is_handle_shown(ring_handles[0]),
+            is_handle_shown(ring_handles[1]),
+            is_handle_shown(ring_handles[2])
+        };
+        const int shown_count =
+            (ring_shown[0] ? 1 : 0) + (ring_shown[1] ? 1 : 0) + (ring_shown[2] ? 1 : 0);
         std::vector<erhe::renderer::Line> visible_lines;
-        std::vector<erhe::renderer::Line> hidden_lines;
         visible_lines.reserve(ring_arc_sample_count);
-        hidden_lines .reserve(ring_arc_sample_count);
         for (int axis = 0; axis < 3; ++axis) {
-            const Handle handle = ring_handles[axis];
-            if (!is_handle_shown(handle)) {
+            if (!ring_shown[axis]) {
                 continue;
             }
+            const Handle handle = ring_handles[axis];
             const vec3 side1 = basis[(axis + 1) % 3];
             const vec3 side2 = basis[(axis + 2) % 3];
             visible_lines.clear();
-            hidden_lines .clear();
             vec3 previous        {0.0f};
             bool previous_visible{false};
             for (int i = 0; i <= ring_arc_sample_count; ++i) {
                 const float theta   = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(ring_arc_sample_count);
                 const vec3  normal  = std::cos(theta) * side1 + std::sin(theta) * side2;
                 const vec3  point   = c + radius * normal;
-                const bool  visible = !arcs_only || !is_ring_point_occluded(eye, point, c, basis, radius, axis);
-                if (i > 0) {
-                    if (visible && previous_visible) {
-                        visible_lines.push_back({previous, point});
-                    } else {
-                        hidden_lines.push_back({previous, point});
-                    }
+                const bool  visible = !arcs_only || !is_ring_point_occluded(eye, point, c, basis, radius, axis, ring_shown);
+                if ((i > 0) && visible && previous_visible) {
+                    visible_lines.push_back({previous, point});
                 }
                 previous         = point;
                 previous_visible = visible;
             }
-            const vec4 color = handle_color(handle, axis_colors[axis]);
-            // Occluded arc: thin reference line, drawn first so the visible
-            // arc overdraws the shared boundary segments. Not pickable.
-            if (!hidden_lines.empty()) {
-                line_renderer.set_thickness(ring_hidden_width);
-                line_renderer.set_line_color(color);
-                line_renderer.add_lines(hidden_lines);
-            }
+            const vec4  color = handle_color(handle, axis_colors[axis]);
+            const float width = is_hot(handle) ? ring_width_hot : ring_width_normal;
             if (!visible_lines.empty()) {
-                line_renderer.set_thickness(is_hot(handle) ? line_width_hot : line_width_normal);
+                line_renderer.set_thickness(width);
                 line_renderer.set_line_color(color);
                 line_renderer.add_lines(visible_lines);
             }
+            // Single shown ring (e.g. during a rotate drag): tangent and
+            // bitangent guides in the ring plane, from the axes' intersection
+            // point (the gizmo center) out to the arc, fading in toward it.
+            if (shown_count == 1) {
+                const vec4 transparent = vec4{vec3{color}, 0.0f};
+                const vec4 opaque      = vec4{vec3{color}, 1.0f};
+                const vec3 directions[4] = { side1, -side1, side2, -side2 };
+                for (const vec3& direction : directions) {
+                    line_renderer.add_line(transparent, width, c, opaque, width, c + radius * direction);
+                }
+            }
+        }
+    }
+
+    // Translate arrows. In single-arrow mode (translate_negative_handles
+    // off) each axis shows only the direction facing the camera, so no
+    // arrow is drawn receding behind the rotate sphere.
+    for (int axis = 0; axis < 3; ++axis) {
+        const vec3 d     = basis[axis];
+        const vec3 side1 = basis[(axis + 1) % 3];
+        const vec3 side2 = basis[(axis + 2) % 3];
+        const bool positive_towards_eye = dot(d, eye - c) >= 0.0f;
+        const Handle directional_handles[2] = {translate_pos_handles[axis], translate_neg_handles[axis]};
+        for (int sign = 0; sign < 2; ++sign) {
+            if (positive_only && ((sign == 0) != positive_towards_eye)) {
+                continue;
+            }
+            const Handle handle = directional_handles[sign];
+            if (!is_handle_shown(handle)) {
+                continue;
+            }
+            const vec3 dir   = (sign == 0) ? d : -d;
+            const vec4 color = handle_color(handle, axis_colors[axis]);
+            line_renderer.set_thickness(is_hot(handle) ? arrow_shaft_width_hot : arrow_shaft_width_normal);
+            line_renderer.add_lines(color, {{c + (s * arrow_start) * dir, c + (s * (arrow_start + arrow_shaft_length)) * dir}});
+            draw_cone_fill(triangle_renderer, color, c + (s * (arrow_start + arrow_shaft_length)) * dir, dir, side1, side2, s * arrow_cone_length, s * translate_cone_radius);
         }
     }
 
@@ -622,10 +653,16 @@ auto Handle_visualizations::pick(const glm::vec3& ray_origin, const glm::vec3& r
     const bool positive_only = !m_context.editor_settings->transform_tool.translate_negative_handles;
 
     // Translate arrows: a thin capsule along the shaft plus a fatter capsule
-    // around the cone head (matching the old collision geometry).
+    // around the cone head (matching the old collision geometry). Mirrors
+    // render()'s single-arrow choice: only the camera-facing direction of
+    // each axis is pickable when translate_negative_handles is off.
     for (int axis = 0; axis < 3; ++axis) {
+        const bool positive_towards_eye = dot(basis[axis], ray_origin - c) >= 0.0f;
         const Handle directional_handles[2] = {translate_pos_handles[axis], translate_neg_handles[axis]};
         for (int sign = 0; sign < 2; ++sign) {
+            if (positive_only && ((sign == 0) != positive_towards_eye)) {
+                continue;
+            }
             const Handle handle = directional_handles[sign];
             if (!is_handle_shown(handle)) {
                 continue;
@@ -635,13 +672,13 @@ auto Handle_visualizations::pick(const glm::vec3& ray_origin, const glm::vec3& r
             vec3  q{0.0f};
             float dist{0.0f};
             if (
-                ray_segment_distance(ray_origin, d, c, c + (s * arrow_shaft_length) * dir, t, q, dist) &&
+                ray_segment_distance(ray_origin, d, c + (s * arrow_start) * dir, c + (s * (arrow_start + arrow_shaft_length)) * dir, t, q, dist) &&
                 (dist <= s * arrow_shaft_pick_radius)
             ) {
                 consider(handle, t, q);
             }
             if (
-                ray_segment_distance(ray_origin, d, c + (s * arrow_shaft_length) * dir, c + (s * arrow_head_pick_end) * dir, t, q, dist) &&
+                ray_segment_distance(ray_origin, d, c + (s * (arrow_start + arrow_shaft_length)) * dir, c + (s * (arrow_start + arrow_head_pick_end)) * dir, t, q, dist) &&
                 (dist <= s * arrow_head_pick_radius)
             ) {
                 consider(handle, t, q);
@@ -659,9 +696,15 @@ auto Handle_visualizations::pick(const glm::vec3& ray_origin, const glm::vec3& r
         if (std::abs(denom) < 1.0e-6f) {
             return;
         }
+        // Camera-facing quadrant, mirroring render(): the offset moves the
+        // quad center toward the eye's side of each in-plane axis. The
+        // bounds check is symmetric around the center, so unsigned u/v axes
+        // suffice for it.
         const vec3  u      = basis[(perp + 1) % 3];
         const vec3  v      = basis[(perp + 2) % 3];
-        const vec3  center = c + (s * offset) * (u + v);
+        const vec3  su     = (dot(u, ray_origin - c) >= 0.0f) ? u : -u;
+        const vec3  sv     = (dot(v, ray_origin - c) >= 0.0f) ? v : -v;
+        const vec3  center = c + (s * offset) * (su + sv);
         const float t      = dot(center - ray_origin, n) / denom;
         if (t <= 0.0f) {
             return;
@@ -716,24 +759,30 @@ auto Handle_visualizations::pick(const glm::vec3& ray_origin, const glm::vec3& r
     }
 
     // Rotate rings: test the sampled ring points; in visible-arcs mode the
-    // samples occluded by the other rings' discs are not pickable. The
-    // samples are spaced ~0.049 R apart while the pick tube radius is
-    // 0.05 R, so testing sample points leaves no dead zones.
+    // samples occluded by other SHOWN rings' discs are not pickable
+    // (matching render). The samples are spaced ~0.049 R apart while the
+    // pick tube radius is 0.05 R, so testing sample points leaves no dead
+    // zones.
     {
         const bool  arcs_only = m_context.editor_settings->transform_tool.rotate_visible_arcs_only;
         const float radius    = s * rotate_ring_major_radius;
+        const bool  ring_shown[3] = {
+            is_handle_shown(ring_handles[0]),
+            is_handle_shown(ring_handles[1]),
+            is_handle_shown(ring_handles[2])
+        };
         for (int axis = 0; axis < 3; ++axis) {
-            const Handle handle = ring_handles[axis];
-            if (!is_handle_shown(handle)) {
+            if (!ring_shown[axis]) {
                 continue;
             }
+            const Handle handle = ring_handles[axis];
             const vec3 side1 = basis[(axis + 1) % 3];
             const vec3 side2 = basis[(axis + 2) % 3];
             for (int i = 0; i < ring_arc_sample_count; ++i) {
                 const float theta  = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(ring_arc_sample_count);
                 const vec3  normal = std::cos(theta) * side1 + std::sin(theta) * side2;
                 const vec3  point  = c + radius * normal;
-                if (arcs_only && is_ring_point_occluded(ray_origin, point, c, basis, radius, axis)) {
+                if (arcs_only && is_ring_point_occluded(ray_origin, point, c, basis, radius, axis, ring_shown)) {
                     continue;
                 }
                 const float t = dot(point - ray_origin, d);

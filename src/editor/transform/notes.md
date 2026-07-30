@@ -16,7 +16,7 @@ Transform gizmo system for interactive translate, rotate, and scale operations.
 
 - **`Subtool`** -- Base class for transform sub-tools with shared handle visualization logic.
 
-- **`Handle_visualizations`** -- Draws the gizmo handles (arrows, plane quads, rings, scale cones/cube) with the debug primitive renderer (x-ray lines and filled triangles; no scene meshes) and hit tests them analytically (`pick()`). Rendering and picking share the same per-handle visibility rules, so a handle is pickable exactly when it is drawn.
+- **`Handle_visualizations`** -- Draws the gizmo handles (arrows, plane quads, rings, scale cones/cube) with the debug primitive renderer (x-ray lines and filled triangles; no scene meshes) and hit tests them analytically (`pick()`). Rendering and picking share the same per-handle visibility rules, so a handle is pickable exactly when it is drawn. The translate presentation is view-dependent: without negative handles, each axis shows the one camera-facing arrow (placed outside the rotate-ring sphere so arrows and rings never contest the same radius) and each plane quad sits at the gizmo center extending into the camera-facing quadrant (min corner on the center, so the three quads share edges). Draw order is inside-out (quads, rings, arrows) because the x-ray debug lines layer by submission order. In visible-arcs mode only SHOWN rings occlude arcs, so a single shown ring (e.g. mid-drag) renders as a full circle, with tangent/bitangent guide lines fading in from the center toward the arc.
 
 - **`Handle_enums`** -- Enumerations for handle types (axis, plane) and coordinate spaces.
 
