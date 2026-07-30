@@ -402,6 +402,16 @@ void Scene_view::set_world_from_control(glm::vec3 near_position_in_world, glm::v
 
 void Scene_view::set_world_from_control(const glm::mat4& world_from_control)
 {
+    // The control ray is a hover input in its own right, beyond the hovered
+    // mesh: the transform gizmo hit-tests its handles analytically against
+    // this ray, so a ray change must re-trigger the hover consumers even
+    // when the hovered mesh stays the same. Without this, gizmo handle
+    // hover froze whenever the pointer moved between handles over an
+    // unchanging background (no mesh change -> no Hover_mesh_message), and
+    // only recovered when a refocus reset the hover slots.
+    if (!m_world_from_control.has_value() || (m_world_from_control.value() != world_from_control)) {
+        m_hover_update_pending = true;
+    }
     m_world_from_control = world_from_control;
     m_control_from_world = glm::inverse(world_from_control);
 }
