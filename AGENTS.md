@@ -257,7 +257,26 @@ The minidump and `logs/log.txt` are a starting hypothesis, not the diagnosis -- 
 **Notes / gotchas:**
 - `symbol_workspace` does not index this C++ solution's symbols (it is C#-oriented and returns no matches here). For C++ symbol navigation use `goto_definition` / `find_references` from an open document, or the Grep tool over `src/`.
 - The startup project is `editor`; `build_status` reports `NoBuildPerformed` until a build is triggered through VS or the MCP build tools.
+- **Modal dialogs in VS block the MCP server.** A CMake configure (rerunning a `scripts\configure_*.bat` while the solution is open, or a `CMakeLists.txt` edit triggering VS's own regenerate) can pop a modal dialog in the VS instance; the MCP server cannot dismiss dialogs, and tool calls just hang/fail until a human clears it. When a configure is part of the flow, tell the user beforehand and ask them to clear any dialog that appears. Expect similar interactive limitations elsewhere (any modal prompt blocks tool calls until dismissed).
+- If the `mcp__visualstudio__*` tools are not registered in the active AI client session, the server is still reachable over plain HTTP on `http://localhost:5050` (JSON-RPC 2.0, same pattern as the in-editor MCP server) -- probe it before concluding the server is unavailable.
 - This complements -- does not replace -- the log-based workflow below (`logs/log.txt`) and the Quest/Android debugging flows, which run on-device and are out of VS's reach.
+
+## Missing tooling: ask, don't settle
+
+When a debugging or analysis task would be materially easier with software
+that is not installed (a post-mortem debugger such as WinDbg/cdb, a profiler,
+a dump or trace analyzer), do NOT silently settle for a weaker workaround.
+Tell the user what is missing, what it would buy for the task at hand, and how
+to install it (command or link), and ask them to install it or for permission
+to install it yourself. Record newly installed per-machine tool locations in
+`memory-bank/local/`. Also re-check the debugging sections of this file first:
+the capability may already exist through an MCP server (Visual Studio MCP for
+live debugging, RenderDoc fork for GPU captures) even when the classic
+command-line tool is absent. Precedent: a `logs/editor_crash_*.dmp` minidump
+was "analyzed" with a hand-rolled dbghelp stack walker that produced a single
+usable frame, when the documented VS MCP debugger flow (or WinDbg,
+`winget install Microsoft.WinDbg`) would have given the full callstack and
+locals.
 
 ## Building / diagnostics on macOS (Xcode MCP server)
 
