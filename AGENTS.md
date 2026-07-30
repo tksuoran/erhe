@@ -65,12 +65,26 @@ cmake --build build_vs2026_vulkan_headless --target editor --config Debug
 ### clangd diagnostics vs the real build
 
 IDE diagnostics come from clangd via `build_ninja_win_clang/compile_commands.json`.
-Newly created source files are not in the compilation database until the next
-CMake configure, so clangd reports masses of false "file not found" / "unknown
-type" errors for them (and for files that include them). Do not chase these --
-the ninja/VS build is the ground truth. Re-run
-`scripts\configure_ninja_win_clang.bat` to refresh the database when the noise
-gets in the way.
+That build tree is NOT part of the routine build loop (day-to-day verification
+uses `build_ninja_win_vulkan`), so nothing keeps its database fresh on its own.
+
+**Habit: after any change that affects compile commands -- editing a
+`CMakeLists.txt`, adding/removing/renaming source files, or adding a new
+`erhe::*` library / include directory -- re-run
+`scripts\configure_ninja_win_clang.bat`.** It is configure-only (~25 s, no
+compilation) and regenerates the database. The IDE's clangd may need a
+language-server restart to pick it up.
+
+Recognize the staleness signature: ONE unresolved include (a header the stale
+database has no include path for) cascades into hundreds of false errors in
+perfectly compiling, committed code -- "file not found", then "unknown type",
+"no member named ... in <well-known class>", "cannot initialize object
+parameter" across unrelated files. Do not chase these -- the ninja/VS build is
+the ground truth; refresh the database instead. (Precedent: a database
+predating `src/erhe/frame_pacing` poisoned diagnostics repo-wide via the single
+missing `erhe_frame_pacing/frame_time_recorder.hpp` include path.) To verify a
+refresh worked without an IDE: `clangd --check=<file>` -- only `tweak:` probe
+failures in its output means the file is clean.
 
 ### macOS (Xcode)
 
