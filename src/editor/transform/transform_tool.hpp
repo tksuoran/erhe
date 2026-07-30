@@ -292,6 +292,12 @@ private:
     // for an axis translation handle, the plane rectangle + grid for a plane
     // translation handle, the rotation axis + rotation plane for a rotate ring.
     void render_hover_preview(const Render_context& context);
+    // Active translate drag feedback (replaces the hover previews for the
+    // duration of the drag): axis drag draws only the traveled segment from
+    // initial to current drag point; plane drag draws an axis-aligned
+    // rectangle spanning the two points, edges color-coded per axis, plus
+    // the diagonal in the plane handle's color.
+    void render_translate_drag_guides(const Render_context& context);
 
     // Apply a gizmo-produced world-from-anchor transform to the selected mesh
     // components (used by adjust_* and the numeric edits when component_mode).

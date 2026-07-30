@@ -1257,18 +1257,84 @@ void Transform_tool::tool_render(const Render_context& context)
     if (m_context.editor_settings->transform_tool.hover_preview) {
         render_hover_preview(context);
     }
+    render_translate_drag_guides(context);
 
     m_context.rotate_tool->render(context);
 }
 
+void Transform_tool::render_translate_drag_guides(const Render_context& context)
+{
+    // Active translate drag feedback (shown instead of the hover previews
+    // for the duration of the drag), anchored on the NODE's travel: from
+    // the anchor's position at drag start to its current (snapped)
+    // position. Axis drag: only that traveled segment - not the full axis.
+    // Plane drag: an axis-aligned rectangle with the two anchor positions
+    // in opposite corners, each edge color-coded by the axis it runs
+    // along, plus the diagonal in the plane handle's own color. Kept
+    // subtle: 1 px lines, reduced alpha.
+    const Handle_type type       = get_handle_type(m_active_handle);
+    const bool        axis_drag  = (type == Handle_type::e_handle_type_translate_axis);
+    const bool        plane_drag = (type == Handle_type::e_handle_type_translate_plane);
+    if (!axis_drag && !plane_drag) {
+        return;
+    }
+    constexpr float guide_width = -1.0f; // negative = constant screen-space pixels
+    constexpr float guide_alpha = 0.75f;
+
+    const vec3 p0           = shared.world_from_anchor_initial_state.get_translation();
+    const vec3 p1           = shared.world_from_anchor.get_translation();
+    const vec3 delta_anchor = p1 - p0;
+
+    erhe::renderer::Primitive_renderer line_renderer = context.get(handle_line_config);
+    line_renderer.set_thickness(guide_width);
+
+    if (axis_drag) {
+        vec4 color = get_axis_color(get_axis_mask(m_active_handle));
+        color.a = guide_alpha;
+        line_renderer.set_line_color(color);
+        line_renderer.add_lines({{p0, p1}});
+        return;
+    }
+
+    int u_index = 0;
+    int v_index = 0;
+    switch (get_handle_plane(m_active_handle)) {
+        case Handle_plane::e_handle_plane_xy: u_index = 0; v_index = 1; break;
+        case Handle_plane::e_handle_plane_xz: u_index = 0; v_index = 2; break;
+        case Handle_plane::e_handle_plane_yz: u_index = 1; v_index = 2; break;
+        default: return;
+    }
+    const mat3 basis = shared.settings.use_anchor_orientation()
+        ? mat3_cast(shared.world_from_anchor.get_rotation())
+        : mat3{1.0f};
+    const vec3 u        = basis[u_index];
+    const vec3 v        = basis[v_index];
+    const vec3 corner_u = p0 + dot(delta_anchor, u) * u;
+    const vec3 corner_v = p0 + dot(delta_anchor, v) * v;
+
+    vec4 u_color        = get_axis_color(1u << u_index);
+    vec4 v_color        = get_axis_color(1u << v_index);
+    vec4 diagonal_color = get_axis_color(get_axis_mask(m_active_handle));
+    u_color.a        = guide_alpha;
+    v_color.a        = guide_alpha;
+    diagonal_color.a = guide_alpha;
+    line_renderer.set_line_color(u_color);
+    line_renderer.add_lines({{p0, corner_u}, {corner_v, p1}});
+    line_renderer.set_line_color(v_color);
+    line_renderer.add_lines({{p0, corner_v}, {corner_u, p1}});
+    line_renderer.set_line_color(diagonal_color);
+    line_renderer.add_lines({{p0, p1}});
+}
+
 void Transform_tool::render_hover_preview(const Render_context& context)
 {
-    // Preview the hovered handle; while a drag is active keep previewing the
-    // active handle (the pointer can drift off the handle mesh mid-drag).
+    // Preview the hovered handle. Active translate drags are handled by
+    // render_translate_drag_guides() (traveled segment / drag rectangle)
+    // instead of these previews, so both translate cases are pre-drag only.
     const Handle handle = (m_active_handle != Handle::e_handle_none) ? m_active_handle : m_hover_handle;
     const Handle_type type = get_handle_type(handle);
-    const bool translate_axis  = (type == Handle_type::e_handle_type_translate_axis);
-    const bool translate_plane = (type == Handle_type::e_handle_type_translate_plane);
+    const bool translate_axis  = (type == Handle_type::e_handle_type_translate_axis)  && (m_active_handle == Handle::e_handle_none);
+    const bool translate_plane = (type == Handle_type::e_handle_type_translate_plane) && (m_active_handle == Handle::e_handle_none);
     // Rotate_tool::render() draws its own (richer) guides - protractor, ring
     // and axis - during an active rotate drag; preview only the pre-drag hover.
     const bool rotate = (type == Handle_type::e_handle_type_rotate) && (m_active_handle == Handle::e_handle_none);
@@ -1302,11 +1368,13 @@ void Transform_tool::render_hover_preview(const Render_context& context)
     if (translate_axis || rotate) {
         // Axis guide: the translation axis for an arrow handle, the rotation
         // axis for a ring. Spans well past the view frustum in both directions.
+        // 1 px and translucent - orientation context, not a handle.
         const int   axis_index       = static_cast<int>(get_handle_axis(handle)) - 1; // e_handle_axis_x == 1
         const vec3  axis             = basis[axis_index];
         const float axis_half_length = 100.0f * radius;
         line_renderer.set_thickness(-1.0f); // negative = constant screen-space pixels
-        line_renderer.add_lines(color, {{center - axis_half_length * axis, center + axis_half_length * axis}});
+        line_renderer.set_line_color(vec4{vec3{color}, 0.6f});
+        line_renderer.add_lines({{center - axis_half_length * axis, center + axis_half_length * axis}});
     }
 
     if (translate_plane) {
@@ -1333,11 +1401,11 @@ void Transform_tool::render_hover_preview(const Render_context& context)
             grid_lines.push_back({center - h * u + t * v, center + h * u + t * v});
         }
         line_renderer.set_thickness(-0.375f);
-        line_renderer.set_line_color(vec4{0.5f * vec3{color}, 0.35f});
+        line_renderer.set_line_color(vec4{0.5f * vec3{color}, 0.25f});
         line_renderer.add_lines(grid_lines);
 
         line_renderer.set_thickness(-0.75f);
-        line_renderer.set_line_color(vec4{vec3{color}, 0.75f});
+        line_renderer.set_line_color(vec4{vec3{color}, 0.5f});
         line_renderer.add_lines(
             {
                 {center - h * u - h * v, center + h * u - h * v},

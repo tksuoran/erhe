@@ -86,9 +86,11 @@ constexpr float line_width_hot      = -4.5f;
 // the wide cone base (translate_cone_radius) reads as a pointer, not a bar.
 constexpr float arrow_shaft_width_normal = 0.5f * line_width_normal;
 constexpr float arrow_shaft_width_hot    = 0.5f * line_width_hot;
-// Rotate ring arcs: slightly thinner than the shared handle width.
+// Rotate ring arcs: slightly thinner than the shared handle width. The
+// hot (hover/active) arc is thinner still - narrower than the resting
+// arc; the hot emphasis comes from the brightened color, not width.
 constexpr float ring_width_normal   = 0.75f * line_width_normal;
-constexpr float ring_width_hot      = 0.75f * line_width_hot;
+constexpr float ring_width_hot      = 0.5f * 0.75f * line_width_hot;
 constexpr float plane_outline_width = -2.0f;
 constexpr float plane_fill_alpha    = 0.5f;
 

@@ -6,7 +6,7 @@ Transform gizmo system for interactive translate, rotate, and scale operations.
 
 ## Key Types
 
-- **`Transform_tool`** -- Coordinates the three sub-tools (move, rotate, scale). Manages gizmo visualization meshes, handle hit detection, and drag state. Subscribes to hover and selection messages. Binds keyboard shortcuts for switching between transform modes and toggling coordinate space (local/world).
+- **`Transform_tool`** -- Coordinates the three sub-tools (move, rotate, scale). Manages gizmo visualization meshes, handle hit detection, and drag state. Subscribes to hover and selection messages. Binds keyboard shortcuts for switching between transform modes and toggling coordinate space (local/world). Hover previews (axis guide line, plane grid) show pre-drag only; during an active translate drag `render_translate_drag_guides()` draws the NODE's travel instead: the traveled segment (axis drag) or an axis-aligned rectangle + diagonal spanning the anchor's initial and current positions (plane drag), edges color-coded per axis, 1 px, reduced alpha.
 
 - **`Move_tool`** -- Subtool for translation. Renders axis arrows and plane handles. Computes translation from pointer ray intersection with the appropriate constraint plane/line.
 
