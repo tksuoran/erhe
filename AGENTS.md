@@ -403,11 +403,19 @@ required):
 - Scene node ids RESHUFFLE on every launch - re-query with
   `get_scene_nodes` before every `select_items`; never reuse an id from a
   previous run.
-- Screenshots: `capture_screenshot` does not work in the windowed build, but
-  a PowerShell `System.Drawing` `CopyFromScreen` capture of the editor
-  window rect (HWND via `Get-Process editor` MainWindowHandle, brought to
-  foreground first) produces PNGs the Read tool can evaluate - good enough
-  to judge layout/rendering changes without RenderDoc.
+- Screenshots: PREFER the MCP `capture_screenshot` tool (headless build)
+  whenever a real display is not required. For the windowed build,
+  `py -3 scripts/capture_window.py` captures the editor window into a PNG
+  the Read tool can evaluate (PrintWindow by default - no focus change;
+  `--foreground` raises the window and blits from the screen).
+  **ALWAYS ASK THE USER FOR PERMISSION BEFORE ANY non-headless window
+  capture, every time.** The user may be using the computer for something
+  else entirely, the editor may not be the topmost window (the capture can
+  include unrelated windows or content), and the user may be live-driving
+  the editor without knowing a capture is being taken - the user must
+  always be aware when non-headless screenshotting is in use. A single
+  granted permission covers only the capture(s) it was asked for, not the
+  rest of the session.
 
 **Scripted startup scene**: `config/editor/commands.json` is a startup script (`scene.add_cameras` / `add_lights` / `add_room` / `add_platonic_solids` / ... with arg blocks; see `editor.cpp` dispatch + `src/editor/config/definitions/*.py` for arg fields). Adjust it to stand up a reproducible test scene before the editor even finishes init -- this is the preferred knob for "I need scene X to debug Y".
 
