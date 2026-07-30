@@ -11,8 +11,8 @@
 //     truncated to the maximum shadow distance (Camera::get_shadow_range()).
 //  2. fit_to_casters: cull the per-caster world AABBs to those intersecting
 //     the shadow caster volume F_shadow (F_main extruded toward the light),
-//     build a convex hull around the survivors, clip it to F_shadow, and use
-//     the clipped point set for fitting.
+//     clip each surviving box to F_shadow individually, and use the union of
+//     the clipped point sets for fitting.
 //  3. fit_to_view_frustum: constrain the fit with the F_main corner point
 //     box (intersection when casters are also fitted).
 //  4. optimize_rotation: rotating calipers on the fit points projected onto
@@ -63,6 +63,8 @@ public:
     const glm::vec3&                 light_direction_in_light
 ) -> Light_space_box
 {
+    ERHE_PROFILE_FUNCTION();
+
     Light_space_box box{};
     if (points_in_world.empty()) {
         return box;
@@ -110,6 +112,13 @@ constexpr float min_box_extent = 0.01f; // meters; keeps degenerate (flat) fits 
 // corners clipped to the view frustum and re-hulled. Shared by all lights of
 // one Light_projections::apply() pass via the cache - none of this depends on
 // the light. No-op when the cache is already valid for this pass.
+//
+// Across passes the cache reuses its previous result when the inputs repeat
+// (skipped while collecting debug data, which must refill the debug vectors):
+// an unchanged corner set keeps the corner hull - it depends on nothing else -
+// and an unchanged view frustum on top keeps the clip, the re-hull and
+// hull_valid as well. A pass over an unchanged scene then pays for the
+// in-frustum gather and the comparison, not for the QuickHull runs.
 void ensure_receiver_cache(
     Shadow_fit_receiver_cache&              cache,
     const std::span<const erhe::math::Aabb> receiver_world_aabbs,
@@ -124,17 +133,17 @@ void ensure_receiver_cache(
     }
     ERHE_PROFILE_FUNCTION();
 
-    cache.valid      = true;
-    cache.hull_valid = false;
-    cache.receiver_points.clear();
-    cache.clipped_hull.clear();
-    cache.receiver_boxes.clear();
-    cache.receiver_hull_points.clear();
-    cache.receiver_clipped_points.clear();
-    cache.receiver_clipped_hull_points.clear();
+    cache.valid = true;
 
-    // Corners of the receiver AABBs that intersect the view frustum (world space).
-    cache.receiver_points.reserve(receiver_world_aabbs.size() * 8);
+    // Corners of the receiver AABBs that intersect the view frustum (world
+    // space), gathered into a scratch so the previous pass's corner set stays
+    // available for the reuse comparison below.
+    std::vector<glm::vec3>& gathered = cache.gather_scratch;
+    gathered.clear();
+    gathered.reserve(receiver_world_aabbs.size() * 8);
+    if (collect_debug) {
+        cache.receiver_boxes.clear();
+    }
     for (const erhe::math::Aabb& aabb : receiver_world_aabbs) {
         const bool in_frustum =
             aabb.is_valid() &&
@@ -147,14 +156,36 @@ void ensure_receiver_cache(
         }
         const glm::vec3& a = aabb.min;
         const glm::vec3& b = aabb.max;
-        cache.receiver_points.push_back(glm::vec3{a.x, a.y, a.z});
-        cache.receiver_points.push_back(glm::vec3{a.x, a.y, b.z});
-        cache.receiver_points.push_back(glm::vec3{a.x, b.y, a.z});
-        cache.receiver_points.push_back(glm::vec3{a.x, b.y, b.z});
-        cache.receiver_points.push_back(glm::vec3{b.x, a.y, a.z});
-        cache.receiver_points.push_back(glm::vec3{b.x, a.y, b.z});
-        cache.receiver_points.push_back(glm::vec3{b.x, b.y, a.z});
-        cache.receiver_points.push_back(glm::vec3{b.x, b.y, b.z});
+        gathered.push_back(glm::vec3{a.x, a.y, a.z});
+        gathered.push_back(glm::vec3{a.x, a.y, b.z});
+        gathered.push_back(glm::vec3{a.x, b.y, a.z});
+        gathered.push_back(glm::vec3{a.x, b.y, b.z});
+        gathered.push_back(glm::vec3{b.x, a.y, a.z});
+        gathered.push_back(glm::vec3{b.x, a.y, b.z});
+        gathered.push_back(glm::vec3{b.x, b.y, a.z});
+        gathered.push_back(glm::vec3{b.x, b.y, b.z});
+    }
+
+    const bool same_corner_set =
+        cache.has_result &&
+        !collect_debug &&
+        (use_hull == cache.result_use_hull) &&
+        (gathered == cache.receiver_points);
+    if (same_corner_set && (main_frustum_corners == cache.result_frustum_corners)) {
+        return; // the clip and re-hull inputs are also unchanged: the whole cached result stands
+    }
+
+    cache.receiver_points.swap(gathered);
+    cache.has_result             = true;
+    cache.result_use_hull        = use_hull;
+    cache.result_frustum_corners = main_frustum_corners;
+
+    cache.hull_valid = false;
+    cache.clipped_hull.clear();
+    if (collect_debug) {
+        cache.receiver_hull_points.clear();
+        cache.receiver_clipped_points.clear();
+        cache.receiver_clipped_hull_points.clear();
     }
 
     // Tight convex-hull body (fit_to_receivers_hull): the convex intersection of
@@ -165,7 +196,12 @@ void ensure_receiver_cache(
     // (fewer than 4, or coplanar) or the clipped body is degenerate.
     if (use_hull && (cache.receiver_points.size() >= 4)) {
         erhe::math::Convex_hull& hull = cache.receiver_hull_scratch;
-        erhe::math::calculate_bounding_convex_hull(cache.receiver_points, hull);
+        if (!same_corner_set) {
+            // same_corner_set implies this branch also ran on the previous
+            // pass (same size, same use_hull), so the stored hull already is
+            // the hull of exactly this corner set.
+            erhe::math::calculate_bounding_convex_hull(cache.receiver_points, hull);
+        }
         if (collect_debug) {
             cache.receiver_hull_points = hull.points;
         }
@@ -342,13 +378,13 @@ auto Light::tight_directional_light_projection_transforms(const Light_projection
     const std::span<const glm::vec3> frustum_corner_points{main_frustum_corners};
 
     // Steps 2-3: Caster point set - filter the per-caster world AABBs to those
-    // that can shadow a visible receiver, build a convex hull around the
-    // survivors, and clip the hull to the shadow caster volume F_shadow.
+    // that can shadow a visible receiver, and clip each survivor to the shadow
+    // caster volume F_shadow.
     std::vector<glm::vec3>& caster_points = scratch.caster_points;
     caster_points.clear();
     bool casters_available = false;
     if (settings.fit_to_casters && !parameters.caster_world_aabbs.empty()) {
-        ERHE_PROFILE_SCOPE("fit: filter casters + hull + clip");
+        ERHE_PROFILE_SCOPE("fit: casters");
 
         // F_shadow: the (truncated) main camera view frustum extruded toward
         // the light. Two plane sets with different requirements are derived
@@ -417,10 +453,9 @@ auto Light::tight_directional_light_projection_transforms(const Light_projection
             debug_out->receiver_filter_planes  = receiver_filter_planes;
         }
 
-        // Surviving casters, expanded to 8 world-space corners.
-        std::vector<glm::vec3>& caster_corner_points = scratch.caster_corner_points;
-        caster_corner_points.clear();
-        caster_corner_points.reserve(parameters.caster_world_aabbs.size() * 8);
+        // Surviving casters: those whose bounds can shadow a visible receiver.
+        std::vector<erhe::math::Aabb>& surviving_casters = scratch.surviving_caster_aabbs;
+        surviving_casters.clear();
         {
             ERHE_PROFILE_SCOPE("fit: filter casters");
             for (const erhe::math::Aabb& aabb : parameters.caster_world_aabbs) {
@@ -450,42 +485,105 @@ auto Light::tight_directional_light_projection_transforms(const Light_projection
                 if (!in_shadow_volume || !in_receiver_volume) {
                     continue; // outside F_shadow, or cannot shadow any visible receiver
                 }
-                const glm::vec3& a = aabb.min;
-                const glm::vec3& b = aabb.max;
-                caster_corner_points.push_back(glm::vec3{a.x, a.y, a.z});
-                caster_corner_points.push_back(glm::vec3{a.x, a.y, b.z});
-                caster_corner_points.push_back(glm::vec3{a.x, b.y, a.z});
-                caster_corner_points.push_back(glm::vec3{a.x, b.y, b.z});
-                caster_corner_points.push_back(glm::vec3{b.x, a.y, a.z});
-                caster_corner_points.push_back(glm::vec3{b.x, a.y, b.z});
-                caster_corner_points.push_back(glm::vec3{b.x, b.y, a.z});
-                caster_corner_points.push_back(glm::vec3{b.x, b.y, b.z});
+                surviving_casters.push_back(aabb);
             }
         }
 
-        if (caster_corner_points.size() >= 4) {
-            ERHE_PROFILE_SCOPE("fit: caster hull + clip");
-            erhe::math::Convex_hull& caster_hull = scratch.caster_hull;
-            erhe::math::calculate_bounding_convex_hull(caster_corner_points, caster_hull);
-            if (!caster_hull.triangle_indices.empty()) {
-                // Clip with the open volume (not filter_planes): the hull is
-                // already bounded laterally by the surviving casters, so the
-                // silhouette side planes are not needed here and the open set
-                // avoids over-clipping the hull against planes it predates.
-                erhe::math::clip_convex_hull_points_by_planes(caster_hull, shadow_volume_planes, caster_points);
-                // The clip produces only points on the caster hull surface; when
-                // the hull contains F_shadow corner regions (e.g. one large caster
-                // enclosing the whole view frustum) the F_main corners inside the
-                // hull restore the missing pure plane intersection vertices.
-                for (const glm::vec3& corner : main_frustum_corners) {
-                    if (erhe::math::point_in_convex_hull(caster_hull, corner)) {
-                        caster_points.push_back(corner);
+        // Fit point set: each surviving box clipped to the **open** F_shadow
+        // individually (the box is bounded laterally by itself, so the
+        // silhouette side planes are not needed). A box is its own convex hull
+        // with fixed topology, so no hull build is involved; and the union of
+        // the per-box clips is a subset of the previously used clipped
+        // whole-set hull - which also covered the empty bridge regions between
+        // separated casters - so the fit can only get tighter while still
+        // covering every caster.
+        if (!surviving_casters.empty()) {
+            ERHE_PROFILE_SCOPE("fit: clip casters");
+
+            // Box hull topology for the corner order built below (bit 0 = z,
+            // bit 1 = y, bit 2 = x). Triangle winding is irrelevant: this hull
+            // is used only for Sutherland-Hodgman clipping, which does not
+            // derive planes from it.
+            static constexpr std::array<std::array<std::size_t, 3>, 12> box_triangles{{
+                {0, 1, 3}, {0, 3, 2}, // x = min
+                {4, 5, 7}, {4, 7, 6}, // x = max
+                {0, 1, 5}, {0, 5, 4}, // y = min
+                {2, 3, 7}, {2, 7, 6}, // y = max
+                {0, 2, 6}, {0, 6, 4}, // z = min
+                {1, 3, 7}, {1, 7, 5}  // z = max
+            }};
+            erhe::math::Convex_hull& box_hull = scratch.caster_box_hull;
+            box_hull.triangle_indices.assign(box_triangles.begin(), box_triangles.end());
+            std::vector<glm::vec3>& box_clip_points      = scratch.box_clip_points;
+            std::vector<glm::vec3>& caster_corner_points = scratch.caster_corner_points;
+            caster_corner_points.clear();
+            unsigned int frustum_corners_added = 0u; // bit per F_main corner already in the fit point set
+
+            for (const erhe::math::Aabb& aabb : surviving_casters) {
+                box_hull.points.clear();
+                for (std::size_t i = 0; i < 8; ++i) {
+                    box_hull.points.push_back(
+                        glm::vec3{
+                            ((i & 4u) != 0u) ? aabb.max.x : aabb.min.x,
+                            ((i & 2u) != 0u) ? aabb.max.y : aabb.min.y,
+                            ((i & 1u) != 0u) ? aabb.max.z : aabb.min.z
+                        }
+                    );
+                }
+                if (debug_out != nullptr) {
+                    caster_corner_points.insert(caster_corner_points.end(), box_hull.points.begin(), box_hull.points.end());
+                }
+
+                // Fast path: a box entirely inside the volume clips to itself,
+                // and its corners are the complete vertex set of the
+                // intersection (interior F_shadow vertices cannot be extremal
+                // against the corner span, so the check below is not needed).
+                const glm::vec3 center = aabb.center();
+                const glm::vec3 extent = 0.5f * aabb.diagonal();
+                bool fully_inside = true;
+                for (const glm::vec4& plane : shadow_volume_planes) {
+                    const glm::vec3 normal{plane};
+                    const float center_distance  = glm::dot(normal, center) + plane.w;
+                    const float projected_extent = glm::dot(glm::abs(normal), extent);
+                    if (center_distance < projected_extent) {
+                        fully_inside = false;
+                        break;
                     }
                 }
-                casters_available = !caster_points.empty();
-                if (debug_out != nullptr) {
-                    debug_out->caster_hull = caster_hull;
+                if (fully_inside) {
+                    caster_points.insert(caster_points.end(), box_hull.points.begin(), box_hull.points.end());
+                    continue;
                 }
+
+                erhe::math::clip_convex_hull_points_by_planes(box_hull, shadow_volume_planes, box_clip_points);
+                caster_points.insert(caster_points.end(), box_clip_points.begin(), box_clip_points.end());
+
+                // The surface clip cannot produce F_shadow vertices interior
+                // to the box (a box strictly containing the whole volume even
+                // clips to nothing), so add the F_main corners the box
+                // contains: they lie in F_shadow, hence in box ^ F_shadow.
+                // Deliberately not gated on the clip output being non-empty -
+                // empty output is exactly the box-contains-volume case.
+                for (std::size_t corner_index = 0; corner_index < 8; ++corner_index) {
+                    if ((frustum_corners_added & (1u << corner_index)) != 0u) {
+                        continue;
+                    }
+                    const glm::vec3& corner = main_frustum_corners[corner_index];
+                    if (
+                        (corner.x >= aabb.min.x) && (corner.x <= aabb.max.x) &&
+                        (corner.y >= aabb.min.y) && (corner.y <= aabb.max.y) &&
+                        (corner.z >= aabb.min.z) && (corner.z <= aabb.max.z)
+                    ) {
+                        caster_points.push_back(corner);
+                        frustum_corners_added |= (1u << corner_index);
+                    }
+                }
+            }
+            casters_available = !caster_points.empty();
+            if ((debug_out != nullptr) && (caster_corner_points.size() >= 4)) {
+                // Visualization only: the hull of the surviving corners no
+                // longer participates in the fit itself.
+                erhe::math::calculate_bounding_convex_hull(caster_corner_points, debug_out->caster_hull);
             }
         }
     }

@@ -78,11 +78,11 @@ public:
     bool                        receiver_hull_path_used{false}; // the hull path produced the planes
     bool                        receiver_box_path_used {false}; // the light-space bounding box fallback produced the planes
     std::vector<Caster_box>     caster_boxes;                 // every caster AABB the fit received, with its cull verdict
-    erhe::math::Convex_hull     caster_hull;                  // convex hull around the surviving caster bounds, before clipping to F_shadow
+    erhe::math::Convex_hull     caster_hull;                  // convex hull around the surviving caster bounds (visualization only; the fit clips per box and builds this hull just for this debug data)
     std::array<glm::vec4, 6>    view_frustum_planes{};        // main camera view frustum planes (truncated to shadow range), world space, inward-facing; receivers are filtered against these
     std::array<glm::vec3, 8>    view_frustum_corners{};       // main camera view frustum corners (truncated to shadow range), world space
     bool                        view_frustum_corners_valid{false};
-    std::vector<glm::vec3>      fit_points;                   // world space point set the light box was fitted to (clipped caster hull or view frustum corners)
+    std::vector<glm::vec3>      fit_points;                   // world space point set the light box was fitted to (per-box clipped caster points or view frustum corners)
     std::vector<glm::vec2>      light_plane_hull;             // 2D convex hull of fit_points on the light plane; coordinates in world_from_light_plane space
     erhe::math::Min_area_obb_2d obb{};                        // rotating calipers result on light_plane_hull (when optimize_rotation is enabled)
     glm::mat4                   world_from_light_plane{1.0f}; // maps light plane points (x, y, 0, 1) to world space
@@ -98,9 +98,12 @@ public:
 // resets one instance per pass (valid = false; buffers keep their capacity)
 // and every tight directional fit of that pass shares it via
 // Light_projection_parameters::receiver_cache. Only the silhouette projection
-// and plane sweep remain per light. The debug intermediates are filled only
-// when the filling fit collects debug data (collect_debug is uniform across
-// the lights of one pass).
+// and plane sweep remain per light. Across passes the cache additionally
+// fingerprints its inputs (see the temporal-reuse fields below) so the
+// receiver hulls are recomputed only when the corner set or frustum actually
+// changed. The debug intermediates are filled only when the filling fit
+// collects debug data (collect_debug is uniform across the lights of one
+// pass).
 class Shadow_fit_receiver_cache
 {
 public:
@@ -109,11 +112,26 @@ public:
     std::vector<glm::vec3>  receiver_points;   // corners of the in-frustum receiver AABBs (box fallback input)
     erhe::math::Convex_hull clipped_hull;      // re-hulled (receiver hull intersected with view frustum); meaningful only when hull_valid
 
-    // Scratch buffers of the cache fill (not cached outputs): the unclipped
-    // receiver hull and the clipped point set it is re-hulled from. Persist
-    // only so their capacity carries across passes.
+    // Previous-pass fingerprint for temporal reuse (see ensure_receiver_cache):
+    // with an unchanged in-frustum corner set the corner hull is reused, and
+    // with an unchanged view frustum on top the whole cached result is.
+    // has_result guards the very first fill; result_frustum_corners fully
+    // identifies the frustum (the planes derive from the same matrix).
+    bool                     has_result     {false};
+    bool                     result_use_hull{false};
+    std::array<glm::vec3, 8> result_frustum_corners{};
+
+    // The unclipped receiver corner hull. Scratch of the cache fill, but also
+    // reused across passes when the corner set is unchanged (temporal reuse
+    // above), so it must stay the hull of receiver_points between fills.
     erhe::math::Convex_hull receiver_hull_scratch;
+
+    // Pure scratch (persist only so capacity carries across passes): the
+    // clipped point set the receiver hull is re-hulled from, and the gather
+    // buffer the corner set is collected into before it is compared against /
+    // swapped into receiver_points.
     std::vector<glm::vec3>  clipped_points_scratch;
+    std::vector<glm::vec3>  gather_scratch;
 
     // Debug intermediates, copied into each light's Shadow_frustum_fit_debug_data
     std::vector<Shadow_frustum_fit_debug_data::Receiver_box> receiver_boxes;
@@ -133,14 +151,16 @@ public:
 class Shadow_fit_scratch
 {
 public:
-    std::vector<glm::vec4>  filter_planes;           // F_shadow per-caster cull planes (volume + silhouette)
-    std::vector<glm::vec4>  receiver_filter_planes;  // receiver cull volume planes
-    std::vector<glm::vec3>  receiver_far_plane_hull; // receiver cull silhouette polygon; filled only when collect_debug is on
-    std::vector<glm::vec3>  caster_corner_points;    // surviving caster AABB corners (largest buffer: 8 per caster)
-    erhe::math::Convex_hull caster_hull;            // hull around the surviving caster corners
-    std::vector<glm::vec3>  caster_points;          // clipped caster hull points (the fit point set)
-    std::vector<glm::vec2>  projected_points;       // fit points projected onto the light plane
-    std::vector<glm::vec2>  light_plane_hull;       // 2D hull of projected_points (rotating calipers input)
+    std::vector<glm::vec4>        filter_planes;           // F_shadow per-caster cull planes (volume + silhouette)
+    std::vector<glm::vec4>        receiver_filter_planes;  // receiver cull volume planes
+    std::vector<glm::vec3>        receiver_far_plane_hull; // receiver cull silhouette polygon; filled only when collect_debug is on
+    std::vector<erhe::math::Aabb> surviving_caster_aabbs;  // casters that passed the F_shadow (and receiver volume) cull
+    erhe::math::Convex_hull       caster_box_hull;         // one caster box as a fixed-topology hull (8 corners, constant 12-triangle table), reused per box
+    std::vector<glm::vec3>        box_clip_points;         // per-box Sutherland-Hodgman clip output
+    std::vector<glm::vec3>        caster_corner_points;    // surviving caster AABB corners; filled only when collect_debug is on (debug caster hull input)
+    std::vector<glm::vec3>        caster_points;           // fit point set: union of the per-box clipped caster points
+    std::vector<glm::vec2>        projected_points;        // fit points projected onto the light plane
+    std::vector<glm::vec2>        light_plane_hull;        // 2D hull of projected_points (rotating calipers input)
 };
 
 } // namespace erhe::scene

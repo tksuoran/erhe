@@ -89,7 +89,7 @@ gated by a `Shadow_frustum_fit_settings` field:
 | Setting | Default | Effect |
 |---|---|---|
 | `fit_to_view_frustum` | off | Constrain the light space box to the main camera view frustum corner box |
-| `fit_to_casters` | off | Fit to the shadow caster convex hull clipped to the shadow caster volume F_shadow |
+| `fit_to_casters` | off | Fit to the surviving caster bounds, each clipped to the shadow caster volume F_shadow |
 | `fit_to_receivers` | off | Cull casters against the receiver volume (view frustum intersected with receiver bounds) extruded toward the light; refines `fit_to_casters` |
 | `fit_to_receivers_hull` | off | Use the tight convex receiver hull (clipped to the frustum) instead of a bounding box for the receiver cull volume |
 | `optimize_rotation` | off | Rotating calipers roll around the light direction for minimum covered area |
@@ -111,14 +111,14 @@ per visible shadow-casting mesh. The fit then, per light:
 1. Builds the shadow caster volume F_shadow: the main camera view frustum,
    *truncated to the maximum shadow distance* (`Camera::get_shadow_range()`),
    extruded toward the light. Two plane sets are derived from it because the
-   two consumers (cull vs hull clip) have different needs - reusing one set for
+   two consumers (cull vs box clip) have different needs - reusing one set for
    both is what made the volume collapse to a single plane:
    - `build_shadow_caster_volume_planes` keeps the F_main planes whose inward
      normals do not face away from the light; planes facing the light are
      dropped, leaving an **open** volume (no lateral closure). This collapses
      to a single plane when the light is near-antiparallel to the view (e.g. a
      top-down camera under a straight-up light), since only the far face then
-     survives. Used only to clip the caster hull.
+     survives. Used only to clip the surviving caster boxes.
    - `build_shadow_caster_silhouette` adds the **silhouette side planes**: for
      each frustum edge between a kept and a dropped face, the plane through
      that edge swept toward the light. The kept planes plus the silhouette
@@ -134,15 +134,21 @@ per visible shadow-casting mesh. The fit then, per light:
    never drops a caster that could shadow a visible receiver (no false
    negative). The silhouette side planes are what make this effective - with
    the open set alone almost nothing is culled.
-3. Expands the surviving AABBs to corners, builds a 3D convex hull
-   (`calculate_bounding_convex_hull`), and clips the hull to the **open**
-   F_shadow (`clip_convex_hull_points_by_planes`, Sutherland-Hodgman per hull
-   triangle) - trimming the parts of straddling casters that stick out below
-   the volume. The hull is already bounded laterally by the surviving casters,
-   so the open set (not `filter_planes`) is used here. Because clipping only
-   produces points on the hull surface, F_main corners that lie inside the
-   hull are added back (a single large caster enclosing the whole view frustum
-   would otherwise lose the pure plane-plane-plane intersection vertices).
+3. Clips each surviving AABB to the **open** F_shadow individually
+   (`clip_convex_hull_points_by_planes` over the box's fixed 12-triangle
+   topology, Sutherland-Hodgman per triangle) - trimming the parts of
+   straddling casters that stick out below the volume - and fits to the union
+   of the per-box clipped point sets. Each box is bounded laterally by
+   itself, so the open set (not `filter_planes`) is used here. Boxes entirely
+   inside the volume skip the clip and contribute their corners directly.
+   Because clipping only produces points on the box surface, F_main corners
+   that lie inside a box are added back (a single large caster enclosing the
+   whole view frustum would otherwise contribute no points at all). No global
+   hull is built: the union of per-box clips is a subset of the previously
+   used clipped whole-set hull - which also covered the empty bridge regions
+   between separated casters - so the fit is equal or tighter at the same
+   coverage. The caster hull survives only as a debug visualization, built
+   when `collect_debug` is on.
 
 If no caster survives the cull (or the clip produces no points) and
 `fit_to_view_frustum` is off, the fit falls back to the stable path.
@@ -220,7 +226,7 @@ A minimum box extent (1 cm) keeps degenerate (flat) fits renderable.
   AABB per mesh passing the shadow filter (visible + shadow_cast) is collected
   before `Light_projections::apply()` and copied into frame-lifetime storage
   inside `Light_projections`. The per-light contribution cull and the
-  expansion to hull points happen inside the fit, not here (the gather is
+  per-box clipping happen inside the fit, not here (the gather is
   light-independent; the cull is not).
 - **Cull mode** - the active graphics preset's `Shadow_cull_mode` selects the
   caster pipeline: `cull_front` (default) writes only back faces, which reduces
