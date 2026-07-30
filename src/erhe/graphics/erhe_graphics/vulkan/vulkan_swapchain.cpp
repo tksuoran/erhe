@@ -1736,6 +1736,25 @@ auto Swapchain_impl::present_image(uint32_t index) -> VkResult
             "vkQueuePresentKHR() returned {} {}; marking swapchain invalid and skipping present",
             static_cast<int32_t>(result), c_str(result)
         );
+        // The present did not happen, so add_present_to_history below never
+        // runs and the slot would keep this present_semaphore - a later
+        // revisit of the slot would then trip the recycle-time VERIFY in
+        // setup_frame (observed live: PRESENT_TIMING_QUEUE_FULL during the
+        // init status display pump). This is an exceptional path, so a full
+        // device wait is acceptable; after it the semaphore is safe to
+        // dispose. It may have been left signaled with no consumer (the
+        // rejected present never enqueued its wait), and a binary semaphore
+        // cannot be reset from the host, so destroy it instead of recycling.
+        // The maintenance1 present fence was never enqueued either;
+        // recycle_fence resets it, so returning it to the pool is safe.
+        vkDeviceWaitIdle(m_device_impl.get_vulkan_device());
+        if (frame.present_semaphore != VK_NULL_HANDLE) {
+            vkDestroySemaphore(m_device_impl.get_vulkan_device(), frame.present_semaphore, nullptr);
+            frame.present_semaphore = VK_NULL_HANDLE;
+        }
+        if (present_fence != VK_NULL_HANDLE) {
+            recycle_fence(present_fence);
+        }
         m_is_valid = false;
         return result;
     }
