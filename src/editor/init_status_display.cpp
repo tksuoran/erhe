@@ -240,6 +240,14 @@ void Init_status_display::pump()
     }
 #endif
 
+    // Session locked (launch-while-locked case): presents cannot reach the
+    // display, so skip driving swapchain frames deliberately - same policy
+    // as the activity classification in Editor::run(). The next set_line
+    // marks the state dirty again, so the display repaints after unlock.
+    if (m_window.is_session_locked()) {
+        return;
+    }
+
     render_present_desktop();
 }
 

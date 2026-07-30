@@ -262,6 +262,23 @@ private:
     std::array<VkPastPresentationTimingEXT, 8>          m_past_timings{};
     std::array<std::array<VkPresentStageTimeEXT, 4>, 8> m_past_timing_stages{};
 
+    // QUEUE_FULL hardening (session lock / undrainable display). When
+    // vkQueuePresentKHR is rejected with VK_ERROR_PRESENT_TIMING_QUEUE_-
+    // FULL_EXT, presents have stopped reaching the display and the
+    // per-swapchain present-timing queue no longer drains (observed live:
+    // locked session -> rejected every present). Recreating per frame would
+    // churn a vkDeviceWaitIdle each time, and chaining more timing requests
+    // can only re-fill the fresh queue. So: suppress timing requests
+    // (sticky across swapchain recreation - init_present_timing must NOT
+    // reset it), gate recreation behind an escalating backoff, and while
+    // suppressed chain timing on a single probe present periodically.
+    // Completed primary-stage (scanout) feedback for any present proves the
+    // display drains again and re-arms timing (poll_present_timing).
+    bool                   m_present_timing_suppressed  {false};
+    uint32_t               m_queue_full_streak          {0};     // consecutive QUEUE_FULL rejections; reset on successful present
+    double                 m_recreate_not_before_seconds{0.0};   // wait_frame defers rebuild until this reference-clock time
+    double                 m_next_timing_probe_seconds  {0.0};   // earliest reference-clock time for the next timed probe present
+
     // Highest present id actually submitted (vkQueuePresentKHR succeeded)
     // on m_vulkan_swapchain. Reset when a new VkSwapchainKHR is created:
     // present ids are per swapchain object, so waiting on an id from a

@@ -21,6 +21,9 @@
 #if defined(ERHE_OS_LINUX)
 # include <wayland-client.h>
 #endif
+#if defined(ERHE_OS_WINDOWS)
+# include <wtsapi32.h> // WTSQuerySessionInformationW (is_session_locked)
+#endif
 
 #if defined(ERHE_GRAPHICS_API_OPENGL)
 # if defined(ERHE_OS_WINDOWS)
@@ -429,6 +432,51 @@ auto Context_window::is_fullscreen() const -> bool
         return false;
     }
     return (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) != 0;
+}
+
+auto Context_window::is_session_locked() const -> bool
+{
+#if defined(ERHE_OS_WINDOWS)
+    // Poll the authoritative source (same philosophy as the
+    // SDL_GetWindowFlags queries above) instead of registering for
+    // WM_WTSSESSION_CHANGE, which needs a wndproc subclass and misses the
+    // launch-while-locked case. The query is an LPC to the terminal
+    // services subsystem, so throttle it; the state is per session, not
+    // per window, hence the file-scope cache.
+    static Uint64 s_last_query_ticks_ms{0};
+    static bool   s_locked{false};
+    static bool   s_queried_once{false};
+    const Uint64 now_ms = SDL_GetTicks();
+    if (!s_queried_once || ((now_ms - s_last_query_ticks_ms) >= 500)) {
+        s_last_query_ticks_ms = now_ms;
+        s_queried_once        = true;
+        WTSINFOEXW* info  = nullptr;
+        DWORD       bytes = 0;
+        if (
+            WTSQuerySessionInformationW(
+                WTS_CURRENT_SERVER_HANDLE,
+                WTS_CURRENT_SESSION,
+                WTSSessionInfoEx,
+                reinterpret_cast<LPWSTR*>(&info),
+                &bytes
+            )
+        ) {
+            if ((info != nullptr) && (info->Level == 1)) {
+                const bool locked = (info->Data.WTSInfoExLevel1.SessionFlags == WTS_SESSIONSTATE_LOCK);
+                if (locked != s_locked) {
+                    log_window->info("session {}", locked ? "locked" : "unlocked");
+                }
+                s_locked = locked;
+            }
+            if (info != nullptr) {
+                WTSFreeMemory(info);
+            }
+        }
+    }
+    return s_locked;
+#else
+    return false;
+#endif
 }
 
 auto Context_window::get_display_refresh_rate() const -> float

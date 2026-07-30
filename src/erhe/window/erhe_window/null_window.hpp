@@ -65,6 +65,7 @@ public:
     [[nodiscard]] auto is_hidden   () const -> bool;
     [[nodiscard]] auto is_visible  () const -> bool;
     [[nodiscard]] auto is_fullscreen() const -> bool;
+    [[nodiscard]] auto is_session_locked() const -> bool;
     [[nodiscard]] auto get_display_refresh_rate() const -> float;
 
     void register_redraw_callback(std::function<void()> callback);

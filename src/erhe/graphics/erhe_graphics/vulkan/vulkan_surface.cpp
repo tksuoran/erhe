@@ -1094,8 +1094,11 @@ auto Surface_impl::update_swapchain(Vulkan_swapchain_create_info& out_swapchain_
 
     // Present timing (frame pacing step P0.4) requires opting in at swapchain
     // creation (VUID-vkSetSwapchainPresentTimingQueueSizeEXT-swapchain-12229).
+    // Only tier W uses present timing (init_present_timing), so don't opt the
+    // swapchain into the driver's timing-queue machinery on other tiers.
     const VkSwapchainCreateFlagsKHR swapchain_create_flags =
-        m_device_impl.get_capabilities().m_present_timing
+        (m_device_impl.get_capabilities().m_present_timing &&
+         (m_device_impl.get_frame_pacing_tier() == Frame_pacing_tier::full))
             ? VK_SWAPCHAIN_CREATE_PRESENT_TIMING_BIT_EXT
             : 0u;
 

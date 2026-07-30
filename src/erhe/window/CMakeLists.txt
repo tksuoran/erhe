@@ -63,7 +63,8 @@ target_link_libraries(
 )
 
 if (ERHE_TARGET_OS_WINDOWS)
-    target_link_libraries(${_target} PUBLIC Setupapi.lib)
+    # Wtsapi32: WTSQuerySessionInformation for Context_window::is_session_locked
+    target_link_libraries(${_target} PUBLIC Setupapi.lib Wtsapi32.lib)
 endif ()
 
 if (${ERHE_WINDOW_LIBRARY} STREQUAL "glfw")

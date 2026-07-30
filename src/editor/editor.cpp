@@ -3375,7 +3375,19 @@ public:
             // desktop window is only a mirror), so never throttle under OpenXR.
             float wait_time = 0.0f;
             m_frame_activity = Frame_activity::active;
-            if (!m_app_context.OpenXR && m_window->is_fullscreen() && !m_window->is_focused()) {
+            if (!m_app_context.OpenXR && m_window->is_session_locked()) {
+                // Session locked: presents cannot reach the display at all.
+                // Pause presentation deliberately instead of waiting for the
+                // swapchain to react to errors (with present timing active
+                // the per-swapchain timing queue stops draining and
+                // vkQueuePresentKHR is eventually rejected with
+                // VK_ERROR_PRESENT_TIMING_QUEUE_FULL_EXT; observed live on a
+                // locked session). Resumes by itself on unlock - the state
+                // is polled, so no unlock event needs to arrive.
+                m_frame_activity = Frame_activity::hidden;
+                const int fps = (m_app_context.hidden_fps > 0) ? m_app_context.hidden_fps : 1;
+                wait_time = 1.0f / static_cast<float>(fps);
+            } else if (!m_app_context.OpenXR && m_window->is_fullscreen() && !m_window->is_focused()) {
                 // Fullscreen without input focus (alt-tabbed away): treat as
                 // hidden REGARDLESS of power_save. An exclusive-fullscreen
                 // swapchain cannot reach the display in this state; presenting

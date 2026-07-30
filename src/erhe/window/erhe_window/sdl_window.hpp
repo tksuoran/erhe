@@ -144,6 +144,13 @@ public:
     [[nodiscard]] auto is_hidden    () const -> bool;
     [[nodiscard]] auto is_visible   () const -> bool; // !minimized && !occluded && !hidden
     [[nodiscard]] auto is_fullscreen() const -> bool;
+    // OS session (desktop) locked - presents cannot reach the display while
+    // locked, so the main loop pauses presentation deliberately instead of
+    // reacting to present errors. Windows: throttled WTSQuerySessionInformation
+    // poll (authoritative and self-healing like the SDL_GetWindowFlags queries
+    // above, and covers launching while already locked, which
+    // WM_WTSSESSION_CHANGE bookkeeping would miss). Other platforms: false.
+    [[nodiscard]] auto is_session_locked() const -> bool;
     // Current display mode refresh rate in Hz for the display the window is
     // on; 0.0 when unknown. Fallback refresh source for frame pacing tier S
     // (P4.2), where present timing (and its refreshDuration query) is off.

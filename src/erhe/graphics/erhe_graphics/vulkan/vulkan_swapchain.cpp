@@ -20,6 +20,14 @@
 
 namespace erhe::graphics {
 
+// QUEUE_FULL hardening tuning (see the member comments in
+// vulkan_swapchain.hpp). Probe cadence bounds how fast a fresh timing queue
+// can re-fill while the display stays undrainable (32 entries / 2 s per
+// entry ~= one forced rebuild per minute) and how soon timing re-arms after
+// the display drains again (<= one probe interval).
+constexpr double s_queue_full_probe_interval_seconds = 2.0;
+constexpr double s_queue_full_backoff_max_seconds    = 4.0;
+
 Swapchain_impl::Swapchain_impl(
     Device_impl&  device_impl,
     Surface_impl& surface_impl
@@ -228,6 +236,16 @@ auto Swapchain_impl::wait_frame(Frame_state& out_frame_state) -> bool
     // recreated by the foreground lifecycle path; in that case we just
     // keep returning false from here, leaving m_state at idle.
     if ((m_vulkan_swapchain == VK_NULL_HANDLE) || !m_is_valid) {
+        // QUEUE_FULL backoff (set by present_image on a rejected present):
+        // skip the rebuild - and the frame - until the backoff expires, so
+        // an undrainable display does not recreate-churn.
+        if ((m_recreate_not_before_seconds > 0.0) &&
+            (erhe::frame_pacing::Frame_time_recorder::now() < m_recreate_not_before_seconds))
+        {
+            m_state = Swapchain_frame_state::idle;
+            out_frame_state.should_render = false;
+            return false;
+        }
         init_swapchain();
     }
 
@@ -1094,18 +1112,25 @@ void Swapchain_impl::init_present_timing(const Vulkan_swapchain_create_info& swa
     if (!m_device_impl.get_capabilities().m_present_timing) {
         return;
     }
-    if (m_device_impl.get_frame_pacing_tier() == Frame_pacing_tier::slop_servo) {
-        // Tier S (P4.2) runs WITHOUT present timing: the slop servo senses
-        // backpressure only, and chaining timing requests on this tier's
-        // plain-FIFO swapchain fills the per-swapchain timing queue on this
-        // driver (measured: VK_ERROR_PRESENT_TIMING_QUEUE_FULL_EXT within
-        // ~32 presents at startup) - the entries do not complete the way
-        // they do on fifo_latest_ready. Not needing the extension is the
-        // method's contract; skipping it also keeps the tier honest for
-        // A/B measurements. Without the refreshDuration timing query, the
+    if (m_device_impl.get_frame_pacing_tier() != Frame_pacing_tier::full) {
+        // Only tier W (P4.2) uses present timing. Tier S runs WITHOUT it:
+        // the slop servo senses backpressure only, and chaining timing
+        // requests on a plain-FIFO swapchain fills the per-swapchain timing
+        // queue on this driver (measured: VK_ERROR_PRESENT_TIMING_QUEUE_-
+        // FULL_EXT within ~32 presents at startup) - the entries do not
+        // complete the way they do on fifo_latest_ready. Not needing the
+        // extension is the method's contract; skipping it also keeps the
+        // tier honest for A/B measurements. Tier OFF means no pacer runs at
+        // all, so timing requests would be pure liability: same plain-FIFO
+        // queue-fill failure whenever presents stop reaching the display
+        // (observed live: session lock -> QUEUE_FULL every present with
+        // tier "off"). Without the refreshDuration timing query, the
         // display refresh period (the servo's overshoot reference and the
         // observer's grid seed) comes from the window's display mode.
-        log_swapchain->info("present timing not enabled: frame pacing tier S does not use it");
+        log_swapchain->info(
+            "present timing not enabled: frame pacing tier {} does not use it",
+            (m_device_impl.get_frame_pacing_tier() == Frame_pacing_tier::slop_servo) ? "S" : "OFF"
+        );
         erhe::window::Context_window* const context_window = m_device_impl.get_context_window();
         if (context_window != nullptr) {
             const float refresh_rate = context_window->get_display_refresh_rate();
@@ -1440,6 +1465,17 @@ void Swapchain_impl::poll_present_timing()
         if (primary_time == 0) {
             continue;
         }
+        if (m_present_timing_suppressed) {
+            // Primary-stage (scanout-near) feedback completed, so the
+            // display is draining presents again - queue-ops-end completes
+            // even while the display is locked, which is why only the
+            // primary stage counts as recovery. Resume timing requests.
+            m_present_timing_suppressed = false;
+            log_swapchain->info(
+                "present timing feedback completed (present id {}); re-arming present timing requests",
+                timing.presentId
+            );
+        }
         // Converts a stage time in the feedback's time domain to reference-
         // clock seconds; stage-local domains have per-stage epochs, so each
         // stage brings its own calibration pair. Returns 0.0 when the
@@ -1640,6 +1676,22 @@ auto Swapchain_impl::present_image(uint32_t index) -> VkResult
     // this frame (FR3, step P2.3). The pacer targets a vsync slot time, so
     // NEAREST_REFRESH_CYCLE lets the engine absorb small precision errors
     // instead of pushing the present a full cycle late.
+    //
+    // QUEUE_FULL hardening: while suppressed, present untimed - untimed
+    // presents take no timing-queue space, so they cannot be rejected with
+    // QUEUE_FULL - except for a periodic probe present carrying a
+    // feedback-only timing request. When the probe's scanout-stage feedback
+    // completes, the display is draining again and poll_present_timing
+    // lifts the suppression.
+    bool chain_timing = m_present_timing_active;
+    if (chain_timing && m_present_timing_suppressed) {
+        const double now_seconds = erhe::frame_pacing::Frame_time_recorder::now();
+        if (now_seconds >= m_next_timing_probe_seconds) {
+            m_next_timing_probe_seconds = now_seconds + s_queue_full_probe_interval_seconds;
+        } else {
+            chain_timing = false;
+        }
+    }
     VkPresentTimingInfoEXT timing_info{
         .sType                        = VK_STRUCTURE_TYPE_PRESENT_TIMING_INFO_EXT,
         .pNext                        = nullptr,
@@ -1650,7 +1702,9 @@ auto Swapchain_impl::present_image(uint32_t index) -> VkResult
         .targetTimeDomainPresentStage = 0
     };
     const double target_seconds = m_device_impl.get_present_target_time(static_cast<std::int64_t>(m_device_impl.get_frame_index()));
-    if (m_present_timing_active && (target_seconds > 0.0)) {
+    // No target-time requests while suppressed: a probe present asks for
+    // feedback only.
+    if (chain_timing && !m_present_timing_suppressed && (target_seconds > 0.0)) {
         const bool domain_is_calibrated =
             (m_timing_time_domain == VK_TIME_DOMAIN_PRESENT_STAGE_LOCAL_EXT) ||
             (m_timing_time_domain == VK_TIME_DOMAIN_SWAPCHAIN_LOCAL_EXT);
@@ -1705,7 +1759,7 @@ auto Swapchain_impl::present_image(uint32_t index) -> VkResult
         .swapchainCount = 1,
         .pTimingInfos   = &timing_info
     };
-    if (m_present_timing_active) {
+    if (chain_timing) {
         timings_info.pNext = present_info.pNext;
         present_info.pNext = &timings_info;
     }
@@ -1755,6 +1809,25 @@ auto Swapchain_impl::present_image(uint32_t index) -> VkResult
         if (present_fence != VK_NULL_HANDLE) {
             recycle_fence(present_fence);
         }
+        if (result == VK_ERROR_PRESENT_TIMING_QUEUE_FULL_EXT) {
+            // Suppress further timing requests (probes excepted) and defer
+            // the rebuild with an escalating backoff so an undrainable
+            // display (locked session) idles instead of recreate-churning
+            // a vkDeviceWaitIdle every frame.
+            m_present_timing_suppressed   = true;
+            m_queue_full_streak           = std::min(m_queue_full_streak + 1u, 16u);
+            const double backoff_seconds  = std::min(
+                s_queue_full_backoff_max_seconds,
+                0.25 * static_cast<double>(1u << std::min(m_queue_full_streak - 1u, 4u))
+            );
+            const double now_seconds      = erhe::frame_pacing::Frame_time_recorder::now();
+            m_recreate_not_before_seconds = now_seconds + backoff_seconds;
+            m_next_timing_probe_seconds   = now_seconds + s_queue_full_probe_interval_seconds;
+            log_swapchain->warn(
+                "present timing requests suppressed (QUEUE_FULL streak {}); swapchain rebuild deferred {} s",
+                m_queue_full_streak, backoff_seconds
+            );
+        }
         m_is_valid = false;
         return result;
     }
@@ -1767,8 +1840,11 @@ auto Swapchain_impl::present_image(uint32_t index) -> VkResult
     // present-wait clamp only waits on ids that can unblock. OUT_OF_DATE is
     // excluded: the present may not have been executed, and recreation
     // resets the counter anyway.
-    if ((present_id_value != 0) && ((result == VK_SUCCESS) || (result == VK_SUBOPTIMAL_KHR))) {
-        m_max_present_id_submitted = std::max(m_max_present_id_submitted, present_id_value);
+    if ((result == VK_SUCCESS) || (result == VK_SUBOPTIMAL_KHR)) {
+        m_queue_full_streak = 0;
+        if (present_id_value != 0) {
+            m_max_present_id_submitted = std::max(m_max_present_id_submitted, present_id_value);
+        }
     }
 
     add_present_to_history(index, present_fence);
