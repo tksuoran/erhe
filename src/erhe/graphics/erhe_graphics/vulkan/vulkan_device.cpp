@@ -1034,6 +1034,12 @@ auto Device_impl::query_device_extensions(
     if (!device_extensions_out.m_VK_KHR_calibrated_timestamps) {
         check_device_extension(VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME, device_extensions_out.m_VK_EXT_calibrated_timestamps, 1.0f);
     }
+    // Non-semantic shader debug info (NonSemantic.Shader.DebugInfo.100, which
+    // glslang emits for source-level shader debugging) can contain forward
+    // references via OpExtInstWithForwardRefsKHR; consuming such SPIR-V
+    // requires the shaderRelaxedExtendedInstruction feature
+    // (VUID-RuntimeSpirv-shaderRelaxedExtendedInstruction-10773).
+    check_device_extension(VK_KHR_SHADER_RELAXED_EXTENDED_INSTRUCTION_EXTENSION_NAME, device_extensions_out.m_VK_KHR_shader_relaxed_extended_instruction, 0.0f);
     return total_score;
 }
 

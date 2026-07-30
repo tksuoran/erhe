@@ -806,6 +806,18 @@ Device_impl::Device_impl(
         query_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&query_present_id2_features);
         query_features_chain_last        = query_features_chain_last->pNext;
     }
+    // Required for SPIR-V with OpExtInstWithForwardRefsKHR (forward references
+    // inside glslang's non-semantic shader debug info); see the extension probe
+    // in choose_physical_device.
+    VkPhysicalDeviceShaderRelaxedExtendedInstructionFeaturesKHR query_shader_relaxed_extended_instruction_features{
+        .sType                            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_RELAXED_EXTENDED_INSTRUCTION_FEATURES_KHR,
+        .pNext                            = nullptr,
+        .shaderRelaxedExtendedInstruction = VK_FALSE
+    };
+    if (m_device_extensions.m_VK_KHR_shader_relaxed_extended_instruction) {
+        query_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&query_shader_relaxed_extended_instruction_features);
+        query_features_chain_last        = query_features_chain_last->pNext;
+    }
     VkPhysicalDevicePresentWait2FeaturesKHR query_present_wait2_features{
         .sType        = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_2_FEATURES_KHR,
         .pNext        = nullptr,
@@ -1402,6 +1414,18 @@ Device_impl::Device_impl(
     if (m_device_extensions.m_VK_KHR_present_id2) {
         set_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&set_present_id2_features);
         set_features_chain_last        = set_features_chain_last->pNext;
+    }
+    VkPhysicalDeviceShaderRelaxedExtendedInstructionFeaturesKHR set_shader_relaxed_extended_instruction_features{
+        .sType                            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_RELAXED_EXTENDED_INSTRUCTION_FEATURES_KHR,
+        .pNext                            = nullptr,
+        .shaderRelaxedExtendedInstruction = query_shader_relaxed_extended_instruction_features.shaderRelaxedExtendedInstruction
+    };
+    if (m_device_extensions.m_VK_KHR_shader_relaxed_extended_instruction) {
+        set_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&set_shader_relaxed_extended_instruction_features);
+        set_features_chain_last        = set_features_chain_last->pNext;
+        if (query_shader_relaxed_extended_instruction_features.shaderRelaxedExtendedInstruction == VK_TRUE) {
+            log_debug->debug("Enabled feature shader relaxed extended instruction");
+        }
     }
     VkPhysicalDevicePresentWait2FeaturesKHR set_present_wait2_features{
         .sType        = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_2_FEATURES_KHR,

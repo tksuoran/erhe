@@ -64,6 +64,7 @@ public:
     bool m_VK_KHR_present_id                    {false};
     bool m_VK_KHR_present_wait                  {false};
     bool m_VK_KHR_present_id2                   {false};
+    bool m_VK_KHR_shader_relaxed_extended_instruction{false};
     bool m_VK_KHR_present_wait2                 {false};
     bool m_VK_EXT_present_timing                {false};
     bool m_VK_EXT_full_screen_exclusive         {false};
