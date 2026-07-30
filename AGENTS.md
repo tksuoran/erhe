@@ -391,6 +391,24 @@ inline JSON containing spaces. Raw HTTP works too (`POST` the JSON-RPC body to
 
 **Interactive (windowed) debugging needs the user at the controls -- prompt for readiness before launching.** When a bug can only be reproduced by live mouse/keyboard/controller input (e.g. physics right-drag, gizmo manipulation, box-select, anything the headless MCP cannot drive), the standard loop is: add `log_*` instrumentation on the suspected path, build the windowed editor, then have the *user* perform the gesture while the file sink records to `logs/log.txt`. Because the run depends on the user actually being present and ready to interact, **prompt the user to get ready and wait for their go-ahead before launching the windowed editor** -- do not launch it and assume they will notice. After launch, tell them the exact gesture to perform and the log prefix you will grep for, then read `logs/log.txt` once they confirm. (This mirrors the Quest headset-prompt protocol: install/build first, then prompt, then act on an acknowledged signal.)
 
+**Driving the WINDOWED editor from an agent session** (verified 2026-07-30;
+the headless flow above is still preferred when a real display is not
+required):
+- Launch with a hidden console (the editor is a console-subsystem binary and
+  its console window annoys the user):
+  `powershell Start-Process -FilePath <build>\src\editor\editor.exe -WorkingDirectory <repo> -WindowStyle Hidden`.
+  The working directory MUST be the repo root (config/, res/, logs/).
+- Kill `editor.exe` before every relink (LNK1168 otherwise), and poll
+  readiness by grepping `logs/log.txt` for `Main loop: completed frame 12`.
+- Scene node ids RESHUFFLE on every launch - re-query with
+  `get_scene_nodes` before every `select_items`; never reuse an id from a
+  previous run.
+- Screenshots: `capture_screenshot` does not work in the windowed build, but
+  a PowerShell `System.Drawing` `CopyFromScreen` capture of the editor
+  window rect (HWND via `Get-Process editor` MainWindowHandle, brought to
+  foreground first) produces PNGs the Read tool can evaluate - good enough
+  to judge layout/rendering changes without RenderDoc.
+
 **Scripted startup scene**: `config/editor/commands.json` is a startup script (`scene.add_cameras` / `add_lights` / `add_room` / `add_platonic_solids` / ... with arg blocks; see `editor.cpp` dispatch + `src/editor/config/definitions/*.py` for arg fields). Adjust it to stand up a reproducible test scene before the editor even finishes init -- this is the preferred knob for "I need scene X to debug Y".
 
 **Augment the API when a capability is missing.** If a debugging task needs an editor action the MCP server does not expose, add a new tool (a `query_*`/`action_*` handler + the `req->tool_name == "..."` dispatch entry + its `tools/list` schema in `refresh_tool_list`) rather than working around it from outside. Growing this surface makes the live editor scriptable for the next investigation; treat it as first-class debugging infrastructure.
