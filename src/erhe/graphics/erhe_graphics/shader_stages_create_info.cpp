@@ -215,6 +215,13 @@ auto Shader_stages_create_info::final_source(
 
     sb << "#define ERHE_GLSL_VERSION " << graphics_device.get_info().glsl_version << "\n";
 
+    // Shared includes (erhe_bxdf.glsl) are compiled into fragment and compute
+    // stages alike; this gates code that needs fragment-only features such as
+    // screen-space derivatives (fwidth).
+    if (shader.type == Shader_type::fragment_shader) {
+        sb << "#define ERHE_FRAGMENT_SHADER 1\n";
+    }
+
     // Driver-workaround defines. We deliberately do NOT expose the graphics API
     // (Vulkan/Metal/GL) to shaders; shaders branch on the specific capability or
     // workaround they need, not on the backend. Each WORKAROUND_* macro is
