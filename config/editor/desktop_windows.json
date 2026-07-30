@@ -35,6 +35,7 @@
         "pipelines": false,
         "post_processing": false,
         "properties": true,
+        "ray_trace": false,
         "rendergraph": false,
         "selection": false,
         "settings": false,
