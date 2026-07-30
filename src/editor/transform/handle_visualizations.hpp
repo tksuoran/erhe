@@ -1,67 +1,39 @@
 #pragma once
 
-#include "transform/transform_tool_settings.hpp"
 #include "erhe_math/aabb.hpp"
-#include "erhe_primitive/primitive.hpp"
-#include "erhe_primitive/buffer_mesh.hpp"
 #include "erhe_scene/trs_transform.hpp"
 
 #include <glm/glm.hpp>
 
-#include <map>
-#include <memory>
-#include <string_view>
-#include <vector>
-
-namespace erhe::geometry { class Geometry; }
-namespace erhe::primitive {
-    class Primitive;
-    class Material;
-}
-namespace erhe::scene {
-    class Mesh;
-    class Node;
-}
-namespace erhe::scene_renderer { class Mesh_memory; }
+#include <optional>
 
 namespace editor {
 
 class App_context;
-class Raytrace_primitive;
+class Render_context;
 class Scene_view;
-class Tools;
-class Transform_tool;
 
 enum class Handle : unsigned int;
 
+// Analytic pick result for a gizmo handle.
+class Handle_pick
+{
+public:
+    Handle    handle  {};
+    float     t       {0.0f};   // distance along the pick ray
+    glm::vec3 position{0.0f};   // world-space point on the handle
+};
+
+// The transform gizmo, drawn entirely with the debug primitive renderer
+// (x-ray lines and filled triangles - no scene meshes) and hit tested
+// analytically. render() runs per view from Transform_tool::tool_render;
+// pick() runs from Transform_tool::update_hover with the control ray.
+// Both share the same handle visibility rules, so a handle is pickable
+// exactly when it is drawn.
 class Handle_visualizations
 {
 public:
-    Handle_visualizations(App_context& app_context, erhe::scene_renderer::Mesh_memory& mesh_memory, Tools& tools);
-
-    enum class Mode : unsigned int {
-        Normal = 0,
-        Hover  = 1,
-        Active = 2
-    };
-
-    [[nodiscard]] auto c_str(Mode mode) -> const char*;
-
-    class Part
-    {
-    public:
-        Part(
-            erhe::scene_renderer::Mesh_memory&               mesh_memory,
-            const std::shared_ptr<erhe::geometry::Geometry>& render_geometry,
-            const std::shared_ptr<erhe::geometry::Geometry>& collision_geometry
-        );
-
-        std::shared_ptr<erhe::primitive::Primitive> primitive;
-    };
-
-    [[nodiscard]] auto get_handle           (erhe::scene::Mesh* mesh) const -> Handle;
-    [[nodiscard]] auto get_handle_material  (Handle handle, Mode mode) -> std::shared_ptr<erhe::primitive::Material>;
-    [[nodiscard]] auto get_handle_visibility(Handle handle) const -> bool;
+    explicit Handle_visualizations(App_context& app_context);
 
     // Bounding-box scale gizmo
     [[nodiscard]] auto is_box_valid () const -> bool             { return m_box_valid; }
@@ -69,128 +41,47 @@ public:
     [[nodiscard]] auto get_box_aabb () const -> const erhe::math::Aabb& { return m_box_aabb; }
 
     // World-space length corresponding to the gizmo's overall radius (the rotate ring),
-    // using the view-dependent scale applied to the handle meshes. Scale_tool uses this
+    // using the view-dependent scale applied to the handles. Scale_tool uses this
     // to normalize the uniform-scale drag displacement.
     [[nodiscard]] auto get_gizmo_radius() const -> float;
 
     void viewport_toolbar ();
-    void update_visibility(Transform_tool_settings& settings);
     void update_for_view  (Scene_view* scene_view);
-    void update_transforms(); //const uint64_t serial);
-
-    // Per-view gizmo scoping: the gizmo binds to the ACTIVE scene, so its
-    // handle meshes are shown only while the view being rendered / hovered
-    // shows that scene. Set by Transform_tool::update_for_view before each
-    // view's visibility update (the same per-view flow that already drives
-    // the view-distance handle scale).
-    void set_view_scene_is_active(bool value) { m_view_scene_is_active = value; }
-
-    void update_mesh_visibility(bool precondition, const std::shared_ptr<erhe::scene::Mesh>& mesh);
+    void update_transforms();
 
     void set_anchor(const erhe::scene::Trs_transform& world_from_anchor);
 
+    // Draws all handles visible in the view being rendered. hover / active
+    // brighten and thicken the corresponding handle.
+    void render(const Render_context& context, Handle hover_handle, Handle active_handle);
+
+    // Analytic hit test with the control ray; returns the nearest handle
+    // within pick range, or nullopt. Only handles that render() would draw
+    // are pickable (in visible-arcs mode, only the unoccluded ring arcs).
+    [[nodiscard]] auto pick(const glm::vec3& ray_origin, const glm::vec3& ray_direction) const -> std::optional<Handle_pick>;
+
 private:
-    [[nodiscard]] auto make_arrow_cylinder(erhe::scene_renderer::Mesh_memory& mesh_memory) -> Part;
-    [[nodiscard]] auto make_arrow_cone    (erhe::scene_renderer::Mesh_memory& mesh_memory) -> Part;
-    [[nodiscard]] auto make_box           (erhe::scene_renderer::Mesh_memory& mesh_memory, bool uniform) -> Part;
-    [[nodiscard]] auto make_center_cube   (erhe::scene_renderer::Mesh_memory& mesh_memory) -> Part;
-    [[nodiscard]] auto make_box_scale_cone(erhe::scene_renderer::Mesh_memory& mesh_memory) -> Part;
-    [[nodiscard]] auto make_rotate_ring   (erhe::scene_renderer::Mesh_memory& mesh_memory) -> Part;
-
     void compute_selection_box();
-    void update_box_handles   ();
 
-    [[nodiscard]] auto make_material(
-        Tools&           tools,
-        const char*      name,
-        const glm::vec3& color,
-        Mode             mode = Mode::Normal
-    ) -> std::shared_ptr<erhe::primitive::Material>;
+    // Anchor orientation basis (world axes in Global reference mode).
+    [[nodiscard]] auto get_basis() const -> glm::mat3;
 
-    [[nodiscard]] auto make_mesh(
-        Tools&                                            tools,
-        std::string_view                                  name,
-        const std::shared_ptr<erhe::primitive::Material>& material,
-        const Part&                                       part
-    ) -> std::shared_ptr<erhe::scene::Mesh>;
+    // Whether the gizmo is present at all (a selection or component anchor exists).
+    [[nodiscard]] auto has_target() const -> bool;
 
-    [[nodiscard]] auto get_mode_material(
-        Mode                                              mode,
-        const std::shared_ptr<erhe::primitive::Material>& active,
-        const std::shared_ptr<erhe::primitive::Material>& hover,
-        const std::shared_ptr<erhe::primitive::Material>& ready
-    ) -> std::shared_ptr<erhe::primitive::Material>;
+    // Per-handle visibility: tool toggles (show_translate / rotate / scale),
+    // the scale gizmo mode, positive-only translate mode, and the
+    // hide-inactive-during-drag rule. Shared by render() and pick().
+    [[nodiscard]] auto is_handle_shown(Handle handle) const -> bool;
 
-    App_context& m_context;
-    float        m_scale     {1.0f};
-    Scene_view*  m_scene_view{nullptr};
-    bool         m_view_scene_is_active{true};
-
-    std::map<erhe::scene::Mesh*, Handle>             m_handles;
-    erhe::scene::Trs_transform                       m_world_from_anchor;
-    std::shared_ptr<erhe::scene::Node>               m_tool_node;
-    float                                            m_view_distance{1.0f};
-    float                                            m_view_scale   {1.0f}; // world units per handle-mesh unit, from update_transforms()
-    std::shared_ptr<erhe::primitive::Material>       m_pos_x_material;
-    std::shared_ptr<erhe::primitive::Material>       m_neg_x_material;
-    std::shared_ptr<erhe::primitive::Material>       m_pos_y_material;
-    std::shared_ptr<erhe::primitive::Material>       m_neg_y_material;
-    std::shared_ptr<erhe::primitive::Material>       m_pos_z_material;
-    std::shared_ptr<erhe::primitive::Material>       m_neg_z_material;
-    std::shared_ptr<erhe::primitive::Material>       m_pos_x_hover_material;
-    std::shared_ptr<erhe::primitive::Material>       m_neg_x_hover_material;
-    std::shared_ptr<erhe::primitive::Material>       m_pos_y_hover_material;
-    std::shared_ptr<erhe::primitive::Material>       m_neg_y_hover_material;
-    std::shared_ptr<erhe::primitive::Material>       m_pos_z_hover_material;
-    std::shared_ptr<erhe::primitive::Material>       m_neg_z_hover_material;
-    std::shared_ptr<erhe::primitive::Material>       m_pos_x_active_material;
-    std::shared_ptr<erhe::primitive::Material>       m_neg_x_active_material;
-    std::shared_ptr<erhe::primitive::Material>       m_pos_y_active_material;
-    std::shared_ptr<erhe::primitive::Material>       m_neg_y_active_material;
-    std::shared_ptr<erhe::primitive::Material>       m_pos_z_active_material;
-    std::shared_ptr<erhe::primitive::Material>       m_neg_z_active_material;
-    std::shared_ptr<erhe::primitive::Material>       m_xyz_material;
-    std::shared_ptr<erhe::primitive::Material>       m_xyz_hover_material;
-    std::shared_ptr<erhe::primitive::Material>       m_xyz_active_material;
-    std::shared_ptr<erhe::scene::Mesh>               m_x_arrow_pos_cylinder_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_x_arrow_neg_cylinder_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_x_arrow_pos_cone_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_x_arrow_neg_cone_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_y_arrow_pos_cylinder_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_y_arrow_neg_cylinder_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_y_arrow_pos_cone_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_y_arrow_neg_cone_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_z_arrow_pos_cylinder_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_z_arrow_neg_cylinder_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_z_arrow_pos_cone_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_z_arrow_neg_cone_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_xy_translate_box_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_xz_translate_box_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_yz_translate_box_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_x_rotate_ring_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_y_rotate_ring_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_z_rotate_ring_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_x_neg_scale_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_x_pos_scale_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_y_neg_scale_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_y_pos_scale_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_z_neg_scale_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_z_pos_scale_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_xy_scale_box_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_xz_scale_box_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_yz_scale_box_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_xyz_scale_mesh;
-    std::shared_ptr<erhe::scene::Node>               m_box_node;
-    std::shared_ptr<erhe::scene::Mesh>               m_box_scale_pos_x_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_box_scale_neg_x_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_box_scale_pos_y_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_box_scale_neg_y_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_box_scale_pos_z_mesh;
-    std::shared_ptr<erhe::scene::Mesh>               m_box_scale_neg_z_mesh;
-    glm::mat4                                        m_box_frame{1.0f};
-    erhe::math::Aabb                                 m_box_aabb{};
-    bool                                             m_box_valid{false};
-    std::vector<std::shared_ptr<Raytrace_primitive>> m_rt_primitives;
+    App_context&               m_context;
+    Scene_view*                m_scene_view{nullptr};
+    erhe::scene::Trs_transform m_world_from_anchor;
+    float                      m_view_distance{1.0f};
+    float                      m_view_scale   {1.0f}; // world units per gizmo unit, from update_transforms()
+    glm::mat4                  m_box_frame{1.0f};
+    erhe::math::Aabb           m_box_aabb{};
+    bool                       m_box_valid{false};
 };
 
 }

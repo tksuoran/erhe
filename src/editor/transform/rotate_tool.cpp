@@ -196,7 +196,18 @@ void Rotate_tool::render(const Render_context& context)
     constexpr vec4 blue  {0.0f, 0.0f, 1.0f, 1.0f};
     constexpr vec4 orange{1.0f, 0.5f, 0.0f, 0.8f};
 
-    erhe::renderer::Primitive_renderer line_renderer = context.get({erhe::graphics::Primitive_type::line, 2, true, true});
+    // X-ray bucket, like all transform-handle line rendering: the occluded
+    // pass blends at full strength so the protractor stays readable inside
+    // content meshes.
+    erhe::renderer::Primitive_renderer line_renderer = context.get(
+        erhe::renderer::Debug_renderer_config{
+            .primitive_type    = erhe::graphics::Primitive_type::line,
+            .stencil_reference = 2,
+            .draw_visible      = true,
+            .draw_hidden       = true,
+            .xray              = true
+        }
+    );
 
     {
         const bool snap_enabled = shared.settings.rotate_snap_enable || m_context.input_state->control;

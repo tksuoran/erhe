@@ -1,4 +1,4 @@
-#include "transform/transform_tool.hpp"
+﻿#include "transform/transform_tool.hpp"
 #include "transform/move_tool.hpp"
 #include "transform/rotate_tool.hpp"
 #include "transform/scale_tool.hpp"
@@ -7,6 +7,7 @@
 #include "animation/animation_player.hpp"
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
+#include "app_settings.hpp"
 #include "editor_log.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
@@ -25,6 +26,7 @@
 #include "windows/item_reference.hpp"
 
 #include "erhe_commands/commands.hpp"
+#include "config/generated/editor_settings_config.hpp"
 #include "config/generated/transform_tool_config.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
@@ -44,6 +46,8 @@
 #   include "erhe_xr/xr_action.hpp"
 #   include "erhe_xr/headset.hpp"
 #endif
+
+#include <glm/gtc/constants.hpp>
 
 #include <imgui/imgui.h>
 
@@ -71,6 +75,21 @@ using vec4 = glm::vec4;
 
 using Trs_transform = erhe::scene::Trs_transform;
 
+namespace {
+
+// All transform-handle line rendering (the handles themselves, the hover
+// previews, the rotate protractor) uses the x-ray bucket: the occluded pass
+// blends at full strength instead of the dim hidden-pass constant, so the
+// gizmo lines stay readable inside content meshes.
+constexpr erhe::renderer::Debug_renderer_config handle_line_config{
+    .primitive_type    = erhe::graphics::Primitive_type::line,
+    .stencil_reference = 2,
+    .draw_visible      = true,
+    .draw_hidden       = true,
+    .xray              = true
+};
+
+}
 
 #pragma region Commands
 
@@ -156,7 +175,8 @@ Transform_tool::Transform_tool(
     settings.show_rotate    = transform_tool_config.show_rotate;
 
     static_cast<void>(executor);
-    shared.visualizations = std::make_unique<Handle_visualizations>(app_context, mesh_memory, tools);
+    static_cast<void>(mesh_memory); // handles are debug-rendered, no meshes
+    shared.visualizations = std::make_unique<Handle_visualizations>(app_context);
     shared.visualizations_ready.store(true);
 
     set_base_priority(c_priority);
@@ -391,6 +411,29 @@ void Transform_tool::window_imgui()
         }
     }
 
+    // Persistent preferences: these live in Editor_settings_config (also
+    // editable in the Settings window) and are read live each frame, so
+    // toggling here takes effect immediately; touch() schedules the autosave.
+    {
+        Transform_tool_config& tool_config = m_context.editor_settings->transform_tool;
+        bool config_edited = false;
+        config_edited = ImGui::Checkbox("Negative Translate Handles", &tool_config.translate_negative_handles) || config_edited;
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Show the negative-direction translation axis handles in addition to the positive ones");
+        }
+        config_edited = ImGui::Checkbox("Hover Preview", &tool_config.hover_preview) || config_edited;
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Preview the hovered handle's constraint: axis line, translation plane, or rotation axis and plane");
+        }
+        config_edited = ImGui::Checkbox("Visible Ring Arcs Only", &tool_config.rotate_visible_arcs_only) || config_edited;
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Where a ring passes behind the discs of the other rings it is drawn as a thin line and is not hoverable");
+        }
+        if (config_edited) {
+            m_context.app_settings->settings_store().touch();
+        }
+    }
+
     // ImGui::TextUnformatted(is_transform_tool_active() ? "Active" : "Inactive");
 
     //const bool show_translate = settings.show_translate;
@@ -604,7 +647,6 @@ void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
     Handle_visualizations* visualizations = shared.get_visualizations();
     if (visualizations != nullptr) {
         visualizations->set_anchor(shared.world_from_anchor);
-        visualizations->update_visibility(shared.settings);
     }
 }
 
@@ -888,28 +930,40 @@ void Transform_tool::update_hover()
         log_trs_tool->debug("scene_view == nullptr");
         m_hover_handle          = Handle::e_handle_none;
         m_box_face_hover_active = false;
+        m_pick_active           = false;
         return;
     }
 
     // The gizmo targets the active scene only: in views of other scenes the
-    // handles are hidden, and any stale tool-slot hover there must not arm it.
+    // handles are hidden and must not arm.
     if (!is_scene_view_of_active_scene(scene_view)) {
         m_hover_handle          = Handle::e_handle_none;
         m_box_face_hover_active = false;
+        m_pick_active           = false;
         m_hover_tool            = nullptr;
         return;
     }
 
+    // All handles are hit tested analytically against the control ray
+    // (Handle_visualizations::pick) - there are no gizmo meshes.
     Handle new_handle = Handle::e_handle_none;
-
-    const auto& tool = scene_view->get_hover(Hover_entry::tool_slot);
-    std::shared_ptr<erhe::scene::Mesh> scene_mesh = tool.scene_mesh_weak.lock();
-    if (tool.valid && scene_mesh) {
-        new_handle = get_handle(scene_mesh.get());
+    m_pick_active = false;
+    Handle_visualizations* visualizations = shared.get_visualizations();
+    if (visualizations != nullptr) {
+        const std::optional<glm::vec3> origin_opt    = scene_view->get_control_ray_origin_in_world();
+        const std::optional<glm::vec3> direction_opt = scene_view->get_control_ray_direction_in_world();
+        if (origin_opt.has_value() && direction_opt.has_value()) {
+            const std::optional<Handle_pick> pick = visualizations->pick(origin_opt.value(), direction_opt.value());
+            if (pick.has_value()) {
+                new_handle      = pick->handle;
+                m_pick_position = pick->position;
+                m_pick_active   = true;
+            }
+        }
     }
 
-    // When no gizmo mesh (e.g. a bounding-box cone) is hovered, fall back to a custom
-    // ray vs bounding-box-face test so every face is draggable without face meshes.
+    // When no handle is picked, fall back to the ray vs bounding-box-face test
+    // so every box face is draggable, not only the face-center cones.
     m_box_face_hover_active = false;
     if ((new_handle == Handle::e_handle_none) && update_box_face_hover(scene_view)) {
         new_handle              = m_box_face_hover_handle;
@@ -1053,17 +1107,15 @@ auto Transform_tool::on_drag_ready() -> bool
 
     glm::vec3 initial_drag_position_in_world{0.0f};
     if (m_box_face_hover_active) {
-        // Drag started on a bounding-box face picked via ray-face intersection; there is
-        // no gizmo mesh under the pointer, so use the stored face hit position.
+        // Drag started on a bounding-box face picked via ray-face intersection;
+        // use the stored face hit position.
         initial_drag_position_in_world = m_box_face_hover_position;
+    } else if (m_pick_active) {
+        // Drag started on an analytically picked handle; use the stored grab point.
+        initial_drag_position_in_world = m_pick_position;
     } else {
-        const auto& hover_entry = scene_view->get_hover(Hover_entry::tool_slot);
-        std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = hover_entry.scene_mesh_weak.lock();
-        if (!hover_entry.valid || !hover_scene_mesh) {
-            log_trs_tool->trace("Transform tool cannot start drag - Pointer is not hovering over tool handle");
-            return false;
-        }
-        initial_drag_position_in_world = hover_entry.position.value();
+        log_trs_tool->trace("Transform tool cannot start drag - Pointer is not hovering over tool handle");
+        return false;
     }
 
     shared.set_initial_drag_position_in_world(initial_drag_position_in_world);
@@ -1119,12 +1171,6 @@ auto Transform_tool::get_active_handle() const -> Handle
 auto Transform_tool::get_hover_handle() const -> Handle
 {
     return m_hover_handle;
-}
-
-auto Transform_tool::get_handle(erhe::scene::Mesh* mesh) const -> Handle
-{
-    Handle_visualizations* visualizations = shared.get_visualizations();
-    return (visualizations != nullptr) ? visualizations->get_handle(mesh) : Handle::e_handle_none;
 }
 
 #pragma region Render
@@ -1201,27 +1247,150 @@ void Transform_tool::tool_render(const Render_context& context)
         }
     }
 
-    if (
-        shared.settings.show_scale &&
-        (shared.settings.scale_gizmo_mode == Scale_gizmo_mode::bounding_box)
-    ) {
-        Handle_visualizations* visualizations = shared.get_visualizations();
-        if ((visualizations != nullptr) && visualizations->is_box_valid()) {
-            const erhe::math::Aabb& aabb = visualizations->get_box_aabb();
-            erhe::renderer::Primitive_renderer line_renderer = m_context.debug_renderer->get(
-                {erhe::graphics::Primitive_type::line, 2, true, true}
-            );
-            line_renderer.add_cube(
-                visualizations->get_box_frame(),
-                glm::vec4{1.0f, 0.7f, 0.1f, 1.0f},
-                aabb.min,
-                aabb.max
-            );
-        }
+    // All gizmo handles are drawn with the debug primitive renderer
+    // (x-ray lines and filled triangles) - there are no handle meshes.
+    Handle_visualizations* visualizations = shared.get_visualizations();
+    if (visualizations != nullptr) {
+        visualizations->render(context, m_hover_handle, m_active_handle);
+    }
+
+    if (m_context.editor_settings->transform_tool.hover_preview) {
+        render_hover_preview(context);
     }
 
     m_context.rotate_tool->render(context);
 }
+
+void Transform_tool::render_hover_preview(const Render_context& context)
+{
+    // Preview the hovered handle; while a drag is active keep previewing the
+    // active handle (the pointer can drift off the handle mesh mid-drag).
+    const Handle handle = (m_active_handle != Handle::e_handle_none) ? m_active_handle : m_hover_handle;
+    const Handle_type type = get_handle_type(handle);
+    const bool translate_axis  = (type == Handle_type::e_handle_type_translate_axis);
+    const bool translate_plane = (type == Handle_type::e_handle_type_translate_plane);
+    // Rotate_tool::render() draws its own (richer) guides - protractor, ring
+    // and axis - during an active rotate drag; preview only the pre-drag hover.
+    const bool rotate = (type == Handle_type::e_handle_type_rotate) && (m_active_handle == Handle::e_handle_none);
+    if (!translate_axis && !translate_plane && !rotate) {
+        return;
+    }
+
+    Handle_visualizations* visualizations = shared.get_visualizations();
+    if (visualizations == nullptr) {
+        return;
+    }
+
+    // The preview frame matches the gizmo: anchor position always, anchor
+    // orientation in every mode except Global (world axes).
+    const vec3 center = shared.world_from_anchor.get_translation();
+    const mat3 basis  = shared.settings.use_anchor_orientation()
+        ? mat3_cast(shared.world_from_anchor.get_rotation())
+        : mat3{1.0f};
+
+    // World-space rotate-ring radius with the view-dependent handle scale
+    // applied, so the preview keeps a constant size relative to the gizmo.
+    const float radius = visualizations->get_gizmo_radius();
+    if (!(radius > 0.0f) || !std::isfinite(radius)) {
+        return;
+    }
+
+    const vec4 color = get_axis_color(get_axis_mask(handle));
+
+    erhe::renderer::Primitive_renderer line_renderer = context.get(handle_line_config);
+
+    if (translate_axis || rotate) {
+        // Axis guide: the translation axis for an arrow handle, the rotation
+        // axis for a ring. Spans well past the view frustum in both directions.
+        const int   axis_index       = static_cast<int>(get_handle_axis(handle)) - 1; // e_handle_axis_x == 1
+        const vec3  axis             = basis[axis_index];
+        const float axis_half_length = 100.0f * radius;
+        line_renderer.set_thickness(-2.0f); // negative = constant screen-space pixels
+        line_renderer.add_lines(color, {{center - axis_half_length * axis, center + axis_half_length * axis}});
+    }
+
+    if (translate_plane) {
+        int u_index = 0;
+        int v_index = 0;
+        switch (get_handle_plane(handle)) {
+            case Handle_plane::e_handle_plane_xy: u_index = 0; v_index = 1; break;
+            case Handle_plane::e_handle_plane_xz: u_index = 0; v_index = 2; break;
+            case Handle_plane::e_handle_plane_yz: u_index = 1; v_index = 2; break;
+            default: return;
+        }
+        const vec3  u = basis[u_index];
+        const vec3  v = basis[v_index];
+        const float h = radius; // half-extent: match the rotate-ring footprint
+
+        constexpr int cell_count = 8;
+        std::vector<erhe::renderer::Line> grid_lines;
+        grid_lines.reserve(2 * (cell_count - 1));
+        for (int i = 1; i < cell_count; ++i) {
+            const float t = -h + (2.0f * h * static_cast<float>(i)) / static_cast<float>(cell_count);
+            grid_lines.push_back({center + t * u - h * v, center + t * u + h * v});
+            grid_lines.push_back({center - h * u + t * v, center + h * u + t * v});
+        }
+        line_renderer.set_thickness(-1.0f);
+        line_renderer.set_line_color(vec4{0.5f * vec3{color}, 0.5f});
+        line_renderer.add_lines(grid_lines);
+
+        line_renderer.set_thickness(-2.0f);
+        line_renderer.add_lines(
+            color,
+            {
+                {center - h * u - h * v, center + h * u - h * v},
+                {center + h * u - h * v, center + h * u + h * v},
+                {center + h * u + h * v, center - h * u + h * v},
+                {center - h * u + h * v, center - h * u - h * v}
+            }
+        );
+
+        erhe::renderer::Primitive_renderer triangle_renderer = context.get({erhe::graphics::Primitive_type::triangle, 2, true, false});
+        const vec3 corners[4] = {
+            center - h * u - h * v,
+            center + h * u - h * v,
+            center + h * u + h * v,
+            center - h * u + h * v
+        };
+        const uint32_t indices[6] = {0, 1, 2, 0, 2, 3};
+        triangle_renderer.add_triangles(mat4{1.0f}, vec4{vec3{color}, 0.10f}, corners, indices);
+    }
+
+    if (rotate) {
+        // Rotation plane: circle just outside the ring plus a translucent disc.
+        const int  axis_index = static_cast<int>(get_handle_axis(handle)) - 1;
+        const vec3 side1      = basis[(axis_index + 1) % 3];
+        const vec3 side2      = basis[(axis_index + 2) % 3];
+        const float r = 1.25f * radius;
+
+        constexpr int sector_count = 64;
+        std::vector<erhe::renderer::Line> circle_lines;
+        circle_lines.reserve(sector_count);
+        std::vector<vec3>     disc_positions;
+        std::vector<uint32_t> disc_indices;
+        disc_positions.reserve(sector_count + 1);
+        disc_indices.reserve(3 * sector_count);
+        disc_positions.push_back(center);
+        vec3 previous = center + r * side1;
+        for (int i = 1; i <= sector_count; ++i) {
+            const float theta = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(sector_count);
+            const vec3  point = center + r * std::cos(theta) * side1 + r * std::sin(theta) * side2;
+            circle_lines.push_back({previous, point});
+            disc_positions.push_back(previous);
+            disc_indices.push_back(0);
+            disc_indices.push_back(static_cast<uint32_t>(i));
+            disc_indices.push_back(static_cast<uint32_t>((i % sector_count) + 1));
+            previous = point;
+        }
+        line_renderer.set_thickness(-2.0f);
+        line_renderer.set_line_color(color);
+        line_renderer.add_lines(circle_lines);
+
+        erhe::renderer::Primitive_renderer triangle_renderer = context.get({erhe::graphics::Primitive_type::triangle, 2, true, false});
+        triangle_renderer.add_triangles(mat4{1.0f}, vec4{vec3{color}, 0.10f}, disc_positions, disc_indices);
+    }
+}
+
 #pragma endregion Render
 
 void Transform_tool::update_for_view(Scene_view* scene_view)
@@ -1258,20 +1427,17 @@ void Transform_tool::update_for_view(Scene_view* scene_view)
         }
     }
 
-    // Refresh the visualizations' scene view FIRST: update_visibility() below
-    // runs update_transforms(), which dereferences the visualizations' cached
-    // scene view. Refreshing afterwards (as this used to) made that a stale
-    // pointer from the previous message -- a use-after-free when the previous
-    // viewport had been destroyed (scene closed).
+    // Refresh the visualizations' scene view FIRST: update_transforms()
+    // dereferences the visualizations' cached scene view. Refreshing
+    // afterwards (as this used to) made that a stale pointer from the
+    // previous message -- a use-after-free when the previous viewport had
+    // been destroyed (scene closed). Per-view gizmo scoping needs no state
+    // here: rendering and picking are both gated on views of the active
+    // scene at their call sites.
     Handle_visualizations* visualizations = shared.get_visualizations();
     if (visualizations != nullptr) {
         visualizations->update_for_view(scene_view);
-        // Per-view gizmo scoping: show the handles only in views of the
-        // active scene (the scene the gizmo targets). This runs per rendered
-        // view, the same flow that already drives the per-view handle scale.
-        visualizations->set_view_scene_is_active(is_scene_view_of_active_scene(scene_view));
     }
-    update_visibility();
     update_transforms();
 }
 
@@ -1287,10 +1453,9 @@ auto Transform_tool::is_scene_view_of_active_scene(Scene_view* scene_view) const
 
 void Transform_tool::update_visibility()
 {
-    Handle_visualizations* visualizations = shared.get_visualizations();
-    if (visualizations != nullptr) {
-        visualizations->update_visibility(shared.settings);
-    }
+    // Handle visibility is evaluated directly at render / pick time
+    // (Handle_visualizations::is_handle_shown); only the transforms and the
+    // selection box need refreshing here.
     update_transforms();
 }
 

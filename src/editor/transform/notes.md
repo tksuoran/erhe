@@ -16,7 +16,7 @@ Transform gizmo system for interactive translate, rotate, and scale operations.
 
 - **`Subtool`** -- Base class for transform sub-tools with shared handle visualization logic.
 
-- **`Handle_visualizations`** -- Creates and manages the gizmo mesh geometry (arrows, rings, boxes) in a dedicated tool scene root.
+- **`Handle_visualizations`** -- Draws the gizmo handles (arrows, plane quads, rings, scale cones/cube) with the debug primitive renderer (x-ray lines and filled triangles; no scene meshes) and hit tests them analytically (`pick()`). Rendering and picking share the same per-handle visibility rules, so a handle is pickable exactly when it is drawn.
 
 - **`Handle_enums`** -- Enumerations for handle types (axis, plane) and coordinate spaces.
 

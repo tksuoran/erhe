@@ -2,6 +2,7 @@
 
 #include "transform/handle_enums.hpp"
 #include "transform/handle_visualizations.hpp"
+#include "transform/transform_tool_settings.hpp"
 #include "transform/lattice_point_transform.hpp"
 #include "transform/mesh_component_transform.hpp"
 #include "transform/rotation_inspector.hpp"
@@ -36,6 +37,9 @@ namespace erhe::scene {
     class Mesh;
     class Node;
     class Trs_transform;
+}
+namespace erhe::scene_renderer {
+    class Mesh_memory;
 }
 
 struct Transform_tool_config;
@@ -213,7 +217,6 @@ public:
     // For Handle_visualizations
     [[nodiscard]] auto get_active_handle  () const -> Handle;
     [[nodiscard]] auto get_hover_handle   () const -> Handle;
-    [[nodiscard]] auto get_handle         (erhe::scene::Mesh* mesh) const -> Handle;
 
     void touch();
     void record_transform_operation();
@@ -284,7 +287,11 @@ private:
     [[nodiscard]] auto is_scene_view_of_active_scene(Scene_view* scene_view) const -> bool;
     void update_hover       ();
     auto update_box_face_hover(Scene_view* scene_view) -> bool;
-    void render_rays    (erhe::scene::Node& node);
+    void render_rays        (erhe::scene::Node& node);
+    // Draws the constraint of the hovered (or dragged) handle: the axis line
+    // for an axis translation handle, the plane rectangle + grid for a plane
+    // translation handle, the rotation axis + rotation plane for a rotate ring.
+    void render_hover_preview(const Render_context& context);
 
     // Apply a gizmo-produced world-from-anchor transform to the selected mesh
     // components (used by adjust_* and the numeric edits when component_mode).
@@ -307,6 +314,9 @@ private:
     Handle                              m_box_face_hover_handle  {Handle::e_handle_none};
     glm::vec3                           m_box_face_hover_position{0.0f};
     bool                                m_box_face_hover_active   {false};
+    // World-space grab point from the analytic handle pick (Handle_visualizations::pick).
+    glm::vec3                           m_pick_position          {0.0f};
+    bool                                m_pick_active            {false};
     std::shared_ptr<erhe::scene::Node>  m_tool_node;
     Subtool*                            m_hover_tool      {nullptr};
     Subtool*                            m_active_tool     {nullptr};
