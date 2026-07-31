@@ -14,7 +14,17 @@ set(ERHE_PYTHON3_EXECUTABLE "${Python3_EXECUTABLE}" CACHE INTERNAL "Python3 inte
 #       TARGET               <target>           # CMake target that depends on generated code
 #       DEFINITIONS_DIR      <path>             # Directory containing .py definition files
 #       OUTPUT_DIR           <path>             # Directory where .hpp/.cpp files are generated
-#       DEFINITIONS          <file1> <file2>... # Python definition files (listed explicitly)
+#       DEFINITIONS          <file1> <file2>... # Python definition files (IDE grouping only;
+#                                                 dependencies come from globbing DEFINITIONS_DIR)
+#       OUTPUTS              <file1> <file2>... # Generated files this unit's target compiles.
+#                                                 Declaring them as custom-command outputs makes
+#                                                 ninja recompile their dependents in the SAME
+#                                                 build that regenerated them; without this the
+#                                                 rewritten file is an output of no edge, its
+#                                                 start-of-build mtime stands, and dependents go
+#                                                 stale until the next ninja invocation. Custom
+#                                                 commands run with ninja restat, so outputs the
+#                                                 generator leaves unchanged do not cascade.
 #       EXTRA_DEFINITIONS_DIRS <dir1:prefix1> ... # Optional extra dirs for reference resolution only
 #                                                  # Format: "path:include_prefix" or just "path"
 #   )
@@ -24,7 +34,7 @@ set(ERHE_PYTHON3_EXECUTABLE "${Python3_EXECUTABLE}" CACHE INTERNAL "Python3 inte
 # Extra definition directories are loaded for StructRef/EnumRef resolution
 # but their types are NOT generated into the output directory.
 function(erhe_codegen_generate)
-    cmake_parse_arguments(ARG "" "TARGET;DEFINITIONS_DIR;OUTPUT_DIR" "DEFINITIONS;EXTRA_DEFINITIONS_DIRS" ${ARGN})
+    cmake_parse_arguments(ARG "" "TARGET;DEFINITIONS_DIR;OUTPUT_DIR" "DEFINITIONS;OUTPUTS;EXTRA_DEFINITIONS_DIRS" ${ARGN})
 
     # Guard: detect stale generated files left in (or accidentally copied into)
     # the source tree at the mirror of OUTPUT_DIR. Consumers typically include
@@ -77,16 +87,25 @@ function(erhe_codegen_generate)
         "${_codegen_dir}/erhe_codegen/types.py"
     )
 
-    # Build-time command: re-runs generator when any .py file changes
+    # Build-time command: re-runs generator when any .py file changes. The
+    # generator scans the whole DEFINITIONS_DIR, so depend on a glob of it
+    # (CONFIGURE_DEPENDS) rather than the explicit DEFINITIONS list - a newly
+    # added definition file must become a dependency without a manual edit.
+    file(GLOB _definition_files CONFIGURE_DEPENDS "${ARG_DEFINITIONS_DIR}/*.py")
+    if (NOT ARG_DEFINITIONS)
+        set(ARG_DEFINITIONS ${_definition_files})
+    endif()
+    # The always-touched stamp keeps the command clean between runs even
+    # though the generator leaves unchanged output files' mtimes alone.
     set(_stamp "${ARG_OUTPUT_DIR}/.codegen_stamp")
     add_custom_command(
-        OUTPUT  "${_stamp}"
+        OUTPUT  "${_stamp}" ${ARG_OUTPUTS}
         COMMAND "${ERHE_PYTHON3_EXECUTABLE}" "${GENERATOR_SCRIPT}"
                 "${ARG_DEFINITIONS_DIR}"
                 "${ARG_OUTPUT_DIR}"
                 ${ARG_EXTRA_DEFINITIONS_DIRS}
         COMMAND "${CMAKE_COMMAND}" -E touch "${_stamp}"
-        DEPENDS ${ARG_DEFINITIONS} ${_gen_files}
+        DEPENDS ${_definition_files} ${_gen_files}
         COMMENT "erhe_codegen: regenerating from ${ARG_DEFINITIONS_DIR}"
     )
     set_source_files_properties("${_stamp}" PROPERTIES GENERATED TRUE)

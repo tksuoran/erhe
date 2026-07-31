@@ -45,12 +45,17 @@ target_link_libraries(
 set(_renderer_defs "${CMAKE_CURRENT_SOURCE_DIR}/definitions")
 set(_renderer_gen  "${CMAKE_CURRENT_BINARY_DIR}/erhe_renderer/generated")
 
+# OUTPUTS: see erhe_codegen_generate.cmake - declaring the generated files as
+# custom-command outputs makes ninja recompile dependents in the same build.
+set(_renderer_generated
+    ${_renderer_gen}/visualization_mode.hpp
+    ${_renderer_gen}/visualization_mode.cpp
+)
 erhe_codegen_generate(
     TARGET          ${_target}
     DEFINITIONS_DIR "${_renderer_defs}"
     OUTPUT_DIR      "${_renderer_gen}"
-    DEFINITIONS
-        "${_renderer_defs}/visualization_mode.py"
+    OUTPUTS         ${_renderer_generated}
 )
 
 # Only the enum header -- serialize/deserialize .cpp compiles in the editor

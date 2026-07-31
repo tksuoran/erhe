@@ -646,10 +646,19 @@ set(_xr_config_defs      "${CMAKE_SOURCE_DIR}/src/erhe/xr/definitions")
 set(_codegen_defs "${CMAKE_CURRENT_SOURCE_DIR}/scene/definitions")
 set(_codegen_out  "${CMAKE_CURRENT_BINARY_DIR}/scene/generated")
 
+set(_codegen_sources
+    ${_codegen_out}/gltf_source_reference.hpp
+    ${_codegen_out}/gltf_source_reference_serialization.hpp
+    ${_codegen_out}/gltf_source_reference.cpp
+    ${_codegen_out}/scene_settings.hpp
+    ${_codegen_out}/scene_settings_serialization.hpp
+    ${_codegen_out}/scene_settings.cpp
+)
 erhe_codegen_generate(
     TARGET          ${_target}
     DEFINITIONS_DIR "${_codegen_defs}"
     OUTPUT_DIR      "${_codegen_out}"
+    OUTPUTS         ${_codegen_sources}
     EXTRA_DEFINITIONS_DIRS
         "${_config_defs}:config/generated/"
         "${_gfx_config_defs}:erhe_graphics/generated/"
@@ -660,15 +669,6 @@ erhe_codegen_generate(
         "${_codegen_defs}/gltf_source_reference.py"
         "${_codegen_defs}/scene_settings.py"
 )
-
-set(_codegen_sources
-    ${_codegen_out}/gltf_source_reference.hpp
-    ${_codegen_out}/gltf_source_reference_serialization.hpp
-    ${_codegen_out}/gltf_source_reference.cpp
-    ${_codegen_out}/scene_settings.hpp
-    ${_codegen_out}/scene_settings_serialization.hpp
-    ${_codegen_out}/scene_settings.cpp
-)
 set_source_files_properties(${_codegen_sources} PROPERTIES GENERATED TRUE)
 target_sources(${_target} PRIVATE ${_codegen_sources})
 source_group("codegen generated/scene" FILES ${_codegen_sources})
@@ -678,71 +678,6 @@ source_group("codegen generated/scene" FILES ${_codegen_sources})
 #  _xr_config_defs are defined above, before the scene codegen unit.)
 set(_config_out  "${CMAKE_CURRENT_BINARY_DIR}/config/generated")
 
-erhe_codegen_generate(
-    TARGET          ${_target}
-    DEFINITIONS_DIR "${_config_defs}"
-    OUTPUT_DIR      "${_config_out}"
-    EXTRA_DEFINITIONS_DIRS
-        "${_gfx_config_defs}:erhe_graphics/generated/"
-        "${_renderer_defs}:erhe_renderer/generated/"
-        "${_scene_renderer_defs}:erhe_scene_renderer/generated/"
-        "${_xr_config_defs}:erhe_xr/generated/"
-    DEFINITIONS
-        "${_config_defs}/camera_controls_config.py"
-        "${_config_defs}/developer_config.py"
-        "${_config_defs}/geometry_edit_mode.py"
-        "${_config_defs}/mesh_transform_mode.py"
-        "${_config_defs}/editor_settings_config.py"
-        "${_config_defs}/grid_config.py"
-        "${_config_defs}/hotbar_config.py"
-        "${_config_defs}/inventory_config.py"
-        "${_config_defs}/hud_config.py"
-        "${_config_defs}/id_renderer_config.py"
-        "${_config_defs}/ray_trace_config.py"
-        "${_config_defs}/network_config.py"
-        "${_config_defs}/physics_config.py"
-        "${_config_defs}/renderer_config.py"
-        "${_config_defs}/scene_config.py"
-        "${_config_defs}/shadow_frustum_fit_config.py"
-        "${_config_defs}/sky_config.py"
-        "${_config_defs}/text_renderer_config.py"
-        "${_config_defs}/threading_config.py"
-        "${_config_defs}/thumbnails_config.py"
-        "${_config_defs}/transform_tool_config.py"
-        "${_config_defs}/viewport_config_data.py"
-        "${_config_defs}/window_config.py"
-        "${_config_defs}/imgui_settings_config.py"
-        "${_config_defs}/icon_settings_config.py"
-        "${_config_defs}/shadow_filter_mode.py"
-        "${_config_defs}/shadow_bias_mode.py"
-        "${_config_defs}/shadow_cull_mode.py"
-        "${_config_defs}/shadow_technique_mode.py"
-        "${_config_defs}/hotbar_anchor.py"
-        "${_config_defs}/graphics_preset_entry.py"
-        "${_config_defs}/graphics_presets_config.py"
-        "${_config_defs}/fly_camera_config.py"
-        "${_config_defs}/render_style_data.py"
-        "${_config_defs}/render_style_appearance.py"
-        "${_config_defs}/selection_outline_style.py"
-        "${_config_defs}/content_edge_lines_config.py"
-        "${_config_defs}/preview_edge_lines_config.py"
-        "${_config_defs}/graph_node_previews_config.py"
-        "${_config_defs}/mesh_component_style.py"
-        "${_config_defs}/debug_visualizations_config.py"
-        "${_config_defs}/debug_visualizations_settings.py"
-        "${_config_defs}/debug_visualizations_style.py"
-        "${_config_defs}/scene_and_camera_settings.py"
-        "${_config_defs}/scene_view_settings.py"
-        "${_config_defs}/default_viewport_config.py"
-        "${_config_defs}/dock_direction.py"
-        "${_config_defs}/dock_placement.py"
-        "${_config_defs}/default_layout_config.py"
-        "${_config_defs}/make_mesh_args.py"
-        "${_config_defs}/add_lights_args.py"
-        "${_config_defs}/add_room_args.py"
-        "${_config_defs}/add_cameras_args.py"
-        "${_config_defs}/asset_reference_data.py"
-)
 
 set(_config_sources
     ${_config_out}/camera_controls_config.hpp
@@ -807,6 +742,8 @@ set(_config_sources
     ${_config_out}/thumbnails_config.hpp
     ${_config_out}/thumbnails_config_serialization.hpp
     ${_config_out}/thumbnails_config.cpp
+    ${_config_out}/rotate_sector_anchoring.hpp
+    ${_config_out}/rotate_sector_anchoring.cpp
     ${_config_out}/transform_tool_config.hpp
     ${_config_out}/transform_tool_config_serialization.hpp
     ${_config_out}/transform_tool_config.cpp
@@ -905,6 +842,17 @@ set(_config_sources
     ${_config_out}/viewport_config.hpp
     ${_config_out}/viewport_config_serialization.hpp
     ${_config_out}/viewport_config.cpp
+)
+erhe_codegen_generate(
+    TARGET          ${_target}
+    DEFINITIONS_DIR "${_config_defs}"
+    OUTPUT_DIR      "${_config_out}"
+    OUTPUTS         ${_config_sources}
+    EXTRA_DEFINITIONS_DIRS
+        "${_gfx_config_defs}:erhe_graphics/generated/"
+        "${_renderer_defs}:erhe_renderer/generated/"
+        "${_scene_renderer_defs}:erhe_scene_renderer/generated/"
+        "${_xr_config_defs}:erhe_xr/generated/"
 )
 set_source_files_properties(${_config_sources} PROPERTIES GENERATED TRUE)
 target_sources(${_target} PRIVATE ${_config_sources})

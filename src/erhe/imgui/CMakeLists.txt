@@ -83,15 +83,6 @@ target_link_libraries(${_target} PUBLIC mango)
 set(_imgui_defs "${CMAKE_CURRENT_SOURCE_DIR}/definitions")
 set(_imgui_gen  "${CMAKE_CURRENT_BINARY_DIR}/erhe_imgui/generated")
 
-erhe_codegen_generate(
-    TARGET          ${_target}
-    DEFINITIONS_DIR "${_imgui_defs}"
-    OUTPUT_DIR      "${_imgui_gen}"
-    DEFINITIONS
-        "${_imgui_defs}/logging_config.py"
-        "${_imgui_defs}/windows_visibility_config.py"
-)
-
 set(_imgui_codegen_sources
     ${_imgui_gen}/logging_config.hpp
     ${_imgui_gen}/logging_config_serialization.hpp
@@ -99,6 +90,14 @@ set(_imgui_codegen_sources
     ${_imgui_gen}/windows_visibility_config.hpp
     ${_imgui_gen}/windows_visibility_config_serialization.hpp
     ${_imgui_gen}/windows_visibility_config.cpp
+)
+# OUTPUTS: see erhe_codegen_generate.cmake - declaring the generated files as
+# custom-command outputs makes ninja recompile dependents in the same build.
+erhe_codegen_generate(
+    TARGET          ${_target}
+    DEFINITIONS_DIR "${_imgui_defs}"
+    OUTPUT_DIR      "${_imgui_gen}"
+    OUTPUTS         ${_imgui_codegen_sources}
 )
 set_source_files_properties(${_imgui_codegen_sources} PROPERTIES GENERATED TRUE)
 target_sources(${_target} PRIVATE ${_imgui_codegen_sources})

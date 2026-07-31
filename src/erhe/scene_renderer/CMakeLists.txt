@@ -69,13 +69,20 @@ target_link_libraries(
 set(_scene_renderer_defs "${CMAKE_CURRENT_SOURCE_DIR}/definitions")
 set(_scene_renderer_gen  "${CMAKE_CURRENT_BINARY_DIR}/erhe_scene_renderer/generated")
 
+# OUTPUTS: see erhe_codegen_generate.cmake - declaring the generated files as
+# custom-command outputs makes ninja recompile dependents in the same build.
+set(_scene_renderer_generated
+    ${_scene_renderer_gen}/primitive_color_source.hpp
+    ${_scene_renderer_gen}/primitive_color_source.cpp
+    ${_scene_renderer_gen}/mesh_memory_config.hpp
+    ${_scene_renderer_gen}/mesh_memory_config_serialization.hpp
+    ${_scene_renderer_gen}/mesh_memory_config.cpp
+)
 erhe_codegen_generate(
     TARGET          ${_target}
     DEFINITIONS_DIR "${_scene_renderer_defs}"
     OUTPUT_DIR      "${_scene_renderer_gen}"
-    DEFINITIONS
-        "${_scene_renderer_defs}/primitive_color_source.py"
-        "${_scene_renderer_defs}/mesh_memory_config.py"
+    OUTPUTS         ${_scene_renderer_generated}
 )
 
 # Only the enum header -- serialize/deserialize .cpp compiles in the editor

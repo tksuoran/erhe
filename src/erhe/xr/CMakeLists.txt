@@ -38,14 +38,22 @@ target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE
 set(_xr_config_defs "${CMAKE_CURRENT_SOURCE_DIR}/definitions")
 set(_xr_config_out  "${CMAKE_CURRENT_BINARY_DIR}/erhe_xr/generated")
 
+# OUTPUTS: see erhe_codegen_generate.cmake - declaring the generated files as
+# custom-command outputs makes ninja recompile dependents in the same build.
+set(_xr_config_generated
+    ${_xr_config_out}/headset_config.hpp
+    ${_xr_config_out}/headset_config_serialization.hpp
+    ${_xr_config_out}/headset_config.cpp
+    ${_xr_config_out}/perf_settings_level.hpp
+    ${_xr_config_out}/perf_settings_level.cpp
+    ${_xr_config_out}/foveation_level.hpp
+    ${_xr_config_out}/foveation_level.cpp
+)
 erhe_codegen_generate(
     TARGET          ${_target}
     DEFINITIONS_DIR "${_xr_config_defs}"
     OUTPUT_DIR      "${_xr_config_out}"
-    DEFINITIONS
-        "${_xr_config_defs}/headset_config.py"
-        "${_xr_config_defs}/perf_settings_level.py"
-        "${_xr_config_defs}/foveation_level.py"
+    OUTPUTS         ${_xr_config_generated}
 )
 
 set(_xr_config_hpps

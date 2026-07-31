@@ -387,14 +387,26 @@ endif()
 set(_gfx_config_defs "${CMAKE_CURRENT_SOURCE_DIR}/definitions")
 set(_gfx_config_out  "${CMAKE_CURRENT_BINARY_DIR}/erhe_graphics/generated")
 
+# Every generated file is declared as a custom-command output (OUTPUTS) so
+# ninja recompiles dependents in the same build that regenerated them - the
+# serialize/deserialize .cpp files compile in the editor target, and the ninja
+# graph is global, so the cross-directory dependency still connects.
+set(_gfx_config_generated
+    ${_gfx_config_out}/graphics_config.hpp
+    ${_gfx_config_out}/graphics_config_serialization.hpp
+    ${_gfx_config_out}/graphics_config.cpp
+    ${_gfx_config_out}/opengl_config.hpp
+    ${_gfx_config_out}/opengl_config_serialization.hpp
+    ${_gfx_config_out}/opengl_config.cpp
+    ${_gfx_config_out}/vulkan_config.hpp
+    ${_gfx_config_out}/vulkan_config_serialization.hpp
+    ${_gfx_config_out}/vulkan_config.cpp
+)
 erhe_codegen_generate(
     TARGET          ${_target}
     DEFINITIONS_DIR "${_gfx_config_defs}"
     OUTPUT_DIR      "${_gfx_config_out}"
-    DEFINITIONS
-        "${_gfx_config_defs}/graphics_config.py"
-        "${_gfx_config_defs}/opengl_config.py"
-        "${_gfx_config_defs}/vulkan_config.py"
+    OUTPUTS         ${_gfx_config_generated}
 )
 
 # Only the struct headers -- serialize/deserialize .cpp compiles in the editor
