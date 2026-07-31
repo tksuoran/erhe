@@ -449,13 +449,7 @@ void Debug_renderer_bucket::render(
 {
     // Nothing was submitted to this bucket this frame (m_draws is cleared at
     // end_frame, while the bucket object persists for the Debug_renderer
-    // lifetime). Return before any work -- and, crucially, before the direct
-    // path's ERHE_VERIFY(!multiview): the shared Debug_renderer renders both
-    // the single-view desktop viewport and the multiview headset, and a
-    // triangle / thin-line (tier == simple) bucket left over from a desktop
-    // frame would otherwise trip that assert during the headset's
-    // multiview render. A genuine multiview direct-path submission still
-    // asserts loudly below.
+    // lifetime).
     if (m_draws.empty()) {
         return;
     }
@@ -538,13 +532,14 @@ void Debug_renderer_bucket::render(
         // GL_LINES / GL_TRIANGLES / GL_POINTS directly from the vertex buffer.
         // This serves the simple-line and geometry-line tiers and every
         // triangle / point bucket (which never use compute).
-        // The direct path is single-view only -- its update_view_buffer
-        // call below passes stride_per_view = 0 and the geometry-shader
-        // pipeline reads cameras[c_view_index] with c_view_index = 0u. If
-        // a caller ever opts into multiview here, both eyes would render
-        // from cameras[0]. Fail loudly so the regression is caught at the
-        // call site instead of silently degrading the right-eye output.
-        ERHE_VERIFY(!multiview);
+        // Multiview draws the same world-space vertex buffer once into the
+        // layered render pass with the line_simple_multiview stages, whose
+        // c_view_index resolves to gl_ViewIndex, picking the per-eye camera
+        // from the view UBO (update_view_buffer below writes all views).
+        // The geometry tier never sees multiview: it exists only when
+        // compute is unavailable (GL 4.1 / Metal), and the multiview
+        // headset path requires Vulkan, where compute is available.
+        ERHE_VERIFY(!multiview || !uses_geometry());
         // Close all input ranges first (can only be done once)
         for (Debug_draw_entry& draw : m_draws) {
             if (draw.primitive_count > 0 && !draw.input_buffer_range.is_closed()) {
@@ -564,9 +559,14 @@ void Debug_renderer_bucket::render(
             // color through, so it serves line, triangle and point topologies
             // alike from the shared line_vertex_format.
             erhe::graphics::Shader_stages* line_shader_stages =
-                uses_geometry()
-                    ? pi.geometry_shader_stages.get()
-                    : pi.line_shader_stages.get();
+                multiview
+                    ? pi.multiview_line_shader_stages.get()
+                    : uses_geometry()
+                        ? pi.geometry_shader_stages.get()
+                        : pi.line_shader_stages.get();
+            if ((line_shader_stages == nullptr) || !line_shader_stages->is_valid()) {
+                return;
+            }
             erhe::graphics::Render_pipeline* p = pipeline.get_pipeline_for(
                 render_pass.get_descriptor(),
                 (visible || m_config.xray) ? &pi.color_blend_visible : &pi.color_blend_hidden,
@@ -589,10 +589,10 @@ void Debug_renderer_bucket::render(
                 render_encoder.set_depth_bias(bias_sign * 4.0f, bias_sign * 1.0f, 0.0f);
             }
             for (Debug_draw_view_span& view_span : m_view_spans) {
-                // Non-compute path is single-view only (the multiview
-                // pipeline reads from the triangle SSBO produced by
-                // the compute path, so the simple-line / geometry
-                // fallback never goes through multiview).
+                // Writes cameras[0..N-1]; the vertex shader picks its eye
+                // via c_view_index. stride_per_view is a compute-path
+                // concept (SSBO slab offset); the direct path fetches
+                // vertices through the input assembler, so 0 is passed.
                 erhe::graphics::Ring_buffer_range view_buffer_range = update_view_buffer(view_span.views, /*primitive_count_for_stride*/ 0);
                 m_view_buffer.bind(render_encoder, view_buffer_range);
 

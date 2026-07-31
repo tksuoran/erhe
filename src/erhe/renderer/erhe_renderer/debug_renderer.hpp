@@ -94,6 +94,12 @@ public:
     // Simple line path (no compute, no geometry shader): vertex buffer → GL_LINES
     erhe::dataformat::Vertex_format                  line_vertex_format;
     std::unique_ptr<erhe::graphics::Shader_stages>   line_shader_stages;
+    // Multiview compile of line_simple (built when view_count >= 2): same
+    // vertex-buffer direct path, but c_view_index resolves to gl_ViewIndex
+    // so one draw inside a multiview render pass transforms per eye. Serves
+    // the direct-path buckets (triangles, points, thin lines) in the
+    // headset pass.
+    std::unique_ptr<erhe::graphics::Shader_stages>   multiview_line_shader_stages;
 
     erhe::graphics::Color_blend_state                color_blend_visible;
     // Dim constant-factor blend for the hidden (occluded) pass; buckets with

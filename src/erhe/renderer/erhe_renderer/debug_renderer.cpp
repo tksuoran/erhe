@@ -354,6 +354,25 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(
         } else {
             log_startup->error("Unable to load line_simple shader - check working directory '{}'", std::filesystem::current_path().string());
         }
+
+        // Multiview variant for the direct path (triangle / point / thin-line
+        // buckets in the headset pass). Same sources; ERHE_MULTIVIEW makes
+        // c_view_index resolve to gl_ViewIndex, so the vertex shader picks
+        // the per-eye camera while the shared world-space vertex buffer is
+        // drawn once into the layered render pass.
+        if (view_count >= 2) {
+            Shader_stages_create_info multiview_create_info = create_info;
+            multiview_create_info.name       = "line_simple_multiview";
+            multiview_create_info.view_count = view_count;
+
+            Shader_stages_prototype multiview_prototype = build_shader_stages(graphics_device, multiview_create_info);
+            if (multiview_prototype.is_valid()) {
+                multiview_line_shader_stages = std::make_unique<Shader_stages>(graphics_device, std::move(multiview_prototype));
+                graphics_device.get_shader_monitor().add(multiview_create_info, multiview_line_shader_stages.get());
+            } else {
+                log_startup->error("Unable to load multiview line_simple shader");
+            }
+        }
     }
 
     // Geometry shader path: wide lines without compute (GL_LINES -> geometry shader -> triangle strip).
