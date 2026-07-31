@@ -30,7 +30,9 @@ enum class Handle : unsigned int {
     e_handle_box_scale_pos_y = 22,
     e_handle_box_scale_neg_y = 23,
     e_handle_box_scale_pos_z = 24,
-    e_handle_box_scale_neg_z = 25
+    e_handle_box_scale_neg_z = 25,
+    e_handle_rotate_view     = 26, // camera-aligned outer ring: rotate around the viewing axis
+    e_handle_rotate_free     = 27  // inside the rotate sphere, no other handle hit: arcball rotate
 };
 
 enum class Handle_tool : unsigned int {
@@ -75,13 +77,18 @@ enum class Handle_type : unsigned int {
 class Axis_mask
 {
 public:
-    static constexpr unsigned int x   = (1 << 0u);
-    static constexpr unsigned int y   = (1 << 1u);
-    static constexpr unsigned int z   = (1 << 2u);
-    static constexpr unsigned int xy  = x | y;
-    static constexpr unsigned int xz  = x | z;
-    static constexpr unsigned int yz  = y | z;
-    static constexpr unsigned int xyz = x | y | z;
+    static constexpr unsigned int x    = (1 << 0u);
+    static constexpr unsigned int y    = (1 << 1u);
+    static constexpr unsigned int z    = (1 << 2u);
+    static constexpr unsigned int xy   = x | y;
+    static constexpr unsigned int xz   = x | z;
+    static constexpr unsigned int yz   = y | z;
+    static constexpr unsigned int xyz  = x | y | z;
+    // Not spatial axes: rotation about the viewing axis / free arcball
+    // rotation. Kept disjoint from x/y/z so mask intersection tests treat
+    // these drags as matching no spatial axis.
+    static constexpr unsigned int view = (1 << 3u);
+    static constexpr unsigned int free = (1 << 4u);
 };
 
 [[nodiscard]] auto get_handle_class(Handle handle) -> Handle_class;

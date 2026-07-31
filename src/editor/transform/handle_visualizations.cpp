@@ -8,6 +8,7 @@
 #include "scene/scene_view.hpp"
 #include "transform/handle_enums.hpp"
 #include "transform/move_tool.hpp"
+#include "transform/rotate_tool.hpp"
 #include "transform/scale_tool.hpp"
 #include "transform/transform_tool.hpp"
 
@@ -58,6 +59,11 @@ constexpr float rotate_ring_major_radius = 4.0f;
 constexpr float ring_pick_radius         = 0.2f;
 constexpr int   ring_arc_sample_count    = 128;
 
+// Camera-aligned view-rotate ring: light gray, outside the rotate sphere
+// with a gap. Dragging it rotates around the viewing axis.
+constexpr float view_ring_radius = 1.3f * rotate_ring_major_radius;
+constexpr vec4  view_ring_color{0.7f, 0.7f, 0.7f, 1.0f};
+
 // Positive-only translate mode: the plane quads sit at the gizmo center
 // with their min corner ON the center, so the three quads share edges
 // along the positive axes. Being deep inside the rotate sphere, they read
@@ -71,6 +77,11 @@ constexpr float plane_positive_offset = plane_half_extent;
 // projected sphere - and that arrow is degenerate for translation anyway).
 constexpr float arrow_ring_gap = 0.25f;
 constexpr float arrow_start    = rotate_ring_major_radius + arrow_ring_gap;
+
+// With the rotate rings hidden (show_rotate off) there is nothing to avoid:
+// the quads always extend into the positive octant (no camera-facing flip)
+// and each positive arrow starts right where the quads end along its axis.
+constexpr float plane_positive_end = 2.0f * plane_half_extent;
 
 constexpr float center_cube_half_length  = 0.25f;
 constexpr float center_cube_pick_radius  = 0.5f;
@@ -116,6 +127,25 @@ constexpr erhe::renderer::Debug_renderer_config handle_line_config{
 constexpr erhe::renderer::Debug_renderer_config handle_fill_config{
     .primitive_type    = erhe::graphics::Primitive_type::triangle,
     .stencil_reference = 2,
+    .draw_visible      = true,
+    .draw_hidden       = true,
+    .xray              = true
+};
+// The debug buckets layer first-wins per pixel (stencil greater/replace at a
+// shared reference), and line vs triangle buckets have no defined mutual
+// order - so "arrows in front of rings" cannot come from submission order.
+// The translate arrows use a higher stencil reference instead: their pixels
+// beat every reference-2 gizmo pixel no matter which bucket drew first.
+constexpr erhe::renderer::Debug_renderer_config arrow_line_config{
+    .primitive_type    = erhe::graphics::Primitive_type::line,
+    .stencil_reference = 3,
+    .draw_visible      = true,
+    .draw_hidden       = true,
+    .xray              = true
+};
+constexpr erhe::renderer::Debug_renderer_config arrow_fill_config{
+    .primitive_type    = erhe::graphics::Primitive_type::triangle,
+    .stencil_reference = 3,
     .draw_visible      = true,
     .draw_hidden       = true,
     .xray              = true
@@ -352,6 +382,16 @@ auto Handle_visualizations::get_gizmo_radius() const -> float
     return rotate_ring_major_radius * m_view_scale;
 }
 
+auto Handle_visualizations::get_view_scale() const -> float
+{
+    return m_view_scale;
+}
+
+auto Handle_visualizations::get_view_ring_radius() const -> float
+{
+    return view_ring_radius * m_view_scale;
+}
+
 void Handle_visualizations::update_transforms()
 {
     ERHE_PROFILE_FUNCTION();
@@ -406,6 +446,12 @@ auto Handle_visualizations::is_handle_shown(const Handle handle) const -> bool
 
     const Handle_type type     = get_handle_type(handle);
     const bool        box_mode = settings.scale_gizmo_mode == Scale_gizmo_mode::bounding_box;
+    if ((handle == Handle::e_handle_rotate_view) && !m_context.editor_settings->transform_tool.rotate_view_ring) {
+        return false;
+    }
+    if ((handle == Handle::e_handle_rotate_free) && !m_context.editor_settings->transform_tool.rotate_arcball) {
+        return false;
+    }
     if (box_mode && ((type == Handle_type::e_handle_type_scale_axis) || (type == Handle_type::e_handle_type_scale_plane))) {
         return false;
     }
@@ -428,7 +474,26 @@ auto Handle_visualizations::is_handle_shown(const Handle handle) const -> bool
         const unsigned int axis_mask       = get_axis_mask(handle);
         const bool         translate_match = m_context.move_tool ->is_active() && (m_context.move_tool ->get_axis_mask() == axis_mask);
         const bool         scale_match     = m_context.scale_tool->is_active() && ((m_context.scale_tool->get_axis_mask() & axis_mask) == axis_mask);
-        if (!translate_match && !scale_match) {
+        // A rotate drag keeps some translate arrows, repositioned by
+        // render() and pick() to start at the protractor ring radius:
+        // - LOCAL space only: the arrows lying in the rotation plane (axes
+        //   orthogonal to the rotation axis) - they rotate with the anchor,
+        //   showing the orientation change. In world space they would sit
+        //   static, so they are hidden like the other inactive handles.
+        // - All spaces: the arrow along the rotation axis itself, starting
+        //   at the tip of the rotation axis line the protractor draws.
+        const bool         rotate_drag_active = m_context.rotate_tool->is_active();
+        const unsigned int rotate_axis_mask   = rotate_drag_active ? m_context.rotate_tool->get_axis_mask() : 0u;
+        const bool rotate_in_plane =
+            rotate_drag_active &&
+            settings.use_anchor_orientation() &&
+            (type == Handle_type::e_handle_type_translate_axis) &&
+            ((rotate_axis_mask & axis_mask) == 0);
+        const bool rotate_axis_arrow =
+            rotate_drag_active &&
+            (type == Handle_type::e_handle_type_translate_axis) &&
+            (rotate_axis_mask == axis_mask);
+        if (!translate_match && !scale_match && !rotate_in_plane && !rotate_axis_arrow) {
             return false;
         }
     }
@@ -465,8 +530,10 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
     const mat3 basis = get_basis();
     const vec3 eye   = vec3{camera_node->position_in_world()};
 
-    erhe::renderer::Primitive_renderer line_renderer     = context.get(handle_line_config);
-    erhe::renderer::Primitive_renderer triangle_renderer = context.get(handle_fill_config);
+    erhe::renderer::Primitive_renderer line_renderer           = context.get(handle_line_config);
+    erhe::renderer::Primitive_renderer triangle_renderer       = context.get(handle_fill_config);
+    erhe::renderer::Primitive_renderer arrow_line_renderer     = context.get(arrow_line_config);
+    erhe::renderer::Primitive_renderer arrow_triangle_renderer = context.get(arrow_fill_config);
 
     const auto is_hot = [&](const Handle handle) {
         return (hover_handle == handle) || (active_handle == handle);
@@ -476,6 +543,11 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
     };
 
     const bool positive_only = !m_context.editor_settings->transform_tool.translate_negative_handles;
+    // With no rotate rings shown (the show_rotate toggle, not transient drag
+    // hiding - placement must not jump mid-drag) the camera-facing choices
+    // exist to dodge nothing: the quads sit in the positive octant and the
+    // positive arrow of each axis starts where the quads end.
+    const bool fixed_octant = positive_only && !m_context.transform_tool->shared.settings.show_rotate;
 
     // Translate planes
     for (int perp = 0; perp < 3; ++perp) {
@@ -490,8 +562,8 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
         const float offset = positive_only ? plane_positive_offset : 0.0f;
         const vec3  u      = basis[(perp + 1) % 3];
         const vec3  v      = basis[(perp + 2) % 3];
-        const vec3  su     = (dot(u, eye - c) >= 0.0f) ? u : -u;
-        const vec3  sv     = (dot(v, eye - c) >= 0.0f) ? v : -v;
+        const vec3  su     = (fixed_octant || (dot(u, eye - c) >= 0.0f)) ? u : -u;
+        const vec3  sv     = (fixed_octant || (dot(v, eye - c) >= 0.0f)) ? v : -v;
         const vec3  center = c + (s * offset) * (su + sv);
         draw_quad(line_renderer, triangle_renderer, handle_color(handle, axis_colors[perp]), center, (s * plane_half_extent) * su, (s * plane_half_extent) * sv);
     }
@@ -553,6 +625,31 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
         }
     }
 
+    // Camera-aligned view-rotate ring (light gray, outside the rotate
+    // sphere): dragging it rotates around the viewing axis.
+    if (is_handle_shown(Handle::e_handle_rotate_view)) {
+        const Handle handle   = Handle::e_handle_rotate_view;
+        const vec3   view_dir = normalize(eye - c);
+        const vec3   ref      = (std::abs(view_dir.y) < 0.9f) ? vec3{0.0f, 1.0f, 0.0f} : vec3{1.0f, 0.0f, 0.0f};
+        const vec3   vs1      = normalize(cross(view_dir, ref));
+        const vec3   vs2      = normalize(cross(view_dir, vs1));
+        const float  radius   = s * view_ring_radius;
+        std::vector<erhe::renderer::Line> lines;
+        lines.reserve(ring_arc_sample_count);
+        vec3 previous{0.0f};
+        for (int i = 0; i <= ring_arc_sample_count; ++i) {
+            const float theta = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(ring_arc_sample_count);
+            const vec3  point = c + radius * (std::cos(theta) * vs1 + std::sin(theta) * vs2);
+            if (i > 0) {
+                lines.push_back({previous, point});
+            }
+            previous = point;
+        }
+        line_renderer.set_thickness(is_hot(handle) ? ring_width_hot : ring_width_normal);
+        line_renderer.set_line_color(handle_color(handle, view_ring_color));
+        line_renderer.add_lines(lines);
+    }
+
     // Translate arrows. In single-arrow mode (translate_negative_handles
     // off) each axis shows only the direction facing the camera, so no
     // arrow is drawn receding behind the rotate sphere.
@@ -562,8 +659,13 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
         const vec3 side2 = basis[(axis + 2) % 3];
         const bool positive_towards_eye = dot(d, eye - c) >= 0.0f;
         const Handle directional_handles[2] = {translate_pos_handles[axis], translate_neg_handles[axis]};
+        // During a rotate drag the surviving in-plane arrows start at the
+        // protractor ring radius, expanding outward from the ring.
+        const float start = m_context.rotate_tool->is_active()
+            ? m_context.editor_settings->transform_tool.rotate_ring_size
+            : fixed_octant ? plane_positive_end : arrow_start;
         for (int sign = 0; sign < 2; ++sign) {
-            if (positive_only && ((sign == 0) != positive_towards_eye)) {
+            if (positive_only && ((sign == 0) != (fixed_octant || positive_towards_eye))) {
                 continue;
             }
             const Handle handle = directional_handles[sign];
@@ -572,9 +674,9 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
             }
             const vec3 dir   = (sign == 0) ? d : -d;
             const vec4 color = handle_color(handle, axis_colors[axis]);
-            line_renderer.set_thickness(is_hot(handle) ? arrow_shaft_width_hot : arrow_shaft_width_normal);
-            line_renderer.add_lines(color, {{c + (s * arrow_start) * dir, c + (s * (arrow_start + arrow_shaft_length)) * dir}});
-            draw_cone_fill(triangle_renderer, color, c + (s * (arrow_start + arrow_shaft_length)) * dir, dir, side1, side2, s * arrow_cone_length, s * translate_cone_radius);
+            arrow_line_renderer.set_thickness(is_hot(handle) ? arrow_shaft_width_hot : arrow_shaft_width_normal);
+            arrow_line_renderer.add_lines(color, {{c + (s * start) * dir, c + (s * (start + arrow_shaft_length)) * dir}});
+            draw_cone_fill(arrow_triangle_renderer, color, c + (s * (start + arrow_shaft_length)) * dir, dir, side1, side2, s * arrow_cone_length, s * translate_cone_radius);
         }
     }
 
@@ -662,6 +764,8 @@ auto Handle_visualizations::pick(const glm::vec3& ray_origin, const glm::vec3& r
     };
 
     const bool positive_only = !m_context.editor_settings->transform_tool.translate_negative_handles;
+    // Mirrors render()'s fixed-octant presentation with rotate rings hidden.
+    const bool fixed_octant  = positive_only && !m_context.transform_tool->shared.settings.show_rotate;
 
     // Translate arrows: a thin capsule along the shaft plus a fatter capsule
     // around the cone head (matching the old collision geometry). Mirrors
@@ -670,8 +774,13 @@ auto Handle_visualizations::pick(const glm::vec3& ray_origin, const glm::vec3& r
     for (int axis = 0; axis < 3; ++axis) {
         const bool positive_towards_eye = dot(basis[axis], ray_origin - c) >= 0.0f;
         const Handle directional_handles[2] = {translate_pos_handles[axis], translate_neg_handles[axis]};
+        // Mirrors render(): in-plane arrows sit at the protractor ring
+        // during a rotate drag.
+        const float start = m_context.rotate_tool->is_active()
+            ? m_context.editor_settings->transform_tool.rotate_ring_size
+            : fixed_octant ? plane_positive_end : arrow_start;
         for (int sign = 0; sign < 2; ++sign) {
-            if (positive_only && ((sign == 0) != positive_towards_eye)) {
+            if (positive_only && ((sign == 0) != (fixed_octant || positive_towards_eye))) {
                 continue;
             }
             const Handle handle = directional_handles[sign];
@@ -683,13 +792,13 @@ auto Handle_visualizations::pick(const glm::vec3& ray_origin, const glm::vec3& r
             vec3  q{0.0f};
             float dist{0.0f};
             if (
-                ray_segment_distance(ray_origin, d, c + (s * arrow_start) * dir, c + (s * (arrow_start + arrow_shaft_length)) * dir, t, q, dist) &&
+                ray_segment_distance(ray_origin, d, c + (s * start) * dir, c + (s * (start + arrow_shaft_length)) * dir, t, q, dist) &&
                 (dist <= s * arrow_shaft_pick_radius)
             ) {
                 consider(handle, t, q);
             }
             if (
-                ray_segment_distance(ray_origin, d, c + (s * (arrow_start + arrow_shaft_length)) * dir, c + (s * (arrow_start + arrow_head_pick_end)) * dir, t, q, dist) &&
+                ray_segment_distance(ray_origin, d, c + (s * (start + arrow_shaft_length)) * dir, c + (s * (start + arrow_head_pick_end)) * dir, t, q, dist) &&
                 (dist <= s * arrow_head_pick_radius)
             ) {
                 consider(handle, t, q);
@@ -713,8 +822,8 @@ auto Handle_visualizations::pick(const glm::vec3& ray_origin, const glm::vec3& r
         // suffice for it.
         const vec3  u      = basis[(perp + 1) % 3];
         const vec3  v      = basis[(perp + 2) % 3];
-        const vec3  su     = (dot(u, ray_origin - c) >= 0.0f) ? u : -u;
-        const vec3  sv     = (dot(v, ray_origin - c) >= 0.0f) ? v : -v;
+        const vec3  su     = (fixed_octant || (dot(u, ray_origin - c) >= 0.0f)) ? u : -u;
+        const vec3  sv     = (fixed_octant || (dot(v, ray_origin - c) >= 0.0f)) ? v : -v;
         const vec3  center = c + (s * offset) * (su + sv);
         const float t      = dot(center - ray_origin, n) / denom;
         if (t <= 0.0f) {
@@ -773,8 +882,10 @@ auto Handle_visualizations::pick(const glm::vec3& ray_origin, const glm::vec3& r
     // samples occluded by other SHOWN rings' discs are not pickable
     // (matching render). The samples are spaced ~0.049 R apart while the
     // pick tube radius is 0.05 R, so testing sample points leaves no dead
-    // zones.
-    {
+    // zones. A ray that already hit a translate arrow never picks a ring:
+    // the arrows render on a higher stencil reference, so at any shared
+    // pixel the arrow is what the user sees, even when the ring is nearer.
+    if (!best.has_value() || (get_handle_type(best->handle) != Handle_type::e_handle_type_translate_axis)) {
         const bool  arcs_only = m_context.editor_settings->transform_tool.rotate_visible_arcs_only;
         const float radius    = s * rotate_ring_major_radius;
         const bool  ring_shown[3] = {
@@ -807,6 +918,48 @@ auto Handle_visualizations::pick(const glm::vec3& ray_origin, const glm::vec3& r
                     continue;
                 }
                 consider(handle, t, point);
+            }
+        }
+    }
+
+    // View-rotate ring: sampled circle points like the axis rings, in the
+    // camera-aligned plane used by render() (eye = the ray origin here).
+    if (is_handle_shown(Handle::e_handle_rotate_view)) {
+        const Handle handle   = Handle::e_handle_rotate_view;
+        const vec3   view_dir = normalize(ray_origin - c);
+        const vec3   ref      = (std::abs(view_dir.y) < 0.9f) ? vec3{0.0f, 1.0f, 0.0f} : vec3{1.0f, 0.0f, 0.0f};
+        const vec3   vs1      = normalize(cross(view_dir, ref));
+        const vec3   vs2      = normalize(cross(view_dir, vs1));
+        const float  radius   = s * view_ring_radius;
+        for (int i = 0; i < ring_arc_sample_count; ++i) {
+            const float theta = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(ring_arc_sample_count);
+            const vec3  point = c + radius * (std::cos(theta) * vs1 + std::sin(theta) * vs2);
+            const float t     = dot(point - ray_origin, d);
+            if (t <= 0.0f) {
+                continue;
+            }
+            if (best.has_value() && (t >= best->t)) {
+                continue;
+            }
+            if (glm::length(point - (ray_origin + t * d)) > s * ring_pick_radius) {
+                continue;
+            }
+            consider(handle, t, point);
+        }
+    }
+
+    // Free (arcball) rotation: the whole rotate sphere, but only when the ray
+    // hit NO other handle - every explicit handle wins over it, regardless of
+    // depth, so it must not go through consider().
+    if (!best.has_value() && is_handle_shown(Handle::e_handle_rotate_free)) {
+        const float radius = s * rotate_ring_major_radius;
+        const float tca    = dot(c - ray_origin, d);
+        if (tca > 0.0f) {
+            const float d2 = dot(c - ray_origin, c - ray_origin) - tca * tca;
+            if (d2 <= radius * radius) {
+                const float thc = std::sqrt(radius * radius - d2);
+                const float t   = (tca - thc > 0.0f) ? (tca - thc) : tca;
+                best = Handle_pick{Handle::e_handle_rotate_free, t, ray_origin + t * d};
             }
         }
     }

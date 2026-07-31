@@ -3,6 +3,8 @@
 #include "transform/subtool.hpp"
 #include "tools/tool.hpp"
 
+#include <glm/gtc/quaternion.hpp>
+
 #include <string_view>
 
 namespace editor {
@@ -36,11 +38,22 @@ private:
     auto update_parallel     (Scene_view* scene_view) -> bool;
     void update_final        ();
 
-    [[nodiscard]] auto snap(float angle_radians) const -> float;
+    auto update_arcball(Scene_view* scene_view) -> bool;
+
+    [[nodiscard]] auto snap          (float angle_radians) const -> float;
+    [[nodiscard]] auto initial_twist () const -> float;
 
     int                      m_rotate_snap_index{2};
     glm::vec3                m_normal              {0.0f}; // also rotation axis
     glm::vec3                m_reference_direction {0.0f};
+    glm::vec3                m_axis_side           {0.0f}; // active-space plane side at drag start (axis-absolute protractor frame)
+    bool                     m_view_mode           {false}; // rotating around the viewing axis (outer ring)
+    bool                     m_free_mode           {false}; // arcball rotation (inside the rotate sphere)
+    // Incremental screen-plane trackball state (see update_arcball()).
+    glm::vec3                m_arcball_prev        {0.0f};  // previous pointer point in the view plane, relative to the center
+    bool                     m_arcball_prev_valid  {false};
+    glm::quat                m_arcball_rotation    {1.0f, 0.0f, 0.0f, 0.0f}; // accumulated drag rotation
+    float                    m_arcball_radius      {1.0f};
     glm::vec3                m_center_of_rotation  {0.0f};
     std::optional<glm::vec3> m_intersection        {};
     float                    m_start_rotation_angle{0.0f};

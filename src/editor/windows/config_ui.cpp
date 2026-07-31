@@ -104,15 +104,20 @@ void imgui_field(void* base, const erhe::codegen::Field_info& field)
                 }
             }
 
+            // Show the human-readable short_desc when the definition has one;
+            // the identifier-style value name is the fallback.
+            const auto value_label = [](const erhe::codegen::Enum_value_info& v) -> const char* {
+                return (v.short_desc != nullptr && v.short_desc[0] != '\0') ? v.short_desc : v.name;
+            };
             const char* preview = (current_index >= 0)
-                ? field.enum_info->values[current_index].name
+                ? value_label(field.enum_info->values[current_index])
                 : "(unknown)";
 
             if (ImGui::BeginCombo("##", preview)) {
                 for (std::size_t i = 0; i < field.enum_info->values.size(); ++i) {
                     const erhe::codegen::Enum_value_info& v = field.enum_info->values[i];
                     const bool selected = (current_index == static_cast<int>(i));
-                    if (ImGui::Selectable(v.name, selected)) {
+                    if (ImGui::Selectable(value_label(v), selected)) {
                         const int64_t new_value = v.value;
                         switch (field.size) {
                             case 1: *static_cast<int8_t* >(ptr) = static_cast<int8_t >(new_value); break;

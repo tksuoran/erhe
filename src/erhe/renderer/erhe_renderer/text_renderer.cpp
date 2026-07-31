@@ -228,7 +228,10 @@ Text_renderer::Text_renderer(
             .debug_label    = erhe::utility::Debug_label{"Text renderer"},
             .input_assembly = erhe::graphics::Input_assembly_state::triangle,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
-            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(graphics_device.get_reverse_depth()),
+            // Text is overlay labels: always on top of 3D content, so no depth
+            // test and no depth write. The z callers pass still participates in
+            // nothing here; overlapping text layers by submission order.
+            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
         }
     }
 {

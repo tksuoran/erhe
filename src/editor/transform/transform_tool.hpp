@@ -288,6 +288,7 @@ private:
     void update_hover       ();
     auto update_box_face_hover(Scene_view* scene_view) -> bool;
     void render_rays        (erhe::scene::Node& node);
+    void render_initial_position_ray();
     // Draws the constraint of the hovered handle: the plane rectangle + grid
     // for a plane translation handle, the rotation plane for a rotate ring.
     // Axis handles have no preview (the axis guide line was dropped).

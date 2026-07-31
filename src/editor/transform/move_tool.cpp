@@ -2,6 +2,8 @@
 #include "windows/property_editor.hpp"
 
 #include "app_context.hpp"
+#include "app_settings.hpp"
+#include "config/generated/editor_settings_config.hpp"
 #include "input_state.hpp"
 #include "graphics/icon_set.hpp"
 #include "scene/scene_view.hpp"
@@ -39,6 +41,15 @@ void Move_tool::imgui(Property_editor& property_editor)
     p.reset();
     p.push_group("Move tool", ImGuiTreeNodeFlags_DefaultOpen);
     p.add_entry("Snap Enable", [this]() { ImGui::Checkbox("##", &get_shared().settings.translate_snap_enable); });
+    // Persistent preference (Transform_tool_config); touch() schedules the autosave.
+    p.add_entry("Snap Absolute", [this]() {
+        if (ImGui::Checkbox("##", &m_context.editor_settings->transform_tool.translate_snap_absolute)) {
+            m_context.app_settings->settings_store().touch();
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Snap the anchor's resulting position coordinates to snap multiples; when off, snap the drag delta instead");
+        }
+    });
     p.add_entry("Snap Value", [this]() {
         const float snap_values[] = {  0.001f,  0.01f,  0.1f,  0.2f,  0.25f,  0.5f,  1.0f,  2.0f,  5.0f,  10.0f,  100.0f };
         const char* snap_items [] = { "0.001", "0.01", "0.1", "0.2", "0.25", "0.5", "1.0", "2.0", "5.0", "10.0", "100.0" };
@@ -121,13 +132,19 @@ auto Move_tool::snap(const glm::vec3 in_translation) const -> glm::vec3
         return in_translation;
     }
 
-    const float in_x = in_translation.x;
-    const float in_y = in_translation.y;
-    const float in_z = in_translation.z;
+    // Absolute snapping lands the anchor's resulting position coordinates on
+    // snap multiples (bias = the anchor's start position); relative snapping
+    // snaps the drag delta itself, preserving any initial off-grid position.
+    const glm::vec3 bias = m_context.editor_settings->transform_tool.translate_snap_absolute
+        ? glm::vec3{shared.world_from_anchor_initial_state.get_translation()}
+        : glm::vec3{0.0f};
+    const float in_x = bias.x + in_translation.x;
+    const float in_y = bias.y + in_translation.y;
+    const float in_z = bias.z + in_translation.z;
     const float snap = shared.settings.translate_snap;
-    const float x    = (m_axis_mask & Axis_mask::x) ? std::floor((in_x + snap * 0.5f) / snap) * snap : in_x;
-    const float y    = (m_axis_mask & Axis_mask::y) ? std::floor((in_y + snap * 0.5f) / snap) * snap : in_y;
-    const float z    = (m_axis_mask & Axis_mask::z) ? std::floor((in_z + snap * 0.5f) / snap) * snap : in_z;
+    const float x    = (m_axis_mask & Axis_mask::x) ? std::floor((in_x + snap * 0.5f) / snap) * snap - bias.x : in_translation.x;
+    const float y    = (m_axis_mask & Axis_mask::y) ? std::floor((in_y + snap * 0.5f) / snap) * snap - bias.y : in_translation.y;
+    const float z    = (m_axis_mask & Axis_mask::z) ? std::floor((in_z + snap * 0.5f) / snap) * snap - bias.z : in_translation.z;
 
     return glm::vec3{x, y, z};
 }

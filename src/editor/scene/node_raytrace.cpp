@@ -20,6 +20,9 @@
 
 #include <glm/gtx/matrix_operation.hpp>
 
+#include <algorithm>
+#include <cmath>
+
 using erhe::geometry::mesh_facet_normalf;
 using erhe::geometry::to_glm_vec3;
 
@@ -104,7 +107,8 @@ void draw_ray_hit(
     erhe::renderer::Primitive_renderer& line_renderer,
     const erhe::raytrace::Ray&          ray,
     const erhe::raytrace::Hit&          hit,
-    const Ray_hit_style&                style
+    const Ray_hit_style&                style,
+    erhe::renderer::Primitive_renderer* ray_line_renderer
 )
 {
     // Null-node guard stays ahead of get_hit_normal(), which VERIFYs the node
@@ -123,37 +127,56 @@ void draw_ray_hit(
 
     const glm::vec3 position = ray.origin + ray.t_far * ray.direction;
     const glm::vec3 N = glm::normalize(world_normal_opt.value());
-    const glm::vec3 T = erhe::math::safe_normalize_cross<float>(N, ray.direction);
+    // The marker cross prefers to align with the ray, but a ray parallel to
+    // the normal (straight down onto a floor) makes that cross degenerate -
+    // fall back to an arbitrary tangent so the hit marker never vanishes.
+    glm::vec3 T = erhe::math::safe_normalize_cross<float>(N, ray.direction);
+    if (glm::dot(T, T) < 1e-6f) {
+        const glm::vec3 arbitrary = (std::abs(N.x) < 0.9f) ? glm::vec3{1.0f, 0.0f, 0.0f} : glm::vec3{0.0f, 1.0f, 0.0f};
+        T = erhe::math::safe_normalize_cross<float>(N, arbitrary);
+    }
     const glm::vec3 B = erhe::math::safe_normalize_cross<float>(T, N);
 
-    line_renderer.set_thickness(style.hit_thickness);
-    line_renderer.add_lines(
-        style.hit_color,
-        {
-            {
-                position + 0.01f * N - style.hit_size * T,
-                position + 0.01f * N + style.hit_size * T
-            },
-            {
-                position + 0.01f * N - style.hit_size * B,
-                position + 0.01f * N + style.hit_size * B
-            },
-            {
-                position,
-                position + style.hit_size * N
-            }
-        }
-    );
-    line_renderer.set_thickness(style.ray_thickness);
-    line_renderer.add_lines(
-        style.ray_color,
-        {
-            {
-                position,
-                position - style.ray_length * ray.direction
-            }
-        }
-    );
+    // Tangent / bitangent marker arms: each arm is split in two equally long
+    // segments - full alpha near the hit, then fading out to nothing at the
+    // tip, so the cross stays crisp at the intersection without hard ends.
+    const float     marker_width  = 0.5f * style.hit_thickness;
+    const glm::vec3 marker_center = position + 0.01f * N;
+    const glm::vec4 marker_full   = style.hit_color;
+    const glm::vec4 marker_clear{marker_full.x, marker_full.y, marker_full.z, 0.0f};
+    const glm::vec3 arms[4] = { T, -T, B, -B };
+    for (const glm::vec3& arm : arms) {
+        const glm::vec3 mid = marker_center + 0.5f * style.hit_size * arm;
+        const glm::vec3 tip = marker_center + style.hit_size * arm;
+        line_renderer.add_line(marker_full, marker_width, marker_center, marker_full,  marker_width, mid);
+        line_renderer.add_line(marker_full, marker_width, mid,           marker_clear, marker_width, tip);
+    }
+    // Normal tick: same two-segment fade as the tangent / bitangent arms.
+    {
+        const glm::vec3 mid = position + 0.5f * style.hit_size * N;
+        const glm::vec3 tip = position + style.hit_size * N;
+        line_renderer.add_line(marker_full, marker_width, position, marker_full,  marker_width, mid);
+        line_renderer.add_line(marker_full, marker_width, mid,      marker_clear, marker_width, tip);
+    }
+
+    // The tail from the hit back toward the ray origin never extends past the
+    // origin. It is split in two equally long segments: full alpha near the
+    // hit, then dimming to 0.2 - matching the constant-0.2 continuation that
+    // covers any remaining span to the origin so the ray's source stays
+    // readable.
+    erhe::renderer::Primitive_renderer& ray_renderer = (ray_line_renderer != nullptr) ? *ray_line_renderer : line_renderer;
+    const float     ray_width   = 0.5f * style.ray_thickness;
+    const float     tail_length = std::min(style.ray_length, ray.t_far);
+    const glm::vec3 tail_mid    = position - (0.5f * tail_length) * ray.direction;
+    const glm::vec3 tail_end    = position - tail_length * ray.direction;
+    const glm::vec4 ray_full    = style.ray_color;
+    const glm::vec4 ray_dim{ray_full.x, ray_full.y, ray_full.z, 0.2f};
+    ray_renderer.set_thickness(ray_width);
+    ray_renderer.add_lines(ray_full, {{position, tail_mid}});
+    ray_renderer.add_line(ray_full, ray_width, tail_mid, ray_dim, ray_width, tail_end);
+    if (tail_length < ray.t_far) {
+        ray_renderer.add_lines(ray_dim, {{tail_end, ray.origin}});
+    }
 }
 
 auto project_ray(

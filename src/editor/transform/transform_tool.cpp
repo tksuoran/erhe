@@ -413,32 +413,11 @@ void Transform_tool::window_imgui()
         }
     }
 
-    // Persistent preferences: these live in Editor_settings_config (also
-    // editable in the Settings window) and are read live each frame, so
-    // toggling here takes effect immediately; touch() schedules the autosave.
-    {
-        Transform_tool_config& tool_config = m_context.editor_settings->transform_tool;
-        bool config_edited = false;
-        config_edited = ImGui::Checkbox("Negative Translate Handles", &tool_config.translate_negative_handles) || config_edited;
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("Show the negative-direction translation axis handles in addition to the positive ones");
-        }
-        config_edited = ImGui::Checkbox("Hover Preview", &tool_config.hover_preview) || config_edited;
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("Preview the hovered handle's constraint: translation plane or rotation plane");
-        }
-        config_edited = ImGui::Checkbox("Visible Ring Arcs Only", &tool_config.rotate_visible_arcs_only) || config_edited;
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("Where a ring passes behind the discs of the other rings it is drawn as a thin line and is not hoverable");
-        }
-        config_edited = ImGui::SliderFloat("Active Rotate Ring Size", &tool_config.rotate_ring_size, 1.0f, 10.0f, "%.1f") || config_edited;
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("Radius of the protractor ring shown during an active rotation drag (the gizmo's own rotate rings use 4.0)");
-        }
-        if (config_edited) {
-            m_context.app_settings->settings_store().touch();
-        }
-    }
+    // Persistent gizmo preferences (Negative Translate Handles, Hover
+    // Preview, Visible Ring Arcs Only, Active Rotate Ring Size, Rotation
+    // Sector Anchoring) are edited in the Settings window's Transform Tool
+    // section; they are read live each frame so edits there take effect
+    // immediately.
 
     // ImGui::TextUnformatted(is_transform_tool_active() ? "Active" : "Inactive");
 
@@ -473,9 +452,6 @@ void Transform_tool::window_imgui()
         ImGui::Text("Hover handle: %s", c_str(m_hover_handle));
         ImGui::Text("Active handle: %s", c_str(m_active_handle));
 
-        m_property_editor.reset();
-        m_property_editor.add_entry("Cast Rays", [this](){ ImGui::Checkbox("##", &shared.settings.cast_rays); });
-        m_property_editor.show_entries();
     }
 
     ImGui::Separator();
@@ -1194,6 +1170,7 @@ void Transform_tool::render_rays(erhe::scene::Node& node)
         return;
     }
     vec3 directions[] = {
+        { 0.0f,  1.0f,  0.0f},
         { 0.0f, -1.0f,  0.0f},
         { 1.0f,  0.0f,  0.0f},
         {-1.0f,  0.0f,  0.0f},
@@ -1201,7 +1178,31 @@ void Transform_tool::render_rays(erhe::scene::Node& node)
         { 0.0f,  0.0f, -1.0f}
     };
 
-    erhe::renderer::Primitive_renderer line_renderer = m_context.debug_renderer->get({erhe::graphics::Primitive_type::line, 2, true, true});
+    // X-ray bucket like the gizmo handles: the occluded pass blends at full
+    // strength, so the ray / hit lines stay in front of mesh surface detail
+    // (edge lines in particular) instead of dropping to the dim hidden pass
+    // wherever the coplanar edge lines win the depth test.
+    erhe::renderer::Primitive_renderer line_renderer = m_context.debug_renderer->get(
+        erhe::renderer::Debug_renderer_config{
+            .primitive_type    = erhe::graphics::Primitive_type::line,
+            .stencil_reference = 2,
+            .draw_visible      = true,
+            .draw_hidden       = true,
+            .xray              = true
+        }
+    );
+    // The ray lines get a higher stencil reference so they alpha-blend over
+    // the hit markers where they overlap (ray antiparallel to the surface
+    // normal) - see draw_ray_hit().
+    erhe::renderer::Primitive_renderer ray_line_renderer = m_context.debug_renderer->get(
+        erhe::renderer::Debug_renderer_config{
+            .primitive_type    = erhe::graphics::Primitive_type::line,
+            .stencil_reference = 3,
+            .draw_visible      = true,
+            .draw_hidden       = true,
+            .xray              = true
+        }
+    );
 
     auto& raytrace_scene = scene_root->get_raytrace_scene();
 
@@ -1228,8 +1229,73 @@ void Transform_tool::render_rays(erhe::scene::Node& node)
                 .hit_size      = 0.10f
             };
 
-            draw_ray_hit(line_renderer, ray, hit, ray_hit_style);
+            draw_ray_hit(line_renderer, ray, hit, ray_hit_style, &ray_line_renderer);
         }
+    }
+}
+
+void Transform_tool::render_initial_position_ray()
+{
+    // One extra ray during translate drags: from the anchor's drag-start
+    // position straight down (world -Y), showing where the travel began
+    // relative to whatever lies below. The first dragged mesh is excluded
+    // from the trace so a barely-moved node does not shadow its own start
+    // point.
+    if (shared.entries.empty()) {
+        return;
+    }
+    const Transform_entry& entry = shared.entries.front();
+    if (!entry.node) {
+        return;
+    }
+    std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(entry.node.get());
+    auto* scene_root = static_cast<Scene_root*>(entry.node->node_data.host);
+    if (scene_root == nullptr) {
+        return;
+    }
+
+    // Same buckets as render_rays(): markers at stencil reference 2, ray
+    // lines at 3 so they alpha-blend over the markers (see draw_ray_hit()).
+    erhe::renderer::Primitive_renderer line_renderer = m_context.debug_renderer->get(
+        erhe::renderer::Debug_renderer_config{
+            .primitive_type    = erhe::graphics::Primitive_type::line,
+            .stencil_reference = 2,
+            .draw_visible      = true,
+            .draw_hidden       = true,
+            .xray              = true
+        }
+    );
+    erhe::renderer::Primitive_renderer ray_line_renderer = m_context.debug_renderer->get(
+        erhe::renderer::Debug_renderer_config{
+            .primitive_type    = erhe::graphics::Primitive_type::line,
+            .stencil_reference = 3,
+            .draw_visible      = true,
+            .draw_hidden       = true,
+            .xray              = true
+        }
+    );
+
+    erhe::raytrace::Ray ray{
+        .origin    = shared.world_from_anchor_initial_state.get_translation(),
+        .t_near    = 0.0f,
+        .direction = vec3{0.0f, -1.0f, 0.0f},
+        .time      = 0.0f,
+        .t_far     = 9999.0f,
+        .mask      = Raytrace_node_mask::content,
+        .id        = 0,
+        .flags     = 0
+    };
+    erhe::raytrace::Hit hit;
+    if (project_ray(&scene_root->get_raytrace_scene(), mesh.get(), ray, hit)) {
+        const Ray_hit_style ray_hit_style{
+            .ray_color     = vec4{1.0f, 0.0f, 1.0f, 1.0f},
+            .ray_thickness = 8.0f,
+            .ray_length    = 0.5f,
+            .hit_color     = vec4{0.8f, 0.2f, 0.8f, 0.75f},
+            .hit_thickness = 8.0f,
+            .hit_size      = 0.10f
+        };
+        draw_ray_hit(line_renderer, ray, hit, ray_hit_style, &ray_line_renderer);
     }
 }
 
@@ -1243,14 +1309,22 @@ void Transform_tool::tool_render(const Render_context& context)
         return;
     }
 
-    for (auto& entry : shared.entries) {
-        auto& node = entry.node;
-        if (!node) {
-            continue;
-        }
-        if (shared.settings.cast_rays) {
+    // Optional translate-drag debug visualization (Settings window): cast
+    // rays from each dragged node along the world axes and mark the nearest
+    // hits with purple lines, like the physics tool's drag visualization.
+    const Handle_type active_type = get_handle_type(m_active_handle);
+    const bool translate_drag_active =
+        (active_type == Handle_type::e_handle_type_translate_axis) ||
+        (active_type == Handle_type::e_handle_type_translate_plane);
+    if (m_context.editor_settings->transform_tool.translate_cast_rays && translate_drag_active) {
+        for (auto& entry : shared.entries) {
+            auto& node = entry.node;
+            if (!node) {
+                continue;
+            }
             render_rays(*node.get());
         }
+        render_initial_position_ray();
     }
 
     // All gizmo handles are drawn with the debug primitive renderer
@@ -1272,14 +1346,12 @@ void Transform_tool::tool_render(const Render_context& context)
 void Transform_tool::render_translate_drag_guides(const Render_context& context)
 {
     // Active translate drag feedback (shown instead of the hover previews
-    // for the duration of the drag), anchored on the NODE's travel: from
-    // the anchor's position at drag start to its current (snapped)
-    // position. Axis drag: only that traveled segment - not the full axis.
-    // Plane drag: an axis-aligned rectangle with the two anchor positions
-    // in opposite corners, each edge color-coded by the axis it runs
-    // along. The traveled segment / rectangle diagonal is yellow - the
-    // delta color, matching the delta text at its midpoint and the rotate
-    // sector. Kept subtle: 1 px lines, reduced alpha.
+    // for the duration of the drag), anchored on the NODE's travel: the
+    // yellow traveled segment (axis drag: along the axis, plane drag: the
+    // travel diagonal) from the anchor's position at drag start to its
+    // current (snapped) position - the delta color, matching the delta text
+    // at its midpoint and the rotate sector. Kept subtle: 1 px, reduced
+    // alpha.
     const Handle_type type       = get_handle_type(m_active_handle);
     const bool        axis_drag  = (type == Handle_type::e_handle_type_translate_axis);
     const bool        plane_drag = (type == Handle_type::e_handle_type_translate_plane);
@@ -1290,21 +1362,18 @@ void Transform_tool::render_translate_drag_guides(const Render_context& context)
     constexpr float guide_alpha = 0.75f;
     constexpr vec4  delta_yellow{1.0f, 1.0f, 0.0f, guide_alpha};
 
-    const vec3 p0           = shared.world_from_anchor_initial_state.get_translation();
-    const vec3 p1           = shared.world_from_anchor.get_translation();
-    const vec3 delta_anchor = p1 - p0;
+    const vec3 p0 = shared.world_from_anchor_initial_state.get_translation();
+    const vec3 p1 = shared.world_from_anchor.get_translation();
 
     erhe::renderer::Primitive_renderer line_renderer = context.get(handle_line_config);
     line_renderer.set_thickness(guide_width);
 
-    if (axis_drag) {
-        line_renderer.set_line_color(delta_yellow);
-        line_renderer.add_lines({{p0, p1}});
-
-        // End-stop markers: a short line across each end of the traveled
-        // segment, orthogonal to it in screen space (dimension-line style).
-        // Built in window space and unprojected back to world at each end's
-        // own depth, because the debug line renderer takes world positions.
+    // End-stop markers: a short line across each end of a traveled segment,
+    // orthogonal to it in screen space (dimension-line style). Built in
+    // window space and unprojected back to world at each end's own depth,
+    // because the debug line renderer takes world positions. Used on the
+    // axis-drag segment and the plane-drag diagonal (both yellow).
+    const auto add_end_stops = [&](const vec3& a, const vec3& b) {
         if (context.camera == nullptr) {
             return;
         }
@@ -1316,8 +1385,8 @@ void Transform_tool::render_translate_drag_guides(const Render_context& context)
         );
         const mat4 clip_from_world = projection_transforms.clip_from_world.get_matrix();
         const mat4 world_from_clip = projection_transforms.clip_from_world.get_inverse_matrix();
-        const vec3 w0 = context.viewport.project_to_screen_space(clip_from_world, p0, 0.0f, 1.0f, context.scene_view.get_conventions());
-        const vec3 w1 = context.viewport.project_to_screen_space(clip_from_world, p1, 0.0f, 1.0f, context.scene_view.get_conventions());
+        const vec3 w0 = context.viewport.project_to_screen_space(clip_from_world, a, 0.0f, 1.0f, context.scene_view.get_conventions());
+        const vec3 w1 = context.viewport.project_to_screen_space(clip_from_world, b, 0.0f, 1.0f, context.scene_view.get_conventions());
         const vec2  delta_px  = vec2{w1} - vec2{w0};
         const float length_px = glm::length(delta_px);
         if (length_px < 1.0f) {
@@ -1345,35 +1414,20 @@ void Transform_tool::render_translate_drag_guides(const Render_context& context)
                 line_renderer.add_lines({{stop_a.value(), stop_b.value()}});
             }
         }
+    };
+
+    if (axis_drag) {
+        line_renderer.set_line_color(delta_yellow);
+        line_renderer.add_lines({{p0, p1}});
+        add_end_stops(p0, p1);
         return;
     }
 
-    int u_index = 0;
-    int v_index = 0;
-    switch (get_handle_plane(m_active_handle)) {
-        case Handle_plane::e_handle_plane_xy: u_index = 0; v_index = 1; break;
-        case Handle_plane::e_handle_plane_xz: u_index = 0; v_index = 2; break;
-        case Handle_plane::e_handle_plane_yz: u_index = 1; v_index = 2; break;
-        default: return;
-    }
-    const mat3 basis = shared.settings.use_anchor_orientation()
-        ? mat3_cast(shared.world_from_anchor.get_rotation())
-        : mat3{1.0f};
-    const vec3 u        = basis[u_index];
-    const vec3 v        = basis[v_index];
-    const vec3 corner_u = p0 + dot(delta_anchor, u) * u;
-    const vec3 corner_v = p0 + dot(delta_anchor, v) * v;
-
-    vec4 u_color = get_axis_color(1u << u_index);
-    vec4 v_color = get_axis_color(1u << v_index);
-    u_color.a = guide_alpha;
-    v_color.a = guide_alpha;
-    line_renderer.set_line_color(u_color);
-    line_renderer.add_lines({{p0, corner_u}, {corner_v, p1}});
-    line_renderer.set_line_color(v_color);
-    line_renderer.add_lines({{p0, corner_v}, {corner_u, p1}});
+    // Plane drag: just the yellow diagonal with end stops - the axis-colored
+    // rectangle edges were dropped as noise.
     line_renderer.set_line_color(delta_yellow);
     line_renderer.add_lines({{p0, p1}});
+    add_end_stops(p0, p1);
 }
 
 void Transform_tool::render_drag_readout(const Render_context& context)
@@ -1404,37 +1458,91 @@ void Transform_tool::render_drag_readout(const Render_context& context)
             const vec3 p0 = shared.world_from_anchor_initial_state.get_translation();
             const vec3 p1 = shared.world_from_anchor.get_translation();
 
-            const auto print_centered = [&](const vec3 position_in_world, const uint32_t color_abgr, const std::string& text) {
+            // All three labels are placed first so the yellow delta can be
+            // hidden when its ink box would run into the initial or current
+            // label (same policy as the rotate protractor's delta label).
+            // Measure bounds are in font space (baseline origin, y up); with
+            // a top-left framebuffer origin the text renderer flips glyph y.
+            const bool top_left = context.scene_view.get_framebuffer_origin() == erhe::math::Framebuffer_origin::top_left;
+            struct Placed_label {
+                bool        valid{false};
+                glm::vec2   print_position{0.0f};
+                glm::vec2   rect_min{0.0f};
+                glm::vec2   rect_max{0.0f};
+                std::string text;
+            };
+            const auto place = [&](const glm::vec2 print_position, std::string text) -> Placed_label {
+                const erhe::ui::Rectangle bounds = text_renderer->measure(text);
+                if (top_left) {
+                    return Placed_label{
+                        true,
+                        print_position,
+                        {print_position.x + bounds.min().x, print_position.y - bounds.max().y},
+                        {print_position.x + bounds.max().x, print_position.y - bounds.min().y},
+                        std::move(text)
+                    };
+                }
+                return Placed_label{
+                    true,
+                    print_position,
+                    {print_position.x + bounds.min().x, print_position.y + bounds.min().y},
+                    {print_position.x + bounds.max().x, print_position.y + bounds.max().y},
+                    std::move(text)
+                };
+            };
+            const auto place_centered = [&](const vec3 position_in_world, std::string text) -> Placed_label {
                 const std::optional<vec3> position_in_window = context.viewport_scene_view->project_to_viewport(position_in_world);
                 if (!position_in_window.has_value()) {
-                    return;
+                    return Placed_label{};
                 }
                 const float width = static_cast<float>(text_renderer->measure(text).size().x);
-                text_renderer->print(vec3{position_in_window.value().x - 0.5f * width, position_in_window.value().y, -0.5f}, color_abgr, text);
+                return place({position_in_window.value().x - 0.5f * width, position_in_window.value().y}, std::move(text));
             };
 
-            print_centered(p0, 0xffffffffu, fmt::format("{:.3f}, {:.3f}, {:.3f}", p0.x, p0.y, p0.z));
-
             const vec3 delta = p1 - p0;
-            print_centered(0.5f * (p0 + p1), 0xff00ffffu, fmt::format("{:.3f}, {:.3f}, {:.3f}", delta.x, delta.y, delta.z));
+            const Placed_label placed_initial = place_centered(p0,                fmt::format("{:.3f}, {:.3f}, {:.3f}", p0.x, p0.y, p0.z));
+            const Placed_label placed_delta   = place_centered(0.5f * (p0 + p1), fmt::format("{:.3f}, {:.3f}, {:.3f}", delta.x, delta.y, delta.z));
 
+            // Current position below the hover text's mesh name, whose anchor
+            // (+50 px x) and 16 px line step are mirrored from
+            // Hover_tool::tool_render(); needs a valid hover entry.
+            Placed_label placed_current;
             const Hover_entry* entry = context.scene_view.get_nearest_hover(
                 context.scene_view.get_pickable_slot_mask(
                     Hover_entry::content_bit | Hover_entry::grid_bit | Hover_entry::rendertarget_bit
                 )
             );
-            if ((entry == nullptr) || !entry->valid || !entry->position.has_value() || (entry->slot == Hover_entry::rendertarget_slot)) {
-                return;
+            if ((entry != nullptr) && entry->valid && entry->position.has_value() && (entry->slot != Hover_entry::rendertarget_slot)) {
+                const std::optional<vec3> name_in_window = context.viewport_scene_view->project_to_viewport(entry->position.value());
+                if (name_in_window.has_value()) {
+                    placed_current = place(
+                        {name_in_window.value().x + 50.0f, name_in_window.value().y + 16.0f},
+                        fmt::format("{:.3f}, {:.3f}, {:.3f}", p1.x, p1.y, p1.z)
+                    );
+                }
             }
-            const std::optional<vec3> name_in_window = context.viewport_scene_view->project_to_viewport(entry->position.value());
-            if (!name_in_window.has_value()) {
-                return;
+
+            const auto overlaps = [](const Placed_label& a, const Placed_label& b) -> bool {
+                constexpr float padding = 2.0f;
+                return
+                    a.valid && b.valid &&
+                    (a.rect_min.x - padding < b.rect_max.x) && (a.rect_max.x + padding > b.rect_min.x) &&
+                    (a.rect_min.y - padding < b.rect_max.y) && (a.rect_max.y + padding > b.rect_min.y);
+            };
+            const bool delta_fits =
+                placed_delta.valid &&
+                !overlaps(placed_delta, placed_initial) &&
+                !overlaps(placed_delta, placed_current);
+
+            if (placed_initial.valid) {
+                text_renderer->print(vec3{placed_initial.print_position, -0.5f}, 0xffffffffu, placed_initial.text);
             }
-            text_renderer->print(
-                vec3{name_in_window.value().x + 50.0f, name_in_window.value().y + 16.0f, -0.5f},
-                0xffffffffu,
-                fmt::format("{:.3f}, {:.3f}, {:.3f}", p1.x, p1.y, p1.z)
-            );
+            if (delta_fits) {
+                text_renderer->print(vec3{placed_delta.print_position, -0.5f}, 0xff00ffffu, placed_delta.text);
+            }
+            if (placed_current.valid) {
+                text_renderer->print(vec3{placed_current.print_position, -0.5f}, 0xffffffffu, placed_current.text);
+            }
             return;
         }
         case Handle_type::e_handle_type_scale_axis:
@@ -1578,37 +1686,71 @@ void Transform_tool::render_hover_preview(const Render_context& context)
     }
 
     if (rotate) {
-        // Rotation plane: circle just outside the ring plus a translucent disc.
-        const int  axis_index = static_cast<int>(get_handle_axis(handle)) - 1;
-        const vec3 side1      = basis[(axis_index + 1) % 3];
-        const vec3 side2      = basis[(axis_index + 2) % 3];
-        const float r = 1.25f * radius;
-
-        constexpr int sector_count = 64;
-        std::vector<erhe::renderer::Line> circle_lines;
-        circle_lines.reserve(sector_count);
-        std::vector<vec3>     disc_positions;
-        std::vector<uint32_t> disc_indices;
-        disc_positions.reserve(sector_count + 1);
-        disc_indices.reserve(3 * sector_count);
-        disc_positions.push_back(center);
-        vec3 previous = center + r * side1;
-        for (int i = 1; i <= sector_count; ++i) {
-            const float theta = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(sector_count);
-            const vec3  point = center + r * std::cos(theta) * side1 + r * std::sin(theta) * side2;
-            circle_lines.push_back({previous, point});
-            disc_positions.push_back(previous);
-            disc_indices.push_back(0);
-            disc_indices.push_back(static_cast<uint32_t>(i));
-            disc_indices.push_back(static_cast<uint32_t>((i % sector_count) + 1));
-            previous = point;
+        // Free (arcball) rotation has no rotation plane to preview.
+        if (handle == Handle::e_handle_rotate_free) {
+            return;
         }
-        line_renderer.set_thickness(-2.0f);
-        line_renderer.set_line_color(color);
-        line_renderer.add_lines(circle_lines);
+        // Hover highlight: a filled low-alpha annulus hugging the hovered
+        // ring - the ring circle widened a small amount inward and outward.
+        // No depth test (x-ray fill) so the band reads at full strength even
+        // where scene content covers the ring. The view-rotate ring's plane
+        // is camera-aligned (perpendicular to the eye-to-anchor direction),
+        // matching its drag.
+        vec3  side1{0.0f};
+        vec3  side2{0.0f};
+        float ring_r = radius;
+        if (handle == Handle::e_handle_rotate_view) {
+            const auto* camera_node = context.get_camera_node();
+            if (camera_node == nullptr) {
+                return;
+            }
+            const vec3 view_dir = normalize(vec3{camera_node->position_in_world()} - center);
+            const vec3 ref      = (std::abs(view_dir.y) < 0.9f) ? vec3{0.0f, 1.0f, 0.0f} : vec3{1.0f, 0.0f, 0.0f};
+            side1  = normalize(cross(view_dir, ref));
+            side2  = normalize(cross(view_dir, side1));
+            ring_r = visualizations->get_view_ring_radius();
+        } else {
+            const int axis_index = static_cast<int>(get_handle_axis(handle)) - 1;
+            side1 = basis[(axis_index + 1) % 3];
+            side2 = basis[(axis_index + 2) % 3];
+        }
 
-        erhe::renderer::Primitive_renderer triangle_renderer = context.get({erhe::graphics::Primitive_type::triangle, 2, true, false});
-        triangle_renderer.add_triangles(mat4{1.0f}, vec4{vec3{color}, 0.10f}, disc_positions, disc_indices);
+        const float half_width = 0.08f * ring_r;
+        const float r_inner    = ring_r - half_width;
+        const float r_outer    = ring_r + half_width;
+        constexpr int sector_count = 64;
+        std::vector<vec3>     band_positions;
+        std::vector<uint32_t> band_indices;
+        band_positions.reserve(2 * sector_count);
+        band_indices.reserve(6 * sector_count);
+        for (int i = 0; i < sector_count; ++i) {
+            const float theta     = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(sector_count);
+            const vec3  direction = std::cos(theta) * side1 + std::sin(theta) * side2;
+            band_positions.push_back(center + r_inner * direction);
+            band_positions.push_back(center + r_outer * direction);
+        }
+        for (int i = 0; i < sector_count; ++i) {
+            const uint32_t inner_0 = static_cast<uint32_t>(2 * i);
+            const uint32_t outer_0 = inner_0 + 1;
+            const uint32_t inner_1 = static_cast<uint32_t>(2 * ((i + 1) % sector_count));
+            const uint32_t outer_1 = inner_1 + 1;
+            band_indices.push_back(inner_0);
+            band_indices.push_back(outer_0);
+            band_indices.push_back(outer_1);
+            band_indices.push_back(inner_0);
+            band_indices.push_back(outer_1);
+            band_indices.push_back(inner_1);
+        }
+        erhe::renderer::Primitive_renderer triangle_renderer = context.get(
+            erhe::renderer::Debug_renderer_config{
+                .primitive_type    = erhe::graphics::Primitive_type::triangle,
+                .stencil_reference = 2,
+                .draw_visible      = true,
+                .draw_hidden       = true,
+                .xray              = true
+            }
+        );
+        triangle_renderer.add_triangles(mat4{1.0f}, vec4{vec3{color}, 0.2f}, band_positions, band_indices);
     }
 }
 

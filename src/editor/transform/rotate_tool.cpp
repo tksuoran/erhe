@@ -2,6 +2,7 @@
 #include "windows/property_editor.hpp"
 
 #include "app_context.hpp"
+#include "app_settings.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "editor_log.hpp"
 #include "input_state.hpp"
@@ -10,6 +11,7 @@
 #include "scene/scene_view.hpp"
 #include "tools/tools.hpp"
 #include "transform/handle_enums.hpp"
+#include "transform/handle_visualizations.hpp"
 #include "transform/transform_tool.hpp"
 
 #include "erhe_math/math_util.hpp"
@@ -53,6 +55,15 @@ void Rotate_tool::imgui(Property_editor& property_editor)
     //auto& shared = get_shared();
     p.push_group("Rotate Tool", ImGuiTreeNodeFlags_DefaultOpen);
     p.add_entry("Snap Enable", [this]() { ImGui::Checkbox("##", &get_shared().settings.rotate_snap_enable); });
+    // Persistent preference (Transform_tool_config); touch() schedules the autosave.
+    p.add_entry("Snap Absolute", [this]() {
+        if (ImGui::Checkbox("##", &m_context.editor_settings->transform_tool.rotate_snap_absolute)) {
+            m_context.app_settings->settings_store().touch();
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Snap the resulting absolute angle around the rotation axis to snap multiples; when off, snap the drag delta instead");
+        }
+    });
     p.add_entry("Snap Value", [this]() {
         const float snap_values[] = {  5.0f, 10.0f, 15.0f, 20.0f, 30.0f, 45.0f, 60.0f, 90.0f };
         const char* snap_items [] = { "5",  "10",  "15",  "20",  "30",  "45",  "60",  "90" };
@@ -83,13 +94,43 @@ auto Rotate_tool::begin(unsigned int axis_mask, Scene_view* scene_view) -> bool
     m_axis_mask     = axis_mask;
     m_active        = true;
     m_current_angle = 0.0f;
+    m_view_mode     = (axis_mask == Axis_mask::view);
+    m_free_mode     = (axis_mask == Axis_mask::free);
 
-    //if (is_rotate_active()) {
     auto& shared = get_shared();
-    const bool world        = !shared.settings.use_anchor_orientation();
-    const vec3 n            = get_plane_normal(world);
-    const vec3 side         = get_plane_side  (world);
-    const vec3 center       = shared.world_from_anchor_initial_state.get_translation();
+    const vec3 center = shared.world_from_anchor_initial_state.get_translation();
+    m_center_of_rotation = center;
+
+    if (m_free_mode) {
+        // Incremental screen-plane trackball: state primed by the first
+        // update_arcball() call.
+        const Handle_visualizations* visualizations = shared.get_visualizations();
+        if (visualizations == nullptr) {
+            return false;
+        }
+        m_arcball_radius     = visualizations->get_gizmo_radius();
+        m_arcball_rotation   = glm::quat{1.0f, 0.0f, 0.0f, 0.0f};
+        m_arcball_prev_valid = false;
+        return true;
+    }
+
+    vec3 n;
+    vec3 side;
+    if (m_view_mode) {
+        // Rotation around the viewing axis (the camera-aligned outer ring):
+        // plane normal = eye-to-anchor direction, side = any perpendicular.
+        const std::optional<vec3> origin_opt = scene_view->get_control_ray_origin_in_world();
+        if (!origin_opt.has_value()) {
+            return false;
+        }
+        n = normalize(center - origin_opt.value());
+        const vec3 ref = (std::abs(n.y) < 0.9f) ? vec3{0.0f, 1.0f, 0.0f} : vec3{1.0f, 0.0f, 0.0f};
+        side = normalize(cross(n, ref));
+    } else {
+        const bool world = !shared.settings.use_anchor_orientation();
+        n    = get_plane_normal(world);
+        side = get_plane_side  (world);
+    }
     const auto intersection = project_pointer_to_plane(scene_view, n, center);
 
     if (!intersection.has_value()) {
@@ -99,10 +140,78 @@ auto Rotate_tool::begin(unsigned int axis_mask, Scene_view* scene_view) -> bool
 
     m_normal               = n;
     m_reference_direction  = normalize(intersection.value() - center);
-    m_center_of_rotation   = center;
+    m_axis_side            = side;
     m_start_rotation_angle = erhe::math::angle_of_rotation<float>(m_reference_direction, n, side);
 
     return true;
+}
+
+// Incremental screen-plane trackball: each frame, the pointer's displacement
+// in the view plane through the rotation center adds a rotation about the
+// in-plane axis perpendicular to that motion, with angle = distance / gizmo
+// radius, accumulated into a quaternion. Mapping increments instead of a
+// fixed start-to-current pair keeps the rotation unbounded - any ball-surface
+// mapping saturates once the pointer leaves the sphere, because the angle
+// between two mapped vectors can never exceed 180 degrees.
+auto Rotate_tool::update_arcball(Scene_view* scene_view) -> bool
+{
+    const auto origin_opt    = scene_view->get_control_ray_origin_in_world();
+    const auto direction_opt = scene_view->get_control_ray_direction_in_world();
+    if (!origin_opt.has_value() || !direction_opt.has_value()) {
+        return false;
+    }
+    const vec3  o       = origin_opt.value();
+    const vec3  d       = normalize(direction_opt.value());
+    const vec3  to_eye  = o - m_center_of_rotation;
+    const float eye_len = glm::length(to_eye);
+    if (!(eye_len > 1e-6f)) {
+        return false;
+    }
+    const vec3  n     = to_eye / eye_len;                       // view plane normal (toward the eye)
+    const float denom = glm::dot(d, n);
+    if (std::abs(denom) < 1e-6f) {
+        return false;
+    }
+    const float t = glm::dot(m_center_of_rotation - o, n) / denom;
+    if (t <= 0.0f) {
+        return false;
+    }
+    const vec3 planar = o + t * d - m_center_of_rotation;       // pointer in the view plane, from the center
+
+    if (!m_arcball_prev_valid) {
+        m_arcball_prev       = planar;
+        m_arcball_prev_valid = true;
+        return true;
+    }
+
+    const vec3  dp  = planar - m_arcball_prev;
+    const float len = glm::length(dp);
+    if (len > 1e-9f) {
+        // cross(n, dp) has length |dp| (dp lies in the plane normal to n),
+        // so dividing by len normalizes it. The sign makes the sphere point
+        // under the pointer follow the pointer's motion.
+        const vec3  axis  = cross(n, dp) / len;
+        const float angle = len / m_arcball_radius;
+        m_arcball_rotation = glm::angleAxis(angle, axis) * m_arcball_rotation;
+        m_arcball_prev     = planar;
+        m_current_angle += angle;
+    }
+    m_context.transform_tool->adjust_rotation(m_center_of_rotation, m_arcball_rotation);
+    return true;
+}
+
+// The anchor's twist about the rotation axis at drag start (swing-twist
+// decomposition), wrapped to (-pi, pi]. Used for the protractor angle labels
+// and the axis-absolute frame, and as the absolute-snap bias.
+auto Rotate_tool::initial_twist() const -> float
+{
+    const float n_length = glm::length(m_normal);
+    const vec3  axis     = (n_length > 1e-6f) ? m_normal / n_length : vec3{0.0f, 0.0f, 1.0f};
+    const glm::quat q0   = get_shared().world_from_anchor_initial_state.get_rotation();
+    float twist = 2.0f * std::atan2(glm::dot(vec3{q0.x, q0.y, q0.z}, axis), q0.w);
+    if (twist >  glm::pi<float>()) { twist -= glm::two_pi<float>(); }
+    if (twist < -glm::pi<float>()) { twist += glm::two_pi<float>(); }
+    return twist;
 }
 
 auto Rotate_tool::snap(const float angle_radians) const -> float
@@ -116,7 +225,11 @@ auto Rotate_tool::snap(const float angle_radians) const -> float
     }
 
     const float snap = glm::radians<float>(shared.settings.rotate_snap);
-    return std::floor((angle_radians + snap * 0.5f) / snap) * snap;
+    // Absolute snapping lands the resulting absolute angle around the axis
+    // (initial twist + delta) on snap multiples; relative snapping snaps the
+    // drag delta itself, preserving any initial off-grid angle.
+    const float bias = m_context.editor_settings->transform_tool.rotate_snap_absolute ? initial_twist() : 0.0f;
+    return std::floor((bias + angle_radians + snap * 0.5f) / snap) * snap - bias;
 }
 
 auto Rotate_tool::update(Scene_view* scene_view) -> bool
@@ -125,6 +238,10 @@ auto Rotate_tool::update(Scene_view* scene_view) -> bool
 
     if (scene_view == nullptr) {
         return false;
+    }
+
+    if (m_free_mode) {
+        return update_arcball(scene_view);
     }
 
     bool ready_to_rotate = update_circle_around(scene_view);
@@ -173,7 +290,9 @@ void Rotate_tool::update_final()
     const vec3  q_                     = normalize                           (m_intersection.value() - m_center_of_rotation);
     const float angle                  = erhe::math::angle_of_rotation<float>(q_, m_normal, m_reference_direction);
     const float snapped_angle          = snap                                (angle);
-    const vec3  rotation_axis_in_world = get_axis_direction                  ();
+    // View-mode rotation happens about the viewing axis, which is not a
+    // basis axis (get_axis_direction() has no mapping for it).
+    const vec3  rotation_axis_in_world = m_view_mode ? m_normal : get_axis_direction();
     const mat4  rotation               = erhe::math::create_rotation<float>  (snapped_angle, rotation_axis_in_world);
 
     m_current_angle = angle;
@@ -186,6 +305,10 @@ void Rotate_tool::render(const Render_context& context)
     if (!is_active()) {
         return;
     }
+    // Arcball rotation has no single rotation plane - no protractor.
+    if (m_free_mode) {
+        return;
+    }
 
     const auto* camera_node = context.get_camera_node();
     if (camera_node == nullptr) {
@@ -193,15 +316,62 @@ void Rotate_tool::render(const Render_context& context)
     }
 
     const auto& shared = get_shared();
-    const vec3  p                 = m_center_of_rotation;
-    const vec3  n                 = m_normal;
-    const vec3  side1             = m_reference_direction;
-    const vec3  side2             = normalize(cross(n, side1));
-    const vec3  position_in_world = p;//node.position_in_world();
-    const float distance          = length(position_in_world - vec3{camera_node->position_in_world()});
-    const float scale             = context.app_context.editor_settings->gizmo_scale * distance / 100.0f;
-    const float r1                = scale * context.app_context.editor_settings->transform_tool.rotate_ring_size;
+    const vec3  p = m_center_of_rotation;
+    const vec3  n = m_normal;
+
+    // The anchor's twist about the rotation axis at drag start; used for the
+    // angle labels in both anchoring modes and for the protractor frame in
+    // axis-absolute mode.
+    const float n_length = glm::length(n);
+    const vec3  axis     = (n_length > 1e-6f) ? n / n_length : vec3{0.0f, 0.0f, 1.0f};
+    const float initial  = initial_twist();
+
+    // Protractor frame: drag-relative anchors theta = 0 (the initial spoke)
+    // to the pointer position at drag start; axis-absolute anchors theta = 0
+    // to the active coordinate space's plane side, placing the initial spoke
+    // at the anchor's absolute twist angle around the rotation axis. The
+    // drag delta amount is computed identically in both modes.
+    const bool axis_absolute =
+        context.app_context.editor_settings->transform_tool.rotate_sector_anchoring == Rotate_sector_anchoring::axis_absolute;
+    vec3 absolute_side = m_axis_side;
+    if (axis_absolute && shared.settings.use_anchor_orientation()) {
+        // In local space the plane side is the anchor's own rotated basis
+        // and already contains the twist; placing the initial spoke at the
+        // twist angle on top of that would show the rotation twice. Untwist
+        // the frame so theta 0 is the anchor's zero-rotation direction and
+        // the spoke at `initial` lands on the anchor's actual side (this
+        // also keeps the tick grid fixed across successive drags).
+        absolute_side = glm::angleAxis(-initial, axis) * m_axis_side;
+    }
+    const vec3  side1 = axis_absolute ? absolute_side : m_reference_direction;
+    const vec3  side2 = normalize(cross(n, side1));
+    const float a0    = axis_absolute ? initial : 0.0f;
+
+
+    // Same world-per-gizmo-unit scale as the handle rendering, so the
+    // protractor ring radius matches the handles placed at it (the in-plane
+    // translate arrows start at the ring during the drag).
+    const Handle_visualizations* visualizations = shared.get_visualizations();
+    const float scale = (visualizations != nullptr)
+        ? visualizations->get_view_scale()
+        : context.app_context.editor_settings->gizmo_scale * length(p - vec3{camera_node->position_in_world()}) / 100.0f;
+    const float r1 = scale * context.app_context.editor_settings->transform_tool.rotate_ring_size;
     const float snapped_angle     = snap(m_current_angle);
+    const float a1                = a0 + snapped_angle;
+
+    // Sector membership in the protractor frame: the swept sector runs from
+    // the initial spoke (a0) by the snapped drag angle.
+    const auto wrap_pi = [](float a) -> float {
+        while (a >  glm::pi<float>()) { a -= glm::two_pi<float>(); }
+        while (a < -glm::pi<float>()) { a += glm::two_pi<float>(); }
+        return a;
+    };
+    const auto in_sector = [&wrap_pi, a0, snapped_angle](const float theta) -> bool {
+        const float d = wrap_pi(theta - a0);
+        return (snapped_angle >= 0.0f)
+            ? (d >= 0.0f) && (d <= snapped_angle)
+            : (d >= snapped_angle) && (d <= 0.0f);
+    };
 
     const vec4     axis_color = get_axis_color(m_axis_mask);
     constexpr vec4 yellow{1.0f, 1.0f, 0.0f, 1.0f};
@@ -225,52 +395,51 @@ void Rotate_tool::render(const Render_context& context)
     );
 
     {
-        const bool snap_enabled = shared.settings.rotate_snap_enable || m_context.input_state->control;
-        const int sector_count = snap_enabled
-            ? static_cast<int>(glm::two_pi<float>() / glm::radians(shared.settings.rotate_snap))
-            : 80;
-
-        // Step markers: yellow inside the swept sector, axis color outside.
-        // The i == 0 marker is the full center spoke - the initial angle
-        // indicator - in the axis color like the current-angle indicator.
-        std::vector<erhe::renderer::Line> inside_ticks;
-        std::vector<erhe::renderer::Line> outside_ticks;
-        for (int i = 0; i < sector_count; ++i) {
-            const float rel   = static_cast<float>(i) / static_cast<float>(sector_count);
-            const float theta = rel * glm::two_pi<float>();
-            const bool  first = (i == 0);
-            const bool  major = (i % 10 == 0);
-            // Tick inner radii as fractions of the ring radius so the marks
-            // scale with the configurable ring size (fractions chosen to
-            // match the original look at ring size 6).
-            const float r0    =
-                first
-                    ? 0.0f
-                    : major
-                        ? r1 * (5.0f / 6.0f)
-                        : r1 * (5.5f / 6.0f);
-
-            const vec3 p0 = p + r0 * std::cos(theta) * side1 + r0 * std::sin(theta) * side2;
-            const vec3 p1 = p + r1 * std::cos(theta) * side1 + r1 * std::sin(theta) * side2;
-
-            if (first) {
-                line_renderer.set_thickness(axis_line_width);
-                line_renderer.set_line_color(axis_color);
-                line_renderer.add_lines( {{ p0, p1 }} );
-                continue;
-            }
-            const float theta_signed = (theta > glm::pi<float>()) ? theta - glm::two_pi<float>() : theta;
-            const bool  inside       = (snapped_angle >= 0.0f)
-                ? (theta_signed >= 0.0f) && (theta_signed <= snapped_angle)
-                : (theta_signed >= snapped_angle) && (theta_signed <= 0.0f);
-            (inside ? inside_ticks : outside_ticks).push_back({p0, p1});
+        // Step markers on a fixed grid of the protractor frame: small ticks
+        // every 5 deg, medium every 10 deg, major every 45 deg (inner radii
+        // as fractions of the ring radius so the marks scale with the
+        // configurable ring size). The small / medium ticks are thinner than
+        // the spokes and the ring so they stay background reference marks;
+        // the majors keep the full spoke / sector widths. Yellow inside the
+        // swept sector, axis color outside.
+        constexpr float tick_line_width        = -0.71f;
+        constexpr float sector_tick_line_width = -1.0f;
+        std::vector<erhe::renderer::Line> inside_major_ticks;
+        std::vector<erhe::renderer::Line> inside_minor_ticks;
+        std::vector<erhe::renderer::Line> outside_major_ticks;
+        std::vector<erhe::renderer::Line> outside_minor_ticks;
+        constexpr int tick_count = 72;  // one tick per 5 deg
+        for (int i = 0; i < tick_count; ++i) {
+            const float theta  = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(tick_count);
+            const bool  major  = (i % 9 == 0);  // every 45 deg
+            const bool  medium = (i % 2 == 0);  // every 10 deg
+            const float r0     = major ? r1 * (5.0f / 6.0f) : medium ? r1 * 0.89f : r1 * 0.94f;
+            const vec3  p0     = p + r0 * std::cos(theta) * side1 + r0 * std::sin(theta) * side2;
+            const vec3  p1     = p + r1 * std::cos(theta) * side1 + r1 * std::sin(theta) * side2;
+            const bool  inside = in_sector(theta);
+            auto& bucket = inside
+                ? (major ? inside_major_ticks  : inside_minor_ticks)
+                : (major ? outside_major_ticks : outside_minor_ticks);
+            bucket.push_back({p0, p1});
         }
-        line_renderer.set_thickness(axis_line_width);
         line_renderer.set_line_color(axis_color);
-        line_renderer.add_lines(outside_ticks);
-        line_renderer.set_thickness(sector_line_width);
+        line_renderer.set_thickness(tick_line_width);
+        line_renderer.add_lines(outside_minor_ticks);
+        line_renderer.set_thickness(axis_line_width);
+        line_renderer.add_lines(outside_major_ticks);
         line_renderer.set_line_color(yellow);
-        line_renderer.add_lines(inside_ticks);
+        line_renderer.set_thickness(sector_tick_line_width);
+        line_renderer.add_lines(inside_minor_ticks);
+        line_renderer.set_thickness(sector_line_width);
+        line_renderer.add_lines(inside_major_ticks);
+
+        // Initial-angle indicator: full spoke from the center in yellow -
+        // the sector boundary / delta color, like the current-angle
+        // indicator drawn after the ring.
+        const vec3 initial_dir = std::cos(a0) * side1 + std::sin(a0) * side2;
+        line_renderer.set_thickness(axis_line_width);
+        line_renderer.set_line_color(yellow);
+        line_renderer.add_lines({{ p, p + r1 * initial_dir }});
     }
 
     // Circle (ring): the part inside the swept sector - the sector's outer
@@ -288,12 +457,8 @@ void Rotate_tool::render(const Render_context& context)
             const float theta1 = glm::two_pi<float>() * static_cast<float>(i + 1) / static_cast<float>(segment_count);
             const vec3  p0     = p + r1 * std::cos(theta0) * side1 + r1 * std::sin(theta0) * side2;
             const vec3  p1     = p + r1 * std::cos(theta1) * side1 + r1 * std::sin(theta1) * side2;
-            const float mid        = 0.5f * (theta0 + theta1);
-            const float mid_signed = (mid > glm::pi<float>()) ? mid - glm::two_pi<float>() : mid;
-            const bool  inside     = (snapped_angle >= 0.0f)
-                ? (mid_signed >= 0.0f) && (mid_signed <= snapped_angle)
-                : (mid_signed >= snapped_angle) && (mid_signed <= 0.0f);
-            (inside ? inside_segments : outside_segments).push_back({p0, p1});
+            const float mid = 0.5f * (theta0 + theta1);
+            (in_sector(mid) ? inside_segments : outside_segments).push_back({p0, p1});
         }
         line_renderer.set_thickness(axis_line_width);
         line_renderer.set_line_color(axis_color);
@@ -303,7 +468,7 @@ void Rotate_tool::render(const Render_context& context)
         line_renderer.add_lines(inside_segments);
     }
 
-    const auto snapped = p + r1 * std::cos(snapped_angle) * side1 + r1 * std::sin(snapped_angle) * side2;
+    const auto snapped = p + r1 * std::cos(a1) * side1 + r1 * std::sin(a1) * side2;
 
     // Swept-rotation sector fill from the initial (reference) direction to
     // the current snapped angle, rooted at the rotation center. Low alpha so
@@ -318,7 +483,7 @@ void Rotate_tool::render(const Render_context& context)
         sector_indices.reserve(3 * sector_count);
         sector_positions.push_back(p);
         for (int i = 0; i <= sector_count; ++i) {
-            const float theta = snapped_angle * static_cast<float>(i) / static_cast<float>(sector_count);
+            const float theta = a0 + snapped_angle * static_cast<float>(i) / static_cast<float>(sector_count);
             sector_positions.push_back(p + r1 * std::cos(theta) * side1 + r1 * std::sin(theta) * side2);
         }
         for (int i = 0; i < sector_count; ++i) {
@@ -332,8 +497,16 @@ void Rotate_tool::render(const Render_context& context)
         triangle_renderer.add_triangles(mat4{1.0f}, vec4{1.0f, 1.0f, 0.0f, 0.14f}, sector_positions, sector_indices);
     }
 
+    // Current-angle indicator spoke in yellow (sector boundary / delta
+    // color), and the rotation axis itself through the center in the
+    // rotation-axis color - two segments meeting at the rotation center
+    // with alpha fading to zero there, so the axis reads at its ends
+    // without covering the protractor center.
     line_renderer.set_thickness(axis_line_width);
-    line_renderer.add_lines(axis_color, { { p, snapped } } );
+    line_renderer.add_lines(yellow, { { p, snapped } } );
+    const vec4 axis_clear{vec3{axis_color}, 0.0f};
+    line_renderer.add_line(axis_color, axis_line_width, p - r1 * axis, axis_clear, axis_line_width, p);
+    line_renderer.add_line(axis_clear, axis_line_width, p,             axis_color, axis_line_width, p + r1 * axis);
 
     // Angle readout at the ring: the anchor's twist about the rotation axis
     // at drag start (swing-twist decomposition), printed just outside the
@@ -344,15 +517,6 @@ void Rotate_tool::render(const Render_context& context)
     if ((text_renderer == nullptr) || !text_renderer->config.enabled || (context.camera == nullptr)) {
         return;
     }
-    const float n_length = glm::length(n);
-    if (!(n_length > 1e-6f)) {
-        return;
-    }
-    const vec3      axis    = n / n_length;
-    const glm::quat q0      = shared.world_from_anchor_initial_state.get_rotation();
-    float           initial = 2.0f * std::atan2(glm::dot(vec3{q0.x, q0.y, q0.z}, axis), q0.w);
-    if (initial >  glm::pi<float>()) { initial -= glm::two_pi<float>(); }
-    if (initial < -glm::pi<float>()) { initial += glm::two_pi<float>(); }
     const float current = initial + snapped_angle;
 
     const auto projection_transforms = context.camera->projection_transforms(
@@ -366,15 +530,15 @@ void Rotate_tool::render(const Render_context& context)
     constexpr uint32_t white_abgr  = 0xffffffffu;
     constexpr uint32_t yellow_abgr = 0xff00ffffu;
     const float label_radius   = 1.15f * r1;
-    const float bisector_angle = 0.5f * snapped_angle;
+    const float bisector_angle = a0 + 0.5f * snapped_angle;
 
     const auto project = [&](const vec3 position_in_world) -> vec3 {
         return context.viewport.project_to_screen_space(
             clip_from_world, position_in_world, 0.0f, 1.0f, context.scene_view.get_conventions()
         );
     };
-    const vec3 initial_anchor = project(p + label_radius * side1);
-    const vec3 current_anchor = project(p + label_radius * (std::cos(snapped_angle)  * side1 + std::sin(snapped_angle)  * side2));
+    const vec3 initial_anchor = project(p + label_radius * (std::cos(a0)             * side1 + std::sin(a0)             * side2));
+    const vec3 current_anchor = project(p + label_radius * (std::cos(a1)             * side1 + std::sin(a1)             * side2));
     const vec3 delta_anchor   = project(p + label_radius * (std::cos(bisector_angle) * side1 + std::sin(bisector_angle) * side2));
 
     const std::string initial_text = fmt::format("{:.1f} deg", glm::degrees(initial));
@@ -394,11 +558,15 @@ void Rotate_tool::render(const Render_context& context)
         glm::vec2 rect_min;
         glm::vec2 rect_max;
     };
-    // vertical_align: -1 = text above the anchor, +1 = below, 0 = baseline on the anchor
+    // vertical_align: -1 = text above the anchor, +1 = below, 0 = ink box
+    // centered on the anchor (not baseline-on-anchor: a baseline placement
+    // hangs most of the text above the anchor, so it crowds whatever is
+    // above it while leaving unused room below).
     const auto place = [&](const vec3& anchor, const erhe::ui::Rectangle& bounds, const int vertical_align) -> Placed_label {
-        const float x_print = anchor.x - 0.5f * bounds.size().x;
-        float       y_print = anchor.y;
+        const float x_print  = anchor.x - 0.5f * bounds.size().x;
+        const float y_center = 0.5f * (bounds.min().y + bounds.max().y);
         if (top_left) {
+            float y_print = anchor.y + y_center;
             if (vertical_align < 0) { y_print = anchor.y + bounds.min().y; }
             if (vertical_align > 0) { y_print = anchor.y + bounds.max().y; }
             return Placed_label{
@@ -407,6 +575,7 @@ void Rotate_tool::render(const Render_context& context)
                 {x_print + bounds.max().x, y_print - bounds.min().y}
             };
         }
+        float y_print = anchor.y - y_center;
         if (vertical_align < 0) { y_print = anchor.y - bounds.min().y; }
         if (vertical_align > 0) { y_print = anchor.y - bounds.max().y; }
         return Placed_label{
@@ -424,7 +593,8 @@ void Rotate_tool::render(const Render_context& context)
     const Placed_label placed_delta   = place(delta_anchor,   text_renderer->measure(delta_text),   0);
 
     // The delta label is skipped when it cannot be shown without running
-    // into the initial or current label.
+    // into the initial or current label. The test is a rect intersection, so
+    // horizontal separation counts as fitting just like vertical separation.
     const auto overlaps = [](const Placed_label& a, const Placed_label& b) -> bool {
         constexpr float padding = 2.0f;
         return

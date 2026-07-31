@@ -36,7 +36,6 @@ static constexpr const char* c_transform_reference_mode_strings[] = {
 class Transform_tool_settings
 {
 public:
-    bool                     cast_rays            {false};
     bool                     show_translate       {true};
     bool                     show_rotate          {false};
     bool                     show_scale           {false};

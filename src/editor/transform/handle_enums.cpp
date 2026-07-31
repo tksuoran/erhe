@@ -131,6 +131,8 @@ auto get_handle_tool(const Handle handle) -> Handle_tool
         case Handle::e_handle_box_scale_neg_y: return Handle_tool::e_handle_tool_scale;
         case Handle::e_handle_box_scale_pos_z: return Handle_tool::e_handle_tool_scale;
         case Handle::e_handle_box_scale_neg_z: return Handle_tool::e_handle_tool_scale;
+        case Handle::e_handle_rotate_view:     return Handle_tool::e_handle_tool_rotate;
+        case Handle::e_handle_rotate_free:     return Handle_tool::e_handle_tool_rotate;
         case Handle::e_handle_none:            return Handle_tool::e_handle_tool_none;
         default: {
             ERHE_FATAL("bad handle %04x", static_cast<unsigned int>(handle));
@@ -167,6 +169,8 @@ auto get_handle_type(const Handle handle) -> Handle_type
         case Handle::e_handle_box_scale_neg_y: return Handle_type::e_handle_type_box_scale;
         case Handle::e_handle_box_scale_pos_z: return Handle_type::e_handle_type_box_scale;
         case Handle::e_handle_box_scale_neg_z: return Handle_type::e_handle_type_box_scale;
+        case Handle::e_handle_rotate_view:     return Handle_type::e_handle_type_rotate;
+        case Handle::e_handle_rotate_free:     return Handle_type::e_handle_type_rotate;
         case Handle::e_handle_none:            return Handle_type::e_handle_type_none;
         default: {
             ERHE_FATAL("bad handle %04x", static_cast<unsigned int>(handle));
@@ -203,6 +207,8 @@ auto get_axis_mask(const Handle handle) -> unsigned int
         case Handle::e_handle_box_scale_neg_y: return Axis_mask::y;
         case Handle::e_handle_box_scale_pos_z: return Axis_mask::z;
         case Handle::e_handle_box_scale_neg_z: return Axis_mask::z;
+        case Handle::e_handle_rotate_view:     return Axis_mask::view;
+        case Handle::e_handle_rotate_free:     return Axis_mask::free;
         case Handle::e_handle_none:            return 0;
         default: {
             ERHE_FATAL("bad handle %04x", static_cast<unsigned int>(handle));
@@ -239,6 +245,8 @@ auto c_str(const Handle handle) -> const char*
         case Handle::e_handle_box_scale_neg_y: return "Box Scale -Y";
         case Handle::e_handle_box_scale_pos_z: return "Box Scale +Z";
         case Handle::e_handle_box_scale_neg_z: return "Box Scale -Z";
+        case Handle::e_handle_rotate_view    : return "Rotate View";
+        case Handle::e_handle_rotate_free    : return "Rotate Free";
         default: return "?";
     };
 }

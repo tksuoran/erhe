@@ -44,6 +44,11 @@ public:
     // using the view-dependent scale applied to the handles. Scale_tool uses this
     // to normalize the uniform-scale drag displacement.
     [[nodiscard]] auto get_gizmo_radius() const -> float;
+    // World units per gizmo unit (distance + perspective scaled). The rotate
+    // protractor uses this too, so its ring and the handles agree on radii.
+    [[nodiscard]] auto get_view_scale  () const -> float;
+    // World-space radius of the camera-aligned view-rotate ring.
+    [[nodiscard]] auto get_view_ring_radius() const -> float;
 
     void viewport_toolbar ();
     void update_for_view  (Scene_view* scene_view);
