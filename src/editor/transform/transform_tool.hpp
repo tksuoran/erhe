@@ -217,6 +217,18 @@ public:
     // For Handle_visualizations
     [[nodiscard]] auto get_active_handle  () const -> Handle;
     [[nodiscard]] auto get_hover_handle   () const -> Handle;
+    // World-space point on the hovered gizmo handle (analytic pick or
+    // box-face hit), or nullopt when no handle is hovered. The gizmo has
+    // no meshes, so this is how non-slot consumers (the XR controller
+    // ray) learn where the ray meets the gizmo.
+    [[nodiscard]] auto get_hover_handle_position_in_world() const -> std::optional<glm::vec3>;
+    // Where the control ray enters the rotation sphere this frame (clamped
+    // to the ray origin when starting inside), or nullopt when it misses.
+    // The XR controller ray recolors from this point onward.
+    [[nodiscard]] auto get_ray_sphere_entry_position_in_world() const -> std::optional<glm::vec3>;
+    // First crossing of any gizmo axis plane inside the rotation sphere,
+    // or nullopt. The XR controller ray darkens from this point onward.
+    [[nodiscard]] auto get_ray_sphere_plane_crossing_position_in_world() const -> std::optional<glm::vec3>;
 
     void touch();
     void record_transform_operation();
@@ -329,6 +341,12 @@ private:
     bool                                m_box_face_hover_active   {false};
     // World-space grab point from the analytic handle pick (Handle_visualizations::pick).
     glm::vec3                           m_pick_position          {0.0f};
+    // Control-ray intersections with the rotation sphere this frame
+    // (independent of the handle pick): the XR controller ray recolors at
+    // the entry and stops at the exit when no visible handle is in front.
+    std::optional<glm::vec3>            m_ray_sphere_entry       {};
+    std::optional<glm::vec3>            m_ray_sphere_exit        {};
+    std::optional<glm::vec3>            m_ray_sphere_plane_crossing{};
     bool                                m_pick_active            {false};
     std::shared_ptr<erhe::scene::Node>  m_tool_node;
     Subtool*                            m_hover_tool      {nullptr};

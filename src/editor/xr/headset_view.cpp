@@ -26,6 +26,7 @@
 #include "scene/scene_settings_resolve.hpp"
 #include "time.hpp"
 #include "tools/tools.hpp"
+#include "transform/transform_tool.hpp"
 #include "xr/controller_visualization.hpp"
 #include "xr/hand_tracker.hpp"
 
@@ -365,6 +366,113 @@ void Headset_view::render(const Render_context& render_context)
             : position + trigger_value * direction;
 
         using namespace erhe::utility;
+
+        // Tool / rendertarget hover terminates the ray: one solid line from
+        // the controller to the hit, nothing drawn past it. "Tool" is the
+        // tool_slot hover (tool-scene meshes) or the transform gizmo's
+        // analytic handle pick - the gizmo has no meshes, so it never
+        // appears in the hover slots. When several of these are hovered at
+        // once, the nearest along the ray wins. Content / grid / empty
+        // hovers keep the two-segment presentation below (bright to the
+        // hit, dim continuation past it).
+        struct Ray_stop {
+            float     t;
+            glm::vec4 color;
+            glm::vec3 position;
+            int       kind;
+        };
+        constexpr glm::vec4 tool_ray_color        {0.8f, 0.8f, 0.8f, 1.0f}; // light gray
+        constexpr glm::vec4 rendertarget_ray_color{0.6f, 0.8f, 1.0f, 1.0f}; // light blue
+        std::optional<Ray_stop> ray_stop;
+        const auto consider_ray_stop = [&](const std::optional<glm::vec3>& stop_position, const glm::vec4& color, const int kind) {
+            if (!stop_position.has_value()) {
+                return;
+            }
+            const float t = glm::dot(stop_position.value() - position, direction);
+            if (t <= 0.0f) {
+                return;
+            }
+            if (!ray_stop.has_value() || (t < ray_stop->t)) {
+                ray_stop = Ray_stop{t, color, stop_position.value(), kind};
+            }
+        };
+        const Hover_entry& tool_entry         = get_hover(Hover_entry::tool_slot);
+        const Hover_entry& rendertarget_entry = get_hover(Hover_entry::rendertarget_slot);
+        if (tool_entry.valid) {
+            consider_ray_stop(tool_entry.position, tool_ray_color, 0);
+        }
+        if (m_context.transform_tool != nullptr) {
+            consider_ray_stop(m_context.transform_tool->get_hover_handle_position_in_world(), tool_ray_color, 1);
+        }
+        if (rendertarget_entry.valid) {
+            consider_ray_stop(rendertarget_entry.position, rendertarget_ray_color, 2);
+        }
+
+        if (ray_stop.has_value()) {
+            // X-ray bucket: the ray to a tool handle / rendertarget must stay
+            // light all the way to the stop point. The regular bucket's
+            // hidden pass dims the occluded portion, which reads as the ray
+            // "turning dark at the mesh surface" when the handle is behind
+            // scene geometry (rotate rings wrap around the object).
+            erhe::renderer::Primitive_renderer xray_line_renderer = render_context.get(
+                erhe::renderer::Debug_renderer_config{
+                    .primitive_type    = erhe::graphics::Primitive_type::line,
+                    .stencil_reference = 2,
+                    .draw_visible      = true,
+                    .draw_hidden       = true,
+                    .xray              = true
+                }
+            );
+            xray_line_renderer.set_thickness(4.0f);
+
+            // Inside the rotation sphere the ray turns cyan from the entry
+            // point (whether the stop is the sphere exit or a handle hit
+            // beyond the entry), and darkens to dark cyan after crossing
+            // the first gizmo axis plane (shared by the translate planes
+            // and the rotate rings).
+            constexpr glm::vec4 sphere_ray_color     {0.0f, 1.0f, 1.0f, 1.0f}; // cyan
+            constexpr glm::vec4 crossed_plane_color  {0.0f, 0.5f, 0.5f, 1.0f}; // dark cyan
+            const std::optional<glm::vec3> sphere_entry = (m_context.transform_tool != nullptr)
+                ? m_context.transform_tool->get_ray_sphere_entry_position_in_world()
+                : std::nullopt;
+            const std::optional<glm::vec3> plane_crossing = (m_context.transform_tool != nullptr)
+                ? m_context.transform_tool->get_ray_sphere_plane_crossing_position_in_world()
+                : std::nullopt;
+            const float entry_t = sphere_entry.has_value()
+                ? glm::dot(sphere_entry.value() - position, direction)
+                : std::numeric_limits<float>::max();
+            if (sphere_entry.has_value() && (entry_t >= 0.0f) && (entry_t < ray_stop->t)) {
+                xray_line_renderer.add_line(
+                    ray_stop->color, 0.0f, position,
+                    ray_stop->color, 2.0f, sphere_entry.value()
+                );
+                const float crossing_t = plane_crossing.has_value()
+                    ? glm::dot(plane_crossing.value() - position, direction)
+                    : std::numeric_limits<float>::max();
+                if (plane_crossing.has_value() && (crossing_t > entry_t) && (crossing_t < ray_stop->t)) {
+                    xray_line_renderer.add_line(
+                        sphere_ray_color, 2.0f, sphere_entry.value(),
+                        sphere_ray_color, 2.0f, plane_crossing.value()
+                    );
+                    xray_line_renderer.add_line(
+                        crossed_plane_color, 2.0f, plane_crossing.value(),
+                        crossed_plane_color, 2.0f, ray_stop->position
+                    );
+                } else {
+                    xray_line_renderer.add_line(
+                        sphere_ray_color, 2.0f, sphere_entry.value(),
+                        sphere_ray_color, 2.0f, ray_stop->position
+                    );
+                }
+            } else {
+                xray_line_renderer.add_line(
+                    ray_stop->color, 0.0f, position,
+                    ray_stop->color, 2.0f, ray_stop->position
+                );
+            }
+            return;
+        }
+
         bool is_content      = (nearest != nullptr) && test_bit_set(nearest->mask, Hover_entry::content_bit);
         bool is_tool         = (nearest != nullptr) && test_bit_set(nearest->mask, Hover_entry::tool_bit);
         bool is_rendertarget = (nearest != nullptr) && test_bit_set(nearest->mask, Hover_entry::rendertarget_bit);

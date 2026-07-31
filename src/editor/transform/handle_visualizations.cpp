@@ -46,14 +46,21 @@ namespace {
 constexpr float arrow_shaft_length     = 2.75f;
 constexpr float arrow_cone_length      = 0.6f;
 constexpr float arrow_cone_radius      = 0.15f;                     // scale-axis tip cones
-constexpr float translate_cone_radius  = 2.0f * arrow_cone_radius;  // translate arrows: wider base, thinner shaft (below)
+// Translate arrows: a doubled pointer cone (length and radius) on a thin
+// shaft (shaft width below) so the tip reads as a pointer, not a bar.
+constexpr float translate_cone_length  = 2.0f * arrow_cone_length;
+constexpr float translate_cone_radius  = 4.0f * arrow_cone_radius;
 constexpr float arrow_tip              = arrow_shaft_length + arrow_cone_length;
 constexpr float arrow_shaft_pick_radius= 0.12f;
 constexpr float arrow_head_pick_end    = arrow_shaft_length + 2.0f * arrow_cone_length;
 constexpr float arrow_head_pick_radius = 0.45f;
+// Translate-arrow head pick span, proportional to the doubled cone (one
+// extra cone length past the tip; pick radius 1.5x the cone base).
+constexpr float translate_head_pick_end    = arrow_shaft_length + 2.0f * translate_cone_length;
+constexpr float translate_head_pick_radius = 1.5f * translate_cone_radius;
 
-constexpr float plane_half_extent      = 0.6f;
-constexpr float plane_pick_half_extent = 0.78f;
+constexpr float plane_half_extent      = 1.2f;
+constexpr float plane_pick_half_extent = 1.56f;
 
 constexpr float rotate_ring_major_radius = 4.0f;
 constexpr float ring_pick_radius         = 0.2f;
@@ -676,7 +683,7 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
             const vec4 color = handle_color(handle, axis_colors[axis]);
             arrow_line_renderer.set_thickness(is_hot(handle) ? arrow_shaft_width_hot : arrow_shaft_width_normal);
             arrow_line_renderer.add_lines(color, {{c + (s * start) * dir, c + (s * (start + arrow_shaft_length)) * dir}});
-            draw_cone_fill(arrow_triangle_renderer, color, c + (s * (start + arrow_shaft_length)) * dir, dir, side1, side2, s * arrow_cone_length, s * translate_cone_radius);
+            draw_cone_fill(arrow_triangle_renderer, color, c + (s * (start + arrow_shaft_length)) * dir, dir, side1, side2, s * translate_cone_length, s * translate_cone_radius);
         }
     }
 
@@ -798,8 +805,8 @@ auto Handle_visualizations::pick(const glm::vec3& eye_position, const glm::vec3&
                 consider(handle, t, q);
             }
             if (
-                ray_segment_distance(ray_origin, d, c + (s * (start + arrow_shaft_length)) * dir, c + (s * (start + arrow_head_pick_end)) * dir, t, q, dist) &&
-                (dist <= s * arrow_head_pick_radius)
+                ray_segment_distance(ray_origin, d, c + (s * (start + arrow_shaft_length)) * dir, c + (s * (start + translate_head_pick_end)) * dir, t, q, dist) &&
+                (dist <= s * translate_head_pick_radius)
             ) {
                 consider(handle, t, q);
             }
@@ -965,6 +972,64 @@ auto Handle_visualizations::pick(const glm::vec3& eye_position, const glm::vec3&
     }
 
     return best;
+}
+
+auto Handle_visualizations::intersect_rotate_sphere(const glm::vec3& ray_origin, const glm::vec3& ray_direction) const -> std::optional<Rotate_sphere_intersection>
+{
+    if (!has_target()) {
+        return std::nullopt;
+    }
+    const float s = m_view_scale;
+    if (!(s > 0.0f) || !std::isfinite(s)) {
+        return std::nullopt;
+    }
+    // The rotation sphere exists as a ray-stop region only while the rotate
+    // gizmo is up: any ring shown, or the arcball region active.
+    const bool sphere_present =
+        is_handle_shown(Handle::e_handle_rotate_x)    ||
+        is_handle_shown(Handle::e_handle_rotate_y)    ||
+        is_handle_shown(Handle::e_handle_rotate_z)    ||
+        is_handle_shown(Handle::e_handle_rotate_free);
+    if (!sphere_present) {
+        return std::nullopt;
+    }
+    const vec3  c      = m_world_from_anchor.get_translation();
+    const vec3  d      = normalize(ray_direction);
+    const float radius = s * rotate_ring_major_radius;
+    const float tca    = dot(c - ray_origin, d);
+    const float d2     = dot(c - ray_origin, c - ray_origin) - tca * tca;
+    if (d2 > radius * radius) {
+        return std::nullopt;
+    }
+    const float thc    = std::sqrt(radius * radius - d2);
+    const float t_far  = tca + thc;
+    if (t_far <= 0.0f) {
+        return std::nullopt;
+    }
+    const float t_near = std::max(tca - thc, 0.0f);
+
+    // First crossing of any gizmo axis plane between entry and exit.
+    const mat3 basis = get_basis();
+    float      t_plane_best{std::numeric_limits<float>::max()};
+    for (int axis = 0; axis < 3; ++axis) {
+        const vec3  n     = basis[axis];
+        const float denom = dot(d, n);
+        if (std::abs(denom) < 1.0e-6f) {
+            continue;
+        }
+        const float t = dot(c - ray_origin, n) / denom;
+        if ((t > t_near) && (t < t_far) && (t < t_plane_best)) {
+            t_plane_best = t;
+        }
+    }
+
+    return Rotate_sphere_intersection{
+        .entry = ray_origin + t_near * d,
+        .exit  = ray_origin + t_far  * d,
+        .first_plane_crossing = (t_plane_best < std::numeric_limits<float>::max())
+            ? std::optional<glm::vec3>{ray_origin + t_plane_best * d}
+            : std::nullopt
+    };
 }
 
 void Handle_visualizations::compute_selection_box()

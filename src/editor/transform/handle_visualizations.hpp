@@ -71,6 +71,25 @@ public:
     // handle arrangement than the one rendered.
     [[nodiscard]] auto pick(const glm::vec3& eye_position, const glm::vec3& ray_origin, const glm::vec3& ray_direction) const -> std::optional<Handle_pick>;
 
+    // Ray vs the rotation sphere (the sphere the rotate rings inscribe):
+    // entry and exit points, or nullopt when the ray misses it or no rotate
+    // handle is up. entry is clamped to the ray origin when the origin is
+    // inside the sphere. The XR controller ray recolors from the entry
+    // point and stops at the exit when no visible handle is hit first.
+    class Rotate_sphere_intersection
+    {
+    public:
+        glm::vec3 entry;
+        glm::vec3 exit;
+        // First crossing of any gizmo axis plane (the three basis planes
+        // through the anchor - shared by the translate planes and the
+        // rotate rings) BETWEEN entry and exit, or nullopt when the ray
+        // leaves the sphere without crossing one. The XR controller ray
+        // darkens from this point onward.
+        std::optional<glm::vec3> first_plane_crossing;
+    };
+    [[nodiscard]] auto intersect_rotate_sphere(const glm::vec3& ray_origin, const glm::vec3& ray_direction) const -> std::optional<Rotate_sphere_intersection>;
+
 private:
     void compute_selection_box();
 

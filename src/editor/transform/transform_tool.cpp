@@ -913,6 +913,9 @@ void Transform_tool::update_hover()
         m_hover_handle          = Handle::e_handle_none;
         m_box_face_hover_active = false;
         m_pick_active           = false;
+        m_ray_sphere_entry.reset();
+        m_ray_sphere_exit.reset();
+        m_ray_sphere_plane_crossing.reset();
         return;
     }
 
@@ -923,6 +926,9 @@ void Transform_tool::update_hover()
         m_box_face_hover_active = false;
         m_pick_active           = false;
         m_hover_tool            = nullptr;
+        m_ray_sphere_entry.reset();
+        m_ray_sphere_exit.reset();
+        m_ray_sphere_plane_crossing.reset();
         return;
     }
 
@@ -930,6 +936,9 @@ void Transform_tool::update_hover()
     // (Handle_visualizations::pick) - there are no gizmo meshes.
     Handle new_handle = Handle::e_handle_none;
     m_pick_active = false;
+    m_ray_sphere_entry.reset();
+    m_ray_sphere_exit.reset();
+    m_ray_sphere_plane_crossing.reset();
     Handle_visualizations* visualizations = shared.get_visualizations();
     if (visualizations != nullptr) {
         const std::optional<glm::vec3> origin_opt    = scene_view->get_control_ray_origin_in_world();
@@ -950,6 +959,17 @@ void Transform_tool::update_hover()
                 new_handle      = pick->handle;
                 m_pick_position = pick->position;
                 m_pick_active   = true;
+            }
+            // Rotation-sphere crossing for the XR controller ray stop:
+            // computed regardless of the pick result - a ray can hit a
+            // visible handle AND cross the sphere, or cross only the
+            // (invisible) sphere interior.
+            const std::optional<Handle_visualizations::Rotate_sphere_intersection> sphere =
+                visualizations->intersect_rotate_sphere(origin_opt.value(), direction_opt.value());
+            if (sphere.has_value()) {
+                m_ray_sphere_entry          = sphere->entry;
+                m_ray_sphere_exit           = sphere->exit;
+                m_ray_sphere_plane_crossing = sphere->first_plane_crossing;
             }
         }
     }
@@ -1163,6 +1183,39 @@ auto Transform_tool::get_active_handle() const -> Handle
 auto Transform_tool::get_hover_handle() const -> Handle
 {
     return m_hover_handle;
+}
+
+auto Transform_tool::get_hover_handle_position_in_world() const -> std::optional<glm::vec3>
+{
+    // Visible handle first: the ray stops at its first intersection point
+    // (arrows, rings, quads, center cube, view ring). The arcball region
+    // (e_handle_rotate_free) is the INVISIBLE rotation sphere interior, so
+    // it falls through to the sphere-exit rule below. Box-face hover is
+    // deliberately excluded: the box hugs the selection's surface, so for
+    // the XR ray it reads as the mesh surface, not as a distinct handle.
+    if (
+        (m_hover_handle != Handle::e_handle_none)        &&
+        (m_hover_handle != Handle::e_handle_rotate_free) &&
+        m_pick_active                                    &&
+        !m_box_face_hover_active
+    ) {
+        return m_pick_position;
+    }
+    // Rotation sphere crossed without a visible handle in front: the ray
+    // stops at the FARTHEST intersection with the sphere, so entering the
+    // gizmo region anywhere - including its invisible parts - reads as
+    // "pointing at the tool".
+    return m_ray_sphere_exit;
+}
+
+auto Transform_tool::get_ray_sphere_entry_position_in_world() const -> std::optional<glm::vec3>
+{
+    return m_ray_sphere_entry;
+}
+
+auto Transform_tool::get_ray_sphere_plane_crossing_position_in_world() const -> std::optional<glm::vec3>
+{
+    return m_ray_sphere_plane_crossing;
 }
 
 #pragma region Render
