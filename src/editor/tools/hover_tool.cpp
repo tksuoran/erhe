@@ -14,6 +14,8 @@
 #include "tools/bone_visualization.hpp"
 #include "tools/mesh_component_selection.hpp"
 #include "tools/tools.hpp"
+#include "transform/handle_enums.hpp"
+#include "transform/transform_tool.hpp"
 #include "windows/viewport_window.hpp"
 
 #include "erhe_geometry_renderer/geometry_debug_renderer.hpp"
@@ -347,7 +349,14 @@ void Hover_tool::tool_render(const Render_context& context)
         return;
     }
 
-    if (m_show_hover_normal && entry->normal.has_value()) {
+    // While a transform gizmo handle is hovered (including the arcball
+    // sphere region between the rings), the gizmo owns the pointer - the
+    // hover normal ray under it is just noise.
+    const bool transform_handle_hovered =
+        (m_context.transform_tool != nullptr) &&
+        (m_context.transform_tool->get_hover_handle() != Handle::e_handle_none);
+
+    if (m_show_hover_normal && !transform_handle_hovered && entry->normal.has_value()) {
         erhe::renderer::Primitive_renderer line_renderer = context.get({erhe::graphics::Primitive_type::line, 2, true, true});
         // Hover_entry::normal is a unit direction, so the drawn length is the
         // configured world-space length whatever the hit geometry's scale.
