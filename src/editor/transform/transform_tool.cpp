@@ -935,7 +935,17 @@ void Transform_tool::update_hover()
         const std::optional<glm::vec3> origin_opt    = scene_view->get_control_ray_origin_in_world();
         const std::optional<glm::vec3> direction_opt = scene_view->get_control_ray_direction_in_world();
         if (origin_opt.has_value() && direction_opt.has_value()) {
-            const std::optional<Handle_pick> pick = visualizations->pick(origin_opt.value(), direction_opt.value());
+            // View-dependent shown/hidden choices are made from the camera
+            // (in XR the head - one mono decision both eyes share), matching
+            // render(); only the intersection uses the control ray, which in
+            // XR originates at the controller.
+            glm::vec3 eye_position = origin_opt.value();
+            const std::shared_ptr<erhe::scene::Camera> camera = scene_view->get_camera();
+            const erhe::scene::Node* camera_node = camera ? camera->get_node() : nullptr;
+            if (camera_node != nullptr) {
+                eye_position = glm::vec3{camera_node->position_in_world()};
+            }
+            const std::optional<Handle_pick> pick = visualizations->pick(eye_position, origin_opt.value(), direction_opt.value());
             if (pick.has_value()) {
                 new_handle      = pick->handle;
                 m_pick_position = pick->position;
@@ -1439,6 +1449,11 @@ void Transform_tool::render_drag_readout(const Render_context& context)
     if ((text_renderer == nullptr) || !text_renderer->config.enabled || (context.camera == nullptr)) {
         return;
     }
+    // Text readouts are window-space; the headset render context has no
+    // viewport scene view. No text in XR (for now).
+    if (context.viewport_scene_view == nullptr) {
+        return;
+    }
 
     std::string initial_line;
     std::string current_line;
@@ -1452,9 +1467,6 @@ void Transform_tool::render_drag_readout(const Render_context& context)
             // position goes below the hover text's mesh name, whose anchor
             // (+50 px x) and 16 px line step are mirrored from
             // Hover_tool::tool_render().
-            if (context.viewport_scene_view == nullptr) {
-                return;
-            }
             const vec3 p0 = shared.world_from_anchor_initial_state.get_translation();
             const vec3 p1 = shared.world_from_anchor.get_translation();
 

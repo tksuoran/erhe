@@ -739,7 +739,7 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
     }
 }
 
-auto Handle_visualizations::pick(const glm::vec3& ray_origin, const glm::vec3& ray_direction) const -> std::optional<Handle_pick>
+auto Handle_visualizations::pick(const glm::vec3& eye_position, const glm::vec3& ray_origin, const glm::vec3& ray_direction) const -> std::optional<Handle_pick>
 {
     if (!has_target()) {
         return std::nullopt;
@@ -772,7 +772,7 @@ auto Handle_visualizations::pick(const glm::vec3& ray_origin, const glm::vec3& r
     // render()'s single-arrow choice: only the camera-facing direction of
     // each axis is pickable when translate_negative_handles is off.
     for (int axis = 0; axis < 3; ++axis) {
-        const bool positive_towards_eye = dot(basis[axis], ray_origin - c) >= 0.0f;
+        const bool positive_towards_eye = dot(basis[axis], eye_position - c) >= 0.0f;
         const Handle directional_handles[2] = {translate_pos_handles[axis], translate_neg_handles[axis]};
         // Mirrors render(): in-plane arrows sit at the protractor ring
         // during a rotate drag.
@@ -822,8 +822,8 @@ auto Handle_visualizations::pick(const glm::vec3& ray_origin, const glm::vec3& r
         // suffice for it.
         const vec3  u      = basis[(perp + 1) % 3];
         const vec3  v      = basis[(perp + 2) % 3];
-        const vec3  su     = (fixed_octant || (dot(u, ray_origin - c) >= 0.0f)) ? u : -u;
-        const vec3  sv     = (fixed_octant || (dot(v, ray_origin - c) >= 0.0f)) ? v : -v;
+        const vec3  su     = (fixed_octant || (dot(u, eye_position - c) >= 0.0f)) ? u : -u;
+        const vec3  sv     = (fixed_octant || (dot(v, eye_position - c) >= 0.0f)) ? v : -v;
         const vec3  center = c + (s * offset) * (su + sv);
         const float t      = dot(center - ray_origin, n) / denom;
         if (t <= 0.0f) {
@@ -904,7 +904,7 @@ auto Handle_visualizations::pick(const glm::vec3& ray_origin, const glm::vec3& r
                 const float theta  = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(ring_arc_sample_count);
                 const vec3  normal = std::cos(theta) * side1 + std::sin(theta) * side2;
                 const vec3  point  = c + radius * normal;
-                if (arcs_only && is_ring_point_occluded(ray_origin, point, c, basis, radius, axis, ring_shown)) {
+                if (arcs_only && is_ring_point_occluded(eye_position, point, c, basis, radius, axis, ring_shown)) {
                     continue;
                 }
                 const float t = dot(point - ray_origin, d);
@@ -923,10 +923,10 @@ auto Handle_visualizations::pick(const glm::vec3& ray_origin, const glm::vec3& r
     }
 
     // View-rotate ring: sampled circle points like the axis rings, in the
-    // camera-aligned plane used by render() (eye = the ray origin here).
+    // camera-aligned plane used by render().
     if (is_handle_shown(Handle::e_handle_rotate_view)) {
         const Handle handle   = Handle::e_handle_rotate_view;
-        const vec3   view_dir = normalize(ray_origin - c);
+        const vec3   view_dir = normalize(eye_position - c);
         const vec3   ref      = (std::abs(view_dir.y) < 0.9f) ? vec3{0.0f, 1.0f, 0.0f} : vec3{1.0f, 0.0f, 0.0f};
         const vec3   vs1      = normalize(cross(view_dir, ref));
         const vec3   vs2      = normalize(cross(view_dir, vs1));

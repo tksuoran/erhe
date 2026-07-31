@@ -119,11 +119,19 @@ auto Rotate_tool::begin(unsigned int axis_mask, Scene_view* scene_view) -> bool
     if (m_view_mode) {
         // Rotation around the viewing axis (the camera-aligned outer ring):
         // plane normal = eye-to-anchor direction, side = any perpendicular.
-        const std::optional<vec3> origin_opt = scene_view->get_control_ray_origin_in_world();
-        if (!origin_opt.has_value()) {
+        // The eye is the camera node (in XR the head, not the controller
+        // ray origin) so the drag plane is the same plane render() and
+        // pick() place the ring in.
+        std::optional<vec3> eye_opt = scene_view->get_control_ray_origin_in_world();
+        const std::shared_ptr<erhe::scene::Camera> camera = scene_view->get_camera();
+        const erhe::scene::Node* camera_node = camera ? camera->get_node() : nullptr;
+        if (camera_node != nullptr) {
+            eye_opt = vec3{camera_node->position_in_world()};
+        }
+        if (!eye_opt.has_value()) {
             return false;
         }
-        n = normalize(center - origin_opt.value());
+        n = normalize(center - eye_opt.value());
         const vec3 ref = (std::abs(n.y) < 0.9f) ? vec3{0.0f, 1.0f, 0.0f} : vec3{1.0f, 0.0f, 0.0f};
         side = normalize(cross(n, ref));
     } else {
@@ -514,7 +522,9 @@ void Rotate_tool::render(const Render_context& context)
     // plus the snapped drag angle, so it stays continuous past +/-180 deg -
     // printed the same way at the current direction.
     erhe::renderer::Text_renderer* text_renderer = m_context.text_renderer;
-    if ((text_renderer == nullptr) || !text_renderer->config.enabled || (context.camera == nullptr)) {
+    // viewport_scene_view null = headset render context: text readouts are
+    // window-space, so no text in XR (for now).
+    if ((text_renderer == nullptr) || !text_renderer->config.enabled || (context.camera == nullptr) || (context.viewport_scene_view == nullptr)) {
         return;
     }
     const float current = initial + snapped_angle;

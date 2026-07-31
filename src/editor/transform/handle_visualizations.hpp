@@ -63,7 +63,13 @@ public:
     // Analytic hit test with the control ray; returns the nearest handle
     // within pick range, or nullopt. Only handles that render() would draw
     // are pickable (in visible-arcs mode, only the unoccluded ring arcs).
-    [[nodiscard]] auto pick(const glm::vec3& ray_origin, const glm::vec3& ray_direction) const -> std::optional<Handle_pick>;
+    // eye_position is the viewer position render() made its view-dependent
+    // presentation choices from (the camera node - in XR the head, a single
+    // mono decision shared by both eyes); intersection runs on the ray. On
+    // desktop viewports the two coincide; in XR the ray is the controller
+    // aim ray, and passing it as the eye would pick against a different
+    // handle arrangement than the one rendered.
+    [[nodiscard]] auto pick(const glm::vec3& eye_position, const glm::vec3& ray_origin, const glm::vec3& ray_direction) const -> std::optional<Handle_pick>;
 
 private:
     void compute_selection_box();
