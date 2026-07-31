@@ -132,21 +132,33 @@ auto Move_tool::snap(const glm::vec3 in_translation) const -> glm::vec3
         return in_translation;
     }
 
-    // Absolute snapping lands the anchor's resulting position coordinates on
-    // snap multiples (bias = the anchor's start position); relative snapping
-    // snaps the drag delta itself, preserving any initial off-grid position.
+    // Snap component-wise in the ACTIVE space (Global / Local / Reference /
+    // Selection): the basis maps active-space axes to world, so express the
+    // delta - and, for absolute snapping, the anchor's start position - in
+    // that basis, snap the masked components there, and map back. In Global
+    // the basis is identity and this is plain world-component snapping.
+    // Absolute snapping lands the anchor's resulting active-space position
+    // coordinates on snap multiples (bias = the anchor's start position);
+    // relative snapping snaps the drag delta itself, preserving any initial
+    // off-grid position.
+    const bool world            = !shared.settings.use_anchor_orientation();
+    glm::mat3  world_from_basis = glm::mat3{get_basis(world)};
+    // The anchor matrix can carry scale; normalized columns make the basis
+    // orthonormal so the transpose below is its inverse.
+    world_from_basis[0] = glm::normalize(world_from_basis[0]);
+    world_from_basis[1] = glm::normalize(world_from_basis[1]);
+    world_from_basis[2] = glm::normalize(world_from_basis[2]);
+    const glm::mat3 basis_from_world = glm::transpose(world_from_basis);
     const glm::vec3 bias = m_context.editor_settings->transform_tool.translate_snap_absolute
-        ? glm::vec3{shared.world_from_anchor_initial_state.get_translation()}
+        ? basis_from_world * glm::vec3{shared.world_from_anchor_initial_state.get_translation()}
         : glm::vec3{0.0f};
-    const float in_x = bias.x + in_translation.x;
-    const float in_y = bias.y + in_translation.y;
-    const float in_z = bias.z + in_translation.z;
-    const float snap = shared.settings.translate_snap;
-    const float x    = (m_axis_mask & Axis_mask::x) ? std::floor((in_x + snap * 0.5f) / snap) * snap - bias.x : in_translation.x;
-    const float y    = (m_axis_mask & Axis_mask::y) ? std::floor((in_y + snap * 0.5f) / snap) * snap - bias.y : in_translation.y;
-    const float z    = (m_axis_mask & Axis_mask::z) ? std::floor((in_z + snap * 0.5f) / snap) * snap - bias.z : in_translation.z;
+    const glm::vec3 t    = basis_from_world * in_translation;
+    const float     snap = shared.settings.translate_snap;
+    const float x = (m_axis_mask & Axis_mask::x) ? std::floor((bias.x + t.x + snap * 0.5f) / snap) * snap - bias.x : t.x;
+    const float y = (m_axis_mask & Axis_mask::y) ? std::floor((bias.y + t.y + snap * 0.5f) / snap) * snap - bias.y : t.y;
+    const float z = (m_axis_mask & Axis_mask::z) ? std::floor((bias.z + t.z + snap * 0.5f) / snap) * snap - bias.z : t.z;
 
-    return glm::vec3{x, y, z};
+    return world_from_basis * glm::vec3{x, y, z};
 }
 
 void Move_tool::update(const vec3 drag_position_in_world)
