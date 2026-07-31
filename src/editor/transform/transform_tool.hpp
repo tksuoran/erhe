@@ -288,9 +288,9 @@ private:
     void update_hover       ();
     auto update_box_face_hover(Scene_view* scene_view) -> bool;
     void render_rays        (erhe::scene::Node& node);
-    // Draws the constraint of the hovered (or dragged) handle: the axis line
-    // for an axis translation handle, the plane rectangle + grid for a plane
-    // translation handle, the rotation axis + rotation plane for a rotate ring.
+    // Draws the constraint of the hovered handle: the plane rectangle + grid
+    // for a plane translation handle, the rotation plane for a rotate ring.
+    // Axis handles have no preview (the axis guide line was dropped).
     void render_hover_preview(const Render_context& context);
     // Active translate drag feedback (replaces the hover previews for the
     // duration of the drag): axis drag draws only the traveled segment from
@@ -298,6 +298,12 @@ private:
     // rectangle spanning the two points, edges color-coded per axis, plus
     // the diagonal in the plane handle's color.
     void render_translate_drag_guides(const Render_context& context);
+    // Numeric feedback for the active drag. Translate: bare coordinates -
+    // initial position printed at its own window projection, current position
+    // and the yellow delta stacked below the hover mesh name. Scale: labeled
+    // initial/current anchor scale under the gizmo. Rotation feedback is drawn
+    // by Rotate_tool::render() (angle readout at the protractor ring).
+    void render_drag_readout(const Render_context& context);
 
     // Apply a gizmo-produced world-from-anchor transform to the selected mesh
     // components (used by adjust_* and the numeric edits when component_mode).

@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Transform_tool_config",
-    version=3,
+    version=4,
     short_desc="Transform Tool",
     long_desc="",
     developer=False,
@@ -53,6 +53,16 @@ struct("Transform_tool_config",
             default="false",
             short_desc="Visible Ring Arcs Only",
             long_desc="Draw the rotation rings as a ball of three discs: where a ring passes behind the discs of the other rings it is drawn as a thin reference line and is not hoverable or draggable.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "rotate_ring_size",
+            Float,
+            added_in=4,
+            default="4.0f",
+            short_desc="Active Rotate Ring Size",
+            long_desc="Radius of the protractor ring shown during an active rotation drag, in the same view-scaled units as the gizmo handles (the gizmo's own rotate rings use 4.0).",
             visible=True,
             developer=False
         ),

@@ -433,6 +433,15 @@ auto Handle_visualizations::is_handle_shown(const Handle handle) const -> bool
         }
     }
 
+    // Every rotate ring is hidden during ANY active drag (and with them the
+    // single-shown-ring tangent/bitangent guides): a rotate drag shows the
+    // Rotate_tool protractor instead, and translate/scale drags draw their
+    // own travel guides. Without this, a same-axis ring would pass the
+    // axis-mask match above and ride along with axis drags.
+    if ((active_handle != Handle::e_handle_none) && (type == Handle_type::e_handle_type_rotate)) {
+        return false;
+    }
+
     return true;
 }
 
