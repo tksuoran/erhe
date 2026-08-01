@@ -1,4 +1,4 @@
-#include "erhe_scene_renderer/mesh_memory.hpp"
+﻿#include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_scene_renderer/buffer_pool.hpp"
 #include "erhe_scene_renderer/generated/mesh_memory_config.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
@@ -40,6 +40,7 @@ Mesh_memory::Mesh_memory(
                     { Format::format_32_vec4_float, Vertex_attribute_usage::tangent,   0},
                     { Format::format_32_vec2_float, Vertex_attribute_usage::tex_coord, 0},
                     { Format::format_32_vec2_float, Vertex_attribute_usage::tex_coord, 1},
+                    { Format::format_32_vec2_float, Vertex_attribute_usage::tex_coord, 2}, // lightmap UVs
                     { Format::format_32_vec4_float, Vertex_attribute_usage::color,     0},
                 }
             },
@@ -69,6 +70,7 @@ Mesh_memory::Mesh_memory(
                     { Format::format_32_vec4_float, Vertex_attribute_usage::tangent,   0},
                     { Format::format_32_vec2_float, Vertex_attribute_usage::tex_coord, 0},
                     { Format::format_32_vec2_float, Vertex_attribute_usage::tex_coord, 1},
+                    { Format::format_32_vec2_float, Vertex_attribute_usage::tex_coord, 2}, // lightmap UVs
                     { Format::format_32_vec4_float, Vertex_attribute_usage::color,     0},
                 }
             },
@@ -98,6 +100,7 @@ Mesh_memory::Mesh_memory(
                     { Format::format_32_vec4_float, Vertex_attribute_usage::tangent,   0},
                     { Format::format_32_vec2_float, Vertex_attribute_usage::tex_coord, 0},
                     { Format::format_32_vec2_float, Vertex_attribute_usage::tex_coord, 1},
+                    { Format::format_32_vec2_float, Vertex_attribute_usage::tex_coord, 2}, // lightmap UVs
                     { Format::format_32_vec4_float, Vertex_attribute_usage::color,     0},
                 }
             },
@@ -138,6 +141,7 @@ Mesh_memory::Mesh_memory(
                     { Format::format_32_vec4_float, Vertex_attribute_usage::tangent,   0},
                     { Format::format_32_vec2_float, Vertex_attribute_usage::tex_coord, 0},
                     { Format::format_32_vec2_float, Vertex_attribute_usage::tex_coord, 1},
+                    { Format::format_32_vec2_float, Vertex_attribute_usage::tex_coord, 2}, // lightmap UVs
                     { Format::format_32_vec4_float, Vertex_attribute_usage::color,     0},
                 }
             },

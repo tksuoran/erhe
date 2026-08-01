@@ -51,6 +51,12 @@ layout(location = 12) in vec2     v_texcoord_1;
 const  vec2 v_texcoord_1 = vec2(0.5, 0.5);
 #endif
 
+#if defined(ERHE_USE_VERTEX_VARYING_TEXCOORD2) && !defined(ERHE_VARIANT_POSITION_PASS)
+layout(location = 21) in vec2     v_texcoord_2; // lightmap UVs
+#elif !defined(ERHE_VARIANT_POSITION_PASS)
+const  vec2 v_texcoord_2 = vec2(0.5, 0.5);
+#endif
+
 // Selects the texcoord set for a texture / feature from its compile-time
 // ERHE_*_TEX_COORD define; the condition folds at compile time.
 #define ERHE_SELECT_TEXCOORD(set) (((set) == 1) ? v_texcoord_1 : v_texcoord_0)
@@ -699,6 +705,8 @@ void main()
         out_color.rgb = srgb_to_linear(vec3(v_texcoord_0, 0.0));
 #  elif ERHE_SHADER_DEBUG == 8 // texcoord_1
         out_color.rgb = srgb_to_linear(vec3(v_texcoord_1, 0.0));
+#  elif ERHE_SHADER_DEBUG == 32 // texcoord_2 (lightmap UVs)
+        out_color.rgb = srgb_to_linear(vec3(v_texcoord_2, 0.0));
 #  elif ERHE_SHADER_DEBUG == 9 // base_color_texture
 #    ifdef ERHE_USE_BASE_COLOR_TEXTURE
         out_color.rgb = srgb_to_linear(base_color);

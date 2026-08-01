@@ -26,7 +26,7 @@ enum class Atlas_packer {
 
 // Generate a UV texture atlas for the source surface using Geogram's
 // mesh_make_atlas() and write the resulting per-corner UVs into the destination's
-// corner texture-coordinate channel selected by usage_index (0 or 1), overwriting
+// corner texture-coordinate channel selected by usage_index (0, 1 or 2), overwriting
 // whatever was in that channel. Topology and every other attribute (including the
 // other texture-coordinate channel, normals and colors) are preserved.
 //

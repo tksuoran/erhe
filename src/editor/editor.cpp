@@ -107,6 +107,7 @@
 #include "transform/scale_tool.hpp"
 #include "windows/editor_windows.hpp"
 #include "windows/frame_pacing_window.hpp"
+#include "windows/lightmap_window.hpp"
 #include "windows/inventory_window.hpp"
 #include "windows/properties.hpp"
 #include "windows/settings_window.hpp"
@@ -1817,6 +1818,7 @@ public:
                 m_properties             = std::make_unique<Properties                      >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
                 m_editor_windows         = std::make_unique<Editor_windows                  >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_frame_pacing_window    = std::make_unique<Frame_pacing_window             >(*m_imgui_renderer.get(), *m_imgui_windows.get());
+                m_lightmap_window        = std::make_unique<Lightmap_window                 >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_app_context.frame_pacing_window   = m_frame_pacing_window.get();
                 m_app_context.frame_pacing_observer = &m_frame_pacing_observer;
                 m_rendergraph_window     = std::make_unique<Rendergraph_window              >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
@@ -3667,6 +3669,7 @@ public:
     std::unique_ptr<Properties                      >        m_properties;
     std::unique_ptr<Editor_windows                  >        m_editor_windows;
     std::unique_ptr<Frame_pacing_window             >        m_frame_pacing_window;
+    std::unique_ptr<Lightmap_window                 >        m_lightmap_window;
     std::unique_ptr<Rendergraph_window              >        m_rendergraph_window;
     std::unique_ptr<Animation_player                >        m_animation_player;
     std::unique_ptr<Animation_window                >        m_animation_window;

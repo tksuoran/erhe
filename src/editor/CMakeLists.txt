@@ -572,6 +572,8 @@ erhe_target_sources_grouped(
     windows/editor_windows.hpp
     windows/frame_pacing_window.cpp
     windows/frame_pacing_window.hpp
+    windows/lightmap_window.cpp
+    windows/lightmap_window.hpp
     windows/window_placement.cpp
     windows/window_placement.hpp
     windows/inventory_slot_payload.hpp
@@ -715,6 +717,9 @@ set(_config_sources
     ${_config_out}/ray_trace_config.hpp
     ${_config_out}/ray_trace_config_serialization.hpp
     ${_config_out}/ray_trace_config.cpp
+    ${_config_out}/lightmap_config.hpp
+    ${_config_out}/lightmap_config_serialization.hpp
+    ${_config_out}/lightmap_config.cpp
     ${_config_out}/network_config.hpp
     ${_config_out}/network_config_serialization.hpp
     ${_config_out}/network_config.cpp

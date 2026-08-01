@@ -120,6 +120,7 @@ auto Shader_key::derive(
     const bool has_tangent       = (vertex_format != nullptr) && vertex_format_has_attribute(*vertex_format, usage::tangent,       0);
     const bool has_texcoord_0    = (vertex_format != nullptr) && vertex_format_has_attribute(*vertex_format, usage::tex_coord,     0);
     const bool has_texcoord_1    = (vertex_format != nullptr) && vertex_format_has_attribute(*vertex_format, usage::tex_coord,     1);
+    const bool has_texcoord_2    = (vertex_format != nullptr) && vertex_format_has_attribute(*vertex_format, usage::tex_coord,     2);
     const bool has_color_0       = (vertex_format != nullptr) && vertex_format_has_attribute(*vertex_format, usage::color,         0);
     const bool has_aniso_control = (vertex_format != nullptr) && vertex_format_has_attribute(*vertex_format, usage::custom,        erhe::dataformat::custom_attribute_aniso_control);
     const bool has_joint_indices = (vertex_format != nullptr) && vertex_format_has_attribute(*vertex_format, usage::joint_indices, 0);
@@ -231,6 +232,9 @@ auto Shader_key::derive(
         }
         if (has_texcoord_1) {
             key.set(Shader_bool::USE_VERTEX_VARYING_TEXCOORD1, true);
+        }
+        if (has_texcoord_2) {
+            key.set(Shader_bool::USE_VERTEX_VARYING_TEXCOORD2, true);
         }
         if (has_aniso_control) {
             key.set(Shader_bool::USE_VERTEX_VARYING_ANISO_CONTROL, true);

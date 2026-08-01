@@ -70,7 +70,12 @@ public:
     // not content - excluded from the item tree, save, export and prefabs, and
     // never selectable as itself (picking it resolves to the joint Node).
     static constexpr uint64_t bone_proxy                = (1u << 29);
-    static constexpr uint64_t count                     = 30;
+    // Static geometry that participates in lightmap baking: gets automatic
+    // lightmap UVs (texcoord channel 2), an atlas region, and baked lighting.
+    // Authored + serialized (by name, like all flags). See
+    // doc/lightmap_baking_plan.md.
+    static constexpr uint64_t lightmapped               = (1u << 30);
+    static constexpr uint64_t count                     = 31;
 
     // High-frequency presentation-state bits (selection, hover, per-frame debug
     // visualization, transform-derived state) that never affect item tree row
@@ -111,6 +116,7 @@ public:
         "Import Root",
         "Bone",
         "Bone Proxy",
+        "Lightmapped",
     };
 
     [[nodiscard]] static auto to_string(uint64_t mask) -> std::string;

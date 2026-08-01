@@ -114,6 +114,7 @@ void Build_context_root::get_vertex_attributes()
     vertex_attributes.color        .push_back(Vertex_attribute_info{vertex_format, Vertex_attribute_usage::color,         1});
     vertex_attributes.texcoord     .push_back(Vertex_attribute_info{vertex_format, Vertex_attribute_usage::tex_coord,     0});
     vertex_attributes.texcoord     .push_back(Vertex_attribute_info{vertex_format, Vertex_attribute_usage::tex_coord,     1});
+    vertex_attributes.texcoord     .push_back(Vertex_attribute_info{vertex_format, Vertex_attribute_usage::tex_coord,     2});
     vertex_attributes.joint_indices.push_back(Vertex_attribute_info{vertex_format, Vertex_attribute_usage::joint_indices, 0});
     vertex_attributes.joint_indices.push_back(Vertex_attribute_info{vertex_format, Vertex_attribute_usage::joint_indices, 1});
     vertex_attributes.joint_weights.push_back(Vertex_attribute_info{vertex_format, Vertex_attribute_usage::joint_weights, 0});
@@ -827,6 +828,7 @@ void Build_context::build_polygon_fill()
     const bool do_vertex_bitangent     = root.vertex_attributes.bitangent         .is_valid();
     const bool do_vertex_texcoord_0    = root.vertex_attributes.texcoord[0]       .is_valid();
     const bool do_vertex_texcoord_1    = root.vertex_attributes.texcoord[1]       .is_valid();
+    const bool do_vertex_texcoord_2    = root.vertex_attributes.texcoord[2]       .is_valid();
     const bool do_vertex_color_0       = root.vertex_attributes.color[0]          .is_valid();
     const bool do_vertex_color_1       = root.vertex_attributes.color[1]          .is_valid();
     const bool do_aniso_control        = root.vertex_attributes.aniso_control     .is_valid();
@@ -865,6 +867,7 @@ void Build_context::build_polygon_fill()
             if (do_vertex_bitangent    ) build_vertex_bitangent    ();
             if (do_vertex_texcoord_0   ) build_vertex_texcoord     (0);
             if (do_vertex_texcoord_1   ) build_vertex_texcoord     (1);
+            if (do_vertex_texcoord_2   ) build_vertex_texcoord     (2);
             if (do_vertex_color_0      ) build_vertex_color        (0);
             if (do_vertex_color_1      ) build_vertex_color        (1);
             if (do_aniso_control       ) build_vertex_aniso_control();
@@ -991,6 +994,7 @@ void Build_context::build_expanded_polygon_fill()
     const bool do_vertex_bitangent     = (attribute_writers.bitangent       != nullptr) && root.vertex_attributes.bitangent.is_valid();
     const bool do_vertex_texcoord_0    = (attribute_writers.texcoord_0      != nullptr) && root.vertex_attributes.texcoord[0].is_valid();
     const bool do_vertex_texcoord_1    = (attribute_writers.texcoord_0      != nullptr) && root.vertex_attributes.texcoord[1].is_valid();
+    const bool do_vertex_texcoord_2    = (attribute_writers.texcoord_0      != nullptr) && root.vertex_attributes.texcoord[2].is_valid();
     const bool do_vertex_color_0       = (attribute_writers.color_0         != nullptr) && root.vertex_attributes.color[0].is_valid();
     const bool do_vertex_color_1       = (attribute_writers.color_0         != nullptr) && root.vertex_attributes.color[1].is_valid();
     const bool do_aniso_control        = (attribute_writers.aniso_control   != nullptr) && root.vertex_attributes.aniso_control.is_valid();
@@ -1068,6 +1072,7 @@ void Build_context::build_expanded_polygon_fill()
                 if (do_vertex_bitangent)     build_vertex_bitangent    ();
                 if (do_vertex_texcoord_0)    build_vertex_texcoord     (0);
                 if (do_vertex_texcoord_1)    build_vertex_texcoord     (1);
+                if (do_vertex_texcoord_2)    build_vertex_texcoord     (2);
                 if (do_vertex_color_0)       build_vertex_color        (0);
                 if (do_vertex_color_1)       build_vertex_color        (1);
                 if (do_aniso_control)        build_vertex_aniso_control();

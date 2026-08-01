@@ -58,7 +58,8 @@ enum class Shader_debug : uint16_t
     shadowmap_texels   = 28,
     misc               = 29,
     shadow_visibility  = 30,
-    vdotn_dim          = 31
+    vdotn_dim          = 31,
+    texcoord_2         = 32
 };
 
 // User-visible display strings matching the Shader_debug enum, in
@@ -95,7 +96,8 @@ inline constexpr const char* c_shader_debug_strings[] = {
     "Shadowmap Texels",
     "Debug Miscellaneous",
     "Shadow Visibility",
-    "V.N (dim)"
+    "V.N (dim)",
+    "TexCoord 2 (Lightmap)"
 };
 
 #define ERHE_SHADER_BOOL(X) \
@@ -111,6 +113,7 @@ inline constexpr const char* c_shader_debug_strings[] = {
     X(USE_VERTEX_VARYING_BITANGENT)     \
     X(USE_VERTEX_VARYING_TEXCOORD0)     \
     X(USE_VERTEX_VARYING_TEXCOORD1)     \
+    X(USE_VERTEX_VARYING_TEXCOORD2)     \
     X(USE_VERTEX_VARYING_COLOR)         \
     X(USE_VERTEX_VARYING_ANISO_CONTROL) \
     X(VARIANT_DEPTH_ONLY)               \

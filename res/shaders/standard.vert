@@ -87,6 +87,10 @@ layout(location = 1) out vec2      v_texcoord_0;
 layout(location = 12) out vec2     v_texcoord_1;
 #endif
 
+#if defined(ERHE_USE_VERTEX_VARYING_TEXCOORD2) && !defined(ERHE_VARIANT_POSITION_PASS)
+layout(location = 21) out vec2     v_texcoord_2; // lightmap UVs
+#endif
+
 #if defined(ERHE_USE_VERTEX_VARYING_COLOR) && !defined(ERHE_VARIANT_POSITION_PASS)
 layout(location = 2) out vec4      v_color;
 #endif
@@ -350,6 +354,9 @@ void main()
     v_texcoord_0     = a_texcoord_0;
 #   endif
 
+#   if defined(ERHE_USE_VERTEX_VARYING_TEXCOORD2)
+    v_texcoord_2     = a_texcoord_2;
+#   endif
 #   if defined(ERHE_USE_VERTEX_VARYING_TEXCOORD1)
     v_texcoord_1     = a_texcoord_1;
 #   endif

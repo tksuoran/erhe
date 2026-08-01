@@ -467,6 +467,7 @@ void Geometry_operation::interpolate_mesh_attributes(const uint64_t regeneration
     }
     interpolate_attribute<GEO::vec2f>(s.vertex_texcoord_0,      d.vertex_texcoord_0,      m_dst_vertex_sources.data(), &m_dst_vertex_sum_weights);
     interpolate_attribute<GEO::vec2f>(s.vertex_texcoord_1,      d.vertex_texcoord_1,      m_dst_vertex_sources.data(), &m_dst_vertex_sum_weights);
+    interpolate_attribute<GEO::vec2f>(s.vertex_texcoord_2,      d.vertex_texcoord_2,      m_dst_vertex_sources.data(), &m_dst_vertex_sum_weights);
     interpolate_attribute<GEO::vec4f>(s.vertex_tangent,         d.vertex_tangent,         m_dst_vertex_sources.data(), &m_dst_vertex_sum_weights);
     interpolate_attribute<GEO::vec3f>(s.vertex_bitangent,       d.vertex_bitangent,       m_dst_vertex_sources.data(), &m_dst_vertex_sum_weights);
     interpolate_attribute<GEO::vec4f>(s.vertex_color_0,         d.vertex_color_0,         m_dst_vertex_sources.data(), &m_dst_vertex_sum_weights);
@@ -483,6 +484,9 @@ void Geometry_operation::interpolate_mesh_attributes(const uint64_t regeneration
         // writes (Geometry_process_parameters::facet_texcoord_usage_index default).
         interpolate_attribute<GEO::vec2f>(s.corner_texcoord_1,  d.corner_texcoord_1,      m_dst_corner_sources.data(), &m_dst_corner_sum_weights);
     }
+    // Lightmap UVs (channel 2) interpolate like any other texcoord; a topology
+    // change invalidates the bake and its atlas anyway (the UVs get regenerated).
+    interpolate_attribute<GEO::vec2f>(s.corner_texcoord_2,      d.corner_texcoord_2,      m_dst_corner_sources.data(), &m_dst_corner_sum_weights);
     interpolate_attribute<GEO::vec4f>(s.corner_tangent,         d.corner_tangent,         m_dst_corner_sources.data(), &m_dst_corner_sum_weights);
     interpolate_attribute<GEO::vec3f>(s.corner_bitangent,       d.corner_bitangent,       m_dst_corner_sources.data(), &m_dst_corner_sum_weights);
     interpolate_attribute<GEO::vec4f>(s.corner_color_0,         d.corner_color_0,         m_dst_corner_sources.data(), &m_dst_corner_sum_weights);
@@ -504,6 +508,7 @@ void Geometry_operation::copy_mesh_attributes()
     copy_attribute<GEO::vec3f>(s.vertex_normal_smooth,   d.vertex_normal_smooth   );
     copy_attribute<GEO::vec2f>(s.vertex_texcoord_0,      d.vertex_texcoord_0      );
     copy_attribute<GEO::vec2f>(s.vertex_texcoord_1,      d.vertex_texcoord_1      );
+    copy_attribute<GEO::vec2f>(s.vertex_texcoord_2,      d.vertex_texcoord_2      );
     copy_attribute<GEO::vec4f>(s.vertex_tangent,         d.vertex_tangent         );
     copy_attribute<GEO::vec3f>(s.vertex_bitangent,       d.vertex_bitangent       );
     copy_attribute<GEO::vec4f>(s.vertex_color_0,         d.vertex_color_0         );
@@ -516,6 +521,7 @@ void Geometry_operation::copy_mesh_attributes()
     copy_attribute<GEO::vec3f>(s.corner_normal,          d.corner_normal          );
     copy_attribute<GEO::vec2f>(s.corner_texcoord_0,      d.corner_texcoord_0      );
     copy_attribute<GEO::vec2f>(s.corner_texcoord_1,      d.corner_texcoord_1      );
+    copy_attribute<GEO::vec2f>(s.corner_texcoord_2,      d.corner_texcoord_2      );
     copy_attribute<GEO::vec4f>(s.corner_tangent,         d.corner_tangent         );
     copy_attribute<GEO::vec3f>(s.corner_bitangent,       d.corner_bitangent       );
     copy_attribute<GEO::vec4f>(s.corner_color_0,         d.corner_color_0         );

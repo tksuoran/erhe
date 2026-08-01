@@ -120,6 +120,7 @@ static constexpr const char* c_tangent         = "tangent"        ;
 static constexpr const char* c_bitangent       = "bitangent"      ;
 static constexpr const char* c_texcoord_0      = "texcoord_0"     ;
 static constexpr const char* c_texcoord_1      = "texcoord_1"     ;
+static constexpr const char* c_texcoord_2      = "texcoord_2"     ; // lightmap UVs (see doc/lightmap_baking_plan.md)
 static constexpr const char* c_color_0         = "color_0"        ;
 static constexpr const char* c_color_1         = "color_1"        ;
 static constexpr const char* c_joint_indices_0 = "joint_indices_0";
@@ -151,6 +152,7 @@ public:
     static inline const Attribute_descriptor s_bitangent      { 0, c_bitangent      , Transform_mode::normalize_mat_mul_vec3_zero,           Interpolation_mode::normalized_vec3_float };
     static inline const Attribute_descriptor s_texcoord_0     { 0, c_texcoord_0     , Transform_mode::none,                                  Interpolation_mode::linear };
     static inline const Attribute_descriptor s_texcoord_1     { 1, c_texcoord_1     , Transform_mode::none,                                  Interpolation_mode::linear };
+    static inline const Attribute_descriptor s_texcoord_2     { 2, c_texcoord_2     , Transform_mode::none,                                  Interpolation_mode::linear };
     static inline const Attribute_descriptor s_color_0        { 0, c_color_0        , Transform_mode::none,                                  Interpolation_mode::linear };
     static inline const Attribute_descriptor s_color_1        { 1, c_color_1        , Transform_mode::none,                                  Interpolation_mode::linear };
     static inline const Attribute_descriptor s_joint_indices_0{ 0, c_joint_indices_0, Transform_mode::none,                                  Interpolation_mode::none };
@@ -272,6 +274,7 @@ public:
     Attribute_present<GEO::vec3f> vertex_normal_smooth     ;
     Attribute_present<GEO::vec2f> vertex_texcoord_0        ;
     Attribute_present<GEO::vec2f> vertex_texcoord_1        ;
+    Attribute_present<GEO::vec2f> vertex_texcoord_2        ;
     Attribute_present<GEO::vec4f> vertex_tangent           ;
     Attribute_present<GEO::vec3f> vertex_bitangent         ;
     Attribute_present<GEO::vec4f> vertex_color_0           ;
@@ -285,6 +288,7 @@ public:
     Attribute_present<GEO::vec3f> corner_normal            ;
     Attribute_present<GEO::vec2f> corner_texcoord_0        ;
     Attribute_present<GEO::vec2f> corner_texcoord_1        ;
+    Attribute_present<GEO::vec2f> corner_texcoord_2        ;
     Attribute_present<GEO::vec4f> corner_tangent           ;
     Attribute_present<GEO::vec3f> corner_bitangent         ;
     Attribute_present<GEO::vec4f> corner_color_0           ;
@@ -292,11 +296,11 @@ public:
     Attribute_present<GEO::vec2f> corner_aniso_control     ;
     Attribute_present<float>      edge_sharpness           ; // first (and so far only) edge-domain attribute
     inline auto facet_color         (size_t i) -> Attribute_present<GEO::vec4f>& { return (i == 0) ? facet_color_0          : facet_color_1         ; }
-    inline auto vertex_texcoord     (size_t i) -> Attribute_present<GEO::vec2f>& { return (i == 0) ? vertex_texcoord_0      : vertex_texcoord_1     ; }
+    inline auto vertex_texcoord     (size_t i) -> Attribute_present<GEO::vec2f>& { return (i == 0) ? vertex_texcoord_0      : (i == 1) ? vertex_texcoord_1 : vertex_texcoord_2; }
     inline auto vertex_color        (size_t i) -> Attribute_present<GEO::vec4f>& { return (i == 0) ? vertex_color_0         : vertex_color_1        ; }
     inline auto vertex_joint_indices(size_t i) -> Attribute_present<GEO::vec4u>& { return (i == 0) ? vertex_joint_indices_0 : vertex_joint_indices_1; }
     inline auto vertex_joint_weights(size_t i) -> Attribute_present<GEO::vec4f>& { return (i == 0) ? vertex_joint_weights_0 : vertex_joint_weights_1; }
-    inline auto corner_texcoord     (size_t i) -> Attribute_present<GEO::vec2f>& { return (i == 0) ? corner_texcoord_0      : corner_texcoord_1     ; }
+    inline auto corner_texcoord     (size_t i) -> Attribute_present<GEO::vec2f>& { return (i == 0) ? corner_texcoord_0      : (i == 1) ? corner_texcoord_1 : corner_texcoord_2; }
     inline auto corner_color        (size_t i) -> Attribute_present<GEO::vec4f>& { return (i == 0) ? corner_color_0         : corner_color_1        ; }
 };
 

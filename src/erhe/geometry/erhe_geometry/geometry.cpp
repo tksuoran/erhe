@@ -172,6 +172,7 @@ void Attribute_descriptors::init()
     insert(s_bitangent      );
     insert(s_texcoord_0     );
     insert(s_texcoord_1     );
+    insert(s_texcoord_2     );
     insert(s_color_0        );
     insert(s_color_1        );
     insert(s_joint_indices_0);
@@ -211,6 +212,7 @@ Mesh_attributes::Mesh_attributes(const GEO::Mesh& mesh)
     , vertex_normal_smooth     {mesh.vertices     .attributes(), Attribute_descriptors::s_normal_smooth     }
     , vertex_texcoord_0        {mesh.vertices     .attributes(), Attribute_descriptors::s_texcoord_0        }
     , vertex_texcoord_1        {mesh.vertices     .attributes(), Attribute_descriptors::s_texcoord_1        }
+    , vertex_texcoord_2        {mesh.vertices     .attributes(), Attribute_descriptors::s_texcoord_2        }
     , vertex_tangent           {mesh.vertices     .attributes(), Attribute_descriptors::s_tangent           }
     , vertex_bitangent         {mesh.vertices     .attributes(), Attribute_descriptors::s_bitangent         }
     , vertex_color_0           {mesh.vertices     .attributes(), Attribute_descriptors::s_color_0           }
@@ -224,6 +226,7 @@ Mesh_attributes::Mesh_attributes(const GEO::Mesh& mesh)
     , corner_normal            {mesh.facet_corners.attributes(), Attribute_descriptors::s_normal            }
     , corner_texcoord_0        {mesh.facet_corners.attributes(), Attribute_descriptors::s_texcoord_0        }
     , corner_texcoord_1        {mesh.facet_corners.attributes(), Attribute_descriptors::s_texcoord_1        }
+    , corner_texcoord_2        {mesh.facet_corners.attributes(), Attribute_descriptors::s_texcoord_2        }
     , corner_tangent           {mesh.facet_corners.attributes(), Attribute_descriptors::s_tangent           }
     , corner_bitangent         {mesh.facet_corners.attributes(), Attribute_descriptors::s_bitangent         }
     , corner_color_0           {mesh.facet_corners.attributes(), Attribute_descriptors::s_color_0           }
@@ -247,6 +250,7 @@ void Mesh_attributes::unbind()
     vertex_normal_smooth     .unbind();
     vertex_texcoord_0        .unbind();
     vertex_texcoord_1        .unbind();
+    vertex_texcoord_2        .unbind();
     vertex_tangent           .unbind();
     vertex_bitangent         .unbind();
     vertex_color_0           .unbind();
@@ -260,6 +264,7 @@ void Mesh_attributes::unbind()
     corner_normal            .unbind();
     corner_texcoord_0        .unbind();
     corner_texcoord_1        .unbind();
+    corner_texcoord_2        .unbind();
     corner_tangent           .unbind();
     corner_bitangent         .unbind();
     corner_color_0           .unbind();
@@ -282,6 +287,7 @@ void Mesh_attributes::bind()
     vertex_normal_smooth     .bind(m_mesh.vertices     .attributes());
     vertex_texcoord_0        .bind(m_mesh.vertices     .attributes());
     vertex_texcoord_1        .bind(m_mesh.vertices     .attributes());
+    vertex_texcoord_2        .bind(m_mesh.vertices     .attributes());
     vertex_tangent           .bind(m_mesh.vertices     .attributes());
     vertex_bitangent         .bind(m_mesh.vertices     .attributes());
     vertex_color_0           .bind(m_mesh.vertices     .attributes());
@@ -295,6 +301,7 @@ void Mesh_attributes::bind()
     corner_normal            .bind(m_mesh.facet_corners.attributes());
     corner_texcoord_0        .bind(m_mesh.facet_corners.attributes());
     corner_texcoord_1        .bind(m_mesh.facet_corners.attributes());
+    corner_texcoord_2        .bind(m_mesh.facet_corners.attributes());
     corner_tangent           .bind(m_mesh.facet_corners.attributes());
     corner_bitangent         .bind(m_mesh.facet_corners.attributes());
     corner_color_0           .bind(m_mesh.facet_corners.attributes());
@@ -929,6 +936,7 @@ void copy_attributes(const Mesh_attributes& s, Mesh_attributes& d)
     copy_attribute<GEO::vec3f>(s.vertex_normal_smooth,   d.vertex_normal_smooth  );
     copy_attribute<GEO::vec2f>(s.vertex_texcoord_0,      d.vertex_texcoord_0     );
     copy_attribute<GEO::vec2f>(s.vertex_texcoord_1,      d.vertex_texcoord_1     );
+    copy_attribute<GEO::vec2f>(s.vertex_texcoord_2,      d.vertex_texcoord_2     );
     copy_attribute<GEO::vec4f>(s.vertex_tangent,         d.vertex_tangent        );
     copy_attribute<GEO::vec3f>(s.vertex_bitangent,       d.vertex_bitangent      );
     copy_attribute<GEO::vec4f>(s.vertex_color_0,         d.vertex_color_0        );
@@ -941,6 +949,7 @@ void copy_attributes(const Mesh_attributes& s, Mesh_attributes& d)
     copy_attribute<GEO::vec3f>(s.corner_normal,          d.corner_normal         );
     copy_attribute<GEO::vec2f>(s.corner_texcoord_0,      d.corner_texcoord_0     );
     copy_attribute<GEO::vec2f>(s.corner_texcoord_1,      d.corner_texcoord_1     );
+    copy_attribute<GEO::vec2f>(s.corner_texcoord_2,      d.corner_texcoord_2     );
     copy_attribute<GEO::vec4f>(s.corner_tangent,         d.corner_tangent        );
     copy_attribute<GEO::vec3f>(s.corner_bitangent,       d.corner_bitangent      );
     copy_attribute<GEO::vec4f>(s.corner_color_0,         d.corner_color_0        );
@@ -1027,6 +1036,7 @@ void transform_mesh(
         transform_attribute<GEO::vec3f>(s.vertex_normal_smooth,   d.vertex_normal_smooth  , transform);
         transform_attribute<GEO::vec2f>(s.vertex_texcoord_0,      d.vertex_texcoord_0     , transform);
         transform_attribute<GEO::vec2f>(s.vertex_texcoord_1,      d.vertex_texcoord_1     , transform);
+        transform_attribute<GEO::vec2f>(s.vertex_texcoord_2,      d.vertex_texcoord_2     , transform);
         transform_attribute<GEO::vec4f>(s.vertex_tangent,         d.vertex_tangent        , transform);
         transform_attribute<GEO::vec3f>(s.vertex_bitangent,       d.vertex_bitangent      , transform);
         transform_attribute<GEO::vec4f>(s.vertex_color_0,         d.vertex_color_0        , transform);
@@ -1039,6 +1049,7 @@ void transform_mesh(
         transform_attribute<GEO::vec3f>(s.corner_normal,          d.corner_normal         , transform);
         transform_attribute<GEO::vec2f>(s.corner_texcoord_0,      d.corner_texcoord_0     , transform);
         transform_attribute<GEO::vec2f>(s.corner_texcoord_1,      d.corner_texcoord_1     , transform);
+        transform_attribute<GEO::vec2f>(s.corner_texcoord_2,      d.corner_texcoord_2     , transform);
         transform_attribute<GEO::vec4f>(s.corner_tangent,         d.corner_tangent        , transform);
         transform_attribute<GEO::vec3f>(s.corner_bitangent,       d.corner_bitangent      , transform);
         transform_attribute<GEO::vec4f>(s.corner_color_0,         d.corner_color_0        , transform);
