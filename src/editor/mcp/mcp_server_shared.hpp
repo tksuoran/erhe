@@ -413,6 +413,7 @@ inline void for_each_vertex_attribute(erhe::geometry::Mesh_attributes& a, F&& f)
     f("vertex_normal_smooth",      a.vertex_normal_smooth);
     f("vertex_texcoord_0",         a.vertex_texcoord_0);
     f("vertex_texcoord_1",         a.vertex_texcoord_1);
+    f("vertex_texcoord_2",         a.vertex_texcoord_2);
     f("vertex_tangent",            a.vertex_tangent);
     f("vertex_bitangent",          a.vertex_bitangent);
     f("vertex_color_0",            a.vertex_color_0);
@@ -431,6 +432,7 @@ inline void for_each_corner_attribute(erhe::geometry::Mesh_attributes& a, F&& f)
     f("corner_normal",        a.corner_normal);
     f("corner_texcoord_0",    a.corner_texcoord_0);
     f("corner_texcoord_1",    a.corner_texcoord_1);
+    f("corner_texcoord_2",    a.corner_texcoord_2);
     f("corner_tangent",       a.corner_tangent);
     f("corner_bitangent",     a.corner_bitangent);
     f("corner_color_0",       a.corner_color_0);

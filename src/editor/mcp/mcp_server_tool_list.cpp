@@ -876,7 +876,7 @@ void Mcp_server::refresh_tool_list()
     m_tool_infos.push_back({"generate_texture_coordinates", "Generate texture coordinates for the selected mesh node(s) via Geogram mesh_make_atlas (queued). Writes UVs into the given corner texcoord channel. Acts on the current object selection.", {
         {"type", "object"},
         {"properties", {
-            {"texcoord_slot",   {{"type", "integer"}, {"description", "Target corner texcoord channel 0 or 1 (default 0)"}}},
+            {"texcoord_slot",   {{"type", "integer"}, {"description", "Target corner texcoord channel 0, 1 or 2 (default 0; 2 is the lightmap channel)"}}},
             {"hard_angles_deg", {{"type", "number"},  {"description", "Hard-angle threshold in degrees for chart seams (default 45)"}}},
             {"parameterizer",   {{"type", "integer"}, {"description", "Atlas_parameterizer enum index (default 3 = ABF)"}}},
             {"packer",          {{"type", "integer"}, {"description", "Atlas_packer enum index (default 2 = XAtlas)"}}}
