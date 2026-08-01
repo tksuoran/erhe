@@ -11,11 +11,21 @@
 
 namespace editor {
 
-static const char* const c_editor_settings_file_path = "config/editor/editor_settings.json";
+static const char* const c_editor_settings_file_path        = "config/editor/editor_settings.json";
+static const char* const c_editor_settings_openxr_file_path = "config/editor/openxr_editor_settings.json";
 
-// Owns Editor_settings_config and its persistence
-// (config/editor/editor_settings.json). The config is loaded at
+// Owns Editor_settings_config and its persistence. The config is loaded at
 // construction.
+//
+// Desktop and OpenXR sessions keep separate settings files (matching the
+// openxr_commands.json / openxr_ imgui-config convention): the shared
+// editor_settings.json is always loaded first and its headset.openxr flag
+// selects the mode; when it says OpenXR, the store switches to
+// openxr_editor_settings.json for both load and save, seeding that file
+// from the shared one on first OpenXR run so existing tuning carries over.
+// Mode selection stays in the shared file only - the OpenXR file's own
+// headset.openxr value is forced true after load so in-session state is
+// consistent.
 //
 // Subsystems that keep their live state outside the config struct (grid,
 // inventory, scene view debug visualizations, App_settings, ...) register a
@@ -79,6 +89,9 @@ private:
     };
 
     Editor_settings_config      m_settings;
+    // The file this store loads from and saves to: editor_settings.json on
+    // desktop, openxr_editor_settings.json under OpenXR (see class comment).
+    std::string                 m_file_path{c_editor_settings_file_path};
     // Parts are constructed in parallel init tasks; registration must be
     // thread safe. collect() runs on the main thread per frame.
     std::mutex                  m_callbacks_mutex;
