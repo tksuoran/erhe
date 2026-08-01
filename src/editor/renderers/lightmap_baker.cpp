@@ -172,14 +172,16 @@ void main()
         }
         vec3 origin = p + n * ray_bias;
         rayQueryEXT ray_query;
-        // Back-facing triangles do not occlude: an origin that lands just
-        // under an adjacent facet (curved surface, interpolated normal)
-        // would otherwise see its own mesh from the inside and go black.
-        // Closed occluders still block via their front faces.
+        // No backface culling: a receiver whose biased origin lands inside
+        // a nearby occluder (floor texel under a resting object - the bias
+        // exceeds the contact gap) must still see that occluder's interior,
+        // or the contact ring bakes fully lit (observed light leak under
+        // the torus). Self-hit defense comes from the normal-offset bias,
+        // not from culling.
         rayQueryInitializeEXT(
             ray_query,
             s_tlas,
-            gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsCullBackFacingTrianglesEXT,
+            gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT,
             0xFFu,
             origin,
             1.0e-4,
@@ -206,7 +208,7 @@ void main()
             ndotl_max = max(ndotl_max, dot(n, to_light));
             rays += 1.0;
             rayQueryEXT rq2;
-            rayQueryInitializeEXT(rq2, s_tlas, gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsCullBackFacingTrianglesEXT, 0xFFu, p + n * lightmap_gather.ray_bias, 1.0e-4, to_light, 1.0e30);
+            rayQueryInitializeEXT(rq2, s_tlas, gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT, 0xFFu, p + n * lightmap_gather.ray_bias, 1.0e-4, to_light, 1.0e30);
             rayQueryProceedEXT(rq2);
             if (rayQueryGetIntersectionTypeEXT(rq2, true) == gl_RayQueryCommittedIntersectionNoneEXT) {
                 misses += 1.0;
