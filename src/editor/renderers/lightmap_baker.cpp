@@ -192,24 +192,30 @@ void main()
         }
     }
 #if defined(ERHE_LM_DEBUG_GATHER)
-    // Diagnostics: R = light_count/8, G = max NdotL over lights, B = shadow
-    // miss ratio (1 = all rays reached their light).
+    // Diagnostics: R = closest blocking hit t over all light rays (0 when
+    // every ray reaches its light), G = max NdotL over lights, B = shadow
+    // miss ratio (1 = all rays reached their light). Rays here mirror the
+    // main loop exactly, including backface culling.
     {
         float ndotl_max = 0.0;
         float misses    = 0.0;
         float rays      = 0.0;
+        float min_hit_t = 0.0;
         for (uint i = 0u; i < lightmap_gather.light_count; ++i) {
             vec3 to_light = normalize(lightmap_gather.light_direction_and_outer_cos[i].xyz);
             ndotl_max = max(ndotl_max, dot(n, to_light));
             rays += 1.0;
             rayQueryEXT rq2;
-            rayQueryInitializeEXT(rq2, s_tlas, gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT, 0xFFu, p + n * lightmap_gather.ray_bias, 1.0e-4, to_light, 1.0e30);
+            rayQueryInitializeEXT(rq2, s_tlas, gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsCullBackFacingTrianglesEXT, 0xFFu, p + n * lightmap_gather.ray_bias, 1.0e-4, to_light, 1.0e30);
             rayQueryProceedEXT(rq2);
             if (rayQueryGetIntersectionTypeEXT(rq2, true) == gl_RayQueryCommittedIntersectionNoneEXT) {
                 misses += 1.0;
+            } else {
+                float t = rayQueryGetIntersectionTEXT(rq2, true);
+                min_hit_t = (min_hit_t == 0.0) ? t : min(min_hit_t, t);
             }
         }
-        imageStore(i_lightmap, texel, vec4(float(lightmap_gather.light_count) / 8.0, ndotl_max, (rays > 0.0) ? misses / rays : 0.0, 1.0));
+        imageStore(i_lightmap, texel, vec4(min_hit_t, ndotl_max, (rays > 0.0) ? misses / rays : 0.0, 1.0));
         return;
     }
 #endif
@@ -438,6 +444,9 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
 
     Shader_stages_create_info gather_create_info{
         .name             = "lightmap_gather",
+        // Diagnostics: add { "ERHE_LM_DEBUG_GATHER", "1" } to defines to bake
+        // R = closest blocking hit t, G = max NdotL, B = shadow miss ratio
+        // instead of irradiance (see the debug block in c_gather_source).
         .extensions       = {
             { Shader_type::compute_shader, "GL_EXT_ray_query" }
         },
