@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Hud_config",
-    version=1,
+    version=2,
     short_desc="HUD",
     long_desc="HUD is intended for Virtual Reality - It can show ImGui UI in VR surface",
     developer=True,
@@ -93,6 +93,16 @@ struct("Hud_config",
             default="-0.38f",
             short_desc="",
             long_desc="",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "summon_distance",
+            Float,
+            added_in=2,
+            default="0.7f",
+            short_desc="Summon Distance",
+            long_desc="Distance in meters from the head at which a long press of the HUD toggle button places the HUD, along the current view direction.",
             visible=True,
             developer=False
         ),

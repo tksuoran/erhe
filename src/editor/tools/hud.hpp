@@ -9,6 +9,7 @@
 
 #include <glm/glm.hpp>
 
+#include <cstdint>
 #include <memory>
 
 namespace erhe::graphics       { class Device; }
@@ -39,6 +40,21 @@ class Toggle_hud_visibility_command : public erhe::commands::Command
 public:
     Toggle_hud_visibility_command(erhe::commands::Commands& commands, App_context& context);
     auto try_call() -> bool override;
+
+private:
+    App_context& m_context;
+};
+
+// XR toggle button with a long-press gesture: a short press toggles the Hud
+// visibility (decided on release), holding the button half a second summons
+// the Hud - repositions it in front of the user's current view (the same
+// placement method as the init status display) and makes it visible.
+class Hud_toggle_or_summon_command : public erhe::commands::Command
+{
+public:
+    Hud_toggle_or_summon_command(erhe::commands::Commands& commands, App_context& context);
+    auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override; // XR button edges
+    auto try_call           () -> bool override;                                      // per-frame update tick
 
 private:
     App_context& m_context;
@@ -96,6 +112,18 @@ public:
     auto toggle_mesh_visibility() -> bool;
     void set_mesh_visibility   (bool value);
 
+    // XR toggle-button handling (see Hud_toggle_or_summon_command): press
+    // starts the long-press timer; the per-frame update fires summon() the
+    // moment the hold threshold is reached; release toggles if the long
+    // press did not fire.
+    auto on_toggle_button_edge  (bool pressed) -> bool;
+    void on_toggle_button_update();
+
+    // Reposition the Hud in front of the user's current view - the init
+    // status display's placement method (fixed distance along the head
+    // forward direction, panel level, facing the user) - and show it.
+    void summon();
+
     auto try_begin_drag() -> bool;
     void on_drag       ();
     void end_drag      ();
@@ -111,12 +139,17 @@ private:
     Toggle_hud_visibility_command m_toggle_visibility_command;
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
+    Hud_toggle_or_summon_command              m_toggle_or_summon_command;
     Hud_drag_command                          m_drag_command;
     erhe::commands::Redirect_command          m_drag_float_redirect_update_command;
     erhe::commands::Drag_enable_float_command m_drag_float_enable_command;
     erhe::commands::Redirect_command          m_drag_bool_redirect_update_command;
     erhe::commands::Drag_enable_command       m_drag_bool_enable_command;
 #endif
+    // Long-press state for on_toggle_button_edge() / _update();
+    // press time -1 = no press in progress.
+    int64_t                                   m_toggle_press_time_ns{-1};
+    bool                                      m_long_press_fired{false};
 
     std::weak_ptr<erhe::scene::Node>          m_drag_node;
     bool                                      m_mesh_visible{true};

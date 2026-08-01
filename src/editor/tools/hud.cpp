@@ -5,6 +5,7 @@
 #include "app_windows.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
+#include "time.hpp"
 #include "tools/tools.hpp"
 #include "quad_view.hpp"
 #include "rendertarget_mesh.hpp"
@@ -13,6 +14,7 @@
 #include "erhe_imgui/window_imgui_host.hpp"
 
 #include "erhe_commands/commands.hpp"
+#include "config/generated/editor_settings_config.hpp"
 #include "config/generated/hud_config.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_math/math_util.hpp"
@@ -28,6 +30,8 @@
 #endif
 
 #include <imgui/imgui.h>
+
+#include <cmath>
 
 namespace editor {
 
@@ -83,6 +87,25 @@ auto Toggle_hud_visibility_command::try_call() -> bool
     m_context.hud->toggle_mesh_visibility();
     return true;
 }
+
+Hud_toggle_or_summon_command::Hud_toggle_or_summon_command(erhe::commands::Commands& commands, App_context& context)
+    : Command  {commands, "Hud.toggle_or_summon"}
+    , m_context{context}
+{
+}
+
+auto Hud_toggle_or_summon_command::try_call_with_input(erhe::commands::Input_arguments& input) -> bool
+{
+    return m_context.hud->on_toggle_button_edge(input.variant.button_pressed);
+}
+
+// Update binding: per-frame tick so the long press fires the moment the
+// threshold is reached, not when the button is finally released.
+auto Hud_toggle_or_summon_command::try_call() -> bool
+{
+    m_context.hud->on_toggle_button_update();
+    return false;
+}
 #pragma endregion Commands
 
 Hud::Hud(
@@ -101,6 +124,7 @@ Hud::Hud(
     : Tool                                {app_context}
     , m_toggle_visibility_command         {commands, app_context}
 #if defined(ERHE_XR_LIBRARY_OPENXR)
+    , m_toggle_or_summon_command          {commands, app_context}
     , m_drag_command                      {commands, app_context}
     , m_drag_float_redirect_update_command{commands, m_drag_command}
     , m_drag_float_enable_command         {commands, m_drag_float_redirect_update_command, 0.3f, 0.1f}
@@ -143,8 +167,13 @@ Hud::Hud(
     erhe::xr::Headset*    headset  = headset_view.get_headset();
     erhe::xr::Xr_actions* xr_right = (headset != nullptr) ? headset->get_actions_right() : nullptr;
     if (xr_right != nullptr) {
-        commands.bind_command_to_xr_boolean_action(&m_toggle_visibility_command, xr_right->menu_click, erhe::commands::Button_trigger::Button_pressed);
-        commands.bind_command_to_xr_boolean_action(&m_toggle_visibility_command, xr_right->b_click,    erhe::commands::Button_trigger::Button_pressed);
+        // Both edges reach the command; the update binding ticks the hold
+        // timer each frame so the long-press summon fires the moment the
+        // threshold is reached (see Hud::on_toggle_button_edge / _update).
+        commands.register_command(&m_toggle_or_summon_command);
+        commands.bind_command_to_xr_boolean_action(&m_toggle_or_summon_command, xr_right->menu_click, erhe::commands::Button_trigger::Any);
+        commands.bind_command_to_xr_boolean_action(&m_toggle_or_summon_command, xr_right->b_click,    erhe::commands::Button_trigger::Any);
+        commands.bind_command_to_update           (&m_toggle_or_summon_command);
         commands.bind_command_to_xr_float_action  (&m_drag_float_enable_command, xr_right->squeeze_value);
         commands.bind_command_to_update           (&m_drag_float_redirect_update_command);
         commands.bind_command_to_xr_boolean_action(&m_drag_bool_enable_command, xr_right->squeeze_click, erhe::commands::Button_trigger::Any);
@@ -476,6 +505,98 @@ void Hud::set_mesh_visibility(const bool value)
     }
 
     m_quad_view->set_visible(m_mesh_visible);
+}
+
+auto Hud::on_toggle_button_edge(const bool pressed) -> bool
+{
+    if (!m_enabled) {
+        return false;
+    }
+    if (m_context.time == nullptr) {
+        if (!pressed) {
+            toggle_mesh_visibility();
+        }
+        return true;
+    }
+    if (pressed) {
+        m_toggle_press_time_ns = m_context.time->get_host_system_time_ns();
+        m_long_press_fired     = false;
+        return true;
+    }
+    if (m_toggle_press_time_ns < 0) {
+        return true; // release without a recorded press (e.g. held across startup)
+    }
+    // The long press already fired from on_toggle_button_update(); the
+    // release then does nothing. A short press toggles.
+    const bool fired = m_long_press_fired;
+    m_toggle_press_time_ns = -1;
+    m_long_press_fired     = false;
+    if (!fired) {
+        toggle_mesh_visibility();
+    }
+    return true;
+}
+
+void Hud::on_toggle_button_update()
+{
+    if (!m_enabled || (m_toggle_press_time_ns < 0) || m_long_press_fired || (m_context.time == nullptr)) {
+        return;
+    }
+    constexpr int64_t long_press_ns = 500'000'000; // 0.5 s
+    if ((m_context.time->get_host_system_time_ns() - m_toggle_press_time_ns) >= long_press_ns) {
+        m_long_press_fired = true;
+        summon();
+    }
+}
+
+void Hud::summon()
+{
+    if (!m_enabled || !m_quad_view) {
+        return;
+    }
+
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    erhe::xr::Headset* headset = (m_headset_view != nullptr) ? m_headset_view->get_headset() : nullptr;
+    glm::vec3 head_position{};
+    glm::quat head_orientation{};
+    if ((headset != nullptr) && headset->get_headset_pose(head_position, head_orientation)) {
+        head_position += m_headset_view->get_camera_offset();
+
+        // Init status display placement: a configurable distance along the
+        // head forward direction, panel level (world up, ignoring head roll),
+        // facing the user. Fall back to the head's own up when looking
+        // nearly straight up or down (world-up look_at degenerates there).
+        const float summon_distance_m = (m_context.editor_settings != nullptr)
+            ? m_context.editor_settings->hud.summon_distance
+            : 0.7f;
+        const glm::vec3 forward  = glm::normalize(head_orientation * glm::vec3{0.0f, 0.0f, -1.0f});
+        const glm::vec3 world_up {0.0f, 1.0f, 0.0f};
+        const glm::vec3 up       = (std::abs(glm::dot(forward, world_up)) < 0.99f)
+            ? world_up
+            : glm::normalize(head_orientation * glm::vec3{0.0f, 1.0f, 0.0f});
+        const glm::vec3 position = head_position + summon_distance_m * forward;
+
+        // Same convention as the Hotbar / init display: create_look_at builds
+        // a transform whose local -Z points from the panel toward the head;
+        // the rotate flip turns the panel's front face toward the user.
+        constexpr glm::mat4 rotate{
+            -1.0f, 0.0f, 0.0f, 0.0f,
+             0.0f, 1.0f, 0.0f, 0.0f,
+             0.0f, 0.0f,-1.0f, 0.0f,
+             0.0f, 0.0f, 0.0f, 1.0f
+        };
+        const glm::mat4 world_from_node = erhe::math::create_look_at(position, head_position, up) * rotate;
+
+        m_mesh_visible = true;
+        m_quad_view->set_world_from_node(world_from_node);
+        m_quad_view->set_visible(true);
+        return;
+    }
+#endif
+
+    // Desktop / no head pose: the regular visibility path already re-places
+    // the Hud at the control pose.
+    set_mesh_visibility(true);
 }
 
 }
