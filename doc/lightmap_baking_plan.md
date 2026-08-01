@@ -1,6 +1,65 @@
 # Lightmap baking plan
 
-Status: PLANNED (research complete 2026-08-01, no implementation started).
+Status: IN PROGRESS on branch lightmap-baking (started 2026-08-01).
+
+## Status (2026-08-01)
+
+DONE, committed, verified:
+- Phase 1: texcoord channel 2 end-to-end (geometry attributes,
+  Mesh_memory vertex formats, Primitive_builder, make_atlas usage_index
+  2, v_texcoord_2 varying + "TexCoord 2 (Lightmap)" shader debug mode),
+  Item_flags::lightmapped (bit 30, glTF-persisted by name), Lightmap
+  window with Generate Lightmap UVs (undoable Make_atlas_operation).
+- Phase 2: Lightmap_baker (src/editor/renderers/lightmap_baker.*) -
+  atlas layout (area x density, skyline packing, POT page 256..4096,
+  4-texel padding) + UV-space texel G-buffer (world position + normal,
+  RGBA32F, alpha = coverage) with debug PNG output.
+- Phase 3A: direct-light gather - ray-query compute, per-texel explicit
+  light sampling (directional/point/spot; light node +Z convention)
+  with shadow rays against BLAS/TLAS of ALL content meshes. Verified:
+  correct occlusion + contact shadows on the default scene.
+- Phase 5: runtime sampling - Mesh_primitive::lightmap_uv_scale_offset
+  -> Primitive_buffer vec4 -> flat varying (loc 22); s_lightmap
+  (c_texture_heap_slot_lightmap = 4) bound by Light_buffer::
+  bind_lightmap (black fallback) from Forward_renderer;
+  standard.frag replaces the ambient term when the region is valid.
+  USER-VERIFIED in the viewport 2026-08-01.
+
+Test loop (MCP, editor launched hidden): set_item_flags lightmapped ->
+select_items -> generate_texture_coordinates texcoord_slot=2 ->
+lightmap_update_atlas -> lightmap_bake_gbuffer ->
+lightmap_bake_direct (optional debug_png). Or interactively via the
+Lightmap window (Generate Lightmap UVs / Update Atlas Layout / Bake
+Direct Lighting).
+
+Known interim behavior:
+- The bake holds DIRECT light only, and analytic lights still run for
+  lightmapped meshes, so direct light doubles up. Resolves when the
+  bake carries indirect (phase 3B) or per-mesh analytic gating lands.
+- Bakes are standalone submits (wait_idle); the §3a interactive loop
+  replaces them.
+- Stale lightmap_uv_scale_offset survives on meshes whose flag is later
+  cleared until the next bake; harmless (they just keep sampling).
+
+Gotchas learned:
+- Vulkan combined_image_sampler bindings are offset past the max
+  buffer binding in a bind group; raw bindings (acceleration
+  structure, storage image) are NOT - pick user binding points that
+  do not collide after the offset (see lightmap gather layout).
+- accelerationStructureEXT must be declared manually in GLSL (like
+  ray_trace.comp); samplers / storage images / uniform blocks are
+  auto-injected from the bind group layout.
+- The lit fragment path has no draw id; per-draw data reaches
+  standard.frag as flat varyings (hence loc 22 for the lightmap
+  region), not primitive.primitives[] indexing.
+- Bake command buffers use thread slot 6 (7 is the texture-graph
+  export slot).
+
+NEXT: phase 3B interactive loop (§3a: budgeted per-frame tile
+dispatch, accumulation + publish, change-driven invalidation, indirect
+bounces reading the published atlas), then phase 4 (dilation + JNLM
+denoise), phase 6 (ERHE_lightmap GLB persistence + RGB9E5), later the
+CLI bake (§7).
 
 Goal: bake static scene lighting into a lightmap texture with **minimum
 authoring effort** — lightmap UVs are assigned automatically, there is
