@@ -329,7 +329,7 @@ void Acceleration_structure_impl::build(Command_buffer& command_buffer, std::spa
             vk_instance.instanceCustomIndex                    = instance.instance_custom_index & 0x00ffffffu;
             vk_instance.mask                                   = instance.mask & 0xffu;
             vk_instance.instanceShaderBindingTableRecordOffset = 0;
-            vk_instance.flags                                  = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
+            vk_instance.flags                                  = instance.disable_facing_cull ? VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR : 0u;
             vk_instance.accelerationStructureReference         = instance.bottom_level->get_impl().get_device_address();
         }
         m_instance_buffer->end_write(0, byte_count);

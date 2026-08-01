@@ -92,7 +92,7 @@ layout(location = 1) out vec3 v_normal;
 void main()
 {
     vec2 atlas_uv = a_texcoord_2 * lightmap_draw.uv_scale_offset.xy + lightmap_draw.uv_scale_offset.zw;
-    vec2 ndc      = atlas_uv * 2.0 - 1.0;
+    vec2 ndc      = atlas_uv * 2.0 - 1.0 + lightmap_draw.jitter_ndc.xy;
     gl_Position   = vec4(ndc.x, ERHE_LM_Y_SIGN * ndc.y, 0.0, 1.0);
     v_position    = (lightmap_draw.world_from_node * vec4(a_position, 1.0)).xyz;
     v_normal      = normalize(mat3(lightmap_draw.world_from_node) * a_normal);
@@ -172,10 +172,14 @@ void main()
         }
         vec3 origin = p + n * ray_bias;
         rayQueryEXT ray_query;
+        // Back-facing triangles do not occlude: an origin that lands just
+        // under an adjacent facet (curved surface, interpolated normal)
+        // would otherwise see its own mesh from the inside and go black.
+        // Closed occluders still block via their front faces.
         rayQueryInitializeEXT(
             ray_query,
             s_tlas,
-            gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT,
+            gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsCullBackFacingTrianglesEXT,
             0xFFu,
             origin,
             1.0e-4,
@@ -213,6 +217,47 @@ void main()
 }
 )GLSL";
 
+// Dilation (plan phase 4): invalid texels (w == 0) take the average of
+// their valid 8-neighbors and become valid, so repeated passes grow every
+// chart outward one texel at a time. Valid texels pass through unchanged.
+// i_src / i_dst are declared by the bind group layout.
+constexpr const char* c_dilate_source = R"GLSL(
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+void main()
+{
+    ivec2 texel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size  = imageSize(i_dst);
+    if ((texel.x >= size.x) || (texel.y >= size.y)) {
+        return;
+    }
+    vec4 value = imageLoad(i_src, texel);
+    if (value.w > 0.0) {
+        imageStore(i_dst, texel, value);
+        return;
+    }
+    vec3  sum   = vec3(0.0);
+    float count = 0.0;
+    for (int dy = -1; dy <= 1; ++dy) {
+        for (int dx = -1; dx <= 1; ++dx) {
+            if ((dx == 0) && (dy == 0)) {
+                continue;
+            }
+            ivec2 neighbor = texel + ivec2(dx, dy);
+            if ((neighbor.x < 0) || (neighbor.y < 0) || (neighbor.x >= size.x) || (neighbor.y >= size.y)) {
+                continue;
+            }
+            vec4 neighbor_value = imageLoad(i_src, neighbor);
+            if (neighbor_value.w > 0.0) {
+                sum   += neighbor_value.rgb;
+                count += 1.0;
+            }
+        }
+    }
+    imageStore(i_dst, texel, (count > 0.0) ? vec4(sum / count, 1.0) : vec4(0.0));
+}
+)GLSL";
+
 } // anonymous namespace
 
 Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::scene_renderer::Mesh_memory& mesh_memory)
@@ -229,9 +274,10 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
             .type          = Shader_resource::Type::uniform_block
         }
     );
-    m_draw_block_world_offset = m_draw_block->add_mat4("world_from_node")->get_offset_in_parent();
-    m_draw_block_uv_offset    = m_draw_block->add_vec4("uv_scale_offset")->get_offset_in_parent();
-    m_draw_block_size         = m_draw_block->get_size_bytes(Shader_resource::Layout::std140);
+    m_draw_block_world_offset  = m_draw_block->add_mat4("world_from_node")->get_offset_in_parent();
+    m_draw_block_uv_offset     = m_draw_block->add_vec4("uv_scale_offset")->get_offset_in_parent();
+    m_draw_block_jitter_offset = m_draw_block->add_vec4("jitter_ndc")->get_offset_in_parent();
+    m_draw_block_size          = m_draw_block->get_size_bytes(Shader_resource::Layout::std140);
 
     m_bind_group_layout = std::make_unique<Bind_group_layout>(
         graphics_device,
@@ -283,9 +329,14 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
 
     Render_pipeline_create_info pipeline_create_info;
     pipeline_create_info.base.input_assembly                    = Input_assembly_state::triangle;
-    // Charts are rasterized in UV space; winding there is unrelated to
-    // world-space facing, so both sides must rasterize.
-    pipeline_create_info.base.rasterization                     = Rasterization_state::cull_mode_none;
+    // Charts are rasterized in UV space. The unwrap is orientation-
+    // preserving, so valid triangles keep the mesh's CCW winding there -
+    // but folded parametrization triangles (observed on curved shapes:
+    // ~1.6% of the torus) arrive mirrored and would overwrite good texels
+    // with positions from elsewhere on the surface (they bake black).
+    // Culling the flipped winding drops exactly the folds; texels only a
+    // fold covered stay invalid and are filled by dilation instead.
+    pipeline_create_info.base.rasterization                     = Rasterization_state::cull_mode_back_cw.with_winding_flip_if(top_left);
     pipeline_create_info.base.depth_stencil.depth_test_enable   = false;
     pipeline_create_info.base.depth_stencil.depth_write_enable  = false;
     pipeline_create_info.base.depth_stencil.stencil_test_enable = false;
@@ -417,6 +468,56 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
             .mag_filter  = Filter::nearest,
             .mipmap_mode = Sampler_mipmap_mode::not_mipmapped,
             .debug_label = "lightmap gather sampler"
+        }
+    );
+
+    // Dilation pipeline. Both bindings are raw storage images, so the
+    // combined-image-sampler binding offset (see the gather layout note)
+    // does not apply.
+    m_dilate_layout = std::make_unique<Bind_group_layout>(
+        graphics_device,
+        Bind_group_layout_create_info{
+            .bindings = {
+                Bind_group_layout_binding{
+                    .binding_point = 0u,
+                    .type          = Binding_type::storage_image,
+                    .name          = "i_src",
+                    .glsl_type     = Glsl_type::image_2d,
+                    .image_format  = "rgba32f",
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                Bind_group_layout_binding{
+                    .binding_point = 1u,
+                    .type          = Binding_type::storage_image,
+                    .name          = "i_dst",
+                    .glsl_type     = Glsl_type::image_2d,
+                    .image_format  = "rgba32f",
+                    .stage_flags   = Shader_stage_flags::compute
+                }
+            },
+            .debug_label       = erhe::utility::Debug_label{"lightmap dilate layout"},
+            .uses_texture_heap = false
+        }
+    );
+    Shader_stages_create_info dilate_create_info{
+        .name    = "lightmap_dilate",
+        .shaders = {
+            { Shader_type::compute_shader, std::string_view{c_dilate_source} }
+        },
+        .bind_group_layout = m_dilate_layout.get()
+    };
+    Shader_stages_prototype dilate_prototype = build_shader_stages(graphics_device, dilate_create_info);
+    if (!dilate_prototype.is_valid()) {
+        log_render->warn("Lightmap_baker: dilate shader failed to compile/link");
+        return;
+    }
+    m_dilate_shader_stages = std::make_unique<Shader_stages>(graphics_device, std::move(dilate_prototype));
+    m_dilate_pipeline = std::make_unique<Compute_pipeline>(
+        graphics_device,
+        Compute_pipeline_data{
+            .name              = "lightmap_dilate",
+            .shader_stages     = m_dilate_shader_stages.get(),
+            .bind_group_layout = m_dilate_layout.get()
         }
     );
 }
@@ -570,8 +671,21 @@ auto Lightmap_baker::bake_gbuffer() -> bool
 
     ensure_gbuffer_targets();
 
-    // Per-draw UBO: one region record per c_draw_ubo_stride bytes.
-    const std::size_t ubo_bytes = m_layout.regions.size() * c_draw_ubo_stride;
+    // Multi-jitter conservative coverage (plan phase 2, Bakery-style): each
+    // region rasterizes 9 times with sub-texel NDC offsets, center pass
+    // LAST. Depth test is off, so later draws win: edge texels whose center
+    // just misses every triangle still get a jittered write, and properly
+    // covered texels end with the unjittered value.
+    constexpr int c_jitter_count = 9;
+    constexpr float c_jitter[c_jitter_count][2] = {
+        {-1.0f, -1.0f}, {0.0f, -1.0f}, {1.0f, -1.0f},
+        {-1.0f,  0.0f},                {1.0f,  0.0f},
+        {-1.0f,  1.0f}, {0.0f,  1.0f}, {1.0f,  1.0f},
+        { 0.0f,  0.0f} // center last
+    };
+
+    // Per-draw UBO: one record per region per jitter pass.
+    const std::size_t ubo_bytes = m_layout.regions.size() * c_jitter_count * c_draw_ubo_stride;
     Buffer draw_ubo{
         m_graphics_device,
         Buffer_create_info{
@@ -588,15 +702,22 @@ auto Lightmap_baker::bake_gbuffer() -> bool
         }
     };
     {
+        // Half-texel jitter magnitude in NDC ([-1,1] spans the page).
+        const float jitter_step_x = 0.5f * 2.0f / static_cast<float>(m_layout.width);
+        const float jitter_step_y = 0.5f * 2.0f / static_cast<float>(m_layout.height);
         const std::span<std::byte> mapped = draw_ubo.map_bytes(0, ubo_bytes);
         std::memset(mapped.data(), 0, ubo_bytes);
-        for (std::size_t i = 0; i < m_layout.regions.size(); ++i) {
-            const Instance_region& region = m_layout.regions[i];
-            const erhe::scene::Node* const node = region.mesh ? region.mesh->get_node() : nullptr;
-            const glm::mat4 world_from_node = (node != nullptr) ? node->world_from_node() : glm::mat4{1.0f};
-            std::byte* const record = mapped.data() + i * c_draw_ubo_stride;
-            std::memcpy(record + m_draw_block_world_offset, &world_from_node,        sizeof(glm::mat4));
-            std::memcpy(record + m_draw_block_uv_offset,    &region.uv_scale_offset, sizeof(glm::vec4));
+        for (int j = 0; j < c_jitter_count; ++j) {
+            const glm::vec4 jitter_ndc{c_jitter[j][0] * jitter_step_x, c_jitter[j][1] * jitter_step_y, 0.0f, 0.0f};
+            for (std::size_t i = 0; i < m_layout.regions.size(); ++i) {
+                const Instance_region& region = m_layout.regions[i];
+                const erhe::scene::Node* const node = region.mesh ? region.mesh->get_node() : nullptr;
+                const glm::mat4 world_from_node = (node != nullptr) ? node->world_from_node() : glm::mat4{1.0f};
+                std::byte* const record = mapped.data() + (static_cast<std::size_t>(j) * m_layout.regions.size() + i) * c_draw_ubo_stride;
+                std::memcpy(record + m_draw_block_world_offset,  &world_from_node,        sizeof(glm::mat4));
+                std::memcpy(record + m_draw_block_uv_offset,     &region.uv_scale_offset, sizeof(glm::vec4));
+                std::memcpy(record + m_draw_block_jitter_offset, &jitter_ndc,             sizeof(glm::vec4));
+            }
         }
         draw_ubo.unmap();
     }
@@ -639,50 +760,55 @@ auto Lightmap_baker::bake_gbuffer() -> bool
         encoder.set_bind_group_layout(m_bind_group_layout.get());
         encoder.set_render_pipeline(*m_pipeline);
 
-        for (std::size_t i = 0; i < m_layout.regions.size(); ++i) {
-            const Instance_region& region = m_layout.regions[i];
-            if (!region.mesh) {
-                continue;
-            }
-            const std::vector<erhe::scene::Mesh_primitive>& primitives = region.mesh->get_primitives();
-            if (region.primitive_index >= primitives.size()) {
-                continue;
-            }
-            const erhe::primitive::Primitive* const primitive = primitives[region.primitive_index].primitive.get();
-            if (primitive == nullptr) {
-                continue;
-            }
-            const erhe::primitive::Buffer_mesh* const buffer_mesh = primitive->get_renderable_mesh();
-            if ((buffer_mesh == nullptr) || (buffer_mesh->triangle_fill_indices.index_count == 0)) {
-                continue;
-            }
-            if (buffer_mesh->vertex_input_key != not_skinned_key) {
-                // Pipeline vertex input is the non-skinned content format;
-                // anything else (should not happen after the skin filter)
-                // is skipped rather than mis-bound.
-                continue;
-            }
-            for (std::size_t stream = 0; stream < buffer_mesh->vertex_buffer_ranges.size(); ++stream) {
-                const erhe::primitive::Buffer_range& range = buffer_mesh->vertex_buffer_ranges[stream];
-                encoder.set_vertex_buffer(m_mesh_memory.get_vertex_buffer(range), range.byte_offset, stream);
-            }
-            const erhe::primitive::Buffer_range& index_range = buffer_mesh->index_buffer_range;
-            encoder.set_index_buffer(m_mesh_memory.get_index_buffer(index_range));
-            encoder.set_buffer(Buffer_target::uniform, &draw_ubo, i * c_draw_ubo_stride, m_draw_block_size, 0);
+        for (int j = 0; j < c_jitter_count; ++j) {
+            for (std::size_t i = 0; i < m_layout.regions.size(); ++i) {
+                const Instance_region& region = m_layout.regions[i];
+                if (!region.mesh) {
+                    continue;
+                }
+                const std::vector<erhe::scene::Mesh_primitive>& primitives = region.mesh->get_primitives();
+                if (region.primitive_index >= primitives.size()) {
+                    continue;
+                }
+                const erhe::primitive::Primitive* const primitive = primitives[region.primitive_index].primitive.get();
+                if (primitive == nullptr) {
+                    continue;
+                }
+                const erhe::primitive::Buffer_mesh* const buffer_mesh = primitive->get_renderable_mesh();
+                if ((buffer_mesh == nullptr) || (buffer_mesh->triangle_fill_indices.index_count == 0)) {
+                    continue;
+                }
+                if (buffer_mesh->vertex_input_key != not_skinned_key) {
+                    // Pipeline vertex input is the non-skinned content format;
+                    // anything else (should not happen after the skin filter)
+                    // is skipped rather than mis-bound.
+                    continue;
+                }
+                for (std::size_t stream = 0; stream < buffer_mesh->vertex_buffer_ranges.size(); ++stream) {
+                    const erhe::primitive::Buffer_range& range = buffer_mesh->vertex_buffer_ranges[stream];
+                    encoder.set_vertex_buffer(m_mesh_memory.get_vertex_buffer(range), range.byte_offset, stream);
+                }
+                const erhe::primitive::Buffer_range& index_range = buffer_mesh->index_buffer_range;
+                encoder.set_index_buffer(m_mesh_memory.get_index_buffer(index_range));
+                const std::size_t record_index = static_cast<std::size_t>(j) * m_layout.regions.size() + i;
+                encoder.set_buffer(Buffer_target::uniform, &draw_ubo, record_index * c_draw_ubo_stride, m_draw_block_size, 0);
 
-            const erhe::dataformat::Format index_format = m_mesh_memory.get_index_format(
-                erhe::scene_renderer::Pool_buffer_identity{index_range.pool_id, index_range.buffer_id}
-            );
-            const std::uintptr_t index_offset =
-                index_range.byte_offset +
-                buffer_mesh->triangle_fill_indices.first_index * index_range.element_size;
-            encoder.draw_indexed_primitives(
-                Primitive_type::triangle,
-                buffer_mesh->triangle_fill_indices.index_count,
-                index_format,
-                index_offset
-            );
-            ++drawn;
+                const erhe::dataformat::Format index_format = m_mesh_memory.get_index_format(
+                    erhe::scene_renderer::Pool_buffer_identity{index_range.pool_id, index_range.buffer_id}
+                );
+                const std::uintptr_t index_offset =
+                    index_range.byte_offset +
+                    buffer_mesh->triangle_fill_indices.first_index * index_range.element_size;
+                encoder.draw_indexed_primitives(
+                    Primitive_type::triangle,
+                    buffer_mesh->triangle_fill_indices.index_count,
+                    index_format,
+                    index_offset
+                );
+                if (j == 0) {
+                    ++drawn;
+                }
+            }
         }
     }
     command_buffer.end();
@@ -890,6 +1016,21 @@ auto Lightmap_baker::bake_direct(Scene_root& scene_root) -> bool
                 .debug_label = erhe::utility::Debug_label{"lightmap atlas"}
             }
         );
+        m_dilate_texture.reset();
+    }
+    if (m_dilate_pipeline && !m_dilate_texture) {
+        m_dilate_texture = std::make_shared<Texture>(
+            m_graphics_device,
+            Texture_create_info{
+                .device      = m_graphics_device,
+                .usage_mask  = Image_usage_flag_bit_mask::storage,
+                .type        = Texture_type::texture_2d,
+                .pixelformat = erhe::dataformat::Format::format_32_vec4_float,
+                .width       = m_layout.width,
+                .height      = m_layout.height,
+                .debug_label = erhe::utility::Debug_label{"lightmap dilate scratch"}
+            }
+        );
     }
 
     // Scene lights into the gather UBO.
@@ -995,7 +1136,11 @@ auto Lightmap_baker::bake_direct(Scene_root& scene_root) -> bool
                     .transform             = world_from_node,
                     .instance_custom_index = static_cast<uint32_t>(instances.size()),
                     .mask                  = 0xFFu,
-                    .bottom_level          = blas
+                    .bottom_level          = blas,
+                    // The gather's shadow rays cull back-facing triangles
+                    // (self-hit leak defense), so facing culling must stay
+                    // enabled on lightmap TLAS instances.
+                    .disable_facing_cull   = false
                 }
             );
         }
@@ -1034,6 +1179,30 @@ auto Lightmap_baker::bake_direct(Scene_root& scene_root) -> bool
             (static_cast<std::uintptr_t>(m_layout.height) + 7) / 8,
             1
         );
+    }
+
+    // Dilation: an even iteration count >= s_padding, so the final pass
+    // lands back in m_lightmap_texture.
+    if (m_dilate_pipeline && m_dilate_texture) {
+        command_buffer.memory_barrier(Memory_barrier_mask::shader_image_access_barrier_bit);
+        command_buffer.transition_texture_layout(*m_dilate_texture, Image_layout::general);
+        constexpr int dilate_iterations = 2 * ((s_padding + 1) / 2);
+        Texture* const ping[2] = { m_lightmap_texture.get(), m_dilate_texture.get() };
+        for (int i = 0; i < dilate_iterations; ++i) {
+            {
+                Compute_command_encoder encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
+                encoder.set_bind_group_layout(m_dilate_layout.get());
+                encoder.set_compute_pipeline(*m_dilate_pipeline);
+                encoder.set_storage_image(0u, *ping[i & 1]);
+                encoder.set_storage_image(1u, *ping[(i + 1) & 1]);
+                encoder.dispatch_compute(
+                    (static_cast<std::uintptr_t>(m_layout.width)  + 7) / 8,
+                    (static_cast<std::uintptr_t>(m_layout.height) + 7) / 8,
+                    1
+                );
+            }
+            command_buffer.memory_barrier(Memory_barrier_mask::shader_image_access_barrier_bit);
+        }
     }
     command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::shader_read_only_optimal);
     command_buffer.end();

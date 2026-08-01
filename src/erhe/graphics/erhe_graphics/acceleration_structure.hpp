@@ -56,6 +56,12 @@ public:
     uint32_t                      instance_custom_index{0};    // low 24 bits, readable in shaders
     uint32_t                      mask                 {0xffu}; // low 8 bits, ANDed against the ray mask
     const Acceleration_structure* bottom_level         {nullptr};
+    // When true (default, the historical behavior) the instance sets
+    // VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR, making the
+    // gl_RayFlagsCull*FacingTrianglesEXT ray flags no-ops against it. Set
+    // false where facing culling matters (e.g. lightmap shadow rays that
+    // must ignore back-facing self-hits).
+    bool                          disable_facing_cull  {true};
 };
 
 class Acceleration_structure_create_info

@@ -137,9 +137,10 @@ private:
     Atlas_layout                                       m_layout;
 
     // G-buffer raster pass objects (created once in the constructor).
-    std::unique_ptr<erhe::graphics::Shader_resource>   m_draw_block; // per-draw UBO: world_from_node + uv_scale_offset
+    std::unique_ptr<erhe::graphics::Shader_resource>   m_draw_block; // per-draw UBO: world_from_node + uv_scale_offset + jitter
     std::size_t                                        m_draw_block_world_offset {0};
     std::size_t                                        m_draw_block_uv_offset    {0};
+    std::size_t                                        m_draw_block_jitter_offset{0};
     std::size_t                                        m_draw_block_size         {0};
     std::unique_ptr<erhe::graphics::Bind_group_layout> m_bind_group_layout;
     std::unique_ptr<erhe::graphics::Fragment_outputs>  m_fragment_outputs;
@@ -164,6 +165,15 @@ private:
     std::unique_ptr<erhe::graphics::Sampler>           m_nearest_sampler;
     std::shared_ptr<erhe::graphics::Texture>           m_lightmap_texture;
     bool                                               m_lightmap_valid{false};
+
+    // Dilation pass (plan phase 4): valid texels flood into invalid
+    // 8-neighborhood, s_padding iterations, ping-pong between the atlas
+    // and a scratch texture, so bilinear sampling at chart edges never
+    // reads unbaked (black) texels.
+    std::unique_ptr<erhe::graphics::Bind_group_layout> m_dilate_layout;
+    std::unique_ptr<erhe::graphics::Shader_stages>     m_dilate_shader_stages;
+    std::unique_ptr<erhe::graphics::Compute_pipeline>  m_dilate_pipeline;
+    std::shared_ptr<erhe::graphics::Texture>           m_dilate_texture;
 
     std::unordered_map<const erhe::primitive::Buffer_mesh*, Blas_entry> m_blas_cache;
     std::unique_ptr<erhe::graphics::Acceleration_structure>             m_tlas;
