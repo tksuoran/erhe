@@ -1,0 +1,422 @@
+# Lightmap baking plan
+
+Status: PLANNED (research complete 2026-08-01, no implementation started).
+
+Goal: bake static scene lighting into a lightmap texture with **minimum
+authoring effort** — lightmap UVs are assigned automatically, there is
+ideally one user-visible quality knob (texel density), and the bake runs
+on the GPU using Vulkan ray query.
+
+The bake is **interactive and iterative**: it runs inside the normal
+frame loop under a per-frame GPU budget, the user keeps navigating and
+editing the scene while it converges, the viewport always shows the
+current (partially converged) lightmap, and edits — moving a light,
+changing its color, toggling it — restart accumulation so the lightmap
+visibly re-converges toward the new lighting. "Bake" is a mode you
+leave on, not a modal job you wait for.
+
+Interactive is the **default and first-built** mode. A later addition
+is a **non-interactive mode**: a fully unattended bake runnable from
+the command line (load scene → converge to target quality → denoise →
+save → exit). The core is built so both modes drive the same bake
+machinery (§7).
+
+Related docs: `doc/raytrace-plan.md` (GPU ray trace renderer this builds
+on), `doc/uv_editor.md` (UV infrastructure inventory), `doc/shadows.md`,
+`doc/scene_serialization.md`.
+
+---
+
+## 1. Research summary
+
+### 1.1 What the modern bakers do (external survey)
+
+The industry has converged on one architecture (Godot 4 LightmapperRD,
+Unity Progressive GPU Lightmapper, Unreal GPU Lightmass, Frostbite Flux,
+Bakery):
+
+1. **Automatic per-mesh UV unwrap** into a dedicated lightmap channel
+   (everyone uses xatlas or an equivalent; Godot vendors xatlas).
+2. **Per-instance atlas packing**: instances get a rectangle in a shared
+   atlas sized by world-space texel density; runtime UV =
+   `uv2 * scale + offset` (+ optional atlas page).
+3. **UV-space rasterization** of each chart into a *texel G-buffer*
+   (world position, normal, albedo, emissive per lightmap texel), with
+   conservative coverage (HW conservative raster or multi-jitter
+   re-render) plus dilation.
+4. **Progressive path-traced gather** per texel in a compute shader:
+   direct light via explicit light sampling (NEE), indirect via
+   cosine-weighted hemisphere rays, accumulated over many dispatches so
+   the app stays responsive. Hemicube radiosity (The Witness,
+   ands/lightmapper.h) is obsolete — slower convergence and no denoiser
+   fit.
+5. **Artifact hardening** — this is the long tail:
+   - light-leak prevention: virtual offset (tangential push-off rays),
+     adaptive ray-origin bias (`pos += pos * 2e-7`), backface-hit
+     invalidation of texels;
+   - guided denoising (Open Image Denoise, or Godot's self-contained
+     JNLM compute shader — non-local means guided by albedo+normal);
+   - dilation of valid texels into gutters;
+   - seam handling: ≥2 texel chart padding + optional least-squares seam
+     stitch (ands/seamoptimizer, zlib license, single file).
+6. **HDR storage**: bake in float; ship RGB9E5 (4 B/texel, filterable,
+   supported everywhere including Quest) or RGBA16F.
+
+Key references (read in this order when implementing):
+
+- Bakery author, "Baking artifact-free lightmaps on the GPU" —
+  https://ndotl.wordpress.com/2018/08/29/baking-artifact-free-lightmaps/
+  — *the* practical artifact checklist (UV-space raster, multi-offset
+  conservative coverage, push-off, bias, dilation, bicubic sampling).
+- Godot `modules/lightmapper_rd` (MIT, ~7 files: `lm_raster.glsl`,
+  `lm_compute.glsl`, `lm_blendseams.glsl`, JNLM denoiser) — the best
+  complete open implementation; GLSL ports nearly verbatim, and its
+  software-grid traversal can be swapped for `rayQueryEXT`.
+  https://github.com/godotengine/godot/tree/master/modules/lightmapper_rd
+- nvpro `vk_mini_path_tracer` — compute + ray query path tracer
+  tutorial; essentially our bake shader minus the UV-space G-buffer.
+  https://nvpro-samples.github.io/vk_mini_path_tracer/
+- MJP BakingLab (MIT) — reference for basis encodings (flat irradiance
+  vs HL2 vs SH L1 vs SG). https://github.com/TheRealMJP/BakingLab
+- ands/seamoptimizer (least-squares seam fix, drop-in) —
+  https://github.com/ands/seamoptimizer
+- Castaño's Witness posts (sample validity, parameterization,
+  compression) — http://www.ludicon.com/castano/blog/articles/lightmap-parameterization/
+
+Libraries worth integrating directly: **none are needed for the core**
+(see below — erhe already has the pieces); candidates for the polish
+phase are **seamoptimizer** (single file, zlib) and **OIDN** (Apache 2,
+optional external denoiser as Godot does). Standalone **xatlas** (MIT,
+2 files) is a fallback if Geogram-based unwrap quality disappoints.
+ands/lightmapper.h was evaluated and rejected (OpenGL hemicube
+radiosity — wrong architecture for us).
+
+### 1.2 What erhe already has (codebase survey)
+
+The starting position is unusually strong; the baker is mostly a new
+dispatch domain over existing machinery.
+
+- **GPU ray tracing is done.** `VK_KHR_acceleration_structure` +
+  `ray_query` + `ray_tracing_position_fetch` detected and abstracted
+  (`src/erhe/graphics/erhe_graphics/acceleration_structure.hpp`,
+  `Device_info::use_ray_query`). `Ray_trace_renderer`
+  (`src/editor/renderers/ray_trace_renderer.cpp`) already builds
+  BLAS-per-`Buffer_mesh` from the live Mesh_memory GPU pools, a TLAS per
+  frame slot, and `res/editor/shaders/ray_trace.comp` already shades
+  ray-query hits with real materials, all light types, and traced
+  shadow rays, fetching stream-1 attributes via buffer device address.
+  It is ray-query-in-compute by design (no RT pipeline / SBT) — exactly
+  what a baker wants.
+- **Automatic UV unwrap is done.**
+  `erhe::geometry::operation::make_atlas()` /
+  `generate_mesh_atlas_texture_coordinates()`
+  (`src/erhe/geometry/erhe_geometry/operation/make_atlas.cpp`) —
+  Geogram parameterizers (LSCM/ABF/…) + xatlas chart packing
+  (`GEO::PACK_XATLAS`), writing into a selectable corner texcoord
+  channel; already exposed in the operations UI and over MCP.
+- **Multi-UV plumbing exists end-to-end**: data-driven vertex formats,
+  `tex_coord` usage_index 0 and 1 in stream 1 of every Mesh_memory
+  format, `v_texcoord_1` varying + `ERHE_SELECT_TEXCOORD`, per-sampler
+  `*_TEX_COORD` shader-key ints. Caveat: **channel 1 is already
+  claimed** (glTF `TEXCOORD_1`, circular-brushed-metal, facet coords) —
+  the lightmap gets a **new channel 2**.
+- Compute encoder with storage images, texture→buffer readback recipe
+  (`ray_trace_renderer.cpp:411` `read_output_rgba8`), offscreen
+  render-to-texture helper (`src/editor/texture_graph/texture_renderer.cpp`),
+  RGBA16F/RGBA32F formats, mipmap generation.
+- Shader variant system (`shader_key.hpp` X-macros) and programmatic
+  material GPU struct (`material_buffer.cpp`) make the runtime sampling
+  hook mechanical; the occlusion-texture sample at
+  `res/shaders/standard.frag:452` is the natural sibling.
+- Vendored `RectangleBinPack` (Skyline/MaxRects) for per-instance atlas
+  packing; mikktspace; CPU raytrace fallback (`erhe::raytrace`:
+  embree/bvh/tinybvh) if ever needed.
+- Persistence: scenes save as erhe-authored GLB with `ERHE_*` vendor
+  extensions and embedded images — a natural home for baked lightmaps.
+
+Gaps to build (nothing exists for these): UV-space texel G-buffer pass,
+the bake gather shader (sampling/RNG/accumulation), dilation/denoise/
+seams, a static/lightmapped item flag, per-instance lightmap
+scale/offset in per-draw data, HDR image writer (fpng is 8-bit PNG
+only), and bake caching/invalidation.
+
+---
+
+## 2. Design decisions
+
+- **Bake on Vulkan only**, gated exactly like
+  `Ray_trace_renderer::is_supported()` (`Device_info::use_ray_query`).
+  Runtime *sampling* of the result works on every backend and on Quest.
+- **Ray query in compute**, not an RT pipeline. Reuse
+  `ray_trace.comp`'s BLAS/TLAS setup, instance records, BDA attribute
+  fetch, and `erhe_light.glsl`/`erhe_bxdf.glsl`.
+- **UV channel 2** (`tex_coord` usage_index 2) is the lightmap channel.
+  Added to stream 1 of the Mesh_memory vertex formats; channels 0/1
+  keep their current meanings.
+- **Unwrap with the existing `make_atlas`** (LSCM parameterize + xatlas
+  pack) per mesh into normalized 0–1 charts. Standalone xatlas is the
+  contingency if chart quality or robustness disappoints (it also
+  handles triangle soups that never had a `Geometry`).
+- **Per-instance atlasing**: each lightmapped mesh instance gets a
+  rectangle in a shared atlas page (RectangleBinPack skyline), sized by
+  `surface_area × texels_per_meter`. Per-draw `vec4 uv_scale_offset`
+  (+ page index if paging is ever needed) lives in the primitive/draw
+  data, not the material — the same material must work lightmapped and
+  not.
+- **Flat RGB irradiance** first (no directionality). SH L1 is an
+  explicit later extension; the storage layout should not preclude it.
+- **Interactive progressive bake**: the gather runs every frame as a
+  budgeted compute dispatch (target ~2 ms GPU, tunable), accumulating
+  samples per texel across frames. The viewport samples the live
+  running-average texture, so the scene converges on screen while the
+  user flies around. There is no modal bake; a "Baking" toggle +
+  pause/reset controls.
+- **Change-driven invalidation, cheapest-first** (see §3a):
+  light edits reset only the accumulation; transform/geometry edits of
+  static meshes additionally re-raster the texel G-buffer and rebuild
+  the TLAS (already per-frame in `Ray_trace_renderer`); adding/removing
+  lightmapped meshes or changing texel density redoes atlas layout.
+  Bounce feedback (iterate-on-previous-lightmap) makes lighting edits
+  propagate gradually even before reset finishes converging — this is a
+  feature, not a bug (real-time-radiosity feel).
+- **One user knob**: texels per meter (default ~16). Everything else is
+  fixed defaults (padding 4 texels, atlas page 2048–4096, sample count
+  target, bounce count 3ish via iterate-on-previous-lightmap).
+- **Storage**: RGBA16F during development/debug; RGB9E5 as the shipped
+  encoding. Persist inside the scene GLB via an `ERHE_lightmap`
+  extension (raw payload in a GLB buffer view avoids needing an
+  EXR/KTX2 writer; revisit if interchange matters).
+- **Static classification**: new `Item_flags` bit (`static` or
+  `lightmapped`, bit 30); flags serialize by name so this round-trips.
+  Skinned meshes are excluded (they already have no BLAS).
+
+## 3. Architecture
+
+```
+                    ┌──────────────────────────────────────────┐
+   per mesh         │ Unwrap: make_atlas → texcoord channel 2  │  (CPU, cached)
+                    └──────────────┬───────────────────────────┘
+                                   │
+   per scene bake   ┌──────────────▼───────────────────────────┐
+                    │ Atlas layout: pack instance rects,       │  (CPU)
+                    │ assign uv_scale_offset per instance      │
+                    └──────────────┬───────────────────────────┘
+                                   │
+                    ┌──────────────▼───────────────────────────┐
+                    │ Texel G-buffer: raster charts in UV space│  (GPU raster,
+                    │ → position/normal/albedo/emissive/valid  │   multi-jitter
+                    └──────────────┬───────────────────────────┘   coverage)
+                                   │
+                    ┌──────────────▼───────────────────────────┐
+                    │ Gather: compute + rayQueryEXT            │  (GPU, progressive,
+                    │ NEE direct + cosine hemisphere indirect, │   reuses ray_trace
+                    │ virtual offset, bias, backface kill      │   BLAS/TLAS/materials)
+                    └──────────────┬───────────────────────────┘
+                                   │
+                    ┌──────────────▼───────────────────────────┐
+                    │ Post: JNLM denoise → dilation → seams    │  (GPU compute
+                    └──────────────┬───────────────────────────┘   + optional CPU seam LSQ)
+                                   │
+                    ┌──────────────▼───────────────────────────┐
+                    │ Runtime: standard.frag samples lightmap  │  (all backends,
+                    │ via texture heap, uv2*scale+offset,      │   replaces ambient
+                    │ added where ambient/occlusion apply      │   for static meshes)
+                    └──────────────────────────────────────────┘
+```
+
+New code lives in `src/editor/renderers/lightmap_baker.{hpp,cpp}`
+(modeled on `ray_trace_renderer.cpp` — copy its BLAS cache, TLAS, bind
+group, dispatch, readback patterns) plus shaders
+`res/editor/shaders/lightmap_{raster.vert,raster.frag,gather.comp,denoise.comp,dilate.comp}`.
+
+## 3a. Interactive bake loop and invalidation
+
+Per frame, while baking is enabled (and `use_ray_query`):
+
+1. **Collect changes** since last frame and downgrade the bake state to
+   the cheapest level that covers them:
+
+   | Change | Response |
+   |---|---|
+   | Light moved / recolored / toggled, ambient, emissive material edit | reset accumulation (zero sample counts; keep G-buffer, atlas, BLAS) |
+   | Static mesh transform changed | re-raster that instance's G-buffer region, TLAS refresh (already per-frame), reset accumulation |
+   | Static mesh geometry edited | rebuild BLAS (existing lazy cache), re-unwrap if topology changed, then as above |
+   | Mesh added/removed from lightmapped set, texel density changed | redo atlas layout + full G-buffer + reset |
+   | Camera motion, dynamic (non-static) object motion | **nothing** — bake input is unaffected |
+
+   Debounce continuous edits (light being dragged): reset at most every
+   frame is fine — reset is a cheap clear; the cost model is "converge
+   time restarts", which is exactly the expected UX.
+
+2. **Dispatch a budgeted gather slice**: a persistent cursor walks the
+   atlas in tiles; each frame traces `rays_per_frame` (adaptive: scale
+   by measured dispatch time toward the ms budget, using the existing
+   GPU timing infrastructure). Early passes do 1 spp sweeps of the
+   whole atlas so the *entire* scene gets a rough answer fast
+   (coarse-to-fine), rather than converging tile 0 fully first.
+
+3. **Publish**: resolve running average (sum / count) into the display
+   atlas texture the renderer samples. Optionally run the denoiser on
+   the published copy every N frames once sample counts pass a
+   threshold — never on the accumulation buffer itself, so denoising
+   stays a display-side refinement that improves as input converges.
+
+4. **Bounce feedback**: indirect rays sample the *published* atlas at
+   hit points (iterate-on-previous-lightmap). With continuous
+   dispatching this behaves like progressive radiosity: after a light
+   edit, direct light snaps in within a sweep or two and bounces flow
+   in over the following seconds.
+
+State kept per bake session: accumulation atlas (RGBA32F sum + count),
+published atlas (RGBA16F), texel G-buffer, atlas layout, tile cursor,
+per-cause dirty flags. Everything except the published atlas is
+transient; persistence (§ Phase 6) snapshots the published atlas when
+the user saves.
+
+UI (Lightmap window): Baking on/off, Pause, Reset, texels/meter,
+ms-budget slider (advanced), convergence readout (min/avg spp), atlas
+debug view.
+
+## 4. Implementation phases
+
+Each phase ends in something visible/testable in the editor.
+
+### Phase 1 — Lightmap UV channel + unwrap pipeline
+- Add `tex_coord` usage_index 2 to the Mesh_memory stream-1 vertex
+  formats (`mesh_memory.cpp`) and to `Primitive_builder`; add
+  `USE_VERTEX_VARYING_TEXCOORD2` shader bool + `v_texcoord_2` varying.
+- Add the `static`/`lightmapped` item flag + UI checkbox.
+- Bake orchestration entry (editor window `Lightmap`, the Baking
+  toggle + texels/meter setting via the config codegen in
+  `src/editor/config/definitions/`): for each flagged mesh lacking
+  channel-2 UVs, run `generate_mesh_atlas_texture_coordinates` into
+  channel 2 (hard-angle defaults), rebuild the primitive.
+- Visual check: UV-debug shader mode showing channel 2 charts (or dump
+  the atlas layout as PNG).
+- Risk to resolve here: meshes imported as `Triangle_soup` (glTF) may
+  lack a `Geometry`; either build one for the unwrap or wire standalone
+  xatlas for that path.
+
+### Phase 2 — Atlas layout + texel G-buffer
+- Instance rect sizing (`area × density`), skyline packing
+  (RectangleBinPack), `uv_scale_offset` per instance stored on the mesh
+  attachment and uploaded via `primitive_buffer.cpp` per-draw data.
+- UV-space raster pass into RGBA32F position + RGBA16F
+  normal/albedo/emissive + coverage targets: vertex shader outputs
+  `clip = (uv2 * scale + offset) * 2 - 1`, fragment writes world-space
+  attributes. Multi-jitter conservative coverage (~9 offsets,
+  center-last, per the Bakery post) unless
+  `VK_EXT_conservative_rasterization` is trivially available.
+- Debug: visualize the G-buffer in the existing debug/texture windows.
+
+### Phase 3 — Gather (the bake)
+- Compute shader + `rayQueryEXT` over valid texels; reuse
+  `ray_trace.comp`'s TLAS binding, instance records, material SSBO,
+  light structures.
+- Step 1: direct light only (NEE to every light with traced shadow ray)
+  — a lightmap that matches the shadow-mapped raster look validates the
+  whole pipeline.
+- Step 2: the interactive loop of §3a — budgeted per-frame tile
+  dispatch, accumulation buffer (RGBA32F sum + count), publish to the
+  display atlas each frame, light-edit → accumulation reset. From this
+  point on the bake is already interactive; later steps only improve
+  quality.
+- Step 3: indirect — cosine-sampled hemisphere, iterate-on-previous-
+  lightmap bounces (rays read the published atlas at the hit point's
+  channel-2 UV).
+- Leak defenses from day one: adaptive origin bias, virtual-offset
+  push-off (~4 tangential probe rays, half-texel length), backface-hit
+  sample invalidation.
+
+### Phase 4 — Post-processing
+- Dilation compute pass (valid→invalid 8-neighborhood, ~padding
+  iterations).
+- Denoise: port Godot's JNLM compute shader (MIT, one file, guided by
+  the G-buffer albedo+normal), applied periodically to the published
+  atlas per §3a so partially-converged views look clean too. OIDN stays
+  an optional external step if JNLM proves insufficient.
+- Seams: rely on padding + dilation first; add a seamoptimizer-style
+  least-squares CPU pass only if seams are visible in practice.
+
+### Phase 5 — Runtime sampling
+- `uvec2 lightmap_texture` via the texture heap; because the atlas is
+  per-scene (not per-material), bind it through the light/per-view
+  block or a dedicated slot rather than `material_buffer`.
+- `standard.frag`: for draws with a valid `uv_scale_offset`, replace
+  the `light_block.ambient_light` term with the lightmap sample
+  (bilinear first; bicubic upgrade later), keep analytic
+  specular/direct as configured — start simple: lightmap = full
+  diffuse (direct+indirect) for static meshes, dynamic lights can be
+  layered back per need.
+- Shader key: `USE_LIGHTMAP` bool. Works on GL/Vulkan/Metal since
+  sampling is plain texture heap usage.
+
+### Phase 6 — Persistence + encoding
+- `ERHE_lightmap` glTF extension: atlas payload (RGB9E5 or RGBA16F
+  buffer view + dimensions + encoding), per-instance
+  `uv_scale_offset`, per-mesh record that channel-2 UVs are baked
+  (they already ride in the `ERHE_geometry` dump / `TEXCOORD_2`).
+- Invalidation: store a hash of (geometry ids, transforms, lights,
+  density) with the bake; stale bakes still load but are flagged in
+  the UI.
+- Quest: RGB9E5 sampling is universally supported; the baked scene GLB
+  just works. (Bake itself remains desktop-Vulkan.)
+
+## 5. Effort estimate
+
+| Phase | Estimate |
+|---|---|
+| 1 UVs + flag | ~1 week |
+| 2 atlas + G-buffer | ~1 week |
+| 3 gather | 2–3 weeks to correct images |
+| 4 post | 1–2 weeks (denoise dominates) |
+| 5 runtime | a few days |
+| 6 persistence | ~1 week |
+
+The artifact-hardening tail (leaks, seams, denoise tuning) is the known
+schedule risk everywhere in the literature; the Bakery checklist and
+Godot's module are the map for it.
+
+## 6. Requirements the interactive build must not paint over
+
+To keep the later CLI mode cheap, the core observes these rules from
+phase 1:
+
+- The bake core (`Lightmap_baker`: atlas layout, G-buffer pass, gather
+  scheduling, post passes, persistence) must not depend on the editor
+  UI, ImGui, windows, or input — the Lightmap window is a thin client.
+  Model: `Ray_trace_renderer` (core) vs `Ray_trace_window` (view).
+- The per-frame budget is a parameter where "unbounded" is a valid
+  value (dispatch until done, no publish cadence needed).
+- Convergence is measurable: the scheduler exposes min/avg samples per
+  texel (already wanted for the UI readout) so "converged" can be a
+  termination criterion, not just a progress bar.
+- Invalidation (§3a step 1) is an optional input source; with no editor
+  driving it, the bake is a straight run to convergence.
+
+## 7. Future: non-interactive command-line bake
+
+Later addition, not part of the initial phases. An unattended bake:
+load scene GLB → unwrap/atlas as needed → run the gather to a target
+quality (min spp and/or variance threshold) at full GPU throughput →
+denoise/dilate/seam-fix → write the baked scene GLB → exit nonzero on
+failure (no ray-query device, unpackable atlas, …).
+
+Hosting: the existing headless build already runs the engine without a
+window/swapchain, which is exactly the environment this needs; the CLI
+entry point is a command-line switch (e.g. `--bake-lightmaps
+<in.glb> [-o out.glb] [--texels-per-meter N] [--target-spp N]`) that
+skips editor UI construction and drives `Lightmap_baker` in a loop
+until the convergence criterion is met. Because the interactive mode's
+core is UI-free (§6), this phase is mostly argument parsing, progress
+logging to stdout, and a saturating (unbudgeted) dispatch loop.
+
+## 8. Out of scope (explicit, for now)
+
+- Directional lightmaps (SH L1) — designed-for but not built.
+- Light probes for dynamic objects (Godot pairs these with lightmaps;
+  natural follow-up, same gather shader).
+- RT pipeline / SBT, GPU denoiser via OIDN in-process, KTX2/EXR
+  interchange export, lightmap block compression (BC6H/ASTC-HDR),
+  skinned/dynamic geometry, non-Vulkan bake fallback (CPU embree path
+  possible later via `erhe::raytrace`).
