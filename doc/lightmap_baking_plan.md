@@ -34,8 +34,11 @@ Direct Lighting).
 
 Known interim behavior:
 - The bake holds DIRECT light only, and analytic lights still run for
-  lightmapped meshes, so direct light doubles up. Resolves when the
-  bake carries indirect (phase 3B) or per-mesh analytic gating lands.
+  lightmapped meshes, so direct light doubles up. DECIDED (user,
+  2026-08-01): the lightmap will hold full direct+indirect and the
+  analytic light loops get gated off per lightmapped draw (same
+  v_lightmap_scale_offset gate) - implement the gate as the first step
+  of the next session, before/with 3B.
 - Bakes are standalone submits (wait_idle); the §3a interactive loop
   replaces them.
 - Stale lightmap_uv_scale_offset survives on meshes whose flag is later
@@ -55,11 +58,15 @@ Gotchas learned:
 - Bake command buffers use thread slot 6 (7 is the texture-graph
   export slot).
 
-NEXT: phase 3B interactive loop (§3a: budgeted per-frame tile
-dispatch, accumulation + publish, change-driven invalidation, indirect
-bounces reading the published atlas), then phase 4 (dilation + JNLM
-denoise), phase 6 (ERHE_lightmap GLB persistence + RGB9E5), later the
-CLI bake (§7).
+NEXT (in order):
+1. Gate analytic lights off for lightmapped draws in standard.frag
+   (branch on v_lightmap_scale_offset.x > 0 around the light loops;
+   specular stays off too for now - the bake is diffuse irradiance).
+2. Phase 3B interactive loop (§3a: budgeted per-frame tile dispatch,
+   accumulation + publish, change-driven invalidation, indirect
+   bounces reading the published atlas).
+3. Phase 4 (dilation + JNLM denoise), phase 6 (ERHE_lightmap GLB
+   persistence + RGB9E5), later the CLI bake (§7).
 
 Goal: bake static scene lighting into a lightmap texture with **minimum
 authoring effort** — lightmap UVs are assigned automatically, there is
@@ -224,6 +231,15 @@ only), and bake caching/invalidation.
   not.
 - **Flat RGB irradiance** first (no directionality). SH L1 is an
   explicit later extension; the storage layout should not preclude it.
+- **The lightmap holds FULL lighting (direct + indirect) and analytic
+  lights are gated off per lightmapped draw** (user-decided
+  2026-08-01). The same per-primitive region gate that enables the
+  lightmap sample skips the analytic light loops in standard.frag, so
+  a mesh is lit either entirely by its bake or entirely analytically -
+  never both. Consequence for interactivity: a light edit shows through
+  re-convergence (direct lands after one full atlas sweep, bounces
+  follow), not instantly; the runtime cost of lightmapped meshes is
+  minimal.
 - **Interactive progressive bake**: the gather runs every frame as a
   budgeted compute dispatch (target ~2 ms GPU, tunable), accumulating
   samples per texel across frames. The viewport samples the live
