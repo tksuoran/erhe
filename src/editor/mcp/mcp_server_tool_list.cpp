@@ -902,6 +902,13 @@ void Mcp_server::refresh_tool_list()
         {"required", json::array({"scene_name"})}
     }});
 
+    m_tool_infos.push_back({"lightmap_bake_gbuffer", "Rasterize the lightmap texel G-buffer for the current atlas layout (run lightmap_update_atlas first): world position + normal per lightmap texel, one draw per region in atlas UV space. Optionally writes debug PNGs (<base>_position.png, <base>_normal.png).", {
+        {"type", "object"},
+        {"properties", {
+            {"debug_png_base", {{"type", "string"}, {"description", "Optional path base for debug PNGs of the baked G-buffer"}}}
+        }}
+    }});
+
     // Transform reference frame for the transform gizmo / numeric edits.
     m_tool_infos.push_back({"set_transform_reference_mode", "Set the orientation reference frame (transform space) of the transform tool: global/world (world axes), local (selection's own orientation), reference (a chosen reference node's orientation), or selection (a frame derived from the active mesh-component selection). For reference mode, give reference_node_id or reference_node_name (searched across scenes, or within scene_name when given) - this is how you set the reference. edge_normal_blend tunes the selection-mode frame. Read the current state back with get_transform_state.", {
         {"type", "object"},

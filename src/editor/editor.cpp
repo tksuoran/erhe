@@ -1760,7 +1760,7 @@ public:
                     *m_mesh_memory.get(),
                     m_editor_settings.ray_trace
                 );
-                m_lightmap_baker = std::make_unique<Lightmap_baker>();
+                m_lightmap_baker = std::make_unique<Lightmap_baker>(*m_graphics_device.get(), *m_mesh_memory.get());
             }
             ERHE_TASK_FOOTER( .name("Post_processing") );
 

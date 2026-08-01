@@ -3,9 +3,21 @@
 #include <glm/glm.hpp>
 
 #include <memory>
+#include <string>
 #include <vector>
 
+namespace erhe::graphics {
+    class Bind_group_layout;
+    class Buffer;
+    class Device;
+    class Fragment_outputs;
+    class Render_pipeline;
+    class Shader_resource;
+    class Shader_stages;
+    class Texture;
+}
 namespace erhe::scene { class Mesh; }
+namespace erhe::scene_renderer { class Mesh_memory; }
 
 namespace editor {
 
@@ -13,16 +25,17 @@ class Scene_root;
 
 // Lightmap baker (doc/lightmap_baking_plan.md).
 //
-// Phase 2 milestone A: the per-instance atlas layout. Each lightmapped,
-// non-skinned content mesh primitive with lightmap UVs gets a rectangle in
-// a single square atlas page, sized by its world-space surface area times
-// the texel density, packed with the vendored skyline bin packer. The
-// packed rectangle maps the primitive's normalized channel-2 UVs into
-// atlas space as atlas_uv = uv2 * uv_scale_offset.xy + uv_scale_offset.zw.
+// Phase 2: the per-instance atlas layout (milestone A) and the texel
+// G-buffer raster pass (milestone B). Each lightmapped, non-skinned
+// content mesh primitive with channel-2 UVs gets a rectangle in a single
+// square atlas page, sized by world-space surface area times texel
+// density. The G-buffer pass then rasterizes every region's triangles in
+// atlas UV space, storing world position (RGBA32F, w = coverage) and
+// world normal (RGBA16F) per texel - the input the ray-query gather (plan
+// phase 3) consumes.
 //
-// The layout is CPU state only; the texel G-buffer pass and the gather
-// (plan phases 2B/3) consume it. UI-free by design (plan section 6) - the
-// Lightmap window is a thin client.
+// UI-free by design (plan section 6) - the Lightmap window and MCP tools
+// are thin clients.
 class Lightmap_baker
 {
 public:
@@ -49,6 +62,11 @@ public:
         std::vector<Instance_region> regions;
     };
 
+    Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::scene_renderer::Mesh_memory& mesh_memory);
+    ~Lightmap_baker() noexcept;
+
+    [[nodiscard]] auto is_supported() const -> bool;
+
     // Recompute the atlas layout for the lightmapped, non-skinned content
     // meshes of the scene whose primitives carry channel-2 UVs. Page size
     // grows in power-of-two steps until everything packs (up to s_max_page
@@ -57,12 +75,45 @@ public:
 
     [[nodiscard]] auto get_layout() const -> const Atlas_layout& { return m_layout; }
 
+    // Rasterize the texel G-buffer for the current layout: one draw per
+    // region, positions mapped through channel-2 UVs into the region's
+    // atlas rect. Standalone submit (own command buffer + wait idle) -
+    // fine for the phase-2 milestone; phase 3 folds this into the
+    // interactive per-frame loop. Returns false when there is no layout
+    // or the pipeline is unavailable.
+    auto bake_gbuffer() -> bool;
+
+    // Debug: write the G-buffer as 8-bit PNGs (<base>_position.png with
+    // position mapped into the layout bounds, <base>_normal.png as
+    // normal * 0.5 + 0.5; alpha = coverage). Requires bake_gbuffer().
+    auto debug_write_gbuffer_pngs(const std::string& base_path) -> bool;
+
+    [[nodiscard]] auto get_position_texture() const -> const std::shared_ptr<erhe::graphics::Texture>& { return m_position_texture; }
+    [[nodiscard]] auto get_normal_texture  () const -> const std::shared_ptr<erhe::graphics::Texture>& { return m_normal_texture; }
+
     static constexpr int s_min_page = 256;
     static constexpr int s_max_page = 4096;
     static constexpr int s_padding  = 4; // texels around each region (mips + bilinear)
 
 private:
-    Atlas_layout m_layout;
+    void ensure_gbuffer_targets();
+
+    erhe::graphics::Device&                            m_graphics_device;
+    erhe::scene_renderer::Mesh_memory&                 m_mesh_memory;
+    Atlas_layout                                       m_layout;
+
+    // G-buffer raster pass objects (created once in the constructor).
+    std::unique_ptr<erhe::graphics::Shader_resource>   m_draw_block; // per-draw UBO: world_from_node + uv_scale_offset
+    std::size_t                                        m_draw_block_world_offset {0};
+    std::size_t                                        m_draw_block_uv_offset    {0};
+    std::size_t                                        m_draw_block_size         {0};
+    std::unique_ptr<erhe::graphics::Bind_group_layout> m_bind_group_layout;
+    std::unique_ptr<erhe::graphics::Fragment_outputs>  m_fragment_outputs;
+    std::unique_ptr<erhe::graphics::Shader_stages>     m_shader_stages;
+    std::unique_ptr<erhe::graphics::Render_pipeline>   m_pipeline;
+    std::shared_ptr<erhe::graphics::Texture>           m_position_texture;
+    std::shared_ptr<erhe::graphics::Texture>           m_normal_texture;
+    bool                                               m_gbuffer_valid{false};
 };
 
 } // namespace editor

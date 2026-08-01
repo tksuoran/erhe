@@ -240,6 +240,40 @@ auto Mcp_server::action_lightmap_update_atlas(const json& args) -> std::string
     }).dump();
 }
 
+auto Mcp_server::action_lightmap_bake_gbuffer(const json& args) -> std::string
+{
+    if (m_context.lightmap_baker == nullptr) {
+        json r = make_text_content("Lightmap baker not available");
+        r["isError"] = true;
+        return r.dump();
+    }
+    if (!m_context.lightmap_baker->is_supported()) {
+        json r = make_text_content("Lightmap G-buffer pipeline not available");
+        r["isError"] = true;
+        return r.dump();
+    }
+    const bool baked = m_context.lightmap_baker->bake_gbuffer();
+    if (!baked) {
+        json r = make_text_content("G-buffer bake failed (no layout? run lightmap_update_atlas first)");
+        r["isError"] = true;
+        return r.dump();
+    }
+    json result{
+        {"baked",  true},
+        {"width",  m_context.lightmap_baker->get_layout().width},
+        {"height", m_context.lightmap_baker->get_layout().height}
+    };
+    const std::string debug_png_base = args.value("debug_png_base", "");
+    if (!debug_png_base.empty()) {
+        const bool written = m_context.lightmap_baker->debug_write_gbuffer_pngs(debug_png_base);
+        result["debug_pngs_written"] = written;
+        if (written) {
+            result["files"] = { debug_png_base + "_position.png", debug_png_base + "_normal.png" };
+        }
+    }
+    return make_json_content(result).dump();
+}
+
 auto Mcp_server::query_active_scene(const json& args) -> std::string
 {
     static_cast<void>(args);
