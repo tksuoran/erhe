@@ -125,6 +125,8 @@ private:
     auto query_shadow_fit_debug (const nlohmann::json& args) -> std::string;
     auto query_raycast          (const nlohmann::json& args) -> std::string;
     auto action_select_items    (const nlohmann::json& args) -> std::string;
+    auto action_set_item_flags  (const nlohmann::json& args) -> std::string;
+    auto action_lightmap_update_atlas(const nlohmann::json& args) -> std::string;
     auto query_active_scene     (const nlohmann::json& args) -> std::string;
     auto action_set_active_scene(const nlohmann::json& args) -> std::string;
     auto action_transform_selection(const nlohmann::json& args) -> std::string;

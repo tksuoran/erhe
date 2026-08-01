@@ -83,6 +83,7 @@
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "renderers/prewarm.hpp"
 #include "renderers/programs.hpp"
+#include "renderers/lightmap_baker.hpp"
 #include "renderers/ray_trace_renderer.hpp"
 #include "renderers/sky_renderer.hpp"
 #include "rendergraph/post_processing.hpp"
@@ -1759,6 +1760,7 @@ public:
                     *m_mesh_memory.get(),
                     m_editor_settings.ray_trace
                 );
+                m_lightmap_baker = std::make_unique<Lightmap_baker>();
             }
             ERHE_TASK_FOOTER( .name("Post_processing") );
 
@@ -2694,6 +2696,7 @@ public:
         m_app_context.prefab_library           = m_prefab_library        .get();
         m_app_context.sky_renderer             = m_sky_renderer          .get();
         m_app_context.ray_trace_renderer       = m_ray_trace_renderer    .get();
+        m_app_context.lightmap_baker           = m_lightmap_baker        .get();
         m_app_context.programs                 = m_programs              .get();
         m_app_context.rotate_tool              = m_rotate_tool           .get();
         m_app_context.scale_tool               = m_scale_tool            .get();
@@ -3637,6 +3640,7 @@ public:
     std::unique_ptr<Post_processing                 >        m_post_processing;
     std::unique_ptr<Sky_renderer                    >        m_sky_renderer;
     std::unique_ptr<Ray_trace_renderer              >        m_ray_trace_renderer;
+    std::unique_ptr<Lightmap_baker                  >        m_lightmap_baker;
     std::unique_ptr<Id_renderer                     >        m_id_renderer;
     std::unique_ptr<Composer_window                 >        m_composer_window;
     std::unique_ptr<Selection_window                >        m_selection_window;

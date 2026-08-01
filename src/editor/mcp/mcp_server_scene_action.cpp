@@ -3,8 +3,12 @@
 
 #include "mcp/mcp_server_shared.hpp"
 
+#include "config/generated/editor_settings_config.hpp"
+#include "renderers/lightmap_baker.hpp"
 #include "scene/generated/scene_settings_serialization.hpp"
 #include "tools/clipboard.hpp"
+
+#include "erhe_gltf/gltf_item_flags.hpp"
 
 #include <simdjson.h>
 
@@ -129,6 +133,110 @@ auto Mcp_server::action_select_items(const json& args) -> std::string
     return make_json_content({
         {"selected_count", static_cast<int>(items_to_select.size())},
         {"items",          selected}
+    }).dump();
+}
+
+auto Mcp_server::action_set_item_flags(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    auto* sr = find_scene(scene_name);
+    if (!sr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+    const json ids_json = args.value("ids", json::array());
+    std::set<std::size_t> target_ids;
+    for (const auto& id_val : ids_json) {
+        if (id_val.is_number_unsigned() || id_val.is_number_integer()) {
+            target_ids.insert(id_val.get<std::size_t>());
+        }
+    }
+    uint64_t flag_bits = 0;
+    for (const auto& flag_val : args.value("flags", json::array())) {
+        if (!flag_val.is_string()) {
+            continue;
+        }
+        const uint64_t bit = erhe::gltf::persistent_item_flag_from_name(flag_val.get<std::string>());
+        if (bit == 0) {
+            json r = make_text_content("Unknown flag name: " + flag_val.get<std::string>());
+            r["isError"] = true;
+            return r.dump();
+        }
+        flag_bits |= bit;
+    }
+    if ((flag_bits == 0) || target_ids.empty()) {
+        json r = make_text_content("Give ids and at least one persistent flag name (e.g. \"lightmapped\", \"shadow_cast\")");
+        r["isError"] = true;
+        return r.dump();
+    }
+    const bool enabled = args.value("enabled", true);
+
+    json updated = json::array();
+    for (const std::shared_ptr<erhe::Item_base>& item : find_items_by_ids(*sr, target_ids)) {
+        // Mesh-scoped flags (lightmapped, shadow_cast) live on the Mesh
+        // attachment; a Node id resolves to its mesh so callers can pass the
+        // ids that get_scene_nodes returns.
+        std::shared_ptr<erhe::Item_base> target = item;
+        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(item);
+        if (mesh) {
+            target = mesh;
+        }
+        if (enabled) {
+            target->enable_flag_bits(flag_bits);
+        } else {
+            target->disable_flag_bits(flag_bits);
+        }
+        updated.push_back({
+            {"id",    target->get_id()},
+            {"name",  target->get_name()},
+            {"type",  std::string{target->get_type_name()}},
+            {"flags", erhe::Item_flags::to_string(target->get_flag_bits())}
+        });
+    }
+    return make_json_content({
+        {"enabled", enabled},
+        {"updated", updated}
+    }).dump();
+}
+
+auto Mcp_server::action_lightmap_update_atlas(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    auto* sr = find_scene(scene_name);
+    if (!sr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+    if ((m_context.lightmap_baker == nullptr) || (m_context.editor_settings == nullptr)) {
+        json r = make_text_content("Lightmap baker not available");
+        r["isError"] = true;
+        return r.dump();
+    }
+    const float texels_per_meter = args.value("texels_per_meter", m_context.editor_settings->lightmap.texels_per_meter);
+    const bool  packed           = m_context.lightmap_baker->update_layout(*sr, texels_per_meter);
+
+    const Lightmap_baker::Atlas_layout& layout = m_context.lightmap_baker->get_layout();
+    json regions = json::array();
+    for (const Lightmap_baker::Instance_region& region : layout.regions) {
+        regions.push_back({
+            {"mesh",            region.mesh ? region.mesh->get_name() : ""},
+            {"primitive_index", region.primitive_index},
+            {"x",               region.x},
+            {"y",               region.y},
+            {"width",           region.width},
+            {"height",          region.height},
+            {"world_area",      region.world_area},
+            {"uv_scale_offset", {region.uv_scale_offset.x, region.uv_scale_offset.y, region.uv_scale_offset.z, region.uv_scale_offset.w}}
+        });
+    }
+    return make_json_content({
+        {"packed",           packed},
+        {"texels_per_meter", texels_per_meter},
+        {"width",            layout.width},
+        {"height",           layout.height},
+        {"regions",          regions}
     }).dump();
 }
 

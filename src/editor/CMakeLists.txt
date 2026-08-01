@@ -415,6 +415,8 @@ erhe_target_sources_grouped(
     renderers/render_context.hpp
     renderers/render_style.cpp
     renderers/render_style.hpp
+    renderers/lightmap_baker.cpp
+    renderers/lightmap_baker.hpp
     renderers/ray_trace_renderer.cpp
     renderers/ray_trace_renderer.hpp
     renderers/sky_renderer.cpp

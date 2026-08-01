@@ -418,6 +418,8 @@ auto Mcp_server::process_queued_requests() -> int
             { "get_shadow_fit_debug",           &Mcp_server::query_shadow_fit_debug               },
             { "raycast",                        &Mcp_server::query_raycast                        },
             { "select_items",                   &Mcp_server::action_select_items                  },
+            { "set_item_flags",                 &Mcp_server::action_set_item_flags                },
+            { "lightmap_update_atlas",          &Mcp_server::action_lightmap_update_atlas         },
             { "get_active_scene",               &Mcp_server::query_active_scene                   },
             { "set_active_scene",               &Mcp_server::action_set_active_scene              },
             { "transform_selection",            &Mcp_server::action_transform_selection           },

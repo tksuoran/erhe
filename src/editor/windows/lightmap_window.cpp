@@ -6,6 +6,7 @@
 #include "items.hpp"
 #include "operations/geometry_operations.hpp"
 #include "operations/operation_stack.hpp"
+#include "renderers/lightmap_baker.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 
@@ -114,6 +115,36 @@ void Lightmap_window::imgui()
             "Automatic UV unwrap (ABF + xatlas) into texcoord channel 2 for every lightmapped mesh.\n"
             "Undoable. Inspect with Scene View Config > Shader Debug > TexCoord 2 (Lightmap)."
         );
+    }
+
+    if (m_context.lightmap_baker != nullptr) {
+        ImGui::SameLine();
+        if (ImGui::Button("Update Atlas Layout")) {
+            const std::shared_ptr<Scene_root> scene_root = m_context.selection->get_active_scene_root();
+            if (scene_root) {
+                m_context.lightmap_baker->update_layout(*scene_root.get(), config.texels_per_meter);
+            }
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Pack every lightmapped primitive with channel-2 UVs into the shared atlas page.");
+        }
+        const Lightmap_baker::Atlas_layout& layout = m_context.lightmap_baker->get_layout();
+        if (layout.width > 0) {
+            ImGui::Text("Atlas: %d x %d, %zu regions", layout.width, layout.height, layout.regions.size());
+            if (ImGui::TreeNode("Regions")) {
+                for (const Lightmap_baker::Instance_region& region : layout.regions) {
+                    ImGui::Text(
+                        "%s[%zu]: %d x %d at (%d, %d), %.2f m^2",
+                        region.mesh ? region.mesh->get_name().c_str() : "<gone>",
+                        region.primitive_index,
+                        region.width, region.height,
+                        region.x, region.y,
+                        region.world_area
+                    );
+                }
+                ImGui::TreePop();
+            }
+        }
     }
 
     // Plan phase 3 turns this into the interactive bake toggle.

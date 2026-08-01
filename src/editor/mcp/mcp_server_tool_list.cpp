@@ -883,6 +883,25 @@ void Mcp_server::refresh_tool_list()
         }}
     }});
 
+    m_tool_infos.push_back({"set_item_flags", "Enable or disable persistent (authored) item flags by name on scene items. Mesh-scoped flags (lightmapped, shadow_cast) go on the Mesh attachment; passing a Node id resolves to its mesh automatically, so get_scene_nodes ids work directly. Flag names match glTF serialization (e.g. \"lightmapped\", \"shadow_cast\", \"visible\").", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name", {{"type", "string"},  {"description", "Name of the scene"}}},
+            {"ids",        {{"type", "array"},   {"items", {{"type", "integer"}}}, {"description", "Item ids (node ids resolve to their mesh attachment)"}}},
+            {"flags",      {{"type", "array"},   {"items", {{"type", "string"}}}, {"description", "Persistent flag names to change"}}},
+            {"enabled",    {{"type", "boolean"}, {"description", "true to enable the flags (default), false to disable"}}}
+        }},
+        {"required", json::array({"scene_name", "ids", "flags"})}
+    }});
+    m_tool_infos.push_back({"lightmap_update_atlas", "Recompute the lightmap atlas layout for a scene: packs every lightmapped, non-skinned mesh primitive that has lightmap UVs (texcoord channel 2; run generate_texture_coordinates texcoord_slot=2 or the Lightmap window's Generate Lightmap UVs first) into the shared atlas page and returns the layout (page size, per-region rect + uv_scale_offset).", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name",       {{"type", "string"}, {"description", "Name of the scene"}}},
+            {"texels_per_meter", {{"type", "number"}, {"description", "Texel density override; default = Lightmap settings value"}}}
+        }},
+        {"required", json::array({"scene_name"})}
+    }});
+
     // Transform reference frame for the transform gizmo / numeric edits.
     m_tool_infos.push_back({"set_transform_reference_mode", "Set the orientation reference frame (transform space) of the transform tool: global/world (world axes), local (selection's own orientation), reference (a chosen reference node's orientation), or selection (a frame derived from the active mesh-component selection). For reference mode, give reference_node_id or reference_node_name (searched across scenes, or within scene_name when given) - this is how you set the reference. edge_normal_blend tunes the selection-mode frame. Read the current state back with get_transform_state.", {
         {"type", "object"},
