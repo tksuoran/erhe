@@ -5,6 +5,7 @@
 
 #include <glm/glm.hpp>
 
+#include <array>
 #include <optional>
 
 namespace editor {
@@ -104,6 +105,13 @@ private:
     // hide-inactive-during-drag rule. Shared by render() and pick().
     [[nodiscard]] auto is_handle_shown(Handle handle) const -> bool;
 
+    // Camera-facing octant: per axis, whether the positive direction faces
+    // the eye. Drives the plane-quad quadrant and the single-arrow direction
+    // choice in both render() and pick(). While a drag is active the signs
+    // are frozen at their drag-start values so a perspective change cannot
+    // re-seat the handles mid-drag.
+    [[nodiscard]] auto get_octant_signs(const glm::vec3& eye, const glm::vec3& center, const glm::mat3& basis) const -> std::array<bool, 3>;
+
     App_context&               m_context;
     Scene_view*                m_scene_view{nullptr};
     erhe::scene::Trs_transform m_world_from_anchor;
@@ -112,6 +120,9 @@ private:
     glm::mat4                  m_box_frame{1.0f};
     erhe::math::Aabb           m_box_aabb{};
     bool                       m_box_valid{false};
+    // Last no-drag octant signs (see get_octant_signs); mutable because
+    // the const pick() path refreshes it too when no drag is active.
+    mutable std::array<bool, 3> m_octant_signs{true, true, true};
 };
 
 }

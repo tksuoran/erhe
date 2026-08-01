@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Transform_tool_config",
-    version=7,
+    version=9,
     short_desc="Transform Tool",
     long_desc="",
     developer=False,
@@ -113,6 +113,186 @@ struct("Transform_tool_config",
             default="true",
             short_desc="Free Rotate (Arcball)",
             long_desc="Dragging inside the rotate sphere without hitting any other handle rotates freely, arcball style.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "ring_pick_radius",
+            Float,
+            added_in=8,
+            default="0.2f",
+            short_desc="Ring Pick Radius",
+            long_desc="Pick tube radius around the rotate rings (axis rings and the view ring), in the same view-scaled units as the gizmo handles (the rings' own radius is 4.0). Larger values make the rings easier to hit, at the cost of the rings' pick zone reaching further over neighboring content.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "arrow_shaft_length",
+            Float,
+            added_in=9,
+            default="2.75f",
+            short_desc="Arrow Shaft Length",
+            long_desc="Length of the translate/scale arrow shafts, in view-scaled gizmo units.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "arrow_cone_length",
+            Float,
+            added_in=9,
+            default="0.6f",
+            short_desc="Scale Cone Length",
+            long_desc="Length of the scale-axis tip cones, in view-scaled gizmo units.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "arrow_cone_radius",
+            Float,
+            added_in=9,
+            default="0.15f",
+            short_desc="Scale Cone Radius",
+            long_desc="Base radius of the scale-axis tip cones, in view-scaled gizmo units.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "translate_cone_length",
+            Float,
+            added_in=9,
+            default="1.2f",
+            short_desc="Translate Cone Length",
+            long_desc="Length of the translate arrow tip cones, in view-scaled gizmo units.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "translate_cone_radius",
+            Float,
+            added_in=9,
+            default="0.6f",
+            short_desc="Translate Cone Radius",
+            long_desc="Base radius of the translate arrow tip cones, in view-scaled gizmo units.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "plane_half_extent",
+            Float,
+            added_in=9,
+            default="1.2f",
+            short_desc="Plane Quad Half Extent",
+            long_desc="Half extent of the plane translate quads, in view-scaled gizmo units.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "plane_pick_half_extent",
+            Float,
+            added_in=9,
+            default="1.56f",
+            short_desc="Plane Quad Pick Half Extent",
+            long_desc="Half extent of the plane translate quads' pick area, in view-scaled gizmo units. Larger than the drawn quad so the quads remain easy to hit.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "rotate_ring_radius",
+            Float,
+            added_in=9,
+            default="4.0f",
+            short_desc="Rotate Ring Radius",
+            long_desc="Radius of the gizmo's rotate rings (and the rotate sphere), in view-scaled gizmo units. Translate arrows start just outside this radius.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "view_ring_radius_factor",
+            Float,
+            added_in=9,
+            default="1.3f",
+            short_desc="View Ring Radius Factor",
+            long_desc="Radius of the camera-aligned view-rotate ring as a multiple of the rotate ring radius.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "arrow_ring_gap",
+            Float,
+            added_in=9,
+            default="0.25f",
+            short_desc="Arrow Ring Gap",
+            long_desc="Gap between the rotate sphere and the start of the translate arrows, in view-scaled gizmo units.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "center_cube_half_length",
+            Float,
+            added_in=9,
+            default="0.25f",
+            short_desc="Center Cube Half Length",
+            long_desc="Half edge length of the uniform-scale center cube, in view-scaled gizmo units.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "center_cube_pick_radius",
+            Float,
+            added_in=9,
+            default="0.5f",
+            short_desc="Center Cube Pick Radius",
+            long_desc="Pick sphere radius of the uniform-scale center cube, in view-scaled gizmo units.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "box_scale_cone_length",
+            Float,
+            added_in=9,
+            default="0.6f",
+            short_desc="Box Scale Cone Length",
+            long_desc="Length of the bounding-box scale face cones, in view-scaled gizmo units.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "box_scale_cone_radius",
+            Float,
+            added_in=9,
+            default="0.2f",
+            short_desc="Box Scale Cone Radius",
+            long_desc="Base radius of the bounding-box scale face cones, in view-scaled gizmo units.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "arrow_shaft_pick_radius",
+            Float,
+            added_in=9,
+            default="0.12f",
+            short_desc="Arrow Shaft Pick Radius",
+            long_desc="Pick capsule radius around the translate arrow shafts, in view-scaled gizmo units.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "arrow_head_pick_radius",
+            Float,
+            added_in=9,
+            default="0.45f",
+            short_desc="Scale Head Pick Radius",
+            long_desc="Pick capsule radius around the scale-axis tip cones, in view-scaled gizmo units.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "translate_head_pick_radius",
+            Float,
+            added_in=9,
+            default="0.9f",
+            short_desc="Translate Head Pick Radius",
+            long_desc="Pick capsule radius around the translate arrow tip cones, in view-scaled gizmo units.",
             visible=True,
             developer=False
         ),

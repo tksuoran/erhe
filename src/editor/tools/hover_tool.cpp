@@ -350,11 +350,14 @@ void Hover_tool::tool_render(const Render_context& context)
     }
 
     // While a transform gizmo handle is hovered (including the arcball
-    // sphere region between the rings), the gizmo owns the pointer - the
-    // hover normal ray under it is just noise.
+    // sphere region between the rings) or a drag is active, the gizmo owns
+    // the pointer - the hover normal ray under it is just noise. The active
+    // check matters mid-drag: the pointer can leave the handle's pick shape
+    // (fast motion, perspective change) while the drag keeps running.
     const bool transform_handle_hovered =
         (m_context.transform_tool != nullptr) &&
-        (m_context.transform_tool->get_hover_handle() != Handle::e_handle_none);
+        ((m_context.transform_tool->get_hover_handle()  != Handle::e_handle_none) ||
+         (m_context.transform_tool->get_active_handle() != Handle::e_handle_none));
 
     if (m_show_hover_normal && !transform_handle_hovered && entry->normal.has_value()) {
         erhe::renderer::Primitive_renderer line_renderer = context.get({erhe::graphics::Primitive_type::line, 2, true, true});
