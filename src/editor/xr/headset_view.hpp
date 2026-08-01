@@ -91,6 +91,36 @@ private:
     char                    m_axis;
 };
 
+class Headset_view;
+
+class Headset_ray_mode_toggle_command : public erhe::commands::Command
+{
+public:
+    Headset_ray_mode_toggle_command(erhe::commands::Commands& commands, Headset_view& headset_view);
+
+    auto try_call() -> bool override;
+
+private:
+    Headset_view& m_headset_view;
+};
+
+// Logs the controller ray / head state on squeeze press and release.
+// Bound to the analog squeeze_value action (Quest Touch has no
+// squeeze/click), so press/release edges are recovered here with a
+// 0.6 / 0.4 hysteresis. One instance per hand.
+class Headset_ray_log_command : public erhe::commands::Command
+{
+public:
+    Headset_ray_log_command(erhe::commands::Commands& commands, Headset_view& headset_view, const char* name, const char* hand);
+
+    auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
+
+private:
+    Headset_view& m_headset_view;
+    const char*   m_hand;
+    bool          m_is_active{false};
+};
+
 class Headset_view
     : public std::enable_shared_from_this<Headset_view>
     , public Scene_view
@@ -129,6 +159,20 @@ public:
     void end_frame                ();
     void request_renderdoc_capture();
 
+    // Controller ray modes: aim mode (default) starts the ray at the
+    // controller aim pose; head-attached mode starts it at a fixed point in
+    // head space (6.5 cm above the right eye), while the ray direction
+    // still follows the controller orientation. Toggled by thumbstick /
+    // trackpad click on either controller.
+    void toggle_controller_ray_mode();
+    [[nodiscard]] auto is_head_attached_ray_mode() const -> bool;
+
+    // Diagnostic dump of the head pose, eye poses, control ray, and hover /
+    // gizmo ray-stop state, triggered by squeeze press and release (see
+    // Headset_ray_log_command) so a problematic configuration can be
+    // captured from inside the headset.
+    void log_controller_ray_state(const char* hand, const char* edge);
+
     void update_fixed_step();
 
     // Implements Scene_view
@@ -165,6 +209,11 @@ private:
     void update_camera_node();
     void update_pointer_context_from_controller();
 
+    // Mode-dependent world-space ray origin for the given controller aim
+    // pose: the aim pose position (aim mode) or the head-lamp point above
+    // the headset (head-lamp mode). Camera offset is already applied.
+    [[nodiscard]] auto get_controller_ray_origin(const erhe::xr::Xr_action_pose& pose) const -> glm::vec3;
+
     // Combined stereo culling frustum for the shadow fit. OpenXR has no API
     // for a single frustum bounding both eyes, so the headset builds one from
     // the per-eye views: update_camera_node() locates the current frame's views
@@ -196,6 +245,10 @@ private:
     Headset_camera_offset_move_command                   m_offset_x_command;
     Headset_camera_offset_move_command                   m_offset_y_command;
     Headset_camera_offset_move_command                   m_offset_z_command;
+    Headset_ray_mode_toggle_command                      m_ray_mode_toggle_command;
+    Headset_ray_log_command                              m_ray_log_left_command;
+    Headset_ray_log_command                              m_ray_log_right_command;
+    bool                                                 m_head_attached_ray_mode{false};
 
     App_context&                                         m_app_context;
     erhe::window::Context_window&                        m_context_window;

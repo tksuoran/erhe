@@ -121,6 +121,38 @@ auto Headset_camera_offset_move_command::try_call_with_input(erhe::commands::Inp
 
 #pragma endregion Fly_camera_variable_float_command
 
+Headset_ray_mode_toggle_command::Headset_ray_mode_toggle_command(erhe::commands::Commands& commands, Headset_view& headset_view)
+    : Command       {commands, "Headset.toggle_controller_ray_mode"}
+    , m_headset_view{headset_view}
+{
+}
+
+auto Headset_ray_mode_toggle_command::try_call() -> bool
+{
+    m_headset_view.toggle_controller_ray_mode();
+    return true;
+}
+
+Headset_ray_log_command::Headset_ray_log_command(erhe::commands::Commands& commands, Headset_view& headset_view, const char* name, const char* hand)
+    : Command       {commands, name}
+    , m_headset_view{headset_view}
+    , m_hand        {hand}
+{
+}
+
+auto Headset_ray_log_command::try_call_with_input(erhe::commands::Input_arguments& input) -> bool
+{
+    const float value = input.variant.float_value;
+    if (!m_is_active && (value >= 0.6f)) {
+        m_is_active = true;
+        m_headset_view.log_controller_ray_state(m_hand, "squeeze press");
+    } else if (m_is_active && (value <= 0.4f)) {
+        m_is_active = false;
+        m_headset_view.log_controller_ray_state(m_hand, "squeeze release");
+    }
+    return false; // observe only - never consume the squeeze input
+}
+
 Headset_view_node::Headset_view_node(erhe::rendergraph::Rendergraph& rendergraph, Headset_view& headset_view)
     : erhe::rendergraph::Rendergraph_node{rendergraph, "Headset"}
     , m_headset_view                     {headset_view}
@@ -168,6 +200,9 @@ Headset_view::Headset_view(
     , m_offset_x_command       {commands, m_translate_x, 'x'}
     , m_offset_y_command       {commands, m_translate_y, 'y'}
     , m_offset_z_command       {commands, m_translate_z, 'z'}
+    , m_ray_mode_toggle_command{commands, *this}
+    , m_ray_log_left_command   {commands, *this, "Headset.log_ray_state_left",  "left"}
+    , m_ray_log_right_command  {commands, *this, "Headset.log_ray_state_right", "right"}
     , m_app_context            {app_context}
     , m_context_window         {context_window}
     , m_headset                {headset}
@@ -200,6 +235,35 @@ Headset_view::Headset_view(
     m_translate_x.set_max_delta(0.004f);
     m_translate_y.set_max_delta(0.004f);
     m_translate_z.set_max_delta(0.004f);
+
+    // Ray mode toggle on thumbstick / trackpad click, either hand. Quest
+    // Touch controllers only expose the thumbstick; the trackpad bindings
+    // cover interaction profiles that have one instead.
+    commands.register_command(&m_ray_mode_toggle_command);
+    commands.register_command(&m_ray_log_left_command);
+    commands.register_command(&m_ray_log_right_command);
+    for (erhe::xr::Xr_actions* actions : { headset->get_actions_left(), headset->get_actions_right() }) {
+        if (actions == nullptr) {
+            continue;
+        }
+        if (actions->thumbstick_click != nullptr) {
+            commands.bind_command_to_xr_boolean_action(&m_ray_mode_toggle_command, actions->thumbstick_click, erhe::commands::Button_trigger::Button_pressed);
+        }
+        if (actions->trackpad_click != nullptr) {
+            commands.bind_command_to_xr_boolean_action(&m_ray_mode_toggle_command, actions->trackpad_click, erhe::commands::Button_trigger::Button_pressed);
+        }
+        // Ray state diagnostics on squeeze press / release (analog action;
+        // the command recovers the edges with hysteresis). Disabled by
+        // default - every grip squeeze (incl. HUD drags) would dump to the
+        // log; flip on when hunting a ray presentation issue.
+        constexpr bool enable_ray_state_logging = false;
+        if (enable_ray_state_logging) {
+            Headset_ray_log_command& log_command = (actions == headset->get_actions_left()) ? m_ray_log_left_command : m_ray_log_right_command;
+            if (actions->squeeze_value != nullptr) {
+                commands.bind_command_to_xr_float_action(&log_command, actions->squeeze_value);
+            }
+        }
+    }
 
     m_rendergraph_node = std::make_shared<Headset_view_node>(rendergraph, *this);
 
@@ -314,8 +378,13 @@ void Headset_view::render(const Render_context& render_context)
         return;
     }
 
-    // TODO Handle selection stencil
-    erhe::renderer::Primitive_renderer line_renderer = render_context.get({erhe::graphics::Primitive_type::line, 2, true, true});
+    // Stencil reference 5: the debug buckets layer first-wins per pixel by
+    // stencil reference, and the gizmo layers front-to-back as arrows (4),
+    // plane quads (3), rings (2) - see handle_visualizations.cpp. The
+    // controller ray must layer over all of them - in head-attached mode it
+    // runs from the eye straight through the gizmo, so at a lower / equal
+    // reference the handles mask long stretches of the ray.
+    erhe::renderer::Primitive_renderer line_renderer = render_context.get({erhe::graphics::Primitive_type::line, 5, true, true});
 
     constexpr glm::vec4 red   {1.0f, 0.0f, 0.0f, 1.0f};
     constexpr glm::vec4 green {0.0f, 1.0f, 0.0f, 1.0f};
@@ -353,7 +422,7 @@ void Headset_view::render(const Render_context& render_context)
 
         const auto position = use_hover
             ? get_control_ray_origin_in_world().value()
-            : pose->position + get_camera_offset();
+            : get_controller_ray_origin(*pose);
 
         const auto orientation = glm::mat4_cast(pose->orientation);
 
@@ -417,7 +486,7 @@ void Headset_view::render(const Render_context& render_context)
             erhe::renderer::Primitive_renderer xray_line_renderer = render_context.get(
                 erhe::renderer::Debug_renderer_config{
                     .primitive_type    = erhe::graphics::Primitive_type::line,
-                    .stencil_reference = 2,
+                    .stencil_reference = 5, // over gizmo rings (2), planes (3), arrows (4), see above
                     .draw_visible      = true,
                     .draw_hidden       = true,
                     .xray              = true
@@ -476,11 +545,16 @@ void Headset_view::render(const Render_context& render_context)
         bool is_content      = (nearest != nullptr) && test_bit_set(nearest->mask, Hover_entry::content_bit);
         bool is_tool         = (nearest != nullptr) && test_bit_set(nearest->mask, Hover_entry::tool_bit);
         bool is_rendertarget = (nearest != nullptr) && test_bit_set(nearest->mask, Hover_entry::rendertarget_bit);
+        // The no-hover default color tells the active ray mode apart:
+        // neutral gray for the aim-pose ray, warm amber for the head-attached ray.
+        const glm::vec4 default_ray_color = m_head_attached_ray_mode
+            ? glm::vec4{0.9f, 0.7f, 0.25f, 1.0f}
+            : glm::vec4{0.4f, 0.4f, 0.4f, 1.0f};
         glm::vec4 type_color =
             is_content      ? glm::vec4{0.8f, 0.5f, 0.3f, 1.0f} :
             is_tool         ? glm::vec4{1.0f, 0.0f, 1.0f, 1.0f} :
             is_rendertarget ? glm::vec4{0.6f, 0.6f, 0.6f, 1.0f} :
-                              glm::vec4{0.4f, 0.4f, 0.4f, 1.0f};
+                              default_ray_color;
         glm::vec4 near_color = click ? glm::vec4{1.0f, 1.0f, 1.0f, 1.0f} : type_color;
         glm::vec4 far_color  = glm::vec4{type_color.x, type_color.y, type_color.z, 0.4f};
         line_renderer.add_line(
@@ -567,8 +641,10 @@ void Headset_view::update_pointer_context_from_controller()
     }
 
     // TODO optimize this transform computation
+    // The control ray origin depends on the ray mode (controller aim pose
+    // or head attached); the orientation always comes from the controller.
     const glm::mat4 orientation = glm::mat4_cast(pose->orientation);
-    const glm::mat4 translation = glm::translate(glm::mat4{1}, pose->position + get_camera_offset());
+    const glm::mat4 translation = glm::translate(glm::mat4{1}, get_controller_ray_origin(*pose));
     const glm::mat4 m           = translation * orientation;
 
     this->Scene_view::set_world_from_control(m);
@@ -1591,6 +1667,148 @@ void Headset_view::update_root_camera_projection()
 auto Headset_view::get_camera_offset() const -> glm::vec3
 {
     return m_camera_offset;
+}
+
+void Headset_view::toggle_controller_ray_mode()
+{
+    m_head_attached_ray_mode = !m_head_attached_ray_mode;
+    log_xr->info("Controller ray mode: {}", m_head_attached_ray_mode ? "head attached" : "aim");
+}
+
+auto Headset_view::is_head_attached_ray_mode() const -> bool
+{
+    return m_head_attached_ray_mode;
+}
+
+void Headset_view::log_controller_ray_state(const char* hand, const char* edge)
+{
+    log_xr->info("=== Ray state ({} {}) ===", hand, edge);
+    log_xr->info("  ray mode = {}", m_head_attached_ray_mode ? "head attached" : "aim");
+    log_xr->info("  camera offset = ({:.4f}, {:.4f}, {:.4f})", m_camera_offset.x, m_camera_offset.y, m_camera_offset.z);
+
+    glm::vec3 head_position{};
+    glm::quat head_orientation{};
+    if ((m_headset != nullptr) && m_headset->get_headset_pose(head_position, head_orientation)) {
+        const glm::vec3 up      = head_orientation * glm::vec3{0.0f, 1.0f,  0.0f};
+        const glm::vec3 forward = head_orientation * glm::vec3{0.0f, 0.0f, -1.0f};
+        log_xr->info(
+            "  head pose: position = ({:.4f}, {:.4f}, {:.4f}) orientation = ({:.4f}, {:.4f}, {:.4f}, {:.4f}) up = ({:.3f}, {:.3f}, {:.3f}) forward = ({:.3f}, {:.3f}, {:.3f})",
+            head_position.x, head_position.y, head_position.z,
+            head_orientation.w, head_orientation.x, head_orientation.y, head_orientation.z,
+            up.x, up.y, up.z, forward.x, forward.y, forward.z
+        );
+    } else {
+        log_xr->info("  head pose: not available");
+    }
+
+    for (const erhe::xr::Render_view& view : m_located_eye_views) {
+        log_xr->info(
+            "  eye view slot {}: position = ({:.4f}, {:.4f}, {:.4f})",
+            view.slot, view.view_pose.position.x, view.view_pose.position.y, view.view_pose.position.z
+        );
+    }
+
+    if (m_headset != nullptr) {
+        const struct { const char* name; erhe::xr::Xr_actions* actions; } hands[] = {
+            { "left",  m_headset->get_actions_left()  },
+            { "right", m_headset->get_actions_right() }
+        };
+        for (const auto& entry : hands) {
+            erhe::xr::Xr_action_pose* aim_pose = (entry.actions != nullptr) ? entry.actions->aim_pose : nullptr;
+            if (aim_pose == nullptr) {
+                log_xr->info("  {} aim pose: no action", entry.name);
+                continue;
+            }
+            log_xr->info(
+                "  {} aim pose: locationFlags = {:#x} position = ({:.4f}, {:.4f}, {:.4f}) orientation = ({:.4f}, {:.4f}, {:.4f}, {:.4f})",
+                entry.name,
+                aim_pose->location.locationFlags,
+                aim_pose->position.x, aim_pose->position.y, aim_pose->position.z,
+                aim_pose->orientation.w, aim_pose->orientation.x, aim_pose->orientation.y, aim_pose->orientation.z
+            );
+        }
+    }
+
+    const std::optional<glm::vec3> ray_origin    = get_control_ray_origin_in_world();
+    const std::optional<glm::vec3> ray_direction = get_control_ray_direction_in_world();
+    if (ray_origin.has_value() && ray_direction.has_value()) {
+        log_xr->info(
+            "  control ray: origin = ({:.4f}, {:.4f}, {:.4f}) direction = ({:.4f}, {:.4f}, {:.4f})",
+            ray_origin->x, ray_origin->y, ray_origin->z,
+            ray_direction->x, ray_direction->y, ray_direction->z
+        );
+    } else {
+        log_xr->info("  control ray: not available");
+    }
+
+    const struct { const char* name; uint32_t slot; } slots[] = {
+        { "content",      Hover_entry::content_slot      },
+        { "tool",         Hover_entry::tool_slot         },
+        { "brush",        Hover_entry::brush_slot        },
+        { "rendertarget", Hover_entry::rendertarget_slot },
+        { "grid",         Hover_entry::grid_slot         }
+    };
+    for (const auto& slot : slots) {
+        const Hover_entry& entry = get_hover(slot.slot);
+        if (!entry.valid || !entry.position.has_value()) {
+            continue;
+        }
+        const glm::vec3 p = entry.position.value();
+        const float     t = (ray_origin.has_value() && ray_direction.has_value())
+            ? glm::dot(p - ray_origin.value(), ray_direction.value())
+            : 0.0f;
+        log_xr->info(
+            "  hover[{}]: '{}' position = ({:.4f}, {:.4f}, {:.4f}) t = {:.4f}",
+            slot.name, entry.get_name(), p.x, p.y, p.z, t
+        );
+    }
+
+    if (m_context.transform_tool != nullptr) {
+        Transform_tool& transform_tool = *m_context.transform_tool;
+        log_xr->info("  gizmo hover handle = {}", c_str(transform_tool.get_hover_handle()));
+        const struct { const char* name; std::optional<glm::vec3> p; } gizmo_points[] = {
+            { "handle stop",    transform_tool.get_hover_handle_position_in_world()          },
+            { "sphere entry",   transform_tool.get_ray_sphere_entry_position_in_world()      },
+            { "plane crossing", transform_tool.get_ray_sphere_plane_crossing_position_in_world() }
+        };
+        for (const auto& point : gizmo_points) {
+            if (!point.p.has_value()) {
+                continue;
+            }
+            const float t = (ray_origin.has_value() && ray_direction.has_value())
+                ? glm::dot(point.p.value() - ray_origin.value(), ray_direction.value())
+                : 0.0f;
+            log_xr->info(
+                "  gizmo {}: position = ({:.4f}, {:.4f}, {:.4f}) t = {:.4f}",
+                point.name, point.p->x, point.p->y, point.p->z, t
+            );
+        }
+    }
+}
+
+auto Headset_view::get_controller_ray_origin(const erhe::xr::Xr_action_pose& pose) const -> glm::vec3
+{
+    if (m_head_attached_ray_mode && (m_headset != nullptr)) {
+        glm::vec3 head_position{};
+        glm::quat head_orientation{};
+        if (m_headset->get_headset_pose(head_position, head_orientation)) {
+            // The head-attached origin sits 6.5 cm above the right eye, in
+            // head space (so it rides head roll/pitch). Use the located right
+            // eye view (slot 1) when this frame has one; otherwise
+            // approximate the right eye from the head pose with a half-IPD
+            // offset.
+            constexpr float origin_height = 0.065f;
+            constexpr float half_ipd      = 0.032f;
+            glm::vec3 right_eye_position = head_position + head_orientation * glm::vec3{half_ipd, 0.0f, 0.0f};
+            for (const erhe::xr::Render_view& view : m_located_eye_views) {
+                if (view.slot == 1) {
+                    right_eye_position = view.view_pose.position;
+                }
+            }
+            return right_eye_position + head_orientation * glm::vec3{0.0f, origin_height, 0.0f} + get_camera_offset();
+        }
+    }
+    return pose.position + get_camera_offset();
 }
 
 auto Headset_view::get_root_node() const -> std::shared_ptr<erhe::scene::Node>
