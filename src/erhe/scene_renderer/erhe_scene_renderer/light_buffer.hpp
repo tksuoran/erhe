@@ -78,6 +78,11 @@ static constexpr uint32_t c_texture_heap_slot_shadow_distance  {2};
 // shadows: an R32F cube-map array storing radial distance from the light, one
 // cube (6 faces) per shadow-casting point light. Sampled by direction.
 static constexpr uint32_t c_texture_heap_slot_shadow_cube      {3};
+// Color-aspect sampler2D binding for the baked lightmap atlas
+// (doc/lightmap_baking_plan.md phase 5). Bound to the Lightmap_baker's
+// atlas when a bake exists, else to a 1x1 black fallback; the fragment
+// shader gates sampling on the per-primitive lightmap scale.
+static constexpr uint32_t c_texture_heap_slot_lightmap        {4};
 
 class Light_interface
 {
@@ -106,6 +111,9 @@ public:
     std::size_t                     point_light_position_offset;
     erhe::graphics::Sampler         shadow_sampler_compare;
     erhe::graphics::Sampler         shadow_sampler_no_compare;
+    // Bilinear clamp sampler for the baked lightmap atlas (immutable in the
+    // descriptor set layout, like the shadow samplers).
+    erhe::graphics::Sampler         lightmap_sampler;
 };
 
 // Selects camera for which the shadow frustums are fitted
@@ -200,6 +208,15 @@ public:
         const Light_projections*                light_projections
     );
 
+    // Bind the baked lightmap atlas (or the 1x1 black fallback when null)
+    // to the s_lightmap sampler binding. Called alongside
+    // bind_shadow_samplers by renderers whose fragment shaders can sample
+    // the lightmap.
+    void bind_lightmap(
+        erhe::graphics::Render_command_encoder& encoder,
+        const erhe::graphics::Texture*          lightmap_texture
+    );
+
     auto update_control(
         std::size_t      light_index,
         float            shadow_distance_bias_coeff = 0.0f,
@@ -223,6 +240,10 @@ private:
     // point shadows are configured, so the samplerCubeArray binding always has
     // a valid texture. Cleared to a large distance (every sample reads "lit").
     std::shared_ptr<erhe::graphics::Texture> m_fallback_point_cube_texture;
+    // 1x1 black RGBA32F bound to s_lightmap when no baked lightmap exists;
+    // the per-primitive lightmap scale gate normally short-circuits before
+    // sampling, so the content only matters defensively.
+    std::shared_ptr<erhe::graphics::Texture> m_fallback_lightmap_texture;
 };
 
 } // namespace erhe::scene_renderer

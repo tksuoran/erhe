@@ -7,6 +7,8 @@
 #include "operations/geometry_operations.hpp"
 #include "operations/operation_stack.hpp"
 #include "renderers/lightmap_baker.hpp"
+
+#include "erhe_scene_renderer/forward_renderer.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 
@@ -130,6 +132,20 @@ void Lightmap_window::imgui()
         }
         const Lightmap_baker::Atlas_layout& layout = m_context.lightmap_baker->get_layout();
         if (layout.width > 0) {
+            if (ImGui::Button("Bake Direct Lighting")) {
+                const std::shared_ptr<Scene_root> scene_root = m_context.selection->get_active_scene_root();
+                if (scene_root && m_context.lightmap_baker->bake_gbuffer() && m_context.lightmap_baker->bake_direct(*scene_root.get())) {
+                    if (m_context.forward_renderer != nullptr) {
+                        m_context.forward_renderer->set_lightmap_texture(m_context.lightmap_baker->get_lightmap_texture());
+                    }
+                }
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip(
+                    "Rasterize the texel G-buffer, then bake direct lighting (ray-query shadow rays)\n"
+                    "into the lightmap atlas. Lightmapped meshes sample it in place of ambient light."
+                );
+            }
             ImGui::Text("Atlas: %d x %d, %zu regions", layout.width, layout.height, layout.regions.size());
             if (ImGui::TreeNode("Regions")) {
                 for (const Lightmap_baker::Instance_region& region : layout.regions) {

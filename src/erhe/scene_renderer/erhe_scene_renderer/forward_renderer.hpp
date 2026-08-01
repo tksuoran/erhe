@@ -59,6 +59,11 @@ class Forward_renderer
 public:
     using Mesh_layer_collection = std::vector<const erhe::scene::Mesh_layer*>;
 
+    // Baked lightmap atlas sampled by standard.frag through s_lightmap
+    // (doc/lightmap_baking_plan.md phase 5). Null binds the black fallback;
+    // per-primitive lightmap_scale_offset gates sampling per draw.
+    void set_lightmap_texture(const std::shared_ptr<erhe::graphics::Texture>& texture) { m_lightmap_texture = texture; }
+
     // glyph_outline_set is optional: pass nullptr from executables that
     // never draw glyphs (the Glyph_buffer falls back to an empty but
     // bindable buffer, same as when the outline set is invalid).
@@ -262,6 +267,7 @@ private:
     erhe::graphics::Sampler                       m_fallback_sampler;
     std::shared_ptr<erhe::graphics::Texture>      m_dummy_texture;
     std::unique_ptr<erhe::graphics::Texture_heap> m_texture_heap;
+    std::shared_ptr<erhe::graphics::Texture>      m_lightmap_texture;
 };
 
 } // namespace erhe::scene_renderer

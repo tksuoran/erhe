@@ -4,6 +4,8 @@
 #include "erhe_scene/node_attachment.hpp"
 #include "erhe_primitive/primitive.hpp"
 
+#include <glm/glm.hpp>
+
 #include <memory>
 #include <vector>
 
@@ -27,6 +29,13 @@ class Mesh_primitive
 public:
     std::shared_ptr<erhe::primitive::Primitive> primitive;
     std::shared_ptr<erhe::primitive::Material>  material;
+
+    // Baked-lightmap atlas region of this primitive: lightmap UV =
+    // channel-2 UV * xy + zw. All-zero (the default) means "no baked
+    // lightmap"; the fragment shader gates on xy > 0. Written by the
+    // lightmap baker (doc/lightmap_baking_plan.md), uploaded per draw by
+    // Primitive_buffer.
+    glm::vec4                                   lightmap_uv_scale_offset{0.0f};
 };
 
 class Mesh;

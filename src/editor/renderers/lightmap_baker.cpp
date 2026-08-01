@@ -1042,6 +1042,21 @@ auto Lightmap_baker::bake_direct(Scene_root& scene_root) -> bool
     m_graphics_device.wait_idle();
 
     m_lightmap_valid = true;
+
+    // Publish per-primitive atlas regions so the forward renderer samples
+    // the fresh bake (Primitive_buffer uploads the value per draw; zero =
+    // no lightmap). Only set on success - meshes keep sampling nothing
+    // until their region holds baked data.
+    for (const Instance_region& region : m_layout.regions) {
+        if (!region.mesh) {
+            continue;
+        }
+        std::vector<erhe::scene::Mesh_primitive>& primitives = region.mesh->get_mutable_primitives();
+        if (region.primitive_index < primitives.size()) {
+            primitives[region.primitive_index].lightmap_uv_scale_offset = region.uv_scale_offset;
+        }
+    }
+
     log_render->info(
         "Lightmap_baker: direct light baked, {} lights, {} occluder instances, {}x{}",
         lights.size(), instances.size(), m_layout.width, m_layout.height

@@ -1,4 +1,4 @@
-#include "erhe_scene_renderer/forward_renderer.hpp"
+﻿#include "erhe_scene_renderer/forward_renderer.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_scene_renderer/shader_variant_cache.hpp"
 
@@ -191,6 +191,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
     Ring_buffer_range light_range = m_light_buffer.update(base.lights, base.light_projections, base.ambient_light);
     m_light_buffer.bind_light_buffer(render_encoder, light_range);
     m_light_buffer.bind_shadow_samplers(render_encoder, base.light_projections);
+    m_light_buffer.bind_lightmap(render_encoder, m_lightmap_texture.get());
 
     m_texture_heap->bind(render_encoder);
 
@@ -429,6 +430,7 @@ void Forward_renderer::draw_primitives(
     Ring_buffer_range light_range = m_light_buffer.update(base.lights, base.light_projections, base.ambient_light);
     m_light_buffer.bind_light_buffer(render_encoder, light_range);
     m_light_buffer.bind_shadow_samplers(render_encoder, base.light_projections);
+    m_light_buffer.bind_lightmap(render_encoder, m_lightmap_texture.get());
 
     m_texture_heap->bind(render_encoder);
 

@@ -96,6 +96,24 @@ Light_interface::Light_interface(erhe::graphics::Device& graphics_device, const 
             .debug_label    = "Light_interface::shadow_sampler_no_compare"
         }
     }
+    , lightmap_sampler{
+        graphics_device,
+        erhe::graphics::Sampler_create_info{
+            .min_filter     = erhe::graphics::Filter::linear,
+            .mag_filter     = erhe::graphics::Filter::linear,
+            .mipmap_mode    = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
+            .address_mode   = {
+                erhe::graphics::Sampler_address_mode::clamp_to_edge,
+                erhe::graphics::Sampler_address_mode::clamp_to_edge,
+                erhe::graphics::Sampler_address_mode::clamp_to_edge
+            },
+            .compare_enable = false,
+            .lod_bias       = 0.0f,
+            .max_lod        = 0.0f,
+            .min_lod        = 0.0f,
+            .debug_label    = "Light_interface::lightmap_sampler"
+        }
+    }
 {
 }
 
@@ -171,6 +189,22 @@ Light_buffer::Light_buffer(
             }
         )
     }
+    , m_fallback_lightmap_texture{
+        std::make_shared<erhe::graphics::Texture>(
+            graphics_device,
+            erhe::graphics::Texture_create_info {
+                .device            = graphics_device,
+                .usage_mask        = erhe::graphics::Image_usage_flag_bit_mask::sampled | erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
+                .type              = erhe::graphics::Texture_type::texture_2d,
+                .pixelformat       = erhe::dataformat::Format::format_32_vec4_float,
+                .width             = 1,
+                .height            = 1,
+                .depth             = 1,
+                .array_layer_count = 1,
+                .debug_label       = "Light_buffer::m_fallback_lightmap_texture"
+            }
+        )
+    }
 {
     // Initialize fallback shadow texture contents (clear to far-plane depth) and
     // leave it in DEPTH_STENCIL_READ_ONLY_OPTIMAL. A bare UNDEFINED -> READ_ONLY
@@ -185,6 +219,9 @@ Light_buffer::Light_buffer(
     // distance so any sample reads "occluder very far away" => lit. Bound
     // whenever no point shadow cube array is active.
     init_command_buffer.clear_texture(*m_fallback_point_cube_texture.get(), {1.0e30, 0.0, 0.0, 0.0});
+    // Lightmap fallback: black (no baked light). The per-primitive scale
+    // gate normally short-circuits before sampling.
+    init_command_buffer.clear_texture(*m_fallback_lightmap_texture.get(), {0.0, 0.0, 0.0, 0.0});
 }
 
 void Light_projections::apply(
@@ -617,6 +654,17 @@ void Light_buffer::bind_shadow_samplers(
         shadow_cube_texture = m_fallback_point_cube_texture.get();
     }
     encoder.set_sampled_image(c_texture_heap_slot_shadow_cube, *shadow_cube_texture, *no_compare_sampler);
+}
+
+void Light_buffer::bind_lightmap(
+    erhe::graphics::Render_command_encoder& encoder,
+    const erhe::graphics::Texture*          lightmap_texture
+)
+{
+    const erhe::graphics::Texture* texture = (lightmap_texture != nullptr)
+        ? lightmap_texture
+        : m_fallback_lightmap_texture.get();
+    encoder.set_sampled_image(c_texture_heap_slot_lightmap, *texture, m_light_interface.lightmap_sampler);
 }
 
 auto Light_buffer::update_control(const std::size_t light_index, const float shadow_distance_bias_coeff, const glm::vec4& point_light_position) -> erhe::graphics::Ring_buffer_range

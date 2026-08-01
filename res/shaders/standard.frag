@@ -52,9 +52,11 @@ const  vec2 v_texcoord_1 = vec2(0.5, 0.5);
 #endif
 
 #if defined(ERHE_USE_VERTEX_VARYING_TEXCOORD2) && !defined(ERHE_VARIANT_POSITION_PASS)
-layout(location = 21) in vec2     v_texcoord_2; // lightmap UVs
+layout(location = 21) in vec2      v_texcoord_2;            // lightmap UVs
+layout(location = 22) flat in vec4 v_lightmap_scale_offset; // atlas region; xy 0 = no lightmap
 #elif !defined(ERHE_VARIANT_POSITION_PASS)
-const  vec2 v_texcoord_2 = vec2(0.5, 0.5);
+const  vec2 v_texcoord_2            = vec2(0.5, 0.5);
+const  vec4 v_lightmap_scale_offset = vec4(0.0);
 #endif
 
 // Selects the texcoord set for a texture / feature from its compile-time
@@ -490,7 +492,21 @@ void main()
         uint light_offset = 0;
 
         //color += (0.5 + 0.5 * N.y) * light_block.ambient_light.rgb * base_color;
-        color  = light_block.ambient_light.rgb * base_color * occlusion;
+        // Baked lightmap (doc/lightmap_baking_plan.md phase 5): a primitive
+        // with an atlas region (lightmap_scale_offset.xy > 0) replaces the
+        // flat ambient term with its baked irradiance, sampled at channel-2
+        // UVs mapped into the atlas. Analytic lights still add on top below;
+        // the bake currently holds direct light only, so this previews the
+        // pipeline (double lighting) until the bake carries indirect only or
+        // the analytic terms are gated per-mesh.
+        vec3 ambient_term = light_block.ambient_light.rgb;
+#if defined(ERHE_USE_VERTEX_VARYING_TEXCOORD2)
+        if (v_lightmap_scale_offset.x > 0.0) {
+            vec2 lightmap_uv = v_texcoord_2 * v_lightmap_scale_offset.xy + v_lightmap_scale_offset.zw;
+            ambient_term = texture(s_lightmap, lightmap_uv).rgb;
+        }
+#endif
+        color  = ambient_term * base_color * occlusion;
         color += emissive;
 
         // Directional - shadow-mapped prefix

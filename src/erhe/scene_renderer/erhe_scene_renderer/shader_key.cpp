@@ -136,6 +136,14 @@ auto Shader_key::derive(
         key.set(Shader_bool::USE_VERTEX_VARYING_COLOR, true);
     }
 
+    // Lightmap UVs (channel 2) always pass through when the format carries
+    // them: whether a draw actually samples the lightmap is a per-primitive
+    // runtime gate (primitive.lightmap_scale_offset), not a variant axis,
+    // so the varying must exist on every lightmap-capable mesh.
+    if (has_texcoord_2) {
+        key.set(Shader_bool::USE_VERTEX_VARYING_TEXCOORD2, true);
+    }
+
     if (material != nullptr) {
         const erhe::primitive::Material_data&             data     = material->data;
         const erhe::primitive::Material_texture_samplers& samplers = data.texture_samplers;

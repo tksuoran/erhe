@@ -32,6 +32,7 @@ public:
     std::size_t world_from_node;    // mat4 16 * 4 bytes
     std::size_t normal_transform;   // mat4 16 * 4 bytes
     std::size_t color;              // vec4  4 * 4 bytes - id_offset / wire frame color
+    std::size_t lightmap_scale_offset; // vec4 4 * 4 bytes - baked lightmap atlas region (uv2 * xy + zw); xy 0 = no lightmap
     std::size_t material_index;     // uint  1 * 4 bytes
     std::size_t size;               // float 1 * 4 bytes - point size / line width
     std::size_t skinning_factor;    // float 1 * 4 bytes

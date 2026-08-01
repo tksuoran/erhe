@@ -9,6 +9,7 @@
 #include "tools/clipboard.hpp"
 
 #include "erhe_gltf/gltf_item_flags.hpp"
+#include "erhe_scene_renderer/forward_renderer.hpp"
 
 #include <simdjson.h>
 
@@ -293,6 +294,11 @@ auto Mcp_server::action_lightmap_bake_direct(const json& args) -> std::string
         json r = make_text_content("Direct bake failed (needs ray query, a packed atlas and a baked G-buffer - run lightmap_update_atlas + lightmap_bake_gbuffer first)");
         r["isError"] = true;
         return r.dump();
+    }
+    // Hand the fresh atlas to the forward renderer so lightmapped draws
+    // sample it (per-primitive scale/offset gates each draw).
+    if (m_context.forward_renderer != nullptr) {
+        m_context.forward_renderer->set_lightmap_texture(m_context.lightmap_baker->get_lightmap_texture());
     }
     json result{
         {"baked",  true},

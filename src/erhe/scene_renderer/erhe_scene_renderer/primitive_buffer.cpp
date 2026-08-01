@@ -38,6 +38,7 @@ Primitive_interface::Primitive_interface(erhe::graphics::Device& graphics_device
         .world_from_node  = primitive_struct.add_mat4 ("world_from_node"       )->get_offset_in_parent(),
         .normal_transform = primitive_struct.add_mat4 ("world_from_node_normal")->get_offset_in_parent(),
         .color            = primitive_struct.add_vec4 ("color"                 )->get_offset_in_parent(),
+        .lightmap_scale_offset = primitive_struct.add_vec4("lightmap_scale_offset")->get_offset_in_parent(),
         .material_index   = primitive_struct.add_uint ("material_index"        )->get_offset_in_parent(),
         .size             = primitive_struct.add_float("size"                  )->get_offset_in_parent(),
         .skinning_factor  = primitive_struct.add_float("skinning_factor"       )->get_offset_in_parent(),
@@ -246,6 +247,7 @@ auto Primitive_buffer::update(
                 write(primitive_gpu_data, write_offset + offsets.world_from_node,  as_span(world_from_node ));
                 write(primitive_gpu_data, write_offset + offsets.normal_transform, as_span(normal_transform));
                 write(primitive_gpu_data, write_offset + offsets.color,            color_span               );
+                write(primitive_gpu_data, write_offset + offsets.lightmap_scale_offset, as_span(mesh_primitive.lightmap_uv_scale_offset));
                 write(primitive_gpu_data, write_offset + offsets.material_index,   as_span(material_index  ));
                 write(primitive_gpu_data, write_offset + offsets.size,             size_span                );
                 write(primitive_gpu_data, write_offset + offsets.skinning_factor,  as_span(skinning_factor ));
@@ -374,6 +376,7 @@ auto Primitive_buffer::update(
         write(primitive_gpu_data, write_offset + offsets.world_from_node,  as_span(world_from_node ));
         write(primitive_gpu_data, write_offset + offsets.normal_transform, as_span(normal_transform));
         write(primitive_gpu_data, write_offset + offsets.color,            color_span               );
+        write(primitive_gpu_data, write_offset + offsets.lightmap_scale_offset, as_span(mesh_primitive.lightmap_uv_scale_offset));
         write(primitive_gpu_data, write_offset + offsets.material_index,   as_span(material_index  ));
         write(primitive_gpu_data, write_offset + offsets.size,             size_span                );
         write(primitive_gpu_data, write_offset + offsets.skinning_factor,  as_span(skinning_factor ));
@@ -426,10 +429,12 @@ auto Primitive_buffer::update(
         using erhe::graphics::as_span;
         const auto color_span = as_span(primitive_settings.constant_color0);
         const auto size_span  = as_span(primitive_settings.constant_size);
+        const glm::vec4 no_lightmap{0.0f};
         using erhe::graphics::write;
         write(primitive_gpu_data, write_offset + offsets.world_from_node,  as_span(world_from_node ));
         write(primitive_gpu_data, write_offset + offsets.normal_transform, as_span(normal_transform));
         write(primitive_gpu_data, write_offset + offsets.color,            color_span               );
+        write(primitive_gpu_data, write_offset + offsets.lightmap_scale_offset, as_span(no_lightmap));
         write(primitive_gpu_data, write_offset + offsets.material_index,   as_span(material_index  ));
         write(primitive_gpu_data, write_offset + offsets.size,             size_span                );
         write(primitive_gpu_data, write_offset + offsets.skinning_factor,  as_span(skinning_factor ));

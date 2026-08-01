@@ -139,6 +139,20 @@ Program_interface::Program_interface(
                 .immutable_sampler = &light_interface.shadow_sampler_no_compare,
                 .stage_flags       = erhe::graphics::Shader_stage_flags::fragment
             },
+            {
+                // Baked lightmap atlas (doc/lightmap_baking_plan.md phase 5).
+                // Bilinear color sampler; bound by Light_buffer::bind_lightmap
+                // (baked atlas or 1x1 black fallback). The fragment shader
+                // gates sampling on the per-primitive lightmap scale.
+                .binding_point     = c_texture_heap_slot_lightmap,
+                .type              = erhe::graphics::Binding_type::combined_image_sampler,
+                .sampler_aspect    = erhe::graphics::Sampler_aspect::color,
+                .name              = "s_lightmap",
+                .glsl_type         = erhe::graphics::Glsl_type::sampler_2d,
+                .is_texture_heap   = false,
+                .immutable_sampler = &light_interface.lightmap_sampler,
+                .stage_flags       = erhe::graphics::Shader_stage_flags::fragment
+            },
         },
         .debug_label = "Scene renderer"
     };
