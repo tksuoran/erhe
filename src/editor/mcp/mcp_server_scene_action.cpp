@@ -274,6 +274,42 @@ auto Mcp_server::action_lightmap_bake_gbuffer(const json& args) -> std::string
     return make_json_content(result).dump();
 }
 
+auto Mcp_server::action_lightmap_bake_direct(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    auto* sr = find_scene(scene_name);
+    if (!sr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+    if (m_context.lightmap_baker == nullptr) {
+        json r = make_text_content("Lightmap baker not available");
+        r["isError"] = true;
+        return r.dump();
+    }
+    const bool baked = m_context.lightmap_baker->bake_direct(*sr);
+    if (!baked) {
+        json r = make_text_content("Direct bake failed (needs ray query, a packed atlas and a baked G-buffer - run lightmap_update_atlas + lightmap_bake_gbuffer first)");
+        r["isError"] = true;
+        return r.dump();
+    }
+    json result{
+        {"baked",  true},
+        {"width",  m_context.lightmap_baker->get_layout().width},
+        {"height", m_context.lightmap_baker->get_layout().height}
+    };
+    const std::string debug_png = args.value("debug_png", "");
+    if (!debug_png.empty()) {
+        const bool written = m_context.lightmap_baker->debug_write_lightmap_png(debug_png);
+        result["debug_png_written"] = written;
+        if (written) {
+            result["file"] = debug_png;
+        }
+    }
+    return make_json_content(result).dump();
+}
+
 auto Mcp_server::query_active_scene(const json& args) -> std::string
 {
     static_cast<void>(args);

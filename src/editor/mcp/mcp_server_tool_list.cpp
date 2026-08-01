@@ -909,6 +909,15 @@ void Mcp_server::refresh_tool_list()
         }}
     }});
 
+    m_tool_infos.push_back({"lightmap_bake_direct", "Bake direct lighting into the lightmap atlas: per valid G-buffer texel, explicit sampling of every scene light with a ray-query shadow ray against all content meshes. Requires lightmap_update_atlas + lightmap_bake_gbuffer first. Optionally writes a tone-mapped debug PNG.", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name", {{"type", "string"}, {"description", "Name of the scene (lights + occluders)"}}},
+            {"debug_png",  {{"type", "string"}, {"description", "Optional path for a tone-mapped PNG of the baked lightmap"}}}
+        }},
+        {"required", json::array({"scene_name"})}
+    }});
+
     // Transform reference frame for the transform gizmo / numeric edits.
     m_tool_infos.push_back({"set_transform_reference_mode", "Set the orientation reference frame (transform space) of the transform tool: global/world (world axes), local (selection's own orientation), reference (a chosen reference node's orientation), or selection (a frame derived from the active mesh-component selection). For reference mode, give reference_node_id or reference_node_name (searched across scenes, or within scene_name when given) - this is how you set the reference. edge_normal_blend tunes the selection-mode frame. Read the current state back with get_transform_state.", {
         {"type", "object"},

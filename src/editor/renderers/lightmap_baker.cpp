@@ -4,7 +4,11 @@
 #include "scene/scene_root.hpp"
 
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_graphics/acceleration_structure.hpp"
 #include "erhe_graphics/bind_group_layout.hpp"
+#include "erhe_graphics/compute_command_encoder.hpp"
+#include "erhe_graphics/compute_pipeline_state.hpp"
+#include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/blit_command_encoder.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/command_buffer.hpp"
@@ -22,6 +26,7 @@
 #include "erhe_item/item.hpp"
 #include "erhe_primitive/buffer_mesh.hpp"
 #include "erhe_primitive/primitive.hpp"
+#include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
@@ -33,6 +38,7 @@
 #include <geogram/mesh/mesh.h>
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <cstring>
 
@@ -101,6 +107,109 @@ void main()
 {
     out_position = vec4(v_position, 1.0);          // w = coverage
     out_normal   = vec4(normalize(v_normal), 1.0); // w = coverage
+}
+)GLSL";
+
+constexpr std::size_t c_max_gather_lights = 16;
+
+// Direct-light gather: one thread per lightmap texel; explicit light
+// sampling with a ray-query shadow ray per light. Bind-group declarations
+// (s_tlas, s_position, s_normal, i_lightmap) and the lightmap_gather block
+// are injected by erhe.
+constexpr const char* c_gather_source = R"GLSL(
+// Samplers / storage image / uniform block are declared by the bind group
+// layout + interface blocks; the acceleration structure is not (matching
+// ray_trace.comp) and is declared here at its layout binding.
+layout(binding = 1) uniform accelerationStructureEXT s_tlas;
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+void main()
+{
+    ivec2 texel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size  = imageSize(i_lightmap);
+    if ((texel.x >= size.x) || (texel.y >= size.y)) {
+        return;
+    }
+    vec4 position_coverage = texelFetch(s_position, texel, 0);
+    if (position_coverage.w <= 0.0) {
+        imageStore(i_lightmap, texel, vec4(0.0));
+        return;
+    }
+    vec3 p = position_coverage.xyz;
+    vec3 n = normalize(texelFetch(s_normal, texel, 0).xyz);
+
+    float ray_bias   = lightmap_gather.ray_bias;
+    vec3  irradiance = vec3(0.0);
+    for (uint i = 0u; i < lightmap_gather.light_count; ++i) {
+        vec4 pos_type  = lightmap_gather.light_position_and_type[i];
+        vec4 dir_cos   = lightmap_gather.light_direction_and_outer_cos[i];
+        vec4 rad_range = lightmap_gather.light_radiance_and_range[i];
+        vec4 params    = lightmap_gather.light_params[i];
+
+        vec3  to_light;
+        float attenuation = 1.0;
+        float t_max       = 1.0e30;
+        if (pos_type.w < 0.5) { // directional
+            to_light = normalize(dir_cos.xyz);
+        } else {
+            vec3 d = pos_type.xyz - p;
+            float distance = length(d);
+            if (distance < 1.0e-6) {
+                continue;
+            }
+            to_light    = d / distance;
+            attenuation = 1.0 / max(distance * distance, 1.0e-4);
+            t_max       = distance - ray_bias;
+            if (pos_type.w > 1.5) { // spot: params.x = inner cos, dir_cos.w = outer cos
+                float cos_angle = dot(to_light, normalize(dir_cos.xyz));
+                attenuation *= smoothstep(dir_cos.w, params.x, cos_angle);
+            }
+        }
+        float n_dot_l = dot(n, to_light);
+        if ((n_dot_l <= 0.0) || (attenuation <= 0.0)) {
+            continue;
+        }
+        vec3 origin = p + n * ray_bias;
+        rayQueryEXT ray_query;
+        rayQueryInitializeEXT(
+            ray_query,
+            s_tlas,
+            gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT,
+            0xFFu,
+            origin,
+            1.0e-4,
+            to_light,
+            t_max
+        );
+        rayQueryProceedEXT(ray_query);
+        if (rayQueryGetIntersectionTypeEXT(ray_query, true) == gl_RayQueryCommittedIntersectionNoneEXT) {
+            irradiance += rad_range.xyz * (n_dot_l * attenuation);
+        }
+    }
+#if defined(ERHE_LM_DEBUG_GATHER)
+    // Diagnostics: R = light_count/8, G = max NdotL over lights, B = shadow
+    // miss ratio (1 = all rays reached their light).
+    {
+        float ndotl_max = 0.0;
+        float misses    = 0.0;
+        float rays      = 0.0;
+        for (uint i = 0u; i < lightmap_gather.light_count; ++i) {
+            vec3 to_light = normalize(lightmap_gather.light_direction_and_outer_cos[i].xyz);
+            ndotl_max = max(ndotl_max, dot(n, to_light));
+            rays += 1.0;
+            rayQueryEXT rq2;
+            rayQueryInitializeEXT(rq2, s_tlas, gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT, 0xFFu, p + n * lightmap_gather.ray_bias, 1.0e-4, to_light, 1.0e30);
+            rayQueryProceedEXT(rq2);
+            if (rayQueryGetIntersectionTypeEXT(rq2, true) == gl_RayQueryCommittedIntersectionNoneEXT) {
+                misses += 1.0;
+            }
+        }
+        imageStore(i_lightmap, texel, vec4(float(lightmap_gather.light_count) / 8.0, ndotl_max, (rays > 0.0) ? misses / rays : 0.0, 1.0));
+        return;
+    }
+#endif
+    imageStore(i_lightmap, texel, vec4(irradiance, 1.0));
 }
 )GLSL";
 
@@ -198,6 +307,118 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
         log_render->warn("Lightmap_baker: G-buffer pipeline is not valid");
         m_pipeline.reset();
     }
+
+    // Direct-light gather: ray query in compute, exactly the machinery
+    // Ray_trace_renderer proves out. Absent ray query, the layout +
+    // G-buffer still work; only baking is unavailable.
+    if (!graphics_device.get_info().use_ray_query) {
+        log_render->info("Lightmap_baker: ray query not available, lightmap gather disabled");
+        return;
+    }
+
+    m_gather_block = std::make_unique<Shader_resource>(
+        graphics_device,
+        Shader_resource::Block_create_info{
+            .name          = "lightmap_gather",
+            .binding_point = 0,
+            .type          = Shader_resource::Type::uniform_block
+        }
+    );
+    m_gather_light_count_offset    = m_gather_block->add_uint ("light_count")->get_offset_in_parent();
+    m_gather_ray_bias_offset       = m_gather_block->add_float("ray_bias")->get_offset_in_parent();
+    m_gather_block->add_float("gather_reserved_0");
+    m_gather_block->add_float("gather_reserved_1");
+    m_gather_position_type_offset  = m_gather_block->add_vec4("light_position_and_type",       c_max_gather_lights)->get_offset_in_parent();
+    m_gather_direction_cos_offset  = m_gather_block->add_vec4("light_direction_and_outer_cos", c_max_gather_lights)->get_offset_in_parent();
+    m_gather_radiance_range_offset = m_gather_block->add_vec4("light_radiance_and_range",      c_max_gather_lights)->get_offset_in_parent();
+    m_gather_params_offset         = m_gather_block->add_vec4("light_params",                  c_max_gather_lights)->get_offset_in_parent();
+    m_gather_block_size            = m_gather_block->get_size_bytes(Shader_resource::Layout::std140);
+
+    m_gather_layout = std::make_unique<Bind_group_layout>(
+        graphics_device,
+        Bind_group_layout_create_info{
+            .bindings = {
+                Bind_group_layout_binding{
+                    .binding_point = 0u,
+                    .type          = Binding_type::uniform_buffer,
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                Bind_group_layout_binding{
+                    .binding_point = 1u,
+                    .type          = Binding_type::acceleration_structure,
+                    .name          = "s_tlas",
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                Bind_group_layout_binding{
+                    .binding_point   = 2u,
+                    .type            = Binding_type::combined_image_sampler,
+                    .sampler_aspect  = Sampler_aspect::color,
+                    .name            = "s_position",
+                    .glsl_type       = Glsl_type::sampler_2d,
+                    .is_texture_heap = false,
+                    .stage_flags     = Shader_stage_flags::compute
+                },
+                Bind_group_layout_binding{
+                    .binding_point   = 3u,
+                    .type            = Binding_type::combined_image_sampler,
+                    .sampler_aspect  = Sampler_aspect::color,
+                    .name            = "s_normal",
+                    .glsl_type       = Glsl_type::sampler_2d,
+                    .is_texture_heap = false,
+                    .stage_flags     = Shader_stage_flags::compute
+                },
+                // Combined image samplers land at vk binding = user + 1
+                // (offset past the uniform buffer at 0), i.e. vk 3 and 4;
+                // raw bindings (TLAS, storage image) are NOT offset, so the
+                // storage image sits at 5 to stay clear of s_normal's vk 4.
+                Bind_group_layout_binding{
+                    .binding_point = 5u,
+                    .type          = Binding_type::storage_image,
+                    .name          = "i_lightmap",
+                    .glsl_type     = Glsl_type::image_2d,
+                    .image_format  = "rgba32f",
+                    .stage_flags   = Shader_stage_flags::compute
+                }
+            },
+            .debug_label       = erhe::utility::Debug_label{"lightmap gather layout"},
+            .uses_texture_heap = false
+        }
+    );
+
+    Shader_stages_create_info gather_create_info{
+        .name             = "lightmap_gather",
+        .extensions       = {
+            { Shader_type::compute_shader, "GL_EXT_ray_query" }
+        },
+        .interface_blocks = { m_gather_block.get() },
+        .shaders = {
+            { Shader_type::compute_shader, std::string_view{c_gather_source} }
+        },
+        .bind_group_layout = m_gather_layout.get()
+    };
+    Shader_stages_prototype gather_prototype = build_shader_stages(graphics_device, gather_create_info);
+    if (!gather_prototype.is_valid()) {
+        log_render->warn("Lightmap_baker: gather shader failed to compile/link");
+        return;
+    }
+    m_gather_shader_stages = std::make_unique<Shader_stages>(graphics_device, std::move(gather_prototype));
+    m_gather_pipeline = std::make_unique<Compute_pipeline>(
+        graphics_device,
+        Compute_pipeline_data{
+            .name              = "lightmap_gather",
+            .shader_stages     = m_gather_shader_stages.get(),
+            .bind_group_layout = m_gather_layout.get()
+        }
+    );
+    m_nearest_sampler = std::make_unique<Sampler>(
+        graphics_device,
+        Sampler_create_info{
+            .min_filter  = Filter::nearest,
+            .mag_filter  = Filter::nearest,
+            .mipmap_mode = Sampler_mipmap_mode::not_mipmapped,
+            .debug_label = "lightmap gather sampler"
+        }
+    );
 }
 
 Lightmap_baker::~Lightmap_baker() noexcept = default;
@@ -209,8 +430,9 @@ auto Lightmap_baker::is_supported() const -> bool
 
 auto Lightmap_baker::update_layout(Scene_root& scene_root, const float texels_per_meter) -> bool
 {
-    m_layout        = Atlas_layout{};
-    m_gbuffer_valid = false;
+    m_layout         = Atlas_layout{};
+    m_gbuffer_valid  = false;
+    m_lightmap_valid = false;
 
     std::vector<Instance_region> regions;
     for (const std::shared_ptr<erhe::scene::Mesh>& mesh : scene_root.layers().content()->meshes) {
@@ -579,6 +801,333 @@ auto Lightmap_baker::debug_write_gbuffer_pngs(const std::string& base_path) -> b
     const bool position_ok = write_image(base_path + "_position.png", position_data, true);
     const bool normal_ok   = write_image(base_path + "_normal.png",   normal_data,   false);
     return position_ok && normal_ok;
+}
+
+auto Lightmap_baker::get_or_create_blas(
+    erhe::graphics::Command_buffer&                    command_buffer,
+    const std::shared_ptr<erhe::primitive::Primitive>& primitive,
+    const erhe::primitive::Buffer_mesh&                buffer_mesh
+) -> erhe::graphics::Acceleration_structure*
+{
+    using namespace erhe::graphics;
+
+    const auto existing = m_blas_cache.find(&buffer_mesh);
+    if (existing != m_blas_cache.end()) {
+        return existing->second.acceleration_structure.get();
+    }
+    // Mirrors Ray_trace_renderer::get_or_create_blas: triangles read in
+    // place from the mesh memory pools (stream 0 leads with position,
+    // uint32 triangle-list indices relative to the range start).
+    if (buffer_mesh.vertex_buffer_ranges.empty()) {
+        return nullptr;
+    }
+    const erhe::primitive::Buffer_range& vertex_range = buffer_mesh.vertex_buffer_ranges[0];
+    const erhe::primitive::Buffer_range& index_range  = buffer_mesh.index_buffer_range;
+    const erhe::primitive::Index_range&  triangles    = buffer_mesh.triangle_fill_indices;
+    if ((triangles.index_count == 0) || (triangles.primitive_type != erhe::primitive::Primitive_type::triangles)) {
+        return nullptr;
+    }
+    if ((vertex_range.count == 0) || (index_range.element_size != sizeof(uint32_t))) {
+        return nullptr;
+    }
+    erhe::graphics::Buffer* vertex_buffer = m_mesh_memory.get_vertex_buffer(vertex_range);
+    erhe::graphics::Buffer* index_buffer  = m_mesh_memory.get_index_buffer(index_range);
+    if ((vertex_buffer == nullptr) || (index_buffer == nullptr)) {
+        return nullptr;
+    }
+
+    Blas_entry& entry = m_blas_cache[&buffer_mesh];
+    entry.primitive = primitive;
+    entry.acceleration_structure = std::make_unique<Acceleration_structure>(
+        m_graphics_device,
+        Acceleration_structure_create_info{
+            .type                = Acceleration_structure_type::bottom_level,
+            .triangle_geometries = {
+                Acceleration_structure_triangles{
+                    .vertex_buffer      = vertex_buffer,
+                    .vertex_byte_offset = vertex_range.byte_offset,
+                    .vertex_byte_stride = vertex_range.element_size,
+                    .vertex_count       = vertex_range.count,
+                    .index_buffer       = index_buffer,
+                    .index_byte_offset  = index_range.byte_offset + (triangles.first_index * index_range.element_size),
+                    .index_count        = triangles.index_count,
+                    .opaque             = true
+                }
+            },
+            .debug_label = erhe::utility::Debug_label{"Lightmap BLAS"}
+        }
+    );
+    entry.acceleration_structure->build(command_buffer);
+    return entry.acceleration_structure.get();
+}
+
+auto Lightmap_baker::bake_direct(Scene_root& scene_root) -> bool
+{
+    using namespace erhe::graphics;
+
+    if (!m_gather_pipeline || !m_gbuffer_valid || !m_position_texture) {
+        return false;
+    }
+
+    // Lightmap accumulation target at the atlas size.
+    const bool lightmap_matches =
+        m_lightmap_texture &&
+        (m_lightmap_texture->get_width()  == m_layout.width) &&
+        (m_lightmap_texture->get_height() == m_layout.height);
+    if (!lightmap_matches) {
+        m_lightmap_texture = std::make_shared<Texture>(
+            m_graphics_device,
+            Texture_create_info{
+                .device      = m_graphics_device,
+                .usage_mask  =
+                    Image_usage_flag_bit_mask::storage  |
+                    Image_usage_flag_bit_mask::sampled  |
+                    Image_usage_flag_bit_mask::transfer_src,
+                .type        = Texture_type::texture_2d,
+                .pixelformat = erhe::dataformat::Format::format_32_vec4_float,
+                .width       = m_layout.width,
+                .height      = m_layout.height,
+                .debug_label = erhe::utility::Debug_label{"lightmap atlas"}
+            }
+        );
+    }
+
+    // Scene lights into the gather UBO.
+    struct Light_record
+    {
+        glm::vec4 position_and_type;
+        glm::vec4 direction_and_outer_cos;
+        glm::vec4 radiance_and_range;
+        glm::vec4 params;
+    };
+    std::vector<Light_record> lights;
+    for (const std::shared_ptr<erhe::scene::Light>& light : scene_root.layers().light()->lights) {
+        if (!light || !light->is_visible() || (lights.size() >= c_max_gather_lights)) {
+            continue;
+        }
+        const erhe::scene::Node* const node = light->get_node();
+        if (node == nullptr) {
+            continue;
+        }
+        const glm::mat4 world_from_node = node->world_from_node();
+        // Light direction convention matches Light_buffer: node +Z axis.
+        const glm::vec3 direction = glm::normalize(glm::vec3{world_from_node * glm::vec4{0.0f, 0.0f, 1.0f, 0.0f}});
+        const glm::vec3 position  = glm::vec3{world_from_node * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
+        const glm::vec3 radiance  = light->intensity * light->get_effective_color();
+        float type_value = 0.0f;
+        switch (light->type) {
+            case erhe::scene::Light_type::directional: type_value = 0.0f; break;
+            case erhe::scene::Light_type::point:       type_value = 1.0f; break;
+            case erhe::scene::Light_type::spot:        type_value = 2.0f; break;
+            default: continue;
+        }
+        lights.push_back(
+            Light_record{
+                .position_and_type       = glm::vec4{position, type_value},
+                .direction_and_outer_cos = glm::vec4{direction, std::cos(light->outer_spot_angle * 0.5f)},
+                .radiance_and_range      = glm::vec4{radiance, light->range},
+                .params                  = glm::vec4{std::cos(light->inner_spot_angle * 0.5f), 0.0f, 0.0f, 0.0f}
+            }
+        );
+    }
+
+    Buffer gather_ubo{
+        m_graphics_device,
+        Buffer_create_info{
+            .capacity_byte_count                    = m_gather_block_size,
+            .memory_allocation_create_flag_bit_mask = Memory_allocation_create_flag_bit_mask::mapped,
+            .usage                                  = Buffer_usage::uniform,
+            .required_memory_property_bit_mask      =
+                Memory_property_flag_bit_mask::host_read |
+                Memory_property_flag_bit_mask::host_write,
+            .preferred_memory_property_bit_mask     =
+                Memory_property_flag_bit_mask::host_coherent |
+                Memory_property_flag_bit_mask::host_persistent,
+            .debug_label = erhe::utility::Debug_label{"lightmap gather ubo"}
+        }
+    };
+    {
+        const std::span<std::byte> mapped = gather_ubo.map_bytes(0, m_gather_block_size);
+        std::memset(mapped.data(), 0, m_gather_block_size);
+        const uint32_t light_count = static_cast<uint32_t>(lights.size());
+        const float    ray_bias    = 0.01f;
+        std::memcpy(mapped.data() + m_gather_light_count_offset, &light_count, sizeof(uint32_t));
+        std::memcpy(mapped.data() + m_gather_ray_bias_offset,    &ray_bias,    sizeof(float));
+        for (std::size_t i = 0; i < lights.size(); ++i) {
+            std::memcpy(mapped.data() + m_gather_position_type_offset  + i * sizeof(glm::vec4), &lights[i].position_and_type,       sizeof(glm::vec4));
+            std::memcpy(mapped.data() + m_gather_direction_cos_offset  + i * sizeof(glm::vec4), &lights[i].direction_and_outer_cos, sizeof(glm::vec4));
+            std::memcpy(mapped.data() + m_gather_radiance_range_offset + i * sizeof(glm::vec4), &lights[i].radiance_and_range,      sizeof(glm::vec4));
+            std::memcpy(mapped.data() + m_gather_params_offset         + i * sizeof(glm::vec4), &lights[i].params,                  sizeof(glm::vec4));
+        }
+        gather_ubo.unmap();
+    }
+
+    constexpr unsigned int bake_thread_slot = 6;
+    Command_buffer& command_buffer = m_graphics_device.get_command_buffer(bake_thread_slot);
+    command_buffer.begin();
+
+    // Shadow world: every visible, non-skinned content mesh occludes,
+    // whether or not it is lightmapped.
+    std::vector<Acceleration_structure_instance> instances;
+    for (const std::shared_ptr<erhe::scene::Mesh>& mesh : scene_root.layers().content()->meshes) {
+        if (!mesh || !mesh->is_visible() || mesh->skin) {
+            continue;
+        }
+        const erhe::scene::Node* const node = mesh->get_node();
+        if (node == nullptr) {
+            continue;
+        }
+        const glm::mat4 world_from_node = node->world_from_node();
+        for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
+            if (!mesh_primitive.primitive) {
+                continue;
+            }
+            const erhe::primitive::Buffer_mesh* buffer_mesh = mesh_primitive.primitive->get_renderable_mesh();
+            if (buffer_mesh == nullptr) {
+                continue;
+            }
+            Acceleration_structure* blas = get_or_create_blas(command_buffer, mesh_primitive.primitive, *buffer_mesh);
+            if (blas == nullptr) {
+                continue;
+            }
+            instances.push_back(
+                Acceleration_structure_instance{
+                    .transform             = world_from_node,
+                    .instance_custom_index = static_cast<uint32_t>(instances.size()),
+                    .mask                  = 0xFFu,
+                    .bottom_level          = blas
+                }
+            );
+        }
+    }
+    if (instances.empty()) {
+        command_buffer.end();
+        return false;
+    }
+    const uint32_t required_capacity = static_cast<uint32_t>(instances.size());
+    if (!m_tlas || (m_tlas_capacity < required_capacity)) {
+        const uint32_t new_capacity = std::max(64u, std::bit_ceil(required_capacity));
+        m_tlas = std::make_unique<Acceleration_structure>(
+            m_graphics_device,
+            Acceleration_structure_create_info{
+                .type               = Acceleration_structure_type::top_level,
+                .max_instance_count = new_capacity,
+                .debug_label        = erhe::utility::Debug_label{"Lightmap TLAS"}
+            }
+        );
+        m_tlas_capacity = new_capacity;
+    }
+    m_tlas->build(command_buffer, instances);
+
+    command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::general);
+    {
+        Compute_command_encoder encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
+        encoder.set_bind_group_layout(m_gather_layout.get());
+        encoder.set_compute_pipeline(*m_gather_pipeline);
+        encoder.set_buffer(Buffer_target::uniform, &gather_ubo, 0, m_gather_block_size, 0);
+        encoder.set_acceleration_structure(1u, *m_tlas);
+        encoder.set_sampled_image(2u, *m_position_texture, *m_nearest_sampler);
+        encoder.set_sampled_image(3u, *m_normal_texture,   *m_nearest_sampler);
+        encoder.set_storage_image(5u, *m_lightmap_texture);
+        encoder.dispatch_compute(
+            (static_cast<std::uintptr_t>(m_layout.width)  + 7) / 8,
+            (static_cast<std::uintptr_t>(m_layout.height) + 7) / 8,
+            1
+        );
+    }
+    command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::shader_read_only_optimal);
+    command_buffer.end();
+    Command_buffer* command_buffers[] = { &command_buffer };
+    m_graphics_device.submit_command_buffers(std::span<Command_buffer* const>{command_buffers});
+    m_graphics_device.wait_idle();
+
+    m_lightmap_valid = true;
+    log_render->info(
+        "Lightmap_baker: direct light baked, {} lights, {} occluder instances, {}x{}",
+        lights.size(), instances.size(), m_layout.width, m_layout.height
+    );
+    return true;
+}
+
+auto Lightmap_baker::debug_write_lightmap_png(const std::string& path) -> bool
+{
+    using namespace erhe::graphics;
+    if (!m_lightmap_valid || !m_lightmap_texture) {
+        return false;
+    }
+    const int         width         = m_layout.width;
+    const int         height        = m_layout.height;
+    const std::size_t texel_count   = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
+    const std::size_t bytes_per_row = static_cast<std::size_t>(width) * 16u;
+    const std::size_t byte_count    = bytes_per_row * static_cast<std::size_t>(height);
+
+    Buffer readback{
+        m_graphics_device,
+        Buffer_create_info{
+            .capacity_byte_count                    = byte_count,
+            .memory_allocation_create_flag_bit_mask = Memory_allocation_create_flag_bit_mask::mapped,
+            .usage                                  = Buffer_usage::transfer_dst | Buffer_usage::storage,
+            .required_memory_property_bit_mask      =
+                Memory_property_flag_bit_mask::host_read |
+                Memory_property_flag_bit_mask::host_write,
+            .preferred_memory_property_bit_mask     =
+                Memory_property_flag_bit_mask::host_coherent |
+                Memory_property_flag_bit_mask::host_persistent,
+            .debug_label = erhe::utility::Debug_label{"lightmap readback"}
+        }
+    };
+    constexpr unsigned int bake_thread_slot = 6;
+    Command_buffer& command_buffer = m_graphics_device.get_command_buffer(bake_thread_slot);
+    command_buffer.begin();
+    command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::transfer_src_optimal);
+    {
+        Blit_command_encoder blit = m_graphics_device.make_blit_command_encoder(command_buffer);
+        blit.copy_from_texture(
+            m_lightmap_texture.get(),
+            0, 0,
+            glm::ivec3{0, 0, 0},
+            glm::ivec3{width, height, 1},
+            &readback,
+            0,
+            bytes_per_row,
+            byte_count
+        );
+    }
+    command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::shader_read_only_optimal);
+    command_buffer.end();
+    Command_buffer* command_buffers[] = { &command_buffer };
+    m_graphics_device.submit_command_buffers(std::span<Command_buffer* const>{command_buffers});
+    m_graphics_device.wait_idle();
+
+    std::vector<float> data(texel_count * 4u);
+    {
+        const std::span<std::byte> mapped = readback.map_bytes(0, byte_count);
+        std::memcpy(data.data(), mapped.data(), byte_count);
+        readback.unmap();
+    }
+
+    std::unique_ptr<Image_writer> writer = Image_writer::create();
+    if (!writer || !writer->is_supported()) {
+        return false;
+    }
+    // Reinhard + gamma for display.
+    std::vector<std::uint8_t> pixels(texel_count * 4u);
+    for (std::size_t i = 0; i < texel_count; ++i) {
+        for (int c = 0; c < 3; ++c) {
+            const float hdr = std::max(data[i * 4 + c], 0.0f);
+            const float sdr = std::pow(hdr / (1.0f + hdr), 1.0f / 2.2f);
+            pixels[i * 4 + c] = static_cast<std::uint8_t>(std::clamp(sdr, 0.0f, 1.0f) * 255.0f + 0.5f);
+        }
+        pixels[i * 4 + 3] = (data[i * 4 + 3] > 0.0f) ? 255u : 0u;
+    }
+    return writer->write_png(
+        std::filesystem::path{path},
+        width,
+        height,
+        width * 4,
+        erhe::dataformat::Format::format_8_vec4_unorm,
+        std::span<const std::byte>{reinterpret_cast<const std::byte*>(pixels.data()), pixels.size()}
+    );
 }
 
 } // namespace editor

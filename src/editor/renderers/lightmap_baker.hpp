@@ -4,17 +4,26 @@
 
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace erhe::graphics {
+    class Acceleration_structure;
     class Bind_group_layout;
     class Buffer;
+    class Command_buffer;
+    class Compute_pipeline;
     class Device;
     class Fragment_outputs;
     class Render_pipeline;
+    class Sampler;
     class Shader_resource;
     class Shader_stages;
     class Texture;
+}
+namespace erhe::primitive {
+    class Buffer_mesh;
+    class Primitive;
 }
 namespace erhe::scene { class Mesh; }
 namespace erhe::scene_renderer { class Mesh_memory; }
@@ -88,6 +97,19 @@ public:
     // normal * 0.5 + 0.5; alpha = coverage). Requires bake_gbuffer().
     auto debug_write_gbuffer_pngs(const std::string& base_path) -> bool;
 
+    // Direct lighting gather (plan phase 3, first milestone): per valid
+    // G-buffer texel, explicit sampling of every scene light with a
+    // ray-query shadow ray against a BLAS/TLAS of ALL non-skinned content
+    // meshes (occluders are not limited to lightmapped meshes). Writes
+    // irradiance into the lightmap atlas texture. Standalone submit like
+    // bake_gbuffer(); requires bake_gbuffer() first.
+    auto bake_direct(Scene_root& scene_root) -> bool;
+
+    // Debug: tone-mapped 8-bit PNG of the baked lightmap atlas.
+    auto debug_write_lightmap_png(const std::string& path) -> bool;
+
+    [[nodiscard]] auto get_lightmap_texture() const -> const std::shared_ptr<erhe::graphics::Texture>& { return m_lightmap_texture; }
+
     [[nodiscard]] auto get_position_texture() const -> const std::shared_ptr<erhe::graphics::Texture>& { return m_position_texture; }
     [[nodiscard]] auto get_normal_texture  () const -> const std::shared_ptr<erhe::graphics::Texture>& { return m_normal_texture; }
 
@@ -97,6 +119,18 @@ public:
 
 private:
     void ensure_gbuffer_targets();
+
+    class Blas_entry
+    {
+    public:
+        std::shared_ptr<erhe::primitive::Primitive>            primitive; // keeps the Buffer_mesh alive
+        std::unique_ptr<erhe::graphics::Acceleration_structure> acceleration_structure;
+    };
+    auto get_or_create_blas(
+        erhe::graphics::Command_buffer&                    command_buffer,
+        const std::shared_ptr<erhe::primitive::Primitive>& primitive,
+        const erhe::primitive::Buffer_mesh&                buffer_mesh
+    ) -> erhe::graphics::Acceleration_structure*;
 
     erhe::graphics::Device&                            m_graphics_device;
     erhe::scene_renderer::Mesh_memory&                 m_mesh_memory;
@@ -114,6 +148,26 @@ private:
     std::shared_ptr<erhe::graphics::Texture>           m_position_texture;
     std::shared_ptr<erhe::graphics::Texture>           m_normal_texture;
     bool                                               m_gbuffer_valid{false};
+
+    // Direct-light gather objects.
+    std::unique_ptr<erhe::graphics::Shader_resource>   m_gather_block;
+    std::size_t                                        m_gather_light_count_offset   {0};
+    std::size_t                                        m_gather_ray_bias_offset      {0};
+    std::size_t                                        m_gather_position_type_offset {0};
+    std::size_t                                        m_gather_direction_cos_offset {0};
+    std::size_t                                        m_gather_radiance_range_offset{0};
+    std::size_t                                        m_gather_params_offset        {0};
+    std::size_t                                        m_gather_block_size           {0};
+    std::unique_ptr<erhe::graphics::Bind_group_layout> m_gather_layout;
+    std::unique_ptr<erhe::graphics::Shader_stages>     m_gather_shader_stages;
+    std::unique_ptr<erhe::graphics::Compute_pipeline>  m_gather_pipeline;
+    std::unique_ptr<erhe::graphics::Sampler>           m_nearest_sampler;
+    std::shared_ptr<erhe::graphics::Texture>           m_lightmap_texture;
+    bool                                               m_lightmap_valid{false};
+
+    std::unordered_map<const erhe::primitive::Buffer_mesh*, Blas_entry> m_blas_cache;
+    std::unique_ptr<erhe::graphics::Acceleration_structure>             m_tlas;
+    uint32_t                                                            m_tlas_capacity{0};
 };
 
 } // namespace editor

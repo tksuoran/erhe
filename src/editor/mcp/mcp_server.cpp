@@ -421,6 +421,7 @@ auto Mcp_server::process_queued_requests() -> int
             { "set_item_flags",                 &Mcp_server::action_set_item_flags                },
             { "lightmap_update_atlas",          &Mcp_server::action_lightmap_update_atlas         },
             { "lightmap_bake_gbuffer",          &Mcp_server::action_lightmap_bake_gbuffer         },
+            { "lightmap_bake_direct",           &Mcp_server::action_lightmap_bake_direct          },
             { "get_active_scene",               &Mcp_server::query_active_scene                   },
             { "set_active_scene",               &Mcp_server::action_set_active_scene              },
             { "transform_selection",            &Mcp_server::action_transform_selection           },
