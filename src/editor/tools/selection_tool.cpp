@@ -215,8 +215,9 @@ void Viewport_select_command::try_ready()
     if (m_context.selection->on_viewport_select_try_ready()) {
         log_selection->trace("Selection set ready");
         set_ready();
+    } else {
+        log_selection->trace("Not setting selection ready");
     }
-    log_selection->trace("Not setting selection ready");
 }
 
 auto Viewport_select_command::try_call() -> bool
