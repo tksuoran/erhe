@@ -4,6 +4,8 @@
 #include "mcp/mcp_server_shared.hpp"
 
 #include "config/generated/editor_settings_config.hpp"
+#include "items.hpp"
+#include "operations/geometry_operations.hpp"
 #include "renderers/lightmap_baker.hpp"
 #include "scene/generated/scene_settings_serialization.hpp"
 #include "tools/clipboard.hpp"
@@ -198,6 +200,70 @@ auto Mcp_server::action_set_item_flags(const json& args) -> std::string
     return make_json_content({
         {"enabled", enabled},
         {"updated", updated}
+    }).dump();
+}
+
+auto Mcp_server::action_lightmap_generate_uvs(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    auto* sr = find_scene(scene_name);
+    if (!sr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    if ((m_context.operation_stack == nullptr) || (m_context.editor_settings == nullptr)) {
+        return make_error_content("Operation stack not available");
+    }
+
+    // Mirrors Lightmap_window::generate_lightmap_uvs(): every lightmapped,
+    // non-skinned content mesh node of the scene - selection is not involved.
+    std::vector<std::shared_ptr<erhe::Item_base>> items;
+    for (const std::shared_ptr<erhe::scene::Mesh>& mesh : sr->layers().content()->meshes) {
+        if (!mesh || mesh->skin) {
+            continue;
+        }
+        if ((mesh->get_flag_bits() & erhe::Item_flags::lightmapped) == 0u) {
+            continue;
+        }
+        erhe::scene::Node* const node = mesh->get_node();
+        if (node == nullptr) {
+            continue;
+        }
+        std::shared_ptr<erhe::Item_base> item = std::dynamic_pointer_cast<erhe::Item_base>(node->shared_from_this());
+        if (item) {
+            items.push_back(std::move(item));
+        }
+    }
+    if (items.empty()) {
+        return make_error_content("No lightmapped meshes in scene: " + sr->get_name());
+    }
+
+    const float hard_angles_deg = args.value("hard_angles_deg", m_context.editor_settings->lightmap.hard_angles_deg);
+    json names = json::array();
+    for (const std::shared_ptr<erhe::Item_base>& item : items) {
+        names.push_back(item->get_name());
+    }
+
+    Operation_stack* const operation_stack = m_context.operation_stack;
+    async_for_nodes_with_mesh(
+        m_context,
+        items,
+        [operation_stack, hard_angles_deg](Mesh_operation_parameters&& params) {
+            // Runs on a tf::Executor worker: queue() is main-thread-only.
+            operation_stack->queue_from_thread(
+                std::make_shared<Make_atlas_operation>(
+                    std::move(params),
+                    2, // lightmap UV channel (texcoord usage_index 2)
+                    hard_angles_deg,
+                    erhe::geometry::operation::Atlas_parameterizer::abf,
+                    erhe::geometry::operation::Atlas_packer::xatlas
+                )
+            );
+        }
+    );
+    return make_json_content({
+        {"queued",          true},
+        {"hard_angles_deg", hard_angles_deg},
+        {"mesh_nodes",      names}
     }).dump();
 }
 

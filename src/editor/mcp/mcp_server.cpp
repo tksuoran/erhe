@@ -419,6 +419,7 @@ auto Mcp_server::process_queued_requests() -> int
             { "raycast",                        &Mcp_server::query_raycast                        },
             { "select_items",                   &Mcp_server::action_select_items                  },
             { "set_item_flags",                 &Mcp_server::action_set_item_flags                },
+            { "lightmap_generate_uvs",          &Mcp_server::action_lightmap_generate_uvs         },
             { "lightmap_update_atlas",          &Mcp_server::action_lightmap_update_atlas         },
             { "lightmap_bake_gbuffer",          &Mcp_server::action_lightmap_bake_gbuffer         },
             { "lightmap_bake_direct",           &Mcp_server::action_lightmap_bake_direct          },

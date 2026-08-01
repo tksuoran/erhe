@@ -494,20 +494,23 @@ void main()
         //color += (0.5 + 0.5 * N.y) * light_block.ambient_light.rgb * base_color;
         // Baked lightmap (doc/lightmap_baking_plan.md phase 5): a primitive
         // with an atlas region (lightmap_scale_offset.xy > 0) replaces the
-        // flat ambient term with its baked irradiance, sampled at channel-2
-        // UVs mapped into the atlas. Analytic lights still add on top below;
-        // the bake currently holds direct light only, so this previews the
-        // pipeline (double lighting) until the bake carries indirect only or
-        // the analytic terms are gated per-mesh.
-        vec3 ambient_term = light_block.ambient_light.rgb;
+        // flat ambient term with its baked lighting, sampled at channel-2
+        // UVs mapped into the atlas. The bake holds FULL lighting
+        // (direct+indirect), so the analytic light loops below are gated
+        // off for lightmapped draws - they would double the direct terms.
+        vec3 ambient_term   = light_block.ambient_light.rgb;
+        bool lightmap_valid = false;
 #if defined(ERHE_USE_VERTEX_VARYING_TEXCOORD2)
         if (v_lightmap_scale_offset.x > 0.0) {
             vec2 lightmap_uv = v_texcoord_2 * v_lightmap_scale_offset.xy + v_lightmap_scale_offset.zw;
-            ambient_term = texture(s_lightmap, lightmap_uv).rgb;
+            ambient_term   = texture(s_lightmap, lightmap_uv).rgb;
+            lightmap_valid = true;
         }
 #endif
         color  = ambient_term * base_color * occlusion;
         color += emissive;
+
+        if (!lightmap_valid) {
 
         // Directional - shadow-mapped prefix
         for (uint i = 0u; i < uint(ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED); ++i) {
@@ -601,6 +604,8 @@ void main()
                 color += intensity * BXDF_CALL(L);
             }
         }
+
+        } // !lightmap_valid - analytic lights gated off for lightmapped draws
 #  undef BXDF_CALL
     }
 #endif
