@@ -567,10 +567,10 @@ void Settings_window::imgui()
         add_config_section(settings.selection_outline);
         // Editor-global mesh-component (vertex / edge / face) selection style.
         add_config_section(settings.mesh_component_style);
-        // Editor-global gizmo scale + viewport clear color (moved out of the
-        // per-view Visual Style popup).
+        // Editor-global viewport clear color (moved out of the per-view
+        // Visual Style popup). Gizmo Scale lives in the Transform Tool
+        // section (Transform_tool_config).
         push_group("Viewport", ImGuiTreeNodeFlags_Framed);
-        add_entry("Gizmo Scale", [&settings](){ ImGui::SliderFloat("##", &settings.gizmo_scale, 1.0f, 20.0f, "%.2f"); }, "Scale factor for the transform gizmo handles.");
         add_entry("Clear Color", [&settings](){ ImGui::ColorEdit4("##", &settings.clear_color.x, ImGuiColorEditFlags_Float); }, "Viewport background clear color.");
         pop_group();
         // Editor-global content edge-line (wide-line) method + bias tuning.

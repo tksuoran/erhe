@@ -1670,11 +1670,13 @@ void Transform_tool::render_hover_preview(const Render_context& context)
     // (render_translate_drag_guides(), Rotate_tool::render()), so every
     // preview here is pre-drag only. Axis handles (translate arrows, rotate
     // ring axes) have no guide line: the infinite axis line was dropped.
+    // Plane-translate handles have no preview either: the old plane grid was
+    // dropped in favor of Handle_visualizations showing both direction
+    // arrows of the plane's two axes while the sector is hovered.
     const Handle handle = (m_active_handle != Handle::e_handle_none) ? m_active_handle : m_hover_handle;
     const Handle_type type = get_handle_type(handle);
-    const bool translate_plane = (type == Handle_type::e_handle_type_translate_plane) && (m_active_handle == Handle::e_handle_none);
-    const bool rotate          = (type == Handle_type::e_handle_type_rotate)          && (m_active_handle == Handle::e_handle_none);
-    if (!translate_plane && !rotate) {
+    const bool rotate = (type == Handle_type::e_handle_type_rotate) && (m_active_handle == Handle::e_handle_none);
+    if (!rotate) {
         return;
     }
 
@@ -1697,58 +1699,9 @@ void Transform_tool::render_hover_preview(const Render_context& context)
         return;
     }
 
-    const vec4 color = get_axis_color(get_axis_mask(handle));
+    const vec4 color = get_axis_color(get_axis_mask(handle), context.app_context.editor_settings->transform_tool);
 
     erhe::renderer::Primitive_renderer line_renderer = context.get(handle_line_config);
-
-    if (translate_plane) {
-        int u_index = 0;
-        int v_index = 0;
-        switch (get_handle_plane(handle)) {
-            case Handle_plane::e_handle_plane_xy: u_index = 0; v_index = 1; break;
-            case Handle_plane::e_handle_plane_xz: u_index = 0; v_index = 2; break;
-            case Handle_plane::e_handle_plane_yz: u_index = 1; v_index = 2; break;
-            default: return;
-        }
-        const vec3  u = basis[u_index];
-        const vec3  v = basis[v_index];
-        const float h = radius; // half-extent: match the rotate-ring footprint
-
-        // Kept subtle: the preview is orientation context, not a handle - thin
-        // lines and low alpha so it never competes with the gizmo itself.
-        constexpr int cell_count = 8;
-        std::vector<erhe::renderer::Line> grid_lines;
-        grid_lines.reserve(2 * (cell_count - 1));
-        for (int i = 1; i < cell_count; ++i) {
-            const float t = -h + (2.0f * h * static_cast<float>(i)) / static_cast<float>(cell_count);
-            grid_lines.push_back({center + t * u - h * v, center + t * u + h * v});
-            grid_lines.push_back({center - h * u + t * v, center + h * u + t * v});
-        }
-        line_renderer.set_thickness(-0.375f);
-        line_renderer.set_line_color(vec4{0.5f * vec3{color}, 0.25f});
-        line_renderer.add_lines(grid_lines);
-
-        line_renderer.set_thickness(-0.75f);
-        line_renderer.set_line_color(vec4{vec3{color}, 0.5f});
-        line_renderer.add_lines(
-            {
-                {center - h * u - h * v, center + h * u - h * v},
-                {center + h * u - h * v, center + h * u + h * v},
-                {center + h * u + h * v, center - h * u + h * v},
-                {center - h * u + h * v, center - h * u - h * v}
-            }
-        );
-
-        erhe::renderer::Primitive_renderer triangle_renderer = context.get({erhe::graphics::Primitive_type::triangle, 2, true, false});
-        const vec3 corners[4] = {
-            center - h * u - h * v,
-            center + h * u - h * v,
-            center + h * u + h * v,
-            center - h * u + h * v
-        };
-        const uint32_t indices[6] = {0, 1, 2, 0, 2, 3};
-        triangle_renderer.add_triangles(mat4{1.0f}, vec4{vec3{color}, 0.07f}, corners, indices);
-    }
 
     if (rotate) {
         // Free (arcball) rotation has no rotation plane to preview.

@@ -1,4 +1,5 @@
 #include "transform/handle_enums.hpp"
+#include "config/generated/transform_tool_config.hpp"
 #include "erhe_verify/verify.hpp"
 
 namespace editor {
@@ -251,17 +252,17 @@ auto c_str(const Handle handle) -> const char*
     };
 }
 
-auto get_axis_color(const unsigned int axis_mask) -> glm::vec4
+auto get_axis_color(const unsigned int axis_mask, const Transform_tool_config& config) -> glm::vec4
 {
     switch (axis_mask) {
         //using enum Handle;
-        case Axis_mask::x:  return glm::vec4{2.0f, 0.0f, 0.0f, 1.0f};
-        case Axis_mask::y:  return glm::vec4{0.0f, 2.0f, 0.0f, 1.0f};
-        case Axis_mask::z:  return glm::vec4{0.0f, 0.0f, 2.0f, 1.0f};
-        case Axis_mask::yz: return glm::vec4{2.0f, 0.0f, 0.0f, 1.0f};
-        case Axis_mask::xz: return glm::vec4{0.0f, 2.0f, 0.0f, 1.0f};
-        case Axis_mask::xy: return glm::vec4{0.0f, 0.0f, 2.0f, 1.0f};
-        default:            return glm::vec4{0.7f, 0.7f, 0.7f, 1.0f};
+        case Axis_mask::x:  return config.active_color_x;
+        case Axis_mask::y:  return config.active_color_y;
+        case Axis_mask::z:  return config.active_color_z;
+        case Axis_mask::yz: return config.active_color_x;
+        case Axis_mask::xz: return config.active_color_y;
+        case Axis_mask::xy: return config.active_color_z;
+        default:            return config.active_color_view;
     }
 }
 

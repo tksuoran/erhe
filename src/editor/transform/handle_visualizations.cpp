@@ -25,6 +25,7 @@
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <optional>
 #include <vector>
@@ -48,70 +49,159 @@ namespace {
 // whatever the settings say. Notes that still apply:
 // - Translate arrows: a doubled pointer cone on a thin shaft (shaft width
 //   below) so the tip reads as a pointer, not a bar.
-// - Positive-only translate mode: the plane quads sit at the gizmo center
-//   with their min corner ON the center, sharing edges along the positive
-//   axes; the axis arrows move OUTSIDE the rotate sphere (arrow_start), so
-//   translate handles and rings never contest the same radius.
-// - With the rotate rings hidden (show_rotate off) the quads always extend
-//   into the positive octant and each positive arrow starts where the quads
-//   end along its axis (plane_positive_end).
+// - Axis handles: the translate arrows sit OUTSIDE the rotate sphere
+//   (arrow_start), so they and the rings never contest the same radius.
+//   Scale-axis handles are cube-tipped (translate is cone-tipped - the
+//   shape is the tell-apart cue) and their placement composes with the
+//   translate visibility TOGGLE, never with transient drag hiding
+//   (placement must not jump mid-drag): with translate hidden they take
+//   exactly the translate layout; with translate shown each axis line
+//   reads inside-out as ring sphere -> translate arrow -> scale cube
+//   (shaft resuming past the translate cone tip with a gap).
+// - Plane handles: concentric shells inside the rotate sphere, inside-out
+//   uniform-scale wedge (the innermost sector of EVERY plane - the three
+//   wedges together are the one uniform-scale handle) -> plane-translate
+//   annular sector -> plane-scale annular sector, the last one ending at
+//   the rotate ring radius. Radial gaps separate the shells
+//   (plane_sector_gap) and the ring (ring_sector_gap, larger); a shell
+//   hidden by its tool's visibility toggle donates its space to the
+//   visible ones (see get_plane_shell_layout). In positive-only translate
+//   mode each plane's
+//   sectors span the camera-facing quadrant (positive octant with the
+//   rings hidden); otherwise they are full annuli.
 // - Ring pick tube radius (config ring_pick_radius, default 0.2): ring
 //   samples are spaced ~0.049 R apart, so values >= ~0.1 leave no dead spots.
 struct Gizmo_sizes
 {
     float arrow_shaft_length;
-    float arrow_cone_length;
-    float arrow_cone_radius;
     float translate_cone_length;
     float translate_cone_radius;
-    float arrow_tip;
     float arrow_shaft_pick_radius;
-    float arrow_head_pick_end;
     float arrow_head_pick_radius;
     float translate_head_pick_end;
     float translate_head_pick_radius;
-    float plane_half_extent;
-    float plane_pick_half_extent;
     float rotate_ring_major_radius;
     float view_ring_radius;
-    float plane_positive_offset;
     float arrow_ring_gap;
     float arrow_start;
-    float plane_positive_end;
-    float center_cube_half_length;
-    float center_cube_pick_radius;
+    float uniform_scale_outer;
+    float plane_sector_gap;
+    float ring_sector_gap;
+    float plane_translate_outer;
     float box_scale_cone_length;
     float box_scale_cone_radius;
+    float scale_shaft_length;
+    float scale_cube_half_length;
+    float scale_handle_gap;
+    // Line widths: negative = constant screen-space pixels.
+    float line_width;
+    float line_width_hot;
+    float arrow_shaft_width;
+    float arrow_shaft_width_hot;
+    float ring_width;
+    float ring_width_hot;
+    float plane_outline_width;
+    float plane_fill_alpha;
 };
 
 auto get_gizmo_sizes(const Transform_tool_config& config) -> Gizmo_sizes
 {
     Gizmo_sizes gz{};
     gz.arrow_shaft_length         = config.arrow_shaft_length;
-    gz.arrow_cone_length          = config.arrow_cone_length;
-    gz.arrow_cone_radius          = config.arrow_cone_radius;
     gz.translate_cone_length      = config.translate_cone_length;
     gz.translate_cone_radius      = config.translate_cone_radius;
-    gz.arrow_tip                  = gz.arrow_shaft_length + gz.arrow_cone_length;
     gz.arrow_shaft_pick_radius    = config.arrow_shaft_pick_radius;
-    gz.arrow_head_pick_end        = gz.arrow_shaft_length + 2.0f * gz.arrow_cone_length;
     gz.arrow_head_pick_radius     = config.arrow_head_pick_radius;
     // Translate-arrow head pick span: one extra cone length past the tip.
     gz.translate_head_pick_end    = gz.arrow_shaft_length + 2.0f * gz.translate_cone_length;
     gz.translate_head_pick_radius = config.translate_head_pick_radius;
-    gz.plane_half_extent          = config.plane_half_extent;
-    gz.plane_pick_half_extent     = config.plane_pick_half_extent;
     gz.rotate_ring_major_radius   = config.rotate_ring_radius;
     gz.view_ring_radius           = config.view_ring_radius_factor * gz.rotate_ring_major_radius;
-    gz.plane_positive_offset      = gz.plane_half_extent;
     gz.arrow_ring_gap             = config.arrow_ring_gap;
     gz.arrow_start                = gz.rotate_ring_major_radius + gz.arrow_ring_gap;
-    gz.plane_positive_end         = 2.0f * gz.plane_half_extent;
-    gz.center_cube_half_length    = config.center_cube_half_length;
-    gz.center_cube_pick_radius    = config.center_cube_pick_radius;
+    gz.uniform_scale_outer        = config.uniform_scale_outer_radius;
+    gz.plane_sector_gap           = config.plane_sector_gap;
+    gz.ring_sector_gap            = config.ring_sector_gap;
+    gz.plane_translate_outer      = config.plane_translate_outer_radius;
     gz.box_scale_cone_length      = config.box_scale_cone_length;
     gz.box_scale_cone_radius      = config.box_scale_cone_radius;
+    gz.scale_shaft_length         = config.scale_shaft_length;
+    gz.scale_cube_half_length     = config.scale_cube_half_length;
+    gz.scale_handle_gap           = config.scale_handle_gap;
+    // Line widths (config in positive screen-space pixels; negative here
+    // selects the renderer's constant-pixel-width mode):
+    // - Translate/scale arrow shafts: half the shared handle width - the
+    //   thin stem plus the wide cone/cube base reads as a pointer, not a bar.
+    // - Rotate ring arcs: own settings; the hot default is thinner than the
+    //   resting one - the hot emphasis comes from the brightened color.
+    gz.line_width                 = -config.handle_line_width;
+    gz.line_width_hot             = -config.handle_line_width_hot;
+    gz.arrow_shaft_width          = 0.5f * gz.line_width;
+    gz.arrow_shaft_width_hot      = 0.5f * gz.line_width_hot;
+    gz.ring_width                 = -config.ring_line_width;
+    gz.ring_width_hot             = -config.ring_line_width_hot;
+    gz.plane_outline_width        = -config.plane_outline_width;
+    gz.plane_fill_alpha           = config.plane_fill_alpha;
     return gz;
+}
+
+// Radial layout of the concentric plane-handle shells, inside-out: uniform-
+// scale wedge, plane-translate sector, plane-scale sector, rotate ring. The
+// config gives the all-visible layout; a shell hidden by its tool's
+// visibility TOGGLE (never transient drag hiding - placement must not jump
+// mid-drag) donates its space and the visible shells stretch proportionally,
+// always keeping plane_sector_gap between neighbors and ring_sector_gap
+// below the ring.
+// Radii of absent shells are left zero - callers gate on visibility first.
+struct Plane_shell_layout
+{
+    float uniform_outer  {0.0f};
+    float translate_inner{0.0f};
+    float translate_outer{0.0f};
+    float scale_inner    {0.0f};
+    float scale_outer    {0.0f};
+};
+
+auto get_plane_shell_layout(
+    const Gizmo_sizes& gz,
+    const bool         show_uniform,
+    const bool         show_translate,
+    const bool         show_scale
+) -> Plane_shell_layout
+{
+    Plane_shell_layout out{};
+    const int count = (show_uniform ? 1 : 0) + (show_translate ? 1 : 0) + (show_scale ? 1 : 0);
+    if (count == 0) {
+        return out;
+    }
+    // ring_sector_gap (larger than the inter-shell gap) keeps the ring
+    // visually separated from the outermost sector.
+    const float gap         = gz.plane_sector_gap;
+    const float outer_bound = gz.rotate_ring_major_radius - gz.ring_sector_gap;
+    const float w_uniform   = gz.uniform_scale_outer;
+    const float w_translate = gz.plane_translate_outer - (gz.uniform_scale_outer + gap);
+    const float w_scale     = outer_bound - (gz.plane_translate_outer + gap);
+    const float nominal =
+        (show_uniform   ? w_uniform   : 0.0f) +
+        (show_translate ? w_translate : 0.0f) +
+        (show_scale     ? w_scale     : 0.0f);
+    const float available = outer_bound - gap * static_cast<float>(count - 1);
+    const float stretch   = (nominal > 0.0f) ? (available / nominal) : 0.0f;
+    float radius = 0.0f;
+    if (show_uniform) {
+        out.uniform_outer = radius + stretch * w_uniform;
+        radius = out.uniform_outer + gap;
+    }
+    if (show_translate) {
+        out.translate_inner = radius;
+        out.translate_outer = radius + stretch * w_translate;
+        radius = out.translate_outer + gap;
+    }
+    if (show_scale) {
+        out.scale_inner = radius;
+        out.scale_outer = radius + stretch * w_scale;
+    }
+    return out;
 }
 
 constexpr int  ring_arc_sample_count = 128;
@@ -122,27 +212,20 @@ constexpr vec4 view_ring_color{0.7f, 0.7f, 0.7f, 1.0f};
 
 constexpr int   cone_side_count          = 16;
 
-constexpr float line_width_normal   = -3.0f; // negative = constant screen-space pixels
-constexpr float line_width_hot      = -4.5f;
-// Translate arrow shafts: half the shared handle width - the thin stem plus
-// the wide cone base (gz.translate_cone_radius) reads as a pointer, not a bar.
-constexpr float arrow_shaft_width_normal = 0.5f * line_width_normal;
-constexpr float arrow_shaft_width_hot    = 0.5f * line_width_hot;
-// Rotate ring arcs: slightly thinner than the shared handle width. The
-// hot (hover/active) arc is thinner still - narrower than the resting
-// arc; the hot emphasis comes from the brightened color, not width.
-constexpr float ring_width_normal   = 0.75f * line_width_normal;
-constexpr float ring_width_hot      = 0.5f * 0.75f * line_width_hot;
-constexpr float plane_outline_width = -2.0f;
-constexpr float plane_fill_alpha    = 0.5f;
 
-// Base colors matching the former handle mesh materials (X / Y / Z / uniform).
-constexpr vec4 axis_colors[3] = {
-    vec4{1.00f, 0.00f, 0.0f, 1.0f},
-    vec4{0.23f, 1.00f, 0.0f, 1.0f},
-    vec4{0.00f, 0.23f, 1.0f, 1.0f}
-};
-constexpr vec4 xyz_color        {0.70f, 0.70f, 0.7f, 1.0f};
+// Per-axis / uniform handle colors and the sector outline colors come from
+// Transform_tool_config (axis_color_x/y/z, axis_outline_color_x/y/z,
+// uniform_scale_color, uniform_scale_outline_color, Settings > Transform
+// Tool); render() snapshots them each frame.
+
+// Flat shading for the solid handle tips (translate cone lateral surface,
+// scale cube faces): a fixed world-space light with an ambient floor so no
+// face ever goes black. The translate cone's base disc instead gets a fixed
+// darkening, reading as the cone's underside.
+constexpr vec3  handle_light_direction{0.408f, 0.816f, 0.408f}; // normalized
+constexpr float handle_shade_ambient = 0.55f;
+constexpr float handle_shade_diffuse = 0.45f;
+constexpr float cone_base_darken     = 0.5f;
 constexpr vec4 box_outline_color{1.00f, 0.70f, 0.1f, 1.0f};
 
 // All handle rendering uses the x-ray buckets: the occluded pass blends at
@@ -154,9 +237,9 @@ constexpr vec4 box_outline_color{1.00f, 0.70f, 0.1f, 1.0f};
 // order - so layering cannot come from submission order. The gizmo layers
 // front-to-back purely by stencil reference instead:
 //   5 = controller ray (headset_view.cpp)
-//   4 = single-axis translate arrows
-//   3 = plane translate quads
-//   2 = rotate rings, scale handles, everything else
+//   4 = single-axis translate arrows, scale-axis shafts and cubes
+//   3 = plane translate quads, plane-scale outline squares
+//   2 = rotate rings, center cube, everything else
 constexpr erhe::renderer::Debug_renderer_config handle_line_config{
     .primitive_type    = erhe::graphics::Primitive_type::line,
     .stencil_reference = 2,
@@ -268,6 +351,9 @@ auto is_ring_point_occluded(
     return false;
 }
 
+// shaded: flat-shade each lateral triangle with the fixed handle light.
+// base_rgb_scale: rgb multiplier for the base disc (the cone's underside);
+// 1.0 keeps the old uniform look.
 void draw_cone_fill(
     erhe::renderer::Primitive_renderer& triangle_renderer,
     const vec4&  color,
@@ -276,13 +362,13 @@ void draw_cone_fill(
     const vec3&  side1,
     const vec3&  side2,
     const float  length,
-    const float  radius
+    const float  radius,
+    const bool   shaded,
+    const float  base_rgb_scale
 )
 {
-    std::vector<vec3>     positions;
-    std::vector<uint32_t> indices;
+    std::vector<vec3> positions;
     positions.reserve(cone_side_count + 2);
-    indices  .reserve(cone_side_count * 6);
     for (int k = 0; k < cone_side_count; ++k) {
         const float theta = glm::two_pi<float>() * static_cast<float>(k) / static_cast<float>(cone_side_count);
         positions.push_back(base_center + radius * (std::cos(theta) * side1 + std::sin(theta) * side2));
@@ -291,47 +377,101 @@ void draw_cone_fill(
     const uint32_t base_index = cone_side_count + 1;
     positions.push_back(base_center + length * direction);
     positions.push_back(base_center);
-    for (uint32_t k = 0; k < static_cast<uint32_t>(cone_side_count); ++k) {
-        const uint32_t k2 = (k + 1) % cone_side_count;
-        indices.push_back(k);
-        indices.push_back(k2);
-        indices.push_back(apex_index);
-        indices.push_back(k2);
-        indices.push_back(k);
-        indices.push_back(base_index);
+
+    // Lateral surface.
+    if (shaded) {
+        for (uint32_t k = 0; k < static_cast<uint32_t>(cone_side_count); ++k) {
+            const uint32_t k2 = (k + 1) % cone_side_count;
+            const vec3& p0 = positions[k];
+            const vec3& p1 = positions[k2];
+            const vec3& pa = positions[apex_index];
+            vec3 normal = cross(p1 - p0, pa - p0);
+            // Orient outward: away from the cone axis at the edge midpoint.
+            if (dot(normal, 0.5f * (p0 + p1) - base_center) < 0.0f) {
+                normal = -normal;
+            }
+            const float len = glm::length(normal);
+            const float lambert   = (len > 0.0f) ? std::max(0.0f, dot(normal / len, handle_light_direction)) : 0.0f;
+            const float intensity = handle_shade_ambient + handle_shade_diffuse * lambert;
+            triangle_renderer.add_triangle(mat4{1.0f}, vec4{intensity * vec3{color}, color.a}, p0, p1, pa);
+        }
+    } else {
+        std::vector<uint32_t> indices;
+        indices.reserve(cone_side_count * 3);
+        for (uint32_t k = 0; k < static_cast<uint32_t>(cone_side_count); ++k) {
+            const uint32_t k2 = (k + 1) % cone_side_count;
+            indices.insert(indices.end(), {k, k2, apex_index});
+        }
+        triangle_renderer.add_triangles(mat4{1.0f}, color, positions, indices);
     }
-    triangle_renderer.add_triangles(mat4{1.0f}, color, positions, indices);
+
+    // Base disc.
+    {
+        std::vector<uint32_t> indices;
+        indices.reserve(cone_side_count * 3);
+        for (uint32_t k = 0; k < static_cast<uint32_t>(cone_side_count); ++k) {
+            const uint32_t k2 = (k + 1) % cone_side_count;
+            indices.insert(indices.end(), {k2, k, base_index});
+        }
+        triangle_renderer.add_triangles(mat4{1.0f}, vec4{base_rgb_scale * vec3{color}, color.a}, positions, indices);
+    }
 }
 
-void draw_quad(
+// Annular sector in the plane spanned by (su, sv): the plane-translate and
+// plane-scale handles' shape. Spans the (su, sv) quadrant, or the full
+// annulus when full_annulus is set (negative-handles translate mode). Fill
+// at the given alpha plus an outline; the outline adds the radial edges
+// only in quadrant mode (a full annulus has none).
+void draw_annular_sector(
     erhe::renderer::Primitive_renderer& line_renderer,
     erhe::renderer::Primitive_renderer& triangle_renderer,
     const vec4&  color,
+    const vec4&  outline_color,
+    const float  fill_alpha,
+    const float  outline_width,
+    const bool   draw_outline,
     const vec3&  center,
-    const vec3&  u_half, // center-to-edge vector along u
-    const vec3&  v_half
+    const vec3&  su,
+    const vec3&  sv,
+    const float  inner_radius,
+    const float  outer_radius,
+    const bool   full_annulus
 )
 {
-    const vec3 corners[4] = {
-        center - u_half - v_half,
-        center + u_half - v_half,
-        center + u_half + v_half,
-        center - u_half + v_half
-    };
-    const uint32_t indices[6] = {0, 1, 2, 0, 2, 3};
-    triangle_renderer.add_triangles(mat4{1.0f}, vec4{vec3{color}, plane_fill_alpha}, corners, indices);
-    line_renderer.set_thickness(plane_outline_width);
-    line_renderer.add_lines(
-        color,
-        {
-            {corners[0], corners[1]},
-            {corners[1], corners[2]},
-            {corners[2], corners[3]},
-            {corners[3], corners[0]}
+    const int   segment_count = full_annulus ? 96 : 24;
+    const float span          = full_annulus ? glm::two_pi<float>() : glm::half_pi<float>();
+    std::vector<vec3> positions;
+    positions.reserve(2 * (segment_count + 1));
+    std::vector<uint32_t> indices;
+    indices.reserve(6 * static_cast<size_t>(segment_count));
+    std::vector<erhe::renderer::Line> outline;
+    outline.reserve(2 * static_cast<size_t>(segment_count) + 2);
+    for (int i = 0; i <= segment_count; ++i) {
+        const float theta = span * static_cast<float>(i) / static_cast<float>(segment_count);
+        const vec3  dir   = std::cos(theta) * su + std::sin(theta) * sv;
+        positions.push_back(center + inner_radius * dir);
+        positions.push_back(center + outer_radius * dir);
+        if (i > 0) {
+            const uint32_t k = static_cast<uint32_t>(2 * i);
+            indices.insert(indices.end(), {k - 2, k, k + 1, k - 2, k + 1, k - 1});
+            outline.push_back({positions[k - 2], positions[k]});
+            outline.push_back({positions[k - 1], positions[k + 1]});
         }
-    );
+    }
+    if (!full_annulus) {
+        outline.push_back({positions[0], positions[1]});
+        outline.push_back({positions[positions.size() - 2], positions[positions.size() - 1]});
+    }
+    triangle_renderer.add_triangles(mat4{1.0f}, vec4{vec3{color}, fill_alpha}, positions, indices);
+    if (draw_outline) {
+        line_renderer.set_thickness(outline_width);
+        line_renderer.set_line_color(outline_color);
+        line_renderer.add_lines(outline);
+    }
 }
 
+// Flat-shades each face with the fixed handle light (used by the scale-axis
+// tip cubes; windings are irrelevant - no culling in the debug pass).
 void draw_cube_fill(
     erhe::renderer::Primitive_renderer& triangle_renderer,
     const vec4&  color,
@@ -340,24 +480,34 @@ void draw_cube_fill(
     const float  half_length
 )
 {
-    std::vector<vec3> positions;
-    positions.reserve(8);
+    vec3 corners[8];
     for (int i = 0; i < 8; ++i) {
         const vec3 offset =
             ((i & 1) != 0 ? half_length : -half_length) * basis[0] +
             ((i & 2) != 0 ? half_length : -half_length) * basis[1] +
             ((i & 4) != 0 ? half_length : -half_length) * basis[2];
-        positions.push_back(center + offset);
+        corners[i] = center + offset;
     }
-    static constexpr uint32_t indices[36] = {
-        0, 2, 3,  0, 3, 1,  // -z .. face windings are irrelevant (no culling in the debug pass)
-        4, 5, 7,  4, 7, 6,
-        0, 1, 5,  0, 5, 4,
-        2, 6, 7,  2, 7, 3,
-        0, 4, 6,  0, 6, 2,
-        1, 3, 7,  1, 7, 5
+    // Faces keyed by axis and sign; corner index bits: 1 = +x, 2 = +y, 4 = +z.
+    static constexpr uint32_t face_corners[6][4] = {
+        {0, 2, 6, 4}, // -x
+        {1, 3, 7, 5}, // +x
+        {0, 1, 5, 4}, // -y
+        {2, 3, 7, 6}, // +y
+        {0, 1, 3, 2}, // -z
+        {4, 5, 7, 6}  // +z
     };
-    triangle_renderer.add_triangles(mat4{1.0f}, color, positions, indices);
+    for (int face = 0; face < 6; ++face) {
+        const int   axis      = face / 2;
+        const float sign      = ((face % 2) == 0) ? -1.0f : 1.0f;
+        const vec3  normal    = sign * normalize(basis[axis]);
+        const float lambert   = std::max(0.0f, dot(normal, handle_light_direction));
+        const float intensity = handle_shade_ambient + handle_shade_diffuse * lambert;
+        const vec4  face_color{intensity * vec3{color}, color.a};
+        const uint32_t* fc = face_corners[face];
+        triangle_renderer.add_triangle(mat4{1.0f}, face_color, corners[fc[0]], corners[fc[1]], corners[fc[2]]);
+        triangle_renderer.add_triangle(mat4{1.0f}, face_color, corners[fc[0]], corners[fc[2]], corners[fc[3]]);
+    }
 }
 
 // Closest approach between a ray and a segment [a, b]; returns false when the
@@ -451,7 +601,7 @@ void Handle_visualizations::update_transforms()
         return;
     }
 
-    const float distance_scale    = m_context.editor_settings->gizmo_scale * m_view_distance / 100.0f;
+    const float distance_scale    = m_context.editor_settings->transform_tool.gizmo_scale * m_view_distance / 100.0f;
     const float perspective_scale = m_scene_view->get_perspective_scale();
     const float scalar_scale      = distance_scale * perspective_scale;
     if (!std::isfinite(scalar_scale)) {
@@ -488,7 +638,8 @@ auto Handle_visualizations::is_handle_shown(const Handle handle) const -> bool
     Transform_tool*                transform_tool = m_context.transform_tool;
     const Transform_tool_settings& settings       = transform_tool->shared.settings;
 
-    switch (get_handle_tool(handle)) {
+    const Handle_tool tool = get_handle_tool(handle);
+    switch (tool) {
         case Handle_tool::e_handle_tool_translate: if (!settings.show_translate) { return false; } break;
         case Handle_tool::e_handle_tool_rotate:    if (!settings.show_rotate)    { return false; } break;
         case Handle_tool::e_handle_tool_scale:     if (!settings.show_scale)     { return false; } break;
@@ -519,12 +670,18 @@ auto Handle_visualizations::is_handle_shown(const Handle handle) const -> bool
 
     // While a drag is active, show only the handles whose constraint exactly
     // matches the dragged one: an axis drag keeps both direction arrows of
-    // that axis, a plane drag keeps only the plane handle.
+    // that axis, a plane drag keeps only the plane handle, a uniform-scale
+    // drag keeps only the uniform wedges. Everything else on the same plane
+    // (or anywhere) hides - only the active handle stays up.
     const Handle active_handle = transform_tool->get_active_handle();
     if (settings.hide_inactive && (active_handle != Handle::e_handle_none) && (handle != active_handle)) {
+        // The mask match alone cannot tell translate_xy from scale_xy (same
+        // axis mask), so each match also requires the handle's own tool
+        // family - a plane-translate drag must not keep the plane-scale
+        // sector up, nor the other way around.
         const unsigned int axis_mask       = get_axis_mask(handle);
-        const bool         translate_match = m_context.move_tool ->is_active() && (m_context.move_tool ->get_axis_mask() == axis_mask);
-        const bool         scale_match     = m_context.scale_tool->is_active() && ((m_context.scale_tool->get_axis_mask() & axis_mask) == axis_mask);
+        const bool         translate_match = (tool == Handle_tool::e_handle_tool_translate) && m_context.move_tool ->is_active() && (m_context.move_tool ->get_axis_mask() == axis_mask);
+        const bool         scale_match     = (tool == Handle_tool::e_handle_tool_scale)     && m_context.scale_tool->is_active() && (m_context.scale_tool->get_axis_mask() == axis_mask);
         // A rotate drag keeps some translate arrows, repositioned by
         // render() and pick() to start at the protractor ring radius:
         // - LOCAL space only: the arrows lying in the rotation plane (axes
@@ -594,7 +751,11 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
     const mat3 basis = get_basis();
     const vec3 eye   = vec3{camera_node->position_in_world()};
 
-    const Gizmo_sizes gz = get_gizmo_sizes(m_context.editor_settings->transform_tool);
+    const Transform_tool_config& tt_config = m_context.editor_settings->transform_tool;
+    const Gizmo_sizes gz = get_gizmo_sizes(tt_config);
+    const vec4 axis_colors[3]         = {tt_config.axis_color_x,         tt_config.axis_color_y,         tt_config.axis_color_z};
+    const vec4 axis_outline_colors[3] = {tt_config.axis_outline_color_x, tt_config.axis_outline_color_y, tt_config.axis_outline_color_z};
+    const vec4 hover_axis_colors[3]   = {tt_config.hover_color_x,        tt_config.hover_color_y,        tt_config.hover_color_z};
 
     erhe::renderer::Primitive_renderer line_renderer           = context.get(handle_line_config);
     erhe::renderer::Primitive_renderer triangle_renderer       = context.get(handle_fill_config);
@@ -606,38 +767,129 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
     const auto is_hot = [&](const Handle handle) {
         return (hover_handle == handle) || (active_handle == handle);
     };
-    const auto handle_color = [&](const Handle handle, const vec4& base) {
-        return is_hot(handle) ? vec4{2.0f * vec3{base}, base.a} : base;
+    // While a handle is hovered (pre-drag only - active drags hide the other
+    // handles via hide_inactive instead), the rest of the gizmo dims to
+    // hover_dim_factor alpha. Handles RELATED to the hovered one keep full
+    // strength: a plane-translate hover keeps the axis arrows of the plane's
+    // two axes, a rotate-ring hover keeps the translate arrow along the
+    // rotation axis, a uniform-scale hover keeps every scale handle. The
+    // arcball region has no visible handle, so its hover dims nothing.
+    const bool hover_dimming =
+        (active_handle == Handle::e_handle_none) &&
+        (hover_handle != Handle::e_handle_none) &&
+        (hover_handle != Handle::e_handle_rotate_free);
+    const auto handle_alpha = [&](const Handle handle) -> float {
+        if (!hover_dimming || (handle == hover_handle)) {
+            return 1.0f;
+        }
+        const Handle_type  type       = get_handle_type(handle);
+        const unsigned int mask       = get_axis_mask(handle);
+        const unsigned int hover_mask = get_axis_mask(hover_handle);
+        bool related = false;
+        switch (get_handle_type(hover_handle)) {
+            case Handle_type::e_handle_type_translate_plane:
+                // The plane's two axis arrows show fully; every OTHER
+                // single-axis handle - the perpendicular translate arrow and
+                // all scale-axis handles - hides fully rather than dimming
+                // (regardless of hover_dim_factor): axis lines not lying in
+                // the plane just distract. The rest dims normally.
+                if (type == Handle_type::e_handle_type_translate_axis) {
+                    if ((mask & hover_mask) == mask) {
+                        return 1.0f;
+                    }
+                    return 0.0f;
+                }
+                if (type == Handle_type::e_handle_type_scale_axis) {
+                    return 0.0f;
+                }
+                break;
+            case Handle_type::e_handle_type_scale_plane:
+                // Mirror of the plane-translate rule: the plane's two
+                // scale-axis handles show fully; every other single-axis
+                // handle - the perpendicular scale handle and all translate
+                // arrows - hides fully. The rest dims normally.
+                if (type == Handle_type::e_handle_type_scale_axis) {
+                    if ((mask & hover_mask) == mask) {
+                        return 1.0f;
+                    }
+                    return 0.0f;
+                }
+                if (type == Handle_type::e_handle_type_translate_axis) {
+                    return 0.0f;
+                }
+                break;
+            case Handle_type::e_handle_type_rotate:
+                related = (type == Handle_type::e_handle_type_translate_axis) && (mask == hover_mask);
+                break;
+            case Handle_type::e_handle_type_scale_uniform:
+                // Every scale handle shows fully; all translate arrows hide
+                // fully - a uniform scale involves no translation direction.
+                if (type == Handle_type::e_handle_type_translate_axis) {
+                    return 0.0f;
+                }
+                related = get_handle_tool(handle) == Handle_tool::e_handle_tool_scale;
+                break;
+            default:
+                break;
+        }
+        return related ? 1.0f : m_context.editor_settings->transform_tool.hover_dim_factor;
+    };
+    // hot: the explicit hover color for this handle (hover_color_x/y/z,
+    // hover_uniform_scale_color, hover_view_ring_color - defaults are the
+    // old 2x-brightened base colors).
+    const auto handle_color = [&](const Handle handle, const vec4& base, const vec4& hot) {
+        return is_hot(handle)
+            ? hot
+            : vec4{vec3{base}, base.a * handle_alpha(handle)};
+    };
+    // With hover_dim_factor 0 a dimmed handle is fully invisible - skip its
+    // draws entirely: alpha-0 pixels would still claim their first-wins
+    // stencil bucket (blocking overlapping gizmo pixels) and waste fill.
+    const auto dimmed_away = [&](const Handle handle) {
+        return !is_hot(handle) && (handle_alpha(handle) <= 0.0f);
     };
 
+    const Transform_tool_settings& settings = m_context.transform_tool->shared.settings;
     const bool positive_only = !m_context.editor_settings->transform_tool.translate_negative_handles;
     // With no rotate rings shown (the show_rotate toggle, not transient drag
     // hiding - placement must not jump mid-drag) the camera-facing choices
     // exist to dodge nothing: the quads sit in the positive octant and the
     // positive arrow of each axis starts where the quads end.
-    const bool fixed_octant = positive_only && !m_context.transform_tool->shared.settings.show_rotate;
+    const bool fixed_octant = positive_only && !settings.show_rotate;
     // Frozen at drag-start values while a drag is active.
     const std::array<bool, 3> octant_signs = get_octant_signs(eye, c, basis);
 
-    // Translate planes
+    // Radial shell layout for the plane handles, reflowed from the tools'
+    // visibility toggles (hidden shells donate their space).
+    const bool box_mode = settings.scale_gizmo_mode == Scale_gizmo_mode::bounding_box;
+    const Plane_shell_layout shells = get_plane_shell_layout(gz, settings.show_scale, settings.show_translate, settings.show_scale && !box_mode);
+
+    // Sector outlines draw ONLY on the hovered / active sector handle - at
+    // rest the sector stack is fill-only, keeping it visually quiet. The
+    // uniform-scale handle counts as one: hovering it outlines all three of
+    // its wedges (they are the same Handle).
+
+    // Translate plane sectors. In positive-only mode each sector spans the
+    // camera-facing quadrant (like the single-arrow choice, each in-plane
+    // axis flips toward the eye); in negative-handles mode it is a full
+    // annulus. The sectors draw on their own stencil layer (3) so they beat
+    // the rotate rings (2) but stay under the translate arrows (4).
     for (int perp = 0; perp < 3; ++perp) {
         const Handle handle = translate_plane_handles[perp];
-        if (!is_handle_shown(handle)) {
+        if (!is_handle_shown(handle) || dimmed_away(handle)) {
             continue;
         }
-        // Camera-facing quadrant: like the single-arrow choice above, each
-        // in-plane axis flips toward the eye, so the quad extends on the
-        // near side of the gizmo and stays clear of the visible rotation
-        // arcs (which hug the far reaches of the projected sphere).
-        const float offset = positive_only ? gz.plane_positive_offset : 0.0f;
-        const vec3  u      = basis[(perp + 1) % 3];
-        const vec3  v      = basis[(perp + 2) % 3];
-        const vec3  su     = (fixed_octant || octant_signs[(perp + 1) % 3]) ? u : -u;
-        const vec3  sv     = (fixed_octant || octant_signs[(perp + 2) % 3]) ? v : -v;
-        const vec3  center = c + (s * offset) * (su + sv);
-        // Plane quads draw on their own stencil layer (3) so they beat the
-        // rotate rings (2) but stay under the translate arrows (4).
-        draw_quad(plane_line_renderer, plane_triangle_renderer, handle_color(handle, axis_colors[perp]), center, (s * gz.plane_half_extent) * su, (s * gz.plane_half_extent) * sv);
+        const vec3 u  = basis[(perp + 1) % 3];
+        const vec3 v  = basis[(perp + 2) % 3];
+        const vec3 su = (fixed_octant || octant_signs[(perp + 1) % 3]) ? u : -u;
+        const vec3 sv = (fixed_octant || octant_signs[(perp + 2) % 3]) ? v : -v;
+        draw_annular_sector(
+            plane_line_renderer, plane_triangle_renderer,
+            handle_color(handle, axis_colors[perp], hover_axis_colors[perp]), handle_color(handle, axis_outline_colors[perp], hover_axis_colors[perp]),
+            gz.plane_fill_alpha * handle_alpha(handle), gz.plane_outline_width,
+            is_hot(handle),
+            c, su, sv, s * shells.translate_inner, s * shells.translate_outer, !positive_only
+        );
     }
 
     // Rotate rings. Occluded arc segments (arcs_only mode) are not drawn at
@@ -660,6 +912,9 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
                 continue;
             }
             const Handle handle = ring_handles[axis];
+            if (dimmed_away(handle)) {
+                continue;
+            }
             const vec3 side1 = basis[(axis + 1) % 3];
             const vec3 side2 = basis[(axis + 2) % 3];
             visible_lines.clear();
@@ -676,8 +931,8 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
                 previous         = point;
                 previous_visible = visible;
             }
-            const vec4  color = handle_color(handle, axis_colors[axis]);
-            const float width = is_hot(handle) ? ring_width_hot : ring_width_normal;
+            const vec4  color = handle_color(handle, axis_colors[axis], hover_axis_colors[axis]);
+            const float width = is_hot(handle) ? gz.ring_width_hot : gz.ring_width;
             if (!visible_lines.empty()) {
                 line_renderer.set_thickness(width);
                 line_renderer.set_line_color(color);
@@ -699,7 +954,7 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
 
     // Camera-aligned view-rotate ring (light gray, outside the rotate
     // sphere): dragging it rotates around the viewing axis.
-    if (is_handle_shown(Handle::e_handle_rotate_view)) {
+    if (is_handle_shown(Handle::e_handle_rotate_view) && !dimmed_away(Handle::e_handle_rotate_view)) {
         const Handle handle   = Handle::e_handle_rotate_view;
         const vec3   view_dir = normalize(eye - c);
         const vec3   ref      = (std::abs(view_dir.y) < 0.9f) ? vec3{0.0f, 1.0f, 0.0f} : vec3{1.0f, 0.0f, 0.0f};
@@ -717,8 +972,8 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
             }
             previous = point;
         }
-        line_renderer.set_thickness(is_hot(handle) ? ring_width_hot : ring_width_normal);
-        line_renderer.set_line_color(handle_color(handle, view_ring_color));
+        line_renderer.set_thickness(is_hot(handle) ? gz.ring_width_hot : gz.ring_width);
+        line_renderer.set_line_color(handle_color(handle, view_ring_color, tt_config.hover_view_ring_color));
         line_renderer.add_lines(lines);
     }
 
@@ -731,73 +986,147 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
         const vec3 side2 = basis[(axis + 2) % 3];
         const bool positive_towards_eye = octant_signs[axis];
         const Handle directional_handles[2] = {translate_pos_handles[axis], translate_neg_handles[axis]};
+        const unsigned int axis_mask = get_axis_mask(directional_handles[0]);
         // During an active single-axis translate drag both directions of the
         // dragged axis are shown even in single-arrow mode: the drag can move
         // either way, and the pair reads as the drag axis.
         const bool axis_drag_here =
             m_context.move_tool->is_active() &&
-            (m_context.move_tool->get_axis_mask() == get_axis_mask(directional_handles[0]));
+            (m_context.move_tool->get_axis_mask() == axis_mask);
+        // While a plane-translate sector is hovered (pre-drag) both direction
+        // arrows of the plane's two axes are shown - the pairs read as the
+        // plane's travel directions (this replaced the old hover plane grid).
+        // The hovered handle itself is also always exempt from the single-
+        // arrow filter, so hover can rest on an opposite arrow it brought up.
+        const bool plane_hover_here =
+            (active_handle == Handle::e_handle_none) &&
+            (hover_handle != Handle::e_handle_none) &&
+            (get_handle_type(hover_handle) == Handle_type::e_handle_type_translate_plane) &&
+            ((axis_mask & get_axis_mask(hover_handle)) == axis_mask);
         // During a rotate drag the surviving in-plane arrows start at the
         // protractor ring radius, expanding outward from the ring.
         const float start = m_context.rotate_tool->is_active()
             ? m_context.editor_settings->transform_tool.rotate_ring_size
-            : fixed_octant ? gz.plane_positive_end : gz.arrow_start;
+            : gz.arrow_start;
         for (int sign = 0; sign < 2; ++sign) {
-            if (positive_only && !axis_drag_here && ((sign == 0) != (fixed_octant || positive_towards_eye))) {
+            if (
+                positive_only && !axis_drag_here && !plane_hover_here &&
+                (directional_handles[sign] != hover_handle) &&
+                ((sign == 0) != (fixed_octant || positive_towards_eye))
+            ) {
                 continue;
             }
             const Handle handle = directional_handles[sign];
-            if (!is_handle_shown(handle)) {
+            if (!is_handle_shown(handle) || dimmed_away(handle)) {
                 continue;
             }
-            // In fixed-octant mode only the positive arrow clears the plane
-            // quads; a drag-shown opposite arrow starts at the normal radius.
-            const float sign_start = ((sign == 1) && !m_context.rotate_tool->is_active() && fixed_octant) ? gz.arrow_start : start;
             const vec3 dir   = (sign == 0) ? d : -d;
-            const vec4 color = handle_color(handle, axis_colors[axis]);
-            arrow_line_renderer.set_thickness(is_hot(handle) ? arrow_shaft_width_hot : arrow_shaft_width_normal);
-            arrow_line_renderer.add_lines(color, {{c + (s * sign_start) * dir, c + (s * (sign_start + gz.arrow_shaft_length)) * dir}});
-            draw_cone_fill(arrow_triangle_renderer, color, c + (s * (sign_start + gz.arrow_shaft_length)) * dir, dir, side1, side2, s * gz.translate_cone_length, s * gz.translate_cone_radius);
+            const vec4 color = handle_color(handle, axis_colors[axis], hover_axis_colors[axis]);
+            arrow_line_renderer.set_thickness(is_hot(handle) ? gz.arrow_shaft_width_hot : gz.arrow_shaft_width);
+            arrow_line_renderer.add_lines(color, {{c + (s * start) * dir, c + (s * (start + gz.arrow_shaft_length)) * dir}});
+            draw_cone_fill(arrow_triangle_renderer, color, c + (s * (start + gz.arrow_shaft_length)) * dir, dir, side1, side2, s * gz.translate_cone_length, s * gz.translate_cone_radius, true, cone_base_darken);
         }
     }
 
-    // Basic scale: per-axis tip cones (both directions map to one handle),
-    // plane quads (always centered) and the uniform-scale center cube.
+    // Basic scale: cube-tipped axis handles (both directions map to one
+    // handle), outline-only plane squares and the uniform-scale center cube.
+    // Placement composes with the translate/rotate visibility TOGGLES, not
+    // drag state: with translate hidden the scale handles take exactly the
+    // translate layout; with translate shown they continue the same lines
+    // outward past the translate handles (see the Gizmo_sizes notes).
     for (int axis = 0; axis < 3; ++axis) {
         const Handle handle = scale_axis_handles[axis];
-        if (!is_handle_shown(handle)) {
+        if (!is_handle_shown(handle) || dimmed_away(handle)) {
             continue;
         }
         const vec3 d     = basis[axis];
-        const vec3 side1 = basis[(axis + 1) % 3];
-        const vec3 side2 = basis[(axis + 2) % 3];
-        const vec4 color = handle_color(handle, axis_colors[axis]);
-        draw_cone_fill(triangle_renderer, color, c + (s * gz.arrow_shaft_length) * d, d, side1, side2, s * gz.arrow_cone_length, s * gz.arrow_cone_radius);
-        draw_cone_fill(triangle_renderer, color, c - (s * gz.arrow_shaft_length) * d, -d, side1, side2, s * gz.arrow_cone_length, s * gz.arrow_cone_radius);
+        const vec4 color = handle_color(handle, axis_colors[axis], hover_axis_colors[axis]);
+        const bool positive_towards_eye = octant_signs[axis];
+        // Both sides during an active scale drag of this axis (the pair
+        // reads as the scale axis), mirroring the translate arrows' rule.
+        const bool axis_drag_here =
+            m_context.scale_tool->is_active() &&
+            (m_context.scale_tool->get_axis_mask() == get_axis_mask(handle));
+        // Both sides while this axis' plane-scale sector is hovered (the
+        // pairs read as the plane's scale axes), and while this handle is
+        // hovered itself - one scale handle covers both directions, so the
+        // side hover rests on must not vanish under it.
+        const bool plane_hover_here =
+            (active_handle == Handle::e_handle_none) &&
+            (hover_handle != Handle::e_handle_none) &&
+            (get_handle_type(hover_handle) == Handle_type::e_handle_type_scale_plane) &&
+            ((get_axis_mask(handle) & get_axis_mask(hover_handle)) == get_axis_mask(handle));
+        // Same base start as the translate arrows so the two layouts agree.
+        const float translate_start = m_context.rotate_tool->is_active()
+            ? m_context.editor_settings->transform_tool.rotate_ring_size
+            : gz.arrow_start;
+        for (int sign = 0; sign < 2; ++sign) {
+            if (
+                positive_only && !axis_drag_here && !plane_hover_here &&
+                (handle != hover_handle) &&
+                ((sign == 0) != (fixed_octant || positive_towards_eye))
+            ) {
+                continue;
+            }
+            const float start = settings.show_translate
+                ? translate_start + gz.arrow_shaft_length + gz.translate_cone_length + gz.scale_handle_gap
+                : translate_start;
+            const float shaft = settings.show_translate ? gz.scale_shaft_length : gz.arrow_shaft_length;
+            const vec3  dir   = (sign == 0) ? d : -d;
+            arrow_line_renderer.set_thickness(is_hot(handle) ? gz.arrow_shaft_width_hot : gz.arrow_shaft_width);
+            arrow_line_renderer.add_lines(color, {{c + (s * start) * dir, c + (s * (start + shaft)) * dir}});
+            draw_cube_fill(arrow_triangle_renderer, color, c + (s * (start + shaft + gz.scale_cube_half_length)) * dir, basis, s * gz.scale_cube_half_length);
+        }
     }
+    // Plane-scale sectors: the outer shell of the concentric plane layout,
+    // ending at the rotate ring radius (minus the sector gap). Lower fill
+    // alpha than the translate sectors so the two shells read differently
+    // even where they meet across the gap.
     for (int perp = 0; perp < 3; ++perp) {
         const Handle handle = scale_plane_handles[perp];
-        if (!is_handle_shown(handle)) {
+        if (!is_handle_shown(handle) || dimmed_away(handle)) {
             continue;
         }
-        const vec3 u = basis[(perp + 1) % 3];
-        const vec3 v = basis[(perp + 2) % 3];
-        draw_quad(line_renderer, triangle_renderer, handle_color(handle, axis_colors[perp]), c, (s * gz.plane_half_extent) * u, (s * gz.plane_half_extent) * v);
+        const vec3 u  = basis[(perp + 1) % 3];
+        const vec3 v  = basis[(perp + 2) % 3];
+        const vec3 su = (fixed_octant || octant_signs[(perp + 1) % 3]) ? u : -u;
+        const vec3 sv = (fixed_octant || octant_signs[(perp + 2) % 3]) ? v : -v;
+        draw_annular_sector(
+            plane_line_renderer, plane_triangle_renderer,
+            handle_color(handle, axis_colors[perp], hover_axis_colors[perp]), handle_color(handle, axis_outline_colors[perp], hover_axis_colors[perp]),
+            0.5f * gz.plane_fill_alpha * handle_alpha(handle), gz.plane_outline_width,
+            is_hot(handle),
+            c, su, sv, s * shells.scale_inner, s * shells.scale_outer, !positive_only
+        );
     }
-    if (is_handle_shown(Handle::e_handle_scale_xyz)) {
-        const vec4 color = handle_color(Handle::e_handle_scale_xyz, xyz_color);
-        draw_cube_fill(triangle_renderer, color, c, basis, s * gz.center_cube_half_length);
+    // Uniform scale: the innermost wedge of every plane - the three wedges
+    // (one per plane, from the gizmo center outward) are together the ONE
+    // uniform-scale handle, so they hover and drag as one.
+    if (is_handle_shown(Handle::e_handle_scale_xyz) && !dimmed_away(Handle::e_handle_scale_xyz)) {
+        const vec4 color         = handle_color(Handle::e_handle_scale_xyz, tt_config.uniform_scale_color,         tt_config.hover_uniform_scale_color);
+        const vec4 outline_color = handle_color(Handle::e_handle_scale_xyz, tt_config.uniform_scale_outline_color, tt_config.hover_uniform_scale_color);
+        for (int perp = 0; perp < 3; ++perp) {
+            const vec3 u  = basis[(perp + 1) % 3];
+            const vec3 v  = basis[(perp + 2) % 3];
+            const vec3 su = (fixed_octant || octant_signs[(perp + 1) % 3]) ? u : -u;
+            const vec3 sv = (fixed_octant || octant_signs[(perp + 2) % 3]) ? v : -v;
+            draw_annular_sector(
+                plane_line_renderer, plane_triangle_renderer,
+                color, outline_color, gz.plane_fill_alpha * handle_alpha(Handle::e_handle_scale_xyz), gz.plane_outline_width,
+                is_hot(Handle::e_handle_scale_xyz),
+                c, su, sv, 0.0f, s * shells.uniform_outer, !positive_only
+            );
+        }
     }
 
     // Bounding-box scale: box outline plus a cone on each face center. The
     // outline is not tied to a single handle so it stays up during a drag.
-    const Transform_tool_settings& settings = m_context.transform_tool->shared.settings;
     if (
         settings.show_scale &&
         (settings.scale_gizmo_mode == Scale_gizmo_mode::bounding_box) &&
         m_box_valid
     ) {
-        line_renderer.set_thickness(plane_outline_width);
+        line_renderer.set_thickness(gz.plane_outline_width);
         line_renderer.add_cube(m_box_frame, box_outline_color, m_box_aabb.min, m_box_aabb.max);
 
         const mat3 box_basis{m_box_frame};
@@ -807,14 +1136,14 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
             const vec3 center = m_box_aabb.center();
             for (int sign = 0; sign < 2; ++sign) {
                 const Handle handle = (sign == 0) ? box_scale_pos_handles[axis] : box_scale_neg_handles[axis];
-                if (!is_handle_shown(handle)) {
+                if (!is_handle_shown(handle) || dimmed_away(handle)) {
                     continue;
                 }
                 vec3 face_center_box = center;
                 face_center_box[axis] = (sign == 0) ? m_box_aabb.max[axis] : m_box_aabb.min[axis];
                 const vec3 base = vec3{m_box_frame * vec4{face_center_box, 1.0f}};
                 const vec3 dir  = ((sign == 0) ? 1.0f : -1.0f) * normalize(box_basis[axis]);
-                draw_cone_fill(triangle_renderer, handle_color(handle, axis_colors[axis]), base, dir, side1, side2, s * gz.box_scale_cone_length, s * gz.box_scale_cone_radius);
+                draw_cone_fill(triangle_renderer, handle_color(handle, axis_colors[axis], hover_axis_colors[axis]), base, dir, side1, side2, s * gz.box_scale_cone_length, s * gz.box_scale_cone_radius, false, 1.0f);
             }
         }
     }
@@ -846,9 +1175,10 @@ auto Handle_visualizations::pick(const glm::vec3& eye_position, const glm::vec3&
         }
     };
 
+    const Transform_tool_settings& settings = m_context.transform_tool->shared.settings;
     const bool positive_only = !m_context.editor_settings->transform_tool.translate_negative_handles;
     // Mirrors render()'s fixed-octant presentation with rotate rings hidden.
-    const bool fixed_octant  = positive_only && !m_context.transform_tool->shared.settings.show_rotate;
+    const bool fixed_octant  = positive_only && !settings.show_rotate;
     // Mirrors render(): frozen at drag-start values while a drag is active.
     const std::array<bool, 3> octant_signs = get_octant_signs(eye_position, c, basis);
 
@@ -856,41 +1186,68 @@ auto Handle_visualizations::pick(const glm::vec3& eye_position, const glm::vec3&
     // around the cone head (matching the old collision geometry). Mirrors
     // render()'s single-arrow choice: only the camera-facing direction of
     // each axis is pickable when translate_negative_handles is off.
+    // Mirrors render()'s hover-driven arrow exemptions. pick() runs while
+    // the transform tool still holds the PREVIOUS frame's hover - that lag
+    // is what makes the switch stable: the opposite arrows a plane hover
+    // brought up stay pickable on the very frame hover moves onto them.
+    const Handle hover_handle  = m_context.transform_tool->get_hover_handle();
+    const Handle active_handle = m_context.transform_tool->get_active_handle();
+
     for (int axis = 0; axis < 3; ++axis) {
         const bool positive_towards_eye = octant_signs[axis];
         const Handle directional_handles[2] = {translate_pos_handles[axis], translate_neg_handles[axis]};
+        const unsigned int axis_mask = get_axis_mask(directional_handles[0]);
         // Mirrors render(): both directions of the dragged axis are shown
         // (and pickable) during an active single-axis translate drag.
         const bool axis_drag_here =
             m_context.move_tool->is_active() &&
-            (m_context.move_tool->get_axis_mask() == get_axis_mask(directional_handles[0]));
+            (m_context.move_tool->get_axis_mask() == axis_mask);
+        // Mirrors render(): both plane-axis arrows while the plane-translate
+        // sector is hovered; the hovered handle itself is always exempt.
+        const bool plane_hover_here =
+            (active_handle == Handle::e_handle_none) &&
+            (hover_handle != Handle::e_handle_none) &&
+            (get_handle_type(hover_handle) == Handle_type::e_handle_type_translate_plane) &&
+            ((axis_mask & get_axis_mask(hover_handle)) == axis_mask);
         // Mirrors render(): in-plane arrows sit at the protractor ring
         // during a rotate drag.
         const float start = m_context.rotate_tool->is_active()
             ? m_context.editor_settings->transform_tool.rotate_ring_size
-            : fixed_octant ? gz.plane_positive_end : gz.arrow_start;
+            : gz.arrow_start;
         for (int sign = 0; sign < 2; ++sign) {
-            if (positive_only && !axis_drag_here && ((sign == 0) != (fixed_octant || positive_towards_eye))) {
+            if (
+                positive_only && !axis_drag_here && !plane_hover_here &&
+                (directional_handles[sign] != hover_handle) &&
+                ((sign == 0) != (fixed_octant || positive_towards_eye))
+            ) {
                 continue;
             }
             const Handle handle = directional_handles[sign];
             if (!is_handle_shown(handle)) {
                 continue;
             }
-            // Mirrors render()'s drag-shown opposite arrow placement.
-            const float sign_start = ((sign == 1) && !m_context.rotate_tool->is_active() && fixed_octant) ? gz.arrow_start : start;
+            // The head capsule normally extends one extra cone length past
+            // the tip as grab margin; with the scale handle continuing this
+            // axis line, cap it halfway into the gap between the two - the
+            // fat translate capsule (hit at a nearer ray-t) would otherwise
+            // engulf the thin scale shaft and cube behind it and win every
+            // pick. Each handle owns exactly its own span of the axis line,
+            // so hover flips between them with no overlap, no dead delay.
+            const float head_pick_end = is_handle_shown(scale_axis_handles[axis])
+                ? gz.arrow_shaft_length + gz.translate_cone_length + 0.5f * gz.scale_handle_gap
+                : gz.translate_head_pick_end;
             const vec3 dir = ((sign == 0) ? 1.0f : -1.0f) * basis[axis];
             float t{0.0f};
             vec3  q{0.0f};
             float dist{0.0f};
             if (
-                ray_segment_distance(ray_origin, d, c + (s * sign_start) * dir, c + (s * (sign_start + gz.arrow_shaft_length)) * dir, t, q, dist) &&
+                ray_segment_distance(ray_origin, d, c + (s * start) * dir, c + (s * (start + gz.arrow_shaft_length)) * dir, t, q, dist) &&
                 (dist <= s * gz.arrow_shaft_pick_radius)
             ) {
                 consider(handle, t, q);
             }
             if (
-                ray_segment_distance(ray_origin, d, c + (s * (sign_start + gz.arrow_shaft_length)) * dir, c + (s * (sign_start + gz.translate_head_pick_end)) * dir, t, q, dist) &&
+                ray_segment_distance(ray_origin, d, c + (s * (start + gz.arrow_shaft_length)) * dir, c + (s * (start + head_pick_end)) * dir, t, q, dist) &&
                 (dist <= s * gz.translate_head_pick_radius)
             ) {
                 consider(handle, t, q);
@@ -898,8 +1255,13 @@ auto Handle_visualizations::pick(const glm::vec3& eye_position, const glm::vec3&
         }
     }
 
-    // Plane quads (translate, then basic-scale which is always centered).
-    const auto pick_plane = [&](const Handle handle, const int perp, const float offset) {
+    // Plane annular sectors (translate, then plane-scale below). The pick
+    // zone grows radially by half the sector gap, so neighboring shells'
+    // pick zones never overlap. Quadrant bounds are exact (mirroring the
+    // drawn sector); in negative-handles mode the sector is a full annulus
+    // and the quadrant test is skipped.
+    const float sector_pick_margin = 0.5f * gz.plane_sector_gap;
+    const auto pick_sector = [&](const Handle handle, const int perp, const float inner_radius, const float outer_radius) {
         if (!is_handle_shown(handle)) {
             return;
         }
@@ -908,66 +1270,101 @@ auto Handle_visualizations::pick(const glm::vec3& eye_position, const glm::vec3&
         if (std::abs(denom) < 1.0e-6f) {
             return;
         }
-        // Camera-facing quadrant, mirroring render(): the offset moves the
-        // quad center toward the eye's side of each in-plane axis. The
-        // bounds check is symmetric around the center, so unsigned u/v axes
-        // suffice for it.
-        const vec3  u      = basis[(perp + 1) % 3];
-        const vec3  v      = basis[(perp + 2) % 3];
-        const vec3  su     = (fixed_octant || octant_signs[(perp + 1) % 3]) ? u : -u;
-        const vec3  sv     = (fixed_octant || octant_signs[(perp + 2) % 3]) ? v : -v;
-        const vec3  center = c + (s * offset) * (su + sv);
-        const float t      = dot(center - ray_origin, n) / denom;
+        const vec3  u  = basis[(perp + 1) % 3];
+        const vec3  v  = basis[(perp + 2) % 3];
+        const vec3  su = (fixed_octant || octant_signs[(perp + 1) % 3]) ? u : -u;
+        const vec3  sv = (fixed_octant || octant_signs[(perp + 2) % 3]) ? v : -v;
+        const float t  = dot(c - ray_origin, n) / denom;
         if (t <= 0.0f) {
             return;
         }
         const vec3  q  = ray_origin + t * d;
-        const float uu = dot(q - center, u);
-        const float vv = dot(q - center, v);
-        if ((std::abs(uu) > s * gz.plane_pick_half_extent) || (std::abs(vv) > s * gz.plane_pick_half_extent)) {
+        const float uu = dot(q - c, su);
+        const float vv = dot(q - c, sv);
+        if (positive_only && ((uu < 0.0f) || (vv < 0.0f))) {
+            return;
+        }
+        const float r = std::sqrt(uu * uu + vv * vv);
+        if ((r < s * (inner_radius - sector_pick_margin)) || (r > s * (outer_radius + sector_pick_margin))) {
             return;
         }
         consider(handle, t, q);
     };
+    // Mirrors render()'s shell layout, reflowed from the visibility toggles.
+    const bool box_mode = settings.scale_gizmo_mode == Scale_gizmo_mode::bounding_box;
+    const Plane_shell_layout shells = get_plane_shell_layout(gz, settings.show_scale, settings.show_translate, settings.show_scale && !box_mode);
     for (int perp = 0; perp < 3; ++perp) {
-        pick_plane(translate_plane_handles[perp], perp, positive_only ? gz.plane_positive_offset : 0.0f);
+        pick_sector(translate_plane_handles[perp], perp, shells.translate_inner, shells.translate_outer);
     }
 
-    // Uniform-scale center cube, approximated by a sphere.
-    if (is_handle_shown(Handle::e_handle_scale_xyz)) {
-        const float radius = s * gz.center_cube_pick_radius;
-        const float tca    = dot(c - ray_origin, d);
-        if (tca > 0.0f) {
-            const float d2 = dot(c - ray_origin, c - ray_origin) - tca * tca;
-            if (d2 <= radius * radius) {
-                const float thc = std::sqrt(radius * radius - d2);
-                const float t   = (tca - thc > 0.0f) ? (tca - thc) : tca;
-                consider(Handle::e_handle_scale_xyz, t, ray_origin + t * d);
-            }
-        }
+    // Uniform scale: the innermost wedge of every plane. Near the center
+    // the three wedges' pick zones overlap, but they are all the same
+    // handle, so any of them winning is correct.
+    for (int perp = 0; perp < 3; ++perp) {
+        pick_sector(Handle::e_handle_scale_xyz, perp, 0.0f, shells.uniform_outer);
     }
 
-    // Basic-scale tip cones: capsules around both cone heads of each axis.
+    // Basic-scale axis handles: a thin capsule along the shaft plus a fatter
+    // capsule across the tip cube. Mirrors render()'s placement (translate-
+    // relative when the translate arrows are shown) and side choice.
     for (int axis = 0; axis < 3; ++axis) {
         const Handle handle = scale_axis_handles[axis];
         if (!is_handle_shown(handle)) {
             continue;
         }
+        const bool positive_towards_eye = octant_signs[axis];
+        // Mirrors render(): both sides during an active scale drag of this
+        // axis, while this axis' plane-scale sector is hovered, and while
+        // this handle is hovered itself.
+        const bool axis_drag_here =
+            m_context.scale_tool->is_active() &&
+            (m_context.scale_tool->get_axis_mask() == get_axis_mask(handle));
+        const bool plane_hover_here =
+            (active_handle == Handle::e_handle_none) &&
+            (hover_handle != Handle::e_handle_none) &&
+            (get_handle_type(hover_handle) == Handle_type::e_handle_type_scale_plane) &&
+            ((get_axis_mask(handle) & get_axis_mask(hover_handle)) == get_axis_mask(handle));
+        const float translate_start = m_context.rotate_tool->is_active()
+            ? m_context.editor_settings->transform_tool.rotate_ring_size
+            : gz.arrow_start;
         for (int sign = 0; sign < 2; ++sign) {
+            if (
+                positive_only && !axis_drag_here && !plane_hover_here &&
+                (handle != hover_handle) &&
+                ((sign == 0) != (fixed_octant || positive_towards_eye))
+            ) {
+                continue;
+            }
+            const float start = settings.show_translate
+                ? translate_start + gz.arrow_shaft_length + gz.translate_cone_length + gz.scale_handle_gap
+                : translate_start;
+            const float shaft = settings.show_translate ? gz.scale_shaft_length : gz.arrow_shaft_length;
             const vec3 dir = ((sign == 0) ? 1.0f : -1.0f) * basis[axis];
             float t{0.0f};
             vec3  q{0.0f};
             float dist{0.0f};
             if (
-                ray_segment_distance(ray_origin, d, c + (s * gz.arrow_shaft_length) * dir, c + (s * gz.arrow_head_pick_end) * dir, t, q, dist) &&
+                ray_segment_distance(ray_origin, d, c + (s * start) * dir, c + (s * (start + shaft)) * dir, t, q, dist) &&
+                (dist <= s * gz.arrow_shaft_pick_radius)
+            ) {
+                consider(handle, t, q);
+            }
+            // Head capsule with a half-cube grab margin past the cube. In
+            // combined mode the whole (short) handle is covered at head
+            // radius - the shaft span there is no longer shadowed by the
+            // translate head capsule, which is capped at the gap.
+            const float head_pick_start = settings.show_translate ? start : (start + shaft);
+            if (
+                ray_segment_distance(ray_origin, d, c + (s * head_pick_start) * dir, c + (s * (start + shaft + 3.0f * gz.scale_cube_half_length)) * dir, t, q, dist) &&
                 (dist <= s * gz.arrow_head_pick_radius)
             ) {
                 consider(handle, t, q);
             }
         }
     }
+    // Plane-scale sectors, mirroring render()'s shell radii.
     for (int perp = 0; perp < 3; ++perp) {
-        pick_plane(scale_plane_handles[perp], perp, 0.0f);
+        pick_sector(scale_plane_handles[perp], perp, shells.scale_inner, shells.scale_outer);
     }
 
     // Rotate rings: test the sampled ring points; in visible-arcs mode the

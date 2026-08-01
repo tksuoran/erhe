@@ -362,7 +362,7 @@ void Rotate_tool::render(const Render_context& context)
     const Handle_visualizations* visualizations = shared.get_visualizations();
     const float scale = (visualizations != nullptr)
         ? visualizations->get_view_scale()
-        : context.app_context.editor_settings->gizmo_scale * length(p - vec3{camera_node->position_in_world()}) / 100.0f;
+        : context.app_context.editor_settings->transform_tool.gizmo_scale * length(p - vec3{camera_node->position_in_world()}) / 100.0f;
     const float r1 = scale * context.app_context.editor_settings->transform_tool.rotate_ring_size;
     const float snapped_angle     = snap(m_current_angle);
     const float a1                = a0 + snapped_angle;
@@ -381,13 +381,49 @@ void Rotate_tool::render(const Render_context& context)
             : (d >= snapped_angle) && (d <= 0.0f);
     };
 
-    const vec4     axis_color = get_axis_color(m_axis_mask);
+    const vec4     axis_color = get_axis_color(m_axis_mask, context.app_context.editor_settings->transform_tool);
     constexpr vec4 yellow{1.0f, 1.0f, 0.0f, 1.0f};
 
     // Axis-colored protractor lines are thinner than the yellow swept-sector
     // lines so the sector reads as the emphasized element.
     constexpr float axis_line_width   = -1.0f;  // negative = constant screen-space pixels
     constexpr float sector_line_width = -1.41f;
+
+    // Background disc behind the protractor: black at a configurable alpha,
+    // to lift the ring / step markers off busy content. Depth-tested,
+    // visible pass only, NO x-ray - it must never cover geometry in front of
+    // the rotation plane (usually the subject being rotated). Stencil
+    // reference 1 keeps it under every transform-tool bucket (all >= 2), so
+    // the protractor lines always draw over it regardless of order.
+    const float background_alpha = context.app_context.editor_settings->transform_tool.rotate_background_alpha;
+    if (background_alpha > 0.0f) {
+        erhe::renderer::Primitive_renderer background_renderer = context.get(
+            erhe::renderer::Debug_renderer_config{
+                .primitive_type    = erhe::graphics::Primitive_type::triangle,
+                .stencil_reference = 1,
+                .draw_visible      = true,
+                .draw_hidden       = false,
+                .xray              = false
+            }
+        );
+        constexpr int background_segment_count = 96;
+        // Slightly past the ring so the ring line itself sits on the disc.
+        const float background_radius = 1.05f * r1;
+        std::vector<vec3> disc_positions;
+        disc_positions.reserve(background_segment_count + 1);
+        disc_positions.push_back(p);
+        std::vector<uint32_t> disc_indices;
+        disc_indices.reserve(3 * static_cast<size_t>(background_segment_count));
+        for (int i = 0; i < background_segment_count; ++i) {
+            const float theta = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(background_segment_count);
+            disc_positions.push_back(p + background_radius * (std::cos(theta) * side1 + std::sin(theta) * side2));
+            disc_indices.insert(
+                disc_indices.end(),
+                {0u, static_cast<uint32_t>(1 + i), static_cast<uint32_t>(1 + ((i + 1) % background_segment_count))}
+            );
+        }
+        background_renderer.add_triangles(glm::mat4{1.0f}, vec4{0.0f, 0.0f, 0.0f, background_alpha}, disc_positions, disc_indices);
+    }
 
     // X-ray bucket, like all transform-handle line rendering: the occluded
     // pass blends at full strength so the protractor stays readable inside

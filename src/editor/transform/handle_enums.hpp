@@ -2,6 +2,8 @@
 
 #include <glm/glm.hpp>
 
+struct Transform_tool_config;
+
 namespace editor {
 
 enum class Handle : unsigned int {
@@ -99,6 +101,9 @@ public:
 [[nodiscard]] auto get_axis_mask   (Handle handle) -> unsigned int;
 [[nodiscard]] auto c_str           (Handle handle) -> const char*;
 
-[[nodiscard]] auto get_axis_color  (unsigned int axis_mask) -> glm::vec4;
+// Drag-time emphasis color for an axis-mask constraint (protractor, drag
+// guides, rotate hover highlight); reads Transform_tool_config's
+// active_color_x/y/z/view. Plane masks map to their perpendicular axis.
+[[nodiscard]] auto get_axis_color  (unsigned int axis_mask, const Transform_tool_config& config) -> glm::vec4;
 
 }
