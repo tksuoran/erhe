@@ -268,6 +268,14 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
     // is rendered before the main pass for the polygon-fill shader to sample.
     bool use_id_edge_lines = false;
 
+    // Last frame's overlay pass was skipped (early-out) after render() had
+    // deferred the debug-renderer frame to it: release the recorded frame
+    // that never got drawn before beginning a new one.
+    if (m_debug_renderer_frame_pending) {
+        m_context.debug_renderer->end_frame();
+        m_debug_renderer_frame_pending = false;
+    }
+
     if (do_render) {
         const erhe::renderer::View debug_view = erhe::renderer::Debug_renderer::view_from_camera(
             *context.camera, context.viewport, get_conventions()
@@ -632,12 +640,29 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
     // See issue #230.
     m_context.app_rendering ->render_viewport_main(context, !m_post_processing_enabled);
     m_context.app_rendering ->render_viewport_renderables(context); // This time with render encoder set
-    m_context.debug_renderer->render(encoder, *m_render_target.get_render_pass(), context.viewport);
-    m_context.debug_renderer->end_frame();
+    if (m_post_processing_enabled) {
+        // Debug rendering (gizmo, debug visualizations) draws in the overlay
+        // pass after post-processing, like the overlay meshes, so bloom and
+        // tonemap never affect it - nearby bright sources cannot drown it and
+        // its colors are WYSIWYG. The overlay pass is multisampled and loads
+        // this pass's depth + stencil, so MSAA and depth/stencil behavior are
+        // unchanged. Deferring across rendergraph nodes is safe because each
+        // view's chain executes contiguously: nodes register per view in
+        // chain order and Graph::sort() picks the earliest-registered
+        // eligible node, so no other view's begin_frame runs in between.
+        m_debug_renderer_frame_pending = true;
+    } else {
+        m_context.debug_renderer->render(encoder, *m_render_target.get_render_pass(), context.viewport);
+        m_context.debug_renderer->end_frame();
+    }
     if (m_context.content_wide_line_renderer != nullptr && m_context.content_wide_line_renderer->is_enabled()) {
         m_context.content_wide_line_renderer->end_frame();
     }
-    m_context.text_renderer ->render(encoder, *m_render_target.get_render_pass(), context.viewport);
+    // Text (gizmo readouts, hover labels) defers with the debug rendering so
+    // the two stay consistent - both WYSIWYG, neither bloomed / tonemapped.
+    if (!m_post_processing_enabled) {
+        m_context.text_renderer->render(encoder, *m_render_target.get_render_pass(), context.viewport);
+    }
 }
 
 void Viewport_scene_view::update_overlay_render_target(const int width, const int height)
@@ -813,6 +838,18 @@ void Viewport_scene_view::render_overlay_pass(
     };
 
     m_context.app_rendering->render_overlay(context);
+
+    // The debug-renderer frame deferred by render(): draw it over the overlay
+    // meshes (matching the old in-content order: meshes first, debug lines
+    // on top, text last) and close the frame. Text_renderer flushes the
+    // prints accumulated during this view's content render - safe here for
+    // the same chain-contiguity reason as the debug renderer deferral.
+    if (m_debug_renderer_frame_pending) {
+        m_context.debug_renderer->render(encoder, *m_overlay_render_pass, m_projection_viewport);
+        m_context.debug_renderer->end_frame();
+        m_context.text_renderer ->render(encoder, *m_overlay_render_pass, m_projection_viewport);
+        m_debug_renderer_frame_pending = false;
+    }
 }
 
 auto Viewport_scene_view::get_overlay_output_texture() const -> std::shared_ptr<erhe::graphics::Texture>

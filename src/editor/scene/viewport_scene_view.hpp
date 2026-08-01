@@ -249,6 +249,10 @@ private:
     const erhe::graphics::Texture*               m_overlay_depth_texture{nullptr};
     int                                          m_overlay_width {0};
     int                                          m_overlay_height{0};
+    // Set when render() recorded a debug-renderer frame that render_overlay_pass()
+    // must draw (and end) after post-processing; cleared there. If the overlay
+    // pass is skipped (early-out), the next render() releases the stale frame.
+    bool                                         m_debug_renderer_frame_pending{false};
 };
 
 }
