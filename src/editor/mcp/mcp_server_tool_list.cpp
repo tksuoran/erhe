@@ -896,8 +896,9 @@ void Mcp_server::refresh_tool_list()
     m_tool_infos.push_back({"lightmap_generate_uvs", "Generate lightmap UVs (texcoord channel 2, ABF + xatlas unwrap, queued async and undoable) for every lightmapped, non-skinned content mesh of a scene - the Lightmap window's Generate Lightmap UVs button without touching the selection. Poll get_async_status until idle before lightmap_update_atlas.", {
         {"type", "object"},
         {"properties", {
-            {"scene_name",      {{"type", "string"}, {"description", "Name of the scene"}}},
-            {"hard_angles_deg", {{"type", "number"}, {"description", "Hard-angle threshold in degrees for chart seams; default = Lightmap settings value"}}}
+            {"scene_name",       {{"type", "string"}, {"description", "Name of the scene"}}},
+            {"hard_angles_deg",  {{"type", "number"}, {"description", "Hard-angle threshold in degrees for chart seams; default = Lightmap settings value"}}},
+            {"texels_per_meter", {{"type", "number"}, {"description", "Density used to size inter-chart gutters in texels of the expected atlas region; default = Lightmap settings value"}}}
         }},
         {"required", json::array({"scene_name"})}
     }});

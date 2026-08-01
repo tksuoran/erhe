@@ -32,13 +32,25 @@ enum class Atlas_packer {
 //
 // hard_angles_threshold: edges whose dihedral angle exceeds this (in degrees)
 //                        become chart boundaries.
+//
+// chart_pack_texel_density (texels per mesh-local unit; 0 = disabled): when
+// positive, Geogram's own chart packing is bypassed (its gutters are sized at
+// an internal resolution the caller cannot know - see
+// doc/geogram_atlas_packing_feature_request.md) and the charts are packed
+// here instead, with at least chart_gutter_texels of empty space between any
+// two charts at the resolution the caller will rasterize this unwrap at
+// (side = sqrt(surface area) * density, the lightmap baker's region formula).
+// Without this, adjacent charts land inside each other's bilinear footprint
+// at practical lightmap densities and bleed across seams.
 void make_atlas(
     const Geometry&     source,
     Geometry&           destination,
     std::size_t         usage_index,
     double              hard_angles_threshold,
     Atlas_parameterizer parameterizer,
-    Atlas_packer        packer);
+    Atlas_packer        packer,
+    double              chart_pack_texel_density = 0.0,
+    double              chart_gutter_texels      = 3.0);
 
 // In-place core of the atlas operation: run Geogram's mesh_make_atlas() on the
 // given mesh and move the resulting per-corner UVs into the corner texcoord
@@ -53,6 +65,8 @@ void generate_mesh_atlas_texture_coordinates(
     std::size_t         usage_index,
     double              hard_angles_threshold,
     Atlas_parameterizer parameterizer,
-    Atlas_packer        packer);
+    Atlas_packer        packer,
+    double              chart_pack_texel_density = 0.0,
+    double              chart_gutter_texels      = 3.0);
 
 } // namespace erhe::geometry::operation

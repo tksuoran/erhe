@@ -161,12 +161,17 @@ public:
 class Make_atlas_operation : public Mesh_operation
 {
 public:
+    // lightmap_texels_per_meter > 0 enables texel-density-aware chart
+    // packing (see erhe_geometry make_atlas.hpp): the per-node world scale
+    // folds in so gutters are sized for the lightmap region each instance
+    // will get at that density.
     Make_atlas_operation(
         Mesh_operation_parameters&&                    context,
         std::size_t                                    usage_index,
         float                                          hard_angles_threshold,
         erhe::geometry::operation::Atlas_parameterizer parameterizer,
-        erhe::geometry::operation::Atlas_packer        packer);
+        erhe::geometry::operation::Atlas_packer        packer,
+        float                                          lightmap_texels_per_meter = 0.0f);
 };
 
 class Binary_mesh_operation : public Compound_operation

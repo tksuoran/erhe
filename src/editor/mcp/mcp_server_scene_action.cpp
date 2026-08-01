@@ -237,7 +237,8 @@ auto Mcp_server::action_lightmap_generate_uvs(const json& args) -> std::string
         return make_error_content("No lightmapped meshes in scene: " + sr->get_name());
     }
 
-    const float hard_angles_deg = args.value("hard_angles_deg", m_context.editor_settings->lightmap.hard_angles_deg);
+    const float hard_angles_deg  = args.value("hard_angles_deg", m_context.editor_settings->lightmap.hard_angles_deg);
+    const float texels_per_meter = args.value("texels_per_meter", m_context.editor_settings->lightmap.texels_per_meter);
     json names = json::array();
     for (const std::shared_ptr<erhe::Item_base>& item : items) {
         names.push_back(item->get_name());
@@ -247,7 +248,7 @@ auto Mcp_server::action_lightmap_generate_uvs(const json& args) -> std::string
     async_for_nodes_with_mesh(
         m_context,
         items,
-        [operation_stack, hard_angles_deg](Mesh_operation_parameters&& params) {
+        [operation_stack, hard_angles_deg, texels_per_meter](Mesh_operation_parameters&& params) {
             // Runs on a tf::Executor worker: queue() is main-thread-only.
             operation_stack->queue_from_thread(
                 std::make_shared<Make_atlas_operation>(
@@ -255,15 +256,17 @@ auto Mcp_server::action_lightmap_generate_uvs(const json& args) -> std::string
                     2, // lightmap UV channel (texcoord usage_index 2)
                     hard_angles_deg,
                     erhe::geometry::operation::Atlas_parameterizer::abf,
-                    erhe::geometry::operation::Atlas_packer::xatlas
+                    erhe::geometry::operation::Atlas_packer::xatlas,
+                    texels_per_meter // density-aware chart gutters
                 )
             );
         }
     );
     return make_json_content({
-        {"queued",          true},
-        {"hard_angles_deg", hard_angles_deg},
-        {"mesh_nodes",      names}
+        {"queued",           true},
+        {"hard_angles_deg",  hard_angles_deg},
+        {"texels_per_meter", texels_per_meter},
+        {"mesh_nodes",       names}
     }).dump();
 }
 

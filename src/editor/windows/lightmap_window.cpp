@@ -71,11 +71,12 @@ void Lightmap_window::generate_lightmap_uvs()
     if (items.empty()) {
         return;
     }
-    const float hard_angles_deg = m_context.editor_settings->lightmap.hard_angles_deg;
+    const float hard_angles_deg  = m_context.editor_settings->lightmap.hard_angles_deg;
+    const float texels_per_meter = m_context.editor_settings->lightmap.texels_per_meter;
     async_for_nodes_with_mesh(
         m_context,
         items,
-        [this, hard_angles_deg](Mesh_operation_parameters&& params) {
+        [this, hard_angles_deg, texels_per_meter](Mesh_operation_parameters&& params) {
             // Runs on a tf::Executor worker: queue() is main-thread-only.
             m_context.operation_stack->queue_from_thread(
                 std::make_shared<Make_atlas_operation>(
@@ -83,7 +84,8 @@ void Lightmap_window::generate_lightmap_uvs()
                     2, // lightmap UV channel (texcoord usage_index 2)
                     hard_angles_deg,
                     erhe::geometry::operation::Atlas_parameterizer::abf,
-                    erhe::geometry::operation::Atlas_packer::xatlas
+                    erhe::geometry::operation::Atlas_packer::xatlas,
+                    texels_per_meter // density-aware chart gutters
                 )
             );
         }
