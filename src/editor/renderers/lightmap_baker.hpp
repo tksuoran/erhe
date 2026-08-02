@@ -177,9 +177,10 @@ private:
         std::vector<erhe::graphics::Acceleration_structure_instance>& out_instances,
         std::vector<Lm_instance_record>&                             out_records
     );
-    // Record resolve (accum -> published running average) followed by the
-    // dilation ping-pong; leaves the published atlas shader-readable.
-    void record_resolve_and_dilate(erhe::graphics::Command_buffer& command_buffer);
+    // Record resolve (accum -> published running average), optionally the
+    // JNLM denoise, then the dilation ping-pong; leaves the published atlas
+    // shader-readable.
+    void record_resolve_and_dilate(erhe::graphics::Command_buffer& command_buffer, bool with_denoise);
     // One-shot virtual-offset pass (article sample-position adjustment):
     // rewrites the position G-buffer in place, once per G-buffer bake.
     void record_adjust(erhe::graphics::Command_buffer& command_buffer, erhe::graphics::Acceleration_structure& tlas);
@@ -274,6 +275,13 @@ private:
     // (two rgba32f storage images named i_src / i_dst).
     std::unique_ptr<erhe::graphics::Shader_stages>     m_resolve_shader_stages;
     std::unique_ptr<erhe::graphics::Compute_pipeline>  m_resolve_pipeline;
+
+    // JNLM denoise (plan phase 4): published atlas + G-buffer normal/albedo
+    // guides in, denoised atlas out (into the dilate scratch); runs per
+    // completed sweep, folded into record_resolve_and_dilate.
+    std::unique_ptr<erhe::graphics::Bind_group_layout> m_denoise_layout;
+    std::unique_ptr<erhe::graphics::Shader_stages>     m_denoise_shader_stages;
+    std::unique_ptr<erhe::graphics::Compute_pipeline>  m_denoise_pipeline;
 
     // Per-tick uploads ride the device ring buffers (the frame command
     // buffer stays open; plain buffers would be destroyed in flight).

@@ -579,6 +579,100 @@ void main()
 }
 )GLSL";
 
+// JNLM denoise (plan phase 4, article alignment: denoise before seams).
+// Port of Godot's lm_compute.glsl MODE_DENOISE joint non-local means
+// (MIT; itself based on YoctoImageDenoiser, MIT, Copyright (c) 2020
+// ManuelPrandini, with corrections from "Nonlinearly Weighted First-order
+// Regression for Denoising Monte Carlo Renderings"). Guides: G-buffer
+// albedo + normal; a zero-length normal or zero published alpha marks an
+// invalid texel (unbaked or backface-invalidated) which passes through
+// unweighted, mirroring Godot's normal/occlusion masks. Windows are
+// compile-time defines, REDUCED from Godot's defaults (half search 10,
+// half patch 3) because this runs per completed sweep inside the
+// interactive loop, not once at bake end; a future CLI bake can raise
+// them.
+constexpr const char* c_denoise_source = R"GLSL(
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+const int   HALF_PATCH_WINDOW  = ERHE_LM_DENOISE_HALF_PATCH;
+const int   HALF_SEARCH_WINDOW = ERHE_LM_DENOISE_HALF_SEARCH;
+const float SIGMA_SPATIAL      = 2.0;
+const float SIGMA_LIGHT        = 0.1;
+const float SIGMA_ALBEDO       = 1.0;
+const float SIGMA_NORMAL       = 0.1;
+const float FILTER_VALUE       = 10.0 * SIGMA_LIGHT;
+
+const int   PATCH_WINDOW_DIMENSION        = HALF_PATCH_WINDOW * 2 + 1;
+const int   PATCH_WINDOW_DIMENSION_SQUARE = PATCH_WINDOW_DIMENSION * PATCH_WINDOW_DIMENSION;
+const float TWO_SIGMA_SPATIAL_SQUARE      = 2.0 * SIGMA_SPATIAL * SIGMA_SPATIAL;
+const float TWO_SIGMA_LIGHT_SQUARE        = 2.0 * SIGMA_LIGHT * SIGMA_LIGHT;
+const float TWO_SIGMA_ALBEDO_SQUARE       = 2.0 * SIGMA_ALBEDO * SIGMA_ALBEDO;
+const float TWO_SIGMA_NORMAL_SQUARE       = 2.0 * SIGMA_NORMAL * SIGMA_NORMAL;
+const float FILTER_SQUARE_TWO_SIGMA_LIGHT_SQUARE = FILTER_VALUE * FILTER_VALUE * TWO_SIGMA_LIGHT_SQUARE;
+const float EPSILON = 1.0e-6;
+
+void main()
+{
+    ivec2 texel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size  = imageSize(i_dst);
+    if ((texel.x >= size.x) || (texel.y >= size.y)) {
+        return;
+    }
+    vec4 input_light  = imageLoad(i_src, texel);
+    vec3 input_normal = imageLoad(i_normal, texel).xyz;
+    if ((input_light.a <= 0.0) || (length(input_normal) < EPSILON)) {
+        imageStore(i_dst, texel, input_light);
+        return;
+    }
+    vec3  input_rgb    = input_light.rgb;
+    vec3  input_albedo = imageLoad(i_albedo, texel).rgb;
+    vec3  denoised_rgb = vec3(0.0);
+    float sum_weights  = 0.0;
+    for (int search_y = -HALF_SEARCH_WINDOW; search_y <= HALF_SEARCH_WINDOW; ++search_y) {
+        for (int search_x = -HALF_SEARCH_WINDOW; search_x <= HALF_SEARCH_WINDOW; ++search_x) {
+            ivec2 search_pos    = texel + ivec2(search_x, search_y);
+            ivec2 clamped_pos   = clamp(search_pos, ivec2(0), size - 1);
+            vec4  search_light  = imageLoad(i_src,    clamped_pos);
+            vec3  search_albedo = imageLoad(i_albedo, clamped_pos).rgb;
+            vec3  search_normal = imageLoad(i_normal, clamped_pos).xyz;
+            float patch_square_dist = 0.0;
+            for (int offset_y = -HALF_PATCH_WINDOW; offset_y <= HALF_PATCH_WINDOW; ++offset_y) {
+                for (int offset_x = -HALF_PATCH_WINDOW; offset_x <= HALF_PATCH_WINDOW; ++offset_x) {
+                    ivec2 offset_input_pos  = clamp(texel      + ivec2(offset_x, offset_y), ivec2(0), size - 1);
+                    ivec2 offset_search_pos = clamp(search_pos + ivec2(offset_x, offset_y), ivec2(0), size - 1);
+                    vec3  offset_delta_rgb  = imageLoad(i_src, offset_input_pos).rgb - imageLoad(i_src, offset_search_pos).rgb;
+                    patch_square_dist += dot(offset_delta_rgb, offset_delta_rgb) - TWO_SIGMA_LIGHT_SQUARE;
+                }
+            }
+            patch_square_dist = max(0.0, patch_square_dist / (3.0 * float(PATCH_WINDOW_DIMENSION_SQUARE)));
+
+            float weight = 1.0;
+            // Out-of-bounds or invalid (unbaked / invalidated) search texels
+            // contribute nothing.
+            weight *= step(0.0, float(search_pos.x)) * step(float(search_pos.x), float(size.x - 1));
+            weight *= step(0.0, float(search_pos.y)) * step(float(search_pos.y), float(size.y - 1));
+            weight *= step(EPSILON, length(search_normal));
+            weight *= step(0.5, search_light.a);
+
+            vec2 pixel_delta = vec2(float(search_x), float(search_y));
+            weight *= exp(-dot(pixel_delta, pixel_delta) / TWO_SIGMA_SPATIAL_SQUARE);
+            weight *= exp(-patch_square_dist / FILTER_SQUARE_TWO_SIGMA_LIGHT_SQUARE);
+
+            vec3 albedo_delta = input_albedo - search_albedo;
+            weight *= exp(-dot(albedo_delta, albedo_delta) / TWO_SIGMA_ALBEDO_SQUARE);
+
+            vec3 normal_delta = input_normal - search_normal;
+            weight *= exp(-dot(normal_delta, normal_delta) / TWO_SIGMA_NORMAL_SQUARE);
+
+            denoised_rgb += weight * search_light.rgb;
+            sum_weights  += weight;
+        }
+    }
+    denoised_rgb = (sum_weights > EPSILON) ? denoised_rgb / sum_weights : input_rgb;
+    imageStore(i_dst, texel, vec4(denoised_rgb, input_light.a));
+}
+)GLSL";
+
 // FNV-1a over raw bytes; drives the change-driven invalidation hashes.
 [[nodiscard]] auto fnv1a64(const void* data, std::size_t byte_count, uint64_t hash = 0xcbf29ce484222325ull) -> uint64_t
 {
@@ -1057,6 +1151,74 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
             .name              = "lightmap_resolve",
             .shader_stages     = m_resolve_shader_stages.get(),
             .bind_group_layout = m_dilate_layout.get()
+        }
+    );
+
+    // JNLM denoise (all raw storage-image bindings, no sampler offset).
+    m_denoise_layout = std::make_unique<Bind_group_layout>(
+        graphics_device,
+        Bind_group_layout_create_info{
+            .bindings = {
+                Bind_group_layout_binding{
+                    .binding_point = 0u,
+                    .type          = Binding_type::storage_image,
+                    .name          = "i_src",
+                    .glsl_type     = Glsl_type::image_2d,
+                    .image_format  = "rgba32f",
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                Bind_group_layout_binding{
+                    .binding_point = 1u,
+                    .type          = Binding_type::storage_image,
+                    .name          = "i_dst",
+                    .glsl_type     = Glsl_type::image_2d,
+                    .image_format  = "rgba32f",
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                Bind_group_layout_binding{
+                    .binding_point = 2u,
+                    .type          = Binding_type::storage_image,
+                    .name          = "i_normal",
+                    .glsl_type     = Glsl_type::image_2d,
+                    .image_format  = "rgba32f",
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                Bind_group_layout_binding{
+                    .binding_point = 3u,
+                    .type          = Binding_type::storage_image,
+                    .name          = "i_albedo",
+                    .glsl_type     = Glsl_type::image_2d,
+                    .image_format  = "rgba16f",
+                    .stage_flags   = Shader_stage_flags::compute
+                }
+            },
+            .debug_label       = erhe::utility::Debug_label{"lightmap denoise layout"},
+            .uses_texture_heap = false
+        }
+    );
+    Shader_stages_create_info denoise_create_info{
+        .name    = "lightmap_denoise",
+        .defines = {
+            { "ERHE_LM_DENOISE_HALF_PATCH",  "1" },
+            { "ERHE_LM_DENOISE_HALF_SEARCH", "3" }
+        },
+        .shaders = {
+            { Shader_type::compute_shader, std::string_view{c_denoise_source} }
+        },
+        .bind_group_layout = m_denoise_layout.get()
+    };
+    Shader_stages_prototype denoise_prototype = build_shader_stages(graphics_device, denoise_create_info);
+    if (!denoise_prototype.is_valid()) {
+        log_render->warn("Lightmap_baker: denoise shader failed to compile/link");
+        return;
+    }
+    m_denoise_shader_stages = std::make_unique<Shader_stages>(graphics_device, std::move(denoise_prototype));
+    m_denoise_pipeline = std::make_unique<Compute_pipeline>(
+        graphics_device,
+        Compute_pipeline_data{
+            .name              = "lightmap_denoise",
+            .shader_stages     = m_denoise_shader_stages.get(),
+            .bind_group_layout = m_denoise_layout.get()
         }
     );
 }
@@ -1988,7 +2150,7 @@ auto Lightmap_baker::bake_direct(Scene_root& scene_root) -> bool
         );
     }
 
-    record_resolve_and_dilate(command_buffer);
+    record_resolve_and_dilate(command_buffer, false);
     command_buffer.end();
     Command_buffer* command_buffers[] = { &command_buffer };
     m_graphics_device.submit_command_buffers(std::span<Command_buffer* const>{command_buffers});
@@ -2035,13 +2197,16 @@ void Lightmap_baker::record_adjust(erhe::graphics::Command_buffer& command_buffe
     m_gbuffer_adjusted = true;
 }
 
-void Lightmap_baker::record_resolve_and_dilate(erhe::graphics::Command_buffer& command_buffer)
+void Lightmap_baker::record_resolve_and_dilate(erhe::graphics::Command_buffer& command_buffer, const bool with_denoise)
 {
     using namespace erhe::graphics;
 
-    // Resolve the running average into the published atlas, then dilate it
-    // (even iteration count >= s_padding so the final pass lands back in
-    // m_lightmap_texture); never touches the accumulation buffer.
+    // Resolve the running average into the published atlas, optionally JNLM
+    // denoise it, then dilate; never touches the accumulation buffer. The
+    // dilation ping-pong iteration count is chosen so the final pass lands
+    // back in m_lightmap_texture: without denoise it starts there (even
+    // count), with denoise it starts in the scratch the denoiser wrote (odd
+    // count).
     command_buffer.memory_barrier(Memory_barrier_mask::shader_image_access_barrier_bit);
     command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::general);
     {
@@ -2057,10 +2222,41 @@ void Lightmap_baker::record_resolve_and_dilate(erhe::graphics::Command_buffer& c
         );
     }
     command_buffer.memory_barrier(Memory_barrier_mask::shader_image_access_barrier_bit);
+    bool denoised = false;
+    if (with_denoise && m_denoise_pipeline && m_dilate_texture) {
+        command_buffer.transition_texture_layout(*m_dilate_texture, Image_layout::general);
+        command_buffer.transition_texture_layout(*m_normal_texture, Image_layout::general);
+        command_buffer.transition_texture_layout(*m_albedo_texture, Image_layout::general);
+        {
+            Compute_command_encoder encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
+            encoder.set_bind_group_layout(m_denoise_layout.get());
+            encoder.set_compute_pipeline(*m_denoise_pipeline);
+            encoder.set_storage_image(0u, *m_lightmap_texture);
+            encoder.set_storage_image(1u, *m_dilate_texture);
+            encoder.set_storage_image(2u, *m_normal_texture);
+            encoder.set_storage_image(3u, *m_albedo_texture);
+            encoder.dispatch_compute(
+                (static_cast<std::uintptr_t>(m_layout.width)  + 7) / 8,
+                (static_cast<std::uintptr_t>(m_layout.height) + 7) / 8,
+                1
+            );
+        }
+        command_buffer.memory_barrier(Memory_barrier_mask::shader_image_access_barrier_bit);
+        command_buffer.transition_texture_layout(*m_normal_texture, Image_layout::shader_read_only_optimal);
+        command_buffer.transition_texture_layout(*m_albedo_texture, Image_layout::shader_read_only_optimal);
+        denoised = true;
+    }
     if (m_dilate_pipeline && m_dilate_texture) {
         command_buffer.transition_texture_layout(*m_dilate_texture, Image_layout::general);
-        constexpr int dilate_iterations = 2 * ((s_padding + 1) / 2);
-        Texture* const ping[2] = { m_lightmap_texture.get(), m_dilate_texture.get() };
+        // Even iterations from the lightmap, odd from the denoise scratch,
+        // so the last write lands in m_lightmap_texture either way.
+        const int dilate_iterations = denoised
+            ? (2 * (s_padding / 2) + 1)
+            : (2 * ((s_padding + 1) / 2));
+        Texture* const ping[2] = {
+            denoised ? m_dilate_texture.get()   : m_lightmap_texture.get(),
+            denoised ? m_lightmap_texture.get() : m_dilate_texture.get()
+        };
         for (int i = 0; i < dilate_iterations; ++i) {
             {
                 Compute_command_encoder encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
@@ -2284,16 +2480,26 @@ void Lightmap_baker::tick(erhe::graphics::Command_buffer& command_buffer, Scene_
     ubo_range.release();
     ssbo_range.release();
 
-    record_resolve_and_dilate(command_buffer);
+    m_cursor_y += band_rows;
+    const bool sweep_completed = m_cursor_y >= m_layout.height;
+    if (sweep_completed) {
+        m_cursor_y = 0;
+        ++m_sweep_count;
+    }
+    // Publish cadence (phase 4 denoise): during the first sweep after a
+    // reset publish the raw average every tick so the lightmap appears
+    // immediately; once a full sweep exists publish only on sweep
+    // completion, with JNLM denoise folded in. Steady-state mid-sweep
+    // ticks skip resolve+dilate entirely - the viewport (and the bounce
+    // feedback) keep sampling the last denoised publish.
+    if (m_sweep_count == 0) {
+        record_resolve_and_dilate(command_buffer, false);
+    } else if (sweep_completed) {
+        record_resolve_and_dilate(command_buffer, true);
+    }
     m_lightmap_valid = true;
     if (!m_regions_published) {
         publish_regions();
-    }
-
-    m_cursor_y += band_rows;
-    if (m_cursor_y >= m_layout.height) {
-        m_cursor_y = 0;
-        ++m_sweep_count;
     }
     ++m_frame_counter;
 }
