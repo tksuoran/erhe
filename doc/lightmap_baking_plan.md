@@ -144,24 +144,26 @@ remains as the fallback (first_jitter_pass selects). Verified: extension
 enabled on the dev NVIDIA GPU, G-buffer log says "native conservative
 raster", bake output matches the jitter path in the viewport.
 
+Item 2 DONE 2026-08-02: article leak defenses replace the as-built set.
+- Adaptive bias (pos += sign(dir) * max(abs(pos) * 2e-7, 1 micron)) for
+  shadow AND bounce ray origins; the fixed 1 cm offset is gone (the UBO
+  ray_bias field remains as padding).
+- Virtual offset / sample push-off runs as a ONE-SHOT compute pass
+  (c_adjust_source, record_adjust()) rewriting the position G-buffer in
+  place after every G-buffer bake - first cut ran it per texel per
+  sample inside the gather and tripled frame time (29 ms); as a
+  pre-pass, steady-state cost is zero (8.3 ms, same as before).
+- World texel size rides in G-buffer normal.w (derivative trick at
+  raster time, x sqrt(2)).
+- Backface-hit invalidation: a bounce ray hitting a backface closer
+  than one texel zeroes the texel's accumulation (dilation fills it);
+  farther backface hits contribute nothing.
+- Shadow rays trace WITH gl_RayFlagsCullBackFacingTrianglesEXT again.
+Regression gate passed: torus/capsule/sphere contact shadows intact, no
+leaks, no acne, frame time unchanged.
+
 NEXT (in order):
-1. Leak defenses per the article (replaces the as-built set):
-   a. Adaptive ray bias: position += position * 2e-7 (magnitude-
-      proportional, ~FLT_EPSILON scale) instead of the fixed 1 cm
-      normal offset - for receiver rays AND bounce continuation.
-   b. Virtual offset / sample push-off: before gathering, trace 4
-      tangential rays from the texel center (length = world texel size
-      * 0.5); on a backface hit, move the sample:
-      newPos = oldPos + rayDir * hitDist + hitFaceNormal * bias.
-      World texel size comes from the G-buffer (see item 3).
-   c. Backface-hit invalidation: a gather ray hitting a backface marks
-      the texel invalid (coverage 0) so dilation fills it instead.
-   d. THEN restore backface culling on shadow rays (the no-cull hack
-      exists only because the 1 cm bias pushed origins inside resting
-      occluders). Regression gate: the torus contact leak and the 2 cm
-      object speck shadows must stay fixed (ERHE_LM_DEBUG_GATHER
-      recipe in the queue).
-2. G-buffer extension toward the article's layout: add smooth
+1. G-buffer extension toward the article's layout: add smooth
    (Phong-tessellated) position, face normal, and world-space texel
    size (alpha channels; derivative trick at raster time); emissive
    when phase 4 needs it. Then the terminator fix: gather from the
@@ -169,18 +171,18 @@ NEXT (in order):
    plane, per-triangle flat fallback when the smooth position lands
    inside neighbor geometry) - the article's answer to our known
    "chart-brightness plateaus at 64 tpm" terminator artifact.
-3. Phase 4 second half: JNLM denoise (Vulkan exception above) on the
+2. Phase 4 second half: JNLM denoise (Vulkan exception above) on the
    published atlas, guided by G-buffer albedo+normal. Runs BEFORE the
    seam pass (article ordering: denoise after seam blending re-opens
    the seams).
-4. Seam fixing as a STANDARD pipeline step (article does it always,
+3. Seam fixing as a STANDARD pipeline step (article does it always,
    not only-if-visible): collect seam edges (position/normal equal
    within epsilon, UVs differ), build a line vertex buffer carrying
    the opposite side's UVs, render onto the atlas with alpha blending
    over multiple passes until converged (Godot lm_blendseams is the
    reference implementation). Runs per publish after denoise.
-5. Bicubic (4-tap) lightmap sampling in standard.frag.
-6. Phase 6 ERHE_lightmap GLB persistence + RGB9E5; later CLI bake.
+4. Bicubic (4-tap) lightmap sampling in standard.frag.
+5. Phase 6 ERHE_lightmap GLB persistence + RGB9E5; later CLI bake.
 
 Goal: bake static scene lighting into a lightmap texture with **minimum
 authoring effort** — lightmap UVs are assigned automatically, there is

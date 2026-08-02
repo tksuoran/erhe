@@ -180,6 +180,9 @@ private:
     // Record resolve (accum -> published running average) followed by the
     // dilation ping-pong; leaves the published atlas shader-readable.
     void record_resolve_and_dilate(erhe::graphics::Command_buffer& command_buffer);
+    // One-shot virtual-offset pass (article sample-position adjustment):
+    // rewrites the position G-buffer in place, once per G-buffer bake.
+    void record_adjust(erhe::graphics::Command_buffer& command_buffer, erhe::graphics::Acceleration_structure& tlas);
 
     class Blas_entry
     {
@@ -211,9 +214,15 @@ private:
     std::shared_ptr<erhe::graphics::Texture>           m_position_texture;
     std::shared_ptr<erhe::graphics::Texture>           m_normal_texture;
     bool                                               m_gbuffer_valid{false};
+    bool                                               m_gbuffer_adjusted{false}; // virtual-offset pass ran for this G-buffer
     // VK_EXT_conservative_rasterization active on the G-buffer pipeline:
     // one raster pass; false = 9-tap jitter fallback.
     bool                                               m_conservative_raster{false};
+
+    // Virtual-offset adjust pass (article sample-position adjustment).
+    std::unique_ptr<erhe::graphics::Bind_group_layout> m_adjust_layout;
+    std::unique_ptr<erhe::graphics::Shader_stages>     m_adjust_shader_stages;
+    std::unique_ptr<erhe::graphics::Compute_pipeline>  m_adjust_pipeline;
 
     // Direct-light gather objects.
     std::unique_ptr<erhe::graphics::Shader_resource>   m_gather_block;

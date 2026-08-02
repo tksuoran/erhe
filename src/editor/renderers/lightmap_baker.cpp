@@ -126,8 +126,14 @@ layout(location = 2) in vec3 v_albedo;
 
 void main()
 {
-    out_position = vec4(v_position, 1.0);          // w = coverage
-    out_normal   = vec4(normalize(v_normal), 1.0); // w = coverage
+    out_position = vec4(v_position, 1.0); // w = coverage
+    // World-space texel size via derivatives (article): the raster maps one
+    // atlas texel per pixel, so screen-space derivatives of world position
+    // are meters-per-texel; the sqrt(2) covers the diagonal. Rides in
+    // normal.w (was a redundant coverage copy) - the gather's virtual
+    // offset probes use it as ray length.
+    float texel_size = max(length(dFdx(v_position)), length(dFdy(v_position))) * 1.41421356;
+    out_normal   = vec4(normalize(v_normal), texel_size);
     // Diffuse albedo (base color factor x (1 - metallic); textures ignored
     // for now): modulates bounce radiance and later guides JNLM.
     out_albedo   = vec4(v_albedo, 1.0);
@@ -175,6 +181,29 @@ float rand_float(inout uint seed)
     return float(seed) * (1.0 / 4294967296.0);
 }
 
+// Adaptive self-intersection bias (article): offset each component
+// proportionally to its magnitude (~FLT_EPSILON scale) along the given
+// direction's signs, floored to a micron near the origin. Replaces the
+// old fixed 1 cm normal offset, whose size itself caused the contact
+// leak the no-cull hack papered over.
+vec3 adaptive_offset(vec3 position, vec3 direction)
+{
+    vec3 magnitude = max(abs(position) * 2.0e-7, vec3(1.0e-6));
+    return position + sign(direction) * magnitude;
+}
+
+// World-space geometric normal of the committed hit's triangle.
+vec3 committed_face_normal(rayQueryEXT ray_query)
+{
+    vec3 positions[3];
+    rayQueryGetIntersectionTriangleVertexPositionsEXT(ray_query, true, positions);
+    mat4x3 world_from_object = rayQueryGetIntersectionObjectToWorldEXT(ray_query, true);
+    vec3 p0 = world_from_object * vec4(positions[0], 1.0);
+    vec3 p1 = world_from_object * vec4(positions[1], 1.0);
+    vec3 p2 = world_from_object * vec4(positions[2], 1.0);
+    return normalize(cross(p1 - p0, p2 - p0));
+}
+
 void main()
 {
     ivec2 texel = ivec2(gl_GlobalInvocationID.xy) + ivec2(0, int(lightmap_gather.base_texel_y));
@@ -187,11 +216,14 @@ void main()
         imageStore(i_accum, texel, vec4(0.0));
         return;
     }
-    vec3 p = position_coverage.xyz;
-    vec3 n = normalize(texelFetch(s_normal, texel, 0).xyz);
+    // Position pre-adjusted by the one-shot virtual-offset pass
+    // (c_adjust_source), so origins here are guaranteed outside geometry.
+    vec3  p                = position_coverage.xyz;
+    vec4  normal_and_size  = texelFetch(s_normal, texel, 0);
+    vec3  n                = normalize(normal_and_size.xyz);
+    float texel_size       = normal_and_size.w;
 
-    float ray_bias = lightmap_gather.ray_bias;
-    vec3  direct   = vec3(0.0);
+    vec3 direct = vec3(0.0);
     for (uint i = 0u; i < lightmap_gather.light_count; ++i) {
         vec4 pos_type  = lightmap_gather.light_position_and_type[i];
         vec4 dir_cos   = lightmap_gather.light_direction_and_outer_cos[i];
@@ -211,7 +243,7 @@ void main()
             }
             to_light    = d / distance;
             attenuation = 1.0 / max(distance * distance, 1.0e-4);
-            t_max       = distance - ray_bias;
+            t_max       = distance - 1.0e-3;
             if (pos_type.w > 1.5) { // spot: params.x = inner cos, dir_cos.w = outer cos
                 float cos_angle = dot(to_light, normalize(dir_cos.xyz));
                 attenuation *= smoothstep(dir_cos.w, params.x, cos_angle);
@@ -221,18 +253,17 @@ void main()
         if ((n_dot_l <= 0.0) || (attenuation <= 0.0)) {
             continue;
         }
-        vec3 origin = p + n * ray_bias;
+        // Backface culling restored (article defenses): the virtual offset
+        // above guarantees the origin is OUTSIDE nearby geometry, and the
+        // adaptive bias is far too small to jump a contact gap - the two
+        // conditions the old no-cull hack existed to survive. Culling makes
+        // coplanar self-hits impossible by construction.
+        vec3 origin = adaptive_offset(p, n);
         rayQueryEXT ray_query;
-        // No backface culling: a receiver whose biased origin lands inside
-        // a nearby occluder (floor texel under a resting object - the bias
-        // exceeds the contact gap) must still see that occluder's interior,
-        // or the contact ring bakes fully lit (observed light leak under
-        // the torus). Self-hit defense comes from the normal-offset bias,
-        // not from culling.
         rayQueryInitializeEXT(
             ray_query,
             s_tlas,
-            gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT,
+            gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsCullBackFacingTrianglesEXT,
             0xFFu,
             origin,
             1.0e-4,
@@ -259,7 +290,7 @@ void main()
             ndotl_max = max(ndotl_max, dot(n, to_light));
             rays += 1.0;
             rayQueryEXT rq2;
-            rayQueryInitializeEXT(rq2, s_tlas, gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT, 0xFFu, p + n * lightmap_gather.ray_bias, 1.0e-4, to_light, 1.0e30);
+            rayQueryInitializeEXT(rq2, s_tlas, gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsCullBackFacingTrianglesEXT, 0xFFu, adaptive_offset(p, n), 1.0e-4, to_light, 1.0e30);
             rayQueryProceedEXT(rq2);
             if (rayQueryGetIntersectionTypeEXT(rq2, true) == gl_RayQueryCommittedIntersectionNoneEXT) {
                 misses += 1.0;
@@ -292,22 +323,27 @@ void main()
         vec3  bounce_dir = normalize(t0 * (r * cos(phi)) + t1 * (r * sin(phi)) + n * sqrt(max(0.0, 1.0 - u1)));
 
         rayQueryEXT bounce_query;
-        rayQueryInitializeEXT(bounce_query, s_tlas, gl_RayFlagsOpaqueEXT, 0xFFu, p + n * ray_bias, 1.0e-4, bounce_dir, 1.0e30);
+        rayQueryInitializeEXT(bounce_query, s_tlas, gl_RayFlagsOpaqueEXT, 0xFFu, adaptive_offset(p, n), 1.0e-4, bounce_dir, 1.0e30);
         while (rayQueryProceedEXT(bounce_query)) {
         }
         if (rayQueryGetIntersectionTypeEXT(bounce_query, true) == gl_RayQueryCommittedIntersectionTriangleEXT) {
-            uint instance_index = uint(rayQueryGetIntersectionInstanceCustomIndexEXT(bounce_query, true));
-            Lm_instance_record record = lm_instance.instances[instance_index];
-            if (record.uv_scale_offset.x > 0.0) {
-                // Reject interior hits: a bounce ray landing on a backface
-                // is inside geometry and must contribute nothing.
-                vec3 positions[3];
-                rayQueryGetIntersectionTriangleVertexPositionsEXT(bounce_query, true, positions);
-                mat4x3 world_from_object = rayQueryGetIntersectionObjectToWorldEXT(bounce_query, true);
-                vec3 p0 = world_from_object * vec4(positions[0], 1.0);
-                vec3 p1 = world_from_object * vec4(positions[1], 1.0);
-                vec3 p2 = world_from_object * vec4(positions[2], 1.0);
-                if (dot(cross(p1 - p0, p2 - p0), bounce_dir) <= 0.0) {
+            vec3  face_normal = committed_face_normal(bounce_query);
+            float hit_t       = rayQueryGetIntersectionTEXT(bounce_query, true);
+            if (dot(face_normal, bounce_dir) > 0.0) {
+                // Backface hit: the ray is looking at geometry interior. A
+                // hit within a texel means the sample itself straddles
+                // geometry the push-off could not fix - invalidate the
+                // texel (article backface invalidation); dilation fills it
+                // from valid neighbors. Farther backface hits (open meshes
+                // seen from behind) just contribute nothing.
+                if (hit_t < texel_size) {
+                    imageStore(i_accum, texel, vec4(0.0));
+                    return;
+                }
+            } else {
+                uint instance_index = uint(rayQueryGetIntersectionInstanceCustomIndexEXT(bounce_query, true));
+                Lm_instance_record record = lm_instance.instances[instance_index];
+                if (record.uv_scale_offset.x > 0.0) {
                     uint primitive    = uint(rayQueryGetIntersectionPrimitiveIndexEXT(bounce_query, true));
                     vec2 barycentrics = rayQueryGetIntersectionBarycentricsEXT(bounce_query, true);
                     Uint_data indices  = Uint_data(record.index_address);
@@ -375,6 +411,86 @@ void main()
         }
     }
     imageStore(i_dst, texel, (count > 0.0) ? vec4(sum / count, 1.0) : vec4(0.0));
+}
+)GLSL";
+
+// Sample-position adjustment (article "virtual offset"), run ONCE per
+// G-buffer bake, before any gathering: a texel center that sits inside
+// nearby geometry (conservative raster + bilinear footprints straddle
+// contacts) leaks. Probe 4 tangential rays half a texel long; the CLOSEST
+// backface hit means the sample is interior - move it just past that
+// surface, writing the position G-buffer in place.
+constexpr const char* c_adjust_source = R"GLSL(
+layout(binding = 0) uniform accelerationStructureEXT s_tlas;
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+vec3 adaptive_offset(vec3 position, vec3 direction)
+{
+    vec3 magnitude = max(abs(position) * 2.0e-7, vec3(1.0e-6));
+    return position + sign(direction) * magnitude;
+}
+
+vec3 committed_face_normal(rayQueryEXT ray_query)
+{
+    vec3 positions[3];
+    rayQueryGetIntersectionTriangleVertexPositionsEXT(ray_query, true, positions);
+    mat4x3 world_from_object = rayQueryGetIntersectionObjectToWorldEXT(ray_query, true);
+    vec3 p0 = world_from_object * vec4(positions[0], 1.0);
+    vec3 p1 = world_from_object * vec4(positions[1], 1.0);
+    vec3 p2 = world_from_object * vec4(positions[2], 1.0);
+    return normalize(cross(p1 - p0, p2 - p0));
+}
+
+void main()
+{
+    ivec2 texel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size  = imageSize(i_position);
+    if ((texel.x >= size.x) || (texel.y >= size.y)) {
+        return;
+    }
+    vec4 position_coverage = imageLoad(i_position, texel);
+    if (position_coverage.w <= 0.0) {
+        return;
+    }
+    vec4  normal_and_size = imageLoad(i_normal, texel);
+    vec3  n               = normalize(normal_and_size.xyz);
+    float texel_size      = normal_and_size.w;
+    vec3  p               = position_coverage.xyz;
+
+    vec3  probe_t0     = normalize((abs(n.x) > 0.7) ? cross(n, vec3(0.0, 1.0, 0.0)) : cross(n, vec3(1.0, 0.0, 0.0)));
+    vec3  probe_t1     = cross(n, probe_t0);
+    float probe_length = 0.5 * texel_size;
+    vec3  push_dir     = vec3(0.0);
+    vec3  push_normal  = vec3(0.0);
+    float push_t       = 1.0e30;
+    bool  push_found   = false;
+    for (int probe = 0; probe < 4; ++probe) {
+        vec3 dir =
+            (probe == 0) ?  probe_t0 :
+            (probe == 1) ? -probe_t0 :
+            (probe == 2) ?  probe_t1 : -probe_t1;
+        rayQueryEXT probe_query;
+        rayQueryInitializeEXT(probe_query, s_tlas, gl_RayFlagsOpaqueEXT, 0xFFu, adaptive_offset(p, n), 0.0, dir, probe_length);
+        while (rayQueryProceedEXT(probe_query)) {
+        }
+        if (rayQueryGetIntersectionTypeEXT(probe_query, true) == gl_RayQueryCommittedIntersectionTriangleEXT) {
+            vec3  face_normal = committed_face_normal(probe_query);
+            float t           = rayQueryGetIntersectionTEXT(probe_query, true);
+            if ((dot(face_normal, dir) > 0.0) && (t < push_t)) {
+                push_t      = t;
+                push_dir    = dir;
+                push_normal = face_normal;
+                push_found  = true;
+            }
+        }
+    }
+    if (push_found) {
+        // Past the backface, then a hair to its front side (the face
+        // normal points along the ray for a backface hit).
+        p += push_dir * push_t + push_normal * 1.0e-4;
+        imageStore(i_position, texel, vec4(p, position_coverage.w));
+    }
 }
 )GLSL";
 
@@ -723,6 +839,65 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
     m_tick_gather_ubo    = std::make_unique<Ring_buffer_client>(graphics_device, Buffer_target::uniform, "Lightmap_baker::gather_ubo",       0u);
     m_tick_instance_ssbo = std::make_unique<Ring_buffer_client>(graphics_device, Buffer_target::storage, "Lightmap_baker::instance_records", 1u);
 
+    // Virtual-offset adjust pass (one dispatch per G-buffer bake): TLAS +
+    // read-write position + read-only normal, all raw bindings.
+    m_adjust_layout = std::make_unique<Bind_group_layout>(
+        graphics_device,
+        Bind_group_layout_create_info{
+            .bindings = {
+                Bind_group_layout_binding{
+                    .binding_point = 0u,
+                    .type          = Binding_type::acceleration_structure,
+                    .name          = "s_tlas",
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                Bind_group_layout_binding{
+                    .binding_point = 1u,
+                    .type          = Binding_type::storage_image,
+                    .name          = "i_position",
+                    .glsl_type     = Glsl_type::image_2d,
+                    .image_format  = "rgba32f",
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                Bind_group_layout_binding{
+                    .binding_point = 2u,
+                    .type          = Binding_type::storage_image,
+                    .name          = "i_normal",
+                    .glsl_type     = Glsl_type::image_2d,
+                    .image_format  = "rgba32f",
+                    .stage_flags   = Shader_stage_flags::compute
+                }
+            },
+            .debug_label       = erhe::utility::Debug_label{"lightmap adjust layout"},
+            .uses_texture_heap = false
+        }
+    );
+    Shader_stages_create_info adjust_create_info{
+        .name       = "lightmap_adjust",
+        .extensions = {
+            { Shader_type::compute_shader, "GL_EXT_ray_query" },
+            { Shader_type::compute_shader, "GL_EXT_ray_tracing_position_fetch" }
+        },
+        .shaders = {
+            { Shader_type::compute_shader, std::string_view{c_adjust_source} }
+        },
+        .bind_group_layout = m_adjust_layout.get()
+    };
+    Shader_stages_prototype adjust_prototype = build_shader_stages(graphics_device, adjust_create_info);
+    if (!adjust_prototype.is_valid()) {
+        log_render->warn("Lightmap_baker: adjust shader failed to compile/link");
+        return;
+    }
+    m_adjust_shader_stages = std::make_unique<Shader_stages>(graphics_device, std::move(adjust_prototype));
+    m_adjust_pipeline = std::make_unique<Compute_pipeline>(
+        graphics_device,
+        Compute_pipeline_data{
+            .name              = "lightmap_adjust",
+            .shader_stages     = m_adjust_shader_stages.get(),
+            .bind_group_layout = m_adjust_layout.get()
+        }
+    );
+
     // Dilation pipeline. Both bindings are raw storage images, so the
     // combined-image-sampler binding offset (see the gather layout note)
     // does not apply.
@@ -921,9 +1096,12 @@ void Lightmap_baker::ensure_gbuffer_targets()
             m_graphics_device,
             Texture_create_info{
                 .device      = m_graphics_device,
+                // storage: the virtual-offset adjust pass rewrites the
+                // position G-buffer in place (reads normal the same way).
                 .usage_mask  =
                     Image_usage_flag_bit_mask::color_attachment |
                     Image_usage_flag_bit_mask::sampled          |
+                    Image_usage_flag_bit_mask::storage          |
                     Image_usage_flag_bit_mask::transfer_src,
                 .type        = Texture_type::texture_2d,
                 .pixelformat = format,
@@ -1112,7 +1290,8 @@ auto Lightmap_baker::bake_gbuffer() -> bool
     m_graphics_device.submit_command_buffers(std::span<Command_buffer* const>{command_buffers});
     m_graphics_device.wait_idle();
 
-    m_gbuffer_valid = drawn > 0;
+    m_gbuffer_valid    = drawn > 0;
+    m_gbuffer_adjusted = false; // fresh positions need the virtual-offset pass
     log_render->info(
         "Lightmap_baker: G-buffer baked, {} of {} regions drawn, {}x{}, {}",
         drawn, m_layout.regions.size(), m_layout.width, m_layout.height,
@@ -1461,7 +1640,9 @@ void Lightmap_baker::write_gather_ubo(
 {
     std::memset(data, 0, m_gather_block_size);
     const uint32_t light_count = static_cast<uint32_t>(lights.size());
-    const float    ray_bias    = 0.01f;
+    // Unused since the article leak defenses (adaptive bias + virtual
+    // offset in the shader); kept as block padding.
+    const float    ray_bias    = 0.0f;
     std::memcpy(data + m_gather_light_count_offset, &light_count,  sizeof(uint32_t));
     std::memcpy(data + m_gather_ray_bias_offset,    &ray_bias,     sizeof(float));
     std::memcpy(data + m_gather_frame_index_offset, &frame_index,  sizeof(uint32_t));
@@ -1543,10 +1724,9 @@ void Lightmap_baker::collect_instances(
                     .instance_custom_index = static_cast<uint32_t>(out_instances.size()),
                     .mask                  = 0xFFu,
                     .bottom_level          = blas,
-                    // Gather rays trace without cull flags (shadow rays must
-                    // see occluder interiors - the contact-leak fix; bounce
-                    // rays reject backfaces manually), so instance-level
-                    // facing-cull state is irrelevant; keep the default.
+                    // Shadow rays cull backfaces via ray flags (article
+                    // leak defenses); disabling facing cull per instance
+                    // would defeat that, so keep the default.
                     .disable_facing_cull   = false
                 }
             );
@@ -1640,6 +1820,9 @@ auto Lightmap_baker::bake_direct(Scene_root& scene_root) -> bool
     }
     m_tlas->build(command_buffer, m_tick_instances);
 
+    // Virtual offset (one-shot per G-buffer): needs the TLAS just built.
+    record_adjust(command_buffer, *m_tlas);
+
     // Gather one full-atlas sample: published atlas is sampled by bounce
     // rays (shader_read_only), accumulation image is written (general).
     command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::shader_read_only_optimal);
@@ -1677,6 +1860,33 @@ auto Lightmap_baker::bake_direct(Scene_root& scene_root) -> bool
         lights.size(), m_tick_instances.size(), m_layout.width, m_layout.height
     );
     return true;
+}
+
+void Lightmap_baker::record_adjust(erhe::graphics::Command_buffer& command_buffer, erhe::graphics::Acceleration_structure& tlas)
+{
+    using namespace erhe::graphics;
+    if (m_gbuffer_adjusted || !m_adjust_pipeline || !m_position_texture) {
+        return;
+    }
+    command_buffer.transition_texture_layout(*m_position_texture, Image_layout::general);
+    command_buffer.transition_texture_layout(*m_normal_texture,   Image_layout::general);
+    {
+        Compute_command_encoder encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
+        encoder.set_bind_group_layout(m_adjust_layout.get());
+        encoder.set_compute_pipeline(*m_adjust_pipeline);
+        encoder.set_acceleration_structure(0u, tlas);
+        encoder.set_storage_image(1u, *m_position_texture);
+        encoder.set_storage_image(2u, *m_normal_texture);
+        encoder.dispatch_compute(
+            (static_cast<std::uintptr_t>(m_layout.width)  + 7) / 8,
+            (static_cast<std::uintptr_t>(m_layout.height) + 7) / 8,
+            1
+        );
+    }
+    command_buffer.memory_barrier(Memory_barrier_mask::shader_image_access_barrier_bit);
+    command_buffer.transition_texture_layout(*m_position_texture, Image_layout::shader_read_only_optimal);
+    command_buffer.transition_texture_layout(*m_normal_texture,   Image_layout::shader_read_only_optimal);
+    m_gbuffer_adjusted = true;
 }
 
 void Lightmap_baker::record_resolve_and_dilate(erhe::graphics::Command_buffer& command_buffer)
@@ -1880,6 +2090,9 @@ void Lightmap_baker::tick(erhe::graphics::Command_buffer& command_buffer, Scene_
         slot.capacity = new_capacity;
     }
     slot.acceleration_structure->build(command_buffer, m_tick_instances);
+
+    // Virtual offset (one-shot per G-buffer): needs a built TLAS.
+    record_adjust(command_buffer, *slot.acceleration_structure);
 
     // Budgeted band (plan section 3a step 2): the tile cursor walks the
     // atlas top to bottom; small pages sweep whole-atlas every frame.
