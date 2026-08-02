@@ -95,6 +95,8 @@ class Post_processing;
 class Prefab_library;
 class Programs;
 class Lightmap_baker;
+class Lightmap_texture_window;
+class Lightmap_window;
 class Ray_trace_renderer;
 class Rendergraph_window;
 class Rotate_tool;
@@ -224,6 +226,8 @@ public:
     Programs*                          programs             {nullptr};
     Ray_trace_renderer*                ray_trace_renderer   {nullptr};
     Lightmap_baker*                    lightmap_baker       {nullptr};
+    Lightmap_texture_window*           lightmap_texture_window{nullptr};
+    Lightmap_window*                   lightmap_window      {nullptr};
     Rendergraph_window*                rendergraph_window   {nullptr};
     Rotate_tool*                       rotate_tool          {nullptr};
     Bone_visualization*                bone_visualization   {nullptr};

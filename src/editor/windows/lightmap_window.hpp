@@ -2,6 +2,10 @@
 
 #include "erhe_imgui/imgui_window.hpp"
 
+#include <unordered_map>
+#include <vector>
+
+namespace erhe::geometry { class Geometry; }
 namespace erhe::imgui {
     class Imgui_renderer;
     class Imgui_windows;
@@ -30,13 +34,32 @@ public:
     // Implements Imgui_window
     void imgui() override;
 
+    // Leak camouflage (per_facet mode): re-unwrap with charts packed in
+    // baked-luminance order so similarly lit facets are atlas neighbors and
+    // cross-chart filter-tap / dilation pollution picks up similar values.
+    // Needs a bake; the interactive baker restarts automatically after.
+    // False when there is no bake or no lightmapped meshes. Also reachable
+    // over MCP (lightmap_reorder_charts).
+    auto reorder_charts_by_bake() -> bool;
+
+    // Executes a reorder the window button requested. Called from the
+    // editor tick BEFORE any lightmap commands are recorded: the reorder
+    // reads the atlas back (standalone submit + wait idle + texture layout
+    // transitions), which must not run in the middle of ImGui frame
+    // construction while the open frame command buffer is using the same
+    // texture - the button only sets a flag.
+    void update();
+
 private:
-    // Queues an undoable Make_atlas_operation (usage_index 2, ABF + xatlas,
-    // hard angle from Lightmap_config) for every lightmapped, non-skinned
-    // mesh node in the active scene.
+    // Queues an undoable Make_atlas_operation (usage_index 2, method knobs
+    // from Lightmap_config) for every lightmapped, non-skinned mesh node in
+    // the active scene. The optional per-facet chart order keys re-pack
+    // similarly keyed facets next to each other (per_facet mode only).
+    auto queue_generate_lightmap_uvs(std::unordered_map<const erhe::geometry::Geometry*, std::vector<float>>&& per_facet_chart_order) -> bool;
     void generate_lightmap_uvs();
 
     App_context& m_context;
+    bool         m_reorder_requested{false};
 };
 
 } // namespace editor

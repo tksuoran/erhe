@@ -188,7 +188,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
 
     // This must be done even if lights is empty.
     // For example, the number of lights is read from the light buffer.
-    Ring_buffer_range light_range = m_light_buffer.update(base.lights, base.light_projections, base.ambient_light);
+    Ring_buffer_range light_range = m_light_buffer.update(base.lights, base.light_projections, base.ambient_light, m_lightmap_bicubic ? 1u : 0u);
     m_light_buffer.bind_light_buffer(render_encoder, light_range);
     m_light_buffer.bind_shadow_samplers(render_encoder, base.light_projections);
     m_light_buffer.bind_lightmap(render_encoder, m_lightmap_texture.get());
@@ -427,7 +427,7 @@ void Forward_renderer::draw_primitives(
         }
     }
 
-    Ring_buffer_range light_range = m_light_buffer.update(base.lights, base.light_projections, base.ambient_light);
+    Ring_buffer_range light_range = m_light_buffer.update(base.lights, base.light_projections, base.ambient_light, m_lightmap_bicubic ? 1u : 0u);
     m_light_buffer.bind_light_buffer(render_encoder, light_range);
     m_light_buffer.bind_shadow_samplers(render_encoder, base.light_projections);
     m_light_buffer.bind_lightmap(render_encoder, m_lightmap_texture.get());

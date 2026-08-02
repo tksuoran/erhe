@@ -7,6 +7,8 @@
 #include "items.hpp"
 #include "operations/geometry_operations.hpp"
 #include "renderers/lightmap_baker.hpp"
+#include "windows/lightmap_texture_window.hpp"
+#include "windows/lightmap_window.hpp"
 #include "scene/generated/scene_settings_serialization.hpp"
 #include "tools/clipboard.hpp"
 
@@ -14,6 +16,9 @@
 #include "erhe_scene_renderer/forward_renderer.hpp"
 
 #include <simdjson.h>
+
+#include <algorithm>
+#include <iterator>
 
 namespace editor {
 
@@ -237,8 +242,37 @@ auto Mcp_server::action_lightmap_generate_uvs(const json& args) -> std::string
         return make_error_content("No lightmapped meshes in scene: " + sr->get_name());
     }
 
-    const float hard_angles_deg  = args.value("hard_angles_deg", m_context.editor_settings->lightmap.hard_angles_deg);
-    const float texels_per_meter = args.value("texels_per_meter", m_context.editor_settings->lightmap.texels_per_meter);
+    const Lightmap_config& lightmap_config = m_context.editor_settings->lightmap;
+    const float hard_angles_deg  = args.value("hard_angles_deg", lightmap_config.hard_angles_deg);
+    const float texels_per_meter = args.value("texels_per_meter", lightmap_config.texels_per_meter);
+    const float gutter_texels    = args.value("gutter_texels",    lightmap_config.uv_gutter_texels);
+    const float min_chart_texels = args.value("min_chart_texels", lightmap_config.uv_min_chart_texels);
+
+    // Unwrap method (doc/geogram_atlas_packing_feature_request.md): by name,
+    // default = the Lightmap settings values (also settable in the window).
+    const std::string parameterizer_names[] = { "projection", "lscm", "spectral_lscm", "abf", "per_facet" };
+    const std::string packer_names[]        = { "none", "tetris", "xatlas" };
+    int parameterizer_index = std::clamp(lightmap_config.uv_parameterizer, 0, 4);
+    int packer_index        = std::clamp(lightmap_config.uv_packer,        0, 2);
+    if (args.contains("parameterizer")) {
+        const std::string name = args.value("parameterizer", "");
+        const auto it = std::find(std::begin(parameterizer_names), std::end(parameterizer_names), name);
+        if (it == std::end(parameterizer_names)) {
+            return make_error_content("Unknown parameterizer: " + name + " (use projection / lscm / spectral_lscm / abf / per_facet)");
+        }
+        parameterizer_index = static_cast<int>(std::distance(std::begin(parameterizer_names), it));
+    }
+    if (args.contains("packer")) {
+        const std::string name = args.value("packer", "");
+        const auto it = std::find(std::begin(packer_names), std::end(packer_names), name);
+        if (it == std::end(packer_names)) {
+            return make_error_content("Unknown packer: " + name + " (use none / tetris / xatlas)");
+        }
+        packer_index = static_cast<int>(std::distance(std::begin(packer_names), it));
+    }
+    const auto parameterizer = static_cast<erhe::geometry::operation::Atlas_parameterizer>(parameterizer_index);
+    const auto packer        = static_cast<erhe::geometry::operation::Atlas_packer>(packer_index);
+
     json names = json::array();
     for (const std::shared_ptr<erhe::Item_base>& item : items) {
         names.push_back(item->get_name());
@@ -248,16 +282,18 @@ auto Mcp_server::action_lightmap_generate_uvs(const json& args) -> std::string
     async_for_nodes_with_mesh(
         m_context,
         items,
-        [operation_stack, hard_angles_deg, texels_per_meter](Mesh_operation_parameters&& params) {
+        [operation_stack, hard_angles_deg, texels_per_meter, gutter_texels, min_chart_texels, parameterizer, packer](Mesh_operation_parameters&& params) {
             // Runs on a tf::Executor worker: queue() is main-thread-only.
             operation_stack->queue_from_thread(
                 std::make_shared<Make_atlas_operation>(
                     std::move(params),
                     2, // lightmap UV channel (texcoord usage_index 2)
                     hard_angles_deg,
-                    erhe::geometry::operation::Atlas_parameterizer::abf,
-                    erhe::geometry::operation::Atlas_packer::xatlas,
-                    texels_per_meter // density-aware chart gutters
+                    parameterizer,
+                    packer,
+                    texels_per_meter, // density-aware chart gutters
+                    gutter_texels,
+                    min_chart_texels
                 )
             );
         }
@@ -266,6 +302,10 @@ auto Mcp_server::action_lightmap_generate_uvs(const json& args) -> std::string
         {"queued",           true},
         {"hard_angles_deg",  hard_angles_deg},
         {"texels_per_meter", texels_per_meter},
+        {"parameterizer",    parameterizer_names[parameterizer_index]},
+        {"packer",           packer_names[packer_index]},
+        {"gutter_texels",    gutter_texels},
+        {"min_chart_texels", min_chart_texels},
         {"mesh_nodes",       names}
     }).dump();
 }
@@ -284,6 +324,20 @@ auto Mcp_server::action_lightmap_update_atlas(const json& args) -> std::string
         r["isError"] = true;
         return r.dump();
     }
+    // Stale-data guard: lightmap_generate_uvs is queued async, and the
+    // resulting operation sits in the operation stack until the main
+    // thread executes it; packing the layout in either window would
+    // consume the OLD channel-2 UVs and leave stale bake data.
+    const std::size_t async_ops =
+        static_cast<std::size_t>(m_context.pending_async_ops.load()) +
+        static_cast<std::size_t>(m_context.running_async_ops.load()) +
+        ((m_context.operation_stack != nullptr) ? m_context.operation_stack->get_queued_count() : 0u);
+    if (async_ops > 0) {
+        return make_error_content(
+            "Operations still in flight (" + std::to_string(async_ops) +
+            ") - poll get_async_status until pending + running + queued_operations == 0, then retry"
+        );
+    }
     const float texels_per_meter = args.value("texels_per_meter", m_context.editor_settings->lightmap.texels_per_meter);
     const bool  packed           = m_context.lightmap_baker->update_layout(*sr, texels_per_meter);
 
@@ -298,6 +352,7 @@ auto Mcp_server::action_lightmap_update_atlas(const json& args) -> std::string
             {"width",           region.width},
             {"height",          region.height},
             {"world_area",      region.world_area},
+            {"uv_coverage",     region.uv_coverage},
             {"uv_scale_offset", {region.uv_scale_offset.x, region.uv_scale_offset.y, region.uv_scale_offset.z, region.uv_scale_offset.w}}
         });
     }
@@ -415,6 +470,40 @@ auto Mcp_server::action_lightmap_set_baking(const json& args) -> std::string
         }
     }
     return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_lightmap_frame_selection(const json& args) -> std::string
+{
+    static_cast<void>(args);
+    if (m_context.lightmap_texture_window == nullptr) {
+        return make_error_content("Lightmap Texture window not available");
+    }
+    m_context.lightmap_texture_window->show_window();
+    m_context.lightmap_texture_window->request_frame_selection();
+    return make_json_content({{"requested", true}}).dump();
+}
+
+auto Mcp_server::action_lightmap_reorder_charts(const json& args) -> std::string
+{
+    static_cast<void>(args);
+    if ((m_context.lightmap_window == nullptr) || (m_context.editor_settings == nullptr)) {
+        return make_error_content("Lightmap window not available");
+    }
+    // Order keys are indexed by facet id == chart id (per_facet mode only).
+    if (m_context.editor_settings->lightmap.uv_parameterizer != 4) {
+        return make_error_content("Requires uv_parameterizer = per_facet (4); set it in Lightmap settings or pass parameterizer to lightmap_generate_uvs");
+    }
+    const std::size_t reorder_async_ops =
+        static_cast<std::size_t>(m_context.pending_async_ops.load()) +
+        static_cast<std::size_t>(m_context.running_async_ops.load()) +
+        ((m_context.operation_stack != nullptr) ? m_context.operation_stack->get_queued_count() : 0u);
+    if (reorder_async_ops > 0) {
+        return make_error_content("Operations still in flight - poll get_async_status until idle, then retry");
+    }
+    if (!m_context.lightmap_window->reorder_charts_by_bake()) {
+        return make_error_content("No bake to order by (bake first) or no lightmapped meshes");
+    }
+    return make_json_content({{"queued", true}}).dump();
 }
 
 auto Mcp_server::query_active_scene(const json& args) -> std::string

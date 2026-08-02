@@ -5,6 +5,11 @@
 
 #include "erhe_geometry/operation/make_atlas.hpp"
 
+#include <unordered_map>
+#include <vector>
+
+namespace erhe::geometry { class Geometry; }
+
 namespace editor {
 
 class Catmull_clark_subdivision_operation : public Mesh_operation
@@ -171,7 +176,14 @@ public:
         float                                          hard_angles_threshold,
         erhe::geometry::operation::Atlas_parameterizer parameterizer,
         erhe::geometry::operation::Atlas_packer        packer,
-        float                                          lightmap_texels_per_meter = 0.0f);
+        float                                          lightmap_texels_per_meter = 0.0f,
+        float                                          chart_gutter_texels       = 3.0f,
+        float                                          chart_min_side_texels     = 2.0f,
+        // Per-source-geometry per-facet chart order keys (per_facet
+        // parameterizer only): pack similarly keyed facets next to each
+        // other (Lightmap_baker::build_chart_order_keys provides baked
+        // luminance for leak camouflage).
+        std::unordered_map<const erhe::geometry::Geometry*, std::vector<float>> per_facet_chart_order = {});
 };
 
 class Binary_mesh_operation : public Compound_operation

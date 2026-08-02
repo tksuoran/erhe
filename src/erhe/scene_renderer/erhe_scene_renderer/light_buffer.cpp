@@ -38,7 +38,7 @@ Light_interface::Light_interface(erhe::graphics::Device& graphics_device, const 
         .spot_shadow_count         = light_block.add_uint ("spot_shadow_count"        )->get_offset_in_parent(),
         .point_shadow_count        = light_block.add_uint ("point_shadow_count"       )->get_offset_in_parent(),
         .brdf_material             = light_block.add_uint ("brdf_material"            )->get_offset_in_parent(),
-        .reserved_1                = light_block.add_uint ("reserved_1"               )->get_offset_in_parent(),
+        .lightmap_flags            = light_block.add_uint ("lightmap_flags"           )->get_offset_in_parent(),
         .brdf_phi_incident_phi     = light_block.add_vec2 ("brdf_phi_incident_phi"    )->get_offset_in_parent(),
         .ambient_light             = light_block.add_vec4 ("ambient_light"            )->get_offset_in_parent(),
 
@@ -412,7 +412,8 @@ auto Light_projections::get_light_projection_transforms_for_light(const erhe::sc
 auto Light_buffer::update(
     const std::span<const std::shared_ptr<erhe::scene::Light>>& lights,
     const Light_projections*                                    light_projections,
-    const glm::vec3&                                            ambient_light
+    const glm::vec3&                                            ambient_light,
+    const uint32_t                                              lightmap_flags
 ) -> erhe::graphics::Ring_buffer_range
 {
     ERHE_PROFILE_FUNCTION();
@@ -435,7 +436,6 @@ auto Light_buffer::update(
     uint32_t       directional_shadow_count{0u};
     uint32_t       spot_shadow_count       {0u};
     uint32_t       point_shadow_count      {0u};
-    const uint32_t uint_zero               {0u};
     const uint32_t uvec4_zero[4]           {0u, 0u, 0u, 0u};
 
     const erhe::graphics::Sampler* compare_sampler    = m_light_interface.get_sampler(true);
@@ -590,7 +590,7 @@ auto Light_buffer::update(
     write(light_gpu_data, common_offset + offsets.spot_shadow_count,         as_span(spot_shadow_count)       );
     write(light_gpu_data, common_offset + offsets.point_shadow_count,        as_span(point_shadow_count)      );
     write(light_gpu_data, common_offset + offsets.brdf_material,             as_span(brdf_material)           );
-    write(light_gpu_data, common_offset + offsets.reserved_1,                as_span(uint_zero)               );
+    write(light_gpu_data, common_offset + offsets.lightmap_flags,            as_span(lightmap_flags)          );
 
     write(light_gpu_data, common_offset + offsets.brdf_phi_incident_phi,     as_span(brdf_phi_incident_phi)   );
 

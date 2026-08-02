@@ -96,6 +96,13 @@ void Operation_stack::queue_from_thread(const std::shared_ptr<Operation>& operat
     m_queued_from_threads.push_back(operation);
 }
 
+auto Operation_stack::get_queued_count() -> std::size_t
+{
+    verify_main_thread();
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_thread_queue_mutex};
+    return m_queued.size() + m_queued_from_threads.size();
+}
+
 void Operation_stack::execute_now(const std::shared_ptr<Operation>& operation)
 {
     verify_main_thread();

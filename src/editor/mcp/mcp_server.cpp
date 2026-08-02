@@ -424,6 +424,8 @@ auto Mcp_server::process_queued_requests() -> int
             { "lightmap_bake_gbuffer",          &Mcp_server::action_lightmap_bake_gbuffer         },
             { "lightmap_bake_direct",           &Mcp_server::action_lightmap_bake_direct          },
             { "lightmap_set_baking",            &Mcp_server::action_lightmap_set_baking           },
+            { "lightmap_frame_selection",       &Mcp_server::action_lightmap_frame_selection      },
+            { "lightmap_reorder_charts",        &Mcp_server::action_lightmap_reorder_charts       },
             { "get_active_scene",               &Mcp_server::query_active_scene                   },
             { "set_active_scene",               &Mcp_server::action_set_active_scene              },
             { "transform_selection",            &Mcp_server::action_transform_selection           },

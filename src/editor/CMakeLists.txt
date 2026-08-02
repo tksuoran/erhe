@@ -574,6 +574,8 @@ erhe_target_sources_grouped(
     windows/editor_windows.hpp
     windows/frame_pacing_window.cpp
     windows/frame_pacing_window.hpp
+    windows/lightmap_texture_window.cpp
+    windows/lightmap_texture_window.hpp
     windows/lightmap_window.cpp
     windows/lightmap_window.hpp
     windows/window_placement.cpp

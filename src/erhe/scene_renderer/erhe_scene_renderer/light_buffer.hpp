@@ -58,7 +58,7 @@ public:
     std::size_t  spot_shadow_count;            // uint - shadow-mapped prefix size for spot lights
     std::size_t  point_shadow_count;           // uint - shadow-mapped prefix size for point lights
     std::size_t  brdf_material;                // uint
-    std::size_t  reserved_1;                   // uint - pad to vec2 alignment
+    std::size_t  lightmap_flags;               // uint - bit 0: bicubic lightmap sampling
 
     std::size_t  brdf_phi_incident_phi;        // vec2
 
@@ -195,7 +195,8 @@ public:
     auto update(
         const std::span<const std::shared_ptr<erhe::scene::Light>>& lights,
         const Light_projections*                                    light_projections,
-        const glm::vec3&                                            ambient_light
+        const glm::vec3&                                            ambient_light,
+        uint32_t                                                    lightmap_flags = 0u // bit 0: bicubic lightmap sampling
     ) -> erhe::graphics::Ring_buffer_range;
 
     // Bind the shadow map textures to the s_shadow_compare and

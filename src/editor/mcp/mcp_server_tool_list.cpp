@@ -82,7 +82,7 @@ void Mcp_server::refresh_tool_list()
     m_tool_infos.push_back({"get_selection",        "Get currently selected items",                          schema_no_args()});
     m_tool_infos.push_back({"get_undo_redo_stack", "Get undo/redo operation stacks",                       schema_no_args()});
     m_tool_infos.push_back({"clear_undo_history",  "Drop the undo and redo histories (queued operations are kept). Recorded operations are declared users / indirect pins of the assets they retain, so container unload can refuse until the history is cleared (R5.4).", schema_no_args()});
-    m_tool_infos.push_back({"get_async_status",   "Get pending/running async operation counts",          schema_no_args()});
+    m_tool_infos.push_back({"get_async_status",   "Get in-flight operation counts: pending/running async workers plus queued_operations (queued on the operation stack, not yet executed on the main thread). The scene is settled only when all three are 0.", schema_no_args()});
     m_tool_infos.push_back({"get_shadow_fit_debug","Dump directional shadow frustum fit debug geometry per shadow node: F_shadow planes, their bounded face quads (the truncated view-frustum faces caster AABBs are tested against), and receiver frustum corners. Needs the Shadow Fit 'Collect Debug' setting enabled.", schema_no_args()});
     m_tool_infos.push_back({"raycast",             "Shoot a ray through a scene's raytrace world and report the closest hit (mesh, node, primitive index, distance, position, normal). Uses the same mask defaults as the interactive viewport hover ray, so it verifies hover / ray picking behavior headlessly.", {
         {"type", "object"},
@@ -893,14 +893,26 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"scene_name", "ids", "flags"})}
     }});
-    m_tool_infos.push_back({"lightmap_generate_uvs", "Generate lightmap UVs (texcoord channel 2, ABF + xatlas unwrap, queued async and undoable) for every lightmapped, non-skinned content mesh of a scene - the Lightmap window's Generate Lightmap UVs button without touching the selection. Poll get_async_status until idle before lightmap_update_atlas.", {
+    m_tool_infos.push_back({"lightmap_generate_uvs", "Generate lightmap UVs (texcoord channel 2, queued async and undoable) for every lightmapped, non-skinned content mesh of a scene - the Lightmap window's Generate Lightmap UVs button without touching the selection. Unwrap method is selectable (parameterizer / packer / gutter) to iterate on unwrap defects; check results with the Lightmap Texture window's overlap count. Poll get_async_status until idle before lightmap_update_atlas.", {
         {"type", "object"},
         {"properties", {
             {"scene_name",       {{"type", "string"}, {"description", "Name of the scene"}}},
             {"hard_angles_deg",  {{"type", "number"}, {"description", "Hard-angle threshold in degrees for chart seams; default = Lightmap settings value"}}},
-            {"texels_per_meter", {{"type", "number"}, {"description", "Density used to size inter-chart gutters in texels of the expected atlas region; default = Lightmap settings value"}}}
+            {"texels_per_meter", {{"type", "number"}, {"description", "Density used to size inter-chart gutters in texels of the expected atlas region; default = Lightmap settings value"}}},
+            {"parameterizer",    {{"type", "string"}, {"enum", json::array({"projection", "lscm", "spectral_lscm", "abf", "per_facet"})}, {"description", "Chart parameterizer; default = Lightmap settings value (abf). per_facet = every facet its own isometric chart (no Geogram, zero overlaps, no shared texels)"}}},
+            {"packer",           {{"type", "string"}, {"enum", json::array({"none", "tetris", "xatlas"})}, {"description", "Geogram chart packer; default = Lightmap settings value (xatlas). With texels_per_meter > 0 erhe repacks charts itself"}}},
+            {"gutter_texels",    {{"type", "number"}, {"description", "Minimum chart gutter in texels at the expected density (erhe's own packing); default = Lightmap settings value (3)"}}},
+            {"min_chart_texels", {{"type", "number"}, {"description", "Minimum chart side in texels at the expected density: smaller charts are scaled up (capped 16x) so each contains at least one texel center; 0 disables; default = Lightmap settings value (2)"}}}
         }},
         {"required", json::array({"scene_name"})}
+    }});
+    m_tool_infos.push_back({"lightmap_frame_selection", "Frame the selected meshes' lightmap UV charts in the Lightmap Texture window: shows the window and sets its pan/zoom so every selected mesh's atlas region is visible. Useful for diagnosing unwrap defects on a specific mesh (pairs with the window's overlap highlight).", {
+        {"type", "object"},
+        {"properties", json::object()}
+    }});
+    m_tool_infos.push_back({"lightmap_reorder_charts", "Leak camouflage for per-facet unwraps: re-unwrap (queued async, undoable) with charts packed in baked-luminance order so similarly lit facets are atlas neighbors and cross-chart filter-tap / dilation pollution picks up similar values. Requires uv_parameterizer = per_facet and an existing bake; the interactive baker restarts automatically. Poll get_async_status until idle afterwards.", {
+        {"type", "object"},
+        {"properties", json::object()}
     }});
     m_tool_infos.push_back({"lightmap_update_atlas", "Recompute the lightmap atlas layout for a scene: packs every lightmapped, non-skinned mesh primitive that has lightmap UVs (texcoord channel 2; run generate_texture_coordinates texcoord_slot=2 or the Lightmap window's Generate Lightmap UVs first) into the shared atlas page and returns the layout (page size, per-region rect + uv_scale_offset).", {
         {"type", "object"},

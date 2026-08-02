@@ -28,6 +28,7 @@ namespace erhe::graphics {
     class Texture;
     class Vertex_input_state;
 }
+namespace erhe::geometry { class Geometry; }
 namespace erhe::primitive {
     class Buffer_mesh;
     class Primitive;
@@ -68,6 +69,11 @@ public:
         int                                width{0};
         int                                height{0};
         float                              world_area{0.0f}; // m^2
+        // Fraction of [0,1]^2 chart space the primitive's facets actually
+        // cover (gutters / packing waste / min-chart upscales excluded).
+        // Region sizing divides by it so texels-per-meter holds exactly
+        // per facet instead of being diluted by packing efficiency.
+        float                              uv_coverage{1.0f};
     };
 
     class Atlas_layout
@@ -78,8 +84,51 @@ public:
         std::vector<Instance_region> regions;
     };
 
+    // Optional bake features (Lightmap window checkboxes; viewport bicubic
+    // sampling is not here - it lives in the forward renderer). set_options()
+    // reacts to changes: terminator_fix re-rasters the G-buffer, indirect
+    // bounce restarts accumulation, publish-stage toggles (denoise, dilation,
+    // seam blend) force a republish on the next tick.
+    class Bake_options
+    {
+    public:
+        bool  indirect_bounce{true};
+        bool  terminator_fix {true};
+        bool  denoise        {true};
+        bool  dilation       {true};
+        bool  seam_blend     {true};
+        // Chart gutter width (texels at the expected density; the unwrap's
+        // uv_gutter_texels). Dilation is clamped to half of it so a chart
+        // never fills gutter texels the neighboring chart's sampling
+        // footprint owns.
+        float gutter_texels  {3.0f};
+    };
+
+    // Procedural sky lighting for the gather's hemisphere ray (plan: "Next
+    // up - procedural sky lighting"). LUTs belong to Sky_renderer; the
+    // caller refreshes this every frame before tick() (the LUT pointers
+    // must stay valid across the frame). Sky contributes only when enabled
+    // AND both LUTs are set; a change resets accumulation via the lighting
+    // hash.
+    class Sky_lighting
+    {
+    public:
+        erhe::graphics::Texture* transmittance_lut{nullptr};
+        erhe::graphics::Texture* multiscatter_lut {nullptr};
+        // xyz = toward-sun direction (world), w = sun illuminance.
+        glm::vec4                sun_direction_and_intensity{0.0f, 1.0f, 0.0f, 0.0f};
+        // x = atmosphere march steps, y = observer altitude (km).
+        glm::vec4                sky_params{32.0f, 0.5f, 0.0f, 0.0f};
+        bool                     enabled{false};
+    };
+
     Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::scene_renderer::Mesh_memory& mesh_memory);
     ~Lightmap_baker() noexcept;
+
+    void set_options(const Bake_options& options);
+    [[nodiscard]] auto get_options() const -> const Bake_options& { return m_options; }
+
+    void set_sky_lighting(const Sky_lighting& sky) { m_sky = sky; }
 
     [[nodiscard]] auto is_supported() const -> bool;
 
@@ -115,6 +164,20 @@ public:
     // Debug: tone-mapped 8-bit PNG of the baked lightmap atlas.
     auto debug_write_lightmap_png(const std::string& path) -> bool;
 
+    // CPU readback of the published atlas (RGBA32F, layout page size).
+    // Standalone submit + wait idle; false when no bake exists.
+    auto read_lightmap(std::vector<float>& out_rgba) -> bool;
+
+    // Similar-color chart adjacency (leak camouflage): per-facet baked
+    // luminance for every lightmapped geometry with a region, sampled at
+    // each facet's chart UV centroid from the published atlas. Feed the
+    // result to Make_atlas_operation's per-facet chart order so a
+    // re-unwrap packs similarly lit facets next to each other - cross-
+    // chart filter-tap / dilation pollution then picks up similar values.
+    // Empty when no bake exists. Keyed by the CURRENT primitive geometry
+    // (the re-unwrap's operation source).
+    auto build_chart_order_keys() -> std::unordered_map<const erhe::geometry::Geometry*, std::vector<float>>;
+
     // Interactive bake loop (plan section 3a): record one budgeted gather
     // slice plus resolve + dilate publish into the given command buffer
     // (the open frame command buffer; the rendergraph samples the published
@@ -135,6 +198,7 @@ public:
 
     [[nodiscard]] auto get_position_texture() const -> const std::shared_ptr<erhe::graphics::Texture>& { return m_position_texture; }
     [[nodiscard]] auto get_normal_texture  () const -> const std::shared_ptr<erhe::graphics::Texture>& { return m_normal_texture; }
+    [[nodiscard]] auto get_albedo_texture  () const -> const std::shared_ptr<erhe::graphics::Texture>& { return m_albedo_texture; }
 
     static constexpr int s_min_page = 256;
     static constexpr int s_max_page = 4096;
@@ -227,10 +291,14 @@ private:
     // one raster pass; false = 9-tap jitter fallback.
     bool                                               m_conservative_raster{false};
 
-    // Virtual-offset adjust pass (article sample-position adjustment).
+    // Virtual-offset adjust pass (article sample-position adjustment). Two
+    // variants: with and without the terminator smooth-position adoption,
+    // selected per bake by Bake_options::terminator_fix.
     std::unique_ptr<erhe::graphics::Bind_group_layout> m_adjust_layout;
     std::unique_ptr<erhe::graphics::Shader_stages>     m_adjust_shader_stages;
     std::unique_ptr<erhe::graphics::Compute_pipeline>  m_adjust_pipeline;
+    std::unique_ptr<erhe::graphics::Shader_stages>     m_adjust_no_smooth_shader_stages;
+    std::unique_ptr<erhe::graphics::Compute_pipeline>  m_adjust_no_smooth_pipeline;
 
     // Direct-light gather objects.
     std::unique_ptr<erhe::graphics::Shader_resource>   m_gather_block;
@@ -238,6 +306,10 @@ private:
     std::size_t                                        m_gather_ray_bias_offset      {0};
     std::size_t                                        m_gather_frame_index_offset   {0};
     std::size_t                                        m_gather_base_y_offset        {0};
+    std::size_t                                        m_gather_bounce_enabled_offset{0};
+    std::size_t                                        m_gather_sky_enabled_offset   {0};
+    std::size_t                                        m_gather_sun_direction_offset {0};
+    std::size_t                                        m_gather_sky_params_offset    {0};
     std::size_t                                        m_gather_position_type_offset {0};
     std::size_t                                        m_gather_direction_cos_offset {0};
     std::size_t                                        m_gather_radiance_range_offset{0};
@@ -335,14 +407,25 @@ private:
     };
     std::array<Tlas_slot, s_tlas_slot_count>           m_tlas_slots;
 
+    Bake_options m_options{};
+    Sky_lighting m_sky{};
     bool     m_baking_enabled   {false};
     bool     m_reset_requested  {false};
+    bool     m_publish_requested{false}; // publish-stage option changed; republish on next tick
     bool     m_accum_cleared    {false}; // accumulation + published atlas zeroed at least once
     bool     m_regions_published{false}; // per-primitive uv_scale_offset pushed to meshes
     int      m_cursor_y         {0};     // next band start row (tile cursor)
     uint32_t m_sweep_count      {0};     // completed full-atlas sweeps since reset
     uint32_t m_frame_counter    {0};     // RNG decorrelation across ticks
     bool     m_hashes_initialized{false};
+    // Layout invalidations land in the same frame as the primitive swap
+    // that caused them, but the swapped meshes' vertex uploads sit in the
+    // FRAME command buffer (submitted at end of frame) while the G-buffer
+    // bake is a standalone submit that would run first - rastering
+    // not-yet-copied buffers into permanently black regions. Set on layout
+    // change; the tick skips one G-buffer bake so the upload-carrying frame
+    // is submitted ahead of the bake on the same queue.
+    bool     m_gbuffer_upload_defer{false};
     uint64_t m_hash_lighting    {0};     // lights + occluder transforms
     uint64_t m_hash_gbuffer     {0};     // lightmapped region transforms
     uint64_t m_hash_layout      {0};     // lightmapped set + texel density

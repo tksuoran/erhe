@@ -27,6 +27,7 @@ namespace {
         case Atlas_parameterizer::lscm:          return GEO::PARAM_LSCM;
         case Atlas_parameterizer::spectral_lscm: return GEO::PARAM_SPECTRAL_LSCM;
         case Atlas_parameterizer::abf:           return GEO::PARAM_ABF;
+        case Atlas_parameterizer::per_facet:     return GEO::PARAM_ABF; // not reached - per_facet skips Geogram
         default:                                 return GEO::PARAM_ABF;
     }
 }
@@ -146,6 +147,77 @@ void repair_outlier_corner_uvs(GEO::Mesh& mesh)
     log_operation->warn("make_atlas: repaired {} outlier corner UVs", repaired);
 }
 
+// Per-facet unwrap (doc/lightmap_seam_driven_unwrap_plan.md phase 1): every
+// facet becomes its own chart, flattened isometrically in its own plane
+// (local orthonormal facet basis), so parameterization distortion is zero
+// for planar facets, triangles never overlap by construction, and nothing
+// shares texels. UVs are written in mesh units (UV area == 3D area), which
+// is exactly the consistent scale pack_charts_with_texel_gutter() needs, so
+// Geogram's normalize step is not required. Writes the same "tex_coord"
+// facet-corner and "chart" facet attributes mesh_make_atlas() would.
+void build_per_facet_charts(GEO::Mesh& mesh)
+{
+    GEO::Attribute<double> tex_coord;
+    tex_coord.bind_if_is_defined(mesh.facet_corners.attributes(), "tex_coord");
+    if (!tex_coord.is_bound()) {
+        tex_coord.create_vector_attribute(mesh.facet_corners.attributes(), "tex_coord", 2);
+    }
+    GEO::Attribute<GEO::index_t> chart(mesh.facets.attributes(), "chart");
+
+    for (GEO::index_t facet : mesh.facets) {
+        chart[facet] = facet;
+        const GEO::index_t corner_count = mesh.facets.nb_corners(facet);
+        if (corner_count < 3) {
+            for (GEO::index_t corner : mesh.facets.corners(facet)) {
+                tex_coord[2 * corner + 0] = 0.0;
+                tex_coord[2 * corner + 1] = 0.0;
+            }
+            continue;
+        }
+        // Newell normal (robust for slightly non-planar polygons).
+        GEO::vec3 normal{0.0, 0.0, 0.0};
+        const GEO::vec3 p0 = mesh.vertices.point(mesh.facet_corners.vertex(mesh.facets.corner(facet, 0)));
+        for (GEO::index_t k = 0; k < corner_count; ++k) {
+            const GEO::vec3 a = mesh.vertices.point(mesh.facet_corners.vertex(mesh.facets.corner(facet, k)));
+            const GEO::vec3 b = mesh.vertices.point(mesh.facet_corners.vertex(mesh.facets.corner(facet, (k + 1) % corner_count)));
+            normal.x += (a.y - b.y) * (a.z + b.z);
+            normal.y += (a.z - b.z) * (a.x + b.x);
+            normal.z += (a.x - b.x) * (a.y + b.y);
+        }
+        const double normal_length = GEO::length(normal);
+        if (normal_length > 0.0) {
+            normal = normal / normal_length;
+        } else {
+            normal = GEO::vec3{0.0, 0.0, 1.0};
+        }
+        // First basis vector: the first non-degenerate edge, made orthogonal
+        // to the normal.
+        GEO::vec3 tangent{1.0, 0.0, 0.0};
+        for (GEO::index_t k = 1; k < corner_count; ++k) {
+            const GEO::vec3 p = mesh.vertices.point(mesh.facet_corners.vertex(mesh.facets.corner(facet, k)));
+            GEO::vec3 edge = p - p0;
+            edge = edge - GEO::dot(edge, normal) * normal;
+            const double edge_length = GEO::length(edge);
+            if (edge_length > 1.0e-12) {
+                tangent = edge / edge_length;
+                break;
+            }
+        }
+        // cross(tangent, normal), not cross(normal, tangent): the G-buffer
+        // raster's cull convention (lightmap_baker.cpp cull_mode_back_cw +
+        // winding_flip_if(top_left)) is tuned to the chart orientation
+        // Geogram's atlas maker emits, which is MIRRORED relative to the
+        // 3D facet winding; match it or every per-facet triangle is culled
+        // (observed: zero G-buffer coverage with the un-mirrored basis).
+        const GEO::vec3 bitangent = GEO::cross(tangent, normal);
+        for (GEO::index_t corner : mesh.facets.corners(facet)) {
+            const GEO::vec3 p = mesh.vertices.point(mesh.facet_corners.vertex(corner)) - p0;
+            tex_coord[2 * corner + 0] = GEO::dot(p, tangent);
+            tex_coord[2 * corner + 1] = GEO::dot(p, bitangent);
+        }
+    }
+}
+
 // Repack the charts of a parameterized mesh so that no two charts are closer
 // than gutter_texels at a rasterization resolution of target_texels (atlas
 // side). Reads Geogram's "tex_coord" facet-corner attribute and "chart" facet
@@ -156,7 +228,12 @@ void repair_outlier_corner_uvs(GEO::Mesh& mesh)
 // Chart sizes are preserved (area proportionality from the normalize step);
 // the gutter is a fixed fraction of the final span, iterated to convergence
 // since span depends on placement.
-void pack_charts_with_texel_gutter(GEO::Mesh& mesh, const double target_texels, const double gutter_texels)
+void pack_charts_with_texel_gutter(
+    GEO::Mesh&                mesh,
+    const double              target_texels,
+    const double              gutter_texels,
+    const double              min_side_texels,
+    const std::vector<float>* chart_order_keys)
 {
     GEO::Attribute<double> tex_coord;
     tex_coord.bind_if_is_defined(mesh.facet_corners.attributes(), "tex_coord");
@@ -182,9 +259,15 @@ void pack_charts_with_texel_gutter(GEO::Mesh& mesh, const double target_texels, 
         double max_v{-std::numeric_limits<double>::max()};
         double place_u{0.0}; // placement of min corner, pre-normalization
         double place_v{0.0};
+        // Minimum-resolution upscale (charts smaller than min_side_texels
+        // at the target rasterization density contain no texel center and
+        // bake nothing; scaling them up gives every chart at least a few
+        // valid texels at the cost of slightly more atlas area). Applied
+        // to the chart's own UV extent at placement and final rewrite.
+        double scale  {1.0};
         bool   used{false};
-        [[nodiscard]] auto width () const -> double { return max_u - min_u; }
-        [[nodiscard]] auto height() const -> double { return max_v - min_v; }
+        [[nodiscard]] auto width () const -> double { return (max_u - min_u) * scale; }
+        [[nodiscard]] auto height() const -> double { return (max_v - min_v) * scale; }
     };
     std::vector<Chart_rect> rects(chart_count);
     for (GEO::index_t facet : mesh.facets) {
@@ -215,36 +298,129 @@ void pack_charts_with_texel_gutter(GEO::Mesh& mesh, const double target_texels, 
     if (order.empty()) {
         return;
     }
+    // Similar-key adjacency (leak camouflage): when the caller provides
+    // baked-luminance keys, pack so that neighboring charts carry similar
+    // light - consecutive placement on a shelf means atlas adjacency, so
+    // cross-chart filter-tap / dilation pollution picks up similar values.
+    // Shelf packing wraps the 1D placement order into rows, so key
+    // similarity must hold both along a shelf and across shelves: sort
+    // primarily by luminance BAND (quantiles of the key distribution), so
+    // each shelf is a narrow luminance stratum and vertically adjacent
+    // shelves hold adjacent strata; within a band by height (shelf
+    // efficiency), then by key. The placement loop below completes this:
+    // shelves BREAK at band boundaries (a bimodal key jump - e.g. a
+    // capsule's dark bottom fan vs lit top fan - becomes a horizontal seam
+    // between shelves instead of a side-by-side pairing mid-shelf), and
+    // shelves fill BOUSTROPHEDON (alternating direction), so the key
+    // sequence stays spatially continuous where one shelf wraps to the
+    // next.
+    const auto key_of = [chart_order_keys](const GEO::index_t i) -> float {
+        return ((chart_order_keys != nullptr) && (i < chart_order_keys->size())) ? (*chart_order_keys)[i] : 0.0f;
+    };
+    std::vector<int> band_of((chart_order_keys != nullptr) ? chart_count : 0u, 0);
+    if (chart_order_keys != nullptr) {
+        std::vector<GEO::index_t> by_key = order;
+        std::sort(
+            by_key.begin(),
+            by_key.end(),
+            [&key_of](const GEO::index_t lhs, const GEO::index_t rhs) {
+                const float key_lhs = key_of(lhs);
+                const float key_rhs = key_of(rhs);
+                return (key_lhs != key_rhs) ? (key_lhs < key_rhs) : (lhs < rhs);
+            }
+        );
+        const std::size_t band_count = std::clamp<std::size_t>(by_key.size() / 8, 1, 16);
+        for (std::size_t position = 0; position < by_key.size(); ++position) {
+            band_of[by_key[position]] = static_cast<int>((position * band_count) / by_key.size());
+        }
+    }
     std::sort(
         order.begin(),
         order.end(),
-        [&rects](const GEO::index_t lhs, const GEO::index_t rhs) { return rects[lhs].height() > rects[rhs].height(); }
+        [&rects, chart_order_keys, &band_of, &key_of](const GEO::index_t lhs, const GEO::index_t rhs) {
+            if (chart_order_keys != nullptr) {
+                if (band_of[lhs] != band_of[rhs]) {
+                    return band_of[lhs] < band_of[rhs];
+                }
+                if (rects[lhs].height() != rects[rhs].height()) {
+                    return rects[lhs].height() > rects[rhs].height();
+                }
+                const float key_lhs = key_of(lhs);
+                const float key_rhs = key_of(rhs);
+                if (key_lhs != key_rhs) {
+                    return key_lhs < key_rhs;
+                }
+                return lhs < rhs;
+            }
+            return rects[lhs].height() > rects[rhs].height();
+        }
     );
 
     const double gutter_fraction = gutter_texels / target_texels;
     double span = std::max(std::sqrt(total_area) * 1.15, max_dimension * (1.0 + 2.0 * gutter_fraction));
     for (int iteration = 0; iteration < 6; ++iteration) {
+        // Minimum chart resolution: charts whose shorter side falls under
+        // min_side_texels at the target density are scaled up so the clamp
+        // is exact in texels after the final divide by span (min_side_uv =
+        // min_side_texels / target_texels * span). The 16x cap keeps
+        // near-degenerate sliver charts from exploding the atlas.
+        // Recomputed each iteration as span settles.
+        if (min_side_texels > 0.0) {
+            const double min_side_uv = (min_side_texels / target_texels) * span;
+            for (const GEO::index_t i : order) {
+                Chart_rect& rect = rects[i];
+                const double shorter = std::min(rect.max_u - rect.min_u, rect.max_v - rect.min_v);
+                rect.scale = std::clamp(min_side_uv / std::max(shorter, 1.0e-12), 1.0, 16.0);
+            }
+        }
         // One gutter of margin at the atlas border too: region-edge texels
         // otherwise rasterize chart data straight against the region border.
+        // Shelves are accumulated before placement so a full shelf can be
+        // emitted in reverse on every other shelf (boustrophedon, keys
+        // only): the sequence-adjacent charts at a shelf wrap then sit at
+        // the same end of consecutive shelves, i.e. vertically adjacent.
         const double gutter  = gutter_fraction * span;
         double       shelf_y = gutter;
         double       shelf_h = 0.0;
-        double       x       = gutter;
+        double       shelf_w = 0.0; // consumed width, excluding leading gutter
         double       used_w  = 0.0;
-        for (const GEO::index_t i : order) {
-            Chart_rect& rect = rects[i];
-            if ((x + rect.width() + gutter > span) && (x > gutter)) {
-                shelf_y = shelf_y + shelf_h + gutter;
-                shelf_h = 0.0;
-                x       = gutter;
+        std::size_t  shelf_rank = 0;
+        std::vector<GEO::index_t> shelf_charts;
+        const auto flush_shelf = [&]() {
+            if (shelf_charts.empty()) {
+                return;
             }
-            rect.place_u = x;
-            rect.place_v = shelf_y;
-            x            = x + rect.width() + gutter;
-            shelf_h      = std::max(shelf_h, rect.height());
-            used_w       = std::max(used_w, x);
+            if ((chart_order_keys != nullptr) && ((shelf_rank & 1u) != 0u)) {
+                std::reverse(shelf_charts.begin(), shelf_charts.end());
+            }
+            double x = gutter;
+            for (const GEO::index_t i : shelf_charts) {
+                rects[i].place_u = x;
+                rects[i].place_v = shelf_y;
+                x = x + rects[i].width() + gutter;
+            }
+            used_w  = std::max(used_w, x);
+            shelf_y = shelf_y + shelf_h + gutter;
+            shelf_h = 0.0;
+            shelf_w = 0.0;
+            shelf_rank++;
+            shelf_charts.clear();
+        };
+        int previous_band = (chart_order_keys != nullptr) ? band_of[order.front()] : 0;
+        for (const GEO::index_t i : order) {
+            const bool band_break = (chart_order_keys != nullptr) && (band_of[i] != previous_band);
+            if (chart_order_keys != nullptr) {
+                previous_band = band_of[i];
+            }
+            if (band_break || (gutter + shelf_w + rects[i].width() + gutter > span)) {
+                flush_shelf();
+            }
+            shelf_charts.push_back(i);
+            shelf_w = shelf_w + rects[i].width() + gutter;
+            shelf_h = std::max(shelf_h, rects[i].height());
         }
-        const double used_h   = shelf_y + shelf_h + gutter;
+        flush_shelf();
+        const double used_h = shelf_y; // flush already advanced past the last shelf + gutter
         const double new_span = std::max(used_w, used_h);
         if (new_span <= span * 1.0001) {
             span = std::max(new_span, max_dimension); // shrink to the used extent
@@ -257,8 +433,8 @@ void pack_charts_with_texel_gutter(GEO::Mesh& mesh, const double target_texels, 
     for (GEO::index_t facet : mesh.facets) {
         const Chart_rect& rect = rects[chart[facet]];
         for (GEO::index_t corner : mesh.facets.corners(facet)) {
-            tex_coord[2 * corner + 0] = (tex_coord[2 * corner + 0] - rect.min_u + rect.place_u) * inv_span;
-            tex_coord[2 * corner + 1] = (tex_coord[2 * corner + 1] - rect.min_v + rect.place_v) * inv_span;
+            tex_coord[2 * corner + 0] = ((tex_coord[2 * corner + 0] - rect.min_u) * rect.scale + rect.place_u) * inv_span;
+            tex_coord[2 * corner + 1] = ((tex_coord[2 * corner + 1] - rect.min_v) * rect.scale + rect.place_v) * inv_span;
         }
     }
 }
@@ -285,8 +461,10 @@ public:
         double              hard_angles_threshold,
         Atlas_parameterizer parameterizer,
         Atlas_packer        packer,
-        double              chart_pack_texel_density,
-        double              chart_gutter_texels)
+        double                    chart_pack_texel_density,
+        double                    chart_gutter_texels,
+        double                    chart_min_side_texels,
+        const std::vector<float>* per_facet_chart_order)
         : Geometry_operation       {source, destination}
         , m_usage_index            {usage_index}
         , m_hard_angles_threshold  {hard_angles_threshold}
@@ -294,18 +472,22 @@ public:
         , m_packer                 {packer}
         , m_chart_pack_texel_density{chart_pack_texel_density}
         , m_chart_gutter_texels    {chart_gutter_texels}
+        , m_chart_min_side_texels  {chart_min_side_texels}
+        , m_per_facet_chart_order  {per_facet_chart_order}
     {
     }
 
     void build();
 
 private:
-    std::size_t         m_usage_index;
-    double              m_hard_angles_threshold;
-    Atlas_parameterizer m_parameterizer;
-    Atlas_packer        m_packer;
-    double              m_chart_pack_texel_density;
-    double              m_chart_gutter_texels;
+    std::size_t               m_usage_index;
+    double                    m_hard_angles_threshold;
+    Atlas_parameterizer       m_parameterizer;
+    Atlas_packer              m_packer;
+    double                    m_chart_pack_texel_density;
+    double                    m_chart_gutter_texels;
+    double                    m_chart_min_side_texels;
+    const std::vector<float>* m_per_facet_chart_order;
 };
 
 void Make_atlas::build()
@@ -320,7 +502,9 @@ void Make_atlas::build()
         m_parameterizer,
         m_packer,
         m_chart_pack_texel_density,
-        m_chart_gutter_texels
+        m_chart_gutter_texels,
+        m_chart_min_side_texels,
+        m_per_facet_chart_order
     );
     post_processing(structural_post_process_flags);
 }
@@ -333,7 +517,9 @@ void generate_mesh_atlas_texture_coordinates(
     const Atlas_parameterizer parameterizer,
     const Atlas_packer        packer,
     const double              chart_pack_texel_density,
-    const double              chart_gutter_texels)
+    const double              chart_gutter_texels,
+    const double              chart_min_side_texels,
+    const std::vector<float>* per_facet_chart_order)
 {
     // Precondition: attributes is UNBOUND (see header). mesh_make_atlas() reads
     // vertices.point() in double precision and grows charts across facet
@@ -343,13 +529,26 @@ void generate_mesh_atlas_texture_coordinates(
 
     // Texel-density-aware chart packing (see header): Geogram must skip its
     // own packing; the charts are packed below at the resolution this unwrap
-    // will actually rasterize at.
-    const bool   own_packing  = chart_pack_texel_density > 0.0;
-    const double target_texels = own_packing
+    // will actually rasterize at. Per-facet mode always packs here (its UVs
+    // start unpacked in mesh units); without a caller density it assumes a
+    // 1024-texel page for gutter sizing.
+    const bool   per_facet    = parameterizer == Atlas_parameterizer::per_facet;
+    const bool   own_packing  = (chart_pack_texel_density > 0.0) || per_facet;
+    const double target_texels = (chart_pack_texel_density > 0.0)
         ? std::max(4.0, std::ceil(std::sqrt(mesh_surface_area(mesh)) * chart_pack_texel_density))
-        : 0.0;
+        : (per_facet ? 1024.0 : 0.0);
 
-    {
+    if (per_facet) {
+        // No Geogram involvement (and so no serialization mutex): trivial
+        // isometric per-facet charts + erhe's own packing. Nothing to
+        // repair - overlaps and outlier corners are impossible here.
+        build_per_facet_charts(mesh);
+        pack_charts_with_texel_gutter(mesh, target_texels, chart_gutter_texels, chart_min_side_texels, per_facet_chart_order);
+        log_operation->warn(
+            "make_atlas: per-facet charts, {} facets, target_texels = {}",
+            mesh.facets.nb(), target_texels
+        );
+    } else {
         // Geogram's progress system uses a process-global, non-thread-safe task
         // stack (basic/progress.cpp: "geo_assert(progress_tasks_.top() == task)"),
         // and the atlas packer/parameterizer carries further process-global state.
@@ -378,7 +577,9 @@ void generate_mesh_atlas_texture_coordinates(
             // Consistent chart scale (UV area proportional to 3D area);
             // charts stay unpacked and may overlap until repacked below.
             GEO::pack_atlas_only_normalize_charts(mesh);
-            pack_charts_with_texel_gutter(mesh, target_texels, chart_gutter_texels);
+            // Chart ids here are Geogram chart ids, not facet ids - the
+            // per-facet order keys do not apply.
+            pack_charts_with_texel_gutter(mesh, target_texels, chart_gutter_texels, chart_min_side_texels, nullptr);
         }
         // Repair AFTER packing: outlier detection needs all charts at a
         // single consistent scale ([0,1] atlas space); pre-normalize the
@@ -425,10 +626,12 @@ void make_atlas(
     const double        hard_angles_threshold,
     Atlas_parameterizer parameterizer,
     Atlas_packer        packer,
-    const double        chart_pack_texel_density,
-    const double        chart_gutter_texels)
+    const double              chart_pack_texel_density,
+    const double              chart_gutter_texels,
+    const double              chart_min_side_texels,
+    const std::vector<float>* per_facet_chart_order)
 {
-    Make_atlas operation{source, destination, usage_index, hard_angles_threshold, parameterizer, packer, chart_pack_texel_density, chart_gutter_texels};
+    Make_atlas operation{source, destination, usage_index, hard_angles_threshold, parameterizer, packer, chart_pack_texel_density, chart_gutter_texels, chart_min_side_texels, per_facet_chart_order};
     operation.build();
 }
 

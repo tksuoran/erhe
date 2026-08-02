@@ -87,6 +87,15 @@ public:
     void undo();
     void redo();
 
+    // Not-yet-executed operations: the main-thread queue plus the cross-
+    // thread inbox. Stale-data guards use this alongside the async-op
+    // counters (App_context::pending/running_async_ops): an async worker
+    // decrements those the moment it has QUEUED its operation here, but the
+    // scene only changes when update() executes it on the main thread -
+    // acting on the scene in that window consumes stale data (e.g. packing
+    // the lightmap atlas from the old channel-2 UVs). Main thread only.
+    [[nodiscard]] auto get_queued_count() -> std::size_t;
+
     // Drops the undo and redo histories (queued operations are kept). Used
     // when a scene is closed: recorded operations hold shared_ptrs to scene
     // content and viewport resources, which would keep a closed scene's

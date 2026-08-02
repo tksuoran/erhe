@@ -392,13 +392,16 @@ Make_atlas_operation::Make_atlas_operation(
     float                                                hard_angles_threshold,
     erhe::geometry::operation::Atlas_parameterizer       parameterizer,
     erhe::geometry::operation::Atlas_packer              packer,
-    float                                                lightmap_texels_per_meter
+    float                                                lightmap_texels_per_meter,
+    float                                                chart_gutter_texels,
+    float                                                chart_min_side_texels,
+    std::unordered_map<const erhe::geometry::Geometry*, std::vector<float>> per_facet_chart_order
 )
     : Mesh_operation{std::move(context)}
 {
     set_description("Make atlas");
     make_entries(
-        [usage_index, hard_angles_threshold, parameterizer, packer, lightmap_texels_per_meter](
+        [usage_index, hard_angles_threshold, parameterizer, packer, lightmap_texels_per_meter, chart_gutter_texels, chart_min_side_texels, per_facet_chart_order = std::move(per_facet_chart_order)](
             const erhe::geometry::Geometry& source,
             erhe::geometry::Geometry&       destination,
             erhe::scene::Node*              node
@@ -410,7 +413,9 @@ Make_atlas_operation::Make_atlas_operation(
                 const float det = (node != nullptr) ? glm::determinant(glm::mat3{node->world_from_node()}) : 1.0f;
                 density = static_cast<double>(lightmap_texels_per_meter) * std::pow(static_cast<double>(std::abs(det)), 1.0 / 3.0);
             }
-            erhe::geometry::operation::make_atlas(source, destination, usage_index, static_cast<double>(hard_angles_threshold), parameterizer, packer, density);
+            const auto order_it = per_facet_chart_order.find(&source);
+            const std::vector<float>* const order_keys = (order_it != per_facet_chart_order.end()) ? &order_it->second : nullptr;
+            erhe::geometry::operation::make_atlas(source, destination, usage_index, static_cast<double>(hard_angles_threshold), parameterizer, packer, density, static_cast<double>(chart_gutter_texels), static_cast<double>(chart_min_side_texels), order_keys);
         }
     );
     set_description(fmt::format("Make atlas {}", describe_entries()));

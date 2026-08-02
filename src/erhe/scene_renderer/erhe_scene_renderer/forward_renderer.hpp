@@ -63,6 +63,9 @@ public:
     // (doc/lightmap_baking_plan.md phase 5). Null binds the black fallback;
     // per-primitive lightmap_scale_offset gates sampling per draw.
     void set_lightmap_texture(const std::shared_ptr<erhe::graphics::Texture>& texture) { m_lightmap_texture = texture; }
+    // Viewport lightmap filtering: bicubic B-spline reconstruction when
+    // true (the default), plain bilinear when false.
+    void set_lightmap_bicubic(const bool enabled) { m_lightmap_bicubic = enabled; }
 
     // glyph_outline_set is optional: pass nullptr from executables that
     // never draw glyphs (the Glyph_buffer falls back to an empty but
@@ -268,6 +271,7 @@ private:
     std::shared_ptr<erhe::graphics::Texture>      m_dummy_texture;
     std::unique_ptr<erhe::graphics::Texture_heap> m_texture_heap;
     std::shared_ptr<erhe::graphics::Texture>      m_lightmap_texture;
+    bool                                          m_lightmap_bicubic{true};
 };
 
 } // namespace erhe::scene_renderer

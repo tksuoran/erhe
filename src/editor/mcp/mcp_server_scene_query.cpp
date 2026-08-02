@@ -1073,9 +1073,13 @@ auto Mcp_server::query_async_status(const json& args) -> std::string
 {
     static_cast<void>(args);
 
+    // queued_operations: async workers decrement pending/running the moment
+    // they have QUEUED their operation; the scene only changes when the main
+    // thread executes it. Idle means all three are zero.
     return make_json_content({
-        {"pending", m_context.pending_async_ops.load()},
-        {"running", m_context.running_async_ops.load()}
+        {"pending",           m_context.pending_async_ops.load()},
+        {"running",           m_context.running_async_ops.load()},
+        {"queued_operations", (m_context.operation_stack != nullptr) ? m_context.operation_stack->get_queued_count() : 0u}
     }).dump();
 }
 

@@ -537,7 +537,11 @@ void main()
 #if defined(ERHE_USE_VERTEX_VARYING_TEXCOORD2)
         if (v_lightmap_scale_offset.x > 0.0) {
             vec2 lightmap_uv = v_texcoord_2 * v_lightmap_scale_offset.xy + v_lightmap_scale_offset.zw;
-            ambient_term   = sample_lightmap_bicubic(lightmap_uv);
+            // lightmap_flags bit 0: bicubic B-spline reconstruction (Lightmap
+            // window checkbox); off = plain bilinear.
+            ambient_term = ((light_block.lightmap_flags & 1u) != 0u)
+                ? sample_lightmap_bicubic(lightmap_uv)
+                : texture(s_lightmap, lightmap_uv).rgb;
             lightmap_valid = true;
         }
 #endif

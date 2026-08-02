@@ -193,6 +193,8 @@ constexpr std::size_t c_max_gather_lights = 16;
 // (samplers, storage image, uniform block, instance SSBO) are injected by
 // erhe; the acceleration structure is not (matching ray_trace.comp).
 constexpr const char* c_gather_source = R"GLSL(
+#include "sky_atmosphere_common.glsl"
+
 layout(binding = 2) uniform accelerationStructureEXT s_tlas;
 
 // Raw uint view of a mesh memory pool via per-instance buffer device
@@ -221,6 +223,79 @@ float rand_float(inout uint seed)
 {
     seed = pcg_hash(seed);
     return float(seed) * (1.0 / 4294967296.0);
+}
+
+// Procedural sky radiance along dir: the sky_atmosphere.frag march
+// (Hillaire EGSR 2020) against the same transmittance / multi-scatter
+// LUTs the viewport sky uses, from the same fixed virtual observer. Two
+// deliberate differences: the SUN DISC is excluded (the sun is a scene
+// directional light, sampled by the direct shadow rays - the disc here
+// would double-count it), and there is no exposure factor (the bake is
+// plain HDR irradiance).
+vec3 sky_sample_transmittance(float r, float mu)
+{
+    return textureLod(s_sky_transmittance, sky_transmittance_params_to_uv(r, mu), 0.0).rgb;
+}
+
+vec3 sky_sample_multiscatter(float r, float mu_sun)
+{
+    return textureLod(s_sky_multiscatter, sky_multiscatter_params_to_uv(r, mu_sun), 0.0).rgb;
+}
+
+vec3 sky_radiance(vec3 ray_dir)
+{
+    vec3  sun_dir         = normalize(lightmap_gather.sun_direction_and_intensity.xyz);
+    float sun_illuminance = lightmap_gather.sun_direction_and_intensity.w;
+    int   num_steps       = max(2, int(lightmap_gather.sky_params.x));
+    vec3  ray_origin      = vec3(0.0, R_GROUND + lightmap_gather.sky_params.y, 0.0);
+
+    Sky_ray_hit ground_hit = sky_ray_sphere(ray_origin, ray_dir, R_GROUND);
+    bool        hit_ground = ground_hit.hit && (ground_hit.t_near > 0.0);
+    float       t_top      = sky_distance_to_atmosphere_top(ray_origin, ray_dir);
+    float       t_max      = hit_ground ? ground_hit.t_near : t_top;
+
+    float cos_theta      = dot(ray_dir, sun_dir);
+    float rayleigh_phase = sky_rayleigh_phase(cos_theta);
+    float mie_phase      = sky_mie_phase_hg(cos_theta, MIE_G);
+
+    vec3  inscatter  = vec3(0.0);
+    vec3  throughput = vec3(1.0);
+    float dt = t_max / float(num_steps);
+    for (int s = 0; s < num_steps; ++s) {
+        float t = (float(s) + 0.5) * dt;
+        vec3  p = ray_origin + ray_dir * t;
+        float r = length(p);
+
+        Sky_medium m = sky_sample_medium(p);
+        vec3 step_trans = exp(-m.extinction * dt);
+
+        float mu_s      = dot(normalize(p), sun_dir);
+        vec3  trans_sun = sky_sample_transmittance(r, mu_s);
+
+        float shadow       = sky_hits_ground(p, sun_dir) ? 0.0 : 1.0;
+        float horizon_fade = clamp(mu_s * 10.0 + 0.5, 0.0, 1.0);
+        shadow *= horizon_fade;
+
+        vec3 single = (m.rayleigh_scatter * rayleigh_phase + m.mie_scatter * mie_phase) * trans_sun * shadow;
+        vec3 multi  = (m.rayleigh_scatter + m.mie_scatter) * sky_sample_multiscatter(r, mu_s);
+        vec3 S      = (single + multi) * sun_illuminance;
+
+        vec3 s_int = (S - S * step_trans) / m.extinction;
+        inscatter += throughput * s_int;
+        throughput *= step_trans;
+    }
+
+    // Lambertian planet-ground bounce for below-horizon rays that escape
+    // the scene geometry (matches the rendered sky background).
+    if (hit_ground) {
+        vec3  ground_pos    = ray_origin + ray_dir * t_max;
+        vec3  ground_normal = normalize(ground_pos);
+        float sun_cos       = max(0.0, dot(ground_normal, sun_dir));
+        vec3  trans_sun_g   = sky_sample_transmittance(R_GROUND, dot(ground_normal, sun_dir));
+        inscatter += throughput * GROUND_ALBEDO * (sun_cos / SKY_PI) * trans_sun_g * sun_illuminance;
+    }
+
+    return inscatter;
 }
 
 // Adaptive self-intersection bias (article): offset each component
@@ -346,15 +421,19 @@ void main()
     }
 #endif
 
-    // One cosine-weighted hemisphere bounce ray. With cosine sampling the
-    // irradiance estimator is E = pi * avg(L_in), and a diffuse hit's
-    // outgoing radiance is albedo * E_hit / pi - the pi cancels, so each
-    // sample adds albedo_hit * E_hit_published. Hits on non-lightmapped
-    // instances (uv_scale_offset.x == 0) and interior/backface hits
-    // contribute nothing.
+    // One cosine-weighted hemisphere ray, shared by the diffuse bounce and
+    // the procedural sky. With cosine sampling the irradiance estimator is
+    // E = pi * avg(L_in); for a diffuse hit the outgoing radiance is
+    // albedo * E_hit / pi - the pi cancels, so each hit sample adds
+    // albedo_hit * E_hit_published. A MISS escapes to the sky: L_in is the
+    // atmosphere radiance, so the sample adds pi * sky_radiance(dir) (no
+    // cancellation - the environment is a radiance source, not a diffuse
+    // reflector). Hits on non-lightmapped instances (uv_scale_offset.x ==
+    // 0) and interior/backface hits contribute nothing.
+    // (ERHE_LM_NO_INDIRECT disables the ray entirely, sky included.)
     vec3 indirect = vec3(0.0);
 #if !defined(ERHE_LM_NO_INDIRECT)
-    {
+    if ((lightmap_gather.bounce_enabled != 0u) || (lightmap_gather.sky_enabled != 0u)) {
         uint  seed = pcg_hash(uint(texel.x) * 1973u + uint(texel.y) * 9277u + lightmap_gather.frame_index * 26699u);
         float u1   = rand_float(seed);
         float u2   = rand_float(seed);
@@ -382,7 +461,7 @@ void main()
                     imageStore(i_accum, texel, vec4(0.0));
                     return;
                 }
-            } else {
+            } else if (lightmap_gather.bounce_enabled != 0u) {
                 uint instance_index = uint(rayQueryGetIntersectionInstanceCustomIndexEXT(bounce_query, true));
                 Lm_instance_record record = lm_instance.instances[instance_index];
                 if (record.uv_scale_offset.x > 0.0) {
@@ -406,6 +485,9 @@ void main()
                     indirect = hit_albedo * hit_irradiance;
                 }
             }
+        } else if (lightmap_gather.sky_enabled != 0u) {
+            // Escaped the scene: environment lighting from the sky.
+            indirect = SKY_PI * sky_radiance(bounce_dir);
         }
     }
 #endif
@@ -556,6 +638,28 @@ void main()
         // normal points along the ray for a backface hit).
         p += push_dir * push_t + push_normal * 1.0e-4;
     }
+
+    // Interior invalidation (article defense the half-texel probes above
+    // cannot provide): a texel deep inside ANOTHER closed mesh (e.g. a
+    // cylinder-top texel buried in an intersecting dodecahedron) passes
+    // the probes, and its gather shadow rays then exit that mesh through
+    // culled backfaces and bake full light - which dilation spreads
+    // outward. Closed geometry gives an exact test: if the closest hit
+    // along the normal, with no culling, is a backface, the origin is
+    // inside something. Zero the coverage so the gather skips the texel
+    // and dilation refills it from the legitimately shadowed texels just
+    // outside the intersection.
+    rayQueryEXT interior_query;
+    rayQueryInitializeEXT(interior_query, s_tlas, gl_RayFlagsOpaqueEXT, 0xFFu, adaptive_offset(p, n), 1.0e-4, n, 1.0e30);
+    while (rayQueryProceedEXT(interior_query)) {
+    }
+    if (rayQueryGetIntersectionTypeEXT(interior_query, true) == gl_RayQueryCommittedIntersectionTriangleEXT) {
+        if (dot(committed_face_normal(interior_query), n) > 0.0) {
+            imageStore(i_position, texel, vec4(p, 0.0));
+            return;
+        }
+    }
+
     // Unconditional: the terminator fix above may have moved p even when
     // no probe pushed it.
     imageStore(i_position, texel, vec4(p, position_coverage.w));
@@ -860,6 +964,10 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
     m_gather_ray_bias_offset       = m_gather_block->add_float("ray_bias")->get_offset_in_parent();
     m_gather_frame_index_offset    = m_gather_block->add_uint ("frame_index")->get_offset_in_parent();
     m_gather_base_y_offset         = m_gather_block->add_uint ("base_texel_y")->get_offset_in_parent();
+    m_gather_bounce_enabled_offset = m_gather_block->add_uint ("bounce_enabled")->get_offset_in_parent();
+    m_gather_sky_enabled_offset    = m_gather_block->add_uint ("sky_enabled")->get_offset_in_parent();
+    m_gather_sun_direction_offset  = m_gather_block->add_vec4("sun_direction_and_intensity")->get_offset_in_parent();
+    m_gather_sky_params_offset     = m_gather_block->add_vec4("sky_params")->get_offset_in_parent();
     m_gather_position_type_offset  = m_gather_block->add_vec4("light_position_and_type",       c_max_gather_lights)->get_offset_in_parent();
     m_gather_direction_cos_offset  = m_gather_block->add_vec4("light_direction_and_outer_cos", c_max_gather_lights)->get_offset_in_parent();
     m_gather_radiance_range_offset = m_gather_block->add_vec4("light_radiance_and_range",      c_max_gather_lights)->get_offset_in_parent();
@@ -922,9 +1030,10 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
                 // Combined image samplers land at vk binding = user +
                 // (max buffer binding + 1) = user + 2 here (buffers at 0/1):
                 // s_position vk 5, s_normal vk 6, s_albedo vk 7,
-                // s_published vk 8. Raw bindings (TLAS, storage image) are
-                // NOT offset, so the accumulation image sits at 9, clear of
-                // every sampler's vk slot.
+                // s_published vk 8, s_sky_transmittance vk 9,
+                // s_sky_multiscatter vk 10. Raw bindings (TLAS, storage
+                // image) are NOT offset, so the accumulation image sits at
+                // 11, clear of every sampler's vk slot.
                 Bind_group_layout_binding{
                     .binding_point   = 3u,
                     .type            = Binding_type::combined_image_sampler,
@@ -961,8 +1070,30 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
                     .is_texture_heap = false,
                     .stage_flags     = Shader_stage_flags::compute
                 },
+                // Procedural sky LUTs (Sky_renderer); bound to the G-buffer
+                // albedo texture as an inert placeholder when the sky is off
+                // or the LUTs do not exist (sky_enabled == 0 -> never
+                // sampled, but the binding must hold a valid texture).
                 Bind_group_layout_binding{
-                    .binding_point = 9u,
+                    .binding_point   = 7u,
+                    .type            = Binding_type::combined_image_sampler,
+                    .sampler_aspect  = Sampler_aspect::color,
+                    .name            = "s_sky_transmittance",
+                    .glsl_type       = Glsl_type::sampler_2d,
+                    .is_texture_heap = false,
+                    .stage_flags     = Shader_stage_flags::compute
+                },
+                Bind_group_layout_binding{
+                    .binding_point   = 8u,
+                    .type            = Binding_type::combined_image_sampler,
+                    .sampler_aspect  = Sampler_aspect::color,
+                    .name            = "s_sky_multiscatter",
+                    .glsl_type       = Glsl_type::sampler_2d,
+                    .is_texture_heap = false,
+                    .stage_flags     = Shader_stage_flags::compute
+                },
+                Bind_group_layout_binding{
+                    .binding_point = 11u,
                     .type          = Binding_type::storage_image,
                     .name          = "i_accum",
                     .glsl_type     = Glsl_type::image_2d,
@@ -1003,6 +1134,11 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
         .interface_blocks = { m_gather_block.get(), m_lm_instance_block.get() },
         .shaders = {
             { Shader_type::compute_shader, std::string_view{c_gather_source} }
+        },
+        // For #include "sky_atmosphere_common.glsl" (shared with the
+        // viewport sky shaders - single source of truth for the math).
+        .extra_include_paths = {
+            std::filesystem::path{"res"} / std::filesystem::path{"editor"} / std::filesystem::path{"shaders"}
         },
         .bind_group_layout = m_gather_layout.get()
     };
@@ -1087,42 +1223,61 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
             .uses_texture_heap = false
         }
     );
-    Shader_stages_create_info adjust_create_info{
-        .name       = "lightmap_adjust",
-        // Environment ERHE_LM_NO_SMOOTH=1 disables the terminator smooth-
-        // position adoption (A/B diagnostics; mirrors ERHE_LM_NO_INDIRECT).
-        .defines    = [&]() {
-            std::vector<std::pair<std::string, std::string>> defines{};
-            const char* const no_smooth = std::getenv("ERHE_LM_NO_SMOOTH");
-            if ((no_smooth != nullptr) && (no_smooth[0] == '1')) {
-                log_render->warn("Lightmap_baker: ERHE_LM_NO_SMOOTH=1 - terminator smooth position disabled");
-                defines.push_back({ "ERHE_LM_NO_SMOOTH", "1" });
+    // Both variants are compiled up front so Bake_options::terminator_fix
+    // can switch without a shader rebuild. Environment ERHE_LM_NO_SMOOTH=1
+    // still forces the smooth adoption off entirely (A/B diagnostics;
+    // mirrors ERHE_LM_NO_INDIRECT) by compiling the "smooth" slot with the
+    // define as well.
+    const char* const no_smooth_env = std::getenv("ERHE_LM_NO_SMOOTH");
+    const bool        env_no_smooth = (no_smooth_env != nullptr) && (no_smooth_env[0] == '1');
+    if (env_no_smooth) {
+        log_render->warn("Lightmap_baker: ERHE_LM_NO_SMOOTH=1 - terminator smooth position disabled");
+    }
+    const auto make_adjust = [&](
+        const bool                                           with_smooth,
+        std::unique_ptr<erhe::graphics::Shader_stages>&      out_shader_stages,
+        std::unique_ptr<erhe::graphics::Compute_pipeline>&   out_pipeline
+    ) -> bool {
+        Shader_stages_create_info adjust_create_info{
+            .name       = with_smooth ? "lightmap_adjust" : "lightmap_adjust_no_smooth",
+            .defines    = [&]() {
+                std::vector<std::pair<std::string, std::string>> defines{};
+                if (!with_smooth) {
+                    defines.push_back({ "ERHE_LM_NO_SMOOTH", "1" });
+                }
+                return defines;
+            }(),
+            .extensions = {
+                { Shader_type::compute_shader, "GL_EXT_ray_query" },
+                { Shader_type::compute_shader, "GL_EXT_ray_tracing_position_fetch" }
+            },
+            .shaders = {
+                { Shader_type::compute_shader, std::string_view{c_adjust_source} }
+            },
+            .bind_group_layout = m_adjust_layout.get()
+        };
+        Shader_stages_prototype adjust_prototype = build_shader_stages(graphics_device, adjust_create_info);
+        if (!adjust_prototype.is_valid()) {
+            log_render->warn("Lightmap_baker: adjust shader failed to compile/link");
+            return false;
+        }
+        out_shader_stages = std::make_unique<Shader_stages>(graphics_device, std::move(adjust_prototype));
+        out_pipeline = std::make_unique<Compute_pipeline>(
+            graphics_device,
+            Compute_pipeline_data{
+                .name              = with_smooth ? "lightmap_adjust" : "lightmap_adjust_no_smooth",
+                .shader_stages     = out_shader_stages.get(),
+                .bind_group_layout = m_adjust_layout.get()
             }
-            return defines;
-        }(),
-        .extensions = {
-            { Shader_type::compute_shader, "GL_EXT_ray_query" },
-            { Shader_type::compute_shader, "GL_EXT_ray_tracing_position_fetch" }
-        },
-        .shaders = {
-            { Shader_type::compute_shader, std::string_view{c_adjust_source} }
-        },
-        .bind_group_layout = m_adjust_layout.get()
+        );
+        return true;
     };
-    Shader_stages_prototype adjust_prototype = build_shader_stages(graphics_device, adjust_create_info);
-    if (!adjust_prototype.is_valid()) {
-        log_render->warn("Lightmap_baker: adjust shader failed to compile/link");
+    if (!make_adjust(!env_no_smooth, m_adjust_shader_stages, m_adjust_pipeline)) {
         return;
     }
-    m_adjust_shader_stages = std::make_unique<Shader_stages>(graphics_device, std::move(adjust_prototype));
-    m_adjust_pipeline = std::make_unique<Compute_pipeline>(
-        graphics_device,
-        Compute_pipeline_data{
-            .name              = "lightmap_adjust",
-            .shader_stages     = m_adjust_shader_stages.get(),
-            .bind_group_layout = m_adjust_layout.get()
-        }
-    );
+    if (!make_adjust(false, m_adjust_no_smooth_shader_stages, m_adjust_no_smooth_pipeline)) {
+        return;
+    }
 
     // Dilation pipeline. Both bindings are raw storage images, so the
     // combined-image-sampler binding offset (see the gather layout note)
@@ -1395,6 +1550,43 @@ auto Lightmap_baker::update_layout(Scene_root& scene_root, const float texels_pe
             region.mesh            = mesh;
             region.primitive_index = primitive_index;
             region.world_area      = mesh_surface_area(geometry->get_mesh()) * instance_area_scale;
+            // Chart-space coverage: summed facet UV area (fan triangles) in
+            // the [0,1]^2 chart space. Dividing the region area by this
+            // makes texels-per-meter exact per facet: a facet's texels =
+            // uv_area_facet * side^2 = (world_area_facet / world_area *
+            // coverage_share...) - concretely, side = sqrt(world_area /
+            // coverage) * density gives every facet world_area_facet *
+            // density^2 texels regardless of gutters, packing waste, or the
+            // packer's minimum-chart-size upscales.
+            {
+                const GEO::Mesh& geo_mesh = geometry->get_mesh();
+                float coverage = 0.0f;
+                for (GEO::index_t facet : geo_mesh.facets) {
+                    const GEO::index_t corner_count = geo_mesh.facets.nb_corners(facet);
+                    if (corner_count < 3) {
+                        continue;
+                    }
+                    const std::optional<GEO::vec2f> uv0 = attributes.corner_texcoord_2.try_get(geo_mesh.facets.corner(facet, 0));
+                    if (!uv0.has_value()) {
+                        continue;
+                    }
+                    for (GEO::index_t k = 2; k < corner_count; ++k) {
+                        const std::optional<GEO::vec2f> uv1 = attributes.corner_texcoord_2.try_get(geo_mesh.facets.corner(facet, k - 1));
+                        const std::optional<GEO::vec2f> uv2 = attributes.corner_texcoord_2.try_get(geo_mesh.facets.corner(facet, k));
+                        if (!uv1.has_value() || !uv2.has_value()) {
+                            continue;
+                        }
+                        const GEO::vec2f e1 = uv1.value() - uv0.value();
+                        const GEO::vec2f e2 = uv2.value() - uv0.value();
+                        coverage += 0.5f * std::abs(e1.x * e2.y - e1.y * e2.x);
+                    }
+                }
+                // Floor at 5% (worst allowed boost ~4.5x per axis): lower
+                // coverage means broken or absurdly gutter-dominated UVs,
+                // where growing the region without bound would explode the
+                // page instead of fixing anything.
+                region.uv_coverage = std::clamp(coverage, 0.05f, 1.0f);
+            }
             regions.push_back(std::move(region));
         }
     }
@@ -1405,7 +1597,7 @@ auto Lightmap_baker::update_layout(Scene_root& scene_root, const float texels_pe
     // Region content side in texels; the normalized per-mesh chart set is
     // square, so the region is too.
     const auto side_of = [texels_per_meter](const Instance_region& region) -> int {
-        const float side = std::sqrt(std::max(region.world_area, 0.0f)) * texels_per_meter;
+        const float side = std::sqrt(std::max(region.world_area, 0.0f) / region.uv_coverage) * texels_per_meter;
         return std::clamp(static_cast<int>(std::ceil(side)), 4, s_max_page - 2 * s_padding);
     };
 
@@ -2193,6 +2385,15 @@ void Lightmap_baker::write_gather_ubo(
     std::memcpy(data + m_gather_ray_bias_offset,    &ray_bias,     sizeof(float));
     std::memcpy(data + m_gather_frame_index_offset, &frame_index,  sizeof(uint32_t));
     std::memcpy(data + m_gather_base_y_offset,      &base_texel_y, sizeof(uint32_t));
+    const uint32_t bounce_enabled = m_options.indirect_bounce ? 1u : 0u;
+    std::memcpy(data + m_gather_bounce_enabled_offset, &bounce_enabled, sizeof(uint32_t));
+    // Sky is only enabled when both LUTs are actually bound (see the
+    // placeholder-binding comment in the gather layout).
+    const uint32_t sky_enabled =
+        (m_sky.enabled && (m_sky.transmittance_lut != nullptr) && (m_sky.multiscatter_lut != nullptr)) ? 1u : 0u;
+    std::memcpy(data + m_gather_sky_enabled_offset,   &sky_enabled,                     sizeof(uint32_t));
+    std::memcpy(data + m_gather_sun_direction_offset, &m_sky.sun_direction_and_intensity, sizeof(glm::vec4));
+    std::memcpy(data + m_gather_sky_params_offset,    &m_sky.sky_params,                  sizeof(glm::vec4));
     for (std::size_t i = 0; i < lights.size(); ++i) {
         std::memcpy(data + m_gather_position_type_offset  + i * sizeof(glm::vec4), &lights[i].position_and_type,       sizeof(glm::vec4));
         std::memcpy(data + m_gather_direction_cos_offset  + i * sizeof(glm::vec4), &lights[i].direction_and_outer_cos, sizeof(glm::vec4));
@@ -2383,7 +2584,9 @@ auto Lightmap_baker::bake_direct(Scene_root& scene_root) -> bool
         encoder.set_sampled_image(4u, *m_normal_texture,   *m_nearest_sampler);
         encoder.set_sampled_image(5u, *m_albedo_texture,   *m_linear_sampler);
         encoder.set_sampled_image(6u, *m_lightmap_texture, *m_linear_sampler);
-        encoder.set_storage_image(9u, *m_accum_texture);
+        encoder.set_sampled_image(7u, (m_sky.transmittance_lut != nullptr) ? *m_sky.transmittance_lut : *m_albedo_texture, *m_linear_sampler);
+        encoder.set_sampled_image(8u, (m_sky.multiscatter_lut  != nullptr) ? *m_sky.multiscatter_lut  : *m_albedo_texture, *m_linear_sampler);
+        encoder.set_storage_image(11u, *m_accum_texture);
         encoder.dispatch_compute(
             (static_cast<std::uintptr_t>(m_layout.width)  + 7) / 8,
             (static_cast<std::uintptr_t>(m_layout.height) + 7) / 8,
@@ -2411,7 +2614,8 @@ auto Lightmap_baker::bake_direct(Scene_root& scene_root) -> bool
 void Lightmap_baker::record_adjust(erhe::graphics::Command_buffer& command_buffer, erhe::graphics::Acceleration_structure& tlas)
 {
     using namespace erhe::graphics;
-    if (m_gbuffer_adjusted || !m_adjust_pipeline || !m_position_texture) {
+    Compute_pipeline* const adjust_pipeline = m_options.terminator_fix ? m_adjust_pipeline.get() : m_adjust_no_smooth_pipeline.get();
+    if (m_gbuffer_adjusted || (adjust_pipeline == nullptr) || !m_position_texture) {
         return;
     }
     command_buffer.transition_texture_layout(*m_position_texture,        Image_layout::general);
@@ -2420,7 +2624,7 @@ void Lightmap_baker::record_adjust(erhe::graphics::Command_buffer& command_buffe
     {
         Compute_command_encoder encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
         encoder.set_bind_group_layout(m_adjust_layout.get());
-        encoder.set_compute_pipeline(*m_adjust_pipeline);
+        encoder.set_compute_pipeline(*adjust_pipeline);
         encoder.set_acceleration_structure(0u, tlas);
         encoder.set_storage_image(1u, *m_position_texture);
         encoder.set_storage_image(2u, *m_normal_texture);
@@ -2436,6 +2640,27 @@ void Lightmap_baker::record_adjust(erhe::graphics::Command_buffer& command_buffe
     command_buffer.transition_texture_layout(*m_normal_texture,          Image_layout::shader_read_only_optimal);
     command_buffer.transition_texture_layout(*m_smooth_position_texture, Image_layout::shader_read_only_optimal);
     m_gbuffer_adjusted = true;
+}
+
+void Lightmap_baker::set_options(const Bake_options& options)
+{
+    if (options.terminator_fix != m_options.terminator_fix) {
+        // The virtual-offset pass folds the smooth position into the
+        // position G-buffer in place; switching variants needs fresh
+        // positions.
+        m_gbuffer_valid   = false;
+        m_reset_requested = true;
+    }
+    if (options.indirect_bounce != m_options.indirect_bounce) {
+        m_reset_requested = true; // accumulated samples already mix in bounce light
+    }
+    if ((options.denoise       != m_options.denoise      ) ||
+        (options.dilation      != m_options.dilation     ) ||
+        (options.seam_blend    != m_options.seam_blend   ) ||
+        (options.gutter_texels != m_options.gutter_texels)) {
+        m_publish_requested = true; // republish the current average with the new stages
+    }
+    m_options = options;
 }
 
 void Lightmap_baker::record_resolve_and_dilate(erhe::graphics::Command_buffer& command_buffer, const bool with_denoise)
@@ -2487,13 +2712,16 @@ void Lightmap_baker::record_resolve_and_dilate(erhe::graphics::Command_buffer& c
         command_buffer.transition_texture_layout(*m_albedo_texture, Image_layout::shader_read_only_optimal);
         denoised = true;
     }
-    if (m_dilate_pipeline && m_dilate_texture) {
+    if (m_options.dilation && m_dilate_pipeline && m_dilate_texture) {
         command_buffer.transition_texture_layout(*m_dilate_texture, Image_layout::general);
-        // Even iterations from the lightmap, odd from the denoise scratch,
-        // so the last write lands in m_lightmap_texture either way.
-        const int dilate_iterations = denoised
-            ? (2 * (s_padding / 2) + 1)
-            : (2 * ((s_padding + 1) / 2));
+        // Gutter-aware clamp: each dilation iteration grows charts one
+        // texel; more than half the chart gutter would fill texels the
+        // neighboring chart's sampling footprint owns (opposing fronts
+        // never overwrite each other, but the FILL itself is what filter
+        // taps read - a chart edge sampled bicubically reaches 2 texels
+        // out, so the gutter must both be wide enough AND stay half-owned).
+        const int gutter_limit     = std::max(1, static_cast<int>(std::floor(0.5f * m_options.gutter_texels)));
+        const int dilate_iterations = std::min(s_padding, gutter_limit);
         Texture* const ping[2] = {
             denoised ? m_dilate_texture.get()   : m_lightmap_texture.get(),
             denoised ? m_lightmap_texture.get() : m_dilate_texture.get()
@@ -2513,8 +2741,29 @@ void Lightmap_baker::record_resolve_and_dilate(erhe::graphics::Command_buffer& c
             }
             command_buffer.memory_barrier(Memory_barrier_mask::shader_image_access_barrier_bit);
         }
+        // The iteration count is now driven by the gutter, not by ping-pong
+        // parity; copy back when the final write landed in the scratch.
+        if (ping[dilate_iterations & 1] != m_lightmap_texture.get()) {
+            command_buffer.transition_texture_layout(*m_dilate_texture,   Image_layout::transfer_src_optimal);
+            command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::transfer_dst_optimal);
+            {
+                Blit_command_encoder blit = m_graphics_device.make_blit_command_encoder(command_buffer);
+                blit.copy_from_texture(m_dilate_texture.get(), m_lightmap_texture.get());
+            }
+        }
+    } else if (denoised) {
+        // Dilation is off but the denoiser wrote into the scratch; copy it
+        // back so the published atlas holds the denoised result.
+        command_buffer.transition_texture_layout(*m_dilate_texture,   Image_layout::transfer_src_optimal);
+        command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::transfer_dst_optimal);
+        {
+            Blit_command_encoder blit = m_graphics_device.make_blit_command_encoder(command_buffer);
+            blit.copy_from_texture(m_dilate_texture.get(), m_lightmap_texture.get());
+        }
     }
-    record_seam_blend(command_buffer);
+    if (m_options.seam_blend) {
+        record_seam_blend(command_buffer);
+    }
     command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::shader_read_only_optimal);
 }
 
@@ -2635,6 +2884,15 @@ void Lightmap_baker::tick(erhe::graphics::Command_buffer& command_buffer, Scene_
         hash_lighting = fnv1a64(&light->inner_spot_angle,   sizeof(float),           hash_lighting);
         hash_lighting = fnv1a64(&light->outer_spot_angle,   sizeof(float),           hash_lighting);
     }
+    // Sky lighting (set_sky_lighting, called before tick): sun moves, sky
+    // toggles or parameter edits invalidate accumulated samples like any
+    // light edit.
+    {
+        const uint32_t sky_enabled = m_sky.enabled ? 1u : 0u;
+        hash_lighting = fnv1a64(&sky_enabled,                     sizeof(uint32_t),  hash_lighting);
+        hash_lighting = fnv1a64(&m_sky.sun_direction_and_intensity, sizeof(glm::vec4), hash_lighting);
+        hash_lighting = fnv1a64(&m_sky.sky_params,                  sizeof(glm::vec4), hash_lighting);
+    }
     for (const std::shared_ptr<erhe::scene::Mesh>& mesh : scene_root.layers().content()->meshes) {
         // Occluder set: any visible content mesh shadows the bake, so its
         // motion invalidates accumulated visibility.
@@ -2667,6 +2925,10 @@ void Lightmap_baker::tick(erhe::graphics::Command_buffer& command_buffer, Scene_
             // tick does not see a spurious G-buffer invalidation.
             hash_gbuffer = region_hash();
             reset = true;
+            // The swap that changed the layout was applied THIS frame; its
+            // vertex uploads have not been submitted yet (see the member's
+            // comment). Bake the G-buffer next tick, not now.
+            m_gbuffer_upload_defer = true;
         }
         if (hash_gbuffer != m_hash_gbuffer) {
             m_hash_gbuffer  = hash_gbuffer;
@@ -2684,8 +2946,20 @@ void Lightmap_baker::tick(erhe::graphics::Command_buffer& command_buffer, Scene_
         if (!update_layout(scene_root, texels_per_meter)) {
             return;
         }
+        m_gbuffer_upload_defer = true;
     }
     if (!m_gbuffer_valid) {
+        // A layout change this tick means the swapped meshes' vertex uploads
+        // are still queued in the frame command buffer, which is submitted
+        // AFTER this standalone bake would run - the raster would read
+        // not-yet-copied buffers and the affected regions would stay black
+        // forever (the hashes match afterwards, so nothing re-rasters).
+        // Skip one tick; the next tick runs after the upload-carrying frame
+        // was submitted ahead of us on the same queue.
+        if (m_gbuffer_upload_defer) {
+            m_gbuffer_upload_defer = false;
+            return;
+        }
         // Standalone submit (wait_idle): a hitch, but only on invalidation
         // events (transform edit of a lightmapped mesh), not steady state.
         if (!bake_gbuffer()) {
@@ -2765,7 +3039,9 @@ void Lightmap_baker::tick(erhe::graphics::Command_buffer& command_buffer, Scene_
         encoder.set_sampled_image(4u, *m_normal_texture,   *m_nearest_sampler);
         encoder.set_sampled_image(5u, *m_albedo_texture,   *m_linear_sampler);
         encoder.set_sampled_image(6u, *m_lightmap_texture, *m_linear_sampler);
-        encoder.set_storage_image(9u, *m_accum_texture);
+        encoder.set_sampled_image(7u, (m_sky.transmittance_lut != nullptr) ? *m_sky.transmittance_lut : *m_albedo_texture, *m_linear_sampler);
+        encoder.set_sampled_image(8u, (m_sky.multiscatter_lut  != nullptr) ? *m_sky.multiscatter_lut  : *m_albedo_texture, *m_linear_sampler);
+        encoder.set_storage_image(11u, *m_accum_texture);
         encoder.dispatch_compute(
             (static_cast<std::uintptr_t>(m_layout.width) + 7) / 8,
             (static_cast<std::uintptr_t>(band_rows)      + 7) / 8,
@@ -2789,9 +3065,10 @@ void Lightmap_baker::tick(erhe::graphics::Command_buffer& command_buffer, Scene_
     // feedback) keep sampling the last denoised publish.
     if (m_sweep_count == 0) {
         record_resolve_and_dilate(command_buffer, false);
-    } else if (sweep_completed) {
-        record_resolve_and_dilate(command_buffer, true);
+    } else if (sweep_completed || m_publish_requested) {
+        record_resolve_and_dilate(command_buffer, m_options.denoise);
     }
+    m_publish_requested = false;
     m_lightmap_valid = true;
     if (!m_regions_published) {
         publish_regions();
@@ -2799,7 +3076,7 @@ void Lightmap_baker::tick(erhe::graphics::Command_buffer& command_buffer, Scene_
     ++m_frame_counter;
 }
 
-auto Lightmap_baker::debug_write_lightmap_png(const std::string& path) -> bool
+auto Lightmap_baker::read_lightmap(std::vector<float>& out_rgba) -> bool
 {
     using namespace erhe::graphics;
     if (!m_lightmap_valid || !m_lightmap_texture) {
@@ -2849,11 +3126,134 @@ auto Lightmap_baker::debug_write_lightmap_png(const std::string& path) -> bool
     m_graphics_device.submit_command_buffers(std::span<Command_buffer* const>{command_buffers});
     m_graphics_device.wait_idle();
 
-    std::vector<float> data(texel_count * 4u);
+    out_rgba.resize(texel_count * 4u);
     {
         const std::span<std::byte> mapped = readback.map_bytes(0, byte_count);
-        std::memcpy(data.data(), mapped.data(), byte_count);
+        std::memcpy(out_rgba.data(), mapped.data(), byte_count);
         readback.unmap();
+    }
+    return true;
+}
+
+// Per-facet chart order keys (leak camouflage; see build_chart_order_keys
+// in the header): mean baked luminance per facet, averaged over the covered
+// texels of the facet's UV bounding box from a CPU readback of the
+// published atlas (centroid texel as fallback for facets with no coverage).
+auto Lightmap_baker::build_chart_order_keys() -> std::unordered_map<const erhe::geometry::Geometry*, std::vector<float>>
+{
+    std::unordered_map<const erhe::geometry::Geometry*, std::vector<float>> keys;
+    std::vector<float> atlas;
+    if (!read_lightmap(atlas) || (m_layout.width == 0)) {
+        return keys;
+    }
+    const int page_width  = m_layout.width;
+    const int page_height = m_layout.height;
+    for (const Instance_region& region : m_layout.regions) {
+        if (!region.mesh) {
+            continue;
+        }
+        const std::vector<erhe::scene::Mesh_primitive>& primitives = region.mesh->get_primitives();
+        if (region.primitive_index >= primitives.size()) {
+            continue;
+        }
+        const erhe::primitive::Primitive* const primitive = primitives[region.primitive_index].primitive.get();
+        if ((primitive == nullptr) || !primitive->render_shape) {
+            continue;
+        }
+        const std::shared_ptr<erhe::geometry::Geometry>& geometry = primitive->render_shape->get_geometry();
+        if (!geometry) {
+            continue;
+        }
+        erhe::geometry::Mesh_attributes& attributes = geometry->get_attributes();
+        if (!attributes.corner_texcoord_2.has(0)) {
+            continue;
+        }
+        const GEO::Mesh& geo_mesh = geometry->get_mesh();
+        std::vector<float>& facet_keys = keys[geometry.get()];
+        facet_keys.assign(geo_mesh.facets.nb(), 0.0f);
+        for (GEO::index_t facet : geo_mesh.facets) {
+            const GEO::index_t corner_count = geo_mesh.facets.nb_corners(facet);
+            if (corner_count == 0) {
+                continue;
+            }
+            GEO::vec2f uv_sum{0.0f, 0.0f};
+            GEO::vec2f uv_min{ std::numeric_limits<float>::max(),  std::numeric_limits<float>::max()};
+            GEO::vec2f uv_max{-std::numeric_limits<float>::max(), -std::numeric_limits<float>::max()};
+            GEO::index_t uv_count = 0;
+            for (GEO::index_t corner : geo_mesh.facets.corners(facet)) {
+                const std::optional<GEO::vec2f> uv = attributes.corner_texcoord_2.try_get(corner);
+                if (uv.has_value()) {
+                    uv_sum = uv_sum + uv.value();
+                    uv_min.x = std::min(uv_min.x, uv.value().x);
+                    uv_min.y = std::min(uv_min.y, uv.value().y);
+                    uv_max.x = std::max(uv_max.x, uv.value().x);
+                    uv_max.y = std::max(uv_max.y, uv.value().y);
+                    ++uv_count;
+                }
+            }
+            if (uv_count == 0) {
+                continue;
+            }
+            const auto texel_x_of = [&region, page_width](const float u) -> int {
+                const float atlas_u = u * region.uv_scale_offset.x + region.uv_scale_offset.z;
+                return std::clamp(static_cast<int>(atlas_u * static_cast<float>(page_width)), 0, page_width - 1);
+            };
+            const auto texel_y_of = [&region, page_height](const float v) -> int {
+                const float atlas_v = v * region.uv_scale_offset.y + region.uv_scale_offset.w;
+                return std::clamp(static_cast<int>(atlas_v * static_cast<float>(page_height)), 0, page_height - 1);
+            };
+            const auto luminance_at = [&atlas, page_width](const int texel_x, const int texel_y) -> float {
+                const std::size_t index = (static_cast<std::size_t>(texel_y) * page_width + texel_x) * 4u;
+                return
+                    0.2126f * atlas[index + 0] +
+                    0.7152f * atlas[index + 1] +
+                    0.0722f * atlas[index + 2];
+            };
+            // Average all covered texels (alpha > 0 = rasterized chart
+            // interior) in the facet's UV bounding box; a single centroid
+            // texel is too noisy for tiny per-facet charts - it can land on
+            // a gutter or dilated texel and interleave dark/bright facets
+            // in the pack sort. Strided so huge facets stay bounded.
+            int x0 = texel_x_of(uv_min.x);
+            int x1 = texel_x_of(uv_max.x);
+            int y0 = texel_y_of(uv_min.y);
+            int y1 = texel_y_of(uv_max.y);
+            if (x1 < x0) { std::swap(x0, x1); }
+            if (y1 < y0) { std::swap(y0, y1); }
+            const int stride_x = std::max(1, (x1 - x0 + 1) / 64);
+            const int stride_y = std::max(1, (y1 - y0 + 1) / 64);
+            double      luminance_sum = 0.0;
+            std::size_t covered_count = 0;
+            for (int texel_y = y0; texel_y <= y1; texel_y += stride_y) {
+                for (int texel_x = x0; texel_x <= x1; texel_x += stride_x) {
+                    const std::size_t index = (static_cast<std::size_t>(texel_y) * page_width + texel_x) * 4u;
+                    if (atlas[index + 3] <= 0.0f) {
+                        continue;
+                    }
+                    luminance_sum += luminance_at(texel_x, texel_y);
+                    ++covered_count;
+                }
+            }
+            if (covered_count > 0) {
+                facet_keys[facet] = static_cast<float>(luminance_sum / static_cast<double>(covered_count));
+            } else {
+                const GEO::vec2f centroid = uv_sum / static_cast<float>(uv_count);
+                facet_keys[facet] = luminance_at(texel_x_of(centroid.x), texel_y_of(centroid.y));
+            }
+        }
+    }
+    return keys;
+}
+
+auto Lightmap_baker::debug_write_lightmap_png(const std::string& path) -> bool
+{
+    using namespace erhe::graphics;
+    const int         width       = m_layout.width;
+    const int         height      = m_layout.height;
+    const std::size_t texel_count = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
+    std::vector<float> data;
+    if (!read_lightmap(data)) {
+        return false;
     }
 
     std::unique_ptr<Image_writer> writer = Image_writer::create();

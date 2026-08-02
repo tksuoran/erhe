@@ -93,6 +93,8 @@
 #include "scene/scene_builder.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/scene_settings_resolve.hpp"
+#include "config/generated/sky_config.hpp"
 #include "scene/viewport_scene_views.hpp"
 #include "texture_graph/graph_texture.hpp"
 #include "texture_graph/texture_graph_window.hpp"
@@ -108,6 +110,7 @@
 #include "transform/scale_tool.hpp"
 #include "windows/editor_windows.hpp"
 #include "windows/frame_pacing_window.hpp"
+#include "windows/lightmap_texture_window.hpp"
 #include "windows/lightmap_window.hpp"
 #include "windows/inventory_window.hpp"
 #include "windows/properties.hpp"
@@ -766,12 +769,66 @@ public:
         // 3a): record this frame's budgeted gather slice + publish into the
         // frame command buffer before the rendergraph samples the published
         // atlas.
-        if (should_render && m_lightmap_baker && m_lightmap_baker->is_baking_enabled()) {
-            const std::shared_ptr<Scene_root> lightmap_scene_root = m_app_context.selection->get_active_scene_root();
-            if (lightmap_scene_root) {
-                erhe::log::set_breadcrumb("tick: lightmap bake");
-                m_lightmap_baker->tick(command_buffer, *lightmap_scene_root.get(), m_app_context.editor_settings->lightmap.texels_per_meter);
-                m_forward_renderer->set_lightmap_texture(m_lightmap_baker->get_lightmap_texture());
+        {
+            const Lightmap_config& lightmap_config = m_app_context.editor_settings->lightmap;
+            m_forward_renderer->set_lightmap_bicubic(lightmap_config.bicubic_sampling);
+            if (m_lightmap_window) {
+                // Deferred Reorder-Charts-By-Bake requests: the atlas
+                // readback must run here, before any lightmap commands are
+                // recorded into the frame, never mid-ImGui.
+                m_lightmap_window->update();
+            }
+            if (m_lightmap_baker) {
+                m_lightmap_baker->set_options(
+                    Lightmap_baker::Bake_options{
+                        .indirect_bounce = lightmap_config.indirect_bounce,
+                        .terminator_fix  = lightmap_config.terminator_fix,
+                        .denoise         = lightmap_config.denoise,
+                        .dilation        = lightmap_config.dilation,
+                        .seam_blend      = lightmap_config.seam_blend,
+                        .gutter_texels   = lightmap_config.uv_gutter_texels
+                    }
+                );
+            }
+            if (should_render && m_lightmap_baker && m_lightmap_baker->is_baking_enabled()) {
+                const std::shared_ptr<Scene_root> lightmap_scene_root = m_app_context.selection->get_active_scene_root();
+                if (lightmap_scene_root) {
+                    // Procedural sky lighting for the bake: same per-scene
+                    // sky resolution + sun direction the viewport uses, so
+                    // the baked environment matches the rendered background.
+                    // Only atmosphere mode (mode == 1) contributes; the LUTs
+                    // exist once a viewport has rendered the atmosphere at
+                    // least once (ensure_luts), and the baker's lighting
+                    // hash resets accumulation when this state changes.
+                    {
+                        const Sky_config& sky_config = get_effective_sky(*m_app_context.editor_settings, *lightmap_scene_root);
+                        Lightmap_baker::Sky_lighting sky{};
+                        sky.enabled =
+                            sky_config.enabled &&
+                            (sky_config.mode == 1) &&
+                            m_sky_renderer &&
+                            m_sky_renderer->is_atmosphere_supported() &&
+                            m_sky_renderer->are_luts_ready();
+                        if (sky.enabled) {
+                            sky.transmittance_lut = m_sky_renderer->get_transmittance_lut();
+                            sky.multiscatter_lut  = m_sky_renderer->get_multiscatter_lut();
+                            sky.sun_direction_and_intensity = glm::vec4{
+                                Sky_renderer::resolve_sun_direction(sky_config, lightmap_scene_root.get()),
+                                sky_config.sun_intensity
+                            };
+                            sky.sky_params = glm::vec4{
+                                static_cast<float>(sky_config.march_steps),
+                                sky_config.observer_altitude_km,
+                                0.0f,
+                                0.0f
+                            };
+                        }
+                        m_lightmap_baker->set_sky_lighting(sky);
+                    }
+                    erhe::log::set_breadcrumb("tick: lightmap bake");
+                    m_lightmap_baker->tick(command_buffer, *lightmap_scene_root.get(), lightmap_config.texels_per_meter);
+                    m_forward_renderer->set_lightmap_texture(m_lightmap_baker->get_lightmap_texture());
+                }
             }
         }
 
@@ -1834,6 +1891,9 @@ public:
                 m_editor_windows         = std::make_unique<Editor_windows                  >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_frame_pacing_window    = std::make_unique<Frame_pacing_window             >(*m_imgui_renderer.get(), *m_imgui_windows.get());
                 m_lightmap_window        = std::make_unique<Lightmap_window                 >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
+                m_lightmap_texture_window = std::make_unique<Lightmap_texture_window        >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
+                m_app_context.lightmap_texture_window = m_lightmap_texture_window.get();
+                m_app_context.lightmap_window         = m_lightmap_window.get();
                 m_app_context.frame_pacing_window   = m_frame_pacing_window.get();
                 m_app_context.frame_pacing_observer = &m_frame_pacing_observer;
                 m_rendergraph_window     = std::make_unique<Rendergraph_window              >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
@@ -3687,6 +3747,7 @@ public:
     std::unique_ptr<Editor_windows                  >        m_editor_windows;
     std::unique_ptr<Frame_pacing_window             >        m_frame_pacing_window;
     std::unique_ptr<Lightmap_window                 >        m_lightmap_window;
+    std::unique_ptr<Lightmap_texture_window         >        m_lightmap_texture_window;
     std::unique_ptr<Rendergraph_window              >        m_rendergraph_window;
     std::unique_ptr<Animation_player                >        m_animation_player;
     std::unique_ptr<Animation_window                >        m_animation_window;

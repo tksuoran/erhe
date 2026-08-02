@@ -21,10 +21,13 @@ namespace erhe::scene_renderer {
     class Program_interface;
 }
 
+struct Sky_config;
+
 namespace editor {
 
 class App_context;
 class Render_context;
+class Scene_root;
 
 // Physically-based procedural sky (Sebastien Hillaire, EGSR 2020) rendered as
 // a fullscreen pass into the viewport render pass, selected via the sky mode
@@ -64,6 +67,19 @@ public:
     // Draws the atmosphere fullscreen pass into the current viewport render
     // pass (context.encoder). No-op when atmosphere is unsupported.
     void render_atmosphere(const Render_context& context);
+
+    // LUT access for the lightmap baker's sky term (Lightmap_baker::
+    // set_sky_lighting): valid only when atmosphere is supported AND
+    // are_luts_ready() (ensure_luts ran).
+    [[nodiscard]] auto get_transmittance_lut() const -> erhe::graphics::Texture* { return m_transmittance_lut.get(); }
+    [[nodiscard]] auto get_multiscatter_lut () const -> erhe::graphics::Texture* { return m_multiscatter_lut.get(); }
+    [[nodiscard]] auto are_luts_ready       () const -> bool                     { return m_luts_ready; }
+
+    // Toward-sun direction for a scene: the scene's first directional
+    // light when present, else the config's elevation / azimuth. The same
+    // resolution render_atmosphere() uses, shared with the lightmap baker
+    // so the baked sky and the rendered sky always agree on the sun.
+    [[nodiscard]] static auto resolve_sun_direction(const Sky_config& sky_config, Scene_root* scene_root) -> glm::vec3;
 
 private:
     App_context&                             m_context;

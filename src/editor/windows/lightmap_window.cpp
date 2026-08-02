@@ -20,6 +20,8 @@
 
 #include <imgui/imgui.h>
 
+#include <algorithm>
+
 namespace editor {
 
 namespace {
@@ -67,29 +69,83 @@ Lightmap_window::Lightmap_window(
 
 void Lightmap_window::generate_lightmap_uvs()
 {
-    const std::vector<std::shared_ptr<erhe::Item_base>> items = collect_lightmapped_mesh_nodes(m_context);
-    if (items.empty()) {
+    queue_generate_lightmap_uvs({});
+}
+
+auto Lightmap_window::reorder_charts_by_bake() -> bool
+{
+    if (m_context.lightmap_baker == nullptr) {
+        return false;
+    }
+    std::unordered_map<const erhe::geometry::Geometry*, std::vector<float>> keys = m_context.lightmap_baker->build_chart_order_keys();
+    if (keys.empty()) {
+        return false; // no bake yet - nothing to order by
+    }
+    if (!queue_generate_lightmap_uvs(std::move(keys))) {
+        return false;
+    }
+    // Without the interactive bake nothing would rebake after the primitive
+    // swap and the new UVs would sample the stale atlas (black / garbled).
+    m_context.lightmap_baker->set_baking_enabled(true);
+    return true;
+}
+
+void Lightmap_window::update()
+{
+    if (!m_reorder_requested) {
         return;
     }
-    const float hard_angles_deg  = m_context.editor_settings->lightmap.hard_angles_deg;
-    const float texels_per_meter = m_context.editor_settings->lightmap.texels_per_meter;
+    // Wait for in-flight operations first (matching the button's disabled
+    // state; the request may have been set the frame before ops appeared).
+    const std::size_t in_flight =
+        static_cast<std::size_t>(m_context.pending_async_ops.load()) +
+        static_cast<std::size_t>(m_context.running_async_ops.load()) +
+        ((m_context.operation_stack != nullptr) ? m_context.operation_stack->get_queued_count() : 0u);
+    if (in_flight > 0) {
+        return; // retry next frame
+    }
+    m_reorder_requested = false;
+    reorder_charts_by_bake();
+}
+
+auto Lightmap_window::queue_generate_lightmap_uvs(std::unordered_map<const erhe::geometry::Geometry*, std::vector<float>>&& per_facet_chart_order) -> bool
+{
+    const std::vector<std::shared_ptr<erhe::Item_base>> items = collect_lightmapped_mesh_nodes(m_context);
+    if (items.empty()) {
+        return false;
+    }
+    const Lightmap_config& config = m_context.editor_settings->lightmap;
+    const float hard_angles_deg  = config.hard_angles_deg;
+    const float texels_per_meter = config.texels_per_meter;
+    const float gutter_texels    = config.uv_gutter_texels;
+    const float min_chart_texels = config.uv_min_chart_texels;
+    const auto  parameterizer    = static_cast<erhe::geometry::operation::Atlas_parameterizer>(
+        std::clamp(config.uv_parameterizer, 0, 4)
+    );
+    const auto  packer           = static_cast<erhe::geometry::operation::Atlas_packer>(
+        std::clamp(config.uv_packer, 0, 2)
+    );
     async_for_nodes_with_mesh(
         m_context,
         items,
-        [this, hard_angles_deg, texels_per_meter](Mesh_operation_parameters&& params) {
+        [this, hard_angles_deg, texels_per_meter, gutter_texels, min_chart_texels, parameterizer, packer, per_facet_chart_order = std::move(per_facet_chart_order)](Mesh_operation_parameters&& params) {
             // Runs on a tf::Executor worker: queue() is main-thread-only.
             m_context.operation_stack->queue_from_thread(
                 std::make_shared<Make_atlas_operation>(
                     std::move(params),
                     2, // lightmap UV channel (texcoord usage_index 2)
                     hard_angles_deg,
-                    erhe::geometry::operation::Atlas_parameterizer::abf,
-                    erhe::geometry::operation::Atlas_packer::xatlas,
-                    texels_per_meter // density-aware chart gutters
+                    parameterizer,
+                    packer,
+                    texels_per_meter, // density-aware chart gutters
+                    gutter_texels,
+                    min_chart_texels,
+                    per_facet_chart_order
                 )
             );
         }
     );
+    return true;
 }
 
 void Lightmap_window::imgui()
@@ -109,20 +165,92 @@ void Lightmap_window::imgui()
         ImGui::SetTooltip("Lightmap texel density; sets each instance's atlas region size. The one quality knob.");
     }
 
-    ImGui::BeginDisabled(lightmapped.empty());
+    // Unwrap method knobs (doc/geogram_atlas_packing_feature_request.md):
+    // exposed so unwrap defects (overlapping / folded UV triangles, see the
+    // Lightmap Texture window's overlap check) can be iterated on live.
+    {
+        const char* const parameterizer_names[] = { "Projection", "LSCM", "Spectral LSCM", "ABF++", "Per-facet" };
+        const char* const packer_names[]        = { "None", "Tetris", "xatlas" };
+        ImGui::SetNextItemWidth(140.0f);
+        if (ImGui::Combo("UV parameterizer", &config.uv_parameterizer, parameterizer_names, IM_ARRAYSIZE(parameterizer_names))) {
+            m_context.app_settings->settings_store().touch();
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "Chart parameterizer for Generate Lightmap UVs. ABF++ is the Geogram default.\n"
+                "Per-facet: every facet is its own chart (no Geogram; zero overlaps by construction,\n"
+                "no shared texels - doc/lightmap_seam_driven_unwrap_plan.md first pass)."
+            );
+        }
+        ImGui::SetNextItemWidth(140.0f);
+        if (ImGui::Combo("UV packer", &config.uv_packer, packer_names, IM_ARRAYSIZE(packer_names))) {
+            m_context.app_settings->settings_store().touch();
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Geogram chart packer; with texel density > 0 erhe repacks charts itself,\nbut the packer still affects chart normalization.");
+        }
+        ImGui::SetNextItemWidth(140.0f);
+        if (ImGui::DragFloat("Chart gutter (texels)", &config.uv_gutter_texels, 0.25f, 0.0f, 16.0f, "%.2f")) {
+            m_context.app_settings->settings_store().touch();
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Minimum empty space between charts, in texels at the expected density (erhe's own packing).");
+        }
+        // Leak condition: filter taps reach outside the chart (bilinear 1
+        // texel, bicubic 2); each chart owns only half the gutter, so the
+        // gutter must be at least twice the filter reach.
+        const float required_gutter = config.bicubic_sampling ? 4.0f : 2.0f;
+        if (config.uv_gutter_texels < required_gutter) {
+            ImGui::TextColored(
+                ImVec4{1.0f, 0.8f, 0.2f, 1.0f},
+                "Gutter %.1f < %.0f texels: %s taps will read the neighboring chart's light (cross-chart leak)",
+                config.uv_gutter_texels,
+                required_gutter,
+                config.bicubic_sampling ? "bicubic" : "bilinear"
+            );
+        }
+        ImGui::SetNextItemWidth(140.0f);
+        if (ImGui::DragFloat("Min chart size (texels)", &config.uv_min_chart_texels, 0.25f, 0.0f, 16.0f, "%.2f")) {
+            m_context.app_settings->settings_store().touch();
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "Charts smaller than this (shorter side, in texels at the expected density) are scaled up\n"
+                "(capped 16x) so every chart contains at least one texel center and bakes valid data.\n"
+                "0 disables. Matters most for per-facet unwraps of dense meshes."
+            );
+        }
+    }
+
+    // Stale-data guard: Generate Lightmap UVs is queued async, and even
+    // after the worker finishes its operation still sits in the operation
+    // stack until the main thread executes it. Acting on the layout or
+    // baking in that window would consume the OLD UVs and leave stale
+    // results; hold the downstream buttons until both drain.
+    const std::size_t async_ops =
+        static_cast<std::size_t>(m_context.pending_async_ops.load()) +
+        static_cast<std::size_t>(m_context.running_async_ops.load()) +
+        ((m_context.operation_stack != nullptr) ? m_context.operation_stack->get_queued_count() : 0u);
+    const bool async_busy = async_ops > 0;
+    if (async_busy) {
+        ImGui::TextColored(ImVec4{1.0f, 0.8f, 0.2f, 1.0f}, "Operations in flight: %zu (UV generation?) - layout / bake disabled", async_ops);
+    }
+
+    ImGui::BeginDisabled(lightmapped.empty() || async_busy);
     if (ImGui::Button("Generate Lightmap UVs")) {
         generate_lightmap_uvs();
     }
     ImGui::EndDisabled();
     if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip(
-            "Automatic UV unwrap (ABF + xatlas) into texcoord channel 2 for every lightmapped mesh.\n"
-            "Undoable. Inspect with Scene View Config > Shader Debug > TexCoord 2 (Lightmap)."
+            "Automatic UV unwrap into texcoord channel 2 for every lightmapped mesh (method: UV parameterizer above).\n"
+            "Undoable. Inspect with the Lightmap Texture window or Scene View Config > Shader Debug > TexCoord 2 (Lightmap)."
         );
     }
 
     if (m_context.lightmap_baker != nullptr) {
         ImGui::SameLine();
+        ImGui::BeginDisabled(async_busy);
         if (ImGui::Button("Update Atlas Layout")) {
             const std::shared_ptr<Scene_root> scene_root = m_context.selection->get_active_scene_root();
             if (scene_root) {
@@ -132,8 +260,10 @@ void Lightmap_window::imgui()
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("Pack every lightmapped primitive with channel-2 UVs into the shared atlas page.");
         }
+        ImGui::EndDisabled(); // async_busy (Update Atlas Layout)
         const Lightmap_baker::Atlas_layout& layout = m_context.lightmap_baker->get_layout();
         if (layout.width > 0) {
+            ImGui::BeginDisabled(async_busy);
             if (ImGui::Button("Bake Direct Lighting")) {
                 const std::shared_ptr<Scene_root> scene_root = m_context.selection->get_active_scene_root();
                 if (scene_root && m_context.lightmap_baker->bake_gbuffer() && m_context.lightmap_baker->bake_direct(*scene_root.get())) {
@@ -148,16 +278,34 @@ void Lightmap_window::imgui()
                     "into the lightmap atlas. Lightmapped meshes sample it in place of ambient light."
                 );
             }
+            // Per-facet mode only: chart order keys are indexed by facet id.
+            ImGui::SameLine();
+            ImGui::BeginDisabled(config.uv_parameterizer != 4);
+            if (ImGui::Button("Reorder Charts By Bake")) {
+                // Deferred to Lightmap_window::update() at a safe point in
+                // the frame - the readback must not run mid-ImGui.
+                m_reorder_requested = true;
+            }
+            ImGui::EndDisabled();
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip(
+                    "Leak camouflage (per-facet mode, needs a bake): re-unwrap with charts packed in\n"
+                    "baked-luminance order, so similarly lit facets are atlas neighbors and cross-chart\n"
+                    "filter-tap / dilation pollution picks up similar values. Rebakes automatically."
+                );
+            }
+            ImGui::EndDisabled(); // async_busy (Bake Direct Lighting)
             ImGui::Text("Atlas: %d x %d, %zu regions", layout.width, layout.height, layout.regions.size());
             if (ImGui::TreeNode("Regions")) {
                 for (const Lightmap_baker::Instance_region& region : layout.regions) {
                     ImGui::Text(
-                        "%s[%zu]: %d x %d at (%d, %d), %.2f m^2",
+                        "%s[%zu]: %d x %d at (%d, %d), %.2f m^2, UV coverage %.0f%%",
                         region.mesh ? region.mesh->get_name().c_str() : "<gone>",
                         region.primitive_index,
                         region.width, region.height,
                         region.x, region.y,
-                        region.world_area
+                        region.world_area,
+                        100.0f * region.uv_coverage
                     );
                 }
                 ImGui::TreePop();
@@ -192,6 +340,40 @@ void Lightmap_window::imgui()
                 m_context.lightmap_baker->get_cursor_row()
             );
         }
+    }
+
+    // Optional features (all on by default; off = A/B comparison and
+    // debugging). The baker picks the changes up through
+    // Lightmap_baker::set_options, which handles the required invalidation;
+    // bicubic sampling is a pure viewport toggle.
+    ImGui::SeparatorText("Features");
+    bool touched = false;
+    touched |= ImGui::Checkbox("Indirect bounce", &config.indirect_bounce);
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("One cosine-weighted hemisphere bounce ray per sample; off = pure direct lighting.\nToggling restarts accumulation.");
+    }
+    touched |= ImGui::Checkbox("Terminator fix", &config.terminator_fix);
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Phong-tessellated smooth sample positions (shadow-terminator fix).\nToggling re-rasters the G-buffer and restarts accumulation.");
+    }
+    touched |= ImGui::Checkbox("Denoise (JNLM)", &config.denoise);
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Joint non-local means denoise of the published atlas at each per-sweep publish.");
+    }
+    touched |= ImGui::Checkbox("Dilation", &config.dilation);
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Flood valid texels into chart padding at publish so filtering never reads unbaked (black) texels.");
+    }
+    touched |= ImGui::Checkbox("Seam blend", &config.seam_blend);
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Blend both sides of every UV seam edge toward each other at publish.");
+    }
+    touched |= ImGui::Checkbox("Bicubic sampling", &config.bicubic_sampling);
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Viewport lightmap filtering: cubic B-spline reconstruction instead of bilinear.\nApplies immediately; no rebake needed.");
+    }
+    if (touched) {
+        m_context.app_settings->settings_store().touch();
     }
 }
 
