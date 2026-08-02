@@ -213,6 +213,10 @@ private:
     std::unique_ptr<erhe::graphics::Render_pipeline>   m_pipeline;
     std::shared_ptr<erhe::graphics::Texture>           m_position_texture;
     std::shared_ptr<erhe::graphics::Texture>           m_normal_texture;
+    // Phong-tessellation smooth position (article terminator fix); consumed
+    // by the one-shot adjust pass, which folds the validated result into
+    // m_position_texture, so the gather never reads this directly.
+    std::shared_ptr<erhe::graphics::Texture>           m_smooth_position_texture;
     bool                                               m_gbuffer_valid{false};
     bool                                               m_gbuffer_adjusted{false}; // virtual-offset pass ran for this G-buffer
     // VK_EXT_conservative_rasterization active on the G-buffer pipeline:

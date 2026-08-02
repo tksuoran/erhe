@@ -102,14 +102,32 @@ constexpr const char* c_vertex_source = R"GLSL(
 layout(location = 0) out vec3 v_position;
 layout(location = 1) out vec3 v_normal;
 layout(location = 2) out vec3 v_albedo;
+layout(location = 3) out vec3 v_nn_col0;
+layout(location = 4) out vec3 v_nn_col1;
+layout(location = 5) out vec3 v_nn_col2;
+layout(location = 6) out vec3 v_nb;
 
 void main()
 {
     vec2 atlas_uv = a_texcoord_2 * lightmap_draw.uv_scale_offset.xy + lightmap_draw.uv_scale_offset.zw;
     vec2 ndc      = atlas_uv * 2.0 - 1.0 + lightmap_draw.jitter_ndc.xy;
     gl_Position   = vec4(ndc.x, ERHE_LM_Y_SIGN * ndc.y, 0.0, 1.0);
-    v_position    = (lightmap_draw.world_from_node * vec4(a_position, 1.0)).xyz;
-    v_normal      = normalize(mat3(lightmap_draw.world_from_node) * a_normal);
+    vec3 world_position = (lightmap_draw.world_from_node * vec4(a_position, 1.0)).xyz;
+    vec3 world_normal   = normalize(mat3(lightmap_draw.world_from_node) * a_normal);
+    v_position    = world_position;
+    v_normal      = world_normal;
+    // Phong-tessellation smooth position (article terminator fix), split
+    // into linearly interpolable parts: with barycentrics w_i,
+    //   smooth(p) = p - sum_i w_i * dot(p - p_i, n_i) * n_i
+    //             = p - (M(p) * p - b(p))
+    // where M = sum_i w_i * n_i n_i^T and b = sum_i w_i * dot(p_i, n_i) n_i
+    // are plain varyings (per-vertex n n^T columns and dot(p, n) n), and the
+    // quadratic term comes from applying interpolated M to interpolated p in
+    // the fragment stage.
+    v_nn_col0     = world_normal * world_normal.x;
+    v_nn_col1     = world_normal * world_normal.y;
+    v_nn_col2     = world_normal * world_normal.z;
+    v_nb          = dot(world_position, world_normal) * world_normal;
     // Read in the VERTEX stage and passed down as a varying: the per-draw
     // UBO binding is declared vertex-stage; a fragment-stage read is
     // undefined (observed live as base_color aliasing world_from_node
@@ -123,6 +141,10 @@ constexpr const char* c_fragment_source = R"GLSL(
 layout(location = 0) in vec3 v_position;
 layout(location = 1) in vec3 v_normal;
 layout(location = 2) in vec3 v_albedo;
+layout(location = 3) in vec3 v_nn_col0;
+layout(location = 4) in vec3 v_nn_col1;
+layout(location = 5) in vec3 v_nn_col2;
+layout(location = 6) in vec3 v_nb;
 
 void main()
 {
@@ -132,11 +154,30 @@ void main()
     // are meters-per-texel; the sqrt(2) covers the diagonal. Rides in
     // normal.w (was a redundant coverage copy) - the gather's virtual
     // offset probes use it as ray length.
-    float texel_size = max(length(dFdx(v_position)), length(dFdy(v_position))) * 1.41421356;
+    vec3  dpdx       = dFdx(v_position);
+    vec3  dpdy       = dFdy(v_position);
+    float texel_size = max(length(dpdx), length(dpdy)) * 1.41421356;
     out_normal   = vec4(normalize(v_normal), texel_size);
     // Diffuse albedo (base color factor x (1 - metallic); textures ignored
     // for now): modulates bounce radiance and later guides JNLM.
     out_albedo   = vec4(v_albedo, 1.0);
+    // Smooth (Phong-tessellated) position: shadow/bounce ray origins start
+    // here instead of the flat surface so the terminator matches the curved
+    // surface the vertex normals imply (see the varying derivation in the
+    // vertex shader). Validated against the FACE plane right away - the
+    // derivatives above span the triangle, so their cross product is the
+    // face normal (oriented by the smooth normal) - because a smooth
+    // position below the face would start rays inside the surface. The
+    // remaining validation (smooth position inside NEIGHBOR geometry) needs
+    // rays and runs in the one-shot adjust pass.
+    vec3 mp          = v_nn_col0 * v_position.x + v_nn_col1 * v_position.y + v_nn_col2 * v_position.z;
+    vec3 smooth_pos  = v_position - (mp - v_nb);
+    vec3 face_normal = cross(dpdx, dpdy);
+    face_normal      = (dot(face_normal, v_normal) < 0.0) ? -face_normal : face_normal;
+    if (dot(smooth_pos - v_position, face_normal) < 0.0) {
+        smooth_pos = v_position;
+    }
+    out_smooth_position = vec4(smooth_pos, 1.0);
 }
 )GLSL";
 
@@ -414,12 +455,17 @@ void main()
 }
 )GLSL";
 
-// Sample-position adjustment (article "virtual offset"), run ONCE per
-// G-buffer bake, before any gathering: a texel center that sits inside
-// nearby geometry (conservative raster + bilinear footprints straddle
-// contacts) leaks. Probe 4 tangential rays half a texel long; the CLOSEST
-// backface hit means the sample is interior - move it just past that
-// surface, writing the position G-buffer in place.
+// Sample-position adjustment, run ONCE per G-buffer bake, before any
+// gathering. Two article defenses in sequence, writing the position
+// G-buffer in place:
+// 1. Terminator fix: promote the ray origin to the Phong-tessellated
+//    smooth position (already validated against the face plane at raster
+//    time) unless the flat->smooth segment is blocked by neighbor
+//    geometry - then keep the flat position.
+// 2. Virtual offset: a texel center that sits inside nearby geometry
+//    (conservative raster + bilinear footprints straddle contacts) leaks.
+//    Probe 4 tangential rays half a texel long; the CLOSEST backface hit
+//    means the sample is interior - move it just past that surface.
 constexpr const char* c_adjust_source = R"GLSL(
 layout(binding = 0) uniform accelerationStructureEXT s_tlas;
 
@@ -458,6 +504,25 @@ void main()
     float texel_size      = normal_and_size.w;
     vec3  p               = position_coverage.xyz;
 
+    // Terminator fix: adopt the smooth position unless the segment from the
+    // flat position to it crosses neighbor geometry (any hit - a frontface
+    // crossing enters something, a backface crossing means we already were
+    // inside something the probes below handle from the flat side).
+#if !defined(ERHE_LM_NO_SMOOTH)
+    vec3  p_smooth = imageLoad(i_smooth_position, texel).xyz;
+    vec3  to_smooth = p_smooth - p;
+    float smooth_distance = length(to_smooth);
+    if (smooth_distance > 1.0e-6) {
+        vec3 dir = to_smooth / smooth_distance;
+        rayQueryEXT smooth_query;
+        rayQueryInitializeEXT(smooth_query, s_tlas, gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT, 0xFFu, adaptive_offset(p, dir), 1.0e-4, dir, smooth_distance);
+        rayQueryProceedEXT(smooth_query);
+        if (rayQueryGetIntersectionTypeEXT(smooth_query, true) == gl_RayQueryCommittedIntersectionNoneEXT) {
+            p = p_smooth;
+        }
+    }
+#endif
+
     vec3  probe_t0     = normalize((abs(n.x) > 0.7) ? cross(n, vec3(0.0, 1.0, 0.0)) : cross(n, vec3(1.0, 0.0, 0.0)));
     vec3  probe_t1     = cross(n, probe_t0);
     float probe_length = 0.5 * texel_size;
@@ -489,8 +554,10 @@ void main()
         // Past the backface, then a hair to its front side (the face
         // normal points along the ray for a backface hit).
         p += push_dir * push_t + push_normal * 1.0e-4;
-        imageStore(i_position, texel, vec4(p, position_coverage.w));
     }
+    // Unconditional: the terminator fix above may have moved p even when
+    // no probe pushed it.
+    imageStore(i_position, texel, vec4(p, position_coverage.w));
 }
 )GLSL";
 
@@ -561,9 +628,10 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
     );
     m_fragment_outputs = std::make_unique<Fragment_outputs>(
         std::initializer_list<Fragment_output>{
-            Fragment_output{ .name = "out_position", .type = Glsl_type::float_vec4, .location = 0 },
-            Fragment_output{ .name = "out_normal",   .type = Glsl_type::float_vec4, .location = 1 },
-            Fragment_output{ .name = "out_albedo",   .type = Glsl_type::float_vec4, .location = 2 }
+            Fragment_output{ .name = "out_position",        .type = Glsl_type::float_vec4, .location = 0 },
+            Fragment_output{ .name = "out_normal",          .type = Glsl_type::float_vec4, .location = 1 },
+            Fragment_output{ .name = "out_albedo",          .type = Glsl_type::float_vec4, .location = 2 },
+            Fragment_output{ .name = "out_smooth_position", .type = Glsl_type::float_vec4, .location = 3 }
         }
     );
 
@@ -616,11 +684,12 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
     pipeline_create_info.base.color_blend                       = &Color_blend_state::color_blend_disabled;
     pipeline_create_info.shader_stages                          = m_shader_stages.get();
     pipeline_create_info.vertex_input                           = vertex_input_entry.vertex_input.get();
-    pipeline_create_info.color_attachment_count                 = 3;
+    pipeline_create_info.color_attachment_count                 = 4;
     pipeline_create_info.color_attachment_formats[0]            = c_position_format;
     pipeline_create_info.color_attachment_formats[1]            = c_normal_format;
     pipeline_create_info.color_attachment_formats[2]            = c_albedo_format;
-    for (int i = 0; i < 3; ++i) {
+    pipeline_create_info.color_attachment_formats[3]            = c_position_format; // smooth position
+    for (int i = 0; i < 4; ++i) {
         pipeline_create_info.color_usage_before[i]              = Image_usage_flag_bit_mask::sampled;
         pipeline_create_info.color_usage_after[i]               = Image_usage_flag_bit_mask::sampled;
     }
@@ -866,6 +935,14 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
                     .glsl_type     = Glsl_type::image_2d,
                     .image_format  = "rgba32f",
                     .stage_flags   = Shader_stage_flags::compute
+                },
+                Bind_group_layout_binding{
+                    .binding_point = 3u,
+                    .type          = Binding_type::storage_image,
+                    .name          = "i_smooth_position",
+                    .glsl_type     = Glsl_type::image_2d,
+                    .image_format  = "rgba32f",
+                    .stage_flags   = Shader_stage_flags::compute
                 }
             },
             .debug_label       = erhe::utility::Debug_label{"lightmap adjust layout"},
@@ -874,6 +951,17 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
     );
     Shader_stages_create_info adjust_create_info{
         .name       = "lightmap_adjust",
+        // Environment ERHE_LM_NO_SMOOTH=1 disables the terminator smooth-
+        // position adoption (A/B diagnostics; mirrors ERHE_LM_NO_INDIRECT).
+        .defines    = [&]() {
+            std::vector<std::pair<std::string, std::string>> defines{};
+            const char* const no_smooth = std::getenv("ERHE_LM_NO_SMOOTH");
+            if ((no_smooth != nullptr) && (no_smooth[0] == '1')) {
+                log_render->warn("Lightmap_baker: ERHE_LM_NO_SMOOTH=1 - terminator smooth position disabled");
+                defines.push_back({ "ERHE_LM_NO_SMOOTH", "1" });
+            }
+            return defines;
+        }(),
         .extensions = {
             { Shader_type::compute_shader, "GL_EXT_ray_query" },
             { Shader_type::compute_shader, "GL_EXT_ray_tracing_position_fetch" }
@@ -1111,9 +1199,10 @@ void Lightmap_baker::ensure_gbuffer_targets()
             }
         );
     };
-    m_position_texture = make_target("lightmap gbuffer position", c_position_format);
-    m_normal_texture   = make_target("lightmap gbuffer normal",   c_normal_format);
-    m_albedo_texture   = make_target("lightmap gbuffer albedo",   c_albedo_format);
+    m_position_texture        = make_target("lightmap gbuffer position",        c_position_format);
+    m_normal_texture          = make_target("lightmap gbuffer normal",          c_normal_format);
+    m_albedo_texture          = make_target("lightmap gbuffer albedo",          c_albedo_format);
+    m_smooth_position_texture = make_target("lightmap gbuffer smooth position", c_position_format);
     m_gbuffer_valid    = false;
 }
 
@@ -1203,13 +1292,14 @@ auto Lightmap_baker::bake_gbuffer() -> bool
 
     // Fresh targets start UNDEFINED; normalize so the render pass can use a
     // uniform layout_before.
-    command_buffer.transition_texture_layout(*m_position_texture, Image_layout::shader_read_only_optimal);
-    command_buffer.transition_texture_layout(*m_normal_texture,   Image_layout::shader_read_only_optimal);
-    command_buffer.transition_texture_layout(*m_albedo_texture,   Image_layout::shader_read_only_optimal);
+    command_buffer.transition_texture_layout(*m_position_texture,        Image_layout::shader_read_only_optimal);
+    command_buffer.transition_texture_layout(*m_normal_texture,          Image_layout::shader_read_only_optimal);
+    command_buffer.transition_texture_layout(*m_albedo_texture,          Image_layout::shader_read_only_optimal);
+    command_buffer.transition_texture_layout(*m_smooth_position_texture, Image_layout::shader_read_only_optimal);
 
-    Texture* const gbuffer_targets[3] = { m_position_texture.get(), m_normal_texture.get(), m_albedo_texture.get() };
+    Texture* const gbuffer_targets[4] = { m_position_texture.get(), m_normal_texture.get(), m_albedo_texture.get(), m_smooth_position_texture.get() };
     Render_pass_descriptor descriptor{};
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < 4; ++i) {
         Render_pass_attachment_descriptor& attachment = descriptor.color_attachments[i];
         attachment.texture       = gbuffer_targets[i];
         attachment.clear_value   = std::array<double, 4>{0.0, 0.0, 0.0, 0.0};
@@ -1359,8 +1449,61 @@ auto Lightmap_baker::debug_write_gbuffer_pngs(const std::string& base_path) -> b
 
     std::vector<float> position_data;
     std::vector<float> normal_data;
-    if (!read_texture(*m_position_texture, position_data) || !read_texture(*m_normal_texture, normal_data)) {
+    std::vector<float> smooth_data;
+    if (!read_texture(*m_position_texture, position_data) || !read_texture(*m_normal_texture, normal_data) || !read_texture(*m_smooth_position_texture, smooth_data)) {
         return false;
+    }
+    {
+        // Terminator-fix diagnostics: how far the Phong-tessellated smooth
+        // position moves off the flat surface (zero on flat-shaded charts).
+        std::size_t covered = 0;
+        std::size_t moved   = 0;
+        double      sum     = 0.0;
+        float       peak    = 0.0f;
+        for (std::size_t i = 0; i < texel_count; ++i) {
+            if (position_data[i * 4 + 3] <= 0.0f) {
+                continue;
+            }
+            ++covered;
+            const glm::vec3 flat_p  {position_data[i * 4 + 0], position_data[i * 4 + 1], position_data[i * 4 + 2]};
+            const glm::vec3 smooth_p{smooth_data  [i * 4 + 0], smooth_data  [i * 4 + 1], smooth_data  [i * 4 + 2]};
+            const float delta = glm::length(smooth_p - flat_p);
+            if (delta > 1.0e-6f) {
+                ++moved;
+            }
+            sum  = sum + delta;
+            peak = std::max(peak, delta);
+        }
+        log_render->info(
+            "Lightmap_baker: smooth-position delta over {} covered texels: moved {} ({:.1f}%), mean {:.6f} m, max {:.6f} m",
+            covered, moved, covered > 0 ? 100.0 * static_cast<double>(moved) / static_cast<double>(covered) : 0.0,
+            covered > 0 ? sum / static_cast<double>(covered) : 0.0, peak
+        );
+        for (const Instance_region& region : m_layout.regions) {
+            std::size_t region_covered = 0;
+            std::size_t region_moved   = 0;
+            float       region_peak    = 0.0f;
+            for (int y = region.y; y < region.y + region.height; ++y) {
+                for (int x = region.x; x < region.x + region.width; ++x) {
+                    const std::size_t i = static_cast<std::size_t>(y) * static_cast<std::size_t>(width) + static_cast<std::size_t>(x);
+                    if (position_data[i * 4 + 3] <= 0.0f) {
+                        continue;
+                    }
+                    ++region_covered;
+                    const glm::vec3 flat_p  {position_data[i * 4 + 0], position_data[i * 4 + 1], position_data[i * 4 + 2]};
+                    const glm::vec3 smooth_p{smooth_data  [i * 4 + 0], smooth_data  [i * 4 + 1], smooth_data  [i * 4 + 2]};
+                    const float delta = glm::length(smooth_p - flat_p);
+                    if (delta > 1.0e-6f) {
+                        ++region_moved;
+                    }
+                    region_peak = std::max(region_peak, delta);
+                }
+            }
+            log_render->info(
+                "  region '{}' {}x{}: covered {}, moved {}, max {:.6f} m",
+                region.mesh ? region.mesh->get_name() : "?", region.width, region.height, region_covered, region_moved, region_peak
+            );
+        }
     }
     // Albedo readback (RGBA16F target): copy through an RGBA32F-sized
     // buffer is wrong for 16F; instead reuse the debug path by sampling is
@@ -1868,8 +2011,9 @@ void Lightmap_baker::record_adjust(erhe::graphics::Command_buffer& command_buffe
     if (m_gbuffer_adjusted || !m_adjust_pipeline || !m_position_texture) {
         return;
     }
-    command_buffer.transition_texture_layout(*m_position_texture, Image_layout::general);
-    command_buffer.transition_texture_layout(*m_normal_texture,   Image_layout::general);
+    command_buffer.transition_texture_layout(*m_position_texture,        Image_layout::general);
+    command_buffer.transition_texture_layout(*m_normal_texture,          Image_layout::general);
+    command_buffer.transition_texture_layout(*m_smooth_position_texture, Image_layout::general);
     {
         Compute_command_encoder encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
         encoder.set_bind_group_layout(m_adjust_layout.get());
@@ -1877,6 +2021,7 @@ void Lightmap_baker::record_adjust(erhe::graphics::Command_buffer& command_buffe
         encoder.set_acceleration_structure(0u, tlas);
         encoder.set_storage_image(1u, *m_position_texture);
         encoder.set_storage_image(2u, *m_normal_texture);
+        encoder.set_storage_image(3u, *m_smooth_position_texture);
         encoder.dispatch_compute(
             (static_cast<std::uintptr_t>(m_layout.width)  + 7) / 8,
             (static_cast<std::uintptr_t>(m_layout.height) + 7) / 8,
@@ -1884,8 +2029,9 @@ void Lightmap_baker::record_adjust(erhe::graphics::Command_buffer& command_buffe
         );
     }
     command_buffer.memory_barrier(Memory_barrier_mask::shader_image_access_barrier_bit);
-    command_buffer.transition_texture_layout(*m_position_texture, Image_layout::shader_read_only_optimal);
-    command_buffer.transition_texture_layout(*m_normal_texture,   Image_layout::shader_read_only_optimal);
+    command_buffer.transition_texture_layout(*m_position_texture,        Image_layout::shader_read_only_optimal);
+    command_buffer.transition_texture_layout(*m_normal_texture,          Image_layout::shader_read_only_optimal);
+    command_buffer.transition_texture_layout(*m_smooth_position_texture, Image_layout::shader_read_only_optimal);
     m_gbuffer_adjusted = true;
 }
 

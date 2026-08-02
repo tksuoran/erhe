@@ -162,27 +162,49 @@ Item 2 DONE 2026-08-02: article leak defenses replace the as-built set.
 Regression gate passed: torus/capsule/sphere contact shadows intact, no
 leaks, no acne, frame time unchanged.
 
+Item 3 DONE 2026-08-02: G-buffer smooth position + terminator fix.
+- New 4th G-buffer attachment: Phong-tessellated smooth position
+  (rgba32f). Computed per fragment WITHOUT vertex fetch or barycentric
+  extensions: smooth(p) = p - (M(p)*p - b(p)) where M = sum w_i n_i
+  n_i^T and b = sum w_i dot(p_i,n_i) n_i interpolate linearly as
+  varyings and the quadratic term falls out of applying interpolated M
+  to interpolated p (derivation in c_vertex_source).
+- Face normal is NOT stored (deviation from the article's layout): its
+  only consumer is the "smooth position must stay on the front side of
+  the face plane" validation, and the fragment shader already has the
+  face normal from dFdx/dFdy of world position (oriented by the smooth
+  normal), so that validation happens at raster time. Revisit if a
+  later phase needs the face normal per texel; this also kept the pass
+  within the graphics layer's 4-color-attachment limit.
+- The neighbor-geometry validation runs in the one-shot adjust pass
+  (which has the TLAS): a segment ray from the flat to the smooth
+  position; any hit keeps the flat position. The winner then goes
+  through the existing virtual-offset probes and is written into the
+  position G-buffer, so the gather is untouched.
+- Diagnostics: ERHE_LM_NO_SMOOTH=1 env var compiles the adoption out
+  (A/B), and debug_write_gbuffer_pngs logs per-region smooth-vs-flat
+  delta stats.
+- Verified 2026-08-02: deltas are zero on flat-shaded charts (floor,
+  polyhedra) and up to ~5 mm on curved ones (capsule/cylinder/sphere/
+  cone/torus, 40-50% of texels); the A/B atlas diff is confined to
+  exactly the curved charts (floor bit-identical), strongest on the
+  torus. The visible effect at 64 tpm is subtle in the tone-mapped
+  atlas - final plateau judgment is a viewport call, and phase 4
+  denoise stacks on top of these ray origins.
+
 NEXT (in order):
-1. G-buffer extension toward the article's layout: add smooth
-   (Phong-tessellated) position, face normal, and world-space texel
-   size (alpha channels; derivative trick at raster time); emissive
-   when phase 4 needs it. Then the terminator fix: gather from the
-   smooth position (validated to stay on the correct side of the face
-   plane, per-triangle flat fallback when the smooth position lands
-   inside neighbor geometry) - the article's answer to our known
-   "chart-brightness plateaus at 64 tpm" terminator artifact.
-2. Phase 4 second half: JNLM denoise (Vulkan exception above) on the
+1. Phase 4 second half: JNLM denoise (Vulkan exception above) on the
    published atlas, guided by G-buffer albedo+normal. Runs BEFORE the
    seam pass (article ordering: denoise after seam blending re-opens
    the seams).
-3. Seam fixing as a STANDARD pipeline step (article does it always,
+2. Seam fixing as a STANDARD pipeline step (article does it always,
    not only-if-visible): collect seam edges (position/normal equal
    within epsilon, UVs differ), build a line vertex buffer carrying
    the opposite side's UVs, render onto the atlas with alpha blending
    over multiple passes until converged (Godot lm_blendseams is the
    reference implementation). Runs per publish after denoise.
-4. Bicubic (4-tap) lightmap sampling in standard.frag.
-5. Phase 6 ERHE_lightmap GLB persistence + RGB9E5; later CLI bake.
+3. Bicubic (4-tap) lightmap sampling in standard.frag.
+4. Phase 6 ERHE_lightmap GLB persistence + RGB9E5; later CLI bake.
 
 Goal: bake static scene lighting into a lightmap texture with **minimum
 authoring effort** — lightmap UVs are assigned automatically, there is
