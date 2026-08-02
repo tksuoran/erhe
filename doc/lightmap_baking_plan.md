@@ -91,6 +91,29 @@ resets accumulation every frame (physics jitter would prevent
 convergence - revisit if it bites), bake_gbuffer on invalidation is a
 standalone wait_idle submit (hitch on lightmapped-mesh transform edits).
 
+Bug found + fixed 2026-08-02 (the "everything is green" report): the
+G-buffer fragment shader read lightmap_draw.base_color directly, but the
+per-draw UBO binding is declared vertex-stage-only - the fragment-stage
+read is undefined and on the dev NVIDIA driver aliased world_from_node
+column 1, so every unrotated draw baked albedo (0,1,0) and the bounce
+tinted the whole atlas green. Fix: base color rides a vertex->fragment
+varying. Diagnostics that isolated it (kept): ERHE_LM_NO_INDIRECT=1 env
+var compiles the bounce out (pure-direct atlas), and
+debug_write_gbuffer_pngs now also dumps <base>_albedo.png.
+
+OPEN QUESTION for the user (metals): every default-scene material is
+metallic = 1. The bake stores diffuse irradiance; the G-buffer albedo is
+now base_color x (1 - metallic) so metals bounce ~nothing (physically
+right), but standard.frag's runtime term is lightmap * base_color
+WITHOUT the (1 - metallic) weight, and the lightmap gate also disables
+analytic specular. So lightmapped metals currently render as pastel
+diffuse (wrong but visible); weighting by (1 - metallic) would render
+them near-black (right for diffuse, but metals live on specular, which
+nothing provides). Options: (a) keep as is, (b) add the weight and
+accept dark metals until specular handling exists, (c) re-enable
+analytic specular (only) for lightmapped draws, (d) bake a specular
+approximation later. Needs a user decision.
+
 Leak-defense reality check (differs from the phase 3 wording below):
 the committed gather uses a FIXED 1 cm normal-offset ray bias
 (ray_bias = 0.01f in lightmap_baker.cpp) and shadow rays with backface

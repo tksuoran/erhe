@@ -46,6 +46,7 @@
 #include <algorithm>
 #include <bit>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 
 namespace editor {
@@ -100,6 +101,7 @@ constexpr int c_texels_per_tick = 1 << 18;
 constexpr const char* c_vertex_source = R"GLSL(
 layout(location = 0) out vec3 v_position;
 layout(location = 1) out vec3 v_normal;
+layout(location = 2) out vec3 v_albedo;
 
 void main()
 {
@@ -108,20 +110,27 @@ void main()
     gl_Position   = vec4(ndc.x, ERHE_LM_Y_SIGN * ndc.y, 0.0, 1.0);
     v_position    = (lightmap_draw.world_from_node * vec4(a_position, 1.0)).xyz;
     v_normal      = normalize(mat3(lightmap_draw.world_from_node) * a_normal);
+    // Read in the VERTEX stage and passed down as a varying: the per-draw
+    // UBO binding is declared vertex-stage; a fragment-stage read is
+    // undefined (observed live as base_color aliasing world_from_node
+    // column 1 - every unrotated draw baked albedo (0,1,0), tinting all
+    // bounce light green).
+    v_albedo      = lightmap_draw.base_color.rgb;
 }
 )GLSL";
 
 constexpr const char* c_fragment_source = R"GLSL(
 layout(location = 0) in vec3 v_position;
 layout(location = 1) in vec3 v_normal;
+layout(location = 2) in vec3 v_albedo;
 
 void main()
 {
     out_position = vec4(v_position, 1.0);          // w = coverage
     out_normal   = vec4(normalize(v_normal), 1.0); // w = coverage
-    // Material base color factor (textures ignored for now): modulates
-    // bounce radiance leaving this surface and later guides JNLM.
-    out_albedo   = vec4(lightmap_draw.base_color.rgb, 1.0);
+    // Diffuse albedo (base color factor x (1 - metallic); textures ignored
+    // for now): modulates bounce radiance and later guides JNLM.
+    out_albedo   = vec4(v_albedo, 1.0);
 }
 )GLSL";
 
@@ -271,6 +280,7 @@ void main()
     // instances (uv_scale_offset.x == 0) and interior/backface hits
     // contribute nothing.
     vec3 indirect = vec3(0.0);
+#if !defined(ERHE_LM_NO_INDIRECT)
     {
         uint  seed = pcg_hash(uint(texel.x) * 1973u + uint(texel.y) * 9277u + lightmap_gather.frame_index * 26699u);
         float u1   = rand_float(seed);
@@ -320,6 +330,7 @@ void main()
             }
         }
     }
+#endif
 
     vec4 accum = imageLoad(i_accum, texel);
     imageStore(i_accum, texel, accum + vec4(direct + indirect, 1.0));
@@ -641,9 +652,19 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
         // Diagnostics: add { "ERHE_LM_DEBUG_GATHER", "1" } to defines to bake
         // R = closest blocking hit t, G = max NdotL, B = shadow miss ratio
         // instead of irradiance (see the debug block in c_gather_source).
-        .defines          = {
-            { "ERHE_LM_TEXCOORD2_OFFSET", fmt::format("{}", texcoord2.attribute->offset / 4) }
-        },
+        // Environment ERHE_LM_NO_INDIRECT=1 disables the bounce ray so the
+        // atlas holds pure direct irradiance (isolates bounce defects).
+        .defines          = [&]() {
+            std::vector<std::pair<std::string, std::string>> defines{
+                { "ERHE_LM_TEXCOORD2_OFFSET", fmt::format("{}", texcoord2.attribute->offset / 4) }
+            };
+            const char* const no_indirect = std::getenv("ERHE_LM_NO_INDIRECT");
+            if ((no_indirect != nullptr) && (no_indirect[0] == '1')) {
+                log_render->warn("Lightmap_baker: ERHE_LM_NO_INDIRECT=1 - bounce ray disabled");
+                defines.push_back({ "ERHE_LM_NO_INDIRECT", "1" });
+            }
+            return defines;
+        }(),
         .extensions       = {
             { Shader_type::compute_shader, "GL_EXT_ray_query" },
             { Shader_type::compute_shader, "GL_EXT_ray_tracing_position_fetch" },
@@ -971,7 +992,10 @@ auto Lightmap_baker::bake_gbuffer() -> bool
                 if (region.mesh) {
                     const std::vector<erhe::scene::Mesh_primitive>& primitives = region.mesh->get_primitives();
                     if ((region.primitive_index < primitives.size()) && primitives[region.primitive_index].material) {
-                        base_color = glm::vec4{primitives[region.primitive_index].material->data.base_color, 1.0f};
+                        const erhe::primitive::Material& material = *primitives[region.primitive_index].material;
+                        // Diffuse albedo: metals have no diffuse lobe, so
+                        // they bounce (and later receive) almost nothing.
+                        base_color = glm::vec4{material.data.base_color * (1.0f - material.data.metallic), 1.0f};
                     }
                 }
                 std::byte* const record = mapped.data() + (static_cast<std::size_t>(j) * m_layout.regions.size() + i) * c_draw_ubo_stride;
@@ -1147,6 +1171,60 @@ auto Lightmap_baker::debug_write_gbuffer_pngs(const std::string& base_path) -> b
     if (!read_texture(*m_position_texture, position_data) || !read_texture(*m_normal_texture, normal_data)) {
         return false;
     }
+    // Albedo readback (RGBA16F target): copy through an RGBA32F-sized
+    // buffer is wrong for 16F; instead reuse the debug path by sampling is
+    // overkill - blit copy gives raw half floats, so decode manually.
+    std::vector<float> albedo_data;
+    {
+        const std::size_t half_bytes_per_row = static_cast<std::size_t>(width) * 8u; // rgba16f
+        const std::size_t half_byte_count    = half_bytes_per_row * static_cast<std::size_t>(height);
+        Buffer readback{
+            m_graphics_device,
+            Buffer_create_info{
+                .capacity_byte_count                    = half_byte_count,
+                .memory_allocation_create_flag_bit_mask = Memory_allocation_create_flag_bit_mask::mapped,
+                .usage                                  = Buffer_usage::transfer_dst | Buffer_usage::storage,
+                .required_memory_property_bit_mask      =
+                    Memory_property_flag_bit_mask::host_read |
+                    Memory_property_flag_bit_mask::host_write,
+                .preferred_memory_property_bit_mask     =
+                    Memory_property_flag_bit_mask::host_coherent |
+                    Memory_property_flag_bit_mask::host_persistent,
+                .debug_label = erhe::utility::Debug_label{"lightmap albedo readback"}
+            }
+        };
+        constexpr unsigned int bake_thread_slot = 6;
+        Command_buffer& command_buffer = m_graphics_device.get_command_buffer(bake_thread_slot);
+        command_buffer.begin();
+        command_buffer.transition_texture_layout(*m_albedo_texture, Image_layout::transfer_src_optimal);
+        {
+            Blit_command_encoder blit = m_graphics_device.make_blit_command_encoder(command_buffer);
+            blit.copy_from_texture(m_albedo_texture.get(), 0, 0, glm::ivec3{0, 0, 0}, glm::ivec3{width, height, 1}, &readback, 0, half_bytes_per_row, half_byte_count);
+        }
+        command_buffer.transition_texture_layout(*m_albedo_texture, Image_layout::shader_read_only_optimal);
+        command_buffer.end();
+        Command_buffer* command_buffers[] = { &command_buffer };
+        m_graphics_device.submit_command_buffers(std::span<Command_buffer* const>{command_buffers});
+        m_graphics_device.wait_idle();
+        const std::span<std::byte> mapped = readback.map_bytes(0, half_byte_count);
+        const auto* halves = reinterpret_cast<const uint16_t*>(mapped.data());
+        albedo_data.resize(texel_count * 4u);
+        for (std::size_t i = 0; i < texel_count * 4u; ++i) {
+            // Minimal half->float (no denormal/inf/nan care needed for albedo).
+            const uint16_t h        = halves[i];
+            const uint32_t sign     = static_cast<uint32_t>(h & 0x8000u) << 16;
+            const uint32_t exponent = (h >> 10) & 0x1Fu;
+            const uint32_t mantissa = h & 0x3FFu;
+            uint32_t bits = 0;
+            if (exponent != 0) {
+                bits = sign | ((exponent + 112u) << 23) | (mantissa << 13);
+            }
+            float value;
+            std::memcpy(&value, &bits, sizeof(float));
+            albedo_data[i] = value;
+        }
+        readback.unmap();
+    }
 
     // Positions map into the covered world bounds so the PNG uses the full
     // 8-bit range; normals map as n * 0.5 + 0.5. Alpha = coverage.
@@ -1190,7 +1268,14 @@ auto Lightmap_baker::debug_write_gbuffer_pngs(const std::string& base_path) -> b
     };
     const bool position_ok = write_image(base_path + "_position.png", position_data, true);
     const bool normal_ok   = write_image(base_path + "_normal.png",   normal_data,   false);
-    return position_ok && normal_ok;
+    // Albedo is already 0..1; reuse the normal mapping's identity-ish path
+    // by pre-biasing so value * 0.5 + 0.5 becomes value.
+    std::vector<float> albedo_biased(albedo_data.size());
+    for (std::size_t i = 0; i < albedo_data.size(); ++i) {
+        albedo_biased[i] = ((i % 4u) == 3u) ? albedo_data[i] : albedo_data[i] * 2.0f - 1.0f;
+    }
+    const bool albedo_ok = write_image(base_path + "_albedo.png", albedo_biased, false);
+    return position_ok && normal_ok && albedo_ok;
 }
 
 auto Lightmap_baker::get_or_create_blas(
