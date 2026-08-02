@@ -149,6 +149,40 @@ layout(location = 20) flat in vec4 v_cap2;
 #  define ERHE_USES_LIT_LOCALS 1
 #endif
 
+#if defined(ERHE_USE_VERTEX_VARYING_TEXCOORD2)
+// Bicubic lightmap sampling (doc/lightmap_baking_plan.md article
+// alignment): cubic B-spline reconstruction via 4 bilinear taps - hides
+// the bilinear diamond pattern texel-magnified lightmaps show. The 4x4
+// footprint stays inside the chart padding (dilation fills s_padding = 4
+// texels; bicubic reads at most 2 outside the chart vs bilinear's 1).
+vec3 sample_lightmap_bicubic(vec2 uv)
+{
+    vec2 texture_size = vec2(textureSize(s_lightmap, 0));
+    vec2 texel_size   = vec2(1.0) / texture_size;
+    vec2 coord        = uv * texture_size - 0.5;
+    vec2 base         = floor(coord);
+    vec2 f            = coord - base;
+    vec2 f2           = f * f;
+    vec2 f3           = f2 * f;
+    vec2 w0           = (1.0 / 6.0) * (-f3 + 3.0 * f2 - 3.0 * f + 1.0);
+    vec2 w1           = (1.0 / 6.0) * (3.0 * f3 - 6.0 * f2 + 4.0);
+    vec2 w2           = (1.0 / 6.0) * (-3.0 * f3 + 3.0 * f2 + 3.0 * f + 1.0);
+    vec2 w3           = (1.0 / 6.0) * f3;
+    vec2 g0           = w0 + w1;
+    vec2 g1           = w2 + w3;
+    // Bilinear tap positions chosen so each tap integrates two texels with
+    // the B-spline weight ratio baked into the sub-texel offset.
+    vec2 h0           = (base + (w1 / g0) - 0.5) * texel_size;
+    vec2 h1           = (base + (w3 / g1) + 1.5) * texel_size;
+    vec3 t00          = texture(s_lightmap, vec2(h0.x, h0.y)).rgb;
+    vec3 t10          = texture(s_lightmap, vec2(h1.x, h0.y)).rgb;
+    vec3 t01          = texture(s_lightmap, vec2(h0.x, h1.y)).rgb;
+    vec3 t11          = texture(s_lightmap, vec2(h1.x, h1.y)).rgb;
+    return g0.y * (g0.x * t00 + g1.x * t10) +
+           g1.y * (g0.x * t01 + g1.x * t11);
+}
+#endif
+
 void main()
 {
 #if defined(ERHE_VARIANT_POINTS)
@@ -503,7 +537,7 @@ void main()
 #if defined(ERHE_USE_VERTEX_VARYING_TEXCOORD2)
         if (v_lightmap_scale_offset.x > 0.0) {
             vec2 lightmap_uv = v_texcoord_2 * v_lightmap_scale_offset.xy + v_lightmap_scale_offset.zw;
-            ambient_term   = texture(s_lightmap, lightmap_uv).rgb;
+            ambient_term   = sample_lightmap_bicubic(lightmap_uv);
             lightmap_valid = true;
         }
 #endif

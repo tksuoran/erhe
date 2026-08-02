@@ -241,9 +241,15 @@ Item 5 DONE 2026-08-02: seam blend as a standard per-publish step.
   (cylinder cap circles, polyhedra face outlines, cube face squares),
   orientation and UV mapping confirmed correct; viewport clean.
 
+Item 6 DONE 2026-08-02: bicubic lightmap sampling in standard.frag.
+sample_lightmap_bicubic(): cubic B-spline reconstruction via the
+standard 4-bilinear-tap trick, replacing the plain bilinear atlas
+sample. The 4x4 footprint reads at most 2 texels outside a chart
+(vs bilinear's 1), inside the s_padding = 4 dilation skirt. Verified
+in the viewport 2026-08-02.
+
 NEXT (in order):
-1. Bicubic (4-tap) lightmap sampling in standard.frag.
-2. Phase 6 ERHE_lightmap GLB persistence + RGB9E5; later CLI bake.
+1. Phase 6 ERHE_lightmap GLB persistence + RGB9E5; later CLI bake.
 
 Goal: bake static scene lighting into a lightmap texture with **minimum
 authoring effort** — lightmap UVs are assigned automatically, there is
