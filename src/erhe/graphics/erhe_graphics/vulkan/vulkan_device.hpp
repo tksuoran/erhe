@@ -81,6 +81,7 @@ public:
     bool m_VK_KHR_ray_query                     {false};
     bool m_VK_KHR_deferred_host_operations      {false};
     bool m_VK_KHR_ray_tracing_position_fetch    {false};
+    bool m_VK_EXT_conservative_rasterization    {false};
 };
 class Capabilities
 {

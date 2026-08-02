@@ -211,6 +211,9 @@ private:
     std::shared_ptr<erhe::graphics::Texture>           m_position_texture;
     std::shared_ptr<erhe::graphics::Texture>           m_normal_texture;
     bool                                               m_gbuffer_valid{false};
+    // VK_EXT_conservative_rasterization active on the G-buffer pipeline:
+    // one raster pass; false = 9-tap jitter fallback.
+    bool                                               m_conservative_raster{false};
 
     // Direct-light gather objects.
     std::unique_ptr<erhe::graphics::Shader_resource>   m_gather_block;

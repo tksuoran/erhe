@@ -20,6 +20,14 @@ public:
     Polygon_mode         polygon_mode        {Polygon_mode::fill};
     // not implementing separate front and back polygon modes for now
 
+    // Conservative rasterization, overestimation mode: every texel a
+    // primitive touches generates a fragment. Vulkan-only, opt-in per
+    // pipeline, honoured only when the device exposes
+    // VK_EXT_conservative_rasterization (Device_info::
+    // use_conservative_rasterization) - silently ignored otherwise and on
+    // GL/Metal. Used by the lightmap G-buffer raster.
+    bool                 conservative_enable {false};
+
     // When true the pipeline enables rasterizer depth bias (polygon offset);
     // the constant / slope / clamp magnitudes are dynamic state set per pass
     // via Render_command_encoder::set_depth_bias(). Off (false) means no bias

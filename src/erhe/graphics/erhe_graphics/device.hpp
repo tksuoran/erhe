@@ -218,6 +218,9 @@ public:
     // structures are built with the data-access flag. Never true without
     // use_ray_query.
     bool use_ray_tracing_position_fetch{false};
+    // VK_EXT_conservative_rasterization present: pipelines may set
+    // Rasterization_state::conservative_enable (ignored elsewhere).
+    bool use_conservative_rasterization{false};
     bool use_base_instance           {false};
     bool use_clear_texture           {false};
     bool use_texture_view            {false};

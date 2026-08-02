@@ -1889,6 +1889,11 @@ Device_impl::Device_impl(
         enable_ray_query                 ? "enabled" : "not available",
         enable_ray_tracing_position_fetch ? "enabled" : "not available"
     );
+    m_info.use_conservative_rasterization = m_device_extensions.m_VK_EXT_conservative_rasterization;
+    log_startup->info(
+        "Conservative rasterization: {}",
+        m_info.use_conservative_rasterization ? "enabled" : "not available"
+    );
     m_info.use_clear_texture           = true;
     m_info.use_texture_view            = true;
     m_info.use_persistent_buffers      = true;

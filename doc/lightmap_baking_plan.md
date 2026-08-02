@@ -132,20 +132,20 @@ cull at raster time and dilation. The article instead keeps culling
 sane and prevents leaks at the SOURCE (sample position). The alignment
 replaces our ad-hoc defenses with the article's, in this order:
 
+Item 1 DONE 2026-08-02: native conservative rasterization.
+VK_EXT_conservative_rasterization (overestimation, properties-only - no
+feature struct) detected in query_device_extensions, exposed as
+Device_info::use_conservative_rasterization, opt-in per pipeline via
+Rasterization_state::conservative_enable (chained
+VkPipelineRasterizationConservativeStateCreateInfoEXT in both Vulkan
+pipeline-build paths; ignored on GL/Metal/unsupported). Lightmap_baker
+sets it and rasters ONE pass (the center tap); the 9-tap jitter loop
+remains as the fallback (first_jitter_pass selects). Verified: extension
+enabled on the dev NVIDIA GPU, G-buffer log says "native conservative
+raster", bake output matches the jitter path in the viewport.
+
 NEXT (in order):
-1. Native conservative rasterization for the G-buffer raster:
-   VK_EXT_conservative_rasterization (overestimation mode) when the
-   device exposes it, replacing the 9-tap half-texel jitter re-render;
-   keep the jitter path as the fallback for devices without the
-   extension. Needs plumbing: device-extension detection (Device_info
-   flag) + an opt-in conservative flag in the render pipeline
-   rasterization state (no-op on GL/Metal/unsupported). Every
-   ray-query-capable desktop GPU of interest (NVIDIA Maxwell+, AMD
-   RDNA2+, Intel Arc) exposes the extension, so the fallback is cold.
-   Note the article's taps reach +-2 texels (gutter fill beyond true
-   coverage); native CR covers exactly the texels a triangle touches -
-   dilation supplies the gutter, as it already does.
-2. Leak defenses per the article (replaces the as-built set):
+1. Leak defenses per the article (replaces the as-built set):
    a. Adaptive ray bias: position += position * 2e-7 (magnitude-
       proportional, ~FLT_EPSILON scale) instead of the fixed 1 cm
       normal offset - for receiver rays AND bounce continuation.
@@ -161,7 +161,7 @@ NEXT (in order):
       occluders). Regression gate: the torus contact leak and the 2 cm
       object speck shadows must stay fixed (ERHE_LM_DEBUG_GATHER
       recipe in the queue).
-3. G-buffer extension toward the article's layout: add smooth
+2. G-buffer extension toward the article's layout: add smooth
    (Phong-tessellated) position, face normal, and world-space texel
    size (alpha channels; derivative trick at raster time); emissive
    when phase 4 needs it. Then the terminator fix: gather from the
@@ -169,18 +169,18 @@ NEXT (in order):
    plane, per-triangle flat fallback when the smooth position lands
    inside neighbor geometry) - the article's answer to our known
    "chart-brightness plateaus at 64 tpm" terminator artifact.
-4. Phase 4 second half: JNLM denoise (Vulkan exception above) on the
+3. Phase 4 second half: JNLM denoise (Vulkan exception above) on the
    published atlas, guided by G-buffer albedo+normal. Runs BEFORE the
    seam pass (article ordering: denoise after seam blending re-opens
    the seams).
-5. Seam fixing as a STANDARD pipeline step (article does it always,
+4. Seam fixing as a STANDARD pipeline step (article does it always,
    not only-if-visible): collect seam edges (position/normal equal
    within epsilon, UVs differ), build a line vertex buffer carrying
    the opposite side's UVs, render onto the atlas with alpha blending
    over multiple passes until converged (Godot lm_blendseams is the
    reference implementation). Runs per publish after denoise.
-6. Bicubic (4-tap) lightmap sampling in standard.frag.
-7. Phase 6 ERHE_lightmap GLB persistence + RGB9E5; later CLI bake.
+5. Bicubic (4-tap) lightmap sampling in standard.frag.
+6. Phase 6 ERHE_lightmap GLB persistence + RGB9E5; later CLI bake.
 
 Goal: bake static scene lighting into a lightmap texture with **minimum
 authoring effort** — lightmap UVs are assigned automatically, there is

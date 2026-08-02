@@ -126,9 +126,22 @@ Render_pipeline_impl::Render_pipeline_impl(Device& device, const Render_pipeline
         .pScissors     = nullptr
     };
 
+    // Conservative rasterization (overestimation), opt-in per pipeline and
+    // gated on VK_EXT_conservative_rasterization being enabled on the device.
+    const VkPipelineRasterizationConservativeStateCreateInfoEXT conservative_state{
+        .sType                            = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_CONSERVATIVE_STATE_CREATE_INFO_EXT,
+        .pNext                            = nullptr,
+        .flags                            = 0,
+        .conservativeRasterizationMode    = VK_CONSERVATIVE_RASTERIZATION_MODE_OVERESTIMATE_EXT,
+        .extraPrimitiveOverestimationSize = 0.0f
+    };
+    const bool use_conservative =
+        base.rasterization.conservative_enable &&
+        device.get_info().use_conservative_rasterization;
+
     const VkPipelineRasterizationStateCreateInfo rasterization_state{
         .sType                   = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-        .pNext                   = nullptr,
+        .pNext                   = use_conservative ? &conservative_state : nullptr,
         .flags                   = 0,
         .depthClampEnable        = base.rasterization.depth_clamp_enable ? VK_TRUE : VK_FALSE,
         .rasterizerDiscardEnable = VK_FALSE,

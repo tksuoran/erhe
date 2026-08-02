@@ -488,6 +488,11 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
     // Culling the flipped winding drops exactly the folds; texels only a
     // fold covered stay invalid and are filled by dilation instead.
     pipeline_create_info.base.rasterization                     = Rasterization_state::cull_mode_back_cw.with_winding_flip_if(top_left);
+    // Native conservative rasterization (article alignment item 1): every
+    // texel a chart triangle touches gets a fragment in ONE pass; the 9-tap
+    // jitter loop in bake_gbuffer() is the fallback without the extension.
+    m_conservative_raster = graphics_device.get_info().use_conservative_rasterization;
+    pipeline_create_info.base.rasterization.conservative_enable = m_conservative_raster;
     pipeline_create_info.base.depth_stencil.depth_test_enable   = false;
     pipeline_create_info.base.depth_stencil.depth_write_enable  = false;
     pipeline_create_info.base.depth_stencil.stencil_test_enable = false;
@@ -946,12 +951,15 @@ auto Lightmap_baker::bake_gbuffer() -> bool
 
     ensure_gbuffer_targets();
 
-    // Multi-jitter conservative coverage (plan phase 2, Bakery-style): each
+    // Conservative coverage. Preferred: native conservative rasterization
+    // (pipeline flag, one unjittered pass - the LAST jitter entry is the
+    // center tap). Fallback: multi-jitter re-render (Bakery-style) - each
     // region rasterizes 9 times with sub-texel NDC offsets, center pass
     // LAST. Depth test is off, so later draws win: edge texels whose center
     // just misses every triangle still get a jittered write, and properly
     // covered texels end with the unjittered value.
     constexpr int c_jitter_count = 9;
+    const int first_jitter_pass = m_conservative_raster ? (c_jitter_count - 1) : 0;
     constexpr float c_jitter[c_jitter_count][2] = {
         {-1.0f, -1.0f}, {0.0f, -1.0f}, {1.0f, -1.0f},
         {-1.0f,  0.0f},                {1.0f,  0.0f},
@@ -982,7 +990,7 @@ auto Lightmap_baker::bake_gbuffer() -> bool
         const float jitter_step_y = 0.5f * 2.0f / static_cast<float>(m_layout.height);
         const std::span<std::byte> mapped = draw_ubo.map_bytes(0, ubo_bytes);
         std::memset(mapped.data(), 0, ubo_bytes);
-        for (int j = 0; j < c_jitter_count; ++j) {
+        for (int j = first_jitter_pass; j < c_jitter_count; ++j) {
             const glm::vec4 jitter_ndc{c_jitter[j][0] * jitter_step_x, c_jitter[j][1] * jitter_step_y, 0.0f, 0.0f};
             for (std::size_t i = 0; i < m_layout.regions.size(); ++i) {
                 const Instance_region& region = m_layout.regions[i];
@@ -1048,7 +1056,7 @@ auto Lightmap_baker::bake_gbuffer() -> bool
         encoder.set_bind_group_layout(m_bind_group_layout.get());
         encoder.set_render_pipeline(*m_pipeline);
 
-        for (int j = 0; j < c_jitter_count; ++j) {
+        for (int j = first_jitter_pass; j < c_jitter_count; ++j) {
             for (std::size_t i = 0; i < m_layout.regions.size(); ++i) {
                 const Instance_region& region = m_layout.regions[i];
                 if (!region.mesh) {
@@ -1093,7 +1101,7 @@ auto Lightmap_baker::bake_gbuffer() -> bool
                     index_format,
                     index_offset
                 );
-                if (j == 0) {
+                if (j == first_jitter_pass) {
                     ++drawn;
                 }
             }
@@ -1105,7 +1113,11 @@ auto Lightmap_baker::bake_gbuffer() -> bool
     m_graphics_device.wait_idle();
 
     m_gbuffer_valid = drawn > 0;
-    log_render->info("Lightmap_baker: G-buffer baked, {} of {} regions drawn, {}x{}", drawn, m_layout.regions.size(), m_layout.width, m_layout.height);
+    log_render->info(
+        "Lightmap_baker: G-buffer baked, {} of {} regions drawn, {}x{}, {}",
+        drawn, m_layout.regions.size(), m_layout.width, m_layout.height,
+        m_conservative_raster ? "native conservative raster" : "9-tap jitter fallback"
+    );
     return m_gbuffer_valid;
 }
 

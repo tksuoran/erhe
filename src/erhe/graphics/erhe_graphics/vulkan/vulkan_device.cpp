@@ -997,6 +997,11 @@ auto Device_impl::query_device_extensions(
     // triangle's object-space vertex positions (used for geometric normals
     // without binding every mesh vertex buffer to the shader).
     check_device_extension(VK_KHR_RAY_TRACING_POSITION_FETCH_EXTENSION_NAME,     device_extensions_out.m_VK_KHR_ray_tracing_position_fetch    , 1.0f);
+    // Conservative rasterization (overestimation) for the lightmap G-buffer
+    // raster (one pass instead of the 9-tap jitter fallback). Properties-only
+    // extension: no feature struct to query/enable; per-pipeline opt-in via
+    // Rasterization_state::conservative_enable.
+    check_device_extension(VK_EXT_CONSERVATIVE_RASTERIZATION_EXTENSION_NAME,     device_extensions_out.m_VK_EXT_conservative_rasterization    , 1.0f);
 
     // VK_KHR_portability_subset must be enabled whenever the physical device
     // advertises it (Vulkan spec VUID-VkDeviceCreateInfo-pProperties-04451).
