@@ -215,15 +215,35 @@ Item 4 DONE 2026-08-02: JNLM denoise (phase 4 second half).
   working), curved charts and bounce glows smooth, viewport clean,
   ~10 ms frame with baking enabled.
 
+Item 5 DONE 2026-08-02: seam blend as a standard per-publish step.
+- Seam detection runs on the GEO mesh in build_seam_vertices() (called
+  from update_layout), where shared vertex ids make the position test
+  exact: a facet edge whose second occurrence carries different
+  channel-2 UVs is a seam. Corner normals must match within dot 0.99
+  per endpoint (hard edges have genuinely discontinuous lighting and
+  are not blended); Godot-style guards for 3+-facet edges. Default
+  scene: 1172 seam edges.
+- Rendering (reference Godot lm_blendseams MODE_LINES): per publish,
+  after denoise+dilate, the published atlas is copied into the dilate
+  scratch (Godot's light_accum_tex2 role - avoids the read/write
+  hazard), then each seam draws as two atlas-space lines, one per
+  side, sampling the OPPOSITE side from the copy at alpha 0.5 with
+  standard alpha blending (dst alpha preserved - it is the validity
+  flag). Because both directions sample the pre-pass copy, one pass
+  equalizes both sides to their average - Godot's depth-mask + eight
+  jitter passes are deliberately skipped (dilation already guards the
+  bilinear skirt).
+- The atlas texture gained color_attachment usage, the dilate scratch
+  sampled + transfer_dst; seam vertices ride a vertex ring buffer per
+  publish.
+- Verified 2026-08-02: an atlas diff against the same bake without the
+  pass changes exactly the chart-boundary texels in every region
+  (cylinder cap circles, polyhedra face outlines, cube face squares),
+  orientation and UV mapping confirmed correct; viewport clean.
+
 NEXT (in order):
-1. Seam fixing as a STANDARD pipeline step (article does it always,
-   not only-if-visible): collect seam edges (position/normal equal
-   within epsilon, UVs differ), build a line vertex buffer carrying
-   the opposite side's UVs, render onto the atlas with alpha blending
-   over multiple passes until converged (Godot lm_blendseams is the
-   reference implementation). Runs per publish after denoise.
-2. Bicubic (4-tap) lightmap sampling in standard.frag.
-3. Phase 6 ERHE_lightmap GLB persistence + RGB9E5; later CLI bake.
+1. Bicubic (4-tap) lightmap sampling in standard.frag.
+2. Phase 6 ERHE_lightmap GLB persistence + RGB9E5; later CLI bake.
 
 Goal: bake static scene lighting into a lightmap texture with **minimum
 authoring effort** — lightmap UVs are assigned automatically, there is

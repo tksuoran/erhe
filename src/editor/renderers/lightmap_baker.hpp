@@ -1,5 +1,7 @@
 #pragma once
 
+#include "erhe_dataformat/vertex_format.hpp"
+
 #include <glm/glm.hpp>
 
 #include <memory>
@@ -24,6 +26,7 @@ namespace erhe::graphics {
     class Shader_resource;
     class Shader_stages;
     class Texture;
+    class Vertex_input_state;
 }
 namespace erhe::primitive {
     class Buffer_mesh;
@@ -282,6 +285,32 @@ private:
     std::unique_ptr<erhe::graphics::Bind_group_layout> m_denoise_layout;
     std::unique_ptr<erhe::graphics::Shader_stages>     m_denoise_shader_stages;
     std::unique_ptr<erhe::graphics::Compute_pipeline>  m_denoise_pipeline;
+
+    // Seam blend pass (article: standard per-publish step; reference Godot
+    // lm_blendseams): each UV seam edge is drawn as two atlas-space lines,
+    // one per side, sampling the OPPOSITE side's radiance from a copy of
+    // the published atlas and alpha-blending 0.5 over it, pulling the two
+    // sides together. Seam edges are found on the GEO mesh where shared
+    // vertex ids make the test exact: a facet edge whose second occurrence
+    // carries different channel-2 UVs is a seam (equal corner normals
+    // required, so hard edges with genuinely discontinuous lighting are
+    // not blended).
+    class Seam_vertex
+    {
+    public:
+        glm::vec2 position;  // atlas UV of this side's edge endpoint
+        glm::vec2 source_uv; // atlas UV of the opposite side's endpoint
+    };
+    void build_seam_vertices();
+    void record_seam_blend(erhe::graphics::Command_buffer& command_buffer);
+    erhe::dataformat::Vertex_format                     m_seam_vertex_format;
+    std::unique_ptr<erhe::graphics::Vertex_input_state> m_seam_vertex_input;
+    std::unique_ptr<erhe::graphics::Bind_group_layout>  m_seam_layout;
+    std::unique_ptr<erhe::graphics::Fragment_outputs>   m_seam_fragment_outputs;
+    std::unique_ptr<erhe::graphics::Shader_stages>      m_seam_shader_stages;
+    std::unique_ptr<erhe::graphics::Render_pipeline>    m_seam_pipeline;
+    std::unique_ptr<erhe::graphics::Ring_buffer_client> m_seam_vertex_ring;
+    std::vector<Seam_vertex>                            m_seam_vertices;
 
     // Per-tick uploads ride the device ring buffers (the frame command
     // buffer stays open; plain buffers would be destroyed in flight).

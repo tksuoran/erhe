@@ -19,6 +19,7 @@
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/render_pipeline.hpp"
+#include "erhe_graphics/ring_buffer.hpp"
 #include "erhe_graphics/ring_buffer_client.hpp"
 #include "erhe_graphics/ring_buffer_range.hpp"
 #include "erhe_graphics/shader_resource.hpp"
@@ -673,6 +674,49 @@ void main()
 }
 )GLSL";
 
+// Seam blend (article: standard per-publish step; reference Godot
+// lm_blendseams MODE_LINES): vertices carry the seam edge's own atlas UV
+// (rasterization target) and the opposite side's atlas UV (sample source);
+// the fragment alpha-blends the opposite side's radiance at 0.5 over the
+// seam texels, pulling both sides of every seam together. Simplifications
+// vs Godot: single center pass, no depth-mask + jitter passes (dilation
+// already guards the chart borders bilinear reads from).
+constexpr const char* c_seam_vertex_source = R"GLSL(
+layout(location = 0) out vec2 v_src_uv;
+
+void main()
+{
+    vec2 ndc    = a_position * 2.0 - 1.0;
+    gl_Position = vec4(ndc.x, ERHE_LM_Y_SIGN * ndc.y, 0.0, 1.0);
+    v_src_uv    = a_texcoord_0;
+}
+)GLSL";
+
+constexpr const char* c_seam_fragment_source = R"GLSL(
+layout(location = 0) in vec2 v_src_uv;
+
+void main()
+{
+    out_color = vec4(textureLod(s_seam_source, v_src_uv, 0.0).rgb, 0.5);
+}
+)GLSL";
+
+// Standard alpha blend for the seam lines; destination alpha is preserved
+// (it is the texel validity flag).
+const erhe::graphics::Color_blend_state c_seam_blend_state{
+    .enabled = true,
+    .rgb = {
+        .equation_mode      = erhe::graphics::Blend_equation_mode::func_add,
+        .source_factor      = erhe::graphics::Blending_factor::src_alpha,
+        .destination_factor = erhe::graphics::Blending_factor::one_minus_src_alpha
+    },
+    .alpha = {
+        .equation_mode      = erhe::graphics::Blend_equation_mode::func_add,
+        .source_factor      = erhe::graphics::Blending_factor::zero,
+        .destination_factor = erhe::graphics::Blending_factor::one
+    }
+};
+
 // FNV-1a over raw bytes; drives the change-driven invalidation hashes.
 [[nodiscard]] auto fnv1a64(const void* data, std::size_t byte_count, uint64_t hash = 0xcbf29ce484222325ull) -> uint64_t
 {
@@ -1221,6 +1265,85 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
             .bind_group_layout = m_denoise_layout.get()
         }
     );
+
+    // Seam blend pass: line raster over the published atlas.
+    m_seam_vertex_format = erhe::dataformat::Vertex_format{
+        {
+            0,
+            {
+                { erhe::dataformat::Format::format_32_vec2_float, erhe::dataformat::Vertex_attribute_usage::position,  0 },
+                { erhe::dataformat::Format::format_32_vec2_float, erhe::dataformat::Vertex_attribute_usage::tex_coord, 0 }
+            }
+        }
+    };
+    m_seam_vertex_input = std::make_unique<Vertex_input_state>(
+        graphics_device,
+        Vertex_input_state_data::make(m_seam_vertex_format)
+    );
+    m_seam_layout = std::make_unique<Bind_group_layout>(
+        graphics_device,
+        Bind_group_layout_create_info{
+            .bindings = {
+                Bind_group_layout_binding{
+                    .binding_point   = 0u,
+                    .type            = Binding_type::combined_image_sampler,
+                    .sampler_aspect  = Sampler_aspect::color,
+                    .name            = "s_seam_source",
+                    .glsl_type       = Glsl_type::sampler_2d,
+                    .is_texture_heap = false,
+                    .stage_flags     = Shader_stage_flags::fragment
+                }
+            },
+            .debug_label       = erhe::utility::Debug_label{"lightmap seam layout"},
+            .uses_texture_heap = false
+        }
+    );
+    m_seam_fragment_outputs = std::make_unique<Fragment_outputs>(
+        std::initializer_list<Fragment_output>{
+            Fragment_output{ .name = "out_color", .type = Glsl_type::float_vec4, .location = 0 }
+        }
+    );
+    Shader_stages_create_info seam_create_info{
+        .name             = "lightmap_seam_blend",
+        .defines          = {
+            { "ERHE_LM_Y_SIGN", top_left ? "-1.0" : "1.0" }
+        },
+        .fragment_outputs = m_seam_fragment_outputs.get(),
+        .vertex_format    = &m_seam_vertex_format,
+        .shaders = {
+            { Shader_type::vertex_shader,   std::string_view{c_seam_vertex_source} },
+            { Shader_type::fragment_shader, std::string_view{c_seam_fragment_source} }
+        },
+        .bind_group_layout = m_seam_layout.get()
+    };
+    Shader_stages_prototype seam_prototype = build_shader_stages(graphics_device, seam_create_info);
+    if (!seam_prototype.is_valid()) {
+        log_render->warn("Lightmap_baker: seam blend shader failed to compile/link");
+        return;
+    }
+    m_seam_shader_stages = std::make_unique<Shader_stages>(graphics_device, std::move(seam_prototype));
+
+    Render_pipeline_create_info seam_pipeline_create_info;
+    seam_pipeline_create_info.base.input_assembly                    = Input_assembly_state::line;
+    seam_pipeline_create_info.base.rasterization                     = Rasterization_state::cull_mode_none;
+    seam_pipeline_create_info.base.depth_stencil.depth_test_enable   = false;
+    seam_pipeline_create_info.base.depth_stencil.depth_write_enable  = false;
+    seam_pipeline_create_info.base.depth_stencil.stencil_test_enable = false;
+    seam_pipeline_create_info.base.bind_group_layout                 = m_seam_layout.get();
+    seam_pipeline_create_info.base.color_blend                       = &c_seam_blend_state;
+    seam_pipeline_create_info.shader_stages                          = m_seam_shader_stages.get();
+    seam_pipeline_create_info.vertex_input                           = m_seam_vertex_input.get();
+    seam_pipeline_create_info.color_attachment_count                 = 1;
+    seam_pipeline_create_info.color_attachment_formats[0]            = erhe::dataformat::Format::format_32_vec4_float;
+    seam_pipeline_create_info.color_usage_before[0]                  = Image_usage_flag_bit_mask::storage;
+    seam_pipeline_create_info.color_usage_after[0]                   = Image_usage_flag_bit_mask::storage;
+    seam_pipeline_create_info.sample_count                           = 1;
+    m_seam_pipeline = std::make_unique<Render_pipeline>(graphics_device, seam_pipeline_create_info);
+    if (!m_seam_pipeline->is_valid()) {
+        log_render->warn("Lightmap_baker: seam blend pipeline is not valid");
+        m_seam_pipeline.reset();
+    }
+    m_seam_vertex_ring = std::make_unique<Ring_buffer_client>(graphics_device, Buffer_target::vertex, "Lightmap_baker::seam_vertices", 0u);
 }
 
 Lightmap_baker::~Lightmap_baker() noexcept = default;
@@ -1324,11 +1447,120 @@ auto Lightmap_baker::update_layout(Scene_root& scene_root, const float texels_pe
         m_layout.width   = page;
         m_layout.height  = page;
         m_layout.regions = std::move(regions);
+        build_seam_vertices();
         return true;
     }
     // Even the largest page failed; drop the layout (a later change can
     // add multi-page support - plan keeps pages <= 4096^2).
+    m_seam_vertices.clear();
     return false;
+}
+
+void Lightmap_baker::build_seam_vertices()
+{
+    m_seam_vertices.clear();
+    std::size_t seam_count = 0;
+    for (const Instance_region& region : m_layout.regions) {
+        if (!region.mesh) {
+            continue;
+        }
+        const std::vector<erhe::scene::Mesh_primitive>& primitives = region.mesh->get_primitives();
+        if (region.primitive_index >= primitives.size()) {
+            continue;
+        }
+        const erhe::primitive::Primitive* const primitive = primitives[region.primitive_index].primitive.get();
+        if ((primitive == nullptr) || !primitive->render_shape) {
+            continue;
+        }
+        const std::shared_ptr<erhe::geometry::Geometry>& geometry = primitive->render_shape->get_geometry();
+        if (!geometry) {
+            continue;
+        }
+        erhe::geometry::Mesh_attributes& attributes = geometry->get_attributes();
+        if (!attributes.corner_texcoord_2.has(0)) {
+            continue;
+        }
+        const GEO::Mesh& geo_mesh = geometry->get_mesh();
+        const glm::vec2 uv_scale {region.uv_scale_offset.x, region.uv_scale_offset.y};
+        const glm::vec2 uv_offset{region.uv_scale_offset.z, region.uv_scale_offset.w};
+        const auto atlas_uv = [&](const GEO::vec2f& uv) -> glm::vec2 {
+            return glm::vec2{uv.x, uv.y} * uv_scale + uv_offset;
+        };
+
+        // First occurrence of each facet edge, keyed by the (order-
+        // normalized) vertex id pair; the second occurrence with different
+        // UVs is a seam. Shared vertex ids make the position test exact.
+        class Edge_side
+        {
+        public:
+            GEO::vec2f uv0;
+            GEO::vec2f uv1;
+            GEO::vec3f n0;
+            GEO::vec3f n1;
+            bool       seam_emitted{false};
+        };
+        std::unordered_map<uint64_t, Edge_side> edge_map;
+        edge_map.reserve(geo_mesh.facet_corners.nb());
+
+        for (GEO::index_t facet : geo_mesh.facets) {
+            const GEO::index_t corner_count = geo_mesh.facets.nb_corners(facet);
+            for (GEO::index_t k = 0; k < corner_count; ++k) {
+                const GEO::index_t c0 = geo_mesh.facets.corner(facet, k);
+                const GEO::index_t c1 = geo_mesh.facets.corner(facet, (k + 1) % corner_count);
+                GEO::index_t v0 = geo_mesh.facet_corners.vertex(c0);
+                GEO::index_t v1 = geo_mesh.facet_corners.vertex(c1);
+                if (v0 == v1) {
+                    continue;
+                }
+                const std::optional<GEO::vec2f> uv0_opt = attributes.corner_texcoord_2.try_get(c0);
+                const std::optional<GEO::vec2f> uv1_opt = attributes.corner_texcoord_2.try_get(c1);
+                if (!uv0_opt.has_value() || !uv1_opt.has_value()) {
+                    continue;
+                }
+                GEO::vec2f uv0 = uv0_opt.value();
+                GEO::vec2f uv1 = uv1_opt.value();
+                GEO::vec3f n0  = attributes.corner_normal.try_get(c0).value_or(GEO::vec3f{0.0f, 0.0f, 0.0f});
+                GEO::vec3f n1  = attributes.corner_normal.try_get(c1).value_or(GEO::vec3f{0.0f, 0.0f, 0.0f});
+                if (v1 < v0) {
+                    std::swap(v0, v1);
+                    std::swap(uv0, uv1);
+                    std::swap(n0, n1);
+                }
+                const uint64_t key = (static_cast<uint64_t>(v0) << 32) | static_cast<uint64_t>(v1);
+                const auto found = edge_map.find(key);
+                if (found == edge_map.end()) {
+                    edge_map.emplace(key, Edge_side{uv0, uv1, n0, n1, false});
+                    continue;
+                }
+                Edge_side& other = found->second;
+                const float uv_epsilon = 1.0e-6f;
+                if ((GEO::length2(other.uv0 - uv0) < uv_epsilon) && (GEO::length2(other.uv1 - uv1) < uv_epsilon)) {
+                    continue; // same UV space, not a seam
+                }
+                if (other.seam_emitted) {
+                    continue; // bad geometry (edge shared by 3+ facets)
+                }
+                // Hard edges (split corner normals) have genuinely
+                // discontinuous lighting - do not blend across them. Zero
+                // normals (attribute absent) blend permissively.
+                const float l0 = GEO::length(n0) * GEO::length(other.n0);
+                const float l1 = GEO::length(n1) * GEO::length(other.n1);
+                if (((l0 > 0.0f) && (GEO::dot(n0, other.n0) < 0.99f * l0)) ||
+                    ((l1 > 0.0f) && (GEO::dot(n1, other.n1) < 0.99f * l1))) {
+                    continue;
+                }
+                other.seam_emitted = true;
+                ++seam_count;
+                // Two lines: each side rasterized at its own UVs, sampling
+                // the opposite side.
+                m_seam_vertices.push_back(Seam_vertex{atlas_uv(uv0),       atlas_uv(other.uv0)});
+                m_seam_vertices.push_back(Seam_vertex{atlas_uv(uv1),       atlas_uv(other.uv1)});
+                m_seam_vertices.push_back(Seam_vertex{atlas_uv(other.uv0), atlas_uv(uv0)});
+                m_seam_vertices.push_back(Seam_vertex{atlas_uv(other.uv1), atlas_uv(uv1)});
+            }
+        }
+    }
+    log_render->info("Lightmap_baker: {} seam edges ({} line vertices)", seam_count, m_seam_vertices.size());
 }
 
 void Lightmap_baker::ensure_gbuffer_targets()
@@ -1858,9 +2090,10 @@ void Lightmap_baker::ensure_bake_targets(erhe::graphics::Command_buffer& command
         // rays), accumulation atlas (sum + count) and the dilate scratch.
         m_lightmap_texture = make_storage(
             "lightmap atlas",
-            Image_usage_flag_bit_mask::storage      |
-            Image_usage_flag_bit_mask::sampled      |
-            Image_usage_flag_bit_mask::transfer_src |
+            Image_usage_flag_bit_mask::storage          |
+            Image_usage_flag_bit_mask::sampled          |
+            Image_usage_flag_bit_mask::color_attachment | // seam blend line raster target
+            Image_usage_flag_bit_mask::transfer_src     |
             Image_usage_flag_bit_mask::transfer_dst
         );
         m_accum_texture = make_storage(
@@ -1868,7 +2101,15 @@ void Lightmap_baker::ensure_bake_targets(erhe::graphics::Command_buffer& command
             Image_usage_flag_bit_mask::storage |
             Image_usage_flag_bit_mask::transfer_dst
         );
-        m_dilate_texture = make_storage("lightmap dilate scratch", Image_usage_flag_bit_mask::storage);
+        // The dilate scratch doubles as the seam pass sample source (a copy
+        // of the published atlas, avoiding a read/write hazard like Godot's
+        // light_accum_tex2).
+        m_dilate_texture = make_storage(
+            "lightmap dilate scratch",
+            Image_usage_flag_bit_mask::storage |
+            Image_usage_flag_bit_mask::sampled |
+            Image_usage_flag_bit_mask::transfer_dst
+        );
         m_accum_cleared = false;
     }
     if (!m_accum_cleared) {
@@ -2273,7 +2514,61 @@ void Lightmap_baker::record_resolve_and_dilate(erhe::graphics::Command_buffer& c
             command_buffer.memory_barrier(Memory_barrier_mask::shader_image_access_barrier_bit);
         }
     }
+    record_seam_blend(command_buffer);
     command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::shader_read_only_optimal);
+}
+
+void Lightmap_baker::record_seam_blend(erhe::graphics::Command_buffer& command_buffer)
+{
+    using namespace erhe::graphics;
+    if (!m_seam_pipeline || m_seam_vertices.empty() || !m_dilate_texture) {
+        return;
+    }
+    // Sample source: a copy of the published atlas in the dilate scratch
+    // (rendering into the atlas while sampling it would be a hazard).
+    command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::transfer_src_optimal);
+    command_buffer.transition_texture_layout(*m_dilate_texture,   Image_layout::transfer_dst_optimal);
+    {
+        Blit_command_encoder blit = m_graphics_device.make_blit_command_encoder(command_buffer);
+        blit.copy_from_texture(m_lightmap_texture.get(), m_dilate_texture.get());
+    }
+    command_buffer.transition_texture_layout(*m_dilate_texture,   Image_layout::shader_read_only_optimal);
+    command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::color_attachment_optimal);
+
+    const std::size_t byte_count = m_seam_vertices.size() * sizeof(Seam_vertex);
+    Ring_buffer_range vertex_range = m_seam_vertex_ring->acquire(Ring_buffer_usage::CPU_write, byte_count);
+    {
+        std::span<std::byte> gpu_data = vertex_range.get_span();
+        std::memcpy(gpu_data.data(), m_seam_vertices.data(), byte_count);
+        vertex_range.bytes_written(byte_count);
+        vertex_range.close();
+    }
+
+    Render_pass_descriptor descriptor{};
+    Render_pass_attachment_descriptor& attachment = descriptor.color_attachments[0];
+    attachment.texture       = m_lightmap_texture.get();
+    attachment.load_action   = Load_action::Load;
+    attachment.store_action  = Store_action::Store;
+    attachment.usage_before  = Image_usage_flag_bit_mask::storage;
+    attachment.layout_before = Image_layout::color_attachment_optimal;
+    attachment.usage_after   = Image_usage_flag_bit_mask::storage;
+    attachment.layout_after  = Image_layout::color_attachment_optimal;
+    descriptor.render_target_width  = m_layout.width;
+    descriptor.render_target_height = m_layout.height;
+    descriptor.debug_label = erhe::utility::Debug_label{"lightmap seam blend"};
+    {
+        Render_pass            render_pass{m_graphics_device, descriptor};
+        Render_command_encoder encoder = m_graphics_device.make_render_command_encoder(command_buffer);
+        const Scoped_render_pass scoped{render_pass, command_buffer};
+        encoder.set_viewport_rect(0, 0, m_layout.width, m_layout.height);
+        encoder.set_scissor_rect (0, 0, m_layout.width, m_layout.height);
+        encoder.set_bind_group_layout(m_seam_layout.get());
+        encoder.set_render_pipeline(*m_seam_pipeline);
+        encoder.set_sampled_image(0u, *m_dilate_texture, *m_linear_sampler);
+        encoder.set_vertex_buffer(vertex_range.get_buffer()->get_buffer(), vertex_range.get_byte_start_offset_in_buffer(), 0);
+        encoder.draw_primitives(Primitive_type::line, 0, m_seam_vertices.size());
+    }
+    vertex_range.release();
 }
 
 void Lightmap_baker::tick(erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root, const float texels_per_meter)
