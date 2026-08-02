@@ -927,6 +927,15 @@ void Mcp_server::refresh_tool_list()
         {"required", json::array({"scene_name"})}
     }});
 
+    m_tool_infos.push_back({"lightmap_set_baking", "Toggle the interactive progressive lightmap bake (per-frame budgeted gather with accumulation; direct light + indirect bounces; scene edits restart convergence). Reports bake status (sweeps completed, cursor row) and can write a tone-mapped debug PNG of the published atlas. Call without 'enabled' to just query status.", {
+        {"type", "object"},
+        {"properties", {
+            {"enabled",   {{"type", "boolean"}, {"description", "Turn interactive baking on/off; omit to leave unchanged"}}},
+            {"reset",     {{"type", "boolean"}, {"description", "Restart accumulation (keeps layout + G-buffer)"}}},
+            {"debug_png", {{"type", "string"},  {"description", "Optional path for a tone-mapped PNG of the published atlas"}}}
+        }}
+    }});
+
     // Transform reference frame for the transform gizmo / numeric edits.
     m_tool_infos.push_back({"set_transform_reference_mode", "Set the orientation reference frame (transform space) of the transform tool: global/world (world axes), local (selection's own orientation), reference (a chosen reference node's orientation), or selection (a frame derived from the active mesh-component selection). For reference mode, give reference_node_id or reference_node_name (searched across scenes, or within scene_name when given) - this is how you set the reference. edge_normal_blend tunes the selection-mode frame. Read the current state back with get_transform_state.", {
         {"type", "object"},

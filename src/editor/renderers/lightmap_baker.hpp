@@ -7,8 +7,11 @@
 #include <unordered_map>
 #include <vector>
 
+#include <array>
+
 namespace erhe::graphics {
     class Acceleration_structure;
+    class Acceleration_structure_instance;
     class Bind_group_layout;
     class Buffer;
     class Command_buffer;
@@ -16,6 +19,7 @@ namespace erhe::graphics {
     class Device;
     class Fragment_outputs;
     class Render_pipeline;
+    class Ring_buffer_client;
     class Sampler;
     class Shader_resource;
     class Shader_stages;
@@ -108,6 +112,22 @@ public:
     // Debug: tone-mapped 8-bit PNG of the baked lightmap atlas.
     auto debug_write_lightmap_png(const std::string& path) -> bool;
 
+    // Interactive bake loop (plan section 3a): record one budgeted gather
+    // slice plus resolve + dilate publish into the given command buffer
+    // (the open frame command buffer; the rendergraph samples the published
+    // atlas later in the same submission). Handles change-driven
+    // invalidation internally: light/occluder edits reset accumulation,
+    // lightmapped-mesh edits additionally re-raster the G-buffer.
+    void tick(erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root, float texels_per_meter);
+
+    void set_baking_enabled(const bool enabled) { m_baking_enabled = enabled; }
+    [[nodiscard]] auto is_baking_enabled() const -> bool     { return m_baking_enabled; }
+    void request_reset() { m_reset_requested = true; }
+    // Completed full-atlas accumulation sweeps since the last reset; every
+    // valid texel holds at least this many samples.
+    [[nodiscard]] auto get_sweep_count() const -> uint32_t   { return m_sweep_count; }
+    [[nodiscard]] auto get_cursor_row () const -> int        { return m_cursor_y; }
+
     [[nodiscard]] auto get_lightmap_texture() const -> const std::shared_ptr<erhe::graphics::Texture>& { return m_lightmap_texture; }
 
     [[nodiscard]] auto get_position_texture() const -> const std::shared_ptr<erhe::graphics::Texture>& { return m_position_texture; }
@@ -119,6 +139,47 @@ public:
 
 private:
     void ensure_gbuffer_targets();
+    void ensure_bake_targets(erhe::graphics::Command_buffer& command_buffer);
+    void publish_regions();
+
+    // Per-TLAS-instance record for the gather's bounce-ray attribute fetch
+    // (mirrors Ray_trace_renderer::Instance_record_data; std430). Instances
+    // without a lightmap region carry uv_scale_offset.x == 0 and bounce
+    // rays hitting them contribute nothing.
+    class Lm_instance_record
+    {
+    public:
+        uint64_t  index_address      {0}; // first triangle index of the instance
+        uint64_t  vertex_address     {0}; // start of the stream-1 vertex range
+        uint32_t  vertex_stride_uints{0};
+        uint32_t  pad0               {0};
+        uint32_t  pad1               {0};
+        uint32_t  pad2               {0};
+        glm::vec4 uv_scale_offset    {0.0f, 0.0f, 0.0f, 0.0f};
+    };
+
+    class Light_record
+    {
+    public:
+        glm::vec4 position_and_type;
+        glm::vec4 direction_and_outer_cos;
+        glm::vec4 radiance_and_range;
+        glm::vec4 params;
+    };
+
+    [[nodiscard]] auto collect_lights(Scene_root& scene_root) const -> std::vector<Light_record>;
+    void write_gather_ubo(std::byte* data, const std::vector<Light_record>& lights, uint32_t frame_index, uint32_t base_texel_y) const;
+    // Collect occluder instances + gather records; builds missing BLAS into
+    // the command buffer. Every visible non-skinned content mesh occludes.
+    void collect_instances(
+        erhe::graphics::Command_buffer&                              command_buffer,
+        Scene_root&                                                  scene_root,
+        std::vector<erhe::graphics::Acceleration_structure_instance>& out_instances,
+        std::vector<Lm_instance_record>&                             out_records
+    );
+    // Record resolve (accum -> published running average) followed by the
+    // dilation ping-pong; leaves the published atlas shader-readable.
+    void record_resolve_and_dilate(erhe::graphics::Command_buffer& command_buffer);
 
     class Blas_entry
     {
@@ -137,11 +198,12 @@ private:
     Atlas_layout                                       m_layout;
 
     // G-buffer raster pass objects (created once in the constructor).
-    std::unique_ptr<erhe::graphics::Shader_resource>   m_draw_block; // per-draw UBO: world_from_node + uv_scale_offset + jitter
-    std::size_t                                        m_draw_block_world_offset {0};
-    std::size_t                                        m_draw_block_uv_offset    {0};
-    std::size_t                                        m_draw_block_jitter_offset{0};
-    std::size_t                                        m_draw_block_size         {0};
+    std::unique_ptr<erhe::graphics::Shader_resource>   m_draw_block; // per-draw UBO: world_from_node + uv_scale_offset + jitter + base_color
+    std::size_t                                        m_draw_block_world_offset     {0};
+    std::size_t                                        m_draw_block_uv_offset        {0};
+    std::size_t                                        m_draw_block_jitter_offset    {0};
+    std::size_t                                        m_draw_block_base_color_offset{0};
+    std::size_t                                        m_draw_block_size             {0};
     std::unique_ptr<erhe::graphics::Bind_group_layout> m_bind_group_layout;
     std::unique_ptr<erhe::graphics::Fragment_outputs>  m_fragment_outputs;
     std::unique_ptr<erhe::graphics::Shader_stages>     m_shader_stages;
@@ -154,6 +216,8 @@ private:
     std::unique_ptr<erhe::graphics::Shader_resource>   m_gather_block;
     std::size_t                                        m_gather_light_count_offset   {0};
     std::size_t                                        m_gather_ray_bias_offset      {0};
+    std::size_t                                        m_gather_frame_index_offset   {0};
+    std::size_t                                        m_gather_base_y_offset        {0};
     std::size_t                                        m_gather_position_type_offset {0};
     std::size_t                                        m_gather_direction_cos_offset {0};
     std::size_t                                        m_gather_radiance_range_offset{0};
@@ -178,6 +242,63 @@ private:
     std::unordered_map<const erhe::primitive::Buffer_mesh*, Blas_entry> m_blas_cache;
     std::unique_ptr<erhe::graphics::Acceleration_structure>             m_tlas;
     uint32_t                                                            m_tlas_capacity{0};
+
+    // ---- Interactive bake loop state (plan section 3a) ----
+
+    // Extra gather inputs: G-buffer albedo (bounce modulation + future JNLM
+    // guide), the accumulation atlas (rgb = radiance sum, w = sample
+    // count), and per-instance records for bounce-ray attribute fetch.
+    std::shared_ptr<erhe::graphics::Texture>           m_albedo_texture;
+    std::shared_ptr<erhe::graphics::Texture>           m_accum_texture;
+    std::unique_ptr<erhe::graphics::Shader_resource>   m_lm_instance_struct;
+    std::unique_ptr<erhe::graphics::Shader_resource>   m_lm_instance_block;
+    std::unique_ptr<erhe::graphics::Sampler>           m_linear_sampler;
+
+    // Resolve pass (accum -> published average); shares m_dilate_layout
+    // (two rgba32f storage images named i_src / i_dst).
+    std::unique_ptr<erhe::graphics::Shader_stages>     m_resolve_shader_stages;
+    std::unique_ptr<erhe::graphics::Compute_pipeline>  m_resolve_pipeline;
+
+    // Per-tick uploads ride the device ring buffers (the frame command
+    // buffer stays open; plain buffers would be destroyed in flight).
+    std::unique_ptr<erhe::graphics::Ring_buffer_client> m_tick_gather_ubo;
+    std::unique_ptr<erhe::graphics::Ring_buffer_client> m_tick_instance_ssbo;
+
+    // bake_direct() is a standalone submit (wait_idle before return), so
+    // plain buffers are safe there; kept as members so a previous call's
+    // buffers outlive their submission.
+    std::unique_ptr<erhe::graphics::Buffer>            m_direct_gather_ubo;
+    std::unique_ptr<erhe::graphics::Buffer>            m_direct_instance_ssbo;
+
+    // Per-frame-in-flight TLAS slots for tick() (rebuilding the single
+    // TLAS a still-in-flight frame reads would be a data race; mirrors
+    // Ray_trace_renderer). bake_direct() keeps using m_tlas (wait_idle).
+    static constexpr std::size_t s_tlas_slot_count = 4;
+    class Tlas_slot
+    {
+    public:
+        std::unique_ptr<erhe::graphics::Acceleration_structure> acceleration_structure;
+        uint32_t                                                capacity{0};
+    };
+    std::array<Tlas_slot, s_tlas_slot_count>           m_tlas_slots;
+
+    bool     m_baking_enabled   {false};
+    bool     m_reset_requested  {false};
+    bool     m_accum_cleared    {false}; // accumulation + published atlas zeroed at least once
+    bool     m_regions_published{false}; // per-primitive uv_scale_offset pushed to meshes
+    int      m_cursor_y         {0};     // next band start row (tile cursor)
+    uint32_t m_sweep_count      {0};     // completed full-atlas sweeps since reset
+    uint32_t m_frame_counter    {0};     // RNG decorrelation across ticks
+    bool     m_hashes_initialized{false};
+    uint64_t m_hash_lighting    {0};     // lights + occluder transforms
+    uint64_t m_hash_gbuffer     {0};     // lightmapped region transforms
+    uint64_t m_hash_layout      {0};     // lightmapped set + texel density
+    float    m_layout_texels_per_meter{0.0f};
+    Scene_root* m_layout_scene_root{nullptr}; // scene update_layout() ran for
+
+    // Per-tick scratch (capacity kept across frames).
+    std::vector<erhe::graphics::Acceleration_structure_instance> m_tick_instances;
+    std::vector<Lm_instance_record>                              m_tick_records;
 };
 
 } // namespace editor

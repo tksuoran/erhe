@@ -762,6 +762,19 @@ public:
             m_headset_view->update_transforms();
         }
 
+        // Interactive lightmap bake (doc/lightmap_baking_plan.md section
+        // 3a): record this frame's budgeted gather slice + publish into the
+        // frame command buffer before the rendergraph samples the published
+        // atlas.
+        if (should_render && m_lightmap_baker && m_lightmap_baker->is_baking_enabled()) {
+            const std::shared_ptr<Scene_root> lightmap_scene_root = m_app_context.selection->get_active_scene_root();
+            if (lightmap_scene_root) {
+                erhe::log::set_breadcrumb("tick: lightmap bake");
+                m_lightmap_baker->tick(command_buffer, *lightmap_scene_root.get(), m_app_context.editor_settings->lightmap.texels_per_meter);
+                m_forward_renderer->set_lightmap_texture(m_lightmap_baker->get_lightmap_texture());
+            }
+        }
+
         // Execute rendergraph
         if (should_render) {
             erhe::log::set_breadcrumb("tick: rendergraph execute");

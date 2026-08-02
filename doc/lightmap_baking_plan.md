@@ -58,15 +58,93 @@ Gotchas learned:
 - Bake command buffers use thread slot 6 (7 is the texture-graph
   export slot).
 
+Also done: the analytic-light gate (standard.frag skips the light loops
+for draws with a valid lightmap region) and phase 4 dilation, both
+committed 2026-08-01.
+
+DONE 2026-08-02 - Phase 3B interactive loop (section 3a), verified on the
+default scene against the analytic ground truth:
+- Accumulation atlas (RGBA32F sum + count) + resolve pass publishing the
+  running average into the display atlas, dilated per publish.
+- Per-frame budgeted tick (editor.cpp, before rendergraph execute):
+  tile-cursor bands of <= 2^18 texels/frame recorded into the frame
+  command buffer via ring buffers + per-frame-in-flight TLAS slots; ~1.5
+  ms/frame at 4096^2 on the dev RTX GPU (~16 sweeps/s).
+- Change-driven invalidation via three FNV hash tiers (lightmapped set +
+  density -> re-layout; region transforms -> re-raster G-buffer; lights +
+  occluder transforms -> reset accumulation); verified with an MCP
+  edit_light call (sweeps 145 -> 1 -> reconverge).
+- Indirect bounces: one cosine hemisphere ray per texel per sample;
+  radiance = albedo_hit * published_irradiance(hit lightmap UV) via
+  per-instance BDA texcoord-2 fetch (Lm_instance_record SSBO), manual
+  backface rejection via position fetch. G-buffer gained an albedo
+  target (material base-color factor; textures ignored for now) - also
+  the future JNLM guide.
+- UI: Lightmap window Baking checkbox + Reset + sweep readout; MCP tool
+  lightmap_set_baking {enabled, reset, debug_png} toggles/queries/dumps.
+- bake_direct() remains the one-shot path (MCP/window), now implemented
+  as reset + one full-atlas sample through the same shader.
+Known deliberate gaps: no ms-adaptive budget (fixed texel band), no
+adaptive bounce-origin bias yet (single bounce spawns only from G-buffer
+texels, where the fixed 1 cm bias applies), dynamic occluder motion
+resets accumulation every frame (physics jitter would prevent
+convergence - revisit if it bites), bake_gbuffer on invalidation is a
+standalone wait_idle submit (hitch on lightmapped-mesh transform edits).
+
+Leak-defense reality check (differs from the phase 3 wording below):
+the committed gather uses a FIXED 1 cm normal-offset ray bias
+(ray_bias = 0.01f in lightmap_baker.cpp) and shadow rays with backface
+culling DISABLED (fixes the contact leak when the biased origin lands
+inside a resting occluder), plus fold cull at raster time and dilation.
+The Bakery-article defenses (adaptive magnitude-proportional bias,
+virtual-offset tangential push-off, backface-hit invalidation) are NOT
+implemented. See "Bakery cross-check" below for when to reach for them.
+
 NEXT (in order):
-1. Gate analytic lights off for lightmapped draws in standard.frag
-   (branch on v_lightmap_scale_offset.x > 0 around the light loops;
-   specular stays off too for now - the bake is diffuse irradiance).
-2. Phase 3B interactive loop (§3a: budgeted per-frame tile dispatch,
+1. Phase 3B interactive loop (§3a: budgeted per-frame tile dispatch,
    accumulation + publish, change-driven invalidation, indirect
-   bounces reading the published atlas).
-3. Phase 4 (dilation + JNLM denoise), phase 6 (ERHE_lightmap GLB
-   persistence + RGB9E5), later the CLI bake (§7).
+   bounces reading the published atlas). Bounce-ray origins at hit
+   points need their own self-intersection bias — use the article's
+   adaptive form (pos += pos * 2e-7 order of magnitude), not the 1 cm
+   receiver bias, since hit points are arbitrary scene positions.
+2. Phase 4 second half: JNLM denoise on the published atlas.
+   PREREQUISITE: JNLM is guided by albedo+normal, and indirect bounces
+   are modulated by surface albedo — extend the texel G-buffer with an
+   albedo(+emissive) target when starting either. Denoise runs BEFORE
+   any seam pass (Bakery ordering: denoising after seam blending would
+   re-open the seams).
+3. Seams, only if still visible after denoise: prefer the GPU
+   edge-bleed pass (render seam-edge line lists with the opposite
+   side's UVs, alpha-blend over several passes until converged —
+   Bakery's method, Godot's lm_blendseams.glsl) over the CPU
+   seamoptimizer LSQ pass; it fits the interactive loop (re-runs per
+   publish) where a CPU pass does not.
+4. Phase 6 ERHE_lightmap GLB persistence + RGB9E5; later CLI bake.
+
+### Bakery cross-check (article re-read 2026-08-02)
+
+Deliberately NOT adopted (current defenses cover them on the default
+scene; revisit only if artifacts resurface):
+- Virtual offset / tangential push-off + backface-hit invalidation:
+  our no-backface-cull shadow rays + fold cull + dilation solved the
+  observed leaks. If leaks reappear on new content (thin walls,
+  interpenetrating geometry), implement push-off (4 tangential rays,
+  half world-texel length, reposition past the hit + normal bias) and
+  then SHRINK the 1 cm bias — the big fixed bias is itself a leak and
+  terminator hazard, and adding push-off on top of it double-treats.
+- 25-tap ±2-texel conservative raster: our 9-tap half-texel jitter +
+  dilation achieves the same coverage; the article's larger offsets
+  substitute for a separate dilation pass, which we have.
+- Shadow terminator fix via per-fragment Phong tessellation (smooth
+  position in the G-buffer, validated against the face plane): this is
+  the article's answer to exactly our known "chart-brightness plateaus
+  at 64 tpm" artifact (terminator quantization on low-poly smooth
+  geometry). Try density/denoise first as planned; if plateaus survive
+  denoise, this — not a seam pass — is the targeted fix, and it needs
+  a G-buffer smooth-position target.
+- Bicubic runtime sampling (4-tap) already planned as a later upgrade;
+  mip-level UV chart repacking is out of scope until lightmap mips
+  exist.
 
 Goal: bake static scene lighting into a lightmap texture with **minimum
 authoring effort** — lightmap UVs are assigned automatically, there is
@@ -399,19 +477,26 @@ Each phase ends in something visible/testable in the editor.
 - Step 3: indirect — cosine-sampled hemisphere, iterate-on-previous-
   lightmap bounces (rays read the published atlas at the hit point's
   channel-2 UV).
-- Leak defenses from day one: adaptive origin bias, virtual-offset
-  push-off (~4 tangential probe rays, half-texel length), backface-hit
-  sample invalidation.
+- Leak defenses from day one — AS BUILT (see status section): fixed
+  1 cm normal-offset bias + shadow rays without backface culling +
+  fold cull + dilation. The article's adaptive bias / virtual offset /
+  backface invalidation remain the documented fallback set.
 
 ### Phase 4 — Post-processing
 - Dilation compute pass (valid→invalid 8-neighborhood, ~padding
   iterations).
 - Denoise: port Godot's JNLM compute shader (MIT, one file, guided by
-  the G-buffer albedo+normal), applied periodically to the published
-  atlas per §3a so partially-converged views look clean too. OIDN stays
-  an optional external step if JNLM proves insufficient.
-- Seams: rely on padding + dilation first; add a seamoptimizer-style
-  least-squares CPU pass only if seams are visible in practice.
+  the G-buffer albedo+normal — requires adding an albedo target to the
+  G-buffer, which today holds only position+normal), applied
+  periodically to the published atlas per §3a so partially-converged
+  views look clean too. Runs before any seam pass. OIDN stays an
+  optional external step if JNLM proves insufficient.
+- Seams: rely on padding + dilation first; if seams remain visible
+  after denoise, add the GPU edge-bleed pass (seam-edge line lists
+  rendered with opposite-side UVs, alpha-blended over multiple passes
+  — Bakery / Godot lm_blendseams) in preference to the CPU
+  seamoptimizer LSQ pass, which cannot re-run per publish in the
+  interactive loop.
 
 ### Phase 5 — Runtime sampling
 - `uvec2 lightmap_texture` via the texture heap; because the atlas is

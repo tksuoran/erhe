@@ -165,13 +165,33 @@ void Lightmap_window::imgui()
         }
     }
 
-    // Plan phase 3 turns this into the interactive bake toggle.
-    ImGui::BeginDisabled(true);
-    bool baking = false;
-    ImGui::Checkbox("Baking", &baking);
-    ImGui::EndDisabled();
-    if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("Interactive lightmap baking is not implemented yet (doc/lightmap_baking_plan.md phase 3).");
+    // Interactive bake (plan section 3a): while on, the editor tick records
+    // a budgeted gather slice + publish into every frame.
+    if (m_context.lightmap_baker != nullptr) {
+        bool baking = m_context.lightmap_baker->is_baking_enabled();
+        if (ImGui::Checkbox("Baking", &baking)) {
+            m_context.lightmap_baker->set_baking_enabled(baking);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "Interactive progressive bake: direct light + indirect bounces accumulate\n"
+                "across frames while you edit; light/mesh edits restart convergence."
+            );
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Reset")) {
+            m_context.lightmap_baker->request_reset();
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Restart accumulation (keeps atlas layout and G-buffer).");
+        }
+        if (m_context.lightmap_baker->is_baking_enabled()) {
+            ImGui::Text(
+                "Sweeps: %u (row %d)",
+                m_context.lightmap_baker->get_sweep_count(),
+                m_context.lightmap_baker->get_cursor_row()
+            );
+        }
     }
 }
 
