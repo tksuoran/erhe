@@ -114,60 +114,73 @@ accept dark metals until specular handling exists, (c) re-enable
 analytic specular (only) for lightmapped draws, (d) bake a specular
 approximation later. Needs a user decision.
 
-Leak-defense reality check (differs from the phase 3 wording below):
-the committed gather uses a FIXED 1 cm normal-offset ray bias
-(ray_bias = 0.01f in lightmap_baker.cpp) and shadow rays with backface
-culling DISABLED (fixes the contact leak when the biased origin lands
-inside a resting occluder), plus fold cull at raster time and dilation.
-The Bakery-article defenses (adaptive magnitude-proportional bias,
-virtual-offset tangential push-off, backface-hit invalidation) are NOT
-implemented. See "Bakery cross-check" below for when to reach for them.
+### Article alignment (user-directed 2026-08-02)
+
+DECISION: follow the Bakery article ("Baking artifact-free lightmaps on
+the GPU", key reference #1 in section 1.1) closely. Exceptions:
+- We are Vulkan: the denoiser is a Vulkan-native compute pass (Godot's
+  JNLM port as planned), NOT the article's OptiX AI denoiser. The
+  article's reversible-tonemap trick is OptiX-specific; JNLM works in
+  linear HDR directly.
+- Mip-level UV chart repacking stays out of scope until the lightmap
+  has mips at all.
+
+As-built state the alignment starts from: the committed gather uses a
+FIXED 1 cm normal-offset ray bias and shadow rays with backface culling
+DISABLED (that combination fixed the observed contact leak), plus fold
+cull at raster time and dilation. The article instead keeps culling
+sane and prevents leaks at the SOURCE (sample position). The alignment
+replaces our ad-hoc defenses with the article's, in this order:
 
 NEXT (in order):
-1. Phase 3B interactive loop (§3a: budgeted per-frame tile dispatch,
-   accumulation + publish, change-driven invalidation, indirect
-   bounces reading the published atlas). Bounce-ray origins at hit
-   points need their own self-intersection bias — use the article's
-   adaptive form (pos += pos * 2e-7 order of magnitude), not the 1 cm
-   receiver bias, since hit points are arbitrary scene positions.
-2. Phase 4 second half: JNLM denoise on the published atlas.
-   PREREQUISITE: JNLM is guided by albedo+normal, and indirect bounces
-   are modulated by surface albedo — extend the texel G-buffer with an
-   albedo(+emissive) target when starting either. Denoise runs BEFORE
-   any seam pass (Bakery ordering: denoising after seam blending would
-   re-open the seams).
-3. Seams, only if still visible after denoise: prefer the GPU
-   edge-bleed pass (render seam-edge line lists with the opposite
-   side's UVs, alpha-blend over several passes until converged —
-   Bakery's method, Godot's lm_blendseams.glsl) over the CPU
-   seamoptimizer LSQ pass; it fits the interactive loop (re-runs per
-   publish) where a CPU pass does not.
-4. Phase 6 ERHE_lightmap GLB persistence + RGB9E5; later CLI bake.
-
-### Bakery cross-check (article re-read 2026-08-02)
-
-Deliberately NOT adopted (current defenses cover them on the default
-scene; revisit only if artifacts resurface):
-- Virtual offset / tangential push-off + backface-hit invalidation:
-  our no-backface-cull shadow rays + fold cull + dilation solved the
-  observed leaks. If leaks reappear on new content (thin walls,
-  interpenetrating geometry), implement push-off (4 tangential rays,
-  half world-texel length, reposition past the hit + normal bias) and
-  then SHRINK the 1 cm bias — the big fixed bias is itself a leak and
-  terminator hazard, and adding push-off on top of it double-treats.
-- 25-tap ±2-texel conservative raster: our 9-tap half-texel jitter +
-  dilation achieves the same coverage; the article's larger offsets
-  substitute for a separate dilation pass, which we have.
-- Shadow terminator fix via per-fragment Phong tessellation (smooth
-  position in the G-buffer, validated against the face plane): this is
-  the article's answer to exactly our known "chart-brightness plateaus
-  at 64 tpm" artifact (terminator quantization on low-poly smooth
-  geometry). Try density/denoise first as planned; if plateaus survive
-  denoise, this — not a seam pass — is the targeted fix, and it needs
-  a G-buffer smooth-position target.
-- Bicubic runtime sampling (4-tap) already planned as a later upgrade;
-  mip-level UV chart repacking is out of scope until lightmap mips
-  exist.
+1. Native conservative rasterization for the G-buffer raster:
+   VK_EXT_conservative_rasterization (overestimation mode) when the
+   device exposes it, replacing the 9-tap half-texel jitter re-render;
+   keep the jitter path as the fallback for devices without the
+   extension. Needs plumbing: device-extension detection (Device_info
+   flag) + an opt-in conservative flag in the render pipeline
+   rasterization state (no-op on GL/Metal/unsupported). Every
+   ray-query-capable desktop GPU of interest (NVIDIA Maxwell+, AMD
+   RDNA2+, Intel Arc) exposes the extension, so the fallback is cold.
+   Note the article's taps reach +-2 texels (gutter fill beyond true
+   coverage); native CR covers exactly the texels a triangle touches -
+   dilation supplies the gutter, as it already does.
+2. Leak defenses per the article (replaces the as-built set):
+   a. Adaptive ray bias: position += position * 2e-7 (magnitude-
+      proportional, ~FLT_EPSILON scale) instead of the fixed 1 cm
+      normal offset - for receiver rays AND bounce continuation.
+   b. Virtual offset / sample push-off: before gathering, trace 4
+      tangential rays from the texel center (length = world texel size
+      * 0.5); on a backface hit, move the sample:
+      newPos = oldPos + rayDir * hitDist + hitFaceNormal * bias.
+      World texel size comes from the G-buffer (see item 3).
+   c. Backface-hit invalidation: a gather ray hitting a backface marks
+      the texel invalid (coverage 0) so dilation fills it instead.
+   d. THEN restore backface culling on shadow rays (the no-cull hack
+      exists only because the 1 cm bias pushed origins inside resting
+      occluders). Regression gate: the torus contact leak and the 2 cm
+      object speck shadows must stay fixed (ERHE_LM_DEBUG_GATHER
+      recipe in the queue).
+3. G-buffer extension toward the article's layout: add smooth
+   (Phong-tessellated) position, face normal, and world-space texel
+   size (alpha channels; derivative trick at raster time); emissive
+   when phase 4 needs it. Then the terminator fix: gather from the
+   smooth position (validated to stay on the correct side of the face
+   plane, per-triangle flat fallback when the smooth position lands
+   inside neighbor geometry) - the article's answer to our known
+   "chart-brightness plateaus at 64 tpm" terminator artifact.
+4. Phase 4 second half: JNLM denoise (Vulkan exception above) on the
+   published atlas, guided by G-buffer albedo+normal. Runs BEFORE the
+   seam pass (article ordering: denoise after seam blending re-opens
+   the seams).
+5. Seam fixing as a STANDARD pipeline step (article does it always,
+   not only-if-visible): collect seam edges (position/normal equal
+   within epsilon, UVs differ), build a line vertex buffer carrying
+   the opposite side's UVs, render onto the atlas with alpha blending
+   over multiple passes until converged (Godot lm_blendseams is the
+   reference implementation). Runs per publish after denoise.
+6. Bicubic (4-tap) lightmap sampling in standard.frag.
+7. Phase 6 ERHE_lightmap GLB persistence + RGB9E5; later CLI bake.
 
 Goal: bake static scene lighting into a lightmap texture with **minimum
 authoring effort** — lightmap UVs are assigned automatically, there is
@@ -480,9 +493,10 @@ Each phase ends in something visible/testable in the editor.
 - UV-space raster pass into RGBA32F position + RGBA16F
   normal/albedo/emissive + coverage targets: vertex shader outputs
   `clip = (uv2 * scale + offset) * 2 - 1`, fragment writes world-space
-  attributes. Multi-jitter conservative coverage (~9 offsets,
-  center-last, per the Bakery post) unless
-  `VK_EXT_conservative_rasterization` is trivially available.
+  attributes. Conservative coverage via native
+  `VK_EXT_conservative_rasterization` (overestimation) where exposed;
+  multi-jitter re-render (~9 offsets, center-last, per the Bakery post)
+  as the fallback (article alignment, status section item 1).
 - Debug: visualize the G-buffer in the existing debug/texture windows.
 
 ### Phase 3 — Gather (the bake)
@@ -500,10 +514,12 @@ Each phase ends in something visible/testable in the editor.
 - Step 3: indirect — cosine-sampled hemisphere, iterate-on-previous-
   lightmap bounces (rays read the published atlas at the hit point's
   channel-2 UV).
-- Leak defenses from day one — AS BUILT (see status section): fixed
-  1 cm normal-offset bias + shadow rays without backface culling +
-  fold cull + dilation. The article's adaptive bias / virtual offset /
-  backface invalidation remain the documented fallback set.
+- Leak defenses: TARGET is the article set (adaptive magnitude-
+  proportional bias, virtual-offset push-off, backface-hit
+  invalidation, shadow rays with normal backface culling) - see the
+  article-alignment item 2 in the status section. AS BUILT until that
+  lands: fixed 1 cm normal-offset bias + shadow rays without backface
+  culling + fold cull + dilation.
 
 ### Phase 4 — Post-processing
 - Dilation compute pass (valid→invalid 8-neighborhood, ~padding
@@ -514,10 +530,10 @@ Each phase ends in something visible/testable in the editor.
   periodically to the published atlas per §3a so partially-converged
   views look clean too. Runs before any seam pass. OIDN stays an
   optional external step if JNLM proves insufficient.
-- Seams: rely on padding + dilation first; if seams remain visible
-  after denoise, add the GPU edge-bleed pass (seam-edge line lists
-  rendered with opposite-side UVs, alpha-blended over multiple passes
-  — Bakery / Godot lm_blendseams) in preference to the CPU
+- Seams: a standard pipeline step after denoise (article alignment
+  item 5): GPU edge-bleed pass - seam-edge line lists rendered with
+  opposite-side UVs, alpha-blended over multiple passes until
+  converged (Bakery / Godot lm_blendseams). Chosen over the CPU
   seamoptimizer LSQ pass, which cannot re-run per publish in the
   interactive loop.
 
