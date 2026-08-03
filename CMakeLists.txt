@@ -338,7 +338,7 @@ elseif (${ERHE_GRAPHICS_API} STREQUAL "vulkan")
     add_definitions(-DVK_NO_PROTOTYPES)
     CPMAddPackage(
         NAME              Vulkan-Headers
-        GIT_TAG           vulkan-sdk-1.4.341.0
+        GIT_TAG           vulkan-sdk-1.4.357.0
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY KhronosGroup/Vulkan-Headers
     )
@@ -360,7 +360,7 @@ elseif (${ERHE_GRAPHICS_API} STREQUAL "vulkan")
     set(VULKAN_HEADERS_INSTALL_DIR "${Vulkan-Headers_SOURCE_DIR}" CACHE PATH "Use CPM Vulkan-Headers" FORCE)
     CPMAddPackage(
         NAME              volk
-        GIT_TAG           vulkan-sdk-1.4.341.0
+        GIT_TAG           vulkan-sdk-1.4.357.0
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY zeux/volk
     )
@@ -374,13 +374,13 @@ elseif (${ERHE_GRAPHICS_API} STREQUAL "metal")
     CPMAddPackage(
         NAME              metal-cpp
         GITHUB_REPOSITORY bkaradzic/metal-cpp
-        GIT_TAG           metal-cpp_macOS15.2_iOS18.2
+        GIT_TAG           metal-cpp_27
         GIT_SHALLOW       TRUE
     )
     CPMAddPackage(
         NAME              SPIRV-Cross
         GITHUB_REPOSITORY KhronosGroup/SPIRV-Cross
-        GIT_TAG           vulkan-sdk-1.4.341.0
+        GIT_TAG           vulkan-sdk-1.4.357.0
         GIT_SHALLOW       TRUE
     )
 elseif (${ERHE_GRAPHICS_API} STREQUAL "none")
@@ -533,7 +533,7 @@ endif ()
 
 CPMAddPackage(
     NAME              simdjson
-    VERSION           4.6.3
+    VERSION           4.6.6
     GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY simdjson/simdjson
 )
@@ -547,7 +547,7 @@ CPMAddPackage(
 
 CPMAddPackage(
     NAME              taskflow
-    VERSION           4.0.0
+    VERSION           4.1.0
     GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY taskflow/taskflow
     OPTIONS
@@ -760,7 +760,7 @@ if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "embree")
 elseif (${ERHE_RAYTRACE_LIBRARY} STREQUAL "bvh")
     CPMAddPackage(
         NAME              bvh
-        GIT_TAG           ac41ab88a32d0c247009d8ed456fd2795c1ee023
+        GIT_TAG           5a9d759c51d9028130b5f25733e2b4b2dc67718b
         #GIT_TAG           master
         GITHUB_REPOSITORY madmann91/bvh
     )
@@ -770,7 +770,7 @@ elseif (${ERHE_RAYTRACE_LIBRARY} STREQUAL "bvh")
 elseif (${ERHE_RAYTRACE_LIBRARY} STREQUAL "tinybvh")
     CPMAddPackage(
         NAME              tinybvh
-        GIT_TAG           4735685f64d8b2bb0ad2c6c4643f291bf58774ad
+        GIT_TAG           0e4584287823252cf83f0e9cd072848bec5f79c5
         GITHUB_REPOSITORY jbikker/tinybvh
         DOWNLOAD_ONLY     YES
     )
@@ -811,7 +811,7 @@ add_definitions(-DERHE_TINYBVH_GIT_COMMIT="${ERHE_TINYBVH_GIT_COMMIT}")
 if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
     CPMAddPackage(
         NAME              JoltPhysics
-        GIT_TAG           v5.5.0
+        GIT_TAG           v5.6.0
         GITHUB_REPOSITORY jrouwe/JoltPhysics
         DOWNLOAD_ONLY     YES
     )
