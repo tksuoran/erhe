@@ -55,8 +55,13 @@ class Scene_root;
 // stream-1 pool reached through buffer device addresses) against the scene
 // lights with ray traced shadows; transmissive materials (Material_data::
 // transmission > 0) refract with Fresnel-weighted traced reflections.
-// Requires Device_info::use_ray_query and use_ray_tracing_position_fetch;
-// is_supported() is false otherwise and render() does nothing.
+// Requires Device_info::use_ray_query; is_supported() is false otherwise and
+// render() does nothing. When use_ray_tracing_position_fetch is additionally
+// available the shader reads the committed triangle's positions from the
+// acceleration structure; otherwise it falls back to fetching them from the
+// mesh memory stream-0 pool via the per-instance device addresses (the same
+// mechanism the attribute fetch already uses), so backends without the
+// extension (Metal) still work.
 //
 // Bottom level acceleration structures are built lazily, once per unique
 // Buffer_mesh (non-skinned meshes only), reading the Mesh_memory vertex/index
@@ -119,14 +124,20 @@ private:
     class Instance_record_data
     {
     public:
-        uint64_t index_address;      // device address of the first triangle index
-        uint64_t vertex_address;     // device address of the stream-1 vertex range start
+        uint64_t index_address;         // device address of the first triangle index
+        uint64_t vertex_address;        // device address of the stream-1 vertex range start
+        uint64_t position_address;      // device address of the stream-0 vertex range start (position-fetch fallback)
         uint32_t vertex_stride_uints;
+        uint32_t position_stride_uints;
         uint32_t material_index;
         uint32_t flags;
+        // Pads the struct to a multiple of 16 so the std140-rounded
+        // Shader_resource size matches sizeof (the layout VERIFYs in the
+        // constructor compare the two).
         uint32_t reserved0;
+        uint32_t reserved1;
     };
-    static_assert(sizeof(Instance_record_data) == 32);
+    static_assert(sizeof(Instance_record_data) == 48);
 
     [[nodiscard]] auto get_or_create_blas(
         erhe::graphics::Command_buffer&                    command_buffer,

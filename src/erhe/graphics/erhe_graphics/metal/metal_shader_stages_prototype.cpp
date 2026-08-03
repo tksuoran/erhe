@@ -1,4 +1,5 @@
 #include "erhe_graphics/metal/metal_shader_stages.hpp"
+#include "erhe_graphics/metal/metal_acceleration_structure.hpp"
 #include "erhe_graphics/metal/metal_device.hpp"
 #include "erhe_graphics/bind_group_layout.hpp"
 #include "erhe_graphics/device.hpp"
@@ -53,7 +54,9 @@ auto compile_spirv_to_mtl_function(
     static constexpr uint32_t texture_descriptor_set = 7;
 
     // Fixed Metal buffer indices -- UBOs/SSBOs use identity mapping (GLSL binding = Metal index).
-    // These higher indices are reserved for the argument buffer and push constant.
+    // These higher indices are reserved for the argument buffer and push
+    // constant; c_metal_acceleration_structure_buffer_index (13) is reserved
+    // for the ray query top level acceleration structure the same way.
     static constexpr uint32_t metal_arg_buffer_index    = 14;
     static constexpr uint32_t metal_push_constant_index = 15;
 
@@ -199,6 +202,21 @@ auto compile_spirv_to_mtl_function(
             rb.desc_set    = 0;
             rb.binding     = binding;
             rb.msl_texture = binding;
+            compiler.add_msl_resource_binding(rb);
+        }
+        // Ray query top level acceleration structures become direct
+        // [[buffer(N)]] kernel parameters (raytracing::acceleration_structure)
+        // in the discrete set 0. Without a remap SPIRV-Cross auto-assigns N,
+        // colliding with the identity-mapped UBO/SSBO indices; pin the
+        // reserved index that Compute_command_encoder_impl::
+        // set_acceleration_structure binds.
+        for (const spirv_cross::Resource& resource : pre_resources.acceleration_structures) {
+            uint32_t glsl_binding = compiler.get_decoration(resource.id, spv::DecorationBinding);
+            spirv_cross::MSLResourceBinding rb{};
+            rb.stage      = exec_model;
+            rb.desc_set   = 0;
+            rb.binding    = glsl_binding;
+            rb.msl_buffer = c_metal_acceleration_structure_buffer_index;
             compiler.add_msl_resource_binding(rb);
         }
         for (const spirv_cross::Resource& resource : pre_resources.push_constant_buffers) {

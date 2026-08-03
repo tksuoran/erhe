@@ -119,29 +119,37 @@ Ray_trace_renderer::Ray_trace_renderer(
     using erhe::utility::Debug_label;
 
     // The compute shader fetches the committed triangle's positions for the
-    // geometric normal, so position fetch is required on top of ray query.
-    if (!graphics_device.get_info().use_ray_query || !graphics_device.get_info().use_ray_tracing_position_fetch) {
+    // geometric normal: with position fetch straight from the acceleration
+    // structure, otherwise (Metal; SPIRV-Cross has no MSL lowering for
+    // SPV_KHR_ray_tracing_position_fetch) from the stream-0 pool via the
+    // per-instance device addresses.
+    if (!graphics_device.get_info().use_ray_query) {
         log_startup->info("Ray_trace_renderer: ray query not available, GPU ray tracing disabled");
         return;
     }
+    const bool use_position_fetch = graphics_device.get_info().use_ray_tracing_position_fetch;
 
     const std::filesystem::path editor_shaders = std::filesystem::path{"res"} / std::filesystem::path{"editor"} / std::filesystem::path{"shaders"};
 
     // Per-instance record layout (std430). Mirrors Instance_record_data;
     // verified below so the CPU-side memcpy upload matches the generated
     // GPU layout.
-    const std::size_t off_index_address       = m_instance_struct.add_uvec2("index_address"      )->get_offset_in_parent();
-    const std::size_t off_vertex_address      = m_instance_struct.add_uvec2("vertex_address"     )->get_offset_in_parent();
-    const std::size_t off_vertex_stride_uints = m_instance_struct.add_uint ("vertex_stride_uints")->get_offset_in_parent();
-    const std::size_t off_material_index      = m_instance_struct.add_uint ("material_index"     )->get_offset_in_parent();
-    const std::size_t off_flags               = m_instance_struct.add_uint ("flags"              )->get_offset_in_parent();
-    const std::size_t off_reserved0           = m_instance_struct.add_uint ("reserved0"          )->get_offset_in_parent();
-    ERHE_VERIFY(off_index_address       == offsetof(Instance_record_data, index_address));
-    ERHE_VERIFY(off_vertex_address      == offsetof(Instance_record_data, vertex_address));
-    ERHE_VERIFY(off_vertex_stride_uints == offsetof(Instance_record_data, vertex_stride_uints));
-    ERHE_VERIFY(off_material_index      == offsetof(Instance_record_data, material_index));
-    ERHE_VERIFY(off_flags               == offsetof(Instance_record_data, flags));
-    ERHE_VERIFY(off_reserved0           == offsetof(Instance_record_data, reserved0));
+    const std::size_t off_index_address         = m_instance_struct.add_uvec2("index_address"        )->get_offset_in_parent();
+    const std::size_t off_vertex_address        = m_instance_struct.add_uvec2("vertex_address"       )->get_offset_in_parent();
+    const std::size_t off_position_address      = m_instance_struct.add_uvec2("position_address"     )->get_offset_in_parent();
+    const std::size_t off_vertex_stride_uints   = m_instance_struct.add_uint ("vertex_stride_uints"  )->get_offset_in_parent();
+    const std::size_t off_position_stride_uints = m_instance_struct.add_uint ("position_stride_uints")->get_offset_in_parent();
+    const std::size_t off_material_index        = m_instance_struct.add_uint ("material_index"       )->get_offset_in_parent();
+    const std::size_t off_flags                 = m_instance_struct.add_uint ("flags"                )->get_offset_in_parent();
+    m_instance_struct.add_uint("reserved0");
+    m_instance_struct.add_uint("reserved1");
+    ERHE_VERIFY(off_index_address         == offsetof(Instance_record_data, index_address));
+    ERHE_VERIFY(off_vertex_address        == offsetof(Instance_record_data, vertex_address));
+    ERHE_VERIFY(off_position_address      == offsetof(Instance_record_data, position_address));
+    ERHE_VERIFY(off_vertex_stride_uints   == offsetof(Instance_record_data, vertex_stride_uints));
+    ERHE_VERIFY(off_position_stride_uints == offsetof(Instance_record_data, position_stride_uints));
+    ERHE_VERIFY(off_material_index        == offsetof(Instance_record_data, material_index));
+    ERHE_VERIFY(off_flags                 == offsetof(Instance_record_data, flags));
     ERHE_VERIFY(m_instance_struct.get_size_bytes() == sizeof(Instance_record_data));
     m_instance_block.add_struct("instances", &m_instance_struct, erhe::graphics::Shader_resource::unsized_array);
 
@@ -240,19 +248,25 @@ Ray_trace_renderer::Ray_trace_renderer(
         Shader_stages_create_info{
             .name                = "ray_trace",
             .defines             = {
-                { "ERHE_TLAS_BINDING",        fmt::format("{}", m_tlas_binding_point) },
-                { "ERHE_RT_NORMAL_OFFSET",    fmt::format("{}", normal   .attribute->offset / 4) },
-                { "ERHE_RT_TANGENT_OFFSET",   fmt::format("{}", tangent  .attribute->offset / 4) },
-                { "ERHE_RT_TEXCOORD0_OFFSET", fmt::format("{}", texcoord0.attribute->offset / 4) },
-                { "ERHE_RT_COLOR0_OFFSET",    fmt::format("{}", color0   .attribute->offset / 4) },
-                { "ERHE_RT_MAX_BOUNCES",      fmt::format("{}", c_max_bounces) }
+                { "ERHE_TLAS_BINDING",            fmt::format("{}", m_tlas_binding_point) },
+                { "ERHE_RT_NORMAL_OFFSET",        fmt::format("{}", normal   .attribute->offset / 4) },
+                { "ERHE_RT_TANGENT_OFFSET",       fmt::format("{}", tangent  .attribute->offset / 4) },
+                { "ERHE_RT_TEXCOORD0_OFFSET",     fmt::format("{}", texcoord0.attribute->offset / 4) },
+                { "ERHE_RT_COLOR0_OFFSET",        fmt::format("{}", color0   .attribute->offset / 4) },
+                { "ERHE_RT_MAX_BOUNCES",          fmt::format("{}", c_max_bounces) },
+                { "ERHE_RT_HAS_POSITION_FETCH",   use_position_fetch ? "1" : "0" }
             },
-            .extensions          = {
-                { Shader_type::compute_shader, "GL_EXT_ray_query" },
-                { Shader_type::compute_shader, "GL_EXT_ray_tracing_position_fetch" },
-                { Shader_type::compute_shader, "GL_EXT_buffer_reference" },
-                { Shader_type::compute_shader, "GL_EXT_buffer_reference_uvec2" }
-            },
+            .extensions          = [&]() {
+                std::vector<Shader_stage_extension> extensions{
+                    { Shader_type::compute_shader, "GL_EXT_ray_query" },
+                    { Shader_type::compute_shader, "GL_EXT_buffer_reference" },
+                    { Shader_type::compute_shader, "GL_EXT_buffer_reference_uvec2" }
+                };
+                if (use_position_fetch) {
+                    extensions.push_back({ Shader_type::compute_shader, "GL_EXT_ray_tracing_position_fetch" });
+                }
+                return extensions;
+            }(),
             .struct_types        = {
                 &program_interface.camera_interface.camera_struct,
                 &program_interface.material_interface.material_struct,
@@ -571,20 +585,26 @@ void Ray_trace_renderer::render(
             if (blas == nullptr) {
                 continue;
             }
-            // Attribute fetch needs stream 1 (normal / texcoords / color).
+            // Attribute fetch needs stream 1 (normal / texcoords / color);
+            // the position-fetch fallback additionally needs stream 0 (the
+            // same range the BLAS was built from).
             if (buffer_mesh->vertex_buffer_ranges.size() < 2) {
                 continue;
             }
+            const erhe::primitive::Buffer_range& position_range  = buffer_mesh->vertex_buffer_ranges[0];
             const erhe::primitive::Buffer_range& attribute_range = buffer_mesh->vertex_buffer_ranges[1];
             const erhe::primitive::Buffer_range& index_range     = buffer_mesh->index_buffer_range;
+            erhe::graphics::Buffer* position_buffer  = m_mesh_memory.get_vertex_buffer(position_range);
             erhe::graphics::Buffer* attribute_buffer = m_mesh_memory.get_vertex_buffer(attribute_range);
             erhe::graphics::Buffer* index_buffer     = m_mesh_memory.get_index_buffer(index_range);
-            if ((attribute_buffer == nullptr) || (index_buffer == nullptr)) {
+            if ((position_buffer == nullptr) || (attribute_buffer == nullptr) || (index_buffer == nullptr)) {
                 continue;
             }
+            const uint64_t position_base_address  = position_buffer->get_device_address();
             const uint64_t attribute_base_address = attribute_buffer->get_device_address();
             const uint64_t index_base_address     = index_buffer->get_device_address();
-            if ((attribute_base_address == 0) || (index_base_address == 0) || ((attribute_range.element_size % 4) != 0)) {
+            if ((position_base_address == 0) || (attribute_base_address == 0) || (index_base_address == 0) ||
+                ((attribute_range.element_size % 4) != 0) || ((position_range.element_size % 4) != 0)) {
                 continue;
             }
 
@@ -594,12 +614,13 @@ void Ray_trace_renderer::render(
 
             m_instance_records.push_back(
                 Instance_record_data{
-                    .index_address       = index_base_address + index_range.byte_offset + (buffer_mesh->triangle_fill_indices.first_index * index_range.element_size),
-                    .vertex_address      = attribute_base_address + attribute_range.byte_offset,
-                    .vertex_stride_uints = static_cast<uint32_t>(attribute_range.element_size / 4),
-                    .material_index      = material_index,
-                    .flags               = transmissive ? 1u : 0u,
-                    .reserved0           = 0u
+                    .index_address         = index_base_address + index_range.byte_offset + (buffer_mesh->triangle_fill_indices.first_index * index_range.element_size),
+                    .vertex_address        = attribute_base_address + attribute_range.byte_offset,
+                    .position_address      = position_base_address + position_range.byte_offset,
+                    .vertex_stride_uints   = static_cast<uint32_t>(attribute_range.element_size / 4),
+                    .position_stride_uints = static_cast<uint32_t>(position_range.element_size / 4),
+                    .material_index        = material_index,
+                    .flags                 = transmissive ? 1u : 0u
                 }
             );
             m_instances.push_back(

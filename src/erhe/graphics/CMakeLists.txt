@@ -401,6 +401,9 @@ set(_gfx_config_generated
     ${_gfx_config_out}/vulkan_config.hpp
     ${_gfx_config_out}/vulkan_config_serialization.hpp
     ${_gfx_config_out}/vulkan_config.cpp
+    ${_gfx_config_out}/metal_config.hpp
+    ${_gfx_config_out}/metal_config_serialization.hpp
+    ${_gfx_config_out}/metal_config.cpp
 )
 erhe_codegen_generate(
     TARGET          ${_target}
@@ -415,6 +418,7 @@ set(_gfx_config_hpps
     ${_gfx_config_out}/graphics_config.hpp
     ${_gfx_config_out}/opengl_config.hpp
     ${_gfx_config_out}/vulkan_config.hpp
+    ${_gfx_config_out}/metal_config.hpp
 )
 set_source_files_properties(${_gfx_config_hpps} PROPERTIES GENERATED TRUE)
 target_sources(${_target} PRIVATE ${_gfx_config_hpps})

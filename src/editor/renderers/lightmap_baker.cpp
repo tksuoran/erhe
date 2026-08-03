@@ -211,6 +211,15 @@ vec2 fetch_vec2(Uint_data vertices, uint base)
     return vec2(uintBitsToFloat(vertices.data[base + 0u]), uintBitsToFloat(vertices.data[base + 1u]));
 }
 
+vec3 fetch_vec3(Uint_data vertices, uint base)
+{
+    return vec3(
+        uintBitsToFloat(vertices.data[base + 0u]),
+        uintBitsToFloat(vertices.data[base + 1u]),
+        uintBitsToFloat(vertices.data[base + 2u])
+    );
+}
+
 // PCG (www.pcg-random.org): per-texel per-frame decorrelation.
 uint pcg_hash(uint v)
 {
@@ -309,11 +318,29 @@ vec3 adaptive_offset(vec3 position, vec3 direction)
     return position + sign(direction) * magnitude;
 }
 
-// World-space geometric normal of the committed hit's triangle.
+// World-space geometric normal of the committed hit's triangle. Object-space
+// positions come from the acceleration structure when the backend supports
+// GL_EXT_ray_tracing_position_fetch, otherwise from the stream-0 pool (the
+// BLAS build input, so the values are identical) via the instance record's
+// position_address.
 vec3 committed_face_normal(rayQueryEXT ray_query)
 {
     vec3 positions[3];
+#if ERHE_RT_HAS_POSITION_FETCH
     rayQueryGetIntersectionTriangleVertexPositionsEXT(ray_query, true, positions);
+#else
+    uint instance_index = uint(rayQueryGetIntersectionInstanceCustomIndexEXT(ray_query, true));
+    uint primitive      = uint(rayQueryGetIntersectionPrimitiveIndexEXT(ray_query, true));
+    Lm_instance_record record = lm_instance.instances[instance_index];
+    Uint_data indices       = Uint_data(record.index_address);
+    Uint_data position_data = Uint_data(record.position_address);
+    uint i0 = indices.data[3u * primitive + 0u];
+    uint i1 = indices.data[3u * primitive + 1u];
+    uint i2 = indices.data[3u * primitive + 2u];
+    positions[0] = fetch_vec3(position_data, i0 * record.position_stride_uints);
+    positions[1] = fetch_vec3(position_data, i1 * record.position_stride_uints);
+    positions[2] = fetch_vec3(position_data, i2 * record.position_stride_uints);
+#endif
     mat4x3 world_from_object = rayQueryGetIntersectionObjectToWorldEXT(ray_query, true);
     vec3 p0 = world_from_object * vec4(positions[0], 1.0);
     vec3 p1 = world_from_object * vec4(positions[1], 1.0);
@@ -552,6 +579,25 @@ void main()
 constexpr const char* c_adjust_source = R"GLSL(
 layout(binding = 0) uniform accelerationStructureEXT s_tlas;
 
+#if !ERHE_RT_HAS_POSITION_FETCH
+// Raw uint view of a mesh memory pool via per-instance buffer device
+// addresses; the position-fetch fallback in committed_face_normal reads
+// triangle positions from the stream-0 pool with it (the lm_instance
+// record SSBO is injected by erhe like in the gather shader).
+layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer Uint_data {
+    uint data[];
+};
+
+vec3 fetch_vec3(Uint_data vertices, uint base)
+{
+    return vec3(
+        uintBitsToFloat(vertices.data[base + 0u]),
+        uintBitsToFloat(vertices.data[base + 1u]),
+        uintBitsToFloat(vertices.data[base + 2u])
+    );
+}
+#endif
+
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 vec3 adaptive_offset(vec3 position, vec3 direction)
@@ -563,7 +609,21 @@ vec3 adaptive_offset(vec3 position, vec3 direction)
 vec3 committed_face_normal(rayQueryEXT ray_query)
 {
     vec3 positions[3];
+#if ERHE_RT_HAS_POSITION_FETCH
     rayQueryGetIntersectionTriangleVertexPositionsEXT(ray_query, true, positions);
+#else
+    uint instance_index = uint(rayQueryGetIntersectionInstanceCustomIndexEXT(ray_query, true));
+    uint primitive      = uint(rayQueryGetIntersectionPrimitiveIndexEXT(ray_query, true));
+    Lm_instance_record record = lm_instance.instances[instance_index];
+    Uint_data indices       = Uint_data(record.index_address);
+    Uint_data position_data = Uint_data(record.position_address);
+    uint i0 = indices.data[3u * primitive + 0u];
+    uint i1 = indices.data[3u * primitive + 1u];
+    uint i2 = indices.data[3u * primitive + 2u];
+    positions[0] = fetch_vec3(position_data, i0 * record.position_stride_uints);
+    positions[1] = fetch_vec3(position_data, i1 * record.position_stride_uints);
+    positions[2] = fetch_vec3(position_data, i2 * record.position_stride_uints);
+#endif
     mat4x3 world_from_object = rayQueryGetIntersectionObjectToWorldEXT(ray_query, true);
     vec3 p0 = world_from_object * vec4(positions[0], 1.0);
     vec3 p1 = world_from_object * vec4(positions[1], 1.0);
@@ -944,13 +1004,17 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
     }
 
     // Gather: ray query in compute, exactly the machinery Ray_trace_renderer
-    // proves out. The bounce ray additionally needs position fetch (backface
-    // rejection) and buffer device addresses (texcoord-2 fetch). Absent
-    // support, the layout + G-buffer still work; only baking is unavailable.
-    if (!graphics_device.get_info().use_ray_query || !graphics_device.get_info().use_ray_tracing_position_fetch) {
-        log_render->info("Lightmap_baker: ray query / position fetch not available, lightmap gather disabled");
+    // proves out. The bounce ray additionally needs buffer device addresses
+    // (texcoord-2 fetch) and the committed triangle's positions (backface
+    // rejection) - from the acceleration structure when position fetch is
+    // supported, otherwise from the stream-0 pool via the instance records.
+    // Absent ray query, the layout + G-buffer still work; only baking is
+    // unavailable.
+    if (!graphics_device.get_info().use_ray_query) {
+        log_render->info("Lightmap_baker: ray query not available, lightmap gather disabled");
         return;
     }
+    const bool use_position_fetch = graphics_device.get_info().use_ray_tracing_position_fetch;
 
     m_gather_block = std::make_unique<Shader_resource>(
         graphics_device,
@@ -977,17 +1041,18 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
     // Per-instance records (std430 SSBO) for the bounce ray's texcoord-2
     // fetch; layout verified against the C++ mirror below.
     m_lm_instance_struct = std::make_unique<Shader_resource>(graphics_device, "Lm_instance_record");
-    const std::size_t off_index_address   = m_lm_instance_struct->add_uvec2("index_address"      )->get_offset_in_parent();
-    const std::size_t off_vertex_address  = m_lm_instance_struct->add_uvec2("vertex_address"     )->get_offset_in_parent();
-    const std::size_t off_stride          = m_lm_instance_struct->add_uint ("vertex_stride_uints")->get_offset_in_parent();
-    m_lm_instance_struct->add_uint("pad0");
-    m_lm_instance_struct->add_uint("pad1");
-    m_lm_instance_struct->add_uint("pad2");
-    const std::size_t off_uv_scale_offset = m_lm_instance_struct->add_vec4 ("uv_scale_offset"    )->get_offset_in_parent();
-    ERHE_VERIFY(off_index_address   == offsetof(Lm_instance_record, index_address));
-    ERHE_VERIFY(off_vertex_address  == offsetof(Lm_instance_record, vertex_address));
-    ERHE_VERIFY(off_stride          == offsetof(Lm_instance_record, vertex_stride_uints));
-    ERHE_VERIFY(off_uv_scale_offset == offsetof(Lm_instance_record, uv_scale_offset));
+    const std::size_t off_index_address    = m_lm_instance_struct->add_uvec2("index_address"        )->get_offset_in_parent();
+    const std::size_t off_vertex_address   = m_lm_instance_struct->add_uvec2("vertex_address"       )->get_offset_in_parent();
+    const std::size_t off_position_address = m_lm_instance_struct->add_uvec2("position_address"     )->get_offset_in_parent();
+    const std::size_t off_stride           = m_lm_instance_struct->add_uint ("vertex_stride_uints"  )->get_offset_in_parent();
+    const std::size_t off_position_stride  = m_lm_instance_struct->add_uint ("position_stride_uints")->get_offset_in_parent();
+    const std::size_t off_uv_scale_offset  = m_lm_instance_struct->add_vec4 ("uv_scale_offset"      )->get_offset_in_parent();
+    ERHE_VERIFY(off_index_address    == offsetof(Lm_instance_record, index_address));
+    ERHE_VERIFY(off_vertex_address   == offsetof(Lm_instance_record, vertex_address));
+    ERHE_VERIFY(off_position_address == offsetof(Lm_instance_record, position_address));
+    ERHE_VERIFY(off_stride           == offsetof(Lm_instance_record, vertex_stride_uints));
+    ERHE_VERIFY(off_position_stride  == offsetof(Lm_instance_record, position_stride_uints));
+    ERHE_VERIFY(off_uv_scale_offset  == offsetof(Lm_instance_record, uv_scale_offset));
     ERHE_VERIFY(m_lm_instance_struct->get_size_bytes() == sizeof(Lm_instance_record));
     m_lm_instance_block = std::make_unique<Shader_resource>(
         graphics_device,
@@ -1115,7 +1180,8 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
         // atlas holds pure direct irradiance (isolates bounce defects).
         .defines          = [&]() {
             std::vector<std::pair<std::string, std::string>> defines{
-                { "ERHE_LM_TEXCOORD2_OFFSET", fmt::format("{}", texcoord2.attribute->offset / 4) }
+                { "ERHE_LM_TEXCOORD2_OFFSET",   fmt::format("{}", texcoord2.attribute->offset / 4) },
+                { "ERHE_RT_HAS_POSITION_FETCH", use_position_fetch ? "1" : "0" }
             };
             const char* const no_indirect = std::getenv("ERHE_LM_NO_INDIRECT");
             if ((no_indirect != nullptr) && (no_indirect[0] == '1')) {
@@ -1124,12 +1190,17 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
             }
             return defines;
         }(),
-        .extensions       = {
-            { Shader_type::compute_shader, "GL_EXT_ray_query" },
-            { Shader_type::compute_shader, "GL_EXT_ray_tracing_position_fetch" },
-            { Shader_type::compute_shader, "GL_EXT_buffer_reference" },
-            { Shader_type::compute_shader, "GL_EXT_buffer_reference_uvec2" }
-        },
+        .extensions       = [&]() {
+            std::vector<Shader_stage_extension> extensions{
+                { Shader_type::compute_shader, "GL_EXT_ray_query" },
+                { Shader_type::compute_shader, "GL_EXT_buffer_reference" },
+                { Shader_type::compute_shader, "GL_EXT_buffer_reference_uvec2" }
+            };
+            if (use_position_fetch) {
+                extensions.push_back({ Shader_type::compute_shader, "GL_EXT_ray_tracing_position_fetch" });
+            }
+            return extensions;
+        }(),
         .struct_types     = { m_lm_instance_struct.get() },
         .interface_blocks = { m_gather_block.get(), m_lm_instance_block.get() },
         .shaders = {
@@ -1183,7 +1254,11 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
     m_tick_instance_ssbo = std::make_unique<Ring_buffer_client>(graphics_device, Buffer_target::storage, "Lightmap_baker::instance_records", 1u);
 
     // Virtual-offset adjust pass (one dispatch per G-buffer bake): TLAS +
-    // read-write position + read-only normal, all raw bindings.
+    // instance records (the committed_face_normal position-fetch fallback
+    // reads them; bound in both variants so the layout is uniform) +
+    // read-write position + read-only normal, all raw bindings. The SSBO
+    // sits at binding 1 because m_lm_instance_block's binding point is
+    // fixed there (shared with the gather layout).
     m_adjust_layout = std::make_unique<Bind_group_layout>(
         graphics_device,
         Bind_group_layout_create_info{
@@ -1196,6 +1271,11 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
                 },
                 Bind_group_layout_binding{
                     .binding_point = 1u,
+                    .type          = Binding_type::storage_buffer,
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                Bind_group_layout_binding{
+                    .binding_point = 2u,
                     .type          = Binding_type::storage_image,
                     .name          = "i_position",
                     .glsl_type     = Glsl_type::image_2d,
@@ -1203,7 +1283,7 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
                     .stage_flags   = Shader_stage_flags::compute
                 },
                 Bind_group_layout_binding{
-                    .binding_point = 2u,
+                    .binding_point = 3u,
                     .type          = Binding_type::storage_image,
                     .name          = "i_normal",
                     .glsl_type     = Glsl_type::image_2d,
@@ -1211,7 +1291,7 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
                     .stage_flags   = Shader_stage_flags::compute
                 },
                 Bind_group_layout_binding{
-                    .binding_point = 3u,
+                    .binding_point = 4u,
                     .type          = Binding_type::storage_image,
                     .name          = "i_smooth_position",
                     .glsl_type     = Glsl_type::image_2d,
@@ -1241,16 +1321,28 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
         Shader_stages_create_info adjust_create_info{
             .name       = with_smooth ? "lightmap_adjust" : "lightmap_adjust_no_smooth",
             .defines    = [&]() {
-                std::vector<std::pair<std::string, std::string>> defines{};
+                std::vector<std::pair<std::string, std::string>> defines{
+                    { "ERHE_RT_HAS_POSITION_FETCH", use_position_fetch ? "1" : "0" }
+                };
                 if (!with_smooth) {
                     defines.push_back({ "ERHE_LM_NO_SMOOTH", "1" });
                 }
                 return defines;
             }(),
-            .extensions = {
-                { Shader_type::compute_shader, "GL_EXT_ray_query" },
-                { Shader_type::compute_shader, "GL_EXT_ray_tracing_position_fetch" }
-            },
+            .extensions = [&]() {
+                std::vector<Shader_stage_extension> extensions{
+                    { Shader_type::compute_shader, "GL_EXT_ray_query" }
+                };
+                if (use_position_fetch) {
+                    extensions.push_back({ Shader_type::compute_shader, "GL_EXT_ray_tracing_position_fetch" });
+                } else {
+                    extensions.push_back({ Shader_type::compute_shader, "GL_EXT_buffer_reference" });
+                    extensions.push_back({ Shader_type::compute_shader, "GL_EXT_buffer_reference_uvec2" });
+                }
+                return extensions;
+            }(),
+            .struct_types     = { m_lm_instance_struct.get() },
+            .interface_blocks = { m_lm_instance_block.get() },
             .shaders = {
                 { Shader_type::compute_shader, std::string_view{c_adjust_source} }
             },
@@ -1508,7 +1600,12 @@ auto Lightmap_baker::is_supported() const -> bool
     return static_cast<bool>(m_pipeline);
 }
 
-auto Lightmap_baker::update_layout(Scene_root& scene_root, const float texels_per_meter) -> bool
+auto Lightmap_baker::is_bake_supported() const -> bool
+{
+    return static_cast<bool>(m_gather_pipeline);
+}
+
+auto Lightmap_baker::update_layout(Scene_root& scene_root, const float texels_per_meter, const float min_face_texels) -> bool
 {
     m_layout            = Atlas_layout{};
     m_gbuffer_valid     = false;
@@ -1517,12 +1614,21 @@ auto Lightmap_baker::update_layout(Scene_root& scene_root, const float texels_pe
     m_accum_cleared     = false;
     m_layout_scene_root = &scene_root;
 
+    // Rejection counters for the zero-regions diagnostic below - "the atlas
+    // is empty" is otherwise invisible (every filter is a silent continue).
+    std::size_t seen_meshes       = 0;
+    std::size_t skip_not_flagged  = 0;
+    std::size_t skip_no_shape     = 0;
+    std::size_t skip_no_uvs       = 0;
+
     std::vector<Instance_region> regions;
     for (const std::shared_ptr<erhe::scene::Mesh>& mesh : scene_root.layers().content()->meshes) {
         if (!mesh || mesh->skin) {
             continue;
         }
+        ++seen_meshes;
         if ((mesh->get_flag_bits() & erhe::Item_flags::lightmapped) == 0u) {
+            ++skip_not_flagged;
             continue;
         }
         const erhe::scene::Node* const node = mesh->get_node();
@@ -1534,16 +1640,19 @@ auto Lightmap_baker::update_layout(Scene_root& scene_root, const float texels_pe
         for (std::size_t primitive_index = 0; primitive_index < primitives.size(); ++primitive_index) {
             const erhe::primitive::Primitive* const primitive = primitives[primitive_index].primitive.get();
             if ((primitive == nullptr) || !primitive->render_shape) {
+                ++skip_no_shape;
                 continue;
             }
             const std::shared_ptr<erhe::geometry::Geometry>& geometry = primitive->render_shape->get_geometry();
             if (!geometry) {
+                ++skip_no_shape;
                 continue;
             }
             // Only primitives that have lightmap UVs (channel 2) participate;
             // Generate Lightmap UVs in the Lightmap window produces them.
             erhe::geometry::Mesh_attributes& attributes = geometry->get_attributes();
             if (!attributes.corner_texcoord_2.has(0)) {
+                ++skip_no_uvs;
                 continue;
             }
             Instance_region region;
@@ -1560,7 +1669,8 @@ auto Lightmap_baker::update_layout(Scene_root& scene_root, const float texels_pe
             // packer's minimum-chart-size upscales.
             {
                 const GEO::Mesh& geo_mesh = geometry->get_mesh();
-                float coverage = 0.0f;
+                float coverage         = 0.0f;
+                float min_facet_extent = std::numeric_limits<float>::max();
                 for (GEO::index_t facet : geo_mesh.facets) {
                     const GEO::index_t corner_count = geo_mesh.facets.nb_corners(facet);
                     if (corner_count < 3) {
@@ -1570,34 +1680,65 @@ auto Lightmap_baker::update_layout(Scene_root& scene_root, const float texels_pe
                     if (!uv0.has_value()) {
                         continue;
                     }
-                    for (GEO::index_t k = 2; k < corner_count; ++k) {
-                        const std::optional<GEO::vec2f> uv1 = attributes.corner_texcoord_2.try_get(geo_mesh.facets.corner(facet, k - 1));
-                        const std::optional<GEO::vec2f> uv2 = attributes.corner_texcoord_2.try_get(geo_mesh.facets.corner(facet, k));
-                        if (!uv1.has_value() || !uv2.has_value()) {
+                    GEO::vec2f uv_min = uv0.value();
+                    GEO::vec2f uv_max = uv0.value();
+                    for (GEO::index_t k = 1; k < corner_count; ++k) {
+                        const std::optional<GEO::vec2f> uv = attributes.corner_texcoord_2.try_get(geo_mesh.facets.corner(facet, k));
+                        if (!uv.has_value()) {
                             continue;
                         }
-                        const GEO::vec2f e1 = uv1.value() - uv0.value();
-                        const GEO::vec2f e2 = uv2.value() - uv0.value();
-                        coverage += 0.5f * std::abs(e1.x * e2.y - e1.y * e2.x);
+                        uv_min.x = std::min(uv_min.x, uv.value().x);
+                        uv_min.y = std::min(uv_min.y, uv.value().y);
+                        uv_max.x = std::max(uv_max.x, uv.value().x);
+                        uv_max.y = std::max(uv_max.y, uv.value().y);
+                        if (k >= 2) {
+                            const std::optional<GEO::vec2f> uv1 = attributes.corner_texcoord_2.try_get(geo_mesh.facets.corner(facet, k - 1));
+                            if (uv1.has_value()) {
+                                const GEO::vec2f e1 = uv1.value() - uv0.value();
+                                const GEO::vec2f e2 = uv.value()  - uv0.value();
+                                coverage += 0.5f * std::abs(e1.x * e2.y - e1.y * e2.x);
+                            }
+                        }
+                    }
+                    const float extent = std::min(uv_max.x - uv_min.x, uv_max.y - uv_min.y);
+                    if (extent > 0.0f) {
+                        min_facet_extent = std::min(min_facet_extent, extent);
                     }
                 }
                 // Floor at 5% (worst allowed boost ~4.5x per axis): lower
                 // coverage means broken or absurdly gutter-dominated UVs,
                 // where growing the region without bound would explode the
                 // page instead of fixing anything.
-                region.uv_coverage = std::clamp(coverage, 0.05f, 1.0f);
+                region.uv_coverage         = std::clamp(coverage, 0.05f, 1.0f);
+                region.min_facet_uv_extent = (min_facet_extent < std::numeric_limits<float>::max()) ? min_facet_extent : 1.0f;
             }
             regions.push_back(std::move(region));
         }
     }
     if (regions.empty()) {
+        log_render->info(
+            "Lightmap_baker::update_layout: no regions to pack (content meshes {}, skipped: not lightmapped {}, no render shape/geometry {}, no lightmap UVs {})",
+            seen_meshes,
+            skip_not_flagged,
+            skip_no_shape,
+            skip_no_uvs
+        );
         return false;
     }
 
     // Region content side in texels; the normalized per-mesh chart set is
     // square, so the region is too.
-    const auto side_of = [texels_per_meter](const Instance_region& region) -> int {
-        const float side = std::sqrt(std::max(region.world_area, 0.0f) / region.uv_coverage) * texels_per_meter;
+    const auto side_of = [texels_per_meter, min_face_texels](const Instance_region& region) -> int {
+        float side = std::sqrt(std::max(region.world_area, 0.0f) / region.uv_coverage) * texels_per_meter;
+        // Min-face-texels bound: grow the region until its smallest facet
+        // spans min_face_texels on its shorter UV axis. This is the half of
+        // the minimum-size guarantee the unwrap cannot provide (see
+        // Instance_region::min_facet_uv_extent). Capped at 4x the density
+        // side so one degenerate sliver facet cannot explode the page.
+        if ((min_face_texels > 0.0f) && (region.min_facet_uv_extent > 0.0f)) {
+            const float bound = min_face_texels / region.min_facet_uv_extent;
+            side = std::max(side, std::min(bound, 4.0f * side));
+        }
         return std::clamp(static_cast<int>(std::ceil(side)), 4, s_max_page - 2 * s_padding);
     };
 
@@ -1643,7 +1784,17 @@ auto Lightmap_baker::update_layout(Scene_root& scene_root, const float texels_pe
         return true;
     }
     // Even the largest page failed; drop the layout (a later change can
-    // add multi-page support - plan keeps pages <= 4096^2).
+    // add multi-page support - plan keeps pages <= 4096^2). Report why:
+    // this is usually the density - a single large mesh (e.g. a floor)
+    // at high texels_per_meter needs a region bigger than the max page.
+    log_render->info(
+        "Lightmap_baker::update_layout: {} regions do not fit the maximum {}x{} page at {} texels/m (largest region side {} texels) - lower the density",
+        regions.size(),
+        s_max_page,
+        s_max_page,
+        texels_per_meter,
+        regions.empty() ? 0 : side_of(regions.front())
+    );
     m_seam_vertices.clear();
     return false;
 }
@@ -2302,19 +2453,32 @@ void Lightmap_baker::ensure_bake_targets(erhe::graphics::Command_buffer& command
             Image_usage_flag_bit_mask::sampled |
             Image_usage_flag_bit_mask::transfer_dst
         );
+        // Renderer-facing double buffer: only complete publishes are copied
+        // in, so accumulation resets never black out the sampled atlas.
+        m_display_texture = make_storage(
+            "lightmap display atlas",
+            Image_usage_flag_bit_mask::sampled      |
+            Image_usage_flag_bit_mask::transfer_src |
+            Image_usage_flag_bit_mask::transfer_dst
+        );
         m_accum_cleared = false;
     }
     if (!m_accum_cleared) {
-        // Both start at zero: the accumulation restarts and the published
-        // atlas must not feed garbage into bounce rays before the first
-        // resolve.
+        // All start at zero: the accumulation restarts, the working atlas
+        // must not feed garbage into bounce rays before the first resolve,
+        // and the display atlas holds no publish yet. This path runs only
+        // on creation and layout repacks (update_layout drops
+        // m_accum_cleared) - lighting/transform resets keep the display.
         command_buffer.clear_texture(*m_accum_texture,    {0.0, 0.0, 0.0, 0.0});
         command_buffer.clear_texture(*m_lightmap_texture, {0.0, 0.0, 0.0, 0.0});
+        command_buffer.clear_texture(*m_display_texture,  {0.0, 0.0, 0.0, 0.0});
         command_buffer.transition_texture_layout(*m_accum_texture,    Image_layout::general);
         command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::shader_read_only_optimal);
-        m_accum_cleared = true;
-        m_cursor_y      = 0;
-        m_sweep_count   = 0;
+        command_buffer.transition_texture_layout(*m_display_texture,  Image_layout::shader_read_only_optimal);
+        m_accum_cleared  = true;
+        m_display_valid  = false;
+        m_cursor_y       = 0;
+        m_sweep_count    = 0;
     }
 }
 
@@ -2443,16 +2607,34 @@ void Lightmap_baker::collect_instances(
             }
 
             Lm_instance_record record{};
+            {
+                // Index + stream-0 position addresses for EVERY occluder:
+                // the committed_face_normal position-fetch fallback reads
+                // them for any hit instance, lightmapped or not. The ranges
+                // are the same ones the BLAS above was built from, so a
+                // non-null blas guarantees they exist.
+                const erhe::primitive::Buffer_range& position_range = buffer_mesh->vertex_buffer_ranges[0];
+                const erhe::primitive::Buffer_range& index_range    = buffer_mesh->index_buffer_range;
+                erhe::graphics::Buffer* position_buffer = m_mesh_memory.get_vertex_buffer(position_range);
+                erhe::graphics::Buffer* index_buffer    = m_mesh_memory.get_index_buffer(index_range);
+                if ((position_buffer == nullptr) || (index_buffer == nullptr) || ((position_range.element_size % 4) != 0)) {
+                    continue;
+                }
+                const uint64_t position_base_address = position_buffer->get_device_address();
+                const uint64_t index_base_address    = index_buffer->get_device_address();
+                if ((position_base_address == 0) || (index_base_address == 0)) {
+                    continue;
+                }
+                record.index_address         = index_base_address + index_range.byte_offset + (buffer_mesh->triangle_fill_indices.first_index * index_range.element_size);
+                record.position_address      = position_base_address + position_range.byte_offset;
+                record.position_stride_uints = static_cast<uint32_t>(position_range.element_size / 4);
+            }
             if (buffer_mesh->vertex_buffer_ranges.size() >= 2) {
                 const erhe::primitive::Buffer_range& attribute_range = buffer_mesh->vertex_buffer_ranges[1];
-                const erhe::primitive::Buffer_range& index_range     = buffer_mesh->index_buffer_range;
                 erhe::graphics::Buffer* attribute_buffer = m_mesh_memory.get_vertex_buffer(attribute_range);
-                erhe::graphics::Buffer* index_buffer     = m_mesh_memory.get_index_buffer(index_range);
-                if ((attribute_buffer != nullptr) && (index_buffer != nullptr) && ((attribute_range.element_size % 4) == 0)) {
+                if ((attribute_buffer != nullptr) && ((attribute_range.element_size % 4) == 0)) {
                     const uint64_t attribute_base_address = attribute_buffer->get_device_address();
-                    const uint64_t index_base_address     = index_buffer->get_device_address();
-                    if ((attribute_base_address != 0) && (index_base_address != 0)) {
-                        record.index_address       = index_base_address + index_range.byte_offset + (buffer_mesh->triangle_fill_indices.first_index * index_range.element_size);
+                    if (attribute_base_address != 0) {
                         record.vertex_address      = attribute_base_address + attribute_range.byte_offset;
                         record.vertex_stride_uints = static_cast<uint32_t>(attribute_range.element_size / 4);
                         for (const Instance_region& region : m_layout.regions) {
@@ -2568,7 +2750,13 @@ auto Lightmap_baker::bake_direct(Scene_root& scene_root) -> bool
     m_tlas->build(command_buffer, m_tick_instances);
 
     // Virtual offset (one-shot per G-buffer): needs the TLAS just built.
-    record_adjust(command_buffer, *m_tlas);
+    record_adjust(
+        command_buffer,
+        *m_tlas,
+        [&](Compute_command_encoder& encoder) {
+            encoder.set_buffer(Buffer_target::storage, m_direct_instance_ssbo.get(), 0, record_byte_count, 1);
+        }
+    );
 
     // Gather one full-atlas sample: published atlas is sampled by bounce
     // rays (shader_read_only), accumulation image is written (general).
@@ -2595,12 +2783,14 @@ auto Lightmap_baker::bake_direct(Scene_root& scene_root) -> bool
     }
 
     record_resolve_and_dilate(command_buffer, false);
+    record_display_publish(command_buffer);
     command_buffer.end();
     Command_buffer* command_buffers[] = { &command_buffer };
     m_graphics_device.submit_command_buffers(std::span<Command_buffer* const>{command_buffers});
     m_graphics_device.wait_idle();
 
     m_lightmap_valid = true;
+    m_display_valid  = true;
     m_sweep_count    = 1;
     publish_regions();
 
@@ -2611,7 +2801,11 @@ auto Lightmap_baker::bake_direct(Scene_root& scene_root) -> bool
     return true;
 }
 
-void Lightmap_baker::record_adjust(erhe::graphics::Command_buffer& command_buffer, erhe::graphics::Acceleration_structure& tlas)
+void Lightmap_baker::record_adjust(
+    erhe::graphics::Command_buffer&                                       command_buffer,
+    erhe::graphics::Acceleration_structure&                               tlas,
+    const std::function<void(erhe::graphics::Compute_command_encoder&)>&  bind_instance_records
+)
 {
     using namespace erhe::graphics;
     Compute_pipeline* const adjust_pipeline = m_options.terminator_fix ? m_adjust_pipeline.get() : m_adjust_no_smooth_pipeline.get();
@@ -2626,9 +2820,10 @@ void Lightmap_baker::record_adjust(erhe::graphics::Command_buffer& command_buffe
         encoder.set_bind_group_layout(m_adjust_layout.get());
         encoder.set_compute_pipeline(*adjust_pipeline);
         encoder.set_acceleration_structure(0u, tlas);
-        encoder.set_storage_image(1u, *m_position_texture);
-        encoder.set_storage_image(2u, *m_normal_texture);
-        encoder.set_storage_image(3u, *m_smooth_position_texture);
+        bind_instance_records(encoder);
+        encoder.set_storage_image(2u, *m_position_texture);
+        encoder.set_storage_image(3u, *m_normal_texture);
+        encoder.set_storage_image(4u, *m_smooth_position_texture);
         encoder.dispatch_compute(
             (static_cast<std::uintptr_t>(m_layout.width)  + 7) / 8,
             (static_cast<std::uintptr_t>(m_layout.height) + 7) / 8,
@@ -2767,6 +2962,22 @@ void Lightmap_baker::record_resolve_and_dilate(erhe::graphics::Command_buffer& c
     command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::shader_read_only_optimal);
 }
 
+void Lightmap_baker::record_display_publish(erhe::graphics::Command_buffer& command_buffer)
+{
+    using namespace erhe::graphics;
+    if (!m_lightmap_texture || !m_display_texture) {
+        return;
+    }
+    command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::transfer_src_optimal);
+    command_buffer.transition_texture_layout(*m_display_texture,  Image_layout::transfer_dst_optimal);
+    {
+        Blit_command_encoder blit = m_graphics_device.make_blit_command_encoder(command_buffer);
+        blit.copy_from_texture(m_lightmap_texture.get(), m_display_texture.get());
+    }
+    command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::shader_read_only_optimal);
+    command_buffer.transition_texture_layout(*m_display_texture,  Image_layout::shader_read_only_optimal);
+}
+
 void Lightmap_baker::record_seam_blend(erhe::graphics::Command_buffer& command_buffer)
 {
     using namespace erhe::graphics;
@@ -2820,7 +3031,7 @@ void Lightmap_baker::record_seam_blend(erhe::graphics::Command_buffer& command_b
     vertex_range.release();
 }
 
-void Lightmap_baker::tick(erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root, const float texels_per_meter)
+void Lightmap_baker::tick(erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root, const float texels_per_meter, const float min_face_texels)
 {
     using namespace erhe::graphics;
 
@@ -2918,7 +3129,7 @@ void Lightmap_baker::tick(erhe::graphics::Command_buffer& command_buffer, Scene_
     } else {
         if ((hash_layout != m_hash_layout) || (m_layout_scene_root != &scene_root)) {
             m_hash_layout = hash_layout;
-            if (!update_layout(scene_root, texels_per_meter)) {
+            if (!update_layout(scene_root, texels_per_meter, min_face_texels)) {
                 return;
             }
             // Regions changed; re-derive their transform hash so the next
@@ -2943,7 +3154,7 @@ void Lightmap_baker::tick(erhe::graphics::Command_buffer& command_buffer, Scene_
     m_layout_texels_per_meter = texels_per_meter;
 
     if (m_layout.width == 0) {
-        if (!update_layout(scene_root, texels_per_meter)) {
+        if (!update_layout(scene_root, texels_per_meter, min_face_texels)) {
             return;
         }
         m_gbuffer_upload_defer = true;
@@ -3002,8 +3213,26 @@ void Lightmap_baker::tick(erhe::graphics::Command_buffer& command_buffer, Scene_
     }
     slot.acceleration_structure->build(command_buffer, m_tick_instances);
 
+    // Instance records before the adjust pass: its committed_face_normal
+    // position-fetch fallback reads them (the gather encoder below binds
+    // the same range again).
+    const std::size_t record_byte_count = m_tick_records.size() * sizeof(Lm_instance_record);
+    Ring_buffer_range ssbo_range = m_tick_instance_ssbo->acquire(Ring_buffer_usage::CPU_write, record_byte_count);
+    {
+        std::span<std::byte> gpu_data = ssbo_range.get_span();
+        std::memcpy(gpu_data.data(), m_tick_records.data(), record_byte_count);
+        ssbo_range.bytes_written(record_byte_count);
+        ssbo_range.close();
+    }
+
     // Virtual offset (one-shot per G-buffer): needs a built TLAS.
-    record_adjust(command_buffer, *slot.acceleration_structure);
+    record_adjust(
+        command_buffer,
+        *slot.acceleration_structure,
+        [&](Compute_command_encoder& encoder) {
+            m_tick_instance_ssbo->bind(encoder, ssbo_range);
+        }
+    );
 
     // Budgeted band (plan section 3a step 2): the tile cursor walks the
     // atlas top to bottom; small pages sweep whole-atlas every frame.
@@ -3017,14 +3246,6 @@ void Lightmap_baker::tick(erhe::graphics::Command_buffer& command_buffer, Scene_
         write_gather_ubo(gpu_data.data(), lights, m_frame_counter, base_y);
         ubo_range.bytes_written(m_gather_block_size);
         ubo_range.close();
-    }
-    const std::size_t record_byte_count = m_tick_records.size() * sizeof(Lm_instance_record);
-    Ring_buffer_range ssbo_range = m_tick_instance_ssbo->acquire(Ring_buffer_usage::CPU_write, record_byte_count);
-    {
-        std::span<std::byte> gpu_data = ssbo_range.get_span();
-        std::memcpy(gpu_data.data(), m_tick_records.data(), record_byte_count);
-        ssbo_range.bytes_written(record_byte_count);
-        ssbo_range.close();
     }
 
     command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::shader_read_only_optimal);
@@ -3065,8 +3286,16 @@ void Lightmap_baker::tick(erhe::graphics::Command_buffer& command_buffer, Scene_
     // feedback) keep sampling the last denoised publish.
     if (m_sweep_count == 0) {
         record_resolve_and_dilate(command_buffer, false);
+        // First-ever bake: nothing better to display, so copy the partial
+        // sweep out for the progressive preview. After a reset the display
+        // keeps the previous complete publish instead.
+        if (!m_display_valid) {
+            record_display_publish(command_buffer);
+        }
     } else if (sweep_completed || m_publish_requested) {
         record_resolve_and_dilate(command_buffer, m_options.denoise);
+        record_display_publish(command_buffer);
+        m_display_valid = true;
     }
     m_publish_requested = false;
     m_lightmap_valid = true;
@@ -3079,7 +3308,10 @@ void Lightmap_baker::tick(erhe::graphics::Command_buffer& command_buffer, Scene_
 auto Lightmap_baker::read_lightmap(std::vector<float>& out_rgba) -> bool
 {
     using namespace erhe::graphics;
-    if (!m_lightmap_valid || !m_lightmap_texture) {
+    // Read the display atlas: that is the published result the renderer
+    // samples (the working atlas may hold a partial post-reset sweep).
+    erhe::graphics::Texture* const source = m_display_texture.get();
+    if (!m_lightmap_valid || (source == nullptr)) {
         return false;
     }
     const int         width         = m_layout.width;
@@ -3106,11 +3338,11 @@ auto Lightmap_baker::read_lightmap(std::vector<float>& out_rgba) -> bool
     constexpr unsigned int bake_thread_slot = 6;
     Command_buffer& command_buffer = m_graphics_device.get_command_buffer(bake_thread_slot);
     command_buffer.begin();
-    command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::transfer_src_optimal);
+    command_buffer.transition_texture_layout(*source, Image_layout::transfer_src_optimal);
     {
         Blit_command_encoder blit = m_graphics_device.make_blit_command_encoder(command_buffer);
         blit.copy_from_texture(
-            m_lightmap_texture.get(),
+            source,
             0, 0,
             glm::ivec3{0, 0, 0},
             glm::ivec3{width, height, 1},
@@ -3120,7 +3352,7 @@ auto Lightmap_baker::read_lightmap(std::vector<float>& out_rgba) -> bool
             byte_count
         );
     }
-    command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::shader_read_only_optimal);
+    command_buffer.transition_texture_layout(*source, Image_layout::shader_read_only_optimal);
     command_buffer.end();
     Command_buffer* command_buffers[] = { &command_buffer };
     m_graphics_device.submit_command_buffers(std::span<Command_buffer* const>{command_buffers});
@@ -3230,7 +3462,15 @@ auto Lightmap_baker::build_chart_order_keys() -> std::unordered_map<const erhe::
                     if (atlas[index + 3] <= 0.0f) {
                         continue;
                     }
-                    luminance_sum += luminance_at(texel_x, texel_y);
+                    // The bake can leave non-finite texels (NaN irradiance
+                    // from degenerate bounce math); one would poison the
+                    // whole average - and a NaN key breaks the packer's
+                    // sort comparator (strict weak ordering).
+                    const float luminance = luminance_at(texel_x, texel_y);
+                    if (!std::isfinite(luminance)) {
+                        continue;
+                    }
+                    luminance_sum += luminance;
                     ++covered_count;
                 }
             }
@@ -3238,7 +3478,8 @@ auto Lightmap_baker::build_chart_order_keys() -> std::unordered_map<const erhe::
                 facet_keys[facet] = static_cast<float>(luminance_sum / static_cast<double>(covered_count));
             } else {
                 const GEO::vec2f centroid = uv_sum / static_cast<float>(uv_count);
-                facet_keys[facet] = luminance_at(texel_x_of(centroid.x), texel_y_of(centroid.y));
+                const float luminance = luminance_at(texel_x_of(centroid.x), texel_y_of(centroid.y));
+                facet_keys[facet] = std::isfinite(luminance) ? luminance : 0.0f;
             }
         }
     }

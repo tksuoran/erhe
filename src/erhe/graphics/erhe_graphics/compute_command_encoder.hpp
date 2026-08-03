@@ -47,8 +47,9 @@ public:
     // Bind a top level acceleration structure to the given binding point (must
     // be an acceleration_structure binding in the active Bind_group_layout;
     // raw binding point, like set_storage_image). Only valid when
-    // Device_info::use_ray_query is true; Vulkan backend only, GL / Metal /
-    // Null are no-ops.
+    // Device_info::use_ray_query is true; Vulkan and Metal backends (Metal
+    // binds a reserved buffer slot and ignores binding_point - the SPIR-V ->
+    // MSL translation remaps the shader side to match); GL / Null are no-ops.
     void set_acceleration_structure(uint32_t binding_point, const Acceleration_structure& acceleration_structure);
     void set_compute_pipeline_state(const Compute_pipeline_state& pipeline);
     void set_compute_pipeline      (const Compute_pipeline& pipeline);

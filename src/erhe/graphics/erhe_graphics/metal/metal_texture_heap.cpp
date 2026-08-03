@@ -2,6 +2,7 @@
 #include "erhe_graphics/metal/metal_texture.hpp"
 #include "erhe_graphics/metal/metal_sampler.hpp"
 #include "erhe_graphics/metal/metal_buffer.hpp"
+#include "erhe_graphics/metal/metal_compute_command_encoder.hpp"
 #include "erhe_graphics/metal/metal_device.hpp"
 #include "erhe_graphics/metal/metal_render_pass.hpp"
 #include "erhe_graphics/bind_group_layout.hpp"
@@ -313,10 +314,58 @@ auto Texture_heap_impl::bind(Render_command_encoder& /*encoder*/) -> std::size_t
     return m_used_slot_count;
 }
 
-auto Texture_heap_impl::bind(Compute_command_encoder& /*encoder*/) -> std::size_t
+auto Texture_heap_impl::bind(Compute_command_encoder& encoder) -> std::size_t
 {
-    // Compute-dispatch texture heap access is not implemented on Metal yet;
-    // the only consumer (GPU ray tracing) is gated on Vulkan ray query.
+    // Same argument-buffer path as the render bind above, on the compute
+    // encoder (the GPU ray tracing compute shader samples material
+    // textures through the heap).
+    if (m_argument_encoder == nullptr) {
+        log_texture_heap->trace("Texture_heap::bind() skipped: no argument encoder (default_uniform_block not provided?)");
+        return m_used_slot_count;
+    }
+
+    static_cast<void>(encoder);
+    MTL::ComputeCommandEncoder* compute_encoder = Compute_command_encoder_impl::get_active_mtl_encoder();
+    if (compute_encoder == nullptr) {
+        return m_used_slot_count;
+    }
+
+    if (m_dirty) {
+        encode_argument_buffer();
+        m_dirty = false;
+    }
+
+    Ring_buffer* ring_buffer = m_argument_buffer_range.get_buffer();
+    if (ring_buffer == nullptr) {
+        return m_used_slot_count;
+    }
+    Buffer* buffer = ring_buffer->get_buffer();
+    if (buffer == nullptr) {
+        return m_used_slot_count;
+    }
+    MTL::Buffer* mtl_buffer = buffer->get_impl().get_mtl_buffer();
+    if (mtl_buffer == nullptr) {
+        return m_used_slot_count;
+    }
+
+    NS::UInteger offset = static_cast<NS::UInteger>(m_argument_buffer_range.get_byte_start_offset_in_buffer());
+    compute_encoder->setBuffer(mtl_buffer, offset, m_argument_buffer_index);
+
+    for (std::size_t slot = 0; slot < m_used_slot_count; ++slot) {
+        const Texture* texture = m_textures[slot];
+        if (texture == nullptr) {
+            continue;
+        }
+        MTL::Texture* mtl_texture = texture->get_impl().get_mtl_texture();
+        if (mtl_texture != nullptr) {
+            compute_encoder->useResource(mtl_texture, MTL::ResourceUsageRead | MTL::ResourceUsageSample);
+        }
+    }
+    MTL::Texture* fallback_mtl = m_fallback_texture.get_impl().get_mtl_texture();
+    if (fallback_mtl != nullptr) {
+        compute_encoder->useResource(fallback_mtl, MTL::ResourceUsageRead | MTL::ResourceUsageSample);
+    }
+
     return m_used_slot_count;
 }
 

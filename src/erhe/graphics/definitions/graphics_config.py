@@ -118,5 +118,6 @@ struct("Graphics_config",
         ),
         field("opengl", StructRef("Opengl_config"), added_in=1),
         field("vulkan", StructRef("Vulkan_config"), added_in=1),
+        field("metal",  StructRef("Metal_config"),  added_in=1),
     ],
 )

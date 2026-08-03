@@ -22,5 +22,8 @@
         "vulkan_validation_layers": false,
         "use_kosmickrisp": false,
         "use_moltenvk": false
+    },
+    "metal": {
+        "disable_gpu_frame_capture": true
     }
 }

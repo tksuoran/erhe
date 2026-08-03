@@ -165,7 +165,7 @@ void Physics_tool::on_message(Hover_scene_view_message& message)
         Scene_view* scene_view = get_hover_scene_view();
         if (scene_view != nullptr) {
             auto scene_root = scene_view->get_scene_root();
-            if (scene_root) {
+            if (scene_root && scene_root->has_physics_world()) {
                 m_physics_world = &scene_root->get_physics_world();
             }
         }

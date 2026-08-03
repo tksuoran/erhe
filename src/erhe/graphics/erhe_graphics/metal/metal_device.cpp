@@ -22,12 +22,14 @@
 #include "erhe_verify/verify.hpp"
 
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
 #include "erhe_utility/align.hpp"
 
 #include <fmt/format.h>
 #include <Metal/Metal.hpp>
 #include <QuartzCore/QuartzCore.hpp>
+#include <objc/runtime.h>
 
 namespace erhe::graphics {
 
@@ -38,6 +40,25 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
 {
 
     install_metal_error_handler(device);
+
+    // Must happen before the first Metal framework use: GPUToolsCapture loads
+    // when Metal initializes with METAL_CAPTURE_ENABLED set (Xcode's scheme
+    // sets it whenever GPU Frame Capture is enabled, even when not capturing),
+    // and once loaded it cannot be unloaded.
+    if (graphics_config.metal.disable_gpu_frame_capture) {
+        if (objc_getClass("CaptureMTLCommandBuffer") != nullptr) {
+            log_startup->warn(
+                "Metal: metal.disable_gpu_frame_capture is set but the GPU frame-capture layer "
+                "is already loaded - too late to suppress it (ray query stays disabled under it)"
+            );
+        } else {
+            unsetenv("METAL_CAPTURE_ENABLED");
+            log_startup->info(
+                "Metal: GPU frame-capture layer suppressed (metal.disable_gpu_frame_capture); "
+                "Xcode GPU frame capture will NOT work for this run"
+            );
+        }
+    }
 
     m_mtl_device = MTL::CreateSystemDefaultDevice();
     if (m_mtl_device == nullptr) {
@@ -152,6 +173,31 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     m_info.use_persistent_buffers                   = true;
     m_info.use_compute_shader                       = true;
     m_info.use_shader_storage_buffers               = true;
+    // GPU ray tracing (Apple7+ / Apple silicon): ray query GLSL lowers to
+    // MSL intersection_query via SPIRV-Cross, acceleration structures build
+    // through MTL::AccelerationStructureCommandEncoder. Position fetch has
+    // no MSL lowering (SPIRV-Cross emits the GLSL intrinsic verbatim), so
+    // use_ray_tracing_position_fetch stays false and ray query consumers
+    // take their buffer-fetch fallback path.
+    //
+    // Xcode's GPU frame-capture layer (GPUToolsCapture, loaded when the
+    // scheme's GPU Frame Capture is enabled or METAL_CAPTURE_ENABLED=1)
+    // crashes on EVERY acceleration structure command encoder: its
+    // endEncoding encodes a signal event that throws
+    // NSInvalidArgumentException inside the AGX driver (reproduced with a
+    // minimal standalone build on macOS 26 / M4). Degrade to no ray query
+    // under it instead of dying the moment a bake or ray trace runs; set
+    // the scheme's GPU Frame Capture to Disabled to debug with ray tracing.
+    const bool gpu_capture_layer = objc_getClass("CaptureMTLCommandBuffer") != nullptr;
+    if (m_mtl_device->supportsRaytracing() && gpu_capture_layer) {
+        log_startup->warn(
+            "Metal: Xcode GPU frame-capture layer detected - disabling GPU ray tracing "
+            "(acceleration structure encoders crash inside GPUToolsCapture; "
+            "set the scheme's GPU Frame Capture to Disabled to use ray tracing under the debugger)"
+        );
+    }
+    m_info.use_ray_query                            = m_mtl_device->supportsRaytracing() && !gpu_capture_layer;
+    m_info.ray_query_disabled_by_capture_layer      = m_mtl_device->supportsRaytracing() && gpu_capture_layer;
     m_info.use_multi_draw_indirect_core             = false;
     m_info.uniform_buffer_offset_alignment          = 256;
     m_info.shader_storage_buffer_offset_alignment   = 256;
@@ -279,10 +325,27 @@ void Device_impl::drain_completed_frames()
     // Command_buffer_impl's addCompletedHandler. Ring buffer ranges
     // pinned to those frames become safe to recycle; per-frame
     // completion handlers run now.
+    //
+    // Only frames that have ENDED (the frame index advanced past them)
+    // are retired. A standalone mid-frame submit (lightmap bakes, ray
+    // trace readback: allocate cb -> submit -> wait_idle inside the tick)
+    // completes while its frame is still OPEN; retiring that frame here
+    // would free every per-thread Command_buffer allocated for it -
+    // including the tick cb the main loop is still recording into
+    // (observed: lightmap G-buffer bake, then the next begin_swapchain
+    // crashing on the freed Command_buffer). Deferred entries stay
+    // pending and retire on the first drain after end_frame advances
+    // the index.
     std::vector<uint64_t> drained;
     {
         std::lock_guard<std::mutex> lock{m_completion_mutex};
-        drained.swap(m_pending_completed_frames);
+        const auto keep_begin = std::partition(
+            m_pending_completed_frames.begin(),
+            m_pending_completed_frames.end(),
+            [this](const uint64_t frame) { return frame < m_frame_index; }
+        );
+        drained.assign(m_pending_completed_frames.begin(), keep_begin);
+        m_pending_completed_frames.erase(m_pending_completed_frames.begin(), keep_begin);
     }
     for (const uint64_t completed_frame : drained) {
         for (const std::unique_ptr<Ring_buffer>& ring_buffer : m_ring_buffers) {
@@ -531,18 +594,9 @@ void Device_impl::wait_idle()
     // the GPU. Drain any pending frame-completion enqueues and flush
     // their frame_completed callbacks so staging buffers / ring buffer
     // ranges are released before wait_idle returns (used by the editor
-    // ctor's init-frame flow).
-    std::vector<uint64_t> drained;
-    {
-        std::lock_guard<std::mutex> lock{m_completion_mutex};
-        drained.swap(m_pending_completed_frames);
-    }
-    for (const uint64_t completed_frame : drained) {
-        for (const std::unique_ptr<Ring_buffer>& ring_buffer : m_ring_buffers) {
-            ring_buffer->frame_completed(completed_frame);
-        }
-        frame_completed(completed_frame);
-    }
+    // ctor's init-frame flow). Frames still open keep pending - see
+    // drain_completed_frames.
+    drain_completed_frames();
 }
 
 void Device_impl::on_thread_enter()

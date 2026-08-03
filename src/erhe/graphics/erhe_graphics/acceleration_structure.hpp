@@ -15,10 +15,11 @@ class Buffer;
 class Command_buffer;
 class Device;
 
-// GPU ray tracing acceleration structures (Vulkan VK_KHR_acceleration_structure;
-// the API shape maps onto Metal MTLPrimitiveAccelerationStructureDescriptor /
-// MTLInstanceAccelerationStructureDescriptor). Only functional when
-// Device_info::use_ray_query is true; on other backends construction succeeds
+// GPU ray tracing acceleration structures: Vulkan
+// VK_KHR_acceleration_structure and Metal
+// MTLPrimitiveAccelerationStructureDescriptor /
+// MTLInstanceAccelerationStructureDescriptor. Only functional when
+// Device_info::use_ray_query is true; on GL / Null construction succeeds
 // but build() is a no-op, so callers must gate the feature on use_ray_query.
 
 enum class Acceleration_structure_type : unsigned int {

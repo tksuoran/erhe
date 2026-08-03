@@ -14,6 +14,7 @@
 #include "erhe_imgui/window_imgui_host.hpp"
 
 #include "erhe_commands/commands.hpp"
+#include "erhe_commands/input_arguments.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/hud_config.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"

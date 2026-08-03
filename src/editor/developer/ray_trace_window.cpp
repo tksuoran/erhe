@@ -5,6 +5,7 @@
 #include "config/generated/ray_trace_config.hpp"
 #include "renderers/ray_trace_renderer.hpp"
 
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
@@ -36,7 +37,21 @@ void Ray_trace_window::imgui()
         return;
     }
     if (!renderer->is_supported()) {
-        ImGui::TextUnformatted("GPU ray tracing (ray query + position fetch) is not supported by this device / backend.");
+        const bool capture_layer =
+            (m_context.graphics_device != nullptr) &&
+            m_context.graphics_device->get_info().ray_query_disabled_by_capture_layer;
+        if (capture_layer) {
+            ImGui::TextColored(
+                ImVec4{1.0f, 0.8f, 0.2f, 1.0f},
+                "GPU ray tracing disabled: Xcode GPU frame-capture layer is loaded."
+            );
+            ImGui::TextUnformatted(
+                "The capture layer crashes Metal acceleration structure builds.\n"
+                "Fix: Edit Scheme > Run > Options > GPU Frame Capture = Disabled, then relaunch."
+            );
+        } else {
+            ImGui::TextUnformatted("GPU ray tracing (ray query + position fetch) is not supported by this device / backend.");
+        }
         return;
     }
 

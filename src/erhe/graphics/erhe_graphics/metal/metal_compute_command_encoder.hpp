@@ -34,8 +34,19 @@ public:
     void set_compute_pipeline      (const Compute_pipeline& pipeline);
     void dispatch_compute          (std::uintptr_t x_size, std::uintptr_t y_size, std::uintptr_t z_size);
 
+    // Backend access for Texture_heap_impl::bind(Compute_command_encoder&),
+    // which binds the texture argument buffer and useResource()s the heap
+    // textures on the raw encoder. Static because Texture_heap only sees
+    // the public pimpl'd Compute_command_encoder; mirrors
+    // Render_pass_impl::get_active_mtl_encoder() (erhe opens one encoder
+    // at a time on a cb, so at most one is live).
+    [[nodiscard]] static auto get_active_mtl_encoder() noexcept -> MTL::ComputeCommandEncoder*;
+
 private:
+    static Compute_command_encoder_impl* s_active_encoder;
+
     MTL::ComputeCommandEncoder*  m_encoder             {nullptr};
+    const Bind_group_layout*     m_bind_group_layout   {nullptr};
     MTL::ComputePipelineState*   m_pipeline_state      {nullptr};
     bool                         m_owns_pipeline_state {false};
     // Per-group thread dimensions for dispatchThreadgroups(), taken from the

@@ -877,6 +877,8 @@ set(_gfx_ser_sources
     ${_gfx_gen}/opengl_config.cpp
     ${_gfx_gen}/vulkan_config_serialization.hpp
     ${_gfx_gen}/vulkan_config.cpp
+    ${_gfx_gen}/metal_config_serialization.hpp
+    ${_gfx_gen}/metal_config.cpp
 )
 set_source_files_properties(${_gfx_ser_sources} PROPERTIES GENERATED TRUE)
 target_sources(${_target} PRIVATE ${_gfx_ser_sources})

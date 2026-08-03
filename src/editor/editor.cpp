@@ -826,7 +826,7 @@ public:
                         m_lightmap_baker->set_sky_lighting(sky);
                     }
                     erhe::log::set_breadcrumb("tick: lightmap bake");
-                    m_lightmap_baker->tick(command_buffer, *lightmap_scene_root.get(), lightmap_config.texels_per_meter);
+                    m_lightmap_baker->tick(command_buffer, *lightmap_scene_root.get(), lightmap_config.texels_per_meter, lightmap_config.uv_min_chart_texels);
                     m_forward_renderer->set_lightmap_texture(m_lightmap_baker->get_lightmap_texture());
                 }
             }
@@ -1117,6 +1117,20 @@ public:
         , m_text_renderer_config{erhe::codegen::load_config<Text_renderer_config>  ("config/editor/text_renderer.json")}
         , m_window_config       {erhe::codegen::load_config<Window_config>         ("config/editor/window.json")}
     {
+#if defined(__APPLE__)
+        // Must happen before the first Metal framework use - window creation
+        // below brings up a CAMetalLayer, which is enough to load Xcode's
+        // GPUToolsCapture layer, and once loaded it cannot be unloaded.
+        // See Metal_config::disable_gpu_frame_capture.
+        if (m_graphics_config.metal.disable_gpu_frame_capture) {
+            unsetenv("METAL_CAPTURE_ENABLED");
+            log_startup->info(
+                "Metal: GPU frame-capture layer suppressed (metal.disable_gpu_frame_capture); "
+                "Xcode GPU frame capture will NOT work for this run"
+            );
+        }
+#endif
+
 #if defined(ERHE_OS_ANDROID) && defined(ERHE_XR_LIBRARY_OPENXR)
         // On Android the only flavor that links OpenXR is `quest` (Meta Quest 3).
         // The flat 2D Horizon panel path is not a supported runtime target;

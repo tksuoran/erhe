@@ -91,6 +91,7 @@ auto Buffer_impl::operator=(Buffer_impl&& other) noexcept -> Buffer_impl&
 }
 
 auto Buffer_impl::get_capacity_byte_count() const noexcept -> std::size_t { return m_capacity_byte_count; }
+auto Buffer_impl::get_device_address() const noexcept -> uint64_t { return (m_mtl_buffer != nullptr) ? m_mtl_buffer->gpuAddress() : 0; }
 auto Buffer_impl::get_debug_label() const noexcept -> erhe::utility::Debug_label { return m_debug_label; }
 auto Buffer_impl::get_map() const -> std::span<std::byte> { return m_map; }
 auto Buffer_impl::gl_name() const noexcept -> unsigned int { return 0; }

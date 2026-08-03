@@ -1,11 +1,15 @@
 #include "erhe_graphics/metal/metal_compute_command_encoder.hpp"
+#include "erhe_graphics/metal/metal_acceleration_structure.hpp"
 #include "erhe_graphics/metal/metal_command_buffer.hpp"
 #include "erhe_graphics/metal/metal_compute_pipeline.hpp"
 #include "erhe_graphics/metal/metal_device.hpp"
 #include "erhe_graphics/metal/metal_buffer.hpp"
+#include "erhe_graphics/metal/metal_sampler.hpp"
 #include "erhe_graphics/metal/metal_shader_stages.hpp"
 #include "erhe_graphics/metal/metal_texture.hpp"
+#include "erhe_graphics/bind_group_layout.hpp"
 #include "erhe_graphics/command_buffer.hpp"
+#include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/compute_pipeline_state.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/shader_stages.hpp"
@@ -16,6 +20,13 @@
 #include <Metal/Metal.hpp>
 
 namespace erhe::graphics {
+
+Compute_command_encoder_impl* Compute_command_encoder_impl::s_active_encoder{nullptr};
+
+auto Compute_command_encoder_impl::get_active_mtl_encoder() noexcept -> MTL::ComputeCommandEncoder*
+{
+    return (s_active_encoder != nullptr) ? s_active_encoder->m_encoder : nullptr;
+}
 
 Compute_command_encoder_impl::Compute_command_encoder_impl(Device& device, Command_buffer& command_buffer)
     : Command_encoder_impl{device, command_buffer}
@@ -31,6 +42,7 @@ Compute_command_encoder_impl::Compute_command_encoder_impl(Device& device, Comma
 
     m_encoder = m_mtl_command_buffer->computeCommandEncoder();
     ERHE_VERIFY(m_encoder != nullptr);
+    s_active_encoder = this;
 
     // Serialize against prior encoders on this cb via the cb's
     // inter-encoder fence. Metal does not track aliased newTextureView
@@ -42,6 +54,9 @@ Compute_command_encoder_impl::Compute_command_encoder_impl(Device& device, Comma
 
 Compute_command_encoder_impl::~Compute_command_encoder_impl() noexcept
 {
+    if (s_active_encoder == this) {
+        s_active_encoder = nullptr;
+    }
     if (m_encoder != nullptr) {
         if (m_inter_encoder_fence != nullptr) {
             m_encoder->updateFence(m_inter_encoder_fence);
@@ -109,7 +124,9 @@ void Compute_command_encoder_impl::set_buffer(const Buffer_target buffer_target,
 
 void Compute_command_encoder_impl::set_bind_group_layout(const Bind_group_layout* bind_group_layout)
 {
-    static_cast<void>(bind_group_layout);
+    // Tracked for set_sampled_image's sampler binding offset (mirrors
+    // Render_command_encoder_impl).
+    m_bind_group_layout = bind_group_layout;
 }
 
 void Compute_command_encoder_impl::set_storage_image(uint32_t binding_point, const Texture& texture)
@@ -128,20 +145,41 @@ void Compute_command_encoder_impl::set_storage_image(uint32_t binding_point, con
 
 void Compute_command_encoder_impl::set_sampled_image(uint32_t binding_point, const Texture& texture, const Sampler& sampler)
 {
-    // No-op: the Metal multi-scatter compute path reads the LUT as a storage
-    // image (set_storage_image above). Only the Vulkan KosmicKrisp workaround
-    // samples the LUT in compute (WORKAROUND_NO_COMPUTE_STORAGE_IMAGE_READ).
-    static_cast<void>(binding_point);
-    static_cast<void>(texture);
-    static_cast<void>(sampler);
+    // Dedicated named samplers are direct [[texture(N)]]/[[sampler(N)]]
+    // bindings on Metal; the slot is the user-facing binding_point plus the
+    // bind group layout's sampler binding offset, exactly like
+    // Render_command_encoder_impl::set_sampled_image (the lightmap gather
+    // compute pass samples its G-buffer and sky LUTs this way).
+    ERHE_VERIFY(m_bind_group_layout != nullptr);
+    const uint32_t metal_slot = binding_point + m_bind_group_layout->get_sampler_binding_offset();
+
+    MTL::Texture*      mtl_texture = texture.get_impl().get_mtl_texture();
+    MTL::SamplerState* mtl_sampler = sampler.get_impl().get_mtl_sampler();
+    if ((mtl_texture == nullptr) || (mtl_sampler == nullptr)) {
+        return;
+    }
+    m_encoder->setTexture     (mtl_texture, static_cast<NS::UInteger>(metal_slot));
+    m_encoder->setSamplerState(mtl_sampler, static_cast<NS::UInteger>(metal_slot));
 }
 
 void Compute_command_encoder_impl::set_acceleration_structure(uint32_t binding_point, const Acceleration_structure& acceleration_structure)
 {
-    // No-op: the Metal backend has no GPU ray tracing support
-    // (Device_info::use_ray_query is false).
+    // The GLSL binding point is not the Metal slot: acceleration structure
+    // resources are remapped to the reserved buffer index by
+    // compile_spirv_to_mtl_function (UBOs/SSBOs own the identity-mapped
+    // index namespace the binding point lives in).
     static_cast<void>(binding_point);
-    static_cast<void>(acceleration_structure);
+    const Acceleration_structure_impl& as_impl = acceleration_structure.get_impl();
+    MTL::AccelerationStructure* tlas = as_impl.get_mtl_acceleration_structure();
+    if (tlas == nullptr) {
+        return;
+    }
+    m_encoder->setAccelerationStructure(tlas, c_metal_acceleration_structure_buffer_index);
+    // Directly-bound structures are made resident automatically, but the
+    // bottom level structures the instance structure references are not.
+    for (MTL::AccelerationStructure* bottom_level : as_impl.get_referenced_bottom_level()) {
+        m_encoder->useResource(bottom_level, MTL::ResourceUsageRead);
+    }
 }
 
 void Compute_command_encoder_impl::set_compute_pipeline_state(const Compute_pipeline_state& pipeline)

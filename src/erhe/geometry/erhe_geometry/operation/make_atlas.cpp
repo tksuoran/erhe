@@ -264,15 +264,25 @@ void pack_charts_with_texel_gutter(
         // bake nothing; scaling them up gives every chart at least a few
         // valid texels at the cost of slightly more atlas area). Applied
         // to the chart's own UV extent at placement and final rewrite.
-        double scale  {1.0};
+        // Anisotropic: each axis is scaled independently, so a sliver
+        // chart reaches the minimum in its thin axis without inflating
+        // its long axis (and the atlas) with it.
+        double scale_u{1.0};
+        double scale_v{1.0};
         bool   used{false};
-        [[nodiscard]] auto width () const -> double { return (max_u - min_u) * scale; }
-        [[nodiscard]] auto height() const -> double { return (max_v - min_v) * scale; }
+        [[nodiscard]] auto width () const -> double { return (max_u - min_u) * scale_u; }
+        [[nodiscard]] auto height() const -> double { return (max_v - min_v) * scale_v; }
     };
     std::vector<Chart_rect> rects(chart_count);
+    double total_uv_area = 0.0;
     for (GEO::index_t facet : mesh.facets) {
         Chart_rect& rect = rects[chart[facet]];
-        for (GEO::index_t corner : mesh.facets.corners(facet)) {
+        const GEO::index_t corner_count = mesh.facets.nb_corners(facet);
+        const GEO::index_t corner_0     = mesh.facets.corner(facet, 0);
+        const double u0 = tex_coord[2 * corner_0 + 0];
+        const double v0 = tex_coord[2 * corner_0 + 1];
+        for (GEO::index_t k = 0; k < corner_count; ++k) {
+            const GEO::index_t corner = mesh.facets.corner(facet, k);
             const double u = tex_coord[2 * corner + 0];
             const double v = tex_coord[2 * corner + 1];
             rect.min_u = std::min(rect.min_u, u);
@@ -280,14 +290,69 @@ void pack_charts_with_texel_gutter(
             rect.max_u = std::max(rect.max_u, u);
             rect.max_v = std::max(rect.max_v, v);
             rect.used  = true;
+            if (k >= 2) {
+                const GEO::index_t corner_p = mesh.facets.corner(facet, k - 1);
+                const double up = tex_coord[2 * corner_p + 0];
+                const double vp = tex_coord[2 * corner_p + 1];
+                total_uv_area += 0.5 * std::abs((up - u0) * (v - v0) - (u - u0) * (vp - v0));
+            }
         }
     }
+
+    // One texel's size in chart UV units is a CONSTANT, not a fraction of
+    // the packed span: the atlas consumer (Lightmap_baker::update_layout)
+    // sizes the mesh's atlas region as sqrt(world_area / uv_coverage) *
+    // density, and uv_coverage is the summed facet UV area of this packing
+    // - the lower the packing efficiency, the larger the region, so texel
+    // size in the charts' own units never changes. target_texels estimates
+    // sqrt(mesh_area) * density, and the charts' consistent scale gives
+    // total_uv_area = k^2 * mesh_area, hence texel_uv = k * sqrt(mesh_area)
+    // / target_texels = sqrt(total_uv_area) / target_texels. Deriving the
+    // gutter and minimum chart side from the span instead (as this packer
+    // originally did) is a positive feedback - requirements that grow with
+    // the span being solved for - which for many-tiny-chart meshes
+    // (per-facet unwraps of dense meshes) has NO fixed point under the
+    // scale cap: the span diverged until the cap broke the minimum-size
+    // clamp and every chart landed sub-texel (observed as uv_coverage
+    // collapsing to the 5% floor for capsule / sphere / torus).
+    const double texel_uv = (total_uv_area > 0.0) ? (std::sqrt(total_uv_area) / target_texels) : 0.0;
+    if ((min_side_texels > 0.0) && (texel_uv > 0.0)) {
+        // Per-axis (anisotropic) minimum-size clamp. The 16x cap keeps
+        // truly degenerate slivers from exploding the atlas; with a
+        // constant min_side_uv it can only be reached by charts whose raw
+        // extent is under 1/16 texel in that axis.
+        //
+        // This clamp alone cannot deliver the minimum when MOST charts are
+        // below it (per-facet unwraps of dense meshes): scaling every chart
+        // up grows the summed UV area, and the consumer's coverage feedback
+        // shrinks the region by the same factor - the texels per chart are
+        // invariant. The consumer closes that gap by growing the region
+        // (Lightmap_baker::update_layout min-face-texels bound); the clamp
+        // here still evens out the small-chart tail so that bound stays
+        // moderate.
+        const double min_side_uv = min_side_texels * texel_uv;
+        for (GEO::index_t i = 0; i < chart_count; ++i) {
+            Chart_rect& rect = rects[i];
+            if (!rect.used) {
+                continue;
+            }
+            rect.scale_u = std::clamp(min_side_uv / std::max(rect.max_u - rect.min_u, 1.0e-12), 1.0, 16.0);
+            rect.scale_v = std::clamp(min_side_uv / std::max(rect.max_v - rect.min_v, 1.0e-12), 1.0, 16.0);
+        }
+    }
+    const double gutter = gutter_texels * texel_uv;
 
     std::vector<GEO::index_t> order;
     double total_area    = 0.0;
     double max_dimension = 0.0;
     for (GEO::index_t i = 0; i < chart_count; ++i) {
-        const Chart_rect& rect = rects[i];
+        Chart_rect& rect = rects[i];
+        // A chart whose every UV is non-finite keeps the sentinel bounds
+        // (min/max drop NaN) - its extent is garbage; drop it from packing
+        // instead of feeding the sort and shelves inf/NaN sizes.
+        if (rect.used && (!std::isfinite(rect.width()) || !std::isfinite(rect.height()))) {
+            rect.used = false;
+        }
         if (!rect.used) {
             continue;
         }
@@ -314,8 +379,13 @@ void pack_charts_with_texel_gutter(
     // shelves fill BOUSTROPHEDON (alternating direction), so the key
     // sequence stays spatially continuous where one shelf wraps to the
     // next.
+    // Non-finite keys (NaN texels in the bake readback the keys average)
+    // map to 0: NaN would break the sort comparators' strict weak ordering
+    // (NaN != x is true but neither orders before the other, so equivalence
+    // loses transitivity - hardened libc++ aborts, release builds scramble).
     const auto key_of = [chart_order_keys](const GEO::index_t i) -> float {
-        return ((chart_order_keys != nullptr) && (i < chart_order_keys->size())) ? (*chart_order_keys)[i] : 0.0f;
+        const float key = ((chart_order_keys != nullptr) && (i < chart_order_keys->size())) ? (*chart_order_keys)[i] : 0.0f;
+        return std::isfinite(key) ? key : 0.0f;
     };
     std::vector<int> band_of((chart_order_keys != nullptr) ? chart_count : 0u, 0);
     if (chart_order_keys != nullptr) {
@@ -356,30 +426,18 @@ void pack_charts_with_texel_gutter(
         }
     );
 
-    const double gutter_fraction = gutter_texels / target_texels;
-    double span = std::max(std::sqrt(total_area) * 1.15, max_dimension * (1.0 + 2.0 * gutter_fraction));
+    double span = std::max(std::sqrt(total_area) * 1.15, max_dimension + 2.0 * gutter);
     for (int iteration = 0; iteration < 6; ++iteration) {
-        // Minimum chart resolution: charts whose shorter side falls under
-        // min_side_texels at the target density are scaled up so the clamp
-        // is exact in texels after the final divide by span (min_side_uv =
-        // min_side_texels / target_texels * span). The 16x cap keeps
-        // near-degenerate sliver charts from exploding the atlas.
-        // Recomputed each iteration as span settles.
-        if (min_side_texels > 0.0) {
-            const double min_side_uv = (min_side_texels / target_texels) * span;
-            for (const GEO::index_t i : order) {
-                Chart_rect& rect = rects[i];
-                const double shorter = std::min(rect.max_u - rect.min_u, rect.max_v - rect.min_v);
-                rect.scale = std::clamp(min_side_uv / std::max(shorter, 1.0e-12), 1.0, 16.0);
-            }
-        }
+        // The gutter and the minimum-size scales are constants in chart UV
+        // units (see texel_uv above); iterating only settles the shelf wrap
+        // width against the used extent.
+        //
         // One gutter of margin at the atlas border too: region-edge texels
         // otherwise rasterize chart data straight against the region border.
         // Shelves are accumulated before placement so a full shelf can be
         // emitted in reverse on every other shelf (boustrophedon, keys
         // only): the sequence-adjacent charts at a shelf wrap then sit at
         // the same end of consecutive shelves, i.e. vertically adjacent.
-        const double gutter  = gutter_fraction * span;
         double       shelf_y = gutter;
         double       shelf_h = 0.0;
         double       shelf_w = 0.0; // consumed width, excluding leading gutter
@@ -433,8 +491,8 @@ void pack_charts_with_texel_gutter(
     for (GEO::index_t facet : mesh.facets) {
         const Chart_rect& rect = rects[chart[facet]];
         for (GEO::index_t corner : mesh.facets.corners(facet)) {
-            tex_coord[2 * corner + 0] = ((tex_coord[2 * corner + 0] - rect.min_u) * rect.scale + rect.place_u) * inv_span;
-            tex_coord[2 * corner + 1] = ((tex_coord[2 * corner + 1] - rect.min_v) * rect.scale + rect.place_v) * inv_span;
+            tex_coord[2 * corner + 0] = ((tex_coord[2 * corner + 0] - rect.min_u) * rect.scale_u + rect.place_u) * inv_span;
+            tex_coord[2 * corner + 1] = ((tex_coord[2 * corner + 1] - rect.min_v) * rect.scale_v + rect.place_v) * inv_span;
         }
     }
 }

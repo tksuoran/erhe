@@ -24,9 +24,11 @@ public:
     auto operator=      (Buffer_impl&& other) noexcept -> Buffer_impl&;
 
     [[nodiscard]] auto get_capacity_byte_count () const noexcept -> std::size_t;
-    // Buffer device addresses are a Vulkan-only concept; Metal gpuAddress()
-    // could back this later if a Metal ray tracing path needs it.
-    [[nodiscard]] auto get_device_address      () const noexcept -> uint64_t { return 0; }
+    // MTL::Buffer::gpuAddress(); SPIRV-Cross lowers GL_EXT_buffer_reference
+    // (PhysicalStorageBuffer) to device pointers in MSL, so the ray query
+    // shaders' per-instance vertex/index fetch works with these like it
+    // does with Vulkan buffer device addresses.
+    [[nodiscard]] auto get_device_address      () const noexcept -> uint64_t;
     [[nodiscard]] auto get_debug_label         () const noexcept -> erhe::utility::Debug_label;
     [[nodiscard]] auto get_map                 () const -> std::span<std::byte>;
     [[nodiscard]] auto gl_name                 () const noexcept -> unsigned int;

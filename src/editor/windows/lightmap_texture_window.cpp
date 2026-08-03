@@ -7,6 +7,7 @@
 #include "tools/selection_tool.hpp"
 
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
@@ -339,6 +340,23 @@ void Lightmap_texture_window::imgui()
     if (baker == nullptr) {
         ImGui::TextUnformatted("Lightmap baker is not available.");
         return;
+    }
+    if (!baker->is_bake_supported()) {
+        const bool capture_layer =
+            (m_context.graphics_device != nullptr) &&
+            m_context.graphics_device->get_info().ray_query_disabled_by_capture_layer;
+        if (capture_layer) {
+            ImGui::TextColored(
+                ImVec4{1.0f, 0.8f, 0.2f, 1.0f},
+                "Baking disabled: Xcode GPU frame-capture layer is loaded (no GPU ray tracing). "
+                "Fix: scheme GPU Frame Capture = Disabled, then relaunch. Viewing still works."
+            );
+        } else {
+            ImGui::TextColored(
+                ImVec4{1.0f, 0.8f, 0.2f, 1.0f},
+                "Baking disabled: GPU ray tracing is not supported by this device / backend. Viewing still works."
+            );
+        }
     }
     const Lightmap_baker::Atlas_layout& layout = baker->get_layout();
 

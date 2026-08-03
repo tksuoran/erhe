@@ -339,7 +339,7 @@ auto Mcp_server::action_lightmap_update_atlas(const json& args) -> std::string
         );
     }
     const float texels_per_meter = args.value("texels_per_meter", m_context.editor_settings->lightmap.texels_per_meter);
-    const bool  packed           = m_context.lightmap_baker->update_layout(*sr, texels_per_meter);
+    const bool  packed           = m_context.lightmap_baker->update_layout(*sr, texels_per_meter, m_context.editor_settings->lightmap.uv_min_chart_texels);
 
     const Lightmap_baker::Atlas_layout& layout = m_context.lightmap_baker->get_layout();
     json regions = json::array();

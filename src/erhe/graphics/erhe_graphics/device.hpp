@@ -208,15 +208,25 @@ public:
     // and Binding_type::acceleration_structure /
     // Compute_command_encoder::set_acceleration_structure are functional.
     // Vulkan sets this when VK_KHR_acceleration_structure + VK_KHR_ray_query
-    // (+ bufferDeviceAddress) were enabled on the device; false on other
-    // backends until they implement the abstraction (Metal is designed for).
+    // (+ bufferDeviceAddress) were enabled on the device; Metal when
+    // MTL::Device::supportsRaytracing() (ray query GLSL lowers to MSL
+    // intersection_query via SPIRV-Cross); false on GL / Null.
     bool use_ray_query               {false};
+
+    // The device supports ray query but use_ray_query was forced off because
+    // Xcode's GPU frame-capture layer (GPUToolsCapture) is loaded - it
+    // intermittently crashes every acceleration structure command encoder
+    // (Metal only). UI uses this to explain WHY ray tracing features are
+    // unavailable and how to get them back (scheme GPU Frame Capture =
+    // Disabled, or metal.disable_gpu_frame_capture in erhe_graphics.json).
+    bool ray_query_disabled_by_capture_layer{false};
 
     // VK_KHR_ray_tracing_position_fetch on top of use_ray_query: ray query
     // shaders can read the committed triangle's object-space vertex positions
     // (GL_EXT_ray_tracing_position_fetch), and bottom level acceleration
     // structures are built with the data-access flag. Never true without
-    // use_ray_query.
+    // use_ray_query. Always false on Metal (SPIRV-Cross has no MSL lowering
+    // for it); consumers must provide a buffer-fetch fallback path.
     bool use_ray_tracing_position_fetch{false};
     // VK_EXT_conservative_rasterization present: pipelines may set
     // Rasterization_state::conservative_enable (ignored elsewhere).

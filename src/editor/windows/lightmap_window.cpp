@@ -12,6 +12,7 @@
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 
+#include "erhe_graphics/device.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_item/item.hpp"
 #include "erhe_scene/mesh.hpp"
@@ -152,6 +153,33 @@ void Lightmap_window::imgui()
 {
     Lightmap_config& config = m_context.editor_settings->lightmap;
 
+    // UV unwrap and atlas layout are CPU-only and stay usable; everything
+    // that shoots rays (bakes and their tunables) is held when the baker's
+    // ray query pipeline is unavailable.
+    const bool bake_supported = (m_context.lightmap_baker != nullptr) && m_context.lightmap_baker->is_bake_supported();
+    if (!bake_supported) {
+        const bool capture_layer =
+            (m_context.graphics_device != nullptr) &&
+            m_context.graphics_device->get_info().ray_query_disabled_by_capture_layer;
+        if (capture_layer) {
+            ImGui::TextColored(
+                ImVec4{1.0f, 0.8f, 0.2f, 1.0f},
+                "Baking disabled: Xcode GPU frame-capture layer is loaded (no GPU ray tracing)."
+            );
+            ImGui::TextUnformatted(
+                "The capture layer crashes Metal acceleration structure builds.\n"
+                "Fix: Edit Scheme > Run > Options > GPU Frame Capture = Disabled, then relaunch.\n"
+                "UV generation and atlas layout still work."
+            );
+        } else {
+            ImGui::TextColored(
+                ImVec4{1.0f, 0.8f, 0.2f, 1.0f},
+                "Baking disabled: GPU ray tracing is not supported by this device / backend."
+            );
+        }
+        ImGui::Separator();
+    }
+
     const std::vector<std::shared_ptr<erhe::Item_base>> lightmapped = collect_lightmapped_mesh_nodes(m_context);
     ImGui::Text("Lightmapped meshes in active scene: %zu", lightmapped.size());
     if (lightmapped.empty()) {
@@ -254,7 +282,7 @@ void Lightmap_window::imgui()
         if (ImGui::Button("Update Atlas Layout")) {
             const std::shared_ptr<Scene_root> scene_root = m_context.selection->get_active_scene_root();
             if (scene_root) {
-                m_context.lightmap_baker->update_layout(*scene_root.get(), config.texels_per_meter);
+                m_context.lightmap_baker->update_layout(*scene_root.get(), config.texels_per_meter, config.uv_min_chart_texels);
             }
         }
         if (ImGui::IsItemHovered()) {
@@ -263,7 +291,7 @@ void Lightmap_window::imgui()
         ImGui::EndDisabled(); // async_busy (Update Atlas Layout)
         const Lightmap_baker::Atlas_layout& layout = m_context.lightmap_baker->get_layout();
         if (layout.width > 0) {
-            ImGui::BeginDisabled(async_busy);
+            ImGui::BeginDisabled(async_busy || !bake_supported);
             if (ImGui::Button("Bake Direct Lighting")) {
                 const std::shared_ptr<Scene_root> scene_root = m_context.selection->get_active_scene_root();
                 if (scene_root && m_context.lightmap_baker->bake_gbuffer() && m_context.lightmap_baker->bake_direct(*scene_root.get())) {
@@ -294,7 +322,7 @@ void Lightmap_window::imgui()
                     "filter-tap / dilation pollution picks up similar values. Rebakes automatically."
                 );
             }
-            ImGui::EndDisabled(); // async_busy (Bake Direct Lighting)
+            ImGui::EndDisabled(); // async_busy || !bake_supported (Bake Direct Lighting)
             ImGui::Text("Atlas: %d x %d, %zu regions", layout.width, layout.height, layout.regions.size());
             if (ImGui::TreeNode("Regions")) {
                 for (const Lightmap_baker::Instance_region& region : layout.regions) {
@@ -316,6 +344,7 @@ void Lightmap_window::imgui()
     // Interactive bake (plan section 3a): while on, the editor tick records
     // a budgeted gather slice + publish into every frame.
     if (m_context.lightmap_baker != nullptr) {
+        ImGui::BeginDisabled(!bake_supported);
         bool baking = m_context.lightmap_baker->is_baking_enabled();
         if (ImGui::Checkbox("Baking", &baking)) {
             m_context.lightmap_baker->set_baking_enabled(baking);
@@ -340,6 +369,7 @@ void Lightmap_window::imgui()
                 m_context.lightmap_baker->get_cursor_row()
             );
         }
+        ImGui::EndDisabled(); // !bake_supported (interactive bake)
     }
 
     // Optional features (all on by default; off = A/B comparison and
@@ -347,6 +377,7 @@ void Lightmap_window::imgui()
     // Lightmap_baker::set_options, which handles the required invalidation;
     // bicubic sampling is a pure viewport toggle.
     ImGui::SeparatorText("Features");
+    ImGui::BeginDisabled(!bake_supported);
     bool touched = false;
     touched |= ImGui::Checkbox("Indirect bounce", &config.indirect_bounce);
     if (ImGui::IsItemHovered()) {
@@ -372,6 +403,7 @@ void Lightmap_window::imgui()
     if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Viewport lightmap filtering: cubic B-spline reconstruction instead of bilinear.\nApplies immediately; no rebake needed.");
     }
+    ImGui::EndDisabled(); // !bake_supported (Features)
     if (touched) {
         m_context.app_settings->settings_store().touch();
     }

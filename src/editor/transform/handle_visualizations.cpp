@@ -66,9 +66,8 @@ namespace {
 //   (plane_sector_gap) and the ring (ring_sector_gap, larger); a shell
 //   hidden by its tool's visibility toggle donates its space to the
 //   visible ones (see get_plane_shell_layout). In positive-only translate
-//   mode each plane's
-//   sectors span the camera-facing quadrant (positive octant with the
-//   rings hidden); otherwise they are full annuli.
+//   mode each plane's sectors span the camera-facing quadrant; otherwise
+//   they are full annuli.
 // - Ring pick tube radius (config ring_pick_radius, default 0.2): ring
 //   samples are spaced ~0.049 R apart, so values >= ~0.1 leave no dead spots.
 struct Gizmo_sizes
@@ -851,11 +850,6 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
 
     const Transform_tool_settings& settings = m_context.transform_tool->shared.settings;
     const bool positive_only = !m_context.editor_settings->transform_tool.translate_negative_handles;
-    // With no rotate rings shown (the show_rotate toggle, not transient drag
-    // hiding - placement must not jump mid-drag) the camera-facing choices
-    // exist to dodge nothing: the quads sit in the positive octant and the
-    // positive arrow of each axis starts where the quads end.
-    const bool fixed_octant = positive_only && !settings.show_rotate;
     // Frozen at drag-start values while a drag is active.
     const std::array<bool, 3> octant_signs = get_octant_signs(eye, c, basis);
 
@@ -881,8 +875,8 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
         }
         const vec3 u  = basis[(perp + 1) % 3];
         const vec3 v  = basis[(perp + 2) % 3];
-        const vec3 su = (fixed_octant || octant_signs[(perp + 1) % 3]) ? u : -u;
-        const vec3 sv = (fixed_octant || octant_signs[(perp + 2) % 3]) ? v : -v;
+        const vec3 su = octant_signs[(perp + 1) % 3] ? u : -u;
+        const vec3 sv = octant_signs[(perp + 2) % 3] ? v : -v;
         draw_annular_sector(
             plane_line_renderer, plane_triangle_renderer,
             handle_color(handle, axis_colors[perp], hover_axis_colors[perp]), handle_color(handle, axis_outline_colors[perp], hover_axis_colors[perp]),
@@ -1012,7 +1006,7 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
             if (
                 positive_only && !axis_drag_here && !plane_hover_here &&
                 (directional_handles[sign] != hover_handle) &&
-                ((sign == 0) != (fixed_octant || positive_towards_eye))
+                ((sign == 0) != positive_towards_eye)
             ) {
                 continue;
             }
@@ -1064,7 +1058,7 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
             if (
                 positive_only && !axis_drag_here && !plane_hover_here &&
                 (handle != hover_handle) &&
-                ((sign == 0) != (fixed_octant || positive_towards_eye))
+                ((sign == 0) != positive_towards_eye)
             ) {
                 continue;
             }
@@ -1089,8 +1083,8 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
         }
         const vec3 u  = basis[(perp + 1) % 3];
         const vec3 v  = basis[(perp + 2) % 3];
-        const vec3 su = (fixed_octant || octant_signs[(perp + 1) % 3]) ? u : -u;
-        const vec3 sv = (fixed_octant || octant_signs[(perp + 2) % 3]) ? v : -v;
+        const vec3 su = octant_signs[(perp + 1) % 3] ? u : -u;
+        const vec3 sv = octant_signs[(perp + 2) % 3] ? v : -v;
         draw_annular_sector(
             plane_line_renderer, plane_triangle_renderer,
             handle_color(handle, axis_colors[perp], hover_axis_colors[perp]), handle_color(handle, axis_outline_colors[perp], hover_axis_colors[perp]),
@@ -1108,8 +1102,8 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
         for (int perp = 0; perp < 3; ++perp) {
             const vec3 u  = basis[(perp + 1) % 3];
             const vec3 v  = basis[(perp + 2) % 3];
-            const vec3 su = (fixed_octant || octant_signs[(perp + 1) % 3]) ? u : -u;
-            const vec3 sv = (fixed_octant || octant_signs[(perp + 2) % 3]) ? v : -v;
+            const vec3 su = octant_signs[(perp + 1) % 3] ? u : -u;
+            const vec3 sv = octant_signs[(perp + 2) % 3] ? v : -v;
             draw_annular_sector(
                 plane_line_renderer, plane_triangle_renderer,
                 color, outline_color, gz.plane_fill_alpha * handle_alpha(Handle::e_handle_scale_xyz), gz.plane_outline_width,
@@ -1177,8 +1171,6 @@ auto Handle_visualizations::pick(const glm::vec3& eye_position, const glm::vec3&
 
     const Transform_tool_settings& settings = m_context.transform_tool->shared.settings;
     const bool positive_only = !m_context.editor_settings->transform_tool.translate_negative_handles;
-    // Mirrors render()'s fixed-octant presentation with rotate rings hidden.
-    const bool fixed_octant  = positive_only && !settings.show_rotate;
     // Mirrors render(): frozen at drag-start values while a drag is active.
     const std::array<bool, 3> octant_signs = get_octant_signs(eye_position, c, basis);
 
@@ -1218,7 +1210,7 @@ auto Handle_visualizations::pick(const glm::vec3& eye_position, const glm::vec3&
             if (
                 positive_only && !axis_drag_here && !plane_hover_here &&
                 (directional_handles[sign] != hover_handle) &&
-                ((sign == 0) != (fixed_octant || positive_towards_eye))
+                ((sign == 0) != positive_towards_eye)
             ) {
                 continue;
             }
@@ -1272,8 +1264,8 @@ auto Handle_visualizations::pick(const glm::vec3& eye_position, const glm::vec3&
         }
         const vec3  u  = basis[(perp + 1) % 3];
         const vec3  v  = basis[(perp + 2) % 3];
-        const vec3  su = (fixed_octant || octant_signs[(perp + 1) % 3]) ? u : -u;
-        const vec3  sv = (fixed_octant || octant_signs[(perp + 2) % 3]) ? v : -v;
+        const vec3  su = octant_signs[(perp + 1) % 3] ? u : -u;
+        const vec3  sv = octant_signs[(perp + 2) % 3] ? v : -v;
         const float t  = dot(c - ray_origin, n) / denom;
         if (t <= 0.0f) {
             return;
@@ -1331,7 +1323,7 @@ auto Handle_visualizations::pick(const glm::vec3& eye_position, const glm::vec3&
             if (
                 positive_only && !axis_drag_here && !plane_hover_here &&
                 (handle != hover_handle) &&
-                ((sign == 0) != (fixed_octant || positive_towards_eye))
+                ((sign == 0) != positive_towards_eye)
             ) {
                 continue;
             }

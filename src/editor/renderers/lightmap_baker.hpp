@@ -4,6 +4,7 @@
 
 #include <glm/glm.hpp>
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -17,6 +18,7 @@ namespace erhe::graphics {
     class Bind_group_layout;
     class Buffer;
     class Command_buffer;
+    class Compute_command_encoder;
     class Compute_pipeline;
     class Device;
     class Fragment_outputs;
@@ -74,6 +76,13 @@ public:
         // Region sizing divides by it so texels-per-meter holds exactly
         // per facet instead of being diluted by packing efficiency.
         float                              uv_coverage{1.0f};
+        // Smallest facet UV AABB extent (shorter axis, normalized atlas
+        // UV). Region sizing raises the side so this facet still spans
+        // min_face_texels: the unwrap's own min-size clamp cannot deliver
+        // it when MOST facets are tiny (scaling every chart up grows
+        // coverage and shrinks the region right back - texels per facet
+        // are invariant to it), so the region itself must grow.
+        float                              min_facet_uv_extent{1.0f};
     };
 
     class Atlas_layout
@@ -132,11 +141,19 @@ public:
 
     [[nodiscard]] auto is_supported() const -> bool;
 
+    // True when the ray-query gather machinery exists - false without
+    // Device_info::use_ray_query. Layout and G-buffer (is_supported) still
+    // work then; only the bakes are unavailable.
+    [[nodiscard]] auto is_bake_supported() const -> bool;
+
     // Recompute the atlas layout for the lightmapped, non-skinned content
     // meshes of the scene whose primitives carry channel-2 UVs. Page size
     // grows in power-of-two steps until everything packs (up to s_max_page
     // texels). Returns true when at least one region was packed.
-    auto update_layout(Scene_root& scene_root, float texels_per_meter) -> bool;
+    // min_face_texels > 0 additionally grows each region (capped at 4x the
+    // density-derived side) so its smallest facet spans at least that many
+    // texels on its shorter UV axis.
+    auto update_layout(Scene_root& scene_root, float texels_per_meter, float min_face_texels) -> bool;
 
     [[nodiscard]] auto get_layout() const -> const Atlas_layout& { return m_layout; }
 
@@ -184,7 +201,7 @@ public:
     // atlas later in the same submission). Handles change-driven
     // invalidation internally: light/occluder edits reset accumulation,
     // lightmapped-mesh edits additionally re-raster the G-buffer.
-    void tick(erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root, float texels_per_meter);
+    void tick(erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root, float texels_per_meter, float min_face_texels);
 
     void set_baking_enabled(const bool enabled) { m_baking_enabled = enabled; }
     [[nodiscard]] auto is_baking_enabled() const -> bool     { return m_baking_enabled; }
@@ -194,14 +211,23 @@ public:
     [[nodiscard]] auto get_sweep_count() const -> uint32_t   { return m_sweep_count; }
     [[nodiscard]] auto get_cursor_row () const -> int        { return m_cursor_y; }
 
-    [[nodiscard]] auto get_lightmap_texture() const -> const std::shared_ptr<erhe::graphics::Texture>& { return m_lightmap_texture; }
+    // Display atlas the forward renderer samples: a copy of the working
+    // atlas taken only at publish points (complete sweeps), so bake resets
+    // (transform / light edits) keep showing the previous result instead of
+    // blacking out the scene while accumulation restarts.
+    [[nodiscard]] auto get_lightmap_texture() const -> const std::shared_ptr<erhe::graphics::Texture>& { return m_display_texture; }
 
     [[nodiscard]] auto get_position_texture() const -> const std::shared_ptr<erhe::graphics::Texture>& { return m_position_texture; }
     [[nodiscard]] auto get_normal_texture  () const -> const std::shared_ptr<erhe::graphics::Texture>& { return m_normal_texture; }
     [[nodiscard]] auto get_albedo_texture  () const -> const std::shared_ptr<erhe::graphics::Texture>& { return m_albedo_texture; }
 
     static constexpr int s_min_page = 256;
-    static constexpr int s_max_page = 4096;
+    // Working-set budget, not a hardware limit (Metal / desktop Vulkan allow
+    // 16384^2): seven page-sized targets exist during a bake (~104 bytes per
+    // texel), so 8192^2 costs ~7 GB when a scene actually packs that big.
+    // Pages grow power-of-two only as needed; going past 8192 should first
+    // slim the rgba32f targets or add multi-page support.
+    static constexpr int s_max_page = 8192;
     static constexpr int s_padding  = 4; // texels around each region (mips + bilinear)
 
 private:
@@ -216,13 +242,12 @@ private:
     class Lm_instance_record
     {
     public:
-        uint64_t  index_address      {0}; // first triangle index of the instance
-        uint64_t  vertex_address     {0}; // start of the stream-1 vertex range
-        uint32_t  vertex_stride_uints{0};
-        uint32_t  pad0               {0};
-        uint32_t  pad1               {0};
-        uint32_t  pad2               {0};
-        glm::vec4 uv_scale_offset    {0.0f, 0.0f, 0.0f, 0.0f};
+        uint64_t  index_address        {0}; // first triangle index of the instance
+        uint64_t  vertex_address       {0}; // start of the stream-1 vertex range
+        uint64_t  position_address     {0}; // start of the stream-0 vertex range (position-fetch fallback)
+        uint32_t  vertex_stride_uints  {0};
+        uint32_t  position_stride_uints{0};
+        glm::vec4 uv_scale_offset      {0.0f, 0.0f, 0.0f, 0.0f};
     };
 
     class Light_record
@@ -248,9 +273,19 @@ private:
     // JNLM denoise, then the dilation ping-pong; leaves the published atlas
     // shader-readable.
     void record_resolve_and_dilate(erhe::graphics::Command_buffer& command_buffer, bool with_denoise);
+    // Blit the working atlas into the display atlas (both left
+    // shader-readable) and mark the display valid.
+    void record_display_publish(erhe::graphics::Command_buffer& command_buffer);
     // One-shot virtual-offset pass (article sample-position adjustment):
     // rewrites the position G-buffer in place, once per G-buffer bake.
-    void record_adjust(erhe::graphics::Command_buffer& command_buffer, erhe::graphics::Acceleration_structure& tlas);
+    // bind_instance_records binds the Lm_instance_record SSBO (binding 1)
+    // into the adjust encoder - the committed_face_normal position-fetch
+    // fallback reads it (the caller owns the buffer, ring range or plain).
+    void record_adjust(
+        erhe::graphics::Command_buffer&                                       command_buffer,
+        erhe::graphics::Acceleration_structure&                               tlas,
+        const std::function<void(erhe::graphics::Compute_command_encoder&)>&  bind_instance_records
+    );
 
     class Blas_entry
     {
@@ -321,6 +356,13 @@ private:
     std::unique_ptr<erhe::graphics::Sampler>           m_nearest_sampler;
     std::shared_ptr<erhe::graphics::Texture>           m_lightmap_texture;
     bool                                               m_lightmap_valid{false};
+
+    // Double-buffered publish: the renderer-facing copy of the working
+    // atlas (see get_lightmap_texture). m_display_valid = it holds at
+    // least one complete sweep; until then the first-bake progressive
+    // preview copies every publish.
+    std::shared_ptr<erhe::graphics::Texture>           m_display_texture;
+    bool                                               m_display_valid{false};
 
     // Dilation pass (plan phase 4): valid texels flood into invalid
     // 8-neighborhood, s_padding iterations, ping-pong between the atlas
