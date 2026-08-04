@@ -13,6 +13,9 @@ namespace erhe::geometry::operation {
 
 void Geometry_operation::run_mesh_boolean_operation(const char* operation)
 {
+    // Geogram algorithm (mesh_boolean_operation) - see geogram_lock().
+    const std::lock_guard<std::recursive_mutex> geogram_guard{geogram_lock()};
+
     ERHE_VERIFY(rhs_mesh != nullptr);
     GEO::Mesh lhs_double;
     lhs_double.copy(source_mesh, true);

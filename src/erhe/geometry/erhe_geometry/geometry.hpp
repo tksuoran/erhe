@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <tuple>
 
@@ -41,6 +42,23 @@ namespace GEO {
 }
 
 namespace erhe::geometry {
+
+// Geogram is not safe to call concurrently from multiple threads: its own
+// tracker (BrunoLevy/geogram#68, open) lists global static state in CVT /
+// (HL)BFGS optimizers and cites "Delaunay on two meshes in parallel" as
+// unsupported, and its Windows thread-pool manager corrupts thread-id
+// assignment when parallel_for is entered from two threads at once
+// (process_win.cpp static threadCounter_; observed as GEO::Geom::colocate()
+// old2new corruption). Every erhe entry point that reaches a geogram
+// *algorithm* (parallel_for users, Delaunay, mesh_repair, CVT, xatlas via
+// process(), colocate via mesh_from_triangle_soup, make_convex_hull, the
+// geometry-operation implementations) must hold this lock. Pure per-mesh
+// element/attribute construction (create_vertices, facets.connect, attribute
+// binds) is mesh-local and does not need it. Recursive so the choke points
+// can nest (a geometry operation that calls Geometry::process()). Geogram
+// still parallelizes each call internally across cores, so serializing the
+// outer calls costs little throughput.
+[[nodiscard]] auto geogram_lock() -> std::recursive_mutex&;
 
 enum class Transform_mode : unsigned int {
     none = 0,                              // texture coordinates, colors, ...

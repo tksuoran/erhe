@@ -90,3 +90,46 @@ inputs are small, so the parallel build gained nothing), and we set
 `GEO::set_assert_mode(GEO::ASSERT_THROW)` explicitly when no debugger is
 attached, so future geogram assertions surface as catchable exceptions
 instead of an interactive abort prompt.
+
+---
+
+# erhe-side serialization contract (implemented 2026-08-04)
+
+A second concurrency defect confirmed the draft issue's premise: geogram's
+Windows thread-pool manager (`WindowsThreadPoolManager::run_concurrent_threads`,
+process_win.cpp) resets a **static** `threadCounter_` shared by all
+invocations, so two threads entering `GEO::parallel_for` simultaneously
+corrupt each other's thread-id assignment and some worker slices never run.
+Observed as `GEO::Geom::colocate()` leaving `old2new` entries at NO_INDEX
+(assert at colocate.cpp:254) when two deferred glTF finalize tasks converted
+triangle soups concurrently (doc/gltf-load-speedup-plan.md). Upstream also
+tracks the general problem (global static state in CVT / LBFGS; "Delaunay on
+two meshes in parallel" unsupported): BrunoLevy/geogram#68.
+
+erhe therefore serializes every entry into a geogram *algorithm* on one
+process-wide recursive mutex, `erhe::geometry::geogram_lock()` (geometry.hpp).
+Geogram still parallelizes each call internally across cores, so the
+throughput cost is small. Lock order: it is the innermost lock - never
+acquire a scene (Item_host) or Primitive_shape mutex while holding it.
+
+Guarded choke points (each takes the lock internally):
+
+- `Geometry::process()` (xatlas atlas generation, repair-ish steps)
+- `erhe::primitive::mesh_from_triangle_soup()` (colocate)
+- `erhe::geometry::make_convex_hull()` (Delaunay branch)
+- `operation::Repair/Weld/Remesh/Decimate/Smooth::build()` (mesh_repair,
+  MeshSurfaceIntersection, CVT remesh/decimate/smooth)
+- `Geometry_operation::run_mesh_boolean_operation()` (mesh_boolean_operation)
+- `operation::generate_mesh_atlas_texture_coordinates()`
+- `Json_library` polyhedron load (mesh_repair) in the editor
+- editor `Mesh_operation::make_entries` additionally wraps the whole
+  geometry-operation callback (belt and suspenders for operations not listed
+  above)
+
+NOT guarded (mesh-local, no geogram algorithm): element/attribute
+construction, `facets.connect()`, `geometry_from_flat_data`,
+`compute_mesh_tangents`, plain mesh reads (buffer-mesh and raytrace builds).
+
+When the fork gains a reentrant thread manager (per-invocation context
+instead of the static counter) and upstream #68 lands, this contract can be
+relaxed.

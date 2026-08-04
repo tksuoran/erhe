@@ -44,11 +44,17 @@ Build_context_root::Build_context_root(
 {
     get_mesh_info                  ();
     get_vertex_attributes          ();
-    allocate_vertex_buffers        ();
-    allocate_edge_line_vertex_buffer();
-    allocate_edge_line_joint_buffer ();
-    allocate_expanded_fill_buffers  ();
-    allocate_index_buffer          ();
+    {
+        // One atomic multi-pool allocation transaction per mesh - see
+        // buffer_mesh_allocation_mutex(). The data writes that follow the
+        // allocation go to the mesh's own ranges and need no lock.
+        const std::lock_guard<std::mutex> allocation_lock{buffer_mesh_allocation_mutex()};
+        allocate_vertex_buffers        ();
+        allocate_edge_line_vertex_buffer();
+        allocate_edge_line_joint_buffer ();
+        allocate_expanded_fill_buffers  ();
+        allocate_index_buffer          ();
+    }
 }
 
 void Build_context_root::get_mesh_info()

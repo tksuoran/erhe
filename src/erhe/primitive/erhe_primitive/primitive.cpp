@@ -411,6 +411,10 @@ auto Primitive_shape::make_geometry_locked() -> bool
         std::shared_ptr<erhe::geometry::Geometry> geometry = std::make_shared<erhe::geometry::Geometry>();
         GEO::Mesh& mesh = geometry->get_mesh();
 
+        // Geogram concurrency: mesh_from_triangle_soup (colocate) and
+        // Geometry::process serialize themselves internally on
+        // erhe::geometry::geogram_lock(); compute_mesh_tangents is
+        // mesh-local erhe code and needs no lock.
         mesh_from_triangle_soup(*m_triangle_soup.get(), mesh, m_element_mappings);
 
         const erhe::dataformat::Attribute_stream tangent_stream = m_triangle_soup->vertex_format.find_attribute(erhe::dataformat::Vertex_attribute_usage::tangent);
@@ -665,27 +669,35 @@ auto build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, co
     const std::size_t      source_vertex_stride  = triangle_soup.vertex_format.streams.front().stride;
     const std::size_t      vertex_count          = triangle_soup.vertex_data.size() / source_vertex_stride;
     const std::size_t      index_count           = triangle_soup.index_data.size();
-    Buffer_sink_allocation index_sink_allocation = buffer_info.index_buffer_sink.allocate_index_buffer_range(buffer_info.index_type, index_count);
-    if (index_sink_allocation.range.count == 0) {
-        return std::optional<Buffer_mesh>{};
-    }
 
     Buffer_mesh buffer_mesh;
-    buffer_mesh.triangle_fill_indices.primitive_type = Primitive_type::triangles;
-    buffer_mesh.triangle_fill_indices.first_index    = 0;
-    buffer_mesh.triangle_fill_indices.index_count    = index_count;
-    buffer_mesh.index_buffer_range                   = index_sink_allocation.range;
-    buffer_mesh.index_allocation                     = std::move(index_sink_allocation.allocation);
-    buffer_mesh.vertex_input_key                     = buffer_info.vertex_input_key;
 
-    for (std::size_t i = 0, end = buffer_info.vertex_format.streams.size(); i < end; ++i) {
-        const erhe::dataformat::Vertex_stream& stream = buffer_info.vertex_format.streams.at(i);
-        Buffer_sink_allocation vertex_sink_allocation = buffer_info.vertex_buffer_sink.allocate_vertex_buffer_range(stream, vertex_count);
-        if (vertex_sink_allocation.range.count == 0) {
+    {
+        // One atomic multi-pool allocation transaction per mesh - see
+        // buffer_mesh_allocation_mutex() (primitive_builder.hpp).
+        const std::lock_guard<std::mutex> allocation_lock{buffer_mesh_allocation_mutex()};
+
+        Buffer_sink_allocation index_sink_allocation = buffer_info.index_buffer_sink.allocate_index_buffer_range(buffer_info.index_type, index_count);
+        if (index_sink_allocation.range.count == 0) {
             return std::optional<Buffer_mesh>{};
         }
-        buffer_mesh.vertex_buffer_ranges.emplace_back(vertex_sink_allocation.range);
-        buffer_mesh.vertex_allocations.emplace_back(std::move(vertex_sink_allocation.allocation));
+
+        buffer_mesh.triangle_fill_indices.primitive_type = Primitive_type::triangles;
+        buffer_mesh.triangle_fill_indices.first_index    = 0;
+        buffer_mesh.triangle_fill_indices.index_count    = index_count;
+        buffer_mesh.index_buffer_range                   = index_sink_allocation.range;
+        buffer_mesh.index_allocation                     = std::move(index_sink_allocation.allocation);
+        buffer_mesh.vertex_input_key                     = buffer_info.vertex_input_key;
+
+        for (std::size_t i = 0, end = buffer_info.vertex_format.streams.size(); i < end; ++i) {
+            const erhe::dataformat::Vertex_stream& stream = buffer_info.vertex_format.streams.at(i);
+            Buffer_sink_allocation vertex_sink_allocation = buffer_info.vertex_buffer_sink.allocate_vertex_buffer_range(stream, vertex_count);
+            if (vertex_sink_allocation.range.count == 0) {
+                return std::optional<Buffer_mesh>{};
+            }
+            buffer_mesh.vertex_buffer_ranges.emplace_back(vertex_sink_allocation.range);
+            buffer_mesh.vertex_allocations.emplace_back(std::move(vertex_sink_allocation.allocation));
+        }
     }
 
     // Lockstep invariant: the indirect draw applies a single vertexOffset

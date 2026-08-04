@@ -1,6 +1,7 @@
 #include "erhe_geometry/operation/repair.hpp"
 #include "erhe_geometry/operation/geometry_operation.hpp"
 #include "erhe_geometry/operation/octree.hpp"
+#include "erhe_geometry/geometry.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
@@ -29,6 +30,9 @@ Repair::Repair(const Geometry& source, Geometry& destination)
 
 void Repair::build()
 {
+    // Geogram algorithms (mesh_repair, MeshSurfaceIntersection) - see geogram_lock().
+    const std::lock_guard<std::recursive_mutex> geogram_guard{geogram_lock()};
+
     destination.get_attributes().unbind();
     destination_mesh.copy(source_mesh, true);
     destination_mesh.vertices.set_double_precision();
@@ -328,6 +332,9 @@ void Weld::build_()
 
 void Weld::build()
 {
+    // Geogram algorithms (MeshSurfaceIntersection in build_()) - see geogram_lock().
+    const std::lock_guard<std::recursive_mutex> geogram_guard{geogram_lock()};
+
     const GEO::index_t vertex_count = source_mesh.vertices.nb();
     const GEO::index_t facet_count  = source_mesh.facets.nb();
     m_vertex_merge_candidates.resize(vertex_count);

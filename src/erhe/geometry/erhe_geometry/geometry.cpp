@@ -80,6 +80,12 @@
 
 namespace erhe::geometry {
 
+auto geogram_lock() -> std::recursive_mutex&
+{
+    static std::recursive_mutex mutex;
+    return mutex;
+}
+
 void set_point(GEO::MeshVertices& mesh_vertices, GEO::index_t vertex, GEO::vec3 p)
 {
     //if (mesh_vertices.single_precision()) {
@@ -830,6 +836,11 @@ void write_geogram_delaunay_repro(GEO::index_t dim, GEO::index_t nb_pts, const G
 
 auto make_convex_hull(const GEO::Mesh& source, GEO::Mesh& destination) -> bool
 {
+    // See geogram_lock(): the (non-default) Delaunay branch below must not
+    // run concurrently with other geogram algorithm invocations; the default
+    // QuickHull branch is erhe code and the lock costs nothing measurable.
+    const std::lock_guard<std::recursive_mutex> geogram_guard{geogram_lock()};
+
     try {
         const GEO::index_t nb_pts = source.vertices.nb();
 #if ERHE_CONVEX_HULL_USE_QUICKHULL
@@ -1427,6 +1438,10 @@ void Geometry::build_edges()
 
 void Geometry::process(const Geometry_process_parameters& parameters)
 {
+    // See geogram_lock(): xatlas / repair / parallel_for-using steps below
+    // must not run concurrently with other geogram algorithm invocations.
+    const std::lock_guard<std::recursive_mutex> geogram_guard{geogram_lock()};
+
     const uint64_t flags = parameters.flags;
     //GEO::mesh_reorder(m_mesh);
 

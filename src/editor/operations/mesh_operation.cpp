@@ -281,7 +281,18 @@ void Mesh_operation::make_entries(
                 erhe::geometry::operation::Geometry_component_selection remap_destination;
 
                 auto after_geometry = std::make_shared<erhe::geometry::Geometry>();
-                geometry_operation(*before_geometry.get(), *after_geometry.get(), node, selected_facets, remap_source, &remap_destination);
+                {
+                    // The operation implementations reach geogram algorithms
+                    // (mesh_repair, CVT remesh/smooth, booleans, Delaunay)
+                    // which must not run concurrently with other geogram
+                    // invocations - deferred glTF finalize tasks and sibling
+                    // async operations run on other workers. See
+                    // erhe::geometry::geogram_lock(). Scoped to the geometry
+                    // operation only: the buffer-mesh / raytrace builds below
+                    // take their own (inner) locks.
+                    const std::lock_guard<std::recursive_mutex> geogram_guard{erhe::geometry::geogram_lock()};
+                    geometry_operation(*before_geometry.get(), *after_geometry.get(), node, selected_facets, remap_source, &remap_destination);
+                }
 
                 auto sanitize_warnings = after_geometry->sanitize();
                 if (!sanitize_warnings.empty()) {

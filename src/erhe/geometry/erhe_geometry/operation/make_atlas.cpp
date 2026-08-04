@@ -579,6 +579,9 @@ void generate_mesh_atlas_texture_coordinates(
     const double              chart_min_side_texels,
     const std::vector<float>* per_facet_chart_order)
 {
+    // Geogram algorithm (mesh_make_atlas / chart parameterization) - see geogram_lock().
+    const std::lock_guard<std::recursive_mutex> geogram_guard{geogram_lock()};
+
     // Precondition: attributes is UNBOUND (see header). mesh_make_atlas() reads
     // vertices.point() in double precision and grows charts across facet
     // adjacency, so ensure both are in place before the call.

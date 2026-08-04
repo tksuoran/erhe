@@ -430,6 +430,11 @@ void mesh_from_triangle_soup(const Triangle_soup& triangle_soup, GEO::Mesh& mesh
     ERHE_VERIFY(element_mappings.mesh_corner_to_vertex_buffer_index.empty());
     ERHE_VERIFY(element_mappings.triangle_to_mesh_facet.empty());
 
+    // See erhe::geometry::geogram_lock(): the vertex welding uses
+    // GEO::Geom::colocate() (geogram parallel_for), which must not run
+    // concurrently with other geogram algorithm invocations.
+    const std::lock_guard<std::recursive_mutex> geogram_guard{erhe::geometry::geogram_lock()};
+
     Mesh_from_triangle_soup builder{mesh, triangle_soup, element_mappings};
     builder.build();
 }

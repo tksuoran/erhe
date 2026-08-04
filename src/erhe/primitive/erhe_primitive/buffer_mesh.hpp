@@ -9,14 +9,29 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <mutex>
 #include <vector>
 
 namespace erhe::primitive {
+
+// Serializes GPU vertex/index pool traffic of buffer meshes. The vertex-pool
+// lockstep invariant (one indirect-draw vertexOffset applied to every stream
+// binding, see buffer_pool.hpp) requires the per-stream pools of a vertex
+// format to see IDENTICAL allocation/free histories - only then do the
+// element cursors and hole patterns stay isomorphic across pools and every
+// mesh's streams land at matching element offsets. Concurrent builders
+// (deferred glTF finalize tasks, async mesh operations) must therefore make
+// each multi-stream allocation group one atomic transaction, and frees (a
+// Buffer_mesh being destroyed or move-assigned over) must not interleave
+// into a transaction either - both take this mutex. Innermost lock: nothing
+// else is acquired while it is held.
+[[nodiscard]] auto buffer_mesh_allocation_mutex() -> std::mutex&;
 
 class Buffer_mesh
 {
 public:
     Buffer_mesh();
+    ~Buffer_mesh();
     Buffer_mesh(Buffer_mesh&& other);
     Buffer_mesh& operator=(Buffer_mesh&& other);
     Buffer_mesh(const Buffer_mesh&) = delete;

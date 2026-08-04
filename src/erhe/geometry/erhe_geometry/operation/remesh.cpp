@@ -1,5 +1,6 @@
 #include "erhe_geometry/operation/remesh.hpp"
 #include "erhe_geometry/operation/geometry_operation.hpp"
+#include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/geometry_log.hpp"
 
 #include <geogram/mesh/mesh.h>
@@ -309,6 +310,9 @@ private:
 
 void Remesh::build()
 {
+    // Geogram algorithms (CVT remesh_smooth, mesh_repair) - see geogram_lock().
+    const std::lock_guard<std::recursive_mutex> geogram_guard{geogram_lock()};
+
     GEO::Mesh input;
     input.copy(source_mesh, true);
     input.vertices.set_double_precision();
@@ -399,6 +403,9 @@ private:
 
 void Decimate::build()
 {
+    // Geogram algorithms (mesh_decimate, mesh_repair) - see geogram_lock().
+    const std::lock_guard<std::recursive_mutex> geogram_guard{geogram_lock()};
+
     destination.get_attributes().unbind();
     destination_mesh.copy(source_mesh, true);
     destination_mesh.vertices.set_double_precision();
@@ -457,6 +464,9 @@ private:
 
 void Smooth::build()
 {
+    // Geogram algorithms (CVT-family smoothing) - see geogram_lock().
+    const std::lock_guard<std::recursive_mutex> geogram_guard{geogram_lock()};
+
     destination.get_attributes().unbind();
     destination_mesh.copy(source_mesh, true);
     destination_mesh.vertices.set_double_precision();

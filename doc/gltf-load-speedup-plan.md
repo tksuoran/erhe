@@ -237,3 +237,49 @@ parse flag lives in `Gltf_parse_arguments`.
   transient window; tools needing exact hits (physics_tool grab) should be
   spot-checked during the proxy window.
 - glTF files with huge node counts but no meshes gain little — out of scope.
+
+## Post-implementation finding: geogram parallel_for is not reentrant on Windows
+
+Concurrent deferred finalize tasks hit an assert in `GEO::Geom::colocate`
+(`old2new[i]` left at NO_INDEX, colocate.cpp:254) while importing
+island_lobby_new_lod3.glb. Root cause is in geogram, not in the task code:
+`WindowsThreadPoolManager::run_concurrent_threads` (process_win.cpp) resets a
+**static** `threadCounter_` shared by all invocations, so two threads entering
+`parallel_for` simultaneously corrupt each other's thread-id assignment and
+some worker slices never run. Any two concurrent geogram-parallel calls are
+exposed (the pre-existing async mesh operations included); the deferred
+finalize made the collision routine instead of rare.
+
+Mitigation in erhe: `Primitive_shape::make_geometry_locked` serializes the
+geogram-heavy soup→Geometry conversion (mesh_from_triangle_soup /
+compute_mesh_tangents / process) on a process-wide mutex
+(`geogram_parallel_mutex()` in primitive.cpp). Geogram still parallelizes each
+conversion internally across cores, so throughput of the deferred phase stays
+close; the BVH and GPU buffer-mesh builds remain fully parallel.
+
+## Post-implementation finding 2: pool lockstep needs atomic alloc AND free
+
+Concurrent deferred tasks also produced "vertex stream allocations out of
+lockstep" build failures (meshes kept their fill-only buffer mesh, no edge
+lines). The lockstep invariant requires the per-stream vertex pools of a
+format to see IDENTICAL allocation/free histories; concurrency broke that in
+two ways: (1) two builders interleaving their per-stream allocations, and
+(2) a Buffer_mesh being freed (deferred commit dropping the fill-only mesh)
+mid-way through another thread's allocation transaction, so one pool's
+allocation saw the freed hole and the others did not. Fixed with
+`erhe::primitive::buffer_mesh_allocation_mutex()` (buffer_mesh.hpp): the
+multi-stream allocation groups (Build_context_root,
+build_buffer_mesh_from_triangle_soup) and the free paths (~Buffer_mesh,
+Buffer_mesh move-assign) all serialize on it. Verified: double import
+(island_lobby_new_lod3 + hintze-hall 1k, overlapping deferred tasks) runs
+with zero lockstep errors; pre-fix the same run produced several per import.
+
+Proper fix (for the tksuoran/geogram fork): make
+`WindowsThreadPoolManager::run_concurrent_threads` reentrant by replacing the
+static counter with a per-invocation context, e.g. submit a heap-allocated
+`struct Ctx { ThreadGroup* threads; volatile LONG counter; }` as the
+`CreateThreadpoolWork` context and `InterlockedIncrement(&ctx->counter)` in
+the callback. Once that lands and the pin in the top-level CMakeLists.txt
+moves forward, the erhe-side mutex can be removed. Note the pre-existing
+concurrent `Geometry::process` calls in async mesh operations share the same
+exposure and would also be fixed by the fork change.
