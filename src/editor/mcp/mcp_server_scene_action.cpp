@@ -17,6 +17,8 @@
 
 #include <simdjson.h>
 
+#include <fmt/format.h>
+
 #include <algorithm>
 #include <iterator>
 
@@ -377,24 +379,58 @@ auto Mcp_server::action_lightmap_bake_gbuffer(const json& args) -> std::string
         r["isError"] = true;
         return r.dump();
     }
-    const bool baked = m_context.lightmap_baker->bake_gbuffer();
-    if (!baked) {
+    // The G-buffer targets are cell-sized and hold one tile cell at a
+    // time; raster every content cell in turn so multi-cell pages are
+    // fully exercised, writing per-cell debug PNGs (suffix _cell<N> on
+    // multi-cell pages) after each cell's bake while its data is resident.
+    const Lightmap_baker::Atlas_layout& layout = m_context.lightmap_baker->get_layout();
+    std::vector<int> content_cells;
+    for (int cell = 0; cell < layout.get_cell_count(); ++cell) {
+        const bool has_content = std::any_of(
+            layout.regions.begin(),
+            layout.regions.end(),
+            [cell](const Lightmap_baker::Instance_region& region) { return region.cell == cell; }
+        );
+        if (has_content) {
+            content_cells.push_back(cell);
+        }
+    }
+    const std::string debug_png_base = args.value("debug_png_base", "");
+    json files       = json::array();
+    int  baked_cells = 0;
+    bool pngs_ok     = !debug_png_base.empty();
+    for (const int cell : content_cells) {
+        if (!m_context.lightmap_baker->bake_gbuffer(cell)) {
+            continue;
+        }
+        ++baked_cells;
+        if (!debug_png_base.empty()) {
+            const std::string base = (content_cells.size() > 1)
+                ? fmt::format("{}_cell{}", debug_png_base, cell)
+                : debug_png_base;
+            if (m_context.lightmap_baker->debug_write_gbuffer_pngs(base)) {
+                files.push_back(base + "_position.png");
+                files.push_back(base + "_normal.png");
+            } else {
+                pngs_ok = false;
+            }
+        }
+    }
+    if (baked_cells == 0) {
         json r = make_text_content("G-buffer bake failed (no layout? run lightmap_update_atlas first)");
         r["isError"] = true;
         return r.dump();
     }
     json result{
-        {"baked",  true},
-        {"width",  m_context.lightmap_baker->get_layout().width},
-        {"height", m_context.lightmap_baker->get_layout().height}
+        {"baked",       true},
+        {"baked_cells", baked_cells},
+        {"cell_count",  layout.get_cell_count()},
+        {"width",       layout.width},
+        {"height",      layout.height}
     };
-    const std::string debug_png_base = args.value("debug_png_base", "");
     if (!debug_png_base.empty()) {
-        const bool written = m_context.lightmap_baker->debug_write_gbuffer_pngs(debug_png_base);
-        result["debug_pngs_written"] = written;
-        if (written) {
-            result["files"] = { debug_png_base + "_position.png", debug_png_base + "_normal.png" };
-        }
+        result["debug_pngs_written"] = pngs_ok;
+        result["files"]              = files;
     }
     return make_json_content(result).dump();
 }

@@ -499,14 +499,32 @@ void Lightmap_texture_window::imgui()
     };
 
     // Image (atlas row 0 = v 0 at the top; nearest magnification past 1:1
-    // so texel boundaries are visible).
-    ImGui::SetCursorScreenPos(ImVec2{canvas_pos.x + m_pan.x, canvas_pos.y + m_pan.y});
+    // so texel boundaries are visible). The G-buffer views are CELL-sized
+    // on multi-cell pages (they hold the baker's current tile cell), so
+    // draw them at the cell's page rect - the page-space overlays (chart
+    // rects, UV wireframe, texel grid, hover) then stay aligned; the rest
+    // of the page shows as empty canvas.
+    glm::vec2 image_page_origin{0.0f, 0.0f};
+    glm::vec2 image_page_size = page_size;
+    if ((texture->get_width() != layout.width) || (texture->get_height() != layout.height)) {
+        const int gbuffer_cell = baker->get_gbuffer_cell();
+        if (gbuffer_cell >= 0) {
+            image_page_origin = glm::vec2{layout.get_cell_origin(gbuffer_cell)};
+            image_page_size   = glm::vec2{static_cast<float>(layout.get_cell_size())};
+        }
+    }
+    ImGui::SetCursorScreenPos(
+        ImVec2{
+            canvas_pos.x + m_pan.x + image_page_origin.x * m_zoom,
+            canvas_pos.y + m_pan.y + image_page_origin.y * m_zoom
+        }
+    );
     const float tint = (m_texture_index == 0) ? m_exposure : 1.0f;
     m_context.imgui_renderer->image(
         erhe::imgui::Draw_texture_parameters{
             .texture_reference = texture,
-            .width             = static_cast<int>(page_size.x * m_zoom),
-            .height            = static_cast<int>(page_size.y * m_zoom),
+            .width             = static_cast<int>(image_page_size.x * m_zoom),
+            .height            = static_cast<int>(image_page_size.y * m_zoom),
             .uv0               = glm::vec2{0.0f, 0.0f},
             .uv1               = glm::vec2{1.0f, 1.0f},
             .tint_color        = glm::vec4{tint, tint, tint, 1.0f},
