@@ -350,6 +350,8 @@ erhe_target_sources_grouped(
     operations/flip_joint_operation.hpp
     operations/fork_geometry_operation.cpp
     operations/fork_geometry_operation.hpp
+    operations/item_set_flag_bits_operation.cpp
+    operations/item_set_flag_bits_operation.hpp
     operations/node_attach_operation.cpp
     operations/node_attach_operation.hpp
     operations/node_transform_operation.cpp
