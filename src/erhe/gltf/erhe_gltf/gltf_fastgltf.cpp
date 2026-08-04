@@ -209,8 +209,8 @@ auto to_erhe_attribute(const fastgltf::Accessor& accessor) -> erhe::dataformat::
                 case fastgltf::ComponentType::UnsignedByte : return accessor.normalized ? Format::format_8_vec3_unorm  : Format::format_8_vec3_uint;
                 case fastgltf::ComponentType::Short        : return accessor.normalized ? Format::format_16_vec3_snorm : Format::format_16_vec3_sint;
                 case fastgltf::ComponentType::UnsignedShort: return accessor.normalized ? Format::format_16_vec3_unorm : Format::format_16_vec3_uint;
-                case fastgltf::ComponentType::Int          : return accessor.normalized ? Format::format_32_vec2_float : Format::format_32_vec3_sint;
-                case fastgltf::ComponentType::UnsignedInt  : return accessor.normalized ? Format::format_32_vec2_float : Format::format_32_vec3_uint;
+                case fastgltf::ComponentType::Int          : return accessor.normalized ? Format::format_32_vec3_float : Format::format_32_vec3_sint;
+                case fastgltf::ComponentType::UnsignedInt  : return accessor.normalized ? Format::format_32_vec3_float : Format::format_32_vec3_uint;
                 case fastgltf::ComponentType::Float        : return Format::format_32_vec3_float;
                 default: break;
             }
@@ -221,8 +221,8 @@ auto to_erhe_attribute(const fastgltf::Accessor& accessor) -> erhe::dataformat::
                 case fastgltf::ComponentType::UnsignedByte : return accessor.normalized ? Format::format_8_vec4_unorm  : Format::format_8_vec4_uint;
                 case fastgltf::ComponentType::Short        : return accessor.normalized ? Format::format_16_vec4_snorm : Format::format_16_vec4_sint;
                 case fastgltf::ComponentType::UnsignedShort: return accessor.normalized ? Format::format_16_vec4_unorm : Format::format_16_vec4_uint;
-                case fastgltf::ComponentType::Int          : return accessor.normalized ? Format::format_32_vec2_float : Format::format_32_vec4_sint;
-                case fastgltf::ComponentType::UnsignedInt  : return accessor.normalized ? Format::format_32_vec2_float : Format::format_32_vec4_uint;
+                case fastgltf::ComponentType::Int          : return accessor.normalized ? Format::format_32_vec4_float : Format::format_32_vec4_sint;
+                case fastgltf::ComponentType::UnsignedInt  : return accessor.normalized ? Format::format_32_vec4_float : Format::format_32_vec4_uint;
                 case fastgltf::ComponentType::Float        : return Format::format_32_vec4_float;
                 default: break;
             }
@@ -812,11 +812,20 @@ void accessor_read_u32s(
 
 // Derived from fastgltf::copyComponentsFromAccessor()
 // because I need stride
-void copyFromAccessorWithOutStride(const fastgltf::Asset& asset, const fastgltf::Accessor& accessor, void* dest, std::size_t destStride)
+// max_element_count bounds the write: the destination is sized by the caller
+// (min of the primitive's attribute accessor counts), so copying the
+// accessor's full count would overflow the destination when a (malformed)
+// file has mismatched attribute counts.
+void copyFromAccessorWithOutStride(const fastgltf::Asset& asset, const fastgltf::Accessor& accessor, void* dest, std::size_t destStride, std::size_t max_element_count)
 {
     ERHE_PROFILE_FUNCTION();
 
-    assert((!bool(accessor.sparse) || accessor.sparse->count == 0) && "copyComponentsFromAccessor currently does not support sparse accessors.");
+    if (bool(accessor.sparse) && (accessor.sparse->count > 0)) {
+        // Copying only the base bufferView data would silently produce wrong
+        // attribute values; the caller logs context. Sparse accessors are not
+        // supported here.
+        log_gltf->error("copyFromAccessorWithOutStride(): sparse accessors are not supported - attribute data will be incorrect");
+    }
 
     auto* dstBytes = static_cast<std::byte*>(dest);
 
@@ -829,7 +838,8 @@ void copyFromAccessorWithOutStride(const fastgltf::Asset& asset, const fastgltf:
     const fastgltf::DefaultBufferDataAdapter adapter{};
     auto srcBytes = adapter(asset, *accessor.bufferViewIndex).subspan(accessor.byteOffset);
 
-    for (std::size_t i = 0; i < accessor.count; ++i) {
+    const std::size_t count = std::min(accessor.count, max_element_count);
+    for (std::size_t i = 0; i < count; ++i) {
         std::memcpy(dstBytes + destStride * i, &srcBytes[srcStride * i], elemSize);
     }
 }
@@ -1778,7 +1788,13 @@ private:
         // Copy indices
         const fastgltf::Accessor& indices_accessor = m_asset->accessors[primitive.indicesAccessor.value()];
         log_gltf->trace("index count = {}", indices_accessor.count);
-        triangle_soup.index_data.resize(indices_accessor.count);
+        try {
+            triangle_soup.index_data.resize(indices_accessor.count);
+        } catch (const std::exception& e) {
+            log_gltf->error("Out of memory allocating {} indices for glTF primitive: {} - primitive skipped", indices_accessor.count, e.what());
+            primitive_entry.triangle_soup.reset();
+            return;
+        }
         fastgltf::iterateAccessorWithIndex<uint32_t>(
             m_asset.get(),
             indices_accessor,
@@ -1811,6 +1827,25 @@ private:
                 attribute_usage_index
             );
         }
+        if (primitive.attributes.empty() || (vertex_count == std::numeric_limits<std::size_t>::max())) {
+            log_gltf->error("glTF primitive has no vertex attributes - primitive skipped");
+            primitive_entry.triangle_soup.reset();
+            return;
+        }
+        // The glTF spec requires all attribute accessors of a primitive to
+        // have the same count. Proceed with the minimum (buffers are sized
+        // and copies clamped to it), but report the malformed file.
+        for (std::size_t i = 0, end = primitive.attributes.size(); i < end; ++i) {
+            const fastgltf::Accessor& accessor = m_asset->accessors[primitive.attributes[i].accessorIndex];
+            if (accessor.count != vertex_count) {
+                log_gltf->error(
+                    "glTF primitive attribute '{}' accessor count {} does not match vertex count {} - clamping",
+                    primitive.attributes[i].name.c_str(),
+                    accessor.count,
+                    vertex_count
+                );
+            }
+        }
         if (generate_tangents) {
             triangle_soup.vertex_format.streams.front().emplace_back(
                 erhe::dataformat::Format::format_32_vec4_float,
@@ -1834,7 +1869,17 @@ private:
         std::size_t vertex_stride = triangle_soup.vertex_format.streams.front().stride;
 
         ERHE_VERIFY(triangle_soup.vertex_format.streams.size() == 1);
-        triangle_soup.vertex_data.resize(vertex_count * vertex_stride);
+        try {
+            triangle_soup.vertex_data.resize(vertex_count * vertex_stride);
+        } catch (const std::exception& e) {
+            log_gltf->error(
+                "Out of memory allocating {} bytes of vertex data for glTF primitive: {} - primitive skipped",
+                vertex_count * vertex_stride,
+                e.what()
+            );
+            primitive_entry.triangle_soup.reset();
+            return;
+        }
         const std::vector<erhe::dataformat::Attribute_stream> erhe_attributes = triangle_soup.vertex_format.get_attributes();
 
         // Gather vertex data
@@ -1852,7 +1897,8 @@ private:
                     m_asset.get(),
                     accessor,
                     triangle_soup.vertex_data.data() + erhe_attribute.attribute->offset,
-                    erhe_attribute.stream->stride
+                    erhe_attribute.stream->stride,
+                    vertex_count
                 );
             } else {
                 log_gltf->warn("Attribute without accessor buffer view");
