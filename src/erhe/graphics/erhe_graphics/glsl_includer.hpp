@@ -34,6 +34,10 @@ public:
     IncludeResult* includeLocal (const char* header_name, const char* includer_name, size_t inclusion_depth) override;
     void           releaseInclude(IncludeResult* result) override;
 
+    // The synthesized preamble served for preamble_include_name; exposed so
+    // compile-error diagnostics can dump it next to the main source.
+    [[nodiscard]] auto get_preamble() const -> const std::string& { return m_preamble; }
+
 private:
     IncludeResult* resolve(const char* header_name);
 

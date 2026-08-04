@@ -1724,7 +1724,12 @@ Device_impl::Device_impl(
         // with VK_MEMORY_ALLOCATE_FLAG_DEVICE_ADDRESS; VMA only does that
         // when this allocator-level flag is set (valid only when the
         // bufferDeviceAddress feature was enabled on the device).
-        .flags                          = enable_ray_query ? VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT : VmaAllocatorCreateFlags{0},
+        .flags                          =
+            (enable_ray_query ? VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT : VmaAllocatorCreateFlags{0}) |
+            // Driver-reported heap budgets for vmaGetHeapBudgets(); the
+            // flag is only valid when VK_EXT_memory_budget was enabled on
+            // the device (VMA falls back to internal estimates without it).
+            (m_device_extensions.m_VK_EXT_memory_budget ? VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT : VmaAllocatorCreateFlags{0}),
         .physicalDevice                 = m_vulkan_physical_device, // VkPhysicalDevice VMA_NOT_NULL physicalDevice;
         .device                         = m_vulkan_device,          // VkDevice VMA_NOT_NULL device;
         .preferredLargeHeapBlockSize    = 0,

@@ -229,6 +229,10 @@ auto Device::get_graphics_config() const -> const Graphics_config&
 {
     return m_impl->get_graphics_config();
 }
+auto Device::get_memory_budget() const -> Memory_budget
+{
+    return m_impl->get_memory_budget();
+}
 auto Device::get_reverse_depth() const -> bool
 {
     const bool api_supports_reverse_depth =

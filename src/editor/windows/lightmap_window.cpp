@@ -363,11 +363,36 @@ void Lightmap_window::imgui()
             ImGui::SetTooltip("Restart accumulation (keeps atlas layout and G-buffer).");
         }
         if (m_context.lightmap_baker->is_baking_enabled()) {
-            ImGui::Text(
-                "Sweeps: %u (row %d)",
-                m_context.lightmap_baker->get_sweep_count(),
-                m_context.lightmap_baker->get_cursor_row()
-            );
+            const int cell_count = m_context.lightmap_baker->get_layout().get_cell_count();
+            if (cell_count > 1) {
+                ImGui::Text(
+                    "Sweeps: %u (tile %d/%d, row %d)",
+                    m_context.lightmap_baker->get_sweep_count(),
+                    m_context.lightmap_baker->get_cursor_cell(),
+                    cell_count,
+                    m_context.lightmap_baker->get_cursor_row()
+                );
+            } else {
+                ImGui::Text(
+                    "Sweeps: %u (row %d)",
+                    m_context.lightmap_baker->get_sweep_count(),
+                    m_context.lightmap_baker->get_cursor_row()
+                );
+            }
+        }
+        // Camera clamp for tiled atlases: pages larger than one tile cell
+        // gather only the N nearest cells; the rest keep their last publish
+        // and release their accumulation memory.
+        if (m_context.lightmap_baker->get_layout().get_cell_count() > 1) {
+            ImGui::SetNextItemWidth(120.0f);
+            ImGui::DragInt("Active tiles", &config.active_tile_budget, 0.1f, 0, m_context.lightmap_baker->get_layout().get_cell_count());
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip(
+                    "Bake only the N tile cells nearest the viewport camera (0 = all).\n"
+                    "Far tiles keep showing their last published lighting and free\n"
+                    "their accumulation memory."
+                );
+            }
         }
         ImGui::EndDisabled(); // !bake_supported (interactive bake)
     }
@@ -386,6 +411,43 @@ void Lightmap_window::imgui()
     touched |= ImGui::Checkbox("Terminator fix", &config.terminator_fix);
     if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Phong-tessellated smooth sample positions (shadow-terminator fix).\nToggling re-rasters the G-buffer and restarts accumulation.");
+    }
+    {
+        const char* const supersample_names[] = { "Off", "16 points (4x4)", "64 points (8x8)" };
+        ImGui::SetNextItemWidth(140.0f);
+        touched |= ImGui::Combo("Supersampled ray origins", &config.supersample_points, supersample_names, IM_ARRAYSIZE(supersample_names));
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "Frostbite Flux texel supersampling: regular grid of sample points per texel;\n"
+                "every shadow/bounce ray starts from a uniform-randomly picked valid point instead\n"
+                "of one fixed origin per texel. Integrates partial-coverage texels and softens\n"
+                "direct-shadow aliasing. 64 points is the Flux default; 16 halves the cost of the\n"
+                "page-sized RGBA32F origin target (grid-side x resolution per axis while baking).\n"
+                "Changing re-rasters the G-buffer and restarts accumulation."
+            );
+        }
+    }
+    {
+        const char* const coverage_names[] = { "Conservative raster", "9-tap jitter", "25-tap jitter" };
+        ImGui::SetNextItemWidth(140.0f);
+        touched |= ImGui::Combo("Texel coverage", &config.coverage_mode, coverage_names, IM_ARRAYSIZE(coverage_names));
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "G-buffer texel coverage strategy: native conservative rasterization (one pass),\n"
+                "or re-render each region with sub-texel jitter offsets spanning half a texel\n"
+                "(9 = 3x3 grid, 25 = 5x5 grid; denser edge coverage, slower G-buffer bake).\n"
+                "Changing re-rasters the G-buffer and restarts accumulation."
+            );
+        }
+        const bool conservative_supported =
+            (m_context.graphics_device != nullptr) &&
+            m_context.graphics_device->get_info().use_conservative_rasterization;
+        if ((config.coverage_mode == 0) && !conservative_supported) {
+            ImGui::TextColored(
+                ImVec4{1.0f, 0.8f, 0.2f, 1.0f},
+                "Conservative rasterization not supported by this device - falling back to 9-tap jitter"
+            );
+        }
     }
     touched |= ImGui::Checkbox("Denoise (JNLM)", &config.denoise);
     if (ImGui::IsItemHovered()) {

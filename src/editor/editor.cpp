@@ -95,6 +95,7 @@
 #include "scene/scene_root.hpp"
 #include "scene/scene_settings_resolve.hpp"
 #include "config/generated/sky_config.hpp"
+#include "scene/viewport_scene_view.hpp"
 #include "scene/viewport_scene_views.hpp"
 #include "texture_graph/graph_texture.hpp"
 #include "texture_graph/texture_graph_window.hpp"
@@ -216,6 +217,7 @@
 #include <geogram/basic/geometry.h>
 #include <geogram/basic/logger.h>
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <condition_variable>
@@ -786,6 +788,10 @@ public:
                         .denoise         = lightmap_config.denoise,
                         .dilation        = lightmap_config.dilation,
                         .seam_blend      = lightmap_config.seam_blend,
+                        .coverage_mode   = static_cast<Lightmap_baker::Coverage_mode>(std::clamp(lightmap_config.coverage_mode, 0, 2)),
+                        // Stored as a combo index (0 = off, 1 = 16 points,
+                        // 2 = 64 points); the baker takes the grid side.
+                        .supersample_factor = (lightmap_config.supersample_points == 2) ? 8 : (lightmap_config.supersample_points == 1) ? 4 : 0,
                         .gutter_texels   = lightmap_config.uv_gutter_texels
                     }
                 );
@@ -826,7 +832,39 @@ public:
                         m_lightmap_baker->set_sky_lighting(sky);
                     }
                     erhe::log::set_breadcrumb("tick: lightmap bake");
-                    m_lightmap_baker->tick(command_buffer, *lightmap_scene_root.get(), lightmap_config.texels_per_meter, lightmap_config.uv_min_chart_texels);
+                    // Camera clamp for tiled atlases (active_tile_budget):
+                    // rank tile cells by distance from the last-used
+                    // viewport camera, falling back to the scene's first
+                    // camera before any viewport has been used; no camera
+                    // at all = bake all tiles.
+                    glm::vec3  camera_position{0.0f};
+                    glm::vec3* camera_position_ptr{nullptr};
+                    {
+                        std::shared_ptr<erhe::scene::Camera> camera{};
+                        if (m_viewport_scene_views) {
+                            const std::shared_ptr<Viewport_scene_view> scene_view = m_viewport_scene_views->last_scene_view();
+                            camera = scene_view ? scene_view->get_camera() : nullptr;
+                        }
+                        if (!camera) {
+                            const std::vector<std::shared_ptr<erhe::scene::Camera>>& cameras = lightmap_scene_root->get_scene().get_cameras();
+                            if (!cameras.empty()) {
+                                camera = cameras.front();
+                            }
+                        }
+                        const erhe::scene::Node* const camera_node = camera ? camera->get_node() : nullptr;
+                        if (camera_node != nullptr) {
+                            camera_position     = glm::vec3{camera_node->world_from_node()[3]};
+                            camera_position_ptr = &camera_position;
+                        }
+                    }
+                    m_lightmap_baker->tick(
+                        command_buffer,
+                        *lightmap_scene_root.get(),
+                        lightmap_config.texels_per_meter,
+                        lightmap_config.uv_min_chart_texels,
+                        camera_position_ptr,
+                        lightmap_config.active_tile_budget
+                    );
                     m_forward_renderer->set_lightmap_texture(m_lightmap_baker->get_lightmap_texture());
                 }
             }

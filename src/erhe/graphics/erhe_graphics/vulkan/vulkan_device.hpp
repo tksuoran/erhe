@@ -82,6 +82,7 @@ public:
     bool m_VK_KHR_deferred_host_operations      {false};
     bool m_VK_KHR_ray_tracing_position_fetch    {false};
     bool m_VK_EXT_conservative_rasterization    {false};
+    bool m_VK_EXT_memory_budget                 {false};
 };
 class Capabilities
 {
@@ -243,6 +244,7 @@ public:
     [[nodiscard]] auto get_shader_monitor                 () -> Shader_monitor&;
     [[nodiscard]] auto get_info                           () const -> const Device_info&;
     [[nodiscard]] auto get_graphics_config                () const -> const Graphics_config&;
+    [[nodiscard]] auto get_memory_budget                  () const -> Memory_budget;
     [[nodiscard]] auto get_allocator                      () -> VmaAllocator&;
     [[nodiscard]] auto get_context_window                 () const -> erhe::window::Context_window*;
 

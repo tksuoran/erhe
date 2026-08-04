@@ -51,6 +51,7 @@
 #include "erhe_graphics/renderdoc_app.h"
 
 #include <algorithm>
+#include <array>
 #include <cstdlib>
 #include <cstring>
 #include <sstream>
@@ -1002,6 +1003,12 @@ auto Device_impl::query_device_extensions(
     // extension: no feature struct to query/enable; per-pipeline opt-in via
     // Rasterization_state::conservative_enable.
     check_device_extension(VK_EXT_CONSERVATIVE_RASTERIZATION_EXTENSION_NAME,     device_extensions_out.m_VK_EXT_conservative_rasterization    , 1.0f);
+    // Driver-accurate device-local heap budgets via vmaGetHeapBudgets()
+    // (VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT). Without it VMA falls
+    // back to its own allocation bookkeeping, so this is an accuracy
+    // upgrade, not a hard dependency; Device::get_memory_budget() works
+    // either way.
+    check_device_extension(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME,                  device_extensions_out.m_VK_EXT_memory_budget                 , 1.0f);
 
     // VK_KHR_portability_subset must be enabled whenever the physical device
     // advertises it (Vulkan spec VUID-VkDeviceCreateInfo-pProperties-04451).
@@ -2003,6 +2010,29 @@ auto Device_impl::probe_image_format_support(
         m_vulkan_physical_device, &image_format_info, &image_format_properties
     );
     return image_result == VK_SUCCESS;
+}
+
+auto Device_impl::get_memory_budget() const -> Memory_budget
+{
+    Memory_budget result{};
+    if (m_vma_allocator == nullptr) {
+        return result;
+    }
+    const VkPhysicalDeviceMemoryProperties* memory_properties{nullptr};
+    vmaGetMemoryProperties(m_vma_allocator, &memory_properties);
+    if (memory_properties == nullptr) {
+        return result;
+    }
+    std::array<VmaBudget, VK_MAX_MEMORY_HEAPS> budgets{};
+    vmaGetHeapBudgets(m_vma_allocator, budgets.data());
+    for (uint32_t heap = 0; heap < memory_properties->memoryHeapCount; ++heap) {
+        if ((memory_properties->memoryHeaps[heap].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) == 0) {
+            continue;
+        }
+        result.device_local_budget += budgets[heap].budget;
+        result.device_local_usage  += budgets[heap].usage;
+    }
+    return result;
 }
 
 auto Device_impl::get_supported_depth_stencil_formats() const -> std::vector<erhe::dataformat::Format>

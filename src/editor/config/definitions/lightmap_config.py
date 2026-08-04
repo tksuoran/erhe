@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Lightmap_config",
-    version=4,
+    version=7,
     short_desc="Lightmap",
     long_desc="Lightmap baking settings (doc/lightmap_baking_plan.md). Texel density is the one quality knob; the boolean toggles switch individual bake/sampling features off for A/B comparison and debugging.",
     developer=False,
@@ -65,6 +65,36 @@ struct("Lightmap_config",
             long_desc="Minimum chart side in texels at the expected rasterization density: charts smaller than this are scaled up (capped at 16x) so every chart contains at least one texel center and bakes valid data. 0 disables the clamp. Matters most for per-facet unwraps of dense meshes.",
             visible=True,
             developer=True
+        ),
+        field(
+            "coverage_mode",
+            Int,
+            added_in=5,
+            default="0",
+            short_desc="Texel coverage",
+            long_desc="G-buffer texel coverage strategy: 0 = native conservative rasterization (one pass; falls back to 9-tap when the extension is unavailable), 1 = 9-tap sub-texel jitter re-render, 2 = 25-tap sub-texel jitter re-render (denser edge coverage, slower G-buffer bake). Changing re-rasters the G-buffer and restarts accumulation.",
+            visible=True,
+            developer=True
+        ),
+        field(
+            "supersample_points",
+            Int,
+            added_in=6,
+            default="0",
+            short_desc="Supersampled ray origins",
+            long_desc="Frostbite Flux texel supersampling: rasterize sample positions on a regular sub-texel grid and pick a uniform-random valid point as the origin of every shadow and bounce ray, instead of one fixed origin per texel. Integrates lighting over the covered part of each texel and softens direct-shadow aliasing. 0 = off, 1 = 16 points per texel (4x4 grid), 2 = 64 points per texel (8x8 grid, the Flux default). Costs one page-sized RGBA32F target at grid-side x resolution per axis while baking (64 points = 1 KB per atlas texel). Changing re-rasters the G-buffer and restarts accumulation. (Replaces the short-lived boolean 'supersample' field; stale keys are ignored.)",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "active_tile_budget",
+            Int,
+            added_in=7,
+            default="0",
+            short_desc="Active tiles",
+            long_desc="Camera-clamped baking for tiled atlases (pages larger than one 2048 tile cell): only the N tile cells whose regions are nearest the viewport camera keep gathering; the others stop accumulating, release their accumulation memory, and keep showing their last published result. 0 = bake all tiles.",
+            visible=True,
+            developer=False
         ),
         field(
             "indirect_bounce",

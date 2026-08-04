@@ -266,11 +266,17 @@ auto Glslang_shader_stages::compile_shader(Device& device, const Shader_stage& s
     const char* info_debug_log = glslang_shader.getInfoDebugLog();
     if (!parse_ok) {
         const std::string formatted_source = format_source(main_with_preamble);
+        // The synthesized preamble (defines + struct/interface declarations,
+        // served via the virtual erhe_preamble.glsl include) is where most
+        // C++-side declaration mismatches live - dump it too.
+        const std::string formatted_preamble = format_source(includer.get_preamble());
         log_glsl->error(
-            "glslang parse error in shader = {}\n{}\n{}\n{}\n{}\n",
+            "glslang parse error in shader = {}\n{}\n{}\n// Synthesized preamble ({}):\n{}\n{}\n{}\n",
             main_name,
             info_log       != nullptr ? info_log       : "",
             info_debug_log != nullptr ? info_debug_log : "",
+            c_preamble_include_name,
+            formatted_preamble,
             formatted_source,
             info_log       != nullptr ? info_log       : ""
         );

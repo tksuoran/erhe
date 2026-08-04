@@ -86,14 +86,191 @@ namespace {
 // the specification maximum, valid everywhere.
 constexpr std::size_t c_draw_ubo_stride = 256;
 
+// Working-set formats, chosen per consumer precision needs (the whole set
+// is 8 page-sized targets, so every byte per texel is a page^2 cost):
+// - position / smooth position: world-space meters, fp32 mandatory (fp16
+//   quantizes to centimeters at room scale; ray origins must be exact).
+// - normal: unit vector, fp16 ample (adjust + denoise guide + gather).
+// - albedo: bounce modulation + denoise guide, 8-bit unorm like the source
+//   base-color textures.
+// - atlas (working / dilate scratch / display): published radiance
+//   AVERAGES, fp16 like typical shipped HDR lightmaps. The accumulation
+//   target stays fp32: it holds a growing sum + sample count, where fp16
+//   would stall accumulation after a few hundred sweeps.
 constexpr erhe::dataformat::Format c_position_format = erhe::dataformat::Format::format_32_vec4_float;
-constexpr erhe::dataformat::Format c_normal_format   = erhe::dataformat::Format::format_32_vec4_float;
-constexpr erhe::dataformat::Format c_albedo_format   = erhe::dataformat::Format::format_16_vec4_float;
+constexpr erhe::dataformat::Format c_normal_format   = erhe::dataformat::Format::format_16_vec4_float;
+constexpr erhe::dataformat::Format c_albedo_format   = erhe::dataformat::Format::format_8_vec4_unorm;
+constexpr erhe::dataformat::Format c_atlas_format    = erhe::dataformat::Format::format_16_vec4_float;
+constexpr erhe::dataformat::Format c_accum_format    = erhe::dataformat::Format::format_32_vec4_float;
+
+// GLSL storage-image format qualifiers matching the constants above; the
+// bind group layout declarations must agree with the actual image format.
+constexpr const char* c_normal_image_format = "rgba16f";
+constexpr const char* c_albedo_image_format = "rgba8";
+constexpr const char* c_atlas_image_format  = "rgba16f";
+constexpr const char* c_accum_image_format  = "rgba32f";
 
 // Per-tick ray budget for the interactive loop, as a texel count: the tile
 // cursor walks the atlas in horizontal bands of at most this many texels
 // per frame (whole-atlas sweeps on small pages, banded on large ones).
 constexpr int c_texels_per_tick = 1 << 18;
+
+// Texel supersampling grid sides (Frostbite Flux, slide "Texel sampling
+// (2)"): sample points per texel = factor^2 on a regular grid ("regular
+// grid also works just fine"). Bake_options::supersample_factor selects
+// 4 (16 points; cheaper hi-res origin target) or 8 (64 points, the Flux
+// default; one RGBA32F page at 8x resolution per axis = 1 KB per atlas
+// texel while baking).
+// Hi-res origin target dimension guard; pages whose supersampled raster
+// would exceed this skip the feature (logged) instead of failing texture
+// creation.
+constexpr int c_supersample_max_dim = 16384;
+
+// Bytes one PAGE texel costs in targets that persist for the whole layout:
+// the per-cell fp32 accumulation textures (page area in total when every
+// cell is active) and the page-sized fp16 display atlas. Drives the
+// budget-derived page cap in update_layout().
+[[nodiscard]] auto persistent_bytes_per_texel() -> uint64_t
+{
+    return static_cast<uint64_t>(
+        erhe::dataformat::get_format_size_bytes(c_accum_format) +   // per-cell accumulation
+        erhe::dataformat::get_format_size_bytes(c_atlas_format)     // display
+    );
+}
+
+// Bytes one CELL texel costs in the scratch working set (one cell resident
+// at a time): the four G-buffer targets plus working atlas + dilate
+// scratch. The supersample origin target is guarded separately (its own
+// byte-budget check in ensure_gbuffer_targets).
+[[nodiscard]] auto scratch_bytes_per_texel() -> uint64_t
+{
+    return static_cast<uint64_t>(
+        erhe::dataformat::get_format_size_bytes(c_position_format) +    // G-buffer position
+        erhe::dataformat::get_format_size_bytes(c_normal_format)   +    // G-buffer normal
+        erhe::dataformat::get_format_size_bytes(c_albedo_format)   +    // G-buffer albedo
+        erhe::dataformat::get_format_size_bytes(c_position_format) +    // G-buffer smooth position
+        2 * erhe::dataformat::get_format_size_bytes(c_atlas_format)     // working atlas / dilate scratch
+    );
+}
+
+// Fraction of the remaining device-local budget the bake working set may
+// occupy. Deliberately conservative: scene textures/buffers keep streaming
+// in after the layout is chosen, and driver budgets shift with what other
+// processes do.
+constexpr uint64_t c_budget_numerator   = 2;
+constexpr uint64_t c_budget_denominator = 3;
+
+// Minimal half->float (inf/nan pass through; fp16 denormals decode to 0 -
+// nothing here cares about values below 6e-5).
+[[nodiscard]] auto half_to_float(const uint16_t h) -> float
+{
+    const uint32_t sign     = static_cast<uint32_t>(h & 0x8000u) << 16;
+    const uint32_t exponent = (h >> 10) & 0x1Fu;
+    const uint32_t mantissa = h & 0x3FFu;
+    uint32_t bits = 0;
+    if (exponent == 0x1Fu) {
+        bits = sign | 0x7F800000u | (mantissa << 13);
+    } else if (exponent != 0) {
+        bits = sign | ((exponent + 112u) << 23) | (mantissa << 13);
+    }
+    float value;
+    std::memcpy(&value, &bits, sizeof(float));
+    return value;
+}
+
+// Full-texture RGBA readback to host floats, decoding per the texture's
+// actual format (the working-set targets are a mix of fp32 / fp16 / unorm8
+// now). Standalone submit + wait idle - debug/readback paths only.
+[[nodiscard]] auto read_rgba_texture_to_float(
+    erhe::graphics::Device&  graphics_device,
+    erhe::graphics::Texture& texture,
+    std::vector<float>&      out_data
+) -> bool
+{
+    using namespace erhe::graphics;
+    const int                      width       = texture.get_width();
+    const int                      height      = texture.get_height();
+    const erhe::dataformat::Format format      = texture.get_pixelformat();
+    const std::size_t              texel_bytes = erhe::dataformat::get_format_size_bytes(format);
+    if ((width <= 0) || (height <= 0) || (texel_bytes == 0)) {
+        return false;
+    }
+    if (
+        (format != erhe::dataformat::Format::format_32_vec4_float) &&
+        (format != erhe::dataformat::Format::format_16_vec4_float) &&
+        (format != erhe::dataformat::Format::format_8_vec4_unorm)
+    ) {
+        return false;
+    }
+    const std::size_t texel_count   = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
+    const std::size_t bytes_per_row = static_cast<std::size_t>(width) * texel_bytes;
+    const std::size_t byte_count    = bytes_per_row * static_cast<std::size_t>(height);
+    Buffer readback{
+        graphics_device,
+        Buffer_create_info{
+            .capacity_byte_count                    = byte_count,
+            .memory_allocation_create_flag_bit_mask = Memory_allocation_create_flag_bit_mask::mapped,
+            .usage                                  = Buffer_usage::transfer_dst | Buffer_usage::storage,
+            .required_memory_property_bit_mask      =
+                Memory_property_flag_bit_mask::host_read |
+                Memory_property_flag_bit_mask::host_write,
+            .preferred_memory_property_bit_mask     =
+                Memory_property_flag_bit_mask::host_coherent |
+                Memory_property_flag_bit_mask::host_persistent,
+            .debug_label = erhe::utility::Debug_label{"lightmap texture readback"}
+        }
+    };
+    constexpr unsigned int bake_thread_slot = 6;
+    Command_buffer& command_buffer = graphics_device.get_command_buffer(bake_thread_slot);
+    command_buffer.begin();
+    command_buffer.transition_texture_layout(texture, Image_layout::transfer_src_optimal);
+    {
+        Blit_command_encoder blit = graphics_device.make_blit_command_encoder(command_buffer);
+        blit.copy_from_texture(
+            &texture,
+            0, 0,
+            glm::ivec3{0, 0, 0},
+            glm::ivec3{width, height, 1},
+            &readback,
+            0,
+            bytes_per_row,
+            byte_count
+        );
+    }
+    command_buffer.transition_texture_layout(texture, Image_layout::shader_read_only_optimal);
+    command_buffer.end();
+    Command_buffer* command_buffers[] = { &command_buffer };
+    graphics_device.submit_command_buffers(std::span<Command_buffer* const>{command_buffers});
+    graphics_device.wait_idle();
+
+    const std::span<std::byte> mapped = readback.map_bytes(0, byte_count);
+    out_data.resize(texel_count * 4u);
+    switch (format) {
+        case erhe::dataformat::Format::format_32_vec4_float: {
+            std::memcpy(out_data.data(), mapped.data(), byte_count);
+            break;
+        }
+        case erhe::dataformat::Format::format_16_vec4_float: {
+            const auto* halves = reinterpret_cast<const uint16_t*>(mapped.data());
+            for (std::size_t i = 0; i < texel_count * 4u; ++i) {
+                out_data[i] = half_to_float(halves[i]);
+            }
+            break;
+        }
+        case erhe::dataformat::Format::format_8_vec4_unorm: {
+            const auto* bytes = reinterpret_cast<const uint8_t*>(mapped.data());
+            for (std::size_t i = 0; i < texel_count * 4u; ++i) {
+                out_data[i] = static_cast<float>(bytes[i]) / 255.0f;
+            }
+            break;
+        }
+        default: {
+            break; // unreachable - filtered above
+        }
+    }
+    readback.unmap();
+    return true;
+}
 
 // The lightmap G-buffer vertex shader positions triangles by their
 // channel-2 UVs mapped into the region's atlas rect. Which NDC y lands in
@@ -179,6 +356,40 @@ void main()
         smooth_pos = v_position;
     }
     out_smooth_position = vec4(smooth_pos, 1.0);
+}
+)GLSL";
+
+// Supersample-origin raster (Frostbite Flux texel supersampling, slide
+// "Texel sampling (2)"): the same UV-space raster as the G-buffer, but at
+// c_supersample_factor x resolution and WITHOUT conservative raster or
+// jitter - each covered hi-res texel center is a true on-triangle point of
+// the regular sub-texel grid, so attributes are interpolated, never
+// extrapolated. Output is the ray origin: the face-plane-validated
+// Phong-tessellated smooth position (same math as the G-buffer fragment
+// shader; terminator fix), or the flat position in the no-smooth variant.
+// w = coverage (a zero-cleared hi-res texel is not on any triangle).
+constexpr const char* c_origin_fragment_source = R"GLSL(
+layout(location = 0) in vec3 v_position;
+layout(location = 1) in vec3 v_normal;
+layout(location = 2) in vec3 v_albedo;
+layout(location = 3) in vec3 v_nn_col0;
+layout(location = 4) in vec3 v_nn_col1;
+layout(location = 5) in vec3 v_nn_col2;
+layout(location = 6) in vec3 v_nb;
+
+void main()
+{
+    vec3 origin = v_position;
+#if !defined(ERHE_LM_NO_SMOOTH)
+    vec3 mp          = v_nn_col0 * v_position.x + v_nn_col1 * v_position.y + v_nn_col2 * v_position.z;
+    vec3 smooth_pos  = v_position - (mp - v_nb);
+    vec3 face_normal = cross(dFdx(v_position), dFdy(v_position));
+    face_normal      = (dot(face_normal, v_normal) < 0.0) ? -face_normal : face_normal;
+    if (dot(smooth_pos - v_position, face_normal) >= 0.0) {
+        origin = smooth_pos;
+    }
+#endif
+    out_origin = vec4(origin, 1.0);
 }
 )GLSL";
 
@@ -367,6 +578,34 @@ void main()
     vec3  n                = normalize(normal_and_size.xyz);
     float texel_size       = normal_and_size.w;
 
+#if ERHE_LM_SUPERSAMPLE > 0
+    // Texel supersampling (Frostbite Flux, slide "Texel sampling (2)"):
+    // collect the texel's valid sub-texel sample points (regular
+    // ERHE_LM_SUPERSAMPLE^2 grid, rasterized WITHOUT conservative raster,
+    // so every covered point lies exactly on a triangle) and start each
+    // ray from a uniform-randomly picked entry instead of the one fixed
+    // per-texel origin. The list points skip the virtual-offset / interior
+    // defenses that protect p - they are raster-exact on-surface positions,
+    // covered by the adaptive self-intersection bias plus the existing
+    // backface invalidation. Texels no grid point covers (the slide-1
+    // pathology conservative raster still catches) fall back to p.
+    vec3 ss_origins[ERHE_LM_SUPERSAMPLE * ERHE_LM_SUPERSAMPLE];
+    int  ss_count = 0;
+    for (int sy = 0; sy < ERHE_LM_SUPERSAMPLE; ++sy) {
+        for (int sx = 0; sx < ERHE_LM_SUPERSAMPLE; ++sx) {
+            vec4 ss_sample = texelFetch(s_origin, texel * ERHE_LM_SUPERSAMPLE + ivec2(sx, sy), 0);
+            if (ss_sample.w > 0.0) {
+                ss_origins[ss_count] = ss_sample.xyz;
+                ++ss_count;
+            }
+        }
+    }
+    uint ss_seed = pcg_hash(uint(texel.x) * 7919u + uint(texel.y) * 104729u + lightmap_gather.frame_index * 15486277u + 1u);
+#define ERHE_LM_RAY_ORIGIN ((ss_count > 0) ? ss_origins[min(int(rand_float(ss_seed) * float(ss_count)), ss_count - 1)] : p)
+#else
+#define ERHE_LM_RAY_ORIGIN p
+#endif
+
     vec3 direct = vec3(0.0);
     for (uint i = 0u; i < lightmap_gather.light_count; ++i) {
         vec4 pos_type  = lightmap_gather.light_position_and_type[i];
@@ -374,13 +613,17 @@ void main()
         vec4 rad_range = lightmap_gather.light_radiance_and_range[i];
         vec4 params    = lightmap_gather.light_params[i];
 
+        // Per-ray origin: with supersampling a random valid sub-texel
+        // point, otherwise the per-texel position.
+        vec3 ray_p = ERHE_LM_RAY_ORIGIN;
+
         vec3  to_light;
         float attenuation = 1.0;
         float t_max       = 1.0e30;
         if (pos_type.w < 0.5) { // directional
             to_light = normalize(dir_cos.xyz);
         } else {
-            vec3 d = pos_type.xyz - p;
+            vec3 d = pos_type.xyz - ray_p;
             float distance = length(d);
             if (distance < 1.0e-6) {
                 continue;
@@ -402,7 +645,7 @@ void main()
         // adaptive bias is far too small to jump a contact gap - the two
         // conditions the old no-cull hack existed to survive. Culling makes
         // coplanar self-hits impossible by construction.
-        vec3 origin = adaptive_offset(p, n);
+        vec3 origin = adaptive_offset(ray_p, n);
         rayQueryEXT ray_query;
         rayQueryInitializeEXT(
             ray_query,
@@ -470,8 +713,9 @@ void main()
         vec3  t1   = cross(n, t0);
         vec3  bounce_dir = normalize(t0 * (r * cos(phi)) + t1 * (r * sin(phi)) + n * sqrt(max(0.0, 1.0 - u1)));
 
+        vec3 bounce_p = ERHE_LM_RAY_ORIGIN;
         rayQueryEXT bounce_query;
-        rayQueryInitializeEXT(bounce_query, s_tlas, gl_RayFlagsOpaqueEXT, 0xFFu, adaptive_offset(p, n), 1.0e-4, bounce_dir, 1.0e30);
+        rayQueryInitializeEXT(bounce_query, s_tlas, gl_RayFlagsOpaqueEXT, 0xFFu, adaptive_offset(bounce_p, n), 1.0e-4, bounce_dir, 1.0e30);
         while (rayQueryProceedEXT(bounce_query)) {
         }
         if (rayQueryGetIntersectionTypeEXT(bounce_query, true) == gl_RayQueryCommittedIntersectionTriangleEXT) {
@@ -975,10 +1219,13 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
     // fold covered stay invalid and are filled by dilation instead.
     pipeline_create_info.base.rasterization                     = Rasterization_state::cull_mode_back_cw.with_winding_flip_if(top_left);
     // Native conservative rasterization (article alignment item 1): every
-    // texel a chart triangle touches gets a fragment in ONE pass; the 9-tap
-    // jitter loop in bake_gbuffer() is the fallback without the extension.
-    m_conservative_raster = graphics_device.get_info().use_conservative_rasterization;
-    pipeline_create_info.base.rasterization.conservative_enable = m_conservative_raster;
+    // texel a chart triangle touches gets a fragment in ONE pass; the
+    // jitter re-render loops in bake_gbuffer() are the alternatives
+    // (Bake_options::coverage_mode selects; conservative falls back to
+    // 9-tap without the extension). Both pipeline variants are built up
+    // front so the mode switches without a pipeline rebuild.
+    m_conservative_supported = graphics_device.get_info().use_conservative_rasterization;
+    pipeline_create_info.base.rasterization.conservative_enable = false;
     pipeline_create_info.base.depth_stencil.depth_test_enable   = false;
     pipeline_create_info.base.depth_stencil.depth_write_enable  = false;
     pipeline_create_info.base.depth_stencil.stencil_test_enable = false;
@@ -1001,6 +1248,16 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
     if (!m_pipeline->is_valid()) {
         log_render->warn("Lightmap_baker: G-buffer pipeline is not valid");
         m_pipeline.reset();
+    }
+    if (m_conservative_supported) {
+        pipeline_create_info.base.rasterization.conservative_enable = true;
+        m_pipeline_conservative = std::make_unique<Render_pipeline>(graphics_device, pipeline_create_info);
+        if (!m_pipeline_conservative->is_valid()) {
+            log_render->warn("Lightmap_baker: conservative G-buffer pipeline is not valid - jitter fallback only");
+            m_pipeline_conservative.reset();
+            m_conservative_supported = false;
+        }
+        pipeline_create_info.base.rasterization.conservative_enable = false;
     }
 
     // Gather: ray query in compute, exactly the machinery Ray_trace_renderer
@@ -1096,9 +1353,9 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
                 // (max buffer binding + 1) = user + 2 here (buffers at 0/1):
                 // s_position vk 5, s_normal vk 6, s_albedo vk 7,
                 // s_published vk 8, s_sky_transmittance vk 9,
-                // s_sky_multiscatter vk 10. Raw bindings (TLAS, storage
-                // image) are NOT offset, so the accumulation image sits at
-                // 11, clear of every sampler's vk slot.
+                // s_sky_multiscatter vk 10, s_origin vk 11. Raw bindings
+                // (TLAS, storage image) are NOT offset, so the accumulation
+                // image sits at 12, clear of every sampler's vk slot.
                 Bind_group_layout_binding{
                     .binding_point   = 3u,
                     .type            = Binding_type::combined_image_sampler,
@@ -1157,12 +1414,26 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
                     .is_texture_heap = false,
                     .stage_flags     = Shader_stage_flags::compute
                 },
+                // Supersampled ray origins (c_supersample_factor x page);
+                // bound to the G-buffer position texture as an inert
+                // placeholder when supersampling is off (the non-SS gather
+                // variant never samples it, but the binding must hold a
+                // valid texture - same pattern as the sky LUTs).
                 Bind_group_layout_binding{
-                    .binding_point = 11u,
+                    .binding_point   = 9u,
+                    .type            = Binding_type::combined_image_sampler,
+                    .sampler_aspect  = Sampler_aspect::color,
+                    .name            = "s_origin",
+                    .glsl_type       = Glsl_type::sampler_2d,
+                    .is_texture_heap = false,
+                    .stage_flags     = Shader_stage_flags::compute
+                },
+                Bind_group_layout_binding{
+                    .binding_point = 12u,
                     .type          = Binding_type::storage_image,
                     .name          = "i_accum",
                     .glsl_type     = Glsl_type::image_2d,
-                    .image_format  = "rgba32f",
+                    .image_format  = c_accum_image_format,
                     .stage_flags   = Shader_stage_flags::compute
                 }
             },
@@ -1171,62 +1442,92 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
         }
     );
 
-    Shader_stages_create_info gather_create_info{
-        .name             = "lightmap_gather",
-        // Diagnostics: add { "ERHE_LM_DEBUG_GATHER", "1" } to defines to bake
-        // R = closest blocking hit t, G = max NdotL, B = shadow miss ratio
-        // instead of irradiance (see the debug block in c_gather_source).
-        // Environment ERHE_LM_NO_INDIRECT=1 disables the bounce ray so the
-        // atlas holds pure direct irradiance (isolates bounce defects).
-        .defines          = [&]() {
-            std::vector<std::pair<std::string, std::string>> defines{
-                { "ERHE_LM_TEXCOORD2_OFFSET",   fmt::format("{}", texcoord2.attribute->offset / 4) },
-                { "ERHE_RT_HAS_POSITION_FETCH", use_position_fetch ? "1" : "0" }
-            };
-            const char* const no_indirect = std::getenv("ERHE_LM_NO_INDIRECT");
-            if ((no_indirect != nullptr) && (no_indirect[0] == '1')) {
-                log_render->warn("Lightmap_baker: ERHE_LM_NO_INDIRECT=1 - bounce ray disabled");
-                defines.push_back({ "ERHE_LM_NO_INDIRECT", "1" });
+    // Both gather variants (single per-texel origin, and supersampled
+    // ray origins per Bake_options::supersample) are compiled up front so
+    // the option switches without a shader rebuild.
+    const char* const no_indirect     = std::getenv("ERHE_LM_NO_INDIRECT");
+    const bool        env_no_indirect = (no_indirect != nullptr) && (no_indirect[0] == '1');
+    if (env_no_indirect) {
+        log_render->warn("Lightmap_baker: ERHE_LM_NO_INDIRECT=1 - bounce ray disabled");
+    }
+    const auto make_gather = [&](
+        const int                                           supersample_factor,
+        std::unique_ptr<erhe::graphics::Shader_stages>&     out_shader_stages,
+        std::unique_ptr<erhe::graphics::Compute_pipeline>&  out_pipeline
+    ) -> bool {
+        const char* const name =
+            (supersample_factor == 8) ? "lightmap_gather_supersample_8x8" :
+            (supersample_factor == 4) ? "lightmap_gather_supersample_4x4" : "lightmap_gather";
+        Shader_stages_create_info gather_create_info{
+            .name             = name,
+            // Diagnostics: add { "ERHE_LM_DEBUG_GATHER", "1" } to defines to bake
+            // R = closest blocking hit t, G = max NdotL, B = shadow miss ratio
+            // instead of irradiance (see the debug block in c_gather_source).
+            // Environment ERHE_LM_NO_INDIRECT=1 disables the bounce ray so the
+            // atlas holds pure direct irradiance (isolates bounce defects).
+            .defines          = [&]() {
+                std::vector<std::pair<std::string, std::string>> defines{
+                    { "ERHE_LM_TEXCOORD2_OFFSET",   fmt::format("{}", texcoord2.attribute->offset / 4) },
+                    { "ERHE_RT_HAS_POSITION_FETCH", use_position_fetch ? "1" : "0" },
+                    { "ERHE_LM_SUPERSAMPLE",        fmt::format("{}", supersample_factor) }
+                };
+                if (env_no_indirect) {
+                    defines.push_back({ "ERHE_LM_NO_INDIRECT", "1" });
+                }
+                return defines;
+            }(),
+            .extensions       = [&]() {
+                std::vector<Shader_stage_extension> extensions{
+                    { Shader_type::compute_shader, "GL_EXT_ray_query" },
+                    { Shader_type::compute_shader, "GL_EXT_buffer_reference" },
+                    { Shader_type::compute_shader, "GL_EXT_buffer_reference_uvec2" }
+                };
+                if (use_position_fetch) {
+                    extensions.push_back({ Shader_type::compute_shader, "GL_EXT_ray_tracing_position_fetch" });
+                }
+                return extensions;
+            }(),
+            .struct_types     = { m_lm_instance_struct.get() },
+            .interface_blocks = { m_gather_block.get(), m_lm_instance_block.get() },
+            .shaders = {
+                { Shader_type::compute_shader, std::string_view{c_gather_source} }
+            },
+            // For #include "sky_atmosphere_common.glsl" (shared with the
+            // viewport sky shaders - single source of truth for the math).
+            .extra_include_paths = {
+                std::filesystem::path{"res"} / std::filesystem::path{"editor"} / std::filesystem::path{"shaders"}
+            },
+            .bind_group_layout = m_gather_layout.get()
+        };
+        Shader_stages_prototype gather_prototype = build_shader_stages(graphics_device, gather_create_info);
+        if (!gather_prototype.is_valid()) {
+            log_render->warn("Lightmap_baker: {} shader failed to compile/link", name);
+            return false;
+        }
+        out_shader_stages = std::make_unique<Shader_stages>(graphics_device, std::move(gather_prototype));
+        out_pipeline = std::make_unique<Compute_pipeline>(
+            graphics_device,
+            Compute_pipeline_data{
+                .name              = name,
+                .shader_stages     = out_shader_stages.get(),
+                .bind_group_layout = m_gather_layout.get()
             }
-            return defines;
-        }(),
-        .extensions       = [&]() {
-            std::vector<Shader_stage_extension> extensions{
-                { Shader_type::compute_shader, "GL_EXT_ray_query" },
-                { Shader_type::compute_shader, "GL_EXT_buffer_reference" },
-                { Shader_type::compute_shader, "GL_EXT_buffer_reference_uvec2" }
-            };
-            if (use_position_fetch) {
-                extensions.push_back({ Shader_type::compute_shader, "GL_EXT_ray_tracing_position_fetch" });
-            }
-            return extensions;
-        }(),
-        .struct_types     = { m_lm_instance_struct.get() },
-        .interface_blocks = { m_gather_block.get(), m_lm_instance_block.get() },
-        .shaders = {
-            { Shader_type::compute_shader, std::string_view{c_gather_source} }
-        },
-        // For #include "sky_atmosphere_common.glsl" (shared with the
-        // viewport sky shaders - single source of truth for the math).
-        .extra_include_paths = {
-            std::filesystem::path{"res"} / std::filesystem::path{"editor"} / std::filesystem::path{"shaders"}
-        },
-        .bind_group_layout = m_gather_layout.get()
+        );
+        return true;
     };
-    Shader_stages_prototype gather_prototype = build_shader_stages(graphics_device, gather_create_info);
-    if (!gather_prototype.is_valid()) {
-        log_render->warn("Lightmap_baker: gather shader failed to compile/link");
+    if (!make_gather(0, m_gather_shader_stages, m_gather_pipeline)) {
         return;
     }
-    m_gather_shader_stages = std::make_unique<Shader_stages>(graphics_device, std::move(gather_prototype));
-    m_gather_pipeline = std::make_unique<Compute_pipeline>(
-        graphics_device,
-        Compute_pipeline_data{
-            .name              = "lightmap_gather",
-            .shader_stages     = m_gather_shader_stages.get(),
-            .bind_group_layout = m_gather_layout.get()
-        }
-    );
+    // Supersampled variants are optional: on failure the plain gather
+    // still works and Bake_options::supersample_factor has no effect.
+    if (!make_gather(4, m_gather_ss4_shader_stages, m_gather_ss4_pipeline)) {
+        m_gather_ss4_shader_stages.reset();
+        m_gather_ss4_pipeline.reset();
+    }
+    if (!make_gather(8, m_gather_ss8_shader_stages, m_gather_ss8_pipeline)) {
+        m_gather_ss8_shader_stages.reset();
+        m_gather_ss8_pipeline.reset();
+    }
     m_nearest_sampler = std::make_unique<Sampler>(
         graphics_device,
         Sampler_create_info{
@@ -1287,7 +1588,7 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
                     .type          = Binding_type::storage_image,
                     .name          = "i_normal",
                     .glsl_type     = Glsl_type::image_2d,
-                    .image_format  = "rgba32f",
+                    .image_format  = c_normal_image_format,
                     .stage_flags   = Shader_stage_flags::compute
                 },
                 Bind_group_layout_binding{
@@ -1371,6 +1672,90 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
         return;
     }
 
+    // Supersample-origin raster pass (Bake_options::supersample_factor):
+    // the G-buffer vertex shader with a single-output fragment shader,
+    // drawn at supersample_factor x page resolution WITHOUT conservative
+    // raster (factor-independent - only the render target size differs).
+    // Smooth / no-smooth variants mirror the adjust pass (ERHE_LM_NO_SMOOTH
+    // env forces no-smooth like everywhere else); optional - on failure the
+    // supersample option simply has no effect.
+    if (m_gather_ss4_pipeline || m_gather_ss8_pipeline) {
+        m_origin_fragment_outputs = std::make_unique<Fragment_outputs>(
+            std::initializer_list<Fragment_output>{
+                Fragment_output{ .name = "out_origin", .type = Glsl_type::float_vec4, .location = 0 }
+            }
+        );
+        const auto make_origin = [&](
+            const bool                                        with_smooth,
+            std::unique_ptr<erhe::graphics::Shader_stages>&   out_shader_stages,
+            std::unique_ptr<erhe::graphics::Render_pipeline>& out_pipeline
+        ) -> bool {
+            const char* const name = with_smooth ? "lightmap_origins" : "lightmap_origins_no_smooth";
+            Shader_stages_create_info origin_create_info{
+                .name             = name,
+                .defines          = [&]() {
+                    std::vector<std::pair<std::string, std::string>> defines{
+                        { "ERHE_LM_Y_SIGN", top_left ? "-1.0" : "1.0" }
+                    };
+                    if (!with_smooth) {
+                        defines.push_back({ "ERHE_LM_NO_SMOOTH", "1" });
+                    }
+                    return defines;
+                }(),
+                .interface_blocks = { m_draw_block.get() },
+                .fragment_outputs = m_origin_fragment_outputs.get(),
+                .vertex_format    = &mesh_memory.vertex_format_not_skinned,
+                .shaders = {
+                    { Shader_type::vertex_shader,   std::string_view{c_vertex_source} },
+                    { Shader_type::fragment_shader, std::string_view{c_origin_fragment_source} }
+                },
+                .bind_group_layout = m_bind_group_layout.get()
+            };
+            Shader_stages_prototype origin_prototype = build_shader_stages(graphics_device, origin_create_info);
+            if (!origin_prototype.is_valid()) {
+                log_render->warn("Lightmap_baker: {} shader failed to compile/link", name);
+                return false;
+            }
+            out_shader_stages = std::make_unique<Shader_stages>(graphics_device, std::move(origin_prototype));
+            Render_pipeline_create_info origin_pipeline_create_info;
+            origin_pipeline_create_info.base.input_assembly                    = Input_assembly_state::triangle;
+            // Same fold-culling raster state as the G-buffer, but NEVER
+            // conservative: valid sub-texel points must lie ON a triangle
+            // (interpolated attributes), not merely touch one.
+            origin_pipeline_create_info.base.rasterization                     = Rasterization_state::cull_mode_back_cw.with_winding_flip_if(top_left);
+            origin_pipeline_create_info.base.depth_stencil.depth_test_enable   = false;
+            origin_pipeline_create_info.base.depth_stencil.depth_write_enable  = false;
+            origin_pipeline_create_info.base.depth_stencil.stencil_test_enable = false;
+            origin_pipeline_create_info.base.bind_group_layout                 = m_bind_group_layout.get();
+            origin_pipeline_create_info.base.color_blend                       = &Color_blend_state::color_blend_disabled;
+            origin_pipeline_create_info.shader_stages                          = out_shader_stages.get();
+            origin_pipeline_create_info.vertex_input                           = vertex_input_entry.vertex_input.get();
+            origin_pipeline_create_info.color_attachment_count                 = 1;
+            origin_pipeline_create_info.color_attachment_formats[0]            = c_position_format;
+            origin_pipeline_create_info.color_usage_before[0]                  = Image_usage_flag_bit_mask::sampled;
+            origin_pipeline_create_info.color_usage_after[0]                   = Image_usage_flag_bit_mask::sampled;
+            origin_pipeline_create_info.sample_count                           = 1;
+            out_pipeline = std::make_unique<Render_pipeline>(graphics_device, origin_pipeline_create_info);
+            if (!out_pipeline->is_valid()) {
+                log_render->warn("Lightmap_baker: {} pipeline is not valid", name);
+                out_pipeline.reset();
+                return false;
+            }
+            return true;
+        };
+        const bool origins_ok =
+            make_origin(!env_no_smooth, m_origin_shader_stages,           m_origin_pipeline) &&
+            make_origin(false,          m_origin_no_smooth_shader_stages, m_origin_no_smooth_pipeline);
+        if (!origins_ok) {
+            m_origin_pipeline.reset();
+            m_origin_no_smooth_pipeline.reset();
+            m_gather_ss4_shader_stages.reset();
+            m_gather_ss4_pipeline.reset();
+            m_gather_ss8_shader_stages.reset();
+            m_gather_ss8_pipeline.reset();
+        }
+    }
+
     // Dilation pipeline. Both bindings are raw storage images, so the
     // combined-image-sampler binding offset (see the gather layout note)
     // does not apply.
@@ -1383,7 +1768,7 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
                     .type          = Binding_type::storage_image,
                     .name          = "i_src",
                     .glsl_type     = Glsl_type::image_2d,
-                    .image_format  = "rgba32f",
+                    .image_format  = c_atlas_image_format,
                     .stage_flags   = Shader_stage_flags::compute
                 },
                 Bind_group_layout_binding{
@@ -1391,7 +1776,7 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
                     .type          = Binding_type::storage_image,
                     .name          = "i_dst",
                     .glsl_type     = Glsl_type::image_2d,
-                    .image_format  = "rgba32f",
+                    .image_format  = c_atlas_image_format,
                     .stage_flags   = Shader_stage_flags::compute
                 }
             },
@@ -1421,14 +1806,40 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
         }
     );
 
-    // Resolve (accum running average -> published atlas); same layout shape
-    // as dilate (i_src / i_dst rgba32f storage images).
+    // Resolve (accum running average -> published atlas); same binding
+    // shape as dilate, but its own layout because the source is the fp32
+    // accumulation target while the destination is the fp16 atlas.
+    m_resolve_layout = std::make_unique<Bind_group_layout>(
+        graphics_device,
+        Bind_group_layout_create_info{
+            .bindings = {
+                Bind_group_layout_binding{
+                    .binding_point = 0u,
+                    .type          = Binding_type::storage_image,
+                    .name          = "i_src",
+                    .glsl_type     = Glsl_type::image_2d,
+                    .image_format  = c_accum_image_format,
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                Bind_group_layout_binding{
+                    .binding_point = 1u,
+                    .type          = Binding_type::storage_image,
+                    .name          = "i_dst",
+                    .glsl_type     = Glsl_type::image_2d,
+                    .image_format  = c_atlas_image_format,
+                    .stage_flags   = Shader_stage_flags::compute
+                }
+            },
+            .debug_label       = erhe::utility::Debug_label{"lightmap resolve layout"},
+            .uses_texture_heap = false
+        }
+    );
     Shader_stages_create_info resolve_create_info{
         .name    = "lightmap_resolve",
         .shaders = {
             { Shader_type::compute_shader, std::string_view{c_resolve_source} }
         },
-        .bind_group_layout = m_dilate_layout.get()
+        .bind_group_layout = m_resolve_layout.get()
     };
     Shader_stages_prototype resolve_prototype = build_shader_stages(graphics_device, resolve_create_info);
     if (!resolve_prototype.is_valid()) {
@@ -1441,7 +1852,7 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
         Compute_pipeline_data{
             .name              = "lightmap_resolve",
             .shader_stages     = m_resolve_shader_stages.get(),
-            .bind_group_layout = m_dilate_layout.get()
+            .bind_group_layout = m_resolve_layout.get()
         }
     );
 
@@ -1455,7 +1866,7 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
                     .type          = Binding_type::storage_image,
                     .name          = "i_src",
                     .glsl_type     = Glsl_type::image_2d,
-                    .image_format  = "rgba32f",
+                    .image_format  = c_atlas_image_format,
                     .stage_flags   = Shader_stage_flags::compute
                 },
                 Bind_group_layout_binding{
@@ -1463,7 +1874,7 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
                     .type          = Binding_type::storage_image,
                     .name          = "i_dst",
                     .glsl_type     = Glsl_type::image_2d,
-                    .image_format  = "rgba32f",
+                    .image_format  = c_atlas_image_format,
                     .stage_flags   = Shader_stage_flags::compute
                 },
                 Bind_group_layout_binding{
@@ -1471,7 +1882,7 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
                     .type          = Binding_type::storage_image,
                     .name          = "i_normal",
                     .glsl_type     = Glsl_type::image_2d,
-                    .image_format  = "rgba32f",
+                    .image_format  = c_normal_image_format,
                     .stage_flags   = Shader_stage_flags::compute
                 },
                 Bind_group_layout_binding{
@@ -1479,7 +1890,7 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
                     .type          = Binding_type::storage_image,
                     .name          = "i_albedo",
                     .glsl_type     = Glsl_type::image_2d,
-                    .image_format  = "rgba16f",
+                    .image_format  = c_albedo_image_format,
                     .stage_flags   = Shader_stage_flags::compute
                 }
             },
@@ -1581,7 +1992,7 @@ Lightmap_baker::Lightmap_baker(erhe::graphics::Device& graphics_device, erhe::sc
     seam_pipeline_create_info.shader_stages                          = m_seam_shader_stages.get();
     seam_pipeline_create_info.vertex_input                           = m_seam_vertex_input.get();
     seam_pipeline_create_info.color_attachment_count                 = 1;
-    seam_pipeline_create_info.color_attachment_formats[0]            = erhe::dataformat::Format::format_32_vec4_float;
+    seam_pipeline_create_info.color_attachment_formats[0]            = c_atlas_format;
     seam_pipeline_create_info.color_usage_before[0]                  = Image_usage_flag_bit_mask::storage;
     seam_pipeline_create_info.color_usage_after[0]                   = Image_usage_flag_bit_mask::storage;
     seam_pipeline_create_info.sample_count                           = 1;
@@ -1605,13 +2016,48 @@ auto Lightmap_baker::is_bake_supported() const -> bool
     return static_cast<bool>(m_gather_pipeline);
 }
 
+auto Lightmap_baker::Atlas_layout::get_cell_origin(const int cell) const -> glm::ivec2
+{
+    const int cx = (cells_x > 0) ? (cell % cells_x) : 0;
+    const int cy = (cells_x > 0) ? (cell / cells_x) : 0;
+    return glm::ivec2{cx * Lightmap_baker::s_tile, cy * Lightmap_baker::s_tile};
+}
+
+auto Lightmap_baker::Atlas_layout::get_cell_size() const -> int
+{
+    return std::min(width, Lightmap_baker::s_tile);
+}
+
+auto Lightmap_baker::get_sweep_count() const -> uint32_t
+{
+    // Minimum over the active, content-carrying cells: every active valid
+    // texel holds at least this many samples.
+    uint32_t result = std::numeric_limits<uint32_t>::max();
+    bool     any    = false;
+    for (const Cell_state& cell : m_cells) {
+        if (!cell.active || !cell.has_content) {
+            continue;
+        }
+        result = std::min(result, cell.sweeps);
+        any    = true;
+    }
+    return any ? result : 0u;
+}
+
 auto Lightmap_baker::update_layout(Scene_root& scene_root, const float texels_per_meter, const float min_face_texels) -> bool
 {
     m_layout            = Atlas_layout{};
     m_gbuffer_valid     = false;
+    m_gbuffer_cell      = -1;
     m_lightmap_valid    = false;
     m_regions_published = false;
-    m_accum_cleared     = false;
+    m_cells.clear();
+    m_cursor_cell       = 0;
+    m_cursor_y          = 0;
+    // Regions move on a repack, so the previous publish no longer matches
+    // the uv_scale_offsets pushed to the meshes; ensure_bake_targets clears
+    // the display atlas when this is false.
+    m_display_cleared   = false;
     m_layout_scene_root = &scene_root;
 
     // Rejection counters for the zero-regions diagnostic below - "the atlas
@@ -1726,9 +2172,56 @@ auto Lightmap_baker::update_layout(Scene_root& scene_root, const float texels_pe
         return false;
     }
 
+    // Budget-derived page cap: the page-wide persistent targets (per-cell
+    // fp32 accumulation + fp16 display) cost persistent_bytes_per_texel()
+    // per page texel, plus the cell-bounded scratch working set (constant
+    // regardless of page size), so cap the page at the largest power-of-two
+    // whose persistent targets stay within c_budget_* of the remaining
+    // device-local budget (VK_EXT_memory_budget-accurate when available;
+    // s_max_page when the backend reports no budget). The current
+    // allocations are about to be replaced, so their bytes count as
+    // available.
+    int max_page = s_max_page;
+    {
+        const erhe::graphics::Memory_budget budget = m_graphics_device.get_memory_budget();
+        if (budget.is_known()) {
+            const uint64_t bytes_per_texel = persistent_bytes_per_texel();
+            uint64_t available = budget.get_remaining();
+            if (m_display_texture) {
+                available += bytes_per_texel
+                    * static_cast<uint64_t>(m_display_texture->get_width())
+                    * static_cast<uint64_t>(m_display_texture->get_height());
+            }
+            // Reserve the cell-sized scratch working set (G-buffer x4,
+            // working atlas, dilate scratch, optional supersample origins)
+            // off the top; it does not scale with the page.
+            const uint64_t cell_texels   = static_cast<uint64_t>(s_tile) * static_cast<uint64_t>(s_tile);
+            const uint64_t scratch_bytes = scratch_bytes_per_texel() * cell_texels;
+            available = (available > scratch_bytes) ? (available - scratch_bytes) : 0;
+            const uint64_t usable = (available * c_budget_numerator) / c_budget_denominator;
+            while (
+                (max_page > s_min_page) &&
+                (bytes_per_texel * static_cast<uint64_t>(max_page) * static_cast<uint64_t>(max_page) > usable)
+            ) {
+                max_page /= 2;
+            }
+            if (max_page < s_max_page) {
+                log_render->info(
+                    "Lightmap_baker::update_layout: page capped at {}x{} by device memory budget ({} MB remaining of {} MB)",
+                    max_page,
+                    max_page,
+                    budget.get_remaining() / (1024u * 1024u),
+                    budget.device_local_budget / (1024u * 1024u)
+                );
+            }
+        }
+    }
+    // Regions never span a tile cell, so their side is bounded by the cell.
+    const int max_region_side = std::min(max_page, s_tile) - 2 * s_padding;
+
     // Region content side in texels; the normalized per-mesh chart set is
     // square, so the region is too.
-    const auto side_of = [texels_per_meter, min_face_texels](const Instance_region& region) -> int {
+    const auto side_of = [texels_per_meter, min_face_texels, max_region_side](const Instance_region& region) -> int {
         float side = std::sqrt(std::max(region.world_area, 0.0f) / region.uv_coverage) * texels_per_meter;
         // Min-face-texels bound: grow the region until its smallest facet
         // spans min_face_texels on its shorter UV axis. This is the half of
@@ -1739,7 +2232,7 @@ auto Lightmap_baker::update_layout(Scene_root& scene_root, const float texels_pe
             const float bound = min_face_texels / region.min_facet_uv_extent;
             side = std::max(side, std::min(bound, 4.0f * side));
         }
-        return std::clamp(static_cast<int>(std::ceil(side)), 4, s_max_page - 2 * s_padding);
+        return std::clamp(static_cast<int>(std::ceil(side)), 4, max_region_side);
     };
 
     // Big regions first packs tighter with the skyline heuristic.
@@ -1749,21 +2242,42 @@ auto Lightmap_baker::update_layout(Scene_root& scene_root, const float texels_pe
         [&](const Instance_region& lhs, const Instance_region& rhs) { return side_of(lhs) > side_of(rhs); }
     );
 
-    for (int page = s_min_page; page <= s_max_page; page *= 2) {
-        rbp::SkylineBinPack packer;
-        packer.Init(page, page, false);
+    for (int page = s_min_page; page <= max_page; page *= 2) {
+        // Pages up to s_tile are a single cell; larger pages are a grid of
+        // s_tile cells and regions pack cell by cell (greedy first-fit in
+        // cell order; a region that fits no remaining cell fails the page).
+        const int cell_size  = std::min(page, s_tile);
+        const int cells_x    = std::max(1, page / s_tile);
+        const int cell_count = cells_x * cells_x;
+        std::vector<rbp::SkylineBinPack> packers(static_cast<std::size_t>(cell_count));
+        for (rbp::SkylineBinPack& packer : packers) {
+            packer.Init(cell_size, cell_size, false);
+        }
         bool failed = false;
         for (Instance_region& region : regions) {
-            const int side = side_of(region);
-            const rbp::Rect rect = packer.Insert(side + 2 * s_padding, side + 2 * s_padding, rbp::SkylineBinPack::LevelBottomLeft);
-            if ((rect.width == 0) || (rect.height == 0)) {
+            const int side   = side_of(region);
+            bool      placed = false;
+            for (int cell = 0; cell < cell_count; ++cell) {
+                const rbp::Rect rect = packers[static_cast<std::size_t>(cell)].Insert(
+                    side + 2 * s_padding, side + 2 * s_padding, rbp::SkylineBinPack::LevelBottomLeft
+                );
+                if ((rect.width == 0) || (rect.height == 0)) {
+                    continue;
+                }
+                const int cell_origin_x = (cell % cells_x) * s_tile;
+                const int cell_origin_y = (cell / cells_x) * s_tile;
+                region.x      = cell_origin_x + rect.x + s_padding;
+                region.y      = cell_origin_y + rect.y + s_padding;
+                region.width  = side;
+                region.height = side;
+                region.cell   = cell;
+                placed        = true;
+                break;
+            }
+            if (!placed) {
                 failed = true;
                 break;
             }
-            region.x      = rect.x + s_padding;
-            region.y      = rect.y + s_padding;
-            region.width  = side;
-            region.height = side;
         }
         if (failed) {
             continue;
@@ -1779,21 +2293,36 @@ auto Lightmap_baker::update_layout(Scene_root& scene_root, const float texels_pe
         }
         m_layout.width   = page;
         m_layout.height  = page;
+        m_layout.cells_x = cells_x;
+        m_layout.cells_y = cells_x;
         m_layout.regions = std::move(regions);
+        m_cells.assign(static_cast<std::size_t>(cell_count), Cell_state{});
+        for (const Instance_region& region : m_layout.regions) {
+            m_cells[static_cast<std::size_t>(region.cell)].has_content = true;
+        }
         build_seam_vertices();
+        if (cell_count > 1) {
+            log_render->info(
+                "Lightmap_baker::update_layout: {}x{} page as {}x{} tile cells of {}",
+                page, page, cells_x, cells_x, cell_size
+            );
+        }
         return true;
     }
     // Even the largest page failed; drop the layout (a later change can
     // add multi-page support - plan keeps pages <= 4096^2). Report why:
     // this is usually the density - a single large mesh (e.g. a floor)
-    // at high texels_per_meter needs a region bigger than the max page.
+    // at high texels_per_meter needs a region bigger than the max page -
+    // or the device memory budget capped the page below what the scene
+    // needs (max_page < s_max_page).
     log_render->info(
-        "Lightmap_baker::update_layout: {} regions do not fit the maximum {}x{} page at {} texels/m (largest region side {} texels) - lower the density",
+        "Lightmap_baker::update_layout: {} regions do not fit the maximum {}x{} page at {} texels/m (largest region side {} texels{}) - lower the density",
         regions.size(),
-        s_max_page,
-        s_max_page,
+        max_page,
+        max_page,
         texels_per_meter,
-        regions.empty() ? 0 : side_of(regions.front())
+        regions.empty() ? 0 : side_of(regions.front()),
+        (max_page < s_max_page) ? ", page capped by device memory budget" : ""
     );
     m_seam_vertices.clear();
     return false;
@@ -1802,9 +2331,18 @@ auto Lightmap_baker::update_layout(Scene_root& scene_root, const float texels_pe
 void Lightmap_baker::build_seam_vertices()
 {
     m_seam_vertices.clear();
+    m_cell_seam_ranges.assign(static_cast<std::size_t>(m_layout.get_cell_count()), {0u, 0u});
     std::size_t seam_count = 0;
+    const float cell_size  = static_cast<float>(m_layout.get_cell_size());
+    const float page_size  = static_cast<float>(m_layout.width);
+    // Grouped by cell (the seam pass rasters into the cell-sized working
+    // atlas, one cell per publish): both sides of a seam always live in the
+    // same region, hence the same cell.
+    for (int cell = 0; cell < m_layout.get_cell_count(); ++cell) {
+    const uint32_t  cell_first_vertex = static_cast<uint32_t>(m_seam_vertices.size());
+    const glm::vec2 cell_origin{m_layout.get_cell_origin(cell)};
     for (const Instance_region& region : m_layout.regions) {
-        if (!region.mesh) {
+        if (!region.mesh || (region.cell != cell)) {
             continue;
         }
         const std::vector<erhe::scene::Mesh_primitive>& primitives = region.mesh->get_primitives();
@@ -1826,8 +2364,11 @@ void Lightmap_baker::build_seam_vertices()
         const GEO::Mesh& geo_mesh = geometry->get_mesh();
         const glm::vec2 uv_scale {region.uv_scale_offset.x, region.uv_scale_offset.y};
         const glm::vec2 uv_offset{region.uv_scale_offset.z, region.uv_scale_offset.w};
+        // The seam pass rasters into the CELL-sized working atlas, so map
+        // chart UV -> page UV (published scale/offset) -> cell UV.
         const auto atlas_uv = [&](const GEO::vec2f& uv) -> glm::vec2 {
-            return glm::vec2{uv.x, uv.y} * uv_scale + uv_offset;
+            const glm::vec2 page_uv = glm::vec2{uv.x, uv.y} * uv_scale + uv_offset;
+            return (page_uv * page_size - cell_origin) / cell_size;
         };
 
         // First occurrence of each facet edge, keyed by the (order-
@@ -1903,20 +2444,18 @@ void Lightmap_baker::build_seam_vertices()
             }
         }
     }
+    m_cell_seam_ranges[static_cast<std::size_t>(cell)] = {
+        cell_first_vertex,
+        static_cast<uint32_t>(m_seam_vertices.size()) - cell_first_vertex
+    };
+    } // for cell
     log_render->info("Lightmap_baker: {} seam edges ({} line vertices)", seam_count, m_seam_vertices.size());
 }
 
 void Lightmap_baker::ensure_gbuffer_targets()
 {
     using namespace erhe::graphics;
-    const bool matches =
-        m_position_texture &&
-        (m_position_texture->get_width()  == m_layout.width) &&
-        (m_position_texture->get_height() == m_layout.height);
-    if (matches) {
-        return;
-    }
-    const auto make_target = [this](const char* label, erhe::dataformat::Format format) {
+    const auto make_target = [this](const char* label, erhe::dataformat::Format format, const int width, const int height) {
         return std::make_shared<Texture>(
             m_graphics_device,
             Texture_create_info{
@@ -1930,24 +2469,103 @@ void Lightmap_baker::ensure_gbuffer_targets()
                     Image_usage_flag_bit_mask::transfer_src,
                 .type        = Texture_type::texture_2d,
                 .pixelformat = format,
-                .width       = m_layout.width,
-                .height      = m_layout.height,
+                .width       = width,
+                .height      = height,
                 .debug_label = erhe::utility::Debug_label{label}
             }
         );
     };
-    m_position_texture        = make_target("lightmap gbuffer position",        c_position_format);
-    m_normal_texture          = make_target("lightmap gbuffer normal",          c_normal_format);
-    m_albedo_texture          = make_target("lightmap gbuffer albedo",          c_albedo_format);
-    m_smooth_position_texture = make_target("lightmap gbuffer smooth position", c_position_format);
+    // Every scratch target is CELL-sized: the G-buffer holds one tile cell
+    // at a time (m_gbuffer_cell) and is re-rastered when the gather cursor
+    // moves to another cell.
+    const int cell_size = m_layout.get_cell_size();
+    // Supersampled ray-origin target (Bake_options::supersample_factor):
+    // the cell at factor x per axis, transient like the other G-buffer
+    // targets. Released when the option is off; skipped (with a log in
+    // bake_gbuffer) when the hi-res cell would exceed the dimension guard
+    // or the factor's gather variant failed to build.
+    const int factor = m_options.supersample_factor;
+    const bool factor_has_gather =
+        ((factor == 4) && m_gather_ss4_pipeline) ||
+        ((factor == 8) && m_gather_ss8_pipeline);
+    // Byte-budget guard on top of the dimension guard: the hi-res origin
+    // target is factor^2 cells of RGBA32F - the single largest scratch
+    // allocation - so refuse it (feature off, bake still runs) when it
+    // would eat more than half the remaining device-local budget.
+    bool origin_fits_budget = true;
+    if (factor_has_gather) {
+        const uint64_t origin_bytes =
+            erhe::dataformat::get_format_size_bytes(c_position_format)
+            * static_cast<uint64_t>(cell_size) * static_cast<uint64_t>(factor)
+            * static_cast<uint64_t>(cell_size) * static_cast<uint64_t>(factor);
+        const erhe::graphics::Memory_budget budget = m_graphics_device.get_memory_budget();
+        if (budget.is_known()) {
+            uint64_t available = budget.get_remaining();
+            if (m_origin_texture) {
+                // A mismatched existing target is released before the new
+                // one is created; its bytes are available to the check.
+                available += erhe::dataformat::get_format_size_bytes(c_position_format)
+                    * static_cast<uint64_t>(m_origin_texture->get_width())
+                    * static_cast<uint64_t>(m_origin_texture->get_height());
+            }
+            origin_fits_budget = origin_bytes <= available / 2;
+        }
+    }
+    const bool want_origin =
+        factor_has_gather &&
+        m_origin_pipeline &&
+        origin_fits_budget &&
+        (cell_size * factor <= c_supersample_max_dim);
+    if (!want_origin) {
+        if (m_origin_texture) {
+            m_origin_texture.reset();
+            m_origin_valid = false;
+        }
+    } else {
+        const bool origin_matches =
+            m_origin_texture &&
+            (m_origin_texture->get_width()  == cell_size * factor) &&
+            (m_origin_texture->get_height() == cell_size * factor);
+        if (!origin_matches) {
+            m_origin_texture = make_target(
+                "lightmap ray origins",
+                c_position_format,
+                cell_size * factor,
+                cell_size * factor
+            );
+            m_origin_valid  = false;
+            m_gbuffer_valid = false;
+        }
+    }
+    const bool matches =
+        m_position_texture &&
+        (m_position_texture->get_width()  == cell_size) &&
+        (m_position_texture->get_height() == cell_size);
+    if (matches) {
+        // The smooth-position target is released once the one-shot adjust
+        // pass folds it into the position G-buffer (record_adjust); a
+        // re-raster needs it back.
+        if (!m_smooth_position_texture) {
+            m_smooth_position_texture = make_target("lightmap gbuffer smooth position", c_position_format, cell_size, cell_size);
+        }
+        return;
+    }
+    m_position_texture        = make_target("lightmap gbuffer position",        c_position_format, cell_size, cell_size);
+    m_normal_texture          = make_target("lightmap gbuffer normal",          c_normal_format,   cell_size, cell_size);
+    m_albedo_texture          = make_target("lightmap gbuffer albedo",          c_albedo_format,   cell_size, cell_size);
+    m_smooth_position_texture = make_target("lightmap gbuffer smooth position", c_position_format, cell_size, cell_size);
     m_gbuffer_valid    = false;
+    m_gbuffer_cell     = -1;
 }
 
-auto Lightmap_baker::bake_gbuffer() -> bool
+auto Lightmap_baker::bake_gbuffer(const int cell) -> bool
 {
     using namespace erhe::graphics;
 
     if (!m_pipeline || (m_layout.width == 0) || m_layout.regions.empty()) {
+        return false;
+    }
+    if ((cell < 0) || (cell >= m_layout.get_cell_count())) {
         return false;
     }
 
@@ -1955,24 +2573,43 @@ auto Lightmap_baker::bake_gbuffer() -> bool
 
     ensure_gbuffer_targets();
 
-    // Conservative coverage. Preferred: native conservative rasterization
-    // (pipeline flag, one unjittered pass - the LAST jitter entry is the
-    // center tap). Fallback: multi-jitter re-render (Bakery-style) - each
-    // region rasterizes 9 times with sub-texel NDC offsets, center pass
-    // LAST. Depth test is off, so later draws win: edge texels whose center
-    // just misses every triangle still get a jittered write, and properly
-    // covered texels end with the unjittered value.
-    constexpr int c_jitter_count = 9;
-    const int first_jitter_pass = m_conservative_raster ? (c_jitter_count - 1) : 0;
-    constexpr float c_jitter[c_jitter_count][2] = {
-        {-1.0f, -1.0f}, {0.0f, -1.0f}, {1.0f, -1.0f},
-        {-1.0f,  0.0f},                {1.0f,  0.0f},
-        {-1.0f,  1.0f}, {0.0f,  1.0f}, {1.0f,  1.0f},
-        { 0.0f,  0.0f} // center last
-    };
+    const int        cell_size   = m_layout.get_cell_size();
+    const glm::ivec2 cell_origin = m_layout.get_cell_origin(cell);
+
+    // Texel coverage strategy (Bake_options::coverage_mode). Conservative:
+    // native conservative rasterization, one unjittered pass (falls back to
+    // 9-tap when the extension is missing). Jitter modes: multi-jitter
+    // re-render (Bakery-style) - each region rasterizes once per tap with
+    // sub-texel NDC offsets spanning +-half a texel (3x3 or 5x5 grid),
+    // center tap LAST. Depth test is off, so later draws win: edge texels
+    // whose center just misses every triangle still get a jittered write,
+    // and properly covered texels end with the unjittered value.
+    const bool conservative_requested = m_options.coverage_mode == Coverage_mode::conservative;
+    const bool use_conservative       = conservative_requested && m_pipeline_conservative;
+    std::vector<glm::vec2> jitter_taps;
+    if (use_conservative) {
+        jitter_taps.push_back(glm::vec2{0.0f, 0.0f});
+    } else {
+        const int grid_half = (m_options.coverage_mode == Coverage_mode::jitter_25) ? 2 : 1;
+        for (int y = -grid_half; y <= grid_half; ++y) {
+            for (int x = -grid_half; x <= grid_half; ++x) {
+                if ((x == 0) && (y == 0)) {
+                    continue;
+                }
+                jitter_taps.push_back(
+                    glm::vec2{
+                        static_cast<float>(x) / static_cast<float>(grid_half),
+                        static_cast<float>(y) / static_cast<float>(grid_half)
+                    }
+                );
+            }
+        }
+        jitter_taps.push_back(glm::vec2{0.0f, 0.0f}); // center last
+    }
+    const std::size_t jitter_count = jitter_taps.size();
 
     // Per-draw UBO: one record per region per jitter pass.
-    const std::size_t ubo_bytes = m_layout.regions.size() * c_jitter_count * c_draw_ubo_stride;
+    const std::size_t ubo_bytes = m_layout.regions.size() * jitter_count * c_draw_ubo_stride;
     Buffer draw_ubo{
         m_graphics_device,
         Buffer_create_info{
@@ -1989,15 +2626,21 @@ auto Lightmap_baker::bake_gbuffer() -> bool
         }
     };
     {
-        // Half-texel jitter magnitude in NDC ([-1,1] spans the page).
-        const float jitter_step_x = 0.5f * 2.0f / static_cast<float>(m_layout.width);
-        const float jitter_step_y = 0.5f * 2.0f / static_cast<float>(m_layout.height);
+        // Half-texel jitter magnitude in NDC ([-1,1] spans the cell).
+        const float jitter_step = 0.5f * 2.0f / static_cast<float>(cell_size);
+        // The published uv_scale_offset maps chart UV into PAGE UV; the
+        // raster target is the cell, so remap into cell UV:
+        //   cell_uv = (page_uv * page - cell_origin) / cell_size
+        const float page_over_cell = static_cast<float>(m_layout.width) / static_cast<float>(cell_size);
         const std::span<std::byte> mapped = draw_ubo.map_bytes(0, ubo_bytes);
         std::memset(mapped.data(), 0, ubo_bytes);
-        for (int j = first_jitter_pass; j < c_jitter_count; ++j) {
-            const glm::vec4 jitter_ndc{c_jitter[j][0] * jitter_step_x, c_jitter[j][1] * jitter_step_y, 0.0f, 0.0f};
+        for (std::size_t j = 0; j < jitter_count; ++j) {
+            const glm::vec4 jitter_ndc{jitter_taps[j].x * jitter_step, jitter_taps[j].y * jitter_step, 0.0f, 0.0f};
             for (std::size_t i = 0; i < m_layout.regions.size(); ++i) {
                 const Instance_region& region = m_layout.regions[i];
+                if (region.cell != cell) {
+                    continue; // draw_regions skips these; the record stays zero
+                }
                 const erhe::scene::Node* const node = region.mesh ? region.mesh->get_node() : nullptr;
                 const glm::mat4 world_from_node = (node != nullptr) ? node->world_from_node() : glm::mat4{1.0f};
                 glm::vec4 base_color{1.0f, 1.0f, 1.0f, 1.0f};
@@ -2010,11 +2653,17 @@ auto Lightmap_baker::bake_gbuffer() -> bool
                         base_color = glm::vec4{material.data.base_color * (1.0f - material.data.metallic), 1.0f};
                     }
                 }
+                const glm::vec4 cell_uv_scale_offset{
+                    region.uv_scale_offset.x * page_over_cell,
+                    region.uv_scale_offset.y * page_over_cell,
+                    (region.uv_scale_offset.z * static_cast<float>(m_layout.width)  - static_cast<float>(cell_origin.x)) / static_cast<float>(cell_size),
+                    (region.uv_scale_offset.w * static_cast<float>(m_layout.height) - static_cast<float>(cell_origin.y)) / static_cast<float>(cell_size)
+                };
                 std::byte* const record = mapped.data() + (static_cast<std::size_t>(j) * m_layout.regions.size() + i) * c_draw_ubo_stride;
-                std::memcpy(record + m_draw_block_world_offset,      &world_from_node,        sizeof(glm::mat4));
-                std::memcpy(record + m_draw_block_uv_offset,         &region.uv_scale_offset, sizeof(glm::vec4));
-                std::memcpy(record + m_draw_block_jitter_offset,     &jitter_ndc,             sizeof(glm::vec4));
-                std::memcpy(record + m_draw_block_base_color_offset, &base_color,             sizeof(glm::vec4));
+                std::memcpy(record + m_draw_block_world_offset,      &world_from_node,      sizeof(glm::mat4));
+                std::memcpy(record + m_draw_block_uv_offset,         &cell_uv_scale_offset, sizeof(glm::vec4));
+                std::memcpy(record + m_draw_block_jitter_offset,     &jitter_ndc,           sizeof(glm::vec4));
+                std::memcpy(record + m_draw_block_base_color_offset, &base_color,           sizeof(glm::vec4));
             }
         }
         draw_ubo.unmap();
@@ -2047,69 +2696,128 @@ auto Lightmap_baker::bake_gbuffer() -> bool
         attachment.usage_after   = Image_usage_flag_bit_mask::sampled;
         attachment.layout_after  = Image_layout::shader_read_only_optimal;
     }
-    descriptor.render_target_width  = m_layout.width;
-    descriptor.render_target_height = m_layout.height;
+    descriptor.render_target_width  = cell_size;
+    descriptor.render_target_height = cell_size;
     descriptor.debug_label = erhe::utility::Debug_label{"lightmap gbuffer"};
+
+    // One jitter pass worth of region draws; shared by the G-buffer passes
+    // and the supersample-origin pass (which draws the zero-jitter center
+    // records once at hi-res).
+    const auto draw_regions = [&](Render_command_encoder& encoder, Buffer& ubo, const std::size_t pass_index) -> std::size_t {
+        std::size_t pass_drawn = 0;
+        for (std::size_t i = 0; i < m_layout.regions.size(); ++i) {
+            const Instance_region& region = m_layout.regions[i];
+            if (!region.mesh || (region.cell != cell)) {
+                continue;
+            }
+            const std::vector<erhe::scene::Mesh_primitive>& primitives = region.mesh->get_primitives();
+            if (region.primitive_index >= primitives.size()) {
+                continue;
+            }
+            const erhe::primitive::Primitive* const primitive = primitives[region.primitive_index].primitive.get();
+            if (primitive == nullptr) {
+                continue;
+            }
+            const erhe::primitive::Buffer_mesh* const buffer_mesh = primitive->get_renderable_mesh();
+            if ((buffer_mesh == nullptr) || (buffer_mesh->triangle_fill_indices.index_count == 0)) {
+                continue;
+            }
+            if (buffer_mesh->vertex_input_key != not_skinned_key) {
+                // Pipeline vertex input is the non-skinned content format;
+                // anything else (should not happen after the skin filter)
+                // is skipped rather than mis-bound.
+                continue;
+            }
+            for (std::size_t stream = 0; stream < buffer_mesh->vertex_buffer_ranges.size(); ++stream) {
+                const erhe::primitive::Buffer_range& range = buffer_mesh->vertex_buffer_ranges[stream];
+                encoder.set_vertex_buffer(m_mesh_memory.get_vertex_buffer(range), range.byte_offset, stream);
+            }
+            const erhe::primitive::Buffer_range& index_range = buffer_mesh->index_buffer_range;
+            encoder.set_index_buffer(m_mesh_memory.get_index_buffer(index_range));
+            const std::size_t record_index = pass_index * m_layout.regions.size() + i;
+            encoder.set_buffer(Buffer_target::uniform, &ubo, record_index * c_draw_ubo_stride, m_draw_block_size, 0);
+
+            const erhe::dataformat::Format index_format = m_mesh_memory.get_index_format(
+                erhe::scene_renderer::Pool_buffer_identity{index_range.pool_id, index_range.buffer_id}
+            );
+            const std::uintptr_t index_offset =
+                index_range.byte_offset +
+                buffer_mesh->triangle_fill_indices.first_index * index_range.element_size;
+            encoder.draw_indexed_primitives(
+                Primitive_type::triangle,
+                buffer_mesh->triangle_fill_indices.index_count,
+                index_format,
+                index_offset
+            );
+            ++pass_drawn;
+        }
+        return pass_drawn;
+    };
 
     std::size_t drawn = 0;
     {
         Render_pass            render_pass{m_graphics_device, descriptor};
         Render_command_encoder encoder = m_graphics_device.make_render_command_encoder(command_buffer);
         const Scoped_render_pass scoped{render_pass, command_buffer};
-        encoder.set_viewport_rect(0, 0, m_layout.width, m_layout.height);
-        encoder.set_scissor_rect (0, 0, m_layout.width, m_layout.height);
+        encoder.set_viewport_rect(0, 0, cell_size, cell_size);
+        encoder.set_scissor_rect (0, 0, cell_size, cell_size);
         encoder.set_bind_group_layout(m_bind_group_layout.get());
-        encoder.set_render_pipeline(*m_pipeline);
+        encoder.set_render_pipeline(use_conservative ? *m_pipeline_conservative : *m_pipeline);
 
-        for (int j = first_jitter_pass; j < c_jitter_count; ++j) {
-            for (std::size_t i = 0; i < m_layout.regions.size(); ++i) {
-                const Instance_region& region = m_layout.regions[i];
-                if (!region.mesh) {
-                    continue;
-                }
-                const std::vector<erhe::scene::Mesh_primitive>& primitives = region.mesh->get_primitives();
-                if (region.primitive_index >= primitives.size()) {
-                    continue;
-                }
-                const erhe::primitive::Primitive* const primitive = primitives[region.primitive_index].primitive.get();
-                if (primitive == nullptr) {
-                    continue;
-                }
-                const erhe::primitive::Buffer_mesh* const buffer_mesh = primitive->get_renderable_mesh();
-                if ((buffer_mesh == nullptr) || (buffer_mesh->triangle_fill_indices.index_count == 0)) {
-                    continue;
-                }
-                if (buffer_mesh->vertex_input_key != not_skinned_key) {
-                    // Pipeline vertex input is the non-skinned content format;
-                    // anything else (should not happen after the skin filter)
-                    // is skipped rather than mis-bound.
-                    continue;
-                }
-                for (std::size_t stream = 0; stream < buffer_mesh->vertex_buffer_ranges.size(); ++stream) {
-                    const erhe::primitive::Buffer_range& range = buffer_mesh->vertex_buffer_ranges[stream];
-                    encoder.set_vertex_buffer(m_mesh_memory.get_vertex_buffer(range), range.byte_offset, stream);
-                }
-                const erhe::primitive::Buffer_range& index_range = buffer_mesh->index_buffer_range;
-                encoder.set_index_buffer(m_mesh_memory.get_index_buffer(index_range));
-                const std::size_t record_index = static_cast<std::size_t>(j) * m_layout.regions.size() + i;
-                encoder.set_buffer(Buffer_target::uniform, &draw_ubo, record_index * c_draw_ubo_stride, m_draw_block_size, 0);
-
-                const erhe::dataformat::Format index_format = m_mesh_memory.get_index_format(
-                    erhe::scene_renderer::Pool_buffer_identity{index_range.pool_id, index_range.buffer_id}
-                );
-                const std::uintptr_t index_offset =
-                    index_range.byte_offset +
-                    buffer_mesh->triangle_fill_indices.first_index * index_range.element_size;
-                encoder.draw_indexed_primitives(
-                    Primitive_type::triangle,
-                    buffer_mesh->triangle_fill_indices.index_count,
-                    index_format,
-                    index_offset
-                );
-                if (j == first_jitter_pass) {
-                    ++drawn;
-                }
+        for (std::size_t j = 0; j < jitter_count; ++j) {
+            const std::size_t pass_drawn = draw_regions(encoder, draw_ubo, j);
+            if (j == 0) {
+                drawn = pass_drawn;
             }
+        }
+    }
+
+    // Supersample-origin pass (Frostbite Flux texel supersampling): the
+    // regular sub-texel sample grid, rasterized as one hi-res center pass
+    // (no conservative raster, no jitter - the valid points must lie ON
+    // triangles). ensure_gbuffer_targets() created the target only when the
+    // option is on, the pipelines exist and the hi-res page fits the guard.
+    m_origin_valid  = false;
+    m_origin_factor = 0;
+    if ((m_options.supersample_factor > 0) && !m_origin_texture) {
+        log_render->warn(
+            "Lightmap_baker: supersampled ray origins unavailable ({}x{} cell x{} exceeds {}, exceeds the device memory budget, or pipelines missing)",
+            cell_size, cell_size, m_options.supersample_factor, c_supersample_max_dim
+        );
+    }
+    if (m_origin_texture) {
+        Render_pipeline* const origin_pipeline =
+            m_options.terminator_fix ? m_origin_pipeline.get() : m_origin_no_smooth_pipeline.get();
+        if (origin_pipeline != nullptr) {
+            const int ss_width  = m_origin_texture->get_width();
+            const int ss_height = m_origin_texture->get_height();
+            command_buffer.transition_texture_layout(*m_origin_texture, Image_layout::shader_read_only_optimal);
+            Render_pass_descriptor origin_descriptor{};
+            Render_pass_attachment_descriptor& origin_attachment = origin_descriptor.color_attachments[0];
+            origin_attachment.texture       = m_origin_texture.get();
+            origin_attachment.clear_value   = std::array<double, 4>{0.0, 0.0, 0.0, 0.0};
+            origin_attachment.load_action   = Load_action::Clear;
+            origin_attachment.store_action  = Store_action::Store;
+            origin_attachment.usage_before  = Image_usage_flag_bit_mask::sampled;
+            origin_attachment.layout_before = Image_layout::shader_read_only_optimal;
+            origin_attachment.usage_after   = Image_usage_flag_bit_mask::sampled;
+            origin_attachment.layout_after  = Image_layout::shader_read_only_optimal;
+            origin_descriptor.render_target_width  = ss_width;
+            origin_descriptor.render_target_height = ss_height;
+            origin_descriptor.debug_label = erhe::utility::Debug_label{"lightmap ray origins"};
+            {
+                Render_pass            origin_pass{m_graphics_device, origin_descriptor};
+                Render_command_encoder encoder = m_graphics_device.make_render_command_encoder(command_buffer);
+                const Scoped_render_pass scoped{origin_pass, command_buffer};
+                encoder.set_viewport_rect(0, 0, ss_width, ss_height);
+                encoder.set_scissor_rect (0, 0, ss_width, ss_height);
+                encoder.set_bind_group_layout(m_bind_group_layout.get());
+                encoder.set_render_pipeline(*origin_pipeline);
+                // Center (zero-jitter) records - always the LAST pass slot.
+                draw_regions(encoder, draw_ubo, jitter_count - 1);
+            }
+            m_origin_valid  = true;
+            m_origin_factor = m_options.supersample_factor;
         }
     }
     command_buffer.end();
@@ -2118,11 +2826,18 @@ auto Lightmap_baker::bake_gbuffer() -> bool
     m_graphics_device.wait_idle();
 
     m_gbuffer_valid    = drawn > 0;
+    m_gbuffer_cell     = m_gbuffer_valid ? cell : -1;
     m_gbuffer_adjusted = false; // fresh positions need the virtual-offset pass
+    const char* const coverage_name =
+        use_conservative     ? "native conservative raster" :
+        (jitter_count == 25) ? "25-tap jitter"              :
+        conservative_requested ? "9-tap jitter (conservative raster unavailable)" : "9-tap jitter";
     log_render->info(
-        "Lightmap_baker: G-buffer baked, {} of {} regions drawn, {}x{}, {}",
-        drawn, m_layout.regions.size(), m_layout.width, m_layout.height,
-        m_conservative_raster ? "native conservative raster" : "9-tap jitter fallback"
+        "Lightmap_baker: G-buffer baked, cell {}/{}, {} of {} regions drawn, {}x{}, {}{}",
+        cell, m_layout.get_cell_count(),
+        drawn, m_layout.regions.size(), cell_size, cell_size,
+        coverage_name,
+        m_origin_valid ? fmt::format(", supersampled origins {}x{} per texel", m_origin_factor, m_origin_factor) : ""
     );
     return m_gbuffer_valid;
 }
@@ -2133,64 +2848,26 @@ auto Lightmap_baker::debug_write_gbuffer_pngs(const std::string& base_path) -> b
     if (!m_gbuffer_valid || !m_position_texture || !m_normal_texture) {
         return false;
     }
-    const int         width         = m_layout.width;
-    const int         height        = m_layout.height;
-    const std::size_t texel_count   = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
-    const std::size_t bytes_per_row = static_cast<std::size_t>(width) * 16u; // rgba32f
-    const std::size_t byte_count    = bytes_per_row * static_cast<std::size_t>(height);
-
-    const auto read_texture = [&](Texture& texture, std::vector<float>& out_data) -> bool {
-        Buffer readback{
-            m_graphics_device,
-            Buffer_create_info{
-                .capacity_byte_count                    = byte_count,
-                .memory_allocation_create_flag_bit_mask = Memory_allocation_create_flag_bit_mask::mapped,
-                .usage                                  = Buffer_usage::transfer_dst | Buffer_usage::storage,
-                .required_memory_property_bit_mask      =
-                    Memory_property_flag_bit_mask::host_read |
-                    Memory_property_flag_bit_mask::host_write,
-                .preferred_memory_property_bit_mask     =
-                    Memory_property_flag_bit_mask::host_coherent |
-                    Memory_property_flag_bit_mask::host_persistent,
-                .debug_label = erhe::utility::Debug_label{"lightmap gbuffer readback"}
-            }
-        };
-        constexpr unsigned int bake_thread_slot = 6;
-        Command_buffer& command_buffer = m_graphics_device.get_command_buffer(bake_thread_slot);
-        command_buffer.begin();
-        command_buffer.transition_texture_layout(texture, Image_layout::transfer_src_optimal);
-        {
-            Blit_command_encoder blit = m_graphics_device.make_blit_command_encoder(command_buffer);
-            blit.copy_from_texture(
-                &texture,
-                0, 0,
-                glm::ivec3{0, 0, 0},
-                glm::ivec3{width, height, 1},
-                &readback,
-                0,
-                bytes_per_row,
-                byte_count
-            );
-        }
-        command_buffer.transition_texture_layout(texture, Image_layout::shader_read_only_optimal);
-        command_buffer.end();
-        Command_buffer* command_buffers[] = { &command_buffer };
-        m_graphics_device.submit_command_buffers(std::span<Command_buffer* const>{command_buffers});
-        m_graphics_device.wait_idle();
-        const std::span<std::byte> mapped = readback.map_bytes(0, byte_count);
-        out_data.resize(texel_count * 4u);
-        std::memcpy(out_data.data(), mapped.data(), byte_count);
-        readback.unmap();
-        return true;
-    };
+    const int         width       = m_position_texture->get_width();
+    const int         height      = m_position_texture->get_height();
+    const glm::ivec2  cell_origin = m_layout.get_cell_origin(std::max(0, m_gbuffer_cell));
+    const std::size_t texel_count = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
 
     std::vector<float> position_data;
     std::vector<float> normal_data;
     std::vector<float> smooth_data;
-    if (!read_texture(*m_position_texture, position_data) || !read_texture(*m_normal_texture, normal_data) || !read_texture(*m_smooth_position_texture, smooth_data)) {
+    if (
+        !read_rgba_texture_to_float(m_graphics_device, *m_position_texture, position_data) ||
+        !read_rgba_texture_to_float(m_graphics_device, *m_normal_texture,   normal_data)
+    ) {
         return false;
     }
-    {
+    // The smooth-position target is transient (released after the adjust
+    // pass); the delta diagnostics below only run while it still exists.
+    const bool have_smooth =
+        m_smooth_position_texture &&
+        read_rgba_texture_to_float(m_graphics_device, *m_smooth_position_texture, smooth_data);
+    if (have_smooth) {
         // Terminator-fix diagnostics: how far the Phong-tessellated smooth
         // position moves off the flat surface (zero on flat-shaded charts).
         std::size_t covered = 0;
@@ -2217,11 +2894,14 @@ auto Lightmap_baker::debug_write_gbuffer_pngs(const std::string& base_path) -> b
             covered > 0 ? sum / static_cast<double>(covered) : 0.0, peak
         );
         for (const Instance_region& region : m_layout.regions) {
+            if (region.cell != m_gbuffer_cell) {
+                continue;
+            }
             std::size_t region_covered = 0;
             std::size_t region_moved   = 0;
             float       region_peak    = 0.0f;
-            for (int y = region.y; y < region.y + region.height; ++y) {
-                for (int x = region.x; x < region.x + region.width; ++x) {
+            for (int y = region.y - cell_origin.y; y < region.y - cell_origin.y + region.height; ++y) {
+                for (int x = region.x - cell_origin.x; x < region.x - cell_origin.x + region.width; ++x) {
                     const std::size_t i = static_cast<std::size_t>(y) * static_cast<std::size_t>(width) + static_cast<std::size_t>(x);
                     if (position_data[i * 4 + 3] <= 0.0f) {
                         continue;
@@ -2242,59 +2922,9 @@ auto Lightmap_baker::debug_write_gbuffer_pngs(const std::string& base_path) -> b
             );
         }
     }
-    // Albedo readback (RGBA16F target): copy through an RGBA32F-sized
-    // buffer is wrong for 16F; instead reuse the debug path by sampling is
-    // overkill - blit copy gives raw half floats, so decode manually.
     std::vector<float> albedo_data;
-    {
-        const std::size_t half_bytes_per_row = static_cast<std::size_t>(width) * 8u; // rgba16f
-        const std::size_t half_byte_count    = half_bytes_per_row * static_cast<std::size_t>(height);
-        Buffer readback{
-            m_graphics_device,
-            Buffer_create_info{
-                .capacity_byte_count                    = half_byte_count,
-                .memory_allocation_create_flag_bit_mask = Memory_allocation_create_flag_bit_mask::mapped,
-                .usage                                  = Buffer_usage::transfer_dst | Buffer_usage::storage,
-                .required_memory_property_bit_mask      =
-                    Memory_property_flag_bit_mask::host_read |
-                    Memory_property_flag_bit_mask::host_write,
-                .preferred_memory_property_bit_mask     =
-                    Memory_property_flag_bit_mask::host_coherent |
-                    Memory_property_flag_bit_mask::host_persistent,
-                .debug_label = erhe::utility::Debug_label{"lightmap albedo readback"}
-            }
-        };
-        constexpr unsigned int bake_thread_slot = 6;
-        Command_buffer& command_buffer = m_graphics_device.get_command_buffer(bake_thread_slot);
-        command_buffer.begin();
-        command_buffer.transition_texture_layout(*m_albedo_texture, Image_layout::transfer_src_optimal);
-        {
-            Blit_command_encoder blit = m_graphics_device.make_blit_command_encoder(command_buffer);
-            blit.copy_from_texture(m_albedo_texture.get(), 0, 0, glm::ivec3{0, 0, 0}, glm::ivec3{width, height, 1}, &readback, 0, half_bytes_per_row, half_byte_count);
-        }
-        command_buffer.transition_texture_layout(*m_albedo_texture, Image_layout::shader_read_only_optimal);
-        command_buffer.end();
-        Command_buffer* command_buffers[] = { &command_buffer };
-        m_graphics_device.submit_command_buffers(std::span<Command_buffer* const>{command_buffers});
-        m_graphics_device.wait_idle();
-        const std::span<std::byte> mapped = readback.map_bytes(0, half_byte_count);
-        const auto* halves = reinterpret_cast<const uint16_t*>(mapped.data());
-        albedo_data.resize(texel_count * 4u);
-        for (std::size_t i = 0; i < texel_count * 4u; ++i) {
-            // Minimal half->float (no denormal/inf/nan care needed for albedo).
-            const uint16_t h        = halves[i];
-            const uint32_t sign     = static_cast<uint32_t>(h & 0x8000u) << 16;
-            const uint32_t exponent = (h >> 10) & 0x1Fu;
-            const uint32_t mantissa = h & 0x3FFu;
-            uint32_t bits = 0;
-            if (exponent != 0) {
-                bits = sign | ((exponent + 112u) << 23) | (mantissa << 13);
-            }
-            float value;
-            std::memcpy(&value, &bits, sizeof(float));
-            albedo_data[i] = value;
-        }
-        readback.unmap();
+    if (!read_rgba_texture_to_float(m_graphics_device, *m_albedo_texture, albedo_data)) {
+        return false;
     }
 
     // Positions map into the covered world bounds so the PNG uses the full
@@ -2410,76 +3040,125 @@ auto Lightmap_baker::get_or_create_blas(
 void Lightmap_baker::ensure_bake_targets(erhe::graphics::Command_buffer& command_buffer)
 {
     using namespace erhe::graphics;
-    const bool matches =
+    const auto texture_matches = [this](const std::shared_ptr<Texture>& texture) {
+        return texture && (texture->get_width() == m_layout.width) && (texture->get_height() == m_layout.height);
+    };
+    const auto make_storage = [this](const char* label, const erhe::dataformat::Format format, const int width, const int height, const uint64_t usage_mask) {
+        return std::make_shared<Texture>(
+            m_graphics_device,
+            Texture_create_info{
+                .device      = m_graphics_device,
+                .usage_mask  = usage_mask,
+                .type        = Texture_type::texture_2d,
+                .pixelformat = format,
+                .width       = width,
+                .height      = height,
+                .debug_label = erhe::utility::Debug_label{label}
+            }
+        );
+    };
+    // Working atlas + dilate scratch are CELL-sized (one cell resolves /
+    // publishes at a time); the renderer-facing display atlas is the full
+    // page.
+    const int cell_size = m_layout.get_cell_size();
+    const bool working_matches =
         m_lightmap_texture &&
-        (m_lightmap_texture->get_width()  == m_layout.width) &&
-        (m_lightmap_texture->get_height() == m_layout.height);
-    if (!matches) {
-        const auto make_storage = [this](const char* label, const uint64_t usage_mask) {
-            return std::make_shared<Texture>(
-                m_graphics_device,
-                Texture_create_info{
-                    .device      = m_graphics_device,
-                    .usage_mask  = usage_mask,
-                    .type        = Texture_type::texture_2d,
-                    .pixelformat = erhe::dataformat::Format::format_32_vec4_float,
-                    .width       = m_layout.width,
-                    .height      = m_layout.height,
-                    .debug_label = erhe::utility::Debug_label{label}
-                }
-            );
-        };
-        // Published atlas (sampled by the forward renderer and by bounce
-        // rays), accumulation atlas (sum + count) and the dilate scratch.
+        (m_lightmap_texture->get_width()  == cell_size) &&
+        (m_lightmap_texture->get_height() == cell_size);
+    if (!working_matches) {
         m_lightmap_texture = make_storage(
-            "lightmap atlas",
+            "lightmap working atlas",
+            c_atlas_format,
+            cell_size,
+            cell_size,
             Image_usage_flag_bit_mask::storage          |
             Image_usage_flag_bit_mask::sampled          |
             Image_usage_flag_bit_mask::color_attachment | // seam blend line raster target
             Image_usage_flag_bit_mask::transfer_src     |
             Image_usage_flag_bit_mask::transfer_dst
         );
-        m_accum_texture = make_storage(
-            "lightmap accumulation",
-            Image_usage_flag_bit_mask::storage |
-            Image_usage_flag_bit_mask::transfer_dst
-        );
         // The dilate scratch doubles as the seam pass sample source (a copy
-        // of the published atlas, avoiding a read/write hazard like Godot's
+        // of the working atlas, avoiding a read/write hazard like Godot's
         // light_accum_tex2).
         m_dilate_texture = make_storage(
             "lightmap dilate scratch",
+            c_atlas_format,
+            cell_size,
+            cell_size,
             Image_usage_flag_bit_mask::storage |
             Image_usage_flag_bit_mask::sampled |
             Image_usage_flag_bit_mask::transfer_dst
         );
-        // Renderer-facing double buffer: only complete publishes are copied
-        // in, so accumulation resets never black out the sampled atlas.
+        command_buffer.clear_texture(*m_lightmap_texture, {0.0, 0.0, 0.0, 0.0});
+        command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::shader_read_only_optimal);
+    }
+    // Renderer-facing double buffer: only complete publishes are copied
+    // in, so accumulation resets never black out the sampled atlas. It
+    // also survives a working-set release (set_baking_enabled(false)), so
+    // recreate only when missing or the page size changed.
+    if (!texture_matches(m_display_texture)) {
         m_display_texture = make_storage(
             "lightmap display atlas",
+            c_atlas_format,
+            m_layout.width,
+            m_layout.height,
             Image_usage_flag_bit_mask::sampled      |
             Image_usage_flag_bit_mask::transfer_src |
             Image_usage_flag_bit_mask::transfer_dst
         );
-        m_accum_cleared = false;
+        m_display_cleared = false;
     }
-    if (!m_accum_cleared) {
-        // All start at zero: the accumulation restarts, the working atlas
-        // must not feed garbage into bounce rays before the first resolve,
-        // and the display atlas holds no publish yet. This path runs only
-        // on creation and layout repacks (update_layout drops
-        // m_accum_cleared) - lighting/transform resets keep the display.
-        command_buffer.clear_texture(*m_accum_texture,    {0.0, 0.0, 0.0, 0.0});
-        command_buffer.clear_texture(*m_lightmap_texture, {0.0, 0.0, 0.0, 0.0});
-        command_buffer.clear_texture(*m_display_texture,  {0.0, 0.0, 0.0, 0.0});
-        command_buffer.transition_texture_layout(*m_accum_texture,    Image_layout::general);
-        command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::shader_read_only_optimal);
-        command_buffer.transition_texture_layout(*m_display_texture,  Image_layout::shader_read_only_optimal);
-        m_accum_cleared  = true;
-        m_display_valid  = false;
-        m_cursor_y       = 0;
-        m_sweep_count    = 0;
+    if (!m_display_cleared) {
+        // Runs on creation and layout repacks (update_layout drops
+        // m_display_cleared: regions moved, so the previous publish no
+        // longer matches the uv_scale_offsets pushed to the meshes).
+        // Lighting/transform resets keep the display showing the last
+        // publish while accumulation rebuilds.
+        command_buffer.clear_texture(*m_display_texture, {0.0, 0.0, 0.0, 0.0});
+        command_buffer.transition_texture_layout(*m_display_texture, Image_layout::shader_read_only_optimal);
+        m_display_cleared = true;
+        for (Cell_state& cell : m_cells) {
+            cell.published = false;
+        }
     }
+}
+
+auto Lightmap_baker::ensure_cell_accum(erhe::graphics::Command_buffer& command_buffer, const int cell) -> erhe::graphics::Texture*
+{
+    using namespace erhe::graphics;
+    if ((cell < 0) || (cell >= static_cast<int>(m_cells.size()))) {
+        return nullptr;
+    }
+    Cell_state& state = m_cells[static_cast<std::size_t>(cell)];
+    const int cell_size = m_layout.get_cell_size();
+    const bool matches =
+        state.accum &&
+        (state.accum->get_width()  == cell_size) &&
+        (state.accum->get_height() == cell_size);
+    if (!matches) {
+        state.accum = std::make_shared<Texture>(
+            m_graphics_device,
+            Texture_create_info{
+                .device      = m_graphics_device,
+                .usage_mask  =
+                    Image_usage_flag_bit_mask::storage |
+                    Image_usage_flag_bit_mask::transfer_dst,
+                .type        = Texture_type::texture_2d,
+                .pixelformat = c_accum_format,
+                .width       = cell_size,
+                .height      = cell_size,
+                .debug_label = erhe::utility::Debug_label{"lightmap cell accumulation"}
+            }
+        );
+        state.accum_dirty = true;
+    }
+    if (state.accum_dirty) {
+        command_buffer.clear_texture(*state.accum, {0.0, 0.0, 0.0, 0.0});
+        command_buffer.transition_texture_layout(*state.accum, Image_layout::general);
+        state.accum_dirty = false;
+        state.sweeps      = 0;
+    }
+    return state.accum.get();
 }
 
 void Lightmap_baker::publish_regions()
@@ -2667,22 +3346,9 @@ auto Lightmap_baker::bake_direct(Scene_root& scene_root) -> bool
 {
     using namespace erhe::graphics;
 
-    if (!m_gather_pipeline || !m_resolve_pipeline || !m_gbuffer_valid || !m_position_texture) {
+    if (!m_gather_pipeline || !m_resolve_pipeline || (m_layout.width == 0) || m_cells.empty()) {
         return false;
     }
-
-    constexpr unsigned int bake_thread_slot = 6;
-    Command_buffer& command_buffer = m_graphics_device.get_command_buffer(bake_thread_slot);
-    command_buffer.begin();
-
-    ensure_bake_targets(command_buffer);
-    // One-shot bake: restart accumulation so the result is exactly one
-    // full-atlas sample - direct light plus one bounce off whatever the
-    // published atlas held before this call (black on the first bake).
-    command_buffer.clear_texture(*m_accum_texture, {0.0, 0.0, 0.0, 0.0});
-    command_buffer.transition_texture_layout(*m_accum_texture, Image_layout::general);
-    m_cursor_y    = 0;
-    m_sweep_count = 0;
 
     const std::vector<Light_record> lights = collect_lights(scene_root);
 
@@ -2707,96 +3373,135 @@ auto Lightmap_baker::bake_direct(Scene_root& scene_root) -> bool
         m_direct_gather_ubo->unmap();
     }
 
-    collect_instances(command_buffer, scene_root, m_tick_instances, m_tick_records);
-    if (m_tick_instances.empty()) {
-        command_buffer.end();
-        return false;
-    }
-    const std::size_t record_byte_count = m_tick_records.size() * sizeof(Lm_instance_record);
-    m_direct_instance_ssbo = std::make_unique<Buffer>(
-        m_graphics_device,
-        Buffer_create_info{
-            .capacity_byte_count                    = record_byte_count,
-            .memory_allocation_create_flag_bit_mask = Memory_allocation_create_flag_bit_mask::mapped,
-            .usage                                  = Buffer_usage::storage,
-            .required_memory_property_bit_mask      =
-                Memory_property_flag_bit_mask::host_read |
-                Memory_property_flag_bit_mask::host_write,
-            .preferred_memory_property_bit_mask     =
-                Memory_property_flag_bit_mask::host_coherent |
-                Memory_property_flag_bit_mask::host_persistent,
-            .debug_label = erhe::utility::Debug_label{"lightmap instance records"}
+    // One cell at a time: raster the cell's G-buffer (standalone submit
+    // inside bake_gbuffer), then gather + resolve + publish the cell in a
+    // second standalone submit. One-shot bake semantics per cell: restart
+    // the cell's accumulation so the result is exactly one full sample -
+    // direct light plus one bounce off whatever the display atlas held.
+    const int    cell_size  = m_layout.get_cell_size();
+    std::size_t  cells_done = 0;
+    constexpr unsigned int bake_thread_slot = 6;
+    for (int cell = 0; cell < m_layout.get_cell_count(); ++cell) {
+        if (!m_cells[static_cast<std::size_t>(cell)].has_content) {
+            continue;
         }
-    );
-    {
-        const std::span<std::byte> mapped = m_direct_instance_ssbo->map_bytes(0, record_byte_count);
-        std::memcpy(mapped.data(), m_tick_records.data(), record_byte_count);
-        m_direct_instance_ssbo->unmap();
-    }
+        if (!bake_gbuffer(cell)) {
+            continue;
+        }
 
-    const uint32_t required_capacity = static_cast<uint32_t>(m_tick_instances.size());
-    if (!m_tlas || (m_tlas_capacity < required_capacity)) {
-        const uint32_t new_capacity = std::max(64u, std::bit_ceil(required_capacity));
-        m_tlas = std::make_unique<Acceleration_structure>(
+        Command_buffer& command_buffer = m_graphics_device.get_command_buffer(bake_thread_slot);
+        command_buffer.begin();
+        ensure_bake_targets(command_buffer);
+        m_cells[static_cast<std::size_t>(cell)].accum_dirty = true;
+        Texture* const accum = ensure_cell_accum(command_buffer, cell);
+        if (accum == nullptr) {
+            command_buffer.end();
+            continue;
+        }
+
+        collect_instances(command_buffer, scene_root, m_tick_instances, m_tick_records);
+        if (m_tick_instances.empty()) {
+            command_buffer.end();
+            return false;
+        }
+        const std::size_t record_byte_count = m_tick_records.size() * sizeof(Lm_instance_record);
+        m_direct_instance_ssbo = std::make_unique<Buffer>(
             m_graphics_device,
-            Acceleration_structure_create_info{
-                .type               = Acceleration_structure_type::top_level,
-                .max_instance_count = new_capacity,
-                .debug_label        = erhe::utility::Debug_label{"Lightmap TLAS"}
+            Buffer_create_info{
+                .capacity_byte_count                    = record_byte_count,
+                .memory_allocation_create_flag_bit_mask = Memory_allocation_create_flag_bit_mask::mapped,
+                .usage                                  = Buffer_usage::storage,
+                .required_memory_property_bit_mask      =
+                    Memory_property_flag_bit_mask::host_read |
+                    Memory_property_flag_bit_mask::host_write,
+                .preferred_memory_property_bit_mask     =
+                    Memory_property_flag_bit_mask::host_coherent |
+                    Memory_property_flag_bit_mask::host_persistent,
+                .debug_label = erhe::utility::Debug_label{"lightmap instance records"}
             }
         );
-        m_tlas_capacity = new_capacity;
-    }
-    m_tlas->build(command_buffer, m_tick_instances);
-
-    // Virtual offset (one-shot per G-buffer): needs the TLAS just built.
-    record_adjust(
-        command_buffer,
-        *m_tlas,
-        [&](Compute_command_encoder& encoder) {
-            encoder.set_buffer(Buffer_target::storage, m_direct_instance_ssbo.get(), 0, record_byte_count, 1);
+        {
+            const std::span<std::byte> mapped = m_direct_instance_ssbo->map_bytes(0, record_byte_count);
+            std::memcpy(mapped.data(), m_tick_records.data(), record_byte_count);
+            m_direct_instance_ssbo->unmap();
         }
-    );
 
-    // Gather one full-atlas sample: published atlas is sampled by bounce
-    // rays (shader_read_only), accumulation image is written (general).
-    command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::shader_read_only_optimal);
-    {
-        Compute_command_encoder encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
-        encoder.set_bind_group_layout(m_gather_layout.get());
-        encoder.set_compute_pipeline(*m_gather_pipeline);
-        encoder.set_buffer(Buffer_target::uniform, m_direct_gather_ubo.get(),    0, m_gather_block_size, 0);
-        encoder.set_buffer(Buffer_target::storage, m_direct_instance_ssbo.get(), 0, record_byte_count,   1);
-        encoder.set_acceleration_structure(2u, *m_tlas);
-        encoder.set_sampled_image(3u, *m_position_texture, *m_nearest_sampler);
-        encoder.set_sampled_image(4u, *m_normal_texture,   *m_nearest_sampler);
-        encoder.set_sampled_image(5u, *m_albedo_texture,   *m_linear_sampler);
-        encoder.set_sampled_image(6u, *m_lightmap_texture, *m_linear_sampler);
-        encoder.set_sampled_image(7u, (m_sky.transmittance_lut != nullptr) ? *m_sky.transmittance_lut : *m_albedo_texture, *m_linear_sampler);
-        encoder.set_sampled_image(8u, (m_sky.multiscatter_lut  != nullptr) ? *m_sky.multiscatter_lut  : *m_albedo_texture, *m_linear_sampler);
-        encoder.set_storage_image(11u, *m_accum_texture);
-        encoder.dispatch_compute(
-            (static_cast<std::uintptr_t>(m_layout.width)  + 7) / 8,
-            (static_cast<std::uintptr_t>(m_layout.height) + 7) / 8,
-            1
+        const uint32_t required_capacity = static_cast<uint32_t>(m_tick_instances.size());
+        if (!m_tlas || (m_tlas_capacity < required_capacity)) {
+            const uint32_t new_capacity = std::max(64u, std::bit_ceil(required_capacity));
+            m_tlas = std::make_unique<Acceleration_structure>(
+                m_graphics_device,
+                Acceleration_structure_create_info{
+                    .type               = Acceleration_structure_type::top_level,
+                    .max_instance_count = new_capacity,
+                    .debug_label        = erhe::utility::Debug_label{"Lightmap TLAS"}
+                }
+            );
+            m_tlas_capacity = new_capacity;
+        }
+        m_tlas->build(command_buffer, m_tick_instances);
+
+        // Virtual offset (one-shot per G-buffer): needs the TLAS just built.
+        record_adjust(
+            command_buffer,
+            *m_tlas,
+            [&](Compute_command_encoder& encoder) {
+                encoder.set_buffer(Buffer_target::storage, m_direct_instance_ssbo.get(), 0, record_byte_count, 1);
+            }
         );
-    }
 
-    record_resolve_and_dilate(command_buffer, false);
-    record_display_publish(command_buffer);
-    command_buffer.end();
-    Command_buffer* command_buffers[] = { &command_buffer };
-    m_graphics_device.submit_command_buffers(std::span<Command_buffer* const>{command_buffers});
-    m_graphics_device.wait_idle();
+        // Gather one full-cell sample: the display atlas is sampled by
+        // bounce rays (shader_read_only), the cell accumulation image is
+        // written (general).
+        command_buffer.transition_texture_layout(*m_display_texture, Image_layout::shader_read_only_optimal);
+        {
+            Compute_pipeline* const ss_pipeline =
+                (m_origin_factor == 8) ? m_gather_ss8_pipeline.get() :
+                (m_origin_factor == 4) ? m_gather_ss4_pipeline.get() : nullptr;
+            const bool supersample = m_origin_valid && m_origin_texture && (ss_pipeline != nullptr);
+            Compute_command_encoder encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
+            encoder.set_bind_group_layout(m_gather_layout.get());
+            encoder.set_compute_pipeline(supersample ? *ss_pipeline : *m_gather_pipeline);
+            encoder.set_buffer(Buffer_target::uniform, m_direct_gather_ubo.get(),    0, m_gather_block_size, 0);
+            encoder.set_buffer(Buffer_target::storage, m_direct_instance_ssbo.get(), 0, record_byte_count,   1);
+            encoder.set_acceleration_structure(2u, *m_tlas);
+            encoder.set_sampled_image(3u, *m_position_texture, *m_nearest_sampler);
+            encoder.set_sampled_image(4u, *m_normal_texture,   *m_nearest_sampler);
+            encoder.set_sampled_image(5u, *m_albedo_texture,   *m_linear_sampler);
+            encoder.set_sampled_image(6u, *m_display_texture,  *m_linear_sampler);
+            encoder.set_sampled_image(7u, (m_sky.transmittance_lut != nullptr) ? *m_sky.transmittance_lut : *m_albedo_texture, *m_linear_sampler);
+            encoder.set_sampled_image(8u, (m_sky.multiscatter_lut  != nullptr) ? *m_sky.multiscatter_lut  : *m_albedo_texture, *m_linear_sampler);
+            encoder.set_sampled_image(9u, supersample ? *m_origin_texture : *m_position_texture, *m_nearest_sampler);
+            encoder.set_storage_image(12u, *accum);
+            encoder.dispatch_compute(
+                (static_cast<std::uintptr_t>(cell_size) + 7) / 8,
+                (static_cast<std::uintptr_t>(cell_size) + 7) / 8,
+                1
+            );
+        }
+
+        record_resolve_and_dilate(command_buffer, cell, false);
+        record_display_publish(command_buffer, cell);
+        command_buffer.end();
+        Command_buffer* command_buffers[] = { &command_buffer };
+        m_graphics_device.submit_command_buffers(std::span<Command_buffer* const>{command_buffers});
+        m_graphics_device.wait_idle();
+        m_cells[static_cast<std::size_t>(cell)].published = true;
+        m_cells[static_cast<std::size_t>(cell)].sweeps    = 1;
+        ++cells_done;
+    }
+    if (cells_done == 0) {
+        return false;
+    }
 
     m_lightmap_valid = true;
-    m_display_valid  = true;
-    m_sweep_count    = 1;
+    m_cursor_cell    = 0;
+    m_cursor_y       = 0;
     publish_regions();
 
     log_render->info(
-        "Lightmap_baker: direct light baked, {} lights, {} occluder instances, {}x{}",
-        lights.size(), m_tick_instances.size(), m_layout.width, m_layout.height
+        "Lightmap_baker: direct light baked, {} lights, {} cells, {}x{} page",
+        lights.size(), cells_done, m_layout.width, m_layout.height
     );
     return true;
 }
@@ -2825,8 +3530,8 @@ void Lightmap_baker::record_adjust(
         encoder.set_storage_image(3u, *m_normal_texture);
         encoder.set_storage_image(4u, *m_smooth_position_texture);
         encoder.dispatch_compute(
-            (static_cast<std::uintptr_t>(m_layout.width)  + 7) / 8,
-            (static_cast<std::uintptr_t>(m_layout.height) + 7) / 8,
+            (static_cast<std::uintptr_t>(m_position_texture->get_width())  + 7) / 8,
+            (static_cast<std::uintptr_t>(m_position_texture->get_height()) + 7) / 8,
             1
         );
     }
@@ -2835,6 +3540,60 @@ void Lightmap_baker::record_adjust(
     command_buffer.transition_texture_layout(*m_normal_texture,          Image_layout::shader_read_only_optimal);
     command_buffer.transition_texture_layout(*m_smooth_position_texture, Image_layout::shader_read_only_optimal);
     m_gbuffer_adjusted = true;
+    // The smooth position is now folded into the position G-buffer and
+    // nothing else reads it; release the page-sized fp32 target until the
+    // next G-buffer re-raster (ensure_gbuffer_targets recreates it).
+    // Destruction is deferred behind the in-flight frames, so the commands
+    // recorded above stay valid.
+    m_smooth_position_texture.reset();
+}
+
+void Lightmap_baker::set_baking_enabled(const bool enabled)
+{
+    if (enabled == m_baking_enabled) {
+        return;
+    }
+    m_baking_enabled = enabled;
+    if (!enabled) {
+        release_working_set();
+    }
+}
+
+void Lightmap_baker::release_working_set()
+{
+    // Everything here is rebuilt on demand by the next enabled tick
+    // (bake_gbuffer / ensure_bake_targets / collect_instances); only the
+    // display atlas the forward renderer samples stays resident, so the
+    // scene keeps its last published lighting while baking is off.
+    // Texture/BLAS destruction is deferred behind the in-flight frames.
+    m_position_texture.reset();
+    m_normal_texture.reset();
+    m_albedo_texture.reset();
+    m_smooth_position_texture.reset();
+    m_origin_texture.reset();
+    m_origin_valid     = false;
+    m_origin_factor    = 0;
+    m_lightmap_texture.reset();
+    m_dilate_texture.reset();
+    m_gbuffer_valid    = false;
+    m_gbuffer_cell     = -1;
+    m_gbuffer_adjusted = false;
+    m_cursor_cell      = 0;
+    m_cursor_y         = 0;
+    for (Cell_state& cell : m_cells) {
+        cell.accum.reset();
+        cell.accum_dirty = true;
+        cell.sweeps      = 0;
+        // cell.published stays: the display atlas keeps its last publish.
+    }
+    m_blas_cache.clear();
+    m_tlas.reset();
+    m_tlas_capacity = 0;
+    for (Tlas_slot& slot : m_tlas_slots) {
+        slot.acceleration_structure.reset();
+        slot.capacity = 0;
+    }
+    log_render->info("Lightmap_baker: bake working set released (display atlas kept)");
 }
 
 void Lightmap_baker::set_options(const Bake_options& options)
@@ -2849,6 +3608,17 @@ void Lightmap_baker::set_options(const Bake_options& options)
     if (options.indirect_bounce != m_options.indirect_bounce) {
         m_reset_requested = true; // accumulated samples already mix in bounce light
     }
+    if (options.coverage_mode != m_options.coverage_mode) {
+        // Coverage decides which texels the raster writes; re-raster.
+        m_gbuffer_valid   = false;
+        m_reset_requested = true;
+    }
+    if (options.supersample_factor != m_options.supersample_factor) {
+        // The origin target is (re)built in bake_gbuffer; accumulated
+        // samples already used the other origin strategy / density.
+        m_gbuffer_valid   = false;
+        m_reset_requested = true;
+    }
     if ((options.denoise       != m_options.denoise      ) ||
         (options.dilation      != m_options.dilation     ) ||
         (options.seam_blend    != m_options.seam_blend   ) ||
@@ -2858,27 +3628,34 @@ void Lightmap_baker::set_options(const Bake_options& options)
     m_options = options;
 }
 
-void Lightmap_baker::record_resolve_and_dilate(erhe::graphics::Command_buffer& command_buffer, const bool with_denoise)
+void Lightmap_baker::record_resolve_and_dilate(erhe::graphics::Command_buffer& command_buffer, const int cell, const bool with_denoise)
 {
     using namespace erhe::graphics;
 
-    // Resolve the running average into the published atlas, optionally JNLM
-    // denoise it, then dilate; never touches the accumulation buffer. The
-    // dilation ping-pong iteration count is chosen so the final pass lands
-    // back in m_lightmap_texture: without denoise it starts there (even
-    // count), with denoise it starts in the scratch the denoiser wrote (odd
-    // count).
+    erhe::graphics::Texture* const accum =
+        ((cell >= 0) && (cell < static_cast<int>(m_cells.size()))) ? m_cells[static_cast<std::size_t>(cell)].accum.get() : nullptr;
+    if ((accum == nullptr) || !m_lightmap_texture) {
+        return;
+    }
+    const int cell_size = m_layout.get_cell_size();
+
+    // Resolve the cell's running average into the working atlas, optionally
+    // JNLM denoise it, then dilate; never touches the accumulation buffer.
+    // The dilation ping-pong iteration count is chosen so the final pass
+    // lands back in m_lightmap_texture: without denoise it starts there
+    // (even count), with denoise it starts in the scratch the denoiser
+    // wrote (odd count).
     command_buffer.memory_barrier(Memory_barrier_mask::shader_image_access_barrier_bit);
     command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::general);
     {
         Compute_command_encoder encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
-        encoder.set_bind_group_layout(m_dilate_layout.get());
+        encoder.set_bind_group_layout(m_resolve_layout.get());
         encoder.set_compute_pipeline(*m_resolve_pipeline);
-        encoder.set_storage_image(0u, *m_accum_texture);
+        encoder.set_storage_image(0u, *accum);
         encoder.set_storage_image(1u, *m_lightmap_texture);
         encoder.dispatch_compute(
-            (static_cast<std::uintptr_t>(m_layout.width)  + 7) / 8,
-            (static_cast<std::uintptr_t>(m_layout.height) + 7) / 8,
+            (static_cast<std::uintptr_t>(cell_size) + 7) / 8,
+            (static_cast<std::uintptr_t>(cell_size) + 7) / 8,
             1
         );
     }
@@ -2897,8 +3674,8 @@ void Lightmap_baker::record_resolve_and_dilate(erhe::graphics::Command_buffer& c
             encoder.set_storage_image(2u, *m_normal_texture);
             encoder.set_storage_image(3u, *m_albedo_texture);
             encoder.dispatch_compute(
-                (static_cast<std::uintptr_t>(m_layout.width)  + 7) / 8,
-                (static_cast<std::uintptr_t>(m_layout.height) + 7) / 8,
+                (static_cast<std::uintptr_t>(cell_size) + 7) / 8,
+                (static_cast<std::uintptr_t>(cell_size) + 7) / 8,
                 1
             );
         }
@@ -2929,8 +3706,8 @@ void Lightmap_baker::record_resolve_and_dilate(erhe::graphics::Command_buffer& c
                 encoder.set_storage_image(0u, *ping[i & 1]);
                 encoder.set_storage_image(1u, *ping[(i + 1) & 1]);
                 encoder.dispatch_compute(
-                    (static_cast<std::uintptr_t>(m_layout.width)  + 7) / 8,
-                    (static_cast<std::uintptr_t>(m_layout.height) + 7) / 8,
+                    (static_cast<std::uintptr_t>(cell_size) + 7) / 8,
+                    (static_cast<std::uintptr_t>(cell_size) + 7) / 8,
                     1
                 );
             }
@@ -2957,34 +3734,52 @@ void Lightmap_baker::record_resolve_and_dilate(erhe::graphics::Command_buffer& c
         }
     }
     if (m_options.seam_blend) {
-        record_seam_blend(command_buffer);
+        record_seam_blend(command_buffer, cell);
     }
     command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::shader_read_only_optimal);
 }
 
-void Lightmap_baker::record_display_publish(erhe::graphics::Command_buffer& command_buffer)
+void Lightmap_baker::record_display_publish(erhe::graphics::Command_buffer& command_buffer, const int cell)
 {
     using namespace erhe::graphics;
     if (!m_lightmap_texture || !m_display_texture) {
         return;
     }
+    const int        cell_size   = m_layout.get_cell_size();
+    const glm::ivec2 cell_origin = m_layout.get_cell_origin(cell);
     command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::transfer_src_optimal);
     command_buffer.transition_texture_layout(*m_display_texture,  Image_layout::transfer_dst_optimal);
     {
         Blit_command_encoder blit = m_graphics_device.make_blit_command_encoder(command_buffer);
-        blit.copy_from_texture(m_lightmap_texture.get(), m_display_texture.get());
+        blit.copy_from_texture(
+            m_lightmap_texture.get(),
+            0, 0,
+            glm::ivec3{0, 0, 0},
+            glm::ivec3{cell_size, cell_size, 1},
+            m_display_texture.get(),
+            0, 0,
+            glm::ivec3{cell_origin.x, cell_origin.y, 0}
+        );
     }
     command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::shader_read_only_optimal);
     command_buffer.transition_texture_layout(*m_display_texture,  Image_layout::shader_read_only_optimal);
 }
 
-void Lightmap_baker::record_seam_blend(erhe::graphics::Command_buffer& command_buffer)
+void Lightmap_baker::record_seam_blend(erhe::graphics::Command_buffer& command_buffer, const int cell)
 {
     using namespace erhe::graphics;
-    if (!m_seam_pipeline || m_seam_vertices.empty() || !m_dilate_texture) {
+    if (!m_seam_pipeline || !m_dilate_texture) {
         return;
     }
-    // Sample source: a copy of the published atlas in the dilate scratch
+    if ((cell < 0) || (cell >= static_cast<int>(m_cell_seam_ranges.size()))) {
+        return;
+    }
+    const auto [first_vertex, vertex_count] = m_cell_seam_ranges[static_cast<std::size_t>(cell)];
+    if (vertex_count == 0) {
+        return;
+    }
+    const int cell_size = m_layout.get_cell_size();
+    // Sample source: a copy of the working atlas in the dilate scratch
     // (rendering into the atlas while sampling it would be a hazard).
     command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::transfer_src_optimal);
     command_buffer.transition_texture_layout(*m_dilate_texture,   Image_layout::transfer_dst_optimal);
@@ -2995,11 +3790,11 @@ void Lightmap_baker::record_seam_blend(erhe::graphics::Command_buffer& command_b
     command_buffer.transition_texture_layout(*m_dilate_texture,   Image_layout::shader_read_only_optimal);
     command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::color_attachment_optimal);
 
-    const std::size_t byte_count = m_seam_vertices.size() * sizeof(Seam_vertex);
+    const std::size_t byte_count = static_cast<std::size_t>(vertex_count) * sizeof(Seam_vertex);
     Ring_buffer_range vertex_range = m_seam_vertex_ring->acquire(Ring_buffer_usage::CPU_write, byte_count);
     {
         std::span<std::byte> gpu_data = vertex_range.get_span();
-        std::memcpy(gpu_data.data(), m_seam_vertices.data(), byte_count);
+        std::memcpy(gpu_data.data(), m_seam_vertices.data() + first_vertex, byte_count);
         vertex_range.bytes_written(byte_count);
         vertex_range.close();
     }
@@ -3013,25 +3808,32 @@ void Lightmap_baker::record_seam_blend(erhe::graphics::Command_buffer& command_b
     attachment.layout_before = Image_layout::color_attachment_optimal;
     attachment.usage_after   = Image_usage_flag_bit_mask::storage;
     attachment.layout_after  = Image_layout::color_attachment_optimal;
-    descriptor.render_target_width  = m_layout.width;
-    descriptor.render_target_height = m_layout.height;
+    descriptor.render_target_width  = cell_size;
+    descriptor.render_target_height = cell_size;
     descriptor.debug_label = erhe::utility::Debug_label{"lightmap seam blend"};
     {
         Render_pass            render_pass{m_graphics_device, descriptor};
         Render_command_encoder encoder = m_graphics_device.make_render_command_encoder(command_buffer);
         const Scoped_render_pass scoped{render_pass, command_buffer};
-        encoder.set_viewport_rect(0, 0, m_layout.width, m_layout.height);
-        encoder.set_scissor_rect (0, 0, m_layout.width, m_layout.height);
+        encoder.set_viewport_rect(0, 0, cell_size, cell_size);
+        encoder.set_scissor_rect (0, 0, cell_size, cell_size);
         encoder.set_bind_group_layout(m_seam_layout.get());
         encoder.set_render_pipeline(*m_seam_pipeline);
         encoder.set_sampled_image(0u, *m_dilate_texture, *m_linear_sampler);
         encoder.set_vertex_buffer(vertex_range.get_buffer()->get_buffer(), vertex_range.get_byte_start_offset_in_buffer(), 0);
-        encoder.draw_primitives(Primitive_type::line, 0, m_seam_vertices.size());
+        encoder.draw_primitives(Primitive_type::line, 0, vertex_count);
     }
     vertex_range.release();
 }
 
-void Lightmap_baker::tick(erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root, const float texels_per_meter, const float min_face_texels)
+void Lightmap_baker::tick(
+    erhe::graphics::Command_buffer& command_buffer,
+    Scene_root&                     scene_root,
+    const float                     texels_per_meter,
+    const float                     min_face_texels,
+    const glm::vec3*                camera_position,
+    const int                       max_active_cells
+)
 {
     using namespace erhe::graphics;
 
@@ -3159,7 +3961,99 @@ void Lightmap_baker::tick(erhe::graphics::Command_buffer& command_buffer, Scene_
         }
         m_gbuffer_upload_defer = true;
     }
-    if (!m_gbuffer_valid) {
+    if (m_cells.empty()) {
+        return;
+    }
+
+    // Camera clamp (max_active_cells > 0): rank content cells by the
+    // nearest distance from the camera to any of their regions' mesh
+    // origins and keep only the N nearest active. Deactivated cells stop
+    // gathering, release their fp32 accumulation, and keep showing their
+    // last publish from the display atlas.
+    {
+        const int cell_count = static_cast<int>(m_cells.size());
+        std::vector<char> want_active(static_cast<std::size_t>(cell_count), 1);
+        if ((max_active_cells > 0) && (camera_position != nullptr) && (cell_count > max_active_cells)) {
+            std::vector<float> distance(static_cast<std::size_t>(cell_count), std::numeric_limits<float>::max());
+            for (const Instance_region& region : m_layout.regions) {
+                const erhe::scene::Node* const node = region.mesh ? region.mesh->get_node() : nullptr;
+                if (node == nullptr) {
+                    continue;
+                }
+                const glm::vec3 position{node->world_from_node()[3]};
+                const float d = glm::distance(position, *camera_position);
+                float& slot = distance[static_cast<std::size_t>(region.cell)];
+                slot = std::min(slot, d);
+            }
+            std::vector<int> order;
+            order.reserve(static_cast<std::size_t>(cell_count));
+            for (int cell = 0; cell < cell_count; ++cell) {
+                if (m_cells[static_cast<std::size_t>(cell)].has_content) {
+                    order.push_back(cell);
+                }
+            }
+            std::sort(
+                order.begin(),
+                order.end(),
+                [&](const int lhs, const int rhs) {
+                    return distance[static_cast<std::size_t>(lhs)] < distance[static_cast<std::size_t>(rhs)];
+                }
+            );
+            std::fill(want_active.begin(), want_active.end(), char{0});
+            for (std::size_t i = 0; (i < order.size()) && (i < static_cast<std::size_t>(max_active_cells)); ++i) {
+                want_active[static_cast<std::size_t>(order[i])] = 1;
+            }
+        }
+        for (int cell = 0; cell < cell_count; ++cell) {
+            Cell_state& state  = m_cells[static_cast<std::size_t>(cell)];
+            const bool  active = want_active[static_cast<std::size_t>(cell)] != 0;
+            if (state.active && !active && state.accum) {
+                // Deactivated: drop the accumulation (destruction is
+                // deferred behind the in-flight frames).
+                state.accum.reset();
+                state.accum_dirty = true;
+                state.sweeps      = 0;
+            }
+            state.active = active;
+        }
+    }
+
+    // Advance the cursor to a cell that actually gathers (has regions and
+    // is within the camera clamp); bail if none is left.
+    const int cell_count = static_cast<int>(m_cells.size());
+    const auto cell_gathers = [this](const int cell) -> bool {
+        const Cell_state& state = m_cells[static_cast<std::size_t>(cell)];
+        return state.has_content && state.active;
+    };
+    if ((m_cursor_cell < 0) || (m_cursor_cell >= cell_count) || !cell_gathers(m_cursor_cell)) {
+        int next = -1;
+        for (int i = 0; i < cell_count; ++i) {
+            const int candidate = (m_cursor_cell + i) % cell_count;
+            if (cell_gathers(candidate)) {
+                next = candidate;
+                break;
+            }
+        }
+        if (next < 0) {
+            return;
+        }
+        m_cursor_cell = next;
+        m_cursor_y    = 0;
+    }
+
+    if (reset) {
+        // Light / occluder / transform edits invalidate every cell's
+        // accumulation; the clears happen lazily as each cell becomes
+        // current (ensure_cell_accum).
+        for (Cell_state& state : m_cells) {
+            state.accum_dirty = true;
+            state.sweeps      = 0;
+        }
+        m_cursor_y = 0;
+    }
+    m_reset_requested = false;
+
+    if (!m_gbuffer_valid || (m_gbuffer_cell != m_cursor_cell)) {
         // A layout change this tick means the swapped meshes' vertex uploads
         // are still queued in the frame command buffer, which is submitted
         // AFTER this standalone bake would run - the raster would read
@@ -3171,23 +4065,21 @@ void Lightmap_baker::tick(erhe::graphics::Command_buffer& command_buffer, Scene_
             m_gbuffer_upload_defer = false;
             return;
         }
-        // Standalone submit (wait_idle): a hitch, but only on invalidation
-        // events (transform edit of a lightmapped mesh), not steady state.
-        if (!bake_gbuffer()) {
+        // Standalone submit (wait_idle): a hitch on invalidation events
+        // (transform edit of a lightmapped mesh) and on cell transitions
+        // (once per cell per sweep on multi-cell pages).
+        if (!bake_gbuffer(m_cursor_cell)) {
             return;
         }
         m_hash_gbuffer = region_hash();
-        reset          = true;
     }
 
     ensure_bake_targets(command_buffer);
-    if (reset && m_accum_cleared) {
-        command_buffer.clear_texture(*m_accum_texture, {0.0, 0.0, 0.0, 0.0});
-        command_buffer.transition_texture_layout(*m_accum_texture, Image_layout::general);
-        m_cursor_y    = 0;
-        m_sweep_count = 0;
+    Texture* const accum = ensure_cell_accum(command_buffer, m_cursor_cell);
+    if (accum == nullptr) {
+        return;
     }
-    m_reset_requested = false;
+    Cell_state& cursor_state = m_cells[static_cast<std::size_t>(m_cursor_cell)];
 
     const std::vector<Light_record> lights = collect_lights(scene_root);
     collect_instances(command_buffer, scene_root, m_tick_instances, m_tick_records);
@@ -3234,10 +4126,11 @@ void Lightmap_baker::tick(erhe::graphics::Command_buffer& command_buffer, Scene_
         }
     );
 
-    // Budgeted band (plan section 3a step 2): the tile cursor walks the
-    // atlas top to bottom; small pages sweep whole-atlas every frame.
-    const int rows_budget = std::clamp(c_texels_per_tick / std::max(m_layout.width, 1), 8, m_layout.height);
-    const int band_rows   = std::min(rows_budget, m_layout.height - m_cursor_y);
+    // Budgeted band (plan section 3a step 2): the cursor walks the current
+    // CELL top to bottom; small cells sweep whole-cell every frame.
+    const int cell_size   = m_layout.get_cell_size();
+    const int rows_budget = std::clamp(c_texels_per_tick / std::max(cell_size, 1), 8, cell_size);
+    const int band_rows   = std::min(rows_budget, cell_size - m_cursor_y);
     const uint32_t base_y = static_cast<uint32_t>(m_cursor_y);
 
     Ring_buffer_range ubo_range = m_tick_gather_ubo->acquire(Ring_buffer_usage::CPU_write, m_gather_block_size);
@@ -3248,24 +4141,31 @@ void Lightmap_baker::tick(erhe::graphics::Command_buffer& command_buffer, Scene_
         ubo_range.close();
     }
 
-    command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::shader_read_only_optimal);
+    // Bounce rays sample the page-sized display atlas (regions' published
+    // uv_scale_offset is page-relative); one publish of feedback latency.
+    command_buffer.transition_texture_layout(*m_display_texture, Image_layout::shader_read_only_optimal);
     {
+        Compute_pipeline* const ss_pipeline =
+            (m_origin_factor == 8) ? m_gather_ss8_pipeline.get() :
+            (m_origin_factor == 4) ? m_gather_ss4_pipeline.get() : nullptr;
+        const bool supersample = m_origin_valid && m_origin_texture && (ss_pipeline != nullptr);
         Compute_command_encoder encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
         encoder.set_bind_group_layout(m_gather_layout.get());
-        encoder.set_compute_pipeline(*m_gather_pipeline);
+        encoder.set_compute_pipeline(supersample ? *ss_pipeline : *m_gather_pipeline);
         m_tick_gather_ubo->bind(encoder, ubo_range);
         m_tick_instance_ssbo->bind(encoder, ssbo_range);
         encoder.set_acceleration_structure(2u, *slot.acceleration_structure);
         encoder.set_sampled_image(3u, *m_position_texture, *m_nearest_sampler);
         encoder.set_sampled_image(4u, *m_normal_texture,   *m_nearest_sampler);
         encoder.set_sampled_image(5u, *m_albedo_texture,   *m_linear_sampler);
-        encoder.set_sampled_image(6u, *m_lightmap_texture, *m_linear_sampler);
+        encoder.set_sampled_image(6u, *m_display_texture,  *m_linear_sampler);
         encoder.set_sampled_image(7u, (m_sky.transmittance_lut != nullptr) ? *m_sky.transmittance_lut : *m_albedo_texture, *m_linear_sampler);
         encoder.set_sampled_image(8u, (m_sky.multiscatter_lut  != nullptr) ? *m_sky.multiscatter_lut  : *m_albedo_texture, *m_linear_sampler);
-        encoder.set_storage_image(11u, *m_accum_texture);
+        encoder.set_sampled_image(9u, supersample ? *m_origin_texture : *m_position_texture, *m_nearest_sampler);
+        encoder.set_storage_image(12u, *accum);
         encoder.dispatch_compute(
-            (static_cast<std::uintptr_t>(m_layout.width) + 7) / 8,
-            (static_cast<std::uintptr_t>(band_rows)      + 7) / 8,
+            (static_cast<std::uintptr_t>(cell_size) + 7) / 8,
+            (static_cast<std::uintptr_t>(band_rows) + 7) / 8,
             1
         );
     }
@@ -3273,34 +4173,43 @@ void Lightmap_baker::tick(erhe::graphics::Command_buffer& command_buffer, Scene_
     ssbo_range.release();
 
     m_cursor_y += band_rows;
-    const bool sweep_completed = m_cursor_y >= m_layout.height;
-    if (sweep_completed) {
+    const bool cell_sweep_completed = m_cursor_y >= cell_size;
+    if (cell_sweep_completed) {
         m_cursor_y = 0;
-        ++m_sweep_count;
+        ++cursor_state.sweeps;
     }
-    // Publish cadence (phase 4 denoise): during the first sweep after a
-    // reset publish the raw average every tick so the lightmap appears
-    // immediately; once a full sweep exists publish only on sweep
-    // completion, with JNLM denoise folded in. Steady-state mid-sweep
-    // ticks skip resolve+dilate entirely - the viewport (and the bounce
-    // feedback) keep sampling the last denoised publish.
-    if (m_sweep_count == 0) {
-        record_resolve_and_dilate(command_buffer, false);
-        // First-ever bake: nothing better to display, so copy the partial
-        // sweep out for the progressive preview. After a reset the display
-        // keeps the previous complete publish instead.
-        if (!m_display_valid) {
-            record_display_publish(command_buffer);
+    // Publish cadence (phase 4 denoise): while the cell has never been
+    // published publish the raw average every tick so the lightmap appears
+    // immediately; afterwards publish only on cell-sweep completion, with
+    // JNLM denoise folded in. Steady-state mid-sweep ticks skip
+    // resolve+dilate entirely - the viewport (and the bounce feedback)
+    // keep sampling the last publish.
+    if (!cursor_state.published) {
+        record_resolve_and_dilate(command_buffer, m_cursor_cell, false);
+        record_display_publish(command_buffer, m_cursor_cell);
+        if (cell_sweep_completed) {
+            cursor_state.published = true;
         }
-    } else if (sweep_completed || m_publish_requested) {
-        record_resolve_and_dilate(command_buffer, m_options.denoise);
-        record_display_publish(command_buffer);
-        m_display_valid = true;
+    } else if (cell_sweep_completed || m_publish_requested) {
+        record_resolve_and_dilate(command_buffer, m_cursor_cell, m_options.denoise);
+        record_display_publish(command_buffer, m_cursor_cell);
+        cursor_state.published = true;
     }
     m_publish_requested = false;
     m_lightmap_valid = true;
     if (!m_regions_published) {
         publish_regions();
+    }
+    // Cell rotation: after finishing a sweep of this cell move to the next
+    // gathering cell (wraps; single-cell pages keep sweeping in place).
+    if (cell_sweep_completed) {
+        for (int i = 1; i <= cell_count; ++i) {
+            const int candidate = (m_cursor_cell + i) % cell_count;
+            if (cell_gathers(candidate)) {
+                m_cursor_cell = candidate;
+                break;
+            }
+        }
     }
     ++m_frame_counter;
 }
@@ -3314,57 +4223,7 @@ auto Lightmap_baker::read_lightmap(std::vector<float>& out_rgba) -> bool
     if (!m_lightmap_valid || (source == nullptr)) {
         return false;
     }
-    const int         width         = m_layout.width;
-    const int         height        = m_layout.height;
-    const std::size_t texel_count   = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
-    const std::size_t bytes_per_row = static_cast<std::size_t>(width) * 16u;
-    const std::size_t byte_count    = bytes_per_row * static_cast<std::size_t>(height);
-
-    Buffer readback{
-        m_graphics_device,
-        Buffer_create_info{
-            .capacity_byte_count                    = byte_count,
-            .memory_allocation_create_flag_bit_mask = Memory_allocation_create_flag_bit_mask::mapped,
-            .usage                                  = Buffer_usage::transfer_dst | Buffer_usage::storage,
-            .required_memory_property_bit_mask      =
-                Memory_property_flag_bit_mask::host_read |
-                Memory_property_flag_bit_mask::host_write,
-            .preferred_memory_property_bit_mask     =
-                Memory_property_flag_bit_mask::host_coherent |
-                Memory_property_flag_bit_mask::host_persistent,
-            .debug_label = erhe::utility::Debug_label{"lightmap readback"}
-        }
-    };
-    constexpr unsigned int bake_thread_slot = 6;
-    Command_buffer& command_buffer = m_graphics_device.get_command_buffer(bake_thread_slot);
-    command_buffer.begin();
-    command_buffer.transition_texture_layout(*source, Image_layout::transfer_src_optimal);
-    {
-        Blit_command_encoder blit = m_graphics_device.make_blit_command_encoder(command_buffer);
-        blit.copy_from_texture(
-            source,
-            0, 0,
-            glm::ivec3{0, 0, 0},
-            glm::ivec3{width, height, 1},
-            &readback,
-            0,
-            bytes_per_row,
-            byte_count
-        );
-    }
-    command_buffer.transition_texture_layout(*source, Image_layout::shader_read_only_optimal);
-    command_buffer.end();
-    Command_buffer* command_buffers[] = { &command_buffer };
-    m_graphics_device.submit_command_buffers(std::span<Command_buffer* const>{command_buffers});
-    m_graphics_device.wait_idle();
-
-    out_rgba.resize(texel_count * 4u);
-    {
-        const std::span<std::byte> mapped = readback.map_bytes(0, byte_count);
-        std::memcpy(out_rgba.data(), mapped.data(), byte_count);
-        readback.unmap();
-    }
-    return true;
+    return read_rgba_texture_to_float(m_graphics_device, *source, out_rgba);
 }
 
 // Per-facet chart order keys (leak camouflage; see build_chart_order_keys

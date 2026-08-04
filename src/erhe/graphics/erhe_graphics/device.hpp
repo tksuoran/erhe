@@ -320,6 +320,22 @@ public:
     unsigned int uniform_buffer_offset_alignment       {256};
 };
 
+// Device-local (VRAM) memory budget snapshot. Vulkan fills this from VMA
+// heap budgets (driver-accurate when VK_EXT_memory_budget is available,
+// VMA's own estimate otherwise); other backends report zeros = unknown.
+// Consumers holding large optional allocations (e.g. the lightmap baker
+// working set) size them against get_remaining() instead of allocating
+// blind and hitting VK_ERROR_OUT_OF_DEVICE_MEMORY.
+class Memory_budget
+{
+public:
+    uint64_t device_local_budget{0}; // bytes the process may use before oversubscribing; 0 = unknown
+    uint64_t device_local_usage {0}; // bytes currently allocated by this process
+
+    [[nodiscard]] auto is_known     () const -> bool     { return device_local_budget > 0; }
+    [[nodiscard]] auto get_remaining() const -> uint64_t { return (device_local_budget > device_local_usage) ? (device_local_budget - device_local_usage) : 0; }
+};
+
 using Shader_error_callback   = std::function<void(const std::string& error_log, const std::string& shader_source, const std::string& callstack)>;
 using Device_message_callback = std::function<void(Message_severity severity, const std::string& message, const std::string& callstack)>;
 using State_dump_callback     = std::function<void(const std::string& state_dump)>;
@@ -512,6 +528,10 @@ public:
     [[nodiscard]] auto get_shader_monitor                 () -> Shader_monitor&;
     [[nodiscard]] auto get_info                           () const -> const Device_info&;
     [[nodiscard]] auto get_graphics_config                () const -> const Graphics_config&;
+
+    // Current device-local memory budget/usage (see Memory_budget). Cheap
+    // to call every frame; values refresh as allocations come and go.
+    [[nodiscard]] auto get_memory_budget                  () const -> Memory_budget;
 
     // The single source of truth for the reverse-Z choice. Returns true when
     // reverse-Z (near=1.0, far=0.0) should be used: the API must natively
