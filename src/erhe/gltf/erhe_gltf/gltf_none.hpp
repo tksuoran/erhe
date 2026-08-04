@@ -153,6 +153,7 @@ struct Gltf_parse_arguments
     const std::shared_ptr<erhe::scene::Node>& root_node;
     erhe::scene::Layer_id                     mesh_layer_id{};
     std::filesystem::path                     path;
+    bool                                      parallel{true};
 };
 
 [[nodiscard]] auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data;

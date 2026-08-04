@@ -726,6 +726,9 @@ set(_config_sources
     ${_config_out}/lightmap_config.hpp
     ${_config_out}/lightmap_config_serialization.hpp
     ${_config_out}/lightmap_config.cpp
+    ${_config_out}/load_config.hpp
+    ${_config_out}/load_config_serialization.hpp
+    ${_config_out}/load_config.cpp
     ${_config_out}/network_config.hpp
     ${_config_out}/network_config_serialization.hpp
     ${_config_out}/network_config.cpp

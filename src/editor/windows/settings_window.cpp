@@ -41,6 +41,7 @@
 #include "config/generated/inventory_slot_serialization.hpp"
 #include "config/generated/inventory_config_serialization.hpp"
 #include "config/generated/id_renderer_config_serialization.hpp"
+#include "config/generated/load_config_serialization.hpp"
 #include "erhe_scene_renderer/generated/mesh_memory_config_serialization.hpp"
 #include "config/generated/network_config_serialization.hpp"
 #include "config/generated/physics_config_serialization.hpp"
@@ -604,6 +605,7 @@ void Settings_window::imgui()
         add_config_section(settings.hotbar);
         add_config_section(settings.hud);
         add_config_section(settings.inventory);
+        add_config_section(settings.load);
         add_config_section(settings.id_renderer);
         add_config_section(settings.network);
         add_config_section(settings.physics);

@@ -43,6 +43,8 @@ Implements the undo/redo operation system and all concrete editor operations.
 
 Geometry operations run asynchronously via `async_for_nodes_with_mesh()` (in `items.cpp`), which creates `tf::AsyncTask` handles chained to any pending tasks for the same items. The operation callback runs on a worker thread, creates the `Mesh_operation`, and queues it to the operation stack. `Operation_stack::update()` executes queued operations on the main thread. `App_context::pending_async_ops` and `running_async_ops` (atomic counters) track in-flight operations.
 
+`Async_raytrace_kickoff_operation` (the last sub-op of every glTF import compound, and open-scene / prefab-instantiate flows) launches one such task per mesh node. Each task is the deferred load finalize (doc/gltf-load-speedup-plan.md): it prepares the Geometry, the real triangle raytrace (replacing the load-time AABB proxy) and, when the load path deferred it, the full edge-lines buffer mesh on the worker without the scene lock, then commits the swap under `item_host_mutex` (`Primitive_shape::prepare_real_raytrace`/`commit_real_raytrace`, `Primitive_render_shape::prepare_geometry_buffer_mesh`/`commit_geometry_buffer_mesh`). Every step no-ops fast when the result already exists, so re-kickoffs and eager-load configurations are safe.
+
 ## Dependencies
 
 - erhe::scene, erhe::geometry, erhe::primitive, erhe::physics

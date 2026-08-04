@@ -22,6 +22,7 @@
 #include "prefabs/prefab_library.hpp"
 
 #include "scene/generated/gltf_source_reference.hpp"
+#include "config/generated/editor_settings_config.hpp"
 
 #include "items.hpp"
 
@@ -45,6 +46,7 @@
 #include "erhe_scene/skin.hpp"
 
 #include "erhe_math/math_util.hpp"
+#include "erhe_profile/profile.hpp"
 
 #include "scene/generated/scene_settings_serialization.hpp"
 
@@ -52,6 +54,7 @@
 #include <simdjson.h>
 
 #include <algorithm>
+#include <chrono>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -408,6 +411,20 @@ void finalize_imported_meshes(
     std::vector<std::shared_ptr<erhe::Item_base>>* out_mesh_node_items
 )
 {
+    ERHE_PROFILE_FUNCTION();
+
+    const std::chrono::steady_clock::time_point finalize_start_time = std::chrono::steady_clock::now();
+
+    // Load-speedup options (doc/gltf-load-speedup-plan.md). When deferred,
+    // the load path builds a fill-only buffer mesh straight from the
+    // triangle soup plus an AABB proxy raytrace; the per-mesh tasks of the
+    // Async_raytrace_kickoff_operation build the Geometry (edges, smooth
+    // normals), the full buffer mesh and the real triangle raytrace after
+    // the glTF has finished loading. Without editor settings (or with the
+    // options disabled) everything is built here, synchronously.
+    const bool defer_edge_lines = (context.editor_settings != nullptr) && context.editor_settings->load.deferred_edge_lines;
+    const bool defer_raytrace   = (context.editor_settings != nullptr) && context.editor_settings->load.deferred_raytrace;
+
     // Build_info variant for skinned meshes -- same as the caller's
     // build_info but with vertex_format_skinned so the GPU vertex buffer
     // carries joint_indices + joint_weights. Without this, Shader_key::derive
@@ -453,7 +470,14 @@ void finalize_imported_meshes(
             // bit-exact round-trip, so process only when edges are
             // genuinely missing.
             if (primitive.render_shape) {
-                const std::shared_ptr<erhe::geometry::Geometry>& geometry = primitive.render_shape->get_geometry();
+                // Deferred edge lines: leave the (expensive) triangle-soup ->
+                // Geometry conversion to the per-mesh background task; only a
+                // Geometry that already exists (ERHE_geometry restore) but
+                // genuinely lacks edges is processed here. The eager path
+                // uses get_geometry(), which lazily converts the soup.
+                const std::shared_ptr<erhe::geometry::Geometry>& geometry = defer_edge_lines
+                    ? primitive.render_shape->get_geometry_const()
+                    : primitive.render_shape->get_geometry();
                 if (geometry && (geometry->get_mesh().edges.nb() == 0)) {
                     geometry->process({.flags =
                         erhe::geometry::Geometry::process_flag_connect                       |
@@ -469,10 +493,28 @@ void finalize_imported_meshes(
                     mesh->get_name()
                 );
             }
+            if (defer_raytrace) {
+                // Proxy over the renderable-mesh bounds so picking works the
+                // moment the scene appears; replaced by the real triangle
+                // raytrace when the deferred task commits.
+                static_cast<void>(primitive.make_raytrace_proxy());
+            } else {
+                if (!primitive.make_raytrace()) {
+                    log_parsers->warn("glTF import: failed to build raytrace for '{}'", mesh->get_name());
+                }
+            }
         }
 
         mesh->update_rt_primitives();
     }
+
+    const std::chrono::steady_clock::duration finalize_duration = std::chrono::steady_clock::now() - finalize_start_time;
+    log_parsers->info(
+        "finalize_imported_meshes: {} ms (deferred_edge_lines = {}, deferred_raytrace = {})",
+        std::chrono::duration_cast<std::chrono::milliseconds>(finalize_duration).count(),
+        defer_edge_lines,
+        defer_raytrace
+    );
 }
 
 auto make_import_gltf_operation(
@@ -540,8 +582,16 @@ auto make_import_gltf_operation(
             .root_node       = root_node,
             .mesh_layer_id   = scene_root->layers().content()->id,
             .path            = path,
+            .parallel        = (context.editor_settings == nullptr) || context.editor_settings->load.parallel_gltf_parse,
         };
+        const std::chrono::steady_clock::time_point parse_start_time = std::chrono::steady_clock::now();
         gltf_data = erhe::gltf::parse_gltf(parse_arguments);
+        const std::chrono::steady_clock::duration parse_duration = std::chrono::steady_clock::now() - parse_start_time;
+        log_parsers->info(
+            "parse_gltf '{}': {} ms",
+            erhe::file::to_string(path.filename()),
+            std::chrono::duration_cast<std::chrono::milliseconds>(parse_duration).count()
+        );
 
         // Detach root_node from temp_scene before it goes out of scope. The
         // Item_insert_remove_operation sub-op below will attach root_node to
@@ -1029,8 +1079,16 @@ auto open_scene_gltf(
             .root_node       = container_node,
             .mesh_layer_id   = Mesh_layer_id::content,
             .path            = path,
+            .parallel        = (context.editor_settings == nullptr) || context.editor_settings->load.parallel_gltf_parse,
         };
+        const std::chrono::steady_clock::time_point parse_start_time = std::chrono::steady_clock::now();
         parsed_gltf_data = erhe::gltf::parse_gltf(parse_arguments);
+        const std::chrono::steady_clock::duration parse_duration = std::chrono::steady_clock::now() - parse_start_time;
+        log_parsers->info(
+            "parse_gltf '{}': {} ms",
+            erhe::file::to_string(path.filename()),
+            std::chrono::duration_cast<std::chrono::milliseconds>(parse_duration).count()
+        );
     }
     // Non-const: the R6 asset-reference resolution below substitutes
     // manager-acquired materials into the parse (for the adopted case that

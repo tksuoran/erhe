@@ -46,7 +46,10 @@
 #include <taskflow/taskflow.hpp>
 
 #include <algorithm>
+#include <chrono>
+#include <cstring>
 #include <filesystem>
+#include <future>
 #include <limits>
 #include <optional>
 #include <random>
@@ -917,15 +920,23 @@ public:
             return;
         }
 
+        using Clock = std::chrono::steady_clock;
+        const auto elapsed_ms = [](const Clock::time_point start) -> long long {
+            return std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start).count();
+        };
+
         log_gltf->trace("parsing files and external assets");
         parse_files_and_external_assets();
 
-        /// log_gltf->trace("parsing images");
+        log_gltf->trace("parsing images");
         m_data_out.images.resize(m_asset->images.size());
         m_data_out.image_sources.resize(m_asset->images.size());
-        /// for (std::size_t i = 0, end = m_asset->images.size(); i < end; ++i) {
-        ///     parse_image(i);
-        /// }
+        const Clock::time_point image_start_time = Clock::now();
+        // Decode every material-referenced image (in parallel when enabled)
+        // and upload on this thread; images referenced some other way fall
+        // back to the lazy get_image() path during material parsing.
+        parse_images();
+        const long long image_ms = elapsed_ms(image_start_time);
 
         log_gltf->trace("parsing samplers");
         m_data_out.samplers.resize(m_asset->samplers.size());
@@ -956,25 +967,33 @@ public:
 
         const std::size_t mesh_count = m_asset->meshes.size();
         log_gltf->trace("parsing {} meshes", mesh_count);
+        const Clock::time_point mesh_start_time = Clock::now();
         m_data_out.meshes.resize(mesh_count);
         m_mesh_uid_claimed.resize(mesh_count);
         for (std::size_t i = 0; i < mesh_count; ++i) {
             pre_parse_mesh(i);
         }
 
-        ::tf::Taskflow taskflow;
-        for (std::size_t i = 0; i < mesh_count; ++i) {
-            const fastgltf::Mesh& mesh = m_asset->meshes[i];
-            erhe::scene::Mesh& erhe_mesh = *m_data_out.meshes[i].get();
-            taskflow.emplace(
-                [this, i, &mesh, &erhe_mesh]()
-                {
-                    parse_mesh(i, mesh, erhe_mesh);
-                }
-            );
+        if (m_arguments.parallel) {
+            ::tf::Taskflow taskflow;
+            for (std::size_t i = 0; i < mesh_count; ++i) {
+                const fastgltf::Mesh& mesh = m_asset->meshes[i];
+                erhe::scene::Mesh& erhe_mesh = *m_data_out.meshes[i].get();
+                taskflow.emplace(
+                    [this, i, &mesh, &erhe_mesh]()
+                    {
+                        parse_mesh(i, mesh, erhe_mesh);
+                    }
+                );
+            }
+            auto future = m_arguments.executor.run(taskflow);
+            future.wait();
+        } else {
+            for (std::size_t i = 0; i < mesh_count; ++i) {
+                parse_mesh(i, m_asset->meshes[i], *m_data_out.meshes[i].get());
+            }
         }
-        auto future = m_arguments.executor.run(taskflow);
-        future.wait();
+        const long long mesh_ms = elapsed_ms(mesh_start_time);
 
         log_gltf->trace("parsing nodes");
         m_data_out.nodes.resize(m_asset->nodes.size());
@@ -1014,13 +1033,34 @@ public:
         }
 
         log_gltf->trace("parsing animations");
-        m_data_out.animations.reserve(m_asset->animations.size());
-        for (std::size_t i = 0, end = m_asset->animations.size(); i < end; ++i) {
-            parse_animation(i);
+        const Clock::time_point animation_start_time = Clock::now();
+        // Animations are independent of each other; they read accessors and
+        // the (already parsed) node vector, and write only their own slot.
+        m_data_out.animations.resize(m_asset->animations.size());
+        if (m_arguments.parallel && (m_asset->animations.size() > 1)) {
+            ::tf::Taskflow taskflow;
+            for (std::size_t i = 0, end = m_asset->animations.size(); i < end; ++i) {
+                taskflow.emplace([this, i]() { parse_animation(i); });
+            }
+            m_arguments.executor.run(taskflow).wait();
+        } else {
+            for (std::size_t i = 0, end = m_asset->animations.size(); i < end; ++i) {
+                parse_animation(i);
+            }
         }
+        const long long animation_ms = elapsed_ms(animation_start_time);
 
         log_gltf->trace("parsing physics");
         parse_physics();
+
+        if ((image_ms > 0) || (mesh_ms > 0) || (animation_ms > 0)) {
+            log_gltf->info(
+                "parse timings for '{}': images {} ms, meshes {} ms, animations {} ms (parallel = {})",
+                m_arguments.path.filename().string(),
+                image_ms, mesh_ms, animation_ms,
+                m_arguments.parallel
+            );
+        }
     }
 
 private:
@@ -1106,7 +1146,9 @@ private:
         erhe_animation->set_source_path(m_arguments.path);
         copy_uid(animation, *erhe_animation);
         erhe_animation->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
-        m_data_out.animations.push_back(erhe_animation);
+        // The animation is published into m_data_out.animations[animation_index]
+        // only at the end of this function (the caller resized the vector), so
+        // parallel per-animation tasks write disjoint slots.
         erhe_animation->samplers.resize(animation.samplers.size());
         for (std::size_t sampler_index = 0, end = animation.samplers.size(); sampler_index < end; ++sampler_index) {
             const fastgltf::AnimationSampler& sampler = animation.samplers[sampler_index];
@@ -1223,28 +1265,117 @@ private:
         }
         m_data_out.animations[animation_index] = erhe_animation;
     }
-    [[nodiscard]] auto load_image_file(
-        const std::filesystem::path& path,
-        const bool                   linear,
-        std::string_view             image_name
-    ) -> std::shared_ptr<erhe::graphics::Texture>
+    // CPU half of image loading: decode (and retain the encoded source
+    // stream) into plain memory. No GPU objects and no Image_transfer ring
+    // buffer are touched, so this is safe to run on executor workers.
+    class Decoded_image
+    {
+    public:
+        bool                               ok{false};
+        erhe::graphics::Image_info         info{};
+        std::vector<std::uint8_t>          pixels;
+        std::shared_ptr<Gltf_image_source> source;
+        std::string                        name;
+        std::filesystem::path              source_path;
+    };
+
+    [[nodiscard]] auto decode_image(const std::size_t image_index, const bool linear) -> Decoded_image
     {
         ERHE_PROFILE_FUNCTION();
 
-        const bool file_is_ok = erhe::file::check_is_existing_non_empty_regular_file("Gltf_parser::load_image_file", path);
-        if (!file_is_ok) {
+        Decoded_image decoded;
+        const fastgltf::Image& image = m_asset->images[image_index];
+        decoded.name = safe_resource_name(image.name, "image", image_index);
+
+        std::visit(
+            fastgltf::visitor {
+                [&](auto& arg) {
+                    static_cast<void>(arg);
+                    log_gltf->error("Image '{}': unsupported image source", decoded.name);
+                },
+                [&](const fastgltf::sources::BufferView& buffer_view_source) {
+                    const fastgltf::BufferView& buffer_view = m_asset->bufferViews[buffer_view_source.bufferViewIndex];
+                    const fastgltf::Buffer&     buffer      = m_asset->buffers.at(buffer_view.bufferIndex);
+                    const fastgltf::sources::Array* array_source = std::get_if<fastgltf::sources::Array>(&buffer.data);
+                    if (array_source == nullptr) {
+                        log_gltf->error("Image '{}': buffer view source buffer is not loaded", decoded.name);
+                        return;
+                    }
+                    const std::span<const std::uint8_t> image_encoded_buffer_view{
+                        reinterpret_cast<const std::uint8_t*>(array_source->bytes.data()) + buffer_view.byteOffset,
+                        buffer_view.byteLength
+                    };
+                    erhe::graphics::Image_loader loader;
+                    if (!loader.open(image_encoded_buffer_view, decoded.info, linear)) {
+                        log_gltf->error("Failed to parse image from buffer view '{}'", decoded.name);
+                        return;
+                    }
+                    // TODO Handle depth > 1 and mipmaps
+                    ERHE_VERIFY(decoded.info.width * erhe::dataformat::get_format_size_bytes(decoded.info.format) == decoded.info.row_stride);
+                    decoded.pixels.resize(static_cast<std::size_t>(decoded.info.row_stride) * static_cast<std::size_t>(decoded.info.height));
+                    decoded.ok = loader.load(std::span<std::uint8_t>{decoded.pixels.data(), decoded.pixels.size()});
+                    loader.close();
+                    decoded.source_path = m_arguments.path;
+                    if (decoded.ok) {
+                        // Retain the encoded source stream for byte-exact
+                        // re-embedding on export (phase 0).
+                        const std::byte* start = reinterpret_cast<const std::byte*>(array_source->bytes.data()) + buffer_view.byteOffset;
+                        decoded.source = std::make_shared<Gltf_image_source>();
+                        decoded.source->encoded_bytes.assign(start, start + buffer_view.byteLength);
+                    }
+                },
+                [&](const fastgltf::sources::URI& uri) {
+                    // Resolve on a copy: replace_filename() mutates in place,
+                    // and m_arguments.path must keep naming the glTF file
+                    // (source paths of nodes parsed later, resource names).
+                    std::filesystem::path relative_path = uri.uri.fspath();
+                    std::filesystem::path image_path    = m_arguments.path;
+                    image_path.replace_filename(relative_path);
+                    const bool file_is_ok = erhe::file::check_is_existing_non_empty_regular_file("Gltf_parser::decode_image", image_path);
+                    if (!file_is_ok) {
+                        return;
+                    }
+                    erhe::graphics::Image_loader loader;
+                    if (!loader.open(image_path, decoded.info, linear)) {
+                        return;
+                    }
+                    // TODO Handle depth > 1 and mipmaps
+                    ERHE_VERIFY(decoded.info.width * erhe::dataformat::get_format_size_bytes(decoded.info.format) == decoded.info.row_stride);
+                    decoded.pixels.resize(static_cast<std::size_t>(decoded.info.row_stride) * static_cast<std::size_t>(decoded.info.height));
+                    decoded.ok = loader.load(std::span<std::uint8_t>{decoded.pixels.data(), decoded.pixels.size()});
+                    loader.close();
+                    decoded.source_path = image_path;
+                    if (decoded.ok) {
+                        const std::optional<std::string> file_content = erhe::file::read("gltf image source retention", image_path);
+                        if (file_content.has_value() && !file_content->empty()) {
+                            const std::byte* start = reinterpret_cast<const std::byte*>(file_content->data());
+                            decoded.source = std::make_shared<Gltf_image_source>();
+                            decoded.source->encoded_bytes.assign(start, start + file_content->size());
+                        }
+                    }
+                }
+            },
+            image.data
+        );
+
+        if (decoded.source) {
+            decoded.source->mime_type = sniff_image_mime_type(decoded.source->encoded_bytes);
+        }
+        return decoded;
+    }
+
+    // GPU half of image loading: texture creation, ring-buffer staging and
+    // upload. Must run on the loading thread (single Image_transfer /
+    // command buffer).
+    [[nodiscard]] auto upload_decoded_image(const Decoded_image& decoded) -> std::shared_ptr<erhe::graphics::Texture>
+    {
+        ERHE_PROFILE_FUNCTION();
+
+        if (!decoded.ok) {
+            log_gltf->warn("Image '{}' load failed", decoded.name);
             return {};
         }
-
-        erhe::graphics::Image_info image_info;
-        erhe::graphics::Image_loader loader;
-
-        if (!loader.open(path, image_info, linear)) {
-            return {};
-        }
-
-        ERHE_VERIFY(!image_name.empty());
-
+        const erhe::graphics::Image_info& image_info = decoded.info;
         erhe::graphics::Texture_create_info texture_create_info{
             .device      = m_arguments.graphics_device,
             .usage_mask  =
@@ -1257,7 +1388,7 @@ private:
             .depth       = image_info.depth,
             .level_count = image_info.level_count,
             .row_stride  = image_info.row_stride,
-            .debug_label = erhe::utility::Debug_label{image_name} // path.filename().string()
+            .debug_label = erhe::utility::Debug_label{decoded.name}
         };
         const int  mipmap_count    = texture_create_info.get_texture_level_count();
         const bool generate_mipmap = mipmap_count != image_info.level_count;
@@ -1266,141 +1397,118 @@ private:
             texture_create_info.level_count = mipmap_count;
         }
 
-        // TODO Handle
-        ERHE_VERIFY(image_info.width * erhe::dataformat::get_format_size_bytes(image_info.format) == image_info.row_stride);
-        const int byte_count = image_info.row_stride * image_info.height;
+        const std::size_t byte_count = decoded.pixels.size();
         ERHE_VERIFY(byte_count >= 1);
+
+        auto texture = std::make_shared<erhe::graphics::Texture>(m_arguments.graphics_device, texture_create_info);
+        texture->set_source_path(decoded.source_path);
 
         erhe::graphics::Ring_buffer_range buffer_range = m_arguments.image_transfer.acquire_range(byte_count);
         std::span<std::byte> byte_span = buffer_range.get_span();
-        std::span<std::uint8_t> u8_span{
-            reinterpret_cast<std::uint8_t*>(byte_span.data()),
-            byte_span.size_bytes()
-        };
-        auto texture = std::make_shared<erhe::graphics::Texture>(m_arguments.graphics_device, texture_create_info);
-        texture->set_source_path(path);
-        const bool ok = loader.load(u8_span);
-        loader.close();
-        if (ok) {
-            buffer_range.bytes_written(byte_count);
-            buffer_range.close();
-            m_arguments.image_transfer.upload_to_texture(image_info, buffer_range, *texture.get(), generate_mipmap);
-            buffer_range.release();
-        } else {
-            buffer_range.cancel();
-        }
+        memcpy(byte_span.data(), decoded.pixels.data(), byte_count);
+        buffer_range.bytes_written(byte_count);
+        buffer_range.close();
+        m_arguments.image_transfer.upload_to_texture(image_info, buffer_range, *texture.get(), generate_mipmap);
+        buffer_range.release();
 
+        log_gltf->info(
+            "Loaded image '{}': width = {}, height = {}",
+            decoded.name, image_info.width, image_info.height
+        );
         return texture;
     }
-    [[nodiscard]] auto load_image_buffer(
-        const std::size_t buffer_view_index,
-        const std::size_t image_index,
-        const bool        linear,
-        std::string_view  image_name
-    ) -> std::shared_ptr<erhe::graphics::Texture>
+
+    void finish_image(const std::size_t image_index, const Decoded_image& decoded)
+    {
+        std::shared_ptr<erhe::graphics::Texture> erhe_texture = upload_decoded_image(decoded);
+        if (erhe_texture) {
+            copy_uid(m_asset->images[image_index], *erhe_texture);
+        }
+        m_data_out.images[image_index]        = erhe_texture;
+        m_data_out.image_sources[image_index] = decoded.source;
+    }
+
+    // Decode every image referenced by a material texture slot - in parallel
+    // executor tasks when enabled - then create + upload the textures on
+    // this thread. The slot determines the color space, exactly like the
+    // lazy get_image() calls in parse_material() did (first referencing slot
+    // wins for images shared between slots).
+    void parse_images()
     {
         ERHE_PROFILE_FUNCTION();
 
-        const fastgltf::BufferView&  buffer_view      = m_asset->bufferViews[buffer_view_index];
-        const fastgltf::Buffer&      buffer           = m_asset->buffers.at(buffer_view.bufferIndex);
-        const std::string            buffer_view_name = safe_resource_name(buffer_view.name, "buffer_view", buffer_view_index);
-        const std::string            name             = !image_name.empty() 
-            ? std::string{image_name}
-            : fmt::format("{} image {} {}", m_arguments.path.filename().string(), image_index, buffer_view_name);
-        erhe::graphics::Image_info   image_info;
-        erhe::graphics::Image_loader loader;
-
-        bool load_ok = false;
-
-        erhe::graphics::Texture_create_info texture_create_info{
-            .device      = m_arguments.graphics_device,
-            .usage_mask  =
-                erhe::graphics::Image_usage_flag_bit_mask::sampled |
-                erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
-            .debug_label = erhe::utility::Debug_label{name}
-        };
-        int  mipmap_count    = 0;
-        bool generate_mipmap = false;
-
-        std::shared_ptr<erhe::graphics::Texture> texture{};
-
-        std::visit(
-            fastgltf::visitor{
-                [](auto& arg) {
-                    static_cast<void>(arg);
-                    ERHE_FATAL("TODO Unsupported image buffer view source");
-                },
-                [&](const fastgltf::sources::Array& data) {
-                    std::span<const std::uint8_t> image_encoded_buffer_view{
-                        reinterpret_cast<const std::uint8_t*>(data.bytes.data()) + buffer_view.byteOffset,
-                        buffer_view.byteLength
-                    };
-                    if (!loader.open(image_encoded_buffer_view, image_info, linear)) {
-                        log_gltf->error("Failed to parse image from buffer view '{}'", name);
-                        return;
-                    }
-
-                    texture_create_info.pixelformat = image_info.format;
-                    texture_create_info.use_mipmaps = true; //(image_info.level_count > 1),
-                    texture_create_info.width       = image_info.width;
-                    texture_create_info.height      = image_info.height;
-                    texture_create_info.depth       = image_info.depth;
-                    texture_create_info.level_count = image_info.level_count;
-                    texture_create_info.row_stride  = image_info.row_stride;
-                    texture_create_info.debug_label = erhe::utility::Debug_label{name};
-
-                    mipmap_count    = texture_create_info.get_texture_level_count();
-                    generate_mipmap = mipmap_count != image_info.level_count;
-                    if (generate_mipmap) {
-                        texture_create_info.level_count = mipmap_count;
-                        texture_create_info.usage_mask |= erhe::graphics::Image_usage_flag_bit_mask::transfer_src;
-                    }
-
-                    texture = std::make_shared<erhe::graphics::Texture>(m_arguments.graphics_device, texture_create_info);
-                    texture->set_source_path(m_arguments.path);
-
-                    // TODO Handle depth > 1 and mipmaps
-                    ERHE_VERIFY(image_info.width * erhe::dataformat::get_format_size_bytes(image_info.format) == image_info.row_stride);
-                    const int byte_count = image_info.row_stride * image_info.height;
-                    ERHE_VERIFY(byte_count >= 1);
-
-                    erhe::graphics::Ring_buffer_range buffer_range = m_arguments.image_transfer.acquire_range(byte_count);
-                    std::span<std::byte> byte_span = buffer_range.get_span();
-                    std::span<std::uint8_t> u8_span{
-                        reinterpret_cast<std::uint8_t*>(byte_span.data()),
-                        byte_span.size_bytes()
-                    };
-
-                    load_ok = loader.load(u8_span);
-                    loader.close();
-
-                    if (load_ok) {
-                        buffer_range.bytes_written(byte_count);
-                        buffer_range.close();
-                        m_arguments.image_transfer.upload_to_texture(image_info, buffer_range, *texture.get(), generate_mipmap);
-                        buffer_range.release();
-                    } else {
-                        buffer_range.cancel();
-                    }
-
-                    loader.close();
-                }
-            },
-            buffer.data
-        );
-        if (!load_ok) {
-            log_gltf->warn(
-                "Image '{}' load failed: image index = {}, width = {}, height = {}",
-                name, image_index, texture_create_info.width, texture_create_info.height
-            );
-        } else {
-            log_gltf->info(
-                "Loaded image '{}': image index = {}, width = {}, height = {}",
-                name, image_index, texture_create_info.width, texture_create_info.height
-            );
+        const std::size_t image_count = m_asset->images.size();
+        if (image_count == 0) {
+            return;
         }
 
-        return texture;
+        std::vector<std::uint8_t> image_used  (image_count, std::uint8_t{0});
+        std::vector<std::uint8_t> image_linear(image_count, std::uint8_t{0});
+        const auto mark_texture = [&](const auto& texture_info, const bool linear) {
+            if (texture_info.textureIndex >= m_asset->textures.size()) {
+                return;
+            }
+            const fastgltf::Texture& texture = m_asset->textures[texture_info.textureIndex];
+            if (!texture.imageIndex.has_value() || (texture.imageIndex.value() >= image_count)) {
+                return;
+            }
+            const std::size_t image_index = texture.imageIndex.value();
+            if (image_used[image_index] == 0) {
+                image_used  [image_index] = 1;
+                image_linear[image_index] = linear ? 1 : 0;
+            }
+        };
+        for (const fastgltf::Material& material : m_asset->materials) {
+            if (material.normalTexture.has_value()) {
+                mark_texture(material.normalTexture.value(), true);
+            }
+            if (material.occlusionTexture.has_value()) {
+                mark_texture(material.occlusionTexture.value(), true);
+            }
+            if (material.emissiveTexture.has_value()) {
+                mark_texture(material.emissiveTexture.value(), false);
+            }
+            if (material.pbrData.baseColorTexture.has_value()) {
+                mark_texture(material.pbrData.baseColorTexture.value(), false);
+            }
+            if (material.pbrData.metallicRoughnessTexture.has_value()) {
+                mark_texture(material.pbrData.metallicRoughnessTexture.value(), true);
+            }
+            if (material.specularGlossiness && material.specularGlossiness->diffuseTexture.has_value()) {
+                mark_texture(material.specularGlossiness->diffuseTexture.value(), false);
+            }
+        }
+
+        std::vector<Decoded_image> decoded_images(image_count);
+        if (m_arguments.parallel) {
+            ::tf::Taskflow taskflow;
+            for (std::size_t i = 0; i < image_count; ++i) {
+                if (image_used[i] == 0) {
+                    continue;
+                }
+                const bool linear = image_linear[i] != 0;
+                taskflow.emplace(
+                    [this, i, linear, &decoded_images]() {
+                        decoded_images[i] = decode_image(i, linear);
+                    }
+                );
+            }
+            m_arguments.executor.run(taskflow).wait();
+        } else {
+            for (std::size_t i = 0; i < image_count; ++i) {
+                if (image_used[i] == 0) {
+                    continue;
+                }
+                decoded_images[i] = decode_image(i, image_linear[i] != 0);
+            }
+        }
+
+        for (std::size_t i = 0; i < image_count; ++i) {
+            if (image_used[i] == 0) {
+                continue;
+            }
+            finish_image(i, decoded_images[i]);
+        }
     }
     [[nodiscard]] auto get_image(const std::size_t image_index, const bool linear)
     {
@@ -1409,63 +1517,14 @@ private:
         }
         return m_data_out.images[image_index];
     }
+    // Lazy fallback for images not covered by the up-front parse_images()
+    // material-slot scan.
     void parse_image(const std::size_t image_index, const bool linear)
     {
         ERHE_PROFILE_FUNCTION();
-        const fastgltf::Image& image      = m_asset->images[image_index];
-        const std::string      image_name = safe_resource_name(image.name, "image", image_index);
-        log_gltf->trace("Image: image index = {}, name = {}", image_index, image_name);
-        std::shared_ptr<erhe::graphics::Texture> erhe_texture;
-        std::shared_ptr<Gltf_image_source>       image_source;
-        std::visit(
-            fastgltf::visitor {
-                [](auto& arg) {
-                    static_cast<void>(arg);
-                    ERHE_FATAL("TODO Unsupported image source");
-                },
-                [&](const fastgltf::sources::BufferView& buffer_view_source){
-                    erhe_texture = load_image_buffer(buffer_view_source.bufferViewIndex, image_index, linear, image_name);
-                    // Retain the encoded source stream for byte-exact
-                    // re-embedding on export (phase 0).
-                    if (erhe_texture) {
-                        const fastgltf::BufferView& buffer_view = m_asset->bufferViews[buffer_view_source.bufferViewIndex];
-                        const fastgltf::Buffer&     buffer      = m_asset->buffers.at(buffer_view.bufferIndex);
-                        if (const fastgltf::sources::Array* array_source = std::get_if<fastgltf::sources::Array>(&buffer.data)) {
-                            const std::byte* start = reinterpret_cast<const std::byte*>(array_source->bytes.data()) + buffer_view.byteOffset;
-                            image_source = std::make_shared<Gltf_image_source>();
-                            image_source->encoded_bytes.assign(start, start + buffer_view.byteLength);
-                        }
-                    }
-                },
-                [&](const fastgltf::sources::URI& uri){
-                    // Resolve on a copy: replace_filename() mutates in place,
-                    // and m_arguments.path must keep naming the glTF file
-                    // (source paths of nodes parsed later, resource names).
-                    std::filesystem::path relative_path = uri.uri.fspath();
-                    std::filesystem::path image_path    = m_arguments.path;
-                    image_path.replace_filename(relative_path);
-                    erhe_texture = load_image_file(image_path, linear, image_name);
-                    if (erhe_texture) {
-                        const std::optional<std::string> file_content = erhe::file::read("gltf image source retention", image_path);
-                        if (file_content.has_value() && !file_content->empty()) {
-                            const std::byte* start = reinterpret_cast<const std::byte*>(file_content->data());
-                            image_source = std::make_shared<Gltf_image_source>();
-                            image_source->encoded_bytes.assign(start, start + file_content->size());
-                        }
-                    }
-                }
-            },
-            image.data
-        );
-
-        if (image_source) {
-            image_source->mime_type = sniff_image_mime_type(image_source->encoded_bytes);
-        }
-        if (erhe_texture) {
-            copy_uid(image, *erhe_texture);
-        }
-        m_data_out.images[image_index]        = erhe_texture;
-        m_data_out.image_sources[image_index] = image_source;
+        log_gltf->trace("Image: image index = {}", image_index);
+        const Decoded_image decoded = decode_image(image_index, linear);
+        finish_image(image_index, decoded);
     }
     void parse_sampler(const std::size_t sampler_index)
     {
@@ -1765,7 +1824,17 @@ private:
         std::shared_ptr<erhe::primitive::Triangle_soup> triangle_soup;
         std::shared_ptr<erhe::primitive::Primitive>     primitive;
     };
-    std::vector<Primitive_entry>   m_primitive_entries;
+    // Dedup cache slot for primitives sharing the same accessors: the first
+    // parse_mesh task to claim a key builds the geometry; concurrent tasks
+    // for the same key wait on `ready` instead of building a duplicate.
+    class Primitive_entry_slot
+    {
+    public:
+        Primitive_entry          entry; // key fields valid from insertion; payload valid once ready
+        std::promise<void>       promise;
+        std::shared_future<void> ready;
+    };
+    std::vector<std::shared_ptr<Primitive_entry_slot>> m_primitive_entries;
     ERHE_PROFILE_MUTEX(std::mutex, m_primitive_entries_mutex);
 
     void load_new_primitive_geometry(
@@ -2078,26 +2147,41 @@ private:
             primitive_entry.attribute_accessors.push_back(attribute.accessorIndex);
         }
 
+        std::shared_ptr<Primitive_entry_slot> slot;
+        bool claimed = false;
         {
             const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_primitive_entries_mutex};
 
-            for (const auto& old_entry : m_primitive_entries) {
-                if (old_entry.index_accessor != primitive_entry.index_accessor) continue;
-                if (old_entry.attribute_accessors != primitive_entry.attribute_accessors) continue;
-                if (old_entry.tangent_frame_needed != primitive_entry.tangent_frame_needed) continue;
-                // Found existing entry
-                primitive_entry = old_entry;
-                return;
+            for (const auto& old_slot : m_primitive_entries) {
+                if (old_slot->entry.index_accessor != primitive_entry.index_accessor) continue;
+                if (old_slot->entry.attribute_accessors != primitive_entry.attribute_accessors) continue;
+                if (old_slot->entry.tangent_frame_needed != primitive_entry.tangent_frame_needed) continue;
+                // Found existing (possibly still building) entry: wait for it
+                // outside the lock instead of building a duplicate.
+                slot = old_slot;
+                break;
+            }
+            if (!slot) {
+                slot = std::make_shared<Primitive_entry_slot>();
+                slot->entry.index_accessor       = primitive_entry.index_accessor;
+                slot->entry.attribute_accessors  = primitive_entry.attribute_accessors;
+                slot->entry.tangent_frame_needed = primitive_entry.tangent_frame_needed;
+                slot->ready = slot->promise.get_future().share();
+                m_primitive_entries.push_back(slot);
+                claimed = true;
             }
         }
 
-        load_new_primitive_geometry(primitive, primitive_entry, tangent_frame_needed);
-
-        {
-            const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_primitive_entries_mutex};
-
-            m_primitive_entries.push_back(primitive_entry);
+        if (!claimed) {
+            slot->ready.wait();
+            primitive_entry = slot->entry;
+            return;
         }
+
+        // This task claimed the slot; build outside the lock and publish.
+        load_new_primitive_geometry(primitive, primitive_entry, tangent_frame_needed);
+        slot->entry = primitive_entry;
+        slot->promise.set_value();
     }
 
     // ERHE_geometry extension JSON per (mesh index, primitive index),

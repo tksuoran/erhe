@@ -136,6 +136,73 @@ Primitive_raytrace::Primitive_raytrace(const GEO::Mesh& mesh, Element_mappings* 
     m_rt_geometry->set_user_data(nullptr);
 }
 
+Primitive_raytrace::Primitive_raytrace(const erhe::math::Aabb& aabb)
+    : m_is_proxy{true}
+{
+    ERHE_PROFILE_FUNCTION();
+
+    constexpr std::size_t vertex_stride = 3 * sizeof(float);
+    constexpr std::size_t index_stride  = 4;
+    constexpr std::size_t vertex_count  = 8;
+    constexpr std::size_t index_count   = 36;
+    // Tail padding of 16 bytes is required by Embree 4 for shared buffers
+    constexpr std::size_t raytrace_buffer_tail_padding = 16;
+    m_rt_vertex_buffer = std::make_shared<erhe::buffer::Cpu_buffer>("raytrace_proxy_vertex", vertex_count * vertex_stride, raytrace_buffer_tail_padding);
+    m_rt_index_buffer  = std::make_shared<erhe::buffer::Cpu_buffer>("raytrace_proxy_index",  index_count * index_stride,   raytrace_buffer_tail_padding);
+
+    const glm::vec3 corners[vertex_count] = {
+        { aabb.min.x, aabb.min.y, aabb.min.z },
+        { aabb.max.x, aabb.min.y, aabb.min.z },
+        { aabb.max.x, aabb.max.y, aabb.min.z },
+        { aabb.min.x, aabb.max.y, aabb.min.z },
+        { aabb.min.x, aabb.min.y, aabb.max.z },
+        { aabb.max.x, aabb.min.y, aabb.max.z },
+        { aabb.max.x, aabb.max.y, aabb.max.z },
+        { aabb.min.x, aabb.max.y, aabb.max.z }
+    };
+    // Outward-facing winding; hit position is what proxy picking consumes,
+    // orientation only affects the (approximate anyway) reported normal.
+    const uint32_t indices[index_count] = {
+        0, 3, 2,  0, 2, 1, // -z
+        4, 5, 6,  4, 6, 7, // +z
+        0, 4, 7,  0, 7, 3, // -x
+        1, 2, 6,  1, 6, 5, // +x
+        0, 1, 5,  0, 5, 4, // -y
+        3, 7, 6,  3, 6, 2  // +y
+    };
+    memcpy(m_rt_vertex_buffer->get_span().data(), &corners[0], vertex_count * vertex_stride);
+    memcpy(m_rt_index_buffer ->get_span().data(), &indices[0], index_count * index_stride);
+
+    m_rt_mesh.triangle_fill_indices.primitive_type = Primitive_type::triangles;
+    m_rt_mesh.triangle_fill_indices.first_index    = 0;
+    m_rt_mesh.triangle_fill_indices.index_count    = index_count;
+    m_rt_mesh.vertex_buffer_ranges.push_back(
+        Buffer_range{
+            .count        = vertex_count,
+            .element_size = vertex_stride,
+            .byte_offset  = 0
+        }
+    );
+    m_rt_mesh.index_buffer_range = Buffer_range{
+        .count        = index_count,
+        .element_size = index_stride,
+        .byte_offset  = 0
+    };
+    m_rt_mesh.bounding_box    = aabb;
+    m_rt_mesh.bounding_sphere = erhe::math::Sphere{
+        .center = aabb.center(),
+        .radius = 0.5f * glm::length(aabb.diagonal())
+    };
+
+    make_raytrace_geometry();
+    m_rt_geometry->set_user_data(nullptr);
+}
+
+auto Primitive_raytrace::is_proxy() const -> bool
+{
+    return m_is_proxy;
+}
+
 auto Primitive_raytrace::get_raytrace_mesh() const -> const Buffer_mesh&
 {
     return m_rt_mesh;
@@ -285,9 +352,30 @@ Primitive_shape::Primitive_shape()
 {
 }
 
-Primitive_shape::Primitive_shape(Primitive_shape&& old) noexcept = default;
+// Manual moves: the mutex is not movable (each shape keeps its own).
+// Shapes are only moved during construction, never while shared.
+Primitive_shape::Primitive_shape(Primitive_shape&& old) noexcept
+    : m_element_mappings       {std::move(old.m_element_mappings)}
+    , m_geometry               {std::move(old.m_geometry)}
+    , m_triangle_soup          {std::move(old.m_triangle_soup)}
+    , m_raytrace               {std::move(old.m_raytrace)}
+    , m_pending_raytrace       {std::move(old.m_pending_raytrace)}
+    , m_retired_proxy_raytrace {std::move(old.m_retired_proxy_raytrace)}
+{
+}
 
-Primitive_shape& Primitive_shape::operator=(Primitive_shape&& old) noexcept = default;
+Primitive_shape& Primitive_shape::operator=(Primitive_shape&& old) noexcept
+{
+    if (this != &old) {
+        m_element_mappings       = std::move(old.m_element_mappings);
+        m_geometry               = std::move(old.m_geometry);
+        m_triangle_soup          = std::move(old.m_triangle_soup);
+        m_raytrace               = std::move(old.m_raytrace);
+        m_pending_raytrace       = std::move(old.m_pending_raytrace);
+        m_retired_proxy_raytrace = std::move(old.m_retired_proxy_raytrace);
+    }
+    return *this;
+}
 
 Primitive_shape::Primitive_shape(const std::shared_ptr<erhe::geometry::Geometry>& geometry)
     : m_geometry{geometry}
@@ -305,14 +393,23 @@ Primitive_shape::~Primitive_shape() noexcept
 
 auto Primitive_shape::make_geometry() -> bool
 {
+    const std::lock_guard<std::mutex> lock{m_mutex};
+    return make_geometry_locked();
+}
+
+auto Primitive_shape::make_geometry_locked() -> bool
+{
     if (m_geometry) {
         return true;
     }
     if (m_triangle_soup) {
         ERHE_VERIFY(m_element_mappings.triangle_to_mesh_facet.empty());
         ERHE_VERIFY(m_element_mappings.mesh_corner_to_vertex_buffer_index.empty());
-        m_geometry = std::make_shared<erhe::geometry::Geometry>();
-        GEO::Mesh& mesh = m_geometry->get_mesh();
+        // Build into a local and publish as the last step, so unlocked
+        // readers of m_geometry (get_geometry_const and the double-checked
+        // fast path in get_geometry) never see a half-built Geometry.
+        std::shared_ptr<erhe::geometry::Geometry> geometry = std::make_shared<erhe::geometry::Geometry>();
+        GEO::Mesh& mesh = geometry->get_mesh();
 
         mesh_from_triangle_soup(*m_triangle_soup.get(), mesh, m_element_mappings);
 
@@ -320,25 +417,13 @@ auto Primitive_shape::make_geometry() -> bool
         if (tangent_stream.attribute == nullptr) {
             erhe::geometry::compute_mesh_tangents(mesh, {.orthonormalize = false, .make_facets_flat = false, .texcoord_usage_index = 0});
         }
-        //mesh.vertices.set_double_precision();
-        //mesh.facets.connect();
-        //mesh.edges.create_edges(
-        //if (mesh.edges.nb() == 0) {
-        //    static int count_bad = 0;
-        //    ++count_bad; // breakpoint placeholder
-        //} else {
-        //    static int count_good = 0;
-        //    ++count_good; // breakpoint placeholder
-        //}
-        //mesh.vertices.set_single_precision();
-        //m_geometry->update_connectivity();
-        m_geometry->process({.flags =
+        geometry->process({.flags =
             erhe::geometry::Geometry::process_flag_connect                       |
             erhe::geometry::Geometry::process_flag_build_edges                   |
             erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
             erhe::geometry::Geometry::process_flag_compute_facet_centroids
         });
-        // compute_mesh_tangents();
+        m_geometry = std::move(geometry);
         return true;
     }
     return false;
@@ -377,6 +462,11 @@ auto Primitive_shape::has_raytrace_triangles() const -> bool
     return m_raytrace.has_raytrace_triangles();
 }
 
+auto Primitive_shape::has_real_raytrace() const -> bool
+{
+    return m_raytrace.has_raytrace_triangles() && !m_raytrace.is_proxy();
+}
+
 auto Primitive_shape::make_raytrace(const GEO::Mesh& mesh) -> bool
 {
     m_raytrace = Primitive_raytrace{mesh, nullptr};
@@ -385,9 +475,11 @@ auto Primitive_shape::make_raytrace(const GEO::Mesh& mesh) -> bool
 
 auto Primitive_shape::make_raytrace() -> bool
 {
+    const std::lock_guard<std::mutex> lock{m_mutex};
+
     // Ensure geometry and element mappings exists
     if (!m_geometry) {
-        if (!make_geometry()) {
+        if (!make_geometry_locked()) {
             return false;
         }
     }
@@ -400,12 +492,62 @@ auto Primitive_shape::make_raytrace() -> bool
 
     // TODO Is it possible to make raytrace only / directly from triangle soup?
     //      We would lack element mappings, is that still useful?
-    // 
+    //
     // if (m_geometry) {
     //     m_raytrace = Primitive_raytrace{*m_geometry.get()};
     // } else if (m_triangle_soup) {
     //     m_raytrace = Primitive_raytrace{*m_triangle_soup.get()};
     // }
+}
+
+auto Primitive_shape::make_raytrace_proxy(const erhe::math::Aabb& aabb) -> bool
+{
+    const std::lock_guard<std::mutex> lock{m_mutex};
+    if (m_raytrace.has_raytrace_triangles()) {
+        return true;
+    }
+    if (!aabb.is_valid()) {
+        return false;
+    }
+    m_raytrace = Primitive_raytrace{aabb};
+    return m_raytrace.has_raytrace_triangles();
+}
+
+auto Primitive_shape::prepare_real_raytrace() -> bool
+{
+    const std::lock_guard<std::mutex> lock{m_mutex};
+    if (has_real_raytrace()) {
+        return true;
+    }
+    if (m_pending_raytrace) {
+        return true; // prepared by another task, not yet committed
+    }
+    if (!make_geometry_locked()) {
+        return false;
+    }
+    std::unique_ptr<Primitive_raytrace> pending = std::make_unique<Primitive_raytrace>(m_geometry->get_mesh(), nullptr);
+    if (!pending->has_raytrace_triangles()) {
+        return false;
+    }
+    m_pending_raytrace = std::move(pending);
+    return true;
+}
+
+auto Primitive_shape::commit_real_raytrace() -> bool
+{
+    const std::lock_guard<std::mutex> lock{m_mutex};
+    if (!m_pending_raytrace) {
+        return false;
+    }
+    if (m_raytrace.has_raytrace_triangles() && m_raytrace.is_proxy() && !m_retired_proxy_raytrace) {
+        // Keep the proxy alive: Raytrace_primitives of meshes sharing this
+        // shape may still reference its IGeometry until their own deferred
+        // task refreshes them (Mesh::update_rt_primitives).
+        m_retired_proxy_raytrace = std::make_unique<Primitive_raytrace>(std::move(m_raytrace));
+    }
+    m_raytrace = std::move(*m_pending_raytrace);
+    m_pending_raytrace.reset();
+    return true;
 }
 #pragma endregion Primitive_shape
 
@@ -439,6 +581,49 @@ Primitive_render_shape::Primitive_render_shape(const std::shared_ptr<Triangle_so
 auto Primitive_render_shape::has_buffer_mesh_triangles() const -> bool
 {
     return m_renderable_mesh.index_range(Primitive_mode::polygon_fill).index_count > 0;
+}
+
+auto Primitive_render_shape::has_edge_lines() const -> bool
+{
+    return m_renderable_mesh.index_range(Primitive_mode::edge_lines).index_count > 0;
+}
+
+auto Primitive_render_shape::prepare_geometry_buffer_mesh(const Build_info& build_info, const Normal_style normal_style) -> bool
+{
+    const std::lock_guard<std::mutex> lock{m_mutex};
+    if (m_pending_buffer_mesh) {
+        return true; // prepared by another task, not yet committed
+    }
+    if (!make_geometry_locked()) {
+        return false;
+    }
+    std::unique_ptr<Pending_buffer_mesh> pending = std::make_unique<Pending_buffer_mesh>();
+    pending->normal_style = normal_style;
+    const bool ok = build_buffer_mesh(
+        pending->buffer_mesh,
+        m_geometry->get_mesh(),
+        build_info,
+        pending->element_mappings,
+        normal_style
+    );
+    if (!ok) {
+        return false;
+    }
+    m_pending_buffer_mesh = std::move(pending);
+    return true;
+}
+
+auto Primitive_render_shape::commit_geometry_buffer_mesh() -> bool
+{
+    const std::lock_guard<std::mutex> lock{m_mutex};
+    if (!m_pending_buffer_mesh) {
+        return false;
+    }
+    m_renderable_mesh  = std::move(m_pending_buffer_mesh->buffer_mesh);
+    m_element_mappings = std::move(m_pending_buffer_mesh->element_mappings);
+    m_normal_style     = m_pending_buffer_mesh->normal_style;
+    m_pending_buffer_mesh.reset();
+    return true;
 }
 
 auto Primitive_render_shape::make_buffer_mesh(const Build_info& build_info, Normal_style normal_style) -> bool
@@ -685,6 +870,24 @@ auto Primitive::make_geometry() const -> bool
         }
     }
     return false;
+}
+
+auto Primitive::make_raytrace_proxy() const -> bool
+{
+    const std::shared_ptr<Primitive_shape> shape = get_shape_for_raytrace();
+    if (!shape) {
+        return false;
+    }
+    if (shape->has_raytrace_triangles()) {
+        return true;
+    }
+    return shape->make_raytrace_proxy(get_bounding_box());
+}
+
+auto Primitive::has_real_raytrace() const -> bool
+{
+    const std::shared_ptr<Primitive_shape> shape = get_shape_for_raytrace();
+    return shape && shape->has_real_raytrace();
 }
 
 auto Primitive::make_raytrace() const -> bool

@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Editor_settings_config",
-    version=18,
+    version=19,
     short_desc="Editor settings",
     long_desc="Runtime-editable settings saved to editor_settings.json.",
     developer=False,
@@ -53,6 +53,8 @@ struct("Editor_settings_config",
         field("ray_trace",            StructRef("Ray_trace_config"),       added_in=16),
         field("lightmap",             StructRef("Lightmap_config"),        added_in=18),
         field("inventory",            StructRef("Inventory_config"),       added_in=1),
+        # glTF import/open performance options (doc/gltf-load-speedup-plan.md).
+        field("load",                 StructRef("Load_config"),            added_in=19),
         field("network",              StructRef("Network_config"),         added_in=1),
         field("physics",              StructRef("Physics_config"),         added_in=1),
         field("scene",                StructRef("Scene_config"),           added_in=1),

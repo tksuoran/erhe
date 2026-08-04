@@ -189,6 +189,10 @@ struct Gltf_parse_arguments
     const std::shared_ptr<erhe::scene::Node>& root_node;
     erhe::scene::Layer_id                     mesh_layer_id{};
     std::filesystem::path                     path;
+    // Run image decode, mesh parsing and animation parsing as parallel
+    // executor tasks (GPU uploads always stay on the calling thread). When
+    // false every parse step runs inline, serially.
+    bool                                      parallel{true};
 };
 
 [[nodiscard]] auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data;
