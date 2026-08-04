@@ -186,8 +186,8 @@ auto Scene_builder::add_cameras(const Add_cameras_args& args) -> bool
         "Camera A",
         vec3{0.0f, camera_elevation, camera_distance},
         vec3{0.0f, 0.25f, 0.0f},
-        0.03f,
-        64.0f,
+        args.z_near,
+        args.z_far,
         args.camera_exposure,
         args.shadow_range
     );
@@ -197,8 +197,8 @@ auto Scene_builder::add_cameras(const Add_cameras_args& args) -> bool
         "Camera B",
         vec3{-7.0f, 1.0f, 0.0f},
         vec3{ 0.0f, 0.5f, 0.0f},
-        0.01f,
-        64.0f,
+        args.z_near,
+        args.z_far,
         args.camera_exposure,
         args.shadow_range
     );

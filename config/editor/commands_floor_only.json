@@ -9,10 +9,13 @@
         {
             "name": "scene.add_cameras",
             "args": {
+                "_version": 2,
                 "camera_exposure": 1,
                 "shadow_range": 30,
                 "camera_distance": 4,
-                "camera_elevation": 1.3
+                "camera_elevation": 1.3,
+                "z_near": 0.03,
+                "z_far": 500.0
             }
         },
         {
