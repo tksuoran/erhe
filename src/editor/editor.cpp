@@ -3343,7 +3343,23 @@ public:
 
         log_startup->info("commands.json: running startup script");
 
-        for (simdjson::ondemand::value element : commands_array) {
+        // Ondemand parses lazily: parser.iterate() above does NOT validate the
+        // whole document, so a syntax error later in the file (e.g. a missing
+        // comma between command objects) surfaces here during iteration. Take
+        // each element as a simdjson_result and check it - the implicit
+        // value conversion of a plain range-for THROWS on error - and keep a
+        // catch as backstop for anything the element processing itself throws.
+        try {
+        for (simdjson::simdjson_result<simdjson::ondemand::value> element_result : commands_array) {
+            simdjson::ondemand::value element;
+            const simdjson::error_code element_error = element_result.get(element);
+            if (element_error != simdjson::SUCCESS) {
+                log_startup->error(
+                    "commands script '{}': malformed JSON in 'commands' array: {} - remaining commands skipped",
+                    commands_path, simdjson::error_message(element_error)
+                );
+                break; // the document iterator is not usable past a parse error
+            }
             std::string                name;
             bool                       has_args{false};
             simdjson::ondemand::object args_obj;
@@ -3503,6 +3519,12 @@ public:
             } else {
                 log_startup->info("commands.json: '{}' returned ok", name);
             }
+        }
+        } catch (const simdjson::simdjson_error& e) {
+            log_startup->error(
+                "commands script '{}': JSON error while running startup script: {} - remaining commands skipped",
+                commands_path, e.what()
+            );
         }
 
         log_startup->info("commands.json: startup script complete");
