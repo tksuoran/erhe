@@ -27,6 +27,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <optional>
 #include <vector>
 
@@ -353,9 +354,14 @@ auto is_ring_point_occluded(
 // shaded: flat-shade each lateral triangle with the fixed handle light.
 // base_rgb_scale: rgb multiplier for the base disc (the cone's underside);
 // 1.0 keeps the old uniform look.
+// The debug triangle bucket is first-wins per pixel (stencil, no depth
+// writes), so within one solid whichever triangle is submitted first shows.
+// The cone is convex and opaque, so submitting only the eye-facing triangles
+// IS the correct order: cull back faces against the eye here.
 void draw_cone_fill(
     erhe::renderer::Primitive_renderer& triangle_renderer,
     const vec4&  color,
+    const vec3&  eye,
     const vec3&  base_center,
     const vec3&  direction,
     const vec3&  side1,
@@ -377,42 +383,44 @@ void draw_cone_fill(
     positions.push_back(base_center + length * direction);
     positions.push_back(base_center);
 
-    // Lateral surface.
-    if (shaded) {
-        for (uint32_t k = 0; k < static_cast<uint32_t>(cone_side_count); ++k) {
-            const uint32_t k2 = (k + 1) % cone_side_count;
-            const vec3& p0 = positions[k];
-            const vec3& p1 = positions[k2];
-            const vec3& pa = positions[apex_index];
-            vec3 normal = cross(p1 - p0, pa - p0);
-            // Orient outward: away from the cone axis at the edge midpoint.
-            if (dot(normal, 0.5f * (p0 + p1) - base_center) < 0.0f) {
-                normal = -normal;
-            }
+    // Lateral surface (eye-facing triangles only, see above).
+    std::vector<uint32_t> indices;
+    indices.reserve(cone_side_count * 3);
+    for (uint32_t k = 0; k < static_cast<uint32_t>(cone_side_count); ++k) {
+        const uint32_t k2 = (k + 1) % cone_side_count;
+        const vec3& p0 = positions[k];
+        const vec3& p1 = positions[k2];
+        const vec3& pa = positions[apex_index];
+        vec3 normal = cross(p1 - p0, pa - p0);
+        // Orient outward: away from the cone axis at the edge midpoint.
+        if (dot(normal, 0.5f * (p0 + p1) - base_center) < 0.0f) {
+            normal = -normal;
+        }
+        if (dot(normal, eye - p0) <= 0.0f) {
+            continue;
+        }
+        if (shaded) {
             const float len = glm::length(normal);
             const float lambert   = (len > 0.0f) ? std::max(0.0f, dot(normal / len, handle_light_direction)) : 0.0f;
             const float intensity = handle_shade_ambient + handle_shade_diffuse * lambert;
             triangle_renderer.add_triangle(mat4{1.0f}, vec4{intensity * vec3{color}, color.a}, p0, p1, pa);
-        }
-    } else {
-        std::vector<uint32_t> indices;
-        indices.reserve(cone_side_count * 3);
-        for (uint32_t k = 0; k < static_cast<uint32_t>(cone_side_count); ++k) {
-            const uint32_t k2 = (k + 1) % cone_side_count;
+        } else {
             indices.insert(indices.end(), {k, k2, apex_index});
         }
+    }
+    if (!indices.empty()) {
         triangle_renderer.add_triangles(mat4{1.0f}, color, positions, indices);
     }
 
-    // Base disc.
-    {
-        std::vector<uint32_t> indices;
-        indices.reserve(cone_side_count * 3);
+    // Base disc: visible only from the underside (normal = -direction).
+    if (dot(direction, eye - base_center) < 0.0f) {
+        std::vector<uint32_t> base_indices;
+        base_indices.reserve(cone_side_count * 3);
         for (uint32_t k = 0; k < static_cast<uint32_t>(cone_side_count); ++k) {
             const uint32_t k2 = (k + 1) % cone_side_count;
-            indices.insert(indices.end(), {k2, k, base_index});
+            base_indices.insert(base_indices.end(), {k2, k, base_index});
         }
-        triangle_renderer.add_triangles(mat4{1.0f}, vec4{base_rgb_scale * vec3{color}, color.a}, positions, indices);
+        triangle_renderer.add_triangles(mat4{1.0f}, vec4{base_rgb_scale * vec3{color}, color.a}, positions, base_indices);
     }
 }
 
@@ -470,10 +478,13 @@ void draw_annular_sector(
 }
 
 // Flat-shades each face with the fixed handle light (used by the scale-axis
-// tip cubes; windings are irrelevant - no culling in the debug pass).
+// tip cubes). Like draw_cone_fill, only the eye-facing faces are submitted:
+// the first-wins debug bucket has no intra-bucket depth ordering, and the
+// cube is convex, so back faces must simply not be drawn.
 void draw_cube_fill(
     erhe::renderer::Primitive_renderer& triangle_renderer,
     const vec4&  color,
+    const vec3&  eye,
     const vec3&  center,
     const mat3&  basis,
     const float  half_length
@@ -500,6 +511,9 @@ void draw_cube_fill(
         const int   axis      = face / 2;
         const float sign      = ((face % 2) == 0) ? -1.0f : 1.0f;
         const vec3  normal    = sign * normalize(basis[axis]);
+        if (dot(normal, eye - (center + sign * half_length * basis[axis])) <= 0.0f) {
+            continue;
+        }
         const float lambert   = std::max(0.0f, dot(normal, handle_light_direction));
         const float intensity = handle_shade_ambient + handle_shade_diffuse * lambert;
         const vec4  face_color{intensity * vec3{color}, color.a};
@@ -971,6 +985,19 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
         line_renderer.add_lines(lines);
     }
 
+    // The solid handle tips (translate cones, scale cubes) all land in the
+    // same first-wins triangle bucket (stencil 4), so where they overlap on
+    // screen - axis pointing near the camera stacks cone and cube, diagonal
+    // views cross pieces of different axes - the winner would be whichever
+    // loop ran first, not the nearer piece. Collect the tip draws with their
+    // eye distance and flush them sorted nearest-first below.
+    struct Solid_tip
+    {
+        float                 depth; // squared eye distance to the piece center
+        std::function<void()> draw;
+    };
+    std::vector<Solid_tip> solid_tips;
+
     // Translate arrows. In single-arrow mode (translate_negative_handles
     // off) each axis shows only the direction facing the camera, so no
     // arrow is drawn receding behind the rotate sphere.
@@ -1018,7 +1045,14 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
             const vec4 color = handle_color(handle, axis_colors[axis], hover_axis_colors[axis]);
             arrow_line_renderer.set_thickness(is_hot(handle) ? gz.arrow_shaft_width_hot : gz.arrow_shaft_width);
             arrow_line_renderer.add_lines(color, {{c + (s * start) * dir, c + (s * (start + gz.arrow_shaft_length)) * dir}});
-            draw_cone_fill(arrow_triangle_renderer, color, c + (s * (start + gz.arrow_shaft_length)) * dir, dir, side1, side2, s * gz.translate_cone_length, s * gz.translate_cone_radius, true, cone_base_darken);
+            const vec3 base       = c + (s * (start + gz.arrow_shaft_length)) * dir;
+            const vec3 tip_center = base + (0.5f * s * gz.translate_cone_length) * dir;
+            solid_tips.push_back({
+                dot(tip_center - eye, tip_center - eye),
+                [&arrow_triangle_renderer, color, eye, base, dir, side1, side2, s, gz]() {
+                    draw_cone_fill(arrow_triangle_renderer, color, eye, base, dir, side1, side2, s * gz.translate_cone_length, s * gz.translate_cone_radius, true, cone_base_darken);
+                }
+            });
         }
     }
 
@@ -1069,8 +1103,23 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
             const vec3  dir   = (sign == 0) ? d : -d;
             arrow_line_renderer.set_thickness(is_hot(handle) ? gz.arrow_shaft_width_hot : gz.arrow_shaft_width);
             arrow_line_renderer.add_lines(color, {{c + (s * start) * dir, c + (s * (start + shaft)) * dir}});
-            draw_cube_fill(arrow_triangle_renderer, color, c + (s * (start + shaft + gz.scale_cube_half_length)) * dir, basis, s * gz.scale_cube_half_length);
+            const vec3 cube_center = c + (s * (start + shaft + gz.scale_cube_half_length)) * dir;
+            solid_tips.push_back({
+                dot(cube_center - eye, cube_center - eye),
+                [&arrow_triangle_renderer, color, eye, cube_center, basis, s, gz]() {
+                    draw_cube_fill(arrow_triangle_renderer, color, eye, cube_center, basis, s * gz.scale_cube_half_length);
+                }
+            });
         }
+    }
+    // Flush the solid tips nearest-first: in the first-wins bucket that is
+    // exactly back-to-front occlusion between the pieces.
+    std::sort(
+        solid_tips.begin(), solid_tips.end(),
+        [](const Solid_tip& a, const Solid_tip& b) { return a.depth < b.depth; }
+    );
+    for (const Solid_tip& tip : solid_tips) {
+        tip.draw();
     }
     // Plane-scale sectors: the outer shell of the concentric plane layout,
     // ending at the rotate ring radius (minus the sector gap). Lower fill
@@ -1137,7 +1186,7 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
                 face_center_box[axis] = (sign == 0) ? m_box_aabb.max[axis] : m_box_aabb.min[axis];
                 const vec3 base = vec3{m_box_frame * vec4{face_center_box, 1.0f}};
                 const vec3 dir  = ((sign == 0) ? 1.0f : -1.0f) * normalize(box_basis[axis]);
-                draw_cone_fill(triangle_renderer, handle_color(handle, axis_colors[axis], hover_axis_colors[axis]), base, dir, side1, side2, s * gz.box_scale_cone_length, s * gz.box_scale_cone_radius, false, 1.0f);
+                draw_cone_fill(triangle_renderer, handle_color(handle, axis_colors[axis], hover_axis_colors[axis]), eye, base, dir, side1, side2, s * gz.box_scale_cone_length, s * gz.box_scale_cone_radius, false, 1.0f);
             }
         }
     }

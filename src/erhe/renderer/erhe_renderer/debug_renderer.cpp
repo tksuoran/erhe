@@ -578,14 +578,22 @@ void Debug_renderer::render(
     // below only read the triangle vertex buffer, so no draw->draw
     // barrier is needed between them.
 
-    // Draw hidden
-    for (Debug_renderer_bucket& bucket : m_buckets) {
-        bucket.render(encoder, render_pass, true, false, multiview);
-    }
+    // Visible before hidden: within a bucket the stencil makes the FIRST
+    // fragment win each pixel, and at any pixel a visible fragment (depth <
+    // scene surface) is always nearer than a hidden one (depth >= surface).
+    // Drawing hidden first would let a far occluded piece claim pixels over
+    // a near visible piece of the same bucket wherever a content surface
+    // cuts between them. Bucket-vs-bucket layering is unaffected: that is
+    // ordered by stencil reference, not by pass order.
 
     // Draw visible
     for (Debug_renderer_bucket& bucket : m_buckets) {
         bucket.render(encoder, render_pass, false, true, multiview);
+    }
+
+    // Draw hidden
+    for (Debug_renderer_bucket& bucket : m_buckets) {
+        bucket.render(encoder, render_pass, true, false, multiview);
     }
 }
 
