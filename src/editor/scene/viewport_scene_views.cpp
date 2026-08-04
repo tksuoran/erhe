@@ -266,6 +266,11 @@ auto Scene_views::create_viewport_scene_view(
     bool                                                  enable_post_processing
 ) -> std::shared_ptr<Viewport_scene_view>
 {
+    // --no-post-processing: every viewport creation funnels through here, so
+    // this one clamp overrides both the editor-settings value the
+    // Scene_builder path passes and the callers that default to enabled.
+    enable_post_processing = enable_post_processing && !m_app_context.force_post_processing_off;
+
     const auto new_viewport = std::make_shared<Viewport_scene_view>(
         &app_settings.settings_store(),
         viewport_config_data,

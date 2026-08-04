@@ -15,10 +15,15 @@ namespace editor {
 // no_startup_scene, when true, starts with an empty editor: neither the procedural
 // default scene nor any scene is loaded. Overridable from the command line
 // (--no-scene) and takes precedence over startup_scene_path.
+//
+// force_post_processing_off, when true, disables viewport post processing for
+// the whole session regardless of editor_settings.json (--no-post-processing).
+// The stored setting is NOT modified - remove the flag to get it back.
 void run_editor(
-    const std::string& startup_commands_path = "config/editor/commands.json",
-    const std::string& startup_scene_path    = "",
-    bool               no_startup_scene      = false
+    const std::string& startup_commands_path     = "config/editor/commands.json",
+    const std::string& startup_scene_path        = "",
+    bool               no_startup_scene          = false,
+    bool               force_post_processing_off = false
 );
 
 }

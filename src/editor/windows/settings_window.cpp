@@ -548,8 +548,14 @@ void Settings_window::imgui()
         Editor_settings_config& settings = *m_context.editor_settings;
 
         push_group("Editor Settings", ImGuiTreeNodeFlags_Framed);
-        add_entry("Post Processing", [&settings](){
+        add_entry("Post Processing", [&settings, this](){
+            ImGui::BeginDisabled(m_context.force_post_processing_off);
             ImGui::Checkbox("##", &settings.post_processing);
+            ImGui::EndDisabled();
+            if (m_context.force_post_processing_off) {
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4{1.0f, 0.8f, 0.2f, 1.0f}, "forced off (--no-post-processing)");
+            }
         }, "Enable Post Processing. Takes effect on next viewport creation.");
         add_config_section(settings.camera_controls);
         // Default Visual Style for new viewports - shown near the top since it

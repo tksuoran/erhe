@@ -123,6 +123,10 @@ public:
     bool  OpenXR_mirror {false};
     bool  developer_mode{false};
     bool  renderdoc     {false};
+    // --no-post-processing: session-wide kill switch, overriding both
+    // editor_settings.json and callers that default post processing to
+    // enabled (Scene_views::create_viewport_scene_view clamps on it).
+    bool  force_post_processing_off{false};
     bool  use_sleep     {false};
     float sleep_margin  {0.0f}; // TODO
 

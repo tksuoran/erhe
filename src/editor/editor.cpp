@@ -1107,7 +1107,7 @@ public:
         return std::make_unique<erhe::window::Context_window>(configuration);
     }
 
-    Editor(std::string startup_commands_path, std::string startup_scene_path, bool no_startup_scene)
+    Editor(std::string startup_commands_path, std::string startup_scene_path, bool no_startup_scene, bool force_post_processing_off)
         : m_startup_commands_path{std::move(startup_commands_path)}
         , m_startup_scene_path   {std::move(startup_scene_path)}
         , m_no_startup_scene     {no_startup_scene}
@@ -1151,6 +1151,14 @@ public:
 
         if (m_graphics_config.renderdoc_capture_support) {
             m_app_context.renderdoc = true;
+        }
+
+        // --no-post-processing: session-wide override; the stored
+        // editor_settings.json value is left untouched so removing the flag
+        // restores the user's preference.
+        m_app_context.force_post_processing_off = force_post_processing_off;
+        if (force_post_processing_off) {
+            log_startup->info("Post processing forced OFF for this session (--no-post-processing)");
         }
 
         // Editor is constructed on the main thread; parts constructed on init
@@ -1982,7 +1990,8 @@ public:
                 ERHE_GET_GL_CONTEXT
                 m_scene_builder = std::make_unique<Scene_builder>(
                     m_editor_settings.scene,                  //const Scene_config&                scene_config
-                    m_editor_settings.post_processing,        //bool                               enable_post_processing
+                    m_editor_settings.post_processing &&
+                        !m_app_context.force_post_processing_off, //bool                          enable_post_processing
                     m_default_content_library,                //std::shared_ptr<Content_library>   content_library
                     *m_executor.get(),                        //tf::Executor&                      executor
                     m_app_context,                            //App_context&                       app_context
@@ -3818,7 +3827,7 @@ public:
     std::unique_ptr<Mcp_server         >                     m_mcp_server;
 };
 
-void run_editor(const std::string& startup_commands_path, const std::string& startup_scene_path, const bool no_startup_scene)
+void run_editor(const std::string& startup_commands_path, const std::string& startup_scene_path, const bool no_startup_scene, const bool force_post_processing_off)
 {
 //#if defined(ERHE_PROFILE_LIBRARY_TRACY) && TRACY_ENABLE
 //    while (!TracyIsConnected) {
@@ -3948,7 +3957,7 @@ void run_editor(const std::string& startup_commands_path, const std::string& sta
         //    editor.tick();
         //}
 
-        Editor editor{startup_commands_path, startup_scene_path, no_startup_scene};
+        Editor editor{startup_commands_path, startup_scene_path, no_startup_scene, force_post_processing_off};
         editor.run();
     }
 

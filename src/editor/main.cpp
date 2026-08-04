@@ -36,12 +36,14 @@ auto main(int argc, char** argv) -> int
     std::string startup_commands_path{"config/editor/commands.json"};
     std::string startup_scene_path{};
     bool        no_startup_scene{false};
+    bool        no_post_processing{false};
     try {
         cxxopts::Options options{"editor", "erhe editor"};
         options.add_options()
             ("commands", "Startup commands script (scene setup) JSON path", cxxopts::value<std::string>()->default_value("config/editor/commands.json"))
             ("scene",    "Scene file (.glb / .gltf) to load on startup instead of building the default scene", cxxopts::value<std::string>()->default_value(""))
             ("no-scene", "Start with an empty editor: no procedural default scene and no scene load (overrides --scene)")
+            ("no-post-processing", "Force viewport post processing off for this session, overriding editor_settings.json (the stored setting is not modified)")
             ("h,help",   "Print usage");
         options.allow_unrecognised_options();
         const cxxopts::ParseResult result = options.parse(argc, argv);
@@ -52,6 +54,7 @@ auto main(int argc, char** argv) -> int
         startup_commands_path = result["commands"].as<std::string>();
         startup_scene_path    = result["scene"].as<std::string>();
         no_startup_scene      = (result.count("no-scene") != 0);
+        no_post_processing    = (result.count("no-post-processing") != 0);
     } catch (const std::exception&) {
         // Keep the default startup paths on any parse failure.
     }
@@ -76,6 +79,6 @@ auto main(int argc, char** argv) -> int
     // android-project/app/build.gradle.
     (void)erhe::file::migrate_android_assets_to_writable("erhe_migrate_manifest.txt");
 #endif
-    editor::run_editor(startup_commands_path, startup_scene_path, no_startup_scene);
+    editor::run_editor(startup_commands_path, startup_scene_path, no_startup_scene, no_post_processing);
     return 0;
 }
