@@ -1,6 +1,7 @@
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_primitive/buffer_sink.hpp"
 #include "erhe_primitive/primitive_builder.hpp"
+#include "erhe_primitive/primitive_log.hpp"
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_primitive/triangle_soup.hpp"
 #include "erhe_geometry/geometry.hpp"
@@ -500,6 +501,36 @@ auto build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, co
         }
         buffer_mesh.vertex_buffer_ranges.emplace_back(vertex_sink_allocation.range);
         buffer_mesh.vertex_allocations.emplace_back(std::move(vertex_sink_allocation.allocation));
+    }
+
+    // Lockstep invariant: the indirect draw applies a single vertexOffset
+    // (computed from stream 0 in Buffer_mesh::base_vertex()) to every vertex
+    // binding, so byte_offset / stride and the block index must be identical
+    // for all streams of this mesh (see buffer_pool.hpp). If a pool has
+    // desynced, refuse the mesh loudly instead of letting the GPU fetch
+    // non-position attributes from the wrong offsets (symptom: positions
+    // correct, normals / tangents / tex_coords / colors garbage or zero).
+    if (!buffer_mesh.vertex_buffer_ranges.empty()) {
+        const Buffer_range& range_0     = buffer_mesh.vertex_buffer_ranges.front();
+        const std::size_t   base_vertex = range_0.byte_offset / range_0.element_size;
+        for (std::size_t stream = 1, stream_end = buffer_mesh.vertex_buffer_ranges.size(); stream < stream_end; ++stream) {
+            const Buffer_range& range = buffer_mesh.vertex_buffer_ranges[stream];
+            if (
+                ((range.byte_offset % range.element_size) != 0)           ||
+                ((range.byte_offset / range.element_size) != base_vertex) ||
+                (range.buffer_id != range_0.buffer_id)
+            ) {
+                log_primitive->error(
+                    "build_buffer_mesh_from_triangle_soup(): vertex stream allocations out of lockstep "
+                    "(stream 0: pool {} buffer {} byte_offset {} stride {}; "
+                    "stream {}: pool {} buffer {} byte_offset {} stride {}) - mesh skipped",
+                    range_0.pool_id, range_0.buffer_id, range_0.byte_offset, range_0.element_size,
+                    stream,
+                    range.pool_id, range.buffer_id, range.byte_offset, range.element_size
+                );
+                return std::optional<Buffer_mesh>{};
+            }
+        }
     }
 
     const Buffer_range& index_range = buffer_mesh.index_buffer_range;

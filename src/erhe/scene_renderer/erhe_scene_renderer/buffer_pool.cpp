@@ -125,7 +125,11 @@ auto Buffer_pool::create_new_block(const std::size_t min_capacity_bytes) -> bool
 {
     const Buffer_pool_block_create_info& info = m_block_create_info;
     if (m_blocks.size() >= info.max_blocks) {
-        ERHE_FATAL("Buffer_pool::create_new_block: block limit reached");
+        log_mesh_memory->error(
+            "Buffer_pool::create_new_block: block limit ({}) reached, {}",
+            info.max_blocks,
+            describe()
+        );
         return false;
     }
     const std::size_t capacity_bytes = std::max(info.block_size_bytes, min_capacity_bytes);
@@ -176,7 +180,16 @@ auto Buffer_pool::allocate(const std::size_t element_count) -> erhe::primitive::
 
     std::optional<std::pair<Pool_block*, std::size_t>> hit = allocate_internal(allocation_byte_count, allocation_alignment);
     if (!hit.has_value()) {
-        ERHE_FATAL("Buffer_pool::allocate: out of memory");
+        // Out of GPU mesh memory. Return an empty allocation (count == 0);
+        // callers treat that as a failed mesh build and skip the mesh,
+        // instead of aborting the application.
+        log_mesh_memory->error(
+            "Buffer_pool::allocate: out of memory requesting {} bytes ({} elements), {}",
+            allocation_byte_count,
+            element_count,
+            describe()
+        );
+        return {};
     }
 
     Pool_block*       block       = hit.value().first;

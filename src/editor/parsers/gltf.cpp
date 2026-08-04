@@ -462,7 +462,13 @@ void finalize_imported_meshes(
                     });
                 }
             }
-            ERHE_VERIFY(primitive.make_renderable_mesh(mesh_build_info, erhe::primitive::Normal_style::corner_normals));
+            const bool renderable_ok = primitive.make_renderable_mesh(mesh_build_info, erhe::primitive::Normal_style::corner_normals);
+            if (!renderable_ok) {
+                log_parsers->error(
+                    "glTF import: failed to build renderable mesh for '{}' (out of GPU mesh memory?) - primitive skipped",
+                    mesh->get_name()
+                );
+            }
         }
 
         mesh->update_rt_primitives();

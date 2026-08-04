@@ -144,6 +144,34 @@ void Build_context_root::allocate_vertex_buffers()
         buffer_mesh.vertex_buffer_ranges.emplace_back(sink_allocation.range);
         buffer_mesh.vertex_allocations.emplace_back(std::move(sink_allocation.allocation));
     }
+
+    // Lockstep invariant: one indirect-draw vertexOffset (from stream 0) is
+    // applied to every binding, so byte_offset / stride and the block index
+    // must match across all streams (see buffer_pool.hpp). Fail the build
+    // loudly instead of rendering non-position attributes from wrong offsets.
+    if (!buffer_mesh.vertex_buffer_ranges.empty() && (total_vertex_count > 0)) {
+        const Buffer_range& range_0     = buffer_mesh.vertex_buffer_ranges.front();
+        const std::size_t   base_vertex = range_0.byte_offset / range_0.element_size;
+        for (std::size_t stream = 1, stream_end = buffer_mesh.vertex_buffer_ranges.size(); stream < stream_end; ++stream) {
+            const Buffer_range& range = buffer_mesh.vertex_buffer_ranges[stream];
+            if (
+                ((range.byte_offset % range.element_size) != 0)           ||
+                ((range.byte_offset / range.element_size) != base_vertex) ||
+                (range.buffer_id != range_0.buffer_id)
+            ) {
+                log_primitive_builder->error(
+                    "allocate_vertex_buffers(): vertex stream allocations out of lockstep "
+                    "(stream 0: pool {} buffer {} byte_offset {} stride {}; "
+                    "stream {}: pool {} buffer {} byte_offset {} stride {}) - mesh build failed",
+                    range_0.pool_id, range_0.buffer_id, range_0.byte_offset, range_0.element_size,
+                    stream,
+                    range.pool_id, range.buffer_id, range.byte_offset, range.element_size
+                );
+                build_failed = true;
+                return;
+            }
+        }
+    }
 }
 
 void Build_context_root::allocate_edge_line_vertex_buffer()
@@ -248,6 +276,31 @@ void Build_context_root::allocate_expanded_fill_buffers()
         }
         buffer_mesh.expanded_vertex_buffer_ranges.emplace_back(sink_allocation.range);
         buffer_mesh.expanded_vertex_allocations.emplace_back(std::move(sink_allocation.allocation));
+    }
+    // Same lockstep invariant as allocate_vertex_buffers(), for the expanded
+    // stream set (expanded_base_vertex is computed from expanded stream 0).
+    if (!buffer_mesh.expanded_vertex_buffer_ranges.empty()) {
+        const Buffer_range& range_0     = buffer_mesh.expanded_vertex_buffer_ranges.front();
+        const std::size_t   base_vertex = range_0.byte_offset / range_0.element_size;
+        for (std::size_t stream = 1, stream_end = buffer_mesh.expanded_vertex_buffer_ranges.size(); stream < stream_end; ++stream) {
+            const Buffer_range& range = buffer_mesh.expanded_vertex_buffer_ranges[stream];
+            if (
+                ((range.byte_offset % range.element_size) != 0)           ||
+                ((range.byte_offset / range.element_size) != base_vertex) ||
+                (range.buffer_id != range_0.buffer_id)
+            ) {
+                log_primitive_builder->error(
+                    "allocate_expanded_fill_buffers(): vertex stream allocations out of lockstep "
+                    "(stream 0: pool {} buffer {} byte_offset {} stride {}; "
+                    "stream {}: pool {} buffer {} byte_offset {} stride {}) - mesh build failed",
+                    range_0.pool_id, range_0.buffer_id, range_0.byte_offset, range_0.element_size,
+                    stream,
+                    range.pool_id, range.buffer_id, range.byte_offset, range.element_size
+                );
+                build_failed = true;
+                return;
+            }
+        }
     }
     buffer_mesh.expanded_vertex_input_key = build_info.buffer_info.expanded_vertex_input_key;
 }

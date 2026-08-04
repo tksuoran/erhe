@@ -13,6 +13,8 @@
 
 #include "erhe_verify/verify.hpp"
 
+#include <algorithm>
+
 namespace erhe::scene_renderer {
 
 using Format                 = erhe::dataformat::Format;
@@ -258,6 +260,44 @@ auto Mesh_memory::allocate_vertex_buffer_range(
         "Creating new vertex buffer pool for stream {}",
         vertex_stream.to_string()
     );
+    // Lockstep block sizing: the indirect draw applies one vertexOffset
+    // (computed from stream 0) to every binding, so all stream pools of a
+    // Vertex_format must run out of block space at the same cumulative
+    // element count -- otherwise one pool rolls over to a new block while
+    // the others keep filling the old one, and byte_offset_K / stride_K
+    // diverges across streams (see the lockstep invariant comment above).
+    // Blocks are therefore sized in ELEMENTS, identical for every stream of
+    // the owning format: elements_per_block derived from the configured byte
+    // size and the format's fattest stream, then converted to bytes with
+    // this stream's own stride.
+    std::size_t block_size_bytes = static_cast<std::size_t>(m_mesh_memory_config.vertex_pool_block_size_mb) * mega;
+    const erhe::dataformat::Vertex_format* const formats[] = {
+        &vertex_format_empty,
+        &vertex_format_skinned,
+        &vertex_format_not_skinned,
+        &vertex_format_not_skinned_wireframe,
+        &vertex_format_skinned_wireframe,
+        &vertex_format_edge_line,
+        &vertex_format_edge_line_joints
+    };
+    for (const erhe::dataformat::Vertex_format* format : formats) {
+        const bool owns_stream = std::any_of(
+            format->streams.begin(), format->streams.end(),
+            [&vertex_stream](const erhe::dataformat::Vertex_stream& stream) { return &stream == &vertex_stream; }
+        );
+        if (!owns_stream) {
+            continue;
+        }
+        std::size_t max_stride = 0;
+        for (const erhe::dataformat::Vertex_stream& stream : format->streams) {
+            max_stride = std::max(max_stride, stream.stride);
+        }
+        if ((max_stride > 0) && (vertex_stream.stride > 0)) {
+            const std::size_t elements_per_block = block_size_bytes / max_stride;
+            block_size_bytes = elements_per_block * vertex_stream.stride;
+        }
+        break;
+    }
     // GPU ray tracing reads vertex/index pools in place as acceleration
     // structure build input, which additionally requires the device-address
     // usage. Only valid when the bufferDeviceAddress feature was enabled
@@ -278,7 +318,7 @@ auto Mesh_memory::allocate_vertex_buffer_range(
             .usage                              = erhe::graphics::Buffer_usage::vertex | erhe::graphics::Buffer_usage::storage | ray_trace_usage,
             .required_memory_property_bit_mask  = erhe::graphics::Memory_property_flag_bit_mask::device_local,
             .preferred_memory_property_bit_mask = erhe::graphics::Memory_property_flag_bit_mask::none,
-            .block_size_bytes                   = static_cast<std::size_t>(m_mesh_memory_config.vertex_pool_block_size_mb) * mega,
+            .block_size_bytes                   = block_size_bytes,
             .max_blocks                         = static_cast<std::size_t>(m_mesh_memory_config.max_buffers_per_pool),
             .debug_label_prefix                 = fmt::format("Mesh vertex pool {}", m_vertex_pools.size())
         }
