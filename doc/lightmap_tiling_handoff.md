@@ -103,12 +103,18 @@ with duplicate node names, undo interactions while a partition is live.
 
 ## Known limitations / next work
 
-1. prepare() is blocking (main thread), but the whole heavy phase -
-   per-region bake_transform + clip_by_tile_tree, per-piece unwrap +
-   primitive build - runs in parallel on the app executor since
-   2026-08-05 (make_atlas locks only its Geogram branch; the clipper
-   needs no lock at all, see clip_tile_tree.hpp thread-safety note).
-   Remaining future work: fully async pipeline + cancel + progress bar.
+1. DONE 2026-08-05: prepare is fully async - request_prepare snapshots on
+   the main thread and launches the heavy phase (per-region bake + clip,
+   per-piece unwrap + primitive build, all parallel) on the app executor;
+   Lightmap_partitioner::update() (editor tick, after the operation stack)
+   commits when done. The old partition stays live until the commit; a
+   mid-flight source-primitive swap or mesh removal aborts the commit
+   (Problems error, old partition kept); transform moves are tolerated
+   (stale-transforms warning). pending_async_ops is held for the flight so
+   every async_busy gate covers it. UI shows a progress bar + Cancel;
+   MCP lightmap_prepare_tiles is async by default ({queued:true}; poll
+   get_async_status.lightmap_prepare; wait:true for the old blocking
+   behavior on small scenes), lightmap_prepare_cancel cancels.
 2. Cross-tile cut boundaries are lightmap seams (positions crack-free,
    shading discontinuity only). Future: cross-tile seam blend at bake time.
 3. Clipper fan-triangulates every facet, including unclipped ones (spec says
@@ -117,6 +123,14 @@ with duplicate node names, undo interactions while a partition is live.
    pieces; the window warns, re-prepare fixes. Undo of scene edits does not
    know about the partition (it is deliberately outside the undo stack).
 5. Piece meshes are not pickable-flagged and carry no physics.
+6. PRE-EXISTING (found 2026-08-05 while testing async prepare, NOT caused
+   by it): closing a scene with a prepared partition trips the
+   scene-close leak watchdog - Lightmap_partitioner::on_scene_closed
+   drops its store, but Lightmap_baker::m_layout still holds the piece
+   meshes (Instance_region::mesh shared_ptrs; the baker has no
+   scene-close hook), keeping their primitives/materials alive until the
+   next update_layout. Fix idea: clear m_layout/m_tiles in the baker when
+   m_layout_scene_root closes.
 
 ## Gotchas
 

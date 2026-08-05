@@ -828,13 +828,17 @@ redone when parameters change.
   only shading discontinuity remains). Exactness holds within one mesh;
   pre-existing inter-mesh cracks are unchanged. Skinned meshes stay
   excluded. Moving a source mesh after the clip leaves stale pieces
-  (window warns; re-prepare). prepare() is blocking (main thread), but
-  its heavy phase - per-region world-space bake + clip and per-piece
-  unwrap + primitive build - runs in parallel on the app executor
-  (only the scene commit and final relayout stay serial; the clipper
-  is lock-free, see clip_tile_tree.hpp); fully async prepare + cancel
-  + progress is future work. N-gon facets are fan-triangulated by the
-  clipper even when unclipped. Revert after a fused prepare returns
+  (window warns; re-prepare). prepare is asynchronous: request_prepare
+  snapshots on the main thread (tile config, split estimate, per-region
+  tasks) and runs the heavy phase - per-region world-space bake + clip
+  and per-piece unwrap + primitive build, all parallel - on the app
+  executor; Lightmap_partitioner::update() commits on the main thread
+  (validate against the live scene -> swap partition -> one relayout +
+  publish). The old partition stays live during the flight; structural
+  scene changes (primitive swap, mesh removal) abort the commit and
+  keep it; cancel keeps it too. pending_async_ops is held for the
+  flight (all async_busy gates cover it). N-gon facets are
+  fan-triangulated by the clipper even when unclipped. Revert after a fused prepare returns
   to the legacy layout of originals that typically carry no channel-2
   UVs -> empty layout (originals render unlit) until the legacy unwrap
   runs or a re-prepare. Tile boundaries derive from estimated coverage,
