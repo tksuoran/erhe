@@ -156,6 +156,22 @@ App_rendering::App_rendering(
         .require_at_least_one_bit_set = Item_flags::selected | Item_flags::hovered_in_item_tree,
         .require_all_bits_clear       = Item_flags::proxy_hidden
     };
+    // Selection silhouette for proxy_hidden items: the source draws no fill
+    // (its render proxy does), but it must still get a selection OUTLINE.
+    // This filter feeds a dedicated stencil-mask pass (below) that writes
+    // silhouette bit 7 for selected/hovered proxy-hidden sources, and the
+    // outline pass itself includes proxy_hidden items (its geometry matches
+    // the proxies', so the outline lands exactly around the rendered surface).
+    const Item_filter filter_selected_or_hovered_proxy_hidden{
+        .require_all_bits_set         = Item_flags::content  | Item_flags::visible | Item_flags::proxy_hidden,
+        .require_at_least_one_bit_set = Item_flags::selected | Item_flags::hovered_in_item_tree,
+        .require_all_bits_clear       = 0
+    };
+    const Item_filter filter_selected_or_hovered_outline{
+        .require_all_bits_set         = Item_flags::content  | Item_flags::visible,
+        .require_at_least_one_bit_set = Item_flags::selected | Item_flags::hovered_in_item_tree,
+        .require_all_bits_clear       = 0
+    };
 
     const auto& render_style_not_selected = [](const Render_context& context) -> const Render_style_data& {
         return context.viewport_config.render_style_not_selected;
@@ -339,6 +355,25 @@ App_rendering::App_rendering(
         selected
     );
 
+    // Selection silhouette for proxy_hidden sources (lightmap originals
+    // while their render proxies draw): the selection fill excludes them,
+    // so bit 7 comes from this always-on depth-only pass instead. Their
+    // depth matches the coplanar proxy surfaces (less-or-equal), so this
+    // adds no visible geometry - just the stencil mask the outline needs.
+    auto selection_stencil_mask_proxy_hidden = make_composition_pass(
+        "Selection stencil mask (proxy hidden)",
+        Composition_pass_data{
+            .mesh_layers                  {Mesh_layer_id::content},
+            .blending_mode_policy         {Blending_mode_policy::override_with_base_render_pipeline},
+            .primitive_mode               {Primitive_mode::polygon_fill},
+            .filter                       {filter_selected_or_hovered_proxy_hidden},
+            .color_blend_override         {&Color_blend_state::color_writes_disabled},
+            .shader_key_force_enable_mask {make_shader_bool_mask(Shader_bool::VARIANT_DEPTH_ONLY)}
+        },
+        selected
+    );
+    static_cast<void>(selection_stencil_mask_proxy_hidden);
+
     edge_lines_not_selected = make_composition_pass(
         "Content edge lines not selected",
         Composition_pass_data{
@@ -489,7 +524,10 @@ App_rendering::App_rendering(
             .mesh_layers                   {Mesh_layer_id::content},
             .blending_mode_policy          {Blending_mode_policy::override_with_base_render_pipeline},
             .primitive_mode                {Primitive_mode::edge_lines},
-            .filter                        {filter_selected_or_hovered},
+            // Outline-inclusive filter: proxy_hidden sources get an outline
+            // too (their silhouette stencil comes from the dedicated pass
+            // above; their edges coincide with the rendered proxies).
+            .filter                        {filter_selected_or_hovered_outline},
             .primitive_settings{
                 erhe::scene_renderer::Primitive_interface_settings{
                     .constant_color0 = glm::vec4{1.0f, 0.75f, 0.0f, 1.0f},

@@ -62,9 +62,15 @@ from disk by grid key.
   are excluded from the visual content passes (app_rendering filters), the
   shadow passes (shadow_renderer) and the bake occluder set
   (collect_instances + the tick's occluder hash) - the pieces do all of
-  that in their place. NOTE: a SELECTED proxy-hidden original draws no
-  selection fill/outline (excluded from those passes too); selection
-  feedback is the gizmo + item tree until an outline-only pass is added.
+  that in their place. Selection OUTLINES still render for proxy-hidden
+  sources: a dedicated always-on depth-only pass ("Selection stencil mask
+  (proxy hidden)") writes silhouette stencil bit 7 for them (the selection
+  fill, which normally writes it, excludes them), and the outline pass
+  uses a proxy-inclusive filter - the source's edges coincide with the
+  proxies' surfaces, so the outline lands exactly around the rendered
+  geometry. Verified via headless screenshots (build_vs2026_vulkan_headless
+  + capture_screenshot MCP) in both render modes. The selection FILL
+  highlight stays excluded (coplanar with the proxies - would z-fight).
 - Editing a partitioned source (transform move or geometry swap - geometry
   identity is now snapshot per source primitive, count_stale_sources)
   auto-launches an async re-prepare after the edit settles (~60 frames
