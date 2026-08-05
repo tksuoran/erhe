@@ -943,6 +943,10 @@ void Mcp_server::refresh_tool_list()
         {"type", "object"},
         {"properties", json::object()}
     }});
+    m_tool_infos.push_back({"lightmap_save_all_tiles", "Write every RESIDENT tile's current published lightmap (interactive bake state) to <scene>.lightmap/ (tile_<id>.lmt + manifest.json) right now. Non-resident tiles have no content in memory - use lightmap_bake_to_disk (UI: 'Batch Process All Tiles') to bake and persist all tiles. Evicted tiles are saved automatically (save-on-evict). Returns how many tiles were saved.", {
+        {"type", "object"},
+        {"properties", json::object()}
+    }});
     m_tool_infos.push_back({"lightmap_prepare_tiles", "Prepare world-space lightmap tiles: make every lightmapped mesh/primitive instance unique, bake its node transform into the vertices (world space), clip the geometry against the spatial kd tile planes (clip vertices are binary exact across the two tiles sharing a plane) and re-unwrap each piece's channel-2 UVs at world-space density. Pieces become Mesh_primitives of new meshes under the identity 'Lightmap Pieces' group node; originals stay in the scene for lightmap_revert_tiles / re-prepare. Refreshes the atlas layout first (same stale-data guard as lightmap_update_atlas). Toggle rendering between originals and pieces with lightmap_set_render.", {
         {"type", "object"},
         {"properties", {

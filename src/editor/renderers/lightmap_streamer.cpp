@@ -93,6 +93,14 @@ auto Lightmap_streamer::try_load_manifest(Scene_root& scene_root) -> bool
         return false;
     }
     m_tiles.assign(m_manifest.tiles.size(), Tile_runtime{});
+    // Incremental manifests (save-on-evict / Save All) list every layout
+    // tile before all payloads exist; stat them once so the ranking skips
+    // not-yet-baked tiles without per-frame filesystem probes or errors.
+    for (std::size_t tile = 0; tile < m_manifest.tiles.size(); ++tile) {
+        std::error_code payload_ec;
+        m_tiles[tile].on_disk =
+            std::filesystem::exists(m_directory / m_manifest.tiles[tile].payload, payload_ec) && !payload_ec;
+    }
     const int desired_slots = std::clamp(m_budget, 1, static_cast<int>(m_manifest.tiles.size()));
     m_slot_grid = 1;
     while (m_slot_grid * m_slot_grid < desired_slots) {
@@ -408,7 +416,7 @@ void Lightmap_streamer::update(Scene_root& scene_root, const glm::vec3* camera_p
     float best_distance   = std::numeric_limits<float>::max();
     for (int tile = 0; tile < tile_count; ++tile) {
         const Tile_runtime& runtime = m_tiles[static_cast<std::size_t>(tile)];
-        if ((runtime.slot >= 0) || runtime.loading || runtime.failed) {
+        if ((runtime.slot >= 0) || runtime.loading || runtime.failed || !runtime.on_disk) {
             continue;
         }
         const float d = distance_of(tile);

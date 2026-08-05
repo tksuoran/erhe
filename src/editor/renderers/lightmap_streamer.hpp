@@ -67,6 +67,11 @@ private:
         int  slot    {-1};   // resident atlas slot; -1 = not resident
         bool loading {false};
         bool failed  {false}; // payload read failed; do not retry every frame
+        // Payload file existed when the manifest was loaded. Incremental
+        // saves (save-on-evict / Save All) write manifests that list every
+        // tile of the layout before all payloads exist; absent ones are
+        // simply not-yet-baked, not errors. invalidate() re-checks.
+        bool on_disk {true};
     };
 
     class Pending_load

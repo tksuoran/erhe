@@ -50,13 +50,23 @@ public:
     // texture - the button only sets a flag.
     void update();
 
-    // Arms the baker's offline bake-to-disk (one tile per frame from
+    // Arms the baker's offline batch bake (one tile per frame from
     // update()): payloads + manifest land in <scene>.lightmap/ via
     // Lightmap_tile_io. False when there is no layout / baker. Also
-    // reachable over MCP (lightmap_bake_to_disk).
+    // reachable over MCP (lightmap_bake_to_disk). UI: "Batch Process All
+    // Tiles".
     auto start_bake_to_disk() -> bool;
 
+    // Persists one resident, published tile's current lightmap (display
+    // slot readback -> tile_<id>.lmt + manifest). Used by the save-on-evict
+    // drain in update() and the Save All Tiles button.
+    auto save_tile_to_disk(int tile) -> bool;
+
+    // Saves every resident, published tile. Returns how many were saved.
+    auto save_all_tiles() -> std::size_t;
+
 private:
+
     // Queues an undoable Make_atlas_operation (usage_index 2, method knobs
     // from Lightmap_config) for every lightmapped, non-skinned mesh node in
     // the active scene. The optional per-facet chart order keys re-pack

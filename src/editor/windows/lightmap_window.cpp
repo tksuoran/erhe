@@ -3,12 +3,14 @@
 #include "app_context.hpp"
 #include "app_settings.hpp"
 #include "config/generated/editor_settings_config.hpp"
+#include "editor_log.hpp"
 #include "items.hpp"
 #include "operations/geometry_operations.hpp"
 #include "operations/operation_stack.hpp"
 #include "renderers/lightmap_baker.hpp"
 #include "renderers/lightmap_partitioner.hpp"
 #include "renderers/lightmap_report.hpp"
+#include "renderers/lightmap_streamer.hpp"
 #include "renderers/lightmap_tile_io.hpp"
 
 #include "erhe_scene_renderer/forward_renderer.hpp"
@@ -25,6 +27,7 @@
 #include <imgui/imgui.h>
 
 #include <algorithm>
+#include <span>
 
 namespace editor {
 
@@ -57,6 +60,108 @@ namespace {
         }
     }
     return items;
+}
+
+// Manifest for the CURRENT layout: tile bounds/density/payload names plus
+// the region identity table (world-space pieces persist the SOURCE mesh
+// identity + (tile, piece_ordinal); they are re-created deterministically by
+// Prepare World-Space Tiles, so the streamer resolves them through the live
+// partition - the piece node names never hit the manifest). Shared by the
+// batch bake and the incremental save paths.
+[[nodiscard]] auto build_tile_manifest(
+    App_context&                        context,
+    const Lightmap_baker::Atlas_layout& layout,
+    const Lightmap_config&              config
+) -> std::shared_ptr<Lightmap_tile_io::Manifest>
+{
+    auto manifest = std::make_shared<Lightmap_tile_io::Manifest>();
+    manifest->tile_size        = layout.get_tile_size();
+    manifest->texels_per_meter = config.texels_per_meter;
+    manifest->bake_hash        = (context.lightmap_baker != nullptr)
+        ? context.lightmap_baker->get_bake_parameters_hash(config.texels_per_meter)
+        : 0u;
+    manifest->tiles.resize(static_cast<std::size_t>(layout.get_tile_count()));
+    for (int tile = 0; tile < layout.get_tile_count(); ++tile) {
+        Lightmap_tile_io::Tile_entry& entry = manifest->tiles[static_cast<std::size_t>(tile)];
+        const Lightmap_baker::Tile& layout_tile = layout.tiles[static_cast<std::size_t>(tile)];
+        entry.id            = tile;
+        entry.bounds_min    = layout_tile.world_bounds.min;
+        entry.bounds_max    = layout_tile.world_bounds.max;
+        entry.density_scale = layout_tile.density_scale;
+        entry.payload       = Lightmap_tile_io::payload_name(tile);
+    }
+    for (const Lightmap_baker::Instance_region& region : layout.regions) {
+        if (!region.mesh || (region.tile < 0) || (region.tile >= layout.get_tile_count())) {
+            continue;
+        }
+        const erhe::scene::Mesh* identity_mesh = region.mesh.get();
+        if ((region.piece_ordinal >= 0) && (context.lightmap_partitioner != nullptr)) {
+            for (const Lightmap_partitioner::Original_entry& entry : context.lightmap_partitioner->get_entries()) {
+                if (entry.piece_mesh == region.mesh) {
+                    identity_mesh = entry.original_mesh.get();
+                    break;
+                }
+            }
+        }
+        manifest->tiles[static_cast<std::size_t>(region.tile)].regions.push_back(
+            Lightmap_tile_io::Region_entry{
+                .node_path       = Lightmap_tile_io::node_path(identity_mesh->get_node()),
+                .node_index_path = Lightmap_tile_io::node_index_path(identity_mesh->get_node()),
+                .mesh_name       = identity_mesh->get_name(),
+                .primitive_index = (region.piece_ordinal >= 0) ? region.source_primitive_index : region.primitive_index,
+                .piece_ordinal   = region.piece_ordinal,
+                .uv_scale_offset = region.uv_scale_offset // tile-local
+            }
+        );
+    }
+    return manifest;
+}
+
+// Writes one tile's payload and rewrites the manifest, so any interruption
+// leaves a consistent set on disk. Errors land in the Problems list.
+[[nodiscard]] auto persist_tile_payload(
+    const std::filesystem::path&      directory,
+    const Lightmap_tile_io::Manifest& manifest,
+    const int                         tile,
+    const int                         width,
+    const int                         height,
+    std::span<const uint16_t>         rgba16,
+    Lightmap_report* const            report
+) -> bool
+{
+    std::string error;
+    std::error_code ec;
+    std::filesystem::create_directories(directory, ec);
+    if (ec) {
+        if (report != nullptr) {
+            report->add_error(Lightmap_report::Stage::persist, directory.string(), ec.message());
+        }
+        return false;
+    }
+    const Lightmap_tile_io::Tile_entry& entry = manifest.tiles[static_cast<std::size_t>(tile)];
+    const bool payload_ok = Lightmap_tile_io::write_tile_payload(
+        directory / entry.payload,
+        width,
+        height,
+        rgba16,
+        manifest.bake_hash,
+        entry.bounds_min,
+        entry.bounds_max,
+        &error
+    );
+    if (!payload_ok) {
+        if (report != nullptr) {
+            report->add_error(Lightmap_report::Stage::persist, entry.payload, error);
+        }
+        return false;
+    }
+    if (!Lightmap_tile_io::write_manifest(directory, manifest, &error)) {
+        if (report != nullptr) {
+            report->add_error(Lightmap_report::Stage::persist, "manifest.json", error);
+        }
+        return false;
+    }
+    return true;
 }
 
 } // anonymous namespace
@@ -119,101 +224,98 @@ auto Lightmap_window::start_bake_to_disk() -> bool
         Lightmap_tile_io::directory_for_scene(scene_root->get_source_path());
 
     // Full manifest up front (the layout is fixed for the whole bake); the
-    // sink writes each tile's payload and rewrites the manifest after every
-    // tile so an interrupted bake leaves a consistent set on disk.
-    auto manifest = std::make_shared<Lightmap_tile_io::Manifest>();
-    manifest->tile_size        = layout.get_tile_size();
-    manifest->texels_per_meter = config.texels_per_meter;
-    manifest->bake_hash        = baker.get_bake_parameters_hash(config.texels_per_meter);
-    manifest->tiles.resize(static_cast<std::size_t>(layout.get_tile_count()));
-    for (int tile = 0; tile < layout.get_tile_count(); ++tile) {
-        Lightmap_tile_io::Tile_entry& entry = manifest->tiles[static_cast<std::size_t>(tile)];
-        const Lightmap_baker::Tile& layout_tile = layout.tiles[static_cast<std::size_t>(tile)];
-        entry.id            = tile;
-        entry.bounds_min    = layout_tile.world_bounds.min;
-        entry.bounds_max    = layout_tile.world_bounds.max;
-        entry.density_scale = layout_tile.density_scale;
-        entry.payload       = Lightmap_tile_io::payload_name(tile);
-    }
-    for (const Lightmap_baker::Instance_region& region : layout.regions) {
-        if (!region.mesh || (region.tile < 0) || (region.tile >= layout.get_tile_count())) {
-            continue;
-        }
-        // World-space tile pieces persist the SOURCE mesh identity plus
-        // (tile, piece_ordinal): pieces are re-created deterministically by
-        // Prepare World-Space Tiles, so the streamer resolves them through
-        // the live partition (the piece node names never hit the manifest).
-        const erhe::scene::Mesh* identity_mesh = region.mesh.get();
-        if ((region.piece_ordinal >= 0) && (m_context.lightmap_partitioner != nullptr)) {
-            for (const Lightmap_partitioner::Original_entry& entry : m_context.lightmap_partitioner->get_entries()) {
-                if (entry.piece_mesh == region.mesh) {
-                    identity_mesh = entry.original_mesh.get();
-                    break;
-                }
-            }
-        }
-        manifest->tiles[static_cast<std::size_t>(region.tile)].regions.push_back(
-            Lightmap_tile_io::Region_entry{
-                .node_path       = Lightmap_tile_io::node_path(identity_mesh->get_node()),
-                .node_index_path = Lightmap_tile_io::node_index_path(identity_mesh->get_node()),
-                .mesh_name       = identity_mesh->get_name(),
-                .primitive_index = (region.piece_ordinal >= 0) ? region.source_primitive_index : region.primitive_index,
-                .piece_ordinal   = region.piece_ordinal,
-                .uv_scale_offset = region.uv_scale_offset // tile-local
-            }
-        );
-    }
+    // sink persists each tile as it completes, so an interrupted bake
+    // leaves a consistent set on disk.
+    std::shared_ptr<Lightmap_tile_io::Manifest> manifest = build_tile_manifest(m_context, layout, config);
 
     Lightmap_report* const report = m_context.lightmap_report;
     if (report != nullptr) {
         report->clear_stage(Lightmap_report::Stage::bake);
         report->clear_stage(Lightmap_report::Stage::persist);
     }
-    const uint64_t bake_hash = manifest->bake_hash;
     return baker.start_offline_bake(
         *scene_root.get(),
         static_cast<uint32_t>(std::max(1, config.offline_sweeps)),
-        [directory, manifest, report, bake_hash](
+        [directory, manifest, report](
             const int                    tile,
             const int                    width,
             const int                    height,
             const std::vector<uint16_t>& rgba16
         ) -> bool {
-            std::string error;
-            std::error_code ec;
-            std::filesystem::create_directories(directory, ec);
-            if (ec) {
-                if (report != nullptr) {
-                    report->add_error(Lightmap_report::Stage::persist, directory.string(), ec.message());
-                }
-                return false;
-            }
-            const Lightmap_tile_io::Tile_entry& entry = manifest->tiles[static_cast<std::size_t>(tile)];
-            const bool payload_ok = Lightmap_tile_io::write_tile_payload(
-                directory / entry.payload,
+            return persist_tile_payload(
+                directory,
+                *manifest,
+                tile,
                 width,
                 height,
                 std::span<const uint16_t>{rgba16.data(), rgba16.size()},
-                bake_hash,
-                entry.bounds_min,
-                entry.bounds_max,
-                &error
+                report
             );
-            if (!payload_ok) {
-                if (report != nullptr) {
-                    report->add_error(Lightmap_report::Stage::persist, entry.payload, error);
-                }
-                return false;
-            }
-            if (!Lightmap_tile_io::write_manifest(directory, *manifest, &error)) {
-                if (report != nullptr) {
-                    report->add_error(Lightmap_report::Stage::persist, "manifest.json", error);
-                }
-                return false;
-            }
-            return true;
         }
     );
+}
+
+auto Lightmap_window::save_tile_to_disk(const int tile) -> bool
+{
+    if (m_context.lightmap_baker == nullptr) {
+        return false;
+    }
+    Lightmap_baker& baker = *m_context.lightmap_baker;
+    const Lightmap_baker::Atlas_layout& layout = baker.get_layout();
+    if ((tile < 0) || (tile >= layout.get_tile_count())) {
+        return false;
+    }
+    const std::shared_ptr<Scene_root> scene_root = m_context.selection->get_active_scene_root();
+    if (!scene_root) {
+        return false;
+    }
+    std::vector<uint16_t> rgba16;
+    if (!baker.read_back_tile(tile, rgba16)) {
+        return false; // not resident / not published - nothing to save
+    }
+    const Lightmap_config& config = m_context.editor_settings->lightmap;
+    const std::filesystem::path directory =
+        Lightmap_tile_io::directory_for_scene(scene_root->get_source_path());
+    const std::shared_ptr<Lightmap_tile_io::Manifest> manifest = build_tile_manifest(m_context, layout, config);
+    const int tile_size = layout.get_tile_size();
+    const bool saved = persist_tile_payload(
+        directory,
+        *manifest,
+        tile,
+        tile_size,
+        tile_size,
+        std::span<const uint16_t>{rgba16.data(), rgba16.size()},
+        m_context.lightmap_report
+    );
+    if (saved) {
+        baker.mark_tile_saved(tile);
+        // The disk set changed; make the streamer re-read the manifest the
+        // next time it owns the lightmap binding.
+        if (m_context.lightmap_streamer != nullptr) {
+            m_context.lightmap_streamer->invalidate();
+        }
+        log_render->info("Lightmap_window: tile {} saved to {}", tile, directory.string());
+    }
+    return saved;
+}
+
+auto Lightmap_window::save_all_tiles() -> std::size_t
+{
+    if (m_context.lightmap_baker == nullptr) {
+        return 0;
+    }
+    const int tile_count = m_context.lightmap_baker->get_layout().get_tile_count();
+    std::size_t saved = 0;
+    for (int tile = 0; tile < tile_count; ++tile) {
+        // save_tile_to_disk() quietly skips tiles with no resident
+        // published content (there is nothing in memory to persist for
+        // them - bake or batch-process to fill those).
+        if (save_tile_to_disk(tile)) {
+            ++saved;
+        }
+    }
+    log_render->info("Lightmap_window: Save All Tiles saved {} of {} tiles", saved, tile_count);
+    return saved;
 }
 
 void Lightmap_window::update()
@@ -227,6 +329,23 @@ void Lightmap_window::update()
             m_context.lightmap_baker->offline_tick(*scene_root.get());
         } else {
             m_context.lightmap_baker->cancel_offline_bake();
+        }
+    }
+
+    // Save-on-evict drain: the residency swap parks tiles with unsaved
+    // published content instead of dropping them (see
+    // Lightmap_baker::set_save_on_evict); persist them here - a safe point
+    // in the frame for standalone readback submits - then release them for
+    // eviction. A failed save is released too (the error is already in
+    // Problems); holding the slot forever would deadlock residency.
+    if (m_context.lightmap_baker != nullptr) {
+        for (;;) {
+            const int tile = m_context.lightmap_baker->take_tile_pending_save();
+            if (tile < 0) {
+                break;
+            }
+            save_tile_to_disk(tile);
+            m_context.lightmap_baker->mark_tile_saved(tile);
         }
     }
 
@@ -754,11 +873,12 @@ void Lightmap_window::imgui()
         ImGui::EndDisabled();
     }
 
-    // Offline bake-to-disk: every spatial tile (not just the resident
-    // ones), one tile at a time, persisted to <scene>.lightmap/ - bounded
-    // memory regardless of world size.
+    // Tile persistence: the batch bake processes every spatial tile (not
+    // just the resident ones) one tile at a time; Save All persists what
+    // the interactive baker currently holds in memory. Evictions save
+    // automatically (see Lightmap_window::update).
     if (m_context.lightmap_baker != nullptr) {
-        ImGui::SeparatorText("Bake To Disk");
+        ImGui::SeparatorText("Tile Persistence");
         ImGui::BeginDisabled(!bake_supported || async_busy);
         const bool offline_active = m_context.lightmap_baker->is_offline_bake_active();
         if (!offline_active) {
@@ -769,7 +889,7 @@ void Lightmap_window::imgui()
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip("Accumulation sweeps gathered per tile before it is written to disk.");
             }
-            if (ImGui::Button("Bake To Disk")) {
+            if (ImGui::Button("Batch Process All Tiles")) {
                 start_bake_to_disk();
             }
             if (ImGui::IsItemHovered()) {
@@ -778,6 +898,18 @@ void Lightmap_window::imgui()
                     "N gather sweeps + resolve) and write tile_<N>.lmt + manifest.json into\n"
                     "<scene>.lightmap/. Only one tile's working set is resident at a time, so any\n"
                     "world size bakes within the fixed memory budget."
+                );
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Save All Tiles")) {
+                save_all_tiles();
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip(
+                    "Write every resident tile's CURRENT published lightmap (interactive bake\n"
+                    "state) to <scene>.lightmap/ right now. Non-resident tiles have no content in\n"
+                    "memory - use Batch Process All Tiles to bake and persist those. Evicted\n"
+                    "tiles are saved automatically."
                 );
             }
         } else {

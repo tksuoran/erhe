@@ -49,6 +49,34 @@ MCP.** Two feature sets landed on top of each other this day:
   stale warning / Render with lightmaps). MCP: `lightmap_prepare_tiles`,
   `lightmap_revert_tiles`, `lightmap_set_render`.
 
+## Interactive-bake persistence (added same day, user-requested)
+
+Interactive bake results are never lost to a residency swap:
+
+- **Save-on-evict**: the residency ranking never drops a tile whose
+  published content is unsaved (`Tile_state::dirty_since_save`); it parks
+  the tile in a pending-save queue keeping its slot (gathering stops), and
+  `Lightmap_window::update()` persists it (display-slot region readback ->
+  `tile_<id>.lmt` + manifest) before releasing it for eviction. Enabled in
+  editor.cpp via `Lightmap_baker::set_save_on_evict(true)`.
+- **Save All Tiles** (window button + MCP `lightmap_save_all_tiles`):
+  writes every resident published tile's current lightmap to disk now.
+  Non-resident tiles have nothing in memory to save.
+- **"Bake To Disk" renamed to "Batch Process All Tiles"** (section
+  "Tile Persistence"); MCP tool name stays `lightmap_bake_to_disk`.
+- Incremental manifests list every layout tile before all payloads exist;
+  the streamer stats payloads at manifest load and skips absent ones
+  (not-yet-baked, not errors).
+- Shared helpers `build_tile_manifest` / `persist_tile_payload`
+  (lightmap_window.cpp) serve the batch bake, Save All and evict-save.
+
+Verified headless: Save All wrote the resident tile; a camera jump across
+tiles (512^2, budget 1) auto-saved the evicted tile with no save-all call;
+no missing-payload errors from the streamer. NOTE: the editor tick pushes
+`lightmap_config` tile size/budget into the baker every frame, so MCP
+`lightmap_update_atlas` overrides do not survive into interactive baking -
+config values rule (that is why the evict test edited the config).
+
 ## Verification done (headless MCP, Default Scene + 6 boxes spread +-40 m)
 
 - `erhe_geometry_tests`: 109/109 (5 new ClipTileTree tests).

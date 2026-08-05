@@ -3927,8 +3927,9 @@ auto Lightmap_baker::bake_direct(Scene_root& scene_root) -> bool
         Command_buffer* command_buffers[] = { &command_buffer };
         m_graphics_device.submit_command_buffers(std::span<Command_buffer* const>{command_buffers});
         m_graphics_device.wait_idle();
-        m_tiles[static_cast<std::size_t>(tile)].published = true;
-        m_tiles[static_cast<std::size_t>(tile)].sweeps    = 1;
+        m_tiles[static_cast<std::size_t>(tile)].published        = true;
+        m_tiles[static_cast<std::size_t>(tile)].sweeps           = 1;
+        m_tiles[static_cast<std::size_t>(tile)].dirty_since_save = true;
         ++tiles_done;
     }
     if (tiles_done == 0) {
@@ -4159,7 +4160,8 @@ auto Lightmap_baker::offline_tick(Scene_root& scene_root) -> bool
     }
     {
         Tile_state& state = m_tiles[static_cast<std::size_t>(tile)];
-        state.sweeps    = offline.progress.target_sweeps;
+        state.sweeps           = offline.progress.target_sweeps;
+        state.dirty_since_save = false; // the offline sink just persisted it
         state.published = m_layout.tiles[static_cast<std::size_t>(tile)].slot >= 0;
     }
     m_lightmap_valid = true;
@@ -4275,8 +4277,9 @@ void Lightmap_baker::release_working_set()
     m_cursor_y         = 0;
     for (Tile_state& tile : m_tiles) {
         tile.accum.reset();
-        tile.accum_dirty = true;
-        tile.sweeps      = 0;
+        tile.accum_dirty      = true;
+        tile.sweeps           = 0;
+        tile.dirty_since_save = false;
         // tile.published stays: the display atlas keeps its last publish.
     }
     m_blas_cache.clear();
@@ -4748,6 +4751,20 @@ void Lightmap_baker::tick(
                 Tile_state& state = m_tiles[static_cast<std::size_t>(tile)];
                 const bool active = want_active[static_cast<std::size_t>(tile)] != 0;
                 if (!active && (layout_tile.slot >= 0)) {
+                    if (m_save_on_evict && state.published && state.dirty_since_save) {
+                        // Unsaved bake results must reach disk before the
+                        // slot is dropped: park the tile in the pending-save
+                        // queue and keep its slot (gathering stops via
+                        // active = false, so the content is stable for the
+                        // readback). Lightmap_window::update() saves it and
+                        // calls mark_tile_saved(); the next tick then
+                        // completes the eviction.
+                        if (std::find(m_tiles_pending_save.begin(), m_tiles_pending_save.end(), tile) == m_tiles_pending_save.end()) {
+                            m_tiles_pending_save.push_back(tile);
+                        }
+                        state.active = false;
+                        continue;
+                    }
                     free_slots.push_back(layout_tile.slot);
                     layout_tile.slot = -1;
                     residency_changed = true;
@@ -4756,8 +4773,9 @@ void Lightmap_baker::tick(
                         // Destruction is deferred behind the in-flight frames.
                         state.accum.reset();
                     }
-                    state.accum_dirty = true;
-                    state.sweeps      = 0;
+                    state.accum_dirty      = true;
+                    state.sweeps           = 0;
+                    state.dirty_since_save = false;
                 }
                 state.active = active;
             }
@@ -4773,9 +4791,10 @@ void Lightmap_baker::tick(
                     // (the slot still shows the previous occupant until the
                     // first publish, but nothing references it - the old
                     // tile's regions were zeroed).
-                    state.published   = false;
-                    state.accum_dirty = true;
-                    state.sweeps      = 0;
+                    state.published        = false;
+                    state.accum_dirty      = true;
+                    state.sweeps           = 0;
+                    state.dirty_since_save = false;
                 }
             }
             if (residency_changed) {
@@ -4810,10 +4829,12 @@ void Lightmap_baker::tick(
     if (reset) {
         // Light / occluder / transform edits invalidate every tile's
         // accumulation; the clears happen lazily as each tile becomes
-        // current (ensure_tile_accum).
+        // current (ensure_tile_accum). The last publish is obsolete too, so
+        // an eviction must not persist it.
         for (Tile_state& state : m_tiles) {
-            state.accum_dirty = true;
-            state.sweeps      = 0;
+            state.accum_dirty      = true;
+            state.sweeps           = 0;
+            state.dirty_since_save = false;
         }
         m_cursor_y = 0;
     }
@@ -4944,6 +4965,7 @@ void Lightmap_baker::tick(
     if (tile_sweep_completed) {
         m_cursor_y = 0;
         ++cursor_state.sweeps;
+        cursor_state.dirty_since_save = true;
     }
     // Publish cadence (phase 4 denoise): while the tile has never been
     // published publish the raw average every tick so the lightmap appears
@@ -4979,6 +5001,100 @@ void Lightmap_baker::tick(
         }
     }
     ++m_frame_counter;
+}
+
+auto Lightmap_baker::take_tile_pending_save() -> int
+{
+    if (m_tiles_pending_save.empty()) {
+        return -1;
+    }
+    const int tile = m_tiles_pending_save.back();
+    m_tiles_pending_save.pop_back();
+    return tile;
+}
+
+void Lightmap_baker::mark_tile_saved(const int tile)
+{
+    if ((tile < 0) || (tile >= static_cast<int>(m_tiles.size()))) {
+        return;
+    }
+    m_tiles[static_cast<std::size_t>(tile)].dirty_since_save = false;
+}
+
+auto Lightmap_baker::tile_has_unsaved_content(const int tile) const -> bool
+{
+    if ((tile < 0) || (tile >= static_cast<int>(m_tiles.size())) || (tile >= m_layout.get_tile_count())) {
+        return false;
+    }
+    const Tile_state& state = m_tiles[static_cast<std::size_t>(tile)];
+    return
+        (m_layout.tiles[static_cast<std::size_t>(tile)].slot >= 0) &&
+        state.published &&
+        state.dirty_since_save;
+}
+
+auto Lightmap_baker::read_back_tile(const int tile, std::vector<uint16_t>& out_rgba16) -> bool
+{
+    using namespace erhe::graphics;
+    if ((tile < 0) || (tile >= m_layout.get_tile_count()) || !m_display_texture) {
+        return false;
+    }
+    if (m_display_texture->get_pixelformat() != erhe::dataformat::Format::format_16_vec4_float) {
+        return false;
+    }
+    const int slot = m_layout.tiles[static_cast<std::size_t>(tile)].slot;
+    if ((slot < 0) || !m_tiles[static_cast<std::size_t>(tile)].published) {
+        return false;
+    }
+    // Region readback of the tile's display slot: the display atlas is
+    // already fp16, so the payload bytes come out directly.
+    const int         tile_size     = m_layout.get_tile_size();
+    const glm::ivec2  slot_origin   = m_layout.get_slot_origin(slot);
+    const std::size_t bytes_per_row = static_cast<std::size_t>(tile_size) * 8u; // RGBA16F
+    const std::size_t byte_count    = bytes_per_row * static_cast<std::size_t>(tile_size);
+    Buffer readback{
+        m_graphics_device,
+        Buffer_create_info{
+            .capacity_byte_count                    = byte_count,
+            .memory_allocation_create_flag_bit_mask = Memory_allocation_create_flag_bit_mask::mapped,
+            .usage                                  = Buffer_usage::transfer_dst | Buffer_usage::storage,
+            .required_memory_property_bit_mask      =
+                Memory_property_flag_bit_mask::host_read |
+                Memory_property_flag_bit_mask::host_write,
+            .preferred_memory_property_bit_mask     =
+                Memory_property_flag_bit_mask::host_coherent |
+                Memory_property_flag_bit_mask::host_persistent,
+            .debug_label = erhe::utility::Debug_label{"lightmap tile save readback"}
+        }
+    };
+    constexpr unsigned int bake_thread_slot = 6;
+    Command_buffer& command_buffer = m_graphics_device.get_command_buffer(bake_thread_slot);
+    command_buffer.begin();
+    command_buffer.transition_texture_layout(*m_display_texture, Image_layout::transfer_src_optimal);
+    {
+        Blit_command_encoder blit = m_graphics_device.make_blit_command_encoder(command_buffer);
+        blit.copy_from_texture(
+            m_display_texture.get(),
+            0, 0,
+            glm::ivec3{slot_origin.x, slot_origin.y, 0},
+            glm::ivec3{tile_size, tile_size, 1},
+            &readback,
+            0,
+            bytes_per_row,
+            byte_count
+        );
+    }
+    command_buffer.transition_texture_layout(*m_display_texture, Image_layout::shader_read_only_optimal);
+    command_buffer.end();
+    Command_buffer* command_buffers[] = { &command_buffer };
+    m_graphics_device.submit_command_buffers(std::span<Command_buffer* const>{command_buffers});
+    m_graphics_device.wait_idle();
+
+    const std::span<std::byte> mapped = readback.map_bytes(0, byte_count);
+    out_rgba16.resize(static_cast<std::size_t>(tile_size) * static_cast<std::size_t>(tile_size) * 4u);
+    std::memcpy(out_rgba16.data(), mapped.data(), byte_count);
+    readback.unmap();
+    return true;
 }
 
 auto Lightmap_baker::read_lightmap(std::vector<float>& out_rgba) -> bool

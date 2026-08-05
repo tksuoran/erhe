@@ -1924,6 +1924,10 @@ public:
                 m_lightmap_streamer    = std::make_unique<Lightmap_streamer>(*m_graphics_device.get(), m_app_context);
                 m_lightmap_partitioner = std::make_unique<Lightmap_partitioner>(m_app_context);
                 m_lightmap_baker->set_partitioner(m_lightmap_partitioner.get());
+                // Interactive bake results must never be lost to a residency
+                // swap: evicting tiles park in a pending-save queue that
+                // Lightmap_window::update() persists to <scene>.lightmap/.
+                m_lightmap_baker->set_save_on_evict(true);
             }
             ERHE_TASK_FOOTER( .name("Post_processing") );
 

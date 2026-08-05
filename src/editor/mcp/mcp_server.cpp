@@ -425,6 +425,7 @@ auto Mcp_server::process_queued_requests() -> int
             { "lightmap_bake_direct",           &Mcp_server::action_lightmap_bake_direct          },
             { "lightmap_set_baking",            &Mcp_server::action_lightmap_set_baking           },
             { "lightmap_bake_to_disk",          &Mcp_server::action_lightmap_bake_to_disk         },
+            { "lightmap_save_all_tiles",        &Mcp_server::action_lightmap_save_all_tiles      },
             { "lightmap_prepare_tiles",         &Mcp_server::action_lightmap_prepare_tiles        },
             { "lightmap_revert_tiles",          &Mcp_server::action_lightmap_revert_tiles         },
             { "lightmap_set_render",            &Mcp_server::action_lightmap_set_render           },

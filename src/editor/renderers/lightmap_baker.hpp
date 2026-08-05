@@ -268,6 +268,22 @@ public:
     // without waiting for a bake tick.
     void publish_regions();
 
+    // ---- Interactive-bake persistence (Lightmap_window drives it) ----
+    // With save-on-evict enabled, the residency swap never drops a tile
+    // whose published content has not been saved: it parks the tile id in
+    // a pending-save queue and keeps its display slot (gathering stops).
+    // Lightmap_window::update() drains the queue at a safe point in the
+    // frame - readback + tile_<id>.lmt + manifest write - then calls
+    // mark_tile_saved(), letting the next tick complete the eviction.
+    void set_save_on_evict(bool enabled) { m_save_on_evict = enabled; }
+    [[nodiscard]] auto take_tile_pending_save() -> int; // -1 = none pending
+    void mark_tile_saved(int tile);
+    // Resident + published + newer than the last save.
+    [[nodiscard]] auto tile_has_unsaved_content(int tile) const -> bool;
+    // Reads back a resident tile's published lightmap (its display-atlas
+    // slot sub-rect) as tightly packed RGBA16F rows.
+    auto read_back_tile(int tile, std::vector<uint16_t>& out_rgba16) -> bool;
+
     [[nodiscard]] auto get_layout() const -> const Atlas_layout& { return m_layout; }
 
     // Rasterize the texel G-buffer for one spatial tile of the current
@@ -620,9 +636,15 @@ private:
         bool     published  {false}; // display holds at least one complete sweep of this tile
         bool     active     {true};  // within the camera clamp; inactive tiles skip gathering
         bool     has_content{false}; // at least one region packed into this tile
+        // Published content newer than the last save-to-disk. With
+        // save-on-evict enabled, the residency swap defers evicting such a
+        // tile until the owner drains take_tile_pending_save().
+        bool     dirty_since_save{false};
         uint32_t sweeps     {0};     // completed tile sweeps since reset
     };
     std::vector<Tile_state>                            m_tiles;
+    bool                                               m_save_on_evict{false};
+    std::vector<int>                                   m_tiles_pending_save;
     std::unique_ptr<erhe::graphics::Shader_resource>   m_lm_instance_struct;
     std::unique_ptr<erhe::graphics::Shader_resource>   m_lm_instance_block;
     std::unique_ptr<erhe::graphics::Sampler>           m_linear_sampler;
