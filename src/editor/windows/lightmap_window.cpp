@@ -556,7 +556,10 @@ void Lightmap_window::imgui()
         static_cast<std::size_t>(m_context.running_async_ops.load()) +
         ((m_context.operation_stack != nullptr) ? m_context.operation_stack->get_queued_count() : 0u);
     const bool async_busy = async_ops > 0;
-    if (async_busy) {
+    const bool prepare_in_flight =
+        (m_context.lightmap_partitioner != nullptr) &&
+        m_context.lightmap_partitioner->is_prepare_in_flight();
+    if (async_busy && !prepare_in_flight) {
         ImGui::TextColored(ImVec4{1.0f, 0.8f, 0.2f, 1.0f}, "Mesh operations in flight: %zu - layout / prepare / bake disabled", async_ops);
     }
 
@@ -565,16 +568,33 @@ void Lightmap_window::imgui()
     // world space and clip it against a geometry-only spatial split
     // estimate; each piece is unwrapped fresh and the partitioned relayout
     // packs the measured piece UVs. Pieces render from the "Lightmap
-    // Pieces" group with per-piece atlas mappings.
+    // Pieces" group with per-piece atlas mappings. Prepare runs
+    // asynchronously on the app executor; the old partition stays live
+    // until the commit, and an in-flight job holds pending_async_ops so
+    // every async_busy gate below covers it.
     if ((m_context.lightmap_baker != nullptr) && (m_context.lightmap_partitioner != nullptr)) {
         ImGui::SeparatorText("World-Space Tiles");
         Lightmap_partitioner& partitioner = *m_context.lightmap_partitioner;
+        if (prepare_in_flight) {
+            const Lightmap_partitioner::Prepare_progress progress = partitioner.get_prepare_progress();
+            ImGui::Text("Preparing: %zu / %zu regions", progress.regions_done, progress.regions_total);
+            const float fraction = (progress.regions_total > 0)
+                ? static_cast<float>(progress.regions_done) / static_cast<float>(progress.regions_total)
+                : 0.0f;
+            ImGui::ProgressBar(fraction, ImVec2{-1.0f, 0.0f});
+            if (!progress.cancel_requested) {
+                if (ImGui::Button("Cancel Prepare")) {
+                    partitioner.cancel_prepare();
+                }
+            } else {
+                ImGui::TextUnformatted("Cancelling...");
+            }
+        }
         ImGui::BeginDisabled(async_busy);
         if (ImGui::Button("Prepare World-Space Tiles")) {
             const std::shared_ptr<Scene_root> scene_root = m_context.selection->get_active_scene_root();
             if (scene_root) {
-                m_context.lightmap_baker->set_tile_config(config.tile_texture_size, config.resident_tile_budget);
-                const bool prepared = partitioner.prepare(
+                const bool launched = partitioner.request_prepare(
                     *scene_root.get(),
                     Lightmap_partitioner::Params{
                         .texels_per_meter = config.texels_per_meter,
@@ -584,9 +604,12 @@ void Lightmap_window::imgui()
                         .min_chart_texels = config.uv_min_chart_texels,
                         .parameterizer    = static_cast<erhe::geometry::operation::Atlas_parameterizer>(std::clamp(config.uv_parameterizer, 0, 4)),
                         .packer           = static_cast<erhe::geometry::operation::Atlas_packer>(std::clamp(config.uv_packer, 0, 2))
-                    }
+                    },
+                    config.tile_texture_size,
+                    config.resident_tile_budget
                 );
-                if (prepared) {
+                if (launched) {
+                    // Stored now, applied by the commit's apply_visibility().
                     partitioner.set_render_with_lightmaps(config.render_with_lightmaps);
                 }
             }

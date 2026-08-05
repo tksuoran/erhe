@@ -6,6 +6,7 @@
 #include "app_rendering.hpp"
 #include "assets/asset_manager.hpp"
 #include "renderers/composition_pass.hpp"
+#include "renderers/lightmap_partitioner.hpp"
 #include "windows/frame_pacing_window.hpp"
 #include "erhe_frame_pacing/frame_pacing_observer.hpp"
 #include "erhe_graphics/device.hpp"
@@ -1075,12 +1076,32 @@ auto Mcp_server::query_async_status(const json& args) -> std::string
 
     // queued_operations: async workers decrement pending/running the moment
     // they have QUEUED their operation; the scene only changes when the main
-    // thread executes it. Idle means all three are zero.
-    return make_json_content({
+    // thread executes it. Idle means all three are zero. An in-flight
+    // lightmap prepare holds pending for its whole flight and is detailed
+    // in the lightmap_prepare sub-object.
+    json result = {
         {"pending",           m_context.pending_async_ops.load()},
         {"running",           m_context.running_async_ops.load()},
         {"queued_operations", (m_context.operation_stack != nullptr) ? m_context.operation_stack->get_queued_count() : 0u}
-    }).dump();
+    };
+    if (m_context.lightmap_partitioner != nullptr) {
+        const Lightmap_partitioner::Prepare_progress progress    = m_context.lightmap_partitioner->get_prepare_progress();
+        const Lightmap_partitioner::Prepare_result&  last_result = m_context.lightmap_partitioner->get_last_prepare_result();
+        result["lightmap_prepare"] = {
+            {"in_flight",        progress.in_flight},
+            {"regions_done",     progress.regions_done},
+            {"regions_total",    progress.regions_total},
+            {"cancel_requested", progress.cancel_requested},
+            {"last_result", {
+                {"committed",    last_result.committed},
+                {"mesh_count",   last_result.mesh_count},
+                {"piece_count",  last_result.piece_count},
+                {"tile_count",   last_result.tile_count},
+                {"abort_reason", last_result.abort_reason}
+            }}
+        };
+    }
+    return make_json_content(result).dump();
 }
 
 auto Mcp_server::find_items_by_ids(Scene_root& sr, const std::set<std::size_t>& target_ids) -> std::vector<std::shared_ptr<erhe::Item_base>>

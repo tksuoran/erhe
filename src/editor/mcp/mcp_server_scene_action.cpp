@@ -591,6 +591,9 @@ auto Mcp_server::action_lightmap_prepare_tiles(const json& args) -> std::string
     if ((m_context.lightmap_partitioner == nullptr) || (m_context.lightmap_baker == nullptr) || (m_context.editor_settings == nullptr)) {
         return make_error_content("Lightmap partitioner not available");
     }
+    if (m_context.lightmap_partitioner->is_prepare_in_flight()) {
+        return make_error_content("Prepare already in flight - poll get_async_status (lightmap_prepare) or lightmap_prepare_cancel first");
+    }
     // In-flight guard (same as lightmap_update_atlas): queued mesh
     // operations (the legacy async UV unwrap among them) swap source
     // primitives when the main thread executes them; a swap landing
@@ -606,10 +609,8 @@ auto Mcp_server::action_lightmap_prepare_tiles(const json& args) -> std::string
         );
     }
     const Lightmap_config& config = m_context.editor_settings->lightmap;
-    m_context.lightmap_baker->set_tile_config(
-        args.value("tile_texture_size",    config.tile_texture_size),
-        args.value("resident_tile_budget", config.resident_tile_budget)
-    );
+    const int tile_texture_size    = args.value("tile_texture_size",    config.tile_texture_size);
+    const int resident_tile_budget = args.value("resident_tile_budget", config.resident_tile_budget);
     const Lightmap_partitioner::Params params{
         .texels_per_meter = args.value("texels_per_meter", config.texels_per_meter),
         .min_face_texels  = config.uv_min_chart_texels,
@@ -619,9 +620,36 @@ auto Mcp_server::action_lightmap_prepare_tiles(const json& args) -> std::string
         .parameterizer    = static_cast<erhe::geometry::operation::Atlas_parameterizer>(std::clamp(config.uv_parameterizer, 0, 4)),
         .packer           = static_cast<erhe::geometry::operation::Atlas_packer>(std::clamp(config.uv_packer, 0, 2))
     };
-    const bool prepared = m_context.lightmap_partitioner->prepare(*sr, params);
+
+    if (!args.value("wait", false)) {
+        // Asynchronous default: launch and return immediately (the blocking
+        // path exceeds the MCP request timeout on large scenes). Poll
+        // get_async_status until pending + running + queued_operations == 0,
+        // then read lightmap_prepare.last_result.
+        const bool launched = m_context.lightmap_partitioner->request_prepare(*sr, params, tile_texture_size, resident_tile_budget);
+        if (!launched) {
+            return make_error_content("Prepare launch failed (no lightmapped meshes? check Lightmap window Problems)");
+        }
+        m_context.lightmap_partitioner->set_render_with_lightmaps(config.render_with_lightmaps);
+        const Lightmap_partitioner::Prepare_progress progress = m_context.lightmap_partitioner->get_prepare_progress();
+        if (!progress.in_flight) {
+            // Tiny scene: the synchronous fallback already committed.
+            const Lightmap_partitioner::Prepare_result& result = m_context.lightmap_partitioner->get_last_prepare_result();
+            if (!result.committed) {
+                return make_error_content("Partition failed (" + (result.abort_reason.empty() ? std::string{"check Lightmap window Problems"} : result.abort_reason) + ")");
+            }
+        }
+        return make_json_content({
+            {"queued",        true},
+            {"regions_total", progress.regions_total},
+            {"message",       "poll get_async_status until pending + running + queued_operations == 0, then read lightmap_prepare.last_result"}
+        }).dump();
+    }
+
+    const bool prepared = m_context.lightmap_partitioner->prepare(*sr, params, tile_texture_size, resident_tile_budget);
     if (!prepared) {
-        return make_error_content("Partition failed (no lightmapped meshes? check Lightmap window Problems)");
+        const Lightmap_partitioner::Prepare_result& result = m_context.lightmap_partitioner->get_last_prepare_result();
+        return make_error_content("Partition failed (" + (result.abort_reason.empty() ? std::string{"no lightmapped meshes? check Lightmap window Problems"} : result.abort_reason) + ")");
     }
     m_context.lightmap_partitioner->set_render_with_lightmaps(config.render_with_lightmaps);
     json meshes = json::array();
@@ -657,9 +685,25 @@ auto Mcp_server::action_lightmap_revert_tiles(const json& args) -> std::string
     if (m_context.lightmap_partitioner == nullptr) {
         return make_error_content("Lightmap partitioner not available");
     }
+    if (m_context.lightmap_partitioner->is_prepare_in_flight()) {
+        return make_error_content("Prepare in flight - lightmap_prepare_cancel first, then poll get_async_status until idle");
+    }
     const bool was_prepared = m_context.lightmap_partitioner->is_prepared();
     m_context.lightmap_partitioner->revert();
     return make_json_content({{"reverted", was_prepared}}).dump();
+}
+
+auto Mcp_server::action_lightmap_prepare_cancel(const json& args) -> std::string
+{
+    static_cast<void>(args);
+    if (m_context.lightmap_partitioner == nullptr) {
+        return make_error_content("Lightmap partitioner not available");
+    }
+    const bool was_in_flight = m_context.lightmap_partitioner->is_prepare_in_flight();
+    m_context.lightmap_partitioner->cancel_prepare();
+    // Does not wait: the job discards on its next completion check; poll
+    // get_async_status until pending drains.
+    return make_json_content({{"cancel_requested", was_in_flight}}).dump();
 }
 
 auto Mcp_server::action_lightmap_set_render(const json& args) -> std::string

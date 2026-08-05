@@ -82,7 +82,7 @@ void Mcp_server::refresh_tool_list()
     m_tool_infos.push_back({"get_selection",        "Get currently selected items",                          schema_no_args()});
     m_tool_infos.push_back({"get_undo_redo_stack", "Get undo/redo operation stacks",                       schema_no_args()});
     m_tool_infos.push_back({"clear_undo_history",  "Drop the undo and redo histories (queued operations are kept). Recorded operations are declared users / indirect pins of the assets they retain, so container unload can refuse until the history is cleared (R5.4).", schema_no_args()});
-    m_tool_infos.push_back({"get_async_status",   "Get in-flight operation counts: pending/running async workers plus queued_operations (queued on the operation stack, not yet executed on the main thread). The scene is settled only when all three are 0.", schema_no_args()});
+    m_tool_infos.push_back({"get_async_status",   "Get in-flight operation counts: pending/running async workers plus queued_operations (queued on the operation stack, not yet executed on the main thread). The scene is settled only when all three are 0. Also carries a lightmap_prepare sub-object: in_flight/regions_done/regions_total/cancel_requested plus last_result{committed, mesh_count, piece_count, tile_count, abort_reason} of the most recent lightmap_prepare_tiles.", schema_no_args()});
     m_tool_infos.push_back({"get_shadow_fit_debug","Dump directional shadow frustum fit debug geometry per shadow node: F_shadow planes, their bounded face quads (the truncated view-frustum faces caster AABBs are tested against), and receiver frustum corners. Needs the Shadow Fit 'Collect Debug' setting enabled.", schema_no_args()});
     m_tool_infos.push_back({"raycast",             "Shoot a ray through a scene's raytrace world and report the closest hit (mesh, node, primitive index, distance, position, normal). Uses the same mask defaults as the interactive viewport hover ray, so it verifies hover / ray picking behavior headlessly.", {
         {"type", "object"},
@@ -947,15 +947,20 @@ void Mcp_server::refresh_tool_list()
         {"type", "object"},
         {"properties", json::object()}
     }});
-    m_tool_infos.push_back({"lightmap_prepare_tiles", "Prepare world-space lightmap tiles: make every lightmapped mesh/primitive instance unique, bake its node transform into the vertices (world space), clip the geometry against the spatial kd tile planes (clip vertices are binary exact across the two tiles sharing a plane) and re-unwrap each piece's channel-2 UVs at world-space density. Pieces become Mesh_primitives of new meshes under the identity 'Lightmap Pieces' group node; originals stay in the scene for lightmap_revert_tiles / re-prepare. Self-contained: the spatial kd split is computed from geometry alone (world areas + density estimate) - lightmap_generate_uvs / lightmap_update_atlas are NOT needed first. Still refuses while async mesh operations are in flight (a queued primitive swap would corrupt the partition; poll get_async_status). Toggle rendering between originals and pieces with lightmap_set_render.", {
+    m_tool_infos.push_back({"lightmap_prepare_tiles", "Prepare world-space lightmap tiles: make every lightmapped mesh/primitive instance unique, bake its node transform into the vertices (world space), clip the geometry against the spatial kd tile planes (clip vertices are binary exact across the two tiles sharing a plane) and re-unwrap each piece's channel-2 UVs at world-space density. Pieces become Mesh_primitives of new meshes under the identity 'Lightmap Pieces' group node; originals stay in the scene for lightmap_revert_tiles / re-prepare. Self-contained: the spatial kd split is computed from geometry alone (world areas + density estimate) - lightmap_generate_uvs / lightmap_update_atlas are NOT needed first. ASYNC by default: returns {queued:true} immediately and the heavy phase runs in the background while the old partition stays live; poll get_async_status until pending + running + queued_operations == 0, then read its lightmap_prepare.last_result (a mid-flight primitive swap aborts the commit and keeps the old partition; cancel with lightmap_prepare_cancel). Refuses while async mesh operations or another prepare are in flight. Toggle rendering between originals and pieces with lightmap_set_render.", {
         {"type", "object"},
         {"properties", {
             {"scene_name",           {{"type", "string"},  {"description", "Name of the scene to partition"}}},
             {"tile_texture_size",    {{"type", "integer"}, {"description", "Texel side of one spatial tile (pow2 256..8192); default = Lightmap settings value"}}},
             {"resident_tile_budget", {{"type", "integer"}, {"description", "Resident tile budget; default = Lightmap settings value"}}},
-            {"texels_per_meter",     {{"type", "number"},  {"description", "World-space lightmap texel density; default = Lightmap settings value"}}}
+            {"texels_per_meter",     {{"type", "number"},  {"description", "World-space lightmap texel density; default = Lightmap settings value"}}},
+            {"wait",                 {{"type", "boolean"}, {"description", "Block until the partition commits and return the full per-piece manifest (small scenes only: the MCP HTTP response is dropped after 5 s while the work still completes). Default false"}}}
         }},
         {"required", json::array({"scene_name"})}
+    }});
+    m_tool_infos.push_back({"lightmap_prepare_cancel", "Request cancellation of an in-flight lightmap_prepare_tiles: remaining regions are skipped, the results are discarded and the OLD partition is kept. Does not wait - poll get_async_status until pending drains. Idempotent.", {
+        {"type", "object"},
+        {"properties", json::object()}
     }});
     m_tool_infos.push_back({"lightmap_revert_tiles", "Revert the world-space lightmap partition: destroy the 'Lightmap Pieces' group and restore original mesh visibility. Originals were never modified, so this is always safe.", {
         {"type", "object"},
