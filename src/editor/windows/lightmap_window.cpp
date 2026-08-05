@@ -546,30 +546,96 @@ void Lightmap_window::imgui()
         }
     }
 
-    // Stale-data guard: Generate Lightmap UVs is queued async, and even
-    // after the worker finishes its operation still sits in the operation
-    // stack until the main thread executes it. Acting on the layout or
-    // baking in that window would consume the OLD UVs and leave stale
-    // results; hold the downstream buttons until both drain.
+    // In-flight guard: queued mesh operations (the legacy async UV unwrap
+    // among them) swap source primitives when the main thread executes
+    // them; a swap landing mid-partition or between a layout and its bake
+    // would act on stale geometry. Hold layout / prepare / bake until the
+    // workers AND the operation stack drain.
     const std::size_t async_ops =
         static_cast<std::size_t>(m_context.pending_async_ops.load()) +
         static_cast<std::size_t>(m_context.running_async_ops.load()) +
         ((m_context.operation_stack != nullptr) ? m_context.operation_stack->get_queued_count() : 0u);
     const bool async_busy = async_ops > 0;
     if (async_busy) {
-        ImGui::TextColored(ImVec4{1.0f, 0.8f, 0.2f, 1.0f}, "Operations in flight: %zu (UV generation?) - layout / bake disabled", async_ops);
+        ImGui::TextColored(ImVec4{1.0f, 0.8f, 0.2f, 1.0f}, "Mesh operations in flight: %zu - layout / prepare / bake disabled", async_ops);
     }
 
-    ImGui::BeginDisabled(lightmapped.empty() || async_busy);
-    if (ImGui::Button("Generate Lightmap UVs")) {
-        generate_lightmap_uvs();
-    }
-    ImGui::EndDisabled();
-    if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip(
-            "Automatic UV unwrap into texcoord channel 2 for every lightmapped mesh (method: UV parameterizer above).\n"
-            "Undoable. Inspect with the Lightmap Texture window or Scene View Config > Shader Debug > TexCoord 2 (Lightmap)."
-        );
+    // World-space partition (the front door, no preconditions): make every
+    // lightmapped mesh/primitive instance unique, bake its transform into
+    // world space and clip it against a geometry-only spatial split
+    // estimate; each piece is unwrapped fresh and the partitioned relayout
+    // packs the measured piece UVs. Pieces render from the "Lightmap
+    // Pieces" group with per-piece atlas mappings.
+    if ((m_context.lightmap_baker != nullptr) && (m_context.lightmap_partitioner != nullptr)) {
+        ImGui::SeparatorText("World-Space Tiles");
+        Lightmap_partitioner& partitioner = *m_context.lightmap_partitioner;
+        ImGui::BeginDisabled(async_busy);
+        if (ImGui::Button("Prepare World-Space Tiles")) {
+            const std::shared_ptr<Scene_root> scene_root = m_context.selection->get_active_scene_root();
+            if (scene_root) {
+                m_context.lightmap_baker->set_tile_config(config.tile_texture_size, config.resident_tile_budget);
+                const bool prepared = partitioner.prepare(
+                    *scene_root.get(),
+                    Lightmap_partitioner::Params{
+                        .texels_per_meter = config.texels_per_meter,
+                        .min_face_texels  = config.uv_min_chart_texels,
+                        .hard_angles_deg  = config.hard_angles_deg,
+                        .gutter_texels    = config.uv_gutter_texels,
+                        .min_chart_texels = config.uv_min_chart_texels,
+                        .parameterizer    = static_cast<erhe::geometry::operation::Atlas_parameterizer>(std::clamp(config.uv_parameterizer, 0, 4)),
+                        .packer           = static_cast<erhe::geometry::operation::Atlas_packer>(std::clamp(config.uv_packer, 0, 2))
+                    }
+                );
+                if (prepared) {
+                    partitioner.set_render_with_lightmaps(config.render_with_lightmaps);
+                }
+            }
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "Self-contained: computes the spatial split from geometry alone - no Generate\n"
+                "Lightmap UVs / Update Atlas Layout needed first. Uniquifies every lightmapped\n"
+                "mesh instance, bakes its transform into world space, clips it against the tile\n"
+                "planes (shared cut vertices are binary exact) and unwraps each piece fresh.\n"
+                "Originals stay in the scene for revert / re-prepare."
+            );
+        }
+        if (partitioner.is_prepared()) {
+            ImGui::SameLine();
+            if (ImGui::Button("Revert Tiling")) {
+                partitioner.revert();
+            }
+            if (partitioner.is_prepared()) {
+                std::size_t piece_count = 0;
+                for (const Lightmap_partitioner::Original_entry& entry : partitioner.get_entries()) {
+                    piece_count += entry.pieces.size();
+                }
+                ImGui::Text(
+                    "%zu meshes -> %zu pieces in %d tiles",
+                    partitioner.get_entries().size(), piece_count, partitioner.get_tile_count()
+                );
+                const std::size_t stale_count = partitioner.count_stale_transforms();
+                if (stale_count > 0) {
+                    ImGui::TextColored(
+                        ImVec4{1.0f, 0.8f, 0.2f, 1.0f},
+                        "%zu source meshes moved since the clip - pieces are stale, re-prepare",
+                        stale_count
+                    );
+                }
+                if (ImGui::Checkbox("Render with lightmaps", &config.render_with_lightmaps)) {
+                    partitioner.set_render_with_lightmaps(config.render_with_lightmaps);
+                    m_context.app_settings->settings_store().touch();
+                }
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip(
+                        "ON: the world-space piece meshes render (every lightmapped mesh, regardless\n"
+                        "of which tiles are loaded; non-resident tiles fall back to white).\n"
+                        "OFF: the original meshes render."
+                    );
+                }
+            }
+        }
+        ImGui::EndDisabled();
     }
 
     // Failures / warnings from every pipeline stage (UV unwrap runs on
@@ -604,6 +670,27 @@ void Lightmap_window::imgui()
         ImGui::Separator();
     }
 
+    // Legacy non-partitioned path: whole-mesh unwrap of the originals into
+    // a shared atlas page (baked in place with channel-2 UVs). The fused
+    // Prepare above does not need any of these.
+    const bool legacy_active =
+        (m_context.lightmap_baker != nullptr) &&
+        (m_context.lightmap_baker->get_layout().width > 0) &&
+        !m_context.lightmap_baker->get_layout().partitioned;
+    if (ImGui::CollapsingHeader("Legacy Atlas (non-partitioned)", legacy_active ? ImGuiTreeNodeFlags_DefaultOpen : ImGuiTreeNodeFlags_None)) {
+    ImGui::BeginDisabled(lightmapped.empty() || async_busy);
+    if (ImGui::Button("Generate Lightmap UVs")) {
+        generate_lightmap_uvs();
+    }
+    ImGui::EndDisabled();
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip(
+            "Automatic UV unwrap into texcoord channel 2 for every lightmapped mesh (method: UV parameterizer above).\n"
+            "Undoable. Legacy non-partitioned path only - NOT needed before Prepare World-Space Tiles.\n"
+            "Inspect with the Lightmap Texture window or Scene View Config > Shader Debug > TexCoord 2 (Lightmap)."
+        );
+    }
+
     if (m_context.lightmap_baker != nullptr) {
         ImGui::SameLine();
         ImGui::BeginDisabled(async_busy);
@@ -615,7 +702,10 @@ void Lightmap_window::imgui()
             }
         }
         if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("Pack every lightmapped primitive with channel-2 UVs into the shared atlas page.");
+            ImGui::SetTooltip(
+                "Pack every lightmapped primitive with channel-2 UVs into the shared atlas page.\n"
+                "Legacy non-partitioned path only - NOT needed before Prepare World-Space Tiles."
+            );
         }
         ImGui::EndDisabled(); // async_busy (Update Atlas Layout)
         const Lightmap_baker::Atlas_layout& layout = m_context.lightmap_baker->get_layout();
@@ -674,6 +764,7 @@ void Lightmap_window::imgui()
             }
         }
     }
+    } // CollapsingHeader "Legacy Atlas (non-partitioned)"
 
     // Interactive bake (plan section 3a): while on, the editor tick records
     // a budgeted gather slice + publish into every frame.
@@ -797,80 +888,6 @@ void Lightmap_window::imgui()
                 ImGui::SetTooltip("Set the scene selection to every mesh node whose region lives in an active (slot-holding) tile.");
             }
         }
-    }
-
-    // World-space partition: make every lightmapped mesh/primitive instance
-    // unique, bake its transform into world space and clip it against the
-    // spatial tile tree; pieces render from the "Lightmap Pieces" group
-    // with per-piece atlas mappings.
-    if ((m_context.lightmap_baker != nullptr) && (m_context.lightmap_partitioner != nullptr)) {
-        ImGui::SeparatorText("World-Space Tiles");
-        Lightmap_partitioner& partitioner = *m_context.lightmap_partitioner;
-        ImGui::BeginDisabled(async_busy);
-        if (ImGui::Button("Prepare World-Space Tiles")) {
-            const std::shared_ptr<Scene_root> scene_root = m_context.selection->get_active_scene_root();
-            if (scene_root) {
-                m_context.lightmap_baker->set_tile_config(config.tile_texture_size, config.resident_tile_budget);
-                const bool prepared = partitioner.prepare(
-                    *scene_root.get(),
-                    Lightmap_partitioner::Params{
-                        .texels_per_meter = config.texels_per_meter,
-                        .min_face_texels  = config.uv_min_chart_texels,
-                        .hard_angles_deg  = config.hard_angles_deg,
-                        .gutter_texels    = config.uv_gutter_texels,
-                        .min_chart_texels = config.uv_min_chart_texels,
-                        .parameterizer    = static_cast<erhe::geometry::operation::Atlas_parameterizer>(std::clamp(config.uv_parameterizer, 0, 4)),
-                        .packer           = static_cast<erhe::geometry::operation::Atlas_packer>(std::clamp(config.uv_packer, 0, 2))
-                    }
-                );
-                if (prepared) {
-                    partitioner.set_render_with_lightmaps(config.render_with_lightmaps);
-                }
-            }
-        }
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip(
-                "Uniquify every lightmapped mesh instance, bake its transform into world space,\n"
-                "clip it against the spatial tile planes (shared cut vertices are binary exact)\n"
-                "and re-unwrap each piece. Originals stay in the scene for revert / re-prepare."
-            );
-        }
-        if (partitioner.is_prepared()) {
-            ImGui::SameLine();
-            if (ImGui::Button("Revert Tiling")) {
-                partitioner.revert();
-            }
-            if (partitioner.is_prepared()) {
-                std::size_t piece_count = 0;
-                for (const Lightmap_partitioner::Original_entry& entry : partitioner.get_entries()) {
-                    piece_count += entry.pieces.size();
-                }
-                ImGui::Text(
-                    "%zu meshes -> %zu pieces in %d tiles",
-                    partitioner.get_entries().size(), piece_count, partitioner.get_tile_count()
-                );
-                const std::size_t stale_count = partitioner.count_stale_transforms();
-                if (stale_count > 0) {
-                    ImGui::TextColored(
-                        ImVec4{1.0f, 0.8f, 0.2f, 1.0f},
-                        "%zu source meshes moved since the clip - pieces are stale, re-prepare",
-                        stale_count
-                    );
-                }
-                if (ImGui::Checkbox("Render with lightmaps", &config.render_with_lightmaps)) {
-                    partitioner.set_render_with_lightmaps(config.render_with_lightmaps);
-                    m_context.app_settings->settings_store().touch();
-                }
-                if (ImGui::IsItemHovered()) {
-                    ImGui::SetTooltip(
-                        "ON: the world-space piece meshes render (every lightmapped mesh, regardless\n"
-                        "of which tiles are loaded; non-resident tiles fall back to white).\n"
-                        "OFF: the original meshes render."
-                    );
-                }
-            }
-        }
-        ImGui::EndDisabled();
     }
 
     // Tile persistence: the batch bake processes every spatial tile (not

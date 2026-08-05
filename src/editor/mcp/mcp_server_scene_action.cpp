@@ -591,8 +591,10 @@ auto Mcp_server::action_lightmap_prepare_tiles(const json& args) -> std::string
     if ((m_context.lightmap_partitioner == nullptr) || (m_context.lightmap_baker == nullptr) || (m_context.editor_settings == nullptr)) {
         return make_error_content("Lightmap partitioner not available");
     }
-    // Stale-data guard (same as lightmap_update_atlas): async UV generation
-    // still in flight would partition against old channel-2 UVs.
+    // In-flight guard (same as lightmap_update_atlas): queued mesh
+    // operations (the legacy async UV unwrap among them) swap source
+    // primitives when the main thread executes them; a swap landing
+    // mid-prepare would clip stale geometry.
     const std::size_t async_ops =
         static_cast<std::size_t>(m_context.pending_async_ops.load()) +
         static_cast<std::size_t>(m_context.running_async_ops.load()) +
@@ -619,7 +621,7 @@ auto Mcp_server::action_lightmap_prepare_tiles(const json& args) -> std::string
     };
     const bool prepared = m_context.lightmap_partitioner->prepare(*sr, params);
     if (!prepared) {
-        return make_error_content("Partition failed (no lightmapped meshes with channel-2 UVs? check Lightmap window Problems)");
+        return make_error_content("Partition failed (no lightmapped meshes? check Lightmap window Problems)");
     }
     m_context.lightmap_partitioner->set_render_with_lightmaps(config.render_with_lightmaps);
     json meshes = json::array();

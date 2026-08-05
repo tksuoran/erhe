@@ -893,7 +893,7 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"scene_name", "ids", "flags"})}
     }});
-    m_tool_infos.push_back({"lightmap_generate_uvs", "Generate lightmap UVs (texcoord channel 2, queued async and undoable) for every lightmapped, non-skinned content mesh of a scene - the Lightmap window's Generate Lightmap UVs button without touching the selection. Unwrap method is selectable (parameterizer / packer / gutter) to iterate on unwrap defects; check results with the Lightmap Texture window's overlap count. Poll get_async_status until idle before lightmap_update_atlas.", {
+    m_tool_infos.push_back({"lightmap_generate_uvs", "Generate lightmap UVs (texcoord channel 2, queued async and undoable) for every lightmapped, non-skinned content mesh of a scene - the Lightmap window's Generate Lightmap UVs button without touching the selection. Legacy non-partitioned path only - NOT needed before lightmap_prepare_tiles (that tool is self-contained). Unwrap method is selectable (parameterizer / packer / gutter) to iterate on unwrap defects; check results with the Lightmap Texture window's overlap count. Poll get_async_status until idle before lightmap_update_atlas.", {
         {"type", "object"},
         {"properties", {
             {"scene_name",       {{"type", "string"}, {"description", "Name of the scene"}}},
@@ -914,7 +914,7 @@ void Mcp_server::refresh_tool_list()
         {"type", "object"},
         {"properties", json::object()}
     }});
-    m_tool_infos.push_back({"lightmap_update_atlas", "Recompute the lightmap atlas layout for a scene: packs every lightmapped, non-skinned mesh primitive that has lightmap UVs (texcoord channel 2; run generate_texture_coordinates texcoord_slot=2 or the Lightmap window's Generate Lightmap UVs first) into the shared atlas page and returns the layout (page size, per-region rect + uv_scale_offset).", {
+    m_tool_infos.push_back({"lightmap_update_atlas", "Recompute the lightmap atlas layout for a scene: packs every lightmapped, non-skinned mesh primitive that has lightmap UVs (texcoord channel 2; run generate_texture_coordinates texcoord_slot=2 or the Lightmap window's Generate Lightmap UVs first) into the shared atlas page and returns the layout (page size, per-region rect + uv_scale_offset). Legacy non-partitioned path only - NOT needed before lightmap_prepare_tiles.", {
         {"type", "object"},
         {"properties", {
             {"scene_name",       {{"type", "string"}, {"description", "Name of the scene"}}},
@@ -947,7 +947,7 @@ void Mcp_server::refresh_tool_list()
         {"type", "object"},
         {"properties", json::object()}
     }});
-    m_tool_infos.push_back({"lightmap_prepare_tiles", "Prepare world-space lightmap tiles: make every lightmapped mesh/primitive instance unique, bake its node transform into the vertices (world space), clip the geometry against the spatial kd tile planes (clip vertices are binary exact across the two tiles sharing a plane) and re-unwrap each piece's channel-2 UVs at world-space density. Pieces become Mesh_primitives of new meshes under the identity 'Lightmap Pieces' group node; originals stay in the scene for lightmap_revert_tiles / re-prepare. Refreshes the atlas layout first (same stale-data guard as lightmap_update_atlas). Toggle rendering between originals and pieces with lightmap_set_render.", {
+    m_tool_infos.push_back({"lightmap_prepare_tiles", "Prepare world-space lightmap tiles: make every lightmapped mesh/primitive instance unique, bake its node transform into the vertices (world space), clip the geometry against the spatial kd tile planes (clip vertices are binary exact across the two tiles sharing a plane) and re-unwrap each piece's channel-2 UVs at world-space density. Pieces become Mesh_primitives of new meshes under the identity 'Lightmap Pieces' group node; originals stay in the scene for lightmap_revert_tiles / re-prepare. Self-contained: the spatial kd split is computed from geometry alone (world areas + density estimate) - lightmap_generate_uvs / lightmap_update_atlas are NOT needed first. Still refuses while async mesh operations are in flight (a queued primitive swap would corrupt the partition; poll get_async_status). Toggle rendering between originals and pieces with lightmap_set_render.", {
         {"type", "object"},
         {"properties", {
             {"scene_name",           {{"type", "string"},  {"description", "Name of the scene to partition"}}},
