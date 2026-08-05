@@ -777,6 +777,14 @@ public:
         {
             const Lightmap_config& lightmap_config = m_app_context.editor_settings->lightmap;
             m_forward_renderer->set_lightmap_bicubic(lightmap_config.bicubic_sampling);
+            if (m_lightmap_partitioner) {
+                // Commit or discard a finished async prepare job. After the
+                // operation stack (:694) and transform updates, so the
+                // commit-time staleness validation sees this frame's scene
+                // mutations; before the baker tick, whose piece-hash change
+                // then triggers the relayout + deferred G-buffer bake.
+                m_lightmap_partitioner->update();
+            }
             if (m_lightmap_window) {
                 // Deferred Reorder-Charts-By-Bake requests: the atlas
                 // readback must run here, before any lightmap commands are

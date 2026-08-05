@@ -6,6 +6,7 @@
 #include <glm/glm.hpp>
 
 #include <memory>
+#include <string>
 #include <unordered_set>
 #include <vector>
 
@@ -42,6 +43,7 @@ class Lightmap_partitioner
 {
 public:
     explicit Lightmap_partitioner(App_context& context);
+    ~Lightmap_partitioner(); // cancels + waits an in-flight prepare job
 
     class Params
     {
@@ -73,16 +75,60 @@ public:
         std::vector<Piece_info>            pieces;       // parallel to piece_mesh primitives
     };
 
-    // Blocking (driven from the main thread by the Lightmap window / MCP);
-    // no preconditions - the kd tile tree comes from a geometry-only split
-    // estimate, and the final partitioned relayout re-packs the pieces with
-    // their measured UVs. The heavy phase - per-region world-space bake +
-    // clip, per-piece unwrap + primitive build - runs in parallel on the
-    // app executor (only the scene commit and final relayout stay serial).
-    // An existing partition is reverted before re-preparing. Failures are
-    // reported via Lightmap_report (Stage::partition); returns false when
-    // nothing could be partitioned.
-    auto prepare(Scene_root& scene_root, const Params& params) -> bool;
+    // ---- Async prepare pipeline ----
+    // request_prepare snapshots everything on the main thread (tile config,
+    // geometry-only split estimate, per-region tasks) and launches the heavy
+    // phase - per-region world-space bake + clip, per-piece unwrap +
+    // primitive build - on the app executor. No preconditions; the old
+    // partition stays live until the commit. update() (editor tick, after
+    // the operation stack) commits when the job finishes: it validates the
+    // job against the live scene (a source primitive swapped or a mesh
+    // removed mid-flight aborts the commit and keeps the old partition;
+    // transform moves are tolerated - count_stale_transforms reports them),
+    // then atomically swaps the partition and runs one partitioned relayout
+    // + publish. m_context.pending_async_ops is held for the whole flight,
+    // so every existing async_busy gate also covers an in-flight prepare.
+    // Failures/cancellation are reported via Lightmap_report
+    // (Stage::partition) and get_last_prepare_result().
+
+    class Prepare_progress
+    {
+    public:
+        bool        in_flight       {false};
+        std::size_t regions_done    {0};
+        std::size_t regions_total   {0};
+        bool        cancel_requested{false};
+    };
+    class Prepare_result
+    {
+    public:
+        bool        committed  {false};
+        std::size_t mesh_count {0};
+        std::size_t piece_count{0};
+        int         tile_count {0};
+        std::string abort_reason; // empty on success
+    };
+
+    // Launch; false = nothing to partition / already in flight / async
+    // mesh operations in flight (reported). With no executor (or a single
+    // region) runs synchronously and commits before returning.
+    auto request_prepare(Scene_root& scene_root, const Params& params, int tile_texture_size, int resident_tile_budget) -> bool;
+
+    // Per-frame driver (editor tick, after the operation stack + transform
+    // updates): commits or discards a finished job. No-op otherwise.
+    void update();
+
+    // Request cancellation of the in-flight job; update() discards the
+    // results on completion (the old partition is kept). No-op when idle.
+    void cancel_prepare();
+
+    // Blocking convenience (MCP wait mode, tests): request_prepare + wait +
+    // commit; true = committed.
+    auto prepare(Scene_root& scene_root, const Params& params, int tile_texture_size, int resident_tile_budget) -> bool;
+
+    [[nodiscard]] auto is_prepare_in_flight   () const -> bool { return m_prepare_job != nullptr; }
+    [[nodiscard]] auto get_prepare_progress   () const -> Prepare_progress;
+    [[nodiscard]] auto get_last_prepare_result() const -> const Prepare_result& { return m_last_prepare_result; }
 
     // Destroys the piece nodes, restores original mesh visibility and
     // clears the store.
@@ -128,7 +174,24 @@ public:
     void on_scene_closed(const Scene_root* scene_root);
 
 private:
+    class Prepare_job; // cpp-local: snapshot + taskflow + progress atomics
+
     void apply_visibility();
+    // Factored halves of revert(), reused by commit_prepare(): restore the
+    // originals' visibility and detach the piece/group nodes (locks the
+    // scene's item_host_mutex itself) / reset the store members
+    // (m_last_params is kept - revert()'s trailing relayout uses it).
+    void teardown_scene_state();
+    void clear_store();
+    // Empty string = the live scene still matches the job's snapshot.
+    [[nodiscard]] auto validate_job_against_scene(const Prepare_job& job) const -> std::string;
+    // Consume the finished job: validate -> assemble -> swap the partition
+    // -> one relayout + publish + streamer invalidate. Keeps the old
+    // partition on abort. Pre: m_prepare_job set, its future ready.
+    void commit_prepare();
+    // Cancel / scene-close path: report, record the result, release the
+    // pending counter and drop the job.
+    void finish_prepare_discard(const char* reason);
 
     App_context&                                            m_context;
     Scene_root*                                             m_scene_root{nullptr};
@@ -139,6 +202,13 @@ private:
     int                                                     m_tile_count{0};
     bool                                                    m_render_with_lightmaps{false};
     Params                                                  m_last_params{};
+    // Job lifetime invariant: the taskflow lambdas capture the raw
+    // Prepare_job*, so the job must NEVER be destroyed before its future is
+    // ready. The only consumption sites - update() (ready-checked),
+    // on_scene_closed() and the destructor (both cancel + wait first) -
+    // uphold this; keep it that way.
+    std::unique_ptr<Prepare_job>                            m_prepare_job;
+    Prepare_result                                          m_last_prepare_result{};
 };
 
 } // namespace editor

@@ -6,6 +6,7 @@
 #include "renderers/lightmap_report.hpp"
 #include "renderers/lightmap_streamer.hpp"
 #include "renderers/lightmap_tile_io.hpp"
+#include "operations/operation_stack.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe_geometry/geometry.hpp"
@@ -23,81 +24,44 @@
 #include <taskflow/taskflow.hpp>
 #include <taskflow/algorithm/for_each.hpp>
 
+#include <atomic>
+#include <chrono>
 #include <mutex>
+#include <optional>
 
 namespace editor {
 
-Lightmap_partitioner::Lightmap_partitioner(App_context& context)
-    : m_context{context}
+namespace {
+
+// Non-skinned lightmapped content meshes with a node - the set the split
+// estimate partitions. Counted at launch and at commit so meshes added
+// mid-flight can be warned about.
+[[nodiscard]] auto count_lightmapped_meshes(Scene_root& scene_root) -> std::size_t
 {
-}
-
-auto Lightmap_partitioner::prepare(Scene_root& scene_root, const Params& params) -> bool
-{
-    ERHE_PROFILE_FUNCTION();
-
-    Lightmap_baker* const  baker  = m_context.lightmap_baker;
-    Lightmap_report* const report = m_context.lightmap_report;
-    if ((baker == nullptr) || (m_context.mesh_memory == nullptr)) {
-        return false;
-    }
-    if (is_prepared()) {
-        revert();
-    }
-    if (report != nullptr) {
-        report->clear_stage(Lightmap_report::Stage::partition);
-    }
-
-    // The tile partition comes from a geometry-only split ESTIMATE of the
-    // original meshes (world areas at a nominal chart coverage): no unwrap
-    // or prior layout is needed, and the partitioned relayout at the end
-    // re-packs every piece with its measured UVs.
-    const Lightmap_baker::Estimate_split split = baker->compute_tile_split_estimate(scene_root, params.texels_per_meter);
-    if (split.empty()) {
-        if (report != nullptr) {
-            report->add_error(Lightmap_report::Stage::partition, "prepare", "no lightmapped meshes to partition");
-        }
-        return false;
-    }
-    m_tile_tree  = split.kd_nodes;
-    m_tile_count = split.tile_count;
-
-    // Group the estimate regions by source mesh: one piece mesh per original
-    // mesh, one Mesh_primitive per (source primitive, overlapped tile).
-    class Mesh_group
-    {
-    public:
-        std::shared_ptr<erhe::scene::Mesh>                  mesh;
-        std::vector<const Lightmap_baker::Estimate_region*> regions;
-    };
-    std::vector<Mesh_group> groups;
-    for (const Lightmap_baker::Estimate_region& region : split.regions) {
-        if (!region.mesh) {
+    std::size_t count = 0;
+    for (const std::shared_ptr<erhe::scene::Mesh>& mesh : scene_root.layers().content()->meshes) {
+        if (!mesh || mesh->skin) {
             continue;
         }
-        auto it = std::find_if(groups.begin(), groups.end(), [&region](const Mesh_group& group) {
-            return group.mesh == region.mesh;
-        });
-        if (it == groups.end()) {
-            groups.push_back(Mesh_group{region.mesh, {}});
-            it = groups.end() - 1;
+        if ((mesh->get_flag_bits() & erhe::Item_flags::lightmapped) == 0u) {
+            continue;
         }
-        it->regions.push_back(&region);
+        if (mesh->get_node() == nullptr) {
+            continue;
+        }
+        ++count;
     }
+    return count;
+}
 
-    const erhe::primitive::Build_info build_info{
-        .primitive_types = {
-            .fill_triangles          = true,
-            .fill_triangles_expanded = true,
-            .edge_lines              = true,
-            .corner_points           = true,
-            .centroid_points         = true
-        },
-        .buffer_info = m_context.mesh_memory->make_primitive_buffer_info()
-    };
+} // anonymous namespace
 
-    // ---- Phase 1 (serial, cheap): collect one task per source primitive
-    // region; no geometry work here.
+// Snapshot + heavy-phase state of one asynchronous prepare. Everything the
+// workers touch is captured here at launch on the main thread; the live
+// partitioner members stay untouched until commit_prepare().
+class Lightmap_partitioner::Prepare_job
+{
+public:
     class Region_task
     {
     public:
@@ -115,71 +79,33 @@ auto Lightmap_partitioner::prepare(Scene_root& scene_root, const Params& params)
         std::shared_ptr<erhe::primitive::Material> material;
         erhe::primitive::Normal_style              normal_style{};
         std::string                                subject;
-        std::vector<Piece_result>                  results; // phase 2 output, in piece order
+        std::vector<Piece_result>                  results; // heavy-phase output, in piece order
     };
-    std::vector<Original_entry> entries;
-    std::vector<Region_task>    tasks;
-    for (const Mesh_group& group : groups) {
-        erhe::scene::Node* const node = group.mesh->get_node();
-        if (node == nullptr) {
-            continue;
-        }
-        const glm::mat4 world_from_node = node->world_from_node();
 
-        const std::size_t entry_index = entries.size();
-        Original_entry entry;
-        entry.original_mesh           = group.mesh;
-        entry.world_from_node_at_clip = world_from_node;
-        entries.push_back(std::move(entry));
-
-        const std::vector<erhe::scene::Mesh_primitive>& source_primitives = group.mesh->get_primitives();
-        for (const Lightmap_baker::Estimate_region* region : group.regions) {
-            if (region->primitive_index >= source_primitives.size()) {
-                continue;
-            }
-            const erhe::scene::Mesh_primitive& source_mesh_primitive = source_primitives[region->primitive_index];
-            if (!source_mesh_primitive.primitive || !source_mesh_primitive.primitive->render_shape) {
-                continue;
-            }
-            const std::shared_ptr<erhe::primitive::Primitive_render_shape>& render_shape = source_mesh_primitive.primitive->render_shape;
-            const std::shared_ptr<erhe::geometry::Geometry>& source_geometry = render_shape->get_geometry();
-            if (!source_geometry) {
-                continue;
-            }
-            tasks.push_back(
-                Region_task{
-                    .entry_index            = entry_index,
-                    .source_primitive_index = region->primitive_index,
-                    .overflow_tile          = region->tile,
-                    .source_geometry        = source_geometry,
-                    .world_from_node        = world_from_node,
-                    .material               = source_mesh_primitive.material,
-                    .normal_style           = render_shape->get_normal_style(),
-                    .subject                = fmt::format("{}[{}]", group.mesh->get_name(), region->primitive_index),
-                    .results                = {}
-                }
-            );
-        }
-    }
-
-    // ---- Phase 2 (parallel): per region, world-space bake + kd clip,
-    // then per-piece re-unwrap + renderable/raytrace primitive build.
-    // Every task is independent: bake_transform and clip_by_tile_tree
-    // reach no Geogram algorithm and are safe on distinct destinations
-    // (clip_tile_tree.hpp thread-safety note; the tile tree is read-only
-    // here, concurrent reads of a shared source geometry are fine),
-    // make_atlas takes geogram_lock internally only around its
+    // Heavy phase for one region: world-space bake + kd clip, then per-piece
+    // re-unwrap + renderable/raytrace primitive build. Runs on executor
+    // workers; every task is independent: bake_transform and
+    // clip_by_tile_tree reach no Geogram algorithm and are safe on distinct
+    // destinations (clip_tile_tree.hpp thread-safety note; the tile tree is
+    // read-only here, concurrent reads of a shared source geometry are
+    // fine), make_atlas takes geogram_lock internally only around its
     // Geogram-parameterizer branch (per-facet unwraps run concurrently),
     // buffer-mesh allocation groups serialize on
     // buffer_mesh_allocation_mutex, and raytrace builds are worker-safe
-    // (deferred glTF finalize does the same). Lightmap_report already
-    // takes worker-thread reports (async UV unwrap failures).
+    // (deferred glTF finalize does the same). Lightmap_report already takes
+    // worker-thread reports (async UV unwrap failures).
     // Unwrap density: world-space geometry, so the density is the world
     // density directly (no node-scale folding). Mirror
     // Make_atlas_operation's per-facet fallback so one degenerate piece
     // does not abort the whole partition.
-    const std::vector<erhe::geometry::operation::Clip_tree_node>& tile_tree = m_tile_tree;
-    const auto process_region = [&params, &build_info, &tile_tree, report](Region_task& task) {
+    static void process_region(
+        const Params&                                                 params,
+        const erhe::primitive::Build_info&                            build_info,
+        const std::vector<erhe::geometry::operation::Clip_tree_node>& tile_tree,
+        Lightmap_report* const                                        report,
+        Region_task&                                                  task
+    )
+    {
         erhe::geometry::Geometry world_geometry{fmt::format("{}.world", task.subject)};
         std::vector<erhe::geometry::operation::Clip_tile_piece> pieces;
         try {
@@ -262,28 +188,349 @@ auto Lightmap_partitioner::prepare(Scene_root& scene_root, const Params& params)
             }
             task.results.push_back(Region_task::Piece_result{.tile = piece.tile, .primitive = std::move(piece_primitive)});
         }
-    };
-    if ((m_context.executor != nullptr) && (tasks.size() > 1)) {
-        tf::Taskflow taskflow;
-        taskflow.for_each_index(
-            std::size_t{0}, tasks.size(), std::size_t{1},
-            [&tasks, &process_region](const std::size_t i) { process_region(tasks[i]); }
-        );
-        m_context.executor->run(taskflow).wait();
-    } else {
-        for (Region_task& task : tasks) {
-            process_region(task);
-        }
     }
 
-    // ---- Phase 3 (serial): assemble piece meshes in task order (identical
-    // to the old serial order; ordinals count successful pieces per
-    // (source mesh, source primitive) region), dropping entries with no
-    // pieces.
+    Scene_root*                                             scene_root{nullptr};
+    Params                                                  params{};
+    int                                                     tile_texture_size{0};
+    int                                                     resident_tile_budget{0};
+    std::vector<erhe::geometry::operation::Clip_tree_node>  tile_tree;
+    int                                                     tile_count{0};
+    std::optional<erhe::primitive::Build_info>              build_info; // Buffer_info holds references - no default construction
+    std::vector<Original_entry>                             entries;    // skeletons; piece nodes/meshes filled at commit
+    std::vector<Region_task>                                tasks;
+    std::size_t                                             lightmapped_mesh_count_at_launch{0};
+    std::atomic<std::size_t>                                regions_done{0};
+    std::atomic<bool>                                       cancel_requested{false};
+    tf::Taskflow                                            taskflow;   // must outlive the run
+    tf::Future<void>                                        future;
+};
+
+Lightmap_partitioner::Lightmap_partitioner(App_context& context)
+    : m_context{context}
+{
+}
+
+Lightmap_partitioner::~Lightmap_partitioner()
+{
+    // Editor teardown: do not destroy a running taskflow. No reports or
+    // counter bookkeeping - everything is going away.
+    if (m_prepare_job) {
+        m_prepare_job->cancel_requested.store(true, std::memory_order_relaxed);
+        if (m_prepare_job->future.valid()) {
+            m_prepare_job->future.cancel();
+            m_prepare_job->future.wait();
+        }
+    }
+}
+
+auto Lightmap_partitioner::request_prepare(
+    Scene_root&   scene_root,
+    const Params& params,
+    const int     tile_texture_size,
+    const int     resident_tile_budget
+) -> bool
+{
+    ERHE_PROFILE_FUNCTION();
+
+    Lightmap_baker* const  baker  = m_context.lightmap_baker;
+    Lightmap_report* const report = m_context.lightmap_report;
+    if ((baker == nullptr) || (m_context.mesh_memory == nullptr)) {
+        return false;
+    }
+    if (m_prepare_job) {
+        if (report != nullptr) {
+            report->add_error(Lightmap_report::Stage::partition, "prepare", "prepare already in flight - cancel or wait first");
+        }
+        return false;
+    }
+    // Defense in depth (callers guard too): a queued mesh operation would
+    // swap source primitives mid-flight; the commit-time validation would
+    // catch it, but refusing up front gives a better error.
+    {
+        const std::size_t async_ops =
+            static_cast<std::size_t>(m_context.pending_async_ops.load()) +
+            static_cast<std::size_t>(m_context.running_async_ops.load()) +
+            ((m_context.operation_stack != nullptr) ? m_context.operation_stack->get_queued_count() : 0u);
+        if (async_ops > 0) {
+            if (report != nullptr) {
+                report->add_error(Lightmap_report::Stage::partition, "prepare", "mesh operations in flight - wait until they settle");
+            }
+            return false;
+        }
+    }
+    if (report != nullptr) {
+        report->clear_stage(Lightmap_report::Stage::partition);
+    }
+    // The split estimate sizes against the baker's tile size - apply the
+    // requested config before computing it (snapshot re-applied at commit).
+    baker->set_tile_config(tile_texture_size, resident_tile_budget);
+
+    // The tile partition comes from a geometry-only split ESTIMATE of the
+    // original meshes (world areas at a nominal chart coverage): no unwrap
+    // or prior layout is needed, and the partitioned relayout at commit
+    // re-packs every piece with its measured UVs.
+    const Lightmap_baker::Estimate_split split = baker->compute_tile_split_estimate(scene_root, params.texels_per_meter);
+    if (split.empty()) {
+        if (report != nullptr) {
+            report->add_error(Lightmap_report::Stage::partition, "prepare", "no lightmapped meshes to partition");
+        }
+        return false;
+    }
+
+    // Group the estimate regions by source mesh: one piece mesh per original
+    // mesh, one Mesh_primitive per (source primitive, overlapped tile).
+    class Mesh_group
+    {
+    public:
+        std::shared_ptr<erhe::scene::Mesh>                  mesh;
+        std::vector<const Lightmap_baker::Estimate_region*> regions;
+    };
+    std::vector<Mesh_group> groups;
+    for (const Lightmap_baker::Estimate_region& region : split.regions) {
+        if (!region.mesh) {
+            continue;
+        }
+        auto it = std::find_if(groups.begin(), groups.end(), [&region](const Mesh_group& group) {
+            return group.mesh == region.mesh;
+        });
+        if (it == groups.end()) {
+            groups.push_back(Mesh_group{region.mesh, {}});
+            it = groups.end() - 1;
+        }
+        it->regions.push_back(&region);
+    }
+
+    // Snapshot everything the heavy phase needs; the live members
+    // (m_entries, m_tile_tree, ...) stay untouched until commit, so the old
+    // partition keeps rendering while the new one computes.
+    std::unique_ptr<Prepare_job> job = std::make_unique<Prepare_job>();
+    job->scene_root           = &scene_root;
+    job->params               = params;
+    job->tile_texture_size    = tile_texture_size;
+    job->resident_tile_budget = resident_tile_budget;
+    job->tile_tree            = split.kd_nodes;
+    job->tile_count           = split.tile_count;
+    job->build_info.emplace(
+        erhe::primitive::Build_info{
+            .primitive_types = {
+                .fill_triangles          = true,
+                .fill_triangles_expanded = true,
+                .edge_lines              = true,
+                .corner_points           = true,
+                .centroid_points         = true
+            },
+            .buffer_info = m_context.mesh_memory->make_primitive_buffer_info()
+        }
+    );
+    job->lightmapped_mesh_count_at_launch = count_lightmapped_meshes(scene_root);
+
+    for (const Mesh_group& group : groups) {
+        erhe::scene::Node* const node = group.mesh->get_node();
+        if (node == nullptr) {
+            continue;
+        }
+        const glm::mat4 world_from_node = node->world_from_node();
+
+        const std::size_t entry_index = job->entries.size();
+        Original_entry entry;
+        entry.original_mesh           = group.mesh;
+        entry.world_from_node_at_clip = world_from_node;
+        job->entries.push_back(std::move(entry));
+
+        const std::vector<erhe::scene::Mesh_primitive>& source_primitives = group.mesh->get_primitives();
+        for (const Lightmap_baker::Estimate_region* region : group.regions) {
+            if (region->primitive_index >= source_primitives.size()) {
+                continue;
+            }
+            const erhe::scene::Mesh_primitive& source_mesh_primitive = source_primitives[region->primitive_index];
+            if (!source_mesh_primitive.primitive || !source_mesh_primitive.primitive->render_shape) {
+                continue;
+            }
+            const std::shared_ptr<erhe::primitive::Primitive_render_shape>& render_shape = source_mesh_primitive.primitive->render_shape;
+            const std::shared_ptr<erhe::geometry::Geometry>& source_geometry = render_shape->get_geometry();
+            if (!source_geometry) {
+                continue;
+            }
+            job->tasks.push_back(
+                Prepare_job::Region_task{
+                    .entry_index            = entry_index,
+                    .source_primitive_index = region->primitive_index,
+                    .overflow_tile          = region->tile,
+                    .source_geometry        = source_geometry,
+                    .world_from_node        = world_from_node,
+                    .material               = source_mesh_primitive.material,
+                    .normal_style           = render_shape->get_normal_style(),
+                    .subject                = fmt::format("{}[{}]", group.mesh->get_name(), region->primitive_index),
+                    .results                = {}
+                }
+            );
+        }
+    }
+    if (job->tasks.empty()) {
+        if (report != nullptr) {
+            report->add_error(Lightmap_report::Stage::partition, "prepare", "no source primitives to partition");
+        }
+        return false;
+    }
+
+    // Held for the whole flight so every async_busy gate (UI buttons, MCP
+    // guards, deferred reorder) also covers an in-flight prepare; released
+    // on commit / abort / discard, all on the main thread.
+    ++m_context.pending_async_ops;
+    m_prepare_job = std::move(job);
+    Prepare_job* const raw_job = m_prepare_job.get();
+
+    if ((m_context.executor == nullptr) || (raw_job->tasks.size() <= 1)) {
+        // Synchronous fallback: run inline and commit before returning.
+        for (Prepare_job::Region_task& task : raw_job->tasks) {
+            if (!raw_job->cancel_requested.load(std::memory_order_relaxed)) {
+                Prepare_job::process_region(raw_job->params, *raw_job->build_info, raw_job->tile_tree, report, task);
+            }
+            raw_job->regions_done.fetch_add(1, std::memory_order_relaxed);
+        }
+        commit_prepare();
+        return m_last_prepare_result.committed;
+    }
+
+    raw_job->taskflow.for_each_index(
+        std::size_t{0}, raw_job->tasks.size(), std::size_t{1},
+        [raw_job, report](const std::size_t i) {
+            if (!raw_job->cancel_requested.load(std::memory_order_relaxed)) {
+                Prepare_job::process_region(raw_job->params, *raw_job->build_info, raw_job->tile_tree, report, raw_job->tasks[i]);
+            }
+            raw_job->regions_done.fetch_add(1, std::memory_order_relaxed);
+        }
+    );
+    raw_job->future = m_context.executor->run(raw_job->taskflow);
+    log_render->info("Lightmap_partitioner: prepare launched ({} regions)", raw_job->tasks.size());
+    return true;
+}
+
+void Lightmap_partitioner::update()
+{
+    if (!m_prepare_job) {
+        return;
+    }
+    if (m_prepare_job->future.valid() && (m_prepare_job->future.wait_for(std::chrono::seconds{0}) != std::future_status::ready)) {
+        return;
+    }
+    if (m_prepare_job->cancel_requested.load(std::memory_order_relaxed)) {
+        finish_prepare_discard("prepare cancelled");
+        return;
+    }
+    commit_prepare();
+}
+
+void Lightmap_partitioner::cancel_prepare()
+{
+    if (!m_prepare_job) {
+        return;
+    }
+    // The per-region check in the taskflow lambda is the real mechanism;
+    // future.cancel() additionally drops not-yet-scheduled chunk tasks.
+    m_prepare_job->cancel_requested.store(true, std::memory_order_relaxed);
+    if (m_prepare_job->future.valid()) {
+        m_prepare_job->future.cancel();
+    }
+}
+
+auto Lightmap_partitioner::prepare(
+    Scene_root&   scene_root,
+    const Params& params,
+    const int     tile_texture_size,
+    const int     resident_tile_budget
+) -> bool
+{
+    if (!request_prepare(scene_root, params, tile_texture_size, resident_tile_budget)) {
+        return false;
+    }
+    if (m_prepare_job) {
+        // Workers need no main-thread service (buffer uploads just queue for
+        // the next frame flush), so a plain wait cannot deadlock.
+        if (m_prepare_job->future.valid()) {
+            m_prepare_job->future.wait();
+        }
+        update();
+    }
+    return m_last_prepare_result.committed;
+}
+
+auto Lightmap_partitioner::get_prepare_progress() const -> Prepare_progress
+{
+    Prepare_progress progress;
+    if (m_prepare_job) {
+        progress.in_flight        = true;
+        progress.regions_done     = m_prepare_job->regions_done.load(std::memory_order_relaxed);
+        progress.regions_total    = m_prepare_job->tasks.size();
+        progress.cancel_requested = m_prepare_job->cancel_requested.load(std::memory_order_relaxed);
+    }
+    return progress;
+}
+
+auto Lightmap_partitioner::validate_job_against_scene(const Prepare_job& job) const -> std::string
+{
+    // Structural changes abort (the pieces were clipped from geometry that
+    // no longer exists in the scene); transform moves are tolerated - the
+    // existing count_stale_transforms() warning covers them, matching the
+    // synchronous flow's move-after-prepare behavior.
+    for (const Prepare_job::Region_task& task : job.tasks) {
+        const Original_entry& entry = job.entries[task.entry_index];
+        const std::shared_ptr<erhe::scene::Mesh>& mesh = entry.original_mesh;
+        if (!mesh) {
+            return "source mesh dropped";
+        }
+        if (mesh->get_item_host() != job.scene_root) {
+            return fmt::format("mesh '{}' left the scene", mesh->get_name());
+        }
+        if (mesh->get_node() == nullptr) {
+            return fmt::format("mesh '{}' lost its node", mesh->get_name());
+        }
+        const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
+        if (task.source_primitive_index >= primitives.size()) {
+            return fmt::format("mesh '{}' primitive list changed", mesh->get_name());
+        }
+        const erhe::scene::Mesh_primitive& mesh_primitive = primitives[task.source_primitive_index];
+        if (!mesh_primitive.primitive ||
+            !mesh_primitive.primitive->render_shape ||
+            (mesh_primitive.primitive->render_shape->get_geometry() != task.source_geometry)) {
+            return fmt::format("mesh '{}' primitive {} geometry swapped", mesh->get_name(), task.source_primitive_index);
+        }
+    }
+    return {};
+}
+
+void Lightmap_partitioner::commit_prepare()
+{
+    ERHE_PROFILE_FUNCTION();
+
+    std::unique_ptr<Prepare_job> job = std::move(m_prepare_job); // future is ready - safe to own/destroy
+    Lightmap_baker* const  baker  = m_context.lightmap_baker;
+    Lightmap_report* const report = m_context.lightmap_report;
+    Scene_root&            scene_root = *job->scene_root;
+
+    const std::string stale_reason = validate_job_against_scene(*job);
+    if (!stale_reason.empty()) {
+        if (report != nullptr) {
+            report->add_error(
+                Lightmap_report::Stage::partition,
+                "prepare",
+                fmt::format("scene changed during prepare ({}) - re-run Prepare", stale_reason)
+            );
+        }
+        m_last_prepare_result = Prepare_result{.committed = false, .mesh_count = 0, .piece_count = 0, .tile_count = 0, .abort_reason = stale_reason};
+        --m_context.pending_async_ops;
+        return; // old partition untouched
+    }
+
+    // Assemble piece meshes in task order (identical to the synchronous
+    // order; ordinals count successful pieces per (source mesh, source
+    // primitive) region), dropping entries with no pieces.
+    std::vector<Original_entry> entries = std::move(job->entries);
     std::vector<std::vector<erhe::scene::Mesh_primitive>> piece_primitives_per_entry(entries.size());
-    for (Region_task& task : tasks) {
+    for (Prepare_job::Region_task& task : job->tasks) {
         int ordinal = 0;
-        for (Region_task::Piece_result& result : task.results) {
+        for (Prepare_job::Region_task::Piece_result& result : task.results) {
             piece_primitives_per_entry[task.entry_index].emplace_back(std::move(result.primitive), task.material);
             entries[task.entry_index].pieces.push_back(
                 Piece_info{
@@ -327,15 +574,30 @@ auto Lightmap_partitioner::prepare(Scene_root& scene_root, const Params& params)
         if (report != nullptr) {
             report->add_error(Lightmap_report::Stage::partition, "prepare", "no pieces produced");
         }
-        m_tile_tree.clear();
-        m_tile_count = 0;
-        return false;
+        m_last_prepare_result = Prepare_result{.committed = false, .mesh_count = 0, .piece_count = 0, .tile_count = 0, .abort_reason = "no pieces produced"};
+        --m_context.pending_async_ops;
+        return; // old partition kept
     }
 
-    // Commit: group node with identity transform at the scene root; the
-    // pieces are world-space geometry, so identity world_from_node is what
-    // makes them render (and raytrace) in place.
+    // Re-apply the launch-time tile config: the editor tick pushes the live
+    // settings into the baker every frame, so a value the user changed
+    // mid-flight would otherwise size the relayout differently than the
+    // split estimate that produced the pieces.
+    if (baker != nullptr) {
+        baker->set_tile_config(job->tile_texture_size, job->resident_tile_budget);
+    }
+
+    // Swap the partition: tear down the old one (if any) and install the new
+    // one with no relayout/publish in between, so nothing renders an
+    // intermediate empty layout.
+    if (is_prepared() && (m_scene_root != nullptr)) {
+        teardown_scene_state();
+    }
+    clear_store();
     {
+        // Commit: group node with identity transform at the scene root; the
+        // pieces are world-space geometry, so identity world_from_node is
+        // what makes them render (and raytrace) in place.
         const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root.item_host_mutex};
         m_group_node = std::make_shared<erhe::scene::Node>("Lightmap Pieces");
         m_group_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::show_in_ui);
@@ -347,15 +609,20 @@ auto Lightmap_partitioner::prepare(Scene_root& scene_root, const Params& params)
     }
     m_entries     = std::move(entries);
     m_scene_root  = &scene_root;
-    m_last_params = params;
+    m_last_params = job->params;
+    m_tile_tree   = std::move(job->tile_tree);
+    m_tile_count  = job->tile_count;
     apply_visibility();
 
     // Switch the baker layout over to the pieces (the partitioned branch of
     // update_layout is active now that the store is populated) and push
     // their atlas mappings (white-fallback sentinel for non-resident tiles)
-    // onto the piece Mesh_primitives.
-    if (baker->update_layout(scene_root, params.texels_per_meter, params.min_face_texels)) {
-        baker->publish_regions();
+    // onto the piece Mesh_primitives. The bake itself happens through the
+    // baker tick's piece-hash change (with its G-buffer upload defer).
+    if (baker != nullptr) {
+        if (baker->update_layout(scene_root, job->params.texels_per_meter, job->params.min_face_texels)) {
+            baker->publish_regions();
+        }
     }
     // Manifest regions that are pieces resolve through this partition; make
     // the streamer re-apply mappings against the new piece set.
@@ -363,44 +630,81 @@ auto Lightmap_partitioner::prepare(Scene_root& scene_root, const Params& params)
         m_context.lightmap_streamer->invalidate();
     }
 
+    const std::size_t lightmapped_now = count_lightmapped_meshes(scene_root);
+    if ((report != nullptr) && (lightmapped_now > job->lightmapped_mesh_count_at_launch)) {
+        report->add_warning(
+            Lightmap_report::Stage::partition,
+            "prepare",
+            fmt::format(
+                "{} lightmapped meshes added during prepare are not partitioned - re-run Prepare",
+                lightmapped_now - job->lightmapped_mesh_count_at_launch
+            )
+        );
+    }
+
+    m_last_prepare_result = Prepare_result{
+        .committed    = true,
+        .mesh_count   = m_entries.size(),
+        .piece_count  = total_pieces,
+        .tile_count   = m_tile_count,
+        .abort_reason = {}
+    };
+    --m_context.pending_async_ops;
+
     log_render->info(
         "Lightmap_partitioner: {} source meshes partitioned into {} world-space pieces across {} tiles",
         m_entries.size(), total_pieces, m_tile_count
     );
-    return true;
 }
 
-void Lightmap_partitioner::revert()
+void Lightmap_partitioner::finish_prepare_discard(const char* const reason)
 {
-    if (!is_prepared() || (m_scene_root == nullptr)) {
-        m_entries.clear();
-        m_piece_meshes.clear();
-        m_group_node.reset();
-        m_tile_tree.clear();
-        m_tile_count = 0;
-        return;
+    Lightmap_report* const report = m_context.lightmap_report;
+    if (report != nullptr) {
+        report->add_warning(Lightmap_report::Stage::partition, "prepare", reason);
     }
-    {
-        const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
-        for (Original_entry& entry : m_entries) {
-            if (entry.original_mesh) {
-                entry.original_mesh->enable_flag_bits(erhe::Item_flags::visible);
-            }
-            if (entry.piece_node) {
-                entry.piece_node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
-            }
+    m_last_prepare_result = Prepare_result{.committed = false, .mesh_count = 0, .piece_count = 0, .tile_count = 0, .abort_reason = reason};
+    --m_context.pending_async_ops;
+    m_prepare_job.reset();
+    log_render->info("Lightmap_partitioner: {}", reason);
+}
+
+void Lightmap_partitioner::teardown_scene_state()
+{
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
+    for (Original_entry& entry : m_entries) {
+        if (entry.original_mesh) {
+            entry.original_mesh->enable_flag_bits(erhe::Item_flags::visible);
         }
-        if (m_group_node) {
-            m_group_node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
+        if (entry.piece_node) {
+            entry.piece_node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
         }
     }
-    Scene_root* const scene_root = m_scene_root;
+    if (m_group_node) {
+        m_group_node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
+    }
+}
+
+void Lightmap_partitioner::clear_store()
+{
+    // m_last_params is kept - revert()'s trailing relayout uses it.
     m_entries.clear();
     m_piece_meshes.clear();
     m_group_node.reset();
     m_tile_tree.clear();
     m_tile_count = 0;
     m_scene_root = nullptr;
+}
+
+void Lightmap_partitioner::revert()
+{
+    if (!is_prepared() || (m_scene_root == nullptr)) {
+        clear_store();
+        return;
+    }
+    teardown_scene_state();
+    Scene_root* const scene_root = m_scene_root;
+    clear_store();
     // Back to the ordinary layout derived from the original meshes. In the
     // fused workflow the originals typically have no channel-2 UVs, so this
     // yields an empty layout (originals render unlit) until the legacy
@@ -500,6 +804,18 @@ auto Lightmap_partitioner::find_piece(
 
 void Lightmap_partitioner::on_scene_closed(const Scene_root* scene_root)
 {
+    // An in-flight job targeting this scene must not commit: cancel, wait
+    // for the workers to drain (bounded - each worker finishes at most its
+    // current region), and discard. Runs before the prepared-store check
+    // because a job can be in flight with no live partition.
+    if (m_prepare_job && (m_prepare_job->scene_root == scene_root)) {
+        m_prepare_job->cancel_requested.store(true, std::memory_order_relaxed);
+        if (m_prepare_job->future.valid()) {
+            m_prepare_job->future.cancel();
+            m_prepare_job->future.wait();
+        }
+        finish_prepare_discard("prepare discarded: scene closed");
+    }
     if ((m_scene_root == nullptr) || (m_scene_root != scene_root)) {
         return;
     }
