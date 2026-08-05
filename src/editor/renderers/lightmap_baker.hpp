@@ -462,15 +462,19 @@ public:
     // Stop = PAUSE: disabling stops gathering but keeps the whole bake
     // working set (accumulation, sweep counts, G-buffer, BLAS/TLAS) so
     // re-enabling continues exactly where it paused - request_reset() is
-    // the explicit restart. The display atlas keeps showing the last
-    // publish while paused (the editor tick leaves the lightmap binding
-    // with the baker while has_published_display()).
+    // the explicit restart. Pausing also queues every resident, published,
+    // unsaved tile for autosave (the save-on-evict drain persists them),
+    // so the disk set matches the paused display and the streamer can take
+    // the lightmap binding over seamlessly. The display atlas keeps
+    // showing the last publish throughout.
     void set_baking_enabled(bool enabled);
     [[nodiscard]] auto is_baking_enabled() const -> bool     { return m_baking_enabled; }
-    // Single Iteration: run the bake until every active content tile has
-    // completed one more full sweep (the minimum sweep count advances by
-    // one), then pause. While already baking this turns into "finish the
-    // current sweep, then pause".
+    // Single Iteration: run the bake until every active content tile
+    // reaches at least the current minimum sweep count + 1, then pause
+    // (with the pause autosave). Tiles ahead of the minimum wait for the
+    // others, so repeated requests advance all tiles in lockstep. While
+    // already baking this turns into "finish the current sweep, then
+    // pause".
     void request_single_iteration();
     // The display atlas holds at least one published tile of the current
     // layout (UI "Paused" state).
@@ -525,6 +529,9 @@ private:
     // Free every rebuildable working-set allocation, keeping only the
     // display atlas (see set_baking_enabled).
     void release_working_set();
+    // Pause autosave: park resident published unsaved tiles in the
+    // pending-save queue for the owner's drain.
+    void queue_dirty_tiles_for_save();
 
     // Per-TLAS-instance record for the gather's bounce-ray attribute fetch
     // (mirrors Ray_trace_renderer::Instance_record_data; std430). Instances

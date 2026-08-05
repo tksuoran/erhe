@@ -4388,6 +4388,34 @@ void Lightmap_baker::set_baking_enabled(const bool enabled)
     m_baking_enabled = enabled;
     if (!enabled) {
         m_pause_after_sweep = false;
+        queue_dirty_tiles_for_save();
+    }
+}
+
+void Lightmap_baker::queue_dirty_tiles_for_save()
+{
+    // Pause autosave: park every resident, published, unsaved tile in the
+    // pending-save queue; the owner's drain (Lightmap_window::update)
+    // persists them at its safe point. The disk set then matches the paused
+    // display, so the streamer takes the lightmap binding over seamlessly
+    // (same pixels) and camera-driven disk tile streaming keeps working
+    // while paused. Gated on the save-on-evict owner flag - without a
+    // drain owner the queue would only grow.
+    if (!m_save_on_evict) {
+        return;
+    }
+    for (std::size_t i = 0; (i < m_tiles.size()) && (i < m_layout.tiles.size()); ++i) {
+        const Tile_state& state = m_tiles[i];
+        const int tile = static_cast<int>(i);
+        if (!state.published || !state.dirty_since_save) {
+            continue;
+        }
+        if (m_layout.tiles[i].slot < 0) {
+            continue; // the readback needs a display slot
+        }
+        if (std::find(m_tiles_pending_save.begin(), m_tiles_pending_save.end(), tile) == m_tiles_pending_save.end()) {
+            m_tiles_pending_save.push_back(tile);
+        }
     }
 }
 
@@ -5240,10 +5268,10 @@ void Lightmap_baker::tick(
 
     // Single Iteration: pause once the minimum active-tile sweep count
     // reaches the requested target (every active content tile completed at
-    // least one more full sweep).
+    // least one more full sweep). Goes through set_baking_enabled so the
+    // pause autosave queues the finished tiles.
     if (m_pause_after_sweep && (get_sweep_count() >= m_pause_target_sweeps)) {
-        m_pause_after_sweep = false;
-        m_baking_enabled    = false;
+        set_baking_enabled(false);
         log_render->info("Lightmap_baker: single iteration complete at sweep {} - paused", get_sweep_count());
     }
 }

@@ -1130,7 +1130,8 @@ void Lightmap_window::imgui()
             ImGui::SetTooltip(
                 "Interactive progressive bake: light accumulates across frames while you\n"
                 "edit; light/mesh edits restart convergence. Stop pauses - accumulation is\n"
-                "kept and Start continues where it paused (Reset restarts)."
+                "kept, the resident tiles autosave to <scene>.lightmap/, and Start continues\n"
+                "where it paused (Reset restarts)."
             );
         }
         ImGui::SameLine();
@@ -1139,8 +1140,10 @@ void Lightmap_window::imgui()
         }
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip(
-                "Bake exactly one more full sweep of every active tile, then pause.\n"
-                "While baking: finish the current sweep, then pause."
+                "Advance the bake by one sweep: every active tile reaches at least the\n"
+                "current minimum sweep count + 1, then pause (autosaving like Stop). Tiles\n"
+                "already ahead wait for the others, so repeated presses advance all tiles\n"
+                "in lockstep. While baking: finish the current sweep, then pause."
             );
         }
         ImGui::SameLine();
