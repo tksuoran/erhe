@@ -75,7 +75,19 @@ public:
     // Authored + serialized (by name, like all flags). See
     // doc/lightmap_baking_plan.md.
     static constexpr uint64_t lightmapped               = (1u << 30);
-    static constexpr uint64_t count                     = 31;
+    // Editor-generated render-only stand-in for another item (e.g. the
+    // lightmap partitioner's world-space piece meshes). Renders (and casts
+    // shadows) in place of its proxy_hidden source but is never user-facing:
+    // no show_in_ui, no Item_flags::id, raytrace mask 0
+    // (raytrace_node_mask), skipped by glTF export and not serialized -
+    // proxies are derived data, rebuilt by their owner.
+    static constexpr uint64_t render_proxy              = (uint64_t{1} << 31);
+    // The item is visually replaced by a render_proxy: excluded from the
+    // visual and shadow render passes, but still fully live - visible flag
+    // set, ID-rendered, raytrace-pickable, selectable, editable and
+    // exported. Not serialized (the proxy owner re-applies it).
+    static constexpr uint64_t proxy_hidden              = (uint64_t{1} << 32);
+    static constexpr uint64_t count                     = 33;
 
     // High-frequency presentation-state bits (selection, hover, per-frame debug
     // visualization, transform-derived state) that never affect item tree row
@@ -117,6 +129,8 @@ public:
         "Bone",
         "Bone Proxy",
         "Lightmapped",
+        "Render Proxy",
+        "Proxy Hidden",
     };
 
     [[nodiscard]] static auto to_string(uint64_t mask) -> std::string;

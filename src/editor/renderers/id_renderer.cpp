@@ -531,7 +531,9 @@ void Id_renderer::render_content_seed(const Seed_render_parameters& parameters)
         const erhe::Item_filter content_filter{
             .require_all_bits_set           = erhe::Item_flags::visible,
             .require_at_least_one_bit_set   = 0u,
-            .require_all_bits_clear         = 0u,
+            // Render proxies (lightmap pieces) must not occlude their
+            // proxy_hidden sources in the face-ID buffer.
+            .require_all_bits_clear         = erhe::Item_flags::render_proxy,
             .require_at_least_one_bit_clear = 0u
         };
         const erhe::scene_renderer::Primitive_interface_settings primitive_settings{

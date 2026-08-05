@@ -249,7 +249,9 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     erhe::Item_filter shadow_filter{
         .require_all_bits_set           = erhe::Item_flags::visible | erhe::Item_flags::shadow_cast,
         .require_at_least_one_bit_set   = 0u,
-        .require_all_bits_clear         = 0u,
+        // proxy_hidden: visually replaced by a render_proxy that casts the
+        // shadows instead (lightmap piece meshes).
+        .require_all_bits_clear         = erhe::Item_flags::proxy_hidden,
         .require_at_least_one_bit_clear = 0u
     };
 
@@ -642,7 +644,9 @@ void Shadow_renderer::prewarm_pipelines(
     erhe::Item_filter shadow_filter{
         .require_all_bits_set           = erhe::Item_flags::visible | erhe::Item_flags::shadow_cast,
         .require_at_least_one_bit_set   = 0u,
-        .require_all_bits_clear         = 0u,
+        // proxy_hidden: visually replaced by a render_proxy that casts the
+        // shadows instead (lightmap piece meshes).
+        .require_all_bits_clear         = erhe::Item_flags::proxy_hidden,
         .require_at_least_one_bit_clear = 0u
     };
 

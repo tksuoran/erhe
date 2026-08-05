@@ -98,6 +98,14 @@ private:
 
     App_context& m_context;
     bool         m_reorder_requested{false};
+    // Auto-re-prepare debounce: editing a partitioned source (transform
+    // move, geometry swap) marks the pieces stale; once the source state
+    // hash stops changing for the debounce window, update() saves the
+    // resident tiles (so restore-on-activate repopulates unaffected tiles
+    // after the commit) and launches an async re-prepare. The old pieces +
+    // old lightmap keep rendering until the commit swaps them.
+    uint64_t     m_source_state_hash{0};
+    int          m_source_stable_frames{0};
 };
 
 } // namespace editor

@@ -72,6 +72,10 @@ public:
     public:
         std::shared_ptr<erhe::scene::Mesh> original_mesh;
         glm::mat4                          world_from_node_at_clip{1.0f};
+        // Source geometry identity at clip time, per source primitive index:
+        // a mesh operation swapping a primitive makes the pieces stale just
+        // like a transform move (count_stale_sources).
+        std::vector<std::pair<std::size_t, const erhe::geometry::Geometry*>> source_geometries_at_clip;
         std::shared_ptr<erhe::scene::Node> piece_node;   // identity transform
         std::shared_ptr<erhe::scene::Mesh> piece_mesh;   // one Mesh_primitive per piece
         std::vector<Piece_info>            pieces;       // parallel to piece_mesh primitives
@@ -142,10 +146,15 @@ public:
     [[nodiscard]] auto get_render_with_lightmaps() const -> bool { return m_render_with_lightmaps; }
 
     [[nodiscard]] auto is_prepared() const -> bool { return !m_entries.empty(); }
-    // How many original meshes moved since the clip (their pieces are stale
-    // world-space geometry until re-prepare). Queried by the Lightmap
-    // window when its World-Space Tiles section is drawn.
-    [[nodiscard]] auto count_stale_transforms() const -> std::size_t;
+    // How many original meshes moved OR had a source primitive's geometry
+    // swapped since the clip (their pieces are stale world-space geometry
+    // until re-prepare). Queried by the Lightmap window's World-Space Tiles
+    // section and by its auto-re-prepare debounce.
+    [[nodiscard]] auto count_stale_sources() const -> std::size_t;
+    // FNV hash of the stale inputs (world transforms + source geometry
+    // pointers) - the auto-re-prepare debounce fires once this stops
+    // changing (the drag / operation settled).
+    [[nodiscard]] auto get_source_state_hash() const -> uint64_t;
     [[nodiscard]] auto is_piece_mesh(const erhe::scene::Mesh* mesh) const -> bool
     {
         return m_piece_meshes.contains(mesh);

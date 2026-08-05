@@ -618,6 +618,44 @@ void Lightmap_window::update()
         }
     }
 
+    // Auto-re-prepare: a partitioned source that moved or had its geometry
+    // swapped leaves stale world-space pieces. Debounced on the source
+    // state hash so a drag re-prepares once, after it settles; the old
+    // pieces + old lightmap keep rendering until the async commit. Saving
+    // the resident tiles first lets restore-on-activate bring the
+    // unaffected tiles straight back after the commit (their region tables
+    // re-validate; the edited tiles decline and re-bake).
+    if ((m_context.lightmap_partitioner != nullptr) &&
+        m_context.lightmap_partitioner->is_prepared() &&
+        !m_context.lightmap_partitioner->is_prepare_in_flight() &&
+        (m_context.lightmap_partitioner->get_scene_root() != nullptr) &&
+        (m_context.selection != nullptr) &&
+        (m_context.selection->get_active_scene_root().get() == m_context.lightmap_partitioner->get_scene_root())) {
+        constexpr int c_stable_frames_to_reprepare = 60;
+        if (m_context.lightmap_partitioner->count_stale_sources() > 0) {
+            const uint64_t source_hash = m_context.lightmap_partitioner->get_source_state_hash();
+            if (source_hash == m_source_state_hash) {
+                ++m_source_stable_frames;
+            } else {
+                m_source_state_hash     = source_hash;
+                m_source_stable_frames  = 0;
+            }
+            const std::size_t async_ops =
+                static_cast<std::size_t>(m_context.pending_async_ops.load()) +
+                static_cast<std::size_t>(m_context.running_async_ops.load()) +
+                ((m_context.operation_stack != nullptr) ? m_context.operation_stack->get_queued_count() : 0u);
+            if ((m_source_stable_frames >= c_stable_frames_to_reprepare) && (async_ops == 0)) {
+                m_source_stable_frames = 0;
+                save_all_tiles();
+                if (launch_prepare()) {
+                    log_render->info("Lightmap_window: stale sources settled - auto re-prepare launched");
+                }
+            }
+        } else {
+            m_source_stable_frames = 0;
+        }
+    }
+
     if (!m_reorder_requested) {
         return;
     }
@@ -888,11 +926,11 @@ void Lightmap_window::imgui()
                     "%zu meshes -> %zu pieces in %d tiles",
                     partitioner.get_entries().size(), piece_count, partitioner.get_tile_count()
                 );
-                const std::size_t stale_count = partitioner.count_stale_transforms();
+                const std::size_t stale_count = partitioner.count_stale_sources();
                 if (stale_count > 0) {
                     ImGui::TextColored(
                         ImVec4{1.0f, 0.8f, 0.2f, 1.0f},
-                        "%zu source meshes moved since the clip - pieces are stale, re-prepare",
+                        "%zu source meshes changed since the clip - re-preparing automatically once edits settle",
                         stale_count
                     );
                 }

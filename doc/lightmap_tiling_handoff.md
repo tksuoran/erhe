@@ -45,10 +45,43 @@ children; merge back; merge below level 0 -> 16 m/32 tpm; overrides survive
 close/reload; evict-save wrote tile_L0_-1_-1.lmt etc. and revisit restored
 from disk by grid key.
 
-KNOWN LIMITATION (new, found while verifying): `save_scene` with a live
-partition exports the "Lightmap Pieces" group into the GLB. The pieces are
-regenerable derived data and should be excluded from export (or the
-partition auto-reverted around saves).
+## UPDATE 2026-08-05 (third session): pieces are render proxies; auto re-prepare
+
+- New `Item_flags::render_proxy` (bit 31, on piece meshes/nodes/group) and
+  `Item_flags::proxy_hidden` (bit 32, on originals while "Render with
+  lightmaps" is ON). Neither flag persists (allowlist in
+  gltf_item_flags.cpp).
+- Pieces are pure render stand-ins: no show_in_ui (item tree), no
+  Item_flags::id (ID render), raytrace mask 0 via raytrace_node_mask (rays
+  pass through, bone-proxy pattern), skipped by glTF export
+  (process_child_nodes) - this also FIXED the earlier known limitation of
+  save_scene exporting the pieces.
+- Originals stay `visible` even while lightmap-rendering (proxy_hidden
+  replaces the old visible-flag flip): ID render, raytrace picking,
+  selection, the gizmo and export all keep operating on the source. They
+  are excluded from the visual content passes (app_rendering filters), the
+  shadow passes (shadow_renderer) and the bake occluder set
+  (collect_instances + the tick's occluder hash) - the pieces do all of
+  that in their place. NOTE: a SELECTED proxy-hidden original draws no
+  selection fill/outline (excluded from those passes too); selection
+  feedback is the gizmo + item tree until an outline-only pass is added.
+- Editing a partitioned source (transform move or geometry swap - geometry
+  identity is now snapshot per source primitive, count_stale_sources)
+  auto-launches an async re-prepare after the edit settles (~60 frames
+  stable source-state hash; Lightmap_window::update debounce). The old
+  pieces + old lightmap keep rendering until the commit swaps them; the
+  resident tiles are saved right before the launch so restore-on-activate
+  brings the UNAFFECTED tiles straight back after the commit (region
+  tables re-validate; the edited tiles decline and re-bake
+  progressively). A moved proxy-hidden source no longer resets
+  accumulation by itself (it is not in the occluder hash); the reset
+  arrives with the commit's piece swap.
+
+Verified headless: raycast under lightmap rendering hits the ORIGINAL
+(floor, not floor.lm); moving `cube` auto-saved the resident tile,
+re-prepared (~1 s later), re-clipped the piece to the new position (piece
+AABB == moved source) and restored the unaffected resident tile from disk
+immediately after the commit.
 
 The sections below describe the ORIGINAL kd-split design; tile-identity and
 split-estimate details are superseded by the grid above.

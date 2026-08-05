@@ -3921,9 +3921,14 @@ void Lightmap_baker::collect_instances(
     // Shadow world: every visible, non-skinned content mesh occludes,
     // whether or not it is lightmapped. Lightmapped primitives additionally
     // carry their atlas region so bounce rays can look up published
-    // radiance + albedo at the hit point.
+    // radiance + albedo at the hit point. proxy_hidden sources are skipped:
+    // their render proxies (the piece meshes) are the occluders - both at
+    // once would put coplanar duplicates in every shadow ray.
     for (const std::shared_ptr<erhe::scene::Mesh>& mesh : scene_root.layers().content()->meshes) {
         if (!mesh || !mesh->is_visible() || mesh->skin) {
+            continue;
+        }
+        if ((mesh->get_flag_bits() & erhe::Item_flags::proxy_hidden) != 0u) {
             continue;
         }
         const erhe::scene::Node* const node = mesh->get_node();
@@ -4874,8 +4879,14 @@ void Lightmap_baker::tick(
     }
     for (const std::shared_ptr<erhe::scene::Mesh>& mesh : scene_root.layers().content()->meshes) {
         // Occluder set: any visible content mesh shadows the bake, so its
-        // motion invalidates accumulated visibility.
+        // motion invalidates accumulated visibility. proxy_hidden sources
+        // are skipped to mirror collect_instances (their render proxies
+        // occlude); their motion still invalidates - through the stale-
+        // source auto-re-prepare, whose commit swaps the piece meshes.
         if (!mesh || !mesh->is_visible() || mesh->skin) {
+            continue;
+        }
+        if ((mesh->get_flag_bits() & erhe::Item_flags::proxy_hidden) != 0u) {
             continue;
         }
         const erhe::scene::Node* const node = mesh->get_node();

@@ -37,6 +37,13 @@ auto raytrace_node_mask(erhe::Item_base& item) -> uint32_t
 {
     uint32_t result{0};
     const uint64_t flags = item.get_flag_bits();
+    // Render proxies (lightmap piece meshes) are never raytrace-pickable:
+    // mask 0 = unhittable, so rays pass through to the proxy_hidden source
+    // mesh they stand in for (same pattern as bone proxies outside bone
+    // mode; see tools/notes.md).
+    if ((flags & Item_flags::render_proxy) != 0) {
+        return 0;
+    }
     if ((flags & Item_flags::content     ) != 0) result |= Raytrace_node_mask::content     ;
     if ((flags & Item_flags::shadow_cast ) != 0) result |= Raytrace_node_mask::shadow_cast ;
     if ((flags & Item_flags::tool        ) != 0) result |= Raytrace_node_mask::tool        ;

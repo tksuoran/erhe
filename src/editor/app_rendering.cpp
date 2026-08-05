@@ -137,20 +137,24 @@ App_rendering::App_rendering(
     // fill passes: they are rendered by a dedicated overlay "Rendertarget" pass
     // (below) that ignores camera exposure and, when post-processing is enabled,
     // runs after it. See issue #230.
+    // proxy_hidden: the item is visually replaced by a render_proxy (the
+    // lightmap partitioner's piece meshes) - excluded from every visual
+    // content pass, while staying ID-rendered / raytrace-pickable /
+    // selectable (see Item_flags).
     const Item_filter filter_not_selected{
         .require_all_bits_set         = Item_flags::visible,
         .require_at_least_one_bit_set = Item_flags::content  | Item_flags::controller,
-        .require_all_bits_clear       = Item_flags::selected | Item_flags::hovered_in_item_tree
+        .require_all_bits_clear       = Item_flags::selected | Item_flags::hovered_in_item_tree | Item_flags::proxy_hidden
     };
     const Item_filter filter_selected{
         .require_all_bits_set         = Item_flags::content | Item_flags::visible,
         .require_at_least_one_bit_set = Item_flags::selected,
-        .require_all_bits_clear       = 0
+        .require_all_bits_clear       = Item_flags::proxy_hidden
     };
     const Item_filter filter_selected_or_hovered{
         .require_all_bits_set         = Item_flags::content  | Item_flags::visible,
         .require_at_least_one_bit_set = Item_flags::selected | Item_flags::hovered_in_item_tree,
-        .require_all_bits_clear       = 0
+        .require_all_bits_clear       = Item_flags::proxy_hidden
     };
 
     const auto& render_style_not_selected = [](const Render_context& context) -> const Render_style_data& {

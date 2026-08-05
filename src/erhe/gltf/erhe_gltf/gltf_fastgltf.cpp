@@ -5022,6 +5022,11 @@ private:
                 process_child_nodes(*erhe_child_node, pre_transform * erhe_child_node->parent_from_node_transform(), out_node_indices);
                 continue;
             }
+            if ((erhe_child_node->get_flag_bits() & erhe::Item_flags::render_proxy) != 0) {
+                // Render proxies (lightmap piece meshes) are derived data,
+                // rebuilt by their owner - never part of the file content.
+                continue;
+            }
             out_node_indices.push_back(process_node(*erhe_child_node, pre_transform));
         }
     }

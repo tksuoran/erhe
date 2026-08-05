@@ -546,6 +546,9 @@ void Lightmap_partitioner::commit_prepare()
     std::vector<Original_entry> entries = std::move(job->entries);
     std::vector<std::vector<erhe::scene::Mesh_primitive>> piece_primitives_per_entry(entries.size());
     for (Prepare_job::Region_task& task : job->tasks) {
+        // Source identity snapshot for staleness detection (geometry swaps
+        // by mesh operations, next to the transform snapshot).
+        entries[task.entry_index].source_geometries_at_clip.emplace_back(task.source_primitive_index, task.source_geometry.get());
         int ordinal = 0;
         for (Prepare_job::Region_task::Piece_result& result : task.results) {
             piece_primitives_per_entry[task.entry_index].emplace_back(std::move(result.primitive), task.material);
@@ -574,14 +577,19 @@ void Lightmap_partitioner::commit_prepare()
             entry.piece_mesh = std::make_shared<erhe::scene::Mesh>(fmt::format("{}.lm", entry.original_mesh->get_name()));
             entry.piece_mesh->layer_id = scene_root.layers().content()->id;
             entry.piece_mesh->set_primitives(piece_primitives);
+            // Render proxies: draw + cast shadows in place of the source
+            // (apply_visibility toggles their visible flag), but stay out
+            // of the item tree (no show_in_ui), the ID buffer (no id flag),
+            // raytrace picking (render_proxy -> mask 0 in
+            // raytrace_node_mask) and glTF export. Selection and editing
+            // always target the proxy_hidden original.
             entry.piece_mesh->enable_flag_bits(
-                erhe::Item_flags::content     |
-                erhe::Item_flags::visible     |
-                erhe::Item_flags::shadow_cast |
-                erhe::Item_flags::show_in_ui
+                erhe::Item_flags::content      |
+                erhe::Item_flags::shadow_cast  |
+                erhe::Item_flags::render_proxy
             );
             entry.piece_node->attach(entry.piece_mesh);
-            entry.piece_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::show_in_ui);
+            entry.piece_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::render_proxy);
             kept.push_back(std::move(entry));
         }
         entries = std::move(kept);
@@ -617,7 +625,7 @@ void Lightmap_partitioner::commit_prepare()
         // what makes them render (and raytrace) in place.
         const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root.item_host_mutex};
         m_group_node = std::make_shared<erhe::scene::Node>("Lightmap Pieces");
-        m_group_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::show_in_ui);
+        m_group_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::render_proxy);
         m_group_node->set_parent(scene_root.get_scene().get_root_node());
         for (Original_entry& entry : entries) {
             entry.piece_node->set_parent(m_group_node);
@@ -692,7 +700,7 @@ void Lightmap_partitioner::teardown_scene_state()
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
     for (Original_entry& entry : m_entries) {
         if (entry.original_mesh) {
-            entry.original_mesh->enable_flag_bits(erhe::Item_flags::visible);
+            entry.original_mesh->disable_flag_bits(erhe::Item_flags::proxy_hidden);
         }
         if (entry.piece_node) {
             entry.piece_node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
@@ -756,10 +764,14 @@ void Lightmap_partitioner::apply_visibility()
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
     for (Original_entry& entry : m_entries) {
         if (entry.original_mesh) {
+            // The original stays fully live - visible (so ID render and
+            // raytrace picking keep working; selection/editing always
+            // target it), just excluded from the visual + shadow passes
+            // while its render proxy draws instead.
             if (m_render_with_lightmaps) {
-                entry.original_mesh->disable_flag_bits(erhe::Item_flags::visible);
+                entry.original_mesh->enable_flag_bits(erhe::Item_flags::proxy_hidden);
             } else {
-                entry.original_mesh->enable_flag_bits(erhe::Item_flags::visible);
+                entry.original_mesh->disable_flag_bits(erhe::Item_flags::proxy_hidden);
             }
         }
         if (entry.piece_mesh) {
@@ -772,7 +784,32 @@ void Lightmap_partitioner::apply_visibility()
     }
 }
 
-auto Lightmap_partitioner::count_stale_transforms() const -> std::size_t
+namespace {
+
+[[nodiscard]] auto entry_geometry_stale(const Lightmap_partitioner::Original_entry& entry) -> bool
+{
+    if (!entry.original_mesh) {
+        return false;
+    }
+    const std::vector<erhe::scene::Mesh_primitive>& primitives = entry.original_mesh->get_primitives();
+    for (const auto& [primitive_index, geometry_at_clip] : entry.source_geometries_at_clip) {
+        const erhe::geometry::Geometry* current = nullptr;
+        if (primitive_index < primitives.size()) {
+            const erhe::primitive::Primitive* const primitive = primitives[primitive_index].primitive.get();
+            if ((primitive != nullptr) && primitive->render_shape) {
+                current = primitive->render_shape->get_geometry().get();
+            }
+        }
+        if (current != geometry_at_clip) {
+            return true;
+        }
+    }
+    return false;
+}
+
+} // anonymous namespace
+
+auto Lightmap_partitioner::count_stale_sources() const -> std::size_t
 {
     std::size_t stale = 0;
     for (const Original_entry& entry : m_entries) {
@@ -780,11 +817,38 @@ auto Lightmap_partitioner::count_stale_transforms() const -> std::size_t
         if (node == nullptr) {
             continue;
         }
-        if (node->world_from_node() != entry.world_from_node_at_clip) {
+        if ((node->world_from_node() != entry.world_from_node_at_clip) || entry_geometry_stale(entry)) {
             ++stale;
         }
     }
     return stale;
+}
+
+auto Lightmap_partitioner::get_source_state_hash() const -> uint64_t
+{
+    uint64_t hash = 0xcbf29ce484222325ull;
+    const auto mix = [&hash](const void* data, const std::size_t byte_count) {
+        const auto* bytes = static_cast<const uint8_t*>(data);
+        for (std::size_t i = 0; i < byte_count; ++i) {
+            hash = (hash ^ bytes[i]) * 0x100000001b3ull;
+        }
+    };
+    for (const Original_entry& entry : m_entries) {
+        const erhe::scene::Node* const node = entry.original_mesh ? entry.original_mesh->get_node() : nullptr;
+        if (node == nullptr) {
+            continue;
+        }
+        const glm::mat4 world_from_node = node->world_from_node();
+        mix(&world_from_node, sizeof(world_from_node));
+        const std::vector<erhe::scene::Mesh_primitive>& primitives = entry.original_mesh->get_primitives();
+        for (const erhe::scene::Mesh_primitive& mesh_primitive : primitives) {
+            const erhe::primitive::Primitive* const primitive = mesh_primitive.primitive.get();
+            const erhe::geometry::Geometry* const geometry =
+                ((primitive != nullptr) && primitive->render_shape) ? primitive->render_shape->get_geometry().get() : nullptr;
+            mix(&geometry, sizeof(geometry));
+        }
+    }
+    return hash;
 }
 
 auto Lightmap_partitioner::find_piece(
