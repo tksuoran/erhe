@@ -261,6 +261,33 @@ public:
     // shorter UV axis.
     auto update_layout(Scene_root& scene_root, float texels_per_meter, float min_face_texels) -> bool;
 
+    // One source primitive of the estimate split with its assigned spatial
+    // tile - all the partitioner needs to clip against the returned tree.
+    class Estimate_region
+    {
+    public:
+        std::shared_ptr<erhe::scene::Mesh> mesh;
+        std::size_t                        primitive_index{0};
+        int                                tile{-1};
+    };
+    class Estimate_split
+    {
+    public:
+        std::vector<erhe::geometry::operation::Clip_tree_node> kd_nodes;
+        std::vector<Estimate_region>                           regions;
+        int                                                    tile_count{0};
+        [[nodiscard]] auto empty() const -> bool { return regions.empty() || kd_nodes.empty(); }
+    };
+
+    // Geometry-only spatial split for the world-space partitioner: same
+    // enumeration as update_layout MINUS the channel-2 UV requirement,
+    // sizing each region from its world area with an assumed nominal chart
+    // coverage. The boundaries are an estimate - the partitioner clips
+    // against the returned tree, unwraps each piece, and the partitioned
+    // relayout re-packs with the pieces' MEASURED UVs - so no unwrap is
+    // needed beforehand. Does NOT touch the active layout (m_layout).
+    auto compute_tile_split_estimate(Scene_root& scene_root, float texels_per_meter) -> Estimate_split;
+
     // Push every region's display (slot-space) uv_scale_offset onto its
     // Mesh_primitive (zero / white-fallback sentinel for non-resident
     // tiles). Ticks do this on residency changes; the partitioner calls it
@@ -682,6 +709,18 @@ private:
     // (never re-split from live pieces). Called by update_layout() after
     // its reset preamble.
     auto update_layout_partitioned(Scene_root& scene_root, float texels_per_meter, float min_face_texels) -> bool;
+    // Shared kd-split + per-leaf skyline pack core of update_layout and
+    // compute_tile_split_estimate (Split_set loop, overflow splits,
+    // pack-failure re-splits). regions must have world_area / uv_coverage /
+    // min_facet_uv_extent filled; returns false when nothing packed.
+    auto split_and_pack(
+        std::vector<Instance_region>&&                          regions,
+        float                                                   texels_per_meter,
+        float                                                   min_face_texels,
+        std::vector<Tile>&                                      out_tiles,
+        std::vector<Instance_region>&                           out_packed_regions,
+        std::vector<erhe::geometry::operation::Clip_tree_node>& out_kd_nodes
+    ) -> bool;
     // Shared tail of both layout paths: display slot grid sizing against
     // the memory budget, m_layout/m_tiles assignment, initial residency and
     // seam vertices.

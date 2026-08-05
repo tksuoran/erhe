@@ -21,10 +21,13 @@ class Scene_root;
 
 // World-space lightmap mesh partitioner (doc/lightmap_baking_plan.md).
 //
-// prepare() makes every lightmapped mesh/primitive instance unique and bakes
-// it into world space: per instance, the node transform is baked into the
-// geometry, the result is clipped against the baker's spatial kd tile tree
-// (clip vertices shared binary exact across tile boundaries - see
+// prepare() is self-contained: it computes a geometry-only spatial split
+// estimate (Lightmap_baker::compute_tile_split_estimate - no unwrap or
+// prior layout needed, originals' primitives are never modified), then
+// makes every lightmapped mesh/primitive instance unique and bakes it into
+// world space: per instance, the node transform is baked into the geometry,
+// the result is clipped against the estimated kd tile tree (clip vertices
+// shared binary exact across tile boundaries - see
 // erhe::geometry::operation::clip_by_tile_tree), and each piece gets fresh
 // channel-2 UVs (per-piece make_atlas at world-space density). The pieces
 // become Mesh_primitives of a new mesh on an identity-transform node under
@@ -71,11 +74,11 @@ public:
     };
 
     // Blocking (driven from the main thread by the Lightmap window / MCP);
-    // refreshes the baker layout from the ORIGINAL meshes first, so the kd
-    // tile tree it clips against matches the packed tiles. An existing
-    // partition is reverted before re-preparing. Failures are reported via
-    // Lightmap_report (Stage::partition); returns false when nothing could
-    // be partitioned.
+    // no preconditions - the kd tile tree comes from a geometry-only split
+    // estimate, and the final partitioned relayout re-packs the pieces with
+    // their measured UVs. An existing partition is reverted before
+    // re-preparing. Failures are reported via Lightmap_report
+    // (Stage::partition); returns false when nothing could be partitioned.
     auto prepare(Scene_root& scene_root, const Params& params) -> bool;
 
     // Destroys the piece nodes, restores original mesh visibility and
@@ -98,8 +101,8 @@ public:
     }
     [[nodiscard]] auto get_entries() const -> const std::vector<Original_entry>& { return m_entries; }
     [[nodiscard]] auto get_scene_root() const -> Scene_root* { return m_scene_root; }
-    // The kd tile tree the pieces were clipped against (snapshot of the
-    // baker layout at prepare time) and its tile count.
+    // The kd tile tree the pieces were clipped against (the split estimate
+    // computed at prepare time) and its tile count.
     [[nodiscard]] auto get_tile_tree() const -> const std::vector<erhe::geometry::operation::Clip_tree_node>& { return m_tile_tree; }
     [[nodiscard]] auto get_tile_count() const -> int { return m_tile_count; }
 

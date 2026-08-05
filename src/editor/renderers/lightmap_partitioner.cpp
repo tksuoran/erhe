@@ -46,34 +46,30 @@ auto Lightmap_partitioner::prepare(Scene_root& scene_root, const Params& params)
         report->clear_stage(Lightmap_report::Stage::partition);
     }
 
-    // The tile partition comes from the ORIGINAL meshes: refresh the baker
-    // layout so the kd tree and the packed tiles agree.
-    if (!baker->update_layout(scene_root, params.texels_per_meter, params.min_face_texels)) {
+    // The tile partition comes from a geometry-only split ESTIMATE of the
+    // original meshes (world areas at a nominal chart coverage): no unwrap
+    // or prior layout is needed, and the partitioned relayout at the end
+    // re-packs every piece with its measured UVs.
+    const Lightmap_baker::Estimate_split split = baker->compute_tile_split_estimate(scene_root, params.texels_per_meter);
+    if (split.empty()) {
         if (report != nullptr) {
-            report->add_error(Lightmap_report::Stage::partition, "prepare", "atlas layout failed - nothing to partition");
+            report->add_error(Lightmap_report::Stage::partition, "prepare", "no lightmapped meshes to partition");
         }
         return false;
     }
-    const Lightmap_baker::Atlas_layout& layout = baker->get_layout();
-    if (layout.kd_nodes.empty() || layout.regions.empty()) {
-        if (report != nullptr) {
-            report->add_error(Lightmap_report::Stage::partition, "prepare", "empty layout - nothing to partition");
-        }
-        return false;
-    }
-    m_tile_tree  = layout.kd_nodes;
-    m_tile_count = layout.get_tile_count();
+    m_tile_tree  = split.kd_nodes;
+    m_tile_count = split.tile_count;
 
-    // Group the layout regions by source mesh: one piece mesh per original
+    // Group the estimate regions by source mesh: one piece mesh per original
     // mesh, one Mesh_primitive per (source primitive, overlapped tile).
     class Mesh_group
     {
     public:
-        std::shared_ptr<erhe::scene::Mesh>              mesh;
-        std::vector<const Lightmap_baker::Instance_region*> regions;
+        std::shared_ptr<erhe::scene::Mesh>                  mesh;
+        std::vector<const Lightmap_baker::Estimate_region*> regions;
     };
     std::vector<Mesh_group> groups;
-    for (const Lightmap_baker::Instance_region& region : layout.regions) {
+    for (const Lightmap_baker::Estimate_region& region : split.regions) {
         if (!region.mesh) {
             continue;
         }
@@ -113,7 +109,7 @@ auto Lightmap_partitioner::prepare(Scene_root& scene_root, const Params& params)
 
         std::vector<erhe::scene::Mesh_primitive> piece_primitives;
         const std::vector<erhe::scene::Mesh_primitive>& source_primitives = group.mesh->get_primitives();
-        for (const Lightmap_baker::Instance_region* region : group.regions) {
+        for (const Lightmap_baker::Estimate_region* region : group.regions) {
             if (region->primitive_index >= source_primitives.size()) {
                 continue;
             }
@@ -327,7 +323,10 @@ void Lightmap_partitioner::revert()
     m_tile_tree.clear();
     m_tile_count = 0;
     m_scene_root = nullptr;
-    // Back to the ordinary layout derived from the original meshes.
+    // Back to the ordinary layout derived from the original meshes. In the
+    // fused workflow the originals typically have no channel-2 UVs, so this
+    // yields an empty layout (originals render unlit) until the legacy
+    // Generate Lightmap UVs path or a re-prepare runs.
     if ((m_context.lightmap_baker != nullptr) && (scene_root != nullptr)) {
         if (m_context.lightmap_baker->update_layout(*scene_root, m_last_params.texels_per_meter, m_last_params.min_face_texels)) {
             m_context.lightmap_baker->publish_regions();

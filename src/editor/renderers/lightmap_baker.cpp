@@ -135,6 +135,31 @@ void compute_region_uv_metrics(erhe::geometry::Geometry& geometry, Lightmap_bake
     region.min_facet_uv_extent = (min_facet_extent < std::numeric_limits<float>::max()) ? min_facet_extent : 1.0f;
 }
 
+// Region content side in texels at full density; the normalized per-mesh
+// chart set is square, so the region is too. The min-face-texels bound grows
+// the region until its smallest facet spans min_face_texels on its shorter
+// UV axis - the half of the minimum-size guarantee the unwrap cannot provide
+// (see Instance_region::min_facet_uv_extent), capped at 4x the density side
+// so one degenerate sliver facet cannot explode the tile.
+[[nodiscard]] auto desired_region_side(const Lightmap_baker::Instance_region& region, const float texels_per_meter, const float min_face_texels) -> float
+{
+    float side = std::sqrt(std::max(region.world_area, 0.0f) / region.uv_coverage) * texels_per_meter;
+    if ((min_face_texels > 0.0f) && (region.min_facet_uv_extent > 0.0f)) {
+        const float bound = min_face_texels / region.min_facet_uv_extent;
+        side = std::max(side, std::min(bound, 4.0f * side));
+    }
+    return std::max(side, 4.0f);
+}
+
+// Nominal chart coverage assumed by the pre-unwrap split estimate
+// (compute_tile_split_estimate): per-facet packing efficiency is predictable
+// enough that a constant suffices - the estimate only places tile
+// BOUNDARIES, and the partitioned relayout re-packs every piece with its
+// measured coverage. A geometric min_facet proxy
+// (sqrt(min_facet_world_area * coverage / world_area)) could sharpen the
+// estimate if per-tile density-flex warnings ever become common.
+constexpr float c_estimated_uv_coverage = 0.7f;
+
 // Per-draw UBO offsets must satisfy the device's uniform alignment; 256 is
 // the specification maximum, valid everywhere.
 constexpr std::size_t c_draw_ubo_stride = 256;
@@ -2216,6 +2241,29 @@ auto Lightmap_baker::update_layout(Scene_root& scene_root, const float texels_pe
         return false;
     }
 
+    std::vector<Tile>                                       tiles;
+    std::vector<Instance_region>                            packed_regions;
+    std::vector<erhe::geometry::operation::Clip_tree_node>  kd_nodes;
+    if (!split_and_pack(std::move(regions), texels_per_meter, min_face_texels, tiles, packed_regions, kd_nodes)) {
+        if (m_report != nullptr) {
+            m_report->add_error(Lightmap_report::Stage::layout, "atlas layout", "no regions could be packed");
+        }
+        m_seam_vertices.clear();
+        return false;
+    }
+
+    return finalize_layout(std::move(tiles), std::move(packed_regions), std::move(kd_nodes), false);
+}
+
+auto Lightmap_baker::split_and_pack(
+    std::vector<Instance_region>&&                          regions,
+    const float                                             texels_per_meter,
+    const float                                             min_face_texels,
+    std::vector<Tile>&                                      out_tiles,
+    std::vector<Instance_region>&                           out_packed_regions,
+    std::vector<erhe::geometry::operation::Clip_tree_node>& out_kd_nodes
+) -> bool
+{
     // ---- Spatial partition (adaptive world-space XZ kd-split) ----
     // Every leaf of the split becomes one tile of m_tile_size^2 texels;
     // tiles are unbounded in count, so layout always succeeds regardless of
@@ -2226,24 +2274,8 @@ auto Lightmap_baker::update_layout(Scene_root& scene_root, const float texels_pe
     // Skyline packing waste headroom for the fit estimate.
     const float fill_factor     = 0.85f;
 
-    // Region content side in texels at full density; the normalized
-    // per-mesh chart set is square, so the region is too. The min-face-
-    // texels bound grows the region until its smallest facet spans
-    // min_face_texels on its shorter UV axis - the half of the minimum-size
-    // guarantee the unwrap cannot provide (see
-    // Instance_region::min_facet_uv_extent), capped at 4x the density side
-    // so one degenerate sliver facet cannot explode the tile.
-    const auto desired_side_of = [texels_per_meter, min_face_texels](const Instance_region& region) -> float {
-        float side = std::sqrt(std::max(region.world_area, 0.0f) / region.uv_coverage) * texels_per_meter;
-        if ((min_face_texels > 0.0f) && (region.min_facet_uv_extent > 0.0f)) {
-            const float bound = min_face_texels / region.min_facet_uv_extent;
-            side = std::max(side, std::min(bound, 4.0f * side));
-        }
-        return std::max(side, 4.0f);
-    };
-
     // Per-region placement inputs: world AABB (instance transform applied)
-    // and the desired texel side.
+    // and the desired texel side (desired_region_side above).
     class Placement
     {
     public:
@@ -2255,7 +2287,7 @@ auto Lightmap_baker::update_layout(Scene_root& scene_root, const float texels_pe
     for (std::size_t i = 0; i < regions.size(); ++i) {
         const Instance_region& region    = regions[i];
         Placement&             placement = placements[i];
-        placement.desired_side = desired_side_of(region);
+        placement.desired_side = desired_region_side(region, texels_per_meter, min_face_texels);
         const erhe::scene::Node* const node = region.mesh ? region.mesh->get_node() : nullptr;
         const glm::mat4 world_from_node = (node != nullptr) ? node->world_from_node() : glm::mat4{1.0f};
         erhe::math::Aabb local_bounds{};
@@ -2492,14 +2524,93 @@ auto Lightmap_baker::update_layout(Scene_root& scene_root, const float texels_pe
     }
 
     if (packed_regions.empty() || tiles.empty()) {
-        if (m_report != nullptr) {
-            m_report->add_error(Lightmap_report::Stage::layout, "atlas layout", "no regions could be packed");
-        }
-        m_seam_vertices.clear();
         return false;
     }
+    out_tiles          = std::move(tiles);
+    out_packed_regions = std::move(packed_regions);
+    out_kd_nodes       = std::move(kd_nodes);
+    return true;
+}
 
-    return finalize_layout(std::move(tiles), std::move(packed_regions), std::move(kd_nodes), false);
+auto Lightmap_baker::compute_tile_split_estimate(Scene_root& scene_root, const float texels_per_meter) -> Estimate_split
+{
+    Estimate_split result;
+
+    // Same enumeration as update_layout minus the channel-2 UV requirement:
+    // the split needs only geometry (world areas + bounding boxes), so the
+    // partitioner can run before any unwrap exists.
+    std::size_t seen_meshes      = 0;
+    std::size_t skip_not_flagged = 0;
+    std::size_t skip_no_shape    = 0;
+
+    std::vector<Instance_region> regions;
+    for (const std::shared_ptr<erhe::scene::Mesh>& mesh : scene_root.layers().content()->meshes) {
+        if (!mesh || mesh->skin) {
+            continue;
+        }
+        ++seen_meshes;
+        if ((mesh->get_flag_bits() & erhe::Item_flags::lightmapped) == 0u) {
+            ++skip_not_flagged;
+            continue;
+        }
+        const erhe::scene::Node* const node = mesh->get_node();
+        if (node == nullptr) {
+            continue;
+        }
+        const float instance_area_scale = area_scale(node->world_from_node());
+        const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
+        for (std::size_t primitive_index = 0; primitive_index < primitives.size(); ++primitive_index) {
+            const erhe::primitive::Primitive* const primitive = primitives[primitive_index].primitive.get();
+            if ((primitive == nullptr) || !primitive->render_shape) {
+                ++skip_no_shape;
+                continue;
+            }
+            const std::shared_ptr<erhe::geometry::Geometry>& geometry = primitive->render_shape->get_geometry();
+            if (!geometry) {
+                ++skip_no_shape;
+                continue;
+            }
+            Instance_region region;
+            region.mesh            = mesh;
+            region.primitive_index = primitive_index;
+            region.world_area      = mesh_surface_area(geometry->get_mesh()) * instance_area_scale;
+            // Estimated coverage instead of compute_region_uv_metrics; the
+            // min-face bound stays off (min_face_texels 0 below) because
+            // min_facet_uv_extent cannot be measured pre-unwrap - the
+            // partitioned relayout applies the real bound per tile.
+            region.uv_coverage     = c_estimated_uv_coverage;
+            regions.push_back(std::move(region));
+        }
+    }
+    if (regions.empty()) {
+        const std::string message = fmt::format(
+            "no lightmapped meshes to partition (content meshes {}, skipped: not lightmapped {}, no render shape/geometry {})",
+            seen_meshes,
+            skip_not_flagged,
+            skip_no_shape
+        );
+        log_render->info("Lightmap_baker::compute_tile_split_estimate: {}", message);
+        if ((m_report != nullptr) && (seen_meshes > 0) && (skip_not_flagged < seen_meshes)) {
+            m_report->add_warning(Lightmap_report::Stage::layout, "split estimate", message);
+        }
+        return result;
+    }
+
+    std::vector<Tile>            tiles;
+    std::vector<Instance_region> packed_regions;
+    if (!split_and_pack(std::move(regions), texels_per_meter, 0.0f, tiles, packed_regions, result.kd_nodes)) {
+        if (m_report != nullptr) {
+            m_report->add_warning(Lightmap_report::Stage::layout, "split estimate", "no regions could be packed");
+        }
+        result.kd_nodes.clear();
+        return result;
+    }
+    result.regions.reserve(packed_regions.size());
+    for (Instance_region& region : packed_regions) {
+        result.regions.push_back(Estimate_region{std::move(region.mesh), region.primitive_index, region.tile});
+    }
+    result.tile_count = static_cast<int>(tiles.size());
+    return result;
 }
 
 auto Lightmap_baker::finalize_layout(
@@ -2647,14 +2758,9 @@ auto Lightmap_baker::update_layout_partitioned(Scene_root& scene_root, const flo
         return false;
     }
 
-    // Same sizing rule as the kd path (see update_layout).
+    // Same sizing rule as the kd path (desired_region_side above).
     const auto desired_side_of = [texels_per_meter, min_face_texels](const Instance_region& region) -> float {
-        float side = std::sqrt(std::max(region.world_area, 0.0f) / region.uv_coverage) * texels_per_meter;
-        if ((min_face_texels > 0.0f) && (region.min_facet_uv_extent > 0.0f)) {
-            const float bound = min_face_texels / region.min_facet_uv_extent;
-            side = std::max(side, std::min(bound, 4.0f * side));
-        }
-        return std::max(side, 4.0f);
+        return desired_region_side(region, texels_per_meter, min_face_texels);
     };
 
     std::vector<std::vector<std::size_t>> buckets(static_cast<std::size_t>(tile_count));
