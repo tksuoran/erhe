@@ -971,12 +971,13 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"level", "ix", "iz"})}
     }});
-    m_tool_infos.push_back({"lightmap_set_baking", "Toggle the interactive progressive lightmap bake (per-frame budgeted gather with accumulation; direct light + indirect bounces; scene edits restart convergence). Reports bake status (sweeps completed, cursor row) and can write a tone-mapped debug PNG of the published atlas. Call without 'enabled' to just query status.", {
+    m_tool_infos.push_back({"lightmap_set_baking", "Toggle the interactive progressive lightmap bake (per-frame budgeted gather with accumulation; direct light + indirect bounces; scene edits restart convergence). enabled:false PAUSES - accumulation and sweep counts are kept, the viewport keeps showing the published bake, and enabled:true continues where it paused (reset is the explicit restart). single_iteration bakes exactly one more full sweep of every active tile, then pauses. Reports bake status (sweeps completed, cursor row) and can write a tone-mapped debug PNG of the published atlas. Call without 'enabled' to just query status.", {
         {"type", "object"},
         {"properties", {
-            {"enabled",   {{"type", "boolean"}, {"description", "Turn interactive baking on/off; omit to leave unchanged"}}},
-            {"reset",     {{"type", "boolean"}, {"description", "Restart accumulation (keeps layout + G-buffer)"}}},
-            {"debug_png", {{"type", "string"},  {"description", "Optional path for a tone-mapped PNG of the published atlas"}}}
+            {"enabled",          {{"type", "boolean"}, {"description", "Turn interactive baking on/off (off = pause; accumulation kept); omit to leave unchanged"}}},
+            {"reset",            {{"type", "boolean"}, {"description", "Restart accumulation (keeps layout + G-buffer)"}}},
+            {"single_iteration", {{"type", "boolean"}, {"description", "Bake one more full sweep of every active tile, then pause"}}},
+            {"debug_png",        {{"type", "string"},  {"description", "Optional path for a tone-mapped PNG of the published atlas"}}}
         }}
     }});
 

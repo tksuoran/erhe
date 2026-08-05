@@ -902,12 +902,18 @@ public:
                 should_render &&
                 m_lightmap_streamer &&
                 lightmap_scene_root &&
-                (!m_lightmap_baker || !m_lightmap_baker->is_offline_bake_active())
+                (!m_lightmap_baker ||
+                 (!m_lightmap_baker->is_offline_bake_active() &&
+                  !m_lightmap_baker->has_unsaved_published_display()))
             ) {
                 // Baked-tile streaming from <scene>.lightmap/: whenever the
                 // interactive / offline baker does not own the lightmap
                 // binding, the streamer keeps the N nearest tiles resident
-                // and binds its atlas.
+                // and binds its atlas. A PAUSED baker with UNSAVED published
+                // content keeps the binding (Stop = Pause: the viewport must
+                // keep showing the in-progress bake, not swap to the disk
+                // set); once everything published is saved the streamer owns
+                // again (same pixels) and disk tile streaming resumes.
                 erhe::log::set_breadcrumb("tick: lightmap stream");
                 m_lightmap_streamer->set_budget(lightmap_config.resident_tile_budget);
                 m_lightmap_streamer->update(*lightmap_scene_root.get(), lightmap_camera_position_ptr);

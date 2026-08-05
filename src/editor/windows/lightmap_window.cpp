@@ -1118,7 +1118,10 @@ void Lightmap_window::imgui()
                 );
             }
         }
-        // Play/stop toggle + state text for the interactive bake.
+        // Play/pause toggle + single-step + state text for the interactive
+        // bake. Stop PAUSES (accumulation and sweep counts are kept and the
+        // viewport keeps showing the published bake); Start resumes where
+        // it paused; Reset is the explicit restart.
         const bool baking = m_context.lightmap_baker->is_baking_enabled();
         if (ImGui::Button(baking ? "Stop###bake_toggle" : "Start###bake_toggle")) {
             m_context.lightmap_baker->set_baking_enabled(!baking);
@@ -1126,7 +1129,18 @@ void Lightmap_window::imgui()
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip(
                 "Interactive progressive bake: light accumulates across frames while you\n"
-                "edit; light/mesh edits restart convergence."
+                "edit; light/mesh edits restart convergence. Stop pauses - accumulation is\n"
+                "kept and Start continues where it paused (Reset restarts)."
+            );
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Single Iteration")) {
+            m_context.lightmap_baker->request_single_iteration();
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "Bake exactly one more full sweep of every active tile, then pause.\n"
+                "While baking: finish the current sweep, then pause."
             );
         }
         ImGui::SameLine();
@@ -1139,10 +1153,12 @@ void Lightmap_window::imgui()
         ImGui::SameLine();
         if (baking) {
             ImGui::TextColored(ImVec4{0.4f, 0.9f, 0.4f, 1.0f}, "Baking");
+        } else if (m_context.lightmap_baker->has_published_display()) {
+            ImGui::TextColored(ImVec4{0.9f, 0.8f, 0.4f, 1.0f}, "Paused");
         } else {
             ImGui::TextUnformatted("Stopped");
         }
-        if (m_context.lightmap_baker->is_baking_enabled()) {
+        if (m_context.lightmap_baker->is_baking_enabled() || (m_context.lightmap_baker->get_sweep_count() > 0)) {
             const int tile_count = m_context.lightmap_baker->get_layout().get_tile_count();
             if (tile_count > 1) {
                 ImGui::Text(

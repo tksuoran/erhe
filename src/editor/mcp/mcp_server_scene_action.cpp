@@ -319,10 +319,15 @@ auto Mcp_server::action_lightmap_set_baking(const json& args) -> std::string
     }
     Lightmap_baker& baker = *m_context.lightmap_baker;
     if (args.contains("enabled")) {
+        // Disabling PAUSES: accumulation and sweep counts are kept and
+        // re-enabling continues where it paused; reset is the restart.
         baker.set_baking_enabled(args.value("enabled", true));
     }
     if (args.value("reset", false)) {
         baker.request_reset();
+    }
+    if (args.value("single_iteration", false)) {
+        baker.request_single_iteration();
     }
     json result{
         {"baking",     baker.is_baking_enabled()},

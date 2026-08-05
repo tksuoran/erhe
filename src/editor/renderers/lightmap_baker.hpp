@@ -459,12 +459,29 @@ public:
     // and payload headers for stale-bake detection.
     [[nodiscard]] auto get_bake_parameters_hash() const -> uint64_t;
 
-    // Disabling releases the whole bake working set (G-buffer, atlas,
-    // accumulation, scratch, origin, BLAS/TLAS caches) - only the display
-    // atlas the forward renderer samples stays resident. Re-enabling
-    // rebuilds everything and restarts accumulation from scratch.
+    // Stop = PAUSE: disabling stops gathering but keeps the whole bake
+    // working set (accumulation, sweep counts, G-buffer, BLAS/TLAS) so
+    // re-enabling continues exactly where it paused - request_reset() is
+    // the explicit restart. The display atlas keeps showing the last
+    // publish while paused (the editor tick leaves the lightmap binding
+    // with the baker while has_published_display()).
     void set_baking_enabled(bool enabled);
     [[nodiscard]] auto is_baking_enabled() const -> bool     { return m_baking_enabled; }
+    // Single Iteration: run the bake until every active content tile has
+    // completed one more full sweep (the minimum sweep count advances by
+    // one), then pause. While already baking this turns into "finish the
+    // current sweep, then pause".
+    void request_single_iteration();
+    // The display atlas holds at least one published tile of the current
+    // layout (UI "Paused" state).
+    [[nodiscard]] auto has_published_display() const -> bool;
+    // ... and at least one of those tiles is newer than its last save. The
+    // paused baker keeps the lightmap binding exactly while this is true:
+    // handing the binding to the disk streamer would drop the in-progress
+    // bake from the viewport. Once everything published is on disk the
+    // streamer can take over seamlessly (same pixels) and camera-driven
+    // tile streaming resumes.
+    [[nodiscard]] auto has_unsaved_published_display() const -> bool;
     void request_reset() { m_reset_requested = true; }
     // Completed accumulation sweeps since the last reset: the minimum over
     // the active tiles' per-tile sweep counts, so every ACTIVE valid texel
@@ -854,6 +871,10 @@ private:
     Sky_lighting m_sky{};
     bool     m_baking_enabled   {false};
     bool     m_reset_requested  {false};
+    // Single Iteration (request_single_iteration): pause the bake once the
+    // minimum active-tile sweep count reaches the target.
+    bool     m_pause_after_sweep{false};
+    uint32_t m_pause_target_sweeps{0};
     bool     m_publish_requested{false}; // publish-stage option changed; republish on next tick
     bool     m_display_cleared  {false}; // display atlas zeroed at least once for this layout
     bool     m_regions_published{false}; // per-primitive uv_scale_offset pushed to meshes

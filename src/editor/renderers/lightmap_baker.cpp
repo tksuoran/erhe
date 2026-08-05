@@ -4381,10 +4381,47 @@ void Lightmap_baker::set_baking_enabled(const bool enabled)
     if (enabled == m_baking_enabled) {
         return;
     }
+    // Pause semantics: the working set (accumulation, sweeps, G-buffer,
+    // BLAS/TLAS) is deliberately KEPT on disable so re-enabling continues
+    // where it paused; request_reset() is the explicit restart and
+    // release_working_set() the explicit memory release.
     m_baking_enabled = enabled;
     if (!enabled) {
-        release_working_set();
+        m_pause_after_sweep = false;
     }
+}
+
+void Lightmap_baker::request_single_iteration()
+{
+    m_pause_after_sweep   = true;
+    m_pause_target_sweeps = get_sweep_count() + 1;
+    m_baking_enabled      = true;
+}
+
+auto Lightmap_baker::has_published_display() const -> bool
+{
+    if (!m_display_texture) {
+        return false;
+    }
+    for (const Tile_state& tile : m_tiles) {
+        if (tile.published) {
+            return true;
+        }
+    }
+    return false;
+}
+
+auto Lightmap_baker::has_unsaved_published_display() const -> bool
+{
+    if (!m_display_texture) {
+        return false;
+    }
+    for (const Tile_state& tile : m_tiles) {
+        if (tile.published && tile.dirty_since_save) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void Lightmap_baker::release_working_set()
@@ -4392,7 +4429,9 @@ void Lightmap_baker::release_working_set()
     // Everything here is rebuilt on demand by the next enabled tick
     // (bake_gbuffer / ensure_bake_targets / collect_instances); only the
     // display atlas the forward renderer samples stays resident, so the
-    // scene keeps its last published lighting while baking is off.
+    // scene keeps its last published lighting. No automatic caller since
+    // Stop became Pause (2026-08-05); kept for explicit memory release
+    // (e.g. a future scene-close cleanup).
     // Texture/BLAS destruction is deferred behind the in-flight frames.
     m_position_texture.reset();
     m_normal_texture.reset();
@@ -5019,6 +5058,11 @@ void Lightmap_baker::tick(
         }
         m_tiles_pending_restore.clear();
         m_cursor_y = 0;
+        // A reset mid-single-iteration re-arms the pause target against the
+        // fresh (zeroed) sweep counts.
+        if (m_pause_after_sweep) {
+            m_pause_target_sweeps = 1;
+        }
     }
     m_reset_requested = false;
 
@@ -5193,6 +5237,15 @@ void Lightmap_baker::tick(
         }
     }
     ++m_frame_counter;
+
+    // Single Iteration: pause once the minimum active-tile sweep count
+    // reaches the requested target (every active content tile completed at
+    // least one more full sweep).
+    if (m_pause_after_sweep && (get_sweep_count() >= m_pause_target_sweeps)) {
+        m_pause_after_sweep = false;
+        m_baking_enabled    = false;
+        log_render->info("Lightmap_baker: single iteration complete at sweep {} - paused", get_sweep_count());
+    }
 }
 
 auto Lightmap_baker::take_tile_pending_save() -> int
