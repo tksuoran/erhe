@@ -76,8 +76,9 @@ public:
     // Blocking (driven from the main thread by the Lightmap window / MCP);
     // no preconditions - the kd tile tree comes from a geometry-only split
     // estimate, and the final partitioned relayout re-packs the pieces with
-    // their measured UVs. The per-piece unwrap + primitive build phase runs
-    // in parallel on the app executor (clip and scene commit stay serial).
+    // their measured UVs. The heavy phase - per-region world-space bake +
+    // clip, per-piece unwrap + primitive build - runs in parallel on the
+    // app executor (only the scene commit and final relayout stay serial).
     // An existing partition is reverted before re-preparing. Failures are
     // reported via Lightmap_report (Stage::partition); returns false when
     // nothing could be partitioned.

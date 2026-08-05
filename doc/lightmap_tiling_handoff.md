@@ -103,12 +103,12 @@ with duplicate node names, undo interactions while a partition is live.
 
 ## Known limitations / next work
 
-1. prepare() is blocking (main thread), but the per-piece unwrap +
-   primitive build phase runs in parallel on the app executor since
-   2026-08-05 (make_atlas locks only its Geogram branch; per-facet is
-   lock-free). Remaining future work: fully async pipeline + cancel +
-   progress bar, and parallelizing the clip phase (clip_by_tile_tree's
-   contract still requires geogram_lock at the caller).
+1. prepare() is blocking (main thread), but the whole heavy phase -
+   per-region bake_transform + clip_by_tile_tree, per-piece unwrap +
+   primitive build - runs in parallel on the app executor since
+   2026-08-05 (make_atlas locks only its Geogram branch; the clipper
+   needs no lock at all, see clip_tile_tree.hpp thread-safety note).
+   Remaining future work: fully async pipeline + cancel + progress bar.
 2. Cross-tile cut boundaries are lightmap seams (positions crack-free,
    shading discontinuity only). Future: cross-tile seam blend at bake time.
 3. Clipper fan-triangulates every facet, including unclipped ones (spec says

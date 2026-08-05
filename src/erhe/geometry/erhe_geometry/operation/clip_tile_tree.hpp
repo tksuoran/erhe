@@ -50,8 +50,14 @@ public:
 // caller's pre-assigned overflow_tile (-1 when the mesh has no overflow
 // assignment; routing then falls back to child[0]).
 //
-// The caller is responsible for locking erhe::geometry::geogram_lock() as
-// required (GEO attribute creation allocates from process-global pools).
+// Thread safety: safe to call concurrently from multiple threads on
+// DISTINCT source/destination geometries with no caller lock. The clipper
+// reaches no Geogram algorithm (pure per-invocation clipping state +
+// mesh-local attribute work; GEO attribute stores are per-mesh with
+// spinlocked observer registration and read-only type registries at the
+// geogram pin), and the piece post_processing self-locks through
+// Geometry::process() (see erhe::geometry::geogram_lock()). Concurrent
+// reads of one shared source geometry are fine; nothing mutates it.
 void clip_by_tile_tree(
     const erhe::geometry::Geometry&    source_world,
     const std::vector<Clip_tree_node>& tree,

@@ -829,10 +829,12 @@ redone when parameters change.
   pre-existing inter-mesh cracks are unchanged. Skinned meshes stay
   excluded. Moving a source mesh after the clip leaves stale pieces
   (window warns; re-prepare). prepare() is blocking (main thread), but
-  its per-piece unwrap + primitive build phase runs in parallel on the
-  app executor (clip and scene commit stay serial); fully async
-  prepare + cancel + progress is future work. N-gon facets are
-  fan-triangulated by the clipper even when unclipped. Revert after a fused prepare returns
+  its heavy phase - per-region world-space bake + clip and per-piece
+  unwrap + primitive build - runs in parallel on the app executor
+  (only the scene commit and final relayout stay serial; the clipper
+  is lock-free, see clip_tile_tree.hpp); fully async prepare + cancel
+  + progress is future work. N-gon facets are fan-triangulated by the
+  clipper even when unclipped. Revert after a fused prepare returns
   to the legacy layout of originals that typically carry no channel-2
   UVs -> empty layout (originals render unlit) until the legacy unwrap
   runs or a re-prepare. Tile boundaries derive from estimated coverage,

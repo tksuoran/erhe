@@ -135,7 +135,10 @@ Guarded choke points (each takes the lock internally):
 
 NOT guarded (mesh-local, no geogram algorithm): element/attribute
 construction, `facets.connect()`, `geometry_from_flat_data`,
-`compute_mesh_tangents`, plain mesh reads (buffer-mesh and raytrace builds).
+`compute_mesh_tangents`, plain mesh reads (buffer-mesh and raytrace builds),
+`operation::bake_transform()` and `operation::clip_by_tile_tree()` (pure
+per-invocation clipping state; their piece post_processing self-locks via
+`Geometry::process()` - see the thread-safety note in clip_tile_tree.hpp).
 
 When the fork gains a reentrant thread manager (per-invocation context
 instead of the static counter) and upstream #68 lands, this contract can be
