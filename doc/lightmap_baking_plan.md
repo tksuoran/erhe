@@ -763,11 +763,28 @@ redone when parameters change.
   (asserted by `test/test_clip_tile_tree.cpp` with memcmp). A vertex
   exactly on a plane is emitted to both sides unmodified. Facet
   provenance is kept as facet attribute "clip_source_facet".
-- **kd tree recording**: `update_layout` now emits
-  `Atlas_layout::kd_nodes` with explicit plane values (midpoint between
-  the sorted centers adjacent to the median split); pack-failure
-  re-splits extend the tree (spatial when the halves separate on X,
-  overflow otherwise).
+- **kd tree recording**: the shared split core
+  (`Lightmap_baker::split_and_pack`) emits `Atlas_layout::kd_nodes` with
+  explicit plane values (midpoint between the sorted centers adjacent to
+  the median split); pack-failure re-splits extend the tree (spatial
+  when the halves separate on X, overflow otherwise).
+- **Split estimate (fused Prepare, 2026-08-05)**: prepare is
+  self-contained - no whole-mesh unwrap or prior atlas layout needed.
+  `Lightmap_baker::compute_tile_split_estimate` enumerates the
+  lightmapped meshes WITHOUT the channel-2 UV precondition and sizes
+  each region as `sqrt(world_area / 0.7) * texels_per_meter` (nominal
+  chart coverage constant `c_estimated_uv_coverage`; the min-face-texels
+  bound is unmeasurable pre-unwrap and deferred to the real per-tile
+  pack), then runs the same `split_and_pack` core as the legacy path. It
+  returns only the kd tree + per-source-primitive tile assignments and
+  never touches the active layout. Rationale: the old first step
+  (Generate Lightmap UVs -> Update Atlas Layout) existed only to feed
+  these sizing metrics - every piece is re-unwrapped and the partitioned
+  relayout re-measures real piece UVs, so an estimate places the tile
+  boundaries just as well, one full unwrap of every source mesh is
+  saved, tile sizing is immune to degenerate whole-mesh coverage (the
+  0.05 clamp could inflate a side 4.5x), and the originals' primitives /
+  undo stack are untouched.
 - **Partitioner** (`Lightmap_partitioner`,
   `src/editor/renderers/lightmap_partitioner.{hpp,cpp}`): per
   lightmapped mesh/primitive instance: `get_geometry()` ->
@@ -779,9 +796,13 @@ redone when parameters change.
   renderer/raytrace/shadows untouched). Originals stay in the scene;
   the store keeps their primitives for revert / re-prepare. Not routed
   through the undo stack (derived bake artifact). UI: Lightmap window
-  "Prepare World-Space Tiles" / "Revert Tiling"; MCP:
-  `lightmap_prepare_tiles` / `lightmap_revert_tiles` /
-  `lightmap_set_render`.
+  "Prepare World-Space Tiles" / "Revert Tiling" (the precondition-free
+  front door; Generate Lightmap UVs + Update Atlas Layout serve only the
+  legacy non-partitioned path, under a collapsed "Legacy Atlas" header);
+  MCP: `lightmap_prepare_tiles` / `lightmap_revert_tiles` /
+  `lightmap_set_render`. The in-flight async-operations guard stays on
+  Prepare: a queued mesh operation swapping source primitives
+  mid-partition would clip stale geometry.
 - **Partitioned layout**: with a prepared partition, `update_layout`
   derives regions from the piece meshes with their pre-assigned tiles
   (no kd re-split; the tile tree is the stored partition). Packing can
@@ -809,4 +830,8 @@ redone when parameters change.
   excluded. Moving a source mesh after the clip leaves stale pieces
   (window warns; re-prepare). prepare() is blocking (main thread);
   async + cancel is future work. N-gon facets are fan-triangulated by
-  the clipper even when unclipped.
+  the clipper even when unclipped. Revert after a fused prepare returns
+  to the legacy layout of originals that typically carry no channel-2
+  UVs -> empty layout (originals render unlit) until the legacy unwrap
+  runs or a re-prepare. Tile boundaries derive from estimated coverage,
+  so pre-fusion on-disk tile sets go stale on the first re-prepare.

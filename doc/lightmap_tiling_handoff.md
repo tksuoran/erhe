@@ -24,8 +24,10 @@ MCP.** Two feature sets landed on top of each other this day:
   `Atlas_layout::kd_nodes` (explicit plane values; overflow splits axis = -1);
   MCP `lightmap_update_atlas` returns the tree as `kd_nodes`.
 - `src/editor/renderers/lightmap_partitioner.{hpp,cpp}` (`App_context::
-  lightmap_partitioner`): prepare = layout from originals -> bake_transform ->
-  clip -> per-piece `make_atlas` (usage 2, world density, per-facet fallback,
+  lightmap_partitioner`): prepare = geometry-only split estimate
+  (`Lightmap_baker::compute_tile_split_estimate`, fused 2026-08-05 - no
+  unwrap or prior layout needed) -> bake_transform -> clip -> per-piece
+  `make_atlas` (usage 2, world density, per-facet fallback,
   `Lightmap_report::Stage::partition`) -> renderable + raytrace primitives ->
   one piece mesh per source mesh on identity nodes under "Lightmap Pieces".
   Originals + params retained; revert/re-prepare supported; scene-close safe
@@ -46,8 +48,11 @@ MCP.** Two feature sets landed on top of each other this day:
   a piece manifest without a live partition warns once. Partition
   prepare/revert invalidates the streamer (`App_context::lightmap_streamer`).
 - UI: Lightmap window "World-Space Tiles" section (Prepare / Revert / stats /
-  stale warning / Render with lightmaps). MCP: `lightmap_prepare_tiles`,
-  `lightmap_revert_tiles`, `lightmap_set_render`.
+  stale warning / Render with lightmaps) is the precondition-free front door
+  (fused 2026-08-05); Generate Lightmap UVs + Update Atlas Layout live under
+  a collapsed "Legacy Atlas (non-partitioned)" header. MCP:
+  `lightmap_prepare_tiles` (self-contained), `lightmap_revert_tiles`,
+  `lightmap_set_render`.
 
 ## Interactive-bake persistence (added same day, user-requested)
 
@@ -98,12 +103,6 @@ with duplicate node names, undo interactions while a partition is live.
 
 ## Known limitations / next work
 
-0. **QUEUED (user-directed 2026-08-05, prompt_queue.txt ITEM -1): fuse
-   Generate Lightmap UVs + Update Atlas Layout + Prepare World-Space Tiles
-   into one self-contained Prepare.** The whole-mesh unwrap only feeds kd
-   split sizing and is discarded (pieces re-unwrap); size the split from
-   world areas instead and drop the channel-2 precondition. Plan in a
-   fresh context; the queue item carries the full rationale and anchors.
 1. prepare() is blocking (main thread); async pipeline + cancel + progress
    bar is future work (per-piece work is parallelizable; per_facet unwrap
    needs no geogram solver serialization).
@@ -124,8 +123,13 @@ with duplicate node names, undo interactions while a partition is live.
 - Piece meshes are NOT `Item_flags::lightmapped` - the partitioned layout
   enumerates them through the partitioner store; the tick hash mixes the
   piece buffer meshes explicitly.
-- The baker's `update_layout` is re-entered by `prepare()` (originals first,
-  then partitioned after commit) - the partitioned branch triggers only when
-  `is_prepared()` and the scene matches.
+- The baker's `update_layout` is entered ONCE by `prepare()` (after the piece
+  commit; the tile tree comes from `compute_tile_split_estimate`, which never
+  touches `m_layout`) - the partitioned branch triggers only when
+  `is_prepared()` and the scene matches. `revert()` after a fused prepare
+  re-runs the legacy layout on originals that typically have no channel-2
+  UVs -> empty layout (originals render unlit) until re-prepare. Tile
+  boundaries come from an estimated coverage (0.7), so tile sets baked to
+  disk before the fusion go stale on the first re-prepare (re-bake).
 - Memory files: `lightmap-spatial-tiles-2026-08-05`,
   `lightmap-uv-parameterizer-default` (auto-memory MEMORY.md).
