@@ -666,6 +666,9 @@ set(_codegen_sources
     ${_codegen_out}/gltf_source_reference.hpp
     ${_codegen_out}/gltf_source_reference_serialization.hpp
     ${_codegen_out}/gltf_source_reference.cpp
+    ${_codegen_out}/lightmap_tile_override.hpp
+    ${_codegen_out}/lightmap_tile_override_serialization.hpp
+    ${_codegen_out}/lightmap_tile_override.cpp
     ${_codegen_out}/scene_settings.hpp
     ${_codegen_out}/scene_settings_serialization.hpp
     ${_codegen_out}/scene_settings.cpp
@@ -683,6 +686,7 @@ erhe_codegen_generate(
         "${_xr_config_defs}:erhe_xr/generated/"
     DEFINITIONS
         "${_codegen_defs}/gltf_source_reference.py"
+        "${_codegen_defs}/lightmap_tile_override.py"
         "${_codegen_defs}/scene_settings.py"
 )
 set_source_files_properties(${_codegen_sources} PROPERTIES GENERATED TRUE)

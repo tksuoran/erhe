@@ -40,9 +40,9 @@ auto Lightmap_tile_io::directory_for_scene(const std::filesystem::path& scene_pa
     return directory;
 }
 
-auto Lightmap_tile_io::payload_name(const int tile_id) -> std::string
+auto Lightmap_tile_io::payload_name(const int level, const int ix, const int iz) -> std::string
 {
-    return fmt::format("tile_{}.lmt", tile_id);
+    return fmt::format("tile_L{}_{}_{}.lmt", level, ix, iz);
 }
 
 auto Lightmap_tile_io::node_path(const erhe::scene::Node* const node) -> std::string
@@ -122,12 +122,16 @@ auto Lightmap_tile_io::write_manifest(const std::filesystem::path& directory, co
             });
         }
         tiles.push_back({
-            {"id",            tile.id},
-            {"bounds_min",    {tile.bounds_min.x, tile.bounds_min.y, tile.bounds_min.z}},
-            {"bounds_max",    {tile.bounds_max.x, tile.bounds_max.y, tile.bounds_max.z}},
-            {"density_scale", tile.density_scale},
-            {"payload",       tile.payload},
-            {"regions",       regions}
+            {"id",               tile.id},
+            {"level",            tile.level},
+            {"ix",               tile.ix},
+            {"iz",               tile.iz},
+            {"texels_per_meter", tile.texels_per_meter},
+            {"bounds_min",       {tile.bounds_min.x, tile.bounds_min.y, tile.bounds_min.z}},
+            {"bounds_max",       {tile.bounds_max.x, tile.bounds_max.y, tile.bounds_max.z}},
+            {"density_scale",    tile.density_scale},
+            {"payload",          tile.payload},
+            {"regions",          regions}
         });
     }
     const nlohmann::json root{
@@ -182,9 +186,13 @@ auto Lightmap_tile_io::read_manifest(const std::filesystem::path& directory, Man
         out_manifest.bake_hash        = root.value("bake_hash", static_cast<uint64_t>(0));
         for (const nlohmann::json& tile_json : root.value("tiles", nlohmann::json::array())) {
             Tile_entry tile;
-            tile.id            = tile_json.value("id", 0);
-            tile.density_scale = tile_json.value("density_scale", 1.0f);
-            tile.payload       = tile_json.value("payload", std::string{});
+            tile.id               = tile_json.value("id", 0);
+            tile.level            = tile_json.value("level", 0);
+            tile.ix               = tile_json.value("ix", 0);
+            tile.iz               = tile_json.value("iz", 0);
+            tile.texels_per_meter = tile_json.value("texels_per_meter", 0.0f);
+            tile.density_scale    = tile_json.value("density_scale", 1.0f);
+            tile.payload          = tile_json.value("payload", std::string{});
             const auto bounds_min = tile_json.value("bounds_min", std::vector<float>{0.0f, 0.0f, 0.0f});
             const auto bounds_max = tile_json.value("bounds_max", std::vector<float>{0.0f, 0.0f, 0.0f});
             if ((bounds_min.size() == 3) && (bounds_max.size() == 3)) {

@@ -1,5 +1,58 @@
 # Lightmap spatial tiling + world-space partition - session handoff (2026-08-05)
 
+## UPDATE 2026-08-05 (later session): quadtree grid replaced the adaptive kd split
+
+The content-adaptive kd split described below was REPLACED (user-directed,
+no back-compat kept) by a uniform world-origin quadtree grid:
+
+- **Grid**: level-0 cells of `lightmap.cell_size_m` (default 8 m) anchored at
+  multiples of the cell size from the world origin, over the XZ AABBs of the
+  lightmapped content. Tile boundaries depend only on grid parameters +
+  overrides - never on content - so they are stable across edits/sessions.
+  Addressing: `Lightmap_tile_key {level, ix, iz}`
+  (renderers/lightmap_grid.hpp); level +1 halves the cell (2x nominal texel
+  density), -1 doubles it.
+- **Per-tile down-only density**: nominal texels/m = `tile_texture_size`
+  (default now 1024) / cell side; packing flexes density DOWN per tile when
+  content does not fit (reported), never up. `texels_per_meter` config no
+  longer drives tile layout (legacy standalone unwrap only).
+- **Subdivide / merge** (density control): scene-persisted leaf overrides
+  (`Scene_settings::lightmap_tile_overrides`, list of {level, ix, iz} with
+  level != 0; survives GLB save/load via the ERHE_scene extension). UI:
+  Lightmap window > World-Space Tiles > "Tiles" tree. MCP:
+  `lightmap_get_tiles`, `lightmap_subdivide_tile`, `lightmap_merge_tile`.
+  With a live partition an override change launches an async re-prepare;
+  the legacy path relayouts through the tick's grid-parameters hash.
+- **kd tree emission**: each quadtree split = X plane + two Z planes, so
+  `clip_by_tile_tree` is untouched. A world-origin quadtree has NO aligned
+  cell spanning the origin, so the tree root is a fixed origin cross (x=0,
+  z=0) with one aligned subtree per occupied signed quadrant. Empty
+  quadrants are tile -1 leaves; the partitioner drops any piece routed
+  there (occupancy is AABB-conservative, so none should be).
+- **Manifest v3**: per tile {level, ix, iz} + nominal texels_per_meter;
+  payloads named `tile_L<level>_<ix>_<iz>.lmt`. Save-on-evict /
+  restore-on-activate match tiles by grid key (+ per-tile density), not
+  index. v2 sets are stale (no back-compat by design).
+- The split "estimate" is now exact (content-independent); the estimated-
+  coverage staleness gotcha below is obsolete. Overflow splits are no
+  longer emitted (the clipper still supports them).
+- Per-piece unwrap uses ITS TILE's nominal density (gutters/min-chart sized
+  at the raster density), snapshot into the prepare job.
+
+Verified headless 2026-08-05 (Default Scene, 512 tiles, budget 1): uniform
+4x8 m cells at 64 tpm nominal with down-only flex; subdivide -> 4 m/128 tpm
+children; merge back; merge below level 0 -> 16 m/32 tpm; overrides survive
+close/reload; evict-save wrote tile_L0_-1_-1.lmt etc. and revisit restored
+from disk by grid key.
+
+KNOWN LIMITATION (new, found while verifying): `save_scene` with a live
+partition exports the "Lightmap Pieces" group into the GLB. The pieces are
+regenerable derived data and should be excluded from export (or the
+partition auto-reverted around saves).
+
+The sections below describe the ORIGINAL kd-split design; tile-identity and
+split-estimate details are superseded by the grid above.
+
 State: **implemented, built green (ninja + headless VS), verified headless via
 MCP.** Two feature sets landed on top of each other this day:
 

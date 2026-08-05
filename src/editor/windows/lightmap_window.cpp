@@ -84,11 +84,18 @@ namespace {
     for (int tile = 0; tile < layout.get_tile_count(); ++tile) {
         Lightmap_tile_io::Tile_entry& entry = manifest->tiles[static_cast<std::size_t>(tile)];
         const Lightmap_baker::Tile& layout_tile = layout.tiles[static_cast<std::size_t>(tile)];
-        entry.id            = tile;
-        entry.bounds_min    = layout_tile.world_bounds.min;
-        entry.bounds_max    = layout_tile.world_bounds.max;
-        entry.density_scale = layout_tile.density_scale;
-        entry.payload       = Lightmap_tile_io::payload_name(tile);
+        entry.id               = tile;
+        entry.level            = layout_tile.key.level;
+        entry.ix               = layout_tile.key.ix;
+        entry.iz               = layout_tile.key.iz;
+        entry.texels_per_meter = layout_tile.texels_per_meter;
+        // Content union when there is content; the grid cell box otherwise
+        // (an empty tile's default Aabb would serialize garbage extents).
+        const erhe::math::Aabb& bounds = layout_tile.world_bounds.is_valid() ? layout_tile.world_bounds : layout_tile.cell_bounds;
+        entry.bounds_min       = bounds.min;
+        entry.bounds_max       = bounds.max;
+        entry.density_scale    = layout_tile.density_scale;
+        entry.payload          = Lightmap_tile_io::payload_name(layout_tile.key.level, layout_tile.key.ix, layout_tile.key.iz);
     }
     for (const Lightmap_baker::Instance_region& region : layout.regions) {
         if (!region.mesh || (region.tile < 0) || (region.tile >= layout.get_tile_count())) {
@@ -196,13 +203,25 @@ namespace {
     }
     const Lightmap_config& config = context.editor_settings->lightmap;
     if ((saved.bake_hash != baker->get_bake_parameters_hash(config.texels_per_meter)) ||
-        (saved.tile_size != layout.get_tile_size()) ||
-        (tile >= static_cast<int>(saved.tiles.size()))) {
+        (saved.tile_size != layout.get_tile_size())) {
         return false;
     }
-    const Lightmap_tile_io::Tile_entry& saved_entry = saved.tiles[static_cast<std::size_t>(tile)];
-    if (saved_entry.id != tile) {
+    // Grid-keyed match: the saved set may have been written by a layout
+    // with different tile ordering; the quadtree key is the identity.
+    const Lightmap_baker::Tile& layout_tile = layout.tiles[static_cast<std::size_t>(tile)];
+    const auto saved_it = std::find_if(
+        saved.tiles.begin(),
+        saved.tiles.end(),
+        [&layout_tile](const Lightmap_tile_io::Tile_entry& entry) {
+            return (entry.level == layout_tile.key.level) && (entry.ix == layout_tile.key.ix) && (entry.iz == layout_tile.key.iz);
+        }
+    );
+    if (saved_it == saved.tiles.end()) {
         return false;
+    }
+    const Lightmap_tile_io::Tile_entry& saved_entry = *saved_it;
+    if (saved_entry.texels_per_meter != layout_tile.texels_per_meter) {
+        return false; // cell size / tile texture size changed since the save
     }
     // The payload maps texel-for-texel only when the tile's region packing
     // is unchanged; compare region identity + tile-local uv rects against a
@@ -392,6 +411,163 @@ auto Lightmap_window::save_all_tiles() -> std::size_t
     }
     log_render->info("Lightmap_window: Save All Tiles saved {} of {} tiles", saved, tile_count);
     return saved;
+}
+
+namespace {
+
+// Current override list of the active scene as grid keys.
+[[nodiscard]] auto read_tile_overrides(Scene_root& scene_root) -> std::vector<Lightmap_tile_key>
+{
+    std::vector<Lightmap_tile_key> keys;
+    for (const Lightmap_tile_override& value : scene_root.get_scene_settings().lightmap_tile_overrides) {
+        keys.emplace_back(value.level, value.ix, value.iz);
+    }
+    return keys;
+}
+
+// Is the key a leaf of the current override set? Level 0 cells are implicit
+// leaves unless an override covers them (merge ancestor) or splits them
+// (subdivide descendants); non-zero levels are leaves exactly when stored.
+[[nodiscard]] auto is_override_leaf(const Lightmap_tile_key& key, const std::vector<Lightmap_tile_key>& overrides) -> bool
+{
+    if (key.level != 0) {
+        return std::find(overrides.begin(), overrides.end(), key) != overrides.end();
+    }
+    for (const Lightmap_tile_key& stored : overrides) {
+        if ((stored.level < 0) && stored.contains(key)) {
+            return false; // merged away
+        }
+        if ((stored.level > 0) && key.contains(stored)) {
+            return false; // subdivided
+        }
+    }
+    return true;
+}
+
+} // anonymous namespace
+
+auto Lightmap_window::subdivide_tile(const Lightmap_tile_key& key) -> std::string
+{
+    const std::shared_ptr<Scene_root> scene_root = m_context.selection->get_active_scene_root();
+    if (!scene_root) {
+        return "no active scene";
+    }
+    constexpr int max_level = 6;
+    if (key.level >= max_level) {
+        return fmt::format("subdivision limit reached (level {})", max_level);
+    }
+    std::vector<Lightmap_tile_key> overrides = read_tile_overrides(*scene_root.get());
+    if (!is_override_leaf(key, overrides)) {
+        return fmt::format("({},{},{}) is not a current leaf tile", key.level, key.ix, key.iz);
+    }
+    std::erase(overrides, key);
+    for (const Lightmap_tile_key& child : key.children()) {
+        if (child.level != 0) {
+            overrides.push_back(child);
+        }
+        // level 0 children (subdividing a merged tile) are the default -
+        // removing the merge override alone restores them.
+    }
+    apply_tile_overrides(std::move(overrides));
+    return {};
+}
+
+auto Lightmap_window::merge_tile(const Lightmap_tile_key& key) -> std::string
+{
+    const std::shared_ptr<Scene_root> scene_root = m_context.selection->get_active_scene_root();
+    if (!scene_root) {
+        return "no active scene";
+    }
+    constexpr int min_level = -6;
+    const Lightmap_tile_key parent = key.parent();
+    if (parent.level <= min_level) {
+        return fmt::format("merge limit reached (level {})", min_level);
+    }
+    std::vector<Lightmap_tile_key> overrides = read_tile_overrides(*scene_root.get());
+    for (const Lightmap_tile_key& child : parent.children()) {
+        if (!is_override_leaf(child, overrides)) {
+            return fmt::format(
+                "sibling ({},{},{}) is not a leaf - merge or subdivide its children to a uniform level first",
+                child.level, child.ix, child.iz
+            );
+        }
+    }
+    for (const Lightmap_tile_key& child : parent.children()) {
+        std::erase(overrides, child);
+    }
+    if (parent.level != 0) {
+        overrides.push_back(parent);
+    }
+    apply_tile_overrides(std::move(overrides));
+    return {};
+}
+
+void Lightmap_window::apply_tile_overrides(std::vector<Lightmap_tile_key>&& overrides)
+{
+    const std::shared_ptr<Scene_root> scene_root = m_context.selection->get_active_scene_root();
+    if (!scene_root) {
+        return;
+    }
+    // Deterministic order: the tick hashes the list, and the scene file
+    // should not churn on no-op round trips.
+    std::sort(overrides.begin(), overrides.end());
+    std::vector<Lightmap_tile_override>& stored = scene_root->get_scene_settings().lightmap_tile_overrides;
+    stored.clear();
+    stored.reserve(overrides.size());
+    for (const Lightmap_tile_key& key : overrides) {
+        stored.push_back(Lightmap_tile_override{.level = key.level, .ix = key.ix, .iz = key.iz});
+    }
+    // Push into the baker NOW: the editor tick mirrors the scene settings
+    // only next frame, and the re-prepare below computes its split estimate
+    // immediately - it must see the new grid.
+    if (m_context.lightmap_baker != nullptr) {
+        std::vector<glm::ivec3> values;
+        values.reserve(overrides.size());
+        for (const Lightmap_tile_key& key : overrides) {
+            values.emplace_back(key.level, key.ix, key.iz);
+        }
+        m_context.lightmap_baker->set_tile_overrides(values);
+    }
+    log_render->info("Lightmap_window: {} tile overrides applied", stored.size());
+    // A live partition was clipped against the old grid - re-prepare
+    // asynchronously. The legacy (non-partitioned) layout relayouts by
+    // itself through the tick's grid-parameters hash.
+    if ((m_context.lightmap_partitioner != nullptr) &&
+        m_context.lightmap_partitioner->is_prepared() &&
+        (m_context.lightmap_partitioner->get_scene_root() == scene_root.get()) &&
+        !m_context.lightmap_partitioner->is_prepare_in_flight()) {
+        launch_prepare();
+    }
+}
+
+auto Lightmap_window::launch_prepare() -> bool
+{
+    if ((m_context.lightmap_partitioner == nullptr) || (m_context.editor_settings == nullptr)) {
+        return false;
+    }
+    const std::shared_ptr<Scene_root> scene_root = m_context.selection->get_active_scene_root();
+    if (!scene_root) {
+        return false;
+    }
+    const Lightmap_config& config = m_context.editor_settings->lightmap;
+    const bool launched = m_context.lightmap_partitioner->request_prepare(
+        *scene_root.get(),
+        Lightmap_partitioner::Params{
+            .texels_per_meter = config.texels_per_meter,
+            .min_face_texels  = config.uv_min_chart_texels,
+            .hard_angles_deg  = config.hard_angles_deg,
+            .gutter_texels    = config.uv_gutter_texels,
+            .min_chart_texels = config.uv_min_chart_texels,
+            .parameterizer    = static_cast<erhe::geometry::operation::Atlas_parameterizer>(std::clamp(config.uv_parameterizer, 0, 4)),
+            .packer           = static_cast<erhe::geometry::operation::Atlas_packer>(std::clamp(config.uv_packer, 0, 2))
+        },
+        config.tile_texture_size,
+        config.resident_tile_budget
+    );
+    if (launched) {
+        m_context.lightmap_partitioner->set_render_with_lightmaps(config.render_with_lightmaps);
+    }
+    return launched;
 }
 
 void Lightmap_window::update()
@@ -685,27 +861,9 @@ void Lightmap_window::imgui()
         }
         ImGui::BeginDisabled(async_busy);
         if (ImGui::Button("Prepare World-Space Tiles")) {
-            const std::shared_ptr<Scene_root> scene_root = m_context.selection->get_active_scene_root();
-            if (scene_root) {
-                const bool launched = partitioner.request_prepare(
-                    *scene_root.get(),
-                    Lightmap_partitioner::Params{
-                        .texels_per_meter = config.texels_per_meter,
-                        .min_face_texels  = config.uv_min_chart_texels,
-                        .hard_angles_deg  = config.hard_angles_deg,
-                        .gutter_texels    = config.uv_gutter_texels,
-                        .min_chart_texels = config.uv_min_chart_texels,
-                        .parameterizer    = static_cast<erhe::geometry::operation::Atlas_parameterizer>(std::clamp(config.uv_parameterizer, 0, 4)),
-                        .packer           = static_cast<erhe::geometry::operation::Atlas_packer>(std::clamp(config.uv_packer, 0, 2))
-                    },
-                    config.tile_texture_size,
-                    config.resident_tile_budget
-                );
-                if (launched) {
-                    // Stored now, applied by the commit's apply_visibility().
-                    partitioner.set_render_with_lightmaps(config.render_with_lightmaps);
-                }
-            }
+            // launch_prepare stores render_with_lightmaps now; the commit's
+            // apply_visibility() applies it.
+            launch_prepare();
         }
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip(
@@ -748,6 +906,42 @@ void Lightmap_window::imgui()
                         "of which tiles are loaded; non-resident tiles fall back to white).\n"
                         "OFF: the original meshes render."
                     );
+                }
+                // Per-tile density control: subdivide = 4 half-size cells
+                // (2x nominal texel density), merge = the tile + its 3
+                // siblings into their parent (half density). Overrides
+                // persist in the scene; both trigger an async re-prepare.
+                if ((m_context.lightmap_baker != nullptr) && ImGui::TreeNode("Tiles (subdivide / merge to control density)")) {
+                    const Lightmap_baker::Atlas_layout& tile_layout = m_context.lightmap_baker->get_layout();
+                    for (int tile = 0; tile < tile_layout.get_tile_count(); ++tile) {
+                        const Lightmap_baker::Tile& layout_tile = tile_layout.tiles[static_cast<std::size_t>(tile)];
+                        const float cell = layout_tile.key.cell_size(m_context.lightmap_baker->get_cell_size());
+                        ImGui::PushID(tile);
+                        ImGui::Text(
+                            "(%d, %d, %d)  %.3g m  %.0f texels/m%s%s",
+                            layout_tile.key.level, layout_tile.key.ix, layout_tile.key.iz,
+                            cell,
+                            layout_tile.texels_per_meter * layout_tile.density_scale,
+                            (layout_tile.density_scale < 0.999f) ? " (flexed)" : "",
+                            layout_tile.has_content ? "" : " (empty)"
+                        );
+                        ImGui::SameLine();
+                        if (ImGui::SmallButton("Subdivide")) {
+                            const std::string error = subdivide_tile(layout_tile.key);
+                            if (!error.empty() && (m_context.lightmap_report != nullptr)) {
+                                m_context.lightmap_report->add_warning(Lightmap_report::Stage::layout, "subdivide", error);
+                            }
+                        }
+                        ImGui::SameLine();
+                        if (ImGui::SmallButton("Merge")) {
+                            const std::string error = merge_tile(layout_tile.key);
+                            if (!error.empty() && (m_context.lightmap_report != nullptr)) {
+                                m_context.lightmap_report->add_warning(Lightmap_report::Stage::layout, "merge", error);
+                            }
+                        }
+                        ImGui::PopID();
+                    }
+                    ImGui::TreePop();
                 }
             }
         }

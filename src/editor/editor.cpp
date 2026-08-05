@@ -793,6 +793,7 @@ public:
             }
             if (m_lightmap_baker) {
                 m_lightmap_baker->set_tile_config(lightmap_config.tile_texture_size, lightmap_config.resident_tile_budget);
+                m_lightmap_baker->set_cell_size(lightmap_config.cell_size_m);
                 m_lightmap_baker->set_options(
                     Lightmap_baker::Bake_options{
                         .indirect_bounce = lightmap_config.indirect_bounce,
@@ -822,6 +823,17 @@ public:
             // camera, falling back to the scene's first camera; no camera
             // at all = keep current residency / bake all tiles.
             const std::shared_ptr<Scene_root> lightmap_scene_root = m_app_context.selection->get_active_scene_root();
+            // Scene-persisted quadtree overrides (subdivide/merge) feed the
+            // grid split; a change flows into the tick's layout hash.
+            if (m_lightmap_baker && lightmap_scene_root) {
+                const std::vector<Lightmap_tile_override>& overrides = lightmap_scene_root->get_scene_settings().lightmap_tile_overrides;
+                std::vector<glm::ivec3> override_values;
+                override_values.reserve(overrides.size());
+                for (const Lightmap_tile_override& value : overrides) {
+                    override_values.emplace_back(value.level, value.ix, value.iz);
+                }
+                m_lightmap_baker->set_tile_overrides(override_values);
+            }
             glm::vec3  lightmap_camera_position{0.0f};
             glm::vec3* lightmap_camera_position_ptr{nullptr};
             if (lightmap_scene_root) {

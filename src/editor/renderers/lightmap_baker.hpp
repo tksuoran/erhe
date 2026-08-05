@@ -1,5 +1,7 @@
 #pragma once
 
+#include "renderers/lightmap_grid.hpp"
+
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_geometry/operation/clip_tile_tree.hpp"
 #include "erhe_math/aabb.hpp"
@@ -114,12 +116,19 @@ public:
     class Tile
     {
     public:
-        erhe::math::Aabb world_bounds{};       // union of member instance world AABBs
+        // Quadtree grid identity (world-origin-anchored; stable across
+        // sessions and content edits) and the cell's world XZ box.
+        Lightmap_tile_key key{};
+        erhe::math::Aabb cell_bounds {};       // the grid cell (XZ exact; Y = content extent)
+        erhe::math::Aabb world_bounds{};       // union of member instance world AABBs (camera ranking)
+        // Nominal texel density of this tile: tile_texture_size / cell side.
+        float            texels_per_meter{0.0f};
         // < 1 when the tile's regions had to shrink to fit tile_size (the
-        // last-resort density flex for content denser than the tile
-        // texture allows); effective texel density scales down with it.
+        // down-only density flex for content denser than the tile texture
+        // allows); effective texel density = texels_per_meter * this.
         float            density_scale{1.0f};
         int              slot{-1};             // display atlas slot; -1 = not resident
+        bool             has_content{false};   // at least one region packed into this tile
     };
 
     class Atlas_layout
@@ -221,10 +230,27 @@ public:
 
     void set_sky_lighting(const Sky_lighting& sky) { m_sky = sky; }
 
-    // Tile texture side (power of two, default 2048) and how many tiles may
+    // Tile texture side (power of two, default 1024) and how many tiles may
     // be resident in the display atlas at once (default 9 = a 3x3 slot
     // grid). Changing either takes effect on the next update_layout().
     void set_tile_config(int tile_texture_size, int resident_tile_budget);
+
+    // World-space side of one grid cell at quadtree level 0 (meters); the
+    // uniform grid is anchored at the world origin. Together with the tile
+    // texture size this sets each tile's nominal texel density. Takes
+    // effect on the next update_layout() / prepare.
+    void set_cell_size(float cell_size_m);
+    [[nodiscard]] auto get_cell_size() const -> float { return m_cell_size; }
+
+    // Quadtree leaf overrides (Scene_settings::lightmap_tile_overrides):
+    // each {level, ix, iz} with level != 0 replaces the level-0 cells it
+    // covers. Pushed by the editor tick from the active scene; consumed by
+    // the next layout / split estimate.
+    void set_tile_overrides(const std::vector<glm::ivec3>& overrides);
+    [[nodiscard]] auto get_tile_overrides() const -> const std::vector<glm::ivec3>& { return m_tile_overrides; }
+    // FNV hash of cell size + overrides, mixed into the tick's layout hash
+    // so grid changes relayout (and, with a live partition, re-prepare).
+    [[nodiscard]] auto get_grid_parameters_hash() const -> uint64_t;
 
     // Failure/warning sink (layout density flex, overflow tiles, budget
     // clamps); optional, shown by the Lightmap window.
@@ -276,6 +302,10 @@ public:
     public:
         std::vector<erhe::geometry::operation::Clip_tree_node> kd_nodes;
         std::vector<Estimate_region>                           regions;
+        // Grid tile metadata (key, cell bounds, nominal density), index-
+        // aligned with the kd leaves' tile indices; the partitioner stores
+        // it for per-piece unwrap density and the partitioned relayout.
+        std::vector<Tile>                                      tiles;
         int                                                    tile_count{0};
         [[nodiscard]] auto empty() const -> bool { return regions.empty() || kd_nodes.empty(); }
     };
@@ -550,6 +580,8 @@ private:
     Atlas_layout                                       m_layout;
     int                                                m_tile_size  {s_tile};
     int                                                m_slot_budget{s_default_slot_budget};
+    float                                              m_cell_size  {8.0f};
+    std::vector<glm::ivec3>                            m_tile_overrides;
     Lightmap_report*                                   m_report     {nullptr};
     const Lightmap_partitioner*                        m_partitioner{nullptr};
     bool                                               m_show_tile_bounds{false};
@@ -733,18 +765,35 @@ private:
     // (never re-split from live pieces). Called by update_layout() after
     // its reset preamble.
     auto update_layout_partitioned(Scene_root& scene_root, float texels_per_meter, float min_face_texels) -> bool;
-    // Shared kd-split + per-leaf skyline pack core of update_layout and
-    // compute_tile_split_estimate (Split_set loop, overflow splits,
-    // pack-failure re-splits). regions must have world_area / uv_coverage /
-    // min_facet_uv_extent filled; returns false when nothing packed.
-    auto split_and_pack(
-        std::vector<Instance_region>&&                          regions,
-        float                                                   texels_per_meter,
-        float                                                   min_face_texels,
-        std::vector<Tile>&                                      out_tiles,
-        std::vector<Instance_region>&                           out_packed_regions,
-        std::vector<erhe::geometry::operation::Clip_tree_node>& out_kd_nodes
-    ) -> bool;
+    // Uniform quadtree grid split (world-origin anchored, shared by
+    // update_layout and compute_tile_split_estimate): occupied level-0
+    // cells from the regions' world XZ AABBs, scene leaf overrides
+    // applied, kd tree emitted as two planes per quadtree split so
+    // clip_by_tile_tree consumes it unchanged. tiles is index-aligned with
+    // the kd leaves' tile indices; unoccupied quadrants become tile -1
+    // leaves (no geometry routes there - occupancy is AABB-conservative).
+    class Grid_split
+    {
+    public:
+        std::vector<erhe::geometry::operation::Clip_tree_node>              kd_nodes;
+        std::vector<Tile>                                                   tiles;
+        std::unordered_map<Lightmap_tile_key, int, Lightmap_tile_key_hash>  tile_of_key;
+        [[nodiscard]] auto tile_for_position(glm::vec2 xz, float base_cell_size) const -> int;
+    };
+    auto build_grid_split(const std::vector<erhe::math::Aabb>& region_bounds) -> Grid_split;
+
+    // Skyline-pack one grid tile's regions at the tile's nominal density,
+    // flexing density down only (error + drop below the 1% floor). Fills
+    // rect + uv_scale_offset of the packed regions, appends them to
+    // out_packed_regions and records the flex on the tile.
+    void pack_tile_regions(
+        int                             tile_index,
+        Tile&                           tile,
+        std::vector<Instance_region>&   regions,
+        const std::vector<std::size_t>& members,
+        float                           min_face_texels,
+        std::vector<Instance_region>&   out_packed_regions
+    );
     // Shared tail of both layout paths: display slot grid sizing against
     // the memory budget, m_layout/m_tiles assignment, initial residency and
     // seam vertices.

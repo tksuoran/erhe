@@ -95,13 +95,16 @@ public:
     // (deferred glTF finalize does the same). Lightmap_report already takes
     // worker-thread reports (async UV unwrap failures).
     // Unwrap density: world-space geometry, so the density is the world
-    // density directly (no node-scale folding). Mirror
-    // Make_atlas_operation's per-facet fallback so one degenerate piece
-    // does not abort the whole partition.
+    // density directly (no node-scale folding) - each piece unwraps at ITS
+    // TILE's nominal density (tile_texture_size / cell side), so gutter
+    // and minimum-chart sizing match the density the tile rasterizes at.
+    // Mirror Make_atlas_operation's per-facet fallback so one degenerate
+    // piece does not abort the whole partition.
     static void process_region(
         const Params&                                                 params,
         const erhe::primitive::Build_info&                            build_info,
         const std::vector<erhe::geometry::operation::Clip_tree_node>& tile_tree,
+        const std::vector<float>&                                     tile_texels_per_meter,
         Lightmap_report* const                                        report,
         Region_task&                                                  task
     )
@@ -126,6 +129,13 @@ public:
             if (!piece.geometry) {
                 continue;
             }
+            if ((piece.tile < 0) || (piece.tile >= static_cast<int>(tile_texels_per_meter.size()))) {
+                // Empty-quadrant leaf (tile -1): grid occupancy is AABB-
+                // conservative, so nothing should route here; drop it
+                // rather than bake an unaddressable piece.
+                continue;
+            }
+            const float tile_tpm = tile_texels_per_meter[static_cast<std::size_t>(piece.tile)];
             const std::string piece_subject = fmt::format("{}.tile{}", task.subject, piece.tile);
             std::shared_ptr<erhe::geometry::Geometry> atlas_geometry = std::make_shared<erhe::geometry::Geometry>(piece_subject);
             try {
@@ -137,7 +147,7 @@ public:
                         static_cast<double>(params.hard_angles_deg),
                         params.parameterizer,
                         params.packer,
-                        static_cast<double>(params.texels_per_meter),
+                        static_cast<double>(tile_tpm),
                         static_cast<double>(params.gutter_texels),
                         static_cast<double>(params.min_chart_texels),
                         nullptr
@@ -160,7 +170,7 @@ public:
                         static_cast<double>(params.hard_angles_deg),
                         erhe::geometry::operation::Atlas_parameterizer::per_facet,
                         params.packer,
-                        static_cast<double>(params.texels_per_meter),
+                        static_cast<double>(tile_tpm),
                         static_cast<double>(params.gutter_texels),
                         static_cast<double>(params.min_chart_texels),
                         nullptr
@@ -196,6 +206,8 @@ public:
     int                                                     resident_tile_budget{0};
     std::vector<erhe::geometry::operation::Clip_tree_node>  tile_tree;
     int                                                     tile_count{0};
+    std::vector<Lightmap_baker::Tile>                       tile_descs;
+    std::vector<float>                                      tile_texels_per_meter; // index-aligned with tile_descs
     std::optional<erhe::primitive::Build_info>              build_info; // Buffer_info holds references - no default construction
     std::vector<Original_entry>                             entries;    // skeletons; piece nodes/meshes filled at commit
     std::vector<Region_task>                                tasks;
@@ -311,6 +323,11 @@ auto Lightmap_partitioner::request_prepare(
     job->resident_tile_budget = resident_tile_budget;
     job->tile_tree            = split.kd_nodes;
     job->tile_count           = split.tile_count;
+    job->tile_descs           = split.tiles;
+    job->tile_texels_per_meter.reserve(split.tiles.size());
+    for (const Lightmap_baker::Tile& tile : split.tiles) {
+        job->tile_texels_per_meter.push_back(tile.texels_per_meter);
+    }
     job->build_info.emplace(
         erhe::primitive::Build_info{
             .primitive_types = {
@@ -385,7 +402,7 @@ auto Lightmap_partitioner::request_prepare(
         // Synchronous fallback: run inline and commit before returning.
         for (Prepare_job::Region_task& task : raw_job->tasks) {
             if (!raw_job->cancel_requested.load(std::memory_order_relaxed)) {
-                Prepare_job::process_region(raw_job->params, *raw_job->build_info, raw_job->tile_tree, report, task);
+                Prepare_job::process_region(raw_job->params, *raw_job->build_info, raw_job->tile_tree, raw_job->tile_texels_per_meter, report, task);
             }
             raw_job->regions_done.fetch_add(1, std::memory_order_relaxed);
         }
@@ -397,7 +414,7 @@ auto Lightmap_partitioner::request_prepare(
         std::size_t{0}, raw_job->tasks.size(), std::size_t{1},
         [raw_job, report](const std::size_t i) {
             if (!raw_job->cancel_requested.load(std::memory_order_relaxed)) {
-                Prepare_job::process_region(raw_job->params, *raw_job->build_info, raw_job->tile_tree, report, raw_job->tasks[i]);
+                Prepare_job::process_region(raw_job->params, *raw_job->build_info, raw_job->tile_tree, raw_job->tile_texels_per_meter, report, raw_job->tasks[i]);
             }
             raw_job->regions_done.fetch_add(1, std::memory_order_relaxed);
         }
@@ -612,6 +629,7 @@ void Lightmap_partitioner::commit_prepare()
     m_last_params = job->params;
     m_tile_tree   = std::move(job->tile_tree);
     m_tile_count  = job->tile_count;
+    m_tile_descs  = std::move(job->tile_descs);
     apply_visibility();
 
     // Switch the baker layout over to the pieces (the partitioned branch of
@@ -693,6 +711,7 @@ void Lightmap_partitioner::clear_store()
     m_group_node.reset();
     m_tile_tree.clear();
     m_tile_count = 0;
+    m_tile_descs.clear();
     m_scene_root = nullptr;
 }
 
@@ -825,6 +844,7 @@ void Lightmap_partitioner::on_scene_closed(const Scene_root* scene_root)
     m_group_node.reset();
     m_tile_tree.clear();
     m_tile_count = 0;
+    m_tile_descs.clear();
     m_scene_root = nullptr;
 }
 

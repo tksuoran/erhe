@@ -52,6 +52,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <unordered_set>
 
 namespace editor {
 
@@ -149,6 +150,29 @@ void compute_region_uv_metrics(erhe::geometry::Geometry& geometry, Lightmap_bake
         side = std::max(side, std::min(bound, 4.0f * side));
     }
     return std::max(side, 4.0f);
+}
+
+// World-space AABB of a region's primitive (instance transform applied);
+// degenerate/missing bounds collapse to the node origin. Grid occupancy and
+// camera ranking both use this.
+[[nodiscard]] auto region_world_bounds(const Lightmap_baker::Instance_region& region) -> erhe::math::Aabb
+{
+    erhe::math::Aabb bounds{};
+    const erhe::scene::Node* const node = region.mesh ? region.mesh->get_node() : nullptr;
+    const glm::mat4 world_from_node = (node != nullptr) ? node->world_from_node() : glm::mat4{1.0f};
+    erhe::math::Aabb local_bounds{};
+    if (region.mesh) {
+        const std::vector<erhe::scene::Mesh_primitive>& primitives = region.mesh->get_primitives();
+        if ((region.primitive_index < primitives.size()) && primitives[region.primitive_index].primitive) {
+            local_bounds = primitives[region.primitive_index].primitive->get_bounding_box();
+        }
+    }
+    if (local_bounds.is_valid()) {
+        bounds = local_bounds.transformed_by(world_from_node);
+    } else {
+        bounds.include(glm::vec3{world_from_node[3]});
+    }
+    return bounds;
 }
 
 // Nominal chart coverage assumed by the pre-unwrap split estimate
@@ -2131,6 +2155,26 @@ void Lightmap_baker::set_tile_config(const int tile_texture_size, const int resi
     m_slot_budget = std::max(1, resident_tile_budget);
 }
 
+void Lightmap_baker::set_cell_size(const float cell_size_m)
+{
+    m_cell_size = std::clamp(cell_size_m, 0.25f, 1024.0f);
+}
+
+void Lightmap_baker::set_tile_overrides(const std::vector<glm::ivec3>& overrides)
+{
+    m_tile_overrides = overrides;
+}
+
+auto Lightmap_baker::get_grid_parameters_hash() const -> uint64_t
+{
+    uint64_t hash = fnv1a64(&m_cell_size, sizeof(float));
+    hash = fnv1a64(&m_tile_size, sizeof(int), hash);
+    for (const glm::ivec3& value : m_tile_overrides) {
+        hash = fnv1a64(&value, sizeof(glm::ivec3), hash);
+    }
+    return hash;
+}
+
 auto Lightmap_baker::get_sweep_count() const -> uint32_t
 {
     // Minimum over the active, content-carrying tiles: every active valid
@@ -2241,10 +2285,39 @@ auto Lightmap_baker::update_layout(Scene_root& scene_root, const float texels_pe
         return false;
     }
 
-    std::vector<Tile>                                       tiles;
-    std::vector<Instance_region>                            packed_regions;
-    std::vector<erhe::geometry::operation::Clip_tree_node>  kd_nodes;
-    if (!split_and_pack(std::move(regions), texels_per_meter, min_face_texels, tiles, packed_regions, kd_nodes)) {
+    // Grid split from the regions' world bounds, one region bucket per
+    // tile (a region belongs to the tile containing its bounds center -
+    // unpartitioned regions never span tiles texel-wise, only their world
+    // bounds may overhang), then a per-tile pack at each tile's nominal
+    // density.
+    std::vector<erhe::math::Aabb> bounds;
+    bounds.reserve(regions.size());
+    for (const Instance_region& region : regions) {
+        bounds.push_back(region_world_bounds(region));
+    }
+    Grid_split grid = build_grid_split(bounds);
+    if (grid.tiles.empty()) {
+        if (m_report != nullptr) {
+            m_report->add_error(Lightmap_report::Stage::layout, "atlas layout", "grid split produced no tiles");
+        }
+        m_seam_vertices.clear();
+        return false;
+    }
+    std::vector<std::vector<std::size_t>> buckets(grid.tiles.size());
+    for (std::size_t i = 0; i < regions.size(); ++i) {
+        const glm::vec3 center = bounds[i].is_valid() ? bounds[i].center() : glm::vec3{0.0f};
+        const int tile = grid.tile_for_position(glm::vec2{center.x, center.z}, std::max(m_cell_size, 0.01f));
+        if (tile >= 0) {
+            buckets[static_cast<std::size_t>(tile)].push_back(i);
+            grid.tiles[static_cast<std::size_t>(tile)].world_bounds.include(bounds[i]);
+        }
+    }
+    std::vector<Instance_region> packed_regions;
+    packed_regions.reserve(regions.size());
+    for (std::size_t tile = 0; tile < grid.tiles.size(); ++tile) {
+        pack_tile_regions(static_cast<int>(tile), grid.tiles[tile], regions, buckets[tile], min_face_texels, packed_regions);
+    }
+    if (packed_regions.empty()) {
         if (m_report != nullptr) {
             m_report->add_error(Lightmap_report::Stage::layout, "atlas layout", "no regions could be packed");
         }
@@ -2252,284 +2325,389 @@ auto Lightmap_baker::update_layout(Scene_root& scene_root, const float texels_pe
         return false;
     }
 
-    return finalize_layout(std::move(tiles), std::move(packed_regions), std::move(kd_nodes), false);
+    return finalize_layout(std::move(grid.tiles), std::move(packed_regions), std::move(grid.kd_nodes), false);
 }
 
-auto Lightmap_baker::split_and_pack(
-    std::vector<Instance_region>&&                          regions,
-    const float                                             texels_per_meter,
-    const float                                             min_face_texels,
-    std::vector<Tile>&                                      out_tiles,
-    std::vector<Instance_region>&                           out_packed_regions,
-    std::vector<erhe::geometry::operation::Clip_tree_node>& out_kd_nodes
-) -> bool
+auto Lightmap_baker::Grid_split::tile_for_position(const glm::vec2 xz, const float base_cell_size) const -> int
 {
-    // ---- Spatial partition (adaptive world-space XZ kd-split) ----
-    // Every leaf of the split becomes one tile of m_tile_size^2 texels;
-    // tiles are unbounded in count, so layout always succeeds regardless of
-    // world extents or density (requirement: bounded memory, no layout
-    // failure). Density flexes down per tile only as the last resort.
-    const int   tile_size       = m_tile_size;
-    const int   max_region_side = tile_size - 2 * s_padding;
-    // Skyline packing waste headroom for the fit estimate.
-    const float fill_factor     = 0.85f;
-
-    // Per-region placement inputs: world AABB (instance transform applied)
-    // and the desired texel side (desired_region_side above).
-    class Placement
-    {
-    public:
-        erhe::math::Aabb bounds{};
-        glm::vec2        center{0.0f, 0.0f}; // world XZ
-        float            desired_side{4.0f};
-    };
-    std::vector<Placement> placements(regions.size());
-    for (std::size_t i = 0; i < regions.size(); ++i) {
-        const Instance_region& region    = regions[i];
-        Placement&             placement = placements[i];
-        placement.desired_side = desired_region_side(region, texels_per_meter, min_face_texels);
-        const erhe::scene::Node* const node = region.mesh ? region.mesh->get_node() : nullptr;
-        const glm::mat4 world_from_node = (node != nullptr) ? node->world_from_node() : glm::mat4{1.0f};
-        erhe::math::Aabb local_bounds{};
-        const std::vector<erhe::scene::Mesh_primitive>& primitives = region.mesh->get_primitives();
-        if ((region.primitive_index < primitives.size()) && primitives[region.primitive_index].primitive) {
-            local_bounds = primitives[region.primitive_index].primitive->get_bounding_box();
-        }
-        if (local_bounds.is_valid()) {
-            placement.bounds = local_bounds.transformed_by(world_from_node);
-        } else {
-            placement.bounds.include(glm::vec3{world_from_node[3]});
-        }
-        const glm::vec3 center = placement.bounds.center();
-        placement.center = glm::vec2{center.x, center.z};
+    // Finest level first so a subdivided child wins over the cell it split.
+    int min_level = 0;
+    int max_level = 0;
+    for (const auto& [key, tile] : tile_of_key) {
+        min_level = std::min(min_level, key.level);
+        max_level = std::max(max_level, key.level);
     }
-
-    // Fit estimate: padded region areas against the tile with packing-waste
-    // headroom. Sides are pre-clamped to the tile (the density flex below
-    // guarantees oversized singles fit), so a set can always shrink to fit
-    // by splitting.
-    const auto cost_of = [max_region_side](const float desired_side) -> double {
-        const double side = std::min(static_cast<double>(desired_side), static_cast<double>(max_region_side)) + 2.0 * static_cast<double>(s_padding);
-        return side * side;
-    };
-    const double tile_capacity = static_cast<double>(fill_factor) * static_cast<double>(tile_size) * static_cast<double>(tile_size);
-
-    // Recursive area-weighted median split (longest XZ axis of the member
-    // centers). Guaranteed to terminate: single regions always leaf, and
-    // co-located sets that cannot split spatially split by count into
-    // overlapping "overflow tiles".
-    // Each split is also recorded as an explicit kd tree node
-    // (Atlas_layout::kd_nodes) so the world-space mesh clipper can cut
-    // against the same partition. A member set travels with the tree node
-    // it belongs to; leaves get their tile index assigned by the packing
-    // loop below (which can re-split, extending the tree).
-    class Split_set
-    {
-    public:
-        int                      node{0}; // index into kd_nodes
-        std::vector<std::size_t> members;
-    };
-    std::vector<erhe::geometry::operation::Clip_tree_node> kd_nodes;
-    const auto make_kd_children = [&kd_nodes](const int parent) -> std::pair<int, int> {
-        const int child_0 = static_cast<int>(kd_nodes.size());
-        kd_nodes.emplace_back();
-        kd_nodes.emplace_back();
-        kd_nodes[static_cast<std::size_t>(parent)].child[0] = child_0;
-        kd_nodes[static_cast<std::size_t>(parent)].child[1] = child_0 + 1;
-        return {child_0, child_0 + 1};
-    };
-    std::vector<Split_set> leaves;
-    {
-        std::vector<Split_set> stack;
-        {
-            std::vector<std::size_t> all(regions.size());
-            for (std::size_t i = 0; i < regions.size(); ++i) {
-                all[i] = i;
-            }
-            kd_nodes.emplace_back(); // root
-            stack.push_back(Split_set{0, std::move(all)});
-        }
-        while (!stack.empty()) {
-            Split_set entry = std::move(stack.back());
-            stack.pop_back();
-            std::vector<std::size_t>& node = entry.members;
-            double    total_cost = 0.0;
-            glm::vec2 center_min{ std::numeric_limits<float>::max(),  std::numeric_limits<float>::max()};
-            glm::vec2 center_max{-std::numeric_limits<float>::max(), -std::numeric_limits<float>::max()};
-            for (const std::size_t i : node) {
-                total_cost += cost_of(placements[i].desired_side);
-                center_min  = glm::min(center_min, placements[i].center);
-                center_max  = glm::max(center_max, placements[i].center);
-            }
-            if ((node.size() <= 1) || (total_cost <= tile_capacity)) {
-                leaves.push_back(std::move(entry));
-                continue;
-            }
-            const glm::vec2 spread = center_max - center_min;
-            if (std::max(spread.x, spread.y) <= 1.0e-4f) {
-                if (m_report != nullptr) {
-                    m_report->add_warning(
-                        Lightmap_report::Stage::layout,
-                        "spatial partition",
-                        fmt::format("{} co-located regions exceed one tile; split into overflow tiles at the same location", node.size())
-                    );
-                }
-                std::sort(node.begin(), node.end(), [&placements](const std::size_t l, const std::size_t r) {
-                    return placements[l].desired_side > placements[r].desired_side;
-                });
-                std::vector<std::size_t> half_a;
-                std::vector<std::size_t> half_b;
-                for (std::size_t k = 0; k < node.size(); ++k) {
-                    (((k & 1u) == 0u) ? half_a : half_b).push_back(node[k]);
-                }
-                kd_nodes[static_cast<std::size_t>(entry.node)].axis = -1; // overflow: no spatial plane
-                const auto [child_0, child_1] = make_kd_children(entry.node);
-                stack.push_back(Split_set{child_0, std::move(half_a)});
-                stack.push_back(Split_set{child_1, std::move(half_b)});
-                continue;
-            }
-            const int axis = (spread.x >= spread.y) ? 0 : 1;
-            std::sort(node.begin(), node.end(), [&placements, axis](const std::size_t l, const std::size_t r) {
-                return placements[l].center[axis] < placements[r].center[axis];
-            });
-            double      cumulative = 0.0;
-            std::size_t split      = node.size() / 2;
-            for (std::size_t k = 0; k < node.size(); ++k) {
-                cumulative += cost_of(placements[node[k]].desired_side);
-                if (cumulative * 2.0 >= total_cost) {
-                    split = k + 1;
-                    break;
-                }
-            }
-            split = std::clamp<std::size_t>(split, 1, node.size() - 1);
-            {
-                // Clip plane between the two center values adjacent to the
-                // split index; placement axis 1 is world Z (kd node axis 2).
-                erhe::geometry::operation::Clip_tree_node& kd_node = kd_nodes[static_cast<std::size_t>(entry.node)];
-                kd_node.axis  = (axis == 0) ? 0 : 2;
-                kd_node.value = 0.5f * (placements[node[split - 1]].center[axis] + placements[node[split]].center[axis]);
-            }
-            const auto [child_0, child_1] = make_kd_children(entry.node);
-            stack.push_back(Split_set{child_0, std::vector<std::size_t>(node.begin(), node.begin() + static_cast<std::ptrdiff_t>(split))});
-            stack.push_back(Split_set{child_1, std::vector<std::size_t>(node.begin() + static_cast<std::ptrdiff_t>(split), node.end())});
+    for (int level = max_level; level >= min_level; --level) {
+        const Lightmap_tile_key key = Lightmap_tile_key::for_position(base_cell_size, level, xz.x, xz.y);
+        const auto it = tile_of_key.find(key);
+        if (it != tile_of_key.end()) {
+            return it->second;
         }
     }
+    return -1;
+}
 
-    // ---- Pack each leaf into one tile (skyline, big regions first) ----
-    std::vector<Tile>            tiles;
-    std::vector<Instance_region> packed_regions;
-    packed_regions.reserve(regions.size());
-    std::vector<Split_set> pending = std::move(leaves);
-    while (!pending.empty()) {
-        Split_set entry = std::move(pending.back());
-        pending.pop_back();
-        std::vector<std::size_t>& members = entry.members;
-        if (members.empty()) {
+auto Lightmap_baker::build_grid_split(const std::vector<erhe::math::Aabb>& region_bounds) -> Grid_split
+{
+    // ---- Uniform quadtree grid (world-origin anchored) ----
+    // Level-0 cells of m_cell_size meters cover the content; scene leaf
+    // overrides (level != 0) subdivide or merge cells. Tile boundaries
+    // depend only on the grid parameters and the overrides - never on the
+    // content - so they are stable across edits and sessions, and each
+    // tile's nominal texel density is m_tile_size / its cell side.
+    Grid_split result;
+    const float base = std::max(m_cell_size, 0.01f);
+
+    // 1. Occupied level-0 cells, AABB-conservative: a clipped fragment can
+    //    land in any cell its source's bounds overlap. Degenerate bounds
+    //    occupy their center cell. A pathological span (a sky sphere
+    //    flagged lightmapped) is clamped with a warning instead of
+    //    emitting millions of cells.
+    std::unordered_set<Lightmap_tile_key, Lightmap_tile_key_hash> occupied;
+    erhe::math::Aabb content_bounds{};
+    constexpr int max_cells_per_region_axis = 256;
+    for (const erhe::math::Aabb& bounds : region_bounds) {
+        if (!bounds.is_valid()) {
             continue;
         }
-        std::sort(members.begin(), members.end(), [&placements](const std::size_t l, const std::size_t r) {
-            return placements[l].desired_side > placements[r].desired_side;
-        });
-
-        // Density flex (last resort): a region wider than the tile shrinks
-        // every side in this tile by the same factor, keeping relative
-        // densities uniform within the tile.
-        float density_scale = 1.0f;
-        for (const std::size_t i : members) {
-            if (placements[i].desired_side > static_cast<float>(max_region_side)) {
-                density_scale = std::min(density_scale, static_cast<float>(max_region_side) / placements[i].desired_side);
+        content_bounds.include(bounds);
+        int ix0 = static_cast<int>(std::floor(bounds.min.x / base));
+        int ix1 = static_cast<int>(std::floor(bounds.max.x / base));
+        int iz0 = static_cast<int>(std::floor(bounds.min.z / base));
+        int iz1 = static_cast<int>(std::floor(bounds.max.z / base));
+        if (((ix1 - ix0) > max_cells_per_region_axis) || ((iz1 - iz0) > max_cells_per_region_axis)) {
+            if (m_report != nullptr) {
+                m_report->add_warning(
+                    Lightmap_report::Stage::layout,
+                    "grid split",
+                    fmt::format(
+                        "a region spans {}x{} cells of {} m - clamped to {} cells per axis around its center (raise cell_size_m for content this large)",
+                        ix1 - ix0 + 1, iz1 - iz0 + 1, base, max_cells_per_region_axis
+                    )
+                );
+            }
+            const glm::vec3 center = bounds.center();
+            const int cx = static_cast<int>(std::floor(center.x / base));
+            const int cz = static_cast<int>(std::floor(center.z / base));
+            ix0 = std::max(ix0, cx - max_cells_per_region_axis / 2);
+            ix1 = std::min(ix1, cx + max_cells_per_region_axis / 2);
+            iz0 = std::max(iz0, cz - max_cells_per_region_axis / 2);
+            iz1 = std::min(iz1, cz + max_cells_per_region_axis / 2);
+        }
+        for (int iz = iz0; iz <= iz1; ++iz) {
+            for (int ix = ix0; ix <= ix1; ++ix) {
+                occupied.insert(Lightmap_tile_key{0, ix, iz});
             }
         }
+    }
+    if (occupied.empty()) {
+        return result;
+    }
 
-        for (;;) {
-            rbp::SkylineBinPack packer;
-            packer.Init(tile_size, tile_size, false);
-            std::vector<Instance_region> tile_regions;
-            tile_regions.reserve(members.size());
-            bool failed = false;
-            for (const std::size_t i : members) {
-                const int side = std::clamp(static_cast<int>(std::ceil(placements[i].desired_side * density_scale)), 4, max_region_side);
-                const rbp::Rect rect = packer.Insert(side + 2 * s_padding, side + 2 * s_padding, rbp::SkylineBinPack::LevelBottomLeft);
-                if ((rect.width == 0) || (rect.height == 0)) {
-                    failed = true;
+    // 2. Apply overrides: stored non-default leaves replace the level-0
+    //    cells they cover. Tolerant descent - a base cell with subdivide
+    //    leaves below it recurses; quadrants without a stored leaf become
+    //    implicit leaves at their own level, so partially stored data
+    //    degrades gracefully instead of failing.
+    std::unordered_set<Lightmap_tile_key, Lightmap_tile_key_hash> stored;
+    std::unordered_set<Lightmap_tile_key, Lightmap_tile_key_hash> stored_interior; // strict ancestors of stored subdivide leaves
+    int min_override_level = 0;
+    for (const glm::ivec3& value : m_tile_overrides) {
+        const Lightmap_tile_key key{value};
+        if (key.level == 0) {
+            continue; // level 0 is the default; never stored
+        }
+        stored.insert(key);
+        min_override_level = std::min(min_override_level, key.level);
+        if (key.level > 0) {
+            Lightmap_tile_key ancestor = key.parent();
+            while (ancestor.level >= 0) {
+                stored_interior.insert(ancestor);
+                if (ancestor.level == 0) {
                     break;
                 }
-                Instance_region region = regions[i];
-                region.x      = rect.x + s_padding;
-                region.y      = rect.y + s_padding;
-                region.width  = side;
-                region.height = side;
-                region.tile   = static_cast<int>(tiles.size());
-                const float inv_tile = 1.0f / static_cast<float>(tile_size);
-                region.uv_scale_offset = glm::vec4{
-                    static_cast<float>(region.width)  * inv_tile,
-                    static_cast<float>(region.height) * inv_tile,
-                    static_cast<float>(region.x)      * inv_tile,
-                    static_cast<float>(region.y)      * inv_tile
-                };
-                tile_regions.push_back(std::move(region));
+                ancestor = ancestor.parent();
             }
-            if (!failed) {
-                kd_nodes[static_cast<std::size_t>(entry.node)].tile = static_cast<int>(tiles.size());
-                Tile tile;
-                tile.density_scale = density_scale;
-                for (const std::size_t i : members) {
-                    tile.world_bounds.include(placements[i].bounds);
-                }
-                for (Instance_region& region : tile_regions) {
-                    packed_regions.push_back(std::move(region));
-                }
-                if ((density_scale < 0.999f) && (m_report != nullptr)) {
-                    m_report->add_warning(
-                        Lightmap_report::Stage::layout,
-                        "density flex",
-                        fmt::format(
-                            "tile {}: texel density scaled to {:.0f}% of {} texels/m to fit {}^2 (effective chart gutters shrink with it - possible cross-chart leaks)",
-                            tiles.size(), 100.0f * density_scale, texels_per_meter, tile_size
-                        )
-                    );
-                }
-                tiles.push_back(std::move(tile));
-                break;
-            }
-            if (members.size() >= 2) {
-                // The fill-factor estimate was too optimistic for this set;
-                // split it once more via the pending stack (recorded in the
-                // kd tree: spatial when the halves separate on X, overflow
-                // when the centers coincide).
-                std::sort(members.begin(), members.end(), [&placements](const std::size_t l, const std::size_t r) {
-                    return placements[l].center.x < placements[r].center.x;
-                });
-                const std::size_t half = members.size() / 2;
-                {
-                    erhe::geometry::operation::Clip_tree_node& kd_node = kd_nodes[static_cast<std::size_t>(entry.node)];
-                    const float center_lo = placements[members[half - 1]].center.x;
-                    const float center_hi = placements[members[half]].center.x;
-                    if ((center_hi - center_lo) > 1.0e-4f) {
-                        kd_node.axis  = 0;
-                        kd_node.value = 0.5f * (center_lo + center_hi);
-                    } else {
-                        kd_node.axis = -1;
-                    }
-                    kd_node.tile = -1;
-                }
-                const auto [child_0, child_1] = make_kd_children(entry.node);
-                pending.push_back(Split_set{child_0, std::vector<std::size_t>(members.begin(), members.begin() + static_cast<std::ptrdiff_t>(half))});
-                pending.push_back(Split_set{child_1, std::vector<std::size_t>(members.begin() + static_cast<std::ptrdiff_t>(half), members.end())});
-                break;
-            }
-            // A single region that still failed (padding rounding): shrink.
-            density_scale *= 0.95f;
         }
     }
 
-    if (packed_regions.empty() || tiles.empty()) {
-        return false;
+    std::vector<Lightmap_tile_key> leaves;
+    std::unordered_set<Lightmap_tile_key, Lightmap_tile_key_hash> emitted;
+    const auto emit_leaf = [&leaves, &emitted](const Lightmap_tile_key& key) {
+        if (emitted.insert(key).second) {
+            leaves.push_back(key);
+        }
+    };
+    const std::function<void(const Lightmap_tile_key&)> descend = [&](const Lightmap_tile_key& key) {
+        if ((key.level > 0) && stored.contains(key)) {
+            emit_leaf(key);
+            return;
+        }
+        if (stored_interior.contains(key)) {
+            for (const Lightmap_tile_key& child : key.children()) {
+                descend(child);
+            }
+            return;
+        }
+        emit_leaf(key);
+    };
+    for (const Lightmap_tile_key& cell : occupied) {
+        // Merged ancestor wins (coarsest stored ancestor).
+        bool merged = false;
+        for (int level = min_override_level; level < 0; ++level) {
+            const int shift = 0 - level;
+            const Lightmap_tile_key ancestor{level, cell.ix >> shift, cell.iz >> shift};
+            if (stored.contains(ancestor)) {
+                emit_leaf(ancestor);
+                merged = true;
+                break;
+            }
+        }
+        if (!merged) {
+            descend(cell);
+        }
     }
-    out_tiles          = std::move(tiles);
-    out_packed_regions = std::move(packed_regions);
-    out_kd_nodes       = std::move(kd_nodes);
-    return true;
+    std::sort(leaves.begin(), leaves.end());
+
+    // 3. Tiles, index-aligned with the kd leaf emission below.
+    result.tiles.reserve(leaves.size());
+    for (const Lightmap_tile_key& key : leaves) {
+        Tile tile;
+        tile.key              = key;
+        tile.texels_per_meter = static_cast<float>(m_tile_size) / key.cell_size(base);
+        const glm::vec2 lo = key.min_corner(base);
+        const glm::vec2 hi = key.max_corner(base);
+        tile.cell_bounds.include(glm::vec3{lo.x, content_bounds.min.y, lo.y});
+        tile.cell_bounds.include(glm::vec3{hi.x, content_bounds.max.y, hi.y});
+        result.tile_of_key.emplace(key, static_cast<int>(result.tiles.size()));
+        result.tiles.push_back(std::move(tile));
+    }
+
+    // 4. kd tree over the leaf set, each quadtree split emitted as an X
+    //    plane + two Z planes so clip_by_tile_tree cuts against the same
+    //    partition unchanged. A world-origin-anchored quadtree has NO
+    //    aligned cell spanning the origin (cells with ix >= 0 and ix < 0
+    //    never share an aligned ancestor), so the tree starts with a fixed
+    //    origin cross - x = 0, then z = 0 per side - and one aligned
+    //    subtree per occupied signed quadrant. Quadrants with no leaf
+    //    below become tile -1 leaves (occupancy is AABB-conservative, so
+    //    no fragment routes there; the partitioner drops any that do).
+    std::vector<erhe::geometry::operation::Clip_tree_node>& kd_nodes = result.kd_nodes;
+    const auto ancestor_at = [](const Lightmap_tile_key& key, const int level) -> Lightmap_tile_key {
+        const int shift = key.level - level;
+        return Lightmap_tile_key{level, key.ix >> shift, key.iz >> shift};
+    };
+    const auto emit_empty_leaf = [&kd_nodes]() -> int {
+        const int node_index = static_cast<int>(kd_nodes.size());
+        kd_nodes.emplace_back();
+        kd_nodes[static_cast<std::size_t>(node_index)].tile = -1;
+        return node_index;
+    };
+    // One signed origin quadrant's leaves (all same XZ signs): find the
+    // smallest aligned ancestor cell containing them all (converges within
+    // a quadrant: same-sign indices shift toward 0 / -1), then emit the
+    // quadtree below it.
+    const auto emit_subtree = [&](const std::vector<Lightmap_tile_key>& subtree_leaves) -> int {
+        if (subtree_leaves.empty()) {
+            return emit_empty_leaf();
+        }
+        int root_level = 0;
+        for (const Lightmap_tile_key& key : subtree_leaves) {
+            root_level = std::min(root_level, key.level);
+        }
+        while (true) {
+            const Lightmap_tile_key root = ancestor_at(subtree_leaves.front(), root_level);
+            bool contains_all = true;
+            for (const Lightmap_tile_key& key : subtree_leaves) {
+                if (ancestor_at(key, root_level) != root) {
+                    contains_all = false;
+                    break;
+                }
+            }
+            if (contains_all) {
+                break;
+            }
+            --root_level;
+        }
+        std::unordered_set<Lightmap_tile_key, Lightmap_tile_key_hash> has_leaf_below;
+        for (const Lightmap_tile_key& key : subtree_leaves) {
+            for (int level = key.level - 1; level >= root_level; --level) {
+                has_leaf_below.insert(ancestor_at(key, level));
+            }
+        }
+        const std::function<int(const Lightmap_tile_key&)> emit_node = [&](const Lightmap_tile_key& key) -> int {
+            const int node_index = static_cast<int>(kd_nodes.size());
+            kd_nodes.emplace_back();
+            const auto leaf_it = result.tile_of_key.find(key);
+            if (leaf_it != result.tile_of_key.end()) {
+                kd_nodes[static_cast<std::size_t>(node_index)].tile = leaf_it->second;
+                return node_index;
+            }
+            if (!has_leaf_below.contains(key)) {
+                kd_nodes[static_cast<std::size_t>(node_index)].tile = -1; // empty quadrant
+                return node_index;
+            }
+            const float s      = key.cell_size(base);
+            const float mid_x  = (static_cast<float>(key.ix) + 0.5f) * s;
+            const float mid_z  = (static_cast<float>(key.iz) + 0.5f) * s;
+            const std::array<Lightmap_tile_key, 4> quads = key.children(); // {2ix,2iz},{2ix+1,2iz},{2ix,2iz+1},{2ix+1,2iz+1}
+            kd_nodes[static_cast<std::size_t>(node_index)].axis  = 0;
+            kd_nodes[static_cast<std::size_t>(node_index)].value = mid_x;
+            const auto emit_z_pair = [&](const Lightmap_tile_key& low_z, const Lightmap_tile_key& high_z) -> int {
+                const int z_index = static_cast<int>(kd_nodes.size());
+                kd_nodes.emplace_back();
+                kd_nodes[static_cast<std::size_t>(z_index)].axis  = 2;
+                kd_nodes[static_cast<std::size_t>(z_index)].value = mid_z;
+                const int child_0 = emit_node(low_z);
+                const int child_1 = emit_node(high_z);
+                kd_nodes[static_cast<std::size_t>(z_index)].child[0] = child_0;
+                kd_nodes[static_cast<std::size_t>(z_index)].child[1] = child_1;
+                return z_index;
+            };
+            const int west = emit_z_pair(quads[0], quads[2]);
+            const int east = emit_z_pair(quads[1], quads[3]);
+            kd_nodes[static_cast<std::size_t>(node_index)].child[0] = west;
+            kd_nodes[static_cast<std::size_t>(node_index)].child[1] = east;
+            return node_index;
+        };
+        return emit_node(ancestor_at(subtree_leaves.front(), root_level));
+    };
+
+    // Partition the leaves by origin quadrant. A cell never straddles the
+    // origin, so the sign of its indices is the sign of its extent.
+    std::array<std::vector<Lightmap_tile_key>, 4> quadrant_leaves; // [west/south, east/south, west/north, east/north]
+    for (const Lightmap_tile_key& key : leaves) {
+        const std::size_t quadrant = ((key.ix >= 0) ? 1u : 0u) + ((key.iz >= 0) ? 2u : 0u);
+        quadrant_leaves[quadrant].push_back(key);
+    }
+    int occupied_quadrants = 0;
+    std::size_t single_quadrant = 0;
+    for (std::size_t q = 0; q < 4; ++q) {
+        if (!quadrant_leaves[q].empty()) {
+            ++occupied_quadrants;
+            single_quadrant = q;
+        }
+    }
+    if (occupied_quadrants == 1) {
+        emit_subtree(quadrant_leaves[single_quadrant]);
+        return result;
+    }
+    // Origin cross: root splits X at 0; each side splits Z at 0.
+    kd_nodes.emplace_back();
+    kd_nodes[0].axis  = 0;
+    kd_nodes[0].value = 0.0f;
+    const auto emit_origin_z = [&](const std::vector<Lightmap_tile_key>& south, const std::vector<Lightmap_tile_key>& north) -> int {
+        const int z_index = static_cast<int>(kd_nodes.size());
+        kd_nodes.emplace_back();
+        kd_nodes[static_cast<std::size_t>(z_index)].axis  = 2;
+        kd_nodes[static_cast<std::size_t>(z_index)].value = 0.0f;
+        const int child_0 = emit_subtree(south);
+        const int child_1 = emit_subtree(north);
+        kd_nodes[static_cast<std::size_t>(z_index)].child[0] = child_0;
+        kd_nodes[static_cast<std::size_t>(z_index)].child[1] = child_1;
+        return z_index;
+    };
+    const int west = emit_origin_z(quadrant_leaves[0], quadrant_leaves[2]);
+    const int east = emit_origin_z(quadrant_leaves[1], quadrant_leaves[3]);
+    kd_nodes[0].child[0] = west;
+    kd_nodes[0].child[1] = east;
+    return result;
+}
+
+void Lightmap_baker::pack_tile_regions(
+    const int                       tile_index,
+    Tile&                           tile,
+    std::vector<Instance_region>&   regions,
+    const std::vector<std::size_t>& members,
+    const float                     min_face_texels,
+    std::vector<Instance_region>&   out_packed_regions
+)
+{
+    if (members.empty()) {
+        return;
+    }
+    const int   tile_size       = m_tile_size;
+    const int   max_region_side = tile_size - 2 * s_padding;
+    const float tile_tpm        = tile.texels_per_meter;
+
+    std::vector<std::size_t> order = members;
+    const auto desired_side_of = [&regions, tile_tpm, min_face_texels](const std::size_t i) -> float {
+        return desired_region_side(regions[i], tile_tpm, min_face_texels);
+    };
+    std::sort(order.begin(), order.end(), [&desired_side_of](const std::size_t l, const std::size_t r) {
+        return desired_side_of(l) > desired_side_of(r);
+    });
+
+    // Down-only density flex: the tile's nominal density (texels_per_meter)
+    // is the ceiling; content that does not fit shrinks uniformly. Below
+    // the 1% floor the remaining regions are dropped with an error - the
+    // fix is subdividing the tile (or a larger tile_texture_size).
+    float density_scale = 1.0f;
+    for (const std::size_t i : order) {
+        const float side = desired_side_of(i);
+        if (side > static_cast<float>(max_region_side)) {
+            density_scale = std::min(density_scale, static_cast<float>(max_region_side) / side);
+        }
+    }
+    for (;;) {
+        rbp::SkylineBinPack packer;
+        packer.Init(tile_size, tile_size, false);
+        std::vector<Instance_region> tile_regions;
+        tile_regions.reserve(order.size());
+        std::size_t packed_count = 0;
+        for (const std::size_t i : order) {
+            const int side = std::clamp(static_cast<int>(std::ceil(desired_side_of(i) * density_scale)), 4, max_region_side);
+            const rbp::Rect rect = packer.Insert(side + 2 * s_padding, side + 2 * s_padding, rbp::SkylineBinPack::LevelBottomLeft);
+            if ((rect.width == 0) || (rect.height == 0)) {
+                break;
+            }
+            Instance_region region = regions[i];
+            region.x      = rect.x + s_padding;
+            region.y      = rect.y + s_padding;
+            region.width  = side;
+            region.height = side;
+            region.tile   = tile_index;
+            const float inv_tile = 1.0f / static_cast<float>(tile_size);
+            region.uv_scale_offset = glm::vec4{
+                static_cast<float>(region.width)  * inv_tile,
+                static_cast<float>(region.height) * inv_tile,
+                static_cast<float>(region.x)      * inv_tile,
+                static_cast<float>(region.y)      * inv_tile
+            };
+            tile_regions.push_back(std::move(region));
+            ++packed_count;
+        }
+        const bool give_up = density_scale < 0.01f;
+        if ((packed_count == order.size()) || give_up) {
+            if (give_up && (packed_count < order.size()) && (m_report != nullptr)) {
+                m_report->add_error(
+                    Lightmap_report::Stage::layout,
+                    "grid pack",
+                    fmt::format(
+                        "tile ({},{},{}): {} of {} regions do not fit even at minimum density - subdivide the tile or increase tile_texture_size",
+                        tile.key.level, tile.key.ix, tile.key.iz, order.size() - packed_count, order.size()
+                    )
+                );
+            }
+            if ((density_scale < 0.999f) && (packed_count == order.size()) && (m_report != nullptr)) {
+                m_report->add_warning(
+                    Lightmap_report::Stage::layout,
+                    "density flex",
+                    fmt::format(
+                        "tile ({},{},{}): texel density scaled to {:.0f}% of its nominal {:.0f} texels/m to fit {}^2 - subdivide the tile to restore density",
+                        tile.key.level, tile.key.ix, tile.key.iz, 100.0f * density_scale, tile_tpm, tile_size
+                    )
+                );
+            }
+            tile.density_scale = density_scale;
+            tile.has_content   = tile.has_content || (packed_count > 0);
+            for (Instance_region& region : tile_regions) {
+                out_packed_regions.push_back(std::move(region));
+            }
+            return;
+        }
+        density_scale *= 0.95f;
+    }
 }
 
 auto Lightmap_baker::compute_tile_split_estimate(Scene_root& scene_root, const float texels_per_meter) -> Estimate_split
@@ -2596,20 +2774,31 @@ auto Lightmap_baker::compute_tile_split_estimate(Scene_root& scene_root, const f
         return result;
     }
 
-    std::vector<Tile>            tiles;
-    std::vector<Instance_region> packed_regions;
-    if (!split_and_pack(std::move(regions), texels_per_meter, 0.0f, tiles, packed_regions, result.kd_nodes)) {
+    // The grid is content-independent (cells + overrides only), so the
+    // "estimate" is exact: the tree the pieces are clipped against is the
+    // same tree every relayout reproduces from the same grid parameters.
+    static_cast<void>(texels_per_meter);
+    std::vector<erhe::math::Aabb> bounds;
+    bounds.reserve(regions.size());
+    for (const Instance_region& region : regions) {
+        bounds.push_back(region_world_bounds(region));
+    }
+    Grid_split grid = build_grid_split(bounds);
+    if (grid.tiles.empty()) {
         if (m_report != nullptr) {
-            m_report->add_warning(Lightmap_report::Stage::layout, "split estimate", "no regions could be packed");
+            m_report->add_warning(Lightmap_report::Stage::layout, "split estimate", "grid split produced no tiles");
         }
-        result.kd_nodes.clear();
         return result;
     }
-    result.regions.reserve(packed_regions.size());
-    for (Instance_region& region : packed_regions) {
-        result.regions.push_back(Estimate_region{std::move(region.mesh), region.primitive_index, region.tile});
+    result.regions.reserve(regions.size());
+    for (std::size_t i = 0; i < regions.size(); ++i) {
+        const glm::vec3 center = bounds[i].is_valid() ? bounds[i].center() : glm::vec3{0.0f};
+        const int tile = grid.tile_for_position(glm::vec2{center.x, center.z}, std::max(m_cell_size, 0.01f));
+        result.regions.push_back(Estimate_region{std::move(regions[i].mesh), regions[i].primitive_index, tile});
     }
-    result.tile_count = static_cast<int>(tiles.size());
+    result.kd_nodes   = std::move(grid.kd_nodes);
+    result.tiles      = std::move(grid.tiles);
+    result.tile_count = static_cast<int>(result.tiles.size());
     return result;
 }
 
@@ -2682,16 +2871,21 @@ auto Lightmap_baker::finalize_layout(
     m_layout.kd_nodes    = std::move(kd_nodes);
     m_layout.partitioned = partitioned;
 
-    // Initial residency: the first slots' worth of tiles in index order;
+    // Initial residency: the first slots' worth of CONTENT tiles in index
+    // order (grid tiles without packed regions never bake or hold a slot);
     // the interactive tick re-ranks by camera distance every frame.
     const int slot_count = m_layout.get_slot_count();
-    for (int tile = 0; tile < m_layout.get_tile_count(); ++tile) {
-        m_layout.tiles[static_cast<std::size_t>(tile)].slot = (tile < slot_count) ? tile : -1;
+    {
+        int next_slot = 0;
+        for (int tile = 0; tile < m_layout.get_tile_count(); ++tile) {
+            Tile& layout_tile = m_layout.tiles[static_cast<std::size_t>(tile)];
+            layout_tile.slot = (layout_tile.has_content && (next_slot < slot_count)) ? next_slot++ : -1;
+        }
     }
 
     m_tiles.assign(m_layout.tiles.size(), Tile_state{});
     for (std::size_t i = 0; i < m_tiles.size(); ++i) {
-        m_tiles[i].has_content = true;
+        m_tiles[i].has_content = m_layout.tiles[i].has_content;
         m_tiles[i].active      = m_layout.tiles[i].slot >= 0;
     }
     build_seam_vertices();
@@ -2707,10 +2901,26 @@ auto Lightmap_baker::finalize_layout(
 auto Lightmap_baker::update_layout_partitioned(Scene_root& scene_root, const float texels_per_meter, const float min_face_texels) -> bool
 {
     static_cast<void>(scene_root);
-    const Lightmap_partitioner& partitioner     = *m_partitioner;
-    const int                   tile_count      = partitioner.get_tile_count();
-    const int                   tile_size       = m_tile_size;
-    const int                   max_region_side = tile_size - 2 * s_padding;
+    static_cast<void>(texels_per_meter);
+    const Lightmap_partitioner& partitioner = *m_partitioner;
+    const int                   tile_count  = partitioner.get_tile_count();
+
+    // Tiles come from the partition's grid split (grid keys, cell bounds,
+    // per-tile nominal density) - never re-derived from the live pieces.
+    std::vector<Tile> tiles = partitioner.get_tile_descs();
+    if (static_cast<int>(tiles.size()) != tile_count) {
+        if (m_report != nullptr) {
+            m_report->add_error(Lightmap_report::Stage::layout, "partitioned layout", "partition tile metadata is inconsistent - re-prepare");
+        }
+        m_seam_vertices.clear();
+        return false;
+    }
+    for (Tile& tile : tiles) {
+        tile.world_bounds  = {};
+        tile.density_scale = 1.0f;
+        tile.has_content   = false;
+        tile.slot          = -1;
+    }
 
     // One region per piece Mesh_primitive; the tile assignment comes from
     // the partition (each piece was clipped to exactly one tile), never
@@ -2758,102 +2968,24 @@ auto Lightmap_baker::update_layout_partitioned(Scene_root& scene_root, const flo
         return false;
     }
 
-    // Same sizing rule as the kd path (desired_region_side above).
-    const auto desired_side_of = [texels_per_meter, min_face_texels](const Instance_region& region) -> float {
-        return desired_region_side(region, texels_per_meter, min_face_texels);
-    };
-
     std::vector<std::vector<std::size_t>> buckets(static_cast<std::size_t>(tile_count));
     for (std::size_t i = 0; i < regions.size(); ++i) {
         buckets[static_cast<std::size_t>(regions[i].tile)].push_back(i);
+        const std::vector<erhe::scene::Mesh_primitive>& primitives = regions[i].mesh->get_primitives();
+        const erhe::primitive::Primitive* const primitive = primitives[regions[i].primitive_index].primitive.get();
+        if (primitive != nullptr) {
+            // Pieces live on identity nodes: local bounds are world bounds.
+            tiles[static_cast<std::size_t>(regions[i].tile)].world_bounds.include(primitive->get_bounding_box());
+        }
     }
 
-    // Pack each tile's pieces (skyline, big-first). The tiles are fixed, so
-    // a set that does not fit can only flex its density down; if even the
-    // 4-texel floor overflows, the remaining pieces are dropped with an
-    // error (the fix is a larger tile_texture_size or a re-prepare).
-    std::vector<Tile>            tiles(static_cast<std::size_t>(tile_count));
+    // Pack each tile's pieces (skyline, big-first) at the tile's nominal
+    // density (tile_texture_size / cell side); the tiles are fixed, so a
+    // set that does not fit can only flex its density down.
     std::vector<Instance_region> packed_regions;
     packed_regions.reserve(regions.size());
     for (int tile = 0; tile < tile_count; ++tile) {
-        std::vector<std::size_t>& members = buckets[static_cast<std::size_t>(tile)];
-        if (members.empty()) {
-            continue;
-        }
-        std::sort(members.begin(), members.end(), [&regions, &desired_side_of](const std::size_t l, const std::size_t r) {
-            return desired_side_of(regions[l]) > desired_side_of(regions[r]);
-        });
-        for (const std::size_t i : members) {
-            const std::vector<erhe::scene::Mesh_primitive>& primitives = regions[i].mesh->get_primitives();
-            const erhe::primitive::Primitive* const primitive = primitives[regions[i].primitive_index].primitive.get();
-            if (primitive != nullptr) {
-                tiles[static_cast<std::size_t>(tile)].world_bounds.include(primitive->get_bounding_box());
-            }
-        }
-        float density_scale = 1.0f;
-        for (const std::size_t i : members) {
-            const float side = desired_side_of(regions[i]);
-            if (side > static_cast<float>(max_region_side)) {
-                density_scale = std::min(density_scale, static_cast<float>(max_region_side) / side);
-            }
-        }
-        for (;;) {
-            rbp::SkylineBinPack packer;
-            packer.Init(tile_size, tile_size, false);
-            std::vector<Instance_region> tile_regions;
-            tile_regions.reserve(members.size());
-            std::size_t packed_count = 0;
-            for (const std::size_t i : members) {
-                const int side = std::clamp(static_cast<int>(std::ceil(desired_side_of(regions[i]) * density_scale)), 4, max_region_side);
-                const rbp::Rect rect = packer.Insert(side + 2 * s_padding, side + 2 * s_padding, rbp::SkylineBinPack::LevelBottomLeft);
-                if ((rect.width == 0) || (rect.height == 0)) {
-                    break;
-                }
-                Instance_region region = regions[i];
-                region.x      = rect.x + s_padding;
-                region.y      = rect.y + s_padding;
-                region.width  = side;
-                region.height = side;
-                const float inv_tile = 1.0f / static_cast<float>(tile_size);
-                region.uv_scale_offset = glm::vec4{
-                    static_cast<float>(region.width)  * inv_tile,
-                    static_cast<float>(region.height) * inv_tile,
-                    static_cast<float>(region.x)      * inv_tile,
-                    static_cast<float>(region.y)      * inv_tile
-                };
-                tile_regions.push_back(std::move(region));
-                ++packed_count;
-            }
-            const bool give_up = density_scale < 0.01f;
-            if ((packed_count == members.size()) || give_up) {
-                if (give_up && (packed_count < members.size()) && (m_report != nullptr)) {
-                    m_report->add_error(
-                        Lightmap_report::Stage::layout,
-                        "partitioned layout",
-                        fmt::format(
-                            "tile {}: {} of {} pieces do not fit even at minimum density - increase tile_texture_size or re-prepare with lower texels/m",
-                            tile, members.size() - packed_count, members.size()
-                        )
-                    );
-                }
-                if ((density_scale < 0.999f) && (packed_count == members.size()) && (m_report != nullptr)) {
-                    m_report->add_warning(
-                        Lightmap_report::Stage::layout,
-                        "density flex",
-                        fmt::format(
-                            "tile {}: texel density scaled to {:.0f}% of {} texels/m to fit {}^2",
-                            tile, 100.0f * density_scale, texels_per_meter, tile_size
-                        )
-                    );
-                }
-                tiles[static_cast<std::size_t>(tile)].density_scale = density_scale;
-                for (Instance_region& region : tile_regions) {
-                    packed_regions.push_back(std::move(region));
-                }
-                break;
-            }
-            density_scale *= 0.95f;
-        }
+        pack_tile_regions(tile, tiles[static_cast<std::size_t>(tile)], regions, buckets[static_cast<std::size_t>(tile)], min_face_texels, packed_regions);
     }
     if (packed_regions.empty()) {
         if (m_report != nullptr) {
@@ -4058,6 +4190,7 @@ auto Lightmap_baker::get_bake_parameters_hash(const float texels_per_meter) cons
 {
     uint64_t hash = fnv1a64(&texels_per_meter, sizeof(float));
     hash = fnv1a64(&m_tile_size, sizeof(int), hash);
+    hash = fnv1a64(&m_cell_size, sizeof(float), hash);
     const uint32_t option_bits =
         (m_options.indirect_bounce ? 1u  : 0u) |
         (m_options.terminator_fix  ? 2u  : 0u) |
@@ -4659,6 +4792,12 @@ void Lightmap_baker::tick(
     // Each tier implies the tiers below it.
     uint64_t hash_layout = fnv1a64(&texels_per_meter, sizeof(float));
     {
+        // Grid parameters (cell size + quadtree overrides): a subdivide /
+        // merge or cell-size change relayouts (and, with a live partition,
+        // the re-prepare commit swaps the pieces, which re-triggers this
+        // through their buffer-mesh pointers).
+        const uint64_t grid_hash = get_grid_parameters_hash();
+        hash_layout = fnv1a64(&grid_hash, sizeof(grid_hash), hash_layout);
         const Scene_root* const scene_ptr = &scene_root;
         hash_layout = fnv1a64(&scene_ptr, sizeof(scene_ptr), hash_layout);
         for (const std::shared_ptr<erhe::scene::Mesh>& mesh : scene_root.layers().content()->meshes) {

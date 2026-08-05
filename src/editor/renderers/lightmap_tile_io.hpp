@@ -36,7 +36,7 @@ namespace editor {
 class Lightmap_tile_io
 {
 public:
-    static constexpr uint32_t c_manifest_version = 2;
+    static constexpr uint32_t c_manifest_version = 3;
     static constexpr uint32_t c_payload_version  = 1;
     static constexpr uint32_t c_payload_magic    = 0x544D4C45u; // 'ELMT' little-endian
 
@@ -58,7 +58,16 @@ public:
     class Tile_entry
     {
     public:
-        int                       id{0};
+        int                       id{0};    // index within THIS manifest (kd leaf tile index of the layout that wrote it)
+        // Quadtree grid identity (manifest v3): {level, ix, iz} anchored at
+        // the world origin - stable across sessions and content edits, the
+        // key save/restore and the streamer match tiles by.
+        int                       level{0};
+        int                       ix{0};
+        int                       iz{0};
+        // Nominal texel density of the tile (tile_texture_size / cell
+        // side); effective baked density = this * density_scale.
+        float                     texels_per_meter{0.0f};
         glm::vec3                 bounds_min{0.0f};
         glm::vec3                 bounds_max{0.0f};
         float                     density_scale{1.0f};
@@ -77,7 +86,9 @@ public:
     };
 
     [[nodiscard]] static auto directory_for_scene(const std::filesystem::path& scene_path) -> std::filesystem::path;
-    [[nodiscard]] static auto payload_name       (int tile_id) -> std::string;
+    // Grid-keyed payload file name: tile_L<level>_<ix>_<iz>.lmt (negative
+    // indices keep their minus sign).
+    [[nodiscard]] static auto payload_name       (int level, int ix, int iz) -> std::string;
 
     // '/'-joined ancestor names for the manifest's reload-stable region key.
     [[nodiscard]] static auto node_path(const erhe::scene::Node* node) -> std::string;

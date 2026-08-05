@@ -1,7 +1,10 @@
 #pragma once
 
+#include "renderers/lightmap_grid.hpp"
+
 #include "erhe_imgui/imgui_window.hpp"
 
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -65,7 +68,26 @@ public:
     // Saves every resident, published tile. Returns how many were saved.
     auto save_all_tiles() -> std::size_t;
 
+    // Quadtree grid density control (scene-persisted leaf overrides,
+    // Scene_settings::lightmap_tile_overrides). subdivide_tile splits a
+    // current leaf into 4 half-size cells (2x nominal texel density);
+    // merge_tile merges the given leaf and its 3 siblings into their
+    // parent (half density). Both validate against the current override
+    // set, write the scene settings, and - with a live partition - launch
+    // an async re-prepare (the legacy path relayouts through the tick's
+    // grid hash). Returns an empty string on success, else the reason.
+    // Also reachable over MCP (lightmap_subdivide_tile /
+    // lightmap_merge_tile).
+    auto subdivide_tile(const Lightmap_tile_key& key) -> std::string;
+    auto merge_tile    (const Lightmap_tile_key& key) -> std::string;
+
 private:
+    // Launch an async re-prepare with the current config (the Prepare
+    // button's parameters). False when nothing was launched.
+    auto launch_prepare() -> bool;
+    // Shared tail of subdivide/merge: sort + write the override list into
+    // the scene settings and kick the relayout/re-prepare.
+    void apply_tile_overrides(std::vector<Lightmap_tile_key>&& overrides);
 
     // Queues an undoable Make_atlas_operation (usage_index 2, method knobs
     // from Lightmap_config) for every lightmapped, non-skinned mesh node in

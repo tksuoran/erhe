@@ -972,6 +972,25 @@ void Mcp_server::refresh_tool_list()
             {"enabled", {{"type", "boolean"}, {"description", "Render pieces (true) or originals (false); omit to query"}}}
         }}
     }});
+    m_tool_infos.push_back({"lightmap_get_tiles", "List the lightmap quadtree grid tiles of the current layout: per tile its grid key {level, ix, iz} (cells anchored at multiples of the cell size from the world origin; level 0 = lightmap.cell_size_m, +1 halves the cell / doubles density, -1 doubles the cell), cell size, nominal texels/m, down-only density flex, content/residency flags and cell bounds - plus the scene's stored overrides.", schema_no_args()});
+    m_tool_infos.push_back({"lightmap_subdivide_tile", "Subdivide one lightmap grid leaf tile {level, ix, iz} into 4 half-size cells (2x nominal texel density). The override persists in the scene (Scene_settings::lightmap_tile_overrides); with a live partition an async re-prepare is launched (poll get_async_status), otherwise the layout updates on the next bake tick. Get keys from lightmap_get_tiles.", {
+        {"type", "object"},
+        {"properties", {
+            {"level", {{"type", "integer"}, {"description", "Quadtree level of the tile to subdivide (from lightmap_get_tiles)"}}},
+            {"ix",    {{"type", "integer"}, {"description", "Cell X index at that level"}}},
+            {"iz",    {{"type", "integer"}, {"description", "Cell Z index at that level"}}}
+        }},
+        {"required", json::array({"level", "ix", "iz"})}
+    }});
+    m_tool_infos.push_back({"lightmap_merge_tile", "Merge one lightmap grid leaf tile {level, ix, iz} AND its 3 siblings into their parent cell (half nominal texel density). All 4 siblings must currently be leaves. The override persists in the scene; with a live partition an async re-prepare is launched (poll get_async_status). Get keys from lightmap_get_tiles.", {
+        {"type", "object"},
+        {"properties", {
+            {"level", {{"type", "integer"}, {"description", "Quadtree level of one of the 4 sibling tiles to merge (from lightmap_get_tiles)"}}},
+            {"ix",    {{"type", "integer"}, {"description", "Cell X index at that level"}}},
+            {"iz",    {{"type", "integer"}, {"description", "Cell Z index at that level"}}}
+        }},
+        {"required", json::array({"level", "ix", "iz"})}
+    }});
     m_tool_infos.push_back({"lightmap_set_baking", "Toggle the interactive progressive lightmap bake (per-frame budgeted gather with accumulation; direct light + indirect bounces; scene edits restart convergence). Reports bake status (sweeps completed, cursor row) and can write a tone-mapped debug PNG of the published atlas. Call without 'enabled' to just query status.", {
         {"type", "object"},
         {"properties", {

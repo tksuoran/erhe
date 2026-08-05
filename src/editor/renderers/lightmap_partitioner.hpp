@@ -1,5 +1,7 @@
 #pragma once
 
+#include "renderers/lightmap_baker.hpp"
+
 #include "erhe_geometry/operation/clip_tile_tree.hpp"
 #include "erhe_geometry/operation/make_atlas.hpp"
 
@@ -150,10 +152,13 @@ public:
     }
     [[nodiscard]] auto get_entries() const -> const std::vector<Original_entry>& { return m_entries; }
     [[nodiscard]] auto get_scene_root() const -> Scene_root* { return m_scene_root; }
-    // The kd tile tree the pieces were clipped against (the split estimate
-    // computed at prepare time) and its tile count.
+    // The kd tile tree the pieces were clipped against (the grid split
+    // computed at prepare time), its tile count, and the per-tile grid
+    // metadata (key, cell bounds, nominal texel density) the partitioned
+    // relayout re-instantiates its tiles from.
     [[nodiscard]] auto get_tile_tree() const -> const std::vector<erhe::geometry::operation::Clip_tree_node>& { return m_tile_tree; }
     [[nodiscard]] auto get_tile_count() const -> int { return m_tile_count; }
+    [[nodiscard]] auto get_tile_descs() const -> const std::vector<Lightmap_baker::Tile>& { return m_tile_descs; }
 
     // Resolves a manifest piece identity (SOURCE mesh identity + tile +
     // ordinal, see Lightmap_tile_io) to the live piece mesh and its
@@ -200,6 +205,7 @@ private:
     std::shared_ptr<erhe::scene::Node>                      m_group_node;
     std::vector<erhe::geometry::operation::Clip_tree_node>  m_tile_tree;
     int                                                     m_tile_count{0};
+    std::vector<Lightmap_baker::Tile>                       m_tile_descs;
     bool                                                    m_render_with_lightmaps{false};
     Params                                                  m_last_params{};
     // Job lifetime invariant: the taskflow lambdas capture the raw

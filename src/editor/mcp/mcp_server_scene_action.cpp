@@ -679,6 +679,79 @@ auto Mcp_server::action_lightmap_prepare_tiles(const json& args) -> std::string
     }).dump();
 }
 
+auto Mcp_server::query_lightmap_tiles(const json& args) -> std::string
+{
+    static_cast<void>(args);
+    if (m_context.lightmap_baker == nullptr) {
+        return make_error_content("Lightmap baker not available");
+    }
+    const Lightmap_baker::Atlas_layout& layout = m_context.lightmap_baker->get_layout();
+    json tiles = json::array();
+    for (int tile = 0; tile < layout.get_tile_count(); ++tile) {
+        const Lightmap_baker::Tile& layout_tile = layout.tiles[static_cast<std::size_t>(tile)];
+        tiles.push_back({
+            {"tile",             tile},
+            {"level",            layout_tile.key.level},
+            {"ix",               layout_tile.key.ix},
+            {"iz",               layout_tile.key.iz},
+            {"cell_size_m",      layout_tile.key.cell_size(m_context.lightmap_baker->get_cell_size())},
+            {"texels_per_meter", layout_tile.texels_per_meter},
+            {"density_scale",    layout_tile.density_scale},
+            {"has_content",      layout_tile.has_content},
+            {"resident",         layout_tile.slot >= 0},
+            {"cell_min",         {layout_tile.cell_bounds.min.x, layout_tile.cell_bounds.min.z}},
+            {"cell_max",         {layout_tile.cell_bounds.max.x, layout_tile.cell_bounds.max.z}}
+        });
+    }
+    json overrides = json::array();
+    for (const glm::ivec3& value : m_context.lightmap_baker->get_tile_overrides()) {
+        overrides.push_back({{"level", value.x}, {"ix", value.y}, {"iz", value.z}});
+    }
+    return make_json_content({
+        {"cell_size_m", m_context.lightmap_baker->get_cell_size()},
+        {"tile_size",   layout.get_tile_size()},
+        {"tile_count",  layout.get_tile_count()},
+        {"tiles",       tiles},
+        {"overrides",   overrides}
+    }).dump();
+}
+
+auto Mcp_server::action_lightmap_subdivide_tile(const json& args) -> std::string
+{
+    if (m_context.lightmap_window == nullptr) {
+        return make_error_content("Lightmap window not available");
+    }
+    const Lightmap_tile_key key{args.value("level", 0), args.value("ix", 0), args.value("iz", 0)};
+    const std::string error = m_context.lightmap_window->subdivide_tile(key);
+    if (!error.empty()) {
+        return make_error_content("Subdivide failed: " + error);
+    }
+    const bool reprepare = (m_context.lightmap_partitioner != nullptr) && m_context.lightmap_partitioner->is_prepare_in_flight();
+    return make_json_content({
+        {"subdivided",         {{"level", key.level}, {"ix", key.ix}, {"iz", key.iz}}},
+        {"reprepare_launched", reprepare},
+        {"message",            reprepare ? "poll get_async_status until idle, then read the new layout via lightmap_get_tiles" : "layout updates on the next bake tick"}
+    }).dump();
+}
+
+auto Mcp_server::action_lightmap_merge_tile(const json& args) -> std::string
+{
+    if (m_context.lightmap_window == nullptr) {
+        return make_error_content("Lightmap window not available");
+    }
+    const Lightmap_tile_key key{args.value("level", 0), args.value("ix", 0), args.value("iz", 0)};
+    const std::string error = m_context.lightmap_window->merge_tile(key);
+    if (!error.empty()) {
+        return make_error_content("Merge failed: " + error);
+    }
+    const bool reprepare = (m_context.lightmap_partitioner != nullptr) && m_context.lightmap_partitioner->is_prepare_in_flight();
+    return make_json_content({
+        {"merged_into_parent_of", {{"level", key.level}, {"ix", key.ix}, {"iz", key.iz}}},
+        {"reprepare_launched",    reprepare},
+        {"message",               reprepare ? "poll get_async_status until idle, then read the new layout via lightmap_get_tiles" : "layout updates on the next bake tick"}
+    }).dump();
+}
+
 auto Mcp_server::action_lightmap_revert_tiles(const json& args) -> std::string
 {
     static_cast<void>(args);
