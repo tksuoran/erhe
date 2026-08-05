@@ -272,7 +272,7 @@ void Lightmap_streamer::start_load(const int tile, const int slot)
     const std::filesystem::path file_path = m_directory / m_manifest.tiles[static_cast<std::size_t>(tile)].payload;
     const auto load = [pending, file_path]() {
         std::string error;
-        if (!Lightmap_tile_io::read_tile_payload(file_path, pending->width, pending->height, pending->pixels, nullptr, &error)) {
+        if (!Lightmap_tile_io::read_tile_payload(file_path, pending->width, pending->height, pending->pixels, nullptr, nullptr, &error)) {
             pending->failed = true;
             pending->error  = error;
         }

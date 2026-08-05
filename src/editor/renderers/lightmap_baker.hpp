@@ -10,6 +10,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <span>
 #include <vector>
 
 #include <array>
@@ -310,6 +311,19 @@ public:
     // Reads back a resident tile's published lightmap (its display-atlas
     // slot sub-rect) as tightly packed RGBA16F rows.
     auto read_back_tile(int tile, std::vector<uint16_t>& out_rgba16) -> bool;
+    // Restore-on-activate (the inverse of save-on-evict): a tile gaining a
+    // display slot with no accumulated content is queued here; the owner
+    // (Lightmap_window::update) validates the saved payload against the
+    // current bake parameters and layout, then hands the pixels back via
+    // restore_tile() so a previously baked tile reappears instantly instead
+    // of visibly re-baking from black. Accumulation still restarts (the
+    // fp32 accum is not persisted), but republish is held until it reaches
+    // saved_sweeps, so the display never regresses.
+    [[nodiscard]] auto take_tile_pending_restore() -> int; // -1 = none pending
+    auto restore_tile(int tile, int width, int height, std::span<const uint16_t> rgba16, uint32_t saved_sweeps) -> bool;
+    // Completed accumulation sweeps behind the tile's published content
+    // (persisted into the payload header by the save paths).
+    [[nodiscard]] auto get_tile_sweeps(int tile) const -> uint32_t;
 
     [[nodiscard]] auto get_layout() const -> const Atlas_layout& { return m_layout; }
 
@@ -667,11 +681,21 @@ private:
         // save-on-evict enabled, the residency swap defers evicting such a
         // tile until the owner drains take_tile_pending_save().
         bool     dirty_since_save{false};
+        // One disk-restore attempt per activation: set when the tile is
+        // queued for take_tile_pending_restore() (or when an invalidation
+        // makes the disk content stale), re-armed on eviction.
+        bool     restore_attempted{false};
         uint32_t sweeps     {0};     // completed tile sweeps since reset
+        // restore_tile(): the display slot holds a disk payload of this
+        // many sweeps; republish is suppressed until fresh accumulation
+        // reaches it, so the restored content never regresses to an
+        // early-sweep result. 0 = no hold (normal publish cadence).
+        uint32_t restore_hold_sweeps{0};
     };
     std::vector<Tile_state>                            m_tiles;
     bool                                               m_save_on_evict{false};
     std::vector<int>                                   m_tiles_pending_save;
+    std::vector<int>                                   m_tiles_pending_restore;
     std::unique_ptr<erhe::graphics::Shader_resource>   m_lm_instance_struct;
     std::unique_ptr<erhe::graphics::Shader_resource>   m_lm_instance_block;
     std::unique_ptr<erhe::graphics::Sampler>           m_linear_sampler;

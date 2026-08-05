@@ -126,6 +126,7 @@ namespace {
     const int                         width,
     const int                         height,
     std::span<const uint16_t>         rgba16,
+    const uint32_t                    sweeps,
     Lightmap_report* const            report
 ) -> bool
 {
@@ -147,6 +148,7 @@ namespace {
         manifest.bake_hash,
         entry.bounds_min,
         entry.bounds_max,
+        sweeps,
         &error
     );
     if (!payload_ok) {
@@ -162,6 +164,77 @@ namespace {
         return false;
     }
     return true;
+}
+
+// Restore-on-activate: validate the saved payload for `tile` against the
+// CURRENT bake parameters and region packing, then hand the pixels back to
+// the baker (Lightmap_baker::restore_tile) so a previously baked tile
+// reappears instantly instead of visibly re-baking from black. Any mismatch
+// quietly declines - the tile then re-bakes from scratch exactly as before.
+[[nodiscard]] auto try_restore_tile_from_disk(App_context& context, const int tile) -> bool
+{
+    Lightmap_baker* const baker = context.lightmap_baker;
+    if (baker == nullptr) {
+        return false;
+    }
+    const std::shared_ptr<Scene_root> scene_root = context.selection->get_active_scene_root();
+    if (!scene_root) {
+        return false;
+    }
+    const Lightmap_baker::Atlas_layout& layout = baker->get_layout();
+    if ((tile < 0) || (tile >= layout.get_tile_count())) {
+        return false;
+    }
+    const std::filesystem::path directory = Lightmap_tile_io::directory_for_scene(scene_root->get_source_path());
+    std::error_code ec;
+    if (!std::filesystem::exists(directory / "manifest.json", ec) || ec) {
+        return false; // nothing baked to disk yet - the common quiet case
+    }
+    Lightmap_tile_io::Manifest saved;
+    if (!Lightmap_tile_io::read_manifest(directory, saved, nullptr)) {
+        return false;
+    }
+    const Lightmap_config& config = context.editor_settings->lightmap;
+    if ((saved.bake_hash != baker->get_bake_parameters_hash(config.texels_per_meter)) ||
+        (saved.tile_size != layout.get_tile_size()) ||
+        (tile >= static_cast<int>(saved.tiles.size()))) {
+        return false;
+    }
+    const Lightmap_tile_io::Tile_entry& saved_entry = saved.tiles[static_cast<std::size_t>(tile)];
+    if (saved_entry.id != tile) {
+        return false;
+    }
+    // The payload maps texel-for-texel only when the tile's region packing
+    // is unchanged; compare region identity + tile-local uv rects against a
+    // manifest entry built from the current layout (floats round-trip the
+    // JSON manifest exactly, so equality is exact).
+    const std::shared_ptr<Lightmap_tile_io::Manifest> current = build_tile_manifest(context, layout, config);
+    const Lightmap_tile_io::Tile_entry& current_entry = current->tiles[static_cast<std::size_t>(tile)];
+    if ((saved_entry.regions.size() != current_entry.regions.size()) ||
+        (saved_entry.bounds_min != current_entry.bounds_min) ||
+        (saved_entry.bounds_max != current_entry.bounds_max)) {
+        return false;
+    }
+    for (std::size_t i = 0; i < saved_entry.regions.size(); ++i) {
+        const Lightmap_tile_io::Region_entry& a = saved_entry.regions[i];
+        const Lightmap_tile_io::Region_entry& b = current_entry.regions[i];
+        if ((a.node_index_path != b.node_index_path) ||
+            (a.node_path       != b.node_path)       ||
+            (a.mesh_name       != b.mesh_name)       ||
+            (a.primitive_index != b.primitive_index) ||
+            (a.piece_ordinal   != b.piece_ordinal)   ||
+            (a.uv_scale_offset != b.uv_scale_offset)) {
+            return false;
+        }
+    }
+    int                   width{0};
+    int                   height{0};
+    std::vector<uint16_t> rgba16;
+    uint32_t              sweeps{0};
+    if (!Lightmap_tile_io::read_tile_payload(directory / saved_entry.payload, width, height, rgba16, nullptr, &sweeps, nullptr)) {
+        return false; // absent payload = tile never baked; not an error
+    }
+    return baker->restore_tile(tile, width, height, std::span<const uint16_t>{rgba16.data(), rgba16.size()}, sweeps);
 }
 
 } // anonymous namespace
@@ -233,10 +306,11 @@ auto Lightmap_window::start_bake_to_disk() -> bool
         report->clear_stage(Lightmap_report::Stage::bake);
         report->clear_stage(Lightmap_report::Stage::persist);
     }
+    const uint32_t offline_sweeps = static_cast<uint32_t>(std::max(1, config.offline_sweeps));
     return baker.start_offline_bake(
         *scene_root.get(),
-        static_cast<uint32_t>(std::max(1, config.offline_sweeps)),
-        [directory, manifest, report](
+        offline_sweeps,
+        [directory, manifest, report, offline_sweeps](
             const int                    tile,
             const int                    width,
             const int                    height,
@@ -249,6 +323,7 @@ auto Lightmap_window::start_bake_to_disk() -> bool
                 width,
                 height,
                 std::span<const uint16_t>{rgba16.data(), rgba16.size()},
+                offline_sweeps,
                 report
             );
         }
@@ -285,6 +360,7 @@ auto Lightmap_window::save_tile_to_disk(const int tile) -> bool
         tile_size,
         tile_size,
         std::span<const uint16_t>{rgba16.data(), rgba16.size()},
+        baker.get_tile_sweeps(tile),
         m_context.lightmap_report
     );
     if (saved) {
@@ -346,6 +422,23 @@ void Lightmap_window::update()
             }
             save_tile_to_disk(tile);
             m_context.lightmap_baker->mark_tile_saved(tile);
+        }
+    }
+
+    // Restore-on-activate drain (after the saves, so a payload evicted this
+    // frame is on disk before other tiles validate against the manifest):
+    // tiles that just gained a display slot come back from disk instead of
+    // visibly re-baking from black. A declined restore (no payload / stale
+    // parameters / changed packing) re-bakes from scratch as before.
+    if (m_context.lightmap_baker != nullptr) {
+        for (;;) {
+            const int tile = m_context.lightmap_baker->take_tile_pending_restore();
+            if (tile < 0) {
+                break;
+            }
+            if (try_restore_tile_from_disk(m_context, tile)) {
+                log_render->info("Lightmap_window: tile {} restored from disk", tile);
+            }
         }
     }
 

@@ -92,7 +92,10 @@ public:
 
     // Tile payload round-trip. rgba16 is width * height * 4 fp16 values
     // (bit patterns); write converts nothing - callers convert from float
-    // with float_to_half() when needed.
+    // with float_to_half() when needed. sweeps is the accumulation sweep
+    // count behind the payload (0 = unknown, e.g. payloads written before
+    // the field existed); restore-on-activate uses it as the republish
+    // hold threshold.
     static auto write_tile_payload(
         const std::filesystem::path& file_path,
         int                          width,
@@ -101,6 +104,7 @@ public:
         uint64_t                     bake_hash,
         const glm::vec3&             bounds_min,
         const glm::vec3&             bounds_max,
+        uint32_t                     sweeps,
         std::string*                 error
     ) -> bool;
     static auto read_tile_payload(
@@ -109,6 +113,7 @@ public:
         int&                         out_height,
         std::vector<uint16_t>&       out_rgba16,
         uint64_t*                    out_bake_hash,
+        uint32_t*                    out_sweeps,
         std::string*                 error
     ) -> bool;
 

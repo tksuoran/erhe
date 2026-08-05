@@ -74,6 +74,21 @@ Interactive bake results are never lost to a residency swap:
   (not-yet-baked, not errors).
 - Shared helpers `build_tile_manifest` / `persist_tile_payload`
   (lightmap_window.cpp) serve the batch bake, Save All and evict-save.
+- **Restore-on-activate** (2026-08-05, the inverse of save-on-evict): a
+  tile that gains a display slot with no accumulated content is queued in
+  the baker (`take_tile_pending_restore`); `Lightmap_window::update()`
+  validates the saved payload - bake-parameter hash, tile size, bounds and
+  the full region packing table must match the CURRENT layout - and uploads
+  it into the display slot (`Lightmap_baker::restore_tile`). The tile shows
+  its saved bake instantly instead of re-baking from black. The fp32
+  accumulation is NOT persisted, so gathering still restarts, but republish
+  is held until fresh sweeps reach the payload's saved sweep count (stored
+  in the `.lmt` header word that was `reserved0`; old payloads read 0 and
+  hold for one sweep), so the display never regresses to an early-sweep
+  result. Lighting/occluder invalidations mark restores stale
+  (`restore_attempted`) so a reset never resurrects pre-edit content; a
+  declined restore (no payload / stale hash / changed packing) re-bakes
+  from scratch exactly as before.
 
 Verified headless: Save All wrote the resident tile; a camera jump across
 tiles (512^2, budget 1) auto-saved the evicted tile with no save-all call;

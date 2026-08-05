@@ -20,7 +20,7 @@ struct Payload_header
     uint32_t width;
     uint32_t height;
     uint32_t format;
-    uint32_t reserved0;
+    uint32_t sweeps; // accumulation sweeps behind the payload; 0 = unknown (pre-field payloads)
     uint64_t bake_hash;
     float    bounds_min[3];
     float    bounds_max[3];
@@ -223,6 +223,7 @@ auto Lightmap_tile_io::write_tile_payload(
     const uint64_t                  bake_hash,
     const glm::vec3&                bounds_min,
     const glm::vec3&                bounds_max,
+    const uint32_t                  sweeps,
     std::string* const              error
 ) -> bool
 {
@@ -239,6 +240,7 @@ auto Lightmap_tile_io::write_tile_payload(
     header.width     = static_cast<uint32_t>(width);
     header.height    = static_cast<uint32_t>(height);
     header.format    = static_cast<uint32_t>(Payload_format::rgba16f);
+    header.sweeps    = sweeps;
     header.bake_hash = bake_hash;
     std::memcpy(header.bounds_min, &bounds_min, sizeof(float) * 3);
     std::memcpy(header.bounds_max, &bounds_max, sizeof(float) * 3);
@@ -268,6 +270,7 @@ auto Lightmap_tile_io::read_tile_payload(
     int&                         out_height,
     std::vector<uint16_t>&       out_rgba16,
     uint64_t* const              out_bake_hash,
+    uint32_t* const              out_sweeps,
     std::string* const           error
 ) -> bool
 {
@@ -311,6 +314,9 @@ auto Lightmap_tile_io::read_tile_payload(
     out_height = static_cast<int>(header.height);
     if (out_bake_hash != nullptr) {
         *out_bake_hash = header.bake_hash;
+    }
+    if (out_sweeps != nullptr) {
+        *out_sweeps = header.sweeps;
     }
     return true;
 }
