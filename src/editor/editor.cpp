@@ -855,6 +855,7 @@ public:
                 }
             }
             if (should_render && m_lightmap_baker && m_lightmap_baker->is_baking_enabled()) {
+                m_lightmap_baker_owned_binding = true;
                 if (lightmap_scene_root) {
                     // Procedural sky lighting for the bake: same per-scene
                     // sky resolution + sun direction the viewport uses, so
@@ -916,6 +917,15 @@ public:
                 // again (same pixels) and disk tile streaming resumes.
                 erhe::log::set_breadcrumb("tick: lightmap stream");
                 m_lightmap_streamer->set_budget(lightmap_config.resident_tile_budget);
+                if (m_lightmap_baker_owned_binding) {
+                    // Ownership handoff baker -> streamer: the baker's
+                    // publish_regions overwrote the primitives' uv mappings
+                    // with baker display slots; re-push the streamer's
+                    // (residency is untouched, so this is cheap and covers
+                    // the no-autosave pause where no invalidate() ran).
+                    m_lightmap_baker_owned_binding = false;
+                    m_lightmap_streamer->reapply_regions(*lightmap_scene_root.get());
+                }
                 m_lightmap_streamer->update(*lightmap_scene_root.get(), lightmap_camera_position_ptr);
                 if (m_lightmap_streamer->has_resident_tiles()) {
                     m_forward_renderer->set_lightmap_texture(m_lightmap_streamer->get_texture());
@@ -3872,6 +3882,9 @@ public:
     std::unique_ptr<Lightmap_streamer               >        m_lightmap_streamer;
     std::unique_ptr<Lightmap_partitioner            >        m_lightmap_partitioner;
     bool                                                     m_lightmap_offline_was_active{false};
+    // The interactive baker held the lightmap binding last frame; a hand-
+    // off to the streamer re-pushes the streamer's region mappings.
+    bool                                                     m_lightmap_baker_owned_binding{false};
     std::unique_ptr<Id_renderer                     >        m_id_renderer;
     std::unique_ptr<Composer_window                 >        m_composer_window;
     std::unique_ptr<Selection_window                >        m_selection_window;

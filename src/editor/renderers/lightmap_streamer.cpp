@@ -378,6 +378,17 @@ void Lightmap_streamer::upload_pending(Scene_root& scene_root)
     log_render->info("Lightmap_streamer: tile {} resident in slot {}", tile, pending->slot);
 }
 
+void Lightmap_streamer::reapply_regions(Scene_root& scene_root)
+{
+    if (!m_manifest_loaded || (m_scene_root != &scene_root)) {
+        return; // nothing applied yet; the next update() publishes fresh
+    }
+    for (int tile = 0; tile < static_cast<int>(m_manifest.tiles.size()); ++tile) {
+        apply_tile_regions(scene_root, tile);
+    }
+    log_render->info("Lightmap_streamer: region mappings re-applied ({} tiles)", m_manifest.tiles.size());
+}
+
 void Lightmap_streamer::update(Scene_root& scene_root, const glm::vec3* camera_position)
 {
     if (m_scene_root != &scene_root) {

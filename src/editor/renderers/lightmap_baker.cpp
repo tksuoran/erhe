@@ -4389,6 +4389,12 @@ void Lightmap_baker::set_baking_enabled(const bool enabled)
     if (!enabled) {
         m_pause_after_sweep = false;
         queue_dirty_tiles_for_save();
+    } else {
+        // The disk streamer may have owned the lightmap binding while
+        // paused and overwritten the primitives' uv mappings with ITS
+        // atlas slots; re-publish ours on the first tick (sampling the
+        // baker display atlas through streamer offsets renders garbage).
+        m_regions_published = false;
     }
 }
 

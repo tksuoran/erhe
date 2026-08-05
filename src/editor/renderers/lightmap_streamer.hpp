@@ -53,6 +53,13 @@ public:
     // offline baker owns the lightmap binding (the caller gates on that).
     void update(Scene_root& scene_root, const glm::vec3* camera_position);
 
+    // Re-push every tile's mapping (resident slots and evicted zero/white
+    // fallbacks) onto the mesh primitives. The caller invokes this when the
+    // streamer REGAINS the lightmap binding from the interactive baker
+    // (whose publish_regions overwrote the mappings with baker slots);
+    // residency itself is untouched. No-op without a loaded manifest.
+    void reapply_regions(Scene_root& scene_root);
+
     [[nodiscard]] auto is_available      () const -> bool { return m_manifest_loaded; }
     [[nodiscard]] auto has_resident_tiles() const -> bool { return m_resident_count > 0; }
     [[nodiscard]] auto is_stale          () const -> bool { return m_stale; }
