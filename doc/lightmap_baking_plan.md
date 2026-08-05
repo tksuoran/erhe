@@ -828,9 +828,11 @@ redone when parameters change.
   only shading discontinuity remains). Exactness holds within one mesh;
   pre-existing inter-mesh cracks are unchanged. Skinned meshes stay
   excluded. Moving a source mesh after the clip leaves stale pieces
-  (window warns; re-prepare). prepare() is blocking (main thread);
-  async + cancel is future work. N-gon facets are fan-triangulated by
-  the clipper even when unclipped. Revert after a fused prepare returns
+  (window warns; re-prepare). prepare() is blocking (main thread), but
+  its per-piece unwrap + primitive build phase runs in parallel on the
+  app executor (clip and scene commit stay serial); fully async
+  prepare + cancel + progress is future work. N-gon facets are
+  fan-triangulated by the clipper even when unclipped. Revert after a fused prepare returns
   to the legacy layout of originals that typically carry no channel-2
   UVs -> empty layout (originals render unlit) until the legacy unwrap
   runs or a re-prepare. Tile boundaries derive from estimated coverage,

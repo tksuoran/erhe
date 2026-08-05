@@ -76,9 +76,11 @@ public:
     // Blocking (driven from the main thread by the Lightmap window / MCP);
     // no preconditions - the kd tile tree comes from a geometry-only split
     // estimate, and the final partitioned relayout re-packs the pieces with
-    // their measured UVs. An existing partition is reverted before
-    // re-preparing. Failures are reported via Lightmap_report
-    // (Stage::partition); returns false when nothing could be partitioned.
+    // their measured UVs. The per-piece unwrap + primitive build phase runs
+    // in parallel on the app executor (clip and scene commit stay serial).
+    // An existing partition is reverted before re-preparing. Failures are
+    // reported via Lightmap_report (Stage::partition); returns false when
+    // nothing could be partitioned.
     auto prepare(Scene_root& scene_root, const Params& params) -> bool;
 
     // Destroys the piece nodes, restores original mesh visibility and

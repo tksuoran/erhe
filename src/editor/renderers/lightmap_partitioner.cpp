@@ -20,7 +20,10 @@
 #include "erhe_scene_renderer/mesh_memory.hpp"
 
 #include <fmt/format.h>
+#include <taskflow/taskflow.hpp>
+#include <taskflow/algorithm/for_each.hpp>
 
+#include <limits>
 #include <mutex>
 
 namespace editor {
@@ -94,8 +97,25 @@ auto Lightmap_partitioner::prepare(Scene_root& scene_root, const Params& params)
         .buffer_info = m_context.mesh_memory->make_primitive_buffer_info()
     };
 
+    // ---- Phase 1 (serial, geogram_lock): world-space bake + kd clip per
+    // source primitive, collecting one unwrap task per clipped piece.
+    // bake_transform and clip_by_tile_tree create GEO attributes and run
+    // attribute interpolation; clip_by_tile_tree's contract requires the
+    // caller to hold geogram_lock (clip_tile_tree.hpp).
+    class Piece_task
+    {
+    public:
+        std::size_t                                 entry_index{0};
+        std::size_t                                 source_primitive_index{0};
+        int                                         tile{-1};
+        std::shared_ptr<erhe::geometry::Geometry>   clipped;         // world-space piece geometry
+        std::shared_ptr<erhe::primitive::Material>  material;
+        erhe::primitive::Normal_style               normal_style{};
+        std::string                                 subject;
+        std::shared_ptr<erhe::primitive::Primitive> result;          // phase 2 output; null = failed (reported there)
+    };
     std::vector<Original_entry> entries;
-    std::size_t total_pieces = 0;
+    std::vector<Piece_task>     tasks;
     for (const Mesh_group& group : groups) {
         erhe::scene::Node* const node = group.mesh->get_node();
         if (node == nullptr) {
@@ -103,11 +123,12 @@ auto Lightmap_partitioner::prepare(Scene_root& scene_root, const Params& params)
         }
         const glm::mat4 world_from_node = node->world_from_node();
 
+        const std::size_t entry_index = entries.size();
         Original_entry entry;
         entry.original_mesh           = group.mesh;
         entry.world_from_node_at_clip = world_from_node;
+        entries.push_back(std::move(entry));
 
-        std::vector<erhe::scene::Mesh_primitive> piece_primitives;
         const std::vector<erhe::scene::Mesh_primitive>& source_primitives = group.mesh->get_primitives();
         for (const Lightmap_baker::Estimate_region* region : group.regions) {
             if (region->primitive_index >= source_primitives.size()) {
@@ -124,8 +145,6 @@ auto Lightmap_partitioner::prepare(Scene_root& scene_root, const Params& params)
             }
             const std::string subject = fmt::format("{}[{}]", group.mesh->get_name(), region->primitive_index);
 
-            // World-space bake + kd clip. Both create GEO attributes, whose
-            // pool allocation is process-global (erhe::geometry::geogram_lock).
             erhe::geometry::Geometry world_geometry{fmt::format("{}.world", subject)};
             std::vector<erhe::geometry::operation::Clip_tile_piece> pieces;
             try {
@@ -143,109 +162,165 @@ auto Lightmap_partitioner::prepare(Scene_root& scene_root, const Params& params)
                 continue;
             }
 
-            int ordinal = 0;
             for (const erhe::geometry::operation::Clip_tile_piece& piece : pieces) {
                 if (!piece.geometry) {
                     continue;
                 }
-                // Per-piece re-unwrap: world-space geometry, so the density
-                // is the world density directly (no node-scale folding).
-                // Mirror Make_atlas_operation's per-facet fallback so one
-                // degenerate piece does not abort the whole partition.
-                std::shared_ptr<erhe::geometry::Geometry> atlas_geometry = std::make_shared<erhe::geometry::Geometry>(
-                    fmt::format("{}.tile{}", subject, piece.tile)
-                );
-                const std::string piece_subject = atlas_geometry->get_name();
-                // make_atlas takes geogram_lock() internally, only around its
-                // Geogram-parameterizer branch - per-facet piece unwraps need
-                // no serialization (a prerequisite for parallelizing this
-                // loop later).
-                try {
-                    try {
-                        erhe::geometry::operation::make_atlas(
-                            *piece.geometry.get(),
-                            *atlas_geometry.get(),
-                            2, // lightmap UV channel (texcoord usage_index 2)
-                            static_cast<double>(params.hard_angles_deg),
-                            params.parameterizer,
-                            params.packer,
-                            static_cast<double>(params.texels_per_meter),
-                            static_cast<double>(params.gutter_texels),
-                            static_cast<double>(params.min_chart_texels),
-                            nullptr
-                        );
-                    } catch (const std::exception& e) {
-                        if (params.parameterizer == erhe::geometry::operation::Atlas_parameterizer::per_facet) {
-                            throw;
-                        }
-                        if (report != nullptr) {
-                            report->add_warning(
-                                Lightmap_report::Stage::partition,
-                                piece_subject,
-                                fmt::format("parameterizer failed ({}); fell back to per-facet unwrap", e.what())
-                            );
-                        }
-                        erhe::geometry::operation::make_atlas(
-                            *piece.geometry.get(),
-                            *atlas_geometry.get(),
-                            2,
-                            static_cast<double>(params.hard_angles_deg),
-                            erhe::geometry::operation::Atlas_parameterizer::per_facet,
-                            params.packer,
-                            static_cast<double>(params.texels_per_meter),
-                            static_cast<double>(params.gutter_texels),
-                            static_cast<double>(params.min_chart_texels),
-                            nullptr
-                        );
-                    }
-                } catch (const std::exception& e) {
-                    if (report != nullptr) {
-                        report->add_error(Lightmap_report::Stage::partition, piece_subject, fmt::format("unwrap failed: {}", e.what()));
-                    }
-                    continue;
-                }
-
-                std::shared_ptr<erhe::primitive::Primitive> piece_primitive = std::make_shared<erhe::primitive::Primitive>(atlas_geometry);
-                const bool renderable_ok = piece_primitive->make_renderable_mesh(build_info, render_shape->get_normal_style());
-                const bool raytrace_ok   = renderable_ok && piece_primitive->make_raytrace();
-                if (!renderable_ok || !raytrace_ok) {
-                    if (report != nullptr) {
-                        report->add_error(
-                            Lightmap_report::Stage::partition,
-                            piece_subject,
-                            renderable_ok ? "raytrace build failed" : "renderable mesh build failed"
-                        );
-                    }
-                    continue;
-                }
-                piece_primitives.emplace_back(piece_primitive, source_mesh_primitive.material);
-                entry.pieces.push_back(
-                    Piece_info{
-                        .tile                   = piece.tile,
+                tasks.push_back(
+                    Piece_task{
+                        .entry_index            = entry_index,
                         .source_primitive_index = region->primitive_index,
-                        .ordinal                = ordinal++
+                        .tile                   = piece.tile,
+                        .clipped                = piece.geometry,
+                        .material               = source_mesh_primitive.material,
+                        .normal_style           = render_shape->get_normal_style(),
+                        .subject                = fmt::format("{}.tile{}", subject, piece.tile),
+                        .result                 = {}
                     }
                 );
             }
         }
-        if (piece_primitives.empty()) {
-            continue;
-        }
-        total_pieces += piece_primitives.size();
+    }
 
-        entry.piece_node = std::make_shared<erhe::scene::Node>(fmt::format("{}.lm", node->get_name()));
-        entry.piece_mesh = std::make_shared<erhe::scene::Mesh>(fmt::format("{}.lm", group.mesh->get_name()));
-        entry.piece_mesh->layer_id = scene_root.layers().content()->id;
-        entry.piece_mesh->set_primitives(piece_primitives);
-        entry.piece_mesh->enable_flag_bits(
-            erhe::Item_flags::content     |
-            erhe::Item_flags::visible     |
-            erhe::Item_flags::shadow_cast |
-            erhe::Item_flags::show_in_ui
+    // ---- Phase 2 (parallel): per-piece re-unwrap + renderable/raytrace
+    // primitive build. Every task is independent: make_atlas takes
+    // geogram_lock internally only around its Geogram-parameterizer branch
+    // (per-facet unwraps run concurrently), buffer-mesh allocation groups
+    // serialize on buffer_mesh_allocation_mutex, and raytrace builds are
+    // worker-safe (deferred glTF finalize does the same). Lightmap_report
+    // already takes worker-thread reports (async UV unwrap failures).
+    // World-space geometry, so the density is the world density directly
+    // (no node-scale folding). Mirror Make_atlas_operation's per-facet
+    // fallback so one degenerate piece does not abort the whole partition.
+    const auto unwrap_piece = [&params, &build_info, report](Piece_task& task) {
+        std::shared_ptr<erhe::geometry::Geometry> atlas_geometry = std::make_shared<erhe::geometry::Geometry>(task.subject);
+        try {
+            try {
+                erhe::geometry::operation::make_atlas(
+                    *task.clipped.get(),
+                    *atlas_geometry.get(),
+                    2, // lightmap UV channel (texcoord usage_index 2)
+                    static_cast<double>(params.hard_angles_deg),
+                    params.parameterizer,
+                    params.packer,
+                    static_cast<double>(params.texels_per_meter),
+                    static_cast<double>(params.gutter_texels),
+                    static_cast<double>(params.min_chart_texels),
+                    nullptr
+                );
+            } catch (const std::exception& e) {
+                if (params.parameterizer == erhe::geometry::operation::Atlas_parameterizer::per_facet) {
+                    throw;
+                }
+                if (report != nullptr) {
+                    report->add_warning(
+                        Lightmap_report::Stage::partition,
+                        task.subject,
+                        fmt::format("parameterizer failed ({}); fell back to per-facet unwrap", e.what())
+                    );
+                }
+                erhe::geometry::operation::make_atlas(
+                    *task.clipped.get(),
+                    *atlas_geometry.get(),
+                    2,
+                    static_cast<double>(params.hard_angles_deg),
+                    erhe::geometry::operation::Atlas_parameterizer::per_facet,
+                    params.packer,
+                    static_cast<double>(params.texels_per_meter),
+                    static_cast<double>(params.gutter_texels),
+                    static_cast<double>(params.min_chart_texels),
+                    nullptr
+                );
+            }
+        } catch (const std::exception& e) {
+            if (report != nullptr) {
+                report->add_error(Lightmap_report::Stage::partition, task.subject, fmt::format("unwrap failed: {}", e.what()));
+            }
+            return;
+        }
+
+        std::shared_ptr<erhe::primitive::Primitive> piece_primitive = std::make_shared<erhe::primitive::Primitive>(atlas_geometry);
+        const bool renderable_ok = piece_primitive->make_renderable_mesh(build_info, task.normal_style);
+        const bool raytrace_ok   = renderable_ok && piece_primitive->make_raytrace();
+        if (!renderable_ok || !raytrace_ok) {
+            if (report != nullptr) {
+                report->add_error(
+                    Lightmap_report::Stage::partition,
+                    task.subject,
+                    renderable_ok ? "raytrace build failed" : "renderable mesh build failed"
+                );
+            }
+            return;
+        }
+        task.result = std::move(piece_primitive);
+    };
+    if ((m_context.executor != nullptr) && (tasks.size() > 1)) {
+        tf::Taskflow taskflow;
+        taskflow.for_each_index(
+            std::size_t{0}, tasks.size(), std::size_t{1},
+            [&tasks, &unwrap_piece](const std::size_t i) { unwrap_piece(tasks[i]); }
         );
-        entry.piece_node->attach(entry.piece_mesh);
-        entry.piece_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::show_in_ui);
-        entries.push_back(std::move(entry));
+        m_context.executor->run(taskflow).wait();
+    } else {
+        for (Piece_task& task : tasks) {
+            unwrap_piece(task);
+        }
+    }
+
+    // ---- Phase 3 (serial): assemble piece meshes in task order (identical
+    // to the old serial order; ordinals count successful pieces per
+    // (source mesh, source primitive)), dropping entries with no pieces.
+    std::vector<std::vector<erhe::scene::Mesh_primitive>> piece_primitives_per_entry(entries.size());
+    {
+        std::size_t last_entry_index = std::numeric_limits<std::size_t>::max();
+        std::size_t last_primitive   = std::numeric_limits<std::size_t>::max();
+        int         ordinal          = 0;
+        for (Piece_task& task : tasks) {
+            if (!task.result) {
+                continue; // failure, reported in phase 2
+            }
+            if ((task.entry_index != last_entry_index) || (task.source_primitive_index != last_primitive)) {
+                last_entry_index = task.entry_index;
+                last_primitive   = task.source_primitive_index;
+                ordinal          = 0;
+            }
+            piece_primitives_per_entry[task.entry_index].emplace_back(std::move(task.result), task.material);
+            entries[task.entry_index].pieces.push_back(
+                Piece_info{
+                    .tile                   = task.tile,
+                    .source_primitive_index = task.source_primitive_index,
+                    .ordinal                = ordinal++
+                }
+            );
+        }
+    }
+    std::size_t total_pieces = 0;
+    {
+        std::vector<Original_entry> kept;
+        kept.reserve(entries.size());
+        for (std::size_t entry_index = 0; entry_index < entries.size(); ++entry_index) {
+            Original_entry& entry = entries[entry_index];
+            std::vector<erhe::scene::Mesh_primitive>& piece_primitives = piece_primitives_per_entry[entry_index];
+            if (piece_primitives.empty()) {
+                continue;
+            }
+            total_pieces += piece_primitives.size();
+            erhe::scene::Node* const node = entry.original_mesh->get_node();
+            entry.piece_node = std::make_shared<erhe::scene::Node>(fmt::format("{}.lm", (node != nullptr) ? node->get_name() : entry.original_mesh->get_name()));
+            entry.piece_mesh = std::make_shared<erhe::scene::Mesh>(fmt::format("{}.lm", entry.original_mesh->get_name()));
+            entry.piece_mesh->layer_id = scene_root.layers().content()->id;
+            entry.piece_mesh->set_primitives(piece_primitives);
+            entry.piece_mesh->enable_flag_bits(
+                erhe::Item_flags::content     |
+                erhe::Item_flags::visible     |
+                erhe::Item_flags::shadow_cast |
+                erhe::Item_flags::show_in_ui
+            );
+            entry.piece_node->attach(entry.piece_mesh);
+            entry.piece_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::show_in_ui);
+            kept.push_back(std::move(entry));
+        }
+        entries = std::move(kept);
     }
 
     if (entries.empty()) {
