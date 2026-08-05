@@ -579,8 +579,14 @@ void generate_mesh_atlas_texture_coordinates(
     const double              chart_min_side_texels,
     const std::vector<float>* per_facet_chart_order)
 {
-    // Geogram algorithm (mesh_make_atlas / chart parameterization) - see geogram_lock().
-    const std::lock_guard<std::recursive_mutex> geogram_guard{geogram_lock()};
+    // geogram_lock() is taken only around the Geogram branch below: the
+    // per-facet branch reaches no Geogram *algorithm* (see geogram_lock()
+    // docs) - vertices precision toggles, facets.connect(), attribute
+    // binds/creates and erhe's own packing are all mesh-local (verified
+    // serial at the geogram pin: mesh.cpp has no parallel_for / progress
+    // tasks; attribute stores are per-mesh with spinlocked observers and
+    // read-only type registries) - so concurrent per-facet unwraps of
+    // DIFFERENT meshes may run in parallel on worker threads.
 
     // Precondition: attributes is UNBOUND (see header). mesh_make_atlas() reads
     // vertices.point() in double precision and grows charts across facet
@@ -610,19 +616,17 @@ void generate_mesh_atlas_texture_coordinates(
             mesh.facets.nb(), target_texels
         );
     } else {
-        // Geogram's progress system uses a process-global, non-thread-safe task
-        // stack (basic/progress.cpp: "geo_assert(progress_tasks_.top() == task)"),
-        // and the atlas packer/parameterizer carries further process-global state.
-        // The editor builds brushes on many worker threads, so concurrent
-        // mesh_make_atlas() calls corrupt that global state (assertion in
-        // progress.cpp end_task(), and intermittent heap corruption inside the
-        // packer). A single mesh_make_atlas() call is safe (the MCP / remesh paths
-        // use one at a time), so serialize the Geogram call here; the surrounding
-        // per-mesh work stays parallel. This serialization is REQUIRED with the
-        // geogram pin at 5a96c38e (which does not have the thread-local
-        // ProgressTask change) and is the robust fix regardless of that change.
-        static std::mutex           s_mesh_make_atlas_mutex;
-        std::lock_guard<std::mutex> lock{s_mesh_make_atlas_mutex};
+        // Geogram algorithms (mesh_make_atlas / chart parameterization /
+        // pack_atlas_only_normalize_charts) - see geogram_lock(). Geogram's
+        // progress system uses a process-global task stack, its Windows
+        // thread-pool manager corrupts thread-id assignment when
+        // parallel_for is entered from two threads at once, and the atlas
+        // packer/parameterizer carries further process-global state; the
+        // editor builds brushes / async unwraps on many worker threads, so
+        // the Geogram calls must be serialized (observed pre-serialization:
+        // progress.cpp end_task() assertion and intermittent heap corruption
+        // inside the packer).
+        const std::lock_guard<std::recursive_mutex> geogram_guard{geogram_lock()};
         GEO::mesh_make_atlas(
             mesh,
             hard_angles_threshold,

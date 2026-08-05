@@ -166,6 +166,15 @@ protected:
 
     Mesh_operation_parameters m_parameters;
     std::vector<Entry>        m_entries;
+    // make_entries() wraps the geometry-operation callback in
+    // erhe::geometry::geogram_lock() by default, because most operation
+    // implementations reach Geogram algorithms without locking themselves.
+    // An operation whose implementation takes the lock internally exactly
+    // where Geogram is involved (e.g. Make_atlas_operation - make_atlas
+    // locks only its Geogram-parameterizer branch, so per-facet unwraps of
+    // different meshes run in parallel on worker threads) sets this false
+    // in its constructor BEFORE calling make_entries().
+    bool                      m_callback_requires_geogram_lock{true};
 };
 
 }

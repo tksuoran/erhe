@@ -401,6 +401,12 @@ Make_atlas_operation::Make_atlas_operation(
     : Mesh_operation{std::move(context)}
 {
     set_description("Make atlas");
+    // make_atlas() takes geogram_lock() internally, only around its
+    // Geogram-parameterizer branch - the per-facet branch reaches no Geogram
+    // algorithm. Skipping the blanket make_entries() wrap lets per-facet
+    // unwraps of different meshes run concurrently on worker threads
+    // (Generate Lightmap UVs / Reorder Charts queue one operation per mesh).
+    m_callback_requires_geogram_lock = false;
     Lightmap_report* const report = m_parameters.context.lightmap_report;
     make_entries(
         [usage_index, hard_angles_threshold, parameterizer, packer, lightmap_texels_per_meter, chart_gutter_texels, chart_min_side_texels, report, per_facet_chart_order = std::move(per_facet_chart_order)](

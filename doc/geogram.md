@@ -120,11 +120,18 @@ Guarded choke points (each takes the lock internally):
 - `operation::Repair/Weld/Remesh/Decimate/Smooth::build()` (mesh_repair,
   MeshSurfaceIntersection, CVT remesh/decimate/smooth)
 - `Geometry_operation::run_mesh_boolean_operation()` (mesh_boolean_operation)
-- `operation::generate_mesh_atlas_texture_coordinates()`
+- `operation::generate_mesh_atlas_texture_coordinates()` - only its
+  Geogram-parameterizer branch (mesh_make_atlas / pack_atlas_only_
+  normalize_charts); the per_facet branch reaches no Geogram algorithm
+  (mesh-local loops + attribute binds; mesh.cpp `connect()`/`copy()` are
+  serial at the pin) and runs UNLOCKED, so per-facet unwraps of different
+  meshes parallelize across workers (2026-08-05)
 - `Json_library` polyhedron load (mesh_repair) in the editor
 - editor `Mesh_operation::make_entries` additionally wraps the whole
   geometry-operation callback (belt and suspenders for operations not listed
-  above)
+  above); an operation whose implementation locks internally exactly where
+  Geogram is involved opts out via `m_callback_requires_geogram_lock = false`
+  (currently only `Make_atlas_operation`)
 
 NOT guarded (mesh-local, no geogram algorithm): element/attribute
 construction, `facets.connect()`, `geometry_from_flat_data`,

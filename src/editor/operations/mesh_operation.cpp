@@ -289,8 +289,13 @@ void Mesh_operation::make_entries(
                     // async operations run on other workers. See
                     // erhe::geometry::geogram_lock(). Scoped to the geometry
                     // operation only: the buffer-mesh / raytrace builds below
-                    // take their own (inner) locks.
-                    const std::lock_guard<std::recursive_mutex> geogram_guard{erhe::geometry::geogram_lock()};
+                    // take their own (inner) locks. Skipped for operations
+                    // that lock internally exactly where Geogram is involved
+                    // (m_callback_requires_geogram_lock in the header).
+                    std::unique_lock<std::recursive_mutex> geogram_guard{erhe::geometry::geogram_lock(), std::defer_lock};
+                    if (m_callback_requires_geogram_lock) {
+                        geogram_guard.lock();
+                    }
                     geometry_operation(*before_geometry.get(), *after_geometry.get(), node, selected_facets, remap_source, &remap_destination);
                 }
 

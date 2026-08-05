@@ -156,8 +156,11 @@ auto Lightmap_partitioner::prepare(Scene_root& scene_root, const Params& params)
                     fmt::format("{}.tile{}", subject, piece.tile)
                 );
                 const std::string piece_subject = atlas_geometry->get_name();
+                // make_atlas takes geogram_lock() internally, only around its
+                // Geogram-parameterizer branch - per-facet piece unwraps need
+                // no serialization (a prerequisite for parallelizing this
+                // loop later).
                 try {
-                    const std::lock_guard<std::recursive_mutex> geogram_guard{erhe::geometry::geogram_lock()};
                     try {
                         erhe::geometry::operation::make_atlas(
                             *piece.geometry.get(),
