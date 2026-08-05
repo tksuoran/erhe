@@ -98,6 +98,12 @@ with duplicate node names, undo interactions while a partition is live.
 
 ## Known limitations / next work
 
+0. **QUEUED (user-directed 2026-08-05, prompt_queue.txt ITEM -1): fuse
+   Generate Lightmap UVs + Update Atlas Layout + Prepare World-Space Tiles
+   into one self-contained Prepare.** The whole-mesh unwrap only feeds kd
+   split sizing and is discarded (pieces re-unwrap); size the split from
+   world areas instead and drop the channel-2 precondition. Plan in a
+   fresh context; the queue item carries the full rationale and anchors.
 1. prepare() is blocking (main thread); async pipeline + cancel + progress
    bar is future work (per-piece work is parallelizable; per_facet unwrap
    needs no geogram solver serialization).
