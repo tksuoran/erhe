@@ -131,6 +131,10 @@ private:
     auto action_lightmap_bake_gbuffer(const nlohmann::json& args) -> std::string;
     auto action_lightmap_bake_direct (const nlohmann::json& args) -> std::string;
     auto action_lightmap_set_baking  (const nlohmann::json& args) -> std::string;
+    auto action_lightmap_bake_to_disk(const nlohmann::json& args) -> std::string;
+    auto action_lightmap_prepare_tiles(const nlohmann::json& args) -> std::string;
+    auto action_lightmap_revert_tiles (const nlohmann::json& args) -> std::string;
+    auto action_lightmap_set_render   (const nlohmann::json& args) -> std::string;
     auto action_lightmap_frame_selection(const nlohmann::json& args) -> std::string;
     auto action_lightmap_reorder_charts (const nlohmann::json& args) -> std::string;
     auto query_active_scene     (const nlohmann::json& args) -> std::string;

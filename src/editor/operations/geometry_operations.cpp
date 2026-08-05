@@ -2,6 +2,7 @@
 #include "operations/item_insert_remove_operation.hpp"
 
 #include "app_context.hpp"
+#include "renderers/lightmap_report.hpp"
 #include "tools/selection_tool.hpp"
 #include "scene/scene_root.hpp"
 
@@ -400,8 +401,9 @@ Make_atlas_operation::Make_atlas_operation(
     : Mesh_operation{std::move(context)}
 {
     set_description("Make atlas");
+    Lightmap_report* const report = m_parameters.context.lightmap_report;
     make_entries(
-        [usage_index, hard_angles_threshold, parameterizer, packer, lightmap_texels_per_meter, chart_gutter_texels, chart_min_side_texels, per_facet_chart_order = std::move(per_facet_chart_order)](
+        [usage_index, hard_angles_threshold, parameterizer, packer, lightmap_texels_per_meter, chart_gutter_texels, chart_min_side_texels, report, per_facet_chart_order = std::move(per_facet_chart_order)](
             const erhe::geometry::Geometry& source,
             erhe::geometry::Geometry&       destination,
             erhe::scene::Node*              node
@@ -415,7 +417,38 @@ Make_atlas_operation::Make_atlas_operation(
             }
             const auto order_it = per_facet_chart_order.find(&source);
             const std::vector<float>* const order_keys = (order_it != per_facet_chart_order.end()) ? &order_it->second : nullptr;
-            erhe::geometry::operation::make_atlas(source, destination, usage_index, static_cast<double>(hard_angles_threshold), parameterizer, packer, density, static_cast<double>(chart_gutter_texels), static_cast<double>(chart_min_side_texels), order_keys);
+            const std::string subject = (node != nullptr) ? node->get_name() : source.get_name();
+            // Geogram parameterizers (ABF++ & co) throw on assertion
+            // failures for degenerate input. Retry once with the per-facet
+            // parameterizer, which skips Geogram entirely and cannot throw,
+            // so one bad mesh no longer aborts the whole batch unseen -
+            // requirement: unwrap failures must surface in the Lightmap
+            // window (via Lightmap_report) and UV generation must succeed.
+            try {
+                erhe::geometry::operation::make_atlas(source, destination, usage_index, static_cast<double>(hard_angles_threshold), parameterizer, packer, density, static_cast<double>(chart_gutter_texels), static_cast<double>(chart_min_side_texels), order_keys);
+            } catch (const std::exception& e) {
+                if (parameterizer == erhe::geometry::operation::Atlas_parameterizer::per_facet) {
+                    if (report != nullptr) {
+                        report->add_error(Lightmap_report::Stage::uv_unwrap, subject, e.what());
+                    }
+                    throw;
+                }
+                if (report != nullptr) {
+                    report->add_warning(
+                        Lightmap_report::Stage::uv_unwrap,
+                        subject,
+                        fmt::format("parameterizer failed ({}); fell back to per-facet unwrap", e.what())
+                    );
+                }
+                try {
+                    erhe::geometry::operation::make_atlas(source, destination, usage_index, static_cast<double>(hard_angles_threshold), erhe::geometry::operation::Atlas_parameterizer::per_facet, packer, density, static_cast<double>(chart_gutter_texels), static_cast<double>(chart_min_side_texels), order_keys);
+                } catch (const std::exception& retry_error) {
+                    if (report != nullptr) {
+                        report->add_error(Lightmap_report::Stage::uv_unwrap, subject, retry_error.what());
+                    }
+                    throw;
+                }
+            }
         }
     );
     set_description(fmt::format("Make atlas {}", describe_entries()));

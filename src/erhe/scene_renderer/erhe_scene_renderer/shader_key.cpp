@@ -182,10 +182,18 @@ auto Shader_key::derive(
         if (has_normal_0 && !is_unlit) {
             key.set(Shader_bool::USE_VERTEX_VARYING_NORMAL, true);
         }
+        // Unlit ignores the normal map / anisotropy entirely, and NORMAL
+        // above is gated on !is_unlit: an unlit material with a bound
+        // normal texture (e.g. exported LOD assets) must not enable the
+        // tangent frame or standard.vert's BITANGENT => TANGENT && NORMAL
+        // declaration invariant breaks ('bitangent' undeclared).
         const bool needs_tangent_frame =
-            sampler_is_bound(samplers.normal) ||
-            is_anisotropic_brdf ||
-            data.use_circular_brushed_metal;
+            !is_unlit &&
+            (
+                sampler_is_bound(samplers.normal) ||
+                is_anisotropic_brdf ||
+                data.use_circular_brushed_metal
+            );
         if (has_tangent && has_normal_0 && needs_tangent_frame) {
             key.set(Shader_bool::USE_VERTEX_VARYING_TANGENT,   true);
             key.set(Shader_bool::USE_VERTEX_VARYING_BITANGENT, true);

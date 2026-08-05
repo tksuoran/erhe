@@ -419,6 +419,14 @@ erhe_target_sources_grouped(
     renderers/render_style.hpp
     renderers/lightmap_baker.cpp
     renderers/lightmap_baker.hpp
+    renderers/lightmap_partitioner.cpp
+    renderers/lightmap_partitioner.hpp
+    renderers/lightmap_report.cpp
+    renderers/lightmap_report.hpp
+    renderers/lightmap_streamer.cpp
+    renderers/lightmap_streamer.hpp
+    renderers/lightmap_tile_io.cpp
+    renderers/lightmap_tile_io.hpp
     renderers/ray_trace_renderer.cpp
     renderers/ray_trace_renderer.hpp
     renderers/sky_renderer.cpp

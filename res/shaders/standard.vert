@@ -315,7 +315,11 @@ void main()
     v_T              = normalize(tangent  );
 #   endif
 
-#   if defined(ERHE_USE_VERTEX_VARYING_BITANGENT)
+    // Guard must match the bitangent declaration above (BITANGENT alone is
+    // not enough - the cross product needs normal and tangent), so a key
+    // that violates the BITANGENT => TANGENT && NORMAL invariant degrades
+    // to an unwritten varying instead of a compile error.
+#   if defined(ERHE_USE_VERTEX_VARYING_BITANGENT) && defined(ERHE_USE_VERTEX_VARYING_TANGENT) && defined(ERHE_USE_VERTEX_VARYING_NORMAL)
     v_B              = normalize(bitangent);
 #   endif
 

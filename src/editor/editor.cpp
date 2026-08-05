@@ -84,6 +84,9 @@
 #include "renderers/prewarm.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/lightmap_baker.hpp"
+#include "renderers/lightmap_report.hpp"
+#include "renderers/lightmap_partitioner.hpp"
+#include "renderers/lightmap_streamer.hpp"
 #include "renderers/ray_trace_renderer.hpp"
 #include "renderers/sky_renderer.hpp"
 #include "rendergraph/post_processing.hpp"
@@ -781,6 +784,7 @@ public:
                 m_lightmap_window->update();
             }
             if (m_lightmap_baker) {
+                m_lightmap_baker->set_tile_config(lightmap_config.tile_texture_size, lightmap_config.resident_tile_budget);
                 m_lightmap_baker->set_options(
                     Lightmap_baker::Bake_options{
                         .indirect_bounce = lightmap_config.indirect_bounce,
@@ -796,8 +800,41 @@ public:
                     }
                 );
             }
+            // A finished offline bake left fresh tiles on disk; make the
+            // streamer reload them.
+            if (m_lightmap_baker && m_lightmap_streamer) {
+                const bool offline_active = m_lightmap_baker->is_offline_bake_active();
+                if (m_lightmap_offline_was_active && !offline_active) {
+                    m_lightmap_streamer->invalidate();
+                }
+                m_lightmap_offline_was_active = offline_active;
+            }
+            // Camera for tile residency ranking (both the interactive
+            // baker's clamp and the disk streamer): the last-used viewport
+            // camera, falling back to the scene's first camera; no camera
+            // at all = keep current residency / bake all tiles.
+            const std::shared_ptr<Scene_root> lightmap_scene_root = m_app_context.selection->get_active_scene_root();
+            glm::vec3  lightmap_camera_position{0.0f};
+            glm::vec3* lightmap_camera_position_ptr{nullptr};
+            if (lightmap_scene_root) {
+                std::shared_ptr<erhe::scene::Camera> camera{};
+                if (m_viewport_scene_views) {
+                    const std::shared_ptr<Viewport_scene_view> scene_view = m_viewport_scene_views->last_scene_view();
+                    camera = scene_view ? scene_view->get_camera() : nullptr;
+                }
+                if (!camera) {
+                    const std::vector<std::shared_ptr<erhe::scene::Camera>>& cameras = lightmap_scene_root->get_scene().get_cameras();
+                    if (!cameras.empty()) {
+                        camera = cameras.front();
+                    }
+                }
+                const erhe::scene::Node* const camera_node = camera ? camera->get_node() : nullptr;
+                if (camera_node != nullptr) {
+                    lightmap_camera_position     = glm::vec3{camera_node->world_from_node()[3]};
+                    lightmap_camera_position_ptr = &lightmap_camera_position;
+                }
+            }
             if (should_render && m_lightmap_baker && m_lightmap_baker->is_baking_enabled()) {
-                const std::shared_ptr<Scene_root> lightmap_scene_root = m_app_context.selection->get_active_scene_root();
                 if (lightmap_scene_root) {
                     // Procedural sky lighting for the bake: same per-scene
                     // sky resolution + sun direction the viewport uses, so
@@ -832,40 +869,31 @@ public:
                         m_lightmap_baker->set_sky_lighting(sky);
                     }
                     erhe::log::set_breadcrumb("tick: lightmap bake");
-                    // Camera clamp for tiled atlases (active_tile_budget):
-                    // rank tile cells by distance from the last-used
-                    // viewport camera, falling back to the scene's first
-                    // camera before any viewport has been used; no camera
-                    // at all = bake all tiles.
-                    glm::vec3  camera_position{0.0f};
-                    glm::vec3* camera_position_ptr{nullptr};
-                    {
-                        std::shared_ptr<erhe::scene::Camera> camera{};
-                        if (m_viewport_scene_views) {
-                            const std::shared_ptr<Viewport_scene_view> scene_view = m_viewport_scene_views->last_scene_view();
-                            camera = scene_view ? scene_view->get_camera() : nullptr;
-                        }
-                        if (!camera) {
-                            const std::vector<std::shared_ptr<erhe::scene::Camera>>& cameras = lightmap_scene_root->get_scene().get_cameras();
-                            if (!cameras.empty()) {
-                                camera = cameras.front();
-                            }
-                        }
-                        const erhe::scene::Node* const camera_node = camera ? camera->get_node() : nullptr;
-                        if (camera_node != nullptr) {
-                            camera_position     = glm::vec3{camera_node->world_from_node()[3]};
-                            camera_position_ptr = &camera_position;
-                        }
-                    }
                     m_lightmap_baker->tick(
                         command_buffer,
                         *lightmap_scene_root.get(),
                         lightmap_config.texels_per_meter,
                         lightmap_config.uv_min_chart_texels,
-                        camera_position_ptr,
+                        lightmap_camera_position_ptr,
                         lightmap_config.active_tile_budget
                     );
                     m_forward_renderer->set_lightmap_texture(m_lightmap_baker->get_lightmap_texture());
+                }
+            } else if (
+                should_render &&
+                m_lightmap_streamer &&
+                lightmap_scene_root &&
+                (!m_lightmap_baker || !m_lightmap_baker->is_offline_bake_active())
+            ) {
+                // Baked-tile streaming from <scene>.lightmap/: whenever the
+                // interactive / offline baker does not own the lightmap
+                // binding, the streamer keeps the N nearest tiles resident
+                // and binds its atlas.
+                erhe::log::set_breadcrumb("tick: lightmap stream");
+                m_lightmap_streamer->set_budget(lightmap_config.resident_tile_budget);
+                m_lightmap_streamer->update(*lightmap_scene_root.get(), lightmap_camera_position_ptr);
+                if (m_lightmap_streamer->has_resident_tiles()) {
+                    m_forward_renderer->set_lightmap_texture(m_lightmap_streamer->get_texture());
                 }
             }
         }
@@ -1890,7 +1918,12 @@ public:
                     *m_mesh_memory.get(),
                     m_editor_settings.ray_trace
                 );
-                m_lightmap_baker = std::make_unique<Lightmap_baker>(*m_graphics_device.get(), *m_mesh_memory.get());
+                m_lightmap_baker  = std::make_unique<Lightmap_baker>(*m_graphics_device.get(), *m_mesh_memory.get());
+                m_lightmap_report = std::make_unique<Lightmap_report>();
+                m_lightmap_baker->set_report(m_lightmap_report.get());
+                m_lightmap_streamer    = std::make_unique<Lightmap_streamer>(*m_graphics_device.get(), m_app_context);
+                m_lightmap_partitioner = std::make_unique<Lightmap_partitioner>(m_app_context);
+                m_lightmap_baker->set_partitioner(m_lightmap_partitioner.get());
             }
             ERHE_TASK_FOOTER( .name("Post_processing") );
 
@@ -2831,6 +2864,9 @@ public:
         m_app_context.sky_renderer             = m_sky_renderer          .get();
         m_app_context.ray_trace_renderer       = m_ray_trace_renderer    .get();
         m_app_context.lightmap_baker           = m_lightmap_baker        .get();
+        m_app_context.lightmap_partitioner     = m_lightmap_partitioner  .get();
+        m_app_context.lightmap_report          = m_lightmap_report       .get();
+        m_app_context.lightmap_streamer        = m_lightmap_streamer     .get();
         m_app_context.programs                 = m_programs              .get();
         m_app_context.rotate_tool              = m_rotate_tool           .get();
         m_app_context.scale_tool               = m_scale_tool            .get();
@@ -3002,6 +3038,12 @@ public:
         // dead-scene items alive or feed them to tools. Other scenes'
         // selections are untouched.
         m_selection->clear_selection(static_cast<erhe::Item_host*>(scene_root.get()));
+
+        // The lightmap partitioner stores shared_ptrs to this scene's meshes
+        // and piece nodes; drop them so the closed scene's content is released.
+        if (m_lightmap_partitioner) {
+            m_lightmap_partitioner->on_scene_closed(scene_root.get());
+        }
 
         // Stop tracking this scene as the active scene; consumers fall back
         // via Selection::get_active_scene_root() until another scene is
@@ -3797,6 +3839,10 @@ public:
     std::unique_ptr<Sky_renderer                    >        m_sky_renderer;
     std::unique_ptr<Ray_trace_renderer              >        m_ray_trace_renderer;
     std::unique_ptr<Lightmap_baker                  >        m_lightmap_baker;
+    std::unique_ptr<Lightmap_report                 >        m_lightmap_report;
+    std::unique_ptr<Lightmap_streamer               >        m_lightmap_streamer;
+    std::unique_ptr<Lightmap_partitioner            >        m_lightmap_partitioner;
+    bool                                                     m_lightmap_offline_was_active{false};
     std::unique_ptr<Id_renderer                     >        m_id_renderer;
     std::unique_ptr<Composer_window                 >        m_composer_window;
     std::unique_ptr<Selection_window                >        m_selection_window;

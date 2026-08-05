@@ -7,6 +7,8 @@
 #include "items.hpp"
 #include "operations/geometry_operations.hpp"
 #include "renderers/lightmap_baker.hpp"
+#include "renderers/lightmap_partitioner.hpp"
+#include "renderers/lightmap_tile_io.hpp"
 #include "windows/lightmap_texture_window.hpp"
 #include "windows/lightmap_window.hpp"
 #include "scene/generated/scene_settings_serialization.hpp"
@@ -341,6 +343,10 @@ auto Mcp_server::action_lightmap_update_atlas(const json& args) -> std::string
         );
     }
     const float texels_per_meter = args.value("texels_per_meter", m_context.editor_settings->lightmap.texels_per_meter);
+    m_context.lightmap_baker->set_tile_config(
+        args.value("tile_texture_size",    m_context.editor_settings->lightmap.tile_texture_size),
+        args.value("resident_tile_budget", m_context.editor_settings->lightmap.resident_tile_budget)
+    );
     const bool  packed           = m_context.lightmap_baker->update_layout(*sr, texels_per_meter, m_context.editor_settings->lightmap.uv_min_chart_texels);
 
     const Lightmap_baker::Atlas_layout& layout = m_context.lightmap_baker->get_layout();
@@ -349,6 +355,7 @@ auto Mcp_server::action_lightmap_update_atlas(const json& args) -> std::string
         regions.push_back({
             {"mesh",            region.mesh ? region.mesh->get_name() : ""},
             {"primitive_index", region.primitive_index},
+            {"tile",            region.tile},
             {"x",               region.x},
             {"y",               region.y},
             {"width",           region.width},
@@ -358,12 +365,33 @@ auto Mcp_server::action_lightmap_update_atlas(const json& args) -> std::string
             {"uv_scale_offset", {region.uv_scale_offset.x, region.uv_scale_offset.y, region.uv_scale_offset.z, region.uv_scale_offset.w}}
         });
     }
+    json tiles = json::array();
+    for (const Lightmap_baker::Tile& tile : layout.tiles) {
+        tiles.push_back({
+            {"slot",          tile.slot},
+            {"density_scale", tile.density_scale},
+            {"bounds_min",    {tile.world_bounds.min.x, tile.world_bounds.min.y, tile.world_bounds.min.z}},
+            {"bounds_max",    {tile.world_bounds.max.x, tile.world_bounds.max.y, tile.world_bounds.max.z}}
+        });
+    }
+    json kd_nodes = json::array();
+    for (const erhe::geometry::operation::Clip_tree_node& node : layout.kd_nodes) {
+        kd_nodes.push_back({
+            {"axis",  node.axis},
+            {"value", node.value},
+            {"child", {node.child[0], node.child[1]}},
+            {"tile",  node.tile}
+        });
+    }
     return make_json_content({
         {"packed",           packed},
         {"texels_per_meter", texels_per_meter},
         {"width",            layout.width},
         {"height",           layout.height},
-        {"regions",          regions}
+        {"tile_size",        layout.tile_size},
+        {"tiles",            tiles},
+        {"regions",          regions},
+        {"kd_nodes",         kd_nodes}
     }).dump();
 }
 
@@ -379,34 +407,23 @@ auto Mcp_server::action_lightmap_bake_gbuffer(const json& args) -> std::string
         r["isError"] = true;
         return r.dump();
     }
-    // The G-buffer targets are cell-sized and hold one tile cell at a
-    // time; raster every content cell in turn so multi-cell pages are
-    // fully exercised, writing per-cell debug PNGs (suffix _cell<N> on
-    // multi-cell pages) after each cell's bake while its data is resident.
+    // The G-buffer targets are tile-sized and hold one spatial tile at a
+    // time; raster every tile in turn so multi-tile layouts are fully
+    // exercised, writing per-tile debug PNGs (suffix _tile<N> on multi-
+    // tile layouts) after each tile's bake while its data is resident.
     const Lightmap_baker::Atlas_layout& layout = m_context.lightmap_baker->get_layout();
-    std::vector<int> content_cells;
-    for (int cell = 0; cell < layout.get_cell_count(); ++cell) {
-        const bool has_content = std::any_of(
-            layout.regions.begin(),
-            layout.regions.end(),
-            [cell](const Lightmap_baker::Instance_region& region) { return region.cell == cell; }
-        );
-        if (has_content) {
-            content_cells.push_back(cell);
-        }
-    }
     const std::string debug_png_base = args.value("debug_png_base", "");
     json files       = json::array();
-    int  baked_cells = 0;
+    int  baked_tiles = 0;
     bool pngs_ok     = !debug_png_base.empty();
-    for (const int cell : content_cells) {
-        if (!m_context.lightmap_baker->bake_gbuffer(cell)) {
+    for (int tile = 0; tile < layout.get_tile_count(); ++tile) {
+        if (!m_context.lightmap_baker->bake_gbuffer(tile)) {
             continue;
         }
-        ++baked_cells;
+        ++baked_tiles;
         if (!debug_png_base.empty()) {
-            const std::string base = (content_cells.size() > 1)
-                ? fmt::format("{}_cell{}", debug_png_base, cell)
+            const std::string base = (layout.get_tile_count() > 1)
+                ? fmt::format("{}_tile{}", debug_png_base, tile)
                 : debug_png_base;
             if (m_context.lightmap_baker->debug_write_gbuffer_pngs(base)) {
                 files.push_back(base + "_position.png");
@@ -416,15 +433,15 @@ auto Mcp_server::action_lightmap_bake_gbuffer(const json& args) -> std::string
             }
         }
     }
-    if (baked_cells == 0) {
+    if (baked_tiles == 0) {
         json r = make_text_content("G-buffer bake failed (no layout? run lightmap_update_atlas first)");
         r["isError"] = true;
         return r.dump();
     }
     json result{
         {"baked",       true},
-        {"baked_cells", baked_cells},
-        {"cell_count",  layout.get_cell_count()},
+        {"baked_tiles", baked_tiles},
+        {"tile_count",  layout.get_tile_count()},
         {"width",       layout.width},
         {"height",      layout.height}
     };
@@ -506,6 +523,135 @@ auto Mcp_server::action_lightmap_set_baking(const json& args) -> std::string
         }
     }
     return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_lightmap_bake_to_disk(const json& args) -> std::string
+{
+    static_cast<void>(args);
+    if ((m_context.lightmap_window == nullptr) || (m_context.lightmap_baker == nullptr)) {
+        return make_error_content("Lightmap window / baker not available");
+    }
+    if (!m_context.lightmap_baker->is_bake_supported()) {
+        return make_error_content("Lightmap ray-query pipeline not available");
+    }
+    if (m_context.lightmap_baker->is_offline_bake_active()) {
+        return make_error_content("Offline bake already running");
+    }
+    const std::shared_ptr<Scene_root> scene_root = m_context.selection ? m_context.selection->get_active_scene_root() : nullptr;
+    if (!scene_root) {
+        return make_error_content("No active scene");
+    }
+    if (!m_context.lightmap_window->start_bake_to_disk()) {
+        return make_error_content("Failed to start bake-to-disk (no layout / no lightmapped meshes? check Lightmap window Problems)");
+    }
+    // Blocking run to completion: MCP-driven verification is headless, so
+    // stalling this frame is fine (each offline_tick bakes one full tile).
+    int guard = 0;
+    while (m_context.lightmap_baker->is_offline_bake_active() && (guard++ < 100000)) {
+        m_context.lightmap_baker->offline_tick(*scene_root.get());
+    }
+    const Lightmap_baker::Offline_progress& progress = m_context.lightmap_baker->get_offline_progress();
+    const std::filesystem::path directory = Lightmap_tile_io::directory_for_scene(scene_root->get_source_path());
+    return make_json_content({
+        {"tiles_baked", progress.tiles_done},
+        {"tile_count",  progress.tile_count},
+        {"sweeps",      progress.target_sweeps},
+        {"directory",   directory.string()},
+        {"completed",   progress.tiles_done == progress.tile_count}
+    }).dump();
+}
+
+auto Mcp_server::action_lightmap_prepare_tiles(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    auto* sr = find_scene(scene_name);
+    if (!sr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    if ((m_context.lightmap_partitioner == nullptr) || (m_context.lightmap_baker == nullptr) || (m_context.editor_settings == nullptr)) {
+        return make_error_content("Lightmap partitioner not available");
+    }
+    // Stale-data guard (same as lightmap_update_atlas): async UV generation
+    // still in flight would partition against old channel-2 UVs.
+    const std::size_t async_ops =
+        static_cast<std::size_t>(m_context.pending_async_ops.load()) +
+        static_cast<std::size_t>(m_context.running_async_ops.load()) +
+        ((m_context.operation_stack != nullptr) ? m_context.operation_stack->get_queued_count() : 0u);
+    if (async_ops > 0) {
+        return make_error_content(
+            "Operations still in flight (" + std::to_string(async_ops) +
+            ") - poll get_async_status until pending + running + queued_operations == 0, then retry"
+        );
+    }
+    const Lightmap_config& config = m_context.editor_settings->lightmap;
+    m_context.lightmap_baker->set_tile_config(
+        args.value("tile_texture_size",    config.tile_texture_size),
+        args.value("resident_tile_budget", config.resident_tile_budget)
+    );
+    const Lightmap_partitioner::Params params{
+        .texels_per_meter = args.value("texels_per_meter", config.texels_per_meter),
+        .min_face_texels  = config.uv_min_chart_texels,
+        .hard_angles_deg  = config.hard_angles_deg,
+        .gutter_texels    = config.uv_gutter_texels,
+        .min_chart_texels = config.uv_min_chart_texels,
+        .parameterizer    = static_cast<erhe::geometry::operation::Atlas_parameterizer>(std::clamp(config.uv_parameterizer, 0, 4)),
+        .packer           = static_cast<erhe::geometry::operation::Atlas_packer>(std::clamp(config.uv_packer, 0, 2))
+    };
+    const bool prepared = m_context.lightmap_partitioner->prepare(*sr, params);
+    if (!prepared) {
+        return make_error_content("Partition failed (no lightmapped meshes with channel-2 UVs? check Lightmap window Problems)");
+    }
+    m_context.lightmap_partitioner->set_render_with_lightmaps(config.render_with_lightmaps);
+    json meshes = json::array();
+    std::size_t piece_count = 0;
+    for (const Lightmap_partitioner::Original_entry& entry : m_context.lightmap_partitioner->get_entries()) {
+        json pieces = json::array();
+        for (const Lightmap_partitioner::Piece_info& piece : entry.pieces) {
+            pieces.push_back({
+                {"tile",                   piece.tile},
+                {"source_primitive_index", piece.source_primitive_index},
+                {"ordinal",                piece.ordinal}
+            });
+        }
+        piece_count += entry.pieces.size();
+        meshes.push_back({
+            {"original_mesh", entry.original_mesh ? entry.original_mesh->get_name() : ""},
+            {"piece_mesh",    entry.piece_mesh    ? entry.piece_mesh->get_name()    : ""},
+            {"pieces",        pieces}
+        });
+    }
+    return make_json_content({
+        {"prepared",    true},
+        {"mesh_count",  m_context.lightmap_partitioner->get_entries().size()},
+        {"piece_count", piece_count},
+        {"tile_count",  m_context.lightmap_partitioner->get_tile_count()},
+        {"meshes",      meshes}
+    }).dump();
+}
+
+auto Mcp_server::action_lightmap_revert_tiles(const json& args) -> std::string
+{
+    static_cast<void>(args);
+    if (m_context.lightmap_partitioner == nullptr) {
+        return make_error_content("Lightmap partitioner not available");
+    }
+    const bool was_prepared = m_context.lightmap_partitioner->is_prepared();
+    m_context.lightmap_partitioner->revert();
+    return make_json_content({{"reverted", was_prepared}}).dump();
+}
+
+auto Mcp_server::action_lightmap_set_render(const json& args) -> std::string
+{
+    if (m_context.lightmap_partitioner == nullptr) {
+        return make_error_content("Lightmap partitioner not available");
+    }
+    if (args.contains("enabled")) {
+        m_context.lightmap_partitioner->set_render_with_lightmaps(args.value("enabled", false));
+    }
+    return make_json_content({
+        {"render_with_lightmaps", m_context.lightmap_partitioner->get_render_with_lightmaps()},
+        {"prepared",              m_context.lightmap_partitioner->is_prepared()}
+    }).dump();
 }
 
 auto Mcp_server::action_lightmap_frame_selection(const json& args) -> std::string

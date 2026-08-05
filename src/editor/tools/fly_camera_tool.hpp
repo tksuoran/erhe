@@ -226,6 +226,10 @@ private:
     // view changes, so switching scenes adopts that scene's controls while live
     // edits persist within a scene.
     void apply_camera_controls_from_scene();
+    // Settings instance that apply_camera_controls_from_scene() will read back:
+    // the hovered scene's override when engaged, otherwise the editor-global
+    // defaults. Returns nullptr when editor settings are not available.
+    [[nodiscard]] auto get_writable_camera_controls() -> Camera_controls_config*;
     void window_imgui();
     void show_input_axis_ui(const char* label, erhe::math::Input_axis& input_axis) const;
 

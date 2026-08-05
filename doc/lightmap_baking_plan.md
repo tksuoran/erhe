@@ -688,3 +688,125 @@ logging to stdout, and a saturating (unbudgeted) dispatch loop.
   interchange export, lightmap block compression (BC6H/ASTC-HDR),
   skinned/dynamic geometry, non-Vulkan bake fallback (CPU embree path
   possible later via `erhe::raytrace`).
+
+## 9. Spatial tiling, bake-to-disk, and streaming (2026-08-05)
+
+Supersedes the single-page atlas (§2/§3) and delivers Phase 6
+persistence in per-tile form. Goal: baking and rendering always work
+with bounded memory, regardless of world extents, mesh count, or
+vertex density.
+
+- **Spatial partition** (`Lightmap_baker::update_layout`): regions are
+  assigned whole (by world-AABB XZ center) to spatial tiles via a
+  recursive area-weighted kd-median split of the XZ plane. Each tile
+  packs its regions (skyline, big-first) into one
+  `tile_texture_size`^2 texture (config, default 2048, pow2 256..8192).
+  Guarantees: tiles split until content fits; co-located sets that
+  cannot split spatially split by count into overlapping "overflow
+  tiles"; a single region denser than a tile flexes that tile's texel
+  density down (warning). Layout can only fail with zero regions.
+- **Region addressing**: `Instance_region` rects and `uv_scale_offset`
+  are tile-local. The renderer-facing mapping goes through the tile's
+  *display slot* (`Atlas_layout::display_uv_scale_offset`); the display
+  atlas is a grid of `ceil(sqrt(resident_tile_budget))`^2 tile-sized
+  slots (default 9 -> 3x3), so the forward renderer still samples one
+  plain 2D texture - zero shader changes. Non-resident tiles publish
+  zero scale/offset (the existing no-lightmap gate) and render unlit.
+- **Interactive residency**: the tick ranks tiles by camera distance to
+  their world bounds each frame and hands the display slots to the N
+  nearest; evicted tiles release their fp32 accumulation and zero
+  their regions. Bounce feedback across non-resident tiles reads black
+  (accepted bias; future: low-res per-tile radiance cache).
+- **Bake to disk** (`start_offline_bake` / `offline_tick`, Lightmap
+  window "Bake To Disk"): one tile per frame - G-buffer raster,
+  `offline_sweeps` full-tile gather submits, resolve/denoise/dilate/
+  seam-blend, CPU readback, then `Lightmap_tile_io` writes
+  `<scene>.lightmap/tile_<id>.lmt` (64-byte ELMT header + raw RGBA16F)
+  and rewrites `manifest.json` (version, tile size, density,
+  bake-parameter hash, world bounds + region table per tile). Only one
+  tile's working set is ever resident.
+- **Streaming** (`Lightmap_streamer`): when the baker does not own the
+  lightmap binding, the streamer keeps the `resident_tile_budget`
+  nearest tiles resident in its own slot atlas (worker-thread file
+  read, staging-buffer upload, <=1 load per frame, eviction hysteresis
+  = 1/4 of the incoming tile's XZ extent) and remaps
+  `Mesh_primitive::lightmap_uv_scale_offset` per residency change.
+  Region identity across reloads is node path + mesh name + primitive
+  index; renames orphan regions (unlit, never corrupt). A
+  bake-parameter hash mismatch flags the set stale in the Lightmap
+  window's Problems list.
+- **Failure surfacing** (`Lightmap_report`, App_context): UV unwrap
+  exceptions (per-mesh catch + automatic per-facet retry in
+  `Make_atlas_operation`), layout warnings (density flex, overflow
+  tiles, budget clamps), bake/persist/stream errors all render as the
+  red/yellow "Problems" list in the Lightmap window.
+
+## 10. World-space tile partitioning (2026-08-05)
+
+Requirement: bake ALL lightmap-enabled meshes in world space; every
+mesh/primitive instance is unique after baking; meshes split into the
+spatial tiles by clipping triangles at the tile boundary planes with all
+vertex attributes interpolated; clip results shared binary exact across
+the two tiles of a plane; originals kept in memory so clipping can be
+redone when parameters change.
+
+- **Clipper** (`erhe::geometry::operation::clip_by_tile_tree`,
+  `src/erhe/geometry/erhe_geometry/operation/clip_tile_tree.{hpp,cpp}`):
+  clips a world-space geometry once down the baker's kd tile tree
+  (`Clip_tree_node`: axis 0 = X / YZ plane, axis 2 = Z / XY plane,
+  axis -1 = overflow split routed by the pre-assigned tile). Each plane
+  is applied to each fan-triangulated fragment exactly once; cuts are
+  memoized per (canonical edge, tree node) so both sides reference one
+  record. Emission goes through a `Geometry_operation` subclass whose
+  identical ordered source lists make `interpolate_mesh_attributes()`
+  produce bitwise-identical positions and attributes in both pieces
+  (asserted by `test/test_clip_tile_tree.cpp` with memcmp). A vertex
+  exactly on a plane is emitted to both sides unmodified. Facet
+  provenance is kept as facet attribute "clip_source_facet".
+- **kd tree recording**: `update_layout` now emits
+  `Atlas_layout::kd_nodes` with explicit plane values (midpoint between
+  the sorted centers adjacent to the median split); pack-failure
+  re-splits extend the tree (spatial when the halves separate on X,
+  overflow otherwise).
+- **Partitioner** (`Lightmap_partitioner`,
+  `src/editor/renderers/lightmap_partitioner.{hpp,cpp}`): per
+  lightmapped mesh/primitive instance: `get_geometry()` ->
+  `bake_transform(world_from_node)` -> `clip_by_tile_tree` -> per-piece
+  `make_atlas` (usage 2, world-space density, per-facet fallback) ->
+  new `Primitive` (renderable + raytrace). Pieces become Mesh_primitives
+  of one mesh per source mesh on identity nodes under the
+  "Lightmap Pieces" group (world-space vertices, identity transform -
+  renderer/raytrace/shadows untouched). Originals stay in the scene;
+  the store keeps their primitives for revert / re-prepare. Not routed
+  through the undo stack (derived bake artifact). UI: Lightmap window
+  "Prepare World-Space Tiles" / "Revert Tiling"; MCP:
+  `lightmap_prepare_tiles` / `lightmap_revert_tiles` /
+  `lightmap_set_render`.
+- **Partitioned layout**: with a prepared partition, `update_layout`
+  derives regions from the piece meshes with their pre-assigned tiles
+  (no kd re-split; the tile tree is the stored partition). Packing can
+  only density-flex (tiles are fixed); pieces that cannot fit even at
+  minimum density are dropped with an error.
+- **Render toggle + white fallback**: "Render with lightmaps"
+  (persisted `lightmap.render_with_lightmaps`) flips visibility between
+  originals and pieces. In partitioned mode a non-resident region
+  publishes the sentinel `vec4(-1,0,0,0)`; `standard.frag` renders it
+  as flat white ambient with analytic lights still gated off, so every
+  lightmapped piece keeps rendering until its tile loads. Bounce
+  feedback clamps the sentinel to zero (white would inject fake
+  energy).
+- **Manifest v2 identity**: regions store node path + node index path
+  (root-to-node child indices - unique under duplicate names; fixes the
+  streamer collision) + mesh name + primitive index + piece_ordinal.
+  Pieces store the SOURCE mesh identity; the streamer resolves them
+  through the live partition (`Lightmap_partitioner::find_piece`) and
+  warns when a piece manifest streams without a prepared partition.
+  Evicted pieces publish the white-fallback sentinel.
+- **Accepted limitations**: cross-tile cut boundaries are genuine
+  lightmap seams (independent bakes/dilation; positions are crack-free,
+  only shading discontinuity remains). Exactness holds within one mesh;
+  pre-existing inter-mesh cracks are unchanged. Skinned meshes stay
+  excluded. Moving a source mesh after the clip leaves stale pieces
+  (window warns; re-prepare). prepare() is blocking (main thread);
+  async + cancel is future work. N-gon facets are fan-triangulated by
+  the clipper even when unclipped.

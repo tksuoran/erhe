@@ -50,6 +50,12 @@ public:
     // texture - the button only sets a flag.
     void update();
 
+    // Arms the baker's offline bake-to-disk (one tile per frame from
+    // update()): payloads + manifest land in <scene>.lightmap/ via
+    // Lightmap_tile_io. False when there is no layout / baker. Also
+    // reachable over MCP (lightmap_bake_to_disk).
+    auto start_bake_to_disk() -> bool;
+
 private:
     // Queues an undoable Make_atlas_operation (usage_index 2, method knobs
     // from Lightmap_config) for every lightmapped, non-skinned mesh node in

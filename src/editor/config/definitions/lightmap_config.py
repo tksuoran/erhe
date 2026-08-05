@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Lightmap_config",
-    version=7,
+    version=9,
     short_desc="Lightmap",
     long_desc="Lightmap baking settings (doc/lightmap_baking_plan.md). Texel density is the one quality knob; the boolean toggles switch individual bake/sampling features off for A/B comparison and debugging.",
     developer=False,
@@ -92,7 +92,47 @@ struct("Lightmap_config",
             added_in=7,
             default="0",
             short_desc="Active tiles",
-            long_desc="Camera-clamped baking for tiled atlases (pages larger than one 2048 tile cell): only the N tile cells whose regions are nearest the viewport camera keep gathering; the others stop accumulating, release their accumulation memory, and keep showing their last published result. 0 = bake all tiles.",
+            long_desc="Interactive baking clamp for multi-tile layouts: at most this many spatial tiles (of the resident, slot-holding set) gather at once, ranked by camera distance to their world bounds. The others stop accumulating and release their accumulation memory. 0 = the whole resident set (resident_tile_budget).",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "tile_texture_size",
+            Int,
+            added_in=8,
+            default="2048",
+            short_desc="Tile texture size",
+            long_desc="Texel side of one spatial lightmap tile (power of two, 256..8192). The world is partitioned into tiles whose content fits this texture at the requested density (spatial tile size adapts to object/vertex density; texel density flexes down only as a last resort), so layout and baking always succeed regardless of world extents. Also the size of every resident display slot; bake scratch memory scales with its square.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "resident_tile_budget",
+            Int,
+            added_in=8,
+            default="9",
+            short_desc="Resident tiles",
+            long_desc="How many spatial tiles may be resident in GPU memory at once (display atlas slots; 9 = a 3x3 grid around the camera). The nearest tiles stream in from <scene>.lightmap/ (or bake interactively); the rest render unlit until the camera approaches. Total lightmap GPU memory is bounded by this budget times tile_texture_size^2, regardless of world size. Further capped automatically by the device memory budget.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "offline_sweeps",
+            Int,
+            added_in=8,
+            default="64",
+            short_desc="Bake-to-disk sweeps",
+            long_desc="Accumulation sweeps gathered per tile by Bake To Disk before the tile is written to <scene>.lightmap/. Higher = less noise, linearly slower bake.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "render_with_lightmaps",
+            Bool,
+            added_in=9,
+            default="false",
+            short_desc="Render with lightmaps",
+            long_desc="World-space tile partition render toggle: on renders the clipped per-tile piece meshes ('Lightmap Pieces' group) for every lightmapped mesh - pieces of non-resident tiles fall back to a flat white lightmap - and hides the originals; off renders the original meshes. Takes effect when a partition is prepared (Prepare World-Space Tiles).",
             visible=True,
             developer=False
         ),

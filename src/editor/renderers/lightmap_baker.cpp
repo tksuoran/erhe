@@ -1,4 +1,7 @@
 #include "renderers/lightmap_baker.hpp"
+#include "renderers/lightmap_partitioner.hpp"
+#include "renderers/lightmap_report.hpp"
+#include "renderers/lightmap_tile_io.hpp"
 #include "editor_log.hpp"
 
 #include "scene/scene_root.hpp"
@@ -82,6 +85,56 @@ namespace {
     return std::pow(std::abs(det), 2.0f / 3.0f);
 }
 
+// Chart-space UV metrics of one region (see Instance_region::uv_coverage /
+// min_facet_uv_extent): summed facet UV area (fan triangles) in the [0,1]^2
+// chart space, and the smallest facet UV AABB shorter-axis extent.
+void compute_region_uv_metrics(erhe::geometry::Geometry& geometry, Lightmap_baker::Instance_region& region)
+{
+    erhe::geometry::Mesh_attributes& attributes = geometry.get_attributes();
+    const GEO::Mesh& geo_mesh = geometry.get_mesh();
+    float coverage         = 0.0f;
+    float min_facet_extent = std::numeric_limits<float>::max();
+    for (GEO::index_t facet : geo_mesh.facets) {
+        const GEO::index_t corner_count = geo_mesh.facets.nb_corners(facet);
+        if (corner_count < 3) {
+            continue;
+        }
+        const std::optional<GEO::vec2f> uv0 = attributes.corner_texcoord_2.try_get(geo_mesh.facets.corner(facet, 0));
+        if (!uv0.has_value()) {
+            continue;
+        }
+        GEO::vec2f uv_min = uv0.value();
+        GEO::vec2f uv_max = uv0.value();
+        for (GEO::index_t k = 1; k < corner_count; ++k) {
+            const std::optional<GEO::vec2f> uv = attributes.corner_texcoord_2.try_get(geo_mesh.facets.corner(facet, k));
+            if (!uv.has_value()) {
+                continue;
+            }
+            uv_min.x = std::min(uv_min.x, uv.value().x);
+            uv_min.y = std::min(uv_min.y, uv.value().y);
+            uv_max.x = std::max(uv_max.x, uv.value().x);
+            uv_max.y = std::max(uv_max.y, uv.value().y);
+            if (k >= 2) {
+                const std::optional<GEO::vec2f> uv1 = attributes.corner_texcoord_2.try_get(geo_mesh.facets.corner(facet, k - 1));
+                if (uv1.has_value()) {
+                    const GEO::vec2f e1 = uv1.value() - uv0.value();
+                    const GEO::vec2f e2 = uv.value()  - uv0.value();
+                    coverage += 0.5f * std::abs(e1.x * e2.y - e1.y * e2.x);
+                }
+            }
+        }
+        const float extent = std::min(uv_max.x - uv_min.x, uv_max.y - uv_min.y);
+        if (extent > 0.0f) {
+            min_facet_extent = std::min(min_facet_extent, extent);
+        }
+    }
+    // Floor at 5% (worst allowed boost ~4.5x per axis): lower coverage means
+    // broken or absurdly gutter-dominated UVs, where growing the region
+    // without bound would explode the page instead of fixing anything.
+    region.uv_coverage         = std::clamp(coverage, 0.05f, 1.0f);
+    region.min_facet_uv_extent = (min_facet_extent < std::numeric_limits<float>::max()) ? min_facet_extent : 1.0f;
+}
+
 // Per-draw UBO offsets must satisfy the device's uniform alignment; 256 is
 // the specification maximum, valid everywhere.
 constexpr std::size_t c_draw_ubo_stride = 256;
@@ -127,18 +180,18 @@ constexpr int c_texels_per_tick = 1 << 18;
 constexpr int c_supersample_max_dim = 16384;
 
 // Bytes one PAGE texel costs in targets that persist for the whole layout:
-// the per-cell fp32 accumulation textures (page area in total when every
-// cell is active) and the page-sized fp16 display atlas. Drives the
+// the per-tile fp32 accumulation textures (page area in total when every
+// tile is active) and the page-sized fp16 display atlas. Drives the
 // budget-derived page cap in update_layout().
 [[nodiscard]] auto persistent_bytes_per_texel() -> uint64_t
 {
     return static_cast<uint64_t>(
-        erhe::dataformat::get_format_size_bytes(c_accum_format) +   // per-cell accumulation
+        erhe::dataformat::get_format_size_bytes(c_accum_format) +   // per-tile accumulation
         erhe::dataformat::get_format_size_bytes(c_atlas_format)     // display
     );
 }
 
-// Bytes one CELL texel costs in the scratch working set (one cell resident
+// Bytes one CELL texel costs in the scratch working set (one tile resident
 // at a time): the four G-buffer targets plus working atlas + dilate
 // scratch. The supersample origin target is guarded separately (its own
 // byte-budget check in ensure_gbuffer_targets).
@@ -2016,29 +2069,54 @@ auto Lightmap_baker::is_bake_supported() const -> bool
     return static_cast<bool>(m_gather_pipeline);
 }
 
-auto Lightmap_baker::Atlas_layout::get_cell_origin(const int cell) const -> glm::ivec2
+auto Lightmap_baker::Atlas_layout::get_slot_origin(const int slot) const -> glm::ivec2
 {
-    const int cx = (cells_x > 0) ? (cell % cells_x) : 0;
-    const int cy = (cells_x > 0) ? (cell / cells_x) : 0;
-    return glm::ivec2{cx * Lightmap_baker::s_tile, cy * Lightmap_baker::s_tile};
+    const int sx = (slots_x > 0) ? (slot % slots_x) : 0;
+    const int sy = (slots_x > 0) ? (slot / slots_x) : 0;
+    return glm::ivec2{sx * tile_size, sy * tile_size};
 }
 
-auto Lightmap_baker::Atlas_layout::get_cell_size() const -> int
+auto Lightmap_baker::Atlas_layout::display_uv_scale_offset(const Instance_region& region) const -> glm::vec4
 {
-    return std::min(width, Lightmap_baker::s_tile);
+    if ((region.tile < 0) || (region.tile >= static_cast<int>(tiles.size())) || (width <= 0)) {
+        return glm::vec4{0.0f};
+    }
+    const int slot = tiles[static_cast<std::size_t>(region.tile)].slot;
+    if (slot < 0) {
+        // Not resident. Ordinary regions publish the renderer's no-lightmap
+        // gate (vec4(0)); world-space tile pieces publish the white-fallback
+        // sentinel (scale.x < 0, see standard.frag) so every lightmapped
+        // piece keeps rendering (flat white) until its tile loads.
+        return partitioned ? glm::vec4{-1.0f, 0.0f, 0.0f, 0.0f} : glm::vec4{0.0f};
+    }
+    const glm::ivec2 slot_origin = get_slot_origin(slot);
+    const float      inv_display = 1.0f / static_cast<float>(width);
+    return glm::vec4{
+        static_cast<float>(region.width)  * inv_display,
+        static_cast<float>(region.height) * inv_display,
+        static_cast<float>(slot_origin.x + region.x) * inv_display,
+        static_cast<float>(slot_origin.y + region.y) * inv_display
+    };
+}
+
+void Lightmap_baker::set_tile_config(const int tile_texture_size, const int resident_tile_budget)
+{
+    const int clamped = std::clamp(static_cast<int>(std::bit_ceil(static_cast<unsigned int>(std::max(1, tile_texture_size)))), s_min_tile, s_max_tile);
+    m_tile_size   = clamped;
+    m_slot_budget = std::max(1, resident_tile_budget);
 }
 
 auto Lightmap_baker::get_sweep_count() const -> uint32_t
 {
-    // Minimum over the active, content-carrying cells: every active valid
+    // Minimum over the active, content-carrying tiles: every active valid
     // texel holds at least this many samples.
     uint32_t result = std::numeric_limits<uint32_t>::max();
     bool     any    = false;
-    for (const Cell_state& cell : m_cells) {
-        if (!cell.active || !cell.has_content) {
+    for (const Tile_state& tile : m_tiles) {
+        if (!tile.active || !tile.has_content) {
             continue;
         }
-        result = std::min(result, cell.sweeps);
+        result = std::min(result, tile.sweeps);
         any    = true;
     }
     return any ? result : 0u;
@@ -2048,17 +2126,24 @@ auto Lightmap_baker::update_layout(Scene_root& scene_root, const float texels_pe
 {
     m_layout            = Atlas_layout{};
     m_gbuffer_valid     = false;
-    m_gbuffer_cell      = -1;
+    m_gbuffer_tile      = -1;
     m_lightmap_valid    = false;
     m_regions_published = false;
-    m_cells.clear();
-    m_cursor_cell       = 0;
+    m_tiles.clear();
+    m_cursor_tile       = 0;
     m_cursor_y          = 0;
     // Regions move on a repack, so the previous publish no longer matches
     // the uv_scale_offsets pushed to the meshes; ensure_bake_targets clears
     // the display atlas when this is false.
     m_display_cleared   = false;
     m_layout_scene_root = &scene_root;
+
+    // Partitioned mode: a prepared world-space partition for this scene
+    // supplies the regions (piece meshes with pre-assigned tiles) and the
+    // tile tree; no kd re-split.
+    if ((m_partitioner != nullptr) && m_partitioner->is_prepared() && (m_partitioner->get_scene_root() == &scene_root)) {
+        return update_layout_partitioned(scene_root, texels_per_meter, min_face_texels);
+    }
 
     // Rejection counters for the zero-regions diagnostic below - "the atlas
     // is empty" is otherwise invisible (every filter is a silent continue).
@@ -2105,244 +2190,589 @@ auto Lightmap_baker::update_layout(Scene_root& scene_root, const float texels_pe
             region.mesh            = mesh;
             region.primitive_index = primitive_index;
             region.world_area      = mesh_surface_area(geometry->get_mesh()) * instance_area_scale;
-            // Chart-space coverage: summed facet UV area (fan triangles) in
-            // the [0,1]^2 chart space. Dividing the region area by this
-            // makes texels-per-meter exact per facet: a facet's texels =
-            // uv_area_facet * side^2 = (world_area_facet / world_area *
-            // coverage_share...) - concretely, side = sqrt(world_area /
-            // coverage) * density gives every facet world_area_facet *
-            // density^2 texels regardless of gutters, packing waste, or the
-            // packer's minimum-chart-size upscales.
-            {
-                const GEO::Mesh& geo_mesh = geometry->get_mesh();
-                float coverage         = 0.0f;
-                float min_facet_extent = std::numeric_limits<float>::max();
-                for (GEO::index_t facet : geo_mesh.facets) {
-                    const GEO::index_t corner_count = geo_mesh.facets.nb_corners(facet);
-                    if (corner_count < 3) {
-                        continue;
-                    }
-                    const std::optional<GEO::vec2f> uv0 = attributes.corner_texcoord_2.try_get(geo_mesh.facets.corner(facet, 0));
-                    if (!uv0.has_value()) {
-                        continue;
-                    }
-                    GEO::vec2f uv_min = uv0.value();
-                    GEO::vec2f uv_max = uv0.value();
-                    for (GEO::index_t k = 1; k < corner_count; ++k) {
-                        const std::optional<GEO::vec2f> uv = attributes.corner_texcoord_2.try_get(geo_mesh.facets.corner(facet, k));
-                        if (!uv.has_value()) {
-                            continue;
-                        }
-                        uv_min.x = std::min(uv_min.x, uv.value().x);
-                        uv_min.y = std::min(uv_min.y, uv.value().y);
-                        uv_max.x = std::max(uv_max.x, uv.value().x);
-                        uv_max.y = std::max(uv_max.y, uv.value().y);
-                        if (k >= 2) {
-                            const std::optional<GEO::vec2f> uv1 = attributes.corner_texcoord_2.try_get(geo_mesh.facets.corner(facet, k - 1));
-                            if (uv1.has_value()) {
-                                const GEO::vec2f e1 = uv1.value() - uv0.value();
-                                const GEO::vec2f e2 = uv.value()  - uv0.value();
-                                coverage += 0.5f * std::abs(e1.x * e2.y - e1.y * e2.x);
-                            }
-                        }
-                    }
-                    const float extent = std::min(uv_max.x - uv_min.x, uv_max.y - uv_min.y);
-                    if (extent > 0.0f) {
-                        min_facet_extent = std::min(min_facet_extent, extent);
-                    }
-                }
-                // Floor at 5% (worst allowed boost ~4.5x per axis): lower
-                // coverage means broken or absurdly gutter-dominated UVs,
-                // where growing the region without bound would explode the
-                // page instead of fixing anything.
-                region.uv_coverage         = std::clamp(coverage, 0.05f, 1.0f);
-                region.min_facet_uv_extent = (min_facet_extent < std::numeric_limits<float>::max()) ? min_facet_extent : 1.0f;
-            }
+            // Chart-space coverage: dividing the region area by it makes
+            // texels-per-meter exact per facet - concretely, side =
+            // sqrt(world_area / coverage) * density gives every facet
+            // world_area_facet * density^2 texels regardless of gutters,
+            // packing waste, or the packer's minimum-chart-size upscales.
+            compute_region_uv_metrics(*geometry, region);
             regions.push_back(std::move(region));
         }
     }
     if (regions.empty()) {
-        log_render->info(
-            "Lightmap_baker::update_layout: no regions to pack (content meshes {}, skipped: not lightmapped {}, no render shape/geometry {}, no lightmap UVs {})",
+        const std::string message = fmt::format(
+            "no regions to pack (content meshes {}, skipped: not lightmapped {}, no render shape/geometry {}, no lightmap UVs {})",
             seen_meshes,
             skip_not_flagged,
             skip_no_shape,
             skip_no_uvs
         );
+        log_render->info("Lightmap_baker::update_layout: {}", message);
+        if ((m_report != nullptr) && (seen_meshes > 0) && (skip_not_flagged < seen_meshes)) {
+            // Only report when lightmapped meshes exist but none qualified;
+            // an entirely unflagged scene is not an error.
+            m_report->add_warning(Lightmap_report::Stage::layout, "atlas layout", message);
+        }
         return false;
     }
 
-    // Budget-derived page cap: the page-wide persistent targets (per-cell
-    // fp32 accumulation + fp16 display) cost persistent_bytes_per_texel()
-    // per page texel, plus the cell-bounded scratch working set (constant
-    // regardless of page size), so cap the page at the largest power-of-two
-    // whose persistent targets stay within c_budget_* of the remaining
-    // device-local budget (VK_EXT_memory_budget-accurate when available;
-    // s_max_page when the backend reports no budget). The current
-    // allocations are about to be replaced, so their bytes count as
-    // available.
-    int max_page = s_max_page;
-    {
-        const erhe::graphics::Memory_budget budget = m_graphics_device.get_memory_budget();
-        if (budget.is_known()) {
-            const uint64_t bytes_per_texel = persistent_bytes_per_texel();
-            uint64_t available = budget.get_remaining();
-            if (m_display_texture) {
-                available += bytes_per_texel
-                    * static_cast<uint64_t>(m_display_texture->get_width())
-                    * static_cast<uint64_t>(m_display_texture->get_height());
-            }
-            // Reserve the cell-sized scratch working set (G-buffer x4,
-            // working atlas, dilate scratch, optional supersample origins)
-            // off the top; it does not scale with the page.
-            const uint64_t cell_texels   = static_cast<uint64_t>(s_tile) * static_cast<uint64_t>(s_tile);
-            const uint64_t scratch_bytes = scratch_bytes_per_texel() * cell_texels;
-            available = (available > scratch_bytes) ? (available - scratch_bytes) : 0;
-            const uint64_t usable = (available * c_budget_numerator) / c_budget_denominator;
-            while (
-                (max_page > s_min_page) &&
-                (bytes_per_texel * static_cast<uint64_t>(max_page) * static_cast<uint64_t>(max_page) > usable)
-            ) {
-                max_page /= 2;
-            }
-            if (max_page < s_max_page) {
-                log_render->info(
-                    "Lightmap_baker::update_layout: page capped at {}x{} by device memory budget ({} MB remaining of {} MB)",
-                    max_page,
-                    max_page,
-                    budget.get_remaining() / (1024u * 1024u),
-                    budget.device_local_budget / (1024u * 1024u)
-                );
-            }
-        }
-    }
-    // Regions never span a tile cell, so their side is bounded by the cell.
-    const int max_region_side = std::min(max_page, s_tile) - 2 * s_padding;
+    // ---- Spatial partition (adaptive world-space XZ kd-split) ----
+    // Every leaf of the split becomes one tile of m_tile_size^2 texels;
+    // tiles are unbounded in count, so layout always succeeds regardless of
+    // world extents or density (requirement: bounded memory, no layout
+    // failure). Density flexes down per tile only as the last resort.
+    const int   tile_size       = m_tile_size;
+    const int   max_region_side = tile_size - 2 * s_padding;
+    // Skyline packing waste headroom for the fit estimate.
+    const float fill_factor     = 0.85f;
 
-    // Region content side in texels; the normalized per-mesh chart set is
-    // square, so the region is too.
-    const auto side_of = [texels_per_meter, min_face_texels, max_region_side](const Instance_region& region) -> int {
+    // Region content side in texels at full density; the normalized
+    // per-mesh chart set is square, so the region is too. The min-face-
+    // texels bound grows the region until its smallest facet spans
+    // min_face_texels on its shorter UV axis - the half of the minimum-size
+    // guarantee the unwrap cannot provide (see
+    // Instance_region::min_facet_uv_extent), capped at 4x the density side
+    // so one degenerate sliver facet cannot explode the tile.
+    const auto desired_side_of = [texels_per_meter, min_face_texels](const Instance_region& region) -> float {
         float side = std::sqrt(std::max(region.world_area, 0.0f) / region.uv_coverage) * texels_per_meter;
-        // Min-face-texels bound: grow the region until its smallest facet
-        // spans min_face_texels on its shorter UV axis. This is the half of
-        // the minimum-size guarantee the unwrap cannot provide (see
-        // Instance_region::min_facet_uv_extent). Capped at 4x the density
-        // side so one degenerate sliver facet cannot explode the page.
         if ((min_face_texels > 0.0f) && (region.min_facet_uv_extent > 0.0f)) {
             const float bound = min_face_texels / region.min_facet_uv_extent;
             side = std::max(side, std::min(bound, 4.0f * side));
         }
-        return std::clamp(static_cast<int>(std::ceil(side)), 4, max_region_side);
+        return std::max(side, 4.0f);
     };
 
-    // Big regions first packs tighter with the skyline heuristic.
-    std::sort(
-        regions.begin(),
-        regions.end(),
-        [&](const Instance_region& lhs, const Instance_region& rhs) { return side_of(lhs) > side_of(rhs); }
-    );
+    // Per-region placement inputs: world AABB (instance transform applied)
+    // and the desired texel side.
+    class Placement
+    {
+    public:
+        erhe::math::Aabb bounds{};
+        glm::vec2        center{0.0f, 0.0f}; // world XZ
+        float            desired_side{4.0f};
+    };
+    std::vector<Placement> placements(regions.size());
+    for (std::size_t i = 0; i < regions.size(); ++i) {
+        const Instance_region& region    = regions[i];
+        Placement&             placement = placements[i];
+        placement.desired_side = desired_side_of(region);
+        const erhe::scene::Node* const node = region.mesh ? region.mesh->get_node() : nullptr;
+        const glm::mat4 world_from_node = (node != nullptr) ? node->world_from_node() : glm::mat4{1.0f};
+        erhe::math::Aabb local_bounds{};
+        const std::vector<erhe::scene::Mesh_primitive>& primitives = region.mesh->get_primitives();
+        if ((region.primitive_index < primitives.size()) && primitives[region.primitive_index].primitive) {
+            local_bounds = primitives[region.primitive_index].primitive->get_bounding_box();
+        }
+        if (local_bounds.is_valid()) {
+            placement.bounds = local_bounds.transformed_by(world_from_node);
+        } else {
+            placement.bounds.include(glm::vec3{world_from_node[3]});
+        }
+        const glm::vec3 center = placement.bounds.center();
+        placement.center = glm::vec2{center.x, center.z};
+    }
 
-    for (int page = s_min_page; page <= max_page; page *= 2) {
-        // Pages up to s_tile are a single cell; larger pages are a grid of
-        // s_tile cells and regions pack cell by cell (greedy first-fit in
-        // cell order; a region that fits no remaining cell fails the page).
-        const int cell_size  = std::min(page, s_tile);
-        const int cells_x    = std::max(1, page / s_tile);
-        const int cell_count = cells_x * cells_x;
-        std::vector<rbp::SkylineBinPack> packers(static_cast<std::size_t>(cell_count));
-        for (rbp::SkylineBinPack& packer : packers) {
-            packer.Init(cell_size, cell_size, false);
+    // Fit estimate: padded region areas against the tile with packing-waste
+    // headroom. Sides are pre-clamped to the tile (the density flex below
+    // guarantees oversized singles fit), so a set can always shrink to fit
+    // by splitting.
+    const auto cost_of = [max_region_side](const float desired_side) -> double {
+        const double side = std::min(static_cast<double>(desired_side), static_cast<double>(max_region_side)) + 2.0 * static_cast<double>(s_padding);
+        return side * side;
+    };
+    const double tile_capacity = static_cast<double>(fill_factor) * static_cast<double>(tile_size) * static_cast<double>(tile_size);
+
+    // Recursive area-weighted median split (longest XZ axis of the member
+    // centers). Guaranteed to terminate: single regions always leaf, and
+    // co-located sets that cannot split spatially split by count into
+    // overlapping "overflow tiles".
+    // Each split is also recorded as an explicit kd tree node
+    // (Atlas_layout::kd_nodes) so the world-space mesh clipper can cut
+    // against the same partition. A member set travels with the tree node
+    // it belongs to; leaves get their tile index assigned by the packing
+    // loop below (which can re-split, extending the tree).
+    class Split_set
+    {
+    public:
+        int                      node{0}; // index into kd_nodes
+        std::vector<std::size_t> members;
+    };
+    std::vector<erhe::geometry::operation::Clip_tree_node> kd_nodes;
+    const auto make_kd_children = [&kd_nodes](const int parent) -> std::pair<int, int> {
+        const int child_0 = static_cast<int>(kd_nodes.size());
+        kd_nodes.emplace_back();
+        kd_nodes.emplace_back();
+        kd_nodes[static_cast<std::size_t>(parent)].child[0] = child_0;
+        kd_nodes[static_cast<std::size_t>(parent)].child[1] = child_0 + 1;
+        return {child_0, child_0 + 1};
+    };
+    std::vector<Split_set> leaves;
+    {
+        std::vector<Split_set> stack;
+        {
+            std::vector<std::size_t> all(regions.size());
+            for (std::size_t i = 0; i < regions.size(); ++i) {
+                all[i] = i;
+            }
+            kd_nodes.emplace_back(); // root
+            stack.push_back(Split_set{0, std::move(all)});
         }
-        bool failed = false;
-        for (Instance_region& region : regions) {
-            const int side   = side_of(region);
-            bool      placed = false;
-            for (int cell = 0; cell < cell_count; ++cell) {
-                const rbp::Rect rect = packers[static_cast<std::size_t>(cell)].Insert(
-                    side + 2 * s_padding, side + 2 * s_padding, rbp::SkylineBinPack::LevelBottomLeft
-                );
-                if ((rect.width == 0) || (rect.height == 0)) {
-                    continue;
+        while (!stack.empty()) {
+            Split_set entry = std::move(stack.back());
+            stack.pop_back();
+            std::vector<std::size_t>& node = entry.members;
+            double    total_cost = 0.0;
+            glm::vec2 center_min{ std::numeric_limits<float>::max(),  std::numeric_limits<float>::max()};
+            glm::vec2 center_max{-std::numeric_limits<float>::max(), -std::numeric_limits<float>::max()};
+            for (const std::size_t i : node) {
+                total_cost += cost_of(placements[i].desired_side);
+                center_min  = glm::min(center_min, placements[i].center);
+                center_max  = glm::max(center_max, placements[i].center);
+            }
+            if ((node.size() <= 1) || (total_cost <= tile_capacity)) {
+                leaves.push_back(std::move(entry));
+                continue;
+            }
+            const glm::vec2 spread = center_max - center_min;
+            if (std::max(spread.x, spread.y) <= 1.0e-4f) {
+                if (m_report != nullptr) {
+                    m_report->add_warning(
+                        Lightmap_report::Stage::layout,
+                        "spatial partition",
+                        fmt::format("{} co-located regions exceed one tile; split into overflow tiles at the same location", node.size())
+                    );
                 }
-                const int cell_origin_x = (cell % cells_x) * s_tile;
-                const int cell_origin_y = (cell / cells_x) * s_tile;
-                region.x      = cell_origin_x + rect.x + s_padding;
-                region.y      = cell_origin_y + rect.y + s_padding;
-                region.width  = side;
-                region.height = side;
-                region.cell   = cell;
-                placed        = true;
-                break;
+                std::sort(node.begin(), node.end(), [&placements](const std::size_t l, const std::size_t r) {
+                    return placements[l].desired_side > placements[r].desired_side;
+                });
+                std::vector<std::size_t> half_a;
+                std::vector<std::size_t> half_b;
+                for (std::size_t k = 0; k < node.size(); ++k) {
+                    (((k & 1u) == 0u) ? half_a : half_b).push_back(node[k]);
+                }
+                kd_nodes[static_cast<std::size_t>(entry.node)].axis = -1; // overflow: no spatial plane
+                const auto [child_0, child_1] = make_kd_children(entry.node);
+                stack.push_back(Split_set{child_0, std::move(half_a)});
+                stack.push_back(Split_set{child_1, std::move(half_b)});
+                continue;
             }
-            if (!placed) {
-                failed = true;
-                break;
+            const int axis = (spread.x >= spread.y) ? 0 : 1;
+            std::sort(node.begin(), node.end(), [&placements, axis](const std::size_t l, const std::size_t r) {
+                return placements[l].center[axis] < placements[r].center[axis];
+            });
+            double      cumulative = 0.0;
+            std::size_t split      = node.size() / 2;
+            for (std::size_t k = 0; k < node.size(); ++k) {
+                cumulative += cost_of(placements[node[k]].desired_side);
+                if (cumulative * 2.0 >= total_cost) {
+                    split = k + 1;
+                    break;
+                }
             }
+            split = std::clamp<std::size_t>(split, 1, node.size() - 1);
+            {
+                // Clip plane between the two center values adjacent to the
+                // split index; placement axis 1 is world Z (kd node axis 2).
+                erhe::geometry::operation::Clip_tree_node& kd_node = kd_nodes[static_cast<std::size_t>(entry.node)];
+                kd_node.axis  = (axis == 0) ? 0 : 2;
+                kd_node.value = 0.5f * (placements[node[split - 1]].center[axis] + placements[node[split]].center[axis]);
+            }
+            const auto [child_0, child_1] = make_kd_children(entry.node);
+            stack.push_back(Split_set{child_0, std::vector<std::size_t>(node.begin(), node.begin() + static_cast<std::ptrdiff_t>(split))});
+            stack.push_back(Split_set{child_1, std::vector<std::size_t>(node.begin() + static_cast<std::ptrdiff_t>(split), node.end())});
         }
-        if (failed) {
+    }
+
+    // ---- Pack each leaf into one tile (skyline, big regions first) ----
+    std::vector<Tile>            tiles;
+    std::vector<Instance_region> packed_regions;
+    packed_regions.reserve(regions.size());
+    std::vector<Split_set> pending = std::move(leaves);
+    while (!pending.empty()) {
+        Split_set entry = std::move(pending.back());
+        pending.pop_back();
+        std::vector<std::size_t>& members = entry.members;
+        if (members.empty()) {
             continue;
         }
-        const float inv_page = 1.0f / static_cast<float>(page);
-        for (Instance_region& region : regions) {
-            region.uv_scale_offset = glm::vec4{
-                static_cast<float>(region.width)  * inv_page,
-                static_cast<float>(region.height) * inv_page,
-                static_cast<float>(region.x)      * inv_page,
-                static_cast<float>(region.y)      * inv_page
-            };
+        std::sort(members.begin(), members.end(), [&placements](const std::size_t l, const std::size_t r) {
+            return placements[l].desired_side > placements[r].desired_side;
+        });
+
+        // Density flex (last resort): a region wider than the tile shrinks
+        // every side in this tile by the same factor, keeping relative
+        // densities uniform within the tile.
+        float density_scale = 1.0f;
+        for (const std::size_t i : members) {
+            if (placements[i].desired_side > static_cast<float>(max_region_side)) {
+                density_scale = std::min(density_scale, static_cast<float>(max_region_side) / placements[i].desired_side);
+            }
         }
-        m_layout.width   = page;
-        m_layout.height  = page;
-        m_layout.cells_x = cells_x;
-        m_layout.cells_y = cells_x;
-        m_layout.regions = std::move(regions);
-        m_cells.assign(static_cast<std::size_t>(cell_count), Cell_state{});
-        for (const Instance_region& region : m_layout.regions) {
-            m_cells[static_cast<std::size_t>(region.cell)].has_content = true;
+
+        for (;;) {
+            rbp::SkylineBinPack packer;
+            packer.Init(tile_size, tile_size, false);
+            std::vector<Instance_region> tile_regions;
+            tile_regions.reserve(members.size());
+            bool failed = false;
+            for (const std::size_t i : members) {
+                const int side = std::clamp(static_cast<int>(std::ceil(placements[i].desired_side * density_scale)), 4, max_region_side);
+                const rbp::Rect rect = packer.Insert(side + 2 * s_padding, side + 2 * s_padding, rbp::SkylineBinPack::LevelBottomLeft);
+                if ((rect.width == 0) || (rect.height == 0)) {
+                    failed = true;
+                    break;
+                }
+                Instance_region region = regions[i];
+                region.x      = rect.x + s_padding;
+                region.y      = rect.y + s_padding;
+                region.width  = side;
+                region.height = side;
+                region.tile   = static_cast<int>(tiles.size());
+                const float inv_tile = 1.0f / static_cast<float>(tile_size);
+                region.uv_scale_offset = glm::vec4{
+                    static_cast<float>(region.width)  * inv_tile,
+                    static_cast<float>(region.height) * inv_tile,
+                    static_cast<float>(region.x)      * inv_tile,
+                    static_cast<float>(region.y)      * inv_tile
+                };
+                tile_regions.push_back(std::move(region));
+            }
+            if (!failed) {
+                kd_nodes[static_cast<std::size_t>(entry.node)].tile = static_cast<int>(tiles.size());
+                Tile tile;
+                tile.density_scale = density_scale;
+                for (const std::size_t i : members) {
+                    tile.world_bounds.include(placements[i].bounds);
+                }
+                for (Instance_region& region : tile_regions) {
+                    packed_regions.push_back(std::move(region));
+                }
+                if ((density_scale < 0.999f) && (m_report != nullptr)) {
+                    m_report->add_warning(
+                        Lightmap_report::Stage::layout,
+                        "density flex",
+                        fmt::format(
+                            "tile {}: texel density scaled to {:.0f}% of {} texels/m to fit {}^2 (effective chart gutters shrink with it - possible cross-chart leaks)",
+                            tiles.size(), 100.0f * density_scale, texels_per_meter, tile_size
+                        )
+                    );
+                }
+                tiles.push_back(std::move(tile));
+                break;
+            }
+            if (members.size() >= 2) {
+                // The fill-factor estimate was too optimistic for this set;
+                // split it once more via the pending stack (recorded in the
+                // kd tree: spatial when the halves separate on X, overflow
+                // when the centers coincide).
+                std::sort(members.begin(), members.end(), [&placements](const std::size_t l, const std::size_t r) {
+                    return placements[l].center.x < placements[r].center.x;
+                });
+                const std::size_t half = members.size() / 2;
+                {
+                    erhe::geometry::operation::Clip_tree_node& kd_node = kd_nodes[static_cast<std::size_t>(entry.node)];
+                    const float center_lo = placements[members[half - 1]].center.x;
+                    const float center_hi = placements[members[half]].center.x;
+                    if ((center_hi - center_lo) > 1.0e-4f) {
+                        kd_node.axis  = 0;
+                        kd_node.value = 0.5f * (center_lo + center_hi);
+                    } else {
+                        kd_node.axis = -1;
+                    }
+                    kd_node.tile = -1;
+                }
+                const auto [child_0, child_1] = make_kd_children(entry.node);
+                pending.push_back(Split_set{child_0, std::vector<std::size_t>(members.begin(), members.begin() + static_cast<std::ptrdiff_t>(half))});
+                pending.push_back(Split_set{child_1, std::vector<std::size_t>(members.begin() + static_cast<std::ptrdiff_t>(half), members.end())});
+                break;
+            }
+            // A single region that still failed (padding rounding): shrink.
+            density_scale *= 0.95f;
         }
-        build_seam_vertices();
-        if (cell_count > 1) {
-            log_render->info(
-                "Lightmap_baker::update_layout: {}x{} page as {}x{} tile cells of {}",
-                page, page, cells_x, cells_x, cell_size
-            );
-        }
-        return true;
     }
-    // Even the largest page failed; drop the layout (a later change can
-    // add multi-page support - plan keeps pages <= 4096^2). Report why:
-    // this is usually the density - a single large mesh (e.g. a floor)
-    // at high texels_per_meter needs a region bigger than the max page -
-    // or the device memory budget capped the page below what the scene
-    // needs (max_page < s_max_page).
+
+    if (packed_regions.empty() || tiles.empty()) {
+        if (m_report != nullptr) {
+            m_report->add_error(Lightmap_report::Stage::layout, "atlas layout", "no regions could be packed");
+        }
+        m_seam_vertices.clear();
+        return false;
+    }
+
+    return finalize_layout(std::move(tiles), std::move(packed_regions), std::move(kd_nodes), false);
+}
+
+auto Lightmap_baker::finalize_layout(
+    std::vector<Tile>&&                                      tiles,
+    std::vector<Instance_region>&&                           packed_regions,
+    std::vector<erhe::geometry::operation::Clip_tree_node>&& kd_nodes,
+    const bool                                               partitioned
+) -> bool
+{
+    const int tile_size = m_tile_size;
+
+    // ---- Display slot grid: ceil(sqrt(resident budget)) tile-sized slots
+    // per axis, shrunk while the persistent targets (per-resident-tile fp32
+    // accumulation + the fp16 display atlas) exceed the device memory
+    // budget - streaming worlds degrade to fewer resident tiles instead of
+    // failing. ----
+    int slot_grid = 1;
+    {
+        const int desired_slots = std::clamp(m_slot_budget, 1, static_cast<int>(tiles.size()));
+        while (slot_grid * slot_grid < desired_slots) {
+            ++slot_grid;
+        }
+        const erhe::graphics::Memory_budget budget = m_graphics_device.get_memory_budget();
+        if (budget.is_known()) {
+            const uint64_t tile_texels     = static_cast<uint64_t>(tile_size) * static_cast<uint64_t>(tile_size);
+            const uint64_t bytes_per_texel = persistent_bytes_per_texel();
+            uint64_t available = budget.get_remaining();
+            if (m_display_texture) {
+                // The current display atlas is about to be replaced; its
+                // bytes count as available.
+                available += static_cast<uint64_t>(erhe::dataformat::get_format_size_bytes(c_atlas_format))
+                    * static_cast<uint64_t>(m_display_texture->get_width())
+                    * static_cast<uint64_t>(m_display_texture->get_height());
+            }
+            // Reserve the tile-sized scratch working set (G-buffer x4,
+            // working atlas, dilate scratch) off the top; it does not scale
+            // with the slot count.
+            const uint64_t scratch_bytes = scratch_bytes_per_texel() * tile_texels;
+            available = (available > scratch_bytes) ? (available - scratch_bytes) : 0;
+            const uint64_t usable = (available * c_budget_numerator) / c_budget_denominator;
+            while (
+                (slot_grid > 1) &&
+                (bytes_per_texel * tile_texels * static_cast<uint64_t>(slot_grid) * static_cast<uint64_t>(slot_grid) > usable)
+            ) {
+                --slot_grid;
+            }
+            if (slot_grid * slot_grid < desired_slots) {
+                const std::string message = fmt::format(
+                    "resident tiles capped at {} (wanted {}) by device memory budget ({} MB remaining of {} MB)",
+                    slot_grid * slot_grid, desired_slots,
+                    budget.get_remaining() / (1024u * 1024u),
+                    budget.device_local_budget / (1024u * 1024u)
+                );
+                log_render->info("Lightmap_baker::update_layout: {}", message);
+                if (m_report != nullptr) {
+                    m_report->add_warning(Lightmap_report::Stage::layout, "memory budget", message);
+                }
+            }
+        }
+    }
+
+    m_layout.width     = slot_grid * tile_size;
+    m_layout.height    = slot_grid * tile_size;
+    m_layout.slots_x   = slot_grid;
+    m_layout.slots_y   = slot_grid;
+    m_layout.tile_size   = tile_size;
+    m_layout.tiles       = std::move(tiles);
+    m_layout.regions     = std::move(packed_regions);
+    m_layout.kd_nodes    = std::move(kd_nodes);
+    m_layout.partitioned = partitioned;
+
+    // Initial residency: the first slots' worth of tiles in index order;
+    // the interactive tick re-ranks by camera distance every frame.
+    const int slot_count = m_layout.get_slot_count();
+    for (int tile = 0; tile < m_layout.get_tile_count(); ++tile) {
+        m_layout.tiles[static_cast<std::size_t>(tile)].slot = (tile < slot_count) ? tile : -1;
+    }
+
+    m_tiles.assign(m_layout.tiles.size(), Tile_state{});
+    for (std::size_t i = 0; i < m_tiles.size(); ++i) {
+        m_tiles[i].has_content = true;
+        m_tiles[i].active      = m_layout.tiles[i].slot >= 0;
+    }
+    build_seam_vertices();
     log_render->info(
-        "Lightmap_baker::update_layout: {} regions do not fit the maximum {}x{} page at {} texels/m (largest region side {} texels{}) - lower the density",
-        regions.size(),
-        max_page,
-        max_page,
-        texels_per_meter,
-        regions.empty() ? 0 : side_of(regions.front()),
-        (max_page < s_max_page) ? ", page capped by device memory budget" : ""
+        "Lightmap_baker::update_layout: {} regions in {} spatial tiles of {}^2 texels, {} display slots ({}x{} atlas){}",
+        m_layout.regions.size(), m_layout.get_tile_count(), tile_size,
+        m_layout.get_slot_count(), m_layout.width, m_layout.height,
+        m_layout.partitioned ? " [partitioned world-space pieces]" : ""
     );
-    m_seam_vertices.clear();
-    return false;
+    return true;
+}
+
+auto Lightmap_baker::update_layout_partitioned(Scene_root& scene_root, const float texels_per_meter, const float min_face_texels) -> bool
+{
+    static_cast<void>(scene_root);
+    const Lightmap_partitioner& partitioner     = *m_partitioner;
+    const int                   tile_count      = partitioner.get_tile_count();
+    const int                   tile_size       = m_tile_size;
+    const int                   max_region_side = tile_size - 2 * s_padding;
+
+    // One region per piece Mesh_primitive; the tile assignment comes from
+    // the partition (each piece was clipped to exactly one tile), never
+    // from a re-split of the live pieces.
+    std::vector<Instance_region> regions;
+    for (const Lightmap_partitioner::Original_entry& entry : partitioner.get_entries()) {
+        if (!entry.piece_mesh) {
+            continue;
+        }
+        const std::vector<erhe::scene::Mesh_primitive>& primitives = entry.piece_mesh->get_primitives();
+        for (std::size_t primitive_index = 0; primitive_index < primitives.size(); ++primitive_index) {
+            const erhe::primitive::Primitive* const primitive = primitives[primitive_index].primitive.get();
+            if ((primitive == nullptr) || !primitive->render_shape) {
+                continue;
+            }
+            const std::shared_ptr<erhe::geometry::Geometry>& geometry = primitive->render_shape->get_geometry();
+            if (!geometry || !geometry->get_attributes().corner_texcoord_2.has(0)) {
+                continue;
+            }
+            if (primitive_index >= entry.pieces.size()) {
+                continue;
+            }
+            const Lightmap_partitioner::Piece_info& piece = entry.pieces[primitive_index];
+            if ((piece.tile < 0) || (piece.tile >= tile_count)) {
+                continue;
+            }
+            Instance_region region;
+            region.mesh                   = entry.piece_mesh;
+            region.primitive_index        = primitive_index;
+            // Pieces are world-space geometry on identity nodes: the local
+            // surface area IS the world area.
+            region.world_area             = mesh_surface_area(geometry->get_mesh());
+            region.tile                   = piece.tile;
+            region.source_primitive_index = piece.source_primitive_index;
+            region.piece_ordinal          = piece.ordinal;
+            compute_region_uv_metrics(*geometry, region);
+            regions.push_back(std::move(region));
+        }
+    }
+    if (regions.empty() || (tile_count <= 0)) {
+        if (m_report != nullptr) {
+            m_report->add_error(Lightmap_report::Stage::layout, "partitioned layout", "no piece regions to pack");
+        }
+        m_seam_vertices.clear();
+        return false;
+    }
+
+    // Same sizing rule as the kd path (see update_layout).
+    const auto desired_side_of = [texels_per_meter, min_face_texels](const Instance_region& region) -> float {
+        float side = std::sqrt(std::max(region.world_area, 0.0f) / region.uv_coverage) * texels_per_meter;
+        if ((min_face_texels > 0.0f) && (region.min_facet_uv_extent > 0.0f)) {
+            const float bound = min_face_texels / region.min_facet_uv_extent;
+            side = std::max(side, std::min(bound, 4.0f * side));
+        }
+        return std::max(side, 4.0f);
+    };
+
+    std::vector<std::vector<std::size_t>> buckets(static_cast<std::size_t>(tile_count));
+    for (std::size_t i = 0; i < regions.size(); ++i) {
+        buckets[static_cast<std::size_t>(regions[i].tile)].push_back(i);
+    }
+
+    // Pack each tile's pieces (skyline, big-first). The tiles are fixed, so
+    // a set that does not fit can only flex its density down; if even the
+    // 4-texel floor overflows, the remaining pieces are dropped with an
+    // error (the fix is a larger tile_texture_size or a re-prepare).
+    std::vector<Tile>            tiles(static_cast<std::size_t>(tile_count));
+    std::vector<Instance_region> packed_regions;
+    packed_regions.reserve(regions.size());
+    for (int tile = 0; tile < tile_count; ++tile) {
+        std::vector<std::size_t>& members = buckets[static_cast<std::size_t>(tile)];
+        if (members.empty()) {
+            continue;
+        }
+        std::sort(members.begin(), members.end(), [&regions, &desired_side_of](const std::size_t l, const std::size_t r) {
+            return desired_side_of(regions[l]) > desired_side_of(regions[r]);
+        });
+        for (const std::size_t i : members) {
+            const std::vector<erhe::scene::Mesh_primitive>& primitives = regions[i].mesh->get_primitives();
+            const erhe::primitive::Primitive* const primitive = primitives[regions[i].primitive_index].primitive.get();
+            if (primitive != nullptr) {
+                tiles[static_cast<std::size_t>(tile)].world_bounds.include(primitive->get_bounding_box());
+            }
+        }
+        float density_scale = 1.0f;
+        for (const std::size_t i : members) {
+            const float side = desired_side_of(regions[i]);
+            if (side > static_cast<float>(max_region_side)) {
+                density_scale = std::min(density_scale, static_cast<float>(max_region_side) / side);
+            }
+        }
+        for (;;) {
+            rbp::SkylineBinPack packer;
+            packer.Init(tile_size, tile_size, false);
+            std::vector<Instance_region> tile_regions;
+            tile_regions.reserve(members.size());
+            std::size_t packed_count = 0;
+            for (const std::size_t i : members) {
+                const int side = std::clamp(static_cast<int>(std::ceil(desired_side_of(regions[i]) * density_scale)), 4, max_region_side);
+                const rbp::Rect rect = packer.Insert(side + 2 * s_padding, side + 2 * s_padding, rbp::SkylineBinPack::LevelBottomLeft);
+                if ((rect.width == 0) || (rect.height == 0)) {
+                    break;
+                }
+                Instance_region region = regions[i];
+                region.x      = rect.x + s_padding;
+                region.y      = rect.y + s_padding;
+                region.width  = side;
+                region.height = side;
+                const float inv_tile = 1.0f / static_cast<float>(tile_size);
+                region.uv_scale_offset = glm::vec4{
+                    static_cast<float>(region.width)  * inv_tile,
+                    static_cast<float>(region.height) * inv_tile,
+                    static_cast<float>(region.x)      * inv_tile,
+                    static_cast<float>(region.y)      * inv_tile
+                };
+                tile_regions.push_back(std::move(region));
+                ++packed_count;
+            }
+            const bool give_up = density_scale < 0.01f;
+            if ((packed_count == members.size()) || give_up) {
+                if (give_up && (packed_count < members.size()) && (m_report != nullptr)) {
+                    m_report->add_error(
+                        Lightmap_report::Stage::layout,
+                        "partitioned layout",
+                        fmt::format(
+                            "tile {}: {} of {} pieces do not fit even at minimum density - increase tile_texture_size or re-prepare with lower texels/m",
+                            tile, members.size() - packed_count, members.size()
+                        )
+                    );
+                }
+                if ((density_scale < 0.999f) && (packed_count == members.size()) && (m_report != nullptr)) {
+                    m_report->add_warning(
+                        Lightmap_report::Stage::layout,
+                        "density flex",
+                        fmt::format(
+                            "tile {}: texel density scaled to {:.0f}% of {} texels/m to fit {}^2",
+                            tile, 100.0f * density_scale, texels_per_meter, tile_size
+                        )
+                    );
+                }
+                tiles[static_cast<std::size_t>(tile)].density_scale = density_scale;
+                for (Instance_region& region : tile_regions) {
+                    packed_regions.push_back(std::move(region));
+                }
+                break;
+            }
+            density_scale *= 0.95f;
+        }
+    }
+    if (packed_regions.empty()) {
+        if (m_report != nullptr) {
+            m_report->add_error(Lightmap_report::Stage::layout, "partitioned layout", "no piece regions could be packed");
+        }
+        m_seam_vertices.clear();
+        return false;
+    }
+
+    std::vector<erhe::geometry::operation::Clip_tree_node> kd_nodes = partitioner.get_tile_tree();
+    return finalize_layout(std::move(tiles), std::move(packed_regions), std::move(kd_nodes), true);
 }
 
 void Lightmap_baker::build_seam_vertices()
 {
     m_seam_vertices.clear();
-    m_cell_seam_ranges.assign(static_cast<std::size_t>(m_layout.get_cell_count()), {0u, 0u});
+    m_tile_seam_ranges.assign(static_cast<std::size_t>(m_layout.get_tile_count()), {0u, 0u});
     std::size_t seam_count = 0;
-    const float cell_size  = static_cast<float>(m_layout.get_cell_size());
-    const float page_size  = static_cast<float>(m_layout.width);
-    // Grouped by cell (the seam pass rasters into the cell-sized working
-    // atlas, one cell per publish): both sides of a seam always live in the
-    // same region, hence the same cell.
-    for (int cell = 0; cell < m_layout.get_cell_count(); ++cell) {
-    const uint32_t  cell_first_vertex = static_cast<uint32_t>(m_seam_vertices.size());
-    const glm::vec2 cell_origin{m_layout.get_cell_origin(cell)};
+    // Grouped by tile (the seam pass rasters into the tile-sized working
+    // atlas, one tile per publish): both sides of a seam always live in the
+    // same region, hence the same tile.
+    for (int tile = 0; tile < m_layout.get_tile_count(); ++tile) {
+    const uint32_t  tile_first_vertex = static_cast<uint32_t>(m_seam_vertices.size());
     for (const Instance_region& region : m_layout.regions) {
-        if (!region.mesh || (region.cell != cell)) {
+        if (!region.mesh || (region.tile != tile)) {
             continue;
         }
         const std::vector<erhe::scene::Mesh_primitive>& primitives = region.mesh->get_primitives();
@@ -2364,11 +2794,10 @@ void Lightmap_baker::build_seam_vertices()
         const GEO::Mesh& geo_mesh = geometry->get_mesh();
         const glm::vec2 uv_scale {region.uv_scale_offset.x, region.uv_scale_offset.y};
         const glm::vec2 uv_offset{region.uv_scale_offset.z, region.uv_scale_offset.w};
-        // The seam pass rasters into the CELL-sized working atlas, so map
-        // chart UV -> page UV (published scale/offset) -> cell UV.
+        // The seam pass rasters into the TILE-sized working atlas and the
+        // region's uv_scale_offset is already tile-local.
         const auto atlas_uv = [&](const GEO::vec2f& uv) -> glm::vec2 {
-            const glm::vec2 page_uv = glm::vec2{uv.x, uv.y} * uv_scale + uv_offset;
-            return (page_uv * page_size - cell_origin) / cell_size;
+            return glm::vec2{uv.x, uv.y} * uv_scale + uv_offset;
         };
 
         // First occurrence of each facet edge, keyed by the (order-
@@ -2444,11 +2873,11 @@ void Lightmap_baker::build_seam_vertices()
             }
         }
     }
-    m_cell_seam_ranges[static_cast<std::size_t>(cell)] = {
-        cell_first_vertex,
-        static_cast<uint32_t>(m_seam_vertices.size()) - cell_first_vertex
+    m_tile_seam_ranges[static_cast<std::size_t>(tile)] = {
+        tile_first_vertex,
+        static_cast<uint32_t>(m_seam_vertices.size()) - tile_first_vertex
     };
-    } // for cell
+    } // for tile
     log_render->info("Lightmap_baker: {} seam edges ({} line vertices)", seam_count, m_seam_vertices.size());
 }
 
@@ -2475,29 +2904,29 @@ void Lightmap_baker::ensure_gbuffer_targets()
             }
         );
     };
-    // Every scratch target is CELL-sized: the G-buffer holds one tile cell
-    // at a time (m_gbuffer_cell) and is re-rastered when the gather cursor
-    // moves to another cell.
-    const int cell_size = m_layout.get_cell_size();
+    // Every scratch target is CELL-sized: the G-buffer holds one tile tile
+    // at a time (m_gbuffer_tile) and is re-rastered when the gather cursor
+    // moves to another tile.
+    const int tile_size = m_layout.get_tile_size();
     // Supersampled ray-origin target (Bake_options::supersample_factor):
-    // the cell at factor x per axis, transient like the other G-buffer
+    // the tile at factor x per axis, transient like the other G-buffer
     // targets. Released when the option is off; skipped (with a log in
-    // bake_gbuffer) when the hi-res cell would exceed the dimension guard
+    // bake_gbuffer) when the hi-res tile would exceed the dimension guard
     // or the factor's gather variant failed to build.
     const int factor = m_options.supersample_factor;
     const bool factor_has_gather =
         ((factor == 4) && m_gather_ss4_pipeline) ||
         ((factor == 8) && m_gather_ss8_pipeline);
     // Byte-budget guard on top of the dimension guard: the hi-res origin
-    // target is factor^2 cells of RGBA32F - the single largest scratch
+    // target is factor^2 tiles of RGBA32F - the single largest scratch
     // allocation - so refuse it (feature off, bake still runs) when it
     // would eat more than half the remaining device-local budget.
     bool origin_fits_budget = true;
     if (factor_has_gather) {
         const uint64_t origin_bytes =
             erhe::dataformat::get_format_size_bytes(c_position_format)
-            * static_cast<uint64_t>(cell_size) * static_cast<uint64_t>(factor)
-            * static_cast<uint64_t>(cell_size) * static_cast<uint64_t>(factor);
+            * static_cast<uint64_t>(tile_size) * static_cast<uint64_t>(factor)
+            * static_cast<uint64_t>(tile_size) * static_cast<uint64_t>(factor);
         const erhe::graphics::Memory_budget budget = m_graphics_device.get_memory_budget();
         if (budget.is_known()) {
             uint64_t available = budget.get_remaining();
@@ -2515,7 +2944,7 @@ void Lightmap_baker::ensure_gbuffer_targets()
         factor_has_gather &&
         m_origin_pipeline &&
         origin_fits_budget &&
-        (cell_size * factor <= c_supersample_max_dim);
+        (tile_size * factor <= c_supersample_max_dim);
     if (!want_origin) {
         if (m_origin_texture) {
             m_origin_texture.reset();
@@ -2524,14 +2953,14 @@ void Lightmap_baker::ensure_gbuffer_targets()
     } else {
         const bool origin_matches =
             m_origin_texture &&
-            (m_origin_texture->get_width()  == cell_size * factor) &&
-            (m_origin_texture->get_height() == cell_size * factor);
+            (m_origin_texture->get_width()  == tile_size * factor) &&
+            (m_origin_texture->get_height() == tile_size * factor);
         if (!origin_matches) {
             m_origin_texture = make_target(
                 "lightmap ray origins",
                 c_position_format,
-                cell_size * factor,
-                cell_size * factor
+                tile_size * factor,
+                tile_size * factor
             );
             m_origin_valid  = false;
             m_gbuffer_valid = false;
@@ -2539,33 +2968,33 @@ void Lightmap_baker::ensure_gbuffer_targets()
     }
     const bool matches =
         m_position_texture &&
-        (m_position_texture->get_width()  == cell_size) &&
-        (m_position_texture->get_height() == cell_size);
+        (m_position_texture->get_width()  == tile_size) &&
+        (m_position_texture->get_height() == tile_size);
     if (matches) {
         // The smooth-position target is released once the one-shot adjust
         // pass folds it into the position G-buffer (record_adjust); a
         // re-raster needs it back.
         if (!m_smooth_position_texture) {
-            m_smooth_position_texture = make_target("lightmap gbuffer smooth position", c_position_format, cell_size, cell_size);
+            m_smooth_position_texture = make_target("lightmap gbuffer smooth position", c_position_format, tile_size, tile_size);
         }
         return;
     }
-    m_position_texture        = make_target("lightmap gbuffer position",        c_position_format, cell_size, cell_size);
-    m_normal_texture          = make_target("lightmap gbuffer normal",          c_normal_format,   cell_size, cell_size);
-    m_albedo_texture          = make_target("lightmap gbuffer albedo",          c_albedo_format,   cell_size, cell_size);
-    m_smooth_position_texture = make_target("lightmap gbuffer smooth position", c_position_format, cell_size, cell_size);
+    m_position_texture        = make_target("lightmap gbuffer position",        c_position_format, tile_size, tile_size);
+    m_normal_texture          = make_target("lightmap gbuffer normal",          c_normal_format,   tile_size, tile_size);
+    m_albedo_texture          = make_target("lightmap gbuffer albedo",          c_albedo_format,   tile_size, tile_size);
+    m_smooth_position_texture = make_target("lightmap gbuffer smooth position", c_position_format, tile_size, tile_size);
     m_gbuffer_valid    = false;
-    m_gbuffer_cell     = -1;
+    m_gbuffer_tile     = -1;
 }
 
-auto Lightmap_baker::bake_gbuffer(const int cell) -> bool
+auto Lightmap_baker::bake_gbuffer(const int tile) -> bool
 {
     using namespace erhe::graphics;
 
     if (!m_pipeline || (m_layout.width == 0) || m_layout.regions.empty()) {
         return false;
     }
-    if ((cell < 0) || (cell >= m_layout.get_cell_count())) {
+    if ((tile < 0) || (tile >= m_layout.get_tile_count())) {
         return false;
     }
 
@@ -2573,8 +3002,7 @@ auto Lightmap_baker::bake_gbuffer(const int cell) -> bool
 
     ensure_gbuffer_targets();
 
-    const int        cell_size   = m_layout.get_cell_size();
-    const glm::ivec2 cell_origin = m_layout.get_cell_origin(cell);
+    const int tile_size = m_layout.get_tile_size();
 
     // Texel coverage strategy (Bake_options::coverage_mode). Conservative:
     // native conservative rasterization, one unjittered pass (falls back to
@@ -2626,19 +3054,15 @@ auto Lightmap_baker::bake_gbuffer(const int cell) -> bool
         }
     };
     {
-        // Half-texel jitter magnitude in NDC ([-1,1] spans the cell).
-        const float jitter_step = 0.5f * 2.0f / static_cast<float>(cell_size);
-        // The published uv_scale_offset maps chart UV into PAGE UV; the
-        // raster target is the cell, so remap into cell UV:
-        //   cell_uv = (page_uv * page - cell_origin) / cell_size
-        const float page_over_cell = static_cast<float>(m_layout.width) / static_cast<float>(cell_size);
+        // Half-texel jitter magnitude in NDC ([-1,1] spans the tile).
+        const float jitter_step = 0.5f * 2.0f / static_cast<float>(tile_size);
         const std::span<std::byte> mapped = draw_ubo.map_bytes(0, ubo_bytes);
         std::memset(mapped.data(), 0, ubo_bytes);
         for (std::size_t j = 0; j < jitter_count; ++j) {
             const glm::vec4 jitter_ndc{jitter_taps[j].x * jitter_step, jitter_taps[j].y * jitter_step, 0.0f, 0.0f};
             for (std::size_t i = 0; i < m_layout.regions.size(); ++i) {
                 const Instance_region& region = m_layout.regions[i];
-                if (region.cell != cell) {
+                if (region.tile != tile) {
                     continue; // draw_regions skips these; the record stays zero
                 }
                 const erhe::scene::Node* const node = region.mesh ? region.mesh->get_node() : nullptr;
@@ -2653,15 +3077,12 @@ auto Lightmap_baker::bake_gbuffer(const int cell) -> bool
                         base_color = glm::vec4{material.data.base_color * (1.0f - material.data.metallic), 1.0f};
                     }
                 }
-                const glm::vec4 cell_uv_scale_offset{
-                    region.uv_scale_offset.x * page_over_cell,
-                    region.uv_scale_offset.y * page_over_cell,
-                    (region.uv_scale_offset.z * static_cast<float>(m_layout.width)  - static_cast<float>(cell_origin.x)) / static_cast<float>(cell_size),
-                    (region.uv_scale_offset.w * static_cast<float>(m_layout.height) - static_cast<float>(cell_origin.y)) / static_cast<float>(cell_size)
-                };
+                // Region uv_scale_offset is already tile-local: exactly the
+                // raster target space.
+                const glm::vec4 tile_uv_scale_offset = region.uv_scale_offset;
                 std::byte* const record = mapped.data() + (static_cast<std::size_t>(j) * m_layout.regions.size() + i) * c_draw_ubo_stride;
                 std::memcpy(record + m_draw_block_world_offset,      &world_from_node,      sizeof(glm::mat4));
-                std::memcpy(record + m_draw_block_uv_offset,         &cell_uv_scale_offset, sizeof(glm::vec4));
+                std::memcpy(record + m_draw_block_uv_offset,         &tile_uv_scale_offset, sizeof(glm::vec4));
                 std::memcpy(record + m_draw_block_jitter_offset,     &jitter_ndc,           sizeof(glm::vec4));
                 std::memcpy(record + m_draw_block_base_color_offset, &base_color,           sizeof(glm::vec4));
             }
@@ -2696,8 +3117,8 @@ auto Lightmap_baker::bake_gbuffer(const int cell) -> bool
         attachment.usage_after   = Image_usage_flag_bit_mask::sampled;
         attachment.layout_after  = Image_layout::shader_read_only_optimal;
     }
-    descriptor.render_target_width  = cell_size;
-    descriptor.render_target_height = cell_size;
+    descriptor.render_target_width  = tile_size;
+    descriptor.render_target_height = tile_size;
     descriptor.debug_label = erhe::utility::Debug_label{"lightmap gbuffer"};
 
     // One jitter pass worth of region draws; shared by the G-buffer passes
@@ -2707,7 +3128,7 @@ auto Lightmap_baker::bake_gbuffer(const int cell) -> bool
         std::size_t pass_drawn = 0;
         for (std::size_t i = 0; i < m_layout.regions.size(); ++i) {
             const Instance_region& region = m_layout.regions[i];
-            if (!region.mesh || (region.cell != cell)) {
+            if (!region.mesh || (region.tile != tile)) {
                 continue;
             }
             const std::vector<erhe::scene::Mesh_primitive>& primitives = region.mesh->get_primitives();
@@ -2759,8 +3180,8 @@ auto Lightmap_baker::bake_gbuffer(const int cell) -> bool
         Render_pass            render_pass{m_graphics_device, descriptor};
         Render_command_encoder encoder = m_graphics_device.make_render_command_encoder(command_buffer);
         const Scoped_render_pass scoped{render_pass, command_buffer};
-        encoder.set_viewport_rect(0, 0, cell_size, cell_size);
-        encoder.set_scissor_rect (0, 0, cell_size, cell_size);
+        encoder.set_viewport_rect(0, 0, tile_size, tile_size);
+        encoder.set_scissor_rect (0, 0, tile_size, tile_size);
         encoder.set_bind_group_layout(m_bind_group_layout.get());
         encoder.set_render_pipeline(use_conservative ? *m_pipeline_conservative : *m_pipeline);
 
@@ -2781,8 +3202,8 @@ auto Lightmap_baker::bake_gbuffer(const int cell) -> bool
     m_origin_factor = 0;
     if ((m_options.supersample_factor > 0) && !m_origin_texture) {
         log_render->warn(
-            "Lightmap_baker: supersampled ray origins unavailable ({}x{} cell x{} exceeds {}, exceeds the device memory budget, or pipelines missing)",
-            cell_size, cell_size, m_options.supersample_factor, c_supersample_max_dim
+            "Lightmap_baker: supersampled ray origins unavailable ({}x{} tile x{} exceeds {}, exceeds the device memory budget, or pipelines missing)",
+            tile_size, tile_size, m_options.supersample_factor, c_supersample_max_dim
         );
     }
     if (m_origin_texture) {
@@ -2826,16 +3247,16 @@ auto Lightmap_baker::bake_gbuffer(const int cell) -> bool
     m_graphics_device.wait_idle();
 
     m_gbuffer_valid    = drawn > 0;
-    m_gbuffer_cell     = m_gbuffer_valid ? cell : -1;
+    m_gbuffer_tile     = m_gbuffer_valid ? tile : -1;
     m_gbuffer_adjusted = false; // fresh positions need the virtual-offset pass
     const char* const coverage_name =
         use_conservative     ? "native conservative raster" :
         (jitter_count == 25) ? "25-tap jitter"              :
         conservative_requested ? "9-tap jitter (conservative raster unavailable)" : "9-tap jitter";
     log_render->info(
-        "Lightmap_baker: G-buffer baked, cell {}/{}, {} of {} regions drawn, {}x{}, {}{}",
-        cell, m_layout.get_cell_count(),
-        drawn, m_layout.regions.size(), cell_size, cell_size,
+        "Lightmap_baker: G-buffer baked, tile {}/{}, {} of {} regions drawn, {}x{}, {}{}",
+        tile, m_layout.get_tile_count(),
+        drawn, m_layout.regions.size(), tile_size, tile_size,
         coverage_name,
         m_origin_valid ? fmt::format(", supersampled origins {}x{} per texel", m_origin_factor, m_origin_factor) : ""
     );
@@ -2850,7 +3271,6 @@ auto Lightmap_baker::debug_write_gbuffer_pngs(const std::string& base_path) -> b
     }
     const int         width       = m_position_texture->get_width();
     const int         height      = m_position_texture->get_height();
-    const glm::ivec2  cell_origin = m_layout.get_cell_origin(std::max(0, m_gbuffer_cell));
     const std::size_t texel_count = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
 
     std::vector<float> position_data;
@@ -2894,14 +3314,14 @@ auto Lightmap_baker::debug_write_gbuffer_pngs(const std::string& base_path) -> b
             covered > 0 ? sum / static_cast<double>(covered) : 0.0, peak
         );
         for (const Instance_region& region : m_layout.regions) {
-            if (region.cell != m_gbuffer_cell) {
+            if (region.tile != m_gbuffer_tile) {
                 continue;
             }
             std::size_t region_covered = 0;
             std::size_t region_moved   = 0;
             float       region_peak    = 0.0f;
-            for (int y = region.y - cell_origin.y; y < region.y - cell_origin.y + region.height; ++y) {
-                for (int x = region.x - cell_origin.x; x < region.x - cell_origin.x + region.width; ++x) {
+            for (int y = region.y; y < region.y + region.height; ++y) {
+                for (int x = region.x; x < region.x + region.width; ++x) {
                     const std::size_t i = static_cast<std::size_t>(y) * static_cast<std::size_t>(width) + static_cast<std::size_t>(x);
                     if (position_data[i * 4 + 3] <= 0.0f) {
                         continue;
@@ -3057,20 +3477,20 @@ void Lightmap_baker::ensure_bake_targets(erhe::graphics::Command_buffer& command
             }
         );
     };
-    // Working atlas + dilate scratch are CELL-sized (one cell resolves /
+    // Working atlas + dilate scratch are CELL-sized (one tile resolves /
     // publishes at a time); the renderer-facing display atlas is the full
     // page.
-    const int cell_size = m_layout.get_cell_size();
+    const int tile_size = m_layout.get_tile_size();
     const bool working_matches =
         m_lightmap_texture &&
-        (m_lightmap_texture->get_width()  == cell_size) &&
-        (m_lightmap_texture->get_height() == cell_size);
+        (m_lightmap_texture->get_width()  == tile_size) &&
+        (m_lightmap_texture->get_height() == tile_size);
     if (!working_matches) {
         m_lightmap_texture = make_storage(
             "lightmap working atlas",
             c_atlas_format,
-            cell_size,
-            cell_size,
+            tile_size,
+            tile_size,
             Image_usage_flag_bit_mask::storage          |
             Image_usage_flag_bit_mask::sampled          |
             Image_usage_flag_bit_mask::color_attachment | // seam blend line raster target
@@ -3083,8 +3503,8 @@ void Lightmap_baker::ensure_bake_targets(erhe::graphics::Command_buffer& command
         m_dilate_texture = make_storage(
             "lightmap dilate scratch",
             c_atlas_format,
-            cell_size,
-            cell_size,
+            tile_size,
+            tile_size,
             Image_usage_flag_bit_mask::storage |
             Image_usage_flag_bit_mask::sampled |
             Image_usage_flag_bit_mask::transfer_dst
@@ -3117,24 +3537,24 @@ void Lightmap_baker::ensure_bake_targets(erhe::graphics::Command_buffer& command
         command_buffer.clear_texture(*m_display_texture, {0.0, 0.0, 0.0, 0.0});
         command_buffer.transition_texture_layout(*m_display_texture, Image_layout::shader_read_only_optimal);
         m_display_cleared = true;
-        for (Cell_state& cell : m_cells) {
-            cell.published = false;
+        for (Tile_state& tile : m_tiles) {
+            tile.published = false;
         }
     }
 }
 
-auto Lightmap_baker::ensure_cell_accum(erhe::graphics::Command_buffer& command_buffer, const int cell) -> erhe::graphics::Texture*
+auto Lightmap_baker::ensure_tile_accum(erhe::graphics::Command_buffer& command_buffer, const int tile) -> erhe::graphics::Texture*
 {
     using namespace erhe::graphics;
-    if ((cell < 0) || (cell >= static_cast<int>(m_cells.size()))) {
+    if ((tile < 0) || (tile >= static_cast<int>(m_tiles.size()))) {
         return nullptr;
     }
-    Cell_state& state = m_cells[static_cast<std::size_t>(cell)];
-    const int cell_size = m_layout.get_cell_size();
+    Tile_state& state = m_tiles[static_cast<std::size_t>(tile)];
+    const int tile_size = m_layout.get_tile_size();
     const bool matches =
         state.accum &&
-        (state.accum->get_width()  == cell_size) &&
-        (state.accum->get_height() == cell_size);
+        (state.accum->get_width()  == tile_size) &&
+        (state.accum->get_height() == tile_size);
     if (!matches) {
         state.accum = std::make_shared<Texture>(
             m_graphics_device,
@@ -3145,9 +3565,9 @@ auto Lightmap_baker::ensure_cell_accum(erhe::graphics::Command_buffer& command_b
                     Image_usage_flag_bit_mask::transfer_dst,
                 .type        = Texture_type::texture_2d,
                 .pixelformat = c_accum_format,
-                .width       = cell_size,
-                .height      = cell_size,
-                .debug_label = erhe::utility::Debug_label{"lightmap cell accumulation"}
+                .width       = tile_size,
+                .height      = tile_size,
+                .debug_label = erhe::utility::Debug_label{"lightmap tile accumulation"}
             }
         );
         state.accum_dirty = true;
@@ -3165,13 +3585,16 @@ void Lightmap_baker::publish_regions()
 {
     // Per-primitive atlas regions so the forward renderer samples the bake
     // (Primitive_buffer uploads the value per draw; zero = no lightmap).
+    // The display mapping goes through the region's tile's current slot:
+    // non-resident tiles publish zero and render unlit until they regain a
+    // slot (re-published on every residency change).
     for (const Instance_region& region : m_layout.regions) {
         if (!region.mesh) {
             continue;
         }
         std::vector<erhe::scene::Mesh_primitive>& primitives = region.mesh->get_mutable_primitives();
         if (region.primitive_index < primitives.size()) {
-            primitives[region.primitive_index].lightmap_uv_scale_offset = region.uv_scale_offset;
+            primitives[region.primitive_index].lightmap_uv_scale_offset = m_layout.display_uv_scale_offset(region);
         }
     }
     m_regions_published = true;
@@ -3318,7 +3741,19 @@ void Lightmap_baker::collect_instances(
                         record.vertex_stride_uints = static_cast<uint32_t>(attribute_range.element_size / 4);
                         for (const Instance_region& region : m_layout.regions) {
                             if ((region.mesh == mesh) && (region.primitive_index == primitive_index)) {
-                                record.uv_scale_offset = region.uv_scale_offset;
+                                // Bounce rays sample the display atlas, so
+                                // the record needs the display (slot-space)
+                                // mapping; zero when the tile is not
+                                // resident (bounce contributes nothing).
+                                // The partitioned-mode white-fallback
+                                // sentinel (scale.x < 0) is for the forward
+                                // renderer only - white here would inject
+                                // fake energy into the gather, so bounce
+                                // stays black for non-resident tiles.
+                                record.uv_scale_offset = m_layout.display_uv_scale_offset(region);
+                                if (record.uv_scale_offset.x < 0.0f) {
+                                    record.uv_scale_offset = glm::vec4{0.0f};
+                                }
                                 break;
                             }
                         }
@@ -3346,7 +3781,7 @@ auto Lightmap_baker::bake_direct(Scene_root& scene_root) -> bool
 {
     using namespace erhe::graphics;
 
-    if (!m_gather_pipeline || !m_resolve_pipeline || (m_layout.width == 0) || m_cells.empty()) {
+    if (!m_gather_pipeline || !m_resolve_pipeline || (m_layout.width == 0) || m_tiles.empty()) {
         return false;
     }
 
@@ -3373,27 +3808,33 @@ auto Lightmap_baker::bake_direct(Scene_root& scene_root) -> bool
         m_direct_gather_ubo->unmap();
     }
 
-    // One cell at a time: raster the cell's G-buffer (standalone submit
-    // inside bake_gbuffer), then gather + resolve + publish the cell in a
-    // second standalone submit. One-shot bake semantics per cell: restart
-    // the cell's accumulation so the result is exactly one full sample -
+    // One tile at a time: raster the tile's G-buffer (standalone submit
+    // inside bake_gbuffer), then gather + resolve + publish the tile in a
+    // second standalone submit. One-shot bake semantics per tile: restart
+    // the tile's accumulation so the result is exactly one full sample -
     // direct light plus one bounce off whatever the display atlas held.
-    const int    cell_size  = m_layout.get_cell_size();
-    std::size_t  cells_done = 0;
+    const int    tile_size  = m_layout.get_tile_size();
+    std::size_t  tiles_done = 0;
     constexpr unsigned int bake_thread_slot = 6;
-    for (int cell = 0; cell < m_layout.get_cell_count(); ++cell) {
-        if (!m_cells[static_cast<std::size_t>(cell)].has_content) {
+    for (int tile = 0; tile < m_layout.get_tile_count(); ++tile) {
+        if (!m_tiles[static_cast<std::size_t>(tile)].has_content) {
             continue;
         }
-        if (!bake_gbuffer(cell)) {
+        // One-shot bakes cover the resident tiles only (they are the ones
+        // with a display slot to publish into); the offline bake-to-disk
+        // path is the way to bake every tile of a large world.
+        if (m_layout.tiles[static_cast<std::size_t>(tile)].slot < 0) {
+            continue;
+        }
+        if (!bake_gbuffer(tile)) {
             continue;
         }
 
         Command_buffer& command_buffer = m_graphics_device.get_command_buffer(bake_thread_slot);
         command_buffer.begin();
         ensure_bake_targets(command_buffer);
-        m_cells[static_cast<std::size_t>(cell)].accum_dirty = true;
-        Texture* const accum = ensure_cell_accum(command_buffer, cell);
+        m_tiles[static_cast<std::size_t>(tile)].accum_dirty = true;
+        Texture* const accum = ensure_tile_accum(command_buffer, tile);
         if (accum == nullptr) {
             command_buffer.end();
             continue;
@@ -3450,8 +3891,8 @@ auto Lightmap_baker::bake_direct(Scene_root& scene_root) -> bool
             }
         );
 
-        // Gather one full-cell sample: the display atlas is sampled by
-        // bounce rays (shader_read_only), the cell accumulation image is
+        // Gather one full-tile sample: the display atlas is sampled by
+        // bounce rays (shader_read_only), the tile accumulation image is
         // written (general).
         command_buffer.transition_texture_layout(*m_display_texture, Image_layout::shader_read_only_optimal);
         {
@@ -3474,35 +3915,287 @@ auto Lightmap_baker::bake_direct(Scene_root& scene_root) -> bool
             encoder.set_sampled_image(9u, supersample ? *m_origin_texture : *m_position_texture, *m_nearest_sampler);
             encoder.set_storage_image(12u, *accum);
             encoder.dispatch_compute(
-                (static_cast<std::uintptr_t>(cell_size) + 7) / 8,
-                (static_cast<std::uintptr_t>(cell_size) + 7) / 8,
+                (static_cast<std::uintptr_t>(tile_size) + 7) / 8,
+                (static_cast<std::uintptr_t>(tile_size) + 7) / 8,
                 1
             );
         }
 
-        record_resolve_and_dilate(command_buffer, cell, false);
-        record_display_publish(command_buffer, cell);
+        record_resolve_and_dilate(command_buffer, tile, false);
+        record_display_publish(command_buffer, tile);
         command_buffer.end();
         Command_buffer* command_buffers[] = { &command_buffer };
         m_graphics_device.submit_command_buffers(std::span<Command_buffer* const>{command_buffers});
         m_graphics_device.wait_idle();
-        m_cells[static_cast<std::size_t>(cell)].published = true;
-        m_cells[static_cast<std::size_t>(cell)].sweeps    = 1;
-        ++cells_done;
+        m_tiles[static_cast<std::size_t>(tile)].published = true;
+        m_tiles[static_cast<std::size_t>(tile)].sweeps    = 1;
+        ++tiles_done;
     }
-    if (cells_done == 0) {
+    if (tiles_done == 0) {
         return false;
     }
 
     m_lightmap_valid = true;
-    m_cursor_cell    = 0;
+    m_cursor_tile    = 0;
     m_cursor_y       = 0;
     publish_regions();
 
     log_render->info(
-        "Lightmap_baker: direct light baked, {} lights, {} cells, {}x{} page",
-        lights.size(), cells_done, m_layout.width, m_layout.height
+        "Lightmap_baker: direct light baked, {} lights, {} tiles, {}x{} page",
+        lights.size(), tiles_done, m_layout.width, m_layout.height
     );
+    return true;
+}
+
+auto Lightmap_baker::get_bake_parameters_hash(const float texels_per_meter) const -> uint64_t
+{
+    uint64_t hash = fnv1a64(&texels_per_meter, sizeof(float));
+    hash = fnv1a64(&m_tile_size, sizeof(int), hash);
+    const uint32_t option_bits =
+        (m_options.indirect_bounce ? 1u  : 0u) |
+        (m_options.terminator_fix  ? 2u  : 0u) |
+        (m_options.denoise         ? 4u  : 0u) |
+        (m_options.dilation        ? 8u  : 0u) |
+        (m_options.seam_blend      ? 16u : 0u) |
+        (static_cast<uint32_t>(m_options.coverage_mode)      << 5) |
+        (static_cast<uint32_t>(m_options.supersample_factor) << 8);
+    hash = fnv1a64(&option_bits, sizeof(uint32_t), hash);
+    return hash;
+}
+
+auto Lightmap_baker::start_offline_bake(Scene_root& scene_root, const uint32_t target_sweeps, Offline_tile_sink sink) -> bool
+{
+    static_cast<void>(scene_root);
+    if (m_offline_state.progress.active || !m_gather_pipeline || !m_resolve_pipeline || !sink) {
+        return false;
+    }
+    if (m_layout.get_tile_count() == 0) {
+        if (m_report != nullptr) {
+            m_report->add_error(Lightmap_report::Stage::bake, "offline bake", "no atlas layout - run Update Atlas Layout first");
+        }
+        return false;
+    }
+    m_offline_state.progress = Offline_progress{
+        .active        = true,
+        .tiles_done    = 0,
+        .tile_count    = m_layout.get_tile_count(),
+        .target_sweeps = std::max(1u, target_sweeps)
+    };
+    m_offline_state.next_tile = 0;
+    m_offline_state.sink      = std::move(sink);
+    log_render->info(
+        "Lightmap_baker: offline bake started, {} tiles of {}^2, {} sweeps per tile",
+        m_layout.get_tile_count(), m_layout.get_tile_size(), m_offline_state.progress.target_sweeps
+    );
+    return true;
+}
+
+void Lightmap_baker::cancel_offline_bake()
+{
+    if (!m_offline_state.progress.active) {
+        return;
+    }
+    m_offline_state.progress.active = false;
+    m_offline_state.sink            = {};
+    log_render->info("Lightmap_baker: offline bake cancelled");
+}
+
+auto Lightmap_baker::offline_tick(Scene_root& scene_root) -> bool
+{
+    using namespace erhe::graphics;
+    Offline_state& offline = m_offline_state;
+    if (!offline.progress.active) {
+        return false;
+    }
+    const int tile = offline.next_tile;
+    if (tile >= m_layout.get_tile_count()) {
+        offline.progress.active = false;
+        offline.sink            = {};
+        log_render->info("Lightmap_baker: offline bake finished, {} tiles", offline.progress.tiles_done);
+        return false;
+    }
+    const auto fail = [this, &offline, tile](const std::string& message) -> bool {
+        if (m_report != nullptr) {
+            m_report->add_error(Lightmap_report::Stage::bake, fmt::format("tile {}", tile), message);
+        }
+        log_render->warn("Lightmap_baker: offline bake aborted at tile {}: {}", tile, message);
+        offline.progress.active = false;
+        offline.sink            = {};
+        return false;
+    };
+
+    // 1. Tile G-buffer (standalone submit inside).
+    if (!bake_gbuffer(tile)) {
+        return fail("G-buffer raster failed");
+    }
+
+    const std::vector<Light_record> lights    = collect_lights(scene_root);
+    const int                       tile_size = m_layout.get_tile_size();
+    constexpr unsigned int          bake_thread_slot = 6;
+
+    // 2. target_sweeps full-tile gather submits into this tile's fresh
+    // accumulation. One submit + wait_idle per sweep so the single plain
+    // gather UBO can be rewritten between sweeps (frame_index decorrelates
+    // the RNG per sweep).
+    m_direct_gather_ubo = std::make_unique<Buffer>(
+        m_graphics_device,
+        Buffer_create_info{
+            .capacity_byte_count                    = m_gather_block_size,
+            .memory_allocation_create_flag_bit_mask = Memory_allocation_create_flag_bit_mask::mapped,
+            .usage                                  = Buffer_usage::uniform,
+            .required_memory_property_bit_mask      =
+                Memory_property_flag_bit_mask::host_read |
+                Memory_property_flag_bit_mask::host_write,
+            .preferred_memory_property_bit_mask     =
+                Memory_property_flag_bit_mask::host_coherent |
+                Memory_property_flag_bit_mask::host_persistent,
+            .debug_label = erhe::utility::Debug_label{"lightmap offline gather ubo"}
+        }
+    );
+    std::size_t record_byte_count = 0;
+    Texture*    accum             = nullptr;
+    for (uint32_t sweep = 0; sweep < offline.progress.target_sweeps; ++sweep) {
+        {
+            const std::span<std::byte> mapped = m_direct_gather_ubo->map_bytes(0, m_gather_block_size);
+            write_gather_ubo(mapped.data(), lights, sweep, 0u);
+            m_direct_gather_ubo->unmap();
+        }
+        Command_buffer& command_buffer = m_graphics_device.get_command_buffer(bake_thread_slot);
+        command_buffer.begin();
+        if (sweep == 0) {
+            ensure_bake_targets(command_buffer);
+            m_tiles[static_cast<std::size_t>(tile)].accum_dirty = true;
+            accum = ensure_tile_accum(command_buffer, tile);
+            if (accum == nullptr) {
+                command_buffer.end();
+                return fail("accumulation target unavailable");
+            }
+            collect_instances(command_buffer, scene_root, m_tick_instances, m_tick_records);
+            if (m_tick_instances.empty()) {
+                command_buffer.end();
+                return fail("no occluder instances (empty scene?)");
+            }
+            record_byte_count = m_tick_records.size() * sizeof(Lm_instance_record);
+            m_direct_instance_ssbo = std::make_unique<Buffer>(
+                m_graphics_device,
+                Buffer_create_info{
+                    .capacity_byte_count                    = record_byte_count,
+                    .memory_allocation_create_flag_bit_mask = Memory_allocation_create_flag_bit_mask::mapped,
+                    .usage                                  = Buffer_usage::storage,
+                    .required_memory_property_bit_mask      =
+                        Memory_property_flag_bit_mask::host_read |
+                        Memory_property_flag_bit_mask::host_write,
+                    .preferred_memory_property_bit_mask     =
+                        Memory_property_flag_bit_mask::host_coherent |
+                        Memory_property_flag_bit_mask::host_persistent,
+                    .debug_label = erhe::utility::Debug_label{"lightmap offline instance records"}
+                }
+            );
+            {
+                const std::span<std::byte> mapped = m_direct_instance_ssbo->map_bytes(0, record_byte_count);
+                std::memcpy(mapped.data(), m_tick_records.data(), record_byte_count);
+                m_direct_instance_ssbo->unmap();
+            }
+            const uint32_t required_capacity = static_cast<uint32_t>(m_tick_instances.size());
+            if (!m_tlas || (m_tlas_capacity < required_capacity)) {
+                const uint32_t new_capacity = std::max(64u, std::bit_ceil(required_capacity));
+                m_tlas = std::make_unique<Acceleration_structure>(
+                    m_graphics_device,
+                    Acceleration_structure_create_info{
+                        .type               = Acceleration_structure_type::top_level,
+                        .max_instance_count = new_capacity,
+                        .debug_label        = erhe::utility::Debug_label{"Lightmap TLAS"}
+                    }
+                );
+                m_tlas_capacity = new_capacity;
+            }
+            m_tlas->build(command_buffer, m_tick_instances);
+            record_adjust(
+                command_buffer,
+                *m_tlas,
+                [&](Compute_command_encoder& encoder) {
+                    encoder.set_buffer(Buffer_target::storage, m_direct_instance_ssbo.get(), 0, record_byte_count, 1);
+                }
+            );
+        }
+        command_buffer.transition_texture_layout(*m_display_texture, Image_layout::shader_read_only_optimal);
+        {
+            Compute_pipeline* const ss_pipeline =
+                (m_origin_factor == 8) ? m_gather_ss8_pipeline.get() :
+                (m_origin_factor == 4) ? m_gather_ss4_pipeline.get() : nullptr;
+            const bool supersample = m_origin_valid && m_origin_texture && (ss_pipeline != nullptr);
+            Compute_command_encoder encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
+            encoder.set_bind_group_layout(m_gather_layout.get());
+            encoder.set_compute_pipeline(supersample ? *ss_pipeline : *m_gather_pipeline);
+            encoder.set_buffer(Buffer_target::uniform, m_direct_gather_ubo.get(),    0, m_gather_block_size, 0);
+            encoder.set_buffer(Buffer_target::storage, m_direct_instance_ssbo.get(), 0, record_byte_count,   1);
+            encoder.set_acceleration_structure(2u, *m_tlas);
+            encoder.set_sampled_image(3u, *m_position_texture, *m_nearest_sampler);
+            encoder.set_sampled_image(4u, *m_normal_texture,   *m_nearest_sampler);
+            encoder.set_sampled_image(5u, *m_albedo_texture,   *m_linear_sampler);
+            encoder.set_sampled_image(6u, *m_display_texture,  *m_linear_sampler);
+            encoder.set_sampled_image(7u, (m_sky.transmittance_lut != nullptr) ? *m_sky.transmittance_lut : *m_albedo_texture, *m_linear_sampler);
+            encoder.set_sampled_image(8u, (m_sky.multiscatter_lut  != nullptr) ? *m_sky.multiscatter_lut  : *m_albedo_texture, *m_linear_sampler);
+            encoder.set_sampled_image(9u, supersample ? *m_origin_texture : *m_position_texture, *m_nearest_sampler);
+            encoder.set_storage_image(12u, *accum);
+            encoder.dispatch_compute(
+                (static_cast<std::uintptr_t>(tile_size) + 7) / 8,
+                (static_cast<std::uintptr_t>(tile_size) + 7) / 8,
+                1
+            );
+        }
+        const bool last_sweep = (sweep + 1) == offline.progress.target_sweeps;
+        if (last_sweep) {
+            // 3. Resolve + optional denoise + dilate + seam blend into the
+            // tile-sized working atlas, and (when this tile happens to hold
+            // a display slot) publish so the viewport reflects the bake.
+            record_resolve_and_dilate(command_buffer, tile, m_options.denoise);
+            record_display_publish(command_buffer, tile);
+        }
+        command_buffer.end();
+        Command_buffer* command_buffers[] = { &command_buffer };
+        m_graphics_device.submit_command_buffers(std::span<Command_buffer* const>{command_buffers});
+        m_graphics_device.wait_idle();
+    }
+    {
+        Tile_state& state = m_tiles[static_cast<std::size_t>(tile)];
+        state.sweeps    = offline.progress.target_sweeps;
+        state.published = m_layout.tiles[static_cast<std::size_t>(tile)].slot >= 0;
+    }
+    m_lightmap_valid = true;
+
+    // 4. CPU readback of the tile-sized working atlas -> fp16 -> sink.
+    {
+        std::vector<float> pixels;
+        if (!m_lightmap_texture || !read_rgba_texture_to_float(m_graphics_device, *m_lightmap_texture, pixels)) {
+            return fail("working atlas readback failed");
+        }
+        std::vector<uint16_t> half_pixels(pixels.size());
+        for (std::size_t i = 0; i < pixels.size(); ++i) {
+            half_pixels[i] = Lightmap_tile_io::float_to_half(pixels[i]);
+        }
+        if (!offline.sink(tile, tile_size, tile_size, half_pixels)) {
+            return fail("tile sink failed (disk write?)");
+        }
+    }
+
+    // 5. Release this tile's accumulation - only one tile's working set is
+    // ever resident during an offline bake (destruction is deferred behind
+    // the in-flight frames; wait_idle above already drained them).
+    {
+        Tile_state& state = m_tiles[static_cast<std::size_t>(tile)];
+        state.accum.reset();
+        state.accum_dirty = true;
+    }
+
+    ++offline.progress.tiles_done;
+    ++offline.next_tile;
+    if (offline.next_tile >= m_layout.get_tile_count()) {
+        offline.progress.active = false;
+        offline.sink            = {};
+        log_render->info("Lightmap_baker: offline bake finished, {} tiles", offline.progress.tiles_done);
+        return false;
+    }
     return true;
 }
 
@@ -3576,15 +4269,15 @@ void Lightmap_baker::release_working_set()
     m_lightmap_texture.reset();
     m_dilate_texture.reset();
     m_gbuffer_valid    = false;
-    m_gbuffer_cell     = -1;
+    m_gbuffer_tile     = -1;
     m_gbuffer_adjusted = false;
-    m_cursor_cell      = 0;
+    m_cursor_tile      = 0;
     m_cursor_y         = 0;
-    for (Cell_state& cell : m_cells) {
-        cell.accum.reset();
-        cell.accum_dirty = true;
-        cell.sweeps      = 0;
-        // cell.published stays: the display atlas keeps its last publish.
+    for (Tile_state& tile : m_tiles) {
+        tile.accum.reset();
+        tile.accum_dirty = true;
+        tile.sweeps      = 0;
+        // tile.published stays: the display atlas keeps its last publish.
     }
     m_blas_cache.clear();
     m_tlas.reset();
@@ -3628,18 +4321,18 @@ void Lightmap_baker::set_options(const Bake_options& options)
     m_options = options;
 }
 
-void Lightmap_baker::record_resolve_and_dilate(erhe::graphics::Command_buffer& command_buffer, const int cell, const bool with_denoise)
+void Lightmap_baker::record_resolve_and_dilate(erhe::graphics::Command_buffer& command_buffer, const int tile, const bool with_denoise)
 {
     using namespace erhe::graphics;
 
     erhe::graphics::Texture* const accum =
-        ((cell >= 0) && (cell < static_cast<int>(m_cells.size()))) ? m_cells[static_cast<std::size_t>(cell)].accum.get() : nullptr;
+        ((tile >= 0) && (tile < static_cast<int>(m_tiles.size()))) ? m_tiles[static_cast<std::size_t>(tile)].accum.get() : nullptr;
     if ((accum == nullptr) || !m_lightmap_texture) {
         return;
     }
-    const int cell_size = m_layout.get_cell_size();
+    const int tile_size = m_layout.get_tile_size();
 
-    // Resolve the cell's running average into the working atlas, optionally
+    // Resolve the tile's running average into the working atlas, optionally
     // JNLM denoise it, then dilate; never touches the accumulation buffer.
     // The dilation ping-pong iteration count is chosen so the final pass
     // lands back in m_lightmap_texture: without denoise it starts there
@@ -3654,8 +4347,8 @@ void Lightmap_baker::record_resolve_and_dilate(erhe::graphics::Command_buffer& c
         encoder.set_storage_image(0u, *accum);
         encoder.set_storage_image(1u, *m_lightmap_texture);
         encoder.dispatch_compute(
-            (static_cast<std::uintptr_t>(cell_size) + 7) / 8,
-            (static_cast<std::uintptr_t>(cell_size) + 7) / 8,
+            (static_cast<std::uintptr_t>(tile_size) + 7) / 8,
+            (static_cast<std::uintptr_t>(tile_size) + 7) / 8,
             1
         );
     }
@@ -3674,8 +4367,8 @@ void Lightmap_baker::record_resolve_and_dilate(erhe::graphics::Command_buffer& c
             encoder.set_storage_image(2u, *m_normal_texture);
             encoder.set_storage_image(3u, *m_albedo_texture);
             encoder.dispatch_compute(
-                (static_cast<std::uintptr_t>(cell_size) + 7) / 8,
-                (static_cast<std::uintptr_t>(cell_size) + 7) / 8,
+                (static_cast<std::uintptr_t>(tile_size) + 7) / 8,
+                (static_cast<std::uintptr_t>(tile_size) + 7) / 8,
                 1
             );
         }
@@ -3706,8 +4399,8 @@ void Lightmap_baker::record_resolve_and_dilate(erhe::graphics::Command_buffer& c
                 encoder.set_storage_image(0u, *ping[i & 1]);
                 encoder.set_storage_image(1u, *ping[(i + 1) & 1]);
                 encoder.dispatch_compute(
-                    (static_cast<std::uintptr_t>(cell_size) + 7) / 8,
-                    (static_cast<std::uintptr_t>(cell_size) + 7) / 8,
+                    (static_cast<std::uintptr_t>(tile_size) + 7) / 8,
+                    (static_cast<std::uintptr_t>(tile_size) + 7) / 8,
                     1
                 );
             }
@@ -3734,19 +4427,27 @@ void Lightmap_baker::record_resolve_and_dilate(erhe::graphics::Command_buffer& c
         }
     }
     if (m_options.seam_blend) {
-        record_seam_blend(command_buffer, cell);
+        record_seam_blend(command_buffer, tile);
     }
     command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::shader_read_only_optimal);
 }
 
-void Lightmap_baker::record_display_publish(erhe::graphics::Command_buffer& command_buffer, const int cell)
+void Lightmap_baker::record_display_publish(erhe::graphics::Command_buffer& command_buffer, const int tile)
 {
     using namespace erhe::graphics;
     if (!m_lightmap_texture || !m_display_texture) {
         return;
     }
-    const int        cell_size   = m_layout.get_cell_size();
-    const glm::ivec2 cell_origin = m_layout.get_cell_origin(cell);
+    // Publishing goes through the tile's display slot; non-resident tiles
+    // have nowhere to publish (their regions render unlit anyway).
+    const int slot = ((tile >= 0) && (tile < m_layout.get_tile_count()))
+        ? m_layout.tiles[static_cast<std::size_t>(tile)].slot
+        : -1;
+    if (slot < 0) {
+        return;
+    }
+    const int        tile_size   = m_layout.get_tile_size();
+    const glm::ivec2 slot_origin = m_layout.get_slot_origin(slot);
     command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::transfer_src_optimal);
     command_buffer.transition_texture_layout(*m_display_texture,  Image_layout::transfer_dst_optimal);
     {
@@ -3755,30 +4456,30 @@ void Lightmap_baker::record_display_publish(erhe::graphics::Command_buffer& comm
             m_lightmap_texture.get(),
             0, 0,
             glm::ivec3{0, 0, 0},
-            glm::ivec3{cell_size, cell_size, 1},
+            glm::ivec3{tile_size, tile_size, 1},
             m_display_texture.get(),
             0, 0,
-            glm::ivec3{cell_origin.x, cell_origin.y, 0}
+            glm::ivec3{slot_origin.x, slot_origin.y, 0}
         );
     }
     command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::shader_read_only_optimal);
     command_buffer.transition_texture_layout(*m_display_texture,  Image_layout::shader_read_only_optimal);
 }
 
-void Lightmap_baker::record_seam_blend(erhe::graphics::Command_buffer& command_buffer, const int cell)
+void Lightmap_baker::record_seam_blend(erhe::graphics::Command_buffer& command_buffer, const int tile)
 {
     using namespace erhe::graphics;
     if (!m_seam_pipeline || !m_dilate_texture) {
         return;
     }
-    if ((cell < 0) || (cell >= static_cast<int>(m_cell_seam_ranges.size()))) {
+    if ((tile < 0) || (tile >= static_cast<int>(m_tile_seam_ranges.size()))) {
         return;
     }
-    const auto [first_vertex, vertex_count] = m_cell_seam_ranges[static_cast<std::size_t>(cell)];
+    const auto [first_vertex, vertex_count] = m_tile_seam_ranges[static_cast<std::size_t>(tile)];
     if (vertex_count == 0) {
         return;
     }
-    const int cell_size = m_layout.get_cell_size();
+    const int tile_size = m_layout.get_tile_size();
     // Sample source: a copy of the working atlas in the dilate scratch
     // (rendering into the atlas while sampling it would be a hazard).
     command_buffer.transition_texture_layout(*m_lightmap_texture, Image_layout::transfer_src_optimal);
@@ -3808,15 +4509,15 @@ void Lightmap_baker::record_seam_blend(erhe::graphics::Command_buffer& command_b
     attachment.layout_before = Image_layout::color_attachment_optimal;
     attachment.usage_after   = Image_usage_flag_bit_mask::storage;
     attachment.layout_after  = Image_layout::color_attachment_optimal;
-    descriptor.render_target_width  = cell_size;
-    descriptor.render_target_height = cell_size;
+    descriptor.render_target_width  = tile_size;
+    descriptor.render_target_height = tile_size;
     descriptor.debug_label = erhe::utility::Debug_label{"lightmap seam blend"};
     {
         Render_pass            render_pass{m_graphics_device, descriptor};
         Render_command_encoder encoder = m_graphics_device.make_render_command_encoder(command_buffer);
         const Scoped_render_pass scoped{render_pass, command_buffer};
-        encoder.set_viewport_rect(0, 0, cell_size, cell_size);
-        encoder.set_scissor_rect (0, 0, cell_size, cell_size);
+        encoder.set_viewport_rect(0, 0, tile_size, tile_size);
+        encoder.set_scissor_rect (0, 0, tile_size, tile_size);
         encoder.set_bind_group_layout(m_seam_layout.get());
         encoder.set_render_pipeline(*m_seam_pipeline);
         encoder.set_sampled_image(0u, *m_dilate_texture, *m_linear_sampler);
@@ -3832,7 +4533,7 @@ void Lightmap_baker::tick(
     const float                     texels_per_meter,
     const float                     min_face_texels,
     const glm::vec3*                camera_position,
-    const int                       max_active_cells
+    const int                       max_active_tiles
 )
 {
     using namespace erhe::graphics;
@@ -3864,6 +4565,23 @@ void Lightmap_baker::tick(
                 const erhe::primitive::Primitive* const primitive = mesh_primitive.primitive.get();
                 const erhe::primitive::Buffer_mesh* const buffer_mesh = (primitive != nullptr) ? primitive->get_renderable_mesh() : nullptr;
                 hash_layout = fnv1a64(&buffer_mesh, sizeof(buffer_mesh), hash_layout);
+            }
+        }
+        // World-space partition state: piece meshes are not lightmapped-
+        // flagged (the loop above skips them), so prepare/revert and piece
+        // swaps must invalidate the layout through their own hash
+        // contribution.
+        if ((m_partitioner != nullptr) && m_partitioner->is_prepared() && (m_partitioner->get_scene_root() == &scene_root)) {
+            for (const Lightmap_partitioner::Original_entry& entry : m_partitioner->get_entries()) {
+                const erhe::scene::Mesh* const piece_mesh_ptr = entry.piece_mesh.get();
+                hash_layout = fnv1a64(&piece_mesh_ptr, sizeof(piece_mesh_ptr), hash_layout);
+                if (entry.piece_mesh) {
+                    for (const erhe::scene::Mesh_primitive& mesh_primitive : entry.piece_mesh->get_primitives()) {
+                        const erhe::primitive::Primitive* const primitive = mesh_primitive.primitive.get();
+                        const erhe::primitive::Buffer_mesh* const buffer_mesh = (primitive != nullptr) ? primitive->get_renderable_mesh() : nullptr;
+                        hash_layout = fnv1a64(&buffer_mesh, sizeof(buffer_mesh), hash_layout);
+                    }
+                }
             }
         }
     }
@@ -3961,75 +4679,123 @@ void Lightmap_baker::tick(
         }
         m_gbuffer_upload_defer = true;
     }
-    if (m_cells.empty()) {
+    if (m_tiles.empty()) {
         return;
     }
 
-    // Camera clamp (max_active_cells > 0): rank content cells by the
-    // nearest distance from the camera to any of their regions' mesh
-    // origins and keep only the N nearest active. Deactivated cells stop
-    // gathering, release their fp32 accumulation, and keep showing their
-    // last publish from the display atlas.
+    // Residency (camera streaming): rank tiles by the distance from the
+    // camera to their world bounds and give the N nearest a display slot
+    // (N = the slot grid, further clamped by max_active_tiles > 0). Tiles
+    // that lose their slot stop gathering, release their fp32 accumulation,
+    // zero their regions' published mapping (they render unlit), and their
+    // old display-slot content is overwritten by the new occupant's first
+    // publish. Without a camera the current residency stands.
     {
-        const int cell_count = static_cast<int>(m_cells.size());
-        std::vector<char> want_active(static_cast<std::size_t>(cell_count), 1);
-        if ((max_active_cells > 0) && (camera_position != nullptr) && (cell_count > max_active_cells)) {
-            std::vector<float> distance(static_cast<std::size_t>(cell_count), std::numeric_limits<float>::max());
-            for (const Instance_region& region : m_layout.regions) {
-                const erhe::scene::Node* const node = region.mesh ? region.mesh->get_node() : nullptr;
-                if (node == nullptr) {
-                    continue;
-                }
-                const glm::vec3 position{node->world_from_node()[3]};
-                const float d = glm::distance(position, *camera_position);
-                float& slot = distance[static_cast<std::size_t>(region.cell)];
-                slot = std::min(slot, d);
-            }
+        const int tile_count = static_cast<int>(m_tiles.size());
+        const int slot_count = m_layout.get_slot_count();
+        int       max_active = std::min(slot_count, tile_count);
+        if (max_active_tiles > 0) {
+            max_active = std::min(max_active, max_active_tiles);
+        }
+        if ((camera_position != nullptr) && (tile_count > 0)) {
             std::vector<int> order;
-            order.reserve(static_cast<std::size_t>(cell_count));
-            for (int cell = 0; cell < cell_count; ++cell) {
-                if (m_cells[static_cast<std::size_t>(cell)].has_content) {
-                    order.push_back(cell);
+            order.reserve(static_cast<std::size_t>(tile_count));
+            for (int tile = 0; tile < tile_count; ++tile) {
+                if (m_tiles[static_cast<std::size_t>(tile)].has_content) {
+                    order.push_back(tile);
                 }
             }
+            // XZ-plane distance (matches the spatial partition axes and the
+            // disk streamer's ranking): camera height must not demote the
+            // tile directly underneath in favor of a horizontally farther
+            // but taller one.
+            const auto distance_of = [this, camera_position](const int tile) -> float {
+                const erhe::math::Aabb& bounds = m_layout.tiles[static_cast<std::size_t>(tile)].world_bounds;
+                const glm::vec2 p{camera_position->x, camera_position->z};
+                const glm::vec2 lo{bounds.min.x, bounds.min.z};
+                const glm::vec2 hi{bounds.max.x, bounds.max.z};
+                const glm::vec2 clamped = glm::clamp(p, lo, hi);
+                return glm::distance(p, clamped);
+            };
             std::sort(
                 order.begin(),
                 order.end(),
                 [&](const int lhs, const int rhs) {
-                    return distance[static_cast<std::size_t>(lhs)] < distance[static_cast<std::size_t>(rhs)];
+                    const float dl = distance_of(lhs);
+                    const float dr = distance_of(rhs);
+                    if (dl != dr) {
+                        return dl < dr;
+                    }
+                    // Tie-break toward the currently resident tile so equal
+                    // distances never thrash slots frame to frame.
+                    const bool rl = m_layout.tiles[static_cast<std::size_t>(lhs)].slot >= 0;
+                    const bool rr = m_layout.tiles[static_cast<std::size_t>(rhs)].slot >= 0;
+                    if (rl != rr) {
+                        return rl;
+                    }
+                    return lhs < rhs;
                 }
             );
-            std::fill(want_active.begin(), want_active.end(), char{0});
-            for (std::size_t i = 0; (i < order.size()) && (i < static_cast<std::size_t>(max_active_cells)); ++i) {
+            std::vector<char> want_active(static_cast<std::size_t>(tile_count), 0);
+            for (std::size_t i = 0; (i < order.size()) && (i < static_cast<std::size_t>(max_active)); ++i) {
                 want_active[static_cast<std::size_t>(order[i])] = 1;
             }
-        }
-        for (int cell = 0; cell < cell_count; ++cell) {
-            Cell_state& state  = m_cells[static_cast<std::size_t>(cell)];
-            const bool  active = want_active[static_cast<std::size_t>(cell)] != 0;
-            if (state.active && !active && state.accum) {
-                // Deactivated: drop the accumulation (destruction is
-                // deferred behind the in-flight frames).
-                state.accum.reset();
-                state.accum_dirty = true;
-                state.sweeps      = 0;
+            // Free the slots of tiles leaving the resident set...
+            bool residency_changed = false;
+            std::vector<int> free_slots;
+            for (int tile = 0; tile < tile_count; ++tile) {
+                Tile& layout_tile = m_layout.tiles[static_cast<std::size_t>(tile)];
+                Tile_state& state = m_tiles[static_cast<std::size_t>(tile)];
+                const bool active = want_active[static_cast<std::size_t>(tile)] != 0;
+                if (!active && (layout_tile.slot >= 0)) {
+                    free_slots.push_back(layout_tile.slot);
+                    layout_tile.slot = -1;
+                    residency_changed = true;
+                    state.published = false;
+                    if (state.accum) {
+                        // Destruction is deferred behind the in-flight frames.
+                        state.accum.reset();
+                    }
+                    state.accum_dirty = true;
+                    state.sweeps      = 0;
+                }
+                state.active = active;
             }
-            state.active = active;
+            // ...and hand them to the tiles entering it.
+            for (int tile = 0; tile < tile_count; ++tile) {
+                Tile& layout_tile = m_layout.tiles[static_cast<std::size_t>(tile)];
+                Tile_state& state = m_tiles[static_cast<std::size_t>(tile)];
+                if (state.active && (layout_tile.slot < 0) && !free_slots.empty()) {
+                    layout_tile.slot = free_slots.back();
+                    free_slots.pop_back();
+                    residency_changed = true;
+                    // Fresh occupant: accumulate and publish from scratch
+                    // (the slot still shows the previous occupant until the
+                    // first publish, but nothing references it - the old
+                    // tile's regions were zeroed).
+                    state.published   = false;
+                    state.accum_dirty = true;
+                    state.sweeps      = 0;
+                }
+            }
+            if (residency_changed) {
+                m_regions_published = false;
+            }
         }
     }
 
-    // Advance the cursor to a cell that actually gathers (has regions and
+    // Advance the cursor to a tile that actually gathers (has regions and
     // is within the camera clamp); bail if none is left.
-    const int cell_count = static_cast<int>(m_cells.size());
-    const auto cell_gathers = [this](const int cell) -> bool {
-        const Cell_state& state = m_cells[static_cast<std::size_t>(cell)];
+    const int tile_count = static_cast<int>(m_tiles.size());
+    const auto tile_gathers = [this](const int tile) -> bool {
+        const Tile_state& state = m_tiles[static_cast<std::size_t>(tile)];
         return state.has_content && state.active;
     };
-    if ((m_cursor_cell < 0) || (m_cursor_cell >= cell_count) || !cell_gathers(m_cursor_cell)) {
+    if ((m_cursor_tile < 0) || (m_cursor_tile >= tile_count) || !tile_gathers(m_cursor_tile)) {
         int next = -1;
-        for (int i = 0; i < cell_count; ++i) {
-            const int candidate = (m_cursor_cell + i) % cell_count;
-            if (cell_gathers(candidate)) {
+        for (int i = 0; i < tile_count; ++i) {
+            const int candidate = (m_cursor_tile + i) % tile_count;
+            if (tile_gathers(candidate)) {
                 next = candidate;
                 break;
             }
@@ -4037,15 +4803,15 @@ void Lightmap_baker::tick(
         if (next < 0) {
             return;
         }
-        m_cursor_cell = next;
+        m_cursor_tile = next;
         m_cursor_y    = 0;
     }
 
     if (reset) {
-        // Light / occluder / transform edits invalidate every cell's
-        // accumulation; the clears happen lazily as each cell becomes
-        // current (ensure_cell_accum).
-        for (Cell_state& state : m_cells) {
+        // Light / occluder / transform edits invalidate every tile's
+        // accumulation; the clears happen lazily as each tile becomes
+        // current (ensure_tile_accum).
+        for (Tile_state& state : m_tiles) {
             state.accum_dirty = true;
             state.sweeps      = 0;
         }
@@ -4053,7 +4819,7 @@ void Lightmap_baker::tick(
     }
     m_reset_requested = false;
 
-    if (!m_gbuffer_valid || (m_gbuffer_cell != m_cursor_cell)) {
+    if (!m_gbuffer_valid || (m_gbuffer_tile != m_cursor_tile)) {
         // A layout change this tick means the swapped meshes' vertex uploads
         // are still queued in the frame command buffer, which is submitted
         // AFTER this standalone bake would run - the raster would read
@@ -4066,20 +4832,20 @@ void Lightmap_baker::tick(
             return;
         }
         // Standalone submit (wait_idle): a hitch on invalidation events
-        // (transform edit of a lightmapped mesh) and on cell transitions
-        // (once per cell per sweep on multi-cell pages).
-        if (!bake_gbuffer(m_cursor_cell)) {
+        // (transform edit of a lightmapped mesh) and on tile transitions
+        // (once per tile per sweep on multi-tile pages).
+        if (!bake_gbuffer(m_cursor_tile)) {
             return;
         }
         m_hash_gbuffer = region_hash();
     }
 
     ensure_bake_targets(command_buffer);
-    Texture* const accum = ensure_cell_accum(command_buffer, m_cursor_cell);
+    Texture* const accum = ensure_tile_accum(command_buffer, m_cursor_tile);
     if (accum == nullptr) {
         return;
     }
-    Cell_state& cursor_state = m_cells[static_cast<std::size_t>(m_cursor_cell)];
+    Tile_state& cursor_state = m_tiles[static_cast<std::size_t>(m_cursor_tile)];
 
     const std::vector<Light_record> lights = collect_lights(scene_root);
     collect_instances(command_buffer, scene_root, m_tick_instances, m_tick_records);
@@ -4127,10 +4893,10 @@ void Lightmap_baker::tick(
     );
 
     // Budgeted band (plan section 3a step 2): the cursor walks the current
-    // CELL top to bottom; small cells sweep whole-cell every frame.
-    const int cell_size   = m_layout.get_cell_size();
-    const int rows_budget = std::clamp(c_texels_per_tick / std::max(cell_size, 1), 8, cell_size);
-    const int band_rows   = std::min(rows_budget, cell_size - m_cursor_y);
+    // TILE top to bottom; small tiles sweep whole-tile every frame.
+    const int tile_size   = m_layout.get_tile_size();
+    const int rows_budget = std::clamp(c_texels_per_tick / std::max(tile_size, 1), 8, tile_size);
+    const int band_rows   = std::min(rows_budget, tile_size - m_cursor_y);
     const uint32_t base_y = static_cast<uint32_t>(m_cursor_y);
 
     Ring_buffer_range ubo_range = m_tick_gather_ubo->acquire(Ring_buffer_usage::CPU_write, m_gather_block_size);
@@ -4141,8 +4907,9 @@ void Lightmap_baker::tick(
         ubo_range.close();
     }
 
-    // Bounce rays sample the page-sized display atlas (regions' published
-    // uv_scale_offset is page-relative); one publish of feedback latency.
+    // Bounce rays sample the display atlas (instance records carry the
+    // display slot mapping); one publish of feedback latency. Hits on
+    // non-resident tiles contribute nothing (their mapping is zero).
     command_buffer.transition_texture_layout(*m_display_texture, Image_layout::shader_read_only_optimal);
     {
         Compute_pipeline* const ss_pipeline =
@@ -4164,7 +4931,7 @@ void Lightmap_baker::tick(
         encoder.set_sampled_image(9u, supersample ? *m_origin_texture : *m_position_texture, *m_nearest_sampler);
         encoder.set_storage_image(12u, *accum);
         encoder.dispatch_compute(
-            (static_cast<std::uintptr_t>(cell_size) + 7) / 8,
+            (static_cast<std::uintptr_t>(tile_size) + 7) / 8,
             (static_cast<std::uintptr_t>(band_rows) + 7) / 8,
             1
         );
@@ -4173,26 +4940,26 @@ void Lightmap_baker::tick(
     ssbo_range.release();
 
     m_cursor_y += band_rows;
-    const bool cell_sweep_completed = m_cursor_y >= cell_size;
-    if (cell_sweep_completed) {
+    const bool tile_sweep_completed = m_cursor_y >= tile_size;
+    if (tile_sweep_completed) {
         m_cursor_y = 0;
         ++cursor_state.sweeps;
     }
-    // Publish cadence (phase 4 denoise): while the cell has never been
+    // Publish cadence (phase 4 denoise): while the tile has never been
     // published publish the raw average every tick so the lightmap appears
-    // immediately; afterwards publish only on cell-sweep completion, with
+    // immediately; afterwards publish only on tile-sweep completion, with
     // JNLM denoise folded in. Steady-state mid-sweep ticks skip
     // resolve+dilate entirely - the viewport (and the bounce feedback)
     // keep sampling the last publish.
     if (!cursor_state.published) {
-        record_resolve_and_dilate(command_buffer, m_cursor_cell, false);
-        record_display_publish(command_buffer, m_cursor_cell);
-        if (cell_sweep_completed) {
+        record_resolve_and_dilate(command_buffer, m_cursor_tile, false);
+        record_display_publish(command_buffer, m_cursor_tile);
+        if (tile_sweep_completed) {
             cursor_state.published = true;
         }
-    } else if (cell_sweep_completed || m_publish_requested) {
-        record_resolve_and_dilate(command_buffer, m_cursor_cell, m_options.denoise);
-        record_display_publish(command_buffer, m_cursor_cell);
+    } else if (tile_sweep_completed || m_publish_requested) {
+        record_resolve_and_dilate(command_buffer, m_cursor_tile, m_options.denoise);
+        record_display_publish(command_buffer, m_cursor_tile);
         cursor_state.published = true;
     }
     m_publish_requested = false;
@@ -4200,13 +4967,13 @@ void Lightmap_baker::tick(
     if (!m_regions_published) {
         publish_regions();
     }
-    // Cell rotation: after finishing a sweep of this cell move to the next
-    // gathering cell (wraps; single-cell pages keep sweeping in place).
-    if (cell_sweep_completed) {
-        for (int i = 1; i <= cell_count; ++i) {
-            const int candidate = (m_cursor_cell + i) % cell_count;
-            if (cell_gathers(candidate)) {
-                m_cursor_cell = candidate;
+    // Tile rotation: after finishing a sweep of this tile move to the next
+    // gathering tile (wraps; single-tile pages keep sweeping in place).
+    if (tile_sweep_completed) {
+        for (int i = 1; i <= tile_count; ++i) {
+            const int candidate = (m_cursor_tile + i) % tile_count;
+            if (tile_gathers(candidate)) {
+                m_cursor_tile = candidate;
                 break;
             }
         }
@@ -4259,6 +5026,12 @@ auto Lightmap_baker::build_chart_order_keys() -> std::unordered_map<const erhe::
         if (!attributes.corner_texcoord_2.has(0)) {
             continue;
         }
+        // The readback is the display atlas: only resident (slot-holding)
+        // regions have baked texels to sample.
+        const glm::vec4 display_scale_offset = m_layout.display_uv_scale_offset(region);
+        if (display_scale_offset.x <= 0.0f) {
+            continue;
+        }
         const GEO::Mesh& geo_mesh = geometry->get_mesh();
         std::vector<float>& facet_keys = keys[geometry.get()];
         facet_keys.assign(geo_mesh.facets.nb(), 0.0f);
@@ -4285,12 +5058,12 @@ auto Lightmap_baker::build_chart_order_keys() -> std::unordered_map<const erhe::
             if (uv_count == 0) {
                 continue;
             }
-            const auto texel_x_of = [&region, page_width](const float u) -> int {
-                const float atlas_u = u * region.uv_scale_offset.x + region.uv_scale_offset.z;
+            const auto texel_x_of = [&display_scale_offset, page_width](const float u) -> int {
+                const float atlas_u = u * display_scale_offset.x + display_scale_offset.z;
                 return std::clamp(static_cast<int>(atlas_u * static_cast<float>(page_width)), 0, page_width - 1);
             };
-            const auto texel_y_of = [&region, page_height](const float v) -> int {
-                const float atlas_v = v * region.uv_scale_offset.y + region.uv_scale_offset.w;
+            const auto texel_y_of = [&display_scale_offset, page_height](const float v) -> int {
+                const float atlas_v = v * display_scale_offset.y + display_scale_offset.w;
                 return std::clamp(static_cast<int>(atlas_v * static_cast<float>(page_height)), 0, page_height - 1);
             };
             const auto luminance_at = [&atlas, page_width](const int texel_x, const int texel_y) -> float {

@@ -95,6 +95,9 @@ class Post_processing;
 class Prefab_library;
 class Programs;
 class Lightmap_baker;
+class Lightmap_partitioner;
+class Lightmap_report;
+class Lightmap_streamer;
 class Lightmap_texture_window;
 class Lightmap_window;
 class Ray_trace_renderer;
@@ -230,6 +233,15 @@ public:
     Programs*                          programs             {nullptr};
     Ray_trace_renderer*                ray_trace_renderer   {nullptr};
     Lightmap_baker*                    lightmap_baker       {nullptr};
+    // World-space mesh partitioner: uniquifies + tile-clips lightmapped
+    // meshes into per-tile piece meshes ("Lightmap Pieces" group).
+    Lightmap_partitioner*              lightmap_partitioner {nullptr};
+    // Failure/warning sink for the lightmap pipeline; written from worker
+    // threads (UV unwrap) and the baker, displayed by the Lightmap window.
+    Lightmap_report*                   lightmap_report      {nullptr};
+    // Baked-tile disk streamer; invalidated when the partition changes so
+    // manifest regions re-resolve against the new piece set.
+    Lightmap_streamer*                 lightmap_streamer    {nullptr};
     Lightmap_texture_window*           lightmap_texture_window{nullptr};
     Lightmap_window*                   lightmap_window      {nullptr};
     Rendergraph_window*                rendergraph_window   {nullptr};

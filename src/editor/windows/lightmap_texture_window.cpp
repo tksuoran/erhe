@@ -147,7 +147,9 @@ void Lightmap_texture_window::refresh_overlay_cache()
                 .primitive       = primitive,
                 .geometry        = geometry,
                 .primitive_index = region.primitive_index,
-                .uv_scale_offset = region.uv_scale_offset,
+                // Display (slot-space) mapping so residency changes (tile
+                // gaining / losing its slot) invalidate the cache too.
+                .uv_scale_offset = layout.display_uv_scale_offset(region),
                 .x               = region.x,
                 .y               = region.y,
                 .width           = region.width,
@@ -183,17 +185,28 @@ void Lightmap_texture_window::refresh_overlay_cache()
         if (!attributes.corner_texcoord_2.has(0)) {
             continue;
         }
+        // Overlays live in display-atlas UV space: only regions whose tile
+        // holds a display slot are visible (the rest render unlit and have
+        // no texels in the atlas to annotate).
+        const glm::vec4 display_scale_offset = layout.display_uv_scale_offset(region);
+        if (display_scale_offset.x <= 0.0f) {
+            continue;
+        }
+        const int tile_slot = ((region.tile >= 0) && (region.tile < layout.get_tile_count()))
+            ? layout.tiles[static_cast<std::size_t>(region.tile)].slot
+            : -1;
+        const glm::vec2 slot_origin{layout.get_slot_origin(std::max(0, tile_slot))};
         const GEO::Mesh& geo_mesh = geometry->get_mesh();
-        const glm::vec2 uv_scale {region.uv_scale_offset.x, region.uv_scale_offset.y};
-        const glm::vec2 uv_offset{region.uv_scale_offset.z, region.uv_scale_offset.w};
+        const glm::vec2 uv_scale {display_scale_offset.x, display_scale_offset.y};
+        const glm::vec2 uv_offset{display_scale_offset.z, display_scale_offset.w};
         const auto atlas_uv = [&](const GEO::vec2f& uv) -> glm::vec2 {
             return glm::vec2{uv.x, uv.y} * uv_scale + uv_offset;
         };
 
         Region_overlay overlay;
         overlay.region_index = region_index;
-        overlay.rect_min = glm::vec2{static_cast<float>(region.x),                static_cast<float>(region.y)}                 / page_size;
-        overlay.rect_max = glm::vec2{static_cast<float>(region.x + region.width), static_cast<float>(region.y + region.height)} / page_size;
+        overlay.rect_min = (slot_origin + glm::vec2{static_cast<float>(region.x),                static_cast<float>(region.y)})                 / page_size;
+        overlay.rect_max = (slot_origin + glm::vec2{static_cast<float>(region.x + region.width), static_cast<float>(region.y + region.height)}) / page_size;
 
         std::unordered_set<std::uint64_t> seen_edges;
         seen_edges.reserve(geo_mesh.facet_corners.nb());
@@ -272,7 +285,7 @@ void Lightmap_texture_window::refresh_overlay_cache()
             }
             const glm::vec2 chart_extent = glm::max(chart_hi - chart_lo, glm::vec2{1.0e-6f});
             const int grid_dim = std::clamp(static_cast<int>(std::ceil(std::sqrt(static_cast<float>(std::max<std::size_t>(triangle_count, 1))))), 1, 64);
-            std::vector<std::vector<std::uint32_t>> cells(static_cast<std::size_t>(grid_dim) * grid_dim);
+            std::vector<std::vector<std::uint32_t>> tiles(static_cast<std::size_t>(grid_dim) * grid_dim);
             const auto cell_range = [&](const glm::vec2& lo, const glm::vec2& hi, int& x0, int& y0, int& x1, int& y1) {
                 x0 = std::clamp(static_cast<int>((lo.x - chart_lo.x) / chart_extent.x * grid_dim), 0, grid_dim - 1);
                 y0 = std::clamp(static_cast<int>((lo.y - chart_lo.y) / chart_extent.y * grid_dim), 0, grid_dim - 1);
@@ -287,17 +300,17 @@ void Lightmap_texture_window::refresh_overlay_cache()
                 cell_range(box_lo[i], box_hi[i], x0, y0, x1, y1);
                 for (int y = y0; y <= y1; ++y) {
                     for (int x = x0; x <= x1; ++x) {
-                        cells[static_cast<std::size_t>(y) * grid_dim + x].push_back(static_cast<std::uint32_t>(i));
+                        tiles[static_cast<std::size_t>(y) * grid_dim + x].push_back(static_cast<std::uint32_t>(i));
                     }
                 }
             }
             std::vector<std::uint8_t>         broken(triangle_count, 0u);
             std::unordered_set<std::uint64_t> tested;
-            for (const std::vector<std::uint32_t>& cell : cells) {
-                for (std::size_t a = 0; a < cell.size(); ++a) {
-                    for (std::size_t b = a + 1; b < cell.size(); ++b) {
-                        const std::uint32_t i = cell[a];
-                        const std::uint32_t j = cell[b];
+            for (const std::vector<std::uint32_t>& tile : tiles) {
+                for (std::size_t a = 0; a < tile.size(); ++a) {
+                    for (std::size_t b = a + 1; b < tile.size(); ++b) {
+                        const std::uint32_t i = tile[a];
+                        const std::uint32_t j = tile[b];
                         const Overlay_triangle& ti = overlay.triangles[i];
                         const Overlay_triangle& tj = overlay.triangles[j];
                         if (ti.facet == tj.facet) {
@@ -500,17 +513,22 @@ void Lightmap_texture_window::imgui()
 
     // Image (atlas row 0 = v 0 at the top; nearest magnification past 1:1
     // so texel boundaries are visible). The G-buffer views are CELL-sized
-    // on multi-cell pages (they hold the baker's current tile cell), so
-    // draw them at the cell's page rect - the page-space overlays (chart
+    // on multi-tile pages (they hold the baker's current tile tile), so
+    // draw them at the tile's page rect - the page-space overlays (chart
     // rects, UV wireframe, texel grid, hover) then stay aligned; the rest
     // of the page shows as empty canvas.
     glm::vec2 image_page_origin{0.0f, 0.0f};
     glm::vec2 image_page_size = page_size;
     if ((texture->get_width() != layout.width) || (texture->get_height() != layout.height)) {
-        const int gbuffer_cell = baker->get_gbuffer_cell();
-        if (gbuffer_cell >= 0) {
-            image_page_origin = glm::vec2{layout.get_cell_origin(gbuffer_cell)};
-            image_page_size   = glm::vec2{static_cast<float>(layout.get_cell_size())};
+        const int gbuffer_tile = baker->get_gbuffer_tile();
+        // The G-buffer holds one spatial tile; draw it at that tile's
+        // display SLOT rect so the slot-space overlays stay aligned.
+        const int gbuffer_slot = ((gbuffer_tile >= 0) && (gbuffer_tile < layout.get_tile_count()))
+            ? layout.tiles[static_cast<std::size_t>(gbuffer_tile)].slot
+            : -1;
+        if (gbuffer_slot >= 0) {
+            image_page_origin = glm::vec2{layout.get_slot_origin(gbuffer_slot)};
+            image_page_size   = glm::vec2{static_cast<float>(layout.get_tile_size())};
         }
     }
     ImGui::SetCursorScreenPos(

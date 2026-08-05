@@ -910,7 +910,7 @@ void Mcp_server::refresh_tool_list()
         {"type", "object"},
         {"properties", json::object()}
     }});
-    m_tool_infos.push_back({"lightmap_reorder_charts", "Leak camouflage for per-facet unwraps: re-unwrap (queued async, undoable) with charts packed in baked-luminance order so similarly lit facets are atlas neighbors and cross-chart filter-tap / dilation pollution picks up similar values. Requires uv_parameterizer = per_facet and an existing bake; the interactive baker restarts automatically. Poll get_async_status until idle afterwards.", {
+    m_tool_infos.push_back({"lightmap_reorder_charts", "Leak camouflage for per-facet unwraps: re-unwrap (queued async, undoable) with charts packed in baked-luminance order so similarly lit facets are atlas neighbors and cross-chart filter-tap / dilation pollution picks up similar values. Requires uv_parameterizer = per_facet and an existing bake. Does NOT bake - the atlas is stale until the next bake (lightmap_set_baking / lightmap_bake_direct). Poll get_async_status until idle afterwards.", {
         {"type", "object"},
         {"properties", json::object()}
     }});
@@ -939,6 +939,30 @@ void Mcp_server::refresh_tool_list()
         {"required", json::array({"scene_name"})}
     }});
 
+    m_tool_infos.push_back({"lightmap_bake_to_disk", "Bake every spatial lightmap tile to disk, one tile at a time (bounded memory regardless of world size): per tile a G-buffer raster, offline_sweeps gather sweeps, resolve/denoise/dilate/seam-blend, then tile_<id>.lmt + manifest.json are written into <scene>.lightmap/. Runs to completion inside this call (headless verification). Requires lightmapped meshes with lightmap UVs; the layout is computed automatically if missing. The streamer picks the fresh tiles up when interactive baking is off.", {
+        {"type", "object"},
+        {"properties", json::object()}
+    }});
+    m_tool_infos.push_back({"lightmap_prepare_tiles", "Prepare world-space lightmap tiles: make every lightmapped mesh/primitive instance unique, bake its node transform into the vertices (world space), clip the geometry against the spatial kd tile planes (clip vertices are binary exact across the two tiles sharing a plane) and re-unwrap each piece's channel-2 UVs at world-space density. Pieces become Mesh_primitives of new meshes under the identity 'Lightmap Pieces' group node; originals stay in the scene for lightmap_revert_tiles / re-prepare. Refreshes the atlas layout first (same stale-data guard as lightmap_update_atlas). Toggle rendering between originals and pieces with lightmap_set_render.", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name",           {{"type", "string"},  {"description", "Name of the scene to partition"}}},
+            {"tile_texture_size",    {{"type", "integer"}, {"description", "Texel side of one spatial tile (pow2 256..8192); default = Lightmap settings value"}}},
+            {"resident_tile_budget", {{"type", "integer"}, {"description", "Resident tile budget; default = Lightmap settings value"}}},
+            {"texels_per_meter",     {{"type", "number"},  {"description", "World-space lightmap texel density; default = Lightmap settings value"}}}
+        }},
+        {"required", json::array({"scene_name"})}
+    }});
+    m_tool_infos.push_back({"lightmap_revert_tiles", "Revert the world-space lightmap partition: destroy the 'Lightmap Pieces' group and restore original mesh visibility. Originals were never modified, so this is always safe.", {
+        {"type", "object"},
+        {"properties", json::object()}
+    }});
+    m_tool_infos.push_back({"lightmap_set_render", "Toggle 'render with lightmaps' for the world-space partition: ON renders the piece meshes (all lightmapped geometry regardless of tile residency; non-resident tiles fall back to white) and hides the originals, OFF restores the originals. Call without 'enabled' to query.", {
+        {"type", "object"},
+        {"properties", {
+            {"enabled", {{"type", "boolean"}, {"description", "Render pieces (true) or originals (false); omit to query"}}}
+        }}
+    }});
     m_tool_infos.push_back({"lightmap_set_baking", "Toggle the interactive progressive lightmap bake (per-frame budgeted gather with accumulation; direct light + indirect bounces; scene edits restart convergence). Reports bake status (sweeps completed, cursor row) and can write a tone-mapped debug PNG of the published atlas. Call without 'enabled' to just query status.", {
         {"type", "object"},
         {"properties", {

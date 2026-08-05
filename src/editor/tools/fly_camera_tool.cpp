@@ -967,6 +967,21 @@ void Fly_camera_tool::apply_camera_controls_from_scene()
     }
 }
 
+auto Fly_camera_tool::get_writable_camera_controls() -> Camera_controls_config*
+{
+    if (m_context.editor_settings == nullptr) {
+        return nullptr;
+    }
+    const std::shared_ptr<Scene_root> scene_root = get_scene_root();
+    if (scene_root) {
+        Scene_settings& overrides = scene_root->get_scene_settings();
+        if (overrides.camera_controls.has_value()) {
+            return &overrides.camera_controls.value();
+        }
+    }
+    return &m_context.editor_settings->camera_controls;
+}
+
 void Fly_camera_tool::on_hover_viewport_change()
 {
     // Adopt the newly-hovered scene's effective camera controls (#239).
@@ -1319,15 +1334,27 @@ void Fly_camera_tool::window_imgui()
     }
 
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock_fly_camera{m_mutex};
+    // Both Speed and Turn Speed are re-applied from the effective camera controls
+    // whenever the hovered scene view changes, so edits must be written back to
+    // that settings source - otherwise hovering a viewport reverts them.
+    Camera_controls_config* camera_controls = get_writable_camera_controls();
+
     float speed = m_camera_controller->translate_z.max_delta();
     ImGui::SliderFloat("Speed",       &speed,         0.001f, 0.1f); //, "%.3f", logarithmic);
     if (ImGui::IsItemEdited()) {
+        config.velocity_max_delta = speed;
+        if (camera_controls != nullptr) {
+            camera_controls->velocity_max_delta = speed;
+        }
         m_camera_controller->translate_x.set_max_delta(speed);
         m_camera_controller->translate_y.set_max_delta(speed);
         m_camera_controller->translate_z.set_max_delta(speed);
     }
     ImGui::SliderFloat("Move Speed", &m_camera_controller->move_speed, 0.001f, 10.0f, "%.3f", ImGuiSliderFlags_Logarithmic);
     ImGui::SliderFloat("Turn Speed", &m_sensitivity, 0.2f, 2.0f);
+    if (ImGui::IsItemEdited() && (camera_controls != nullptr)) {
+        camera_controls->sensitivity = m_sensitivity;
+    }
 
 
     //erhe::math::Input_axis& control = m_camera_controller->translate_x;

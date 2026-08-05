@@ -10,6 +10,7 @@
 #include "app_settings.hpp"
 #include "editor_log.hpp"
 #include "scene/shadow_fit_debug.hpp"
+#include "renderers/lightmap_baker.hpp"
 #include "renderers/render_context.hpp"
 #include "renderers/programs.hpp"
 #include "rendergraph/shadow_render_node.hpp"
@@ -2189,6 +2190,46 @@ void Debug_visualizations::render(const Render_context& context)
     physics_nodes_visualization(context);
 
     raytrace_nodes_visualization(context);
+
+    lightmap_tiles_visualization(context);
+}
+
+void Debug_visualizations::lightmap_tiles_visualization(const Render_context& context)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    const Lightmap_baker* const baker = context.app_context.lightmap_baker;
+    if ((baker == nullptr) || !baker->get_show_tile_bounds()) {
+        return;
+    }
+    const Lightmap_baker::Atlas_layout& layout = baker->get_layout();
+    if (layout.tiles.empty()) {
+        return;
+    }
+    // X-ray so tiles read through the very geometry they contain.
+    erhe::renderer::Primitive_renderer line_renderer = context.get(
+        erhe::renderer::Debug_renderer_config{
+            .primitive_type    = erhe::graphics::Primitive_type::line,
+            .stencil_reference = 2,
+            .draw_visible      = true,
+            .draw_hidden       = true,
+            .xray              = true
+        }
+    );
+    line_renderer.set_thickness(2.0f);
+    constexpr glm::vec4 all_color   {0.6f, 0.2f, 0.9f, 1.0f}; // purple: every tile
+    constexpr glm::vec4 active_color{1.0f, 1.0f, 1.0f, 1.0f}; // white: holds a display slot
+    for (const Lightmap_baker::Tile& tile : layout.tiles) {
+        if (!tile.world_bounds.is_valid()) {
+            continue;
+        }
+        line_renderer.add_cube(
+            glm::mat4{1.0f},
+            (tile.slot >= 0) ? active_color : all_color,
+            tile.world_bounds.min,
+            tile.world_bounds.max
+        );
+    }
 }
 
 void Debug_visualizations::make_combo(const char* label, Visualization_mode& visualization)

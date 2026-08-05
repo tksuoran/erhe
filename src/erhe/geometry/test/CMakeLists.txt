@@ -15,6 +15,7 @@ add_executable(${_target}
     test_catmull_clark_crease.cpp
     test_chamfer_diagnostics.cpp
     test_chamfer_self_intersection.cpp
+    test_clip_tile_tree.cpp
     test_component_selection_remap.cpp
     test_csg.cpp
     test_edge_sharpness.cpp

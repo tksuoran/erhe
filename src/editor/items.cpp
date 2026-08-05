@@ -2,6 +2,7 @@
 #include "app_context.hpp"
 #include "editor_log.hpp"
 #include "operations/mesh_operation.hpp"
+#include "renderers/lightmap_report.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/mesh_component_selection.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
@@ -198,8 +199,17 @@ void async_for_nodes_with_mesh(
                 op(std::move(parameters));
             } catch (const std::exception& e) {
                 log_operations->error("Async mesh operation failed: {}", e.what());
+                // Last-ditch surface for the Lightmap window: UV unwrap is
+                // the dominant user of this path and its per-mesh handling
+                // (Make_atlas_operation) already reported and rethrew.
+                if (context.lightmap_report != nullptr) {
+                    context.lightmap_report->add_error(Lightmap_report::Stage::uv_unwrap, "async mesh operation", e.what());
+                }
             } catch (...) {
                 log_operations->error("Async mesh operation failed: unknown exception");
+                if (context.lightmap_report != nullptr) {
+                    context.lightmap_report->add_error(Lightmap_report::Stage::uv_unwrap, "async mesh operation", "unknown exception");
+                }
             }
             --context.running_async_ops;
             --context.pending_async_ops;

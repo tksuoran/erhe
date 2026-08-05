@@ -1,6 +1,8 @@
 #pragma once
 
 #include "erhe_dataformat/vertex_format.hpp"
+#include "erhe_geometry/operation/clip_tile_tree.hpp"
+#include "erhe_math/aabb.hpp"
 
 #include <glm/glm.hpp>
 
@@ -40,6 +42,8 @@ namespace erhe::scene_renderer { class Mesh_memory; }
 
 namespace editor {
 
+class Lightmap_partitioner;
+class Lightmap_report;
 class Scene_root;
 
 // Lightmap baker (doc/lightmap_baking_plan.md).
@@ -59,7 +63,10 @@ class Lightmap_baker
 {
 public:
     // One packed mesh primitive. mesh+primitive_index identify the source;
-    // the rect is the content region in texels (padding lives outside it).
+    // the rect is the content region in TILE-LOCAL texels (padding lives
+    // outside it), uv_scale_offset maps chart UV into TILE UV. The display-
+    // atlas mapping depends on the tile's resident slot and is derived via
+    // Atlas_layout::display_uv_scale_offset.
     class Instance_region
     {
     public:
@@ -70,11 +77,11 @@ public:
         int                                y{0};
         int                                width{0};
         int                                height{0};
-        // Tile cell (page-space grid of s_tile x s_tile cells) the region
-        // packs into; regions never span cells, so the bake working set
-        // (G-buffer, working atlas, accumulation) only ever needs one
-        // cell's worth of texels at a time.
-        int                                cell{0};
+        // Spatial tile (Atlas_layout::tiles index) the region packs into;
+        // regions never span tiles, so the bake working set (G-buffer,
+        // working atlas, accumulation) only ever needs one tile's worth of
+        // texels at a time.
+        int                                tile{0};
         float                              world_area{0.0f}; // m^2
         // Fraction of [0,1]^2 chart space the primitive's facets actually
         // cover (gutters / packing waste / min-chart upscales excluded).
@@ -88,24 +95,67 @@ public:
         // coverage and shrinks the region right back - texels per facet
         // are invariant to it), so the region itself must grow.
         float                              min_facet_uv_extent{1.0f};
+        // Partitioned mode (world-space tile pieces): the primitive index of
+        // the ORIGINAL mesh this piece came from and the piece ordinal
+        // within that (source mesh, source primitive) - together with the
+        // node path they form the on-disk region identity. piece_ordinal is
+        // -1 for ordinary (non-piece) regions.
+        std::size_t                        source_primitive_index{0};
+        int                                piece_ordinal{-1};
+    };
+
+    // One spatial tile of the adaptive world-space (XZ) partition. Every
+    // tile packs its member regions into one tile_size^2 texel square;
+    // tiles are unbounded in count, so any world extent lays out with
+    // bounded per-tile memory. A tile becomes visible by holding a slot in
+    // the display atlas (a grid of get_slot_count() tile-sized sub-rects);
+    // non-resident tiles keep their layout but render unlit.
+    class Tile
+    {
+    public:
+        erhe::math::Aabb world_bounds{};       // union of member instance world AABBs
+        // < 1 when the tile's regions had to shrink to fit tile_size (the
+        // last-resort density flex for content denser than the tile
+        // texture allows); effective texel density scales down with it.
+        float            density_scale{1.0f};
+        int              slot{-1};             // display atlas slot; -1 = not resident
     };
 
     class Atlas_layout
     {
     public:
+        // Display atlas size: slots_x/slots_y tile-sized slots per axis.
         int                          width {0};
         int                          height{0};
-        // Page-space tile grid: cells_x * cells_y cells of s_tile texels
-        // (1x1 when the page is not larger than a tile). Cell index i maps
-        // to page texel origin ((i % cells_x) * s_tile, (i / cells_x) * s_tile).
-        int                          cells_x{1};
-        int                          cells_y{1};
+        int                          slots_x{1};
+        int                          slots_y{1};
+        // Texel side of every tile (and so of every display slot).
+        int                          tile_size{0};
+        std::vector<Tile>            tiles;
         std::vector<Instance_region> regions;
+        // The kd split tree behind `tiles`, with explicit world-space plane
+        // values (node 0 = root; leaf nodes carry the tile index). This is
+        // the partition the world-space mesh clipper
+        // (erhe::geometry::operation::clip_by_tile_tree) cuts against, so
+        // clipped pieces land in exactly the tiles the packer assigned.
+        // Overflow splits (co-located regions divided by count, and pack-
+        // failure re-splits of co-located sets) carry axis == -1: they have
+        // no spatial plane, and their tiles overlap in world space.
+        std::vector<erhe::geometry::operation::Clip_tree_node> kd_nodes;
+        // True when the regions are world-space tile pieces from the
+        // Lightmap_partitioner. Non-resident regions then publish the
+        // white-fallback sentinel vec4(-1,0,0,0) instead of the vec4(0)
+        // no-lightmap gate (see display_uv_scale_offset).
+        bool partitioned{false};
 
-        [[nodiscard]] auto get_cell_count () const -> int { return cells_x * cells_y; }
-        [[nodiscard]] auto get_cell_origin(int cell) const -> glm::ivec2;
-        // Cell side in texels: min(page side, s_tile).
-        [[nodiscard]] auto get_cell_size  () const -> int;
+        [[nodiscard]] auto get_tile_count () const -> int { return static_cast<int>(tiles.size()); }
+        [[nodiscard]] auto get_slot_count () const -> int { return slots_x * slots_y; }
+        [[nodiscard]] auto get_slot_origin(int slot) const -> glm::ivec2;
+        [[nodiscard]] auto get_tile_size  () const -> int { return tile_size; }
+        // Chart UV -> display atlas UV for the region's tile's current
+        // slot; zero (the renderer's "no lightmap" gate) when the tile is
+        // not resident.
+        [[nodiscard]] auto display_uv_scale_offset(const Instance_region& region) const -> glm::vec4;
     };
 
     // Optional bake features (Lightmap window checkboxes; viewport bicubic
@@ -170,6 +220,27 @@ public:
 
     void set_sky_lighting(const Sky_lighting& sky) { m_sky = sky; }
 
+    // Tile texture side (power of two, default 2048) and how many tiles may
+    // be resident in the display atlas at once (default 9 = a 3x3 slot
+    // grid). Changing either takes effect on the next update_layout().
+    void set_tile_config(int tile_texture_size, int resident_tile_budget);
+
+    // Failure/warning sink (layout density flex, overflow tiles, budget
+    // clamps); optional, shown by the Lightmap window.
+    void set_report(Lightmap_report* report) { m_report = report; }
+
+    // World-space tile partitioner (optional). When it has a prepared
+    // partition for the layout scene, update_layout() derives its regions
+    // from the piece meshes with their pre-assigned tiles (no kd re-split;
+    // the tile tree comes from the stored partition).
+    void set_partitioner(const Lightmap_partitioner* partitioner) { m_partitioner = partitioner; }
+
+    // Tile-bounds debug visualization (Lightmap window toggle, drawn by
+    // Debug_visualizations): x-ray wireframe world AABBs of every spatial
+    // tile - purple for all, white for the active (slot-holding) ones.
+    void set_show_tile_bounds(bool show)                { m_show_tile_bounds = show; }
+    [[nodiscard]] auto get_show_tile_bounds() const -> bool { return m_show_tile_bounds; }
+
     [[nodiscard]] auto is_supported() const -> bool;
 
     // True when the ray-query gather machinery exists - false without
@@ -177,28 +248,39 @@ public:
     // work then; only the bakes are unavailable.
     [[nodiscard]] auto is_bake_supported() const -> bool;
 
-    // Recompute the atlas layout for the lightmapped, non-skinned content
-    // meshes of the scene whose primitives carry channel-2 UVs. Page size
-    // grows in power-of-two steps until everything packs (up to s_max_page
-    // texels). Returns true when at least one region was packed.
-    // min_face_texels > 0 additionally grows each region (capped at 4x the
-    // density-derived side) so its smallest facet spans at least that many
-    // texels on its shorter UV axis.
+    // Recompute the layout for the lightmapped, non-skinned content meshes
+    // of the scene whose primitives carry channel-2 UVs: an adaptive
+    // world-space (XZ) kd-partition into spatial tiles, each packing its
+    // regions into one tile_size^2 texel square. Partitioning cannot run
+    // out of space - tiles split until content fits, co-located overflows
+    // split by region count, and a single region denser than a tile flexes
+    // the tile's texel density down (reported as a warning) - so this only
+    // returns false when there are no regions at all. min_face_texels > 0
+    // additionally grows each region (capped at 4x the density-derived
+    // side) so its smallest facet spans at least that many texels on its
+    // shorter UV axis.
     auto update_layout(Scene_root& scene_root, float texels_per_meter, float min_face_texels) -> bool;
+
+    // Push every region's display (slot-space) uv_scale_offset onto its
+    // Mesh_primitive (zero / white-fallback sentinel for non-resident
+    // tiles). Ticks do this on residency changes; the partitioner calls it
+    // after a partitioned relayout so piece meshes get their mappings
+    // without waiting for a bake tick.
+    void publish_regions();
 
     [[nodiscard]] auto get_layout() const -> const Atlas_layout& { return m_layout; }
 
-    // Rasterize the texel G-buffer for one tile cell of the current layout:
-    // one draw per region of the cell, positions mapped through channel-2
-    // UVs into the region's rect relative to the cell origin. The G-buffer
-    // targets are cell-sized and hold exactly one cell at a time
-    // (get_gbuffer_cell). Standalone submit (own command buffer + wait
+    // Rasterize the texel G-buffer for one spatial tile of the current
+    // layout: one draw per region of the tile, positions mapped through
+    // channel-2 UVs into the region's tile-local rect. The G-buffer
+    // targets are tile-sized and hold exactly one tile at a time
+    // (get_gbuffer_tile). Standalone submit (own command buffer + wait
     // idle). Returns false when there is no layout or the pipeline is
     // unavailable.
-    auto bake_gbuffer(int cell = 0) -> bool;
-    [[nodiscard]] auto get_gbuffer_cell() const -> int { return m_gbuffer_cell; }
+    auto bake_gbuffer(int tile = 0) -> bool;
+    [[nodiscard]] auto get_gbuffer_tile() const -> int { return m_gbuffer_tile; }
 
-    // Debug: write the current cell's G-buffer as 8-bit PNGs
+    // Debug: write the current tile's G-buffer as 8-bit PNGs
     // (<base>_position.png with position mapped into the covered world
     // bounds, <base>_normal.png as normal * 0.5 + 0.5; alpha = coverage).
     // Requires bake_gbuffer().
@@ -236,19 +318,60 @@ public:
     // invalidation internally: light/occluder edits reset accumulation,
     // lightmapped-mesh edits additionally re-raster the G-buffer.
     //
-    // The gather walks the atlas one tile cell at a time (the working set
-    // is cell-sized); max_active_cells > 0 with a valid camera position
-    // limits gathering to the N cells whose regions are nearest the
-    // camera - the display atlas keeps showing the other cells' last
-    // publish, and their accumulation textures are released.
+    // The gather walks the layout one spatial tile at a time (the working
+    // set is tile-sized); the N tiles whose world bounds are nearest the
+    // camera hold the display slots and gather (N = the resident budget,
+    // further clamped by max_active_tiles > 0 when a camera position is
+    // given). Tiles that lose their slot render unlit and release their
+    // accumulation textures.
     void tick(
         erhe::graphics::Command_buffer& command_buffer,
         Scene_root&                     scene_root,
         float                           texels_per_meter,
         float                           min_face_texels,
         const glm::vec3*                camera_position  = nullptr,
-        int                             max_active_cells = 0
+        int                             max_active_tiles = 0
     );
+
+    // ---- Offline bake-to-disk (one tile at a time, bounded memory) ----
+    //
+    // start_offline_bake arms the state machine; offline_tick() (call once
+    // per frame while is_offline_bake_active()) bakes ONE tile per call:
+    // G-buffer raster, target_sweeps full-tile gather submits, resolve +
+    // dilate + seam blend, CPU readback of the tile-sized working atlas,
+    // then hands the fp16 pixels to the sink (which persists them, e.g.
+    // via Lightmap_tile_io) and releases the tile's accumulation. Only one
+    // tile's working set is ever resident, so any world size bakes within
+    // the fixed scratch budget. Standalone submits only - no frame command
+    // buffer needed - but each call blocks for that tile's full bake.
+    //
+    // The sink returns false to abort the bake (e.g. disk write failed).
+    using Offline_tile_sink = std::function<bool(
+        int                          tile,
+        int                          width,
+        int                          height,
+        const std::vector<uint16_t>& rgba16 // packed fp16 RGBA rows
+    )>;
+    class Offline_progress
+    {
+    public:
+        bool     active       {false};
+        int      tiles_done   {0};
+        int      tile_count   {0};
+        uint32_t target_sweeps{0};
+    };
+    auto start_offline_bake(Scene_root& scene_root, uint32_t target_sweeps, Offline_tile_sink sink) -> bool;
+    void cancel_offline_bake();
+    [[nodiscard]] auto is_offline_bake_active() const -> bool { return m_offline_state.progress.active; }
+    [[nodiscard]] auto get_offline_progress  () const -> const Offline_progress& { return m_offline_state.progress; }
+    // Bake ONE pending tile; returns false when the bake just finished or
+    // aborted (check the report for errors).
+    auto offline_tick(Scene_root& scene_root) -> bool;
+
+    // FNV hash of the parameters that invalidate persisted tiles: texel
+    // density, tile size, and the bake feature set. Stored in the manifest
+    // and payload headers for stale-bake detection.
+    [[nodiscard]] auto get_bake_parameters_hash(float texels_per_meter) const -> uint64_t;
 
     // Disabling releases the whole bake working set (G-buffer, atlas,
     // accumulation, scratch, origin, BLAS/TLAS caches) - only the display
@@ -258,11 +381,11 @@ public:
     [[nodiscard]] auto is_baking_enabled() const -> bool     { return m_baking_enabled; }
     void request_reset() { m_reset_requested = true; }
     // Completed accumulation sweeps since the last reset: the minimum over
-    // the active cells' per-cell sweep counts, so every ACTIVE valid texel
+    // the active tiles' per-tile sweep counts, so every ACTIVE valid texel
     // holds at least this many samples.
     [[nodiscard]] auto get_sweep_count() const -> uint32_t;
     [[nodiscard]] auto get_cursor_row () const -> int        { return m_cursor_y; }
-    [[nodiscard]] auto get_cursor_cell() const -> int        { return m_cursor_cell; }
+    [[nodiscard]] auto get_cursor_tile() const -> int        { return m_cursor_tile; }
 
     // Display atlas the forward renderer samples: a copy of the working
     // atlas taken only at publish points (complete sweeps), so bake resets
@@ -274,30 +397,28 @@ public:
     [[nodiscard]] auto get_normal_texture  () const -> const std::shared_ptr<erhe::graphics::Texture>& { return m_normal_texture; }
     [[nodiscard]] auto get_albedo_texture  () const -> const std::shared_ptr<erhe::graphics::Texture>& { return m_albedo_texture; }
 
-    static constexpr int s_min_page = 256;
-    // Page ceiling, not a hardware limit (Metal / desktop Vulkan allow
-    // 16384^2). Pages grow power-of-two only as needed, and update_layout()
-    // additionally caps the page so the persistent per-texel targets
-    // (accumulation + display, ~24 bytes per texel) fit the device's
-    // remaining memory budget.
-    static constexpr int s_max_page = 8192;
-    // Tile cell side. Pages larger than this are packed as a grid of
-    // cells; regions never span a cell, and the bake scratch targets
-    // (G-buffer x4, working atlas, dilate scratch, supersample origins)
-    // are cell-sized - the gather visits one cell at a time - so scratch
-    // cost is bounded at ~60 bytes x s_tile^2 (~250 MB) regardless of the
-    // page size. Per-cell fp32 accumulation textures allocate lazily and
-    // camera clamping (tick max_active_cells) releases the far ones.
+    // Default tile texture side (set_tile_config overrides; power of two,
+    // clamped to [s_min_tile, s_max_tile]). Regions never span a tile, and
+    // the bake scratch targets (G-buffer x4, working atlas, dilate scratch,
+    // supersample origins) are tile-sized - the gather visits one tile at a
+    // time - so scratch cost is bounded at ~60 bytes x tile_size^2 (~250 MB
+    // at 2048) regardless of world extents. Per-tile fp32 accumulation
+    // textures allocate lazily and only resident (slot-holding) tiles keep
+    // one.
     static constexpr int s_tile     = 2048;
+    static constexpr int s_min_tile = 256;
+    static constexpr int s_max_tile = 8192;
+    // Default resident-tile budget: display slots (and so tiles baked /
+    // shown at once); 9 = a 3x3 slot grid around the camera.
+    static constexpr int s_default_slot_budget = 9;
     static constexpr int s_padding  = 4; // texels around each region (mips + bilinear)
 
 private:
     void ensure_gbuffer_targets();
     void ensure_bake_targets(erhe::graphics::Command_buffer& command_buffer);
-    // Lazily create (and clear when dirty) the given cell's accumulation
+    // Lazily create (and clear when dirty) the given tile's accumulation
     // texture; returns it. Records the clear into command_buffer.
-    auto ensure_cell_accum(erhe::graphics::Command_buffer& command_buffer, int cell) -> erhe::graphics::Texture*;
-    void publish_regions();
+    auto ensure_tile_accum(erhe::graphics::Command_buffer& command_buffer, int tile) -> erhe::graphics::Texture*;
     // Free every rebuildable working-set allocation, keeping only the
     // display atlas (see set_baking_enabled).
     void release_working_set();
@@ -336,14 +457,14 @@ private:
         std::vector<erhe::graphics::Acceleration_structure_instance>& out_instances,
         std::vector<Lm_instance_record>&                             out_records
     );
-    // Record resolve (cell accum -> working running average), optionally
+    // Record resolve (tile accum -> working running average), optionally
     // the JNLM denoise, then the dilation ping-pong; leaves the working
-    // atlas shader-readable. Operates on the cell-sized targets; the
-    // G-buffer must hold the same cell (denoise guides).
-    void record_resolve_and_dilate(erhe::graphics::Command_buffer& command_buffer, int cell, bool with_denoise);
-    // Copy the cell-sized working atlas into the cell's sub-rect of the
+    // atlas shader-readable. Operates on the tile-sized targets; the
+    // G-buffer must hold the same tile (denoise guides).
+    void record_resolve_and_dilate(erhe::graphics::Command_buffer& command_buffer, int tile, bool with_denoise);
+    // Copy the tile-sized working atlas into the tile's sub-rect of the
     // page-sized display atlas (both left shader-readable).
-    void record_display_publish(erhe::graphics::Command_buffer& command_buffer, int cell);
+    void record_display_publish(erhe::graphics::Command_buffer& command_buffer, int tile);
     // One-shot virtual-offset pass (article sample-position adjustment):
     // rewrites the position G-buffer in place, once per G-buffer bake.
     // bind_instance_records binds the Lm_instance_record SSBO (binding 1)
@@ -370,6 +491,11 @@ private:
     erhe::graphics::Device&                            m_graphics_device;
     erhe::scene_renderer::Mesh_memory&                 m_mesh_memory;
     Atlas_layout                                       m_layout;
+    int                                                m_tile_size  {s_tile};
+    int                                                m_slot_budget{s_default_slot_budget};
+    Lightmap_report*                                   m_report     {nullptr};
+    const Lightmap_partitioner*                        m_partitioner{nullptr};
+    bool                                               m_show_tile_bounds{false};
 
     // G-buffer raster pass objects (created once in the constructor).
     std::unique_ptr<erhe::graphics::Shader_resource>   m_draw_block; // per-draw UBO: world_from_node + uv_scale_offset + jitter + base_color
@@ -458,11 +584,11 @@ private:
     bool                                               m_lightmap_valid{false};
 
     // Double-buffered publish: the renderer-facing page-sized fp16 atlas
-    // (see get_lightmap_texture). Cells copy their cell-sized working
-    // result into their page sub-rect at publish points; per-cell
-    // Cell_state::published tracks which cells hold a complete sweep
+    // (see get_lightmap_texture). Tiles copy their tile-sized working
+    // result into their page sub-rect at publish points; per-tile
+    // Tile_state::published tracks which tiles hold a complete sweep
     // (until then the first-bake progressive preview copies every
-    // publish of that cell).
+    // publish of that tile).
     std::shared_ptr<erhe::graphics::Texture>           m_display_texture;
 
     // Dilation pass (plan phase 4): valid texels flood into invalid
@@ -481,22 +607,22 @@ private:
     // ---- Interactive bake loop state (plan section 3a) ----
 
     // Extra gather inputs: G-buffer albedo (bounce modulation + future JNLM
-    // guide), the per-cell accumulation textures (rgb = radiance sum, w =
-    // sample count; cell-sized fp32, allocated lazily per visited cell and
-    // released for camera-clamped inactive cells), and per-instance records
+    // guide), the per-tile accumulation textures (rgb = radiance sum, w =
+    // sample count; tile-sized fp32, allocated lazily per visited tile and
+    // released for camera-clamped inactive tiles), and per-instance records
     // for bounce-ray attribute fetch.
     std::shared_ptr<erhe::graphics::Texture>           m_albedo_texture;
-    class Cell_state
+    class Tile_state
     {
     public:
         std::shared_ptr<erhe::graphics::Texture> accum;
         bool     accum_dirty{true};  // clear before the next gather (fresh texture or reset)
-        bool     published  {false}; // display holds at least one complete sweep of this cell
-        bool     active     {true};  // within the camera clamp; inactive cells skip gathering
-        bool     has_content{false}; // at least one region packed into this cell
-        uint32_t sweeps     {0};     // completed cell sweeps since reset
+        bool     published  {false}; // display holds at least one complete sweep of this tile
+        bool     active     {true};  // within the camera clamp; inactive tiles skip gathering
+        bool     has_content{false}; // at least one region packed into this tile
+        uint32_t sweeps     {0};     // completed tile sweeps since reset
     };
-    std::vector<Cell_state>                            m_cells;
+    std::vector<Tile_state>                            m_tiles;
     std::unique_ptr<erhe::graphics::Shader_resource>   m_lm_instance_struct;
     std::unique_ptr<erhe::graphics::Shader_resource>   m_lm_instance_block;
     std::unique_ptr<erhe::graphics::Sampler>           m_linear_sampler;
@@ -529,8 +655,22 @@ private:
         glm::vec2 position;  // atlas UV of this side's edge endpoint
         glm::vec2 source_uv; // atlas UV of the opposite side's endpoint
     };
+    // Partitioned-mode layout: regions come from the partitioner's piece
+    // meshes with pre-assigned tiles; the tile tree is the stored partition
+    // (never re-split from live pieces). Called by update_layout() after
+    // its reset preamble.
+    auto update_layout_partitioned(Scene_root& scene_root, float texels_per_meter, float min_face_texels) -> bool;
+    // Shared tail of both layout paths: display slot grid sizing against
+    // the memory budget, m_layout/m_tiles assignment, initial residency and
+    // seam vertices.
+    auto finalize_layout(
+        std::vector<Tile>&&                                       tiles,
+        std::vector<Instance_region>&&                            regions,
+        std::vector<erhe::geometry::operation::Clip_tree_node>&&  kd_nodes,
+        bool                                                      partitioned
+    ) -> bool;
     void build_seam_vertices();
-    void record_seam_blend(erhe::graphics::Command_buffer& command_buffer, int cell);
+    void record_seam_blend(erhe::graphics::Command_buffer& command_buffer, int tile);
     erhe::dataformat::Vertex_format                     m_seam_vertex_format;
     std::unique_ptr<erhe::graphics::Vertex_input_state> m_seam_vertex_input;
     std::unique_ptr<erhe::graphics::Bind_group_layout>  m_seam_layout;
@@ -538,11 +678,11 @@ private:
     std::unique_ptr<erhe::graphics::Shader_stages>      m_seam_shader_stages;
     std::unique_ptr<erhe::graphics::Render_pipeline>    m_seam_pipeline;
     std::unique_ptr<erhe::graphics::Ring_buffer_client> m_seam_vertex_ring;
-    // Ordered by cell: m_cell_seam_ranges[cell] = (first vertex, count)
-    // into m_seam_vertices, positions relative to the cell origin so the
-    // pass rasters into the cell-sized working atlas.
+    // Ordered by tile: m_tile_seam_ranges[tile] = (first vertex, count)
+    // into m_seam_vertices, positions relative to the tile origin so the
+    // pass rasters into the tile-sized working atlas.
     std::vector<Seam_vertex>                            m_seam_vertices;
-    std::vector<std::pair<uint32_t, uint32_t>>          m_cell_seam_ranges;
+    std::vector<std::pair<uint32_t, uint32_t>>          m_tile_seam_ranges;
 
     // Per-tick uploads ride the device ring buffers (the frame command
     // buffer stays open; plain buffers would be destroyed in flight).
@@ -567,6 +707,16 @@ private:
     };
     std::array<Tlas_slot, s_tlas_slot_count>           m_tlas_slots;
 
+    // Offline bake-to-disk state (start_offline_bake / offline_tick).
+    class Offline_state
+    {
+    public:
+        Offline_progress  progress{};
+        int               next_tile{0};
+        Offline_tile_sink sink{};
+    };
+    Offline_state m_offline_state{};
+
     Bake_options m_options{};
     Sky_lighting m_sky{};
     bool     m_baking_enabled   {false};
@@ -574,9 +724,9 @@ private:
     bool     m_publish_requested{false}; // publish-stage option changed; republish on next tick
     bool     m_display_cleared  {false}; // display atlas zeroed at least once for this layout
     bool     m_regions_published{false}; // per-primitive uv_scale_offset pushed to meshes
-    int      m_gbuffer_cell     {-1};    // cell the (cell-sized) G-buffer targets hold; -1 = none
-    int      m_cursor_cell      {0};     // cell the gather is currently sweeping
-    int      m_cursor_y         {0};     // next band start row within the cursor cell
+    int      m_gbuffer_tile     {-1};    // tile the (tile-sized) G-buffer targets hold; -1 = none
+    int      m_cursor_tile      {0};     // tile the gather is currently sweeping
+    int      m_cursor_y         {0};     // next band start row within the cursor tile
     uint32_t m_frame_counter    {0};     // RNG decorrelation across ticks
     bool     m_hashes_initialized{false};
     // Layout invalidations land in the same frame as the primitive swap

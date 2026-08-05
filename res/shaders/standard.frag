@@ -543,6 +543,14 @@ void main()
                 ? sample_lightmap_bicubic(lightmap_uv)
                 : texture(s_lightmap, lightmap_uv).rgb;
             lightmap_valid = true;
+        } else if (v_lightmap_scale_offset.x < 0.0) {
+            // Sentinel for a lightmapped world-space tile piece whose tile is
+            // not resident: flat white fallback instead of the no-lightmap
+            // gate (Lightmap_baker::Atlas_layout::display_uv_scale_offset,
+            // partitioned mode). Still lightmap_valid, so analytic lights
+            // stay gated off - the piece renders flat until its tile loads.
+            ambient_term   = vec3(1.0);
+            lightmap_valid = true;
         }
 #endif
         color  = ambient_term * base_color * occlusion;
