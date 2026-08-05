@@ -893,44 +893,25 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"scene_name", "ids", "flags"})}
     }});
-    m_tool_infos.push_back({"lightmap_generate_uvs", "Generate lightmap UVs (texcoord channel 2, queued async and undoable) for every lightmapped, non-skinned content mesh of a scene - the Lightmap window's Generate Lightmap UVs button without touching the selection. Legacy non-partitioned path only - NOT needed before lightmap_prepare_tiles (that tool is self-contained). Unwrap method is selectable (parameterizer / packer / gutter) to iterate on unwrap defects; check results with the Lightmap Texture window's overlap count. Poll get_async_status until idle before lightmap_update_atlas.", {
-        {"type", "object"},
-        {"properties", {
-            {"scene_name",       {{"type", "string"}, {"description", "Name of the scene"}}},
-            {"hard_angles_deg",  {{"type", "number"}, {"description", "Hard-angle threshold in degrees for chart seams; default = Lightmap settings value"}}},
-            {"texels_per_meter", {{"type", "number"}, {"description", "Density used to size inter-chart gutters in texels of the expected atlas region; default = Lightmap settings value"}}},
-            {"parameterizer",    {{"type", "string"}, {"enum", json::array({"projection", "lscm", "spectral_lscm", "abf", "per_facet"})}, {"description", "Chart parameterizer; default = Lightmap settings value (abf). per_facet = every facet its own isometric chart (no Geogram, zero overlaps, no shared texels)"}}},
-            {"packer",           {{"type", "string"}, {"enum", json::array({"none", "tetris", "xatlas"})}, {"description", "Geogram chart packer; default = Lightmap settings value (xatlas). With texels_per_meter > 0 erhe repacks charts itself"}}},
-            {"gutter_texels",    {{"type", "number"}, {"description", "Minimum chart gutter in texels at the expected density (erhe's own packing); default = Lightmap settings value (3)"}}},
-            {"min_chart_texels", {{"type", "number"}, {"description", "Minimum chart side in texels at the expected density: smaller charts are scaled up (capped 16x) so each contains at least one texel center; 0 disables; default = Lightmap settings value (2)"}}}
-        }},
-        {"required", json::array({"scene_name"})}
-    }});
     m_tool_infos.push_back({"lightmap_frame_selection", "Frame the selected meshes' lightmap UV charts in the Lightmap Texture window: shows the window and sets its pan/zoom so every selected mesh's atlas region is visible. Useful for diagnosing unwrap defects on a specific mesh (pairs with the window's overlap highlight).", {
         {"type", "object"},
         {"properties", json::object()}
     }});
-    m_tool_infos.push_back({"lightmap_reorder_charts", "Leak camouflage for per-facet unwraps: re-unwrap (queued async, undoable) with charts packed in baked-luminance order so similarly lit facets are atlas neighbors and cross-chart filter-tap / dilation pollution picks up similar values. Requires uv_parameterizer = per_facet and an existing bake. Does NOT bake - the atlas is stale until the next bake (lightmap_set_baking / lightmap_bake_direct). Poll get_async_status until idle afterwards.", {
-        {"type", "object"},
-        {"properties", json::object()}
-    }});
-    m_tool_infos.push_back({"lightmap_update_atlas", "Recompute the lightmap atlas layout for a scene: packs every lightmapped, non-skinned mesh primitive that has lightmap UVs (texcoord channel 2; run generate_texture_coordinates texcoord_slot=2 or the Lightmap window's Generate Lightmap UVs first) into the shared atlas page and returns the layout (page size, per-region rect + uv_scale_offset). Legacy non-partitioned path only - NOT needed before lightmap_prepare_tiles.", {
+    m_tool_infos.push_back({"lightmap_reorder_charts", "Leak camouflage for per-facet unwraps: async re-prepare of the world-space partition with the piece charts packed in baked-luminance order, so similarly lit facets are atlas neighbors and cross-chart filter-tap / dilation pollution picks up similar values. Requires uv_parameterizer = per_facet, a prepared partition (lightmap_prepare_tiles) and an existing bake. Does NOT bake - the reordered tiles are stale until the next bake (lightmap_set_baking / lightmap_bake_direct); tiles reordered per-tile leave the other tiles' packing unchanged so they restore from disk. Poll get_async_status until idle afterwards.", {
         {"type", "object"},
         {"properties", {
-            {"scene_name",       {{"type", "string"}, {"description", "Name of the scene"}}},
-            {"texels_per_meter", {{"type", "number"}, {"description", "Texel density override; default = Lightmap settings value"}}}
-        }},
-        {"required", json::array({"scene_name"})}
+            {"tile", {{"type", "integer"}, {"description", "Spatial tile index to reorder (from lightmap_get_tiles); omit or -1 = all tiles"}}}
+        }}
     }});
 
-    m_tool_infos.push_back({"lightmap_bake_gbuffer", "Rasterize the lightmap texel G-buffer for the current atlas layout (run lightmap_update_atlas first): world position + normal per lightmap texel, one draw per region in atlas UV space. Optionally writes debug PNGs (<base>_position.png, <base>_normal.png).", {
+    m_tool_infos.push_back({"lightmap_bake_gbuffer", "Rasterize the lightmap texel G-buffer for the current atlas layout (run lightmap_prepare_tiles first): world position + normal per lightmap texel, one draw per region in atlas UV space. Optionally writes debug PNGs (<base>_position.png, <base>_normal.png).", {
         {"type", "object"},
         {"properties", {
             {"debug_png_base", {{"type", "string"}, {"description", "Optional path base for debug PNGs of the baked G-buffer"}}}
         }}
     }});
 
-    m_tool_infos.push_back({"lightmap_bake_direct", "Bake direct lighting into the lightmap atlas: per valid G-buffer texel, explicit sampling of every scene light with a ray-query shadow ray against all content meshes. Requires lightmap_update_atlas + lightmap_bake_gbuffer first. Optionally writes a tone-mapped debug PNG.", {
+    m_tool_infos.push_back({"lightmap_bake_direct", "Bake direct lighting into the lightmap atlas: per valid G-buffer texel, explicit sampling of every scene light with a ray-query shadow ray against all content meshes. Requires lightmap_prepare_tiles + lightmap_bake_gbuffer first. Optionally writes a tone-mapped debug PNG.", {
         {"type", "object"},
         {"properties", {
             {"scene_name", {{"type", "string"}, {"description", "Name of the scene (lights + occluders)"}}},
@@ -939,7 +920,7 @@ void Mcp_server::refresh_tool_list()
         {"required", json::array({"scene_name"})}
     }});
 
-    m_tool_infos.push_back({"lightmap_bake_to_disk", "Bake every spatial lightmap tile to disk, one tile at a time (bounded memory regardless of world size): per tile a G-buffer raster, offline_sweeps gather sweeps, resolve/denoise/dilate/seam-blend, then tile_<id>.lmt + manifest.json are written into <scene>.lightmap/. Runs to completion inside this call (headless verification). Requires lightmapped meshes with lightmap UVs; the layout is computed automatically if missing. The streamer picks the fresh tiles up when interactive baking is off.", {
+    m_tool_infos.push_back({"lightmap_bake_to_disk", "Bake every spatial lightmap tile to disk, one tile at a time (bounded memory regardless of world size): per tile a G-buffer raster, offline_sweeps gather sweeps, resolve/denoise/dilate/seam-blend, then tile_<id>.lmt + manifest.json are written into <scene>.lightmap/. Runs to completion inside this call (headless verification). Requires a prepared world-space partition (lightmap_prepare_tiles); the layout is computed automatically if missing. The streamer picks the fresh tiles up when interactive baking is off.", {
         {"type", "object"},
         {"properties", json::object()}
     }});
@@ -947,13 +928,12 @@ void Mcp_server::refresh_tool_list()
         {"type", "object"},
         {"properties", json::object()}
     }});
-    m_tool_infos.push_back({"lightmap_prepare_tiles", "Prepare world-space lightmap tiles: make every lightmapped mesh/primitive instance unique, bake its node transform into the vertices (world space), clip the geometry against the spatial kd tile planes (clip vertices are binary exact across the two tiles sharing a plane) and re-unwrap each piece's channel-2 UVs at world-space density. Pieces become Mesh_primitives of new meshes under the identity 'Lightmap Pieces' group node; originals stay in the scene for lightmap_revert_tiles / re-prepare. Self-contained: the spatial kd split is computed from geometry alone (world areas + density estimate) - lightmap_generate_uvs / lightmap_update_atlas are NOT needed first. ASYNC by default: returns {queued:true} immediately and the heavy phase runs in the background while the old partition stays live; poll get_async_status until pending + running + queued_operations == 0, then read its lightmap_prepare.last_result (a mid-flight primitive swap aborts the commit and keeps the old partition; cancel with lightmap_prepare_cancel). Refuses while async mesh operations or another prepare are in flight. Toggle rendering between originals and pieces with lightmap_set_render.", {
+    m_tool_infos.push_back({"lightmap_prepare_tiles", "Prepare world-space lightmap tiles: make every lightmapped mesh/primitive instance unique, bake its node transform into the vertices (world space), clip the geometry against the spatial kd tile planes (clip vertices are binary exact across the two tiles sharing a plane) and re-unwrap each piece's channel-2 UVs at world-space density. Pieces become Mesh_primitives of new meshes under the identity 'Lightmap Pieces' group node; originals stay in the scene for lightmap_revert_tiles / re-prepare. Self-contained: the spatial grid split is computed from geometry alone and the per-tile density comes from the grid (tile_texture_size / cell size). ASYNC by default: returns {queued:true} immediately and the heavy phase runs in the background while the old partition stays live; poll get_async_status until pending + running + queued_operations == 0, then read its lightmap_prepare.last_result (a mid-flight primitive swap aborts the commit and keeps the old partition; cancel with lightmap_prepare_cancel). Refuses while async mesh operations or another prepare are in flight. Toggle rendering between originals and pieces with lightmap_set_render.", {
         {"type", "object"},
         {"properties", {
             {"scene_name",           {{"type", "string"},  {"description", "Name of the scene to partition"}}},
             {"tile_texture_size",    {{"type", "integer"}, {"description", "Texel side of one spatial tile (pow2 256..8192); default = Lightmap settings value"}}},
             {"resident_tile_budget", {{"type", "integer"}, {"description", "Resident tile budget; default = Lightmap settings value"}}},
-            {"texels_per_meter",     {{"type", "number"},  {"description", "World-space lightmap texel density; default = Lightmap settings value"}}},
             {"wait",                 {{"type", "boolean"}, {"description", "Block until the partition commits and return the full per-piece manifest (small scenes only: the MCP HTTP response is dropped after 5 s while the work still completes). Default false"}}}
         }},
         {"required", json::array({"scene_name"})}

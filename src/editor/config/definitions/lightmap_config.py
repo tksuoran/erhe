@@ -1,21 +1,11 @@
 from erhe_codegen import *
 
 struct("Lightmap_config",
-    version=10,
+    version=11,
     short_desc="Lightmap",
-    long_desc="Lightmap baking settings (doc/lightmap_baking_plan.md). Texel density is the one quality knob; the boolean toggles switch individual bake/sampling features off for A/B comparison and debugging.",
+    long_desc="Lightmap baking settings (doc/lightmap_baking_plan.md). Texel density comes from the world-space tile grid: tile_texture_size / cell size, per tile. The boolean toggles switch individual bake/sampling features off for A/B comparison and debugging. (The legacy standalone texels_per_meter unwrap density was removed in version 11; stale keys are ignored.)",
     developer=False,
     fields=[
-        field(
-            "texels_per_meter",
-            Float,
-            added_in=1,
-            default="16.0f",
-            short_desc="Texels per meter (legacy unwrap)",
-            long_desc="Legacy standalone unwrap density (Generate Lightmap UVs without the world-space tile grid). Tile layout density is no longer driven by this: each grid tile's density is tile_texture_size / its cell size, flexing down per tile only when content does not fit.",
-            visible=True,
-            developer=True
-        ),
         field(
             "cell_size_m",
             Float,

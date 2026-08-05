@@ -1,5 +1,40 @@
 # Lightmap spatial tiling + world-space partition - session handoff (2026-08-05)
 
+## UPDATE 2026-08-05 (latest): legacy standalone flow removed
+
+The legacy non-partitioned flow is GONE (user-directed, no back-compat):
+
+- Removed: `texels_per_meter` from `Lightmap_config` (version 11; stale
+  keys ignored), the whole-mesh channel-2 layout branch of
+  `Lightmap_baker::update_layout` (a prepared partition is now the ONLY
+  layout source; without one update_layout clears the layout and returns
+  false), the Lightmap window's "Legacy Atlas (non-partitioned)" section
+  (Generate Lightmap UVs / Update Atlas Layout / Bake Direct Lighting
+  buttons), and the MCP tools `lightmap_generate_uvs` /
+  `lightmap_update_atlas` (+ the `texels_per_meter` arg of
+  `lightmap_prepare_tiles`). `generate_texture_coordinates` (generic
+  mesh op) still exists; `lightmap_bake_gbuffer` / `lightmap_bake_direct`
+  still work on the prepared layout.
+- Signatures: `update_layout(scene, min_face_texels)`,
+  `tick(cb, scene, min_face_texels, camera, max_active)`,
+  `compute_tile_split_estimate(scene)`, `get_bake_parameters_hash()`
+  (no density arg - the slider can no longer spuriously invalidate saved
+  tiles). Manifest v4 drops the global `texels_per_meter` (density stays
+  per tile); v3 sets are stale.
+- UI: "Cell size (m)" is now exposed next to "Tile texture size"
+  (nominal density = tile_texture_size / cell size); committing a cell
+  size edit (or changing tile texture size) with a live partition
+  launches an async re-prepare.
+- "Reorder Charts By Bake" moved into the World-Space Tiles section and
+  works per tile (SmallButton in the tiles tree; MCP
+  `lightmap_reorder_charts {tile}`) or for all tiles: it re-prepares
+  with per-facet luminance order keys routed to the new pieces by
+  (source mesh, source primitive, tile) identity
+  (`Lightmap_partitioner::Params::chart_order`). It does NOT migrate the
+  baked texels yet - reordered tiles are stale until the next bake (see
+  the prompt queue item on reorder bake-data migration); unaffected
+  tiles keep their packing and restore from disk.
+
 ## UPDATE 2026-08-05 (later session): quadtree grid replaced the adaptive kd split
 
 The content-adaptive kd split described below was REPLACED (user-directed,

@@ -83,9 +83,10 @@ pack_atlas_only_normalize_charts-equivalent scaling +
 pack_charts_with_texel_gutter as-is.
 
 Exposure: a new Atlas_parameterizer-level choice ("per_facet") through the
-existing knob chain (Lightmap_config.uv_parameterizer combo, MCP
-lightmap_generate_uvs parameterizer arg) - the plumbing added 2026-08-02
-already carries it.
+existing knob chain (Lightmap_config.uv_parameterizer combo; feeds the
+world-space piece unwraps of lightmap_prepare_tiles - the legacy
+lightmap_generate_uvs MCP tool was removed 2026-08-05) - the plumbing
+added 2026-08-02 already carries it.
 
 Cost note (why this is a first pass, not automatically the final layout):
 a chart of side s texels with gutter g occupies (s + 2g)^2, so tiny charts

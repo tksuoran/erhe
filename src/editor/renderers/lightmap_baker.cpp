@@ -2191,7 +2191,7 @@ auto Lightmap_baker::get_sweep_count() const -> uint32_t
     return any ? result : 0u;
 }
 
-auto Lightmap_baker::update_layout(Scene_root& scene_root, const float texels_per_meter, const float min_face_texels) -> bool
+auto Lightmap_baker::update_layout(Scene_root& scene_root, const float min_face_texels) -> bool
 {
     m_layout            = Atlas_layout{};
     m_gbuffer_valid     = false;
@@ -2207,125 +2207,17 @@ auto Lightmap_baker::update_layout(Scene_root& scene_root, const float texels_pe
     m_display_cleared   = false;
     m_layout_scene_root = &scene_root;
 
-    // Partitioned mode: a prepared world-space partition for this scene
-    // supplies the regions (piece meshes with pre-assigned tiles) and the
-    // tile tree; no kd re-split.
-    if ((m_partitioner != nullptr) && m_partitioner->is_prepared() && (m_partitioner->get_scene_root() == &scene_root)) {
-        return update_layout_partitioned(scene_root, texels_per_meter, min_face_texels);
-    }
-
-    // Rejection counters for the zero-regions diagnostic below - "the atlas
-    // is empty" is otherwise invisible (every filter is a silent continue).
-    std::size_t seen_meshes       = 0;
-    std::size_t skip_not_flagged  = 0;
-    std::size_t skip_no_shape     = 0;
-    std::size_t skip_no_uvs       = 0;
-
-    std::vector<Instance_region> regions;
-    for (const std::shared_ptr<erhe::scene::Mesh>& mesh : scene_root.layers().content()->meshes) {
-        if (!mesh || mesh->skin) {
-            continue;
-        }
-        ++seen_meshes;
-        if ((mesh->get_flag_bits() & erhe::Item_flags::lightmapped) == 0u) {
-            ++skip_not_flagged;
-            continue;
-        }
-        const erhe::scene::Node* const node = mesh->get_node();
-        if (node == nullptr) {
-            continue;
-        }
-        const float instance_area_scale = area_scale(node->world_from_node());
-        const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
-        for (std::size_t primitive_index = 0; primitive_index < primitives.size(); ++primitive_index) {
-            const erhe::primitive::Primitive* const primitive = primitives[primitive_index].primitive.get();
-            if ((primitive == nullptr) || !primitive->render_shape) {
-                ++skip_no_shape;
-                continue;
-            }
-            const std::shared_ptr<erhe::geometry::Geometry>& geometry = primitive->render_shape->get_geometry();
-            if (!geometry) {
-                ++skip_no_shape;
-                continue;
-            }
-            // Only primitives that have lightmap UVs (channel 2) participate;
-            // Generate Lightmap UVs in the Lightmap window produces them.
-            erhe::geometry::Mesh_attributes& attributes = geometry->get_attributes();
-            if (!attributes.corner_texcoord_2.has(0)) {
-                ++skip_no_uvs;
-                continue;
-            }
-            Instance_region region;
-            region.mesh            = mesh;
-            region.primitive_index = primitive_index;
-            region.world_area      = mesh_surface_area(geometry->get_mesh()) * instance_area_scale;
-            // Chart-space coverage: dividing the region area by it makes
-            // texels-per-meter exact per facet - concretely, side =
-            // sqrt(world_area / coverage) * density gives every facet
-            // world_area_facet * density^2 texels regardless of gutters,
-            // packing waste, or the packer's minimum-chart-size upscales.
-            compute_region_uv_metrics(*geometry, region);
-            regions.push_back(std::move(region));
-        }
-    }
-    if (regions.empty()) {
-        const std::string message = fmt::format(
-            "no regions to pack (content meshes {}, skipped: not lightmapped {}, no render shape/geometry {}, no lightmap UVs {})",
-            seen_meshes,
-            skip_not_flagged,
-            skip_no_shape,
-            skip_no_uvs
-        );
-        log_render->info("Lightmap_baker::update_layout: {}", message);
-        if ((m_report != nullptr) && (seen_meshes > 0) && (skip_not_flagged < seen_meshes)) {
-            // Only report when lightmapped meshes exist but none qualified;
-            // an entirely unflagged scene is not an error.
-            m_report->add_warning(Lightmap_report::Stage::layout, "atlas layout", message);
-        }
-        return false;
-    }
-
-    // Grid split from the regions' world bounds, one region bucket per
-    // tile (a region belongs to the tile containing its bounds center -
-    // unpartitioned regions never span tiles texel-wise, only their world
-    // bounds may overhang), then a per-tile pack at each tile's nominal
-    // density.
-    std::vector<erhe::math::Aabb> bounds;
-    bounds.reserve(regions.size());
-    for (const Instance_region& region : regions) {
-        bounds.push_back(region_world_bounds(region));
-    }
-    Grid_split grid = build_grid_split(bounds);
-    if (grid.tiles.empty()) {
-        if (m_report != nullptr) {
-            m_report->add_error(Lightmap_report::Stage::layout, "atlas layout", "grid split produced no tiles");
-        }
+    // The prepared world-space partition for this scene supplies the
+    // regions (piece meshes with pre-assigned grid tiles) and the tile
+    // tree. Without one there is no layout - Prepare World-Space Tiles is
+    // the only front door (the legacy whole-mesh channel-2 layout was
+    // removed).
+    if ((m_partitioner == nullptr) || !m_partitioner->is_prepared() || (m_partitioner->get_scene_root() != &scene_root)) {
+        log_render->info("Lightmap_baker::update_layout: no prepared world-space partition for this scene - run Prepare World-Space Tiles");
         m_seam_vertices.clear();
         return false;
     }
-    std::vector<std::vector<std::size_t>> buckets(grid.tiles.size());
-    for (std::size_t i = 0; i < regions.size(); ++i) {
-        const glm::vec3 center = bounds[i].is_valid() ? bounds[i].center() : glm::vec3{0.0f};
-        const int tile = grid.tile_for_position(glm::vec2{center.x, center.z}, std::max(m_cell_size, 0.01f));
-        if (tile >= 0) {
-            buckets[static_cast<std::size_t>(tile)].push_back(i);
-            grid.tiles[static_cast<std::size_t>(tile)].world_bounds.include(bounds[i]);
-        }
-    }
-    std::vector<Instance_region> packed_regions;
-    packed_regions.reserve(regions.size());
-    for (std::size_t tile = 0; tile < grid.tiles.size(); ++tile) {
-        pack_tile_regions(static_cast<int>(tile), grid.tiles[tile], regions, buckets[tile], min_face_texels, packed_regions);
-    }
-    if (packed_regions.empty()) {
-        if (m_report != nullptr) {
-            m_report->add_error(Lightmap_report::Stage::layout, "atlas layout", "no regions could be packed");
-        }
-        m_seam_vertices.clear();
-        return false;
-    }
-
-    return finalize_layout(std::move(grid.tiles), std::move(packed_regions), std::move(grid.kd_nodes), false);
+    return update_layout_partitioned(scene_root, min_face_texels);
 }
 
 auto Lightmap_baker::Grid_split::tile_for_position(const glm::vec2 xz, const float base_cell_size) const -> int
@@ -2710,7 +2602,7 @@ void Lightmap_baker::pack_tile_regions(
     }
 }
 
-auto Lightmap_baker::compute_tile_split_estimate(Scene_root& scene_root, const float texels_per_meter) -> Estimate_split
+auto Lightmap_baker::compute_tile_split_estimate(Scene_root& scene_root) -> Estimate_split
 {
     Estimate_split result;
 
@@ -2777,7 +2669,6 @@ auto Lightmap_baker::compute_tile_split_estimate(Scene_root& scene_root, const f
     // The grid is content-independent (cells + overrides only), so the
     // "estimate" is exact: the tree the pieces are clipped against is the
     // same tree every relayout reproduces from the same grid parameters.
-    static_cast<void>(texels_per_meter);
     std::vector<erhe::math::Aabb> bounds;
     bounds.reserve(regions.size());
     for (const Instance_region& region : regions) {
@@ -2898,10 +2789,9 @@ auto Lightmap_baker::finalize_layout(
     return true;
 }
 
-auto Lightmap_baker::update_layout_partitioned(Scene_root& scene_root, const float texels_per_meter, const float min_face_texels) -> bool
+auto Lightmap_baker::update_layout_partitioned(Scene_root& scene_root, const float min_face_texels) -> bool
 {
     static_cast<void>(scene_root);
-    static_cast<void>(texels_per_meter);
     const Lightmap_partitioner& partitioner = *m_partitioner;
     const int                   tile_count  = partitioner.get_tile_count();
 
@@ -4191,10 +4081,9 @@ auto Lightmap_baker::bake_direct(Scene_root& scene_root) -> bool
     return true;
 }
 
-auto Lightmap_baker::get_bake_parameters_hash(const float texels_per_meter) const -> uint64_t
+auto Lightmap_baker::get_bake_parameters_hash() const -> uint64_t
 {
-    uint64_t hash = fnv1a64(&texels_per_meter, sizeof(float));
-    hash = fnv1a64(&m_tile_size, sizeof(int), hash);
+    uint64_t hash = fnv1a64(&m_tile_size, sizeof(int));
     hash = fnv1a64(&m_cell_size, sizeof(float), hash);
     const uint32_t option_bits =
         (m_options.indirect_bounce ? 1u  : 0u) |
@@ -4777,7 +4666,6 @@ void Lightmap_baker::record_seam_blend(erhe::graphics::Command_buffer& command_b
 void Lightmap_baker::tick(
     erhe::graphics::Command_buffer& command_buffer,
     Scene_root&                     scene_root,
-    const float                     texels_per_meter,
     const float                     min_face_texels,
     const glm::vec3*                camera_position,
     const int                       max_active_tiles
@@ -4791,11 +4679,11 @@ void Lightmap_baker::tick(
 
     // Change detection (plan section 3a step 1), cheapest response first.
     // Three tiers of FNV hashes over the bake inputs:
-    //   layout   - the lightmapped set + texel density -> redo atlas layout
-    //   gbuffer  - lightmapped region transforms       -> re-raster G-buffer
-    //   lighting - lights + occluder transforms        -> reset accumulation
+    //   layout   - the lightmapped set + grid parameters -> redo atlas layout
+    //   gbuffer  - lightmapped region transforms         -> re-raster G-buffer
+    //   lighting - lights + occluder transforms          -> reset accumulation
     // Each tier implies the tiers below it.
-    uint64_t hash_layout = fnv1a64(&texels_per_meter, sizeof(float));
+    uint64_t hash_layout = 0xcbf29ce484222325ull;
     {
         // Grid parameters (cell size + quadtree overrides): a subdivide /
         // merge or cell-size change relayouts (and, with a live partition,
@@ -4908,7 +4796,7 @@ void Lightmap_baker::tick(
     } else {
         if ((hash_layout != m_hash_layout) || (m_layout_scene_root != &scene_root)) {
             m_hash_layout = hash_layout;
-            if (!update_layout(scene_root, texels_per_meter, min_face_texels)) {
+            if (!update_layout(scene_root, min_face_texels)) {
                 return;
             }
             // Regions changed; re-derive their transform hash so the next
@@ -4930,10 +4818,8 @@ void Lightmap_baker::tick(
             reset           = true;
         }
     }
-    m_layout_texels_per_meter = texels_per_meter;
-
     if (m_layout.width == 0) {
-        if (!update_layout(scene_root, texels_per_meter, min_face_texels)) {
+        if (!update_layout(scene_root, min_face_texels)) {
             return;
         }
         m_gbuffer_upload_defer = true;
@@ -5558,7 +5444,7 @@ auto Lightmap_baker::read_lightmap(std::vector<float>& out_rgba) -> bool
 // in the header): mean baked luminance per facet, averaged over the covered
 // texels of the facet's UV bounding box from a CPU readback of the
 // published atlas (centroid texel as fallback for facets with no coverage).
-auto Lightmap_baker::build_chart_order_keys() -> std::unordered_map<const erhe::geometry::Geometry*, std::vector<float>>
+auto Lightmap_baker::build_chart_order_keys(const int tile) -> std::unordered_map<const erhe::geometry::Geometry*, std::vector<float>>
 {
     std::unordered_map<const erhe::geometry::Geometry*, std::vector<float>> keys;
     std::vector<float> atlas;
@@ -5569,6 +5455,9 @@ auto Lightmap_baker::build_chart_order_keys() -> std::unordered_map<const erhe::
     const int page_height = m_layout.height;
     for (const Instance_region& region : m_layout.regions) {
         if (!region.mesh) {
+            continue;
+        }
+        if ((tile >= 0) && (region.tile != tile)) {
             continue;
         }
         const std::vector<erhe::scene::Mesh_primitive>& primitives = region.mesh->get_primitives();

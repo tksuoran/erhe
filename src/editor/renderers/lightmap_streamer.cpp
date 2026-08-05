@@ -113,8 +113,8 @@ auto Lightmap_streamer::try_load_manifest(Scene_root& scene_root) -> bool
     // Stale-bake detection: the manifest's parameter hash against the
     // current settings. Stale tiles still stream (better than nothing);
     // the window shows the notice.
-    if ((m_context.lightmap_baker != nullptr) && (m_context.editor_settings != nullptr)) {
-        const uint64_t current_hash = m_context.lightmap_baker->get_bake_parameters_hash(m_context.editor_settings->lightmap.texels_per_meter);
+    if (m_context.lightmap_baker != nullptr) {
+        const uint64_t current_hash = m_context.lightmap_baker->get_bake_parameters_hash();
         m_stale = (current_hash != m_manifest.bake_hash);
         if (m_stale && (m_context.lightmap_report != nullptr)) {
             m_context.lightmap_report->add_warning(

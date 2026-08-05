@@ -275,18 +275,16 @@ public:
     // work then; only the bakes are unavailable.
     [[nodiscard]] auto is_bake_supported() const -> bool;
 
-    // Recompute the layout for the lightmapped, non-skinned content meshes
-    // of the scene whose primitives carry channel-2 UVs: an adaptive
-    // world-space (XZ) kd-partition into spatial tiles, each packing its
-    // regions into one tile_size^2 texel square. Partitioning cannot run
-    // out of space - tiles split until content fits, co-located overflows
-    // split by region count, and a single region denser than a tile flexes
-    // the tile's texel density down (reported as a warning) - so this only
-    // returns false when there are no regions at all. min_face_texels > 0
-    // additionally grows each region (capped at 4x the density-derived
-    // side) so its smallest facet spans at least that many texels on its
-    // shorter UV axis.
-    auto update_layout(Scene_root& scene_root, float texels_per_meter, float min_face_texels) -> bool;
+    // Recompute the layout from the prepared world-space partition for this
+    // scene: piece meshes with pre-assigned grid tiles, each tile packing
+    // its regions into one tile_size^2 texel square at the tile's nominal
+    // density (tile_texture_size / cell side; flexing down per tile only
+    // when content does not fit). Returns false (and clears the layout)
+    // when no partition is prepared for the scene - Prepare World-Space
+    // Tiles is the only front door. min_face_texels > 0 additionally grows
+    // each region (capped at 4x the density-derived side) so its smallest
+    // facet spans at least that many texels on its shorter UV axis.
+    auto update_layout(Scene_root& scene_root, float min_face_texels) -> bool;
 
     // One source primitive of the estimate split with its assigned spatial
     // tile - all the partitioner needs to clip against the returned tree.
@@ -317,7 +315,7 @@ public:
     // against the returned tree, unwraps each piece, and the partitioned
     // relayout re-packs with the pieces' MEASURED UVs - so no unwrap is
     // needed beforehand. Does NOT touch the active layout (m_layout).
-    auto compute_tile_split_estimate(Scene_root& scene_root, float texels_per_meter) -> Estimate_split;
+    auto compute_tile_split_estimate(Scene_root& scene_root) -> Estimate_split;
 
     // Push every region's display (slot-space) uv_scale_offset onto its
     // Mesh_primitive (zero / white-fallback sentinel for non-resident
@@ -391,12 +389,14 @@ public:
     // Similar-color chart adjacency (leak camouflage): per-facet baked
     // luminance for every lightmapped geometry with a region, sampled at
     // each facet's chart UV centroid from the published atlas. Feed the
-    // result to Make_atlas_operation's per-facet chart order so a
-    // re-unwrap packs similarly lit facets next to each other - cross-
-    // chart filter-tap / dilation pollution then picks up similar values.
-    // Empty when no bake exists. Keyed by the CURRENT primitive geometry
-    // (the re-unwrap's operation source).
-    auto build_chart_order_keys() -> std::unordered_map<const erhe::geometry::Geometry*, std::vector<float>>;
+    // result to the partitioner's per-facet chart order (via the Lightmap
+    // window's Reorder Charts By Bake) so a re-unwrap packs similarly lit
+    // facets next to each other - cross-chart filter-tap / dilation
+    // pollution then picks up similar values. Empty when no bake exists.
+    // Keyed by the CURRENT region geometry (the piece geometry in
+    // partitioned mode). tile >= 0 restricts the keys to that spatial
+    // tile's regions (per-tile reorder).
+    auto build_chart_order_keys(int tile = -1) -> std::unordered_map<const erhe::geometry::Geometry*, std::vector<float>>;
 
     // Interactive bake loop (plan section 3a): record one budgeted gather
     // slice plus resolve + dilate publish into the given command buffer
@@ -414,7 +414,6 @@ public:
     void tick(
         erhe::graphics::Command_buffer& command_buffer,
         Scene_root&                     scene_root,
-        float                           texels_per_meter,
         float                           min_face_texels,
         const glm::vec3*                camera_position  = nullptr,
         int                             max_active_tiles = 0
@@ -455,10 +454,10 @@ public:
     // aborted (check the report for errors).
     auto offline_tick(Scene_root& scene_root) -> bool;
 
-    // FNV hash of the parameters that invalidate persisted tiles: texel
-    // density, tile size, and the bake feature set. Stored in the manifest
+    // FNV hash of the parameters that invalidate persisted tiles: tile
+    // size, cell size and the bake feature set. Stored in the manifest
     // and payload headers for stale-bake detection.
-    [[nodiscard]] auto get_bake_parameters_hash(float texels_per_meter) const -> uint64_t;
+    [[nodiscard]] auto get_bake_parameters_hash() const -> uint64_t;
 
     // Disabling releases the whole bake working set (G-buffer, atlas,
     // accumulation, scratch, origin, BLAS/TLAS caches) - only the display
@@ -764,7 +763,7 @@ private:
     // meshes with pre-assigned tiles; the tile tree is the stored partition
     // (never re-split from live pieces). Called by update_layout() after
     // its reset preamble.
-    auto update_layout_partitioned(Scene_root& scene_root, float texels_per_meter, float min_face_texels) -> bool;
+    auto update_layout_partitioned(Scene_root& scene_root, float min_face_texels) -> bool;
     // Uniform quadtree grid split (world-origin anchored, shared by
     // update_layout and compute_tile_split_estimate): occupied level-0
     // cells from the regions' world XZ AABBs, scene leaf overrides
@@ -873,8 +872,7 @@ private:
     bool     m_gbuffer_upload_defer{false};
     uint64_t m_hash_lighting    {0};     // lights + occluder transforms
     uint64_t m_hash_gbuffer     {0};     // lightmapped region transforms
-    uint64_t m_hash_layout      {0};     // lightmapped set + texel density
-    float    m_layout_texels_per_meter{0.0f};
+    uint64_t m_hash_layout      {0};     // lightmapped set + grid parameters
     Scene_root* m_layout_scene_root{nullptr}; // scene update_layout() ran for
 
     // Per-tick scratch (capacity kept across frames).

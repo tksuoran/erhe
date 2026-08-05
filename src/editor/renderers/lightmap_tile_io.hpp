@@ -36,7 +36,9 @@ namespace editor {
 class Lightmap_tile_io
 {
 public:
-    static constexpr uint32_t c_manifest_version = 3;
+    // v4: dropped the manifest-global texels_per_meter (density is per tile
+    // from the grid) and removed it from the bake parameters hash.
+    static constexpr uint32_t c_manifest_version = 4;
     static constexpr uint32_t c_payload_version  = 1;
     static constexpr uint32_t c_payload_magic    = 0x544D4C45u; // 'ELMT' little-endian
 
@@ -78,10 +80,9 @@ public:
     class Manifest
     {
     public:
-        uint32_t                version         {c_manifest_version};
-        int                     tile_size       {2048};
-        float                   texels_per_meter{16.0f};
-        uint64_t                bake_hash       {0};
+        uint32_t                version  {c_manifest_version};
+        int                     tile_size{2048};
+        uint64_t                bake_hash{0};
         std::vector<Tile_entry> tiles;
     };
 

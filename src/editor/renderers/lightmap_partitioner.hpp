@@ -7,8 +7,10 @@
 
 #include <glm/glm.hpp>
 
+#include <map>
 #include <memory>
 #include <string>
+#include <tuple>
 #include <unordered_set>
 #include <vector>
 
@@ -50,13 +52,24 @@ public:
     class Params
     {
     public:
-        float                                          texels_per_meter {8.0f};
+        // Per-facet chart order keys for the piece unwraps (Reorder Charts
+        // By Bake): baked-luminance keys measured on the CURRENT layout's
+        // piece geometries, keyed by piece identity (source mesh, source
+        // primitive index, grid tile). Clipping is deterministic for
+        // unchanged sources and make_atlas preserves facet order, so keys
+        // indexed by the old piece's facet ids apply to the re-clipped
+        // piece. Pieces without keys unwrap in default order. Per-facet
+        // parameterizer only; ignored otherwise.
+        using Piece_identity = std::tuple<const erhe::scene::Mesh*, std::size_t, int>;
+        using Chart_order    = std::map<Piece_identity, std::vector<float>>;
+
         float                                          min_face_texels  {2.0f};
         float                                          hard_angles_deg  {60.0f};
         float                                          gutter_texels    {2.0f};
         float                                          min_chart_texels {2.0f};
         erhe::geometry::operation::Atlas_parameterizer parameterizer    {erhe::geometry::operation::Atlas_parameterizer::per_facet};
         erhe::geometry::operation::Atlas_packer        packer           {erhe::geometry::operation::Atlas_packer::xatlas};
+        std::shared_ptr<const Chart_order>             chart_order      {};
     };
 
     class Piece_info

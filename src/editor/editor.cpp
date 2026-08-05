@@ -892,7 +892,6 @@ public:
                     m_lightmap_baker->tick(
                         command_buffer,
                         *lightmap_scene_root.get(),
-                        lightmap_config.texels_per_meter,
                         lightmap_config.uv_min_chart_texels,
                         lightmap_camera_position_ptr,
                         lightmap_config.active_tile_budget

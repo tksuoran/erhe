@@ -25,12 +25,13 @@ DONE, committed, verified:
   standard.frag replaces the ambient term when the region is valid.
   USER-VERIFIED in the viewport 2026-08-01.
 
-Test loop (MCP, editor launched hidden): set_item_flags lightmapped ->
-select_items -> generate_texture_coordinates texcoord_slot=2 ->
-lightmap_update_atlas -> lightmap_bake_gbuffer ->
-lightmap_bake_direct (optional debug_png). Or interactively via the
-Lightmap window (Generate Lightmap UVs / Update Atlas Layout / Bake
-Direct Lighting).
+Test loop (MCP, editor launched hidden; UPDATED 2026-08-05 - the legacy
+standalone flow was removed, lightmap_prepare_tiles is the only front
+door): set_item_flags lightmapped -> lightmap_prepare_tiles {scene_name}
+(poll get_async_status until idle) -> lightmap_bake_gbuffer ->
+lightmap_bake_direct (optional debug_png), or lightmap_set_baking for
+the interactive bake. Or interactively via the Lightmap window (Prepare
+World-Space Tiles + Start).
 
 Known interim behavior:
 - The bake holds DIRECT light only, and analytic lights still run for

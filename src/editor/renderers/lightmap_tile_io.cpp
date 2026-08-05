@@ -135,11 +135,10 @@ auto Lightmap_tile_io::write_manifest(const std::filesystem::path& directory, co
         });
     }
     const nlohmann::json root{
-        {"version",          manifest.version},
-        {"tile_size",        manifest.tile_size},
-        {"texels_per_meter", manifest.texels_per_meter},
-        {"bake_hash",        manifest.bake_hash},
-        {"tiles",            tiles}
+        {"version",   manifest.version},
+        {"tile_size", manifest.tile_size},
+        {"bake_hash", manifest.bake_hash},
+        {"tiles",     tiles}
     };
     const std::filesystem::path file_path = directory / "manifest.json";
     std::ofstream stream{file_path, std::ios::binary | std::ios::trunc};
@@ -181,9 +180,8 @@ auto Lightmap_tile_io::read_manifest(const std::filesystem::path& directory, Man
             }
             return false;
         }
-        out_manifest.tile_size        = root.value("tile_size", 0);
-        out_manifest.texels_per_meter = root.value("texels_per_meter", 0.0f);
-        out_manifest.bake_hash        = root.value("bake_hash", static_cast<uint64_t>(0));
+        out_manifest.tile_size = root.value("tile_size", 0);
+        out_manifest.bake_hash = root.value("bake_hash", static_cast<uint64_t>(0));
         for (const nlohmann::json& tile_json : root.value("tiles", nlohmann::json::array())) {
             Tile_entry tile;
             tile.id               = tile_json.value("id", 0);

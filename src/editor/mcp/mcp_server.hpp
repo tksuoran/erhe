@@ -126,8 +126,6 @@ private:
     auto query_raycast          (const nlohmann::json& args) -> std::string;
     auto action_select_items    (const nlohmann::json& args) -> std::string;
     auto action_set_item_flags  (const nlohmann::json& args) -> std::string;
-    auto action_lightmap_generate_uvs(const nlohmann::json& args) -> std::string;
-    auto action_lightmap_update_atlas(const nlohmann::json& args) -> std::string;
     auto action_lightmap_bake_gbuffer(const nlohmann::json& args) -> std::string;
     auto action_lightmap_bake_direct (const nlohmann::json& args) -> std::string;
     auto action_lightmap_set_baking  (const nlohmann::json& args) -> std::string;

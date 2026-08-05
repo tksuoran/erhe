@@ -79,6 +79,9 @@ public:
         std::shared_ptr<erhe::primitive::Material> material;
         erhe::primitive::Normal_style              normal_style{};
         std::string                                subject;
+        // Per-facet chart order keys per tile (Params::chart_order entries
+        // for this task's source primitive, extracted at launch).
+        std::map<int, std::vector<float>>          chart_order;
         std::vector<Piece_result>                  results; // heavy-phase output, in piece order
     };
 
@@ -137,6 +140,11 @@ public:
             }
             const float tile_tpm = tile_texels_per_meter[static_cast<std::size_t>(piece.tile)];
             const std::string piece_subject = fmt::format("{}.tile{}", task.subject, piece.tile);
+            // Reorder Charts By Bake: order keys measured on the previous
+            // layout's piece, applied to this re-clip by facet id (the clip
+            // is deterministic for unchanged sources).
+            const auto order_it = task.chart_order.find(piece.tile);
+            const std::vector<float>* const order_keys = (order_it != task.chart_order.end()) ? &order_it->second : nullptr;
             std::shared_ptr<erhe::geometry::Geometry> atlas_geometry = std::make_shared<erhe::geometry::Geometry>(piece_subject);
             try {
                 try {
@@ -150,7 +158,7 @@ public:
                         static_cast<double>(tile_tpm),
                         static_cast<double>(params.gutter_texels),
                         static_cast<double>(params.min_chart_texels),
-                        nullptr
+                        order_keys
                     );
                 } catch (const std::exception& e) {
                     if (params.parameterizer == erhe::geometry::operation::Atlas_parameterizer::per_facet) {
@@ -173,7 +181,7 @@ public:
                         static_cast<double>(tile_tpm),
                         static_cast<double>(params.gutter_texels),
                         static_cast<double>(params.min_chart_texels),
-                        nullptr
+                        order_keys
                     );
                 }
             } catch (const std::exception& e) {
@@ -282,7 +290,7 @@ auto Lightmap_partitioner::request_prepare(
     // original meshes (world areas at a nominal chart coverage): no unwrap
     // or prior layout is needed, and the partitioned relayout at commit
     // re-packs every piece with its measured UVs.
-    const Lightmap_baker::Estimate_split split = baker->compute_tile_split_estimate(scene_root, params.texels_per_meter);
+    const Lightmap_baker::Estimate_split split = baker->compute_tile_split_estimate(scene_root);
     if (split.empty()) {
         if (report != nullptr) {
             report->add_error(Lightmap_report::Stage::partition, "prepare", "no lightmapped meshes to partition");
@@ -369,6 +377,16 @@ auto Lightmap_partitioner::request_prepare(
             if (!source_geometry) {
                 continue;
             }
+            // Chart order keys for this source primitive, per tile
+            // (Reorder Charts By Bake; empty for ordinary prepares).
+            std::map<int, std::vector<float>> task_chart_order;
+            if (params.chart_order) {
+                for (const auto& [identity, keys] : *params.chart_order) {
+                    if ((std::get<0>(identity) == group.mesh.get()) && (std::get<1>(identity) == region->primitive_index)) {
+                        task_chart_order.emplace(std::get<2>(identity), keys);
+                    }
+                }
+            }
             job->tasks.push_back(
                 Prepare_job::Region_task{
                     .entry_index            = entry_index,
@@ -379,6 +397,7 @@ auto Lightmap_partitioner::request_prepare(
                     .material               = source_mesh_primitive.material,
                     .normal_style           = render_shape->get_normal_style(),
                     .subject                = fmt::format("{}[{}]", group.mesh->get_name(), region->primitive_index),
+                    .chart_order            = std::move(task_chart_order),
                     .results                = {}
                 }
             );
@@ -646,7 +665,7 @@ void Lightmap_partitioner::commit_prepare()
     // onto the piece Mesh_primitives. The bake itself happens through the
     // baker tick's piece-hash change (with its G-buffer upload defer).
     if (baker != nullptr) {
-        if (baker->update_layout(scene_root, job->params.texels_per_meter, job->params.min_face_texels)) {
+        if (baker->update_layout(scene_root, job->params.min_face_texels)) {
             baker->publish_regions();
         }
     }
@@ -732,12 +751,10 @@ void Lightmap_partitioner::revert()
     teardown_scene_state();
     Scene_root* const scene_root = m_scene_root;
     clear_store();
-    // Back to the ordinary layout derived from the original meshes. In the
-    // fused workflow the originals typically have no channel-2 UVs, so this
-    // yields an empty layout (originals render unlit) until the legacy
-    // Generate Lightmap UVs path or a re-prepare runs.
+    // With the partition gone there is no layout source left; this clears
+    // the baker layout (originals render unlit) until a re-prepare runs.
     if ((m_context.lightmap_baker != nullptr) && (scene_root != nullptr)) {
-        if (m_context.lightmap_baker->update_layout(*scene_root, m_last_params.texels_per_meter, m_last_params.min_face_texels)) {
+        if (m_context.lightmap_baker->update_layout(*scene_root, m_last_params.min_face_texels)) {
             m_context.lightmap_baker->publish_regions();
         }
     }

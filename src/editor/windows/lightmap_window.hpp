@@ -1,14 +1,15 @@
 #pragma once
 
 #include "renderers/lightmap_grid.hpp"
+#include "renderers/lightmap_partitioner.hpp"
 
 #include "erhe_imgui/imgui_window.hpp"
 
+#include <climits>
+#include <memory>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
-namespace erhe::geometry { class Geometry; }
 namespace erhe::imgui {
     class Imgui_renderer;
     class Imgui_windows;
@@ -20,11 +21,10 @@ class App_context;
 
 // Lightmap baking control window (doc/lightmap_baking_plan.md).
 //
-// Phase 1: marks meshes as lightmapped (the Item flag is toggled in the
-// Properties window), generates automatic lightmap UVs into texcoord
-// channel 2 for every lightmapped mesh in the active scene, and exposes
-// the texel-density setting. The Baking toggle arrives with the gather
-// (plan phase 3); until then it is shown disabled.
+// Front door: Prepare World-Space Tiles (the partitioner). The window
+// exposes the grid density knobs (cell size, tile texture size), the
+// interactive/offline bakes, tile persistence and the per-tile
+// subdivide/merge controls.
 class Lightmap_window : public erhe::imgui::Imgui_window
 {
 public:
@@ -37,13 +37,18 @@ public:
     // Implements Imgui_window
     void imgui() override;
 
-    // Leak camouflage (per_facet mode): re-unwrap with charts packed in
-    // baked-luminance order so similarly lit facets are atlas neighbors and
-    // cross-chart filter-tap / dilation pollution picks up similar values.
-    // Needs a bake; the interactive baker restarts automatically after.
-    // False when there is no bake or no lightmapped meshes. Also reachable
-    // over MCP (lightmap_reorder_charts).
-    auto reorder_charts_by_bake() -> bool;
+    // Leak camouflage (per_facet mode): re-prepare with the piece charts
+    // packed in baked-luminance order so similarly lit facets are atlas
+    // neighbors and cross-chart filter-tap / dilation pollution picks up
+    // similar values. Needs a prepared partition and a bake. tile >= 0
+    // reorders only that spatial tile's pieces (the others re-unwrap in
+    // default order and restore from disk). False when there is no
+    // partition, no bake, or a prepare is already in flight. Also
+    // reachable over MCP (lightmap_reorder_charts).
+    // NOTE: the bake data itself is NOT migrated to the new texel
+    // locations yet - the atlas is stale until the next bake (see the
+    // prompt queue item on reorder bake-data migration).
+    auto reorder_charts_by_bake(int tile = -1) -> bool;
 
     // Executes a reorder the window button requested. Called from the
     // editor tick BEFORE any lightmap commands are recorded: the reorder
@@ -83,21 +88,17 @@ public:
 
 private:
     // Launch an async re-prepare with the current config (the Prepare
-    // button's parameters). False when nothing was launched.
-    auto launch_prepare() -> bool;
+    // button's parameters); chart_order (optional) is the Reorder Charts
+    // By Bake key set. False when nothing was launched.
+    auto launch_prepare(std::shared_ptr<const Lightmap_partitioner::Params::Chart_order> chart_order = {}) -> bool;
     // Shared tail of subdivide/merge: sort + write the override list into
     // the scene settings and kick the relayout/re-prepare.
     void apply_tile_overrides(std::vector<Lightmap_tile_key>&& overrides);
 
-    // Queues an undoable Make_atlas_operation (usage_index 2, method knobs
-    // from Lightmap_config) for every lightmapped, non-skinned mesh node in
-    // the active scene. The optional per-facet chart order keys re-pack
-    // similarly keyed facets next to each other (per_facet mode only).
-    auto queue_generate_lightmap_uvs(std::unordered_map<const erhe::geometry::Geometry*, std::vector<float>>&& per_facet_chart_order) -> bool;
-    void generate_lightmap_uvs();
-
     App_context& m_context;
-    bool         m_reorder_requested{false};
+    // Deferred Reorder Charts By Bake request (see update()): INT_MIN =
+    // none, -1 = all tiles, >= 0 = that tile only.
+    int          m_reorder_requested_tile{INT_MIN};
     // Auto-re-prepare debounce: editing a partitioned source (transform
     // move, geometry swap) marks the pieces stale; once the source state
     // hash stops changing for the debounce window, update() saves the

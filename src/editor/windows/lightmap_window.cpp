@@ -5,7 +5,6 @@
 #include "config/generated/editor_settings_config.hpp"
 #include "editor_log.hpp"
 #include "items.hpp"
-#include "operations/geometry_operations.hpp"
 #include "operations/operation_stack.hpp"
 #include "renderers/lightmap_baker.hpp"
 #include "renderers/lightmap_partitioner.hpp"
@@ -13,13 +12,14 @@
 #include "renderers/lightmap_streamer.hpp"
 #include "renderers/lightmap_tile_io.hpp"
 
-#include "erhe_scene_renderer/forward_renderer.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 
+#include "erhe_geometry/geometry.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_item/item.hpp"
+#include "erhe_primitive/primitive.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
@@ -28,6 +28,7 @@
 
 #include <algorithm>
 #include <span>
+#include <unordered_map>
 
 namespace editor {
 
@@ -70,15 +71,13 @@ namespace {
 // batch bake and the incremental save paths.
 [[nodiscard]] auto build_tile_manifest(
     App_context&                        context,
-    const Lightmap_baker::Atlas_layout& layout,
-    const Lightmap_config&              config
+    const Lightmap_baker::Atlas_layout& layout
 ) -> std::shared_ptr<Lightmap_tile_io::Manifest>
 {
     auto manifest = std::make_shared<Lightmap_tile_io::Manifest>();
     manifest->tile_size        = layout.get_tile_size();
-    manifest->texels_per_meter = config.texels_per_meter;
     manifest->bake_hash        = (context.lightmap_baker != nullptr)
-        ? context.lightmap_baker->get_bake_parameters_hash(config.texels_per_meter)
+        ? context.lightmap_baker->get_bake_parameters_hash()
         : 0u;
     manifest->tiles.resize(static_cast<std::size_t>(layout.get_tile_count()));
     for (int tile = 0; tile < layout.get_tile_count(); ++tile) {
@@ -201,8 +200,7 @@ namespace {
     if (!Lightmap_tile_io::read_manifest(directory, saved, nullptr)) {
         return false;
     }
-    const Lightmap_config& config = context.editor_settings->lightmap;
-    if ((saved.bake_hash != baker->get_bake_parameters_hash(config.texels_per_meter)) ||
+    if ((saved.bake_hash != baker->get_bake_parameters_hash()) ||
         (saved.tile_size != layout.get_tile_size())) {
         return false;
     }
@@ -227,7 +225,7 @@ namespace {
     // is unchanged; compare region identity + tile-local uv rects against a
     // manifest entry built from the current layout (floats round-trip the
     // JSON manifest exactly, so equality is exact).
-    const std::shared_ptr<Lightmap_tile_io::Manifest> current = build_tile_manifest(context, layout, config);
+    const std::shared_ptr<Lightmap_tile_io::Manifest> current = build_tile_manifest(context, layout);
     const Lightmap_tile_io::Tile_entry& current_entry = current->tiles[static_cast<std::size_t>(tile)];
     if ((saved_entry.regions.size() != current_entry.regions.size()) ||
         (saved_entry.bounds_min != current_entry.bounds_min) ||
@@ -268,27 +266,75 @@ Lightmap_window::Lightmap_window(
 {
 }
 
-void Lightmap_window::generate_lightmap_uvs()
+auto Lightmap_window::reorder_charts_by_bake(const int tile) -> bool
 {
-    queue_generate_lightmap_uvs({});
-}
-
-auto Lightmap_window::reorder_charts_by_bake() -> bool
-{
-    if (m_context.lightmap_baker == nullptr) {
+    if ((m_context.lightmap_baker == nullptr) || (m_context.lightmap_partitioner == nullptr)) {
         return false;
     }
-    std::unordered_map<const erhe::geometry::Geometry*, std::vector<float>> keys = m_context.lightmap_baker->build_chart_order_keys();
+    Lightmap_partitioner& partitioner = *m_context.lightmap_partitioner;
+    const std::shared_ptr<Scene_root> scene_root = m_context.selection->get_active_scene_root();
+    if (!scene_root ||
+        !partitioner.is_prepared() ||
+        (partitioner.get_scene_root() != scene_root.get()) ||
+        partitioner.is_prepare_in_flight()) {
+        return false;
+    }
+    // Baked-luminance keys, measured on the current layout's piece
+    // geometries (optionally restricted to one spatial tile). Standalone
+    // atlas readback - callers defer to update() for a safe point.
+    std::unordered_map<const erhe::geometry::Geometry*, std::vector<float>> keys =
+        m_context.lightmap_baker->build_chart_order_keys(tile);
     if (keys.empty()) {
         return false; // no bake yet - nothing to order by
     }
-    if (!queue_generate_lightmap_uvs(std::move(keys))) {
+    // Re-key from piece geometry to piece identity (source mesh, source
+    // primitive index, tile): the re-prepare clips NEW piece geometries;
+    // the identity routes each key vector to the matching new piece
+    // (deterministic clip preserves facet order for unchanged sources).
+    auto chart_order = std::make_shared<Lightmap_partitioner::Params::Chart_order>();
+    const Lightmap_baker::Atlas_layout& layout = m_context.lightmap_baker->get_layout();
+    for (const Lightmap_baker::Instance_region& region : layout.regions) {
+        if (!region.mesh || (region.piece_ordinal < 0)) {
+            continue;
+        }
+        const std::vector<erhe::scene::Mesh_primitive>& primitives = region.mesh->get_primitives();
+        if (region.primitive_index >= primitives.size()) {
+            continue;
+        }
+        const erhe::primitive::Primitive* const primitive = primitives[region.primitive_index].primitive.get();
+        if ((primitive == nullptr) || !primitive->render_shape) {
+            continue;
+        }
+        const std::shared_ptr<erhe::geometry::Geometry>& geometry = primitive->render_shape->get_geometry();
+        if (!geometry) {
+            continue;
+        }
+        const auto keys_it = keys.find(geometry.get());
+        if (keys_it == keys.end()) {
+            continue;
+        }
+        const erhe::scene::Mesh* source_mesh = nullptr;
+        for (const Lightmap_partitioner::Original_entry& entry : partitioner.get_entries()) {
+            if (entry.piece_mesh == region.mesh) {
+                source_mesh = entry.original_mesh.get();
+                break;
+            }
+        }
+        if (source_mesh == nullptr) {
+            continue;
+        }
+        (*chart_order)[{source_mesh, region.source_primitive_index, region.tile}] = std::move(keys_it->second);
+    }
+    if (chart_order->empty()) {
         return false;
     }
-    // Deliberately does NOT start the interactive bake: until the user
-    // bakes again the new UVs sample the stale atlas (black / garbled),
-    // which is the expected "needs a rebake" state after a reorder.
-    return true;
+    // Re-prepare with the order keys; the affected pieces re-unwrap with
+    // charts packed in luminance order. Deliberately does NOT bake: until
+    // the next bake the reordered tiles sample the stale atlas, the
+    // expected "needs a rebake" state (unaffected tiles' packing is
+    // unchanged, so they restore from disk). Migrating the baked texels to
+    // their new locations instead is queued future work (prompt queue).
+    return launch_prepare(std::move(chart_order));
 }
 
 auto Lightmap_window::start_bake_to_disk() -> bool
@@ -307,7 +353,8 @@ auto Lightmap_window::start_bake_to_disk() -> bool
     const Lightmap_config& config = m_context.editor_settings->lightmap;
     baker.set_tile_config(config.tile_texture_size, config.resident_tile_budget);
     if (baker.get_layout().get_tile_count() == 0) {
-        if (!baker.update_layout(*scene_root.get(), config.texels_per_meter, config.uv_min_chart_texels)) {
+        // Needs a prepared world-space partition (the only layout source).
+        if (!baker.update_layout(*scene_root.get(), config.uv_min_chart_texels)) {
             return false;
         }
     }
@@ -318,7 +365,7 @@ auto Lightmap_window::start_bake_to_disk() -> bool
     // Full manifest up front (the layout is fixed for the whole bake); the
     // sink persists each tile as it completes, so an interrupted bake
     // leaves a consistent set on disk.
-    std::shared_ptr<Lightmap_tile_io::Manifest> manifest = build_tile_manifest(m_context, layout, config);
+    std::shared_ptr<Lightmap_tile_io::Manifest> manifest = build_tile_manifest(m_context, layout);
 
     Lightmap_report* const report = m_context.lightmap_report;
     if (report != nullptr) {
@@ -367,10 +414,9 @@ auto Lightmap_window::save_tile_to_disk(const int tile) -> bool
     if (!baker.read_back_tile(tile, rgba16)) {
         return false; // not resident / not published - nothing to save
     }
-    const Lightmap_config& config = m_context.editor_settings->lightmap;
     const std::filesystem::path directory =
         Lightmap_tile_io::directory_for_scene(scene_root->get_source_path());
-    const std::shared_ptr<Lightmap_tile_io::Manifest> manifest = build_tile_manifest(m_context, layout, config);
+    const std::shared_ptr<Lightmap_tile_io::Manifest> manifest = build_tile_manifest(m_context, layout);
     const int tile_size = layout.get_tile_size();
     const bool saved = persist_tile_payload(
         directory,
@@ -540,7 +586,7 @@ void Lightmap_window::apply_tile_overrides(std::vector<Lightmap_tile_key>&& over
     }
 }
 
-auto Lightmap_window::launch_prepare() -> bool
+auto Lightmap_window::launch_prepare(std::shared_ptr<const Lightmap_partitioner::Params::Chart_order> chart_order) -> bool
 {
     if ((m_context.lightmap_partitioner == nullptr) || (m_context.editor_settings == nullptr)) {
         return false;
@@ -550,16 +596,21 @@ auto Lightmap_window::launch_prepare() -> bool
         return false;
     }
     const Lightmap_config& config = m_context.editor_settings->lightmap;
+    // The split estimate reads the baker's grid parameters; push the live
+    // config first (the editor tick mirrors it only once per frame).
+    if (m_context.lightmap_baker != nullptr) {
+        m_context.lightmap_baker->set_cell_size(config.cell_size_m);
+    }
     const bool launched = m_context.lightmap_partitioner->request_prepare(
         *scene_root.get(),
         Lightmap_partitioner::Params{
-            .texels_per_meter = config.texels_per_meter,
             .min_face_texels  = config.uv_min_chart_texels,
             .hard_angles_deg  = config.hard_angles_deg,
             .gutter_texels    = config.uv_gutter_texels,
             .min_chart_texels = config.uv_min_chart_texels,
             .parameterizer    = static_cast<erhe::geometry::operation::Atlas_parameterizer>(std::clamp(config.uv_parameterizer, 0, 4)),
-            .packer           = static_cast<erhe::geometry::operation::Atlas_packer>(std::clamp(config.uv_packer, 0, 2))
+            .packer           = static_cast<erhe::geometry::operation::Atlas_packer>(std::clamp(config.uv_packer, 0, 2)),
+            .chart_order      = std::move(chart_order)
         },
         config.tile_texture_size,
         config.resident_tile_budget
@@ -656,7 +707,7 @@ void Lightmap_window::update()
         }
     }
 
-    if (!m_reorder_requested) {
+    if (m_reorder_requested_tile == INT_MIN) {
         return;
     }
     // Wait for in-flight operations first (matching the button's disabled
@@ -668,52 +719,9 @@ void Lightmap_window::update()
     if (in_flight > 0) {
         return; // retry next frame
     }
-    m_reorder_requested = false;
-    reorder_charts_by_bake();
-}
-
-auto Lightmap_window::queue_generate_lightmap_uvs(std::unordered_map<const erhe::geometry::Geometry*, std::vector<float>>&& per_facet_chart_order) -> bool
-{
-    const std::vector<std::shared_ptr<erhe::Item_base>> items = collect_lightmapped_mesh_nodes(m_context);
-    if (items.empty()) {
-        return false;
-    }
-    // Fresh run: the report should reflect this generation, not stale ones.
-    if (m_context.lightmap_report != nullptr) {
-        m_context.lightmap_report->clear_stage(Lightmap_report::Stage::uv_unwrap);
-    }
-    const Lightmap_config& config = m_context.editor_settings->lightmap;
-    const float hard_angles_deg  = config.hard_angles_deg;
-    const float texels_per_meter = config.texels_per_meter;
-    const float gutter_texels    = config.uv_gutter_texels;
-    const float min_chart_texels = config.uv_min_chart_texels;
-    const auto  parameterizer    = static_cast<erhe::geometry::operation::Atlas_parameterizer>(
-        std::clamp(config.uv_parameterizer, 0, 4)
-    );
-    const auto  packer           = static_cast<erhe::geometry::operation::Atlas_packer>(
-        std::clamp(config.uv_packer, 0, 2)
-    );
-    async_for_nodes_with_mesh(
-        m_context,
-        items,
-        [this, hard_angles_deg, texels_per_meter, gutter_texels, min_chart_texels, parameterizer, packer, per_facet_chart_order = std::move(per_facet_chart_order)](Mesh_operation_parameters&& params) {
-            // Runs on a tf::Executor worker: queue() is main-thread-only.
-            m_context.operation_stack->queue_from_thread(
-                std::make_shared<Make_atlas_operation>(
-                    std::move(params),
-                    2, // lightmap UV channel (texcoord usage_index 2)
-                    hard_angles_deg,
-                    parameterizer,
-                    packer,
-                    texels_per_meter, // density-aware chart gutters
-                    gutter_texels,
-                    min_chart_texels,
-                    per_facet_chart_order
-                )
-            );
-        }
-    );
-    return true;
+    const int reorder_tile = m_reorder_requested_tile;
+    m_reorder_requested_tile = INT_MIN;
+    reorder_charts_by_bake(reorder_tile);
 }
 
 void Lightmap_window::imgui()
@@ -753,13 +761,29 @@ void Lightmap_window::imgui()
         ImGui::TextUnformatted("Enable the \"Lightmapped\" flag on content meshes (Properties window) to include them.");
     }
 
-    if (ImGui::DragFloat("Texels per meter", &config.texels_per_meter, 0.5f, 1.0f, 256.0f, "%.1f")) {
-        m_context.app_settings->settings_store().touch();
-    }
-    if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("Lightmap texel density; sets each instance's atlas region size. The one quality knob.");
-    }
     {
+        // Grid density: cell size (m) x tile texture size = the nominal
+        // texel density of every level-0 tile. A live partition was clipped
+        // against the old grid, so a committed cell-size edit re-prepares.
+        ImGui::SetNextItemWidth(120.0f);
+        if (ImGui::DragFloat("Cell size (m)", &config.cell_size_m, 0.25f, 0.25f, 1024.0f, "%.2f")) {
+            m_context.app_settings->settings_store().touch();
+        }
+        const bool cell_size_edited = ImGui::IsItemDeactivatedAfterEdit();
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "World-space side of one lightmap grid cell (quadtree level 0), anchored at the\n"
+                "world origin. Nominal texel density = tile texture size / cell size; subdivide /\n"
+                "merge individual tiles below to change density locally. With a live partition,\n"
+                "releasing the drag re-prepares the world-space tiles."
+            );
+        }
+        if (cell_size_edited &&
+            (m_context.lightmap_partitioner != nullptr) &&
+            m_context.lightmap_partitioner->is_prepared() &&
+            !m_context.lightmap_partitioner->is_prepare_in_flight()) {
+            launch_prepare();
+        }
         // Tile texture size: power-of-two combo (the baker clamps anyway).
         const char* const tile_size_names[]  = { "256", "512", "1024", "2048", "4096", "8192" };
         const int         tile_size_values[] = {  256,   512,   1024,   2048,   4096,   8192  };
@@ -774,13 +798,18 @@ void Lightmap_window::imgui()
         if (ImGui::Combo("Tile texture size", &tile_size_index, tile_size_names, IM_ARRAYSIZE(tile_size_names))) {
             config.tile_texture_size = tile_size_values[tile_size_index];
             m_context.app_settings->settings_store().touch();
+            if ((m_context.lightmap_partitioner != nullptr) &&
+                m_context.lightmap_partitioner->is_prepared() &&
+                !m_context.lightmap_partitioner->is_prepare_in_flight()) {
+                launch_prepare();
+            }
         }
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip(
-                "Texel side of one spatial lightmap tile. The world partitions into tiles whose\n"
-                "content fits this texture at the requested density (spatial tile extents adapt;\n"
-                "texel density flexes down only as a last resort), so layout always succeeds.\n"
-                "Takes effect on the next Update Atlas Layout."
+                "Texel side of one spatial lightmap tile (and of every resident display slot).\n"
+                "Together with the cell size this sets each tile's nominal texel density\n"
+                "(density flexes down per tile only when content does not fit). With a live\n"
+                "partition, changing it re-prepares the world-space tiles."
             );
         }
         ImGui::SetNextItemWidth(120.0f);
@@ -808,9 +837,9 @@ void Lightmap_window::imgui()
         }
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip(
-                "Chart parameterizer for Generate Lightmap UVs. ABF++ is the Geogram default.\n"
-                "Per-facet: every facet is its own chart (no Geogram; zero overlaps by construction,\n"
-                "no shared texels - doc/lightmap_seam_driven_unwrap_plan.md first pass)."
+                "Chart parameterizer for the world-space piece unwraps. ABF++ is the Geogram\n"
+                "default. Per-facet: every facet is its own chart (no Geogram; zero overlaps by\n"
+                "construction, no shared texels - doc/lightmap_seam_driven_unwrap_plan.md)."
             );
         }
         ImGui::SetNextItemWidth(140.0f);
@@ -853,11 +882,10 @@ void Lightmap_window::imgui()
         }
     }
 
-    // In-flight guard: queued mesh operations (the legacy async UV unwrap
-    // among them) swap source primitives when the main thread executes
-    // them; a swap landing mid-partition or between a layout and its bake
-    // would act on stale geometry. Hold layout / prepare / bake until the
-    // workers AND the operation stack drain.
+    // In-flight guard: queued mesh operations swap source primitives when
+    // the main thread executes them; a swap landing mid-partition or
+    // between a layout and its bake would act on stale geometry. Hold
+    // prepare / bake until the workers AND the operation stack drain.
     const std::size_t async_ops =
         static_cast<std::size_t>(m_context.pending_async_ops.load()) +
         static_cast<std::size_t>(m_context.running_async_ops.load()) +
@@ -945,6 +973,31 @@ void Lightmap_window::imgui()
                         "OFF: the original meshes render."
                     );
                 }
+                // Reorder Charts By Bake (per-facet mode only: the order
+                // keys are indexed by facet id == chart id). Deferred to
+                // update() - the atlas readback must not run mid-ImGui.
+                const bool reorder_available = (config.uv_parameterizer == 4) && bake_supported;
+                ImGui::BeginDisabled(!reorder_available);
+                if (ImGui::Button("Reorder Charts By Bake")) {
+                    m_reorder_requested_tile = -1; // all tiles
+                }
+                ImGui::EndDisabled();
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip(
+                        "Leak camouflage (per-facet mode, needs a bake): re-prepare with the piece\n"
+                        "charts packed in baked-luminance order, so similarly lit facets are atlas\n"
+                        "neighbors and cross-chart filter-tap / dilation pollution picks up similar\n"
+                        "values. Does not bake; the reordered tiles are stale until you bake again."
+                    );
+                }
+                if (m_context.lightmap_baker != nullptr) {
+                    const Lightmap_baker::Atlas_layout& tile_layout = m_context.lightmap_baker->get_layout();
+                    ImGui::Text(
+                        "Atlas: %d spatial tiles of %d^2, %zu regions, %d resident slots (%d x %d display)",
+                        tile_layout.get_tile_count(), tile_layout.get_tile_size(), tile_layout.regions.size(),
+                        tile_layout.get_slot_count(), tile_layout.width, tile_layout.height
+                    );
+                }
                 // Per-tile density control: subdivide = 4 half-size cells
                 // (2x nominal texel density), merge = the tile + its 3
                 // siblings into their parent (half density). Overrides
@@ -977,7 +1030,30 @@ void Lightmap_window::imgui()
                                 m_context.lightmap_report->add_warning(Lightmap_report::Stage::layout, "merge", error);
                             }
                         }
+                        ImGui::SameLine();
+                        ImGui::BeginDisabled(!reorder_available);
+                        if (ImGui::SmallButton("Reorder")) {
+                            // This tile only; the other tiles re-unwrap in
+                            // default order, so their packing (and disk
+                            // restore) is unaffected.
+                            m_reorder_requested_tile = tile;
+                        }
+                        ImGui::EndDisabled();
                         ImGui::PopID();
+                    }
+                    ImGui::TreePop();
+                }
+                if ((m_context.lightmap_baker != nullptr) && ImGui::TreeNode("Regions")) {
+                    for (const Lightmap_baker::Instance_region& region : m_context.lightmap_baker->get_layout().regions) {
+                        ImGui::Text(
+                            "%s[%zu]: %d x %d at (%d, %d), %.2f m^2, UV coverage %.0f%%",
+                            region.mesh ? region.mesh->get_name().c_str() : "<gone>",
+                            region.primitive_index,
+                            region.width, region.height,
+                            region.x, region.y,
+                            region.world_area,
+                            100.0f * region.uv_coverage
+                        );
                     }
                     ImGui::TreePop();
                 }
@@ -1017,102 +1093,6 @@ void Lightmap_window::imgui()
         }
         ImGui::Separator();
     }
-
-    // Legacy non-partitioned path: whole-mesh unwrap of the originals into
-    // a shared atlas page (baked in place with channel-2 UVs). The fused
-    // Prepare above does not need any of these.
-    const bool legacy_active =
-        (m_context.lightmap_baker != nullptr) &&
-        (m_context.lightmap_baker->get_layout().width > 0) &&
-        !m_context.lightmap_baker->get_layout().partitioned;
-    if (ImGui::CollapsingHeader("Legacy Atlas (non-partitioned)", legacy_active ? ImGuiTreeNodeFlags_DefaultOpen : ImGuiTreeNodeFlags_None)) {
-    ImGui::BeginDisabled(lightmapped.empty() || async_busy);
-    if (ImGui::Button("Generate Lightmap UVs")) {
-        generate_lightmap_uvs();
-    }
-    ImGui::EndDisabled();
-    if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip(
-            "Automatic UV unwrap into texcoord channel 2 for every lightmapped mesh (method: UV parameterizer above).\n"
-            "Undoable. Legacy non-partitioned path only - NOT needed before Prepare World-Space Tiles.\n"
-            "Inspect with the Lightmap Texture window or Scene View Config > Shader Debug > TexCoord 2 (Lightmap)."
-        );
-    }
-
-    if (m_context.lightmap_baker != nullptr) {
-        ImGui::SameLine();
-        ImGui::BeginDisabled(async_busy);
-        if (ImGui::Button("Update Atlas Layout")) {
-            const std::shared_ptr<Scene_root> scene_root = m_context.selection->get_active_scene_root();
-            if (scene_root) {
-                m_context.lightmap_baker->set_tile_config(config.tile_texture_size, config.resident_tile_budget);
-                m_context.lightmap_baker->update_layout(*scene_root.get(), config.texels_per_meter, config.uv_min_chart_texels);
-            }
-        }
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip(
-                "Pack every lightmapped primitive with channel-2 UVs into the shared atlas page.\n"
-                "Legacy non-partitioned path only - NOT needed before Prepare World-Space Tiles."
-            );
-        }
-        ImGui::EndDisabled(); // async_busy (Update Atlas Layout)
-        const Lightmap_baker::Atlas_layout& layout = m_context.lightmap_baker->get_layout();
-        if (layout.width > 0) {
-            ImGui::BeginDisabled(async_busy || !bake_supported);
-            if (ImGui::Button("Bake Direct Lighting")) {
-                const std::shared_ptr<Scene_root> scene_root = m_context.selection->get_active_scene_root();
-                if (scene_root && m_context.lightmap_baker->bake_gbuffer() && m_context.lightmap_baker->bake_direct(*scene_root.get())) {
-                    if (m_context.forward_renderer != nullptr) {
-                        m_context.forward_renderer->set_lightmap_texture(m_context.lightmap_baker->get_lightmap_texture());
-                    }
-                }
-            }
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip(
-                    "Rasterize the texel G-buffer, then bake direct lighting (ray-query shadow rays)\n"
-                    "into the lightmap atlas. Lightmapped meshes sample it in place of ambient light."
-                );
-            }
-            // Per-facet mode only: chart order keys are indexed by facet id.
-            ImGui::SameLine();
-            ImGui::BeginDisabled(config.uv_parameterizer != 4);
-            if (ImGui::Button("Reorder Charts By Bake")) {
-                // Deferred to Lightmap_window::update() at a safe point in
-                // the frame - the readback must not run mid-ImGui.
-                m_reorder_requested = true;
-            }
-            ImGui::EndDisabled();
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip(
-                    "Leak camouflage (per-facet mode, needs a bake): re-unwrap with charts packed in\n"
-                    "baked-luminance order, so similarly lit facets are atlas neighbors and cross-chart\n"
-                    "filter-tap / dilation pollution picks up similar values. Does not bake; the atlas\n"
-                    "is stale until you bake again."
-                );
-            }
-            ImGui::EndDisabled(); // async_busy || !bake_supported (Bake Direct Lighting)
-            ImGui::Text(
-                "Atlas: %d spatial tiles of %d^2, %zu regions, %d resident slots (%d x %d display)",
-                layout.get_tile_count(), layout.get_tile_size(), layout.regions.size(),
-                layout.get_slot_count(), layout.width, layout.height
-            );
-            if (ImGui::TreeNode("Regions")) {
-                for (const Lightmap_baker::Instance_region& region : layout.regions) {
-                    ImGui::Text(
-                        "%s[%zu]: %d x %d at (%d, %d), %.2f m^2, UV coverage %.0f%%",
-                        region.mesh ? region.mesh->get_name().c_str() : "<gone>",
-                        region.primitive_index,
-                        region.width, region.height,
-                        region.x, region.y,
-                        region.world_area,
-                        100.0f * region.uv_coverage
-                    );
-                }
-                ImGui::TreePop();
-            }
-        }
-    }
-    } // CollapsingHeader "Legacy Atlas (non-partitioned)"
 
     // Interactive bake (plan section 3a): while on, the editor tick records
     // a budgeted gather slice + publish into every frame.
