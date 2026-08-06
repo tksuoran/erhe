@@ -603,6 +603,70 @@ auto Scene_root::make_browser_window(
                     close = true;
                 }
             }
+
+            // No-transform-update flag (undoable): set / clear
+            // Item_flags::no_transform_update on every node in the clicked
+            // node's subtree - or under every selected node when the clicked
+            // node is selected (the Cut / Delete convention above). Same
+            // deferred-collect + pre-filter scheme as the lightmap flag
+            // above, but targeting the nodes themselves; the flag change
+            // re-buckets each node in the Scene's transform-update split.
+            {
+                const auto queue_no_transform_update_flag = [&context, node, &deferred_operations](const bool enable) {
+                    deferred_operations.push_back(
+                        [&context, node, enable]() {
+                            std::vector<std::shared_ptr<erhe::scene::Node>> roots;
+                            if (node->is_selected()) {
+                                for (const std::shared_ptr<erhe::Item_base>& selected_item : context.selection->get_selected_items()) {
+                                    const std::shared_ptr<erhe::scene::Node> selected_node = std::dynamic_pointer_cast<erhe::scene::Node>(selected_item);
+                                    if (selected_node) {
+                                        roots.push_back(selected_node);
+                                    }
+                                }
+                            }
+                            if (roots.empty()) {
+                                roots.push_back(node);
+                            }
+                            // Guard against double-collect when the selection
+                            // holds both an ancestor and its descendant.
+                            std::unordered_set<const erhe::Item_base*>    seen;
+                            std::vector<std::shared_ptr<erhe::Item_base>> nodes;
+                            const std::function<void(const std::shared_ptr<erhe::scene::Node>&)> visit = [&](const std::shared_ptr<erhe::scene::Node>& visited_node) {
+                                if (seen.insert(visited_node.get()).second && (visited_node->is_no_transform_update() != enable)) {
+                                    nodes.push_back(visited_node);
+                                }
+                                for (const std::shared_ptr<erhe::Hierarchy>& child : visited_node->get_children()) {
+                                    const std::shared_ptr<erhe::scene::Node> child_node = std::dynamic_pointer_cast<erhe::scene::Node>(child);
+                                    if (child_node) {
+                                        visit(child_node);
+                                    }
+                                }
+                            };
+                            for (const std::shared_ptr<erhe::scene::Node>& root : roots) {
+                                visit(root);
+                            }
+                            if (nodes.empty()) {
+                                return;
+                            }
+                            auto op = std::make_shared<Item_set_flag_bits_operation>(
+                                std::move(nodes),
+                                erhe::Item_flags::no_transform_update,
+                                enable,
+                                enable ? "Set No Transform Update" : "Clear No Transform Update"
+                            );
+                            context.operation_stack->queue(op);
+                        }
+                    );
+                };
+                if (ImGui::MenuItem("Set No Transform Update (Recursive)")) {
+                    queue_no_transform_update_flag(true);
+                    close = true;
+                }
+                if (ImGui::MenuItem("Clear No Transform Update (Recursive)")) {
+                    queue_no_transform_update_flag(false);
+                    close = true;
+                }
+            }
         }
     );
     // Content-library context menu (migrated from the removed Content Library
