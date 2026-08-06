@@ -5179,6 +5179,27 @@ void Lightmap_baker::tick(
         }
         m_tiles_pending_restore.clear();
         m_cursor_y = 0;
+        // ACTIVE tiles keep showing their obsolete publish only until the
+        // rebake replaces it (anti-blackout). Resident tiles OUTSIDE the
+        // active clamp never rebake until the camera activates them - their
+        // stale publish would show indefinitely; overwrite their slots with
+        // white (the unbaked look) instead.
+        std::size_t stale_inactive_slots = 0;
+        for (int tile = 0; tile < static_cast<int>(m_tiles.size()); ++tile) {
+            Tile_state& state = m_tiles[static_cast<std::size_t>(tile)];
+            const int slot = m_layout.tiles[static_cast<std::size_t>(tile)].slot;
+            if ((slot < 0) || state.active || !state.published) {
+                continue;
+            }
+            state.published = false;
+            ++stale_inactive_slots;
+            if (std::find(m_slots_pending_white_clear.begin(), m_slots_pending_white_clear.end(), slot) == m_slots_pending_white_clear.end()) {
+                m_slots_pending_white_clear.push_back(slot);
+            }
+        }
+        if (stale_inactive_slots > 0) {
+            log_render->info("Lightmap_baker: reset - {} inactive resident slots cleared to white (stale publish)", stale_inactive_slots);
+        }
         // A reset mid-single-iteration re-arms the pause target against the
         // fresh (zeroed) sweep counts.
         if (m_pause_after_sweep) {
