@@ -1806,6 +1806,15 @@ void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scen
     const Debug_visualizations_style& style = context.app_context.editor_settings->debug_visualizations_style;
     ERHE_PROFILE_FUNCTION();
 
+    if (
+        (m_settings.vertex_labels == Visualization_mode::off) &&
+        (m_settings.edge_labels   == Visualization_mode::off) &&
+        (m_settings.facet_labels  == Visualization_mode::off) &&
+        (m_settings.corner_labels == Visualization_mode::off)
+    ) {
+        return;
+    }
+
     if (scene_mesh == nullptr) {
         return;
     }
@@ -1814,6 +1823,7 @@ void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scen
     if ((node == nullptr) || (camera == nullptr)) {
         return;
     }
+
     const auto projection_transforms = camera->projection_transforms(
         context.viewport,
         context.scene_view.get_reverse_depth(),
@@ -1829,6 +1839,7 @@ void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scen
     const Hover_entry& content_hover = context.scene_view.get_hover(Hover_entry::content_slot);
     hovered_scene_mesh = content_hover.scene_mesh_weak.lock().get();
 
+    // TODO: Cache set of primitives that pass filters
     for (erhe::scene::Mesh_primitive& mesh_primitive : scene_mesh->get_mutable_primitives()) {
         const erhe::primitive::Primitive& primitive = *mesh_primitive.primitive.get();
         if (!primitive.render_shape) {
@@ -2103,7 +2114,8 @@ void Debug_visualizations::render(const Render_context& context)
             line_renderer.add_lines( m, green, {{ O, axis_y }} );
             line_renderer.add_lines( m, blue,  {{ O, axis_z }} );
         }
-    }
+        return true;
+    });
 
     for (erhe::scene::Mesh_layer* layer : scene_root->layers().mesh_layers()) {
         for (const auto& mesh : layer->meshes) {
@@ -2139,7 +2151,8 @@ void Debug_visualizations::render(const Render_context& context)
                     layout_visualization(context, *node, *layout);
                 }
             }
-        }
+            return true;
+        });
     }
 
     // Skins can be shared by multiple meshes.
