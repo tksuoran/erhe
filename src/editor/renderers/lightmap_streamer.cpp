@@ -57,6 +57,7 @@ void Lightmap_streamer::reset()
     m_piece_hint_logged       = false;
     m_foreign_rejected        = false;
     m_stale                   = false;
+    m_all_regions_applied     = false;
     m_manifest                = {};
     m_tiles.clear();
     m_slot_to_tile.clear();
@@ -389,7 +390,21 @@ void Lightmap_streamer::upload_pending(Scene_root& scene_root)
     runtime.slot = pending->slot;
     m_slot_to_tile[static_cast<std::size_t>(pending->slot)] = tile;
     ++m_resident_count;
-    apply_tile_regions(scene_root, tile);
+    if (!m_all_regions_applied) {
+        // First residency after a manifest (re)load: has_resident_tiles()
+        // flips true and the renderer switches its lightmap binding to this
+        // atlas (editor.cpp handoff). The interactive baker's display-page
+        // mappings may still be on the primitives - valid rects that would
+        // now sample this atlas's cleared-black texels - so push EVERY
+        // tile's mapping once: not-yet-streamed tiles get their zero /
+        // white-fallback mapping instead of dangling baker rects.
+        m_all_regions_applied = true;
+        for (int t = 0; t < static_cast<int>(m_manifest.tiles.size()); ++t) {
+            apply_tile_regions(scene_root, t);
+        }
+    } else {
+        apply_tile_regions(scene_root, tile);
+    }
     log_render->info("Lightmap_streamer: tile {} resident in slot {}", tile, pending->slot);
 }
 

@@ -115,6 +115,12 @@ private:
     // invalidate()/reset().
     bool                                     m_foreign_rejected{false};
     bool                                     m_stale{false};
+    // Every tile's mapping has been pushed at least once since the manifest
+    // (re)load. Until then primitives may still carry the interactive
+    // baker's display-page mappings (valid rects into a DIFFERENT texture),
+    // which would sample this atlas's cleared-black texels once the
+    // renderer binds it. Cleared by reset().
+    bool                                     m_all_regions_applied{false};
     std::filesystem::path                    m_directory;
     Scene_root*                              m_scene_root{nullptr};
     Lightmap_tile_io::Manifest               m_manifest;
