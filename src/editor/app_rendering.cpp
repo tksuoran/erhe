@@ -301,8 +301,12 @@ App_rendering::App_rendering(
             .shader_key_force_enable_mask {make_shader_bool_mask(Shader_bool::EDGE_LINES_CORNER_CAP)},
             .get_appearance               {appearance_not_selected},
             .is_enabled                   {
+                // Follows the per-view Visual Style edge-lines toggle like the
+                // edge feed in Viewport_scene_view: no edges means no caps.
                 [](const Render_context& context) -> bool {
-                    return context.app_context.editor_settings->content_edge_lines.use_id_buffer;
+                    return
+                        context.app_context.editor_settings->content_edge_lines.use_id_buffer &&
+                        context.viewport_config.render_style_not_selected.edge_lines;
                 }
             }
         },
@@ -321,7 +325,9 @@ App_rendering::App_rendering(
             .get_appearance               {appearance_selected},
             .is_enabled                   {
                 [](const Render_context& context) -> bool {
-                    return context.app_context.editor_settings->content_edge_lines.use_id_buffer;
+                    return
+                        context.app_context.editor_settings->content_edge_lines.use_id_buffer &&
+                        context.viewport_config.render_style_selected.edge_lines;
                 }
             }
         },

@@ -268,6 +268,12 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
     // is rendered before the main pass for the polygon-fill shader to sample.
     bool use_id_edge_lines = false;
 
+    // Meshes fed to the content wide line renderer this frame. Zero when this
+    // view's Visual Style disables every edge-line pass (and nothing is
+    // selected / ghosted): the ribbon compute, the joint-buffer handoff and
+    // the edge-id pre-pass are all skipped then.
+    std::size_t content_wide_line_mesh_count = 0;
+
     // Last frame's overlay pass was skipped (early-out) after render() had
     // deferred the debug-renderer frame to it: release the recorded frame
     // that never got drawn before beginning a new one.
@@ -338,6 +344,7 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
 
         // Content wide line compute path, all edge line passes
         if (m_context.content_wide_line_renderer != nullptr && m_context.content_wide_line_renderer->is_enabled()) {
+            ERHE_PROFILE_SCOPE("Edge line compute");
             const auto content_scene_root = context.scene_view.get_scene_root();
             if (content_scene_root) {
                 erhe::scene::Scene* scene = content_scene_root->get_hosted_scene();
@@ -351,6 +358,16 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
                         }
                         auto& data = pass->data;
                         if ((data.primitive_mode != erhe::primitive::Primitive_mode::edge_lines) || !data.enabled) {
+                            return;
+                        }
+                        // Mirror Composition_pass::render's per-view Visual Style
+                        // gate (get_render_style + is_primitive_mode_enabled): when
+                        // this view's style disables the pass's edge lines, do not
+                        // feed its meshes - the ribbons would be expanded by the
+                        // compute pass and then never drawn. Passes without a
+                        // render style (selection / translucent outline, ghost
+                        // edge lines) stay ungated, matching the render side.
+                        if (data.get_render_style && !is_primitive_mode_enabled(data.get_render_style(context), data.primitive_mode)) {
                             return;
                         }
                         erhe::scene_renderer::Primitive_interface_settings settings;
@@ -390,6 +407,7 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
                                             group,
                                             provider
                                         );
+                                        ++content_wide_line_mesh_count;
                                     }
                                 }
                             }
@@ -478,7 +496,7 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
                 // after the compute encoder closes.
                 const auto          scene_root_joints = context.scene_view.get_scene_root();
                 erhe::scene::Scene* scene_for_joints  = scene_root_joints ? scene_root_joints->get_hosted_scene() : nullptr;
-                if ((scene_for_joints != nullptr) && (m_context.forward_renderer != nullptr)) {
+                if ((content_wide_line_mesh_count > 0) && (scene_for_joints != nullptr) && (m_context.forward_renderer != nullptr)) {
                     erhe::scene_renderer::Joint_buffer& joint_buffer = m_context.forward_renderer->get_joint_buffer();
                     erhe::graphics::Ring_buffer_range   joint_buffer_range = joint_buffer.update(
                         glm::uvec4{0, 0, 0, 0}, {}, scene_for_joints->get_skins()
@@ -530,8 +548,10 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
                 // 4.1 on macOS) expands lines in its geometry shader at
                 // render time: compute() is a no-op, there is no
                 // compute->vertex hazard, and glMemoryBarrier does not
-                // exist there.
-                if (m_context.content_wide_line_renderer->uses_compute()) {
+                // exist there. Skipped when nothing was fed this frame
+                // (edge lines disabled in this view's Visual Style and no
+                // outline / ghost meshes): no ribbons to expand, no hazard.
+                if ((content_wide_line_mesh_count > 0) && m_context.content_wide_line_renderer->uses_compute()) {
                     {
                         erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder(command_buffer);
                         m_context.content_wide_line_renderer->compute(compute_encoder);
@@ -553,8 +573,11 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
         // ID-buffer edge-line method: now that the edge ribbons are expanded,
         // render them into the face-ID buffer (its own pass, before the main
         // viewport pass) and hand the buffer + matching base provider to the
-        // composition passes via the render context.
-        if (use_id_edge_lines && (m_context.id_renderer != nullptr)) {
+        // composition passes via the render context. Skipped when no meshes
+        // were fed (this view's Visual Style disables the edge-line passes):
+        // the pre-pass would be empty and leaving edge_id_texture unset also
+        // keeps EDGE_LINES_FROM_ID out of the fill shader.
+        if (use_id_edge_lines && (content_wide_line_mesh_count > 0) && (m_context.id_renderer != nullptr)) {
             m_context.id_renderer->render_content_edge_id(
                 command_buffer,
                 context.viewport,
