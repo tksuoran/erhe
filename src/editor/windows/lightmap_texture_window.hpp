@@ -113,6 +113,16 @@ private:
     bool   m_show_edges       {true};
     bool   m_highlight_mesh   {true};
     bool   m_highlight_facet  {true};
+    // Which spatial tiles' chart overlays (edge wireframe, hover
+    // highlights, overlap fills) draw; the texture image itself always
+    // shows every resident slot regardless.
+    int    m_triangle_scope   {0}; // 0 = all tiles, 1 = resident tiles, 2 = active tile
+    // Resident-slot boundary rects, colored like the 3D viewport tile
+    // bounds debug rendering (white = active / gathering, cyan = resident).
+    bool   m_show_tile_bounds {true};
+    // Yellow crosshair marking the camera's XZ position within its grid
+    // tile's cell, drawn in that tile's display slot rect.
+    bool   m_show_camera      {true};
 
     std::vector<Region_signature> m_cache_signature;
     std::vector<Region_overlay>   m_overlays;

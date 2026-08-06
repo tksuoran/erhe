@@ -4,8 +4,12 @@
 #include "app_message_bus.hpp"
 #include "renderers/lightmap_baker.hpp"
 #include "renderers/lightmap_partitioner.hpp"
+#include "renderers/lightmap_report.hpp"
 #include "scene/scene_view.hpp"
+#include "scene/viewport_scene_view.hpp"
+#include "scene/viewport_scene_views.hpp"
 #include "tools/selection_tool.hpp"
+#include "windows/lightmap_window.hpp"
 
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_graphics/device.hpp"
@@ -13,7 +17,9 @@
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_primitive/primitive.hpp"
+#include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
+#include "erhe_scene/node.hpp"
 
 #include <fmt/format.h>
 #include <geogram/mesh/mesh.h>
@@ -391,6 +397,36 @@ void Lightmap_texture_window::imgui()
     }
     const Lightmap_baker::Atlas_layout& layout = baker->get_layout();
 
+    // Camera position (same source as the baker's residency ranking:
+    // the last viewport scene view's camera) and the grid tile whose
+    // cell contains it in XZ - the "current" tile for the crosshair and
+    // the Subdivide / Merge buttons below.
+    glm::vec3 camera_position{0.0f};
+    bool      camera_valid{false};
+    if (m_context.scene_views != nullptr) {
+        const std::shared_ptr<Viewport_scene_view> scene_view = m_context.scene_views->last_scene_view();
+        const std::shared_ptr<erhe::scene::Camera> camera = scene_view ? scene_view->get_camera() : nullptr;
+        const erhe::scene::Node* const camera_node = camera ? camera->get_node() : nullptr;
+        if (camera_node != nullptr) {
+            camera_position = glm::vec3{camera_node->world_from_node()[3]};
+            camera_valid    = true;
+        }
+    }
+    int camera_tile = -1;
+    if (camera_valid) {
+        for (int tile = 0; tile < layout.get_tile_count(); ++tile) {
+            const erhe::math::Aabb& cell = layout.tiles[static_cast<std::size_t>(tile)].cell_bounds;
+            if (!cell.is_valid()) {
+                continue;
+            }
+            if ((camera_position.x >= cell.min.x) && (camera_position.x < cell.max.x) &&
+                (camera_position.z >= cell.min.z) && (camera_position.z < cell.max.z)) {
+                camera_tile = tile;
+                break; // quadtree leaves do not overlap
+            }
+        }
+    }
+
     // Toolbar.
     const char* const texture_names[] = { "Atlas", "Position", "Normal", "Albedo" };
     ImGui::SetNextItemWidth(120.0f);
@@ -437,6 +473,70 @@ void Lightmap_texture_window::imgui()
             "UV sanity check: triangles overlapping another triangle of the same region\n"
             "with positive area (unwrap defect); drawn filled red in the canvas."
         );
+    }
+
+    // Second toolbar row: overlay scope + tile / camera annotations +
+    // density control of the camera's tile.
+    const char* const triangle_scope_names[] = { "All tiles", "Resident tiles", "Active tile" };
+    ImGui::SetNextItemWidth(120.0f);
+    ImGui::Combo("##triangle_scope", &m_triangle_scope, triangle_scope_names, IM_ARRAYSIZE(triangle_scope_names));
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip(
+            "Which spatial tiles' chart triangles (edges, hover highlights, overlap fills)\n"
+            "draw; the texture itself always shows every resident slot."
+        );
+    }
+    ImGui::SameLine();
+    ImGui::Checkbox("Tile bounds", &m_show_tile_bounds);
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Resident slot boundaries; white = active (gathering), cyan = resident (3D viewport debug colors)");
+    }
+    ImGui::SameLine();
+    ImGui::Checkbox("Camera", &m_show_camera);
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip(
+            "Yellow crosshair: the camera's XZ position within its grid tile's cell,\n"
+            "drawn in that tile's display slot (charts are packed, not world-mapped -\n"
+            "the crosshair locates the camera relative to the TILE, not to its texels)."
+        );
+    }
+    // Subdivide / Merge the camera's tile (same override mechanism as the
+    // Lightmap window's per-tile list; failures land in Problems).
+    {
+        const bool tile_actions_available = (camera_tile >= 0) && (m_context.lightmap_window != nullptr);
+        ImGui::SameLine();
+        ImGui::BeginDisabled(!tile_actions_available);
+        const Lightmap_tile_key camera_key = (camera_tile >= 0)
+            ? layout.tiles[static_cast<std::size_t>(camera_tile)].key
+            : Lightmap_tile_key{};
+        if (ImGui::Button("Subdivide")) {
+            const std::string error = m_context.lightmap_window->subdivide_tile(camera_key);
+            if (!error.empty() && (m_context.lightmap_report != nullptr)) {
+                m_context.lightmap_report->add_warning(Lightmap_report::Stage::layout, "subdivide", error);
+            }
+        }
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+            if (tile_actions_available) {
+                ImGui::SetTooltip("Split the camera's tile (%d, %d, level %d) into 4 half-size cells (2x texel density)", camera_key.ix, camera_key.iz, camera_key.level);
+            } else {
+                ImGui::SetTooltip("No layout tile contains the camera position");
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Merge")) {
+            const std::string error = m_context.lightmap_window->merge_tile(camera_key);
+            if (!error.empty() && (m_context.lightmap_report != nullptr)) {
+                m_context.lightmap_report->add_warning(Lightmap_report::Stage::layout, "merge", error);
+            }
+        }
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+            if (tile_actions_available) {
+                ImGui::SetTooltip("Merge the camera's tile (%d, %d, level %d) and its 3 siblings into their parent (half texel density)", camera_key.ix, camera_key.iz, camera_key.level);
+            } else {
+                ImGui::SetTooltip("No layout tile contains the camera position");
+            }
+        }
+        ImGui::EndDisabled();
     }
 
     const std::shared_ptr<erhe::graphics::Texture>& texture =
@@ -606,6 +706,22 @@ void Lightmap_texture_window::imgui()
         m_fit_requested = true;
     }
 
+    // Overlay scope (toolbar combo): which spatial tiles' chart overlays
+    // draw and hit-test. The texture image itself is unaffected.
+    const auto overlay_in_scope = [&](const Region_overlay& overlay) -> bool {
+        if (m_triangle_scope == 0) {
+            return true;
+        }
+        const Lightmap_baker::Instance_region& region = layout.regions[overlay.region_index];
+        if ((region.tile < 0) || (region.tile >= layout.get_tile_count())) {
+            return false;
+        }
+        if (m_triangle_scope == 1) {
+            return layout.tiles[static_cast<std::size_t>(region.tile)].slot >= 0;
+        }
+        return baker->is_tile_active(region.tile);
+    };
+
     // Hover hit test, atlas mouse first: mouse -> atlas UV -> region rect
     // -> facet fan triangles (the same triangulation the G-buffer raster
     // uses). A whole hovered facet is highlighted (one fan triangle from
@@ -617,6 +733,9 @@ void Lightmap_texture_window::imgui()
     if (canvas_hovered) {
         const glm::vec2 uv = uv_from_screen(io.MousePos);
         for (const Region_overlay& overlay : m_overlays) {
+            if (!overlay_in_scope(overlay)) {
+                continue;
+            }
             if ((uv.x < overlay.rect_min.x) || (uv.x > overlay.rect_max.x) ||
                 (uv.y < overlay.rect_min.y) || (uv.y > overlay.rect_max.y)) {
                 continue;
@@ -650,6 +769,9 @@ void Lightmap_texture_window::imgui()
             const erhe::scene::Mesh* const match_mesh = resolve_to_piece_mesh(m_context, hover_mesh.get());
             const bool                     via_piece  = match_mesh != hover_mesh.get();
             for (const Region_overlay& overlay : m_overlays) {
+                if (!overlay_in_scope(overlay)) {
+                    continue;
+                }
                 const Lightmap_baker::Instance_region& region = layout.regions[overlay.region_index];
                 if (region.mesh.get() != match_mesh) {
                     continue;
@@ -699,11 +821,35 @@ void Lightmap_texture_window::imgui()
             draw_list->AddLine(ImVec2{grid_screen_x0, sy}, ImVec2{grid_screen_x1, sy}, grid_color, 1.0f);
         }
     }
+    // Resident tile (display slot) boundaries, colored like the 3D
+    // viewport tile-bounds debug rendering (Debug_visualizations::
+    // lightmap_tiles_visualization): white = active (gathering), cyan =
+    // resident but not gathering. Non-resident tiles have no slot in the
+    // atlas and so nothing to outline here.
+    if (m_show_tile_bounds) {
+        constexpr ImU32 active_color   = IM_COL32(255, 255, 255, 255); // white: gathering (camera clamp)
+        constexpr ImU32 resident_color = IM_COL32(  0, 255, 255, 255); // cyan: display slot, not gathering
+        const float tile_size = static_cast<float>(layout.get_tile_size());
+        for (int tile = 0; tile < layout.get_tile_count(); ++tile) {
+            const Lightmap_baker::Tile& layout_tile = layout.tiles[static_cast<std::size_t>(tile)];
+            if (layout_tile.slot < 0) {
+                continue;
+            }
+            const bool      active = baker->is_tile_active(tile);
+            const glm::vec2 origin{layout.get_slot_origin(layout_tile.slot)};
+            const ImVec2 rect_min = screen_from_uv(origin / page_size);
+            const ImVec2 rect_max = screen_from_uv((origin + glm::vec2{tile_size}) / page_size);
+            draw_list->AddRect(rect_min, rect_max, active ? active_color : resident_color, 0.0f, 0, active ? 2.0f : 1.0f);
+        }
+    }
     // Broken (overlapping) triangles: always-on sanity check, filled red
     // at 50% alpha under the edge lines.
     {
         const ImU32 broken_color = IM_COL32(255, 0, 0, 128);
         for (const Region_overlay& overlay : m_overlays) {
+            if (!overlay_in_scope(overlay)) {
+                continue;
+            }
             for (const std::uint32_t index : overlay.broken_triangles) {
                 const Overlay_triangle& triangle = overlay.triangles[index];
                 draw_list->AddTriangleFilled(
@@ -718,6 +864,9 @@ void Lightmap_texture_window::imgui()
     if (m_show_edges) {
         const ImU32 edge_color = IM_COL32(255, 0, 0, 128); // red
         for (const Region_overlay& overlay : m_overlays) {
+            if (!overlay_in_scope(overlay)) {
+                continue;
+            }
             for (const std::array<glm::vec2, 2>& edge : overlay.edges) {
                 draw_list->AddLine(screen_from_uv(edge[0]), screen_from_uv(edge[1]), edge_color, 1.0f);
             }
@@ -738,6 +887,36 @@ void Lightmap_texture_window::imgui()
             draw_list->AddLine(a, b, facet_color, 2.0f);
             draw_list->AddLine(b, c, facet_color, 2.0f);
             draw_list->AddLine(c, a, facet_color, 2.0f);
+        }
+    }
+
+    // Camera crosshair (yellow): the camera's XZ position within its grid
+    // tile's CELL, drawn proportionally in that tile's display slot rect.
+    // Charts are packed, not world-mapped, so this locates the camera
+    // relative to the tile boundaries, not to individual texels.
+    if (m_show_camera && (camera_tile >= 0)) {
+        const Lightmap_baker::Tile& layout_tile = layout.tiles[static_cast<std::size_t>(camera_tile)];
+        if (layout_tile.slot >= 0) {
+            const erhe::math::Aabb& cell = layout_tile.cell_bounds;
+            const glm::vec2 cell_extent{
+                std::max(cell.max.x - cell.min.x, 1.0e-6f),
+                std::max(cell.max.z - cell.min.z, 1.0e-6f)
+            };
+            const glm::vec2 fraction{
+                (camera_position.x - cell.min.x) / cell_extent.x,
+                (camera_position.z - cell.min.z) / cell_extent.y
+            };
+            const float     tile_size = static_cast<float>(layout.get_tile_size());
+            const glm::vec2 origin{layout.get_slot_origin(layout_tile.slot)};
+            const ImVec2 center = screen_from_uv((origin + fraction * tile_size) / page_size);
+            constexpr ImU32 camera_color = IM_COL32(255, 255, 0, 255); // yellow
+            constexpr float arm = 8.0f;
+            constexpr float gap = 2.0f;
+            draw_list->AddLine(ImVec2{center.x - arm, center.y}, ImVec2{center.x - gap, center.y}, camera_color, 2.0f);
+            draw_list->AddLine(ImVec2{center.x + gap, center.y}, ImVec2{center.x + arm, center.y}, camera_color, 2.0f);
+            draw_list->AddLine(ImVec2{center.x, center.y - arm}, ImVec2{center.x, center.y - gap}, camera_color, 2.0f);
+            draw_list->AddLine(ImVec2{center.x, center.y + gap}, ImVec2{center.x, center.y + arm}, camera_color, 2.0f);
+            draw_list->AddCircle(center, 3.0f, camera_color, 0, 1.5f);
         }
     }
 
