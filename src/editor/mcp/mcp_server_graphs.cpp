@@ -1063,12 +1063,13 @@ auto Mcp_server::action_set_node_graph_mesh(const json& args) -> std::string
         return make_error_content("Scene not found: " + scene_name);
     }
     std::shared_ptr<erhe::scene::Node> node;
-    for (const std::shared_ptr<erhe::scene::Node>& entry : sr->get_scene().get_flat_nodes()) {
+    sr->get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& entry) {
         if (entry->get_name() == node_name) {
             node = entry;
-            break;
+            return false;
         }
-    }
+        return true;
+    });
     if (!node) {
         return make_error_content("Node not found: " + node_name);
     }

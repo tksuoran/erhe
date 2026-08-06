@@ -3263,9 +3263,12 @@ public:
                     }
                 );
             }
-            for (const std::shared_ptr<erhe::scene::Node>& node : scene_root->get_scene().get_flat_nodes()) {
-                watch.items.emplace_back(node);
-            }
+            scene_root->get_scene().for_each_node(
+                [&watch](const std::shared_ptr<erhe::scene::Node>& node) {
+                    watch.items.emplace_back(node);
+                    return true;
+                }
+            );
             m_scene_close_leak_watches.push_back(std::move(watch));
 
             // R5.6: sever the record's scene identity while the Scene_root

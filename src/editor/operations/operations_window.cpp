@@ -452,7 +452,7 @@ public:
         return std::dynamic_pointer_cast<erhe::scene::Node>(node->shared_from_this());
     };
 
-    for (const std::shared_ptr<erhe::scene::Node>& node : scene_root.get_scene().get_flat_nodes()) {
+    scene_root.get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
         for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : node->get_attachments()) {
             const std::shared_ptr<Node_joint> node_joint = std::dynamic_pointer_cast<Node_joint>(attachment);
             if (!node_joint) {
@@ -485,7 +485,7 @@ public:
                 result.frame_node  = as_shared(joint_node);
                 result.other_node  = as_shared(body_b_node);
                 result.hinge_frame = node_rigid_world(*connected_node);
-                return result;
+                return false;
             }
             if (selected_body_node == body_b_node) {
                 // Flip side B; the unmoved hinge frame is side A's joint node.
@@ -495,10 +495,11 @@ public:
                 result.frame_node  = connected_node;
                 result.other_node  = as_shared(body_a_node);
                 result.hinge_frame = node_rigid_world(*joint_node);
-                return result;
+                return false;
             }
         }
-    }
+        return true;
+    });
     return result;
 }
 

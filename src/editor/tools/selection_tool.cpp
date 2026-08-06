@@ -1149,8 +1149,7 @@ void Selection::sanity_check()
     const auto& scene_roots = m_context.app_scenes->get_scene_roots();
     for (const auto& scene_root : scene_roots) {
         const auto& scene = scene_root->get_scene();
-        const auto& flat_nodes = scene.get_flat_nodes();
-        for (const auto& node : flat_nodes) {
+        scene.for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
             const auto item = std::static_pointer_cast<erhe::Item_base>(node);
             if (
                 node->is_selected() &&
@@ -1165,7 +1164,8 @@ void Selection::sanity_check()
                 log_selection->error("Node does not have selection flag set while being in selection");
                 ++error_count;
             }
-        }
+            return true;
+        });
     }
 
     // No duplicates in the selection (each per-host view assumes one entry per item)

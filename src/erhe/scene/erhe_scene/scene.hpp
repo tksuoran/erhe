@@ -97,8 +97,30 @@ public:
     [[nodiscard]] auto get_cameras          () const -> const std::vector<std::shared_ptr<Camera>>&;
     [[nodiscard]] auto get_skins            () -> std::vector<std::shared_ptr<Skin>>&;
     [[nodiscard]] auto get_skins            () const -> const std::vector<std::shared_ptr<Skin>>&;
-    [[nodiscard]] auto get_flat_nodes       () -> std::vector<std::shared_ptr<Node>>&;
-    [[nodiscard]] auto get_flat_nodes       () const -> const std::vector<std::shared_ptr<Node>>&;
+    // Registered nodes are kept in two buckets keyed by the
+    // Item_flags::no_transform_update flag so that update_node_transforms()
+    // can skip the flagged bucket entirely. Nodes migrate between buckets
+    // when the flag changes (Node::handle_flag_bits_update).
+    [[nodiscard]] auto get_transform_update_nodes   () const -> const std::vector<std::shared_ptr<Node>>&;
+    [[nodiscard]] auto get_no_transform_update_nodes() const -> const std::vector<std::shared_ptr<Node>>&;
+    [[nodiscard]] auto get_node_count               () const -> std::size_t;
+
+    // Visits every registered node (both buckets, no particular order).
+    // The callback returns false to stop the iteration.
+    template <typename Fn>
+    void for_each_node(Fn&& fn) const
+    {
+        for (const std::shared_ptr<Node>& node : m_transform_update_nodes) {
+            if (!fn(node)) {
+                return;
+            }
+        }
+        for (const std::shared_ptr<Node>& node : m_no_transform_update_nodes) {
+            if (!fn(node)) {
+                return;
+            }
+        }
+    }
     [[nodiscard]] auto get_mesh_layers      () -> std::vector<std::shared_ptr<Mesh_layer>>&;
     [[nodiscard]] auto get_mesh_layers      () const -> const std::vector<std::shared_ptr<Mesh_layer>>&;
     [[nodiscard]] auto get_light_layers     () -> std::vector<std::shared_ptr<Light_layer>>&;
@@ -109,6 +131,10 @@ public:
 
     void register_node    (const std::shared_ptr<Node>& node);
     void unregister_node  (const std::shared_ptr<Node>& node);
+    // Called by Node::handle_flag_bits_update() when the
+    // Item_flags::no_transform_update bit changes on a hosted node;
+    // moves the node to the bucket matching the new flag value.
+    void handle_node_no_transform_update_changed(Node& node);
     void register_camera  (const std::shared_ptr<Camera>& camera);
     void unregister_camera(const std::shared_ptr<Camera>& camera);
     void register_mesh    (const std::shared_ptr<Mesh>& mesh);
@@ -126,7 +152,8 @@ public:
 private:
     Scene_host*                               m_host       {nullptr};
     std::shared_ptr<erhe::scene::Node>        m_root_node;
-    std::vector<std::shared_ptr<Node>>        m_flat_node_vector;
+    std::vector<std::shared_ptr<Node>>        m_transform_update_nodes;
+    std::vector<std::shared_ptr<Node>>        m_no_transform_update_nodes;
     std::vector<std::shared_ptr<Mesh_layer>>  m_mesh_layers;
     std::vector<std::shared_ptr<Skin>>        m_skins;
     std::vector<std::shared_ptr<Light_layer>> m_light_layers;

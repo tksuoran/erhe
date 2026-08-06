@@ -464,22 +464,24 @@ auto Asset_manager::resolve_scene_local(const Asset_key& key, std::string& out_e
         if (key.type == Asset_type::mesh) {
             // Meshes are scene content, not library entries: match by the
             // mesh attachment's name over the scene's nodes.
-            for (const std::shared_ptr<erhe::scene::Node>& node : scene_root->get_scene().get_flat_nodes()) {
+            scene_root->get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
                 const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
                 if (mesh && (mesh->get_name() == key.name)) {
                     consider(mesh);
                 }
-            }
+                return true;
+            });
             continue;
         }
         if (key.type == Asset_type::node) {
             // Scene nodes are scene content, not library entries: match by
             // node name over the scene's nodes.
-            for (const std::shared_ptr<erhe::scene::Node>& node : scene_root->get_scene().get_flat_nodes()) {
+            scene_root->get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
                 if (node && (node->get_name() == key.name)) {
                     consider(node);
                 }
-            }
+                return true;
+            });
             continue;
         }
         const std::shared_ptr<Content_library> library = scene_root->get_content_library();

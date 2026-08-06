@@ -356,11 +356,12 @@ void Transform_tool::window_imgui()
         m_reference_candidates.clear();
         Scene_root* scene_root = m_context.scene_commands->get_scene_root(static_cast<erhe::scene::Node*>(nullptr));
         if (scene_root != nullptr) {
-            for (const std::shared_ptr<erhe::scene::Node>& node : scene_root->get_scene().get_flat_nodes()) {
+            scene_root->get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
                 if (node) {
                     m_reference_candidates.push_back(node);
                 }
-            }
+                return true;
+            });
         }
         Item_reference_options options;
         options.candidates = m_reference_candidates;

@@ -762,12 +762,13 @@ void Geometry_graph_window::apply_baked_products_to_attachments(const std::share
         return;
     }
     for (const std::shared_ptr<Scene_root>& scene_root : m_app_context.app_scenes->get_scene_roots()) {
-        for (const std::shared_ptr<erhe::scene::Node>& node : scene_root->get_scene().get_flat_nodes()) {
+        scene_root->get_scene().for_each_node([&graph_mesh](const std::shared_ptr<erhe::scene::Node>& node) {
             const std::shared_ptr<Geometry_graph_mesh> attachment = erhe::scene::get_attachment<Geometry_graph_mesh>(node.get());
             if (attachment && (attachment->get_graph_mesh() == graph_mesh)) {
                 attachment->apply_baked_products();
             }
-        }
+            return true;
+        });
     }
 }
 

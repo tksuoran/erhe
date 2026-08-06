@@ -2092,7 +2092,7 @@ void Debug_visualizations::render(const Render_context& context)
 
     erhe::renderer::Primitive_renderer line_renderer = context.get({erhe::graphics::Primitive_type::line, 2, true, true});
 
-    for (const auto& node : scene_root->get_hosted_scene()->get_flat_nodes()) {
+    scene_root->get_hosted_scene()->for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
         if (node && should_visualize(m_settings.node_axises, node)) {
             const glm::vec4 red  {1.0f, 0.0f, 0.0f, 1.0f};
             const glm::vec4 green{0.0f, 1.0f, 0.0f, 1.0f};
@@ -2129,9 +2129,9 @@ void Debug_visualizations::render(const Render_context& context)
     }
 
     if (m_settings.layouts != Visualization_mode::off) {
-        for (const auto& node : scene_root->get_hosted_scene()->get_flat_nodes()) {
+        scene_root->get_hosted_scene()->for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
             if (!node) {
-                continue;
+                return true;
             }
             for (const auto& attachment : node->get_attachments()) {
                 const auto& layout = std::dynamic_pointer_cast<erhe::scene::Layout>(attachment);

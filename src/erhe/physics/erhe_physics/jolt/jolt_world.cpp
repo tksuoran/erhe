@@ -465,7 +465,31 @@ void Jolt_world::update_fixed_step(const double dt)
         &m_job_system
     );
 
+    dispatch_activation_events();
     dispatch_trigger_events();
+}
+
+void Jolt_world::dispatch_activation_events()
+{
+    // Move pending events (queued by the activation listener on Jolt worker
+    // threads) to the dispatch buffer and invoke the callbacks on this
+    // (caller) thread. Both vectors keep their high-water capacity.
+    {
+        const std::lock_guard<std::mutex> lock{m_activation_mutex};
+        std::swap(m_pending_activation_events, m_dispatch_activation_events);
+    }
+    for (const Pending_activation_event& pending : m_dispatch_activation_events) {
+        if (pending.activated) {
+            if (m_on_body_activated_callback) {
+                m_on_body_activated_callback(pending.body);
+            }
+        } else {
+            if (m_on_body_deactivated_callback) {
+                m_on_body_deactivated_callback(pending.body);
+            }
+        }
+    }
+    m_dispatch_activation_events.clear();
 }
 
 void Jolt_world::dispatch_trigger_events()
@@ -573,6 +597,13 @@ void Jolt_world::remove_rigid_body(IRigid_body* rigid_body)
         body_interface.RemoveBody(jolt_body->GetID());
         m_rigid_bodies.erase(i, m_rigid_bodies.end());
     }
+
+    // RemoveBody() of an active body fires OnBodyDeactivated synchronously on
+    // this thread, which queues a pending event pointing at the wrapper being
+    // removed. Drain the queue now, while the wrapper is still alive, so no
+    // dangling pointer survives in the pending buffer. (remove_rigid_body is
+    // never called during update_fixed_step, so the buffers are free here.)
+    dispatch_activation_events();
 
     // Synthesize trigger exit events for sensor pairs involving the removed
     // body. Jolt reports OnContactRemoved for these pairs only in the NEXT
@@ -709,11 +740,12 @@ void Jolt_world::OnBodyActivated(const JPH::BodyID& inBodyID, JPH::uint64 inBody
     if (!m_on_body_activated_callback) {
         return;
     }
-    //const auto userdata = m_physics_system.GetBodyInterface().GetUserData(inBodyID);
     auto* body = reinterpret_cast<Jolt_rigid_body*>(inBodyUserData);
     ERHE_VERIFY(body != nullptr);
-    m_on_body_activated_callback(body);
-
+    {
+        const std::lock_guard<std::mutex> lock{m_activation_mutex};
+        m_pending_activation_events.push_back(Pending_activation_event{.body = body, .activated = true});
+    }
     log_physics->trace(
         "Body activated ID = {}, name = {}",
         inBodyID.GetIndex(),
@@ -728,7 +760,10 @@ void Jolt_world::OnBodyDeactivated(const JPH::BodyID& inBodyID, JPH::uint64 inBo
     }
     auto* body = reinterpret_cast<Jolt_rigid_body*>(inBodyUserData);
     ERHE_VERIFY(body != nullptr);
-    m_on_body_deactivated_callback(body);
+    {
+        const std::lock_guard<std::mutex> lock{m_activation_mutex};
+        m_pending_activation_events.push_back(Pending_activation_event{.body = body, .activated = false});
+    }
     log_physics->trace(
         "Body deactivated ID = {}, name = {}",
         inBodyID.GetIndex(),

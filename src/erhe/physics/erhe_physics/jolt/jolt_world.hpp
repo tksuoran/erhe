@@ -180,6 +180,7 @@ public:
 
 private:
     void dispatch_trigger_events();
+    void dispatch_activation_events();
 
     // Sensor overlap bookkeeping: one entry per (sensor, other) body pair
     // currently in contact, counting sub-shape contacts so that enter / exit
@@ -199,6 +200,13 @@ private:
     public:
         Trigger_event event;
         bool          is_enter{false};
+    };
+
+    class Pending_activation_event
+    {
+    public:
+        Jolt_rigid_body* body     {nullptr};
+        bool             activated{false};
     };
 
     static constexpr unsigned int cMaxBodies             = 1024 * 32;
@@ -239,6 +247,16 @@ private:
     std::unordered_map<uint64_t, Sensor_pair>      m_sensor_contacts;        // key: packed (body1, body2) BodyID pair
     std::vector<Pending_trigger_event>             m_pending_trigger_events; // filled by contact callbacks
     std::vector<Pending_trigger_event>             m_dispatch_trigger_events;// drained on the update_fixed_step caller thread
+
+    // Body activation events. Jolt invokes the BodyActivationListener on
+    // worker threads during update_fixed_step(), and the user callbacks
+    // mutate scene state (Scene_root toggles Item_flags::no_transform_update,
+    // which re-buckets the node in the Scene), so events are buffered here
+    // and the callbacks invoked on the update_fixed_step (or
+    // remove_rigid_body) caller thread.
+    std::mutex                                     m_activation_mutex;
+    std::vector<Pending_activation_event>          m_pending_activation_events;
+    std::vector<Pending_activation_event>          m_dispatch_activation_events;
 };
 
 } // namespace erhe::physics

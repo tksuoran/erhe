@@ -88,12 +88,13 @@ namespace {
             std::shared_ptr<erhe::scene::Node> found;
             if (context.app_scenes != nullptr) {
                 for (const std::shared_ptr<Scene_root>& scene_root : context.app_scenes->get_scene_roots()) {
-                    for (const std::shared_ptr<erhe::scene::Node>& node : scene_root->get_scene().get_flat_nodes()) {
+                    scene_root->get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
                         if (node && (node->get_name() == node_name)) {
                             found = node;
-                            break;
+                            return false;
                         }
-                    }
+                        return true;
+                    });
                     if (found) {
                         break;
                     }

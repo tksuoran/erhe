@@ -318,7 +318,7 @@ auto build_gltf_physics_data(const erhe::scene::Scene& scene, const Content_libr
 {
     Gltf_physics_builder builder{};
 
-    for (const std::shared_ptr<erhe::scene::Node>& node : scene.get_flat_nodes()) {
+    scene.for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
         std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
         // A Node_physics controlled by a Geometry Graph Mesh attachment is a
         // baked artifact the graph rebuilds on load - persisting it would
@@ -343,7 +343,7 @@ auto build_gltf_physics_data(const erhe::scene::Scene& scene, const Content_libr
             }
         }
         if (!node_physics && !node_joint) {
-            continue;
+            return true;
         }
 
         erhe::gltf::Physics_node_description description{};
@@ -540,7 +540,8 @@ auto build_gltf_physics_data(const erhe::scene::Scene& scene, const Content_libr
         if (has_content) {
             builder.data.node_physics.push_back(std::move(description));
         }
-    }
+        return true;
+    });
 
     if (!builder.data.node_physics.empty() || !builder.data.synthesized_colliders.empty()) {
         log_parsers->info(

@@ -187,13 +187,13 @@ auto make_material_internal(
     // object now uses the copy. Other holders (slots, tools, other scenes)
     // deliberately keep the shared object.
     std::size_t swapped_count = 0;
-    for (const std::shared_ptr<erhe::scene::Node>& node : scene_root.get_scene().get_flat_nodes()) {
+    scene_root.get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
         if (!node) {
-            continue;
+            return true;
         }
         const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
         if (!mesh) {
-            continue;
+            return true;
         }
         for (erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_mutable_primitives()) {
             if (mesh_primitive.material == material) {
@@ -201,7 +201,8 @@ auto make_material_internal(
                 ++swapped_count;
             }
         }
-    }
+        return true;
+    });
     {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{library->mutex};
         // Brushes hold their own material references; a brush pointing at

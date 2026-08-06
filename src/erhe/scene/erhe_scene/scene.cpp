@@ -197,14 +197,19 @@ auto Scene::get_skins() const -> const std::vector<std::shared_ptr<Skin>>&
     return m_skins;
 }
 
-auto Scene::get_flat_nodes() -> std::vector<std::shared_ptr<Node>>&
+auto Scene::get_transform_update_nodes() const -> const std::vector<std::shared_ptr<Node>>&
 {
-    return m_flat_node_vector;
+    return m_transform_update_nodes;
 }
 
-auto Scene::get_flat_nodes() const -> const std::vector<std::shared_ptr<Node>>&
+auto Scene::get_no_transform_update_nodes() const -> const std::vector<std::shared_ptr<Node>>&
 {
-    return m_flat_node_vector;
+    return m_no_transform_update_nodes;
+}
+
+auto Scene::get_node_count() const -> std::size_t
+{
+    return m_transform_update_nodes.size() + m_no_transform_update_nodes.size();
 }
 
 auto Scene::get_mesh_layers() -> std::vector<std::shared_ptr<Mesh_layer>>&
@@ -252,11 +257,9 @@ void Scene::sever_host()
 
 void Scene::sort_transform_nodes()
 {
-    // log->trace("sorting {} nodes", m_flat_node_vector.size());
-
     std::sort(
-        m_flat_node_vector.begin(),
-        m_flat_node_vector.end(),
+        m_transform_update_nodes.begin(),
+        m_transform_update_nodes.end(),
         [](const auto& lhs, const auto& rhs) {
             return lhs->get_depth() < rhs->get_depth();
         }
@@ -282,10 +285,7 @@ void Scene::update_node_transforms()
         sort_transform_nodes();
     }
 
-    for (auto& node : m_flat_node_vector) {
-        if (node->is_no_transform_update()) {
-            continue;
-        }
+    for (auto& node : m_transform_update_nodes) {
         node->update_transform(0);
     }
 }
@@ -324,7 +324,8 @@ Scene::~Scene() noexcept
 
     m_root_node->recursive_remove();
 
-    m_flat_node_vector.clear();
+    m_transform_update_nodes.clear();
+    m_no_transform_update_nodes.clear();
     m_mesh_layers.clear();
     m_light_layers.clear();
     m_cameras.clear();
@@ -351,16 +352,22 @@ void Scene::register_node(const std::shared_ptr<erhe::scene::Node>& node)
     ERHE_PROFILE_FUNCTION();
 
 #ifndef NDEBUG
-    const auto i = std::find(m_flat_node_vector.begin(), m_flat_node_vector.end(), node);
-    if (i != m_flat_node_vector.end()) {
+    const bool already_registered =
+        (std::find(m_transform_update_nodes   .begin(), m_transform_update_nodes   .end(), node) != m_transform_update_nodes   .end()) ||
+        (std::find(m_no_transform_update_nodes.begin(), m_no_transform_update_nodes.end(), node) != m_no_transform_update_nodes.end());
+    if (already_registered) {
         log->error("{} {} already in scene nodes", node->get_type_name(), node->get_name());
     } else
 #endif
     {
         ERHE_VERIFY(node->node_data.host == nullptr);
         node->node_data.host = m_host;
-        m_flat_node_vector.push_back(node);
-        m_nodes_sorted = false;
+        if (node->is_no_transform_update()) {
+            m_no_transform_update_nodes.push_back(node);
+        } else {
+            m_transform_update_nodes.push_back(node);
+            m_nodes_sorted = false;
+        }
     }
 
     ERHE_VERIFY(!node->get_parent().expired());
@@ -375,17 +382,51 @@ void Scene::unregister_node(const std::shared_ptr<erhe::scene::Node>& node)
         node->get_child_count()
     );
 
-    const auto i = std::remove(m_flat_node_vector.begin(), m_flat_node_vector.end(), node);
-    if (i == m_flat_node_vector.end()) {
-        log->error("Node {} not in scene nodes", node->get_name());
-    } else {
+    // Remove from the bucket matching the node's current flag value; fall back
+    // to the other bucket in case the flag was toggled while the node was not
+    // hosted (the flag-change hook only notifies the hosting scene).
+    auto* primary_bucket   = node->is_no_transform_update() ? &m_no_transform_update_nodes : &m_transform_update_nodes;
+    auto* secondary_bucket = node->is_no_transform_update() ? &m_transform_update_nodes    : &m_no_transform_update_nodes;
+    auto i = std::remove(primary_bucket->begin(), primary_bucket->end(), node);
+    if (i != primary_bucket->end()) {
         node->node_data.host = nullptr;
-        m_flat_node_vector.erase(i, m_flat_node_vector.end());
+        primary_bucket->erase(i, primary_bucket->end());
+    } else {
+        i = std::remove(secondary_bucket->begin(), secondary_bucket->end(), node);
+        if (i != secondary_bucket->end()) {
+            node->node_data.host = nullptr;
+            secondary_bucket->erase(i, secondary_bucket->end());
+        } else {
+            log->error("Node {} not in scene nodes", node->get_name());
+        }
     }
 
 #if !defined(NDEBUG)
     sanity_check();
 #endif
+}
+
+void Scene::handle_node_no_transform_update_changed(Node& node)
+{
+    // The node moves out of the bucket that no longer matches its flag value.
+    auto* source_bucket = node.is_no_transform_update() ? &m_transform_update_nodes    : &m_no_transform_update_nodes;
+    auto* target_bucket = node.is_no_transform_update() ? &m_no_transform_update_nodes : &m_transform_update_nodes;
+    const auto i = std::find_if(
+        source_bucket->begin(),
+        source_bucket->end(),
+        [&node](const std::shared_ptr<Node>& entry) {
+            return entry.get() == &node;
+        }
+    );
+    if (i == source_bucket->end()) {
+        log->error("Node {} not in expected scene node bucket", node.get_name());
+        return;
+    }
+    target_bucket->push_back(std::move(*i));
+    source_bucket->erase(i);
+    if (target_bucket == &m_transform_update_nodes) {
+        m_nodes_sorted = false;
+    }
 }
 
 void Scene::register_camera(const std::shared_ptr<Camera>& camera)

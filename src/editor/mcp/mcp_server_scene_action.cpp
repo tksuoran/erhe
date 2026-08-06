@@ -1162,12 +1162,13 @@ auto Mcp_server::action_create_shape(const json& args) -> std::string
         std::shared_ptr<erhe::scene::Node> parent;
         if (args.contains("parent_node_id")) {
             const std::size_t parent_node_id = args.value("parent_node_id", std::size_t{0});
-            for (const auto& node : sr->get_scene().get_flat_nodes()) {
+            sr->get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
                 if (node->get_id() == parent_node_id) {
                     parent = node;
-                    break;
+                    return false;
                 }
-            }
+                return true;
+            });
             if (!parent) {
                 json r = make_text_content("Parent node not found with id: " + std::to_string(parent_node_id));
                 r["isError"] = true;
@@ -1610,12 +1611,13 @@ auto Mcp_server::action_reparent_node(const json& args) -> std::string
 
     // Find child node
     std::shared_ptr<erhe::scene::Node> child_node;
-    for (const std::shared_ptr<erhe::scene::Node>& node : scene.get_flat_nodes()) {
+    scene.for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
         if (node->get_id() == node_id) {
             child_node = node;
-            break;
+            return false;
         }
-    }
+        return true;
+    });
     if (!child_node) {
         json r = make_text_content("Node not found: " + std::to_string(node_id));
         r["isError"] = true;
@@ -1627,12 +1629,13 @@ auto Mcp_server::action_reparent_node(const json& args) -> std::string
     if (parent_node_id == 0) {
         new_parent = scene.get_root_node();
     } else {
-        for (const std::shared_ptr<erhe::scene::Node>& node : scene.get_flat_nodes()) {
+        scene.for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
             if (node->get_id() == parent_node_id) {
                 new_parent = node;
-                break;
+                return false;
             }
-        }
+            return true;
+        });
     }
     if (!new_parent) {
         json r = make_text_content("Parent node not found: " + std::to_string(parent_node_id));
@@ -1683,13 +1686,14 @@ auto Mcp_server::action_clipboard_copy_nodes(const json& args) -> std::string
     // watchdog reports as intentional clipboard pins.
     std::vector<std::shared_ptr<erhe::Item_base>> clones;
     json copied = json::array();
-    for (const std::shared_ptr<erhe::scene::Node>& node : sr->get_scene().get_flat_nodes()) {
+    sr->get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
         if (!target_ids.contains(node->get_id())) {
-            continue;
+            return true;
         }
         clones.push_back(node->clone());
         copied.push_back(node->get_name());
-    }
+        return true;
+    });
     if (clones.empty()) {
         json r = make_text_content("No nodes found for the given node_ids");
         r["isError"] = true;
@@ -1719,12 +1723,13 @@ auto Mcp_server::action_clipboard_paste(const json& args) -> std::string
     if (parent_node_id == 0) {
         parent_node = sr->get_scene().get_root_node();
     } else {
-        for (const std::shared_ptr<erhe::scene::Node>& node : sr->get_scene().get_flat_nodes()) {
+        sr->get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
             if (node->get_id() == parent_node_id) {
                 parent_node = node;
-                break;
+                return false;
             }
-        }
+            return true;
+        });
     }
     if (!parent_node) {
         json r = make_text_content("Parent node not found: " + std::to_string(parent_node_id));

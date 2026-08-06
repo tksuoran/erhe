@@ -227,6 +227,12 @@ void Node::handle_remove_attachment(Node_attachment* const attachment_to_remove)
 
 void Node::handle_flag_bits_update(const uint64_t old_flag_bits, const uint64_t new_flag_bits)
 {
+    if (((old_flag_bits ^ new_flag_bits) & erhe::Item_flags::no_transform_update) != 0) {
+        Scene* const scene = get_scene();
+        if (scene != nullptr) {
+            scene->handle_node_no_transform_update_changed(*this);
+        }
+    }
     for (const auto& attachment : get_attachments()) {
         attachment->handle_node_flag_bits_update(old_flag_bits, new_flag_bits);
     }

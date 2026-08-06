@@ -20,22 +20,23 @@ auto Mcp_server::action_wake_physics_bodies(const json& args) -> std::string
     // Bodies enter the world deactivated (quiet scene loading); wake the
     // dynamic ones the same way Node_joint does after constraint creation.
     std::size_t woken = 0;
-    for (const std::shared_ptr<erhe::scene::Node>& node : sr->get_scene().get_flat_nodes()) {
+    sr->get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
         const std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
         if (!node_physics) {
-            continue;
+            return true;
         }
         erhe::physics::IRigid_body* rigid_body = node_physics->get_rigid_body();
         if (rigid_body == nullptr) {
-            continue;
+            return true;
         }
         if (rigid_body->get_motion_mode() != erhe::physics::Motion_mode::e_dynamic) {
-            continue;
+            return true;
         }
         rigid_body->begin_move();
         rigid_body->end_move();
         ++woken;
-    }
+        return true;
+    });
     return make_json_content({
         {"woken", woken}
     }).dump();
@@ -99,6 +100,9 @@ auto Mcp_server::action_create_physics_body(const json& args) -> std::string
     }
     if (erhe::scene::get_attachment<Node_physics>(node.get())) {
         return make_error_content("Node already has a rigid body: " + node->get_name());
+    }
+    if (!sr->has_physics_world()) {
+        return make_error_content("Scene has no physics world (physics is disabled in editor settings)");
     }
     const std::shared_ptr<Content_library> library = sr->get_content_library();
     if (!library) {

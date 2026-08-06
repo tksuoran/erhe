@@ -217,12 +217,15 @@ inline auto find_node_in_scene(Scene_root& scene_root, const json& args, const c
     if ((node_id == 0) && node_name.empty()) {
         return {};
     }
-    for (const std::shared_ptr<erhe::scene::Node>& node : scene_root.get_scene().get_flat_nodes()) {
+    std::shared_ptr<erhe::scene::Node> found;
+    scene_root.get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
         if ((node_id != 0) ? (node->get_id() == node_id) : (node->get_name() == node_name)) {
-            return node;
+            found = node;
+            return false;
         }
-    }
-    return {};
+        return true;
+    });
+    return found;
 }
 
 inline auto find_light_in_scene(Scene_root& scene_root, const json& args, const char* id_key, const char* name_key) -> std::shared_ptr<erhe::scene::Light>

@@ -234,7 +234,6 @@ void add_gltf_editor_state(
     add_material_asset_references(arguments, scene_root.get_content_library(), export_path);
 
     const erhe::scene::Scene& scene = scene_root.get_scene();
-    const std::vector<std::shared_ptr<erhe::scene::Node>>& flat_nodes = scene.get_flat_nodes();
     const std::shared_ptr<Content_library> content_library = scene_root.get_content_library();
     const std::shared_ptr<erhe::scene::Node> scene_root_node = scene.get_root_node();
 
@@ -243,15 +242,15 @@ void add_gltf_editor_state(
     bool used_physics = false;
     bool used_layout  = false;
 
-    for (const std::shared_ptr<erhe::scene::Node>& node : flat_nodes) {
+    scene.for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
         if (node == scene_root_node) {
-            continue; // the scene root itself is not a glTF node
+            return true; // the scene root itself is not a glTF node
         }
         if ((node->get_flag_bits() & erhe::Item_flags::import_root) != 0) {
-            continue; // implicit containers are unwrapped by the exporter
+            return true; // implicit containers are unwrapped by the exporter
         }
         if (is_inside_prefab_instance(node.get())) {
-            continue;
+            return true;
         }
 
         // Exclusion hook + ERHE_node_graphs node bindings: a Geometry Graph
@@ -341,7 +340,8 @@ void add_gltf_editor_state(
         for (const std::string& tag : node->get_tags()) {
             data->tag_nodes[tag].push_back(node.get());
         }
-    }
+        return true;
+    });
 
     if (used_physics) {
         arguments.extensions_used.push_back("ERHE_physics");

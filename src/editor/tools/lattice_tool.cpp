@@ -118,14 +118,14 @@ auto Lattice_tool::update_active_lattice() -> const Active_lattice&
     if (!scene_root) {
         return m_active;
     }
-    for (const std::shared_ptr<erhe::scene::Node>& node : scene_root->get_scene().get_flat_nodes()) {
+    scene_root->get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
         const std::shared_ptr<Geometry_graph_mesh> attachment = erhe::scene::get_attachment<Geometry_graph_mesh>(node.get());
         if (!attachment) {
-            continue;
+            return true;
         }
         const std::shared_ptr<Graph_mesh>& graph_mesh = attachment->get_graph_mesh();
         if (!graph_mesh) {
-            continue;
+            return true;
         }
         Geometry_graph& graph = graph_mesh->graph();
         // The designation is the edit-mode switch: display shows the lattice
@@ -139,9 +139,10 @@ auto Lattice_tool::update_active_lattice() -> const Active_lattice&
             }
             m_active.lattice    = std::dynamic_pointer_cast<Lattice_node>(lattice_raw->node_from_this());
             m_active.bound_node = node;
-            return m_active;
+            return false;
         }
-    }
+        return true;
+    });
     return m_active;
 }
 

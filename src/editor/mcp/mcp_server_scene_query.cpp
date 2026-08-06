@@ -107,7 +107,7 @@ auto Mcp_server::query_list_scenes(const json& args) -> std::string
         scenes.push_back({
             {"name",                sr->get_name()},
             {"id",                  scene.get_id()}, // Scene item id (selectable, issue #240)
-            {"node_count",          static_cast<int>(scene.get_flat_nodes().size())},
+            {"node_count",          static_cast<int>(scene.get_node_count())},
             {"camera_count",        static_cast<int>(scene.get_cameras().size())},
             {"light_count",         light_count},
             {"material_count",      material_count},
@@ -130,7 +130,7 @@ auto Mcp_server::query_scene_nodes(const json& args) -> std::string
 
     const auto& scene = sr->get_scene();
     json nodes = json::array();
-    for (const auto& node : scene.get_flat_nodes()) {
+    scene.for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
         const auto& trs = node->parent_from_node_transform();
         const glm::vec3 t = trs.get_translation();
         const glm::quat r = trs.get_rotation();
@@ -161,7 +161,8 @@ auto Mcp_server::query_scene_nodes(const json& args) -> std::string
             {"import_root",      (node->get_flag_bits() & erhe::Item_flags::import_root) != 0},
             {"tags",             tags_arr}
         });
-    }
+        return true;
+    });
 
     return make_json_content({{"nodes", nodes}}).dump();
 }
@@ -179,12 +180,13 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
 
     const auto& scene = sr->get_scene();
     std::shared_ptr<erhe::scene::Node> found_node;
-    for (const auto& node : scene.get_flat_nodes()) {
+    scene.for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
         if (node->get_name() == node_name) {
             found_node = node;
-            break;
+            return false;
         }
-    }
+        return true;
+    });
     if (!found_node) {
         json r = make_text_content("Node not found: " + node_name);
         r["isError"] = true;
@@ -1115,11 +1117,12 @@ auto Mcp_server::find_items_by_ids(Scene_root& sr, const std::set<std::size_t>& 
     if (scene_item && target_ids.contains(scene_item->get_id())) {
         result.push_back(scene_item);
     }
-    for (const auto& node : scene.get_flat_nodes()) {
+    scene.for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
         if (target_ids.contains(node->get_id())) {
             result.push_back(node);
         }
-    }
+        return true;
+    });
     for (const auto& camera : scene.get_cameras()) {
         if (target_ids.contains(camera->get_id())) {
             result.push_back(camera);
