@@ -359,6 +359,9 @@ public:
     // Completed accumulation sweeps behind the tile's published content
     // (persisted into the payload header by the save paths).
     [[nodiscard]] auto get_tile_sweeps(int tile) const -> uint32_t;
+    // The tile gathers: it has content and is within the camera clamp /
+    // resident set (Tile_state::active). Drives the per-active-set reorder.
+    [[nodiscard]] auto is_tile_active(int tile) const -> bool;
 
     [[nodiscard]] auto get_layout() const -> const Atlas_layout& { return m_layout; }
 

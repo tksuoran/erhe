@@ -640,7 +640,9 @@ auto Mcp_server::action_lightmap_reorder_charts(const json& args) -> std::string
     if (reorder_async_ops > 0) {
         return make_error_content("Operations still in flight - poll get_async_status until idle, then retry");
     }
-    const int tile = args.value("tile", -1); // -1 = all tiles
+    const int tile = args.value("active", false)
+        ? Lightmap_window::c_reorder_active_tiles
+        : args.value("tile", Lightmap_window::c_reorder_all_tiles);
     if (!m_context.lightmap_window->reorder_charts_by_bake(tile)) {
         return make_error_content("No bake to order by (bake first), no prepared world-space partition, or a prepare is in flight");
     }

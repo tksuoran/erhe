@@ -280,10 +280,11 @@ auto Lightmap_window::reorder_charts_by_bake(const int tile) -> bool
         return false;
     }
     // Baked-luminance keys, measured on the current layout's piece
-    // geometries (optionally restricted to one spatial tile). Standalone
-    // atlas readback - callers defer to update() for a safe point.
+    // geometries (optionally restricted to one spatial tile; the active-
+    // set filter is applied per region below). Standalone atlas readback -
+    // callers defer to update() for a safe point.
     std::unordered_map<const erhe::geometry::Geometry*, std::vector<float>> keys =
-        m_context.lightmap_baker->build_chart_order_keys(tile);
+        m_context.lightmap_baker->build_chart_order_keys((tile >= 0) ? tile : -1);
     if (keys.empty()) {
         return false; // no bake yet - nothing to order by
     }
@@ -296,6 +297,9 @@ auto Lightmap_window::reorder_charts_by_bake(const int tile) -> bool
     for (const Lightmap_baker::Instance_region& region : layout.regions) {
         if (!region.mesh || (region.piece_ordinal < 0)) {
             continue;
+        }
+        if ((tile == c_reorder_active_tiles) && !m_context.lightmap_baker->is_tile_active(region.tile)) {
+            continue; // inactive tiles keep their packing (and disk restore)
         }
         const std::vector<erhe::scene::Mesh_primitive>& primitives = region.mesh->get_primitives();
         if (region.primitive_index >= primitives.size()) {
@@ -979,7 +983,7 @@ void Lightmap_window::imgui()
                 const bool reorder_available = (config.uv_parameterizer == 4) && bake_supported;
                 ImGui::BeginDisabled(!reorder_available);
                 if (ImGui::Button("Reorder Charts By Bake")) {
-                    m_reorder_requested_tile = -1; // all tiles
+                    m_reorder_requested_tile = c_reorder_all_tiles;
                 }
                 ImGui::EndDisabled();
                 if (ImGui::IsItemHovered()) {
@@ -989,6 +993,19 @@ void Lightmap_window::imgui()
                         "neighbors and cross-chart filter-tap / dilation pollution picks up similar\n"
                         "values. The commit clears the atlas to white and bakes a single iteration;\n"
                         "keep baking for a converged result."
+                    );
+                }
+                ImGui::SameLine();
+                ImGui::BeginDisabled(!reorder_available);
+                if (ImGui::Button("Reorder Active Charts")) {
+                    m_reorder_requested_tile = c_reorder_active_tiles;
+                }
+                ImGui::EndDisabled();
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip(
+                        "Reorder Charts By Bake, restricted to the ACTIVE tiles (the camera-clamped\n"
+                        "resident set that is currently gathering). The other tiles keep their\n"
+                        "packing, so their saved bakes restore from disk untouched."
                     );
                 }
                 if (m_context.lightmap_baker != nullptr) {

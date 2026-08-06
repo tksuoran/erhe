@@ -900,7 +900,8 @@ void Mcp_server::refresh_tool_list()
     m_tool_infos.push_back({"lightmap_reorder_charts", "Leak camouflage for per-facet unwraps: async re-prepare of the world-space partition with the piece charts packed in baked-luminance order, so similarly lit facets are atlas neighbors and cross-chart filter-tap / dilation pollution picks up similar values. Requires uv_parameterizer = per_facet, a prepared partition (lightmap_prepare_tiles) and an existing bake. Does NOT bake - the reordered tiles are stale until the next bake (lightmap_set_baking / lightmap_bake_direct); tiles reordered per-tile leave the other tiles' packing unchanged so they restore from disk. Poll get_async_status until idle afterwards.", {
         {"type", "object"},
         {"properties", {
-            {"tile", {{"type", "integer"}, {"description", "Spatial tile index to reorder (from lightmap_get_tiles); omit or -1 = all tiles"}}}
+            {"tile",   {{"type", "integer"}, {"description", "Spatial tile index to reorder (from lightmap_get_tiles); omit or -1 = all tiles"}}},
+            {"active", {{"type", "boolean"}, {"description", "Reorder only the ACTIVE tiles (the camera-clamped resident set currently gathering); overrides 'tile'"}}}
         }}
     }});
 

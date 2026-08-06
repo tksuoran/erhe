@@ -41,14 +41,18 @@ public:
     // packed in baked-luminance order so similarly lit facets are atlas
     // neighbors and cross-chart filter-tap / dilation pollution picks up
     // similar values. Needs a prepared partition and a bake. tile >= 0
-    // reorders only that spatial tile's pieces (the others re-unwrap in
-    // default order and restore from disk). False when there is no
-    // partition, no bake, or a prepare is already in flight. Also
-    // reachable over MCP (lightmap_reorder_charts).
+    // reorders only that spatial tile's pieces, c_reorder_active_tiles
+    // only the currently gathering (camera-clamped resident) set; tiles
+    // left out re-unwrap in default order and restore from disk. False
+    // when there is no partition, no bake, or a prepare is already in
+    // flight. Also reachable over MCP (lightmap_reorder_charts).
     // NOTE: the bake data itself is NOT migrated to the new texel
-    // locations yet - the atlas is stale until the next bake (see the
-    // prompt queue item on reorder bake-data migration).
-    auto reorder_charts_by_bake(int tile = -1) -> bool;
+    // locations yet - the reordered tiles rebake from the commit's single
+    // iteration (see the prompt queue item on reorder bake-data
+    // migration).
+    static constexpr int c_reorder_all_tiles    = -1;
+    static constexpr int c_reorder_active_tiles = -2;
+    auto reorder_charts_by_bake(int tile = c_reorder_all_tiles) -> bool;
 
     // Executes a reorder the window button requested. Called from the
     // editor tick BEFORE any lightmap commands are recorded: the reorder

@@ -5394,6 +5394,15 @@ auto Lightmap_baker::get_tile_sweeps(const int tile) const -> uint32_t
     return m_tiles[static_cast<std::size_t>(tile)].sweeps;
 }
 
+auto Lightmap_baker::is_tile_active(const int tile) const -> bool
+{
+    if ((tile < 0) || (tile >= static_cast<int>(m_tiles.size()))) {
+        return false;
+    }
+    const Tile_state& state = m_tiles[static_cast<std::size_t>(tile)];
+    return state.has_content && state.active;
+}
+
 auto Lightmap_baker::restore_tile(
     const int                       tile,
     const int                       width,
