@@ -87,6 +87,7 @@
 #include "renderers/lightmap_report.hpp"
 #include "renderers/lightmap_partitioner.hpp"
 #include "renderers/lightmap_streamer.hpp"
+#include "renderers/lightmap_tile_io.hpp"
 #include "renderers/ray_trace_renderer.hpp"
 #include "renderers/sky_renderer.hpp"
 #include "rendergraph/post_processing.hpp"
@@ -3040,6 +3041,21 @@ public:
             name,
             enable_physics
         );
+        // A from-scratch scene has no source path, so its tile-set
+        // directory is the shared untitled.lightmap/ - whatever a previous
+        // unsaved scene left there is foreign to this one (mismatched
+        // manifests / payload sizes error into the log and stale tiles
+        // stream in). Start clean.
+        {
+            const std::filesystem::path directory = Lightmap_tile_io::directory_for_scene(m_default_scene->get_source_path());
+            std::string error;
+            const int removed = Lightmap_tile_io::delete_tile_set(directory, &error);
+            if (removed > 0) {
+                log_startup->info("scene.create: removed {} stale lightmap tile files from {}", removed, directory.string());
+            } else if (removed < 0) {
+                log_startup->warn("scene.create: could not clear stale lightmap tiles: {}", error);
+            }
+        }
         m_default_scene->register_to_editor_scenes(*m_app_scenes);
         // The content library is shown nested under the Scene row in the Hierarchy
         // window (#240); the standalone Content Library window was removed (#241).

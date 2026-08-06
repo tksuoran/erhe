@@ -444,6 +444,37 @@ auto Lightmap_window::save_tile_to_disk(const int tile) -> bool
     return saved;
 }
 
+auto Lightmap_window::clear_all_tiles() -> bool
+{
+    if (m_context.lightmap_baker == nullptr) {
+        return false;
+    }
+    if (m_context.lightmap_baker->is_offline_bake_active()) {
+        return false;
+    }
+    const std::shared_ptr<Scene_root> scene_root = m_context.selection->get_active_scene_root();
+    if (!scene_root) {
+        return false;
+    }
+    m_context.lightmap_baker->clear_tiles();
+    const std::filesystem::path directory = Lightmap_tile_io::directory_for_scene(scene_root->get_source_path());
+    std::string error;
+    const int removed = Lightmap_tile_io::delete_tile_set(directory, &error);
+    if (removed < 0) {
+        if (m_context.lightmap_report != nullptr) {
+            m_context.lightmap_report->add_error(Lightmap_report::Stage::persist, directory.string(), error);
+        }
+    } else {
+        log_render->info("Lightmap_window: Clear All Tiles removed {} files from {}", removed, directory.string());
+    }
+    // The disk set is gone; drop the streamer's residency and make it
+    // notice the missing manifest.
+    if (m_context.lightmap_streamer != nullptr) {
+        m_context.lightmap_streamer->invalidate();
+    }
+    return true;
+}
+
 auto Lightmap_window::save_all_tiles() -> std::size_t
 {
     if (m_context.lightmap_baker == nullptr) {
@@ -1293,6 +1324,17 @@ void Lightmap_window::imgui()
                     "state) to <scene>.lightmap/ right now. Non-resident tiles have no content in\n"
                     "memory - use Batch Process All Tiles to bake and persist those. Evicted\n"
                     "tiles are saved automatically."
+                );
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Clear All Tiles")) {
+                clear_all_tiles();
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip(
+                    "Forget all baked content: the display clears to white, accumulation\n"
+                    "restarts, and the on-disk tile set (<scene>.lightmap/) is DELETED.\n"
+                    "Rebake with Start / Single Iteration / Batch Process."
                 );
             }
         } else {

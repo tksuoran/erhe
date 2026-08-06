@@ -131,6 +131,7 @@ private:
     auto action_lightmap_set_baking  (const nlohmann::json& args) -> std::string;
     auto action_lightmap_bake_to_disk(const nlohmann::json& args) -> std::string;
     auto action_lightmap_save_all_tiles(const nlohmann::json& args) -> std::string;
+    auto action_lightmap_clear_tiles  (const nlohmann::json& args) -> std::string;
     auto action_lightmap_prepare_tiles(const nlohmann::json& args) -> std::string;
     auto action_lightmap_revert_tiles (const nlohmann::json& args) -> std::string;
     auto action_lightmap_prepare_cancel(const nlohmann::json& args) -> std::string;

@@ -375,6 +375,12 @@ public:
     void monitor_paused_scene(Scene_root& scene_root);
     [[nodiscard]] auto is_display_content_stale() const -> bool { return m_scene_stale; }
 
+    // Clear All Tiles: forget all baked content (white display, restart
+    // accumulation, drop pending saves/restores). The caller deletes the
+    // on-disk set (Lightmap_tile_io::delete_tile_set) and invalidates the
+    // streamer.
+    void clear_tiles();
+
     [[nodiscard]] auto get_layout() const -> const Atlas_layout& { return m_layout; }
 
     // Rasterize the texel G-buffer for one spatial tile of the current

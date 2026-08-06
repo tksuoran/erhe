@@ -403,6 +403,26 @@ auto Mcp_server::action_lightmap_save_all_tiles(const json& args) -> std::string
     }).dump();
 }
 
+auto Mcp_server::action_lightmap_clear_tiles(const json& args) -> std::string
+{
+    static_cast<void>(args);
+    if ((m_context.lightmap_window == nullptr) || (m_context.lightmap_baker == nullptr)) {
+        return make_error_content("Lightmap window / baker not available");
+    }
+    const std::shared_ptr<Scene_root> scene_root = m_context.selection ? m_context.selection->get_active_scene_root() : nullptr;
+    if (!scene_root) {
+        return make_error_content("No active scene");
+    }
+    const std::filesystem::path directory = Lightmap_tile_io::directory_for_scene(scene_root->get_source_path());
+    if (!m_context.lightmap_window->clear_all_tiles()) {
+        return make_error_content("Clear failed (offline bake running?)");
+    }
+    return make_json_content({
+        {"cleared",   true},
+        {"directory", directory.string()}
+    }).dump();
+}
+
 auto Mcp_server::action_lightmap_prepare_tiles(const json& args) -> std::string
 {
     const std::string scene_name = args.value("scene_name", "");

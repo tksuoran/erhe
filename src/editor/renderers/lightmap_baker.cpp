@@ -4532,6 +4532,34 @@ void Lightmap_baker::clear_display_to_white()
     log_render->info("Lightmap_baker: display atlas cleared to white");
 }
 
+void Lightmap_baker::clear_tiles()
+{
+    // Forget all baked content (Clear All Tiles): white display, restart
+    // accumulation, drop the pending save/restore queues. Filesystem
+    // cleanup (Lightmap_tile_io::delete_tile_set) is the caller's job.
+    clear_display_to_white();
+    for (Tile_state& state : m_tiles) {
+        state.accum_dirty         = true;
+        state.sweeps              = 0;
+        state.dirty_since_save    = false;
+        state.restore_hold_sweeps = 0;
+        // The disk set is being deleted; future restore attempts decline
+        // quietly on the missing manifest.
+        state.restore_attempted   = false;
+    }
+    m_tiles_pending_save.clear();
+    m_tiles_pending_restore.clear();
+    m_reset_requested = true;
+    if (!m_baking_enabled) {
+        // Paused: reuse the stale-display takeover so the editor binds the
+        // (white) baker display instead of leaving a dropped streamer
+        // texture in the binding. Start clears the flag and rebakes.
+        publish_regions();
+        m_scene_stale = true;
+    }
+    log_render->info("Lightmap_baker: all tiles cleared");
+}
+
 void Lightmap_baker::release_working_set()
 {
     // Everything here is rebuilt on demand by the next enabled tick

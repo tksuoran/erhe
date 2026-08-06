@@ -102,6 +102,15 @@ public:
     static auto write_manifest(const std::filesystem::path& directory, const Manifest& manifest, std::string* error) -> bool;
     static auto read_manifest (const std::filesystem::path& directory, Manifest& out_manifest, std::string* error) -> bool;
 
+    // Delete the tile set: manifest.json + every tile_*.lmt in the
+    // directory (only set files - nothing else is touched), then the
+    // directory itself when it ends up empty. Returns how many files were
+    // removed; -1 with error filled when a removal failed. A missing
+    // directory is not an error (returns 0). Used by the Lightmap window's
+    // Clear All Tiles and by scratch scene creation (a new unsaved scene
+    // must not inherit another session's untitled.lightmap set).
+    static auto delete_tile_set(const std::filesystem::path& directory, std::string* error) -> int;
+
     // Tile payload round-trip. rgba16 is width * height * 4 fp16 values
     // (bit patterns); write converts nothing - callers convert from float
     // with float_to_half() when needed. sweeps is the accumulation sweep

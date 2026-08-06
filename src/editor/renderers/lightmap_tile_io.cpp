@@ -45,6 +45,43 @@ auto Lightmap_tile_io::payload_name(const int level, const int ix, const int iz)
     return fmt::format("tile_L{}_{}_{}.lmt", level, ix, iz);
 }
 
+auto Lightmap_tile_io::delete_tile_set(const std::filesystem::path& directory, std::string* const error) -> int
+{
+    std::error_code ec;
+    if (!std::filesystem::exists(directory, ec) || ec) {
+        return 0; // nothing saved - the common quiet case
+    }
+    int removed = 0;
+    for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator{directory, ec}) {
+        if (ec) {
+            break;
+        }
+        if (!entry.is_regular_file(ec) || ec) {
+            continue;
+        }
+        const std::string filename = entry.path().filename().string();
+        const bool is_set_file =
+            (filename == "manifest.json") ||
+            (filename.starts_with("tile_") && filename.ends_with(".lmt"));
+        if (!is_set_file) {
+            continue; // only set files; leave anything else alone
+        }
+        std::error_code remove_ec;
+        if (std::filesystem::remove(entry.path(), remove_ec) && !remove_ec) {
+            ++removed;
+        } else if (error != nullptr) {
+            *error = fmt::format("cannot remove {}: {}", entry.path().string(), remove_ec.message());
+            return -1;
+        }
+    }
+    // Drop the directory itself when the set was all it held.
+    std::error_code empty_ec;
+    if (std::filesystem::is_empty(directory, empty_ec) && !empty_ec) {
+        std::filesystem::remove(directory, empty_ec);
+    }
+    return removed;
+}
+
 auto Lightmap_tile_io::node_path(const erhe::scene::Node* const node) -> std::string
 {
     if (node == nullptr) {

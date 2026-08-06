@@ -77,6 +77,12 @@ public:
     // Saves every resident, published tile. Returns how many were saved.
     auto save_all_tiles() -> std::size_t;
 
+    // Clear All Tiles: forget all baked content (white display, restart
+    // accumulation) AND delete the scene's on-disk tile set
+    // (<scene>.lightmap/). False without a baker / active scene or while
+    // the offline bake runs.
+    auto clear_all_tiles() -> bool;
+
     // Quadtree grid density control (scene-persisted leaf overrides,
     // Scene_settings::lightmap_tile_overrides). subdivide_tile splits a
     // current leaf into 4 half-size cells (2x nominal texel density);

@@ -929,6 +929,10 @@ void Mcp_server::refresh_tool_list()
         {"type", "object"},
         {"properties", json::object()}
     }});
+    m_tool_infos.push_back({"lightmap_clear_tiles", "Clear All Tiles: forget all baked lightmap content (display clears to white, accumulation restarts) AND delete the active scene's on-disk tile set (<scene>.lightmap/: manifest.json + tile_*.lmt; other files untouched). Rebake with lightmap_set_baking / lightmap_bake_to_disk. Refuses while the offline bake runs.", {
+        {"type", "object"},
+        {"properties", json::object()}
+    }});
     m_tool_infos.push_back({"lightmap_prepare_tiles", "Prepare world-space lightmap tiles: make every lightmapped mesh/primitive instance unique, bake its node transform into the vertices (world space), clip the geometry against the spatial kd tile planes (clip vertices are binary exact across the two tiles sharing a plane) and re-unwrap each piece's channel-2 UVs at world-space density. Pieces become Mesh_primitives of new meshes under the identity 'Lightmap Pieces' group node; originals stay in the scene for lightmap_revert_tiles / re-prepare. Self-contained: the spatial grid split is computed from geometry alone and the per-tile density comes from the grid (tile_texture_size / cell size). On commit the display atlas clears to white and a single bake iteration runs automatically, then pauses (with the pause autosave). ASYNC by default: returns {queued:true} immediately and the heavy phase runs in the background while the old partition stays live; poll get_async_status until pending + running + queued_operations == 0, then read its lightmap_prepare.last_result (a mid-flight primitive swap aborts the commit and keeps the old partition; cancel with lightmap_prepare_cancel). Refuses while async mesh operations or another prepare are in flight. Toggle rendering between originals and pieces with lightmap_set_render.", {
         {"type", "object"},
         {"properties", {
