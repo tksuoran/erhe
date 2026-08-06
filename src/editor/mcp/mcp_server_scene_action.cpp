@@ -11,6 +11,7 @@
 #include "renderers/lightmap_tile_io.hpp"
 #include "windows/lightmap_texture_window.hpp"
 #include "windows/lightmap_window.hpp"
+#include "windows/viewport_config_window.hpp"
 #include "scene/generated/scene_settings_serialization.hpp"
 #include "tools/clipboard.hpp"
 
@@ -625,7 +626,13 @@ auto Mcp_server::action_lightmap_set_render(const json& args) -> std::string
         return make_error_content("Lightmap partitioner not available");
     }
     if (args.contains("enabled")) {
-        m_context.lightmap_partitioner->set_render_with_lightmaps(args.value("enabled", false));
+        // Same mirror as the Lightmap window checkbox: sets every scene view's
+        // Visual Style shadow mode (Baked Lightmaps also disables that view's
+        // shadow-map updates) and re-applies the global proxy swap.
+        Viewport_config_window::set_shadow_mode_all_views(
+            m_context,
+            args.value("enabled", false) ? Shadow_mode::baked_lightmaps : Shadow_mode::shadow_maps
+        );
     }
     return make_json_content({
         {"render_with_lightmaps", m_context.lightmap_partitioner->get_render_with_lightmaps()},

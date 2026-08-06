@@ -793,6 +793,8 @@ set(_config_sources
     ${_config_out}/shadow_cull_mode.cpp
     ${_config_out}/shadow_technique_mode.hpp
     ${_config_out}/shadow_technique_mode.cpp
+    ${_config_out}/shadow_mode.hpp
+    ${_config_out}/shadow_mode.cpp
     ${_config_out}/graphics_preset_entry.hpp
     ${_config_out}/graphics_preset_entry_serialization.hpp
     ${_config_out}/graphics_preset_entry.cpp

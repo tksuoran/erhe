@@ -443,10 +443,13 @@ auto Light_buffer::update(
 
     uint64_t shadow_map_texture_handle_compare    = erhe::graphics::invalid_texture_handle;
     uint64_t shadow_map_texture_handle_no_compare = erhe::graphics::invalid_texture_handle;
+    // No shadow map (no Light_projections at all, or Light_projections::apply()
+    // ran with a null texture - the per-view "shadows off" path in
+    // Shadow_render_node): leave the handles at invalid_texture_handle so the
+    // shader's max_u32 "no shadow map" sentinel fires and every light shades
+    // unshadowed. bind_shadow_samplers() below still binds the fallback texture
+    // to keep the sampler bindings valid; it is never sampled then.
     erhe::graphics::Texture* shadow_map_texture = light_projections ? light_projections->shadow_map_texture.get() : nullptr;
-    if (shadow_map_texture == nullptr) {
-        shadow_map_texture = m_fallback_shadow_texture.get();
-    }
     if (shadow_map_texture != nullptr) {
         // The handles written into the UBO are only used as a "shadow
         // texture present" sentinel on all backends: the shader reads
@@ -608,6 +611,8 @@ void Light_buffer::bind_shadow_samplers(
     const Light_projections*                light_projections
 )
 {
+    ERHE_PROFILE_FUNCTION();
+
     // Bind the shadow map to the named sampler bindings declared in the
     // bind group layout (s_shadow_compare and s_shadow_no_compare). The
     // depth aspect comes from the layout binding's Sampler_aspect::depth
@@ -661,6 +666,8 @@ void Light_buffer::bind_lightmap(
     const erhe::graphics::Texture*          lightmap_texture
 )
 {
+    ERHE_PROFILE_FUNCTION();
+
     const erhe::graphics::Texture* texture = (lightmap_texture != nullptr)
         ? lightmap_texture
         : m_fallback_lightmap_texture.get();

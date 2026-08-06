@@ -163,6 +163,9 @@ public:
     [[nodiscard]] auto owns_pointer_capture(const Viewport_scene_view* scene_view) const -> bool;
     [[nodiscard]] auto get_post_processing_nodes() const -> const std::vector<std::shared_ptr<Post_processing_node>>&;
     [[nodiscard]] auto get_viewport_windows() const -> const std::vector<std::shared_ptr<Viewport_window>>&;
+    // All live viewport scene views. Used by the Visual Style shadow-mode <->
+    // Lightmap window render-with-lightmaps mirror (Viewport_config_window).
+    [[nodiscard]] auto get_viewport_scene_views() const -> const std::vector<std::shared_ptr<Viewport_scene_view>>&;
 
 private:
     // Camera to show when binding a scene to a viewport: a selected camera

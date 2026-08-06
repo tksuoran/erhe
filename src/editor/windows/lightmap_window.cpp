@@ -14,6 +14,7 @@
 
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
+#include "windows/viewport_config_window.hpp"
 
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_graphics/device.hpp"
@@ -1007,14 +1008,23 @@ void Lightmap_window::imgui()
                     );
                 }
                 if (ImGui::Checkbox("Render with lightmaps", &config.render_with_lightmaps)) {
-                    partitioner.set_render_with_lightmaps(config.render_with_lightmaps);
-                    m_context.app_settings->settings_store().touch();
+                    // Global control mirrored with the per-view Visual Style
+                    // shadow mode: ON sets every scene view to Baked Lightmaps
+                    // (which also disables its shadow-map updates), OFF back to
+                    // Shadow Maps. This also re-applies the partitioner proxy
+                    // swap and touches the settings store.
+                    Viewport_config_window::set_shadow_mode_all_views(
+                        m_context,
+                        config.render_with_lightmaps ? Shadow_mode::baked_lightmaps : Shadow_mode::shadow_maps
+                    );
                 }
                 if (ImGui::IsItemHovered()) {
                     ImGui::SetTooltip(
                         "ON: the world-space piece meshes render (every lightmapped mesh, regardless\n"
                         "of which tiles are loaded; non-resident tiles fall back to white).\n"
-                        "OFF: the original meshes render."
+                        "OFF: the original meshes render.\n"
+                        "Mirrors the Visual Style 'Shadows' mode of every scene view\n"
+                        "(Baked Lightmaps when on, Shadow Maps when off)."
                     );
                 }
                 // Reorder Charts By Bake (per-facet mode only: the order

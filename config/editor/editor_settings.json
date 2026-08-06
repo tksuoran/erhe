@@ -1,11 +1,11 @@
 {
-    "_version": 18,
+    "_version": 19,
     "camera_controls": {
         "invert_x": false,
         "invert_y": false,
         "sensitivity": 1,
         "velocity_damp": 0.92,
-        "velocity_max_delta": 0.004,
+        "velocity_max_delta": 0.048,
         "move_power": 1000,
         "move_speed": 2,
         "turn_speed": 1
@@ -202,6 +202,7 @@
                 "vertex_positions": false
             },
             "viewport_config": {
+                "_version": 2,
                 "render_style_not_selected": {
                     "_version": 2,
                     "polygon_fill": true,
@@ -223,7 +224,8 @@
                     "camera": "selected"
                 },
                 "selection_bounding_box": false,
-                "selection_bounding_sphere": false
+                "selection_bounding_sphere": false,
+                "shadow_mode": "shadow_maps"
             },
             "scene_and_camera": {
                 "scene_name": "",
@@ -286,6 +288,7 @@
                 "vertex_positions": false
             },
             "viewport_config": {
+                "_version": 2,
                 "render_style_not_selected": {
                     "_version": 2,
                     "polygon_fill": true,
@@ -307,11 +310,98 @@
                     "camera": "selected"
                 },
                 "selection_bounding_box": false,
-                "selection_bounding_sphere": false
+                "selection_bounding_sphere": false,
+                "shadow_mode": "baked_lightmaps"
             },
             "scene_and_camera": {
-                "scene_name": "Default Scene",
+                "scene_name": "Floor Only Scene",
                 "camera_name": "Camera A",
+                "shadow_fit_override_camera_name": "",
+                "shader_debug": 0,
+                "renderer_choice": 0
+            }
+        },
+        {
+            "_version": 2,
+            "name": "Scene 1",
+            "debug_visualizations": {
+                "_version": 11,
+                "lights": "off",
+                "cameras": "off",
+                "layouts": "off",
+                "skins": "off",
+                "node_axises": "off",
+                "physics": "off",
+                "raytrace": "off",
+                "vertex_labels": "off",
+                "facet_labels": "off",
+                "edge_labels": "off",
+                "corner_labels": "off",
+                "world_axes": false,
+                "shadow_debug": false,
+                "shadow_fit_debug": false,
+                "shadow_fit_casters": false,
+                "shadow_fit_caster_hull": false,
+                "shadow_fit_view_frustum": false,
+                "shadow_fit_receivers": false,
+                "shadow_fit_receiver_hull": false,
+                "shadow_fit_receiver_hull_unclipped": false,
+                "shadow_fit_volume_planes": false,
+                "shadow_fit_far_plane_hull": false,
+                "shadow_fit_points": false,
+                "shadow_fit_light_plane_hull": false,
+                "shadow_fit_box_fit": false,
+                "shadow_fit_box_frustum": false,
+                "shadow_fit_box_cap": false,
+                "shadow_fit_box_final": false,
+                "selection": true,
+                "selection_bounding_points": false,
+                "selection_box": false,
+                "selection_sphere": false,
+                "selection_parts": false,
+                "selection_convex_hull": false,
+                "selection_convex_hull_projected": false,
+                "debug_convex_hull": false,
+                "convex_hull_edge": 0,
+                "gap": 0.003,
+                "tool_hide": false,
+                "frustum_box": false,
+                "frustum_planes": false,
+                "camera_cull_test": false,
+                "mesh_primitive_boxes": false,
+                "bone_boxes": false,
+                "max_labels": 400,
+                "vertex_positions": false
+            },
+            "viewport_config": {
+                "_version": 2,
+                "render_style_not_selected": {
+                    "_version": 2,
+                    "polygon_fill": true,
+                    "edge_lines": true,
+                    "solid_wireframe": false,
+                    "polygon_centroids": false,
+                    "corner_points": false
+                },
+                "render_style_selected": {
+                    "_version": 2,
+                    "polygon_fill": true,
+                    "edge_lines": true,
+                    "solid_wireframe": false,
+                    "polygon_centroids": false,
+                    "corner_points": false
+                },
+                "debug_visualizations": {
+                    "light": "selected",
+                    "camera": "selected"
+                },
+                "selection_bounding_box": false,
+                "selection_bounding_sphere": false,
+                "shadow_mode": "shadow_maps"
+            },
+            "scene_and_camera": {
+                "scene_name": "Scene 1",
+                "camera_name": "Camera",
                 "shadow_fit_override_camera_name": "",
                 "shader_debug": 0,
                 "renderer_choice": 0
@@ -398,8 +488,8 @@
         "max_bounces": 8
     },
     "lightmap": {
-        "_version": 7,
-        "texels_per_meter": 100,
+        "_version": 11,
+        "cell_size_m": 10,
         "hard_angles_deg": 60,
         "uv_parameterizer": 4,
         "uv_packer": 2,
@@ -407,7 +497,11 @@
         "uv_min_chart_texels": 2,
         "coverage_mode": 0,
         "supersample_points": 0,
-        "active_tile_budget": 0,
+        "active_tile_budget": 9,
+        "tile_texture_size": 256,
+        "resident_tile_budget": 14,
+        "offline_sweeps": 64,
+        "render_with_lightmaps": true,
         "indirect_bounce": true,
         "terminator_fix": true,
         "denoise": true,
@@ -481,6 +575,11 @@
             { "_version": 4 },
             { "_version": 4 }
         ]
+    },
+    "load": {
+        "deferred_raytrace": true,
+        "deferred_edge_lines": true,
+        "parallel_gltf_parse": true
     },
     "network": {
         "upstream_address": "127.0.0.1",

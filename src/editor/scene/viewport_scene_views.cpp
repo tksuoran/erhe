@@ -849,6 +849,11 @@ auto Scene_views::get_viewport_windows() const -> const std::vector<std::shared_
     return m_viewport_windows;
 }
 
+auto Scene_views::get_viewport_scene_views() const -> const std::vector<std::shared_ptr<Viewport_scene_view>>&
+{
+    return m_viewport_scene_views;
+}
+
 void Scene_views::update_transforms()
 {
     for (auto& view : m_viewport_scene_views) {
