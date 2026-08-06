@@ -4437,6 +4437,9 @@ void Lightmap_baker::set_baking_enabled(const bool enabled)
         // atlas slots; re-publish ours on the first tick (sampling the
         // baker display atlas through streamer offsets renders garbage).
         m_regions_published = false;
+        // A paused-scene staleness white-out ends here: the first tick's
+        // own hash checks perform the real reset/relayout and rebake.
+        m_scene_stale = false;
     }
 }
 
@@ -4807,26 +4810,29 @@ void Lightmap_baker::record_seam_blend(erhe::graphics::Command_buffer& command_b
     vertex_range.release();
 }
 
-void Lightmap_baker::tick(
-    erhe::graphics::Command_buffer& command_buffer,
-    Scene_root&                     scene_root,
-    const float                     min_face_texels,
-    const glm::vec3*                camera_position,
-    const int                       max_active_tiles
-)
+auto Lightmap_baker::compute_region_transform_hash() const -> uint64_t
 {
-    using namespace erhe::graphics;
-
-    if (!m_gather_pipeline || !m_resolve_pipeline) {
-        return;
+    uint64_t hash = 0xcbf29ce484222325ull;
+    for (const Instance_region& region : m_layout.regions) {
+        const erhe::scene::Node* const node = region.mesh ? region.mesh->get_node() : nullptr;
+        if (node != nullptr) {
+            const glm::mat4 world_from_node = node->world_from_node();
+            hash = fnv1a64(&world_from_node, sizeof(world_from_node), hash);
+        }
     }
+    return hash;
+}
 
-    // Change detection (plan section 3a step 1), cheapest response first.
-    // Three tiers of FNV hashes over the bake inputs:
-    //   layout   - the lightmapped set + grid parameters -> redo atlas layout
-    //   gbuffer  - lightmapped region transforms         -> re-raster G-buffer
-    //   lighting - lights + occluder transforms          -> reset accumulation
-    // Each tier implies the tiers below it.
+// Change detection (plan section 3a step 1), cheapest response first.
+// Three tiers of FNV hashes over the bake inputs:
+//   layout   - the lightmapped set + grid parameters -> redo atlas layout
+//   gbuffer  - lightmapped region transforms         -> re-raster G-buffer
+//   lighting - lights + occluder transforms          -> reset accumulation
+// Each tier implies the tiers below it. Shared by the tick and the paused
+// monitor (monitor_paused_scene).
+auto Lightmap_baker::compute_scene_hashes(Scene_root& scene_root) const -> Scene_hashes
+{
+    Scene_hashes result;
     uint64_t hash_layout = 0xcbf29ce484222325ull;
     {
         // Grid parameters (cell size + quadtree overrides): a subdivide /
@@ -4870,18 +4876,8 @@ void Lightmap_baker::tick(
             }
         }
     }
-    const auto region_hash = [this]() -> uint64_t {
-        uint64_t hash = 0xcbf29ce484222325ull;
-        for (const Instance_region& region : m_layout.regions) {
-            const erhe::scene::Node* const node = region.mesh ? region.mesh->get_node() : nullptr;
-            if (node != nullptr) {
-                const glm::mat4 world_from_node = node->world_from_node();
-                hash = fnv1a64(&world_from_node, sizeof(world_from_node), hash);
-            }
-        }
-        return hash;
-    };
-    uint64_t hash_gbuffer = region_hash();
+    result.layout  = hash_layout;
+    result.gbuffer = compute_region_transform_hash();
     uint64_t hash_lighting = 0xcbf29ce484222325ull;
     for (const std::shared_ptr<erhe::scene::Light>& light : scene_root.layers().light()->lights) {
         if (!light || !light->is_visible()) {
@@ -4928,6 +4924,63 @@ void Lightmap_baker::tick(
         const glm::mat4 world_from_node = node->world_from_node();
         hash_lighting = fnv1a64(&world_from_node, sizeof(world_from_node), hash_lighting);
     }
+    result.lighting = hash_lighting;
+    return result;
+}
+
+void Lightmap_baker::monitor_paused_scene(Scene_root& scene_root)
+{
+    // Paused change detection: the tick's hash checks only run while
+    // baking, so without this a paused lightmap keeps showing pre-edit
+    // lighting until Start. On any change: white-out the display, block
+    // disk restores (payloads are pre-edit too) and flag the staleness -
+    // the editor then keeps the lightmap binding on the (white) baker
+    // display instead of the streamer's equally stale disk set. The
+    // stored hashes stay untouched, so the first tick after Start still
+    // performs the real relayout/reset/rebake.
+    if (m_baking_enabled || m_scene_stale || !m_hashes_initialized) {
+        return;
+    }
+    if ((m_layout_scene_root != &scene_root) || (m_layout.width == 0) || m_tiles.empty()) {
+        return;
+    }
+    if (!has_published_display()) {
+        return; // nothing stale is showing
+    }
+    const Scene_hashes hashes = compute_scene_hashes(scene_root);
+    if ((hashes.layout == m_hash_layout) && (hashes.gbuffer == m_hash_gbuffer) && (hashes.lighting == m_hash_lighting)) {
+        return;
+    }
+    clear_display_to_white();
+    // The streamer may have owned the binding (and the mappings) since the
+    // pause autosave; point the regions back at the (white) baker display.
+    publish_regions();
+    for (Tile_state& state : m_tiles) {
+        state.restore_attempted = true;
+    }
+    m_tiles_pending_restore.clear();
+    m_scene_stale = true;
+    log_render->info("Lightmap_baker: scene changed while paused - display cleared to white until the next bake");
+}
+
+void Lightmap_baker::tick(
+    erhe::graphics::Command_buffer& command_buffer,
+    Scene_root&                     scene_root,
+    const float                     min_face_texels,
+    const glm::vec3*                camera_position,
+    const int                       max_active_tiles
+)
+{
+    using namespace erhe::graphics;
+
+    if (!m_gather_pipeline || !m_resolve_pipeline) {
+        return;
+    }
+
+    const Scene_hashes scene_hashes = compute_scene_hashes(scene_root);
+    uint64_t hash_layout   = scene_hashes.layout;
+    uint64_t hash_gbuffer  = scene_hashes.gbuffer;
+    uint64_t hash_lighting = scene_hashes.lighting;
 
     bool reset = m_reset_requested;
     if (!m_hashes_initialized) {
@@ -4945,7 +4998,7 @@ void Lightmap_baker::tick(
             }
             // Regions changed; re-derive their transform hash so the next
             // tick does not see a spurious G-buffer invalidation.
-            hash_gbuffer = region_hash();
+            hash_gbuffer = compute_region_transform_hash();
             reset = true;
             // The swap that changed the layout was applied THIS frame; its
             // vertex uploads have not been submitted yet (see the member's
@@ -5226,7 +5279,7 @@ void Lightmap_baker::tick(
         if (!bake_gbuffer(m_cursor_tile)) {
             return;
         }
-        m_hash_gbuffer = region_hash();
+        m_hash_gbuffer = compute_region_transform_hash();
     }
 
     ensure_bake_targets(command_buffer);

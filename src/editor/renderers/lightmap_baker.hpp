@@ -363,6 +363,18 @@ public:
     // resident set (Tile_state::active). Drives the per-active-set reorder.
     [[nodiscard]] auto is_tile_active(int tile) const -> bool;
 
+    // Paused change detection (call once per frame while NOT baking): the
+    // tick's hash checks only run while baking, so scene edits made while
+    // paused would otherwise keep showing pre-edit lighting until Start.
+    // On any change this white-outs the display, re-publishes the baker
+    // mappings, blocks disk restores (payloads are pre-edit too) and sets
+    // the staleness flag - the editor then keeps the lightmap binding on
+    // the (white) baker display instead of the streamer's equally stale
+    // disk set. The flag clears when baking resumes (the first tick's own
+    // hash checks perform the real reset/relayout).
+    void monitor_paused_scene(Scene_root& scene_root);
+    [[nodiscard]] auto is_display_content_stale() const -> bool { return m_scene_stale; }
+
     [[nodiscard]] auto get_layout() const -> const Atlas_layout& { return m_layout; }
 
     // Rasterize the texel G-buffer for one spatial tile of the current
@@ -542,6 +554,18 @@ private:
     // Pause autosave: park resident published unsaved tiles in the
     // pending-save queue for the owner's drain.
     void queue_dirty_tiles_for_save();
+
+    // Three-tier change-detection hashes over the bake inputs (see
+    // compute_scene_hashes); shared by tick() and monitor_paused_scene().
+    class Scene_hashes
+    {
+    public:
+        uint64_t layout  {0};
+        uint64_t gbuffer {0};
+        uint64_t lighting{0};
+    };
+    [[nodiscard]] auto compute_scene_hashes         (Scene_root& scene_root) const -> Scene_hashes;
+    [[nodiscard]] auto compute_region_transform_hash() const -> uint64_t;
 
     // Per-TLAS-instance record for the gather's bounce-ray attribute fetch
     // (mirrors Ray_trace_renderer::Instance_record_data; std430). Instances
@@ -898,6 +922,10 @@ private:
     Sky_lighting m_sky{};
     bool     m_baking_enabled   {false};
     bool     m_reset_requested  {false};
+    // The scene changed while paused (monitor_paused_scene): the display
+    // was white-cleared and the baker holds the lightmap binding until
+    // baking resumes.
+    bool     m_scene_stale      {false};
     // Single Iteration (request_single_iteration): pause the bake once the
     // minimum active-tile sweep count reaches the target.
     bool     m_pause_after_sweep{false};

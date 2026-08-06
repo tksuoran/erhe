@@ -854,6 +854,13 @@ public:
                     lightmap_camera_position_ptr = &lightmap_camera_position;
                 }
             }
+            // Paused change detection: scene edits made while NOT baking
+            // must not keep showing pre-edit lighting (the tick's hash
+            // checks only run while baking); on a change the baker white-
+            // outs its display and takes the binding below.
+            if (should_render && m_lightmap_baker && !m_lightmap_baker->is_baking_enabled() && lightmap_scene_root) {
+                m_lightmap_baker->monitor_paused_scene(*lightmap_scene_root.get());
+            }
             if (should_render && m_lightmap_baker && m_lightmap_baker->is_baking_enabled()) {
                 m_lightmap_baker_owned_binding = true;
                 if (lightmap_scene_root) {
@@ -905,7 +912,8 @@ public:
                 lightmap_scene_root &&
                 (!m_lightmap_baker ||
                  (!m_lightmap_baker->is_offline_bake_active() &&
-                  !m_lightmap_baker->has_unsaved_published_display()))
+                  !m_lightmap_baker->has_unsaved_published_display() &&
+                  !m_lightmap_baker->is_display_content_stale()))
             ) {
                 // Baked-tile streaming from <scene>.lightmap/: whenever the
                 // interactive / offline baker does not own the lightmap
@@ -930,6 +938,18 @@ public:
                 if (m_lightmap_streamer->has_resident_tiles()) {
                     m_forward_renderer->set_lightmap_texture(m_lightmap_streamer->get_texture());
                 }
+            } else if (
+                should_render &&
+                m_lightmap_baker &&
+                m_lightmap_baker->is_display_content_stale() &&
+                m_lightmap_baker->get_lightmap_texture()
+            ) {
+                // Paused-and-stale: the monitor white-cleared the baker
+                // display and re-published its mappings; actively rebind it
+                // (the streamer may have held the binding since the pause
+                // autosave). The baker owns the binding until Start.
+                m_lightmap_baker_owned_binding = true;
+                m_forward_renderer->set_lightmap_texture(m_lightmap_baker->get_lightmap_texture());
             }
         }
 
