@@ -3,6 +3,7 @@
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
 #include "renderers/lightmap_baker.hpp"
+#include "renderers/lightmap_partitioner.hpp"
 #include "scene/scene_view.hpp"
 #include "tools/selection_tool.hpp"
 
@@ -27,6 +28,23 @@
 namespace editor {
 
 namespace {
+
+// Selection and viewport picking target the SOURCE meshes (the pieces are
+// render proxies), while the atlas regions belong to the world-space PIECE
+// meshes - resolve a source mesh to its piece mesh through the live
+// partition (identity when the mesh has no piece / no partition).
+[[nodiscard]] auto resolve_to_piece_mesh(App_context& context, const erhe::scene::Mesh* const mesh) -> const erhe::scene::Mesh*
+{
+    if ((mesh == nullptr) || (context.lightmap_partitioner == nullptr) || !context.lightmap_partitioner->is_prepared()) {
+        return mesh;
+    }
+    for (const Lightmap_partitioner::Original_entry& entry : context.lightmap_partitioner->get_entries()) {
+        if (entry.original_mesh.get() == mesh) {
+            return entry.piece_mesh.get();
+        }
+    }
+    return mesh;
+}
 
 [[nodiscard]] auto hash_edge(std::uint32_t v0, std::uint32_t v1, const glm::vec2& uv0, const glm::vec2& uv1) -> std::uint64_t
 {
@@ -471,9 +489,12 @@ void Lightmap_texture_window::imgui()
                 if (!selected_mesh) {
                     continue;
                 }
+                // Selection holds SOURCE meshes; the regions belong to
+                // their world-space pieces.
+                const erhe::scene::Mesh* const match_mesh = resolve_to_piece_mesh(m_context, selected_mesh.get());
                 for (const Region_overlay& overlay : m_overlays) {
                     const Lightmap_baker::Instance_region& region = layout.regions[overlay.region_index];
-                    if (region.mesh.get() != selected_mesh.get()) {
+                    if (region.mesh.get() != match_mesh) {
                         continue;
                     }
                     frame_lo  = glm::min(frame_lo, overlay.rect_min);
@@ -620,13 +641,25 @@ void Lightmap_texture_window::imgui()
         const Hover_entry& entry = m_hover_scene_view->get_hover(Hover_entry::content_slot);
         const std::shared_ptr<erhe::scene::Mesh> hover_mesh = entry.valid ? entry.scene_mesh_weak.lock() : std::shared_ptr<erhe::scene::Mesh>{};
         if (hover_mesh) {
+            // Picking targets the SOURCE mesh (pieces are render proxies);
+            // regions belong to the piece. A piece region matches by its
+            // SOURCE primitive index (the first matching piece highlights;
+            // Frame Selection covers all of them). Facet ids do not
+            // survive the clip (piece facets are renumbered), so the facet
+            // highlight applies only to direct (non-piece) matches.
+            const erhe::scene::Mesh* const match_mesh = resolve_to_piece_mesh(m_context, hover_mesh.get());
+            const bool                     via_piece  = match_mesh != hover_mesh.get();
             for (const Region_overlay& overlay : m_overlays) {
                 const Lightmap_baker::Instance_region& region = layout.regions[overlay.region_index];
-                if ((region.mesh.get() != hover_mesh.get()) || (region.primitive_index != entry.scene_mesh_primitive_index)) {
+                if (region.mesh.get() != match_mesh) {
+                    continue;
+                }
+                const std::size_t region_primitive = via_piece ? region.source_primitive_index : region.primitive_index;
+                if (region_primitive != entry.scene_mesh_primitive_index) {
                     continue;
                 }
                 hovered_overlay = &overlay;
-                if (entry.facet != GEO::NO_INDEX) {
+                if (!via_piece && (entry.facet != GEO::NO_INDEX)) {
                     hovered_facet = static_cast<std::uint32_t>(entry.facet);
                     for (const Overlay_triangle& triangle : overlay.triangles) {
                         if (triangle.facet == hovered_facet) {
