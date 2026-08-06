@@ -4973,16 +4973,18 @@ void Lightmap_baker::tick(
     }
 
     // Residency (camera streaming): rank tiles by the distance from the
-    // camera to their world bounds and give the N nearest a display slot
-    // (N = the slot grid, further clamped by max_active_tiles > 0). Tiles
-    // that lose their slot stop gathering, release their fp32 accumulation,
-    // zero their regions' published mapping (they render unlit), and their
-    // old display-slot content is overwritten by the new occupant's first
-    // publish. Without a camera the current residency stands.
+    // camera to their world bounds. The N nearest hold a display slot
+    // (N = the slot grid) - RESIDENT tiles keep showing their published
+    // lightmap. Of those, the max_active_tiles nearest (> 0; otherwise
+    // all) actually GATHER - inactive-but-resident tiles keep their slot
+    // and last publish but stop accumulating and release their fp32
+    // accumulation. Tiles that lose their slot render unlit until the
+    // camera returns. Without a camera the current residency stands.
     {
-        const int tile_count = static_cast<int>(m_tiles.size());
-        const int slot_count = m_layout.get_slot_count();
-        int       max_active = std::min(slot_count, tile_count);
+        const int tile_count   = static_cast<int>(m_tiles.size());
+        const int slot_count   = m_layout.get_slot_count();
+        const int max_resident = std::min(slot_count, tile_count);
+        int       max_active   = max_resident;
         if (max_active_tiles > 0) {
             max_active = std::min(max_active, max_active_tiles);
         }
@@ -5025,9 +5027,15 @@ void Lightmap_baker::tick(
                     return lhs < rhs;
                 }
             );
-            std::vector<char> want_active(static_cast<std::size_t>(tile_count), 0);
-            for (std::size_t i = 0; (i < order.size()) && (i < static_cast<std::size_t>(max_active)); ++i) {
-                want_active[static_cast<std::size_t>(order[i])] = 1;
+            // Two nested camera-ranked sets: want_active is a subset of
+            // want_resident by construction (same order, smaller count).
+            std::vector<char> want_resident(static_cast<std::size_t>(tile_count), 0);
+            std::vector<char> want_active  (static_cast<std::size_t>(tile_count), 0);
+            for (std::size_t i = 0; (i < order.size()) && (i < static_cast<std::size_t>(max_resident)); ++i) {
+                want_resident[static_cast<std::size_t>(order[i])] = 1;
+                if (i < static_cast<std::size_t>(max_active)) {
+                    want_active[static_cast<std::size_t>(order[i])] = 1;
+                }
             }
             // Free the slots of tiles leaving the resident set...
             bool residency_changed = false;
@@ -5035,8 +5043,9 @@ void Lightmap_baker::tick(
             for (int tile = 0; tile < tile_count; ++tile) {
                 Tile& layout_tile = m_layout.tiles[static_cast<std::size_t>(tile)];
                 Tile_state& state = m_tiles[static_cast<std::size_t>(tile)];
-                const bool active = want_active[static_cast<std::size_t>(tile)] != 0;
-                if (!active && (layout_tile.slot >= 0)) {
+                const bool resident = want_resident[static_cast<std::size_t>(tile)] != 0;
+                const bool active   = want_active  [static_cast<std::size_t>(tile)] != 0;
+                if (!resident && (layout_tile.slot >= 0)) {
                     if (m_save_on_evict && state.published && state.dirty_since_save) {
                         // Unsaved bake results must reach disk before the
                         // slot is dropped: park the tile in the pending-save
@@ -5073,7 +5082,7 @@ void Lightmap_baker::tick(
             for (int tile = 0; tile < tile_count; ++tile) {
                 Tile& layout_tile = m_layout.tiles[static_cast<std::size_t>(tile)];
                 Tile_state& state = m_tiles[static_cast<std::size_t>(tile)];
-                if (state.active && (layout_tile.slot < 0) && !free_slots.empty()) {
+                if ((want_resident[static_cast<std::size_t>(tile)] != 0) && (layout_tile.slot < 0) && !free_slots.empty()) {
                     layout_tile.slot = free_slots.back();
                     free_slots.pop_back();
                     residency_changed = true;
@@ -5110,7 +5119,10 @@ void Lightmap_baker::tick(
     if (m_save_on_evict) {
         for (int tile = 0; tile < static_cast<int>(m_tiles.size()); ++tile) {
             Tile_state& state = m_tiles[static_cast<std::size_t>(tile)];
-            if (!state.has_content || !state.active || state.published || (state.sweeps != 0) || state.restore_attempted) {
+            // Residency (the slot check below), not activity, gates the
+            // restore: an inactive-but-resident tile displays its slot
+            // without gathering, so it needs its disk content too.
+            if (!state.has_content || state.published || (state.sweeps != 0) || state.restore_attempted) {
                 continue;
             }
             if (m_layout.tiles[static_cast<std::size_t>(tile)].slot < 0) {
