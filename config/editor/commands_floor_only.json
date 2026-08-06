@@ -43,7 +43,7 @@
             "name": "scene.add_room",
             "args": {
                 "floor": true,
-                "floor_size": 4,
+                "floor_size": 32,
                 "floor_height": 1
             }
         }
