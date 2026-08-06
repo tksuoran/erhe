@@ -1,5 +1,53 @@
 # Lightmap spatial tiling + world-space partition - session handoff (2026-08-05)
 
+## UPDATE 2026-08-06: bake lifecycle (pause/resume, staleness = white, scene_id)
+
+Semantics settled across 13 commits (cb42cc32..4bfa56c0):
+
+- **Stop = Pause**: `set_baking_enabled(false)` keeps the whole working
+  set; Start continues, Reset restarts. Pausing (incl. Single Iteration
+  completion) autosaves resident dirty tiles through the save-on-evict
+  drain. **Single Iteration** bakes until the minimum active-tile sweep
+  count + 1, then pauses (repeat presses advance all tiles in lockstep).
+- **Binding/mapping invariant**: the baker and the disk streamer both
+  write `Mesh_primitive::lightmap_uv_scale_offset` in their OWN atlas
+  slot space. Every binding-owner transition must republish: resume
+  drops `m_regions_published`; the baker->streamer handoff calls
+  `Lightmap_streamer::reapply_regions` (editor tracks
+  `m_lightmap_baker_owned_binding`). The streamer owns the binding only
+  when the baker is idle with nothing unsaved and nothing stale.
+- **Staleness always shows WHITE, never an old bake**: the display
+  clear color is white {1,1,1,0}; the prepare commit clears the display
+  immediately (`clear_display_to_white`) and requests a single
+  iteration; freshly assigned display slots are white-overwritten
+  before their first publish (`m_slots_pending_white_clear`; a disk
+  restore unqueues its slot); a reset white-clears inactive resident
+  slots (they never rebake until activated); and
+  `monitor_paused_scene` (the tick's three-tier hashes, factored into
+  `compute_scene_hashes`, run every frame while NOT baking) white-outs
+  the display and takes the binding when the scene changes while
+  paused (`m_scene_stale`, cleared by Start).
+- **Resident vs active are nested camera-ranked sets**: want_resident
+  (the slot grid / resident_tile_budget) drives slot assignment;
+  want_active (its active_tile_budget prefix) only drives gathering.
+  Inactive resident tiles keep their slot + last publish; restore-on-
+  activate gates on residency. Tile-bounds debug: white = active,
+  cyan = resident, purple = non-resident, 2 px constant width.
+- **Side-data ownership**: every scene has a persistent
+  `Scene_settings::scene_id` (lazy `Scene_root::get_scene_id`,
+  timestamp + 64 random bits, saved via the ERHE_scene extension).
+  Manifest v5 stamps it; the streamer (cached foreign-reject) and
+  restore-on-activate reject other scenes' sets - unsaved scenes share
+  untitled.lightmap safely. scene.create purges stale sets on scratch
+  creation; Clear All Tiles (button / MCP lightmap_clear_tiles) wipes
+  memory + disk (`Lightmap_tile_io::delete_tile_set`).
+- Reorder Charts By Bake: all tiles / ACTIVE set / single tile (MCP
+  lightmap_reorder_charts {tile | active:true}); idempotent for
+  unchanged lighting. Texture window Frame Selection + viewport hover
+  resolve SOURCE meshes to their pieces (`resolve_to_piece_mesh`);
+  facet-level hover on pieces would need clip provenance (source facet
+  ids through clip_by_tile_tree) - not implemented.
+
 ## UPDATE 2026-08-05 (latest): legacy standalone flow removed
 
 The legacy non-partitioned flow is GONE (user-directed, no back-compat):
