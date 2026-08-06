@@ -3661,8 +3661,10 @@ void Lightmap_baker::ensure_bake_targets(erhe::graphics::Command_buffer& command
         // m_display_cleared: regions moved, so the previous publish no
         // longer matches the uv_scale_offsets pushed to the meshes).
         // Lighting/transform resets keep the display showing the last
-        // publish while accumulation rebuilds.
-        command_buffer.clear_texture(*m_display_texture, {0.0, 0.0, 0.0, 0.0});
+        // publish while accumulation rebuilds. White = the unbaked look
+        // (matches the piece white-fallback sentinel); alpha 0 keeps "no
+        // coverage" for the atlas readback consumers.
+        command_buffer.clear_texture(*m_display_texture, {1.0, 1.0, 1.0, 0.0});
         command_buffer.transition_texture_layout(*m_display_texture, Image_layout::shader_read_only_optimal);
         m_display_cleared = true;
         for (Tile_state& tile : m_tiles) {
@@ -4456,6 +4458,34 @@ auto Lightmap_baker::has_unsaved_published_display() const -> bool
         }
     }
     return false;
+}
+
+void Lightmap_baker::clear_display_to_white()
+{
+    using namespace erhe::graphics;
+    if (!m_display_texture) {
+        // Not created yet: ensure_bake_targets / restore_tile create the
+        // page already cleared white on first use.
+        return;
+    }
+    // Standalone submit (same pattern as restore_tile): the fresh layout's
+    // mappings must not sample the previous bake's texels at the previous
+    // packing. White = the unbaked look (matches the piece white-fallback
+    // sentinel); alpha 0 keeps "no coverage" for atlas readback consumers.
+    constexpr unsigned int bake_thread_slot = 6;
+    Command_buffer& command_buffer = m_graphics_device.get_command_buffer(bake_thread_slot);
+    command_buffer.begin();
+    command_buffer.clear_texture(*m_display_texture, {1.0, 1.0, 1.0, 0.0});
+    command_buffer.transition_texture_layout(*m_display_texture, Image_layout::shader_read_only_optimal);
+    command_buffer.end();
+    Command_buffer* command_buffers[] = { &command_buffer };
+    m_graphics_device.submit_command_buffers(std::span<Command_buffer* const>{command_buffers});
+    m_graphics_device.wait_idle();
+    m_display_cleared = true;
+    for (Tile_state& tile : m_tiles) {
+        tile.published = false;
+    }
+    log_render->info("Lightmap_baker: display atlas cleared to white");
 }
 
 void Lightmap_baker::release_working_set()
@@ -5400,8 +5430,10 @@ auto Lightmap_baker::restore_tile(
     command_buffer.begin();
     if (!m_display_cleared) {
         // Same semantics as the ensure_bake_targets clear (which this
-        // preempts): fresh page, no tile holds a publish yet.
-        command_buffer.clear_texture(*m_display_texture, {0.0, 0.0, 0.0, 0.0});
+        // preempts): fresh page, no tile holds a publish yet. White = the
+        // unbaked look (matches the piece white-fallback sentinel); alpha 0
+        // keeps "no coverage" for the atlas readback consumers.
+        command_buffer.clear_texture(*m_display_texture, {1.0, 1.0, 1.0, 0.0});
         command_buffer.transition_texture_layout(*m_display_texture, Image_layout::shader_read_only_optimal);
         m_display_cleared = true;
         for (Tile_state& tile_state : m_tiles) {

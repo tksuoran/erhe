@@ -933,10 +933,10 @@ void Lightmap_window::imgui()
         }
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip(
-                "Self-contained: computes the spatial split from geometry alone - no Generate\n"
-                "Lightmap UVs / Update Atlas Layout needed first. Uniquifies every lightmapped\n"
-                "mesh instance, bakes its transform into world space, clips it against the tile\n"
-                "planes (shared cut vertices are binary exact) and unwraps each piece fresh.\n"
+                "Self-contained: uniquifies every lightmapped mesh instance, bakes its\n"
+                "transform into world space, clips it against the tile planes (shared cut\n"
+                "vertices are binary exact) and unwraps each piece fresh. On commit the\n"
+                "display atlas clears to white and a single bake iteration runs, then pauses.\n"
                 "Originals stay in the scene for revert / re-prepare."
             );
         }
@@ -987,7 +987,8 @@ void Lightmap_window::imgui()
                         "Leak camouflage (per-facet mode, needs a bake): re-prepare with the piece\n"
                         "charts packed in baked-luminance order, so similarly lit facets are atlas\n"
                         "neighbors and cross-chart filter-tap / dilation pollution picks up similar\n"
-                        "values. Does not bake; the reordered tiles are stale until you bake again."
+                        "values. The commit clears the atlas to white and bakes a single iteration;\n"
+                        "keep baking for a converged result."
                     );
                 }
                 if (m_context.lightmap_baker != nullptr) {

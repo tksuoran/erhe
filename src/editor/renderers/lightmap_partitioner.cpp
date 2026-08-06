@@ -662,11 +662,19 @@ void Lightmap_partitioner::commit_prepare()
     // Switch the baker layout over to the pieces (the partitioned branch of
     // update_layout is active now that the store is populated) and push
     // their atlas mappings (white-fallback sentinel for non-resident tiles)
-    // onto the piece Mesh_primitives. The bake itself happens through the
-    // baker tick's piece-hash change (with its G-buffer upload defer).
+    // onto the piece Mesh_primitives.
     if (baker != nullptr) {
         if (baker->update_layout(scene_root, job->params.min_face_texels)) {
             baker->publish_regions();
+        }
+        // The display atlas still holds the previous bake at the previous
+        // packing - the fresh mappings would sample rubbish; show the
+        // unbaked white look instead.
+        baker->clear_display_to_white();
+        // Fresh lighting right away: one full sweep of every tile, then
+        // pause (with the pause autosave writing the new packing to disk).
+        if (baker->is_bake_supported()) {
+            baker->request_single_iteration();
         }
     }
     // Manifest regions that are pieces resolve through this partition; make

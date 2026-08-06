@@ -324,6 +324,13 @@ public:
     // without waiting for a bake tick.
     void publish_regions();
 
+    // Immediately clear the display atlas to white (standalone submit).
+    // The partitioner calls this right after the commit relayout: the
+    // fresh mappings must not sample the previous bake's texels at the
+    // previous packing (rubbish); white is the unbaked-piece look. No-op
+    // before the display atlas exists (it is created cleared white).
+    void clear_display_to_white();
+
     // ---- Interactive-bake persistence (Lightmap_window drives it) ----
     // With save-on-evict enabled, the residency swap never drops a tile
     // whose published content has not been saved: it parks the tile id in
