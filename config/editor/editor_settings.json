@@ -727,7 +727,7 @@
         "large_icon_size": 32,
         "hotbar_icon_size": 80
     },
-    "threading": { "thread_count": 8 },
+    "threading": { "thread_count": 0 },
     "post_processing": true,
     "geometry_edit_mode": "fork",
     "transform_mode": "extrude_group_normal",

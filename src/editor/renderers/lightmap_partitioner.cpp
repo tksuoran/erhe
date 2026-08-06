@@ -22,8 +22,8 @@
 
 #include <fmt/format.h>
 #include <taskflow/taskflow.hpp>
-#include <taskflow/algorithm/for_each.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <mutex>
@@ -69,7 +69,9 @@ public:
         {
         public:
             int                                         tile{-1};
-            std::shared_ptr<erhe::primitive::Primitive> primitive;
+            std::shared_ptr<erhe::primitive::Primitive> primitive; // empty = failed piece, skipped at commit
+            int64_t                                     unwrap_us{0};
+            int64_t                                     build_us{0};
         };
         std::size_t                                entry_index{0};
         std::size_t                                source_primitive_index{0};
@@ -83,11 +85,134 @@ public:
         // for this task's source primitive, extracted at launch).
         std::map<int, std::vector<float>>          chart_order;
         std::vector<Piece_result>                  results; // heavy-phase output, in piece order
+
+        // Timing instrumentation (microseconds, filled by process_region):
+        // estimates the gain of finer-grained parallelism - bake_clip_us is
+        // the serial-per-region prefix, unwrap/build split per-piece work,
+        // and max_piece_us bounds the critical path if pieces ran parallel.
+        int64_t     bake_clip_us{0};
+        int64_t     unwrap_us{0};
+        int64_t     build_us{0};
+        int64_t     max_piece_us{0};
+        std::size_t clip_piece_count{0};
     };
 
-    // Heavy phase for one region: world-space bake + kd clip, then per-piece
-    // re-unwrap + renderable/raytrace primitive build. Runs on executor
-    // workers; every task is independent: bake_transform and
+    // Heavy phase for one piece: channel-2 re-unwrap + renderable/raytrace
+    // primitive build. Writes only its own Piece_result slot (results are
+    // index-addressed so pieces run as parallel subflow tasks); a slot whose
+    // primitive stays empty is a failed/skipped piece, dropped at commit in
+    // piece order - identical to the old push-back-on-success ordering, so
+    // piece ordinals stay deterministic.
+    // Unwrap density: world-space geometry, so the density is the world
+    // density directly (no node-scale folding) - each piece unwraps at ITS
+    // TILE's nominal density (tile_texture_size / cell side), so gutter
+    // and minimum-chart sizing match the density the tile rasterizes at.
+    // Mirror Make_atlas_operation's per-facet fallback so one degenerate
+    // piece does not abort the whole partition.
+    static void process_piece(
+        const Params&                                     params,
+        const erhe::primitive::Build_info&                build_info,
+        const std::vector<float>&                         tile_texels_per_meter,
+        Lightmap_report* const                            report,
+        const Region_task&                                task,
+        const erhe::geometry::operation::Clip_tile_piece& piece,
+        Region_task::Piece_result&                        result
+    )
+    {
+        using Clock = std::chrono::steady_clock;
+        const auto elapsed_us = [](const Clock::time_point from, const Clock::time_point to) -> int64_t {
+            return std::chrono::duration_cast<std::chrono::microseconds>(to - from).count();
+        };
+
+        if (!piece.geometry) {
+            return;
+        }
+        if ((piece.tile < 0) || (piece.tile >= static_cast<int>(tile_texels_per_meter.size()))) {
+            // Empty-quadrant leaf (tile -1): grid occupancy is AABB-
+            // conservative, so nothing should route here; drop it
+            // rather than bake an unaddressable piece.
+            return;
+        }
+        const float tile_tpm = tile_texels_per_meter[static_cast<std::size_t>(piece.tile)];
+        const std::string piece_subject = fmt::format("{}.tile{}", task.subject, piece.tile);
+        // Reorder Charts By Bake: order keys measured on the previous
+        // layout's piece, applied to this re-clip by facet id (the clip
+        // is deterministic for unchanged sources).
+        const auto order_it = task.chart_order.find(piece.tile);
+        const std::vector<float>* const order_keys = (order_it != task.chart_order.end()) ? &order_it->second : nullptr;
+        const Clock::time_point piece_start = Clock::now();
+        std::shared_ptr<erhe::geometry::Geometry> atlas_geometry = std::make_shared<erhe::geometry::Geometry>(piece_subject);
+        try {
+            try {
+                erhe::geometry::operation::make_atlas(
+                    *piece.geometry.get(),
+                    *atlas_geometry.get(),
+                    2, // lightmap UV channel (texcoord usage_index 2)
+                    static_cast<double>(params.hard_angles_deg),
+                    params.parameterizer,
+                    params.packer,
+                    static_cast<double>(tile_tpm),
+                    static_cast<double>(params.gutter_texels),
+                    static_cast<double>(params.min_chart_texels),
+                    order_keys
+                );
+            } catch (const std::exception& e) {
+                if (params.parameterizer == erhe::geometry::operation::Atlas_parameterizer::per_facet) {
+                    throw;
+                }
+                if (report != nullptr) {
+                    report->add_warning(
+                        Lightmap_report::Stage::partition,
+                        piece_subject,
+                        fmt::format("parameterizer failed ({}); fell back to per-facet unwrap", e.what())
+                    );
+                }
+                erhe::geometry::operation::make_atlas(
+                    *piece.geometry.get(),
+                    *atlas_geometry.get(),
+                    2,
+                    static_cast<double>(params.hard_angles_deg),
+                    erhe::geometry::operation::Atlas_parameterizer::per_facet,
+                    params.packer,
+                    static_cast<double>(tile_tpm),
+                    static_cast<double>(params.gutter_texels),
+                    static_cast<double>(params.min_chart_texels),
+                    order_keys
+                );
+            }
+        } catch (const std::exception& e) {
+            result.unwrap_us = elapsed_us(piece_start, Clock::now());
+            if (report != nullptr) {
+                report->add_error(Lightmap_report::Stage::partition, piece_subject, fmt::format("unwrap failed: {}", e.what()));
+            }
+            return;
+        }
+        const Clock::time_point unwrap_end = Clock::now();
+        result.unwrap_us = elapsed_us(piece_start, unwrap_end);
+
+        std::shared_ptr<erhe::primitive::Primitive> piece_primitive = std::make_shared<erhe::primitive::Primitive>(atlas_geometry);
+        const bool renderable_ok = piece_primitive->make_renderable_mesh(build_info, task.normal_style);
+        const bool raytrace_ok   = renderable_ok && piece_primitive->make_raytrace();
+        result.build_us = elapsed_us(unwrap_end, Clock::now());
+        if (!renderable_ok || !raytrace_ok) {
+            if (report != nullptr) {
+                report->add_error(
+                    Lightmap_report::Stage::partition,
+                    piece_subject,
+                    renderable_ok ? "raytrace build failed" : "renderable mesh build failed"
+                );
+            }
+            return;
+        }
+        result.tile      = piece.tile;
+        result.primitive = std::move(piece_primitive);
+    }
+
+    // Heavy phase for one region: world-space bake + kd clip on the calling
+    // worker, then the per-piece work fans out as subflow child tasks
+    // (join() blocks with the worker co-running children), so one large
+    // mesh clipped across many tiles no longer serializes on a single
+    // worker. Everything is independent: bake_transform and
     // clip_by_tile_tree reach no Geogram algorithm and are safe on distinct
     // destinations (clip_tile_tree.hpp thread-safety note; the tile tree is
     // read-only here, concurrent reads of a shared source geometry are
@@ -97,21 +222,23 @@ public:
     // buffer_mesh_allocation_mutex, and raytrace builds are worker-safe
     // (deferred glTF finalize does the same). Lightmap_report already takes
     // worker-thread reports (async UV unwrap failures).
-    // Unwrap density: world-space geometry, so the density is the world
-    // density directly (no node-scale folding) - each piece unwraps at ITS
-    // TILE's nominal density (tile_texture_size / cell side), so gutter
-    // and minimum-chart sizing match the density the tile rasterizes at.
-    // Mirror Make_atlas_operation's per-facet fallback so one degenerate
-    // piece does not abort the whole partition.
     static void process_region(
         const Params&                                                 params,
         const erhe::primitive::Build_info&                            build_info,
         const std::vector<erhe::geometry::operation::Clip_tree_node>& tile_tree,
         const std::vector<float>&                                     tile_texels_per_meter,
         Lightmap_report* const                                        report,
-        Region_task&                                                  task
+        Region_task&                                                  task,
+        const std::atomic<bool>&                                      cancel_requested,
+        tf::Subflow* const                                            subflow
     )
     {
+        using Clock = std::chrono::steady_clock;
+        const auto elapsed_us = [](const Clock::time_point from, const Clock::time_point to) -> int64_t {
+            return std::chrono::duration_cast<std::chrono::microseconds>(to - from).count();
+        };
+        const Clock::time_point region_start = Clock::now();
+
         erhe::geometry::Geometry world_geometry{fmt::format("{}.world", task.subject)};
         std::vector<erhe::geometry::operation::Clip_tile_piece> pieces;
         try {
@@ -122,89 +249,41 @@ public:
             );
             erhe::geometry::operation::clip_by_tile_tree(world_geometry, tile_tree, task.overflow_tile, pieces);
         } catch (const std::exception& e) {
+            task.bake_clip_us = elapsed_us(region_start, Clock::now());
             if (report != nullptr) {
                 report->add_error(Lightmap_report::Stage::partition, task.subject, fmt::format("clip failed: {}", e.what()));
             }
             return;
         }
+        task.bake_clip_us     = elapsed_us(region_start, Clock::now());
+        task.clip_piece_count = pieces.size();
 
-        for (const erhe::geometry::operation::Clip_tile_piece& piece : pieces) {
-            if (!piece.geometry) {
-                continue;
-            }
-            if ((piece.tile < 0) || (piece.tile >= static_cast<int>(tile_texels_per_meter.size()))) {
-                // Empty-quadrant leaf (tile -1): grid occupancy is AABB-
-                // conservative, so nothing should route here; drop it
-                // rather than bake an unaddressable piece.
-                continue;
-            }
-            const float tile_tpm = tile_texels_per_meter[static_cast<std::size_t>(piece.tile)];
-            const std::string piece_subject = fmt::format("{}.tile{}", task.subject, piece.tile);
-            // Reorder Charts By Bake: order keys measured on the previous
-            // layout's piece, applied to this re-clip by facet id (the clip
-            // is deterministic for unchanged sources).
-            const auto order_it = task.chart_order.find(piece.tile);
-            const std::vector<float>* const order_keys = (order_it != task.chart_order.end()) ? &order_it->second : nullptr;
-            std::shared_ptr<erhe::geometry::Geometry> atlas_geometry = std::make_shared<erhe::geometry::Geometry>(piece_subject);
-            try {
-                try {
-                    erhe::geometry::operation::make_atlas(
-                        *piece.geometry.get(),
-                        *atlas_geometry.get(),
-                        2, // lightmap UV channel (texcoord usage_index 2)
-                        static_cast<double>(params.hard_angles_deg),
-                        params.parameterizer,
-                        params.packer,
-                        static_cast<double>(tile_tpm),
-                        static_cast<double>(params.gutter_texels),
-                        static_cast<double>(params.min_chart_texels),
-                        order_keys
-                    );
-                } catch (const std::exception& e) {
-                    if (params.parameterizer == erhe::geometry::operation::Atlas_parameterizer::per_facet) {
-                        throw;
+        task.results.resize(pieces.size());
+        if (subflow != nullptr) {
+            for (std::size_t i = 0; i < pieces.size(); ++i) {
+                subflow->emplace(
+                    [&params, &build_info, &tile_texels_per_meter, report, &task, &cancel_requested, &pieces, i]() {
+                        if (!cancel_requested.load(std::memory_order_relaxed)) {
+                            process_piece(params, build_info, tile_texels_per_meter, report, task, pieces[i], task.results[i]);
+                        }
                     }
-                    if (report != nullptr) {
-                        report->add_warning(
-                            Lightmap_report::Stage::partition,
-                            piece_subject,
-                            fmt::format("parameterizer failed ({}); fell back to per-facet unwrap", e.what())
-                        );
-                    }
-                    erhe::geometry::operation::make_atlas(
-                        *piece.geometry.get(),
-                        *atlas_geometry.get(),
-                        2,
-                        static_cast<double>(params.hard_angles_deg),
-                        erhe::geometry::operation::Atlas_parameterizer::per_facet,
-                        params.packer,
-                        static_cast<double>(tile_tpm),
-                        static_cast<double>(params.gutter_texels),
-                        static_cast<double>(params.min_chart_texels),
-                        order_keys
-                    );
-                }
-            } catch (const std::exception& e) {
-                if (report != nullptr) {
-                    report->add_error(Lightmap_report::Stage::partition, piece_subject, fmt::format("unwrap failed: {}", e.what()));
-                }
-                continue;
+                );
             }
+            // join() keeps `pieces` (and the reference captures) alive until
+            // every child ran; the worker co-runs children while blocked.
+            subflow->join();
+        } else {
+            for (std::size_t i = 0; i < pieces.size(); ++i) {
+                if (!cancel_requested.load(std::memory_order_relaxed)) {
+                    process_piece(params, build_info, tile_texels_per_meter, report, task, pieces[i], task.results[i]);
+                }
+            }
+        }
 
-            std::shared_ptr<erhe::primitive::Primitive> piece_primitive = std::make_shared<erhe::primitive::Primitive>(atlas_geometry);
-            const bool renderable_ok = piece_primitive->make_renderable_mesh(build_info, task.normal_style);
-            const bool raytrace_ok   = renderable_ok && piece_primitive->make_raytrace();
-            if (!renderable_ok || !raytrace_ok) {
-                if (report != nullptr) {
-                    report->add_error(
-                        Lightmap_report::Stage::partition,
-                        piece_subject,
-                        renderable_ok ? "raytrace build failed" : "renderable mesh build failed"
-                    );
-                }
-                continue;
-            }
-            task.results.push_back(Region_task::Piece_result{.tile = piece.tile, .primitive = std::move(piece_primitive)});
+        for (const Region_task::Piece_result& result : task.results) {
+            task.unwrap_us   += result.unwrap_us;
+            task.build_us    += result.build_us;
+            task.max_piece_us = std::max(task.max_piece_us, result.unwrap_us + result.build_us);
         }
     }
 
@@ -220,6 +299,7 @@ public:
     std::vector<Original_entry>                             entries;    // skeletons; piece nodes/meshes filled at commit
     std::vector<Region_task>                                tasks;
     std::size_t                                             lightmapped_mesh_count_at_launch{0};
+    std::chrono::steady_clock::time_point                   launch_time{};
     std::atomic<std::size_t>                                regions_done{0};
     std::atomic<bool>                                       cancel_requested{false};
     tf::Taskflow                                            taskflow;   // must outlive the run
@@ -252,6 +332,8 @@ auto Lightmap_partitioner::request_prepare(
 ) -> bool
 {
     ERHE_PROFILE_FUNCTION();
+
+    const std::chrono::steady_clock::time_point request_start = std::chrono::steady_clock::now();
 
     Lightmap_baker* const  baker  = m_context.lightmap_baker;
     Lightmap_report* const report = m_context.lightmap_report;
@@ -290,7 +372,9 @@ auto Lightmap_partitioner::request_prepare(
     // original meshes (world areas at a nominal chart coverage): no unwrap
     // or prior layout is needed, and the partitioned relayout at commit
     // re-packs every piece with its measured UVs.
+    const std::chrono::steady_clock::time_point estimate_start = std::chrono::steady_clock::now();
     const Lightmap_baker::Estimate_split split = baker->compute_tile_split_estimate(scene_root);
+    const std::chrono::steady_clock::time_point estimate_end = std::chrono::steady_clock::now();
     if (split.empty()) {
         if (report != nullptr) {
             report->add_error(Lightmap_report::Stage::partition, "prepare", "no lightmapped meshes to partition");
@@ -417,11 +501,25 @@ auto Lightmap_partitioner::request_prepare(
     m_prepare_job = std::move(job);
     Prepare_job* const raw_job = m_prepare_job.get();
 
+    raw_job->launch_time = std::chrono::steady_clock::now();
+    {
+        const auto ms = [](const std::chrono::steady_clock::time_point from, const std::chrono::steady_clock::time_point to) {
+            return static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(to - from).count()) / 1000.0;
+        };
+        log_render->info(
+            "Lightmap_partitioner: prepare timing: split estimate {:.1f} ms, snapshot {:.1f} ms (main thread, {} regions)",
+            ms(estimate_start, estimate_end),
+            ms(request_start, raw_job->launch_time) - ms(estimate_start, estimate_end),
+            raw_job->tasks.size()
+        );
+    }
+
     if ((m_context.executor == nullptr) || (raw_job->tasks.size() <= 1)) {
-        // Synchronous fallback: run inline and commit before returning.
+        // Synchronous fallback: run inline (no subflow) and commit before
+        // returning.
         for (Prepare_job::Region_task& task : raw_job->tasks) {
             if (!raw_job->cancel_requested.load(std::memory_order_relaxed)) {
-                Prepare_job::process_region(raw_job->params, *raw_job->build_info, raw_job->tile_tree, raw_job->tile_texels_per_meter, report, task);
+                Prepare_job::process_region(raw_job->params, *raw_job->build_info, raw_job->tile_tree, raw_job->tile_texels_per_meter, report, task, raw_job->cancel_requested, nullptr);
             }
             raw_job->regions_done.fetch_add(1, std::memory_order_relaxed);
         }
@@ -429,15 +527,19 @@ auto Lightmap_partitioner::request_prepare(
         return m_last_prepare_result.committed;
     }
 
-    raw_job->taskflow.for_each_index(
-        std::size_t{0}, raw_job->tasks.size(), std::size_t{1},
-        [raw_job, report](const std::size_t i) {
-            if (!raw_job->cancel_requested.load(std::memory_order_relaxed)) {
-                Prepare_job::process_region(raw_job->params, *raw_job->build_info, raw_job->tile_tree, raw_job->tile_texels_per_meter, report, raw_job->tasks[i]);
+    // One task per region; each fans its per-piece work out as subflow
+    // children, so a single large mesh clipped across many tiles cannot pin
+    // the whole prepare on one worker.
+    for (std::size_t i = 0; i < raw_job->tasks.size(); ++i) {
+        raw_job->taskflow.emplace(
+            [raw_job, report, i](tf::Subflow& subflow) {
+                if (!raw_job->cancel_requested.load(std::memory_order_relaxed)) {
+                    Prepare_job::process_region(raw_job->params, *raw_job->build_info, raw_job->tile_tree, raw_job->tile_texels_per_meter, report, raw_job->tasks[i], raw_job->cancel_requested, &subflow);
+                }
+                raw_job->regions_done.fetch_add(1, std::memory_order_relaxed);
             }
-            raw_job->regions_done.fetch_add(1, std::memory_order_relaxed);
-        }
-    );
+        );
+    }
     raw_job->future = m_context.executor->run(raw_job->taskflow);
     log_render->info("Lightmap_partitioner: prepare launched ({} regions)", raw_job->tasks.size());
     return true;
@@ -545,6 +647,58 @@ void Lightmap_partitioner::commit_prepare()
     Lightmap_report* const report = m_context.lightmap_report;
     Scene_root&            scene_root = *job->scene_root;
 
+    using Clock = std::chrono::steady_clock;
+    const auto to_ms = [](const int64_t us) { return static_cast<double>(us) / 1000.0; };
+    const Clock::time_point commit_start = Clock::now();
+
+    // Heavy-phase timing summary: measures how the parallel-per-region work
+    // distributed, and estimates what per-piece parallelism would gain (the
+    // per-piece critical path = each region's serial bake+clip prefix plus
+    // its single slowest piece).
+    {
+        int64_t sum_bake_clip = 0;
+        int64_t sum_unwrap    = 0;
+        int64_t sum_build     = 0;
+        int64_t max_piece_parallel_path = 0;
+        std::vector<const Prepare_job::Region_task*> by_total;
+        by_total.reserve(job->tasks.size());
+        for (const Prepare_job::Region_task& task : job->tasks) {
+            sum_bake_clip += task.bake_clip_us;
+            sum_unwrap    += task.unwrap_us;
+            sum_build     += task.build_us;
+            max_piece_parallel_path = std::max(max_piece_parallel_path, task.bake_clip_us + task.max_piece_us);
+            by_total.push_back(&task);
+        }
+        std::sort(
+            by_total.begin(), by_total.end(),
+            [](const Prepare_job::Region_task* lhs, const Prepare_job::Region_task* rhs) {
+                return (lhs->bake_clip_us + lhs->unwrap_us + lhs->build_us) > (rhs->bake_clip_us + rhs->unwrap_us + rhs->build_us);
+            }
+        );
+        const double wall_ms = static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(commit_start - job->launch_time).count()) / 1000.0;
+        const int64_t sum_total = sum_bake_clip + sum_unwrap + sum_build;
+        log_render->info(
+            "Lightmap_partitioner: prepare heavy phase: wall {:.1f} ms, worker cpu {:.1f} ms (x{:.2f}): bake+clip {:.1f} ms, unwrap {:.1f} ms, primitive build {:.1f} ms; est. per-piece-parallel critical path {:.1f} ms",
+            wall_ms,
+            to_ms(sum_total),
+            (wall_ms > 0.0) ? (to_ms(sum_total) / wall_ms) : 0.0,
+            to_ms(sum_bake_clip), to_ms(sum_unwrap), to_ms(sum_build),
+            to_ms(max_piece_parallel_path)
+        );
+        const std::size_t top_count = std::min<std::size_t>(5, by_total.size());
+        for (std::size_t i = 0; i < top_count; ++i) {
+            const Prepare_job::Region_task& task = *by_total[i];
+            log_render->info(
+                "Lightmap_partitioner:   region {} '{}': total {:.1f} ms (bake+clip {:.1f}, unwrap {:.1f}, build {:.1f}), {} pieces, max piece {:.1f} ms",
+                i, task.subject,
+                to_ms(task.bake_clip_us + task.unwrap_us + task.build_us),
+                to_ms(task.bake_clip_us), to_ms(task.unwrap_us), to_ms(task.build_us),
+                task.clip_piece_count,
+                to_ms(task.max_piece_us)
+            );
+        }
+    }
+
     const std::string stale_reason = validate_job_against_scene(*job);
     if (!stale_reason.empty()) {
         if (report != nullptr) {
@@ -559,6 +713,8 @@ void Lightmap_partitioner::commit_prepare()
         return; // old partition untouched
     }
 
+    const Clock::time_point validate_end = Clock::now();
+
     // Assemble piece meshes in task order (identical to the synchronous
     // order; ordinals count successful pieces per (source mesh, source
     // primitive) region), dropping entries with no pieces.
@@ -570,6 +726,9 @@ void Lightmap_partitioner::commit_prepare()
         entries[task.entry_index].source_geometries_at_clip.emplace_back(task.source_primitive_index, task.source_geometry.get());
         int ordinal = 0;
         for (Prepare_job::Region_task::Piece_result& result : task.results) {
+            if (!result.primitive) {
+                continue; // failed/skipped piece slot (reported in the heavy phase)
+            }
             piece_primitives_per_entry[task.entry_index].emplace_back(std::move(result.primitive), task.material);
             entries[task.entry_index].pieces.push_back(
                 Piece_info{
@@ -608,7 +767,16 @@ void Lightmap_partitioner::commit_prepare()
                 erhe::Item_flags::render_proxy
             );
             entry.piece_node->attach(entry.piece_mesh);
-            entry.piece_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::render_proxy);
+            // Piece nodes hold world-space geometry on a static identity
+            // transform: skip the per-frame transform update pass and lock
+            // them against the viewport transform tool.
+            entry.piece_node->enable_flag_bits(
+                erhe::Item_flags::content                 |
+                erhe::Item_flags::visible                 |
+                erhe::Item_flags::render_proxy            |
+                erhe::Item_flags::no_transform_update     |
+                erhe::Item_flags::lock_viewport_transform
+            );
             kept.push_back(std::move(entry));
         }
         entries = std::move(kept);
@@ -644,7 +812,13 @@ void Lightmap_partitioner::commit_prepare()
         // what makes them render (and raytrace) in place.
         const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root.item_host_mutex};
         m_group_node = std::make_shared<erhe::scene::Node>("Lightmap Pieces");
-        m_group_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::render_proxy);
+        m_group_node->enable_flag_bits(
+            erhe::Item_flags::content                 |
+            erhe::Item_flags::visible                 |
+            erhe::Item_flags::render_proxy            |
+            erhe::Item_flags::no_transform_update     |
+            erhe::Item_flags::lock_viewport_transform
+        );
         m_group_node->set_parent(scene_root.get_scene().get_root_node());
         for (Original_entry& entry : entries) {
             entry.piece_node->set_parent(m_group_node);
@@ -658,6 +832,7 @@ void Lightmap_partitioner::commit_prepare()
     m_tile_count  = job->tile_count;
     m_tile_descs  = std::move(job->tile_descs);
     apply_visibility();
+    const Clock::time_point swap_end = Clock::now();
 
     // Switch the baker layout over to the pieces (the partitioned branch of
     // update_layout is active now that the store is populated) and push
@@ -681,6 +856,19 @@ void Lightmap_partitioner::commit_prepare()
     // the streamer re-apply mappings against the new piece set.
     if (m_context.lightmap_streamer != nullptr) {
         m_context.lightmap_streamer->invalidate();
+    }
+    const Clock::time_point relayout_end = Clock::now();
+    {
+        const auto span_ms = [](const Clock::time_point from, const Clock::time_point to) {
+            return static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(to - from).count()) / 1000.0;
+        };
+        log_render->info(
+            "Lightmap_partitioner: commit (main thread): validate+stats {:.1f} ms, assemble+swap {:.1f} ms, relayout+publish {:.1f} ms, total {:.1f} ms",
+            span_ms(commit_start, validate_end),
+            span_ms(validate_end, swap_end),
+            span_ms(swap_end, relayout_end),
+            span_ms(commit_start, relayout_end)
+        );
     }
 
     const std::size_t lightmapped_now = count_lightmapped_meshes(scene_root);

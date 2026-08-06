@@ -49,6 +49,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -2780,7 +2781,15 @@ auto Lightmap_baker::finalize_layout(
         m_tiles[i].has_content = m_layout.tiles[i].has_content;
         m_tiles[i].active      = m_layout.tiles[i].slot >= 0;
     }
-    build_seam_vertices();
+    {
+        const std::chrono::steady_clock::time_point seam_start = std::chrono::steady_clock::now();
+        build_seam_vertices();
+        const std::chrono::steady_clock::time_point seam_end = std::chrono::steady_clock::now();
+        log_render->info(
+            "Lightmap_baker::finalize_layout timing: build_seam_vertices {:.1f} ms",
+            static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(seam_end - seam_start).count()) / 1000.0
+        );
+    }
     log_render->info(
         "Lightmap_baker::update_layout: {} regions in {} spatial tiles of {}^2 texels, {} display slots ({}x{} atlas){}",
         m_layout.regions.size(), m_layout.get_tile_count(), tile_size,
@@ -2812,6 +2821,8 @@ auto Lightmap_baker::update_layout_partitioned(Scene_root& scene_root, const flo
         tile.has_content   = false;
         tile.slot          = -1;
     }
+
+    const std::chrono::steady_clock::time_point metrics_start = std::chrono::steady_clock::now();
 
     // One region per piece Mesh_primitive; the tile assignment comes from
     // the partition (each piece was clipped to exactly one tile), never
@@ -2870,6 +2881,8 @@ auto Lightmap_baker::update_layout_partitioned(Scene_root& scene_root, const flo
         }
     }
 
+    const std::chrono::steady_clock::time_point pack_start = std::chrono::steady_clock::now();
+
     // Pack each tile's pieces (skyline, big-first) at the tile's nominal
     // density (tile_texture_size / cell side); the tiles are fixed, so a
     // set that does not fit can only flex its density down.
@@ -2877,6 +2890,17 @@ auto Lightmap_baker::update_layout_partitioned(Scene_root& scene_root, const flo
     packed_regions.reserve(regions.size());
     for (int tile = 0; tile < tile_count; ++tile) {
         pack_tile_regions(tile, tiles[static_cast<std::size_t>(tile)], regions, buckets[static_cast<std::size_t>(tile)], min_face_texels, packed_regions);
+    }
+    {
+        const std::chrono::steady_clock::time_point pack_end = std::chrono::steady_clock::now();
+        const auto span_ms = [](const std::chrono::steady_clock::time_point from, const std::chrono::steady_clock::time_point to) {
+            return static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(to - from).count()) / 1000.0;
+        };
+        log_render->info(
+            "Lightmap_baker::update_layout_partitioned timing: region metrics {:.1f} ms ({} pieces), packing {:.1f} ms ({} tiles)",
+            span_ms(metrics_start, pack_start), regions.size(),
+            span_ms(pack_start, pack_end), tile_count
+        );
     }
     if (packed_regions.empty()) {
         if (m_report != nullptr) {

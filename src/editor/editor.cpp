@@ -1287,7 +1287,11 @@ public:
         // taskflow workers must not capture their own thread id as the owner.
         m_app_context.main_thread_id = std::this_thread::get_id();
 
-        const int thread_count = m_editor_settings.threading.thread_count;
+        // thread_count <= 0 means one worker per hardware thread.
+        const int configured_thread_count = m_editor_settings.threading.thread_count;
+        const std::size_t thread_count = (configured_thread_count > 0)
+            ? static_cast<std::size_t>(configured_thread_count)
+            : std::max<std::size_t>(std::thread::hardware_concurrency(), 1);
 
         // Note: m_executor is also used at runtime, so it cannot be
         //       skipped even if parallel init is not used.
