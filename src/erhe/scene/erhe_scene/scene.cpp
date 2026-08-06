@@ -255,16 +255,19 @@ void Scene::sever_host()
     m_host = nullptr;
 }
 
-void Scene::sort_transform_nodes()
+void Scene::mark_node_transform_dirty(const Node& node)
 {
-    std::sort(
-        m_transform_update_nodes.begin(),
-        m_transform_update_nodes.end(),
-        [](const auto& lhs, const auto& rhs) {
-            return lhs->get_depth() < rhs->get_depth();
-        }
-    );
-    m_nodes_sorted = true;
+    if (m_updating_node_transforms) {
+        // The propagation pass itself calls Node::update_transform(), whose
+        // handle_transform_update() lands back here; the subtree walk already
+        // covers those nodes.
+        return;
+    }
+    if (node.node_data.transforms.scene_transform_dirty) {
+        return;
+    }
+    node.node_data.transforms.scene_transform_dirty = true;
+    m_transform_dirty_nodes.push_back(const_cast<Node*>(&node));
 }
 
 void Scene::update_node_transforms()
@@ -281,12 +284,58 @@ void Scene::update_node_transforms()
         (m_host != nullptr) ? m_host->item_host_mutex : Item_host::orphan_item_host_mutex
     };
 
-    if (!m_nodes_sorted) {
-        sort_transform_nodes();
+    if (m_transform_dirty_nodes.empty()) {
+        return; // nothing moved since the last pass
     }
 
-    for (auto& node : m_transform_update_nodes) {
-        node->update_transform(0);
+    m_updating_node_transforms = true;
+    std::swap(m_transform_dirty_nodes, m_transform_dirty_processing);
+
+    // Ancestors first: when a dirty node lies inside another dirty node's
+    // subtree, the ancestor's walk updates it (and records it in the visited
+    // set), so its own entry is skipped instead of re-walking the subtree.
+    std::sort(
+        m_transform_dirty_processing.begin(),
+        m_transform_dirty_processing.end(),
+        [](const Node* lhs, const Node* rhs) {
+            return lhs->get_depth() < rhs->get_depth();
+        }
+    );
+
+    m_transform_update_visited.clear();
+    for (Node* node : m_transform_dirty_processing) {
+        node->node_data.transforms.scene_transform_dirty = false;
+        if (!m_transform_update_visited.insert(node).second) {
+            continue;
+        }
+        update_subtree_transforms(*node);
+    }
+    m_transform_dirty_processing.clear();
+    m_updating_node_transforms = false;
+}
+
+void Scene::update_subtree_transforms(Node& node)
+{
+    // The dirty node itself is already up to date: every write path updates
+    // the node's own world transform and notifies its attachments eagerly
+    // (transform setters, Node::handle_parent_update). Only descendants need
+    // recomputation. no_transform_update children own their world transform
+    // (physics-driven); their cached world did not change with the parent, so
+    // their branches need no visit either - when such a node IS written, its
+    // setter dirties it and propagation resumes from there.
+    for (const auto& child : node.get_children()) {
+        const auto child_node = std::dynamic_pointer_cast<Node>(child);
+        if (!child_node) {
+            continue;
+        }
+        if (child_node->is_no_transform_update()) {
+            continue;
+        }
+        if (!m_transform_update_visited.insert(child_node.get()).second) {
+            continue;
+        }
+        child_node->update_transform(0);
+        update_subtree_transforms(*child_node);
     }
 }
 
@@ -324,6 +373,7 @@ Scene::~Scene() noexcept
 
     m_root_node->recursive_remove();
 
+    m_transform_dirty_nodes.clear();
     m_transform_update_nodes.clear();
     m_no_transform_update_nodes.clear();
     m_mesh_layers.clear();
@@ -366,8 +416,11 @@ void Scene::register_node(const std::shared_ptr<erhe::scene::Node>& node)
             m_no_transform_update_nodes.push_back(node);
         } else {
             m_transform_update_nodes.push_back(node);
-            m_nodes_sorted = false;
         }
+        // The bit may arrive set without list membership (clone() copies
+        // node_data wholesale); reset it so the node can be enqueued here.
+        node->node_data.transforms.scene_transform_dirty = false;
+        mark_node_transform_dirty(*node);
     }
 
     ERHE_VERIFY(!node->get_parent().expired());
@@ -381,6 +434,12 @@ void Scene::unregister_node(const std::shared_ptr<erhe::scene::Node>& node)
         node->get_depth(),
         node->get_child_count()
     );
+
+    if (node->node_data.transforms.scene_transform_dirty) {
+        node->node_data.transforms.scene_transform_dirty = false;
+        const auto dirty_i = std::remove(m_transform_dirty_nodes.begin(), m_transform_dirty_nodes.end(), node.get());
+        m_transform_dirty_nodes.erase(dirty_i, m_transform_dirty_nodes.end());
+    }
 
     // Remove from the bucket matching the node's current flag value; fall back
     // to the other bucket in case the flag was toggled while the node was not
@@ -422,10 +481,15 @@ void Scene::handle_node_no_transform_update_changed(Node& node)
         log->error("Node {} not in expected scene node bucket", node.get_name());
         return;
     }
-    target_bucket->push_back(std::move(*i));
+    const std::shared_ptr<Node> moved_node = std::move(*i);
     source_bucket->erase(i);
+    target_bucket->push_back(moved_node);
     if (target_bucket == &m_transform_update_nodes) {
-        m_nodes_sorted = false;
+        // Re-entering the updated set (e.g. physics body deactivated): the
+        // parent may have moved while this branch was skipped, so recompute
+        // the node's world transform now. update_transform() also notifies
+        // attachments and queues the subtree via handle_transform_update().
+        moved_node->update_transform(0);
     }
 }
 

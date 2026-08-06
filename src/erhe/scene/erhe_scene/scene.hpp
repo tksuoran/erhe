@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <vector>
 
 namespace erhe::scene {
@@ -84,8 +85,17 @@ public:
     // its host dereferences the freed Scene_host, raytrace scene, or physics
     // world (see node_sanity_check, Mesh::detach_rt_from_scene).
     void sever_host            ();
-    void sort_transform_nodes  ();
     void update_node_transforms();
+
+    // Queues the node's subtree for world-transform propagation in the next
+    // update_node_transforms() pass. Called by Node::handle_transform_update()
+    // (every transform setter and reparent funnels through it), so any writer
+    // - animation, physics, tools, undo, import - dirties the scene without
+    // its own integration. The node's OWN world transform is already up to
+    // date when this is called (setters update it eagerly); only descendants
+    // need the pass. Callers hold the Item_host mutex per the same discipline
+    // as all other hosted-item mutation.
+    void mark_node_transform_dirty(const Node& node);
 
     [[nodiscard]] auto get_mesh_by_id       (erhe::Unique_id<Node>::id_type id) const -> std::shared_ptr<Mesh>;
     [[nodiscard]] auto get_light_by_id      (erhe::Unique_id<Node>::id_type id) const -> std::shared_ptr<Light>;
@@ -150,6 +160,8 @@ public:
     glm::vec4 ambient_light{0.0f, 0.0f, 0.0f, 0.0f};
 
 private:
+    void update_subtree_transforms(Node& node);
+
     Scene_host*                               m_host       {nullptr};
     std::shared_ptr<erhe::scene::Node>        m_root_node;
     std::vector<std::shared_ptr<Node>>        m_transform_update_nodes;
@@ -158,7 +170,17 @@ private:
     std::vector<std::shared_ptr<Skin>>        m_skins;
     std::vector<std::shared_ptr<Light_layer>> m_light_layers;
     std::vector<std::shared_ptr<Camera>>      m_cameras;
-    bool                                      m_nodes_sorted{false};
+
+    // Pending transform propagation (see mark_node_transform_dirty). Raw
+    // pointers are safe: unregister_node() removes the node from the list,
+    // and registered nodes are kept alive by the bucket vectors above.
+    // Node_transforms::scene_transform_dirty mirrors list membership so a
+    // node is enqueued at most once per pass. The processing / visited
+    // containers are members only to keep their capacity across frames.
+    std::vector<Node*>                        m_transform_dirty_nodes;
+    std::vector<Node*>                        m_transform_dirty_processing;
+    std::unordered_set<const Node*>           m_transform_update_visited;
+    bool                                      m_updating_node_transforms{false};
 };
 
 } // namespace erhe::scene

@@ -11,6 +11,7 @@
 #include "erhe_imgui/imgui_host.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_scene/node.hpp"
 #include "erhe_window/window.hpp"
 
 namespace editor {
@@ -83,6 +84,11 @@ void App_windows::viewport_menu(erhe::imgui::Imgui_host& imgui_host)
                     }
 #endif
                 }
+                // Logs a warning for every transform write to a node carrying
+                // Item_flags::no_transform_update. Nodes driven by awake
+                // physics bodies carry the flag and are written every step,
+                // so expect those to be reported while this is enabled.
+                ImGui::MenuItem("Warn On No-Transform-Update Writes", nullptr, &erhe::scene::Node::s_check_no_transform_update_writes);
                 ImGui::EndMenu();
             }
         }

@@ -273,6 +273,18 @@ void Node::handle_parent_update(erhe::Hierarchy* const old_parent_item, erhe::Hi
         handle_item_host_update(old_item_host, new_item_host);
     }
 
+    // A plain reparent keeps parent_from_node, so world_from_node changes:
+    // refresh it eagerly and notify attachments / queue the subtree for
+    // propagation, like the transform setters do. (World-preserving reparent
+    // flows adjust the local transform afterwards through a setter, which
+    // repeats this - harmless.) Skipped when detaching (new parent null,
+    // e.g. scene teardown): attachments may already be severed from their
+    // host resources there.
+    if (new_parent != nullptr) {
+        update_world_from_node();
+        handle_transform_update(0);
+    }
+
     hierarchy_sanity_check();
 }
 
@@ -312,9 +324,15 @@ void Node::handle_item_host_update(erhe::Item_host* const old_item_host, erhe::I
     ERHE_VERIFY(node_data.host == new_item_host);
 }
 
+bool Node::s_check_no_transform_update_writes{false};
+
 void Node::handle_transform_update(const uint64_t serial) const
 {
     ERHE_PROFILE_FUNCTION();
+
+    if (s_check_no_transform_update_writes && is_no_transform_update()) {
+        log->warn("Transform write to no_transform_update node '{}'", get_name());
+    }
 
     const uint64_t effective_serial = (serial > 0)
         ? serial
@@ -324,6 +342,15 @@ void Node::handle_transform_update(const uint64_t serial) const
     node_data.transforms.world_from_node_serial  = effective_serial;
     for (const auto& attachment : node_data.attachments) {
         attachment->handle_node_transform_update();
+    }
+
+    // Descendants inherit this node's new world transform; queue the subtree
+    // for propagation in the scene's next update_node_transforms() pass. Every
+    // transform mutation path funnels through here, so no writer (animation,
+    // physics, tools, MCP, undo, import, ...) needs its own integration.
+    Scene* const scene = get_scene();
+    if (scene != nullptr) {
+        scene->mark_node_transform_dirty(*this);
     }
 }
 

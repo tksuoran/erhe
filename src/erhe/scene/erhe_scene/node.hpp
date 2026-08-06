@@ -23,6 +23,11 @@ public:
     mutable std::uint64_t parent_from_node_serial{0}; // update needed if 0
     mutable std::uint64_t world_from_node_serial {0}; // update needed if 0
 
+    // Set when the node is in its Scene's transform-dirty list (cleared by
+    // Scene::update_node_transforms), so repeated transform writes within one
+    // frame enqueue the node only once.
+    mutable bool          scene_transform_dirty  {false};
+
     // One of these is normative, and the other is calculated by update_transform()
     Trs_transform         parent_from_node;
     mutable Trs_transform world_from_node;  
@@ -126,6 +131,13 @@ public:
     void set_world_from_node   (const Trs_transform& world_from_node);
     void set_node_from_world   (glm::mat4 node_from_world);
     void set_node_from_world   (const Transform& node_from_world);
+
+    // Optional developer sanity check: when enabled, every transform write to
+    // a node carrying Item_flags::no_transform_update logs a warning with the
+    // node name. Off by default; nodes owned by awake physics bodies carry the
+    // flag and are written legitimately every simulation step, so expect those
+    // to be reported too while the check is on.
+    static bool s_check_no_transform_update_writes;
 
     Node_data node_data;
 };
