@@ -2216,18 +2216,23 @@ void Debug_visualizations::lightmap_tiles_visualization(const Render_context& co
             .xray              = true
         }
     );
-    line_renderer.set_thickness(2.0f);
-    constexpr glm::vec4 all_color   {0.6f, 0.2f, 0.9f, 1.0f}; // purple: every tile
-    constexpr glm::vec4 active_color{1.0f, 1.0f, 1.0f, 1.0f}; // white: holds a display slot
-    for (const Lightmap_baker::Tile& tile : layout.tiles) {
-        if (!tile.world_bounds.is_valid()) {
+    line_renderer.set_thickness(-2.0f); // negative = pixels, no distance scaling
+    constexpr glm::vec4 active_color      {1.0f, 1.0f, 1.0f, 1.0f}; // white: gathering (camera clamp)
+    constexpr glm::vec4 resident_color    {0.0f, 1.0f, 1.0f, 1.0f}; // cyan: display slot, not gathering
+    constexpr glm::vec4 non_resident_color{0.6f, 0.2f, 0.9f, 1.0f}; // purple: no display slot
+    for (int tile = 0; tile < layout.get_tile_count(); ++tile) {
+        const Lightmap_baker::Tile& layout_tile = layout.tiles[static_cast<std::size_t>(tile)];
+        if (!layout_tile.world_bounds.is_valid()) {
             continue;
         }
+        const glm::vec4 color = baker->is_tile_active(tile) ? active_color
+            : (layout_tile.slot >= 0)                       ? resident_color
+            :                                                 non_resident_color;
         line_renderer.add_cube(
             glm::mat4{1.0f},
-            (tile.slot >= 0) ? active_color : all_color,
-            tile.world_bounds.min,
-            tile.world_bounds.max
+            color,
+            layout_tile.world_bounds.min,
+            layout_tile.world_bounds.max
         );
     }
 }

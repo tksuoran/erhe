@@ -1223,7 +1223,8 @@ void Lightmap_window::imgui()
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip(
                     "Draw every spatial tile's world bounds as x-ray wireframe boxes in the\n"
-                    "viewport: purple = all tiles, white = active (display-slot-holding) tiles."
+                    "viewport: white = active (gathering), cyan = resident (display slot, not\n"
+                    "gathering), purple = not resident."
                 );
             }
             ImGui::SameLine();

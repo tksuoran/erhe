@@ -120,8 +120,9 @@ private:
     void physics_nodes_visualization     (const Render_context& context);
     void raytrace_nodes_visualization    (const Render_context& context);
     // Spatial lightmap tiles (Lightmap_baker::get_show_tile_bounds): x-ray
-    // wireframe world AABBs, purple for all tiles, white for the active
-    // (display-slot-holding) ones.
+    // wireframe world AABBs, 2 px constant width; white = active
+    // (gathering), cyan = resident (display slot, not gathering),
+    // purple = not resident.
     void lightmap_tiles_visualization    (const Render_context& context);
     void mesh_labels                     (const Render_context& context, erhe::scene::Mesh* mesh);
 
