@@ -628,6 +628,8 @@ void bucket_primitives(
     const erhe::Item_filter&                                   shader_debug_filter
 )
 {
+    ERHE_PROFILE_FUNCTION();
+
     for (const std::shared_ptr<erhe::scene::Mesh>& mesh : meshes) {
         const auto primitives = mesh->get_primitives();
         if (!filter(mesh->get_flag_bits())) {

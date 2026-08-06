@@ -385,6 +385,8 @@ auto Sky_renderer::resolve_sun_direction(const Sky_config& sky_config, Scene_roo
 
 void Sky_renderer::ensure_luts(erhe::graphics::Device& graphics_device, erhe::graphics::Command_buffer& command_buffer)
 {
+    ERHE_PROFILE_FUNCTION();
+
     if (!is_atmosphere_supported() || m_luts_ready) {
         return;
     }

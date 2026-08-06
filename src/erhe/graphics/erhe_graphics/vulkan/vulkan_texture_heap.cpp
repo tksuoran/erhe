@@ -383,6 +383,8 @@ void Texture_heap_impl::unbind(Command_buffer& command_buffer)
 
 auto Texture_heap_impl::bind_descriptor_set(Command_buffer& command_buffer_wrapper, VkPipelineBindPoint bind_point) -> std::size_t
 {
+    ERHE_PROFILE_FUNCTION();
+
     // Covers a bind() before the first reset_heap(); normal passes have a
     // current set acquired by reset_heap().
     if (m_current_set_index == s_invalid_set_index) {

@@ -356,12 +356,16 @@ private:
 
 void Build_context_root::calculate_bounding_volume()
 {
+    ERHE_PROFILE_FUNCTION();
+
     const Mesh_point_source point_source{mesh};
     erhe::math::calculate_bounding_volume(point_source, buffer_mesh.bounding_box, buffer_mesh.bounding_sphere);
 }
 
 void Build_context_root::calculate_joint_bounding_volumes(erhe::geometry::Mesh_attributes& mesh_attributes)
 {
+    ERHE_PROFILE_FUNCTION();
+
     // Rest-pose bounds per joint, so a GPU-skinned mesh can be bounded in world
     // space from the joint transforms alone (see Buffer_mesh::joint_bounding_boxes).
     // A vertex is included in the box of every joint that influences it; the
@@ -477,6 +481,8 @@ auto Primitive_builder::build() -> bool
 
 [[nodiscard]] auto Build_context::get_attribute_writer(erhe::dataformat::Vertex_attribute_usage usage, std::size_t index) -> Vertex_buffer_writer*
 {
+    ERHE_PROFILE_FUNCTION();
+
     erhe::dataformat::Attribute_stream info = root.vertex_format.find_attribute(usage, index);
     if (info.attribute != nullptr) {
         std::size_t stream_index = info.stream - root.vertex_format.streams.data();
@@ -497,6 +503,8 @@ Build_context::Build_context(
     , index_writer   {*this, build_info.buffer_info.index_buffer_sink}
     , mesh_attributes{mesh}
 {
+    ERHE_PROFILE_FUNCTION();
+
     if (root.build_failed) {
         return;
     }

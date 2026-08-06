@@ -496,6 +496,8 @@ void Debug_renderer::begin_frame(
     std::span<const View>      views
 )
 {
+    ERHE_PROFILE_FUNCTION();
+
     // No Scoped_debug_group here: this path only sets up CPU-side view
     // state (per-eye Views, view stack); no GPU commands are recorded.
     // The bracketing belongs around Debug_renderer::compute /
@@ -599,6 +601,8 @@ void Debug_renderer::render(
 
 void Debug_renderer::end_frame()
 {
+    ERHE_PROFILE_FUNCTION();
+
     for (Debug_renderer_bucket& bucket : m_buckets) {
         bucket.release_buffers();
     }

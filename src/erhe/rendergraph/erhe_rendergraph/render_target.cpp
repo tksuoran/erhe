@@ -45,6 +45,8 @@ void Render_target::reconfigure(int sample_count)
 
 void Render_target::update(int width, int height, erhe::graphics::Swapchain* swapchain)
 {
+    ERHE_PROFILE_FUNCTION();
+
     using erhe::graphics::Render_pass;
     using erhe::graphics::Texture;
 

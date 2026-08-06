@@ -264,6 +264,8 @@ auto Shader_key::derive(
 
 auto compute_light_layer_partition(std::span<const std::shared_ptr<erhe::scene::Light>> lights) -> Light_layer_partition
 {
+    ERHE_PROFILE_FUNCTION();
+
     auto type_index = [](const erhe::scene::Light_type t) -> std::size_t {
         switch (t) {
             case erhe::scene::Light_type::directional: return 0;
