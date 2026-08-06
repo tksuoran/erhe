@@ -76,6 +76,12 @@ namespace {
 {
     auto manifest = std::make_shared<Lightmap_tile_io::Manifest>();
     manifest->tile_size        = layout.get_tile_size();
+    // Owning-scene stamp: consumers reject sets from a different scene
+    // (unsaved scenes share the untitled.lightmap directory).
+    const std::shared_ptr<Scene_root> scene_root = context.selection->get_active_scene_root();
+    if (scene_root) {
+        manifest->scene_id = scene_root->get_scene_id();
+    }
     manifest->bake_hash        = (context.lightmap_baker != nullptr)
         ? context.lightmap_baker->get_bake_parameters_hash()
         : 0u;
@@ -199,6 +205,9 @@ namespace {
     Lightmap_tile_io::Manifest saved;
     if (!Lightmap_tile_io::read_manifest(directory, saved, nullptr)) {
         return false;
+    }
+    if (saved.scene_id != scene_root->get_scene_id()) {
+        return false; // another scene's set (shared untitled.lightmap)
     }
     if ((saved.bake_hash != baker->get_bake_parameters_hash()) ||
         (saved.tile_size != layout.get_tile_size())) {

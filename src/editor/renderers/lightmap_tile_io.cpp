@@ -173,6 +173,7 @@ auto Lightmap_tile_io::write_manifest(const std::filesystem::path& directory, co
     }
     const nlohmann::json root{
         {"version",   manifest.version},
+        {"scene_id",  manifest.scene_id},
         {"tile_size", manifest.tile_size},
         {"bake_hash", manifest.bake_hash},
         {"tiles",     tiles}
@@ -217,6 +218,7 @@ auto Lightmap_tile_io::read_manifest(const std::filesystem::path& directory, Man
             }
             return false;
         }
+        out_manifest.scene_id  = root.value("scene_id", std::string{});
         out_manifest.tile_size = root.value("tile_size", 0);
         out_manifest.bake_hash = root.value("bake_hash", static_cast<uint64_t>(0));
         for (const nlohmann::json& tile_json : root.value("tiles", nlohmann::json::array())) {

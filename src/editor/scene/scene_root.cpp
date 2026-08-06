@@ -50,7 +50,10 @@
 #include <imgui/imgui_internal.h>
 
 #include <algorithm>
+#include <chrono>
+#include <ctime>
 #include <functional>
+#include <random>
 #include <unordered_set>
 
 namespace editor {
@@ -1436,6 +1439,32 @@ auto Scene_root::get_scene_settings() -> Scene_settings&
 auto Scene_root::get_scene_settings() const -> const Scene_settings&
 {
     return m_scene_settings;
+}
+
+auto Scene_root::get_scene_id() -> const std::string&
+{
+    if (m_scene_settings.scene_id.empty()) {
+        // Creation timestamp (UTC, second granularity - human-readable
+        // provenance) + 64 random bits (uniqueness).
+        const auto now = std::chrono::system_clock::now();
+        const std::time_t now_time = std::chrono::system_clock::to_time_t(now);
+        std::tm utc{};
+#if defined(_WIN32)
+        gmtime_s(&utc, &now_time);
+#else
+        gmtime_r(&now_time, &utc);
+#endif
+        std::random_device device;
+        const uint64_t random_bits = (static_cast<uint64_t>(device()) << 32) ^ static_cast<uint64_t>(device());
+        m_scene_settings.scene_id = fmt::format(
+            "{:04}{:02}{:02}-{:02}{:02}{:02}-{:016x}",
+            utc.tm_year + 1900, utc.tm_mon + 1, utc.tm_mday,
+            utc.tm_hour, utc.tm_min, utc.tm_sec,
+            random_bits
+        );
+        log_scene->info("Scene '{}' assigned scene_id {}", get_name(), m_scene_settings.scene_id);
+    }
+    return m_scene_settings.scene_id;
 }
 
 namespace {

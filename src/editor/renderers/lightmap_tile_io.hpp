@@ -38,7 +38,9 @@ class Lightmap_tile_io
 public:
     // v4: dropped the manifest-global texels_per_meter (density is per tile
     // from the grid) and removed it from the bake parameters hash.
-    static constexpr uint32_t c_manifest_version = 4;
+    // v5: scene_id (Scene_root::get_scene_id) stamps the set with its
+    // owning scene; consumers reject side data from a different scene.
+    static constexpr uint32_t c_manifest_version = 5;
     static constexpr uint32_t c_payload_version  = 1;
     static constexpr uint32_t c_payload_magic    = 0x544D4C45u; // 'ELMT' little-endian
 
@@ -81,6 +83,11 @@ public:
     {
     public:
         uint32_t                version  {c_manifest_version};
+        // Owning scene (Scene_settings::scene_id): a set stamped with a
+        // different scene's id is foreign - the streamer and
+        // restore-on-activate reject it instead of streaming stale data
+        // (unsaved scenes share the untitled.lightmap directory).
+        std::string             scene_id {};
         int                     tile_size{2048};
         uint64_t                bake_hash{0};
         std::vector<Tile_entry> tiles;

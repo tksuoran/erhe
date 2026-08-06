@@ -221,6 +221,14 @@ public:
     [[nodiscard]] auto get_scene_settings()       -> Scene_settings&;
     [[nodiscard]] auto get_scene_settings() const -> const Scene_settings&;
 
+    // Persistent scene identity (Scene_settings::scene_id, saved with the
+    // scene): creation timestamp + random suffix, generated lazily here for
+    // scenes that lack one (from-scratch scenes and pre-scene_id files
+    // alike - no back-compat kept). Side data (the lightmap tile set
+    // manifest) is stamped with it and rejected on mismatch, so a scratch
+    // scene never adopts another scene's untitled.lightmap set.
+    [[nodiscard]] auto get_scene_id() -> const std::string&;
+
     void imgui();
 
     auto camera_combo(const char* label, erhe::scene::Camera*& camera, bool nullptr_option = false) const -> bool;

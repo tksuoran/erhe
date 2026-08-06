@@ -55,6 +55,7 @@ void Lightmap_streamer::reset()
     m_manifest_loaded         = false;
     m_manifest_missing_logged = false;
     m_piece_hint_logged       = false;
+    m_foreign_rejected        = false;
     m_stale                   = false;
     m_manifest                = {};
     m_tiles.clear();
@@ -90,6 +91,20 @@ auto Lightmap_streamer::try_load_manifest(Scene_root& scene_root) -> bool
         return false;
     }
     if ((m_manifest.tile_size <= 0) || m_manifest.tiles.empty()) {
+        return false;
+    }
+    // Owning-scene check: a set stamped with a different scene_id is
+    // foreign (unsaved scenes share the untitled.lightmap directory) -
+    // never stream another scene's data. m_foreign_rejected caches the
+    // verdict so the manifest is not re-parsed every frame; invalidate()
+    // (a fresh save from THIS scene rewrites the stamp) re-checks.
+    if (m_manifest.scene_id != scene_root.get_scene_id()) {
+        m_foreign_rejected = true;
+        m_manifest         = {};
+        log_render->info(
+            "Lightmap_streamer: tile set in {} belongs to a different scene - ignored",
+            m_directory.string()
+        );
         return false;
     }
     m_tiles.assign(m_manifest.tiles.size(), Tile_runtime{});
@@ -394,6 +409,9 @@ void Lightmap_streamer::update(Scene_root& scene_root, const glm::vec3* camera_p
     if (m_scene_root != &scene_root) {
         reset();
         m_scene_root = &scene_root;
+    }
+    if (m_foreign_rejected) {
+        return; // another scene's set; re-checked on invalidate()
     }
     if (!m_manifest_loaded) {
         if (!try_load_manifest(scene_root)) {

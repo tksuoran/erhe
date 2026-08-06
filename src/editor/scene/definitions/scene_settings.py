@@ -13,10 +13,11 @@ from erhe_codegen import *
 # the scene codegen unit and references them across units via the scene
 # erhe_codegen_generate() EXTRA_DEFINITIONS_DIRS entry (config/generated/).
 struct("Scene_settings",
-    version=2,
+    version=3,
     short_desc="Per-scene setting overrides",
     long_desc="Each field left null means: use the editor-global default.",
     fields=[
+        field("scene_id", String, added_in=3, default='""', short_desc="Persistent scene identity", long_desc="Unique persistent scene id (creation timestamp + random suffix), generated lazily by Scene_root::get_scene_id for scenes that lack one and persisted with the scene. Identifies side data (e.g. the lightmap tile set manifest): side data stamped with a different scene_id is rejected. Not intended for hand editing."),
         field("sky",                Optional(StructRef("Sky_config")),                added_in=1, short_desc="Sky",                long_desc="Override the editor-global sky settings for this scene."),
         field("grid",               Optional(StructRef("Grid_config")),               added_in=1, short_desc="Grid",               long_desc="Override the editor-global grid settings for this scene."),
         field("physics",            Optional(StructRef("Physics_config")),            added_in=1, short_desc="Physics",            long_desc="Override the editor-global physics settings for this scene."),

@@ -110,6 +110,10 @@ private:
     bool                                     m_manifest_loaded{false};
     bool                                     m_manifest_missing_logged{false};
     bool                                     m_piece_hint_logged{false};
+    // The on-disk set belongs to a different scene (manifest scene_id
+    // mismatch); skip it without re-parsing every frame. Cleared by
+    // invalidate()/reset().
+    bool                                     m_foreign_rejected{false};
     bool                                     m_stale{false};
     std::filesystem::path                    m_directory;
     Scene_root*                              m_scene_root{nullptr};
