@@ -582,6 +582,12 @@ private:
     // Copy the tile-sized working atlas into the tile's sub-rect of the
     // page-sized display atlas (both left shader-readable).
     void record_display_publish(erhe::graphics::Command_buffer& command_buffer, int tile);
+    // Overwrite freshly assigned display slots with white (the unbaked
+    // look): a new occupant's regions map into the slot immediately, but
+    // the slot still holds the previous occupant's published texels until
+    // the first publish/restore. Consumes m_slots_pending_white_clear;
+    // called by tick() after ensure_bake_targets.
+    void record_pending_slot_white_clears(erhe::graphics::Command_buffer& command_buffer);
     // One-shot virtual-offset pass (article sample-position adjustment):
     // rewrites the position G-buffer in place, once per G-buffer bake.
     // bind_instance_records binds the Lm_instance_record SSBO (binding 1)
@@ -758,6 +764,10 @@ private:
     bool                                               m_save_on_evict{false};
     std::vector<int>                                   m_tiles_pending_save;
     std::vector<int>                                   m_tiles_pending_restore;
+    // Freshly assigned display slots awaiting their white overwrite
+    // (record_pending_slot_white_clears); a successful disk restore
+    // unqueues its slot, a full-page clear empties the list.
+    std::vector<int>                                   m_slots_pending_white_clear;
     std::unique_ptr<erhe::graphics::Shader_resource>   m_lm_instance_struct;
     std::unique_ptr<erhe::graphics::Shader_resource>   m_lm_instance_block;
     std::unique_ptr<erhe::graphics::Sampler>           m_linear_sampler;

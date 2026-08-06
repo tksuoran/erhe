@@ -2205,6 +2205,7 @@ auto Lightmap_baker::update_layout(Scene_root& scene_root, const float min_face_
     // the uv_scale_offsets pushed to the meshes; ensure_bake_targets clears
     // the display atlas when this is false.
     m_display_cleared   = false;
+    m_slots_pending_white_clear.clear(); // slot indices belong to the old layout
     m_layout_scene_root = &scene_root;
 
     // The prepared world-space partition for this scene supplies the
@@ -3633,8 +3634,9 @@ void Lightmap_baker::ensure_bake_targets(erhe::graphics::Command_buffer& command
             c_atlas_format,
             tile_size,
             tile_size,
-            Image_usage_flag_bit_mask::storage |
-            Image_usage_flag_bit_mask::sampled |
+            Image_usage_flag_bit_mask::storage      |
+            Image_usage_flag_bit_mask::sampled      |
+            Image_usage_flag_bit_mask::transfer_src | // white source for fresh-slot clears
             Image_usage_flag_bit_mask::transfer_dst
         );
         command_buffer.clear_texture(*m_lightmap_texture, {0.0, 0.0, 0.0, 0.0});
@@ -3667,10 +3669,48 @@ void Lightmap_baker::ensure_bake_targets(erhe::graphics::Command_buffer& command
         command_buffer.clear_texture(*m_display_texture, {1.0, 1.0, 1.0, 0.0});
         command_buffer.transition_texture_layout(*m_display_texture, Image_layout::shader_read_only_optimal);
         m_display_cleared = true;
+        m_slots_pending_white_clear.clear(); // the full-page clear covers them
         for (Tile_state& tile : m_tiles) {
             tile.published = false;
         }
     }
+}
+
+void Lightmap_baker::record_pending_slot_white_clears(erhe::graphics::Command_buffer& command_buffer)
+{
+    using namespace erhe::graphics;
+    if (m_slots_pending_white_clear.empty() || !m_display_texture || !m_dilate_texture) {
+        return;
+    }
+    // A freshly assigned display slot still holds the PREVIOUS occupant
+    // tile's published texels, and the new occupant's regions map into it
+    // immediately (publish_regions on the residency change) - stale
+    // lighting until its first publish/restore. Overwrite the slot with
+    // white (the unbaked look) using the tile-sized dilate scratch as the
+    // source (it is re-filled by every dilate/seam pass, so clobbering it
+    // here is safe).
+    const int tile_size = m_layout.get_tile_size();
+    command_buffer.clear_texture(*m_dilate_texture, {1.0, 1.0, 1.0, 0.0});
+    command_buffer.transition_texture_layout(*m_dilate_texture,  Image_layout::transfer_src_optimal);
+    command_buffer.transition_texture_layout(*m_display_texture, Image_layout::transfer_dst_optimal);
+    {
+        Blit_command_encoder blit = m_graphics_device.make_blit_command_encoder(command_buffer);
+        for (const int slot : m_slots_pending_white_clear) {
+            const glm::ivec2 slot_origin = m_layout.get_slot_origin(slot);
+            blit.copy_from_texture(
+                m_dilate_texture.get(),
+                0, 0,
+                glm::ivec3{0, 0, 0},
+                glm::ivec3{tile_size, tile_size, 1},
+                m_display_texture.get(),
+                0, 0,
+                glm::ivec3{slot_origin.x, slot_origin.y, 0}
+            );
+        }
+    }
+    command_buffer.transition_texture_layout(*m_dilate_texture,  Image_layout::shader_read_only_optimal);
+    command_buffer.transition_texture_layout(*m_display_texture, Image_layout::shader_read_only_optimal);
+    m_slots_pending_white_clear.clear();
 }
 
 auto Lightmap_baker::ensure_tile_accum(erhe::graphics::Command_buffer& command_buffer, const int tile) -> erhe::graphics::Texture*
@@ -4482,6 +4522,7 @@ void Lightmap_baker::clear_display_to_white()
     m_graphics_device.submit_command_buffers(std::span<Command_buffer* const>{command_buffers});
     m_graphics_device.wait_idle();
     m_display_cleared = true;
+    m_slots_pending_white_clear.clear(); // the full-page clear covers them
     for (Tile_state& tile : m_tiles) {
         tile.published = false;
     }
@@ -5036,10 +5077,14 @@ void Lightmap_baker::tick(
                     layout_tile.slot = free_slots.back();
                     free_slots.pop_back();
                     residency_changed = true;
-                    // Fresh occupant: accumulate and publish from scratch
-                    // (the slot still shows the previous occupant until the
-                    // first publish, but nothing references it - the old
-                    // tile's regions were zeroed).
+                    // Fresh occupant: accumulate and publish from scratch.
+                    // The slot still holds the PREVIOUS occupant's texels
+                    // and this tile's regions map into it right away
+                    // (publish_regions below) - queue a white overwrite so
+                    // the interim shows the unbaked look, not stale
+                    // lighting (record_pending_slot_white_clears; a disk
+                    // restore replaces the white and unqueues the slot).
+                    m_slots_pending_white_clear.push_back(layout_tile.slot);
                     state.published           = false;
                     state.accum_dirty         = true;
                     state.sweeps              = 0;
@@ -5152,6 +5197,7 @@ void Lightmap_baker::tick(
     }
 
     ensure_bake_targets(command_buffer);
+    record_pending_slot_white_clears(command_buffer);
     Texture* const accum = ensure_tile_accum(command_buffer, m_cursor_tile);
     if (accum == nullptr) {
         return;
@@ -5460,6 +5506,9 @@ auto Lightmap_baker::restore_tile(
     m_graphics_device.submit_command_buffers(std::span<Command_buffer* const>{command_buffers});
     m_graphics_device.wait_idle();
 
+    // The restored pixels replace the fresh-slot white overwrite; a still-
+    // queued clear for this slot would wipe them on the next tick.
+    std::erase(m_slots_pending_white_clear, slot);
     // Published disk content: the display matches the payload, so it is not
     // dirty; accumulation still restarts (accum_dirty stands), but republish
     // waits until it has re-earned the restored quality.
