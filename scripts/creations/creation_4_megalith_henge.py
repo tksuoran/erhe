@@ -50,7 +50,7 @@ def granite_graph(c):
 
 def main():
     args = standard_args("Megalith Henge at Dusk")
-    c = Creation("Megalith Henge", port=args.port)
+    c = Creation("Megalith Henge", port=args.port, pause_s=args.pause)
     scene = c.new_scene()
     print(f"scene: {scene}")
 

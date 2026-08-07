@@ -25,11 +25,23 @@ class Creation:
     """Wraps an McpClient with busy-retry, scene bootstrap and camera/screenshot
     helpers used by every creation script."""
 
-    def __init__(self, title, port=8080, wait_s=120.0):
+    def __init__(self, title, port=8080, wait_s=120.0, pause_s=10.0):
         self.title = title
         self.client = McpClient(port)
         wait_for_server(self.client, wait_s)
         self.scene = None
+        # One-time pause after the first visible mesh appears, so a screen
+        # video recording can be started before the scene builds up.
+        self.pause_s = pause_s
+        self._record_pause_done = False
+
+    def _record_pause(self):
+        if self._record_pause_done or self.pause_s <= 0:
+            return
+        self._record_pause_done = True
+        print(f"First visible mesh placed - pausing {self.pause_s:.0f} s "
+              "(start screen recording now)...", flush=True)
+        time.sleep(self.pause_s)
 
     # ------------------------------------------------------------ transport
 
@@ -184,7 +196,13 @@ class Creation:
         self.settle()
         self.presentation()
         time.sleep(1.0)  # let a few frames render with final state
-        result = self.call("capture_screenshot", {"path": path})
+        try:
+            result = self.call("capture_screenshot", {"path": path})
+        except RuntimeError as error:
+            # The windowed build has no frame capture; a recording session
+            # should still reach save_scene.
+            print(f"screenshot skipped: {error}")
+            return None
         print(f"screenshot: {json.dumps(result)}")
         return result
 
@@ -269,6 +287,7 @@ class Creation:
             "node_name": node_name, "graph_mesh": graph_mesh, "scene_name": self.scene,
         })
         self.call("get_geometry_graph")  # evaluation barrier
+        self._record_pause()
         return node_name
 
     def move_node_id(self, node_id, translation=None, rotation_xyzw=None, scale=None):
@@ -317,7 +336,10 @@ class Creation:
             "motion_mode": kwargs.pop("motion_mode", "static"),
         }
         args.update({k: v for k, v in kwargs.items() if v is not None})
-        return self.mutate("create_shape", args)
+        result = self.mutate("create_shape", args)
+        if kwargs.get("instance", True) is not False:
+            self._record_pause()
+        return result
 
     def light(self, light_type, name, position, color, intensity, **kwargs):
         args = {
@@ -345,7 +367,9 @@ class Creation:
         }
         if material_name:
             args["material_name"] = material_name
-        return self.mutate("place_brush", args)
+        result = self.mutate("place_brush", args)
+        self._record_pause()
+        return result
 
     def ambience(self, ambient=None, clear_color=None, grid=None):
         args = {"scene_name": self.scene}
@@ -444,4 +468,7 @@ def standard_args(description):
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("--port", type=int, default=8080)
     parser.add_argument("--no-save", action="store_true", help="skip save_scene")
+    parser.add_argument("--pause", type=float, default=10.0,
+                        help="seconds to pause after the first visible mesh, "
+                             "for starting a screen recording (0 disables)")
     return parser.parse_args()

@@ -149,7 +149,7 @@ PLINTH_H = 1.0
 
 def main():
     args = standard_args("The Texture Atelier")
-    c = Creation("Texture Atelier", port=args.port)
+    c = Creation("Texture Atelier", port=args.port, pause_s=args.pause)
     scene = c.new_scene()
     print(f"scene: {scene}")
 

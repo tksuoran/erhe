@@ -53,7 +53,7 @@ def build_sculpture_graph(c, name, source, chain_ops, material_name):
 
 def main():
     args = standard_args("Cathedral of Conway")
-    c = Creation("Conway Cathedral", port=args.port)
+    c = Creation("Conway Cathedral", port=args.port, pause_s=args.pause)
     scene = c.new_scene()
     print(f"scene: {scene}")
 

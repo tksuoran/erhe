@@ -26,7 +26,7 @@ TOP_Y = 10.0
 
 def main():
     args = standard_args("The Spiral Reef")
-    c = Creation("Spiral Reef", port=args.port)
+    c = Creation("Spiral Reef", port=args.port, pause_s=args.pause)
     scene = c.new_scene()
     print(f"scene: {scene}")
 

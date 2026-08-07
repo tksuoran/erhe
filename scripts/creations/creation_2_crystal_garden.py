@@ -50,7 +50,7 @@ def build_cluster(c, index, count, material_name):
 
 def main():
     args = standard_args("Crystal Garden at Night")
-    c = Creation("Crystal Garden", port=args.port)
+    c = Creation("Crystal Garden", port=args.port, pause_s=args.pause)
     scene = c.new_scene()
     print(f"scene: {scene}")
 
