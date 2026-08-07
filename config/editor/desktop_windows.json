@@ -40,11 +40,11 @@
         "ray_trace": false,
         "rendergraph": false,
         "selection": false,
-        "settings": false,
+        "settings": true,
         "sheet": false,
         "tail_log": true,
         "texture_graph_palette": false,
-        "tool_properties": true,
+        "tool_properties": false,
         "tools_content_library": false,
         "transform": true
     }

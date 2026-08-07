@@ -5,7 +5,7 @@
         "invert_y": false,
         "sensitivity": 1,
         "velocity_damp": 0.92,
-        "velocity_max_delta": 0.048,
+        "velocity_max_delta": 0.003,
         "move_power": 1000,
         "move_speed": 2,
         "turn_speed": 1
@@ -311,7 +311,7 @@
                 },
                 "selection_bounding_box": false,
                 "selection_bounding_sphere": false,
-                "shadow_mode": "baked_lightmaps"
+                "shadow_mode": "shadow_maps"
             },
             "scene_and_camera": {
                 "scene_name": "Floor Only Scene",
@@ -501,7 +501,7 @@
         "tile_texture_size": 256,
         "resident_tile_budget": 14,
         "offline_sweeps": 64,
-        "render_with_lightmaps": true,
+        "render_with_lightmaps": false,
         "indirect_bounce": true,
         "terminator_fix": true,
         "denoise": true,
@@ -588,8 +588,8 @@
         "downstream_port": 34567
     },
     "physics": {
-        "static_enable": false,
-        "dynamic_enable": false,
+        "static_enable": true,
+        "dynamic_enable": true,
         "debug_draw": false
     },
     "scene": {

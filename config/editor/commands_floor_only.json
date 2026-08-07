@@ -23,8 +23,8 @@
             "args": {
                 "_version": 2,
                 "directional_light_intensity": 4,
-                "directional_light_radius": 4.5,
-                "directional_light_height": 10,
+                "directional_light_radius": 30,
+                "directional_light_height": 1.572,
                 "directional_light_shadow_count": 1,
                 "directional_light_no_shadow_count": 0,
                 "spot_light_intensity": 500,
