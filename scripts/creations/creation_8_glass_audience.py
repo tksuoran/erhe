@@ -162,11 +162,11 @@ def main():
     # ------------------------------------------------------------ the room
     c.shape("box", "Stage Floor", [0.0, -0.25, 0.0], size=[14.0, 0.5, 11.0],
             material_name=m["floor"])
-    c.shape("box", "End Wall A", [0.0, 2.5, 5.6], size=[14.0, 5.0, 0.4],
+    c.shape("box", "End Wall A", [0.0, 3.0, 5.6], size=[14.0, 6.0, 0.4],
             material_name=m["wall"])
-    c.shape("box", "End Wall B", [0.0, 2.5, -5.6], size=[14.0, 5.0, 0.4],
+    c.shape("box", "End Wall B", [0.0, 3.0, -5.6], size=[14.0, 6.0, 0.4],
             material_name=m["wall"])
-    c.shape("box", "Back Wall", [-7.2, 2.5, 0.0], size=[0.4, 5.0, 11.6],
+    c.shape("box", "Back Wall", [-7.2, 3.0, 0.0], size=[0.4, 6.0, 11.6],
             material_name=m["wall"])
 
     # Glass wall dividing the room, with a steel frame.
@@ -178,12 +178,15 @@ def main():
         c.shape("box", f"Glass Frame Side {side:+.0f}", [side * 5.06, 1.8, 0.0],
                 size=[0.12, 3.72, 0.14], material_name=m["steel"])
 
-    # Gantry above the glass line for the swinging lamp.
+    # Gantry above the glass line for the swinging lamp. High enough that
+    # the lamp's lowest point (rest pose) clears the glass frame top: the
+    # rod swings in the wall's own plane, so any overlap makes it land on
+    # the frame and hang there.
     for side in (-1.0, 1.0):
         c.shape("cone", f"Lamp Pillar {side:+.0f}", [side * 5.3, 0.0, 0.0],
-                height=4.05, bottom_radius=0.09, top_radius=0.09,
+                height=5.05, bottom_radius=0.09, top_radius=0.09,
                 slice_count=14, material_name=m["steel"])
-    c.shape("box", "Lamp Beam", [0.0, 4.12, 0.0], size=[11.0, 0.16, 0.16],
+    c.shape("box", "Lamp Beam", [0.0, 5.13, 0.0], size=[11.0, 0.16, 0.16],
             material_name=m["steel"])
 
     # ------------------------------------------------------------- thrones
@@ -195,21 +198,21 @@ def main():
     # ------------------------------------------------- the swinging lamp
     # Same rig as Ragdoll Rumble: a dynamic rod on a pendulum joint to the
     # world; shade, bulb and the spot light ride the rod as pure visuals.
-    pivot = [0.0, 4.02, 0.0]
+    pivot = [0.0, 5.02, 0.0]
     theta = math.radians(38.0)
     d = [math.sin(theta), -math.cos(theta), 0.0]  # pivot -> lamp direction
     q_rod = axis_angle_quaternion([0.0, 0.0, 1.0], theta)
 
     rod = c.shape("capsule", "Lamp Rod",
-                  [pivot[i] + d[i] * 0.73 for i in range(3)],
-                  length=1.40, bottom_radius=0.025, top_radius=0.025,
+                  [pivot[i] + d[i] * 0.53 for i in range(3)],
+                  length=1.00, bottom_radius=0.025, top_radius=0.025,
                   slice_count=10, motion_mode="dynamic",
                   material_name=m["steel"])
     rod_id = rod["node_id"]
     c.move_node_id(rod_id, rotation_xyzw=q_rod)
 
     shade = c.shape("cone", "Lamp Shade",
-                    [pivot[i] + d[i] * 1.52 for i in range(3)],
+                    [pivot[i] + d[i] * 1.12 for i in range(3)],
                     height=0.24, bottom_radius=0.26, top_radius=0.06,
                     slice_count=20, use_bottom=False, motion_mode="static",
                     material_name=m["steel"], parent_node_id=rod_id)
@@ -218,7 +221,7 @@ def main():
         c.move_node_id(shade_id, rotation_xyzw=q_rod)
         c.strip_physics(shade_id)
     bulb = c.shape("uv_sphere", "Lamp Bulb",
-                   [pivot[i] + d[i] * 1.50 for i in range(3)], radius=0.055,
+                   [pivot[i] + d[i] * 1.10 for i in range(3)], radius=0.055,
                    slice_count=12, stack_count=8, motion_mode="static",
                    material_name=m["glow"], parent_node_id=rod_id)
     bulb_id = bulb.get("node_id") if isinstance(bulb, dict) else None
@@ -226,9 +229,9 @@ def main():
         c.strip_physics(bulb_id)
 
     # Spot light under the shade, aimed along the rod, riding it.
-    c.light("spot", "Swinging Cone", [pivot[i] + d[i] * 1.56 for i in range(3)],
-            [1.0, 0.92, 0.7], 380.0, range=14.0, cast_shadow=True,
-            inner_spot_angle=0.35, outer_spot_angle=0.62)
+    c.light("spot", "Swinging Cone", [pivot[i] + d[i] * 1.16 for i in range(3)],
+            [1.0, 0.92, 0.7], 480.0, range=17.0, cast_shadow=True,
+            inner_spot_angle=0.38, outer_spot_angle=0.68)
     c.settle()
     light_node = c.node_by_name("Swinging Cone")
     if light_node is None:
@@ -261,7 +264,7 @@ def main():
 
     c.settle()
     # Diagonal view through the glass: skeleton throne near, empty one beyond.
-    c.place_camera([6.6, 2.9, 5.6], [-1.2, 1.0, -1.4])
+    c.place_camera([6.6, 3.0, 5.6], [-1.2, 1.5, -1.4])
     c.screenshot("logs/creations/glass_audience_still.png")
 
     # Let the lamp swing and keep it swinging.
