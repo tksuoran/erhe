@@ -30,6 +30,8 @@ def launch_editor(editor_exe):
     """Kill any running editor and launch a fresh one WITHOUT a default scene
     (--commands config/editor/commands_empty.json), so the creation's own
     scene is the only scene (one set of viewport/shadow resources)."""
+    if not os.path.isabs(editor_exe):
+        editor_exe = os.path.join(REPO_ROOT, editor_exe)
     subprocess.run(["taskkill", "/IM", "editor.exe", "/F"],
                    capture_output=True, check=False)
     time.sleep(2.0)
@@ -248,11 +250,16 @@ class Creation:
 
     MATERIAL_POOL_EXCLUDE = {"Rendertarget Node"}
 
-    def make_material(self, base_name=None, **edits):
+    TEXTURE_SLOTS = ("base_color", "metallic_roughness", "normal", "occlusion", "emissive")
+
+    def make_material(self, base_name=None, clear_textures=False, **edits):
         """Claim an unused material from this scene's own stock library
         (every new scene ships with the standard metals) and edit it in
         place. Falls back to copying from another open scene when the pool
-        runs dry. Returns the material's name."""
+        runs dry. Returns the material's name. clear_textures=True makes the
+        material plain: drops every texture assignment and resets the BxDF
+        to isotropic (stock metals default to circular-brushed anisotropic,
+        which draws an X/ring pattern per UV tile on faceted shapes)."""
         if self._material_pool is None:
             self._material_pool = [
                 m["name"] for m in self.materials()
@@ -282,6 +289,11 @@ class Creation:
             raise RuntimeError(
                 "material pool exhausted and no other scene to copy from - "
                 "reuse materials (fewer make_material calls)")
+        if clear_textures:
+            edits["texture_samplers"] = {slot: {"texture": None} for slot in self.TEXTURE_SLOTS}
+            edits.setdefault("bxdf_model", "isotropic_brdf")
+            edits.setdefault("use_circular_brushed_metal", False)
+            edits.setdefault("use_aniso_control", False)
         if edits:
             args = {"scene_name": self.scene, "material_name": name}
             args.update(edits)
@@ -402,7 +414,9 @@ class Creation:
         self._record_pause()
         return result
 
-    def ambience(self, ambient=None, clear_color=None, grid=None):
+    def ambience(self, ambient=None, clear_color=None, grid=None, sky=None):
+        """Scene mood knobs. grid / sky accept a bool (visibility / enable)
+        or a full Grid_config / Sky_config dict override."""
         args = {"scene_name": self.scene}
         if ambient is not None:
             args["ambient_light"] = [float(v) for v in ambient]
@@ -410,7 +424,11 @@ class Creation:
         if clear_color is not None:
             settings["clear_color"] = [float(v) for v in clear_color]
         if grid is not None:
-            settings["grid"] = bool(grid)
+            settings["grid"] = grid if isinstance(grid, dict) else {"_version": 3, "visible": bool(grid)}
+        if sky is not None:
+            # "_version" matters: sky "enabled" is an added_in=2 field, and a
+            # versionless JSON object parses as version 1 (the field is dropped).
+            settings["sky"] = sky if isinstance(sky, dict) else {"_version": 3, "enabled": bool(sky)}
         if settings:
             args["settings"] = settings
         self.mutate("set_scene_settings", args)
@@ -421,6 +439,64 @@ class Creation:
             self.mutate("edit_camera", {
                 "scene_name": self.scene, "camera_id": cameras[0]["id"],
                 "exposure": float(value)})
+
+    # -------------------------------------------------------------- physics
+
+    def set_physics(self, enabled):
+        """Set the dynamic physics simulation on/off deterministically.
+        toggle_physics only flips, so toggle once and flip back if the
+        reported state is not the wanted one."""
+        result = self.mutate("toggle_physics")
+        state = result.get("dynamic_physics_enabled") if isinstance(result, dict) else None
+        if state == bool(enabled):
+            return
+        self.mutate("toggle_physics")
+
+    def wake_physics(self):
+        """Wake all dynamic bodies (they enter the world deactivated)."""
+        self.mutate("wake_physics_bodies", {"scene_name": self.scene})
+
+    def joint_settings(self, name, limits, drives=None):
+        """Create shared Physics_joint_settings in this scene's library."""
+        args = {"scene_name": self.scene, "name": name, "limits": limits}
+        if drives:
+            args["drives"] = drives
+        self.mutate("create_physics_joint_settings", args)
+        return name
+
+    def anchor(self, name, parent_node_id, position):
+        """Empty child node at a world position, used as a joint pivot."""
+        result = self.mutate("create_node", {
+            "scene_name": self.scene, "name": name,
+            "parent_node_id": int(parent_node_id),
+            "position": [float(v) for v in position],
+        })
+        if isinstance(result, dict) and "node_id" in result:
+            return result["node_id"]
+        node = self.node_by_name(name)
+        if node is None:
+            raise RuntimeError(f"anchor '{name}' did not appear")
+        return node["id"]
+
+    def joint(self, node_id, connected_node_id=None, settings_name=None, enable_collision=False):
+        """create_physics_joint: joins the nearest self-or-ancestor rigid
+        body of node_id to that of connected_node_id (or the world)."""
+        args = {
+            "scene_name": self.scene, "node_id": int(node_id),
+            "enable_collision": bool(enable_collision),
+        }
+        if connected_node_id is not None:
+            args["connected_node_id"] = int(connected_node_id)
+        if settings_name:
+            args["settings_name"] = settings_name
+        return self.mutate("create_physics_joint", args)
+
+    def strip_physics(self, node_id):
+        """Remove the rigid body from a node (pure visual detail parts)."""
+        self.mutate("remove_node_attachment", {
+            "scene_name": self.scene, "node_id": int(node_id),
+            "type": "Node_physics",
+        })
 
 
 class GraphBuilder:
@@ -483,6 +559,26 @@ def look_at_quaternion(eye, target, up=(0.0, 1.0, 0.0)):
         return [(yx + xy) / s, 0.25 * s, (zy + yz) / s, (zx - xz) / s]
     s = math.sqrt(1.0 + zz - xx - yy) * 2.0
     return [(zx + xz) / s, (zy + yz) / s, 0.25 * s, (xy - yx) / s]
+
+
+def axis_angle_quaternion(axis, angle_rad):
+    """Quaternion [x,y,z,w] rotating angle_rad around a (unit) axis."""
+    ax, ay, az = axis
+    length = math.sqrt(ax * ax + ay * ay + az * az) or 1.0
+    s = math.sin(angle_rad / 2.0)
+    return [ax / length * s, ay / length * s, az / length * s, math.cos(angle_rad / 2.0)]
+
+
+def quat_mul(a, b):
+    """Hamilton product a*b for [x,y,z,w] quaternions (applies b, then a)."""
+    ax, ay, az, aw = a
+    bx, by, bz, bw = b
+    return [
+        aw * bx + ax * bw + ay * bz - az * by,
+        aw * by - ax * bz + ay * bw + az * bx,
+        aw * bz + ax * by - ay * bx + az * bw,
+        aw * bw - ax * bx - ay * by - az * bz,
+    ]
 
 
 def hsv_to_rgb(h, s, v):
