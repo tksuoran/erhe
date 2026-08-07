@@ -84,6 +84,25 @@ The editor is a sandbox application for 3D scene creation and manipulation.
 -   180+ built-in polyhedra (Platonic solids, Johnson solids, geodesic domes, etc.)
 -   Procedural scene generation
 
+### Node Graphs
+
+-   **Texture graph** -- Material Maker-style procedural texture authoring with ~75 node types (noises, patterns, gradients, transforms, color operations); nodes compose into a single fragment shader evaluated on the GPU, with live per-node previews, and bake to textures and PBR material channels
+-   **Geometry graph** -- node-based procedural modeling: parametric generators, subdivision, Conway operators, lattice deform, boolean CSG, point scattering and instancing, nested node groups; evaluated asynchronously on worker threads so editing stays interactive
+-   Shared node-editor canvas with a dockable node palette, undo/redo, and JSON serialization; graphs are content-library assets
+
+### Ray Tracing
+
+-   CPU ray tracing library with swappable backends (madmann91 bvh, tinybvh, Embree 4) and BVH disk caching, used for mouse picking and spatial queries
+-   GPU ray tracing renderer (Vulkan ray query compute): PBR material shading, real scene lights, ray-traced shadows, reflection and refraction for transmissive materials
+
+### Lightmap Baking
+
+-   Progressive GPU lightmap baker (ray query compute): direct lighting, indirect bounce, procedural sky lighting, texel supersampling
+-   Automatic lightmap UV unwrap with world-space quadtree tile partitioning and per-tile atlas packing
+-   Artifact defenses: conservative-raster texel G-buffer, JNLM denoise, seam blending, dilation, shadow terminator fix
+-   Tiles persist to disk and stream in by camera distance under a fixed memory budget, so world size is unbounded
+-   Bakes progressively in the running editor; lighting and geometry edits invalidate and re-accumulate automatically
+
 ### File Format Support
 
 -   glTF 2.0 import and export (via fastgltf)
@@ -110,6 +129,7 @@ The editor is a sandbox application for 3D scene creation and manipulation.
 -   Shader hot-reload via shader monitor
 -   GL state dump to clipboard
 -   Tracy profiler integration
+-   Built-in MCP server: scene inspection and editing, screenshots, and tool automation for AI-agent and scripted workflows
 
 ## Libraries
 
@@ -120,6 +140,11 @@ erhe is organized as a set of independent libraries under `src/erhe/`. Each has 
 | `erhe::graphics` | Vulkan/Metal-style graphics abstraction: pipelines, buffers, textures, shaders, ring buffers, shader monitor |
 | `erhe::rendergraph` | DAG of render nodes with typed inputs/outputs, executed in dependency order |
 | `erhe::scene` | glTF-like scene graph: nodes, meshes, cameras, lights, animations, skins |
+| `erhe::gltf` | glTF 2.0 import and export via fastgltf, including KHR physics extensions |
+| `erhe::raytrace` | CPU ray tracing abstraction with swappable bvh / tinybvh / Embree backends and BVH disk caching |
+| `erhe::texgen` | Procedural texture generation: data-driven node descriptors composed into GLSL fragment shaders (Material Maker port) |
+| `erhe::graph` | Generic node graph: nodes, pins, links, topological-order evaluation; base for the geometry, texture, and shader graphs |
+| `erhe::xr` | OpenXR integration: session and swapchain management, action-based input, hand tracking, stereo rendering |
 | `erhe::scene_renderer` | Forward renderer, shadow renderer, ID picking, camera/light/material/joint GPU buffers |
 | `erhe::renderer` | Debug line renderer (compute, geometry shader, or GL_LINES), text renderer, texture blit |
 | `erhe::geometry` | Polygon mesh manipulation via Geogram: subdivision, Conway operators, CSG, shape generators |
@@ -130,6 +155,11 @@ erhe is organized as a set of independent libraries under `src/erhe/`. Each has 
 | `erhe::window` | SDL / GLFW windowing abstraction with input event handling |
 | `erhe::item` | Base `Item` (name, id, flags) and `Hierarchy` (parent/child tree) classes |
 | `erhe::gl` | Generated type-safe OpenGL wrappers with call logging and extension queries |
+| `erhe::math` | Bounding volumes, viewport projection, input axis filtering, vector/matrix helpers |
+| `erhe::dataformat` | Graphics-API-agnostic pixel and vertex format definitions |
+| `erhe::message_bus` | Typed publish-subscribe bus used to decouple editor subsystems |
+| `erhe::profile` | Unified profiling macros dispatching to Tracy, Superluminal, or NVTX |
+| `erhe::ui` | FreeType glyph rasterization and HarfBuzz shaping into GPU font atlases |
 | `erhe::log` | spdlog wrappers |
 | `erhe::verify` | `VERIFY(condition)` and `FATAL(format, ...)` macros |
 | `erhe::codegen` | Python code generator for C++ structs with versioned JSON serialization via simdjson |
