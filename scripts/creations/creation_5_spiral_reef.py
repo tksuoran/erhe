@@ -26,7 +26,7 @@ TOP_Y = 10.0
 
 def main():
     args = standard_args("The Spiral Reef")
-    c = Creation("Spiral Reef", port=args.port, pause_s=args.pause)
+    c = Creation("Spiral Reef", port=args.port, pause_s=args.pause, editor_exe=args.editor_exe, reuse=args.reuse)
     scene = c.new_scene()
     print(f"scene: {scene}")
 
@@ -34,16 +34,25 @@ def main():
 
     sea = c.make_material(base_color=[0.04, 0.18, 0.22], roughness=0.05,
                           metallic=0.0, reflectance=1.0, opacity=0.55)
-    sand = c.make_material(base_color=[0.55, 0.48, 0.33], roughness=1.0)
+    sand = c.make_material(base_color=[0.55, 0.48, 0.33], roughness=1.0, metallic=0.0)
     c.shape("box", "Sea Floor", [0.0, -0.6, 0.0], size=[30.0, 0.4, 30.0], material_name=sand)
     c.shape("box", "Sea Surface", [0.0, -0.15, 0.0], size=[30.0, 0.1, 30.0],
             material_name=sea)
 
     # Central spire the helix wraps around.
-    spire = c.make_material(base_color=[0.35, 0.30, 0.28], roughness=0.85)
+    spire = c.make_material(base_color=[0.35, 0.30, 0.28], roughness=0.85, metallic=0.0)
     c.shape("cone", "Spire", [0.0, 0.0, 0.0], height=TOP_Y + 2.0,
             bottom_radius=1.0, top_radius=0.12, slice_count=24,
             material_name=spire)
+
+    # A 9-step hue palette (the scene's stock material pool holds 12 and
+    # three are already claimed); elements pick the nearest palette entry.
+    palette = []
+    for k in range(9):
+        hue = (0.98 - 0.55 * (k / 8.0)) % 1.0
+        rgb = hsv_to_rgb(hue, 0.65, 0.85)
+        palette.append(c.make_material(base_color=list(rgb), roughness=0.35,
+                                       metallic=0.15, reflectance=0.6))
 
     created = []   # (node name, op kind)
     shapes = ["torus", "uv_sphere", "capsule"]
@@ -56,10 +65,7 @@ def main():
         y = 0.3 + TOP_Y * (t ** 1.15)
         size = 1.15 * (1.0 - 0.6 * t)
 
-        hue = 0.98 - 0.55 * t  # magenta-coral down to teal
-        rgb = hsv_to_rgb(hue % 1.0, 0.65, 0.85)
-        mat = c.make_material(base_color=list(rgb), roughness=0.35,
-                              metallic=0.15, reflectance=0.6)
+        mat = palette[min(8, int(t * 9.0))]
 
         kind = shapes[i % 3]
         name = f"Reef {i:02d}"

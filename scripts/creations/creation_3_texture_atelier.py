@@ -149,13 +149,13 @@ PLINTH_H = 1.0
 
 def main():
     args = standard_args("The Texture Atelier")
-    c = Creation("Texture Atelier", port=args.port, pause_s=args.pause)
+    c = Creation("Texture Atelier", port=args.port, pause_s=args.pause, editor_exe=args.editor_exe, reuse=args.reuse)
     scene = c.new_scene()
     print(f"scene: {scene}")
 
     c.ambience(ambient=[0.16, 0.16, 0.18], grid=False)
 
-    hall = c.make_material(base_color=[0.22, 0.22, 0.24], roughness=0.6)
+    hall = c.make_material(base_color=[0.22, 0.22, 0.24], roughness=0.6, metallic=0.0)
     c.shape("box", "Gallery Floor", [0.0, -0.25, 0.0], size=[26.0, 0.5, 12.0], material_name=hall)
     c.shape("box", "Gallery Wall", [0.0, 3.0, -3.5], size=[26.0, 6.5, 0.4], material_name=hall)
 

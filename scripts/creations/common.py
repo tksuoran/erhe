@@ -14,22 +14,50 @@ import argparse
 import json
 import math
 import os
+import subprocess
 import sys
 import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from erhe_mcp import McpClient, wait_for_server  # noqa: E402
 
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+DEFAULT_EDITOR_EXE = os.path.join(REPO_ROOT, "build_vs2026_vulkan", "src", "editor", "Release", "editor.exe")
+EMPTY_COMMANDS = os.path.join("config", "editor", "commands_empty.json")
+
+
+def launch_editor(editor_exe):
+    """Kill any running editor and launch a fresh one WITHOUT a default scene
+    (--commands config/editor/commands_empty.json), so the creation's own
+    scene is the only scene (one set of viewport/shadow resources)."""
+    subprocess.run(["taskkill", "/IM", "editor.exe", "/F"],
+                   capture_output=True, check=False)
+    time.sleep(2.0)
+    env = dict(os.environ)
+    env["ERHE_AI_DRIVER"] = "1"
+    flags = 0
+    if os.name == "nt":
+        flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW
+    subprocess.Popen(
+        [editor_exe, "--commands", EMPTY_COMMANDS],
+        cwd=REPO_ROOT, env=env, creationflags=flags,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    print(f"launched {editor_exe} (no default scene)")
+
 
 class Creation:
     """Wraps an McpClient with busy-retry, scene bootstrap and camera/screenshot
     helpers used by every creation script."""
 
-    def __init__(self, title, port=8080, wait_s=120.0, pause_s=10.0):
+    def __init__(self, title, port=8080, wait_s=120.0, pause_s=10.0,
+                 editor_exe=None, reuse=False):
         self.title = title
+        if not reuse:
+            launch_editor(editor_exe or DEFAULT_EDITOR_EXE)
         self.client = McpClient(port)
         wait_for_server(self.client, wait_s)
         self.scene = None
+        self._material_pool = None
         # One-time pause after the first visible mesh appears, so a screen
         # video recording can be started before the scene builds up.
         self.pause_s = pause_s
@@ -218,39 +246,42 @@ class Creation:
     def materials(self):
         return self.call("get_scene_materials", {"scene_name": self.scene}).get("materials", [])
 
+    MATERIAL_POOL_EXCLUDE = {"Rendertarget Node"}
+
     def make_material(self, base_name=None, **edits):
-        """Copy a material from another scene's library into this scene and
-        edit it (copy_library_item refuses same-scene copies). Returns the new
-        material's name."""
-        source_scene = None
-        source = base_name
-        for scene in self.call("list_scenes")["scenes"]:
-            if scene["name"] == self.scene:
-                continue
-            mats = self.call("get_scene_materials", {"scene_name": scene["name"]}).get("materials", [])
-            if not mats:
-                continue
-            if source is None:
-                source_scene, source = scene["name"], mats[0]["name"]
-                break
-            if any(m["name"] == source for m in mats):
-                source_scene = scene["name"]
-                break
-        if source_scene is None:
-            raise RuntimeError("no other scene has a material to copy")
-        before = {m["name"] for m in self.materials()}
-        result = self.mutate("copy_library_item", {
-            "item_name": source, "item_type": "material",
-            "source_scene": source_scene, "target_scene": self.scene,
-        })
-        if isinstance(result, dict) and "name" in result:
-            name = result["name"]
-        else:
-            after = self.materials()
-            fresh = [m["name"] for m in after if m["name"] not in before]
-            if not fresh:
-                raise RuntimeError(f"copy_library_item produced no new material from '{source}'")
-            name = fresh[0]
+        """Claim an unused material from this scene's own stock library
+        (every new scene ships with the standard metals) and edit it in
+        place. Falls back to copying from another open scene when the pool
+        runs dry. Returns the material's name."""
+        if self._material_pool is None:
+            self._material_pool = [
+                m["name"] for m in self.materials()
+                if m["name"] not in self.MATERIAL_POOL_EXCLUDE]
+        name = None
+        if base_name is not None and base_name in self._material_pool:
+            self._material_pool.remove(base_name)
+            name = base_name
+        elif self._material_pool:
+            name = self._material_pool.pop(0)
+        if name is None:
+            # Pool exhausted: copy a material in from another open scene.
+            for scene in self.call("list_scenes")["scenes"]:
+                if scene["name"] == self.scene:
+                    continue
+                mats = self.call("get_scene_materials", {"scene_name": scene["name"]}).get("materials", [])
+                if not mats:
+                    continue
+                result = self.mutate("copy_library_item", {
+                    "item_name": mats[0]["name"], "item_type": "material",
+                    "source_scene": scene["name"], "target_scene": self.scene,
+                })
+                if isinstance(result, dict) and "name" in result:
+                    name = result["name"]
+                    break
+        if name is None:
+            raise RuntimeError(
+                "material pool exhausted and no other scene to copy from - "
+                "reuse materials (fewer make_material calls)")
         if edits:
             args = {"scene_name": self.scene, "material_name": name}
             args.update(edits)
@@ -471,4 +502,11 @@ def standard_args(description):
     parser.add_argument("--pause", type=float, default=10.0,
                         help="seconds to pause after the first visible mesh, "
                              "for starting a screen recording (0 disables)")
+    parser.add_argument("--editor-exe", default=DEFAULT_EDITOR_EXE,
+                        help="editor executable to launch (default: windowed "
+                             "Vulkan Release; pass the headless build for "
+                             "screenshot runs)")
+    parser.add_argument("--reuse", action="store_true",
+                        help="use the already-running editor instead of "
+                             "launching a fresh one without a default scene")
     return parser.parse_args()

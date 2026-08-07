@@ -50,7 +50,7 @@ def granite_graph(c):
 
 def main():
     args = standard_args("Megalith Henge at Dusk")
-    c = Creation("Megalith Henge", port=args.port, pause_s=args.pause)
+    c = Creation("Megalith Henge", port=args.port, pause_s=args.pause, editor_exe=args.editor_exe, reuse=args.reuse)
     scene = c.new_scene()
     print(f"scene: {scene}")
 
@@ -60,7 +60,7 @@ def main():
     granite = granite_graph(c)
     stone = c.make_material(base_color=[0.9, 0.9, 0.9], roughness=0.95, metallic=0.0)
     c.bind_material_texture(stone, granite, slot="base_color")
-    earth = c.make_material(base_color=[0.16, 0.13, 0.09], roughness=1.0)
+    earth = c.make_material(base_color=[0.16, 0.13, 0.09], roughness=1.0, metallic=0.0)
 
     # Ground.
     c.shape("box", "Moor", [0.0, -0.3, 0.0], size=[34.0, 0.6, 34.0], material_name=earth)
