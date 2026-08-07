@@ -3,12 +3,14 @@
 
 A small sunlit forest clearing: a ring of L-system trees in two species
 (gnarled oaks and slim pale birches, same stochastic string-rewriting +
-3D-turtle interpreter with per-species parameters), dome bushes, mossy
-boulders, fly-agaric mushroom clusters and a scatter of wildflowers on
-the glade floor.
-Showcases: parametric L-system vegetation, non-uniform node scaling
-(squashed spheres as rocks / moss / mushroom caps), seeded scatter
-composition, morning-forest lighting.
+3D-turtle interpreter with per-species parameters), L-system wildflowers
+(segmented stems, bracketed leaves, side-bloom stalks, petal-ring
+blooms), fern rosettes with arched beaded fronds, dome bushes, mossy
+boulders, fly-agaric mushroom clusters and a fallen mossy log with its
+stump.
+Showcases: parametric L-system vegetation at two scales (trees and
+flowers), non-uniform node scaling (rocks / moss / petals / fern
+leaflets), seeded scatter composition, morning-forest lighting.
 """
 
 import math
@@ -212,32 +214,175 @@ def mossy_rock(c, tag, x, z, size, yaw, m, rng):
                   size * 0.82, [1.05, 0.32, 1.0], m["moss"])
 
 
-def mushroom(c, tag, x, z, height, m, rng):
+def mushroom(c, tag, x, z, height, m, rng, y0=0.0):
     """Fly agaric: cream stem, squashed red cap, white speckles."""
     cap_r = height * 0.62
-    c.shape("cone", f"{tag} Stem", [x, 0.0, z], height=height,
+    c.shape("cone", f"{tag} Stem", [x, y0, z], height=height,
             bottom_radius=height * 0.30, top_radius=height * 0.20,
             slice_count=10, material_name=m["cream"])
-    scaled_sphere(c, f"{tag} Cap", [x, height * 1.02, z], cap_r,
+    scaled_sphere(c, f"{tag} Cap", [x, y0 + height * 1.02, z], cap_r,
                   [1.0, 0.60, 1.0], m["red"], slices=14, stacks=10)
     for i in range(3):
         a = rng.uniform(0.0, 2.0 * math.pi)
         d = cap_r * rng.uniform(0.35, 0.75)
         c.shape("uv_sphere", f"{tag} Dot {i}",
-                [x + d * math.cos(a), height * 1.02 + cap_r * 0.42, z + d * math.sin(a)],
+                [x + d * math.cos(a), y0 + height * 1.02 + cap_r * 0.42, z + d * math.sin(a)],
                 radius=cap_r * 0.16, slice_count=8, stack_count=6,
                 material_name=m["cream"])
 
 
+def blade(c, name, position, radius, scale, direction, material):
+    """Elongated squashed sphere aligned so its long (local Y) axis points
+    along direction: leaf blades, petals, cut faces. Scale FIRST, then
+    rotate (each transform_selection call is a separate edit)."""
+    result = c.shape("uv_sphere", name, position, radius=radius,
+                     slice_count=10, stack_count=8, material_name=material)
+    node_id = result.get("node_id") if isinstance(result, dict) else None
+    if node_id is None:
+        return
+    c.move_node_id(node_id, scale=scale)
+    rotation = align_y_quaternion(direction)
+    if rotation is not None:
+        c.move_node_id(node_id, rotation_xyzw=rotation)
+
+
+def expand_flower(rng, iterations=3):
+    """Flower L-system: a stem apex grows a segment then a bracketed leaf,
+    a bracketed side-bloom stalk, or nothing; every surviving apex blooms."""
+    s = "A"
+    for _ in range(iterations):
+        out = []
+        for ch in s:
+            if ch != "A":
+                out.append(ch)
+                continue
+            r = rng.random()
+            if r < 0.50:
+                out.append("F[L]/A")
+            elif r < 0.75:
+                out.append("F[&FK]/A")
+            else:
+                out.append("FA")
+        s = "".join(out)
+    return s.replace("A", "K")
+
+
 def flower(c, tag, x, z, color, m, rng):
-    """Wildflower: thin stem cone + colored head sphere."""
-    h = rng.uniform(0.18, 0.32)
-    c.shape("cone", f"{tag} Stem", [x, 0.0, z], height=h,
-            bottom_radius=0.014, top_radius=0.010, slice_count=6,
-            material_name=m["leaf2"])
-    c.shape("uv_sphere", f"{tag} Head", [x, h + 0.035, z],
-            radius=rng.uniform(0.04, 0.06), slice_count=10, stack_count=8,
-            material_name=m[color])
+    """L-system wildflower: turtle-drawn stem segments, leaf blades at
+    the bracketed Ls, petal-ring blooms (center + 5 aligned petals) at
+    every K."""
+    pos = [x, 0.0, z]
+    heading = v_norm([rng.uniform(-0.12, 0.12), 1.0, rng.uniform(-0.12, 0.12)])
+    left = v_norm(v_cross([0.0, 1.0, 0.0], heading)) if abs(heading[1]) < 0.999 else [1.0, 0.0, 0.0]
+    stack = []
+    seg = 0
+
+    for ch in expand_flower(rng):
+        if ch == "F":
+            wob = math.radians(rng.uniform(-7.0, 7.0))
+            heading = v_norm(v_rotate(heading, left, wob))
+            length = rng.uniform(0.09, 0.14)
+            result = c.shape("cone", f"{tag} Stem {seg}", list(pos),
+                             height=length, bottom_radius=0.013,
+                             top_radius=0.010, slice_count=6,
+                             material_name=m["leaf2"])
+            rotation = align_y_quaternion(heading)
+            if rotation is not None:
+                node_id = result.get("node_id") if isinstance(result, dict) else None
+                if node_id is not None:
+                    c.move_node_id(node_id, rotation_xyzw=rotation)
+            pos = v_add(pos, v_scale(heading, length))
+            seg += 1
+        elif ch == "L":
+            leaf_dir = v_norm(v_rotate(heading, left, math.radians(rng.uniform(55.0, 75.0))))
+            blade(c, f"{tag} Leaf {seg}", v_add(pos, v_scale(leaf_dir, 0.05)),
+                  0.05, [0.50, 1.6, 0.22], leaf_dir, m["leaf2"])
+        elif ch == "&":
+            heading = v_norm(v_rotate(heading, left, math.radians(rng.uniform(35.0, 55.0))))
+        elif ch == "/":
+            left = v_norm(v_rotate(left, heading, math.radians(rng.uniform(110.0, 150.0))))
+        elif ch == "[":
+            stack.append((list(pos), list(heading), list(left)))
+        elif ch == "]":
+            pos, heading, left = stack.pop()
+        elif ch == "K":
+            c.shape("uv_sphere", f"{tag} Center {seg}",
+                    v_add(pos, v_scale(heading, 0.02)), radius=0.032,
+                    slice_count=8, stack_count=6, material_name=m["yellow"])
+            for i in range(5):
+                ring = v_rotate(left, heading, math.radians(i * 72.0 + rng.uniform(-8.0, 8.0)))
+                petal_dir = v_norm(v_add(ring, v_scale(heading, 0.45)))
+                blade(c, f"{tag} Petal {seg}.{i}",
+                      v_add(pos, v_scale(petal_dir, 0.055)),
+                      0.045, [0.55, 1.35, 0.30], petal_dir, m[color])
+            seg += 1
+
+
+def fern(c, tag, x, z, size, m, rng):
+    """Fern rosette: 5-6 fronds, each an outward arc of three flattened,
+    shrinking leaflet spheres (rises then droops)."""
+    fronds = rng.randint(5, 6)
+    for i in range(fronds):
+        a = 2.0 * math.pi * i / fronds + rng.uniform(-0.25, 0.25)
+        dx, dz = math.cos(a), math.sin(a)
+        # Yaw the leaflet's long (local X) axis onto the frond direction.
+        yaw = [0.0, math.sin(-a / 2.0), 0.0, math.cos(a / 2.0)]
+        reach = size * rng.uniform(0.85, 1.1)
+        for t in range(3):
+            tt = (t + 1) / 3.0
+            py = max(0.05, size * (0.22 + 1.05 * tt * (1.0 - tt)))
+            radius = size * 0.17 * (1.15 - 0.28 * t)
+            node_id = scaled_sphere(c, f"{tag} Frond {i}.{t}",
+                                    [x + dx * reach * tt, py, z + dz * reach * tt],
+                                    radius, [1.6, 0.30, 0.45],
+                                    m["leaf"] if i % 2 else m["leaf2"],
+                                    slices=10, stacks=8)
+            if node_id is not None:
+                c.move_node_id(node_id, rotation_xyzw=yaw)
+
+
+def fallen_log(c, m, rng):
+    """Fallen mossy tree: horizontal tapered trunk, cut-face discs, its
+    stump, stub branches, moss patches and a pair of log-top mushrooms."""
+    start = [-2.7, 0.26, 3.0]
+    d = v_norm([2.9, 0.02, 1.1])
+    length = 3.1
+    result = c.shape("cone", "Fallen Log", start, height=length,
+                     bottom_radius=0.27, top_radius=0.19, slice_count=14,
+                     material_name=m["bark"])
+    node_id = result.get("node_id") if isinstance(result, dict) else None
+    if node_id is not None:
+        c.move_node_id(node_id, rotation_xyzw=align_y_quaternion(d))
+    end = v_add(start, v_scale(d, length))
+    blade(c, "Log Cut Face", end, 0.19, [1.0, 0.16, 1.0], d, m["cream"])
+    # Stump the log broke off from, with a pale cut face.
+    stump = v_add(start, v_scale(d, -0.8))
+    c.shape("cone", "Log Stump", [stump[0], 0.0, stump[2]], height=0.5,
+            bottom_radius=0.30, top_radius=0.27, slice_count=14,
+            material_name=m["bark"])
+    scaled_sphere(c, "Stump Cut Face", [stump[0], 0.5, stump[2]], 0.26,
+                  [1.0, 0.14, 1.0], m["cream"], slices=12, stacks=8)
+    # Stub branches poking up from the log.
+    for i, f in enumerate((0.9, 1.7, 2.4)):
+        p = v_add(start, v_scale(d, f))
+        stub_dir = v_norm([rng.uniform(-0.4, 0.4), 1.0, rng.uniform(-0.5, 0.1)])
+        result = c.shape("cone", f"Log Stub {i}", [p[0], p[1] + 0.12, p[2]],
+                         height=rng.uniform(0.30, 0.45), bottom_radius=0.06,
+                         top_radius=0.025, slice_count=8, material_name=m["bark"])
+        node_id = result.get("node_id") if isinstance(result, dict) else None
+        if node_id is not None:
+            c.move_node_id(node_id, rotation_xyzw=align_y_quaternion(stub_dir))
+    # Moss saddles along the top.
+    for i, f in enumerate((0.5, 1.4, 2.2)):
+        p = v_add(start, v_scale(d, f))
+        scaled_sphere(c, f"Log Moss {i}", [p[0], p[1] + 0.18, p[2]],
+                      0.22, [1.4, 0.30, 0.85], m["moss"], slices=10, stacks=8)
+    # Mushrooms colonizing the log.
+    log_top = start[1] + 0.20
+    for i, f in enumerate((1.15, 1.95)):
+        p = v_add(start, v_scale(d, f))
+        mushroom(c, f"Log Mushroom {i}", p[0] + 0.06, p[2] - 0.06,
+                 rng.uniform(0.09, 0.13), m, rng, y0=log_top)
 
 
 # --------------------------------------------------------------------- main
@@ -305,11 +450,19 @@ def main():
                                 (0.15, -2.15)]):
         mushroom(c, f"Mushroom {i}", x, z, rng.uniform(0.10, 0.18), m, rng)
 
-    # Wildflower scatter across the open glade.
+    # Fallen mossy tree along the front edge of the clearing.
+    fallen_log(c, m, rng)
+
+    # Fern rosettes in the tree shade.
+    for i, (x, z, size) in enumerate([(-2.5, -1.7, 0.55), (3.3, -2.3, 0.5),
+                                      (-4.0, 4.1, 0.6), (0.9, 2.5, 0.45)]):
+        fern(c, f"Fern {i}", x, z, size, m, rng)
+
+    # L-system wildflowers across the open glade.
     colors = ["pink", "yellow", "cream", "sky_blue"]
-    for i in range(16):
+    for i in range(8):
         a = rng.uniform(0.0, 2.0 * math.pi)
-        d = rng.uniform(0.4, 3.4)
+        d = rng.uniform(0.5, 2.8)
         flower(c, f"Flower {i}", d * math.cos(a), d * math.sin(a),
                colors[i % len(colors)], m, rng)
 
