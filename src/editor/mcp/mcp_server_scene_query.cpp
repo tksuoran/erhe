@@ -866,6 +866,15 @@ auto Mcp_server::query_material_details(const json& args) -> std::string
                                                                                               "isotropic_brdf"},
                 {"use_circular_brushed_metal", d.use_circular_brushed_metal},
                 {"use_aniso_control",          d.use_aniso_control},
+                {"blending_mode",
+                    (d.blending_mode == erhe::primitive::Material_blending_mode::alpha_blend) ? "alpha_blend" :
+                    (d.blending_mode == erhe::primitive::Material_blending_mode::multiply)    ? "multiply" :
+                    (d.blending_mode == erhe::primitive::Material_blending_mode::add)         ? "add" :
+                    (d.blending_mode == erhe::primitive::Material_blending_mode::subtract)    ? "subtract" :
+                    (d.blending_mode == erhe::primitive::Material_blending_mode::screen_door) ? "screen_door" :
+                    (d.blending_mode == erhe::primitive::Material_blending_mode::alpha_test)  ? "alpha_test" :
+                                                                                                "opaque"},
+                {"alpha_cutoff",               d.alpha_cutoff},
                 {"texture_samplers", {
                     {"base_color",         sampler_to_json(d.texture_samplers.base_color)},
                     {"metallic_roughness", sampler_to_json(d.texture_samplers.metallic_roughness)},

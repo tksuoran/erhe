@@ -489,6 +489,42 @@ auto Mcp_server::action_edit_material(const json& args) -> std::string
             applied["bxdf_model"] = s;
         }
     }
+    {
+        const auto blending_it = args.find("blending_mode");
+        if (blending_it != args.end()) {
+            if (!blending_it->is_string()) {
+                json r = make_text_content("blending_mode must be a string");
+                r["isError"] = true;
+                return r.dump();
+            }
+            const std::string s = blending_it->get<std::string>();
+            if (s == "opaque") {
+                after.blending_mode = erhe::primitive::Material_blending_mode::opaque;
+            } else if (s == "alpha_blend") {
+                after.blending_mode = erhe::primitive::Material_blending_mode::alpha_blend;
+            } else if (s == "multiply") {
+                after.blending_mode = erhe::primitive::Material_blending_mode::multiply;
+            } else if (s == "add") {
+                after.blending_mode = erhe::primitive::Material_blending_mode::add;
+            } else if (s == "subtract") {
+                after.blending_mode = erhe::primitive::Material_blending_mode::subtract;
+            } else if (s == "screen_door") {
+                after.blending_mode = erhe::primitive::Material_blending_mode::screen_door;
+            } else if (s == "alpha_test") {
+                after.blending_mode = erhe::primitive::Material_blending_mode::alpha_test;
+            } else {
+                json r = make_text_content("blending_mode must be one of 'opaque', 'alpha_blend', 'multiply', 'add', 'subtract', 'screen_door', 'alpha_test'");
+                r["isError"] = true;
+                return r.dump();
+            }
+            applied["blending_mode"] = s;
+        }
+    }
+    switch (try_read_float(args, "alpha_cutoff", f, field_err)) {
+        case Field_status::Ok:         after.alpha_cutoff = clamp01(f); applied["alpha_cutoff"] = after.alpha_cutoff; break;
+        case Field_status::Invalid:    return reject(field_err);
+        case Field_status::NotPresent: break;
+    }
     if (try_read_bool(args, "use_circular_brushed_metal", b)) {
         after.use_circular_brushed_metal = b;
         applied["use_circular_brushed_metal"] = b;

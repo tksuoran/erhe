@@ -332,6 +332,8 @@ void Mcp_server::refresh_tool_list()
             {"normal_texture_scale",       {{"type", "number"},  {"description", "Normal map scale"}}},
             {"occlusion_texture_strength", {{"type", "number"},  {"description", "Occlusion map strength"}}},
             {"bxdf_model",                 {{"type", "string"},  {"enum", json::array({"unlit", "isotropic_brdf", "anisotropic_brdf", "anisotropic_slope", "anisotropic_engine_ready"})}, {"description", "Selects which BxDF the standard shader applies"}}},
+            {"blending_mode",              {{"type", "string"},  {"enum", json::array({"opaque", "alpha_blend", "multiply", "add", "subtract", "screen_door", "alpha_test"})}, {"description", "Framebuffer blending: alpha_blend/multiply/add/subtract route through the translucent pass (raster translucency needs this - opacity alone renders opaque); screen_door/alpha_test discard in the opaque pass"}}},
+            {"alpha_cutoff",               {{"type", "number"},  {"description", "Alpha cutoff in [0, 1] for blending_mode alpha_test (default 0.5)"}}},
             {"use_circular_brushed_metal", {{"type", "boolean"}, {"description", "Enable circular brushed metal shading variant"}}},
             {"use_aniso_control",          {{"type", "boolean"}, {"description", "Enable anisotropic shading control"}}},
             {"texture_samplers",           {
