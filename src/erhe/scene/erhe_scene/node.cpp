@@ -120,7 +120,11 @@ void Node::set_node_parent(Node* const new_parent_node, const std::size_t positi
 
 void Node::set_parent(const std::shared_ptr<erhe::Hierarchy>& new_parent_item, const std::size_t position)
 {
-    const auto& world_from_node = world_from_node_transform();
+    // Copy, not a reference: handle_parent_update() refreshes the cached
+    // world transform (world = new_parent_world * old_local) during
+    // Hierarchy::set_parent() below, which would turn the world-preserving
+    // re-application into a no-op re-read of the already-reparented value.
+    const Trs_transform world_from_node = world_from_node_transform();
     Hierarchy::set_parent(new_parent_item, position);
 
     // NOTE: For now, we do not care about transforms of orphan nodes.

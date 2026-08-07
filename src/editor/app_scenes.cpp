@@ -132,7 +132,13 @@ void App_scenes::before_physics_simulation_steps()
 
     for (const auto& scene_root : m_scene_roots) {
         const Physics_config& physics = get_effective_physics(*m_context.editor_settings, *scene_root);
-        if (!physics.static_enable || !physics.dynamic_enable) {
+        const bool running = physics.static_enable && physics.dynamic_enable;
+        // Edge-triggered: clears no_transform_update from body-driven nodes
+        // on pause and restores it on resume, so paused bodies follow
+        // hierarchy edits again (the flag otherwise sticks - no deactivation
+        // events fire while the simulation is not stepping).
+        scene_root->set_physics_simulation_running(running);
+        if (!running) {
             continue;
         }
         scene_root->before_physics_simulation_steps();

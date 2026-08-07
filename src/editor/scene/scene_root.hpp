@@ -177,6 +177,16 @@ public:
     void update_physics_simulation_fixed_step(double dt);
     void after_physics_simulation_steps      ();
 
+    // Item_flags::no_transform_update means "the physics simulation currently
+    // drives this node's world transform". That is only true while this
+    // scene's simulation is stepping: pausing the simulation leaves awake
+    // bodies active forever (no deactivation events fire), which used to
+    // strand the flag on their nodes so hierarchy edits no longer propagated
+    // to them. App_scenes calls this every frame with the scene's resolved
+    // physics gate; edges clear the flag from every body-driven node (pause)
+    // or restore it on awake dynamic bodies (resume).
+    void set_physics_simulation_running(bool running);
+
     [[nodiscard]] auto layers            () -> Scene_layers&;
     [[nodiscard]] auto layers            () const -> const Scene_layers&;
     [[nodiscard]] auto has_physics_world () const -> bool;
@@ -268,6 +278,7 @@ private:
 
     // Must live longer than m_scene for example
     bool                                            m_node_physics_sorted{false};
+    bool                                            m_physics_simulation_running{true};
     std::vector<std::shared_ptr<Node_physics>>      m_node_physics;
     std::vector<std::shared_ptr<Node_joint>>        m_node_joints;
     std::vector<std::shared_ptr<Rendertarget_mesh>> m_rendertarget_meshes;

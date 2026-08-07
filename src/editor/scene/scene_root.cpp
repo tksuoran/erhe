@@ -178,6 +178,13 @@ Scene_root::Scene_root(
                 if (node == nullptr) {
                     return;
                 }
+                // Activation events can be dispatched while the simulation is
+                // paused (remove_rigid_body() drains the pending queue); the
+                // flag must not be set then, or it sticks until the next
+                // resume and hierarchy edits stop propagating to the node.
+                if (!m_physics_simulation_running) {
+                    return;
+                }
                 node->enable_flag_bits(erhe::Item_flags::no_transform_update);
             }
         );
@@ -1339,6 +1346,36 @@ void Scene_root::unregister_node_joint(const std::shared_ptr<Node_joint>& node_j
     }
 
     node_joint->set_physics_world(nullptr);
+}
+
+void Scene_root::set_physics_simulation_running(const bool running)
+{
+    if (running == m_physics_simulation_running) {
+        return;
+    }
+    m_physics_simulation_running = running;
+    if (!m_physics_world) {
+        return;
+    }
+    for (const auto& node_physics : m_node_physics) {
+        auto* rigid_body = node_physics->get_rigid_body();
+        if (rigid_body == nullptr) {
+            continue;
+        }
+        erhe::scene::Node* node = node_physics->get_node();
+        if (node == nullptr) {
+            continue;
+        }
+        if (running) {
+            // Awake bodies stayed active across the pause; their activation
+            // events were consumed long ago, so restore the flag here.
+            if (rigid_body->is_active() && (rigid_body->get_motion_mode() == erhe::physics::Motion_mode::e_dynamic)) {
+                node->enable_flag_bits(erhe::Item_flags::no_transform_update);
+            }
+        } else {
+            node->disable_flag_bits(erhe::Item_flags::no_transform_update);
+        }
+    }
 }
 
 void Scene_root::before_physics_simulation_steps()
