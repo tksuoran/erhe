@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Transform_tool_config",
-    version=23,
+    version=24,
     short_desc="Transform Tool",
     long_desc="",
     developer=False,
@@ -33,6 +33,16 @@ struct("Transform_tool_config",
             default="false",
             short_desc="Show Rotate",
             long_desc="Show the rotate gizmo at startup.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "show_scale",
+            Bool,
+            added_in=24,
+            default="true",
+            short_desc="Show Scale",
+            long_desc="Show the scale gizmo at startup.",
             visible=True,
             developer=False
         ),

@@ -175,6 +175,7 @@ Transform_tool::Transform_tool(
     auto& settings = shared.settings;
     settings.show_translate = transform_tool_config.show_translate;
     settings.show_rotate    = transform_tool_config.show_rotate;
+    settings.show_scale     = transform_tool_config.show_scale;
 
     static_cast<void>(executor);
     static_cast<void>(mesh_memory); // handles are debug-rendered, no meshes
