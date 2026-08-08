@@ -739,6 +739,29 @@ def main():
     rng = random.Random(7)
     sway_jobs = []
 
+    # Lights first, so the scene is lit from the first shape onward when
+    # watching a windowed build.
+    c.light("directional", "Morning Sun", [0.0, 12.0, 0.0],
+            [1.0, 0.92, 0.75], 2.6)
+    c.settle()  # light nodes insert on the next frame; lookup needs it live
+    sun = c.node_by_name("Morning Sun")
+    if sun is not None:
+        pitch = math.radians(-142.0)
+        yaw = math.radians(-55.0)
+        qy = [0.0, math.sin(yaw / 2), 0.0, math.cos(yaw / 2)]
+        qx = [math.sin(pitch / 2), 0.0, 0.0, math.cos(pitch / 2)]
+        q = [
+            qy[3] * qx[0] + qy[0] * qx[3] + qy[1] * qx[2] - qy[2] * qx[1],
+            qy[3] * qx[1] - qy[0] * qx[2] + qy[1] * qx[3] + qy[2] * qx[0],
+            qy[3] * qx[2] + qy[0] * qx[1] - qy[1] * qx[0] + qy[2] * qx[3],
+            qy[3] * qx[3] - qy[0] * qx[0] - qy[1] * qx[1] - qy[2] * qx[2],
+        ]
+        c.select(sun["id"])
+        c.mutate("transform_selection", {"space": "global", "rotation_xyzw": q})
+        c.clear_selection()
+    c.light("point", "Green Bounce", [0.0, 3.5, 0.0], [0.55, 0.75, 0.45],
+            45.0, range=20.0, cast_shadow=False)
+
     c.shape("box", "Forest Floor", [0.0, -0.25, 0.0], size=[60.0, 0.5, 60.0],
             material_name=m["grass"])
 
@@ -826,26 +849,6 @@ def main():
     # B in the back ring as a depth element.
     willow(c, "Willow A", [-3.2, 0.05, 1.4], m, rng, sway_jobs)
     willow(c, "Willow B", [4.6, 0.05, -6.2], m, rng, sway_jobs)
-
-    c.light("directional", "Morning Sun", [0.0, 12.0, 0.0],
-            [1.0, 0.92, 0.75], 2.6)
-    sun = c.node_by_name("Morning Sun")
-    if sun is not None:
-        pitch = math.radians(-142.0)
-        yaw = math.radians(-55.0)
-        qy = [0.0, math.sin(yaw / 2), 0.0, math.cos(yaw / 2)]
-        qx = [math.sin(pitch / 2), 0.0, 0.0, math.cos(pitch / 2)]
-        q = [
-            qy[3] * qx[0] + qy[0] * qx[3] + qy[1] * qx[2] - qy[2] * qx[1],
-            qy[3] * qx[1] - qy[0] * qx[2] + qy[1] * qx[3] + qy[2] * qx[0],
-            qy[3] * qx[2] + qy[0] * qx[1] - qy[1] * qx[0] + qy[2] * qx[3],
-            qy[3] * qx[3] - qy[0] * qx[0] - qy[1] * qx[1] - qy[2] * qx[2],
-        ]
-        c.select(sun["id"])
-        c.mutate("transform_selection", {"space": "global", "rotation_xyzw": q})
-        c.clear_selection()
-    c.light("point", "Green Bounce", [0.0, 3.5, 0.0], [0.55, 0.75, 0.45],
-            45.0, range=20.0, cast_shadow=False)
 
     # ------------------------------------------------------- physics + wind
     c.settle()
