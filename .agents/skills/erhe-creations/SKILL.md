@@ -132,6 +132,10 @@ following its construction logic:
 - `transform_selection` (when you do use it) applies **ONE component
   per call** (translation OR rotation OR scale); combined calls
   silently drop components.
+- Geometry ops (remesh / decimate / smooth / chamfer / merge_faces /
+  catmull_clark) accept `node_ids` / `node_id` / `node_name` +
+  `scene_name` since 2026-08-08 - no select_items dance; the previous
+  selection is restored server-side.
 - Align-to-direction quaternion (chained cones, blades): axis MUST be
   `cross(+Y, dir) = (d.z, 0, -d.x)`. The mirrored sign renders every
   chained segment tilted opposite its chain step -> gapped "dashed"
