@@ -17,11 +17,12 @@ agent memory and prompt_queue.txt only point here.
 
 ## Existing creations
 
-`creation_1_conway_cathedral` … `creation_13_windswept_glade` (henge,
+`creation_1_conway_cathedral` … `creation_14_spider_sentinel` (henge,
 reef, robots, ragdoll, glass audience, sandbox + L-system oak, forest
 glade, monster portal island, UAP hangar, windswept glade = glade +
-physics foliage + wind). Look at the two or three most recent scripts
-before writing a new one - they carry the current idioms.
+physics foliage + wind, spider sentinel = motor-held STANDING ragdoll).
+Look at the two or three most recent scripts before writing a new one -
+they carry the current idioms.
 
 ## Workflow
 
@@ -196,6 +197,35 @@ following its construction logic:
   recreates the body BEFORE it lands. Two calls: first
   `{linear_velocity, mass, ...}`, then `{shape, ...}` to trigger the
   recreation that applies it.
+
+## Load-bearing motor rigs (creation 14 carries reference code)
+
+Rest-pose motor drives are strong enough to act as MUSCLES, not just
+sway springs: creation 14's 50-part ragdoll spider STANDS under full
+gravity on motorized leg joints (and staggers + recovers from an
+apply_physics_force shove).
+
+- Explicit masses are essential for motor sizing, and `create_shape`
+  cannot set mass while `edit_physics_body`'s mass edit does NOT rescale
+  inertia. Create every part `motion_mode="none"`, pose it, then attach
+  the body with `create_physics_body shape="auto" mass=<explicit>`
+  (gravity_factor stays 1 - the point is to carry the weight).
+- Size stiffness per joint from its static hold torque = (weight share
+  at the contact point) x (horizontal lever from joint to contact), for
+  ~0.02 rad of sag; graduate along the limb (spider hip 2400 -> toe 100
+  Nm/rad). `max_force` ~5x hold torque makes a real shove yield the
+  motors visibly before recovery. Drives on all 3 angular axes,
+  position_target 0, limits ~+/-0.45 rad, linear locked.
+- Feet/contact ends: place the authored pose so free-end tips just touch
+  the floor (compute the drop analytically from the limb tables); the
+  closed contact chain makes the stance much stiffer than open-chain
+  spring sag suggests (measured: 24 mm sag on a 0.46 m stance).
+- Pose probes: "tilt from world up" is useless for capsules rotated off
+  +Y (reads 90 deg forever). Gate standing on height + drift from the
+  REST rotation, and gate recovery on the body axis ELEVATION only
+  (yaw-insensitive) - a shoved creature legitimately re-plants facing a
+  new heading. A shove also slides it 1-2 m: re-frame the aftermath
+  camera on the body's actual position, not the build position.
 
 ## Physics LOD for whole plants (creation 13 carries reference code)
 
