@@ -365,8 +365,10 @@ pose needs no new machinery - six-dof drives ARE the rest-pose motor:
 
 ## Open bugs (workarounds in place; fix only if asked)
 
-- `chamfer` op on a uv_sphere selection crashes the editor (use
-  `remesh`).
+- (The chamfer crash is FIXED 2026-08-08: it was a cross-thread
+  Operation_stack::queue in seven async mesh-op lambdas, not a
+  uv_sphere geometry problem - chamfer/truncate/gyro/kis/merge_faces
+  all work now.)
 - (Both former blockers are FIXED 2026-08-08: `capture_screenshot`
   works windowed -- swapchain readback + one-frame MCP deferral -- and
   the windowed `save_scene` crash is gone: the glTF exporter saves only
