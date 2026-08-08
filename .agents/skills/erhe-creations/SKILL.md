@@ -50,6 +50,13 @@ they carry the current idioms.
   the headless iterations** (previous sessions keep a backup at
   `%TEMP%\erhe_imgui_ini_backup.ini`). Windowed runs use the user's
   real layout and skip all of this.
+- Iteration modes (2026-08-08): `--reuse` attaches to the running
+  editor AND closes the previous run's scenes first (`--keep-scenes`
+  opts out) - iterate without relaunching or leaking scenes.
+  `--reframe <glb>` skips the build: it load_scenes the saved .glb and
+  runs only the script's camera/screenshot stage - composition
+  iteration in seconds instead of a full rebuild (scripts opt in;
+  creation_14 is the pattern).
 - When done: commit the script (see Conventions), restore the ini (if
   headless was used), then run the script windowed with `--no-save` so
   the user can watch it build; the editor is left open.
