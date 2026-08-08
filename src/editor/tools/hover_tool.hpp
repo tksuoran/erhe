@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+namespace erhe { class Hierarchy; }
 namespace erhe::imgui { class Imgui_windows; }
 
 namespace editor {
@@ -42,6 +43,13 @@ private:
     void on_message         (Hover_scene_view_message& message);
     void on_hover_mesh      (Hover_mesh_message& message);
     void on_hover_tree_node (Hover_tree_node_message& message);
+
+    // Maintains Item_flags::descendant_hovered_in_viewport on the ancestor
+    // chain of the viewport-hovered node: clears the previously flagged chain
+    // (recorded here, so still correct after a reparent), then flags the
+    // current one. Runs when the hovered node changes and again whenever the
+    // item mutation serial moves (any scene tree structure change).
+    void update_ancestor_hover_flags();
     [[nodiscard]] auto get_hover_node() const -> std::shared_ptr<erhe::scene::Node>;
 
     // The joint node behind a hovered bone proxy, or null when the bone slot
@@ -59,6 +67,11 @@ private:
 
     std::weak_ptr<erhe::scene::Node> m_hovered_node_in_viewport;
     std::weak_ptr<erhe::scene::Node> m_hovered_node_in_item_tree;
+
+    // Ancestors currently carrying descendant_hovered_in_viewport, and the
+    // item mutation serial the chain was derived at.
+    std::vector<std::weak_ptr<erhe::Hierarchy>> m_flagged_hover_ancestors;
+    uint64_t                                    m_flagged_hover_ancestors_serial{0};
 };
 
 }

@@ -21,6 +21,7 @@
 #include "erhe_geometry_renderer/geometry_debug_renderer.hpp"
 #include "erhe_imgui/imgui_host.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_item/hierarchy.hpp"
 #include "erhe_log/log_glm.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_renderer/text_renderer.hpp"
@@ -117,6 +118,28 @@ auto Hover_tool::get_hover_node() const -> std::shared_ptr<erhe::scene::Node>
     return node_shared;
 }
 
+void Hover_tool::update_ancestor_hover_flags()
+{
+    for (const std::weak_ptr<erhe::Hierarchy>& ancestor_weak : m_flagged_hover_ancestors) {
+        const std::shared_ptr<erhe::Hierarchy> ancestor = ancestor_weak.lock();
+        if (ancestor) {
+            ancestor->disable_flag_bits(erhe::Item_flags::descendant_hovered_in_viewport);
+        }
+    }
+    m_flagged_hover_ancestors.clear();
+
+    const std::shared_ptr<erhe::scene::Node> hovered_node = m_hovered_node_in_viewport.lock();
+    if (hovered_node) {
+        std::shared_ptr<erhe::Hierarchy> ancestor = hovered_node->get_parent().lock();
+        while (ancestor) {
+            ancestor->enable_flag_bits(erhe::Item_flags::descendant_hovered_in_viewport);
+            m_flagged_hover_ancestors.push_back(ancestor);
+            ancestor = ancestor->get_parent().lock();
+        }
+    }
+    m_flagged_hover_ancestors_serial = erhe::get_item_mutation_serial();
+}
+
 void Hover_tool::reset_item_tree_hover()
 {
     m_context.app_message_bus->hover_tree_node.queue_message(Hover_tree_node_message{.item = {}});
@@ -146,6 +169,7 @@ void Hover_tool::on_hover_mesh(Hover_mesh_message& message)
             log_pointer->debug("no new hovered mesh / node");
         }
         m_hovered_node_in_viewport = hovered_node;
+        update_ancestor_hover_flags();
         // Direct call rather than a hover_mesh subscription in
         // Bone_visualization: a subscriber registered before this one would
         // read the hovered flags before the flips above. Here both flags are
@@ -326,6 +350,13 @@ void Hover_tool::add_line(const std::string& line)
 void Hover_tool::tool_render(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
+
+    // Scene tree structure changed since the ancestor chain was flagged
+    // (reparent, add/remove): re-derive it so the descendant-hovered marks
+    // stay on the hovered node's actual ancestors.
+    if (m_flagged_hover_ancestors_serial != erhe::get_item_mutation_serial()) {
+        update_ancestor_hover_flags();
+    }
 
     ERHE_DEFER(
         m_text_lines.clear();

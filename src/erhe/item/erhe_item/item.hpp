@@ -87,14 +87,21 @@ public:
     // set, ID-rendered, raytrace-pickable, selectable, editable and
     // exported. Not serialized (the proxy owner re-applies it).
     static constexpr uint64_t proxy_hidden              = (uint64_t{1} << 32);
-    static constexpr uint64_t count                     = 33;
+    // Transient companion of hovered_in_viewport, maintained by Hover_tool on
+    // every ancestor of the viewport-hovered node (and refreshed when the
+    // scene tree structure changes). Lets item trees highlight the closest
+    // visible ancestor of a hovered node folded out of view with a plain
+    // per-row flag test instead of walking the hierarchy.
+    static constexpr uint64_t descendant_hovered_in_viewport = (uint64_t{1} << 33);
+    static constexpr uint64_t count                     = 34;
 
     // High-frequency presentation-state bits (selection, hover, per-frame debug
     // visualization, transform-derived state) that never affect item tree row
     // structure or filtering. Changes to only these bits do not bump the item
     // mutation serial, so they do not invalidate cached item tree rows.
     static constexpr uint64_t transient =
-        selected | hovered_in_viewport | hovered_in_item_tree | negative_determinant | affects_shadow;
+        selected | hovered_in_viewport | hovered_in_item_tree | descendant_hovered_in_viewport |
+        negative_determinant | affects_shadow;
 
     static constexpr const char* c_bit_labels[] =
     {
@@ -131,6 +138,7 @@ public:
         "Lightmapped",
         "Render Proxy",
         "Proxy Hidden",
+        "Descendant Hovered in Viewport",
     };
 
     [[nodiscard]] static auto to_string(uint64_t mask) -> std::string;

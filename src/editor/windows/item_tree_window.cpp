@@ -920,7 +920,7 @@ void Item_tree::set_item_selection(const std::shared_ptr<erhe::Item_base>& item,
     }
 }
 
-void Item_tree::item_update_selection(const std::shared_ptr<erhe::Item_base>& item)
+void Item_tree::item_update_selection(const std::shared_ptr<erhe::Item_base>& item, const bool hovered_in_folded_subtree)
 {
     ERHE_PROFILE_SCOPE("item_update_selection"); // named zone: no per-row callstack capture
 
@@ -944,7 +944,7 @@ void Item_tree::item_update_selection(const std::shared_ptr<erhe::Item_base>& it
         m_shift_down_range_selection_started = false;
     }
 
-    if (item->is_hovered()) {
+    if (item->is_hovered() || hovered_in_folded_subtree) {
         const ImVec2 rect_min = ImGui::GetItemRectMin();
         const ImVec2 rect_max = ImGui::GetItemRectMax();
         const ImRect rect{rect_min, rect_max};
@@ -1342,9 +1342,10 @@ void Item_tree::imgui_row(const Flat_row& row)
 
     // Tree node with an empty visible label; the icon and the label text are drawn manually
     // below, after the interaction handlers - those must see the tree node as the last item.
+    bool is_open = false;
     {
         ERHE_PROFILE_SCOPE("tree_node");
-        ImGui::TreeNodeEx(row.debug_label.data(), flags, "%s", "");
+        is_open = ImGui::TreeNodeEx(row.debug_label.data(), flags, "%s", "");
     }
 
     bool consumed = false;
@@ -1365,7 +1366,14 @@ void Item_tree::imgui_row(const Flat_row& row)
 
             if (!consumed) {
                 ERHE_PROFILE_SCOPE("update");
-                item_update_selection(row.item);
+                // A closed row hides its subtree, so when the viewport-hovered
+                // node is inside (descendant_hovered_in_viewport, maintained
+                // by Hover_tool), this row is its closest visible ancestor and
+                // takes over the hover highlight.
+                const bool hovered_in_folded_subtree =
+                    !is_open &&
+                    erhe::utility::test_bit_set(row.item->get_flag_bits(), erhe::Item_flags::descendant_hovered_in_viewport);
+                item_update_selection(row.item, hovered_in_folded_subtree);
             }
         }
     }

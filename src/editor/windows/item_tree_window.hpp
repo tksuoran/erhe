@@ -137,7 +137,7 @@ private:
 
     void imgui_row                    (const Flat_row& row);
     void item_icon_and_text           (const std::shared_ptr<erhe::Item_base>& item); // drag payload preview
-    void item_update_selection        (const std::shared_ptr<erhe::Item_base>& item);
+    void item_update_selection        (const std::shared_ptr<erhe::Item_base>& item, bool hovered_in_folded_subtree);
     void flatten_visible_rows         (const std::shared_ptr<erhe::Item_base>& item, float indent);
 
     enum class Show_mode : unsigned int {
