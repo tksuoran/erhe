@@ -409,9 +409,18 @@ auto Mcp_server::action_capture_screenshot(const json& args) -> std::string
     erhe::dataformat::Format format = erhe::dataformat::Format::format_8_vec4_srgb;
     std::vector<std::byte>   pixels;
     if (!m_context.graphics_device->capture_last_frame(width, height, format, pixels)) {
+        // Windowed build: the last presented WSI image is owned by the
+        // presentation engine and cannot be read synchronously. Arm a
+        // one-shot capture that the upcoming frame's swapchain render pass
+        // records, and defer this request to the next MCP pass - the retry
+        // (this same handler, next frame) then collects the pixels above.
+        if (m_context.graphics_device->request_frame_capture()) {
+            m_defer_current_request = true;
+            return {};
+        }
         json r = make_text_content(
-            "Frame capture not available. Screenshots are currently only supported in the headless "
-            "Vulkan configuration (emulated swapchain), and require at least one rendered frame."
+            "Frame capture not available: the swapchain does not support reading its images back, "
+            "and at least one rendered frame is required."
         );
         r["isError"] = true;
         return r.dump();

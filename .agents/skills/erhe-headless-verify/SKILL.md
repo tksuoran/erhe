@@ -1,6 +1,6 @@
 ---
 name: erhe-headless-verify
-description: Verify editor behavior end-to-end without a display -- build the headless Vulkan editor, launch it, wait for its embedded MCP server, drive it with scripts/mcp_call.py (scene queries and mutations, geometry graph tools, undo/redo, capture_screenshot), read the screenshot PNG to SEE the result, then clean up. Use this whenever a change needs runtime verification and no interactive UI is required or no live display is available -- "does the mesh render", "does save/load round-trip", "does undo restore state", "what does the viewport look like now". This is the standard verification loop for editor changes on Windows; the windowed build cannot capture screenshots (returns "Frame capture not available") and aborts at startup when the display is off/asleep.
+description: Verify editor behavior end-to-end without a display -- build the headless Vulkan editor, launch it, wait for its embedded MCP server, drive it with scripts/mcp_call.py (scene queries and mutations, geometry graph tools, undo/redo, capture_screenshot), read the screenshot PNG to SEE the result, then clean up. Use this whenever a change needs runtime verification and no interactive UI is required or no live display is available -- "does the mesh render", "does save/load round-trip", "does undo restore state", "what does the viewport look like now". This is the standard verification loop for editor changes on Windows; the same MCP loop (including capture_screenshot, windowed since 2026-08-08) also works against the windowed build, but the windowed build aborts at startup when the display is off/asleep.
 ---
 
 # erhe headless verification (headless Vulkan build + in-editor MCP)
@@ -16,8 +16,9 @@ cmake --build build_vs2026_vulkan_headless --target editor --config Debug
 
 If `build_vs2026_vulkan_headless/` does not exist, configure once with
 `scripts\configure_vs2026_vulkan_headless.bat`. (The windowed ninja build
-`scripts\build_ninja_win_vulkan.bat editor` verifies compilation faster, but
-only the headless build supports `capture_screenshot`.)
+`scripts\build_ninja_win_vulkan.bat editor` verifies compilation faster;
+`capture_screenshot` works in both builds since 2026-08-08, so headless
+mainly buys display independence.)
 
 ## Step 2 -- launch and wait for the MCP server (NEVER blind-sleep)
 
@@ -96,9 +97,11 @@ git status --short    # confirm nothing else got dirtied (never commit the ini)
 
 ## Gotchas
 
-- `capture_screenshot` works ONLY in the headless build; the windowed build
-  returns "Frame capture not available" (use the RenderDoc fork /
-  erhe-renderdoc-gpu-debug for windowed GPU inspection instead).
+- `capture_screenshot` works in BOTH builds (windowed since 2026-08-08:
+  one-shot swapchain readback with a one-frame deferral inside the MCP
+  server -- transparent to the caller). For deeper windowed GPU inspection
+  (textures, pixel debugging) use the RenderDoc fork /
+  erhe-renderdoc-gpu-debug.
 - The windowed editor needs a live, awake display; headless does not.
 - The scripted startup scene comes from `config/editor/commands.json` --
   adjust it when a test needs a reproducible scene before init completes.

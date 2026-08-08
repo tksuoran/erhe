@@ -7,7 +7,9 @@
 #include "volk.h"
 #include "vk_mem_alloc.h"
 
+#include <cstddef>
 #include <string>
+#include <vector>
 
 namespace erhe::graphics {
 
@@ -45,6 +47,17 @@ void cmd_pipeline_image_barriers2(
 void log_image_layout_transition(
     const VkImageMemoryBarrier2& barrier,
     const char*                  source = nullptr
+);
+
+// Convert a read-back 4x8-bit color buffer (RGBA or BGRA order, per
+// source_format) to tightly packed RGBA8 with forced opaque alpha (a
+// composited swapchain frame's alpha is not meaningful). Used by the
+// swapchain screenshot readback paths (emulated and WSI).
+void convert_readback_to_rgba8_opaque(
+    VkFormat                source_format,
+    const std::byte*        source,
+    std::size_t             pixel_count,
+    std::vector<std::byte>& out_rgba8
 );
 
 [[nodiscard]] auto to_vk_primitive_topology (Primitive_type type) -> VkPrimitiveTopology;

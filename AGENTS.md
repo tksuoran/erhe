@@ -53,8 +53,9 @@ scripts\build_ninja_win_vulkan.bat editor     REM build a target (this is the us
 
 `configure_ninja_win_clang.bat` / `build_ninja_win_clang.bat` are the clang-cl
 equivalents (their configure also regenerates `compile_commands.json` for
-clangd). The **headless Vulkan build** (needed for MCP-driven verification and
-`capture_screenshot`, see "In-editor MCP server" below) is a VS solution
+clangd). The **headless Vulkan build** (needed for MCP-driven verification
+without a live display, see "In-editor MCP server" below; `capture_screenshot`
+works in the windowed build too since 2026-08-08) is a VS solution
 configured with `scripts\configure_vs2026_vulkan_headless.bat`; build it from
 the CLI with:
 
@@ -383,7 +384,7 @@ inline JSON containing spaces. Raw HTTP works too (`POST` the JSON-RPC body to
 - **Queries**: `list_scenes`, `get_scene_nodes`, `get_node_details`, `get_scene_cameras`, `get_scene_lights`, `get_scene_materials`, `get_material_details`, `get_scene_textures`, `get_scene_brushes`, `get_selection`, `get_undo_redo_stack`, `get_physics_items`, `get_shadow_fit_debug`, `get_async_status`.
 - **Actions**: `create_shape`, `create_node`, `place_brush`, `select_items`, `transform_selection`, `reparent_node`, `edit_material`, `lock_items`/`unlock_items`, `add_tags`/`remove_tags`, `toggle_physics` + the `*_physics_*` family, mesh-component editing (`set_mesh_component_mode`, `select_mesh_components`, `remesh`/`decimate`/`smooth`, ...), `save_scene`, `export_gltf`/`import_gltf`, and `capture_screenshot`.
 
-**Screenshots (`capture_screenshot`, default `logs/mcp_screenshot.png`) only work in the headless Vulkan build** -- `Device::capture_last_frame` reads back the *emulated* swapchain (`ERHE_GRAPHICS_API=vulkan` + `ERHE_WINDOW_LIBRARY=none`; build via `scripts/configure_vs2026_vulkan_headless.bat` -> `build_vs2026_vulkan_headless`). The normal windowed build returns "Frame capture not available" (real WSI swapchain readback is unimplemented). For the windowed build, capture frames with the RenderDoc fork instead ([`doc/renderdoc_fork.md`](doc/renderdoc_fork.md)) -- which is also strictly more diagnostic (save individual textures, pixel-debug shaders).
+**Screenshots (`capture_screenshot`, default `logs/mcp_screenshot.png`) work in BOTH builds** (windowed support added 2026-08-08). Headless: `Device::capture_last_frame` reads back the *emulated* swapchain synchronously. Windowed: the tool arms a one-shot swapchain capture (`Device::request_frame_capture`), the MCP server defers the request one frame while the swapchain render pass records a copy of the composited image, and the retry returns the pixels -- one extra frame of latency, invisible to the caller. The windowed path needs the surface to grant `TRANSFER_SRC` image usage (all desktop drivers do) and a supported 4x8-bit swapchain format; otherwise the tool errors. This is the preferred screenshot path in both builds -- no OS-level window capture, no occlusion, no permission concerns. For deeper GPU diagnostics (individual textures, pixel-debug shaders) use the RenderDoc fork ([`doc/renderdoc_fork.md`](doc/renderdoc_fork.md)).
 
 **Windowed editor needs a live display; switch to headless when it does not start.** The windowed build creates a real WSI swapchain, so it needs a present-capable GPU queue on the window surface. When the **display is powered off / asleep / disconnected** (common when an AI is driving the machine unattended), no present queue exists, `choose_physical_device()` finds no usable GPU, and the editor aborts at startup. The log now says exactly this and recommends the fix (look for "Switch to the HEADLESS build" in `logs/log.txt`); older builds printed a misleading `vkCreateInstance() failed with 0 VK_SUCCESS` -- that message is really `choose_physical_device()` failing, not `vkCreateInstance()`. **When this happens, run the headless build instead** (`build_vs2026_vulkan_headless/src/editor/Debug/editor.exe`, `ERHE_WINDOW_LIBRARY=none`): it is surfaceless (emulated swapchain), needs no display, still runs the full render pipeline + MCP server, and supports `capture_screenshot`. The same RenderDoc/GPU-capture flows do not work against a headless emulated swapchain (no real present), so for GPU captures the windowed build + a live display is still required.
 
@@ -403,10 +404,11 @@ required):
 - Scene node ids RESHUFFLE on every launch - re-query with
   `get_scene_nodes` before every `select_items`; never reuse an id from a
   previous run.
-- Screenshots: PREFER the MCP `capture_screenshot` tool (headless build)
-  whenever a real display is not required. For the windowed build,
-  `py -3 scripts/capture_window.py` captures the editor window into a PNG
-  the Read tool can evaluate (PrintWindow by default - no focus change;
+- Screenshots: PREFER the MCP `capture_screenshot` tool -- it works in the
+  windowed build too (2026-08-08; captures the editor's own composited
+  frame, so occlusion by other windows does not matter). OS-level window
+  capture (`py -3 scripts/capture_window.py`) remains only for cases the
+  in-editor capture cannot serve (PrintWindow by default - no focus change;
   `--foreground` raises the window and blits from the screen).
   **ALWAYS ASK THE USER FOR PERMISSION BEFORE ANY non-headless window
   capture, every time.** The user may be using the computer for something

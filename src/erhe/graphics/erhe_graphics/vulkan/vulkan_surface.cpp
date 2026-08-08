@@ -1102,6 +1102,15 @@ auto Surface_impl::update_swapchain(Vulkan_swapchain_create_info& out_swapchain_
             ? VK_SWAPCHAIN_CREATE_PRESENT_TIMING_BIT_EXT
             : 0u;
 
+    // Screenshot readback (Device::capture_last_frame): TRANSFER_SRC lets the
+    // swapchain render pass epilogue copy the composited image to a staging
+    // buffer (Swapchain_impl::record_capture). Only added when the surface
+    // supports it; capture then degrades gracefully to unsupported.
+    VkImageUsageFlags image_usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    if ((surface_capabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0) {
+        image_usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    }
+
     out_swapchain_create_info.swapchain_create_info = VkSwapchainCreateInfoKHR{
         .sType                 = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,   // VkStructureType
         .pNext                 = pNext,                                         // const void*
@@ -1112,7 +1121,7 @@ auto Surface_impl::update_swapchain(Vulkan_swapchain_create_info& out_swapchain_
         .imageColorSpace       = m_surface_format.colorSpace,                   // VkColorSpaceKHR
         .imageExtent           = extent,                                        // VkExtent2D
         .imageArrayLayers      = 1,                                             // uint32_t
-        .imageUsage            = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,           // VkImageUsageFlags
+        .imageUsage            = image_usage,                                   // VkImageUsageFlags
         .imageSharingMode      = VK_SHARING_MODE_EXCLUSIVE,                     // VkSharingMode
         .queueFamilyIndexCount = 1,                                             // uint32_t
         .pQueueFamilyIndices   = &graphics_queue_family_index,                  // const uint32_t*

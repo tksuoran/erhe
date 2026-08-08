@@ -482,16 +482,26 @@ public:
 
     // Reads the most recently composited frame back to host memory as tightly
     // packed 8-bit RGBA (out_format = format_8_vec4_srgb). Returns false if the
-    // backend / configuration does not support it. Currently only the headless
-    // Vulkan emulated swapchain is supported; the real WSI swapchain and other
-    // backends return false. Synchronous and intended for infrequent
-    // diagnostic capture (e.g. MCP screenshots), not the hot path.
+    // backend / configuration does not support it, Vulkan only. Headless
+    // (emulated swapchain): synchronous readback. Windowed (real WSI
+    // swapchain): collects a capture previously armed with
+    // request_frame_capture() once a frame has recorded it - arm, render a
+    // frame, then call this. Intended for infrequent diagnostic capture
+    // (e.g. MCP screenshots), not the hot path.
     [[nodiscard]] auto capture_last_frame(
         int&                      out_width,
         int&                      out_height,
         erhe::dataformat::Format& out_format,
         std::vector<std::byte>&   out_pixels
     ) -> bool;
+
+    // Arms a one-shot capture of the next composited frame on the real WSI
+    // swapchain; the copy is recorded by that frame's swapchain render pass
+    // and collected with capture_last_frame() afterwards. Returns false when
+    // no capture path exists (non-Vulkan backend, no surface, or the surface
+    // does not support reading its images back); returns true and is a no-op
+    // when headless (capture_last_frame is already synchronous there).
+    [[nodiscard]] auto request_frame_capture() -> bool;
 
     [[nodiscard]] auto get_surface                        () -> Surface*;
     // Presentation pre-rotation the renderer must apply to its final swapchain

@@ -507,21 +507,12 @@ auto Emulated_swapchain_impl::read_back_last_frame(
         // Make the GPU writes visible to the host (no-op for coherent memory).
         vmaInvalidateAllocation(allocator, staging_allocation, 0, VK_WHOLE_SIZE);
 
-        // Convert to tightly packed RGBA8: swap B/R for a BGRA source and force
-        // an opaque alpha (the composited frame's alpha is not meaningful).
-        const bool             is_bgra = (m_color_format == VK_FORMAT_B8G8R8A8_SRGB) || (m_color_format == VK_FORMAT_B8G8R8A8_UNORM);
-        const std::byte* const src     = static_cast<const std::byte*>(staging_info.pMappedData);
-        out_rgba8.resize(static_cast<std::size_t>(buffer_size));
-        for (VkDeviceSize i = 0; i < pixel_count; ++i) {
-            const std::size_t o  = static_cast<std::size_t>(i) * 4u;
-            const std::byte   c0 = src[o + 0];
-            const std::byte   c1 = src[o + 1];
-            const std::byte   c2 = src[o + 2];
-            out_rgba8[o + 0] = is_bgra ? c2 : c0; // R
-            out_rgba8[o + 1] = c1;                // G
-            out_rgba8[o + 2] = is_bgra ? c0 : c2; // B
-            out_rgba8[o + 3] = std::byte{0xff};   // A
-        }
+        convert_readback_to_rgba8_opaque(
+            m_color_format,
+            static_cast<const std::byte*>(staging_info.pMappedData),
+            static_cast<std::size_t>(pixel_count),
+            out_rgba8
+        );
         out_width  = width;
         out_height = height;
     } else {

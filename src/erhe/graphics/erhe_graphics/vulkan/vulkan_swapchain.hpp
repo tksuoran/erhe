@@ -7,8 +7,10 @@
 #include "vk_mem_alloc.h"
 
 #include <array>
+#include <cstddef>
 #include <deque>
 #include <limits>
+#include <utility>
 #include <vector>
 
 namespace erhe::graphics {
@@ -126,6 +128,22 @@ public:
     [[nodiscard]] auto acquire_swapchain_framebuffer(VkRenderPass render_pass) -> VkFramebuffer;
     [[nodiscard]] auto get_swapchain_extent() const -> VkExtent2D;
     void               mark_render_pass_recorded();
+    // Windowed screenshot capture (Device::capture_last_frame). A presented
+    // swapchain image is owned by the presentation engine and must not be
+    // read, so capture is a one-shot arm-then-collect protocol:
+    // request_capture() arms it; the swapchain render pass epilogue
+    // (Render_pass_impl::end_render_pass) calls record_capture() which
+    // copies the freshly composited image into a persistent staging buffer
+    // inside the frame's own command buffer (PRESENT_SRC -> TRANSFER_SRC ->
+    // PRESENT_SRC); read_back_capture() then collects the pixels as tightly
+    // packed RGBA8 once that frame has been submitted (it drains the GPU -
+    // diagnostic path, like the emulated swapchain readback). Capture is
+    // supported only when the surface granted TRANSFER_SRC image usage
+    // (is_capture_supported, set by init_swapchain).
+    [[nodiscard]] auto is_capture_supported() const -> bool;
+    void               request_capture();
+    void               record_capture(VkCommandBuffer command_buffer);
+    [[nodiscard]] auto read_back_capture(uint32_t& out_width, uint32_t& out_height, std::vector<std::byte>& out_rgba8) -> bool;
     // Drive vkQueuePresentKHR for the currently acquired image. Caller
     // must have already submitted a cb that signals this swapchain's
     // present_semaphore (the implicit-present path: Device_impl::submit_command_buffers
@@ -296,6 +314,27 @@ private:
     std::vector<Swapchain_cleanup_data>      m_old_swapchains;
 
     size_t                                   m_swapchain_serial{0};
+
+    // Windowed screenshot capture state (see the capture methods above).
+    // m_capture_ready means a copy has been recorded and not yet collected;
+    // the staging buffer grows on demand and outgrown buffers go to
+    // m_capture_garbage until a GPU drain makes freeing them safe
+    // (read_back_capture / release_resources).
+    bool                                     m_capture_supported{false};
+    bool                                     m_capture_requested{false};
+    bool                                     m_capture_ready    {false};
+    // Device frame index the capture was recorded on. An armed capture whose
+    // collector went away (e.g. the MCP client timed out) must not be served
+    // to a later caller as if it were current: read_back_capture rejects
+    // captures older than a couple of frames.
+    uint64_t                                 m_capture_frame_index{0};
+    VkBuffer                                 m_capture_buffer    {VK_NULL_HANDLE};
+    VmaAllocation                            m_capture_allocation{VK_NULL_HANDLE};
+    VmaAllocationInfo                        m_capture_allocation_info{};
+    VkDeviceSize                             m_capture_buffer_size{0};
+    VkExtent2D                               m_capture_extent{0, 0};
+    VkFormat                                 m_capture_format{VK_FORMAT_UNDEFINED};
+    std::vector<std::pair<VkBuffer, VmaAllocation>> m_capture_garbage;
 };
 
 } // namespace erhe::graphics

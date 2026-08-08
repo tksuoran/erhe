@@ -76,12 +76,19 @@ auto Device::capture_last_frame(
 #if defined(ERHE_GRAPHICS_API_VULKAN)
     return m_impl->capture_last_frame(out_width, out_height, out_format, out_pixels);
 #else
-    // Frame capture is currently only implemented for the headless Vulkan
-    // emulated swapchain.
+    // Frame capture is currently only implemented for the Vulkan backend.
     static_cast<void>(out_width);
     static_cast<void>(out_height);
     static_cast<void>(out_format);
     static_cast<void>(out_pixels);
+    return false;
+#endif
+}
+auto Device::request_frame_capture() -> bool
+{
+#if defined(ERHE_GRAPHICS_API_VULKAN)
+    return m_impl->request_frame_capture();
+#else
     return false;
 #endif
 }

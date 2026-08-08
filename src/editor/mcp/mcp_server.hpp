@@ -321,6 +321,18 @@ private:
     };
     std::mutex                                       m_queue_mutex;
     std::vector<std::unique_ptr<Queued_request>>     m_request_queue;
+
+    // One-frame request deferral (main thread only, no lock needed). A
+    // handler that needs the editor to render a frame before it can produce
+    // its result (capture_screenshot in the windowed build: it arms a
+    // swapchain capture that the upcoming frame records) sets
+    // m_defer_current_request instead of returning a result;
+    // process_queued_requests then parks the request in m_deferred_requests
+    // and re-runs it on the next frame's pass, ahead of newly queued
+    // requests. The k_request_timeout expiry check bounds repeated deferral
+    // (e.g. a minimized window that never renders).
+    bool                                             m_defer_current_request{false};
+    std::vector<std::unique_ptr<Queued_request>>     m_deferred_requests;
 };
 
 } // namespace editor

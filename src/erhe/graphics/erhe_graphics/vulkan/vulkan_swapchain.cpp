@@ -132,6 +132,22 @@ void Swapchain_impl::release_resources()
         vkDestroySwapchainKHR(vulkan_device, m_vulkan_swapchain, nullptr);
         m_vulkan_swapchain = VK_NULL_HANDLE;
     }
+
+    // Screenshot capture staging buffer(s). Safe to free here: the GPU was
+    // drained by the vkDeviceWaitIdle at the top of this function.
+    VmaAllocator& allocator = m_device_impl.get_allocator();
+    for (const auto& [buffer, allocation] : m_capture_garbage) {
+        vmaDestroyBuffer(allocator, buffer, allocation);
+    }
+    m_capture_garbage.clear();
+    if (m_capture_buffer != VK_NULL_HANDLE) {
+        vmaDestroyBuffer(allocator, m_capture_buffer, m_capture_allocation);
+        m_capture_buffer      = VK_NULL_HANDLE;
+        m_capture_allocation  = VK_NULL_HANDLE;
+        m_capture_buffer_size = 0;
+    }
+    m_capture_requested = false;
+    m_capture_ready     = false;
 }
 
 void Swapchain_impl::reset_for_new_surface()
@@ -158,6 +174,7 @@ void Swapchain_impl::reset_for_new_surface()
     m_is_valid             = false;
     m_acquired_image_index = 0;
     m_state                = Swapchain_frame_state::idle;
+    m_capture_supported    = false; // re-decided by the next init_swapchain
 }
 
 auto Swapchain_impl::submit_command_buffer() -> bool
@@ -951,6 +968,11 @@ void Swapchain_impl::init_swapchain(Vulkan_swapchain_create_info& swapchain_crea
     m_swapchain_extent = swapchain_create_info.swapchain_create_info.imageExtent;
     m_swapchain_format = swapchain_create_info.swapchain_create_info.imageFormat;
 
+    // Screenshot capture needs to copy out of the swapchain images;
+    // Surface_impl::update_swapchain added TRANSFER_SRC when the surface
+    // supports it.
+    m_capture_supported = (swapchain_create_info.swapchain_create_info.imageUsage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0;
+
     if (!has_maintenance1()) {
         // When VK_SWAPCHAIN_CREATE_DEFERRED_MEMORY_ALLOCATION_BIT_EXT is used, image views
         // cannot be created until the first time the image is acquired.
@@ -1023,6 +1045,207 @@ void Swapchain_impl::mark_render_pass_recorded()
     if (m_state == Swapchain_frame_state::image_ackquired) {
         m_state = Swapchain_frame_state::render_pass_end;
     }
+}
+
+auto Swapchain_impl::is_capture_supported() const -> bool
+{
+    return m_capture_supported;
+}
+
+void Swapchain_impl::request_capture()
+{
+    m_capture_requested = true;
+}
+
+void Swapchain_impl::record_capture(VkCommandBuffer command_buffer)
+{
+    if (!m_capture_requested) {
+        return;
+    }
+    if (!m_capture_supported || !is_valid() || (command_buffer == VK_NULL_HANDLE)) {
+        m_capture_requested = false;
+        return;
+    }
+    // The readback conversion (convert_readback_to_rgba8_opaque) only
+    // understands 4x8-bit RGBA/BGRA; skip capture for anything else
+    // (e.g. a 10-bit HDR surface format).
+    switch (m_swapchain_format) {
+        case VK_FORMAT_R8G8B8A8_SRGB:
+        case VK_FORMAT_R8G8B8A8_UNORM:
+        case VK_FORMAT_B8G8R8A8_SRGB:
+        case VK_FORMAT_B8G8R8A8_UNORM: {
+            break;
+        }
+        default: {
+            log_swapchain->warn("record_capture: unsupported swapchain format {} for screenshot readback", c_str(m_swapchain_format));
+            m_capture_requested = false;
+            return;
+        }
+    }
+
+    const uint32_t     width    = m_swapchain_extent.width;
+    const uint32_t     height   = m_swapchain_extent.height;
+    const VkImage      image    = m_swapchain_objects.images[m_acquired_image_index];
+    const VkDeviceSize required = static_cast<VkDeviceSize>(width) * static_cast<VkDeviceSize>(height) * 4u;
+    if ((image == VK_NULL_HANDLE) || (required == 0)) {
+        m_capture_requested = false;
+        return;
+    }
+
+    // Persistent host-visible staging buffer, grown on demand. An outgrown
+    // buffer may still be referenced by an uncollected previous capture, so
+    // it is parked in m_capture_garbage until the next GPU drain.
+    if ((m_capture_buffer != VK_NULL_HANDLE) && (m_capture_buffer_size < required)) {
+        m_capture_garbage.emplace_back(m_capture_buffer, m_capture_allocation);
+        m_capture_buffer      = VK_NULL_HANDLE;
+        m_capture_allocation  = VK_NULL_HANDLE;
+        m_capture_buffer_size = 0;
+        m_capture_ready       = false;
+    }
+    if (m_capture_buffer == VK_NULL_HANDLE) {
+        const VkBufferCreateInfo buffer_create_info{
+            .sType                 = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .pNext                 = nullptr,
+            .flags                 = 0,
+            .size                  = required,
+            .usage                 = VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+            .sharingMode           = VK_SHARING_MODE_EXCLUSIVE,
+            .queueFamilyIndexCount = 0,
+            .pQueueFamilyIndices   = nullptr
+        };
+        const VmaAllocationCreateInfo alloc_create_info{
+            .flags          = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+            .usage          = VMA_MEMORY_USAGE_AUTO,
+            .requiredFlags  = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+            .preferredFlags = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            .memoryTypeBits = 0,
+            .pool           = VK_NULL_HANDLE,
+            .pUserData      = nullptr,
+            .priority       = 0.0f
+        };
+        VmaAllocator& allocator = m_device_impl.get_allocator();
+        const VkResult result = vmaCreateBuffer(allocator, &buffer_create_info, &alloc_create_info, &m_capture_buffer, &m_capture_allocation, &m_capture_allocation_info);
+        if (result != VK_SUCCESS) {
+            log_swapchain->error("record_capture: staging buffer allocation failed with {} {}", static_cast<int32_t>(result), c_str(result));
+            m_capture_requested = false;
+            return;
+        }
+        vmaSetAllocationName(allocator, m_capture_allocation, "Swapchain capture staging buffer");
+        m_capture_buffer_size = required;
+    }
+
+    // The swapchain render pass just ended, leaving the image in
+    // PRESENT_SRC_KHR. Round-trip it through TRANSFER_SRC_OPTIMAL for the
+    // copy; the frame's present executes after this command buffer, so the
+    // image is back in PRESENT_SRC_KHR by then.
+    const VkImageMemoryBarrier to_transfer{
+        .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .pNext               = nullptr,
+        .srcAccessMask       = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        .dstAccessMask       = VK_ACCESS_TRANSFER_READ_BIT,
+        .oldLayout           = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+        .newLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image               = image,
+        .subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
+    };
+    vkCmdPipelineBarrier(
+        command_buffer,
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        0, 0, nullptr, 0, nullptr, 1, &to_transfer
+    );
+
+    const VkBufferImageCopy region{
+        .bufferOffset      = 0,
+        .bufferRowLength   = 0,
+        .bufferImageHeight = 0,
+        .imageSubresource  = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+        .imageOffset       = {0, 0, 0},
+        .imageExtent       = {width, height, 1}
+    };
+    vkCmdCopyImageToBuffer(command_buffer, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, m_capture_buffer, 1, &region);
+
+    const VkImageMemoryBarrier to_present{
+        .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .pNext               = nullptr,
+        .srcAccessMask       = VK_ACCESS_TRANSFER_READ_BIT,
+        .dstAccessMask       = 0,
+        .oldLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        .newLayout           = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image               = image,
+        .subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
+    };
+    vkCmdPipelineBarrier(
+        command_buffer,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+        0, 0, nullptr, 0, nullptr, 1, &to_present
+    );
+
+    m_capture_extent      = m_swapchain_extent;
+    m_capture_format      = m_swapchain_format;
+    m_capture_frame_index = m_device_impl.get_frame_index();
+    m_capture_requested   = false;
+    m_capture_ready       = true;
+}
+
+auto Swapchain_impl::read_back_capture(
+    uint32_t&               out_width,
+    uint32_t&               out_height,
+    std::vector<std::byte>& out_rgba8
+) -> bool
+{
+    if (!m_capture_ready || (m_capture_buffer == VK_NULL_HANDLE)) {
+        return false;
+    }
+
+    // Reject a stale capture whose collector went away (m_capture_frame_index
+    // member comment): the caller re-arms and gets a current frame instead.
+    // The normal arm -> render -> collect cycle sees an age of 1.
+    const uint64_t age = m_device_impl.get_frame_index() - m_capture_frame_index;
+    if (age > 2) {
+        m_capture_ready = false;
+        return false;
+    }
+
+    // Drain the GPU so the capture-carrying frame has fully executed before
+    // the staging buffer is read (diagnostic / infrequent path, matching the
+    // emulated swapchain readback).
+    const VkDevice vulkan_device = m_device_impl.get_vulkan_device();
+    vkDeviceWaitIdle(vulkan_device);
+
+    VmaAllocator& allocator = m_device_impl.get_allocator();
+    for (const auto& [buffer, allocation] : m_capture_garbage) {
+        vmaDestroyBuffer(allocator, buffer, allocation);
+    }
+    m_capture_garbage.clear();
+
+    if (m_capture_allocation_info.pMappedData == nullptr) {
+        m_capture_ready = false;
+        return false;
+    }
+
+    // Make the GPU writes visible to the host (no-op for coherent memory).
+    vmaInvalidateAllocation(allocator, m_capture_allocation, 0, VK_WHOLE_SIZE);
+
+    const std::size_t pixel_count = static_cast<std::size_t>(m_capture_extent.width) * static_cast<std::size_t>(m_capture_extent.height);
+    convert_readback_to_rgba8_opaque(
+        m_capture_format,
+        static_cast<const std::byte*>(m_capture_allocation_info.pMappedData),
+        pixel_count,
+        out_rgba8
+    );
+    out_width  = m_capture_extent.width;
+    out_height = m_capture_extent.height;
+
+    // One-shot: the next capture_screenshot arms a fresh capture so it sees
+    // a current frame, not this stale one.
+    m_capture_ready = false;
+    return true;
 }
 
 auto Swapchain_impl::get_active_present_semaphore() const -> VkSemaphore

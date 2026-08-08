@@ -1592,6 +1592,12 @@ void Render_pass_impl::end_render_pass(Command_buffer& command_buffer, Render_pa
             //     reinterpret_cast<std::uintptr_t>(m_command_buffer)
             // );
             vkCmdEndRenderPass2(m_command_buffer, &subpass_end_info);
+            if (m_swapchain != nullptr) {
+                // Armed screenshot capture (Device::request_frame_capture):
+                // copy the freshly composited image to the capture staging
+                // buffer while this frame still owns it (pre-present).
+                m_swapchain->get_impl().record_capture(m_command_buffer);
+            }
         }
     } else {
         // End the render pass. The device-frame command buffer stays

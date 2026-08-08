@@ -16,6 +16,7 @@
 #include <array>
 #include <cmath>
 #include <filesystem>
+#include <iterator>
 #include <span>
 
 namespace editor {
@@ -362,6 +363,18 @@ auto Mcp_server::process_queued_requests() -> int
         requests.swap(m_request_queue);
     }
 
+    // Requests deferred on the previous pass run first (they are older, and
+    // the frame they were waiting for has rendered in between).
+    if (!m_deferred_requests.empty()) {
+        m_deferred_requests.insert(
+            m_deferred_requests.end(),
+            std::make_move_iterator(requests.begin()),
+            std::make_move_iterator(requests.end())
+        );
+        requests.swap(m_deferred_requests);
+        m_deferred_requests.clear();
+    }
+
     const auto now = std::chrono::steady_clock::now();
     int count = 0;
     for (auto& req : requests) {
@@ -578,6 +591,15 @@ auto Mcp_server::process_queued_requests() -> int
         } catch (...) {
             log_mcp->error("MCP server: handler for '{}' threw a non-standard exception", req->tool_name);
             result = make_error_content(std::string{"Handler '"} + req->tool_name + "' threw a non-standard exception");
+        }
+
+        if (m_defer_current_request) {
+            // The handler needs a rendered frame before it can answer (see
+            // the m_deferred_requests member comment): park the request,
+            // promise unsettled, and re-run it on the next frame's pass.
+            m_defer_current_request = false;
+            m_deferred_requests.push_back(std::move(req));
+            continue;
         }
 
         req->result_promise.set_value(std::move(result));

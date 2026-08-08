@@ -308,9 +308,18 @@ public:
 
     [[nodiscard]] auto get_device                       () -> Device&;
     [[nodiscard]] auto get_surface                      () -> Surface*;
-    // Reads the most recently composited headless (emulated swapchain) frame to
-    // host memory as tightly packed 8-bit RGBA. Returns false when not headless.
+    // Reads the most recently composited frame to host memory as tightly
+    // packed 8-bit RGBA. Headless (emulated swapchain): synchronous readback.
+    // Windowed (real WSI swapchain): returns a previously armed capture
+    // (request_frame_capture) once a frame has recorded it; returns false
+    // when nothing has been captured yet.
     [[nodiscard]] auto capture_last_frame               (int& out_width, int& out_height, erhe::dataformat::Format& out_format, std::vector<std::byte>& out_pixels) -> bool;
+    // Arms a one-shot capture of the next composited frame on the real WSI
+    // swapchain (collected by capture_last_frame on a later call). Returns
+    // false when no capture path exists (no surface, or the surface did not
+    // grant TRANSFER_SRC usage); true and a no-op when headless (emulated
+    // swapchain capture is synchronous).
+    [[nodiscard]] auto request_frame_capture            () -> bool;
     [[nodiscard]] auto get_native_handles               () const -> Native_device_handles;
     [[nodiscard]] auto get_vulkan_instance              () -> VkInstance;
     [[nodiscard]] auto get_vulkan_physical_device       () -> VkPhysicalDevice;

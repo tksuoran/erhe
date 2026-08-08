@@ -61,8 +61,8 @@ the `VK_ENABLE_BETA_EXTENSIONS` private compile definition on the
 | `vulkan_buffer.cpp/.hpp` | VMA-backed `VkBuffer`, persistent mapping |
 | `vulkan_sampler.cpp/.hpp` | `VkSampler` |
 | `vulkan_surface.cpp/.hpp` | `VkSurfaceKHR`, surface-format / present-mode scoring, swapchain create-info |
-| `vulkan_swapchain.cpp/.hpp` | `VkSwapchainKHR`, per-frame acquire/present semaphores, app-managed depth image, present history, recreation |
-| `vulkan_emulated_swapchain.cpp/.hpp` | Surfaceless offscreen "swapchain" for the headless configuration (`ERHE_WINDOW_LIBRARY=none`), backs `Device::capture_last_frame()` |
+| `vulkan_swapchain.cpp/.hpp` | `VkSwapchainKHR`, per-frame acquire/present semaphores, app-managed depth image, present history, recreation, armed screenshot capture (`request_capture` / `record_capture` / `read_back_capture`) |
+| `vulkan_emulated_swapchain.cpp/.hpp` | Surfaceless offscreen "swapchain" for the headless configuration (`ERHE_WINDOW_LIBRARY=none`), backs the headless path of `Device::capture_last_frame()` |
 | `vulkan_vertex_input_state.cpp/.hpp` | Vertex attribute / binding descriptions |
 | `vulkan_gpu_timer.cpp/.hpp` | Timestamp queries against the device query pool |
 | `vulkan_debug.cpp`, `vulkan_scoped_debug_group.cpp/.hpp` | Debug labels and scoped debug groups via `VK_EXT_debug_utils` |
@@ -535,10 +535,25 @@ swapchain.
 
 `Emulated_swapchain_impl::read_back_last_frame()` copies the most recently
 composited color image back to host memory as RGBA8 (synchronous, drains the
-GPU) and is the sole implementation behind `Device_impl::capture_last_frame()`
--- the `capture_screenshot` path used by the in-editor MCP server in the
-headless build. Real WSI-swapchain capture is not implemented; the windowed
-build returns "Frame capture not available".
+GPU) and backs the headless path of `Device_impl::capture_last_frame()`
+-- the `capture_screenshot` path used by the in-editor MCP server.
+
+The windowed (real WSI) build captures with an arm-then-collect protocol
+instead, because a presented swapchain image is owned by the presentation
+engine and must not be read: `Device::request_frame_capture()` arms a one-shot
+capture on `Swapchain_impl`; the next swapchain render pass epilogue
+(`Render_pass_impl::end_render_pass`) records a copy of the freshly composited
+image into a persistent staging buffer inside the frame's own command buffer
+(`record_capture`: PRESENT_SRC -> TRANSFER_SRC -> PRESENT_SRC round trip,
+before the present executes); a later `capture_last_frame()` call collects the
+pixels (`read_back_capture`: drains the GPU, converts BGRA/RGBA to packed
+RGBA8, rejects captures older than a couple of frames). The swapchain is
+created with `VK_IMAGE_USAGE_TRANSFER_SRC_BIT` when
+`VkSurfaceCapabilitiesKHR::supportedUsageFlags` allows it; without that (or
+with a non-4x8-bit surface format) capture reports unsupported. The MCP
+server bridges the one-frame gap by deferring the `capture_screenshot`
+request to the next frame's `process_queued_requests()` pass
+(`m_deferred_requests` in `mcp_server.hpp`).
 
 The class is a deliberately self-contained sibling of `Swapchain_impl` (some
 image-view / framebuffer / depth helper code is duplicated on purpose; the real

@@ -1671,4 +1671,27 @@ void cmd_pipeline_image_barriers2(
     vkCmdPipelineBarrier2(cmd, &dep_info);
 }
 
+void convert_readback_to_rgba8_opaque(
+    const VkFormat          source_format,
+    const std::byte*        source,
+    const std::size_t       pixel_count,
+    std::vector<std::byte>& out_rgba8
+)
+{
+    const bool is_bgra =
+        (source_format == VK_FORMAT_B8G8R8A8_SRGB) ||
+        (source_format == VK_FORMAT_B8G8R8A8_UNORM);
+    out_rgba8.resize(pixel_count * 4u);
+    for (std::size_t i = 0; i < pixel_count; ++i) {
+        const std::size_t o  = i * 4u;
+        const std::byte   c0 = source[o + 0];
+        const std::byte   c1 = source[o + 1];
+        const std::byte   c2 = source[o + 2];
+        out_rgba8[o + 0] = is_bgra ? c2 : c0; // R
+        out_rgba8[o + 1] = c1;                // G
+        out_rgba8[o + 2] = is_bgra ? c0 : c2; // B
+        out_rgba8[o + 3] = std::byte{0xff};   // A
+    }
+}
+
 } // namespace erhe::graphics

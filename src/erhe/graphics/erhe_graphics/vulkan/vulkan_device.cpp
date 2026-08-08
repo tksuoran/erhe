@@ -1075,20 +1075,49 @@ auto Device_impl::capture_last_frame(
     if (m_surface == nullptr) {
         return false;
     }
-    // Only the headless emulated swapchain is supported; the real WSI swapchain
-    // (non-headless) capture is not implemented yet.
-    Emulated_swapchain_impl* const emulated = m_surface->get_impl().get_emulated_swapchain();
-    if (emulated == nullptr) {
-        return false;
-    }
     uint32_t width  = 0;
     uint32_t height = 0;
-    if (!emulated->read_back_last_frame(width, height, out_pixels)) {
-        return false;
+    Emulated_swapchain_impl* const emulated = m_surface->get_impl().get_emulated_swapchain();
+    if (emulated != nullptr) {
+        // Headless: synchronous readback of the last composited frame.
+        if (!emulated->read_back_last_frame(width, height, out_pixels)) {
+            return false;
+        }
+    } else {
+        // Windowed: collect a previously armed capture (request_frame_capture);
+        // a presented WSI image cannot be read directly.
+        Swapchain* const swapchain = m_surface->get_impl().get_swapchain();
+        if (swapchain == nullptr) {
+            return false;
+        }
+        if (!swapchain->get_impl().read_back_capture(width, height, out_pixels)) {
+            return false;
+        }
     }
     out_width  = static_cast<int>(width);
     out_height = static_cast<int>(height);
     out_format = erhe::dataformat::Format::format_8_vec4_srgb;
+    return true;
+}
+
+auto Device_impl::request_frame_capture() -> bool
+{
+    if (m_surface == nullptr) {
+        return false;
+    }
+    if (m_surface->get_impl().get_emulated_swapchain() != nullptr) {
+        // Headless capture is synchronous; nothing to arm.
+        return true;
+    }
+    Swapchain* const swapchain = m_surface->get_impl().get_swapchain();
+    if (swapchain == nullptr) {
+        return false;
+    }
+    Swapchain_impl& swapchain_impl = swapchain->get_impl();
+    if (!swapchain_impl.is_capture_supported()) {
+        return false;
+    }
+    swapchain_impl.request_capture();
     return true;
 }
 

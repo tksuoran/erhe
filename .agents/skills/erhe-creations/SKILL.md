@@ -1,6 +1,6 @@
 ---
 name: erhe-creations
-description: Build an MCP-driven showcase scene ("creation") in the erhe editor. Read BEFORE starting, revising, or debugging any creation in scripts/creations/ - covers the workflow (self-launching scripts, headless screenshot iteration, windowed showing), the mandatory scene-graph hierarchy rules, and every hard-won MCP editor gotcha (transforms, materials, L-systems, physics, lighting). Revise this document at the end of each creation session with new learnings.
+description: Build an MCP-driven showcase scene ("creation") in the erhe editor. Read BEFORE starting, revising, or debugging any creation in scripts/creations/ - covers the workflow (self-launching scripts, screenshot iteration in either build, windowed showing), the mandatory scene-graph hierarchy rules, and every hard-won MCP editor gotcha (transforms, materials, L-systems, physics, lighting). Revise this document at the end of each creation session with new learnings.
 ---
 
 # Editor AI Creations
@@ -8,7 +8,7 @@ description: Build an MCP-driven showcase scene ("creation") in the erhe editor.
 Showcase scenes built by driving the in-editor MCP server from Python
 scripts in `scripts/creations/`. Each script is self-contained and
 reproducible: it launches the editor, builds one scene, frames the
-camera, screenshots (headless) and saves the scene.
+camera, screenshots and saves the scene.
 
 **Maintenance contract:** read this document before any creation work;
 at the end of a session, fold new facts into it (and prune anything it
@@ -33,21 +33,26 @@ they carry the current idioms.
   `--pause N` (recording pause after first visible mesh, default 10 s),
   `--no-save` (optional: skip `save_scene`; windowed saves work since
   the exporter's content-flag filter, 2026-08-08).
-- **Iterate with headless screenshots**:
-  `py -3 scripts/creations/<script>.py --pause 0 --editor-exe
-  build_vs2026_vulkan_headless/src/editor/Release/editor.exe`
-  (`capture_screenshot` only works headless). Judge the PNG in
-  `logs/creations/`, fix, rerun. Expect 2-4 iterations; composition
-  problems (occlusion, framing, washed lighting) are the usual finds.
-- Headless big viewports need
+- **Iterate with screenshots**: `capture_screenshot` works in BOTH
+  builds since 2026-08-08 (windowed captures the editor's own composited
+  frame -- one frame of extra latency, handled inside the MCP server).
+  Iterating against the WINDOWED build is now fine and needs no ini
+  ritual; the headless build (`--editor-exe
+  build_vs2026_vulkan_headless/src/editor/Release/editor.exe`) is still
+  useful when the display is off or the user is using the machine.
+  Judge the PNG in `logs/creations/`, fix, rerun. Expect 2-4
+  iterations; composition problems (occlusion, framing, washed
+  lighting) are the usual finds.
+- HEADLESS ONLY: big viewports need
   `config/editor/desktop_window_imgui_host_imgui.ini` seeded with
   `[Window][Viewport_window N]` `Pos=8,28` `Size=2288,1160` for N=2..12
   BEFORE launch. **Back up the user's ini first and restore it after
   the headless iterations** (previous sessions keep a backup at
-  `%TEMP%\erhe_imgui_ini_backup.ini`).
-- When done: commit the script (see Conventions), restore the ini, then
-  run the script windowed with `--no-save` so the user can watch it
-  build; the editor is left open.
+  `%TEMP%\erhe_imgui_ini_backup.ini`). Windowed runs use the user's
+  real layout and skip all of this.
+- When done: commit the script (see Conventions), restore the ini (if
+  headless was used), then run the script windowed with `--no-save` so
+  the user can watch it build; the editor is left open.
 - Outputs: screenshots `logs/creations/*.png`, headless-saved scenes
   `res/editor/scenes/creations/*.glb` (untracked; loadable with
   `load_scene`). Only the script is committed.
@@ -341,10 +346,11 @@ pose needs no new machinery - six-dof drives ARE the rest-pose motor:
 
 - `chamfer` op on a uv_sphere selection crashes the editor (use
   `remesh`).
-- `capture_screenshot` is headless-only (queue ITEM 4 tracks the
-  windowed implementation). (The windowed `save_scene` crash is FIXED
-  2026-08-08: the glTF exporter saves only `Item_flags::content`
-  children, so the hotbar rendertarget quad no longer reaches export.)
+- (Both former blockers are FIXED 2026-08-08: `capture_screenshot`
+  works windowed -- swapchain readback + one-frame MCP deferral -- and
+  the windowed `save_scene` crash is gone: the glTF exporter saves only
+  `Item_flags::content` children, so the hotbar rendertarget quad no
+  longer reaches export.)
 - Graphics preset High once shipped `shadow_light_count 32` (~2.1 GiB
   VRAM per view -> OOM with two scenes); trimmed to 8 locally in
   `config/editor/graphics_presets.json` - coordinate before reverting.
