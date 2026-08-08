@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <functional>
 #include <future>
 #include <memory>
 #include <mutex>
@@ -98,6 +99,13 @@ private:
     // Query handlers (run on main thread)
     auto find_scene             (const std::string& name) -> Scene_root*;
     auto find_items_by_ids      (Scene_root& sr, const std::set<std::size_t>& target_ids) -> std::vector<std::shared_ptr<erhe::Item_base>>;
+
+    // Selection-driven geometry ops (remesh/decimate/smooth/chamfer/
+    // merge_faces/catmull_clark): when args carry explicit node targets
+    // (node_ids / node_id / node_name + scene_name), select them, run op,
+    // and restore the previous selection (the ops snapshot the selection
+    // synchronously). Returns an error message, empty on success.
+    auto run_geometry_op_with_target(const nlohmann::json& args, const std::function<void()>& op) -> std::string;
     // Finds a material by unique item id across every registered scene's
     // material library, then the asset manager's builtins and loaded
     // containers - the id path lets tools address container materials,

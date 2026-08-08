@@ -917,37 +917,65 @@ void Mcp_server::refresh_tool_list()
     }});
 
     // Geogram mesh operations - act on the object selection (set via select_items).
-    m_tool_infos.push_back({"remesh", "Geogram isotropic / anisotropic remesh of the selected mesh node(s) to a target vertex count (queued, runs over subsequent frames - poll get_async_status). anisotropy=0 (default) is isotropic; anisotropy>0 (e.g. 0.04) is anisotropic. Acts on the current object selection.", {
+    m_tool_infos.push_back({"remesh", "Geogram isotropic / anisotropic remesh of the selected mesh node(s) to a target vertex count (queued, runs over subsequent frames - poll get_async_status). anisotropy=0 (default) is isotropic; anisotropy>0 (e.g. 0.04) is anisotropic. Acts on the current object selection, or on explicit node targets (node_ids / node_id / node_name + scene_name; the previous selection is restored).", {
         {"type", "object"},
         {"properties", {
+            {"scene_name", {{"type", "string"},  {"description", "Scene for node targets (required with node_ids / node_id / node_name)"}}},
+            {"node_ids",   {{"type", "array"},   {"items", {{"type", "integer"}}}, {"description", "Explicit target node ids; the previous selection is restored after the call"}}},
+            {"node_id",    {{"type", "integer"}, {"description", "Single explicit target node id"}}},
+            {"node_name",  {{"type", "string"},  {"description", "Single explicit target node name"}}},
             {"target_vertex_count",   {{"type", "integer"}, {"description", "Target vertex count (Geogram nb_points, default 2000)"}}},
             {"anisotropy",            {{"type", "number"},  {"description", "0 = isotropic (default); >0 = anisotropic strength (e.g. 0.04)"}}},
             {"regenerate_attributes", {{"type", "boolean"}, {"description", "Regenerate smooth normals and texture coordinates (default true)"}}}
         }}
     }});
-    m_tool_infos.push_back({"decimate", "Geogram vertex-clustering decimation of the selected mesh node(s) (queued). bins is the clustering grid resolution (higher = more detail kept). Acts on the current object selection.", {
+    m_tool_infos.push_back({"decimate", "Geogram vertex-clustering decimation of the selected mesh node(s) (queued). bins is the clustering grid resolution (higher = more detail kept). Acts on the current object selection, or on explicit node targets (node_ids / node_id / node_name + scene_name; the previous selection is restored).", {
         {"type", "object"},
         {"properties", {
+            {"scene_name", {{"type", "string"},  {"description", "Scene for node targets (required with node_ids / node_id / node_name)"}}},
+            {"node_ids",   {{"type", "array"},   {"items", {{"type", "integer"}}}, {"description", "Explicit target node ids; the previous selection is restored after the call"}}},
+            {"node_id",    {{"type", "integer"}, {"description", "Single explicit target node id"}}},
+            {"node_name",  {{"type", "string"},  {"description", "Single explicit target node name"}}},
             {"bins",                  {{"type", "integer"}, {"description", "Vertex-clustering grid resolution (default 50)"}}},
             {"regenerate_attributes", {{"type", "boolean"}, {"description", "Regenerate smooth normals and texture coordinates (default true)"}}}
         }}
     }});
-    m_tool_infos.push_back({"smooth", "Geogram Laplacian smoothing of the selected mesh node(s) (queued). Vertex count is preserved. Acts on the current object selection.", {
+    m_tool_infos.push_back({"smooth", "Geogram Laplacian smoothing of the selected mesh node(s) (queued). Vertex count is preserved. Acts on the current object selection, or on explicit node targets (node_ids / node_id / node_name + scene_name; the previous selection is restored).", {
         {"type", "object"},
         {"properties", {
+            {"scene_name", {{"type", "string"},  {"description", "Scene for node targets (required with node_ids / node_id / node_name)"}}},
+            {"node_ids",   {{"type", "array"},   {"items", {{"type", "integer"}}}, {"description", "Explicit target node ids; the previous selection is restored after the call"}}},
+            {"node_id",    {{"type", "integer"}, {"description", "Single explicit target node id"}}},
+            {"node_name",  {{"type", "string"},  {"description", "Single explicit target node name"}}},
             {"iterations",            {{"type", "integer"}, {"description", "Smoothing iterations (default 5)"}}},
             {"strength",              {{"type", "number"},  {"description", "Smoothing strength [0,1] (default 0.5)"}}},
             {"regenerate_attributes", {{"type", "boolean"}, {"description", "Regenerate smooth normals and texture coordinates (default true)"}}}
         }}
     }});
-    m_tool_infos.push_back({"chamfer", "Conway chamfer of the selected mesh node(s) (queued): shrink each facet toward its centroid by bevel_ratio and replace every edge with a hexagonal face. When a FACE-mode mesh-component selection is active, only the selected facets are chamfered and the result stays welded watertight to the rest of the mesh (selected facets inset, interior shared edges become hexagons, boundary edges become bevel quads); otherwise the whole mesh is chamfered. Acts on the current object or face-component selection.", {
+    m_tool_infos.push_back({"chamfer", "Conway chamfer of the selected mesh node(s) (queued): shrink each facet toward its centroid by bevel_ratio and replace every edge with a hexagonal face. When a FACE-mode mesh-component selection is active, only the selected facets are chamfered and the result stays welded watertight to the rest of the mesh (selected facets inset, interior shared edges become hexagons, boundary edges become bevel quads); otherwise the whole mesh is chamfered. Acts on the current object or face-component selection, or on explicit node targets (node_ids / node_id / node_name + scene_name; the previous selection is restored).", {
         {"type", "object"},
         {"properties", {
+            {"scene_name", {{"type", "string"},  {"description", "Scene for node targets (required with node_ids / node_id / node_name)"}}},
+            {"node_ids",   {{"type", "array"},   {"items", {{"type", "integer"}}}, {"description", "Explicit target node ids; the previous selection is restored after the call"}}},
+            {"node_id",    {{"type", "integer"}, {"description", "Single explicit target node id"}}},
+            {"node_name",  {{"type", "string"},  {"description", "Single explicit target node name"}}},
             {"bevel_ratio", {{"type", "number"}, {"description", "How much each face shrinks toward its centroid, [0,1] (default 0.25)"}}}
         }}
     }});
-    m_tool_infos.push_back({"catmull_clark", "Apply one level of Catmull-Clark subdivision to the selected mesh node(s) (select_items first). Honors the per-edge edge_sharpness crease attribute (see set_edge_sharpness): sharp rules for sharpness levels, fractional blend, child edges carry decremented sharpness. Queued and undoable.", schema_no_args()});
-    m_tool_infos.push_back({"merge_faces", "Merge (dissolve) the selected facets of the mesh node(s) into one polygon per edge-connected group: facets connected through a shared EDGE (not merely a shared vertex) become a single polygon spanning their boundary loop, dropping the now-interior edges and vertices. Requires an active FACE-mode mesh-component selection (set_mesh_component_mode face + select_mesh_components). A group whose boundary is not a single simple loop (encloses a hole / pinches) is left unchanged. Queued; the rest of the mesh stays watertight.", schema_no_args()});
+    json geometry_target_properties = {
+        {"scene_name", {{"type", "string"},  {"description", "Scene for node targets (required with node_ids / node_id / node_name)"}}},
+        {"node_ids",   {{"type", "array"},   {"items", {{"type", "integer"}}}, {"description", "Explicit target node ids; the previous selection is restored after the call"}}},
+        {"node_id",    {{"type", "integer"}, {"description", "Single explicit target node id"}}},
+        {"node_name",  {{"type", "string"},  {"description", "Single explicit target node name"}}}
+    };
+    m_tool_infos.push_back({"catmull_clark", "Apply one level of Catmull-Clark subdivision to the selected mesh node(s), or to explicit node targets (node_ids / node_id / node_name + scene_name; the previous selection is restored). Honors the per-edge edge_sharpness crease attribute (see set_edge_sharpness): sharp rules for sharpness levels, fractional blend, child edges carry decremented sharpness. Queued and undoable.", {
+        {"type", "object"},
+        {"properties", geometry_target_properties}
+    }});
+    m_tool_infos.push_back({"merge_faces", "Merge (dissolve) the selected facets of the mesh node(s) into one polygon per edge-connected group: facets connected through a shared EDGE (not merely a shared vertex) become a single polygon spanning their boundary loop, dropping the now-interior edges and vertices. Requires an active FACE-mode mesh-component selection (set_mesh_component_mode face + select_mesh_components). A group whose boundary is not a single simple loop (encloses a hole / pinches) is left unchanged. Queued; the rest of the mesh stays watertight. Node targets (node_ids / node_id / node_name + scene_name) override the object selection.", {
+        {"type", "object"},
+        {"properties", geometry_target_properties}
+    }});
     m_tool_infos.push_back({"generate_texture_coordinates", "Generate texture coordinates for the selected mesh node(s) via Geogram mesh_make_atlas (queued). Writes UVs into the given corner texcoord channel. Acts on the current object selection.", {
         {"type", "object"},
         {"properties", {

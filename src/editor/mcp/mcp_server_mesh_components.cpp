@@ -606,6 +606,67 @@ auto Mcp_server::query_get_physics_state(const json& args) -> std::string
     }).dump();
 }
 
+auto Mcp_server::run_geometry_op_with_target(const json& args, const std::function<void()>& op) -> std::string
+{
+    // No explicit target: the operation acts on the current selection, as
+    // before.
+    const bool has_target = args.contains("node_ids") || args.contains("node_id") || args.contains("node_name");
+    if (!has_target) {
+        op();
+        return {};
+    }
+
+    if (m_context.selection == nullptr) {
+        return "Selection system not available";
+    }
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return "Scene not found: " + scene_name + " (scene_name is required with node targets)";
+    }
+
+    std::vector<std::shared_ptr<erhe::Item_base>> targets;
+    if (args.contains("node_ids")) {
+        const json& ids = args["node_ids"];
+        if (!ids.is_array() || ids.empty()) {
+            return "node_ids must be a non-empty array of node ids";
+        }
+        std::set<std::size_t> target_ids;
+        for (const auto& id_val : ids) {
+            if (!id_val.is_number_unsigned() && !id_val.is_number_integer()) {
+                return "node_ids entries must be integers";
+            }
+            target_ids.insert(id_val.get<std::size_t>());
+        }
+        targets = find_items_by_ids(*sr, target_ids);
+        if (targets.size() != target_ids.size()) {
+            return "Some node_ids were not found in scene: " + sr->get_name();
+        }
+    } else {
+        const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+        if (!node) {
+            return "Node not found (give node_id or node_name)";
+        }
+        targets.push_back(node);
+    }
+
+    // Snapshot - retarget - run - restore. The geometry operations snapshot
+    // the selection synchronously (Operations::resolve_operation_items) even
+    // though the mesh work itself is async, so the caller-visible selection
+    // is back to what it was when this returns.
+    const std::vector<std::shared_ptr<erhe::Item_base>> saved = m_context.selection->get_selected_items();
+    {
+        Scoped_selection_change change{*m_context.selection};
+        m_context.selection->set_selection(targets);
+    }
+    op();
+    {
+        Scoped_selection_change change{*m_context.selection};
+        m_context.selection->set_selection(saved);
+    }
+    return {};
+}
+
 auto Mcp_server::action_remesh(const json& args) -> std::string
 {
     if (m_context.operations == nullptr) {
@@ -614,10 +675,15 @@ auto Mcp_server::action_remesh(const json& args) -> std::string
     const unsigned int target     = static_cast<unsigned int>(args.value("target_vertex_count", 2000));
     const float        anisotropy = args.value("anisotropy", 0.0f);
     const bool         regen      = args.value("regenerate_attributes", true);
-    if (anisotropy > 0.0f) {
-        m_context.operations->anisotropic_remesh(target, anisotropy, regen);
-    } else {
-        m_context.operations->remesh(target, regen);
+    const std::string  target_error = run_geometry_op_with_target(args, [&]() {
+        if (anisotropy > 0.0f) {
+            m_context.operations->anisotropic_remesh(target, anisotropy, regen);
+        } else {
+            m_context.operations->remesh(target, regen);
+        }
+    });
+    if (!target_error.empty()) {
+        return make_error_content(target_error);
     }
     return make_json_content({
         {"queued",                true},
@@ -634,7 +700,12 @@ auto Mcp_server::action_decimate(const json& args) -> std::string
     }
     const unsigned int bins  = static_cast<unsigned int>(args.value("bins", 50));
     const bool         regen = args.value("regenerate_attributes", true);
-    m_context.operations->decimate(bins, regen);
+    const std::string  target_error = run_geometry_op_with_target(args, [&]() {
+        m_context.operations->decimate(bins, regen);
+    });
+    if (!target_error.empty()) {
+        return make_error_content(target_error);
+    }
     return make_json_content({{"queued", true}, {"bins", bins}, {"regenerate_attributes", regen}}).dump();
 }
 
@@ -646,7 +717,12 @@ auto Mcp_server::action_smooth(const json& args) -> std::string
     const unsigned int iterations = static_cast<unsigned int>(args.value("iterations", 5));
     const float        strength   = args.value("strength", 0.5f);
     const bool         regen      = args.value("regenerate_attributes", true);
-    m_context.operations->smooth(iterations, strength, regen);
+    const std::string  target_error = run_geometry_op_with_target(args, [&]() {
+        m_context.operations->smooth(iterations, strength, regen);
+    });
+    if (!target_error.empty()) {
+        return make_error_content(target_error);
+    }
     return make_json_content({{"queued", true}, {"iterations", iterations}, {"strength", strength}, {"regenerate_attributes", regen}}).dump();
 }
 
@@ -656,25 +732,40 @@ auto Mcp_server::action_chamfer3(const json& args) -> std::string
         return make_error_content("Operations not available");
     }
     const float bevel_ratio = args.value("bevel_ratio", 0.25f);
-    m_context.operations->chamfer3(bevel_ratio);
+    const std::string target_error = run_geometry_op_with_target(args, [&]() {
+        m_context.operations->chamfer3(bevel_ratio);
+    });
+    if (!target_error.empty()) {
+        return make_error_content(target_error);
+    }
     return make_json_content({{"queued", true}, {"bevel_ratio", bevel_ratio}}).dump();
 }
 
-auto Mcp_server::action_merge_faces(const json& /*args*/) -> std::string
+auto Mcp_server::action_merge_faces(const json& args) -> std::string
 {
     if (m_context.operations == nullptr) {
         return make_error_content("Operations not available");
     }
-    m_context.operations->merge_faces();
+    const std::string target_error = run_geometry_op_with_target(args, [&]() {
+        m_context.operations->merge_faces();
+    });
+    if (!target_error.empty()) {
+        return make_error_content(target_error);
+    }
     return make_json_content({{"queued", true}}).dump();
 }
 
-auto Mcp_server::action_catmull_clark(const json& /*args*/) -> std::string
+auto Mcp_server::action_catmull_clark(const json& args) -> std::string
 {
     if (m_context.operations == nullptr) {
         return make_error_content("Operations not available");
     }
-    m_context.operations->catmull_clark();
+    const std::string target_error = run_geometry_op_with_target(args, [&]() {
+        m_context.operations->catmull_clark();
+    });
+    if (!target_error.empty()) {
+        return make_error_content(target_error);
+    }
     return make_json_content({{"queued", true}}).dump();
 }
 
