@@ -29,35 +29,13 @@ Physics rig pattern:
 import math
 import os
 import sys
-import time
 
 sys.path.insert(0, os.path.dirname(__file__))
-from common import Creation, standard_args  # noqa: E402
-
-
-# --------------------------------------------------------------------- math
-
-def v_add(a, b):       return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
-def v_sub(a, b):       return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
-def v_scale(a, s):     return [a[0] * s, a[1] * s, a[2] * s]
-def v_dot(a, b):       return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-def v_length(a):       return math.sqrt(v_dot(a, a))
-def v_norm(a):         return v_scale(a, 1.0 / (v_length(a) or 1.0))
-def v_distance(a, b):  return v_length(v_sub(b, a))
-
-
-def align_y_quaternion(direction):
-    """Quaternion [x,y,z,w] rotating +Y onto direction (axis = cross(+Y, d))."""
-    d = v_norm(direction)
-    c = max(-1.0, min(1.0, d[1]))
-    if c > 0.99999:
-        return None
-    if c < -0.99999:
-        return [1.0, 0.0, 0.0, 0.0]
-    axis = v_norm([d[2], 0.0, -d[0]])
-    half = math.acos(c) / 2.0
-    s = math.sin(half)
-    return [axis[0] * s, axis[1] * s, axis[2] * s, math.cos(half)]
+from common import (  # noqa: E402
+    Creation, standard_args, align_y_quaternion, body_axis_elevation,
+    hierarchy_report, probe_pose, rest_rotation,
+    v_add, v_sub, v_scale, v_dot, v_distance, v_norm,
+)
 
 
 def segment_closest_parameters(p1, q1, p2, q2):
@@ -299,42 +277,6 @@ def rig_spider(c, spider):
     print(f"rigged {len(spider.body_jobs)} bodies, {len(spider.joint_jobs)} motor joints")
 
 
-# -------------------------------------------------------------------- probe
-
-def rest_rotation(c, node_name):
-    details = c.call("get_node_details", {"scene_name": c.scene, "node_name": node_name})
-    return details["world_transform"]["rotation_xyzw"]
-
-
-def body_axis_elevation(q):
-    """Elevation (deg) of the node's +Y axis (the capsule's long axis) above
-    the horizontal. The body lies along Z, so this is ~0 at rest; a tipped-
-    over spider reads tens of degrees. Yaw-insensitive on purpose: after a
-    shove the spider may legitimately re-plant facing a new heading."""
-    qx, qy, qz, qw = q
-    axis_y = 1.0 - 2.0 * (qx * qx + qz * qz)  # y component of the rotated +Y axis
-    return math.degrees(math.asin(max(-1.0, min(1.0, axis_y))))
-
-
-def probe_stand(c, label, rest_elevation, seconds=6.0, interval=0.5):
-    """Sample the front body's height and its pitch/roll drift from the
-    rest pose - numeric proof the motors hold the spider up (and recover
-    it after the shove)."""
-    steps = max(1, int(seconds / interval))
-    heights, drifts = [], []
-    position = None
-    for _ in range(steps):
-        time.sleep(interval)
-        details = c.call("get_node_details", {"scene_name": c.scene, "node_name": "Spider Body Front"})
-        position = details["world_transform"]["translation"]
-        heights.append(position[1])
-        elevation = body_axis_elevation(details["world_transform"]["rotation_xyzw"])
-        drifts.append(abs(elevation - rest_elevation))
-    print(f"{label} height: {' '.join(f'{h:5.3f}' for h in heights)}")
-    print(f"{label} lean:   {' '.join(f'{t:5.1f}' for t in drifts)}")
-    return heights, drifts, position
-
-
 # --------------------------------------------------------------------- main
 
 def main():
@@ -419,13 +361,14 @@ def main():
     make_motor_settings(c)
     rig_spider(c, spider)
     c.settle()
+    hierarchy_report(c)
 
     # ------------------------------------------------- stand, shove, recover
     rest_elev = body_axis_elevation(rest_rotation(c, "Spider Body Front"))
     c.set_physics(True)
     c.wake_physics()
     print("Physics enabled - the motors hold the stance...")
-    heights, drifts, _ = probe_stand(c, "stand", rest_elev, seconds=6.0)
+    heights, drifts, _ = probe_pose(c, "Spider Body Front", rest_elev, "stand", seconds=6.0)
     stand_ok = min(heights) > 0.7 * center[1] and drifts[-1] < 10.0
     print(f"{'PASS' if stand_ok else 'FAIL'}: standing "
           f"(min height {min(heights):.3f} vs rest {center[1]:.3f}, "
@@ -441,7 +384,8 @@ def main():
         "impulse": [110.0, 25.0, 70.0],
         "point": v_add(center, [0.0, 0.25, -0.175]),
     })
-    heights, drifts, position = probe_stand(c, "recover", rest_elev, seconds=8.0, interval=0.25)
+    heights, drifts, position = probe_pose(c, "Spider Body Front", rest_elev, "recover",
+                                           seconds=8.0, interval=0.25)
     recover_ok = heights[-1] > 0.7 * center[1] and drifts[-1] < 12.0
     print(f"{'PASS' if recover_ok else 'FAIL'}: recovered "
           f"(final height {heights[-1]:.3f} vs rest {center[1]:.3f}, "

@@ -53,12 +53,24 @@ they carry the current idioms.
   `load_scene`). Only the script is committed.
 - `scripts/creations/common.py` is the shared API: scene bootstrap,
   look-at camera, material pool, graph builders, brushes, lights,
-  physics helpers, screenshots, `group()`. Extend it rather than
-  duplicating helpers - but keep per-creation code (L-systems, critters)
-  in the creation script.
-- Runtime budget: ~0.3-0.5 s per MCP call, background command timeout
-  is 10 min. A create_shape + scale + rotate is 4+ calls. Keep scenes
-  under ~800 nodes / ~2000 calls or split the build.
+  physics helpers, screenshots, `group()` - plus module-level vector
+  math (`v_add`/`v_cross`/`v_rotate`/...), `align_y_quaternion`,
+  `probe_tilt` / `probe_pose` / `rest_rotation` / `body_axis_elevation`,
+  and `hierarchy_report`. IMPORT these, never re-derive them locally.
+  Extend common.py rather than duplicating helpers - but keep
+  per-creation code (L-system rules, critters) in the creation script.
+- Runtime budget (measured 2026-08-08 against a live Release editor):
+  queries ~10 ms, mutations ~15-25 ms, a posed shape (create + select +
+  rotate + deselect) ~70 ms, get_scene_nodes on a 2400-node scene
+  ~90 ms. Cost scales with CALL COUNT (a posed part is 4 calls), fixed
+  sleeps and settle polls - not per-call latency. Every run prints an
+  MCP telemetry summary at exit (per-tool counts + seconds); read it
+  before optimizing anything. Background command timeout is 10 min;
+  scenes of ~2500 nodes build fine.
+- Screenshot from 2-3 angles per iteration
+  (`c.screenshot_views(base, [(suffix, eye, target), ...])`) -
+  composition problems (occlusion, a buried face, a floating prop) then
+  surface in ONE iteration instead of one per rerun.
 
 ## Scene-graph hierarchy (MANDATORY for all creations)
 
@@ -98,8 +110,8 @@ following its construction logic:
 - Align-to-direction quaternion (chained cones, blades): axis MUST be
   `cross(+Y, dir) = (d.z, 0, -d.x)`. The mirrored sign renders every
   chained segment tilted opposite its chain step -> gapped "dashed"
-  trunks. Use `common`'s `axis_angle_quaternion` or a verified local
-  `align_y_quaternion`; don't re-derive by hand.
+  trunks. Import `common.align_y_quaternion` (or
+  `axis_angle_quaternion`); never re-derive by hand.
 - Rotation pivots at the **node origin** (= cone base for base-origin
   cones). No bbox-center compensation.
 - Non-uniform scale then rotation, as two sequential calls, composes as

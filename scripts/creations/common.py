@@ -11,6 +11,7 @@ The editor must already be running (see AGENTS.md "In-editor MCP server").
 """
 
 import argparse
+import atexit
 import json
 import math
 import os
@@ -68,6 +69,11 @@ class Creation:
         # video recording can be started before the scene builds up.
         self.pause_s = pause_s
         self._record_pause_done = False
+        # Per-tool call telemetry: tool -> [count, total_ms]; a summary is
+        # printed at exit so the skill's runtime-budget numbers stay measured
+        # instead of folklore.
+        self._call_stats = {}
+        atexit.register(self._print_call_stats)
 
     def _record_pause(self):
         if self._record_pause_done or self.pause_s <= 0:
@@ -79,34 +85,57 @@ class Creation:
 
     # ------------------------------------------------------------ transport
 
+    def _timed(self, tool, args):
+        started = time.perf_counter()
+        try:
+            return self.client.call(tool, args)
+        finally:
+            stat = self._call_stats.setdefault(tool, [0, 0.0])
+            stat[0] += 1
+            stat[1] += (time.perf_counter() - started) * 1000.0
+
+    def _print_call_stats(self):
+        if not self._call_stats:
+            return
+        total_calls = sum(s[0] for s in self._call_stats.values())
+        total_ms = sum(s[1] for s in self._call_stats.values())
+        print(f"MCP telemetry: {total_calls} calls, {total_ms / 1000.0:.1f} s total")
+        by_cost = sorted(self._call_stats.items(), key=lambda kv: -kv[1][1])
+        for tool, (count, ms) in by_cost[:12]:
+            print(f"  {tool:32s} {count:5d} calls {ms / 1000.0:8.1f} s")
+
     def call(self, tool, args=None, deadline_s=600.0):
         """Query-style call: retry freely while the server is busy."""
         deadline = time.time() + deadline_s
+        pause = 0.25
         while True:
             try:
-                return self.client.call(tool, args)
+                return self._timed(tool, args)
             except RuntimeError as error:
                 if not self._busy(error) or time.time() > deadline:
                     raise
-                time.sleep(2.0)
+                time.sleep(pause)
+                pause = min(pause * 1.6, 2.0)
 
     def mutate(self, tool, args=None, deadline_s=600.0):
         """Mutation: issue ONCE; on a server-side timeout poll until the server
         drains, then treat the mutation as applied (never re-issue)."""
         try:
-            return self.client.call(tool, args)
+            return self._timed(tool, args)
         except RuntimeError as error:
             if not self._busy(error):
                 raise
             deadline = time.time() + deadline_s
+            pause = 0.25
             while True:
                 try:
-                    self.client.call("get_undo_redo_stack")
+                    self._timed("get_undo_redo_stack", None)
                     return None
                 except RuntimeError as poll_error:
                     if not self._busy(poll_error) or time.time() > deadline:
                         raise
-                    time.sleep(2.0)
+                    time.sleep(pause)
+                    pause = min(pause * 1.6, 2.0)
 
     @staticmethod
     def _busy(error):
@@ -127,7 +156,7 @@ class Creation:
                 self.scene = fresh[0]
                 self.mutate("set_active_scene", {"scene_name": self.scene})
                 return self.scene
-            time.sleep(0.25)
+            time.sleep(0.1)
         raise RuntimeError("create_scene did not surface a new scene")
 
     def settle(self, deadline_s=600.0, extra_sleep=0.0):
@@ -141,7 +170,7 @@ class Creation:
                 if extra_sleep > 0.0:
                     time.sleep(extra_sleep)
                 return
-            time.sleep(0.5)
+            time.sleep(0.2)
         raise RuntimeError("scene did not settle in time")
 
     def nodes(self):
@@ -240,6 +269,16 @@ class Creation:
         print(f"screenshot: {json.dumps(result)}")
         return result
 
+    def screenshot_views(self, base_path, views):
+        """Screenshot the scene from several angles in one run: views is a
+        list of (suffix, eye, target). Composition problems (occlusion, a
+        buried face, a floating prop) get caught in ONE iteration instead of
+        surfacing one per rerun."""
+        root, ext = os.path.splitext(base_path)
+        for suffix, eye, target in views:
+            self.place_camera(eye, target)
+            self.screenshot(f"{root}_{suffix}{ext or '.png'}")
+
     def save(self, path):
         parent = os.path.dirname(path)
         if parent:
@@ -329,7 +368,7 @@ class Creation:
         while self.node_by_name(node_name) is None:
             if time.time() > deadline:
                 raise RuntimeError(f"create_node '{node_name}' did not appear")
-            time.sleep(0.25)
+            time.sleep(0.1)
         self.mutate("set_node_graph_mesh", {
             "node_name": node_name, "graph_mesh": graph_mesh, "scene_name": self.scene,
         })
@@ -597,6 +636,145 @@ class GraphBuilder:
     def chain(self, node_ids):
         for a, b in zip(node_ids, node_ids[1:]):
             self.link(a, b)
+
+
+# -------------------------------------------------------------- vector math
+# Shared by every creation script - import these, never re-derive them
+# (the mirrored align-axis sign alone has cost hours of debugging).
+
+def v_add(a, b):       return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
+def v_sub(a, b):       return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+def v_scale(a, s):     return [a[0] * s, a[1] * s, a[2] * s]
+def v_dot(a, b):       return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+def v_length(a):       return math.sqrt(v_dot(a, a))
+def v_norm(a):         return v_scale(a, 1.0 / (v_length(a) or 1.0))
+def v_distance(a, b):  return v_length(v_sub(b, a))
+
+
+def v_cross(a, b):
+    return [a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0]]
+
+
+def v_rotate(v, axis, angle):
+    """Rodrigues rotation of v about a unit axis (the L-system turtle's
+    workhorse)."""
+    c, s = math.cos(angle), math.sin(angle)
+    kv = v_cross(axis, v)
+    kkv = v_cross(axis, kv)
+    return [v[i] + s * kv[i] + (1.0 - c) * kkv[i] for i in range(3)]
+
+
+def align_y_quaternion(direction):
+    """Quaternion [x,y,z,w] rotating +Y onto direction; None when direction
+    is already +Y (no rotation needed). The axis MUST be cross(+Y, d) =
+    (d.z, 0, -d.x) - the mirrored sign tilts every chained segment opposite
+    its chain step (gapped 'dashed' trunks)."""
+    d = v_norm(direction)
+    c = max(-1.0, min(1.0, d[1]))
+    if c > 0.99999:
+        return None
+    if c < -0.99999:
+        return [1.0, 0.0, 0.0, 0.0]
+    axis = v_norm([d[2], 0.0, -d[0]])
+    half = math.acos(c) / 2.0
+    s = math.sin(half)
+    return [axis[0] * s, axis[1] * s, axis[2] * s, math.cos(half)]
+
+
+# ------------------------------------------------------------ pose probing
+
+def rest_rotation(creation, node_name):
+    details = creation.call("get_node_details", {"scene_name": creation.scene, "node_name": node_name})
+    return details["world_transform"]["rotation_xyzw"]
+
+
+def body_axis_elevation(q):
+    """Elevation (deg) of a node's +Y axis above the horizontal. Yaw-
+    insensitive on purpose: a shoved creature may legitimately re-plant
+    facing a new heading, and that is still a recovery."""
+    qx, qy, qz, qw = q
+    axis_y = 1.0 - 2.0 * (qx * qx + qz * qz)  # y component of the rotated +Y axis
+    return math.degrees(math.asin(max(-1.0, min(1.0, axis_y))))
+
+
+def probe_tilt(creation, node_names, seconds=6.0, interval=0.25):
+    """Sample world tilt (deg from upright) of the named nodes and print a
+    small table - numeric proof that wind/physics moves them. Roughness
+    (mean |second difference|) exposes high-frequency ringing the range
+    alone hides: smooth sway ~ a fraction of a degree, jitter >> 1. A
+    monotonic ramp that parks at the angular limit means receptivity is
+    too high for the drive stiffness."""
+    steps = max(1, int(seconds / interval))
+    series = {name: [] for name in node_names}
+    for _ in range(steps):
+        time.sleep(interval)
+        for name in node_names:
+            details = creation.call("get_node_details", {"scene_name": creation.scene, "node_name": name})
+            qx, qy, qz, qw = details["world_transform"]["rotation_xyzw"]
+            y_up = 1.0 - 2.0 * (qx * qx + qz * qz)
+            series[name].append(math.degrees(math.acos(max(-1.0, min(1.0, y_up)))))
+    for name, tilts in series.items():
+        lo, hi = min(tilts), max(tilts)
+        roughness = 0.0
+        if len(tilts) > 2:
+            roughness = sum(abs(tilts[i + 1] - 2.0 * tilts[i] + tilts[i - 1])
+                            for i in range(1, len(tilts) - 1)) / (len(tilts) - 2)
+        print(f"sway {name}: {' '.join(f'{t:5.1f}' for t in tilts)}  "
+              f"(range {hi - lo:.1f} deg, roughness {roughness:.2f})")
+    return series
+
+
+def probe_pose(creation, node_name, rest_elevation, label, seconds=6.0, interval=0.5):
+    """Sample a body node's height and its pitch/roll drift from the rest
+    pose (see body_axis_elevation). 'Tilt from world up' is useless for
+    capsules rotated off +Y - it reads 90 deg forever. Returns (heights,
+    leans, last world position) - the position matters because a shove can
+    slide a creature 1-2 m and the aftermath camera must re-frame on it."""
+    steps = max(1, int(seconds / interval))
+    heights, leans = [], []
+    position = None
+    for _ in range(steps):
+        time.sleep(interval)
+        details = creation.call("get_node_details", {"scene_name": creation.scene, "node_name": node_name})
+        position = details["world_transform"]["translation"]
+        heights.append(position[1])
+        elevation = body_axis_elevation(details["world_transform"]["rotation_xyzw"])
+        leans.append(abs(elevation - rest_elevation))
+    print(f"{label} height: {' '.join(f'{h:5.3f}' for h in heights)}")
+    print(f"{label} lean:   {' '.join(f'{t:5.1f}' for t in leans)}")
+    return heights, leans, position
+
+
+def hierarchy_report(creation, label="hierarchy"):
+    """Print root count + depth histogram (the skill's mandatory hierarchy
+    verification). Roots should be ~one per logical object + camera/floor/
+    lights. Returns (root_count, depth_histogram)."""
+    nodes = creation.nodes()
+    by_id = {n["id"]: n for n in nodes if "id" in n}
+
+    def depth_of(node):
+        depth = 0
+        seen = set()
+        while True:
+            parent = node.get("parent_id")
+            if parent is None or parent not in by_id or parent in seen:
+                return depth
+            seen.add(parent)
+            node = by_id[parent]
+            depth += 1
+
+    histogram = {}
+    roots = 0
+    for node in nodes:
+        depth = depth_of(node)
+        histogram[depth] = histogram.get(depth, 0) + 1
+        if depth == 0:
+            roots += 1
+    shape = " ".join(f"d{d}:{histogram[d]}" for d in sorted(histogram))
+    print(f"{label}: {len(nodes)} nodes, {roots} roots, {shape}")
+    return roots, histogram
 
 
 def look_at_quaternion(eye, target, up=(0.0, 1.0, 0.0)):

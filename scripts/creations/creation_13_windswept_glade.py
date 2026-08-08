@@ -34,50 +34,10 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(__file__))
-from common import Creation, standard_args  # noqa: E402
-
-
-# --------------------------------------------------------------------- math
-
-def v_add(a, b):
-    return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
-
-
-def v_scale(a, s):
-    return [a[0] * s, a[1] * s, a[2] * s]
-
-
-def v_cross(a, b):
-    return [a[1] * b[2] - a[2] * b[1],
-            a[2] * b[0] - a[0] * b[2],
-            a[0] * b[1] - a[1] * b[0]]
-
-
-def v_norm(a):
-    length = math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]) or 1.0
-    return [a[0] / length, a[1] / length, a[2] / length]
-
-
-def v_rotate(v, axis, angle):
-    """Rodrigues rotation of v about unit axis."""
-    c, s = math.cos(angle), math.sin(angle)
-    kv = v_cross(axis, v)
-    kkv = v_cross(axis, kv)
-    return [v[i] + s * kv[i] + (1.0 - c) * kkv[i] for i in range(3)]
-
-
-def align_y_quaternion(direction):
-    """Quaternion [x,y,z,w] rotating +Y onto direction."""
-    d = v_norm(direction)
-    dot = max(-1.0, min(1.0, d[1]))
-    if dot > 0.99999:
-        return None
-    if dot < -0.99999:
-        return [1.0, 0.0, 0.0, 0.0]
-    axis = v_norm(v_cross([0.0, 1.0, 0.0], d))
-    half = math.acos(dot) / 2.0
-    s = math.sin(half)
-    return [axis[0] * s, axis[1] * s, axis[2] * s, math.cos(half)]
+from common import (  # noqa: E402
+    Creation, standard_args, align_y_quaternion, probe_tilt,
+    v_add, v_scale, v_cross, v_norm, v_rotate,
+)
 
 
 # ----------------------------------------------------------------- L-system
@@ -716,33 +676,6 @@ def fallen_log(c, m, rng):
                  rng.uniform(0.09, 0.13), m, rng, y0=log_top, parent=on_log)
 
 
-# ---------------------------------------------------------------- sway probe
-
-def probe_sway(c, node_names, seconds=6.0, interval=0.25):
-    """Sample world tilt (deg from upright) of the named nodes and print a
-    small table - numeric proof the wind is moving the plants. Roughness
-    (mean |second difference|) exposes high-frequency ringing that the
-    range alone hides: smooth sway ~ a fraction of a degree, jitter >> 1."""
-    steps = max(1, int(seconds / interval))
-    series = {name: [] for name in node_names}
-    for _ in range(steps):
-        time.sleep(interval)
-        for name in node_names:
-            details = c.call("get_node_details", {"scene_name": c.scene, "node_name": name})
-            qx, qy, qz, qw = details["world_transform"]["rotation_xyzw"]
-            y_up = 1.0 - 2.0 * (qx * qx + qz * qz)
-            series[name].append(math.degrees(math.acos(max(-1.0, min(1.0, y_up)))))
-    for name, tilts in series.items():
-        lo, hi = min(tilts), max(tilts)
-        roughness = 0.0
-        if len(tilts) > 2:
-            roughness = sum(abs(tilts[i + 1] - 2.0 * tilts[i] + tilts[i - 1])
-                            for i in range(1, len(tilts) - 1)) / (len(tilts) - 2)
-        print(f"sway {name}: {' '.join(f'{t:5.1f}' for t in tilts)}  "
-              f"(range {hi - lo:.1f} deg, roughness {roughness:.2f})")
-    return series
-
-
 # --------------------------------------------------------------------- main
 
 def main():
@@ -909,7 +842,7 @@ def main():
     c.set_physics(True)
     c.wake_physics()
 
-    probe_sway(c, ["Oak A Trunk", "Fern 0 Rachis 0.0", "Flower 0 Stem 0",
+    probe_tilt(c, ["Oak A Trunk", "Fern 0 Rachis 0.0", "Flower 0 Stem 0",
                    "Grass 0 Spine", "Willow A Curtain 0"])
 
     c.place_camera([6.8, 3.2, 7.6], [0.0, 1.3, -0.8])
