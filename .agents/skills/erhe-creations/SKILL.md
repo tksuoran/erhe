@@ -178,6 +178,51 @@ following its construction logic:
   bodies spawn DEACTIVATED - `wake_physics()` after enabling. Freeze an
   aftermath pose by toggling physics off before save.
 - Pure-visual child parts: `strip_physics(node_id)`.
+- `apply_physics_force` pokes a dynamic body (force / torque / impulse +
+  optional world `point`). Impulses act immediately; forces last one
+  fixed step (re-apply for a sustained push).
+- `edit_physics_body` initial-velocity gotcha: `linear_velocity` only
+  stores into the create info, and a shape edit in the SAME call
+  recreates the body BEFORE it lands. Two calls: first
+  `{linear_velocity, mass, ...}`, then `{shape, ...}` to trigger the
+  recreation that applies it.
+
+## Bendy plants & wind (rest-pose motor joints; verified 2026-08-08)
+
+Foliage that bends under impact / wind and springs back to its authored
+pose needs no new machinery - six-dof drives ARE the rest-pose motor:
+
+- **Rig**: chain of Y-axis capsules (`create_shape capsule` is
+  center-origin), coincident anchor child pairs at each pivot as above;
+  root anchor joints to the world (no connected node). Joint settings:
+  lock linear XYZ (0..0) + angular Y (0..0), limit angular X/Z (about
+  +/-0.9 rad), and add angular drives on axes 0 and 2 with
+  `position_target 0`, `stiffness ~30`, `damping ~2`, finite
+  `max_force ~60`. Target 0 = the pose at joint creation; the motor
+  springs back to it, `max_force` is the yield threshold, the limits cap
+  the bend.
+- **Build with physics DISABLED, enable after the joints exist.**
+  Segments free-fall for the frames between create_shape and the
+  gravity_factor edit, and joints capture that fallen pose as the rest
+  pose (a few degrees of permanent lean). Verified: disabled-build gives
+  rest tilt exactly 0.
+- `gravity_factor 0` on segments so the motor spring does not fight
+  gravity (no droop below the authored pose); modest
+  `angular_damping ~0.1`.
+- Stiffness/max_force scale with segment thickness: stiff base, floppy
+  tip reads plant-like.
+- **Wind**: set `wind_receptivity` (kg/s) on segment bodies via
+  create/edit_physics_body - increasing toward the tip (e.g. 0.7 base ->
+  1.5 tip). Enable scene wind through `set_scene_settings` physics
+  override; the object MUST carry `"_version": 2` or the wind fields are
+  silently dropped by version migration (same trap as sky `_version`).
+  Verified values: `wind_speed 6, wind_gust_amplitude 4,
+  wind_gust_frequency 0.5, wind_turbulence 0.4, wind_wavelength 8` =
+  dramatic 7-78 deg sway; quarter those receptivities for subtle
+  ambient foliage. Wind force is
+  `receptivity * (wind_velocity - body_velocity)` at the COM each fixed
+  step; zero receptivity bodies are never touched (they sleep).
+  `wind_receptivity` persists in the ERHE_physics extension on save.
 
 ## Conventions
 
